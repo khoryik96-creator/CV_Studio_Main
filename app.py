@@ -222,11 +222,60 @@ def safe_json(raw, fallback=None):
         return fallback
 import io, time
 from pathlib import Path
+from cvstudio_storage import (
+    CVStudioStorage,
+    LeadContactCacheRepository,
+    LeadTitleCacheRepository,
+    PPCMetadataRepository,
+    SalaryComponentCacheRepository,
+    StorageCorruptionError,
+    StorageError,
+    StorageMigrationError,
+    UsageHistoryRepository,
+)
 
 _CVSTUDIO_VERSION = "v24.6.217"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
+
+_CVSTUDIO_STORAGE = CVStudioStorage()
+_CVSTUDIO_USAGE_REPOSITORY = UsageHistoryRepository(_CVSTUDIO_STORAGE)
+_CVSTUDIO_LEAD_TITLE_REPOSITORY = LeadTitleCacheRepository(_CVSTUDIO_STORAGE)
+_CVSTUDIO_LEAD_CONTACT_REPOSITORY = LeadContactCacheRepository(_CVSTUDIO_STORAGE)
+_CVSTUDIO_SALARY_REPOSITORY = SalaryComponentCacheRepository(_CVSTUDIO_STORAGE)
+_CVSTUDIO_PPC_REPOSITORY = PPCMetadataRepository(_CVSTUDIO_STORAGE)
+_CVSTUDIO_STORAGE_STARTUP_ERROR = None
+try:
+    _CVSTUDIO_STORAGE.initialize()
+except StorageError as _storage_startup_error:
+    # Keep non-storage routes available. Affected routes and diagnostics return
+    # the structured request-ID recovery contract once Flask is initialised.
+    _CVSTUDIO_STORAGE_STARTUP_ERROR = _storage_startup_error
+
+
+def _cvstudio_legacy_json_read(path, expected_type):
+    """Read a transition JSON store without renaming, deleting or rewriting it."""
+    try:
+        with open(path, "rb") as handle:
+            raw = handle.read()
+        data = json.loads(raw.decode("utf-8-sig"))
+        if not isinstance(data, expected_type):
+            return None, ""
+        return data, hashlib.sha256(raw).hexdigest()
+    except Exception:
+        return None, ""
+
+
+def _cvstudio_legacy_json_write(path, data, *, indent=None):
+    """Keep the v24.6.217 JSON shape backward-readable for one release."""
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+    tmp_path = path + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as handle:
+        json.dump(data, handle, ensure_ascii=False, indent=indent)
+    os.replace(tmp_path, path)
 
 
 def _resolve_cvstudio_port():
@@ -551,6 +600,12 @@ def _cvstudio_classify_error(status, message, path=""):
         return "METHOD_NOT_ALLOWED", False, ""
     if status == 413:
         return "REQUEST_TOO_LARGE", False, "use_smaller_file"
+    if "storage database is corrupt" in low:
+        return "STORAGE_CORRUPT", False, "restore_storage_backup"
+    if "storage migration" in low:
+        return "STORAGE_MIGRATION_FAILED", False, "restore_storage_backup"
+    if "local storage" in low and ("unavailable" in low or "newer cv studio" in low):
+        return "STORAGE_UNAVAILABLE", False, "restore_storage_backup"
     if status == 429 or "rate limit" in low or "too many requests" in low:
         return "RATE_LIMITED", True, "retry_later"
     if status in (408, 504) or "timed out" in low or "timeout" in low:
@@ -629,6 +684,23 @@ def _cvstudio_error_payload(code, message, status=400, *, retryable=False, actio
     if isinstance(extra, dict):
         payload.update(extra)
     return jsonify(payload), int(status or 400)
+
+
+@app.errorhandler(StorageError)
+def _cvstudio_storage_error(error):
+    return _cvstudio_error_payload(
+        getattr(error, "code", "STORAGE_UNAVAILABLE"),
+        getattr(error, "public_message", "Local storage is unavailable."),
+        503,
+        retryable=bool(getattr(error, "retryable", False)),
+        action=getattr(error, "recovery_action", "restore_storage_backup"),
+        details={
+            "recovery": (
+                "Preserve every legacy JSON file. Close CV Studio and restore "
+                "the latest verified migration backup before retrying."
+            )
+        },
+    )
 
 
 @app.before_request
@@ -8793,14 +8865,15 @@ _SALARY_AI_CACHE_LOCK = threading.Lock()
 
 
 def _ja_salary_ai_cache_load():
+    legacy, fingerprint = _cvstudio_legacy_json_read(_SALARY_AI_CACHE_PATH, dict)
     try:
-        if not os.path.exists(_SALARY_AI_CACHE_PATH):
-            return {}
-        with open(_SALARY_AI_CACHE_PATH, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return data if isinstance(data, dict) else {}
+        if legacy is not None:
+            _CVSTUDIO_SALARY_REPOSITORY.import_legacy(legacy, fingerprint)
+        return _CVSTUDIO_SALARY_REPOSITORY.load()
+    except StorageError:
+        raise
     except Exception:
-        return {}
+        return legacy if isinstance(legacy, dict) else {}
 
 
 def _ja_salary_ai_cache_get(cache_key):
@@ -8823,11 +8896,13 @@ def _ja_salary_ai_cache_put(cache_key, components, provider, model):
         # keep newest 500 entries by insertion order
         if len(data) > 500:
             data = dict(list(data.items())[-500:])
-        os.makedirs(os.path.dirname(_SALARY_AI_CACHE_PATH), exist_ok=True)
-        tmp = _SALARY_AI_CACHE_PATH + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        os.replace(tmp, _SALARY_AI_CACHE_PATH)
+        _CVSTUDIO_SALARY_REPOSITORY.save(data)
+        try:
+            _cvstudio_legacy_json_write(_SALARY_AI_CACHE_PATH, data, indent=2)
+        except Exception:
+            # SQLite is authoritative; keep the existing legacy file untouched
+            # if this compatibility mirror cannot be updated.
+            pass
 
 
 def _ja_salary_ai_num(value, minimum=0, maximum=1000000000):
@@ -11238,6 +11313,7 @@ def _cvstudio_runtime_diagnostics_payload():
         "platform": {"system": platform.system(), "release": platform.release(), "machine": platform.machine(), "python": platform.python_version()},
         "memory": _cvstudio_system_memory_status(),
         "cache": _spider_preview_cache_stats(),
+        "durable_storage": _CVSTUDIO_STORAGE.health(),
         "dependencies": _cvstudio_dependency_status(),
         "connections": _cvstudio_connection_status_redacted(),
         "install_receipt": (lambda result: {"valid": bool(result[0]), "status": str(result[1] or "")[:240]})(_install_receipt_status()),
@@ -19363,22 +19439,28 @@ _LEAD_FAMILY_BOOST_TOKENS = {
 
 
 def _lead_title_cache_load():
+    legacy, fingerprint = _cvstudio_legacy_json_read(_LEAD_TITLE_CACHE_PATH, dict)
     try:
-        with open(_LEAD_TITLE_CACHE_PATH, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        if isinstance(data, dict) and isinstance(data.get("entries"), list):
-            return data
+        if isinstance(legacy, dict) and isinstance(legacy.get("entries"), list):
+            _CVSTUDIO_LEAD_TITLE_REPOSITORY.import_legacy(legacy, fingerprint)
+        return _CVSTUDIO_LEAD_TITLE_REPOSITORY.load()
+    except StorageError:
+        raise
     except Exception:
-        pass
-    return {"entries": []}
+        if isinstance(legacy, dict) and isinstance(legacy.get("entries"), list):
+            return legacy
+        return {"entries": []}
 
 
 def _lead_title_cache_save(data):
     try:
-        tmp_path = _LEAD_TITLE_CACHE_PATH + ".tmp"
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False)
-        os.replace(tmp_path, _LEAD_TITLE_CACHE_PATH)
+        _CVSTUDIO_LEAD_TITLE_REPOSITORY.save(data)
+        try:
+            _cvstudio_legacy_json_write(_LEAD_TITLE_CACHE_PATH, data)
+        except Exception:
+            pass
+    except StorageError:
+        raise
     except Exception:
         pass
 
@@ -19466,22 +19548,28 @@ _LEAD_CONTACT_CACHE_MAX_ENTRIES = 10000
 
 
 def _lead_contact_cache_load():
+    legacy, fingerprint = _cvstudio_legacy_json_read(_LEAD_CONTACT_CACHE_PATH, dict)
     try:
-        with open(_LEAD_CONTACT_CACHE_PATH, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        if isinstance(data, dict) and isinstance(data.get("entries"), dict):
-            return data
+        if isinstance(legacy, dict) and isinstance(legacy.get("entries"), dict):
+            _CVSTUDIO_LEAD_CONTACT_REPOSITORY.import_legacy(legacy, fingerprint)
+        return _CVSTUDIO_LEAD_CONTACT_REPOSITORY.load()
+    except StorageError:
+        raise
     except Exception:
-        pass
-    return {"entries": {}}
+        if isinstance(legacy, dict) and isinstance(legacy.get("entries"), dict):
+            return legacy
+        return {"entries": {}}
 
 
 def _lead_contact_cache_save(data):
     try:
-        tmp_path = _LEAD_CONTACT_CACHE_PATH + ".tmp"
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False)
-        os.replace(tmp_path, _LEAD_CONTACT_CACHE_PATH)
+        _CVSTUDIO_LEAD_CONTACT_REPOSITORY.save(data)
+        try:
+            _cvstudio_legacy_json_write(_LEAD_CONTACT_CACHE_PATH, data)
+        except Exception:
+            pass
+    except StorageError:
+        raise
     except Exception:
         pass
 

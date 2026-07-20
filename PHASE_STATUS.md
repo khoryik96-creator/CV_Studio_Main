@@ -6,8 +6,8 @@
 - Baseline Git commit: `c8eeb34c275d374170a5931d69ed95ea213c791a`
 - Working branch: `codex/phase-2a-sqlite`
 - Active phase: Phase 2A only
-- Status: SQLite foundation and repositories complete; backend cache integration is next
-- Current milestone: SQLite-first lead-title, lead-contact and salary cache migration
+- Status: backend JSON caches migrated; browser usage/PPC bridge is next
+- Current milestone: usage-history and PPC-metadata SQLite bridge
 
 ## Verified baseline
 
@@ -96,9 +96,9 @@
 - [x] Implement schema-version and migration history.
 - [x] Implement repository interfaces.
 - [ ] Migrate usage history.
-- [ ] Migrate lead-title cache.
-- [ ] Migrate lead-contact cache.
-- [ ] Migrate salary-component cache.
+- [x] Migrate lead-title cache.
+- [x] Migrate lead-contact cache.
+- [x] Migrate salary-component cache.
 - [ ] Migrate PPC metadata.
 - [x] Implement non-sensitive diagnostic state.
 - [ ] Prove SQLite-first reads, legacy fallback/import and one-release dual writes.
@@ -141,6 +141,12 @@ None.
   - Lead-contact and salary cache documents round-trip and clear correctly.
   - PPC metadata imports/upserts idempotently; diagnostic state drops fields outside the non-sensitive allowlist.
 - Python syntax: storage module plus both Phase 2A test modules passed `py_compile`.
+- Backend cache integration suite: 4 additional tests passed.
+  - Lead-title, lead-contact and salary legacy JSON imported without deletion and repeated reads produced no duplicates.
+  - SQLite remained authoritative when a previously imported legacy file became malformed.
+  - Cache updates wrote SQLite first and retained the exact v24.6.217 JSON shapes as compatibility mirrors.
+  - Corrupt storage returned a structured `STORAGE_CORRUPT` response with the caller request ID and recovery action; legacy bytes were unchanged.
+  - Runtime diagnostics expose path-free durable-storage health only.
 
 ## Files changed
 
@@ -148,7 +154,9 @@ None.
 - `cvstudio_storage.py` — SQLite lifecycle, safety PRAGMAs, integrity checks, ordered schema, migration history, verified backups and redacted diagnostic state.
 - `tests/test_phase2a_storage_foundation.py` — foundation, idempotency, corruption and interrupted-migration coverage.
 - `tests/test_phase2a_repositories.py` — repository import, round-trip, clear, compatibility-cutoff and diagnostic allowlist coverage.
+- `app.py` — storage initialisation, structured storage recovery, SQLite-first backend cache reads/imports, JSON dual writes and redacted health diagnostics.
+- `tests/test_phase2a_app_cache_integration.py` — real Flask-module cache and corruption-route integration coverage.
 
 ## Next action
 
-Connect the three backend JSON cache boundaries with SQLite-first reads, idempotent legacy imports and compatible JSON dual writes; run route/helper regression tests before checkpointing.
+Add the usage-history and PPC-metadata same-origin routes and asynchronous browser hydration/mirroring while keeping both existing localStorage keys readable by v24.6.217.
