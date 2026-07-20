@@ -1,7 +1,7 @@
 # CV Studio Backburner and Stability Roadmap
 
 Last updated: 20 July 2026  
-Current implementation base: v24.6.217
+Current implementation base: v24.6.218
 
 ## Explicit backburner — do not implement until the owner reactivates them
 
@@ -33,6 +33,14 @@ Deferred scope includes Shortlist / Maybe / Reject / Reviewed states, recruiter 
 - pre-launch update health checks on a temporary loopback port;
 - previous signed-receipt preservation and transactional Windows/macOS rollback;
 - owner-source-only integration-test panel and downloadable reports.
+
+### v24.6.218 — Phase 2A SQLite foundation
+
+- per-user SQLite database with WAL, foreign keys, busy timeout and integrity checks;
+- transactional schema migrations with verified timestamped backups and durable history;
+- SQLite-first usage history, lead caches, salary-component cache, PPC metadata and non-sensitive diagnostic state;
+- idempotent legacy import plus one-release JSON/localStorage backward readability;
+- structured request-ID recovery for corruption and migration failure.
 
 ## Active stability direction
 

@@ -1,56 +1,19 @@
-You are continuing development of CV Studio from the approved private v24.6.217 baseline.
+You are continuing development of CV Studio from the completed private v24.6.218 Phase 2A owner/source release.
 
 Work locally in this opened cv_formatter folder.
 
-First read all of these files:
+First read:
 
 - AGENTS.md
 - ROADMAP.md
 - PHASE_STATUS.md
 - IMPLEMENT.md
-- CV_STUDIO_V24_6_217_PHASE_2_HANDOVER.md
-- cv_studio_v24_6_217_phase1_release_safety_error_contract_owner_integration_qa_report.md
+- CV_STUDIO_V24_6_218_PHASE_2B_HANDOVER.md
+- cv_studio_v24_6_218_phase2a_sqlite_foundation_qa_report.md
 - BACKBURNER_ROADMAP.md
 
-Then perform the following without waiting for me to type “continue” between ordinary milestones:
+Verify the v24.6.218 source and adjacent SHA-256 sidecar, verify Git, and re-run the Phase 2A safety suites before changing production code.
 
-1. Verify that the source is v24.6.217.
-2. Verify Git is available.
-3. If this is not already a Git repository, initialise it and create a clean v24.6.217 baseline commit before changing production code.
-4. Inventory the current backend JSON files, caches, storage helpers and every read/write call site relevant to Phase 2A.
-5. Update PHASE_STATUS.md with the concrete implementation plan.
-6. Implement Phase 2A only: the SQLite foundation and lower-risk backend durable-data migration described in AGENTS.md and the Phase 2 handover.
-7. Work milestone by milestone until every Phase 2A acceptance criterion passes.
-8. After each milestone:
-   - run targeted tests;
-   - fix failures before proceeding;
-   - update PHASE_STATUS.md;
-   - record important decisions and limitations;
-   - create a Git checkpoint when stable.
-9. At phase completion:
-   - run the complete regression suite;
-   - run Python, JavaScript, Bash and PowerShell syntax checks;
-   - verify repository consistency;
-   - test migration twice for idempotency;
-   - test corrupt and interrupted migrations;
-   - verify legacy JSON remains intact;
-   - create the private owner/source ZIP;
-   - freshly extract and byte-verify the ZIP;
-   - produce the QA report;
-   - produce the Phase 2B handover;
-   - record the final SHA-256.
-10. Stop after Phase 2A. Do not start Phase 2B or any later phase.
+Do not start Phase 2B unless this message is accompanied by the owner's explicit instruction to implement Phase 2B. If authorised, implement Phase 2B only, preserve every Phase 2A migration/backup/recovery guarantee, and stop before Phase 3.
 
-Do not implement roadmap items 4, 7 or 8.
-
-Do not perform shared API-client refactoring, background-job work, backend/frontend modularisation, lazy loading, credential migration or new user-facing workflow features during this phase.
-
-Make conservative routine decisions without asking me. Stop and ask only when:
-
-- an operation could delete or irreversibly reinterpret user data;
-- credentials or a paid external call are required;
-- administrator approval is required;
-- genuine native Windows/macOS execution is required;
-- two choices have materially different compatibility consequences.
-
-Keep the existing application operational throughout the migration. Do not claim tests that were not genuinely run.
+Do not implement roadmap items 4, 7 or 8. Do not perform credential migration, shared API-client refactoring, background-job work, backend/frontend modularisation, lazy loading or new user-facing workflow features unless the owner separately activates them.

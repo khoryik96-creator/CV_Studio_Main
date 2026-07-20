@@ -1,9 +1,11 @@
 # CV Studio Stability Roadmap
 
-## Baseline
+## Release state
 
-- v24.6.217 is the approved starting point.
-- Phase 1 is complete.
+- v24.6.217 was the approved Phase 2A starting point.
+- v24.6.218 is the completed private owner/source Phase 2A release.
+- Phases 1 and 2A are complete.
+- Do not begin Phase 2B without an explicit owner request.
 
 ## Phase 1 — Completed
 
@@ -13,7 +15,7 @@
 - rollback foundation;
 - owner-only integration-test foundation.
 
-## Phase 2A — Active
+## Phase 2A — Completed in v24.6.218
 
 SQLite foundation and lower-risk backend durable-data migration:
 
@@ -32,7 +34,7 @@ SQLite foundation and lower-risk backend durable-data migration:
 13. idempotency, corruption and rollback tests;
 14. QA, private package and Phase 2B handover.
 
-## Phase 2B — Future
+## Phase 2B — Next candidate; not active
 
 - durable browser-backed records such as notes and saved links;
 - selected persistent settings;

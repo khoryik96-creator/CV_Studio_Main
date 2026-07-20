@@ -27,8 +27,8 @@ import zipfile
 import zlib
 from pathlib import Path
 
-VERSION = "v24.6.217"
-VERSION_SLUG = "v24_6_217"
+VERSION = "v24.6.218"
+VERSION_SLUG = "v24_6_218"
 PRODUCT = "TheGuoLab-CVStudio"
 RECEIPT_SCHEMA = 2
 TOTP_MASK = bytes([147,57,36,83,116,245,122,57,165,162,176,168,249,50,204,128,45,174,232,56])
@@ -171,7 +171,7 @@ def validate_repository_dependency_state(root: Path) -> None:
             raise RuntimeError(f"POSIX script is not LF-only: {rel}. Run repo_consistency.py --repair.")
 
 def validate_source(root: Path) -> None:
-    required=("app.py","index.html","generate.js","template.docx","package.json","requirements.txt","merge_title_cache.py")
+    required=("app.py","cvstudio_storage.py","index.html","generate.js","template.docx","package.json","requirements.txt","merge_title_cache.py")
     missing=[x for x in required if not (root/x).exists()]
     if missing: raise RuntimeError("Missing source files: "+", ".join(missing))
     # Build only from the readable owner patch base. The separate Authy QR/key
@@ -220,7 +220,7 @@ def validate_vetted_adm_zip(root: Path) -> Path:
 
 
 def preflight_source(root: Path) -> None:
-    run([sys.executable,"-m","py_compile",str(root/"app.py"),str(root/"merge_title_cache.py")])
+    run([sys.executable,"-m","py_compile",str(root/"app.py"),str(root/"cvstudio_storage.py"),str(root/"merge_title_cache.py")])
     run(["node","--check",str(root/"generate.js")])
     validate_vetted_adm_zip(root)
     # The owner/source installation still needs a working local module for

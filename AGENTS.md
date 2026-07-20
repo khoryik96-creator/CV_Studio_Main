@@ -1,12 +1,13 @@
 # CV Studio Codex Rules
 
-## Approved baseline
+## Completed release
 
-- Current approved private source baseline: **CV Studio v24.6.217**.
-- Baseline owner ZIP SHA-256:
+- Phase 2A migration source baseline: **CV Studio v24.6.217**.
+- v24.6.217 baseline owner ZIP SHA-256:
   `c499ea8043f274bf47a4981c84794759f38fc7c761b98ba3939626114a898a59`
-- Phase 1 is complete.
-- The active implementation target is **Phase 2A only**.
+- Current completed private owner/source release: **CV Studio v24.6.218**.
+- Phases 1 and 2A are complete.
+- There is no active implementation target. Stop after Phase 2A unless the owner explicitly starts Phase 2B.
 
 ## Explicit backburner
 
@@ -16,9 +17,9 @@ Do not implement these unless the owner explicitly reactivates them:
 2. Roadmap item 7 — saved and versioned AI Crawler scoring profiles.
 3. Roadmap item 8 — AI Crawler Shortlist / Maybe / Reject / Reviewed workflow.
 
-## Current scope: Phase 2A only
+## Completed scope: Phase 2A
 
-Implement the SQLite foundation and migrate lower-risk backend durable data:
+The SQLite foundation and lower-risk backend durable data migration now include:
 
 - local SQLite database;
 - WAL mode;
@@ -40,7 +41,7 @@ Implement the SQLite foundation and migrate lower-risk backend durable data:
 - one-release backward readability;
 - idempotent migration.
 
-Do not include during Phase 2A:
+The following were not included during Phase 2A and remain out of scope until explicitly activated:
 
 - browser notes/settings migration;
 - credential migration;
@@ -77,8 +78,8 @@ Before changing code:
 1. Read `ROADMAP.md`.
 2. Read `PHASE_STATUS.md`.
 3. Read `IMPLEMENT.md`.
-4. Read `CV_STUDIO_V24_6_217_PHASE_2_HANDOVER.md`.
-5. Read the v24.6.217 QA report.
+4. Read `CV_STUDIO_V24_6_218_PHASE_2B_HANDOVER.md`.
+5. Read the v24.6.218 Phase 2A QA report.
 6. Inspect the relevant existing storage paths and tests.
 7. Verify the baseline before implementation.
 
@@ -102,7 +103,7 @@ Stop and ask the owner only when:
 
 Routine implementation decisions do not require owner confirmation.
 
-## Definition of done for Phase 2A
+## Completed definition of done for Phase 2A
 
 - No user-data loss from a v24.6.217 fixture.
 - Migration is transactional and idempotent.

@@ -1,5 +1,5 @@
 CV Studio private source patch base
-Version: v24.6.217
+Version: v24.6.218
 Keep this ZIP for future patches. Do not distribute this source package to colleagues.
 
 JobAdder API investigation source of truth:
@@ -904,3 +904,13 @@ Patch note v24.6.193: cross-platform deterministic adm-zip tree hashing fixes th
 - The pre-existing Max Low Screening Call fixture remains separately locked to candidate 41262878 and exact confirmation `CREATE ONE MAX LOW TEST`; it was not made automatic.
 - Native Windows/macOS compilation and physical-machine smoke execution remain release-gating work. Controlled package assembly is not a substitute for native testing.
 
+## v24.6.218 Phase 2A SQLite foundation and lower-risk durable-data migration
+
+- Adds the per-user cv_studio.sqlite3 database with WAL, foreign-key enforcement, a five-second busy timeout and integrity checks.
+- Applies seven ordered, checksummed schema migrations transactionally and creates an independently integrity-verified timestamped backup before each schema change.
+- Migrates usage history, lead-title cache, lead-contact cache, salary-component cache, PPC metadata and non-sensitive diagnostic state through store-specific repositories.
+- Reads SQLite first after idempotent legacy import and retains the v24.6.217 JSON/localStorage shapes for one-release backward readability.
+- Never deletes legacy cache files during migration and keeps protected credentials outside plain SQLite.
+- Returns structured request-ID corruption/migration errors with recovery guidance and path-free durable-storage diagnostics.
+- Proves the complete v24.6.217 fixture, double migration, interrupted migration rollback/restart, corruption recovery, legacy byte preservation, Phase 1 regressions and real loopback source smoke.
+- Stops after Phase 2A. Browser notes/settings, shared clients, background jobs, modularisation, lazy loading and roadmap items 4, 7 and 8 remain untouched.

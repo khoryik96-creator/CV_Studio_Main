@@ -3,11 +3,12 @@
 ## Release state
 
 - Approved baseline: v24.6.217
+- Completed release candidate: v24.6.218
 - Baseline Git commit: `c8eeb34c275d374170a5931d69ed95ea213c791a`
 - Working branch: `codex/phase-2a-sqlite`
-- Active phase: Phase 2A only
-- Status: Phase 2A implementation complete; acceptance and release validation are next
-- Current milestone: full regression, failure fixtures, release consistency and packaging
+- Active phase: Phase 2A closeout only; implementation and validation are complete
+- Status: v24.6.218 release validation passed; clean source packaging is next
+- Current milestone: private owner/source archive and byte verification
 
 ## Verified baseline
 
@@ -104,7 +105,7 @@
 - [x] Prove SQLite-first reads, legacy fallback/import and one-release dual writes.
 - [x] Prove migration idempotency.
 - [x] Test corrupt and interrupted migration handling.
-- [ ] Run complete regression and static validation.
+- [x] Run complete regression and static validation.
 - [ ] Create and byte-verify private owner/source ZIP.
 - [ ] Produce QA report, SHA-256 and Phase 2B handover.
 
@@ -118,6 +119,7 @@
 - Migration tests found and eliminated two Windows file-handle leaks before any existing store was connected to SQLite.
 - No protected colleague package will be produced without matching native compilation and smoke testing.
 - Genuine native Windows/macOS installation testing is not part of the current local source run and will not be claimed.
+- The archive checksum is recorded in an adjacent sidecar generated after the archive; the ZIP cannot reliably contain its own authoritative hash.
 
 ## Blockers
 
@@ -162,6 +164,9 @@ None.
 - Static validation checkpoint passed: Python (tracked modules), JavaScript (19 files), Bash (5 files through Git Bash) and PowerShell (5 files, zero parser errors).
 - Repository consistency: passed; no lock file, exact Git bytes, approved encodings and platform line endings.
 - Scope audit: the Phase 2A diff adds no Flask server replacement, scoring-profile workflow, candidate-decision workflow, shared API client, background job, lazy loading or credential persistence.
+- Final v24.6.218 rerun: 16 Python tests, frontend fixture and 18-assertion live source smoke all passed after the version bump.
+- Final version audit: 8 primary version surfaces agree on v24.6.218.
+- Route compatibility audit: all 88 v24.6.217 Flask route URLs remain present; Phase 2A adds 8 local storage routes.
 
 ## Files changed
 
@@ -175,7 +180,11 @@ None.
 - `tests/test_phase2a_frontend_storage.js` — inline-JavaScript syntax plus usage/PPC hydration, deduplication, write and clear fixtures.
 - `tests/test_phase2a_v217_fixture.py` — complete legacy store fixture, double import, byte preservation and restart evidence.
 - `tests/run_phase2a_source_smoke.py` — bounded real-loopback source smoke with temporary local state and 18 assertions.
+- Production/installer/launcher/protected-build version surfaces — advanced consistently to v24.6.218.
+- `AGENTS.md`, `ROADMAP.md`, `IMPLEMENT.md`, `CODEX_FIRST_PROMPT.txt`, `README_FIRST.txt`, `BACKBURNER_ROADMAP.md` and `KEEP_PRIVATE_PATCH_BASE.txt` — Phase 2A completion/stop gate and next-phase entry instructions.
+- `cv_studio_v24_6_218_phase2a_sqlite_foundation_qa_report.md` — Phase 2A release QA evidence.
+- `CV_STUDIO_V24_6_218_PHASE_2B_HANDOVER.md` — owner-gated next-phase handover.
 
 ## Next action
 
-Run the complete Phase 2A acceptance matrix, fix every regression, then bump release surfaces and produce the private source package evidence.
+Commit the clean v24.6.218 release source, create the private owner/source ZIP from that commit, freshly extract and compare every byte, then generate checksum/verification sidecars and stop.
