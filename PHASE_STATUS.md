@@ -6,8 +6,8 @@
 - Baseline Git commit: `c8eeb34c275d374170a5931d69ed95ea213c791a`
 - Working branch: `codex/phase-2a-sqlite`
 - Active phase: Phase 2A only
-- Status: backend JSON caches migrated; browser usage/PPC bridge is next
-- Current milestone: usage-history and PPC-metadata SQLite bridge
+- Status: Phase 2A implementation complete; acceptance and release validation are next
+- Current milestone: full regression, failure fixtures, release consistency and packaging
 
 ## Verified baseline
 
@@ -95,15 +95,15 @@
 - [x] Implement SQLite connection, integrity and backup foundation.
 - [x] Implement schema-version and migration history.
 - [x] Implement repository interfaces.
-- [ ] Migrate usage history.
+- [x] Migrate usage history.
 - [x] Migrate lead-title cache.
 - [x] Migrate lead-contact cache.
 - [x] Migrate salary-component cache.
-- [ ] Migrate PPC metadata.
+- [x] Migrate PPC metadata.
 - [x] Implement non-sensitive diagnostic state.
-- [ ] Prove SQLite-first reads, legacy fallback/import and one-release dual writes.
-- [ ] Prove migration idempotency.
-- [ ] Test corrupt and interrupted migration handling.
+- [x] Prove SQLite-first reads, legacy fallback/import and one-release dual writes.
+- [x] Prove migration idempotency.
+- [x] Test corrupt and interrupted migration handling.
 - [ ] Run complete regression and static validation.
 - [ ] Create and byte-verify private owner/source ZIP.
 - [ ] Produce QA report, SHA-256 and Phase 2B handover.
@@ -146,7 +146,14 @@ None.
   - SQLite remained authoritative when a previously imported legacy file became malformed.
   - Cache updates wrote SQLite first and retained the exact v24.6.217 JSON shapes as compatibility mirrors.
   - Corrupt storage returned a structured `STORAGE_CORRUPT` response with the caller request ID and recovery action; legacy bytes were unchanged.
-  - Runtime diagnostics expose path-free durable-storage health only.
+- Runtime diagnostics expose path-free durable-storage health only.
+- Usage/PPC backend route coverage: import, upsert, read and explicit clear passed with request IDs and legacy-preserved flags.
+- Frontend storage fixture: passed.
+  - Both inline `index.html` scripts compile in Node.
+  - Usage and PPC hydrate from SQLite while synchronously retaining their v24.6.217 localStorage keys.
+  - Writes are serialized; usage clear is protected from an in-flight import restoring deleted history.
+  - Legacy usage rows without IDs use stable sorted-key identity, avoiding duplicates when JSON property order changes.
+  - PPC mirror conflicts use `updatedAt`; browser mutations are re-upserted if they race hydration.
 
 ## Files changed
 
@@ -156,7 +163,9 @@ None.
 - `tests/test_phase2a_repositories.py` — repository import, round-trip, clear, compatibility-cutoff and diagnostic allowlist coverage.
 - `app.py` — storage initialisation, structured storage recovery, SQLite-first backend cache reads/imports, JSON dual writes and redacted health diagnostics.
 - `tests/test_phase2a_app_cache_integration.py` — real Flask-module cache and corruption-route integration coverage.
+- `index.html` — asynchronous SQLite hydration and ordered mirroring for usage history and PPC metadata, retaining existing synchronous localStorage compatibility.
+- `tests/test_phase2a_frontend_storage.js` — inline-JavaScript syntax plus usage/PPC hydration, deduplication, write and clear fixtures.
 
 ## Next action
 
-Add the usage-history and PPC-metadata same-origin routes and asynchronous browser hydration/mirroring while keeping both existing localStorage keys readable by v24.6.217.
+Run the complete Phase 2A acceptance matrix, fix every regression, then bump release surfaces and produce the private source package evidence.

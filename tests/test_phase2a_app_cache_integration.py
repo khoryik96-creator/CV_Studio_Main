@@ -45,9 +45,11 @@ class Phase2AAppCacheIntegrationTests(unittest.TestCase):
         _MODULE_TEMPORARY.cleanup()
 
     def setUp(self):
+        app._CVSTUDIO_USAGE_REPOSITORY.clear()
         app._CVSTUDIO_LEAD_TITLE_REPOSITORY.clear()
         app._CVSTUDIO_LEAD_CONTACT_REPOSITORY.clear()
         app._CVSTUDIO_SALARY_REPOSITORY.clear()
+        app._CVSTUDIO_PPC_REPOSITORY.clear()
         for path in (
             Path(app._LEAD_TITLE_CACHE_PATH),
             Path(app._LEAD_CONTACT_CACHE_PATH),
@@ -192,6 +194,98 @@ class Phase2AAppCacheIntegrationTests(unittest.TestCase):
         self.assertEqual(storage["journal_mode"], "wal")
         self.assertNotIn(str(_MODULE_ROOT), json.dumps(storage))
         self.assertNotIn("database_path", storage)
+
+    def test_usage_and_ppc_routes_import_upsert_read_and_clear(self):
+        client = app.app.test_client()
+        headers = {
+            "X-CV-Studio-Request": "1",
+            "X-CV-Studio-Request-ID": "phase2a-browser-store",
+        }
+        legacy_usage = [
+            {
+                "ts": "2026-07-01T00:00:00Z",
+                "name": "Legacy fixture",
+                "mode": "format",
+                "cost": 0.125,
+                "model": "legacy-model",
+            }
+        ]
+        response = client.post(
+            "/storage/usage-history/import",
+            json={"records": legacy_usage},
+            headers=headers,
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["records"], legacy_usage)
+        self.assertNotIn("input_tokens", payload["records"][0])
+        self.assertTrue(payload["legacy_preserved"])
+
+        current_usage = [
+            {
+                "id": "stat_fixture",
+                "ts": "2026-07-02T00:00:00Z",
+                "name": "Current fixture",
+                "mode": "lead",
+                "cost": 0.25,
+                "input_tokens": 4,
+                "output_tokens": 2,
+                "api_calls": 1,
+                "pricing_model_key": "fixture-pricing",
+            }
+        ]
+        response = client.post(
+            "/storage/usage-history/upsert",
+            json={"records": current_usage},
+            headers=headers,
+        )
+        self.assertEqual(response.status_code, 200)
+        response = client.get("/storage/usage-history", headers=headers)
+        records = response.get_json()["records"]
+        self.assertEqual(len(records), 2)
+        self.assertEqual(records[1]["pricing_model_key"], "fixture-pricing")
+
+        legacy_ppc = {
+            "placement-fixture": {
+                "payment": "Invoiced",
+                "guaranteeMonths": "3",
+                "updatedAt": "2026-07-01T00:00:00Z",
+            }
+        }
+        response = client.post(
+            "/storage/ppc-metadata/import",
+            json={"metadata": legacy_ppc},
+            headers=headers,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["metadata"], legacy_ppc)
+
+        changed_ppc = {
+            "placement-fixture": {
+                "payment": "Paid",
+                "guaranteeMonths": "3",
+                "updatedAt": "2026-07-02T00:00:00Z",
+            }
+        }
+        response = client.post(
+            "/storage/ppc-metadata/upsert",
+            json={"metadata": changed_ppc},
+            headers=headers,
+        )
+        self.assertEqual(response.status_code, 200)
+        response = client.get("/storage/ppc-metadata", headers=headers)
+        self.assertEqual(response.get_json()["metadata"], changed_ppc)
+
+        self.assertEqual(
+            client.post("/storage/usage-history/clear", json={}, headers=headers).status_code,
+            200,
+        )
+        self.assertEqual(
+            client.post("/storage/ppc-metadata/clear", json={}, headers=headers).status_code,
+            200,
+        )
+        self.assertEqual(client.get("/storage/usage-history").get_json()["records"], [])
+        self.assertEqual(client.get("/storage/ppc-metadata").get_json()["metadata"], {})
 
 
 if __name__ == "__main__":

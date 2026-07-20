@@ -11561,6 +11561,168 @@ def owner_integration_run():
     return jsonify(report), status
 
 
+_PHASE2A_USAGE_MAX_RECORDS = 250000
+_PHASE2A_USAGE_SECRET_FIELDS = {
+    "access_token", "refresh_token", "client_secret", "api_key", "authorization",
+    "authorization_code", "password", "credential", "credentials", "token",
+}
+
+
+def _phase2a_usage_records(payload):
+    if not isinstance(payload, list):
+        return None
+    if len(payload) > _PHASE2A_USAGE_MAX_RECORDS:
+        return None
+    records = []
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        clean = {}
+        for key, value in item.items():
+            key_text = str(key or "")[:120]
+            if key_text.lower() in _PHASE2A_USAGE_SECRET_FIELDS:
+                continue
+            clean[key_text] = value
+        records.append(clean)
+    return records
+
+
+def _phase2a_ppc_metadata(payload):
+    if not isinstance(payload, dict) or len(payload) > 250000:
+        return None
+    clean = {}
+    for placement_id, raw in payload.items():
+        placement_id = str(placement_id or "").strip()[:500]
+        if not placement_id or not isinstance(raw, dict):
+            continue
+        payment = str(raw.get("payment") or "")
+        guarantee = str(raw.get("guaranteeMonths") or "")
+        clean[placement_id] = {
+            "payment": payment if payment in ("Paid", "Unpaid", "Invoiced") else "",
+            "guaranteeMonths": guarantee if re.fullmatch(r"(?:[1-6]|9|12|resigned_backout)", guarantee) else "",
+            "updatedAt": str(raw.get("updatedAt") or "")[:80],
+        }
+    return clean
+
+
+@app.route("/storage/usage-history", methods=["GET"])
+def phase2a_usage_history_read():
+    return jsonify({
+        "ok": True,
+        "records": _CVSTUDIO_USAGE_REPOSITORY.list(),
+        "request_id": _cvstudio_current_request_id(),
+        "legacy_preserved": True,
+    })
+
+
+@app.route("/storage/usage-history/import", methods=["POST"])
+def phase2a_usage_history_import():
+    body = request.get_json(silent=True) or {}
+    records = _phase2a_usage_records(body.get("records"))
+    if records is None:
+        return _cvstudio_error_payload(
+            "STORAGE_PAYLOAD_INVALID",
+            "Usage history payload is invalid or too large",
+            400,
+        )
+    imported = _CVSTUDIO_USAGE_REPOSITORY.import_legacy(records)
+    return jsonify({
+        "ok": True,
+        "imported": imported,
+        "records": _CVSTUDIO_USAGE_REPOSITORY.list(),
+        "request_id": _cvstudio_current_request_id(),
+        "legacy_preserved": True,
+    })
+
+
+@app.route("/storage/usage-history/upsert", methods=["POST"])
+def phase2a_usage_history_upsert():
+    body = request.get_json(silent=True) or {}
+    records = _phase2a_usage_records(body.get("records"))
+    if records is None:
+        return _cvstudio_error_payload(
+            "STORAGE_PAYLOAD_INVALID",
+            "Usage history payload is invalid or too large",
+            400,
+        )
+    written = _CVSTUDIO_USAGE_REPOSITORY.upsert(records)
+    return jsonify({
+        "ok": True,
+        "written": written,
+        "request_id": _cvstudio_current_request_id(),
+        "legacy_preserved": True,
+    })
+
+
+@app.route("/storage/usage-history/clear", methods=["POST"])
+def phase2a_usage_history_clear():
+    _CVSTUDIO_USAGE_REPOSITORY.clear()
+    return jsonify({
+        "ok": True,
+        "request_id": _cvstudio_current_request_id(),
+        "legacy_preserved": True,
+    })
+
+
+@app.route("/storage/ppc-metadata", methods=["GET"])
+def phase2a_ppc_metadata_read():
+    return jsonify({
+        "ok": True,
+        "metadata": _CVSTUDIO_PPC_REPOSITORY.load(),
+        "request_id": _cvstudio_current_request_id(),
+        "legacy_preserved": True,
+    })
+
+
+@app.route("/storage/ppc-metadata/import", methods=["POST"])
+def phase2a_ppc_metadata_import():
+    body = request.get_json(silent=True) or {}
+    metadata = _phase2a_ppc_metadata(body.get("metadata"))
+    if metadata is None:
+        return _cvstudio_error_payload(
+            "STORAGE_PAYLOAD_INVALID",
+            "PPC metadata payload is invalid or too large",
+            400,
+        )
+    imported = _CVSTUDIO_PPC_REPOSITORY.import_legacy(metadata)
+    return jsonify({
+        "ok": True,
+        "imported": imported,
+        "metadata": _CVSTUDIO_PPC_REPOSITORY.load(),
+        "request_id": _cvstudio_current_request_id(),
+        "legacy_preserved": True,
+    })
+
+
+@app.route("/storage/ppc-metadata/upsert", methods=["POST"])
+def phase2a_ppc_metadata_upsert():
+    body = request.get_json(silent=True) or {}
+    metadata = _phase2a_ppc_metadata(body.get("metadata"))
+    if metadata is None:
+        return _cvstudio_error_payload(
+            "STORAGE_PAYLOAD_INVALID",
+            "PPC metadata payload is invalid or too large",
+            400,
+        )
+    written = _CVSTUDIO_PPC_REPOSITORY.upsert(metadata)
+    return jsonify({
+        "ok": True,
+        "written": written,
+        "request_id": _cvstudio_current_request_id(),
+        "legacy_preserved": True,
+    })
+
+
+@app.route("/storage/ppc-metadata/clear", methods=["POST"])
+def phase2a_ppc_metadata_clear():
+    _CVSTUDIO_PPC_REPOSITORY.clear()
+    return jsonify({
+        "ok": True,
+        "request_id": _cvstudio_current_request_id(),
+        "legacy_preserved": True,
+    })
+
+
 @app.route("/diagnostics/runtime", methods=["GET"])
 def cvstudio_runtime_diagnostics():
     return jsonify(_cvstudio_runtime_diagnostics_payload())

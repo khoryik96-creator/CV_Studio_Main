@@ -15387,16 +15387,80 @@ var _ppcDraftBusy = {};
 var _ppcInvoicePreviewPlacementId = '';
 var _ppcInvoicePreviewMessage = null;
 var _ppcInvoiceForceNewDraft = false;
+var _ppcMetaSqliteCache = null;
+var _ppcMetaMutationVersion = 0;
+var _ppcMetaHydrationPromise = null;
+var _ppcMetaWriteQueue = Promise.resolve();
 
-function ppcMetaLoad() {
+function ppcMetaLegacyLoad() {
   try {
     var d = JSON.parse(localStorage.getItem(PPC_META_STORE) || '{}');
     return d && typeof d === 'object' && !Array.isArray(d) ? d : {};
   } catch(e) { return {}; }
 }
-function ppcMetaSave(data) {
-  try { localStorage.setItem(PPC_META_STORE, JSON.stringify(data || {})); } catch(e) {}
+function ppcMetaMerge(sqliteData, legacyData) {
+  var merged = {};
+  function add(source, preferNewer) {
+    if (!source || typeof source !== 'object' || Array.isArray(source)) return;
+    Object.keys(source).forEach(function(id){
+      var incoming=source[id];
+      if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) return;
+      var existing=merged[id];
+      if (!existing) { merged[id]=incoming; return; }
+      if (!preferNewer) { merged[id]=incoming; return; }
+      var incomingAt=String(incoming.updatedAt||''),existingAt=String(existing.updatedAt||'');
+      if (incomingAt && (!existingAt || incomingAt>=existingAt)) merged[id]=incoming;
+    });
+  }
+  add(sqliteData, false);
+  add(legacyData, true);
+  return merged;
 }
+function ppcMetaStoragePost(path, payload) {
+  return fetch(path, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(payload || {})
+  }).then(function(response){
+    return response.json().catch(function(){return {};}).then(function(data){
+      if (!response.ok || !data.ok) throw new Error(data.message || data.error || 'Local PPC storage request failed');
+      return data;
+    });
+  });
+}
+function ppcMetaQueuePost(path, payload) {
+  _ppcMetaWriteQueue=_ppcMetaWriteQueue.catch(function(){}).then(function(){return ppcMetaStoragePost(path,payload);});
+  return _ppcMetaWriteQueue;
+}
+function ppcMetaLoad() {
+  var source=_ppcMetaSqliteCache && typeof _ppcMetaSqliteCache==='object' && !Array.isArray(_ppcMetaSqliteCache)
+    ? _ppcMetaSqliteCache : ppcMetaLegacyLoad();
+  return Object.assign({},source||{});
+}
+function ppcMetaSave(data) {
+  data=data&&typeof data==='object'&&!Array.isArray(data)?data:{};
+  _ppcMetaSqliteCache=Object.assign({},data);
+  _ppcMetaMutationVersion+=1;
+  try { localStorage.setItem(PPC_META_STORE, JSON.stringify(data)); } catch(e) {}
+  ppcMetaQueuePost('/storage/ppc-metadata/upsert',{metadata:data}).catch(function(){});
+}
+function ppcMetaHydrateFromSQLite() {
+  if (_ppcMetaHydrationPromise) return _ppcMetaHydrationPromise;
+  var startedVersion=_ppcMetaMutationVersion,legacy=ppcMetaLegacyLoad();
+  _ppcMetaHydrationPromise=ppcMetaStoragePost('/storage/ppc-metadata/import',{metadata:legacy}).then(function(data){
+    var merged=ppcMetaMerge(data.metadata,ppcMetaLegacyLoad());
+    _ppcMetaSqliteCache=merged;
+    try{localStorage.setItem(PPC_META_STORE,JSON.stringify(merged));}catch(e){}
+    if(_ppcMetaMutationVersion!==startedVersion)ppcMetaQueuePost('/storage/ppc-metadata/upsert',{metadata:merged}).catch(function(){});
+    try{if(_ppcItems.length)ppcApplyFilters(false);}catch(e){}
+    return merged;
+  }).catch(function(){
+    _ppcMetaSqliteCache=ppcMetaLegacyLoad();
+    return _ppcMetaSqliteCache;
+  });
+  return _ppcMetaHydrationPromise;
+}
+window.addEventListener('load',function(){setTimeout(ppcMetaHydrateFromSQLite,0);});
 function ppcUpdateMeta(placementId, field, value) {
   var id = String(placementId || '');
   if (!id) return;
@@ -18355,13 +18419,102 @@ window.addEventListener("load", function() {
   if (inp) inp.value = USD_TO_MYR.toFixed(2);
 });
 var _statsFilter = 'week';
+var _statsSqliteCache = null;
+var _statsMutationVersion = 0;
+var _statsClearVersion = 0;
+var _statsHydrationPromise = null;
+var _statsStorageWriteQueue = Promise.resolve();
 
-function statsLoad() {
+function statsLegacyLoad() {
   try { return JSON.parse(localStorage.getItem('guo_lab_stats') || '[]'); } catch(e) { return []; }
 }
-function statsSave(records) {
+function statsStableStorageValue(value) {
+  if (Array.isArray(value)) return '[' + value.map(statsStableStorageValue).join(',') + ']';
+  if (value && typeof value === 'object') {
+    return '{' + Object.keys(value).sort().map(function(key){
+      return JSON.stringify(key) + ':' + statsStableStorageValue(value[key]);
+    }).join(',') + '}';
+  }
+  var encoded=JSON.stringify(value);
+  return encoded===undefined ? 'null' : encoded;
+}
+function statsStorageRecordKey(record) {
+  record = record && typeof record === 'object' ? record : {};
+  if (record.id) return 'id:' + String(record.id);
+  try { return 'legacy:' + statsStableStorageValue(record); } catch(e) { return 'legacy:' + String(record.ts || '') + '|' + String(record.name || '') + '|' + String(record.mode || ''); }
+}
+function statsMergeStorageRecords(sqliteRecords, legacyRecords) {
+  var merged = [], positions = {};
+  function add(record) {
+    if (!record || typeof record !== 'object' || Array.isArray(record)) return;
+    var key = statsStorageRecordKey(record);
+    if (Object.prototype.hasOwnProperty.call(positions, key)) merged[positions[key]] = record;
+    else { positions[key] = merged.length; merged.push(record); }
+  }
+  (Array.isArray(sqliteRecords) ? sqliteRecords : []).forEach(add);
+  (Array.isArray(legacyRecords) ? legacyRecords : []).forEach(add);
+  return merged;
+}
+function statsLegacySave(records) {
   try { localStorage.setItem('guo_lab_stats', JSON.stringify(records)); } catch(e) {}
 }
+function statsStoragePost(path, payload) {
+  return fetch(path, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(payload || {})
+  }).then(function(response){
+    return response.json().catch(function(){return {};}).then(function(data){
+      if (!response.ok || !data.ok) throw new Error(data.message || data.error || 'Local storage request failed');
+      return data;
+    });
+  });
+}
+function statsQueueStoragePost(path, payload) {
+  _statsStorageWriteQueue = _statsStorageWriteQueue.catch(function(){}).then(function(){
+    return statsStoragePost(path, payload);
+  });
+  return _statsStorageWriteQueue;
+}
+function statsLoad() {
+  var records = Array.isArray(_statsSqliteCache) ? _statsSqliteCache : statsLegacyLoad();
+  return Array.isArray(records) ? records.slice() : [];
+}
+function statsSave(records) {
+  records = Array.isArray(records) ? records.slice() : [];
+  _statsSqliteCache = records;
+  _statsMutationVersion += 1;
+  statsLegacySave(records);
+  statsQueueStoragePost('/storage/usage-history/upsert', {records:records}).catch(function(){});
+}
+function statsHydrateFromSQLite() {
+  if (_statsHydrationPromise) return _statsHydrationPromise;
+  var startedVersion = _statsMutationVersion;
+  var legacy = statsLegacyLoad();
+  _statsHydrationPromise = statsStoragePost('/storage/usage-history/import', {records:legacy}).then(function(data){
+    var currentLegacy = statsLegacyLoad();
+    var clearedDuringHydration = _statsClearVersion > startedVersion;
+    var merged = clearedDuringHydration ? currentLegacy : statsMergeStorageRecords(data.records, currentLegacy);
+    _statsSqliteCache = merged;
+    statsLegacySave(merged);
+    if (clearedDuringHydration) {
+      return statsQueueStoragePost('/storage/usage-history/clear', {}).catch(function(){}).then(function(){
+        if (!merged.length) { renderStats(); return merged; }
+        return statsQueueStoragePost('/storage/usage-history/upsert', {records:merged}).catch(function(){}).then(function(){renderStats();return merged;});
+      });
+    }
+    if (_statsMutationVersion !== startedVersion) {
+      return statsQueueStoragePost('/storage/usage-history/upsert', {records:merged}).catch(function(){}).then(function(){renderStats();return merged;});
+    }
+    renderStats();
+    return merged;
+  }).catch(function(){
+    _statsSqliteCache = statsLegacyLoad();
+    return _statsSqliteCache;
+  });
+  return _statsHydrationPromise;
+}
+window.addEventListener('load', function(){ setTimeout(statsHydrateFromSQLite, 0); });
 
 function statsRecord(candidateName, mode, costUSD, model, jaUrl, provider, meta) {
   model = model || getModel();
@@ -18619,7 +18772,11 @@ function exportStatsExcel() {
 
 function clearStats() {
   if (!confirm('Clear all usage history? This cannot be undone.')) return;
+  _statsSqliteCache = [];
+  _statsMutationVersion += 1;
+  _statsClearVersion = _statsMutationVersion;
   try { localStorage.removeItem('guo_lab_stats'); } catch(e) {}
+  statsQueueStoragePost('/storage/usage-history/clear', {}).catch(function(){});
   renderStats();
   showToast('History cleared', 'info');
 }
