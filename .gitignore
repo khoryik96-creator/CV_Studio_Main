@@ -1,0 +1,17 @@
+# Owner-only enrolment material is not needed by protected CI builds.
+OWNER_ONLY_AUTHY_SETUP/
+
+# Generated/build/runtime files
+node_modules/
+protected-output/
+__pycache__/
+*.pyc
+*.pyo
+*.bak
+.DS_Store
+package-lock.json
+npm-shrinkwrap.json
+startup_timing.log
+startup_authorization_error.txt
+install_log.txt
+install_health_report.json

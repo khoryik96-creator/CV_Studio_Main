@@ -1,0 +1,118 @@
+name: Build protected CV Studio packages
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: windows-x64
+            os: windows-latest
+            python: "3.12"
+          - target: macos-arm64
+            os: macos-15
+            python: "3.12"
+          - target: macos-intel
+            os: macos-15-intel
+            python: "3.12"
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+
+    steps:
+      - name: Disable Git line-ending conversion
+        shell: bash
+        run: git config --global core.autocrlf false
+
+      - name: Check out private source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+
+      - name: Normalize private repository dependency state
+        shell: bash
+        run: |
+          python owner_build_tools/repo_consistency.py --root . --repair --report repo_consistency_report.json
+          if ! git diff --quiet -- package-lock.json npm-shrinkwrap.json package.json .gitignore .gitattributes "*.bat" owner_build_tools/*.bat owner_build_tools/*.command .github/workflows/build-protected.yml; then
+            echo "::warning::The checkout contained stale npm lock/workflow state. The build normalized it. Commit the current owner-kit files to keep the private repository clean."
+            git diff -- package-lock.json npm-shrinkwrap.json package.json .gitignore .gitattributes "*.bat" owner_build_tools/*.bat owner_build_tools/*.command .github/workflows/build-protected.yml || true
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Python build and runtime dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "nuitka==4.1.3" ordered-set zstandard
+          python -m pip install -r requirements.txt
+          if [[ "${{ matrix.target }}" == "windows-x64" ]]; then python -m pip install pywin32; fi
+
+      - name: Install Node runtime and protection dependencies
+        shell: bash
+        run: |
+          npm install --ignore-scripts --no-audit --no-fund --package-lock=false
+          npm install --no-save --ignore-scripts --no-audit --no-fund --package-lock=false javascript-obfuscator@4.1.1
+
+      - name: Verify dependency/workflow consistency after npm install
+        shell: bash
+        run: |
+          python owner_build_tools/repo_consistency.py --root . --report repo_consistency_report.json
+
+      - name: Build and smoke-test protected package
+        shell: bash
+        run: |
+          python owner_build_tools/build_protected.py \
+            --target "${{ matrix.target }}" \
+            --source-root . \
+            --output-dir protected-output
+
+      - name: Verify smoke result
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          files=list(pathlib.Path('protected-output').glob('*protected_smoke.json'))
+          if len(files)!=1:
+              raise SystemExit(f'Expected one smoke result, found {len(files)}')
+          data=json.loads(files[0].read_text(encoding='utf-8'))
+          if data.get('ok') is not True:
+              raise SystemExit(f'Protected smoke failed: {data}')
+          print('Protected smoke passed:', files[0])
+          PY
+
+      - name: Upload colleague package and public smoke result
+        uses: actions/upload-artifact@v4
+        with:
+          name: cv-studio-v24.6.217-${{ matrix.target }}-COLLEAGUE
+          path: |
+            protected-output/*colleague.zip
+            protected-output/*protected_smoke.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload owner-only compiler diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: cv-studio-v24.6.217-${{ matrix.target }}-OWNER-DIAGNOSTICS
+          path: |
+            protected-output/*nuitka_report.xml
+            protected-output/*runtime.log
+            protected-output/*failure.json
+            protected-output/*startup_timing_failure.log
+            repo_consistency_report.json
+          if-no-files-found: ignore
+          retention-days: 7

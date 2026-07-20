@@ -1,0 +1,906 @@
+CV Studio private source patch base
+Version: v24.6.217
+Keep this ZIP for future patches. Do not distribute this source package to colleagues.
+
+JobAdder API investigation source of truth:
+https://api.jobadder.com/v2/docs
+Bundled reference: references/jobadder_v2_openapi.json
+
+Confirmed production AddCandidateActivity write model:
+- POST /candidates/{candidateId}/activities
+- activitySettingId 8225
+- textAnswers [{questionId, text}]
+- listValueAnswers [{questionId, values}]
+- dateRangeValueAnswers [{questionId, startDate, endDate}]
+- ratingValueAnswers [{questionId, rating}]
+- Presentability questionId 62988, rating 1-4
+
+GET/response details use question/answer and question/percentage and must not be reused as the POST model.
+Normal OneNote transfer uses the official OAuth activity schema, creates a new Screening Call, then updates parsable salary/notice through UpdateCandidate. The F12 browser helper remains emergency-only.
+
+Correct salary/notice normalization source of truth:
+- references/salary_notice_logic_handover.md
+- JobAdder current monthly equivalent = (monthly base x guaranteed salary months / 12) + fixed recurring monthly allowances.
+- AWS/annual wage supplement = guaranteed 13th-month salary.
+- Support 13th, 13.5th, 14th and 14.5th month salary multipliers.
+- Exclude variable/discretionary bonus, EPF/KWSP, SOCSO, EIS, commission, claims, reimbursements, stock/RSU/ESOP, insurance and employer contributions.
+- Preserve all components in the Screening Call breakdown text.
+- Expected fixed amount overrides percentage; percentage uses the normalized monthly equivalent.
+
+Deterministic salary canonicalisation (v24.6.135):
+- AI may extract clues only; deterministic code calculates final current/expected salary.
+- One canonical salary object feeds JobAdder profile updates, transfer records and emergency fallback.
+- Never reparse display strings.
+- Use ROUND_HALF_UP to whole currency units.
+- guaranteedSalaryMonths is one total field; supports AWS/13th, 13.5, 14, 14.5 and explicit N-month contractual/guaranteed bonuses.
+- Expected percentage always uses canonical current.monthlyEquivalent and validates basisCurrentAmount parity.
+
+OneNote salary processing and cost transparency (v24.6.135):
+- OneNote salary AI assist is enabled by default and routes through the dedicated `OneNote — Salary extraction` AI route, whose default provider is DeepSeek.
+- AI receives only Current Salary Breakdown and Expected Salary text; candidate name, email, notice period and the rest of the screening note are not included in the salary/currency prompt.
+- AI extracts structured salary components only. Deterministic Python code remains the sole owner of final current salary, expected salary, JobAdder profile values, displays and exports.
+- If the configured AI key is missing, the provider fails, or the response is unusable, CV Studio falls back safely to the local deterministic parser and records the fallback reason.
+- Identical provider/model/input combinations reuse a local hash-keyed component cache; the raw salary text is not stored in that cache. Cache hits make no new AI call and cost USD 0.
+- Processing metadata records provider, model, API-call/cache status, input/output tokens and estimated token cost. OneNote UI, transfer records and Usage & Cost Tracker show the actual processing path.
+- Dashboard local-only records must display `Local · deterministic-salary-v1`, never Claude. AI-assisted records display the provider/model actually used, e.g. DeepSeek / deepseek-v4-flash.
+- DeepSeek token cost uses the app pricing table based on the official DeepSeek Models & Pricing reference; displayed cost is an estimate from returned token usage and the configured model rate.
+
+
+Salary shorthand correction (v24.6.135):
+- Recognizes recruiter shorthand such as `13.5th bonus` and `14th bonus` as total guaranteed salary months.
+- Treats a standalone additive cash component after the base (for example `RM12k + 500`) as fixed monthly cash when it is a separate safe component.
+- Example confirmed rule: `rm12k + 500 + 13.5th bonus + 16epf + 2 months bonus` = RM14,000 current monthly equivalent; EPF and the non-guaranteed 2-month bonus remain excluded.
+- Expected 15-30% from RM14,000 = RM16,100 to RM18,200.
+
+
+OneNote salary currency population (v24.6.135):
+- Currency detection is strictly scoped to Current Salary Breakdown and Expected Salary. Summary/RFL/LF/Leads/Remarks/Presentability/Notice and full note text are ignored.
+- DeepSeek may normalize aliases; deterministic code selects the final supported ISO code and exact JobAdder option.
+- If current and expected currencies differ, JobAdder custom Currency field 4 follows Expected Salary.
+- Public OAuth profile update uses custom [{fieldId:4,value:<exact option>}], validated against GET /candidates/fields/custom/4 when available.
+- Emergency SPA helper mirrors Kano and sets customFields[4].value.
+- Supported dropdown options are stored in references/salary_notice_logic_handover.md.
+
+Extensive risk hardening (v24.6.135):
+- Explicit salary-field currency evidence overrides conflicting AI; multi-currency AI disambiguation is constrained to explicit candidates.
+- AI salary numbers are validated against raw-field evidence before deterministic calculation.
+- Fixed 13.5 mths / 14th salary parsing and base-selection hazards.
+- Failed paid AI extraction is cost-recorded; historical deterministic rows render Local.
+- Currency custom-field write is skipped if Candidate GET omits custom collection.
+- Numeric notice dates are calendar-validated; browser bridge ignores client canonical numbers.
+
+
+OneNote summary alias support (v24.6.136):
+- The Screening Call summary field accepts Brief Overview of Experience, Brief Overview, Overview, Summary, and common candidate/profile/professional/career/experience variants.
+- Supports both inline labels (for example `Overview: ...`) and heading-only layouts where `Overview` is on one line and the content starts below it.
+- All aliases map to the existing JobAdder question 41172; the official activity payload mapping is unchanged.
+
+
+Extensive OneNote parser hardening (v24.6.137):
+- Summary/Overview labels accept inline and heading-only Markdown, bullets, numbering, hash headings, and multiline paragraphs.
+- Summary collection stops at all recognized screening field headings/shorthands so RFL/LF/CS/ES/NP and other fields are not swallowed into question 41172.
+- Presentability extraction is strict 1-4 and no longer misreads 10/10, 14, 40, years-of-experience numbers, or unrelated x/4 text.
+- Corrupted/non-array OneNote transfer history is discarded safely rather than breaking a successful transfer record render.
+- macOS startup enable/disable no longer invokes launchctl through a shell; it uses a fixed argument list to remove shell-injection/path-quoting risk.
+
+AI Crawler rename, lock and installer gate (v24.6.138):
+- Visible “The Spider” branding is renamed to “AI Crawler”; stable internal IDs/routes remain unchanged to reduce regression risk.
+- AI Crawler uses an independent version-scoped tab unlock with access code 1571.
+- AI Crawler JobAdder options, search and candidate-preview routes also require the access code server-side.
+- Windows INSTALL.bat / INSTALL_CORE.bat / INSTALL_CORE.ps1 and macOS install.sh now require access code 1571, with three masked attempts and exit code 13 on denial.
+- The installer stores only the SHA-256 digest in the scripts, not the plain code.
+- Important: this is a casual local access gate, not encryption or enterprise DRM. A technically capable user with local file access can modify scripts or copy an already-installed app.
+
+Installer access-code correction (v24.6.139):
+- Windows INSTALL.bat / INSTALL_CORE.bat / INSTALL_CORE.ps1 and macOS install.sh now require installer access code 1212.
+- AI Crawler and Lead Finder remain locked with code 1571.
+- CV Summary remains locked with code 1212.
+- The installer continues to store only the SHA-256 digest, allows three masked attempts, and exits 13 on denial.
+- This remains a casual local deterrent rather than encryption or licensing.
+
+
+Authy/TOTP installer gate (v24.6.141):
+- Replaces the fixed installer code 1212 with a standard RFC 6238 TOTP code compatible with Authy.
+- Account issuer: The 郭 Lab; account label: CV Studio Installer.
+- Six digits, 30-second period, HMAC-SHA1; accepts current plus one previous/next time step for minor clock skew.
+- Three masked attempts; denial exits 13. There is no fixed installer fallback.
+- Owner-only QR, setup URI and manual key are stored under OWNER_ONLY_AUTHY_SETUP in the private package only. Never distribute that folder.
+- Source-removed colleague package contains no QR, URI or manual setup key.
+- CV Summary remains 1212. AI Crawler and Lead Finder remain 1571.
+- Offline TOTP necessarily requires verifier secret material within the installer. It is obscured but recoverable/bypassable by a technically capable local user; this is not server licensing, encryption or DRM.
+
+
+Machine-bound first-run authorization and salary typo fix (v24.6.141):
+- A correct Authy code entered through INSTALL.bat/install.sh creates a signed receipt outside the app folder, bound to the local machine fingerprint.
+- CV Studio.bat, START_HIDDEN.vbs, start.sh and app.py all refuse to launch when the receipt is missing, invalid or copied from another computer.
+- The receipt is version-independent so future builds using the same installer secret remain authorized on that machine.
+- Direct app.py launch is guarded before Flask/dependency imports; denial exits 13 and instructs the user to run the installer.
+- This remains an offline local deterrent; a highly technical user can still patch local code.
+- Salary month parsing tolerates common recruiter typos such as `13th monnth bonus`, `13th mnth bonus` and `13th mth bonus`.
+- Regression example: `15% epf + 13th monnth bonus + 3 months bonus + rm10k + rm 400 allowance` = RM11,233 current monthly equivalent. EPF and the non-guaranteed 3-month bonus remain excluded.
+
+
+Recruiter salary typo normalization hardening (v24.6.142):
+- Adds a conservative deterministic salary-field-only typo normalizer. It never scans Summary, RFL, Looking For, Leads, Remarks, Presentability or unrelated note sections.
+- Allowance aliases include allowance, allowence, alowance, allwance, allwan, alwance, alwan, alwn and related close forms.
+- Month aliases include month/months, monnth, moth, mnth, mth/mths, mthh, monht/monhth and attached ordinal shorthand such as 13thmth.
+- Currency typo aliases include ringgit plus rngint, rnggit, ringit, ringgt, renggit and related close forms, including no-space suffixes such as 2000rngint.
+- Bonus, EPF and percent typo aliases are normalized conservatively for salary parsing.
+- Original recruiter text remains the stored Screening Call breakdown; normalization is used only for deterministic extraction/calculation and is recorded in canonical metadata.
+- DeepSeek salary extraction prompt now explicitly understands these typo families. Cache namespace is bumped to salary-ai-v4-typo-tolerant so stale pre-fix components are not reused.
+- Current/Expected currency priority remains unchanged: Expected Salary currency wins the single JobAdder Currency field when both differ.
+
+
+Windows Authy receipt creation fix (v24.6.143):
+- Fixes a v24.6.141-v24.6.142 Windows-only installer regression where INSTALL_CORE.ps1 validated the Authy code, cleared the plaintext variable, and then assigned the cleared value to the receipt writer.
+- Symptom: `Installer access granted.` followed immediately by `Could not create the machine authorization receipt.` and exit code 13.
+- The accepted code is now preserved only long enough to invoke INSTALL_RECEIPT.ps1, then removed from the environment and script state in the existing finally block.
+- Adds an internal empty-authorization guard before receipt creation so future regressions fail with a specific message.
+- No Authy re-enrollment or QR rescan is required; the existing owner token/secret remains unchanged.
+
+
+Desktop OneNote COM/local-link hardening (v24.6.144):
+- Fixes the misleading `Desktop OneNote hierarchy read failed ... PowerShell exited with code 0` failure seen on some Windows PowerShell 5.1/Office installations.
+- OneNote COM fallback now runs a temporary UTF-8 BOM `.ps1` through `-File`, forces non-zero exit on exceptions, prefers Windows PowerShell 5.1, and transports OneNote XML as base64 to avoid console-encoding/blank-output loss.
+- COM activation tries OneNote.Application plus versioned ProgIDs. GetHierarchy/GetPageContent use explicit BYREF strings and xs2013 fallback.
+- Desktop `onenote:///C:\...\Section.one#section-id=...` links are now recognized, decoded, and opened directly with OneNote.OpenHierarchy without requiring successful root notebook enumeration.
+- Load Notebooks / Sections passes the pasted desktop link to the backend; if root enumeration fails, the directly resolved section is returned as a one-section picker.
+- Scan Source can resolve that local section path directly and list its pages.
+- No salary, DeepSeek, JobAdder, Authy secret, machine receipt, or lock-code behavior changed.
+
+
+Desktop OneNote local notebook-folder section picker (v24.6.145):
+- Pasted local notebook-folder links such as `onenote:///C:\Users\...\OneNote Notebooks\My Notebook` are treated as notebook containers, not as a single section.
+- CV Studio combines direct OneNote notebook-hierarchy enumeration with local `.one` file discovery, including section-group subfolders, so Office builds that expose only the first section are supplemented.
+- Load Notebooks / Sections returns every resolved section and keeps the Section dropdown unselected so the user explicitly chooses which section to scan.
+- A full `Section.one` link still resolves as a single section exactly as in v24.6.144.
+- Local recycle-bin/cache folders are skipped conservatively; inaccessible OneDrive placeholders are reported as warnings rather than hiding successfully resolved sections.
+- No salary, DeepSeek, JobAdder, Authy enrollment, machine receipt, AI Crawler or lock-code behavior changed.
+
+
+Desktop OneNote section-picker visibility fix (v24.6.146):
+- Fixes the live v24.6.145 regression where Desktop/manual mode populated `oneNoteSectionSelect` but hid its parent `oneNoteWebPickerRow`.
+- Notebook and Section dropdowns now remain visible in Web, Desktop/manual, and Both modes.
+- A nearby status hint reports the number of sections found and highlights the picker after loading.
+- Multiple sections remain unselected until the user explicitly chooses one; Scan Source still refuses silent first-section selection.
+- No backend OneNote enumeration, salary, DeepSeek, JobAdder, Authy, machine-receipt, installer, or feature-lock logic changed.
+
+Saved Desktop/Manual OneNote Links (v24.6.147):
+- Desktop/manual OneNote links can be saved locally with a user-defined name and category: Notebook, Section, or Page.
+- Saved links use the version-independent browser-storage key `cvstudio_onenote_saved_desktop_links_v1`, so they persist across CV Studio updates on the same browser/computer.
+- Selecting a saved link fills the manual-link input. `Use Saved` switches to Desktop/manual mode and applies category-aware behavior: notebooks load the section picker; sections/pages resolve their pages.
+- Saving an already-saved link updates it rather than creating a duplicate. Users can rename, recategorize, update, and delete saved links.
+- Storage parsing is defensive: malformed/non-array data is ignored, invalid entries are discarded, names are capped at 80 characters, links at 4096 characters, and the list at 100 entries.
+- Only the manually supplied OneNote link/name is stored. No OneNote page content, Microsoft token, candidate data, salary data, or JobAdder data is added to this saved-link store.
+- No backend OneNote enumeration, salary, DeepSeek, JobAdder, Authy, machine-receipt, installer, or feature-lock logic changed.
+
+
+
+Compact OneNote guidance UI (v24.6.148):
+- Removes most always-visible instructional paragraphs from the OneNote console to reduce clutter and vertical scrolling.
+- Keeps only compact operational statuses such as AI cost, section count/selection, connection state, and transfer results.
+- Moves necessary explanations into native hover balloons on small info icons, labels, and action buttons.
+- Shortens visible labels and button text: Source, Filters, Manual link, Saved links, Name, Use Link, Use, and Import Checked.
+- Normal section-load success messages no longer occupy the page-list area; detailed messages remain visible for actual errors.
+- No OneNote enumeration, saved-link storage, salary, DeepSeek, JobAdder, Authy, machine-receipt, installer, or feature-lock behavior changed.
+
+
+Email-optional OneNote import (v24.6.149):
+- OneNote pages import and remain reviewable even when no email address is present.
+- Imported backend page markers are split into separate review rows so a no-email page is not merged into another candidate.
+- A compact Candidate email field and Match button allow the recruiter to add an email later and match JobAdder.
+- Missing email is informational, not an import failure. Transfer still requires a matched JobAdder candidate and Presentability 1-4.
+
+Desktop OneNote import de-duplication and email-optional review (v24.6.149):
+- Selected OneNote pages import even when no candidate email is present; missing email is informational rather than an import error.
+- A no-email page remains as an editable review row. The recruiter can add an email later and click Match before transfer.
+- Transfer still requires a matched JobAdder candidate and Presentability 1-4; import itself does not.
+- Desktop OneNote page extraction reads only leaf `<one:T>` nodes. It no longer concatenates Page/Outline/OE ancestor `itertext()` values that repeated the same note several times.
+- Embedded OneNote `<br />` markup is converted to real line breaks and no longer appears literally in imported notes.
+- Multiple candidate emails on one page are split into independent blocks. Candidate 2 starts at its own email (with at most one safe preceding name line) and no longer inherits candidate 1's RFL/CS/ES fields.
+- Repeated occurrences of the same email are de-duplicated to one review row for that email within the page.
+
+Saved OneNote link workflow refinement (v24.6.150):
+- Moves the new-link Save button beside the upper Use Link button.
+- Clicking Save opens a focused popup that requires a user-defined Name and Category (Notebook, Section, or Page).
+- Removes the redundant Use button from the Saved links row. Selecting a saved entry immediately fills the upper manual-link field plus its editable Name and Category.
+- The upper Use Link button remains the only explicit open/resolve action, so merely selecting a saved item does not trigger OneNote COM/Graph work.
+- Selected entries can be renamed, recategorized, or have their link edited, then persisted with Save Changes. Save Changes is disabled until a saved entry is selected.
+- Duplicate manual links update their existing saved entry instead of creating duplicates. Existing storage key and data format remain unchanged: `cvstudio_onenote_saved_desktop_links_v1`.
+- No OneNote page parsing, desktop COM, Microsoft Graph, salary/DeepSeek, JobAdder transfer/profile update, Authy, machine-receipt, installer, feature-lock, or source-protection behavior changed.
+
+Pinned navigation and persistent section-picker attention (v24.6.151):
+- The main page-tab button panel is sticky on desktop/tablet-width layouts, so tab buttons remain accessible while the document scrolls. Very small screens keep normal non-sticky flow to avoid covering most of the viewport.
+- The OneNote notebook/section picker attention outline is now strong red instead of blue.
+- The attention outline no longer disappears after a timer; it remains until the recruiter clicks the picker row, a picker field, or its label.
+- A fresh section-loading result may draw attention again when a new notebook/section list is populated.
+- No OneNote parsing, saved-link storage, desktop COM, Microsoft Graph, salary/DeepSeek, JobAdder transfer/profile update, Authy, machine-receipt, installer, feature-lock, or source-protection behavior changed.
+
+
+Optional pinned navigation toggle (v24.6.152):
+- Replaces always-on sticky navigation with an opt-in Pin tabs toggle in the bottom-right corner of the main page-tab panel.
+- Pin state persists in browser storage under `cvstudio_page_nav_pinned_v1`.
+- When enabled, the panel stays in normal flow at the top of the page, then switches to a measured fixed-position floating panel after the user scrolls past it.
+- A same-size spacer prevents page-content jumps while the panel is floating; resize and scroll listeners keep its width aligned with the app shell.
+- Clicking Pinned unpins it. At 760px and below, pinning is disabled and the panel remains in normal flow to avoid covering small screens.
+- No tab ordering, tab locks, activity alerts, OneNote parsing, saved-link storage, COM/Graph integration, salary/DeepSeek, JobAdder writes, Authy, machine receipts, installers, or source-protection behaviour changed.
+
+
+Pinned navigation stacking-context fix (v24.6.153):
+- Root cause: `.app` contains the navigation, while several later feature views (including OneNote and Dashboard) are body-level siblings. Wallpaper mode gives every direct body child `position: relative; z-index: 1`, creating sibling stacking contexts. A fixed navigation left inside `.app` cannot out-rank later sibling views, so those views can paint over it and make the navigation appear to slide away.
+- While floating, the navigation is now temporarily portalled to `document.body` and assigned a high application-layer z-index below the Owl/settings modal layers.
+- The original spacer remains inside `.app`, preserving exact width, left alignment, and page height. Unpinning or returning above the anchor restores the navigation immediately after the spacer.
+- Pin preference, toggle placement, 760px mobile cutoff, persistent red OneNote picker attention, tab order/locks, and all backend behaviour remain unchanged.
+
+
+Pinned navigation content scroller (v24.6.154):
+- Pin tabs remains optional and uses the existing cvstudio_page_nav_pinned_v1 preference.
+- Once the navigation floats, the active feature page is placed in a dedicated viewport directly below it.
+- Long pages scroll inside that viewport, so the feature panel no longer covers page content.
+- The active view is temporarily portalled to document.body to support both legacy .app views and later body-level views.
+- Tab changes restore the previous view, portal the newly active view, and retain a separate scroll position per tab.
+- Unpinning restores the active view to its exact original DOM position and returns to normal document scrolling.
+- Mobile widths of 760 px and below keep normal page flow.
+- Once the pinned workspace activates, it stays active until the user clicks Pinned to unpin or the viewport drops to the mobile cutoff. This avoids scroll-lock oscillation.
+
+
+Mac installer and launcher hardening (v24.6.155):
+- macOS now installs Python dependencies into `~/.guo_lab_cv_studio/venv` instead of calling global `pip3`.
+- `start.sh` launches with that same isolated interpreter and verifies all required imports before starting.
+- Homebrew paths `/opt/homebrew/bin` and `/usr/local/bin` are explicitly added for Apple Silicon and Intel Macs.
+- The Desktop `CV Studio.command` launcher now records the exact installed `cv_formatter/start.sh` path. It no longer assumes the folder is directly under `~/` or `~/Downloads`.
+- A non-Python process already holding localhost port 5000 is not killed; startup stops with a clear alert because JobAdder OAuth uses the fixed port-5000 callback.
+- Tesseract/Poppler install failures remain warnings so basic CV Studio features can still install; core Python/Node dependency failures remain fatal.
+- Windows installers, Authy/TOTP material, machine receipts, navigation pinning, OneNote parsing, JobAdder writes, salary rules, locks, and source protection remain unchanged.
+
+
+Batch missing-email JobAdder prompt (v24.6.156):
+- When Batch Format completes a CV but detects no candidate email, the inline JobAdder email field now shows the placeholder “Enter email for JobAdder”.
+- The required email field uses a strong red outline, pale-red background and focus ring so the empty column is obvious.
+- Pressing Enter submits through the existing blur/change upload path.
+- Existing automatic JobAdder upload behaviour is unchanged when an email is detected.
+
+
+OneNote unmatched-candidate CV creation bridge (v24.6.157):
+- A OneNote row with a valid email remains visible after JobAdder confirms that no candidate exists.
+- That confirmed no-match row shows Upload CV beside Match. The button opens the native PDF/DOCX/DOC file chooser.
+- The chosen CV is added to the existing Create Profile queue and starts automatically; the Create Profile tab uses the existing orange running outline, then green done/red failed state.
+- The OneNote email is authoritative for this bridge, so the CV cannot silently create a different-email profile.
+- The specific OneNote row shows an orange in-progress notice, then a green “Candidate profile is created in JobAdder.” confirmation (or a red row-local failure message).
+- Successful creation writes the returned candidate ID/name back into the same row, making it matched and ready for the existing Screening Call transfer once Presentability is valid.
+- Existing Create Profile uploads, OneNote matching/transfer, salary, Authy, machine receipt, macOS launcher and source-removal behaviour remain unchanged.
+
+OneNote review/parser/notification hardening (v24.6.157):
+- Email-less and even title-only selected OneNote pages remain visible as review rows in Matched screening notes.
+- Missing or invalid candidate email fields use a persistent red pulsating outline and explicit “Enter candidate email” placeholder until corrected.
+- Heading-only OneNote templates may contain bounded blank paragraphs between a field label and its value; parenthetical aliases such as Reason for Leaving (RFL), Looking For?, Current Salary Breakdown (CS), Expected Salary (ES), Notice Period (NP / Availability), and Presentability (Confidence, Comms, Business Awareness) are recognised.
+- Wrapped values stop at the next field, page marker, different email, or a safe name-before-email boundary, preserving multi-candidate isolation.
+- Presentability accepts valid 1-4 forms such as “3/4 - Good” while still rejecting out-of-range/ambiguous values.
+- Visible OneNote textareas, email fields, and Presentability selects are synchronized into row state immediately before transfer validation, preventing a focused/unblurred populated field from being reported as missing.
+- Global toast notifications, JobAdder dialogs, and the server reconnect banner now remain above the optional pinned navigation/content workspace. Toasts are positioned below the pinned tab panel.
+
+
+OneNote free-form canvas block parsing (v24.6.158):
+- Desktop OneNote extraction still reads only leaf <one:T> nodes, but now preserves each top-level Outline/text box with a stable note-block boundary.
+- A visual text box with one email is parsed as one candidate whether the email is at the top or bottom.
+- A text box without an email becomes its own review row with the red pulsating email field, even when other text boxes on the same page contain emails.
+- Flat legacy/Graph/manual text also splits when core screening headings repeat, preventing a second RFL/CS set from being absorbed into the previous candidate.
+- Invalid Presentability values such as 32 remain intentionally blank; valid communications 3/4 still resolves to rating 3.
+
+
+AI Crawler two-stage discovery and 0-100 fit (v24.6.159):
+- When Boolean Rules / Keywords are supplied, they drive JobAdder candidate discovery. AI/JD-derived strings do not replace the recruiter-authored Boolean discovery query.
+- The JD is not used as a discovery rejection gate. After keyword discovery and existing explicit hard filters, each candidate receives a normalized 0-100% job match fit based on job scope, role alignment and relevant requirements.
+- Language and education/degree criteria are always omitted from match-fit percentage calculations.
+- Candidate cards display the percentage and separate keyword-discovery evidence from job-scope fit evidence.
+- Only candidates at 10% fit or above are shown; results are sorted highest fit first. Keyword-only searches without JD/role context retain a transparent 10% discovery baseline rather than returning an invented high fit.
+
+Dashboard JobAdder URL attachment hardening (v24.6.159):
+- Every stats record now receives a stable local record ID.
+- Single Format CV uploads attach the JobAdder profile URL to the exact formatting record rather than whichever unlinked format row happens to be newest.
+- Batch auto-uploads and the manual missing-email path attach the URL to that exact batch row. The previous manual-email path uploaded successfully but never updated Dashboard stats, which caused a candidate name with no clickable URL.
+- Create Profile manual-email continuation now records the completed profile with its URL; existing FCV Upload already creates a URL-complete dashboard record and remains unchanged.
+
+AI Crawler Boolean recall fix (v24.6.160):
+- Do not send an entire recruiter Boolean expression as one literal JobAdder Keywords value and assume JobAdder will parse AND/OR/parentheses.
+- Split Boolean atoms into separate latest-resume keyword searches using official parameter casing: Keywords, Limit, Offset.
+- Recombine candidate ID result sets locally with exact AND / OR / NOT logic.
+- Treat JobAdder keyword-result membership as valid discovery evidence even when GET candidate detail does not expose the underlying resume text.
+- Internal _spider metadata must never inflate JD fit evidence.
+- A JobAdder-confirmed Boolean candidate receives a conservative 10% floor when visible profile fields are insufficient for a higher JD/job-scope score, so keyword matches are not incorrectly hidden.
+- Up to 200 eligible candidates can be displayed per search; Boolean term scans may page through up to 3,000 candidates per atom before local set combination.
+
+
+AI Crawler native JobAdder Boolean correction (v24.6.161):
+- JobAdder candidate Keywords search natively supports recruiter Boolean expressions. Send the complete authored expression once, unchanged except whitespace/control-character cleanup.
+- Do not split Boolean atoms into separate API searches and do not reconstruct AND/OR/NOT logic locally.
+- JobAdder result membership is authoritative keyword-discovery proof. Do not re-test the Boolean rule against candidate-detail JSON because that response may omit latest-resume text.
+- Boolean NOT is handled by JobAdder; only the separate Exclude/Avoid field is rechecked locally.
+- A Boolean-confirmed candidate with insufficient visible JD evidence remains visible at the transparent 10% floor.
+- Language and education stay excluded from match-fit scoring; the JD remains scoring-only, never a keyword-discovery gate.
+
+
+OneNote selected-row Presentability validation fix (v24.6.162):
+- Transfer validation now checks Presentability only for rows selected for the current transfer.
+- An unchecked matched row with blank/invalid Presentability no longer blocks other selected ready candidates.
+- The row-level red missing-field state remains visible on the incomplete row for later correction.
+- Live DOM synchronization before transfer remains preserved.
+
+
+OneNote repeat-transfer and typo correction (v24.6.163):
+- Editing any field after a successful transfer reopens that matched row for a deliberate new Screening Call transfer.
+- A second successful transfer remains a NEW Candidate Screening Call and is labelled Transferred again.
+- OneNote Settings now includes a default-on spelling-correction toggle stored under cvstudio_onenote_spelling_correction_v1.
+- Correction is conservative: recognised field-label typos and notice-period values only; Original Notes are never rewritten.
+- Notice examples such as 3 month, 3month, 3mothn, 3monht and common Immediate misspellings normalize safely.
+
+
+OneNote recruitment vocabulary spelling correction (v24.6.164):
+- The existing default-on Settings > OneNote API spelling-correction toggle now also corrects conservative recruitment vocabulary inside parsed fields.
+- Covered examples include allowance, contract/contractual, permanent, expatriate, local, nationality, sponsorship, citizenship, relocation, employment, salary, bonus, guaranteed, negotiable, availability, environment, experience, communication, presentability, candidate, residential status, visa/work permit, remote/hybrid/onsite.
+- Explicit common aliases and tightly bounded Damerau edit-distance matching are used; correct derivatives such as contractor, allowances, employees and candidates are protected.
+- Candidate name, email and phone are never changed. Brief Overview uses explicit aliases only; other structured fields may use the conservative fuzzy allow-list.
+- Original Notes remain byte-for-byte unchanged. Disabling the toggle leaves parsed values untouched on the next Parse & Match.
+- Frontend preview and backend JobAdder activity/profile paths apply the same correction policy.
+
+
+OneNote inline-name parsing and bulk selection controls (v24.6.165):
+- A candidate name may appear before the first field on the same line, e.g. `Gavin Tew rfl: ...`; the parser now preserves `Gavin Tew` as the name and extracts the RFL value.
+- Consecutive duplicate aliases for the same field, e.g. `Notice Period: 1 month` followed by `np: 1 month`, remain in one candidate block instead of creating a false second candidate.
+- After Scan Source, the page picker shows Select all and Unselect all controls.
+- Matched screening notes now provide Select all ready and Unselect all controls. Select all ready chooses only matched, non-transferred rows with valid Presentability.
+
+
+Batch Format stale-start recovery (v24.6.166):
+- Fixes the state shown as an orange Batch tab, files stuck at Waiting, and Start Processing remaining disabled.
+- Adding fresh files clears an orphaned prior run latch and re-enables Start Processing.
+- Clear All now clears the Batch tab run state, timer/watchdog, and disabled-button state when no real request is running.
+- Clear All is blocked while a genuine processing row is active so in-flight requests are not orphaned.
+- A 750 ms startup watchdog releases the controls and shows an error if a startup exception occurs before the first row reaches Processing.
+- Batch timer DOM access is defensive and cannot leave the workflow locked if the timer element is unavailable.
+
+
+PPC / Post Placement Care dashboard (introduced v24.6.167; current v24.6.173):
+- New PPC tab sits before AI Crawler and Lead Finder, preserving those as the second-last and last tabs.
+- Reads JobAdder placements through GET /placements using official StartDate, Approved, Type, Offset and Limit parameters; no PPC JobAdder write route exists.
+- Default view is approved Permanent/Contract/Temporary placements starting in the current year; Last year and All time quick ranges are available.
+- Displays candidate, company, job title, type, status, start/end dates, associated recruiter(s)/Placed by, Created By fallback, job owner and direct JobAdder links.
+- Recruiter/company/type/status/payment/guarantee filters, search, sorting, KPI tiles, 100-row pagination and Excel-compatible CSV export are included.
+- Payment choices: Not set, Unpaid, Invoiced, Paid. Guarantee choices: Not set, 1-6, 9, 12 months and Resigned / Backout.
+- Payment/guarantee metadata persists locally by JobAdder Placement ID under cvstudio_ppc_meta_v1 and survives JobAdder refreshes.
+- Guarantee end date is derived from placement start date plus the selected months and labelled Active, Ending soon or Expired.
+- PPC refresh uses the existing authenticated JobAdder OAuth user and read scope. The backend caps one refresh at 5,000 placements, enriches up to 500 placement-detail records for associated recruiter names with six workers, and returns visible fallback/truncation warnings when needed.
+
+
+PPC persistence + quick AI provider panels (v24.6.168):
+- PPC placement snapshots are cached per date range/Approved-only query in IndexedDB, with a bounded localStorage fallback.
+- Reloading CV Studio restores the last PPC date range, filters, sort and page, then displays cached placement rows immediately without automatically re-downloading them.
+- This year / Last year / All time reuse each range's cached snapshot when available; Refresh JobAdder explicitly replaces only JobAdder fields.
+- Payment and Guarantee Period remain separately stored by Placement ID under cvstudio_ppc_meta_v1 and survive refresh/range changes.
+- Single CV and Batch Format each have a compact Claude/DeepSeek selector that uses saved keys/models and writes to the existing per-feature AI route stores.
+
+
+PPC recruiter/date/guarantee corrections (v24.6.169):
+- Guarantee Period supports 1-6, 9 and 12 months plus Resigned / Backout. The special state has no calculated end date and remains local by Placement ID.
+- The Placed by recruiter filter uses only Placement.recruiters user IDs. Created By, placement owner and job owner are displayed separately and never count as recruiter matches.
+- Placement pagination follows totalCount and advances by the actual returned page length, so a tenant returning a short page before the end no longer drops later placements.
+- Current-year cache keys are schema-versioned so incomplete v24.6.168 snapshots are not reused. Jan 1 and Dec 31 remain included.
+
+
+PPC interactive rows, KPI quick filters and dashboard/table customization (v24.6.170):
+- Clicking a placement table row highlights that row with a persistent green outline until another row is selected.
+- KPI cards are interactive quick filters layered on top of the existing date/recruiter/company/type/status/payment/guarantee/search filters. Active now, Upcoming starts, Ending in 30 days, Unpaid and Guarantee ending soon show only the matching candidates without clearing the user's existing filters. Clicking the selected card again, or Placements shown, clears only the KPI quick filter.
+- KPI counts are calculated from the normal filtered result set before applying the KPI quick filter, so the cards remain meaningful while a quick view is active.
+- Right-click anywhere on the KPI bar to choose which dashboard KPI cards are visible. Visibility is stored locally under cvstudio_ppc_kpi_visibility_v1 and survives reloads. Hiding the currently active KPI card safely clears that quick filter.
+- Right-click anywhere on the table-header row (Candidate, Company, Job title, etc.) to choose which PPC columns appear. Column visibility is stored under cvstudio_ppc_column_visibility_v1, survives reloads, and always keeps at least one column visible.
+- The selected KPI quick filter is included in the existing PPC UI-state persistence.
+
+
+Pinned-navigation notification positioning fix (v24.6.171):
+- The wallpaper rule for direct body children previously overrode the global toast from `position: fixed` to `position: relative`, so unlock/success/error notifications could appear as a thin strip at the left edge or behind the pinned workspace.
+- The global toast now remains viewport-fixed at the highest notification layer even while wallpaper mode is active.
+- While the feature navigation is pinned, notifications appear 12 px below the navigation and align 12 px inside its right edge. They no longer sit behind the panel or detach to an odd screen corner.
+- Unpinning clears the temporary top/right offsets and restores the normal top-right notification position.
+- Toast accessibility metadata (`role=status`, `aria-live=polite`) is preserved for status announcements.
+
+
+Quick AI provider expansion and bug audit (v24.6.173):
+- Added in-tab Claude / DeepSeek quick toggles to CV Summary, CV Scoring, The Owl, Blind JD and Company Profile.
+- These controls write to the same per-feature AI Routing keys used by Settings; whichever control is changed last is authoritative.
+- Existing Format CV and Batch Format quick toggles remain independent and unchanged in purpose.
+- Quick panels display the resolved provider/model, inheritance source and whether the selected provider has a saved key.
+- Settings Save/Reset, API-key saves, tab switches and startup now resynchronise all seven quick panels.
+- Bug audit fix: changing Single CV now immediately refreshes Batch when Batch inherits its route.
+- Bug audit fix: AI Crawler's documented default `Same as The Owl` now truly resolves The Owl route instead of silently falling back to Main AI; the Settings dropdown also contains the missing `Same as The Owl` option and its badge refreshes after changes.
+- Extensive regression coverage includes provider persistence, Settings round-trip, missing-key warnings, route payload selection, pinned notifications, PPC persistence/interactions, OneNote parsing/selection, AI Crawler native Boolean handling, Batch stale recovery, dashboard links, installers, receipts and source-removed packaging.
+
+
+## v24.6.173 PPC invoice email
+- PPC placement detail normalization now retains official Placement.billing contact/email/terms/dueDate and Placement.salary.fee plus charge currency.
+- Each PPC row has an Open Outlook button that creates the requested invoice email with candidate, role, commencement date, fee, payment term, client billing email and JobAdder placement link.
+- Invoice setup stores the internal recipient email and greeting locally under cvstudio_ppc_invoice_email_v1.
+- Outlook is opened as a draft only; CV Studio never sends the email automatically.
+- PPC cache schema is 3 so old snapshots without billing data are refreshed once.
+
+
+## v24.6.174 PPC Outlook Web and export hardening
+
+- PPC invoice action now uses a normal `target="_blank"` Outlook Web link rather than a script-created popup.
+- Outlook URL: `https://outlook.office.com/mail/deeplink/compose` with encoded subject/body.
+- The Outlook **To** field is always blank. No `to` query parameter is emitted.
+- JobAdder billing/client email remains in the invoice body only for reference.
+- Older locally saved invoice-recipient values are ignored; Invoice setup now stores only the greeting name.
+- PPC Export Excel is visibly disabled and the export function is blocked at logic level.
+- Payment, guarantee, filters, PPC cache, recruiter logic, interactive KPIs and row highlighting are unchanged.
+
+
+## v24.6.175 PPC saved Outlook recipient restoration
+
+- Restores the saved Outlook invoice recipient under `cvstudio_ppc_invoice_email_v1`.
+- `Invoice setup` now saves both the Outlook **To** recipient and greeting name.
+- Clicking **Open Outlook Web** with no saved recipient prompts for a valid email, saves it, updates the clicked link, and then opens the normal Outlook Web compose URL.
+- Later invoice clicks reuse the saved recipient without prompting until it is changed or cleared in Invoice setup.
+- The JobAdder billing/client email remains a separate reference line inside the email body and is not confused with the Outlook recipient.
+- The normal `target="_blank"` anchor flow from v24.6.174 is preserved to avoid popup-blocker regressions.
+- PPC Excel export remains disabled.
+
+## v24.6.176 PPC complete retrieval and email-preview privacy
+
+- PPC placement collection is now fetched independently for Permanent, Contract, Temporary and Credit placement types, each with its own authoritative `totalCount` and complete Offset/Limit pagination.
+- The PPC safety cap is increased to 20,000 placements. Incomplete type pagination is explicitly reported and is not persisted as a complete cache snapshot.
+- Full placement-detail enrichment now targets every retrieved row by default so placement recruiter and invoice fields are not limited to the first 500 rows. Detail responses are cached in memory by placement ID and updated timestamp during the running session.
+- Complete All time snapshots automatically seed This year and Last year caches, and a complete All time cache can restore a missing range locally. This keeps range counts consistent while preserving manual Payment/Guarantee metadata.
+- PPC cache schema is bumped to 4, invalidating older partial snapshots.
+- Candidate email and JobAdder billing/client email are no longer previewed in the PPC table. The billing/client email remains available only inside the generated invoice-request email body.
+- The Invoice email column label is renamed Invoice action.
+
+
+## v24.6.177 PPC invoice subject and formatted Outlook copy
+
+- Outlook invoice subject now follows `Hyppies: Invoice - Client - Position - Candidate - Placed-by Recruiter`.
+- Recruiter comes only from the actual PPC `placed_by`/placement recruiter value; Job Owner is not substituted.
+- Plain-text Outlook Web body aligns every colon using one calculated label width.
+- Every invoice row has `Copy formatted`, which copies rich HTML using black Calibri 11 with bold labels and a borderless three-column alignment table.
+- `Open Outlook Web` still prefills a usable plain-text body and also attempts the rich clipboard copy during the click.
+- The Outlook Web compose deeplink itself does not reliably accept HTML body markup, so automatic rich insertion cannot be guaranteed without adding Microsoft Graph Mail.ReadWrite authorization.
+- Saved invoice recipient, greeting, hidden dashboard emails, disabled PPC export, PPC caches, Payment and Guarantee metadata remain unchanged.
+
+
+## v24.6.178 Outlook draft navigation reliability
+
+- Fixed PPC `Open Outlook Web` sometimes opening only the Outlook inbox shell and dropping the draft subject/body.
+- Root cause: v24.6.177 relied on changing a normal anchor `href` inside its click handler; some browser/Outlook combinations followed the original navigation before the updated compose URL was applied.
+- The handler now prevents the default anchor navigation, reserves a new tab synchronously, and explicitly navigates that tab to the completed draft URL.
+- Compose URL now uses `https://outlook.office.com/mail/0/deeplink/compose?popoutv2=1` with URL-encoded To, subject and body.
+- Saved recipient prompting, invoice subject format, rich Calibri 11 clipboard copy, hidden dashboard emails, disabled PPC export, placement retrieval and manual PPC metadata remain unchanged.
+
+
+## v24.6.178 PPC selected-row visual cleanup
+
+- Replaced the PPC selected row's real 2 px cell borders with inset green highlights.
+- Root cause: `border-collapse: collapse` merged the borders of adjacent cells and controls, making the outline look uneven and changing row height.
+- Selected rows now use a subtle green background, continuous 1 px inset top/bottom lines, a clear 4 px left accent, and a 1 px right edge.
+- Column hiding continues to recalculate the first/last visible cells, so the highlight remains aligned with the visible table.
+
+
+## v24.6.179 PPC rich Outlook HTML drafts
+
+- Fixed the formatting mismatch between `Open Outlook Web` and `Copy formatted`.
+- Outlook compose deeplink bodies remain a plain-text fallback only.
+- Added a dedicated Microsoft Outlook delegated connection using `Mail.ReadWrite`, separate from OneNote's `Notes.Read` token.
+- `Open Outlook Web` now creates a draft through Microsoft Graph with an HTML body, then opens the returned Outlook `webLink`.
+- The HTML draft uses Calibri 11 pt, black text, bold labels, a fixed label/colon/value table, and aligned colons.
+- Added `Connect Outlook` / `Finish Outlook Login` in the PPC header.
+- Existing recipient and greeting storage remain unchanged.
+- The app creates drafts only and never calls a mail-send endpoint.
+- If Outlook is not connected or Graph fails, the prior plain-text deeplink remains available and the correct rich version is copied automatically.
+- OneNote OAuth scope and token storage remain unchanged to avoid a OneNote permission regression.
+
+
+## v24.6.179 formatted CV alignment preference
+
+- Added General Settings → Formatted CV alignment with `Left` (default) and `Justify`.
+- Saved locally under `cvstudio_cv_text_alignment_v1`.
+- Applies deterministically after AI parsing/blinding to both single Format CV / Blind CV and Batch Format / Blind All DOCX exports.
+- Provider routing does not affect the chosen alignment.
+- Invalid or missing saved values safely fall back to left alignment.
+- The setting controls exported CV body paragraphs and bullets while preserving fixed table/footer layout rules.
+
+- When no valid Outlook rich-draft connection exists, Open Outlook Web now starts/restarts the one-time connection instead of knowingly opening the incorrectly formatted plain-text draft.
+- Successful Graph draft links append Microsoft Outlook's documented `ispopout=1` display parameter.
+
+
+## v24.6.180 Outlook hardening and batch alignment snapshot
+
+- Removed the automatic plain-text Outlook compose fallback. A rich-draft failure now closes the reserved tab and directs the recruiter to the separate Copy formatted button.
+- Added explicit Outlook setup with a dedicated Client ID/tenant. OneNote credentials are no longer inherited silently. The app registration must allow delegated Mail.ReadWrite and public-client/device-code login.
+- Outlook access and refresh tokens are no longer kept in browser localStorage. They are stored in an authenticated, machine-bound backend file beside the install receipt, with restrictive file permissions where supported.
+- Finish Outlook Login now succeeds only after the backend confirms that the token was stored. Backend draft creation automatically refreshes expired access tokens.
+- Outlook success messaging states honestly that Microsoft may open a Graph-created draft in reading/review mode and the user may need to click Edit.
+- Batch Format and Batch Blind now snapshot Left/Justify once at run start so one batch cannot contain mixed alignment if Settings changes mid-run.
+
+
+## v24.6.181 Outlook workflow, integrations and CV body alignment
+
+- Adds duplicate-draft protection with per-placement busy state and backend request idempotency.
+- Stores and displays the connected Outlook account, adds connection diagnostics, test connection and test draft controls.
+- Replaces Outlook browser prompts with Settings → Integrations & Data controls.
+- Keeps Microsoft device-login sessions isolated by random expiring session IDs.
+- Uses Windows DPAPI or macOS Keychain for Outlook secrets when available, with the authenticated machine-bound file only as a fallback.
+- Adds an invoice review modal, exact HTML preview, missing-field warning, and locally saved Open last draft link/timestamp.
+- Adds safe non-secret local-data export/import; access tokens, refresh tokens, API keys, passwords and Authy material are excluded.
+- Changes Justify mode so substantive CV body paragraphs and bullets are justified while headings, dates, job titles, education headings and short skills remain left aligned.
+- Adds a General Settings alignment preview and snapshots the chosen alignment for a batch run.
+
+## v24.6.182 decimal notice, restart and PPC modal hardening
+
+- Decimal notice values can no longer be partially matched after the decimal point.
+- Required policy: 1.5/2.5/3.5 months become 1/2/3 Months; 0.5 month becomes 2 Weeks. Sub-one-month fractions use a four-week month and ROUND_HALF_UP, while other fractional units are deliberately truncated to whole units and recorded in normalization metadata.
+- `/restart` is POST-only and requires the CV Studio custom header plus loopback/same-origin checks. The former CSRF-triggerable GET route was removed.
+- The PPC Outlook invoice preview closes whenever the user leaves PPC and refuses to open outside the active PPC view.
+- Corrected the AI industry enum typo from `Eduction` to `Education`.
+- `_ja_calc_fixed_salary_detailed` now always returns a dictionary; unparseable input returns `{}`.
+- Removed the unreachable `/generate-docx-batch` ZIP route and its helper. The actual Batch workflow remains the intentional per-CV `/generate-docx` loop so independent retry, Dashboard and JobAdder upload state are preserved.
+- Removed verified dead locals, duplicate imports and safe unused imports without changing operational paths.
+
+
+
+## v24.6.184 protected-runtime smoke-test correction
+
+- Preserves all v24.6.182 application behaviour and the v24.6.183 protection-build structure.
+- Changes the Windows native compile from Nuitka console mode `disable` to `hide` so redirected startup diagnostics remain available while the user-facing console remains hidden.
+- Makes informational startup printing safe when no stdout stream exists.
+- Extends compiled-server readiness from 60 seconds to 240 seconds by default.
+- Detects early native-process exits instead of waiting for a generic timeout.
+- Keeps runtime and startup diagnostics under `protected-output` after a failed smoke test.
+- Continues deleting any colleague ZIP after smoke-test failure.
+
+## v24.6.183 native protection build infrastructure
+
+- Adds owner-only Nuitka standalone builders for Windows x64, macOS Apple Silicon and macOS Intel.
+- Adds a private GitHub Actions workflow that builds all three native colleague artifacts on matching operating-system/CPU runners.
+- Protected colleague artifacts contain a native compiled Flask/Python backend, a minimal launcher stub, conservatively transformed browser JavaScript, and no readable application backend source.
+- Owner Authy enrollment material, private handover/reference notes, compiler output and build scripts are explicitly excluded from colleague artifacts.
+- Every protected build must pass source syntax checks, protected JavaScript syntax checks, source-leak scanning, native `/ping`, `/status`, `/`, vendor-asset and DOCX-generation smoke tests before the artifact is accepted.
+- Source-mode behavior remains unchanged. The restart routine now distinguishes source and native execution so a compiled binary never receives its executable path twice.
+- The private-source ZIP remains the only future patch base. Protected native packages are distribution outputs only.
+- Browser-delivered JavaScript remains inspectable by a determined user; the build is practical copy-hardening, not unbreakable DRM.
+
+
+## v24.6.185 protected smoke-test HTTP 204 correction
+
+- Corrected the native protected-build readiness probe to accept CV Studio's intentional `204 No Content` response from `/ping`.
+- Corrected the post-start smoke URL validation so `/ping` may be HTTP 204 with an empty body, while `/status`, `/`, and the bundled jsPDF asset still require HTTP 200 and a non-empty body.
+- Added a 250 ms delay on unsuccessful readiness attempts to prevent accidental tight polling.
+- No CV Studio feature logic was changed beyond version surfaces.
+
+## v24.6.187 protected Windows hidden-runtime correction
+
+- Windows protected binaries use Nuitka no-console mode.
+- START_HIDDEN.vbs launches runtime/native/CVStudio.exe directly with hidden window style.
+- The protected app.py launcher detaches the native process with CREATE_NO_WINDOW.
+- Windows in-app restart also uses CREATE_NO_WINDOW and redirects child streams.
+- Runtime output is written to a private local runtime.log when console streams are unavailable.
+- Existing functional smoke tests and source-leak controls are preserved.
+
+
+## v24.6.193 instance, OAuth, resource and protected-runtime hardening
+
+- Every running package now exposes an exact version/root/instance identity. Windows and macOS launchers, watchdogs, PID files and stop logic distinguish this package from older/newer copies and unrelated port-5000 services.
+- JobAdder OAuth now uses cryptographic, expiring, one-attempt session IDs and state validation. Token activation is a protected POST bound to the initiating browser session; GET can no longer consume the result.
+- OneNote and Outlook device-code attempts are isolated and locked per session so simultaneous tabs cannot overwrite or poll the same attempt.
+- Unsafe HTTP methods accept only the exact CV Studio origins on port 5000 or the private CV Studio request header. Extension access remains limited to OCR routes.
+- Global response headers deny framing, disable MIME sniffing/referrers and prevent sensitive integration responses from being cached.
+- JobAdder, OneNote and AI/search/enrichment secrets migrate from browser storage into DPAPI, macOS Keychain, or an authenticated machine-bound 0600 fallback. Legacy browser values are deleted only after durable backend storage succeeds.
+- JobAdder reconnects can reuse the backend-vault Client Secret only when the requested Client ID exactly matches the stored Client ID. The browser receives only a `client_secret_configured` boolean, never the secret, and changing Client ID requires entering its matching secret.
+- Hidden runtime logging rotates while the application is running, works on both Windows and macOS, suppresses health-probe noise and redacts query strings, emails and common credential fields.
+- PDF, OCR, image, DOCX and ODT processing now has page, pixel, ZIP-entry, expanded-size, concurrency and time limits. Preview and extraction routes apply the same limits and return client-safe 400/413 errors.
+- macOS LaunchAgent files are generated with plistlib, validated against the exact package, checked with launchctl, and removed only for this instance. Port shutdown verifies the full CV Studio command before stopping anything.
+- Windows VBS health checks have explicit timeouts. STOP and port-conflict handling use normalized exact package roots and PID rechecks rather than broad Python/WScript termination.
+- Machine authorization is finalized only after mandatory Node/runtime setup succeeds. A failed install does not leave a launch-authorized partial package.
+- Windows Node downloads use pinned SHA-256 values, retries and timeouts. Unverified automatic Tesseract/Poppler/antiword downloads remain disabled.
+- Protected builds bundle the vetted adm-zip 0.5.17 runtime tree, verify its aggregate hash, and smoke-test without borrowing owner node_modules. Colleague installation still requires a Node.js executable but no npm download for adm-zip.
+- Windows packages omit macOS launchers; macOS packages omit Windows launchers. The owner-only title-cache merge utility is no longer distributed to colleagues.
+- Native compilation seals the two largest proprietary prompt constants in the temporary compile input and rejects binaries containing their plaintext prefixes. This is stronger copy-hardening, not irreversible DRM.
+- Protected workflow artifacts separate colleague ZIP/smoke results from owner-only compiler diagnostics.
+- PPC Outlook, CV formatting/alignment, Batch, Dashboard, OneNote parsing/transfer, salary/notice rules, native JobAdder Boolean discovery, installers and existing locks remain functionally preserved.
+
+
+## v24.6.193 protected-builder dependency correction
+- Fixed Windows protected builds falsely rejecting a valid `adm-zip@0.5.17` installation because the builder hashed npm's mutable working tree.
+- Added an immutable, owner-vetted adm-zip payload with a pinned aggregate SHA-256.
+- Protected colleague packages now copy only that vetted payload; source `node_modules` is never distributed.
+- Owner/source npm installation is still functionally tested, but harmless extra npm metadata no longer blocks compilation.
+
+Patch note v24.6.193: cross-platform deterministic adm-zip tree hashing fixes the Windows false integrity failure from v24.6.190.
+
+
+## v24.6.193 private-repository/npm consistency hardening
+
+- Preserves the v24.6.191 cross-platform deterministic adm-zip tree-hash fix that corrected the local Windows failure shown in the owner recording.
+- Repairs the separate private-GitHub-repository failure where an old workflow ran `npm ci` against a stale `package-lock.json` pinned to adm-zip 0.5.16.
+- The deliberate no-lock design is now enforced by owner builders, CI, and `build_protected.py`: exact `adm-zip` 0.5.17, no package-lock/npm-shrinkwrap, and the current `npm install --package-lock=false` workflow.
+- CI removes stale lock files at checkout, reports repository drift, verifies the state again after npm installation, and still packages only the immutable owner-vetted adm-zip tree.
+- Owner-only Windows/macOS repo-sync helpers can remove/stage stale lock/workflow files in a private Git clone.
+- No CV Studio feature behavior was intentionally changed.
+
+
+## v24.6.193 Git byte-stability and Windows batch line-ending hardening
+
+- Adds root `.gitattributes` with `* -text` so private GitHub checkouts preserve exact committed bytes across Windows, macOS, and Linux.
+- The protected workflow also runs `git config --global core.autocrlf false` before `actions/checkout`, protecting the vetted adm-zip payload even when a stale private repository has not yet committed `.gitattributes`.
+- Normalizes every shipped `.bat` file to CRLF, including `CV Studio.bat` and `MERGE_TITLE_CACHE.bat`, preventing cmd.exe label-scanner failures on colleague machines.
+- Repository repair/verification now creates and validates `.gitattributes`, CRLF batch files, exact adm-zip 0.5.17, no lock file, and pre-checkout Git configuration.
+- Private repo sync helpers stage the new byte-policy and normalized batch files.
+- Protected builder validation refuses CI state that can rewrite vetted dependency bytes.
+- No CV Studio feature behavior was intentionally changed.
+
+
+## v24.6.194 owner-tool BOM and repository-repair correctness
+
+- Removes UTF-8 BOMs from both Windows owner batch builders and both macOS owner command scripts.
+- Windows owner batch files remain CRLF; macOS/Linux command scripts remain LF with a valid first-byte shebang.
+- Repository repair/verification now rejects BOM-bearing owner scripts and repairs them deterministically.
+- Clean repository repair runs no longer report a false npm-install repair.
+- `.gitignore` is rewritten only when its content actually changes.
+- Private-repository sync helpers stage both Mac owner command scripts as well as the Windows owner tools.
+- Protected CI drift reporting includes owner `.command` scripts.
+- No CV Studio runtime feature behavior was intentionally changed.
+
+
+## v24.6.195 AI-spend, preview, Antiword and JobAdder region hardening
+
+- Paid AI routes require a random per-process HttpOnly browser-session cookie.
+- Blind JD visual data URLs are allowlisted and attribute-escaped.
+- Blind JD plain-text fallback uses the shared full HTML escaper.
+- Package/known Antiword binaries are preferred; arbitrary Windows PATH execution is opt-in.
+- INSTANCE_PORT.ps1 is UTF-8 without BOM and enforced by owner tooling.
+- JobAdder uses the OAuth-provided regional API base and never silently forces AU3.
+- Migrated API bases are restricted to JobAdder-owned HTTPS hosts.
+
+## v24.6.197 AI Crawler discovery/funnel correction
+
+- Country is no longer sent to JobAdder as Location; optional City / State is the only source of Location.
+- Native Boolean zero-result searches use a clearly labelled plain-keyword fallback.
+- Non-enriched candidates keep missing IT Skills, Qualifications, Country and Residential fields as unknown unless Strict is enabled.
+- Explicit country/residential mismatches still exclude.
+- Search response and UI expose JobAdder matched, scanned, enriched, excluded, showing and mode.
+- Latest-resume API scope limitation is stated in the AI Crawler help text.
+- Candidate list calls request embedded skills/notes when supported and retry without Embed when a tenant rejects it.
+
+## v24.6.197 AI Crawler accuracy, pagination and timeout hardening
+
+- Boolean zero-result fallback now extracts positive atoms only; NOT-scoped atoms never become discovery keywords.
+- Negative-only Boolean expressions do not run an unsafe inverted fallback.
+- Visible NOT matches are conservatively excluded from fallback rows while missing evidence stays unknown.
+- Country filtering recognizes exact ISO codes and comprehensive Malaysia state/city coverage, with wider APAC mappings.
+- Candidate pagination continues through short pages until totalCount or the safety cap, and detects repeated/premature-empty pages.
+- AI Crawler browser timeout increased to 240 seconds and stale run responses are ignored.
+- Short acronyms use token boundaries, preventing BI/mobile, SAP/sapphire, HR/three and BW/BWorld false matches.
+- Residential Status reads only labelled residency/work-rights fields and uses explicit status mappings.
+- Multi-query candidate de-duplication uses the canonical candidate-ID helper and normalized email fallback.
+- JobAdder Embed is serialized as repeated array values; unsupported Embed still retries safely without it.
+- Windows Script Host launchers are now BOM-free CRLF; repository repair and protected-build validation block UTF-8-BOM VBS files that cause 800A0408.
+
+
+
+## v24.6.198 Windows stop recovery and AI Crawler card/fit usability
+- STOP.bat now identifies a CV Studio listener through the localhost `/instance` identity, validates the listener PID, product, package-root hash and process type, and safely stops an older extracted CV Studio package even when pythonw.exe was launched with a relative app.py path.
+- The verified package watchdog is stopped before its listener, with a bounded recheck to prevent WATCHDOG.vbs from immediately recreating the old pythonw.exe process. Unrelated programs on port 5000 are never terminated.
+- AI Crawler deep-merges candidate detail fields so nested JobAdder current salary, expected salary and availability/notice values are retained when the list result contains only a partial employment object.
+- Candidate cards use normalized salary/notice snapshots, are more compact, and include sorting by fit, current salary, expected salary, notice, update date and name.
+- Match fit uses bounded latest-resume extraction plus JD, recruiter Boolean/must-have, target role and nice-to-have coverage, removing the previous uniform 10% outcome where candidate detail JSON omitted resume evidence.
+- The loaded CV preview exposes an in-preview Find bar. Ctrl+F on the active AI Crawler tab searches extracted preview text, including PDF/image previews when JobAdder supplies a readable resume attachment.
+
+## v24.6.199 deep AI Crawler integrity, preview and protected-installer hardening
+
+- Resume-text cache keys are scoped to an opaque fingerprint of the connected JobAdder account/token plus candidate ID; reconnect, restore and disconnect clear the in-memory cache.
+- Empty or failed resume extraction is no longer cached for 15 minutes.
+- Plain-keyword Boolean fallback membership no longer receives the native-Boolean 60% proof floor.
+- Candidate list/detail merging is identity-aware for custom fields and employment ideal/other records, preserving detail-only current salary, expected salary and notice values.
+- PDF preview search scans all pages within the existing safe page/time/text ceilings instead of only the first eight pages.
+- Image and scanned-PDF resumes use bounded OCR when available; binary data is never decoded and labelled as resume text.
+- Candidate preview requests use AbortController plus a monotonically increasing selection ID, preventing a slow older response from replacing the newer selected CV.
+- Find-in-CV state resets when a different candidate preview is loaded, including when the same keyword is reused.
+- Resume scoring uses a strict whole-pool merit-plus-spread budget of at most 40 candidates and one latest attachment each. Full detail is loaded only for the competitive return pool plus a 12-row backfill margin, removing the old first-120/first-200 positional bias while reducing the candidate API request ceiling.
+- AI Crawler salary and notice sort behaviour is intentionally unchanged by user instruction.
+- Protected Windows installation is identified by its platform marker, never by whether the native EXE happens to be present. A missing/quarantined native EXE or bundled adm-zip tree now produces an explicit damaged-package/antivirus diagnostic instead of misleading source-build Python/npm errors.
+- Protected colleague installation verifies the bundled pinned adm-zip 0.5.17 and never runs npm install. Owner/source installation retains the pinned npm fallback.
+
+## v24.6.200 protected PDF OCR and JobAdder 401 recovery
+
+- Protected installer now displays all seven numbered steps; step 3 is explicitly marked as bundled/skipped instead of disappearing.
+- Protected Windows/macOS native builds bundle pypdfium2/PDFium for scanned-PDF rendering, so external Poppler is no longer required. Poppler remains an optional fallback in owner/source environments.
+- All bounded scanned-PDF OCR paths use the built-in renderer first and preserve Tesseract, page, pixel, semaphore and deadline limits.
+- AI Crawler retries one rejected JobAdder GET after a forced OAuth refresh. If the refreshed token is still rejected, the backend marks JobAdder disconnected and returns one clear reconnect instruction.
+- The browser stops its multi-query fan-out after the first 401, preventing repeated Location/Role Focus error lines.
+- AI Crawler sort behaviour remains unchanged by user instruction.
+## v24.6.201 JobAdder invalid-grant recovery and protected-workflow naming
+
+- OAuth refresh-token rejection (`400 invalid_grant`) is contained inside the shared token helper instead of escaping as route-level HTTP 500 errors.
+- Rejected refresh credentials invalidate only the access-token state, preserve reusable client registration, clear tenant-bound crawler cache, and expose `needs_reconnect`.
+- AI Crawler and the explicit refresh endpoint return a structured reconnect response.
+- Protected GitHub workflow artifact names now use the current version instead of the stale v24.6.197 label.
+- AI Crawler sorting remains unchanged.
+
+## v24.6.202 collision-free protected-build smoke test
+
+- Native protected-build smoke testing no longer requires production port 5000 to be free.
+- The owner builder selects an ephemeral loopback port and passes it through a smoke-only runtime override.
+- The compiled package still defaults to port 5000 for every normal launch, preserving launchers, OAuth callbacks and security assumptions.
+- Smoke URLs, Host-header validation, self-ping, startup logs and `/instance` identity all use the selected smoke port during the owner test.
+- The smoke JSON records the temporary port and whether production port 5000 was occupied, so an already-running CV Studio instance does not invalidate a genuine new-build smoke test.
+
+## v24.6.203 built-in AI Crawler CV preview finder
+
+- The AI Crawler preview header now contains a permanent built-in Find field instead of showing only a separate extracted-text snippet after Ctrl+F.
+- Ctrl+F on the active AI Crawler tab focuses the in-preview finder. Enter and Shift+Enter move between matches.
+- Searching switches the preview to a searchable Text view of the loaded CV and highlights every located occurrence in place, with the active match outlined and scrolled into view.
+- Visual and Text buttons let the recruiter move between the original PDF/image/DOCX preview and the searchable representation without reopening the candidate.
+- Clearing the search or pressing Escape returns to the original visual preview, and opening another candidate resets all find state.
+- PDF and image files remain visually unchanged; their extracted/OCR text is highlighted in the built-in Text view because browser PDF/image pixels cannot be safely modified by the parent page.
+
+## v24.6.204 automatic Boolean keyword highlights in AI Crawler CV preview
+
+- The AI Crawler preview toolbar adds a persistent `Boolean HL: On/Off` toggle.
+- When enabled, the searchable Text preview automatically highlights every term parsed from Boolean Rules / Keywords.
+- Quoted phrases stay intact, Boolean operators and parentheses are ignored, NOT-scoped terms are identified even inside groups, and double-NOT is resolved.
+- Included terms use yellow highlighting; NOT/excluded terms use red highlighting; a term used in both scopes uses a distinct mixed state.
+- Matching is case-insensitive and boundary-aware, preserving acronym accuracy such as BI not matching mobile, while supporting C++, .NET and simple `*`/`?` wildcards.
+- The toggle preference persists locally. New candidate previews apply it automatically, and editing the Boolean input refreshes highlights live.
+- Manual Find temporarily takes priority. Clearing the manual query restores the automatic Boolean highlights when the toggle remains on.
+- Original PDF/image pixels are unchanged; automatic highlighting uses the built-in searchable Text preview.
+- AI Crawler no longer embeds the browser's native PDF viewer. PDF and converted-Office CVs are rendered server-side into bounded preview-only page images, removing the built-in PDF download toolbar.
+- Image/page previews block ordinary right-click and drag-save actions as a UI deterrent. This does not claim irreversible protection: anything visible on screen can still be captured.
+
+
+## v24.6.205 selectable AI Crawler CV preview text
+
+- AI Crawler keeps the visual PDF/image preview download toolbar removed, but the companion searchable preview is now explicitly selectable and copyable.
+- The former `Text` button is labelled `Select text` so recruiters can clearly switch from image-only visual pages to the selectable CV representation.
+- Drag selection, Ctrl+C, browser context-menu Copy and a new `Copy selection` button work inside the selectable preview.
+- Boolean and manual-find marks remain ordinary selectable text; highlighting no longer prevents copying the underlying words.
+- The global stray-caret guard now recognizes the actual AI Crawler selectable preview classes and IDs instead of the obsolete `.spider-preview-text` class, so it does not clear a user's selection.
+- Visual page images remain preview-only and non-draggable; this preserves the requested removal of built-in file-download controls.
+- The 1,200-candidate safety-cap message is now an amber warning labelled as a successful but potentially incomplete search, instead of looking like a red fatal error.
+
+## v24.6.206 fast selectable visual CV preview and visual keyword overlays
+
+- Visual remains the default AI Crawler CV preview even when Boolean highlighting is enabled.
+- Digital PDF and converted-Office previews now include a normalized PDFium coordinate text layer over the preview-only page images.
+- Recruiters can select and copy words directly from the visual CV without exposing the browser PDF download toolbar.
+- Boolean positive, NOT/excluded and mixed-scope terms are highlighted directly on the visual pages. Manual Find also highlights and navigates matches on the visual CV.
+- Scanned/image-only or rotated pages without reliable coordinates continue to use the Select text OCR/extracted-text fallback rather than showing a misleading overlay.
+- PDFium rendering and coordinate text extraction now happen in one pass at an interactive 118-DPI preview resolution. Fast WebP encoding replaces the older high-effort encoder.
+- When a PDF coordinate layer is available, it supplies preview search text directly, avoiding the prior second pdfplumber parse and materially reducing first-preview latency.
+- Visual page images remain non-downloadable through native PDF controls; image drag/save is still blocked while browser text selection/context-menu Copy remains available on the overlay.
+- AI Crawler sorting, candidate cap, scoring, JobAdder auth and unrelated features remain unchanged.
+- Protected builder diagnostic, smoke and colleague artifact filenames now use the current `v24_6_206` slug instead of the stale `v24_6_202` slug found during deep QA.
+
+
+## v24.6.207 AI Crawler preview reuse, serial shortlist prefetch and two-phase status
+
+- Candidate previews now use three deliberately bounded layers: a frontend payload LRU, a detached rendered-DOM LRU for instant recent revisits, and an account-scoped backend JSON LRU validated by the latest JobAdder attachment fingerprint.
+- Reopening a recently viewed candidate reattaches the already-rendered preview without another network request or loading flash.
+- All currently displayed shortlisted candidate previews are queued for strictly serial background prefetch. Foreground card clicks pause or promote the queue, always take priority, and reprioritize neighbouring cards before the remaining shortlist.
+- Ordinary background failures are silent. A 401/403 stops the remaining queue after the first rejection and shows one reconnect/lock warning, preventing a preview-request storm. A new search, Clear, unlock reset or stale-run invalidation cancels the queue and clears frontend CV data.
+- Memory remains bounded: the frontend retains up to 220 payloads within 160 MB, the recent rendered-DOM cache retains 20 views, and the backend retains up to 240 payloads within 256 MB. No sensitive preview payload is persisted to browser disk storage. Background prefetch eagerly decodes only the first two visual pages so it does not make the active preview sluggish.
+- The backend still performs the cheap latest-attachment listing on every preview request. Attachment ID/type/name/timestamps/size form the validator, so replacing a JobAdder resume causes a fingerprint miss and fresh rendering. Legacy tenants that return no attachment metadata deliberately bypass the backend LRU rather than risk serving a stale CV from an unvalidated empty fingerprint.
+- AI Crawler now keeps one orange in-app tab outline across both phases. Starting a new run first clears the previous AI Crawler browser success/failure badge so the browser indicator cannot remain stale while the new run is orange. Sourcing Notes & Scorecard failure turns the AI Crawler tab red and raises the red browser-tab indicator. JobAdder Candidate Results remain orange while running, then turn green and raise the green browser-tab completion indicator when complete.
+- Partial JobAdder results with warnings complete green; authentication failure or an all-query failure with no candidates completes red. AI Crawler sorting and preview highlighting behaviour remain unchanged.
+
+
+## v24.6.208 AI Crawler bounded preview memory, partial prefetch and cache correctness
+
+- Stops preview prefetch immediately on HTTP 423/403 lock rejection.
+- Stops after three consecutive ordinary preview failures.
+- Reports only previews currently retained in cache; evicted entries are no longer counted as ready or silently requeued.
+- Limits background warming to the first 30 displayed candidates and a 72 MB prefetch payload budget.
+- Uses a lightweight two-page/104-DPI server prefetch payload, then upgrades to the full preview only when opened.
+- Cooperatively cancels background PDFium/LibreOffice work when a foreground preview or Clear/new search takes priority; scanned/image-only OCR is deferred to the foreground open so background warming cannot occupy Tesseract.
+- Caps frontend payload cache at 96 MB and rendered DOM cache at three entries / approximately 96 MB, releasing detached image sources on eviction.
+- Revalidates cached attachment fingerprints after two minutes while keeping immediate A → B → A revisits network-free.
+- Uses a stable protected JobAdder account namespace so normal access-token refresh does not invalidate preview caches.
+- Prevents cleared/stale run tokens from recreating red or green browser-tab indicators.
+- Backend rendered-preview cache is bounded to 120 entries / 192 MB.
+
+
+## v24.6.209 manual second preview batch and default Boolean highlights
+
+- The first 30 displayed AI Crawler candidates still warm automatically in the current sort order.
+- After the first batch finishes, a `Preload next 30` button appears when more displayed candidates are available.
+- Manual second-batch warming expands the current session target to a maximum of 60 candidates and raises only the lightweight preview-payload budget from 72 MB to 96 MB.
+- All existing serial execution, foreground priority, lock/auth stops, three-failure breaker, cancellation and cache eviction controls remain active.
+- If 60 lightweight previews do not fit within 96 MB, warming stops at the memory cap and remaining candidates continue to load normally on click.
+- Boolean highlight is now enabled by default for v24.6.209. The recruiter can still turn it off, and the new preference persists locally after the first toggle.
+- AI Crawler scoring, Boolean parsing, sorting, candidate order, preview rendering, download controls and two-phase tab/browser status are unchanged.
+
+## v24.6.210 expanded AI Crawler preview-memory allowance
+
+- Raises the browser-side AI Crawler preview-cache allowance by exactly 256 MB, from approximately 192 MB to approximately 448 MB before ordinary browser/runtime overhead.
+- Lightweight frontend preview payloads are capped at 320 MB; the first automatic batch may use up to 160 MB and the recruiter-triggered 60-candidate batch may use up to 320 MB.
+- Recent rendered preview DOM remains limited to three candidates and is capped at approximately 128 MB, preventing an unlimited number of decoded CV page images from remaining mounted.
+- The backend rendered-preview LRU remains capped at 192 MB, so total bounded AI Crawler preview-cache allowances are approximately 640 MB across browser and local server, excluding normal application/browser overhead.
+- Serial preloading, foreground priority, cancellation, lock/authentication stops, failure breaker, attachment-fingerprint validation, current sorting order and the 60-candidate ceiling are unchanged.
+
+## v24.6.211 one-gigabyte AI Crawler preview-cache allowance
+
+- Raises the combined bounded AI Crawler preview-cache allowance to exactly 1,024 MB across browser and local server caches.
+- Lightweight frontend preview payloads are capped at 512 MB; the first automatic 30-candidate batch may use up to 256 MB and the recruiter-triggered 60-candidate batch may use up to 512 MB.
+- Recent rendered preview DOM remains limited to three candidates and is capped at approximately 256 MB, preventing an unlimited number of decoded CV page images from remaining mounted.
+- The backend rendered-preview LRU is raised from 192 MB to 256 MB.
+- Combined bounded allowances are therefore 512 MB frontend payloads + 256 MB recent rendered views + 256 MB backend LRU = 1,024 MB, excluding ordinary browser/runtime and temporary rendering overhead.
+- Candidate batch limits, serial preloading, foreground priority, cancellation, lock/authentication stops, failure breaker, attachment-fingerprint validation, sorting and Boolean highlighting remain unchanged.
+
+
+## v24.6.212 AI Crawler fit-context cleanup and min/max experience range
+
+- Location, country/city and on-site/hybrid/remote work-arrangement text from pasted JDs no longer contributes Job Fit percentage points. These remain explicit eligibility/search inputs only.
+- Common JD metadata/header/footer lines are excluded from fit-term extraction while role, domain, responsibility and technical evidence remain scoreable.
+- Years of Experience is now a LinkedIn-style minimum/maximum range (0 to 40+). The right edge at 40 means no maximum.
+- Minimum and maximum experience are hard eligibility gates when experience is visible; unknown experience remains visible rather than being guessed.
+- JobAdder employment-history dates are merged as non-overlapping intervals to estimate total career experience, with labelled explicit experience text as a fallback.
+- Pasted JD scoring is section-aware: Responsibilities, Requirements, Tech Stack/Tools and Nice/Good-to-have sections are retained, while About Client/Company, location/work mode, benefits, culture, alternative titles and footer text are ignored when recognised headings are present.
+- Nice/Good-to-have content is capped to a smaller slice of JD terms so it cannot crowd out core responsibilities and requirements. Unstructured JDs retain a conservative fallback.
+
+
+## v24.6.213 AI Crawler corporate-JD and experience-range hardening
+
+- Recognises hierarchical corporate headings such as 2.1 Job Purpose, 2.2 Primary Responsibilities and 2.4 Qualifications & Skills, plus common apostrophe and Essential/Preferred heading variants.
+- Preserves individual paragraphs and bullets inside DOCX table cells so later responsibilities, regulatory frameworks and certifications are not flattened or discarded.
+- Excludes corporate template metadata such as Job ID, GG level, Transit, Incumbent, signature, pay-equity and working-condition sections from Job Fit evidence.
+- Preserves domain phrases including Regulatory Reporting, Basel III, CRD V/VI, Axiom, SFT, large exposures, concentration risk, audit documentation, workload allocation and coaching/mentoring.
+- Retains professional certifications such as ACA, CIMA, ACCA, CFA, CPA, FRM, PMP, CISSP, CISM and CISA while continuing to exclude degree and language requirements from Job Fit.
+- Experience text fallback now requires explicit experience wording; elapsed time since graduation, age and years in a country cannot be misread as career experience.
+- Hybrid Cloud, Remote Desktop Services, remote sensing and similar technical phrases are preserved while pure location/work-mode metadata remains unscored.
+- Maximum-experience searches enrich candidates in bounded 40-row batches until the requested eligible shortlist plus ranking buffer is filled or the pool is exhausted, replacing the fixed 12-row backfill.
+- Sourcing Notes & Scorecard now receive both minimum and maximum experience constraints.
+- Equal min/max slider handles separate vertically so both remain mouse-accessible.
+
+
+## v24.6.214 AI Crawler precision, JD-noise and sort/prefetch hardening
+
+- Two-word fit phrases no longer receive credit from a single generic token: AWS alone cannot satisfy AWS RDS, and Security Groups cannot satisfy Database Security. Both separated words retain conservative partial credit, labelled explicitly as partial evidence.
+- Education rows contribute professional certifications only; academic subjects such as Finance or Accounting no longer leak into Job Fit merely because they share a row with ACCA/CFA. Distinct technical clauses on the same extracted table line are retained.
+- Recognised About/Company/Benefits sections are excluded even when the following valid heading uses a previously unseen corporate variant. Common Role Summary, Key Requirements, Required Qualifications, Technical Skills, Preferred/Desired and alphabetic/Roman outline headings are recognised. Uppercase technology rows inside a valid section remain evidence rather than being mistaken for another heading.
+- Experience fallback accepts common recruiter formats including 3 yrs exp, 18 months experience and 10 years overall experience while preserving age, graduation-date and location false-positive protections.
+- Sorting candidate results now updates only the card list, preserving the mounted CV preview, finder, visual/text mode and selection. The first-30/optional-60 prefetch plan is rebuilt in the new displayed order without discarding valid cached previews.
+- A JobAdder reconnect signal raised during concurrent resume scoring now exits immediately instead of falling into a sequential retry pass.
+- No React runtime is bundled in CV Studio; production React errors shown by an embedded/external page are not generated by CV Studio's own frontend.
+
+
+## v24.6.215 DeepSeek cost audit and complete paid-usage tracking
+
+- Centralized provider-neutral usage normalization and token-cost calculation across every AI feature.
+- DeepSeek input cost uses returned cache-hit/cache-miss counters; if the endpoint omits the split, all input is conservatively priced at the cache-miss rate and the method is disclosed.
+- CV parse repair/retry calls, blind-CV calls, provider-key tests, Lead Finder subcalls, OneNote salary extraction, and paid malformed/empty outputs are now recorded.
+- Usage & Cost Tracker stores input/output/cache-hit/cache-miss tokens, API-call count, pricing method and success/failure outcome; CSV export includes the same audit fields.
+- The Owl now displays its token cost in-panel. Owl Chat auto-mode is included in exported chat totals.
+- Local-only actions such as JobAdder search/enrichment, PDF/OCR, DOCX generation, sorting, preview caching and Boolean highlighting remain correctly recorded as zero AI-token cost or excluded from AI cost.
+- Usage & Cost now includes an in-app expandable coverage guide listing every known paid DeepSeek action, local no-token action and excluded third-party fee category.
+
+## v24.6.216 staged stability, explainable fit, diagnostics and adaptive preview memory
+
+- Adds `BACKBURNER_ROADMAP.md`, explicitly deferring roadmap items 4 (local WSGI server replacement), 7 (saved/versioned scoring profiles) and 8 (candidate decision workflow) until the owner reactivates them.
+- Adds a structured local error foundation with stable error codes, retryability/action fields and a per-request identifier returned in `X-CV-Studio-Request-ID`, while preserving the legacy `error` field used by existing frontend code.
+- AI Crawler candidate cards now show an exact normalized Job Fit component breakdown: points earned/max points, matched terms, partial terms, missing terms, native-Boolean floor and discovery-floor disclosure.
+- Location, work arrangement, language, education, salary, industry and target companies remain explicitly listed as excluded from Job Fit points.
+- Adds Low, Standard, High and Auto AI Crawler preview-memory profiles. High preserves the approved 1,024 MB combined browser/backend cache allowance; switching profiles clears old preview cache safely.
+- Preview cache status now reports browser usage, backend usage and warmed-candidate counts, with a one-click browser/backend cache clear action.
+- Adds a redacted diagnostic bundle containing runtime identity, platform/memory/dependency status, redacted connection flags, cache statistics, browser metadata without localStorage values, the roadmap note and bounded redacted log tails. No API keys, OAuth tokens, CV files or preview payloads are included.
+- Leaves the Flask runtime, saved scoring profiles and candidate decision workflow unchanged as explicitly requested.
+- Auto memory mode considers both installed RAM and currently available RAM, resolving conservatively under memory pressure; High remains the default for existing users and preserves the approved 1 GB ceiling.
+- Diagnostic browser metadata now tolerates malformed numeric values without crashing, support-log redaction covers quoted values with spaces, URL queries and cross-platform home paths, and downloaded diagnostic/generated-document responses are marked no-store.
+- Preserves the v24.6.215 Usage & Cost history boundary so v24.6.215 records retain their token/call/cache audit detail instead of being mislabeled as legacy.
+
+## v24.6.217 Phase 1 release safety, complete JSON error contract and owner integration foundation
+
+- Preserves roadmap items 4, 7 and 8 as explicit backburner work. Flask remains the local server; no scoring-profile or candidate-decision workflow was added.
+- Every request receives or preserves a bounded request ID. Legacy JSON failures are normalised after each route into the additive `ok/error/message/code/retryable/request_id/severity/action` contract without removing existing fields or changing successful response bodies.
+- The browser sends request IDs on all same-origin requests, keeps the existing anti-CSRF header on unsafe methods, enriches legacy error displays with action guidance and request IDs, and keeps a bounded redacted recent-error list for support bundles.
+- Windows and macOS installers preserve the currently active root-bound receipt, launch the new folder on a temporary loopback port, verify status/package identity/runtime diagnostics, and change the Desktop launcher only after health and rollback state are committed.
+- `RESTORE_PREVIOUS.bat` / `RESTORE_PREVIOUS.ps1` and `restore_previous.sh` switch the signed receipt, Desktop launcher and update state transactionally. Failed verification or state writing restores the original launcher and receipt.
+- Owner source builds expose a hidden Settings integration-test card for local health/DOCX, read-only JobAdder/Microsoft checks and an explicitly confirmed small paid DeepSeek probe. Protected colleague packages report the feature disabled and cannot run it.
+- The pre-existing Max Low Screening Call fixture remains separately locked to candidate 41262878 and exact confirmation `CREATE ONE MAX LOW TEST`; it was not made automatic.
+- Native Windows/macOS compilation and physical-machine smoke execution remain release-gating work. Controlled package assembly is not a substitute for native testing.
+
