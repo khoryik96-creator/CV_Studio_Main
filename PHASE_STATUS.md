@@ -6,8 +6,8 @@
 - Baseline Git commit: `c8eeb34c275d374170a5931d69ed95ea213c791a`
 - Working branch: `codex/phase-2a-sqlite`
 - Active phase: Phase 2A only
-- Status: implementation plan approved from the handover; foundation implementation is next
-- Current milestone: SQLite connection, integrity, migration and backup foundation
+- Status: SQLite safety foundation complete; repository implementation is next
+- Current milestone: repository interfaces and backend JSON-cache migration
 
 ## Verified baseline
 
@@ -92,8 +92,8 @@
 - [x] Verify source baseline and repository state.
 - [x] Inventory existing backend JSON/cache stores and read/write call sites.
 - [x] Design database path, connection policy, migration order and compatibility boundary.
-- [ ] Implement SQLite connection, integrity and backup foundation.
-- [ ] Implement schema-version and migration history.
+- [x] Implement SQLite connection, integrity and backup foundation.
+- [x] Implement schema-version and migration history.
 - [ ] Implement repository interfaces.
 - [ ] Migrate usage history.
 - [ ] Migrate lead-title cache.
@@ -114,6 +114,8 @@
 - Browser notes/settings are not being migrated. Usage history and PPC metadata are the two explicitly named Phase 2A browser-origin stores and will retain legacy localStorage mirrors.
 - Legacy backend cache files remain byte-present throughout migration and continue to receive compatible writes for the transition release.
 - The runtime PID JSON is deliberately not moved because current Windows stop/launcher scripts require it and changing that contract would exceed Phase 2A.
+- Schema changes are ordered as seven migrations so each store receives its own verified pre-change backup and restart-safe checkpoint.
+- Migration tests found and eliminated two Windows file-handle leaks before any existing store was connected to SQLite.
 - No protected colleague package will be produced without matching native compilation and smoke testing.
 - Genuine native Windows/macOS installation testing is not part of the current local source run and will not be claimed.
 
@@ -126,11 +128,20 @@ None.
 - Baseline Git worktree: clean before Phase 2A edits.
 - Baseline/version surface inspection: passed.
 - Storage call-site inventory: complete.
+- SQLite foundation targeted suite: 4 tests passed.
+  - WAL, foreign keys, 5-second busy timeout, integrity check, schema metadata and exact migration history.
+  - Seven distinct pre-migration backups created and independently integrity-verified.
+  - Second initialisation created no duplicate history and no extra backup.
+  - Injected interruption rolled schema and history back to version 3, then a clean restart completed versions 4–7.
+  - Corrupt database returned `STORAGE_CORRUPT`, path-free recovery guidance and left legacy fixture bytes unchanged.
+- Python syntax: `cvstudio_storage.py` and the foundation test module passed `py_compile`.
 
 ## Files changed
 
-- `PHASE_STATUS.md` — baseline evidence, full storage inventory, compatibility decisions and milestone plan.
+- `PHASE_STATUS.md` — baseline evidence, storage inventory, milestone plan and results.
+- `cvstudio_storage.py` — SQLite lifecycle, safety PRAGMAs, integrity checks, ordered schema, migration history, verified backups and redacted diagnostic state.
+- `tests/test_phase2a_storage_foundation.py` — foundation, idempotency, corruption and interrupted-migration coverage.
 
 ## Next action
 
-Implement Milestone 1 and add focused transactional migration/backup tests before touching existing store call sites.
+Implement repository interfaces, prove idempotent legacy imports, then connect the three backend JSON cache boundaries with SQLite-first reads and compatible dual writes.
