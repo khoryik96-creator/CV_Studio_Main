@@ -644,15 +644,452 @@ class CVStudioStorage:
         return payload if isinstance(payload, dict) else None
 
 
+def _safe_text(value, maximum: int = 500) -> str:
+    return str(value or "").strip()[:maximum]
+
+
+def _safe_integer(value) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
+class UsageHistoryRepository:
+    store_name = "usage_history"
+
+    def __init__(self, storage: CVStudioStorage):
+        self.storage = storage
+
+    @staticmethod
+    def _record_key(record: dict) -> str:
+        supplied = _safe_text(record.get("id"), 240)
+        if supplied:
+            return "id:" + supplied
+        return "legacy:" + _payload_fingerprint(record)
+
+    @staticmethod
+    def _write_record(connection, record: dict, source: str) -> None:
+        payload = dict(record)
+        record_id = UsageHistoryRepository._record_key(payload)
+        recorded_at = _safe_text(payload.get("ts"), 80)
+        updated_at = _utc_now()
+        connection.execute(
+            """
+            INSERT INTO usage_history(
+                record_id, recorded_at, payload_json, source, updated_at
+            ) VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(record_id) DO UPDATE SET
+                recorded_at = excluded.recorded_at,
+                payload_json = excluded.payload_json,
+                source = excluded.source,
+                updated_at = excluded.updated_at
+            """,
+            (
+                record_id,
+                recorded_at,
+                _canonical_json(payload),
+                _safe_text(source, 40) or "sqlite",
+                updated_at,
+            ),
+        )
+
+    def import_legacy(self, records, fingerprint: str | None = None) -> int:
+        if not isinstance(records, list):
+            return 0
+        clean = [dict(record) for record in records if isinstance(record, dict)]
+        fingerprint = fingerprint or _payload_fingerprint(clean)
+        with self.storage.connection(write=True) as connection:
+            if self.storage.legacy_import_seen(connection, self.store_name, fingerprint):
+                return 0
+            for record in clean:
+                self._write_record(connection, record, "legacy")
+            self.storage.record_legacy_import(
+                connection, self.store_name, fingerprint, len(clean)
+            )
+        return len(clean)
+
+    def upsert(self, records, source: str = "browser") -> int:
+        if not isinstance(records, list):
+            return 0
+        clean = [dict(record) for record in records if isinstance(record, dict)]
+        with self.storage.connection(write=True) as connection:
+            for record in clean:
+                self._write_record(connection, record, source)
+        return len(clean)
+
+    def list(self) -> list[dict]:
+        with self.storage.connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT payload_json FROM usage_history
+                ORDER BY CASE WHEN recorded_at = '' THEN 0 ELSE 1 END,
+                         recorded_at, rowid
+                """
+            ).fetchall()
+        result = []
+        for row in rows:
+            try:
+                payload = json.loads(row["payload_json"])
+            except Exception:
+                continue
+            if isinstance(payload, dict):
+                result.append(payload)
+        return result
+
+    def clear(self) -> None:
+        with self.storage.connection(write=True) as connection:
+            connection.execute("DELETE FROM usage_history")
+
+
+class LeadTitleCacheRepository:
+    store_name = "lead_title_cache"
+
+    def __init__(self, storage: CVStudioStorage):
+        self.storage = storage
+
+    @staticmethod
+    def _entry_key(entry: dict) -> str:
+        signature = {
+            "family": _safe_text(entry.get("family"), 240),
+            "evidence": sorted(
+                _safe_text(item, 500)
+                for item in (entry.get("evidence") or [])
+                if _safe_text(item, 500)
+            ),
+        }
+        return _payload_fingerprint(signature)
+
+    @classmethod
+    def _write_entry(cls, connection, entry: dict) -> bool:
+        if not isinstance(entry, dict):
+            return False
+        family = _safe_text(entry.get("family"), 240)
+        evidence = entry.get("evidence")
+        if not family or not isinstance(evidence, list) or not evidence:
+            return False
+        payload = dict(entry)
+        connection.execute(
+            """
+            INSERT INTO lead_title_cache(
+                entry_key, family, created_at, hits, payload_json, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(entry_key) DO UPDATE SET
+                family = excluded.family,
+                created_at = excluded.created_at,
+                hits = excluded.hits,
+                payload_json = excluded.payload_json,
+                updated_at = excluded.updated_at
+            """,
+            (
+                cls._entry_key(payload),
+                family,
+                _safe_text(payload.get("created_at"), 80),
+                max(0, _safe_integer(payload.get("hits"))),
+                _canonical_json(payload),
+                _utc_now(),
+            ),
+        )
+        return True
+
+    def import_legacy(self, data, fingerprint: str | None = None) -> int:
+        if not isinstance(data, dict) or not isinstance(data.get("entries"), list):
+            return 0
+        entries = [dict(entry) for entry in data["entries"] if isinstance(entry, dict)]
+        fingerprint = fingerprint or _payload_fingerprint(data)
+        with self.storage.connection(write=True) as connection:
+            if self.storage.legacy_import_seen(connection, self.store_name, fingerprint):
+                return 0
+            count = sum(1 for entry in entries if self._write_entry(connection, entry))
+            self.storage.record_legacy_import(
+                connection, self.store_name, fingerprint, count
+            )
+        return count
+
+    def save(self, data) -> int:
+        entries = (
+            [dict(entry) for entry in data.get("entries", []) if isinstance(entry, dict)]
+            if isinstance(data, dict)
+            else []
+        )
+        with self.storage.connection(write=True) as connection:
+            connection.execute("DELETE FROM lead_title_cache")
+            count = sum(1 for entry in entries if self._write_entry(connection, entry))
+        return count
+
+    def load(self) -> dict:
+        with self.storage.connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT payload_json FROM lead_title_cache
+                ORDER BY created_at, rowid
+                """
+            ).fetchall()
+        entries = []
+        for row in rows:
+            try:
+                payload = json.loads(row["payload_json"])
+            except Exception:
+                continue
+            if isinstance(payload, dict):
+                entries.append(payload)
+        return {"entries": entries}
+
+    def clear(self) -> None:
+        self.save({"entries": []})
+
+
+class LeadContactCacheRepository:
+    store_name = "lead_contact_cache"
+
+    def __init__(self, storage: CVStudioStorage):
+        self.storage = storage
+
+    @staticmethod
+    def _write_entry(connection, cache_key: str, entry: dict) -> bool:
+        cache_key = _safe_text(cache_key, 800)
+        if not cache_key or not isinstance(entry, dict):
+            return False
+        payload = dict(entry)
+        connection.execute(
+            """
+            INSERT INTO lead_contact_cache(
+                cache_key, cached_at, hits, payload_json, updated_at
+            ) VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(cache_key) DO UPDATE SET
+                cached_at = excluded.cached_at,
+                hits = excluded.hits,
+                payload_json = excluded.payload_json,
+                updated_at = excluded.updated_at
+            """,
+            (
+                cache_key,
+                _safe_text(payload.get("cached_at"), 80),
+                max(0, _safe_integer(payload.get("hits"))),
+                _canonical_json(payload),
+                _utc_now(),
+            ),
+        )
+        return True
+
+    def import_legacy(self, data, fingerprint: str | None = None) -> int:
+        if not isinstance(data, dict) or not isinstance(data.get("entries"), dict):
+            return 0
+        entries = data["entries"]
+        fingerprint = fingerprint or _payload_fingerprint(data)
+        with self.storage.connection(write=True) as connection:
+            if self.storage.legacy_import_seen(connection, self.store_name, fingerprint):
+                return 0
+            count = sum(
+                1
+                for key, entry in entries.items()
+                if self._write_entry(connection, key, entry)
+            )
+            self.storage.record_legacy_import(
+                connection, self.store_name, fingerprint, count
+            )
+        return count
+
+    def save(self, data) -> int:
+        entries = data.get("entries", {}) if isinstance(data, dict) else {}
+        if not isinstance(entries, dict):
+            entries = {}
+        with self.storage.connection(write=True) as connection:
+            connection.execute("DELETE FROM lead_contact_cache")
+            count = sum(
+                1
+                for key, entry in entries.items()
+                if self._write_entry(connection, key, entry)
+            )
+        return count
+
+    def load(self) -> dict:
+        with self.storage.connection() as connection:
+            rows = connection.execute(
+                "SELECT cache_key, payload_json FROM lead_contact_cache ORDER BY cache_key"
+            ).fetchall()
+        entries = {}
+        for row in rows:
+            try:
+                payload = json.loads(row["payload_json"])
+            except Exception:
+                continue
+            if isinstance(payload, dict):
+                entries[str(row["cache_key"])] = payload
+        return {"entries": entries}
+
+    def clear(self) -> None:
+        self.save({"entries": {}})
+
+
+class SalaryComponentCacheRepository:
+    store_name = "salary_component_cache"
+
+    def __init__(self, storage: CVStudioStorage):
+        self.storage = storage
+
+    @staticmethod
+    def _write_entry(connection, cache_key: str, entry: dict) -> bool:
+        cache_key = _safe_text(cache_key, 500)
+        if not cache_key or not isinstance(entry, dict):
+            return False
+        payload = dict(entry)
+        connection.execute(
+            """
+            INSERT INTO salary_component_cache(
+                cache_key, saved_at, payload_json, updated_at
+            ) VALUES (?, ?, ?, ?)
+            ON CONFLICT(cache_key) DO UPDATE SET
+                saved_at = excluded.saved_at,
+                payload_json = excluded.payload_json,
+                updated_at = excluded.updated_at
+            """,
+            (
+                cache_key,
+                _safe_text(payload.get("savedAt"), 80),
+                _canonical_json(payload),
+                _utc_now(),
+            ),
+        )
+        return True
+
+    def import_legacy(self, data, fingerprint: str | None = None) -> int:
+        if not isinstance(data, dict):
+            return 0
+        fingerprint = fingerprint or _payload_fingerprint(data)
+        with self.storage.connection(write=True) as connection:
+            if self.storage.legacy_import_seen(connection, self.store_name, fingerprint):
+                return 0
+            count = sum(
+                1
+                for key, entry in data.items()
+                if self._write_entry(connection, key, entry)
+            )
+            self.storage.record_legacy_import(
+                connection, self.store_name, fingerprint, count
+            )
+        return count
+
+    def save(self, data) -> int:
+        entries = data if isinstance(data, dict) else {}
+        with self.storage.connection(write=True) as connection:
+            connection.execute("DELETE FROM salary_component_cache")
+            count = sum(
+                1
+                for key, entry in entries.items()
+                if self._write_entry(connection, key, entry)
+            )
+        return count
+
+    def load(self) -> dict:
+        with self.storage.connection() as connection:
+            rows = connection.execute(
+                "SELECT cache_key, payload_json FROM salary_component_cache ORDER BY rowid"
+            ).fetchall()
+        result = {}
+        for row in rows:
+            try:
+                payload = json.loads(row["payload_json"])
+            except Exception:
+                continue
+            if isinstance(payload, dict):
+                result[str(row["cache_key"])] = payload
+        return result
+
+    def clear(self) -> None:
+        self.save({})
+
+
+class PPCMetadataRepository:
+    store_name = "ppc_metadata"
+
+    def __init__(self, storage: CVStudioStorage):
+        self.storage = storage
+
+    @staticmethod
+    def _write_entry(connection, placement_id: str, metadata: dict) -> bool:
+        placement_id = _safe_text(placement_id, 500)
+        if not placement_id or not isinstance(metadata, dict):
+            return False
+        payload = dict(metadata)
+        connection.execute(
+            """
+            INSERT INTO ppc_metadata(placement_id, metadata_json, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(placement_id) DO UPDATE SET
+                metadata_json = excluded.metadata_json,
+                updated_at = excluded.updated_at
+            """,
+            (
+                placement_id,
+                _canonical_json(payload),
+                _safe_text(payload.get("updatedAt"), 80) or _utc_now(),
+            ),
+        )
+        return True
+
+    def import_legacy(self, data, fingerprint: str | None = None) -> int:
+        if not isinstance(data, dict):
+            return 0
+        fingerprint = fingerprint or _payload_fingerprint(data)
+        with self.storage.connection(write=True) as connection:
+            if self.storage.legacy_import_seen(connection, self.store_name, fingerprint):
+                return 0
+            count = sum(
+                1
+                for key, metadata in data.items()
+                if self._write_entry(connection, key, metadata)
+            )
+            self.storage.record_legacy_import(
+                connection, self.store_name, fingerprint, count
+            )
+        return count
+
+    def upsert(self, data) -> int:
+        if not isinstance(data, dict):
+            return 0
+        with self.storage.connection(write=True) as connection:
+            count = sum(
+                1
+                for key, metadata in data.items()
+                if self._write_entry(connection, key, metadata)
+            )
+        return count
+
+    def load(self) -> dict:
+        with self.storage.connection() as connection:
+            rows = connection.execute(
+                "SELECT placement_id, metadata_json FROM ppc_metadata ORDER BY placement_id"
+            ).fetchall()
+        result = {}
+        for row in rows:
+            try:
+                payload = json.loads(row["metadata_json"])
+            except Exception:
+                continue
+            if isinstance(payload, dict):
+                result[str(row["placement_id"])] = payload
+        return result
+
+    def clear(self) -> None:
+        with self.storage.connection(write=True) as connection:
+            connection.execute("DELETE FROM ppc_metadata")
+
+
 __all__ = [
     "BUSY_TIMEOUT_MS",
     "CVStudioStorage",
+    "LeadContactCacheRepository",
+    "LeadTitleCacheRepository",
     "MIGRATIONS",
+    "PPCMetadataRepository",
     "SCHEMA_VERSION",
+    "SalaryComponentCacheRepository",
     "StorageCorruptionError",
     "StorageError",
     "StorageMigrationError",
     "StorageVersionError",
+    "UsageHistoryRepository",
     "default_database_path",
     "default_state_directory",
     "_canonical_json",

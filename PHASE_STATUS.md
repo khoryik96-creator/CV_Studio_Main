@@ -6,8 +6,8 @@
 - Baseline Git commit: `c8eeb34c275d374170a5931d69ed95ea213c791a`
 - Working branch: `codex/phase-2a-sqlite`
 - Active phase: Phase 2A only
-- Status: SQLite safety foundation complete; repository implementation is next
-- Current milestone: repository interfaces and backend JSON-cache migration
+- Status: SQLite foundation and repositories complete; backend cache integration is next
+- Current milestone: SQLite-first lead-title, lead-contact and salary cache migration
 
 ## Verified baseline
 
@@ -94,13 +94,13 @@
 - [x] Design database path, connection policy, migration order and compatibility boundary.
 - [x] Implement SQLite connection, integrity and backup foundation.
 - [x] Implement schema-version and migration history.
-- [ ] Implement repository interfaces.
+- [x] Implement repository interfaces.
 - [ ] Migrate usage history.
 - [ ] Migrate lead-title cache.
 - [ ] Migrate lead-contact cache.
 - [ ] Migrate salary-component cache.
 - [ ] Migrate PPC metadata.
-- [ ] Implement non-sensitive diagnostic state.
+- [x] Implement non-sensitive diagnostic state.
 - [ ] Prove SQLite-first reads, legacy fallback/import and one-release dual writes.
 - [ ] Prove migration idempotency.
 - [ ] Test corrupt and interrupted migration handling.
@@ -135,13 +135,20 @@ None.
   - Injected interruption rolled schema and history back to version 3, then a clean restart completed versions 4–7.
   - Corrupt database returned `STORAGE_CORRUPT`, path-free recovery guidance and left legacy fixture bytes unchanged.
 - Python syntax: `cvstudio_storage.py` and the foundation test module passed `py_compile`.
+- Repository targeted suite: 4 additional tests passed; 8 Phase 2A tests pass in combination.
+  - Usage imports are fingerprinted/idempotent and legacy cost-only rows retain missing detailed fields.
+  - Lead-title signatures deduplicate deterministically without duplicate rows.
+  - Lead-contact and salary cache documents round-trip and clear correctly.
+  - PPC metadata imports/upserts idempotently; diagnostic state drops fields outside the non-sensitive allowlist.
+- Python syntax: storage module plus both Phase 2A test modules passed `py_compile`.
 
 ## Files changed
 
 - `PHASE_STATUS.md` — baseline evidence, storage inventory, milestone plan and results.
 - `cvstudio_storage.py` — SQLite lifecycle, safety PRAGMAs, integrity checks, ordered schema, migration history, verified backups and redacted diagnostic state.
 - `tests/test_phase2a_storage_foundation.py` — foundation, idempotency, corruption and interrupted-migration coverage.
+- `tests/test_phase2a_repositories.py` — repository import, round-trip, clear, compatibility-cutoff and diagnostic allowlist coverage.
 
 ## Next action
 
-Implement repository interfaces, prove idempotent legacy imports, then connect the three backend JSON cache boundaries with SQLite-first reads and compatible dual writes.
+Connect the three backend JSON cache boundaries with SQLite-first reads, idempotent legacy imports and compatible JSON dual writes; run route/helper regression tests before checkpointing.
