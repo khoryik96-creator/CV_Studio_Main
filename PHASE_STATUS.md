@@ -6,9 +6,9 @@
 - Completed release candidate: v24.6.218
 - Baseline Git commit: `c8eeb34c275d374170a5931d69ed95ea213c791a`
 - Working branch: `codex/phase-2a-sqlite`
-- Active phase: Phase 2A closeout only; implementation and validation are complete
-- Status: v24.6.218 release validation passed; clean source packaging is next
-- Current milestone: private owner/source archive and byte verification
+- Active phase: none; Phase 2A is complete and stopped
+- Status: v24.6.218 Phase 2A owner/source release complete
+- Current milestone: complete; Phase 2B requires a new explicit owner instruction
 
 ## Verified baseline
 
@@ -106,8 +106,8 @@
 - [x] Prove migration idempotency.
 - [x] Test corrupt and interrupted migration handling.
 - [x] Run complete regression and static validation.
-- [ ] Create and byte-verify private owner/source ZIP.
-- [ ] Produce QA report, SHA-256 and Phase 2B handover.
+- [x] Create and byte-verify private owner/source ZIP.
+- [x] Produce QA report, SHA-256 and Phase 2B handover.
 
 ## Decisions and limitations
 
@@ -167,6 +167,8 @@ None.
 - Final v24.6.218 rerun: 16 Python tests, frontend fixture and 18-assertion live source smoke all passed after the version bump.
 - Final version audit: 8 primary version surfaces agree on v24.6.218.
 - Route compatibility audit: all 88 v24.6.217 Flask route URLs remain present; Phase 2A adds 8 local storage routes.
+- Clean archive trial: `git archive` produced the required single `cv_formatter/` root with 80 tracked source files; fresh extraction found 80 files, zero missing files, zero extra files and zero byte mismatches.
+- The authoritative owner/source ZIP is generated from the final clean documentation commit. Its SHA-256, byte size, source commit and repeated fresh-extraction result are recorded in adjacent checksum and verification sidecars because an archive cannot contain its own authoritative digest.
 
 ## Files changed
 
@@ -187,4 +189,4 @@ None.
 
 ## Next action
 
-Commit the clean v24.6.218 release source, create the private owner/source ZIP from that commit, freshly extract and compare every byte, then generate checksum/verification sidecars and stop.
+Stop. Do not begin Phase 2B or any later phase without a new explicit owner instruction.
