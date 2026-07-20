@@ -154,6 +154,14 @@ None.
   - Writes are serialized; usage clear is protected from an in-flight import restoring deleted history.
   - Legacy usage rows without IDs use stable sorted-key identity, avoiding duplicates when JSON property order changes.
   - PPC mirror conflicts use `updatedAt`; browser mutations are re-upserted if they race hydration.
+- Complete Python discovery suite: 16 tests passed.
+  - Includes explicit all-store v24.6.217 fixture migration twice, byte-exact legacy preservation and restart without extra backups.
+  - Includes preserved Phase 1 request-ID/error normalization, Host/CSRF defense, JobAdder reconnect classification, owner local-health/DOCX checks and support-bundle regression.
+- Live threaded source smoke: 18 loopback assertions passed on an ephemeral port with temporary receipt, database and log state.
+- Owner-source validation and dependency preflight: passed, including vetted adm-zip 0.5.17 behavior and both inline JavaScript blocks.
+- Static validation checkpoint passed: Python (tracked modules), JavaScript (19 files), Bash (5 files through Git Bash) and PowerShell (5 files, zero parser errors).
+- Repository consistency: passed; no lock file, exact Git bytes, approved encodings and platform line endings.
+- Scope audit: the Phase 2A diff adds no Flask server replacement, scoring-profile workflow, candidate-decision workflow, shared API client, background job, lazy loading or credential persistence.
 
 ## Files changed
 
@@ -165,6 +173,8 @@ None.
 - `tests/test_phase2a_app_cache_integration.py` — real Flask-module cache and corruption-route integration coverage.
 - `index.html` — asynchronous SQLite hydration and ordered mirroring for usage history and PPC metadata, retaining existing synchronous localStorage compatibility.
 - `tests/test_phase2a_frontend_storage.js` — inline-JavaScript syntax plus usage/PPC hydration, deduplication, write and clear fixtures.
+- `tests/test_phase2a_v217_fixture.py` — complete legacy store fixture, double import, byte preservation and restart evidence.
+- `tests/run_phase2a_source_smoke.py` — bounded real-loopback source smoke with temporary local state and 18 assertions.
 
 ## Next action
 

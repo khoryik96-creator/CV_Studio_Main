@@ -3,6 +3,8 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+import zipfile
+import io
 
 
 _MODULE_TEMPORARY = tempfile.TemporaryDirectory(prefix="cvstudio-app-cache-")
@@ -286,6 +288,98 @@ class Phase2AAppCacheIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(client.get("/storage/usage-history").get_json()["records"], [])
         self.assertEqual(client.get("/storage/ppc-metadata").get_json()["metadata"], {})
+
+    def test_phase1_request_id_error_contract_and_local_security_regression(self):
+        client = app.app.test_client()
+        request_id = "phase1-contract-regression"
+        response = client.get("/status", headers={"X-CV-Studio-Request-ID": request_id})
+        payload = response.get_json()
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(payload["healthy"])
+        self.assertEqual(payload["version"], "v24.6.217")
+        self.assertEqual(response.headers["X-CV-Studio-Request-ID"], request_id)
+
+        response = client.get("/missing-phase1-fixture", headers={"X-CV-Studio-Request-ID": request_id})
+        payload = response.get_json()
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(payload["code"], "NOT_FOUND")
+        self.assertEqual(payload["request_id"], request_id)
+        self.assertIn("error", payload)
+        self.assertIn("message", payload)
+
+        response = client.post("/storage/usage-history/clear", json={})
+        payload = response.get_json()
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(payload["code"], "UNSAFE_LOCAL_REQUEST")
+        self.assertTrue(payload["request_id"])
+
+        response = client.get("/status", headers={"Host": "host-fixture.invalid"})
+        payload = response.get_json()
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(payload["code"], "INVALID_LOCAL_HOST")
+        self.assertEqual(payload["action"], "reopen_local_app")
+
+        response = client.get(
+            "/jobadder/search_candidate",
+            headers={"X-CV-Studio-Request-ID": request_id},
+        )
+        payload = response.get_json()
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(payload["code"], "JOBADDER_RECONNECT_REQUIRED")
+        self.assertEqual(payload["action"], "open_jobadder_settings")
+        self.assertEqual(payload["request_id"], request_id)
+
+    def test_phase1_owner_local_integration_and_support_bundle_regression(self):
+        client = app.app.test_client()
+        headers = {
+            "X-CV-Studio-Request": "1",
+            "X-CV-Studio-Owner-Test": "1",
+            "X-CV-Studio-Request-ID": "phase1-owner-regression",
+        }
+        response = client.get("/owner/integration/status")
+        status = response.get_json()
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(status["enabled"])
+        self.assertTrue(status["owner_source_only"])
+
+        response = client.post(
+            "/owner/integration/run",
+            json={"tests": ["local_health", "docx_generation"]},
+            headers=headers,
+        )
+        report = response.get_json()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(report["summary"], {"passed": 2, "failed": 0, "skipped": 0, "total": 2})
+        self.assertTrue(all(item["status"] == "passed" for item in report["results"]))
+
+        response = client.post(
+            "/diagnostics/support_bundle",
+            json={
+                "browser": {
+                    "active_tab": "stats",
+                    "recent_api_errors": [
+                        {
+                            "status": 500,
+                            "code": "FIXTURE_FAILURE",
+                            "request_id": "phase1-owner-regression",
+                            "message": "Non-sensitive regression fixture",
+                            "action": "retry",
+                        }
+                    ],
+                }
+            },
+            headers=headers,
+        )
+        self.assertEqual(response.status_code, 200)
+        with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
+            names = set(archive.namelist())
+            self.assertTrue({"runtime.json", "browser.json", "README.txt"}.issubset(names))
+            runtime = json.loads(archive.read("runtime.json"))
+            browser = json.loads(archive.read("browser.json"))
+        self.assertTrue(runtime["durable_storage"]["healthy"])
+        self.assertEqual(browser["active_tab"], "stats")
+        self.assertNotIn(str(_MODULE_ROOT), json.dumps(runtime))
+        self.assertNotIn("local_storage_values", browser)
 
 
 if __name__ == "__main__":
