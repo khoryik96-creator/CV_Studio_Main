@@ -11767,14 +11767,14 @@ def phase2a_ppc_metadata_clear():
     })
 
 
-def _phase2b_record_array(payload, maximum):
+def _phase2b_record_array(payload, maximum, normalizer):
     if (
         not isinstance(payload, list)
         or len(payload) > maximum
         or any(not isinstance(item, dict) for item in payload)
     ):
         return None
-    return payload
+    return normalizer(payload)
 
 
 def _phase2b_browser_settings(payload):
@@ -11817,7 +11817,11 @@ def phase2b_onenote_transfer_read():
 @app.route("/storage/onenote-transfer-records/import", methods=["POST"])
 def phase2b_onenote_transfer_import():
     body = request.get_json(silent=True) or {}
-    records = _phase2b_record_array(body.get("records"), 200)
+    records = _phase2b_record_array(
+        body.get("records"),
+        200,
+        _CVSTUDIO_ONENOTE_TRANSFER_REPOSITORY.normalize_records,
+    )
     if records is None:
         return _cvstudio_error_payload(
             "STORAGE_PAYLOAD_INVALID",
@@ -11837,7 +11841,11 @@ def phase2b_onenote_transfer_import():
 @app.route("/storage/onenote-transfer-records/replace", methods=["POST"])
 def phase2b_onenote_transfer_replace():
     body = request.get_json(silent=True) or {}
-    records = _phase2b_record_array(body.get("records"), 200)
+    records = _phase2b_record_array(
+        body.get("records"),
+        200,
+        _CVSTUDIO_ONENOTE_TRANSFER_REPOSITORY.normalize_records,
+    )
     if records is None:
         return _cvstudio_error_payload(
             "STORAGE_PAYLOAD_INVALID",
@@ -11876,7 +11884,11 @@ def phase2b_onenote_links_read():
 @app.route("/storage/onenote-saved-links/import", methods=["POST"])
 def phase2b_onenote_links_import():
     body = request.get_json(silent=True) or {}
-    links = _phase2b_record_array(body.get("links"), 100)
+    links = _phase2b_record_array(
+        body.get("links"),
+        100,
+        _CVSTUDIO_ONENOTE_LINK_REPOSITORY.normalize_records,
+    )
     if links is None:
         return _cvstudio_error_payload(
             "STORAGE_PAYLOAD_INVALID",
@@ -11896,7 +11908,11 @@ def phase2b_onenote_links_import():
 @app.route("/storage/onenote-saved-links/replace", methods=["POST"])
 def phase2b_onenote_links_replace():
     body = request.get_json(silent=True) or {}
-    links = _phase2b_record_array(body.get("links"), 100)
+    links = _phase2b_record_array(
+        body.get("links"),
+        100,
+        _CVSTUDIO_ONENOTE_LINK_REPOSITORY.normalize_records,
+    )
     if links is None:
         return _cvstudio_error_payload(
             "STORAGE_PAYLOAD_INVALID",

@@ -112,6 +112,30 @@ class Phase2BAppStorageIntegrationTests(unittest.TestCase):
         ).get_json()
         self.assertEqual([row["id"] for row in read["records"]], ["transfer-route-b"])
 
+        oversized = {
+            "id": "transfer-route-oversized",
+            "field_a": "a" * (300 * 1024),
+            "field_b": "b" * (300 * 1024),
+        }
+        response = self.client.post(
+            "/storage/onenote-transfer-records/replace",
+            json={"records": [oversized]},
+            headers=self._headers("phase2b-transfer-record-too-large"),
+        )
+        payload = response.get_json()
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(payload["code"], "STORAGE_PAYLOAD_INVALID")
+        self.assertEqual(payload["request_id"], "phase2b-transfer-record-too-large")
+        self.assertEqual(
+            [
+                row["id"]
+                for row in self.client.get(
+                    "/storage/onenote-transfer-records"
+                ).get_json()["records"]
+            ],
+            ["transfer-route-b"],
+        )
+
         response = self.client.post(
             "/storage/onenote-transfer-records/clear",
             json={},
@@ -151,6 +175,25 @@ class Phase2BAppStorageIntegrationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         read = self.client.get("/storage/onenote-saved-links").get_json()
         self.assertEqual(read["links"][0]["name"], "Renamed route fixture")
+
+        oversized = dict(
+            changed[0],
+            field_a="a" * (300 * 1024),
+            field_b="b" * (300 * 1024),
+        )
+        response = self.client.post(
+            "/storage/onenote-saved-links/replace",
+            json={"links": [oversized]},
+            headers=self._headers("phase2b-link-record-too-large"),
+        )
+        payload = response.get_json()
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(payload["code"], "STORAGE_PAYLOAD_INVALID")
+        self.assertEqual(payload["request_id"], "phase2b-link-record-too-large")
+        self.assertEqual(
+            self.client.get("/storage/onenote-saved-links").get_json()["links"][0]["name"],
+            "Renamed route fixture",
+        )
 
         response = self.client.post(
             "/storage/onenote-saved-links/import",

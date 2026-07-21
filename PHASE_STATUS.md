@@ -4,13 +4,14 @@
 
 - Approved baseline: v24.6.217
 - Completed release: v24.6.220
+- Corrective release target: v24.6.221
 - Phase 2B source baseline: v24.6.219
 - Phase 2B baseline Git commit: `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`
 - Working branch: `codex/phase-2b-browser-storage`
-- Active phase: none
+- Active phase: owner-authorized Phase 2B review corrections only
 - Completed private owner/source release: v24.6.220
-- Status: Phase 2B complete
-- Current milestone: none; Phase 3 requires new explicit owner authorization
+- Status: three Phase 2B review findings corrected; corrective release evidence pending
+- Current milestone: v24.6.221 corrective release preparation; Phase 3 remains unauthorized
 
 ## Completed Phase 2B authorization and constraints
 
@@ -379,6 +380,50 @@ without reinterpreting each feature's established shape.
   execution, native protected builds and live/paid external-service calls were
   not performed and are not claimed.
 - Phase 3 is not active. Stop at this completed v24.6.220 release.
+
+## v24.6.221 Phase 2B review-correction milestone
+
+The owner authorized correction of all actionable review findings on
+`codex/phase-2b-browser-storage`. This remains Phase 2B work: schema version 10,
+all route URLs, the selected-store boundary and every Phase 3/backburner stop
+gate remain unchanged.
+
+- Record arrays are now fully normalized before import or replacement. Any
+  record that exceeds the 512 KiB sanitized limit, or is otherwise invalid,
+  receives the existing structured `STORAGE_PAYLOAD_INVALID` response before a
+  repository transaction begins.
+- Both OneNote repositories defensively reject invalid arrays before preparing
+  a tombstoning replacement, so a future internal caller cannot silently erase
+  the authoritative set by bypassing the HTTP validator.
+- Post-hydration settings refresh now rebuilds AI-routing controls from the
+  SQLite-authoritative mirror instead of only refreshing their preview.
+- Post-hydration refresh reapplies the AI Crawler preview-memory profile and
+  schedules one Auto-mode diagnostics load when system-memory data is absent.
+- Regression coverage proves oversized transfer/link replacements return 400
+  and preserve prior rows, direct repository replacement is non-destructive,
+  hydrated route controls are rebuilt, and the hydrated memory mode is applied.
+- Targeted correction gate: 16 Python tests and the Phase 2B frontend fixture
+  passed.
+- Full regression gate: 26 Python tests, both frontend fixtures and the
+  24-assertion live source smoke passed.
+- Static gate: tracked Python, JavaScript, Bash and PowerShell syntax passed;
+  owner-source validation/preflight, repository consistency and Git whitespace
+  validation passed.
+
+### Corrective decisions and limitations
+
+- Reject the complete record request rather than partially persisting it. This
+  preserves atomic replacement semantics and prevents the browser mirror from
+  being overwritten with a silently shortened SQLite response.
+- Existing duplicate-identity conflict rules remain unchanged; this correction
+  concerns records that cannot be safely normalized and persisted.
+- Rebuilding AI route rows after authoritative hydration is intentional. It
+  closes the startup race in which controls rendered from a stale mirror could
+  later overwrite SQLite when saved.
+- This source-level correction does not claim a new protected native build,
+  physical installer test, live external-service call or paid AI call.
+- No shared client, background job, modularisation, lazy loading, new workflow
+  or roadmap item 4, 7 or 8 was implemented. Phase 3 remains unauthorized.
 
 ## v24.6.219 corrective plan
 

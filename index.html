@@ -6418,7 +6418,8 @@ function cvStudioRefreshHydratedSettingUi(){
   try{if(typeof oneNoteApiLoadSettings==='function')oneNoteApiLoadSettings();if(typeof oneNoteLoadSpellingCorrectionSetting==='function')oneNoteLoadSpellingCorrectionSetting();var salary=document.getElementById('oneNoteSalaryAiEnabled'),salarySaved=localStorage.getItem('cv_studio_onenote_salary_ai_enabled_v1');if(salary)salary.checked=salarySaved===null?true:salarySaved==='1';if(typeof oneNoteSourceModeChanged==='function')oneNoteSourceModeChanged(true);if(typeof oneNoteUpdateSalaryAiBadge==='function')oneNoteUpdateSalaryAiBadge();}catch(e){}
   try{if(typeof pageNavPinStored==='function'){window._pageNavPinEnabled=pageNavPinStored();if(typeof updatePageNavPinButton==='function')updatePageNavPinButton();}}catch(e){}
   try{if(typeof ppcRestoreUiState==='function')ppcRestoreUiState();if(typeof ppcApplyKpiVisibility==='function')ppcApplyKpiVisibility();if(typeof ppcApplyColumnVisibility==='function')ppcApplyColumnVisibility();}catch(e){}
-  try{if(typeof ensureAiRoutingRowsVisible==='function')ensureAiRoutingRowsVisible();if(typeof syncQuickAiProviderPanels==='function')syncQuickAiProviderPanels();}catch(e){}
+  try{if(typeof storedTheSpiderPreviewMemoryMode==='function'&&typeof applyTheSpiderPreviewMemoryMode==='function'){var memoryMode=storedTheSpiderPreviewMemoryMode();applyTheSpiderPreviewMemoryMode(memoryMode,false);if(memoryMode==='auto'&&typeof scheduleTheSpiderPreviewAutoDiagnostics==='function')scheduleTheSpiderPreviewAutoDiagnostics();}}catch(e){}
+  try{if(typeof renderAiRoutingRows==='function')renderAiRoutingRows();else if(typeof ensureAiRoutingRowsVisible==='function')ensureAiRoutingRowsVisible();if(typeof syncQuickAiProviderPanels==='function')syncQuickAiProviderPanels();}catch(e){}
 }
 function cvStudioDurableSettingSet(key,value){
   key=String(key||'');value=String(value==null?'':value);
@@ -8927,8 +8928,15 @@ async function setTheSpiderPreviewMemoryMode(mode,announce){
     else showToast('Preview memory set to '+result.profile.label+'. Browser cache cleared; backend clear was not confirmed'+(backendMessage?': '+backendMessage:'')+'.','warn');
   }
 }
+var _theSpiderPreviewAutoDiagnosticsQueued=false;
+function scheduleTheSpiderPreviewAutoDiagnostics(){
+  if(storedTheSpiderPreviewMemoryMode()!=='auto'||_theSpiderPreviewAutoDiagnosticsQueued||Number(window._cvStudioSystemMemoryTotalBytes)>0)return;
+  _theSpiderPreviewAutoDiagnosticsQueued=true;
+  var run=function(){setTimeout(function(){_theSpiderPreviewAutoDiagnosticsQueued=false;if(storedTheSpiderPreviewMemoryMode()==='auto'&&Number(window._cvStudioSystemMemoryTotalBytes)<=0)refreshCvStudioDiagnostics(false);},0);};
+  if(document.readyState==='complete')run();else window.addEventListener('load',run,{once:true});
+}
 applyTheSpiderPreviewMemoryMode(storedTheSpiderPreviewMemoryMode(),false);
-if(storedTheSpiderPreviewMemoryMode()==='auto')window.addEventListener('load',function(){setTimeout(function(){refreshCvStudioDiagnostics(false);},0);});
+scheduleTheSpiderPreviewAutoDiagnostics();
 function estimateTheSpiderPreviewPayloadBytes(payload) {
   try { return Math.max(1, JSON.stringify(payload || {}).length * 2); } catch(e) { return 1; }
 }

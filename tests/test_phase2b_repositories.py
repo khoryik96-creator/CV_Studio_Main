@@ -178,6 +178,18 @@ class Phase2BRepositoryTests(unittest.TestCase):
             ["transfer-c", "transfer-a"],
         )
 
+        oversized = dict(
+            replacement[0],
+            field_a="a" * (300 * 1024),
+            field_b="b" * (300 * 1024),
+        )
+        with self.assertRaisesRegex(ValueError, "invalid or too large"):
+            repository.replace([oversized])
+        self.assertEqual(
+            [row["id"] for row in repository.list()],
+            ["transfer-c", "transfer-a"],
+        )
+
         stale_deleted = dict(legacy[1], status="Stale browser mirror")
         self.assertEqual(repository.import_legacy([stale_deleted]), 0)
         self.assertNotIn("transfer-b", [row["id"] for row in repository.list()])
@@ -212,6 +224,14 @@ class Phase2BRepositoryTests(unittest.TestCase):
         self.assertEqual(loaded[0]["futureField"], {"safe": "kept"})
 
         self.assertEqual(repository.replace([dict(loaded[0], name="Renamed fixture")]), 1)
+        self.assertEqual(repository.list()[0]["name"], "Renamed fixture")
+        oversized = dict(
+            loaded[0],
+            field_a="a" * (300 * 1024),
+            field_b="b" * (300 * 1024),
+        )
+        with self.assertRaisesRegex(ValueError, "invalid or too large"):
+            repository.replace([oversized])
         self.assertEqual(repository.list()[0]["name"], "Renamed fixture")
         self.assertEqual(
             repository.import_legacy([dict(legacy[1], futureField="stale")]),

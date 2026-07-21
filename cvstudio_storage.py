@@ -1350,6 +1350,18 @@ class OneNoteTransferRepository:
         return "legacy:" + _payload_fingerprint(record)
 
     @classmethod
+    def normalize_records(cls, records) -> list[dict] | None:
+        if not isinstance(records, list) or len(records) > cls.max_records:
+            return None
+        clean_records = []
+        for raw in records:
+            clean = _clean_private_record(raw)
+            if clean is None:
+                return None
+            clean_records.append(clean)
+        return clean_records
+
+    @classmethod
     def _prepare(cls, records) -> list[tuple[str, dict]]:
         if not isinstance(records, list):
             return []
@@ -1404,6 +1416,9 @@ class OneNoteTransferRepository:
         return cursor.rowcount > 0
 
     def import_legacy(self, records, fingerprint: str | None = None) -> int:
+        records = self.normalize_records(records)
+        if records is None:
+            raise ValueError("OneNote transfer records are invalid or too large")
         prepared = self._prepare(records)
         fingerprint = fingerprint or _payload_fingerprint(
             [record for _, record in prepared]
@@ -1428,6 +1443,9 @@ class OneNoteTransferRepository:
         return count
 
     def replace(self, records) -> int:
+        records = self.normalize_records(records)
+        if records is None:
+            raise ValueError("OneNote transfer records are invalid or too large")
         prepared = self._prepare(records)
         updated_at = _utc_now()
         with self.storage.connection(write=True) as connection:
@@ -1504,6 +1522,18 @@ class OneNoteSavedLinkRepository:
         return clean
 
     @classmethod
+    def normalize_records(cls, records) -> list[dict] | None:
+        if not isinstance(records, list) or len(records) > cls.max_records:
+            return None
+        clean_records = []
+        for raw in records:
+            clean = cls._normalize(raw)
+            if clean is None:
+                return None
+            clean_records.append(clean)
+        return clean_records
+
+    @classmethod
     def _prepare(cls, records) -> list[dict]:
         if not isinstance(records, list):
             return []
@@ -1546,6 +1576,9 @@ class OneNoteSavedLinkRepository:
         return cursor.rowcount > 0
 
     def import_legacy(self, records, fingerprint: str | None = None) -> int:
+        records = self.normalize_records(records)
+        if records is None:
+            raise ValueError("Saved OneNote links are invalid or too large")
         prepared = self._prepare(records)
         fingerprint = fingerprint or _payload_fingerprint(prepared)
         with self.storage.connection(write=True) as connection:
@@ -1562,6 +1595,9 @@ class OneNoteSavedLinkRepository:
         return count
 
     def replace(self, records) -> int:
+        records = self.normalize_records(records)
+        if records is None:
+            raise ValueError("Saved OneNote links are invalid or too large")
         prepared = self._prepare(records)
         with self.storage.connection(write=True) as connection:
             connection.execute(

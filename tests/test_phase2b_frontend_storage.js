@@ -55,6 +55,7 @@ async function testSettingsBridgeAndAllowlist() {
     hy_provider: 'anthropic',
     hy_model_openai: 'gpt-stale-fixture',
     hy_model_deepseek: 'deepseek-stale-fixture',
+    cvstudio_spider_preview_memory_mode_v1: 'high',
     hy_key_openai: 'redacted-fixture-value',
     cvstudio_ppc_ui_state_v1: JSON.stringify({page: 1, clientSecret: 'redacted-fixture-value'}),
   });
@@ -62,10 +63,19 @@ async function testSettingsBridgeAndAllowlist() {
   let resolveImport, failDelete = false;
   const context = vm.createContext({
     console, Promise, JSON, Object, Array, String, Number, Error, localStorage: storage,
+    window: {}, document: {getElementById() { return null; }},
+    renderRouteCalls: 0, ensureRouteCalls: 0, syncRouteCalls: 0,
+    appliedMemoryModes: [], autoMemorySchedules: 0,
+    storedTheSpiderPreviewMemoryMode() { return storage.getItem('cvstudio_spider_preview_memory_mode_v1') || 'high'; },
+    applyTheSpiderPreviewMemoryMode(mode, clearExisting) { context.appliedMemoryModes.push([mode, clearExisting]); },
+    scheduleTheSpiderPreviewAutoDiagnostics() { context.autoMemorySchedules += 1; },
+    renderAiRoutingRows() { context.renderRouteCalls += 1; },
+    ensureAiRoutingRowsVisible() { context.ensureRouteCalls += 1; },
+    syncQuickAiProviderPanels() { context.syncRouteCalls += 1; },
     showToast(message, kind) { toasts.push({message, kind}); },
     fetch(url, options) {
       const body = JSON.parse((options && options.body) || '{}'); calls.push({url, body});
-      if (url.endsWith('/import')) return new Promise(resolve => { resolveImport = () => resolve(response({ok: true, settings: {hy_provider: 'openai', hy_model_openai: 'gpt-current-fixture', hy_model_deepseek: 'deepseek-current-fixture', cvstudio_ppc_ui_state_v1: JSON.stringify({page: 1})}})); });
+      if (url.endsWith('/import')) return new Promise(resolve => { resolveImport = () => resolve(response({ok: true, settings: {hy_provider: 'openai', hy_model_openai: 'gpt-current-fixture', hy_model_deepseek: 'deepseek-current-fixture', cvstudio_ppc_ui_state_v1: JSON.stringify({page: 1}), cvstudio_spider_preview_memory_mode_v1: 'low'}})); });
       if (failDelete && url.endsWith('/delete')) return Promise.resolve(response({ok: false, message: 'Delete fixture failed'}, false));
       return Promise.resolve(response({ok: true}));
     },
@@ -92,6 +102,17 @@ async function testSettingsBridgeAndAllowlist() {
   assert.strictEqual(storage.getItem('hy_model_deepseek'), null);
   assert.ok(calls.some(call => call.url.endsWith('/upsert') && call.body.settings.hy_provider === 'deepseek'));
   assert.ok(calls.some(call => call.url.endsWith('/delete') && call.body.keys[0] === 'hy_model_deepseek'));
+  assert.deepStrictEqual(Array.from(context.appliedMemoryModes[0]), ['low', false]);
+  assert.strictEqual(context.autoMemorySchedules, 0);
+  assert.strictEqual(context.renderRouteCalls, 1);
+  assert.strictEqual(context.ensureRouteCalls, 0);
+  assert.strictEqual(context.syncRouteCalls, 1);
+
+  storage.setItem('cvstudio_spider_preview_memory_mode_v1', 'auto');
+  context.cvStudioRefreshHydratedSettingUi();
+  assert.deepStrictEqual(Array.from(context.appliedMemoryModes[1]), ['auto', false]);
+  assert.strictEqual(context.autoMemorySchedules, 1);
+  assert.strictEqual(context.renderRouteCalls, 2);
 
   const exportedSettings = context.cvStudioLocalDataSettingsSnapshot(false);
   assert.ok(!Object.prototype.hasOwnProperty.call(exportedSettings, 'hy_key_openai'));
