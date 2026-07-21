@@ -8,7 +8,7 @@
 - Working branch: `codex/phase-2a-sqlite`
 - Active phase: none
 - Status: Phase 2A corrective review patch complete
-- Current milestone: final owner/source archive verification and checksum recording
+- Current milestone: complete; stop at the Phase 2A boundary
 
 ## v24.6.219 corrective plan
 
@@ -192,6 +192,8 @@ None.
 - Final v24.6.219 rerun: 17 Python tests, frontend fixture and 18-assertion live source smoke all passed after the corrective changes and version bump.
 - Final version audit: 8 primary version surfaces agree on v24.6.219.
 - Corrective scope audit: no prohibited Phase 2B/backburner implementation definitions or shared-client/background-job/lazy-loading symbols were added.
+- v24.6.219 clean archive trial: `git archive` produced one `cv_formatter/` root with 82 tracked source files; fresh extraction found 82 files, zero missing files, zero extra files and zero byte mismatches.
+- The authoritative v24.6.219 owner/source ZIP is generated from the final clean phase-record commit. Its SHA-256, byte size, source commit and repeated fresh-extraction result are recorded in adjacent sidecars.
 - Clean archive trial: `git archive` produced the required single `cv_formatter/` root with 80 tracked source files; fresh extraction found 80 files, zero missing files, zero extra files and zero byte mismatches.
 - The authoritative owner/source ZIP is generated from the final clean documentation commit. Its SHA-256, byte size, source commit and repeated fresh-extraction result are recorded in adjacent checksum and verification sidecars because an archive cannot contain its own authoritative digest.
 
