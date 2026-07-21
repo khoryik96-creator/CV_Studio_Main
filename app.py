@@ -223,9 +223,13 @@ def safe_json(raw, fallback=None):
 import io, time
 from pathlib import Path
 from cvstudio_storage import (
+    BROWSER_SETTING_KEYS,
+    BrowserSettingsRepository,
     CVStudioStorage,
     LeadContactCacheRepository,
     LeadTitleCacheRepository,
+    OneNoteSavedLinkRepository,
+    OneNoteTransferRepository,
     PPCMetadataRepository,
     SalaryComponentCacheRepository,
     StorageCorruptionError,
@@ -245,6 +249,9 @@ _CVSTUDIO_LEAD_TITLE_REPOSITORY = LeadTitleCacheRepository(_CVSTUDIO_STORAGE)
 _CVSTUDIO_LEAD_CONTACT_REPOSITORY = LeadContactCacheRepository(_CVSTUDIO_STORAGE)
 _CVSTUDIO_SALARY_REPOSITORY = SalaryComponentCacheRepository(_CVSTUDIO_STORAGE)
 _CVSTUDIO_PPC_REPOSITORY = PPCMetadataRepository(_CVSTUDIO_STORAGE)
+_CVSTUDIO_ONENOTE_TRANSFER_REPOSITORY = OneNoteTransferRepository(_CVSTUDIO_STORAGE)
+_CVSTUDIO_ONENOTE_LINK_REPOSITORY = OneNoteSavedLinkRepository(_CVSTUDIO_STORAGE)
+_CVSTUDIO_BROWSER_SETTINGS_REPOSITORY = BrowserSettingsRepository(_CVSTUDIO_STORAGE)
 _CVSTUDIO_STORAGE_STARTUP_ERROR = None
 try:
     _CVSTUDIO_STORAGE.initialize()
@@ -11755,6 +11762,219 @@ def phase2a_ppc_metadata_clear():
     _CVSTUDIO_PPC_REPOSITORY.clear()
     return jsonify({
         "ok": True,
+        "request_id": _cvstudio_current_request_id(),
+        "legacy_preserved": True,
+    })
+
+
+def _phase2b_record_array(payload, maximum):
+    if (
+        not isinstance(payload, list)
+        or len(payload) > maximum
+        or any(not isinstance(item, dict) for item in payload)
+    ):
+        return None
+    return payload
+
+
+def _phase2b_browser_settings(payload):
+    if not isinstance(payload, dict) or len(payload) > len(BROWSER_SETTING_KEYS):
+        return None
+    clean = {}
+    for raw_key, value in payload.items():
+        key = str(raw_key or "")
+        if key not in BROWSER_SETTING_KEYS or not isinstance(value, str):
+            return None
+        clean[key] = value
+    return clean
+
+
+def _phase2b_browser_setting_keys(payload):
+    if not isinstance(payload, list) or len(payload) > len(BROWSER_SETTING_KEYS):
+        return None
+    keys = []
+    seen = set()
+    for raw_key in payload:
+        key = str(raw_key or "")
+        if key not in BROWSER_SETTING_KEYS:
+            return None
+        if key not in seen:
+            seen.add(key)
+            keys.append(key)
+    return keys
+
+
+@app.route("/storage/onenote-transfer-records", methods=["GET"])
+def phase2b_onenote_transfer_read():
+    return jsonify({
+        "ok": True,
+        "records": _CVSTUDIO_ONENOTE_TRANSFER_REPOSITORY.list(),
+        "request_id": _cvstudio_current_request_id(),
+        "legacy_preserved": True,
+    })
+
+
+@app.route("/storage/onenote-transfer-records/import", methods=["POST"])
+def phase2b_onenote_transfer_import():
+    body = request.get_json(silent=True) or {}
+    records = _phase2b_record_array(body.get("records"), 200)
+    if records is None:
+        return _cvstudio_error_payload(
+            "STORAGE_PAYLOAD_INVALID",
+            "OneNote transfer record payload is invalid or too large",
+            400,
+        )
+    imported = _CVSTUDIO_ONENOTE_TRANSFER_REPOSITORY.import_legacy(records)
+    return jsonify({
+        "ok": True,
+        "imported": imported,
+        "records": _CVSTUDIO_ONENOTE_TRANSFER_REPOSITORY.list(),
+        "request_id": _cvstudio_current_request_id(),
+        "legacy_preserved": True,
+    })
+
+
+@app.route("/storage/onenote-transfer-records/replace", methods=["POST"])
+def phase2b_onenote_transfer_replace():
+    body = request.get_json(silent=True) or {}
+    records = _phase2b_record_array(body.get("records"), 200)
+    if records is None:
+        return _cvstudio_error_payload(
+            "STORAGE_PAYLOAD_INVALID",
+            "OneNote transfer record payload is invalid or too large",
+            400,
+        )
+    written = _CVSTUDIO_ONENOTE_TRANSFER_REPOSITORY.replace(records)
+    return jsonify({
+        "ok": True,
+        "written": written,
+        "request_id": _cvstudio_current_request_id(),
+        "legacy_preserved": True,
+    })
+
+
+@app.route("/storage/onenote-transfer-records/clear", methods=["POST"])
+def phase2b_onenote_transfer_clear():
+    _CVSTUDIO_ONENOTE_TRANSFER_REPOSITORY.clear()
+    return jsonify({
+        "ok": True,
+        "request_id": _cvstudio_current_request_id(),
+        "legacy_preserved": True,
+    })
+
+
+@app.route("/storage/onenote-saved-links", methods=["GET"])
+def phase2b_onenote_links_read():
+    return jsonify({
+        "ok": True,
+        "links": _CVSTUDIO_ONENOTE_LINK_REPOSITORY.list(),
+        "request_id": _cvstudio_current_request_id(),
+        "legacy_preserved": True,
+    })
+
+
+@app.route("/storage/onenote-saved-links/import", methods=["POST"])
+def phase2b_onenote_links_import():
+    body = request.get_json(silent=True) or {}
+    links = _phase2b_record_array(body.get("links"), 100)
+    if links is None:
+        return _cvstudio_error_payload(
+            "STORAGE_PAYLOAD_INVALID",
+            "Saved OneNote link payload is invalid or too large",
+            400,
+        )
+    imported = _CVSTUDIO_ONENOTE_LINK_REPOSITORY.import_legacy(links)
+    return jsonify({
+        "ok": True,
+        "imported": imported,
+        "links": _CVSTUDIO_ONENOTE_LINK_REPOSITORY.list(),
+        "request_id": _cvstudio_current_request_id(),
+        "legacy_preserved": True,
+    })
+
+
+@app.route("/storage/onenote-saved-links/replace", methods=["POST"])
+def phase2b_onenote_links_replace():
+    body = request.get_json(silent=True) or {}
+    links = _phase2b_record_array(body.get("links"), 100)
+    if links is None:
+        return _cvstudio_error_payload(
+            "STORAGE_PAYLOAD_INVALID",
+            "Saved OneNote link payload is invalid or too large",
+            400,
+        )
+    written = _CVSTUDIO_ONENOTE_LINK_REPOSITORY.replace(links)
+    return jsonify({
+        "ok": True,
+        "written": written,
+        "request_id": _cvstudio_current_request_id(),
+        "legacy_preserved": True,
+    })
+
+
+@app.route("/storage/browser-settings", methods=["GET"])
+def phase2b_browser_settings_read():
+    return jsonify({
+        "ok": True,
+        "settings": _CVSTUDIO_BROWSER_SETTINGS_REPOSITORY.load(),
+        "request_id": _cvstudio_current_request_id(),
+        "legacy_preserved": True,
+    })
+
+
+@app.route("/storage/browser-settings/import", methods=["POST"])
+def phase2b_browser_settings_import():
+    body = request.get_json(silent=True) or {}
+    settings = _phase2b_browser_settings(body.get("settings"))
+    if settings is None:
+        return _cvstudio_error_payload(
+            "STORAGE_PAYLOAD_INVALID",
+            "Browser setting payload contains an unsupported key or value",
+            400,
+        )
+    imported = _CVSTUDIO_BROWSER_SETTINGS_REPOSITORY.import_legacy(settings)
+    return jsonify({
+        "ok": True,
+        "imported": imported,
+        "settings": _CVSTUDIO_BROWSER_SETTINGS_REPOSITORY.load(),
+        "request_id": _cvstudio_current_request_id(),
+        "legacy_preserved": True,
+    })
+
+
+@app.route("/storage/browser-settings/upsert", methods=["POST"])
+def phase2b_browser_settings_upsert():
+    body = request.get_json(silent=True) or {}
+    settings = _phase2b_browser_settings(body.get("settings"))
+    if settings is None:
+        return _cvstudio_error_payload(
+            "STORAGE_PAYLOAD_INVALID",
+            "Browser setting payload contains an unsupported key or value",
+            400,
+        )
+    written = _CVSTUDIO_BROWSER_SETTINGS_REPOSITORY.upsert(settings)
+    return jsonify({
+        "ok": True,
+        "written": written,
+        "request_id": _cvstudio_current_request_id(),
+        "legacy_preserved": True,
+    })
+
+
+@app.route("/storage/browser-settings/delete", methods=["POST"])
+def phase2b_browser_settings_delete():
+    body = request.get_json(silent=True) or {}
+    keys = _phase2b_browser_setting_keys(body.get("keys"))
+    if keys is None:
+        return _cvstudio_error_payload(
+            "STORAGE_PAYLOAD_INVALID",
+            "Browser setting delete payload contains an unsupported key",
+            400,
+        )
+    deleted = _CVSTUDIO_BROWSER_SETTINGS_REPOSITORY.delete(keys)
+    return jsonify({
+        "ok": True,
+        "deleted": deleted,
         "request_id": _cvstudio_current_request_id(),
         "legacy_preserved": True,
     })

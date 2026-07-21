@@ -9,8 +9,8 @@
 - Working branch: `codex/phase-2b-browser-storage`
 - Active phase: Phase 2B (owner authorized 21 July 2026)
 - Planned private owner/source release: v24.6.220
-- Status: Phase 2B Milestone 2 complete
-- Current milestone: Milestone 3 — backend bridge routes and structured recovery
+- Status: Phase 2B Milestone 3 complete
+- Current milestone: Milestone 4 — frontend migration and export compatibility
 
 ## Phase 2B authorization and constraints
 
@@ -99,7 +99,7 @@
 - [x] Record owner authorization, scope boundaries and milestone plan.
 - [x] Inventory and select Phase 2B browser stores/settings.
 - [x] Implement schema migration and repositories.
-- [ ] Implement backend bridge routes and structured recovery.
+- [x] Implement backend bridge routes and structured recovery.
 - [ ] Implement frontend hydration/mirroring and export compatibility.
 - [ ] Complete Phase 2B acceptance and compatibility tests.
 - [ ] Run full regression, static validation and final master review.
@@ -250,6 +250,36 @@ without reinterpreting each feature's established shape.
   the selected settings allowlist and three tombstone-aware repositories.
 - `tests/test_phase2b_repositories.py` — schema-7 upgrade, backup, interruption,
   Phase 2A preservation, repository, filter and tombstone coverage.
+
+## Phase 2B Milestone 3 results
+
+- Added same-origin request-ID routes for OneNote transfer read/import/replace/
+  clear, saved-link read/import/replace and browser-setting read/import/upsert/
+  delete operations. No existing route URL or response field changed.
+- All successful bridge responses state that the legacy browser mirror remains
+  preserved. Invalid record counts/types, unsupported setting keys and
+  non-string setting values return the established `STORAGE_PAYLOAD_INVALID`
+  structured 400 response.
+- Browser settings are checked against the exact server allowlist before the
+  repository is called. Credential keys therefore cannot be silently accepted
+  while reporting a successful write.
+- Existing global `StorageError` handling remains the sole storage-recovery
+  response path. A genuinely corrupt database returned path-free
+  `STORAGE_CORRUPT`, the caller's request ID and `restore_storage_backup` from a
+  new Phase 2B route.
+- Targeted real-Flask integration passed 11 tests across the seven existing
+  Phase 2A app/cache cases and four Phase 2B route cases. Coverage includes
+  credential-field filtering, replace/clear/delete, oversized input, allowlist
+  rejection, request-ID propagation and corruption recovery.
+- Python compilation passed for the backend, storage module and new integration
+  test module.
+
+### Milestone 3 files
+
+- `app.py` — repository wiring, bounded payload gates and 11 additive local
+  storage route handlers.
+- `tests/test_phase2b_app_storage_integration.py` — isolated temporary-database
+  integration and structured-recovery coverage.
 
 ## v24.6.219 corrective plan
 
