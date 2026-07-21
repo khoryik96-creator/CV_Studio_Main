@@ -3,15 +3,14 @@
 ## Release state
 
 - Approved baseline: v24.6.217
-- Completed release: v24.6.220
-- Corrective release target: v24.6.221
+- Completed release: v24.6.221
 - Phase 2B source baseline: v24.6.219
 - Phase 2B baseline Git commit: `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`
 - Working branch: `codex/phase-2b-browser-storage`
-- Active phase: owner-authorized Phase 2B review corrections only
-- Completed private owner/source release: v24.6.220
-- Status: three Phase 2B review findings corrected; corrective release evidence pending
-- Current milestone: v24.6.221 corrective release preparation; Phase 3 remains unauthorized
+- Active phase: none
+- Completed private owner/source release: v24.6.221
+- Status: Phase 2B and its corrective review closure are complete
+- Current milestone: none; Phase 3 requires new explicit owner authorization
 
 ## Completed Phase 2B authorization and constraints
 
@@ -409,6 +408,17 @@ gate remain unchanged.
 - Static gate: tracked Python, JavaScript, Bash and PowerShell syntax passed;
   owner-source validation/preflight, repository consistency and Git whitespace
   validation passed.
+- All active product, installer, launcher, protected-build source and starter
+  surfaces agree on v24.6.221. Historical v24.6.220 references remain only in
+  the original Phase 2B evidence and release history.
+- Final master review preserves all 96 baseline routes and the 11 additive
+  Phase 2B storage routes; no existing URL or response contract was removed.
+- The private owner/source archive is
+  `cv_studio_v24_6_221_phase2b_corrective_owner_source.zip`. It is generated
+  from the final clean release commit with one `cv_formatter/` root; its
+  SHA-256, source commit, byte size and fresh byte-verification counts are
+  recorded in adjacent sidecars under
+  `C:\CV-Studio-Codex\releases\v24.6.221\`.
 
 ### Corrective decisions and limitations
 
@@ -652,6 +662,13 @@ None.
 - `cv_studio_v24_6_220_phase2b_browser_storage_qa_report.md` — Phase 2B release
   QA evidence.
 - `CV_STUDIO_V24_6_220_PHASE_3_HANDOVER.md` — owner-gated next-phase handover.
+
+- `cv_studio_v24_6_221_phase2b_corrective_review_qa_report.md` — corrective
+  review and release QA evidence.
+- `CV_STUDIO_V24_6_221_PHASE_3_HANDOVER.md` — refreshed owner-gated Phase 3
+  handover preserving all corrected Phase 2B contracts.
+- Production, installer, launcher, protected-build and starter-pack version
+  surfaces — advanced consistently to v24.6.221.
 
 ## Next action
 

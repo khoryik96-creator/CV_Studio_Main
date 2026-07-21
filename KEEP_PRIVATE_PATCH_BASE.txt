@@ -1,5 +1,5 @@
 CV Studio private source patch base
-Version: v24.6.220
+Version: v24.6.221
 Keep this ZIP for future patches. Do not distribute this source package to colleagues.
 
 JobAdder API investigation source of truth:
@@ -938,3 +938,14 @@ Patch note v24.6.193: cross-platform deterministic adm-zip tree hashing fixes th
 - Keeps Phase 2A data/migrations and every existing route URL intact. Shared
   clients, background jobs, modularisation, lazy loading, new workflows and
   roadmap items 4, 7 and 8 remain unchanged.
+
+## v24.6.221 Phase 2B post-release review corrections
+
+- Rejects any invalid or oversized OneNote transfer/link array before an
+  authoritative replacement can tombstone existing rows.
+- Rebuilds hydrated AI-routing controls from the SQLite-authoritative mirror so
+  stale browser controls cannot overwrite current routes.
+- Reapplies the hydrated AI Crawler preview-memory mode and safely schedules
+  Auto diagnostics when memory data is not yet available.
+- Leaves schema version 10, all routes, transition mirrors, Phase 3 scope and
+  roadmap items 4, 7 and 8 unchanged.

@@ -1,7 +1,7 @@
 # CV Studio Backburner and Stability Roadmap
 
 Last updated: 21 July 2026
-Current implementation base: v24.6.220
+Current implementation base: v24.6.221
 
 ## Explicit backburner — do not implement until the owner reactivates them
 
@@ -61,6 +61,14 @@ Deferred scope includes Shortlist / Maybe / Reject / Reviewed states, recruiter 
 - every Phase 2A migration, backup, recovery and compatibility contract remains;
 - shared clients, background jobs, modularisation, lazy loading, new workflows
   and backburner items 4, 7 and 8 remain untouched.
+
+### v24.6.221 — Phase 2B corrective review closure
+
+- invalid or oversized OneNote record arrays are rejected before replacement,
+  preserving the existing authoritative rows;
+- hydrated AI-routing controls and preview-memory behavior now reflect the
+  SQLite-authoritative settings;
+- schema version 10 and every existing scope boundary remain unchanged.
 
 ## Active stability direction
 

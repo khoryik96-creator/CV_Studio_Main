@@ -1,6 +1,6 @@
 Option Explicit
 
-Const EXPECTED_VERSION = "v24.6.220"
+Const EXPECTED_VERSION = "v24.6.221"
 Const CV_PORT = 5000
 Const HTTP_TIMEOUT_MS = 2500
 

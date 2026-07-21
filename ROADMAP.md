@@ -6,6 +6,7 @@
 - v24.6.218 completed the Phase 2A implementation.
 - v24.6.219 is the completed private owner/source Phase 2A corrective release.
 - v24.6.220 completed Phase 2B browser-backed durable records and settings.
+- v24.6.221 corrected all three Phase 2B post-release review findings.
 - Phases 1, 2A and 2B are complete.
 - No later phase is active. Phase 3 requires a new explicit owner instruction.
 
@@ -56,6 +57,15 @@ SQLite foundation and lower-risk backend durable-data migration:
 - schema versions 8–10, each with a verified pre-change backup and transactional
   restart-safe migration;
 - completed owner/source release, QA evidence and Phase 3 handover.
+
+### v24.6.221 corrective review closure
+
+- reject invalid or oversized OneNote record arrays atomically before any
+  tombstoning replacement;
+- rebuild AI-routing controls from SQLite-authoritative hydrated settings;
+- reapply and schedule Auto diagnostics for the hydrated preview-memory mode;
+- retain schema version 10, all Phase 2A/2B compatibility contracts and the
+  Phase 3 stop boundary.
 
 ## Phase 3 — Future, not active
 
