@@ -4,11 +4,107 @@
 
 - Approved baseline: v24.6.217
 - Completed release: v24.6.219
-- Baseline Git commit: `c8eeb34c275d374170a5931d69ed95ea213c791a`
-- Working branch: `codex/phase-2a-sqlite`
-- Active phase: none
-- Status: Phase 2A corrective review patch complete
-- Current milestone: complete; stop at the Phase 2A boundary
+- Phase 2B source baseline: v24.6.219
+- Phase 2B baseline Git commit: `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`
+- Working branch: `codex/phase-2b-browser-storage`
+- Active phase: Phase 2B (owner authorized 21 July 2026)
+- Planned private owner/source release: v24.6.220
+- Status: Phase 2B entry gates passed; inventory and design in progress
+- Current milestone: Milestone 1 — durable browser-store inventory and compatibility design
+
+## Phase 2B authorization and constraints
+
+- Migrate only durable browser-backed records and selected persistent settings
+  that need application backup/restore.
+- Keep temporary UI/session state in `localStorage` where appropriate.
+- Define explicit legacy import, mirror, export and rollback/readability behavior
+  for every selected store before changing production code.
+- Preserve Phase 2A WAL, foreign-key, busy-timeout, integrity, verified-backup,
+  transactional migration, restart, corruption, redaction and request-ID
+  contracts.
+- Keep credentials and protected secrets outside plain SQLite.
+- Do not implement roadmap items 4, 7 or 8.
+- Do not begin shared-client work, background jobs, modularisation, lazy loading
+  or new user-facing workflows.
+- Stop after the Phase 2B release and Phase 3 handover.
+
+## Phase 2B entry verification
+
+- The worktree was clean before activation.
+- Local `master` and the opened worktree both resolved to
+  `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`; no remote is configured, so this
+  is the latest available master tip.
+- All primary source version surfaces identify v24.6.219.
+- The v24.6.219 release archive exists under
+  `C:\CV-Studio-Codex\releases\v24.6.219\`.
+- Its computed SHA-256 exactly matched the adjacent sidecar:
+  `66e4be40f8f528b54281801fb0404f77ef65f61fcd365539452245f25ff510df`.
+- A fresh extraction contained exactly 82 tracked files, with zero missing,
+  extra or byte-mismatched files against the master Git blobs.
+- Entry regression passed after installing the pinned, ignored owner/source
+  `adm-zip` dependency in this worktree: 17 Python tests, the Phase 2A frontend
+  fixture, 18 live-source-smoke assertions, owner-source validation/preflight
+  and repository consistency.
+
+## Phase 2B implementation plan
+
+### Milestone 1 — inventory and compatibility design
+
+- Inventory durable browser records, settings, localStorage/IndexedDB keys,
+  read/write call sites, existing export/import behavior and sensitive fields.
+- Select the smallest Phase 2B store set and explicitly leave temporary UI,
+  credential-like and later-phase data in their existing storage.
+- Record deterministic identities, conflict rules, limits, legacy mirrors and
+  export/backward-readability behavior.
+
+### Milestone 2 — schema and repository foundation
+
+- Add ordered Phase 2B schema migration(s) through the existing verified-backup
+  and transactional migration engine.
+- Add narrowly scoped repositories for only the selected browser records and
+  settings, with bounded/redacted payload validation and idempotent import.
+- Prove backup verification, rollback/restart, double initialization and Phase
+  2A schema/data preservation.
+
+### Milestone 3 — backend bridge
+
+- Add same-origin request-ID routes for import/read/upsert/delete or clear as
+  required by the selected store contracts.
+- Preserve structured storage errors and existing route behavior.
+- Add real Flask integration coverage for every operation and recovery path.
+
+### Milestone 4 — frontend migration and export compatibility
+
+- Hydrate selected durable records/settings from SQLite while retaining the
+  defined local browser fallback/mirror for transition compatibility.
+- Serialize mutations and protect hydration/delete/clear races.
+- Preserve unknown legacy fields and extend the existing local-data
+  export/import contract without exporting credentials.
+- Leave temporary UI state in localStorage.
+
+### Milestone 5 — acceptance and release evidence
+
+- Test legacy fixtures, migration twice, conflict handling, clear/delete races,
+  corruption/interruption recovery, legacy preservation and export round trips.
+- Run complete regression, source smoke and Python/JavaScript/Bash/PowerShell
+  static validation plus repository consistency and scope audits.
+- Advance all completed owner/source version surfaces to v24.6.220 only after
+  implementation passes.
+- Create and freshly byte-verify the private owner/source ZIP, QA report,
+  Phase 3 handover, SHA-256 and release directory artifacts; then stop.
+
+## Phase 2B milestones
+
+- [x] Verify the v24.6.219 master/source/package baseline and all entry gates.
+- [x] Record owner authorization, scope boundaries and milestone plan.
+- [ ] Inventory and select Phase 2B browser stores/settings.
+- [ ] Implement schema migration and repositories.
+- [ ] Implement backend bridge routes and structured recovery.
+- [ ] Implement frontend hydration/mirroring and export compatibility.
+- [ ] Complete Phase 2B acceptance and compatibility tests.
+- [ ] Run full regression, static validation and final master review.
+- [ ] Create and byte-verify the v24.6.220 private owner/source release.
+- [ ] Produce QA report, SHA-256 and Phase 3 handover; stop before Phase 3.
 
 ## v24.6.219 corrective plan
 

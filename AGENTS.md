@@ -8,7 +8,23 @@
 - Phase 2A was completed in v24.6.218 and its five post-release review findings were corrected in **CV Studio v24.6.219**.
 - Current completed private owner/source release: **CV Studio v24.6.219**.
 - Phases 1 and 2A are complete.
-- There is no active implementation target. Stop after Phase 2A unless the owner explicitly starts Phase 2B.
+- The owner explicitly authorized **Phase 2B** on 21 July 2026 from clean
+  `master` commit `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`.
+- Active implementation target: **Phase 2B browser-backed durable records and
+  selected persistent settings only**.
+- Complete Phase 2B milestone by milestone, then stop. Do not begin Phase 3.
+
+## Active scope: Phase 2B
+
+Inventory first, then migrate only durable browser records and selected
+persistent settings that need application backup/restore. Preserve explicit
+import/export and backward-readability contracts for every selected store.
+Temporary UI state remains in `localStorage` where appropriate.
+
+Phase 2B must preserve all Phase 2A SQLite safety, migration, recovery,
+redaction and legacy-compatibility guarantees. It must not expand into shared
+external-service clients, background jobs, backend/frontend modularisation,
+lazy loading or new user-facing workflows.
 
 ## Explicit backburner
 
