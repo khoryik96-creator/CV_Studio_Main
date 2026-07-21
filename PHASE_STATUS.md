@@ -9,8 +9,8 @@
 - Working branch: `codex/phase-2b-browser-storage`
 - Active phase: Phase 2B (owner authorized 21 July 2026)
 - Planned private owner/source release: v24.6.220
-- Status: Phase 2B entry gates passed; inventory and design in progress
-- Current milestone: Milestone 1 — durable browser-store inventory and compatibility design
+- Status: Phase 2B Milestone 1 complete
+- Current milestone: Milestone 2 — schema and repository foundation
 
 ## Phase 2B authorization and constraints
 
@@ -97,7 +97,7 @@
 
 - [x] Verify the v24.6.219 master/source/package baseline and all entry gates.
 - [x] Record owner authorization, scope boundaries and milestone plan.
-- [ ] Inventory and select Phase 2B browser stores/settings.
+- [x] Inventory and select Phase 2B browser stores/settings.
 - [ ] Implement schema migration and repositories.
 - [ ] Implement backend bridge routes and structured recovery.
 - [ ] Implement frontend hydration/mirroring and export compatibility.
@@ -105,6 +105,114 @@
 - [ ] Run full regression, static validation and final master review.
 - [ ] Create and byte-verify the v24.6.220 private owner/source release.
 - [ ] Produce QA report, SHA-256 and Phase 3 handover; stop before Phase 3.
+
+## Phase 2B Milestone 1 inventory and compatibility contract
+
+### Selected durable records
+
+1. **OneNote transfer record history** — browser `localStorage` key
+   `cv_studio_onenote_transfer_records_v1`.
+   - Existing boundary: `oneNoteRecordsLoad`, `oneNoteRecordsSave`, successful
+     transfer recording, paid salary-extraction failure recording, rendering,
+     cost display and explicit clear in `index.html`.
+   - Existing shape is an ordered array capped at 200 records. Records may
+     contain candidate contact/identifier fields, JobAdder activity links,
+     salary canonical data and AI accounting metadata. They are private
+     application data, not credentials, and must never enter diagnostics or
+     logs.
+   - New records receive an explicit stable ID. Legacy records without one use
+     a canonical full-record fingerprint so exact duplicate imports are
+     idempotent without inventing or reinterpreting fields.
+   - SQLite is authoritative after insert-only legacy import. Live replace and
+     clear operations are serialized; deleted rows retain tombstones so stale
+     browser mirrors cannot resurrect them.
+2. **Saved OneNote desktop links** — browser `localStorage` key
+   `cvstudio_onenote_saved_desktop_links_v1`.
+   - Existing boundary: read/normalize, create, edit, delete, render and use-link
+     helpers in `index.html`.
+   - Existing shape is an array capped at 100 records with stable IDs, name,
+     notebook/section/page kind, link and timestamps.
+   - Preserve unknown non-credential legacy fields. SQLite is authoritative;
+     current-browser edits replace by ID and deletions retain tombstones.
+
+### Selected persistent settings
+
+The SQLite settings repository is limited to the existing non-secret
+local-data-backup contract, excluding Phase 2A PPC metadata (which keeps its
+dedicated repository) and saved OneNote links (which receive their own record
+repository):
+
+- PPC UI state, KPI visibility, column visibility, invoice recipient/greeting,
+  non-secret Outlook client configuration and saved draft links;
+- OneNote spelling correction, salary-AI toggle, source mode, public Microsoft
+  client ID and tenant;
+- CV text alignment, page-navigation pinning, AI Crawler preview-memory mode and
+  JobAdder auto-upload preference;
+- main/Lead/Search/Enrichment provider selections, legacy model selections,
+  the known per-provider main/Lead model keys and the known per-feature AI route
+  and route-model keys.
+
+The existing export allowlist omitted the live per-provider model keys even
+though its description promised provider/model selections. Phase 2B corrects
+that allowlist only for the known Anthropic, DeepSeek and OpenAI model keys; it
+does not admit any provider-key or credential-key prefix.
+
+Settings import is insert-only. Live writes are authoritative upserts; live
+removals retain per-key tombstones. Values remain their existing bounded
+`localStorage` strings so JSON subfields and backward readability are preserved
+without reinterpreting each feature's established shape.
+
+### Explicit exclusions
+
+- JobAdder, OneNote, Outlook and AI tokens, secrets, API keys, device/login
+  sessions and legacy credential migration keys remain in their protected
+  mechanisms and are never admitted by a Phase 2B route or repository.
+- The PPC IndexedDB query cache, its bounded localStorage fallback and in-memory
+  preview/detail caches remain regenerable caches.
+- AI Crawler/Lead Finder result snapshots, activity-diagnostic candidate and
+  activity IDs, current tab/filter state, browser lock flags and other session
+  or diagnostic state remain browser-local.
+- Background wallpaper data remains browser-local because it is cosmetic and
+  may contain multi-megabyte image data. The unexported MYR rate, Boolean
+  highlight toggle and Lead Finder tuning toggles also remain unchanged rather
+  than silently expanding the established backup allowlist.
+- Phase 2A usage/PPC mirrors and backend JSON compatibility files remain intact;
+  Phase 2B does not remove or shorten their transition contract.
+
+### Schema, conflict and export decisions
+
+- Extend schema version 7 to version 10 with one verified pre-migration backup
+  per new store: OneNote transfer records, saved OneNote links and browser
+  settings.
+- Every migration uses the existing transactional migration engine and must
+  prove rollback/restart safety, exact history and no change to schema versions
+  1–7 or their data.
+- Store payloads as canonical JSON/text behind deterministic keys, with bounded
+  record counts, sizes and nesting. Recursively discard credential-like fields
+  before persistence while retaining private record fields needed by the
+  feature.
+- Legacy imports never overwrite an existing live row or tombstone. Same-page
+  mutations during hydration win only for the affected record IDs/setting keys.
+- Keep the legacy localStorage keys as transition mirrors. Durable clear/delete
+  failures are visible and restore the prior mirror instead of claiming
+  success.
+- Keep the existing local-data export `product`, schema 1 and `settings` object
+  so v24.6.219 can still restore the settings it understands. Add the OneNote
+  transfer history as an optional top-level record collection that Phase 2B can
+  restore and persist; older releases safely ignore that additive field.
+- Diagnostics expose only bounded store counts/health, never record values,
+  setting values, emails, candidate identifiers, links or paths.
+
+## Phase 2B decisions and limitations
+
+- Milestone 1 is inventory/design only; it changes no application behavior or
+  user data.
+- The three-store boundary is intentionally narrower than all browser
+  localStorage. A key is not migrated merely because it persists between page
+  loads.
+- Source-level Windows testing is available in this worktree. No protected
+  native build, physical installer/restore test, live external-service call or
+  paid provider request is claimed or required for this owner/source phase.
 
 ## v24.6.219 corrective plan
 
