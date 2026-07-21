@@ -9,8 +9,8 @@
 - Working branch: `codex/phase-2b-browser-storage`
 - Active phase: Phase 2B (owner authorized 21 July 2026)
 - Planned private owner/source release: v24.6.220
-- Status: Phase 2B Milestone 1 complete
-- Current milestone: Milestone 2 — schema and repository foundation
+- Status: Phase 2B Milestone 2 complete
+- Current milestone: Milestone 3 — backend bridge routes and structured recovery
 
 ## Phase 2B authorization and constraints
 
@@ -98,7 +98,7 @@
 - [x] Verify the v24.6.219 master/source/package baseline and all entry gates.
 - [x] Record owner authorization, scope boundaries and milestone plan.
 - [x] Inventory and select Phase 2B browser stores/settings.
-- [ ] Implement schema migration and repositories.
+- [x] Implement schema migration and repositories.
 - [ ] Implement backend bridge routes and structured recovery.
 - [ ] Implement frontend hydration/mirroring and export compatibility.
 - [ ] Complete Phase 2B acceptance and compatibility tests.
@@ -213,6 +213,43 @@ without reinterpreting each feature's established shape.
 - Source-level Windows testing is available in this worktree. No protected
   native build, physical installer/restore test, live external-service call or
   paid provider request is claimed or required for this owner/source phase.
+
+## Phase 2B Milestone 2 results
+
+- SQLite schema version is now 10. Versions 8, 9 and 10 add only the selected
+  OneNote transfer, saved-link and browser-setting tables and their bounded
+  active-row indexes; migrations 1–7 and their checksums are unchanged.
+- A real schema-7 fixture upgraded through all three migrations with three new
+  unique, independently integrity-verified backups. Phase 2A usage data and
+  migration history remained intact; a second startup created no additional
+  backup or history row.
+- A deterministic interruption after migration 9 schema work left the database
+  transactionally at version 8 with no version-9 table/history row and a clean
+  integrity check. Removing the fault completed versions 9–10 on restart.
+- OneNote transfer records are capped at 200 and saved links at 100. Live
+  replacement preserves exact active membership/order; clear/delete marks
+  tombstones so later stale legacy imports cannot resurrect removed entries.
+- Browser settings accept only the selected exact key set. Known main/Lead
+  provider-model and per-feature route keys are enumerated explicitly; API-key,
+  token and arbitrary prefixes are not accepted.
+- Private record JSON and JSON-valued settings are bounded by size/depth and
+  recursively stripped of credential-like fields. Safe accounting fields such
+  as `input_tokens` remain intact.
+- Targeted repository suites passed 9 tests across all Phase 2A repositories,
+  the three new Phase 2B repositories, schema-7 upgrade and Phase 2B interrupted
+  migration recovery.
+- Targeted foundation/fixture suites passed 6 tests covering WAL/foreign keys,
+  busy timeout, all verified backups, double initialisation, Phase 2A
+  interruption/corruption behavior and byte-preserved v24.6.217 imports.
+- Python compilation passed for the storage module and all targeted migration/
+  repository test modules.
+
+### Milestone 2 files
+
+- `cvstudio_storage.py` — schema versions 8–10, bounded credential filtering,
+  the selected settings allowlist and three tombstone-aware repositories.
+- `tests/test_phase2b_repositories.py` — schema-7 upgrade, backup, interruption,
+  Phase 2A preservation, repository, filter and tombstone coverage.
 
 ## v24.6.219 corrective plan
 

@@ -19,7 +19,7 @@ import threading
 import uuid
 
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 10
 BUSY_TIMEOUT_MS = 5_000
 _INTEGRITY_OK = "ok"
 _SAFE_STATE_KEYS = {
@@ -279,6 +279,63 @@ MIGRATIONS = (
                 payload_json TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )
+            """,
+        ),
+    ),
+    SchemaMigration(
+        8,
+        "onenote_transfer_record_repository",
+        (
+            """
+            CREATE TABLE onenote_transfer_records (
+                record_key TEXT PRIMARY KEY,
+                recorded_at TEXT NOT NULL DEFAULT '',
+                sort_position INTEGER NOT NULL DEFAULT 0,
+                payload_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                deleted INTEGER NOT NULL DEFAULT 0 CHECK (deleted IN (0, 1))
+            )
+            """,
+            """
+            CREATE INDEX onenote_transfer_records_active_idx
+            ON onenote_transfer_records(deleted, recorded_at, sort_position)
+            """,
+        ),
+    ),
+    SchemaMigration(
+        9,
+        "onenote_saved_link_repository",
+        (
+            """
+            CREATE TABLE onenote_saved_links (
+                link_id TEXT PRIMARY KEY,
+                sort_position INTEGER NOT NULL DEFAULT 0,
+                payload_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                deleted INTEGER NOT NULL DEFAULT 0 CHECK (deleted IN (0, 1))
+            )
+            """,
+            """
+            CREATE INDEX onenote_saved_links_active_idx
+            ON onenote_saved_links(deleted, sort_position)
+            """,
+        ),
+    ),
+    SchemaMigration(
+        10,
+        "browser_settings_repository",
+        (
+            """
+            CREATE TABLE browser_settings (
+                setting_key TEXT PRIMARY KEY,
+                value_text TEXT NOT NULL DEFAULT '',
+                updated_at TEXT NOT NULL,
+                deleted INTEGER NOT NULL DEFAULT 0 CHECK (deleted IN (0, 1))
+            )
+            """,
+            """
+            CREATE INDEX browser_settings_active_idx
+            ON browser_settings(deleted, setting_key)
             """,
         ),
     ),
@@ -705,6 +762,144 @@ def _safe_integer(value) -> int:
         return int(value or 0)
     except (TypeError, ValueError, OverflowError):
         return 0
+
+
+_PRIVATE_RECORD_MAX_BYTES = 512 * 1024
+_BROWSER_SETTING_MAX_BYTES = 2 * 1024 * 1024
+_PRIVATE_JSON_DROP = object()
+_PRIVATE_SECRET_FIELDS = {
+    "access_token",
+    "refresh_token",
+    "client_secret",
+    "api_key",
+    "authorization",
+    "authorization_code",
+    "password",
+    "credential",
+    "credentials",
+    "token",
+}
+_PRIVATE_SECRET_SUFFIXES = {
+    "accesstoken",
+    "refreshtoken",
+    "clientsecret",
+    "apikey",
+    "authorizationcode",
+    "password",
+    "credential",
+    "credentials",
+    "bearertoken",
+    "oauthtoken",
+    "oauth2token",
+    "authtoken",
+    "idtoken",
+    "sessiontoken",
+    "csrftoken",
+    "devicecode",
+    "secret",
+}
+_SUSPICIOUS_SECRET_TEXT = re.compile(
+    r"(?i)(?:\bBearer\s+[A-Za-z0-9._~-]{12,}|\bsk-(?:ant-|proj-)?[A-Za-z0-9_-]{12,}|"
+    r"\b(?:api[_-]?key|client[_-]?secret|access[_-]?token|refresh[_-]?token)\s*[:=])"
+)
+
+
+def _private_secret_field(key) -> bool:
+    key_text = str(key or "").strip().lower()
+    if key_text in _PRIVATE_SECRET_FIELDS:
+        return True
+    compact = re.sub(r"[^a-z0-9]", "", key_text)
+    return compact.startswith("authorization") or any(
+        compact.endswith(suffix) for suffix in _PRIVATE_SECRET_SUFFIXES
+    )
+
+
+def _sanitize_private_json(value, depth=0):
+    """Recursively preserve private feature data while excluding credentials."""
+
+    if depth > 24:
+        return _PRIVATE_JSON_DROP
+    if isinstance(value, dict):
+        clean = {}
+        for index, (key, nested) in enumerate(value.items()):
+            if index >= 10_000:
+                break
+            key_text = str(key or "")[:160]
+            if _private_secret_field(key_text):
+                continue
+            safe_nested = _sanitize_private_json(nested, depth + 1)
+            if safe_nested is not _PRIVATE_JSON_DROP:
+                clean[key_text] = safe_nested
+        return clean
+    if isinstance(value, list):
+        clean = []
+        for nested in value[:10_000]:
+            safe_nested = _sanitize_private_json(nested, depth + 1)
+            if safe_nested is not _PRIVATE_JSON_DROP:
+                clean.append(safe_nested)
+        return clean
+    if isinstance(value, str):
+        return value[:262_144]
+    if value is None or isinstance(value, (int, float, bool)):
+        return value
+    return _PRIVATE_JSON_DROP
+
+
+def _clean_private_record(record):
+    if not isinstance(record, dict):
+        return None
+    clean = _sanitize_private_json(record)
+    if not isinstance(clean, dict):
+        return None
+    encoded = _canonical_json(clean).encode("utf-8")
+    return clean if len(encoded) <= _PRIVATE_RECORD_MAX_BYTES else None
+
+
+_AI_ROUTE_FEATURES = (
+    "cv_single",
+    "summary",
+    "appraiser",
+    "the_owl",
+    "the_spider",
+    "cv_batch",
+    "ja_create",
+    "onenote_salary",
+    "jd_anonymizer",
+    "company_profile",
+    "lead_search",
+    "lead_people",
+    "lead_email",
+)
+_AI_PROVIDERS = ("anthropic", "deepseek", "openai")
+BROWSER_SETTING_KEYS = frozenset(
+    {
+        "cvstudio_ppc_ui_state_v1",
+        "cvstudio_ppc_kpi_visibility_v1",
+        "cvstudio_ppc_column_visibility_v1",
+        "cvstudio_ppc_invoice_email_v1",
+        "cvstudio_ppc_outlook_ms_client_v1",
+        "cvstudio_ppc_outlook_drafts_v1",
+        "cvstudio_onenote_spelling_correction_v1",
+        "cv_studio_onenote_salary_ai_enabled_v1",
+        "onenote_source_mode",
+        "onenote_ms_client_id",
+        "onenote_ms_tenant",
+        "cvstudio_cv_text_alignment_v1",
+        "cvstudio_page_nav_pinned_v1",
+        "cvstudio_spider_preview_memory_mode_v1",
+        "ja_auto_upload",
+        "hy_provider",
+        "hy_model",
+        "hy_lead_provider",
+        "hy_lead_model",
+        "hy_search_provider",
+        "hy_enrichment_provider",
+    }
+    | {"hy_model_{}".format(provider) for provider in _AI_PROVIDERS}
+    | {"hy_lead_model_{}".format(provider) for provider in _AI_PROVIDERS}
+    | {"hy_ai_route_{}".format(feature) for feature in _AI_ROUTE_FEATURES}
+    | {"hy_ai_route_model_{}".format(feature) for feature in _AI_ROUTE_FEATURES}
+)
 
 
 class UsageHistoryRepository:
@@ -1140,12 +1335,397 @@ class PPCMetadataRepository:
             connection.execute("DELETE FROM ppc_metadata")
 
 
+class OneNoteTransferRepository:
+    store_name = "onenote_transfer_records"
+    max_records = 200
+
+    def __init__(self, storage: CVStudioStorage):
+        self.storage = storage
+
+    @staticmethod
+    def _record_key(record: dict) -> str:
+        supplied = _safe_text(record.get("id"), 240)
+        if supplied:
+            return "id:" + supplied
+        return "legacy:" + _payload_fingerprint(record)
+
+    @classmethod
+    def _prepare(cls, records) -> list[tuple[str, dict]]:
+        if not isinstance(records, list):
+            return []
+        clean_records = []
+        seen = set()
+        for raw in records[: cls.max_records]:
+            clean = _clean_private_record(raw)
+            if clean is None:
+                continue
+            record_key = cls._record_key(clean)
+            if record_key in seen:
+                continue
+            seen.add(record_key)
+            clean_records.append((record_key, clean))
+        return clean_records
+
+    @staticmethod
+    def _write_record(
+        connection,
+        record_key: str,
+        record: dict,
+        position: int,
+        *,
+        overwrite: bool,
+    ) -> bool:
+        conflict_clause = (
+            """
+            ON CONFLICT(record_key) DO UPDATE SET
+                recorded_at = excluded.recorded_at,
+                sort_position = excluded.sort_position,
+                payload_json = excluded.payload_json,
+                updated_at = excluded.updated_at,
+                deleted = 0
+            """
+            if overwrite
+            else "ON CONFLICT(record_key) DO NOTHING"
+        )
+        cursor = connection.execute(
+            """
+            INSERT INTO onenote_transfer_records(
+                record_key, recorded_at, sort_position, payload_json, updated_at, deleted
+            ) VALUES (?, ?, ?, ?, ?, 0)
+            """ + conflict_clause,
+            (
+                record_key,
+                _safe_text(record.get("ts"), 80),
+                max(0, int(position)),
+                _canonical_json(record),
+                _utc_now(),
+            ),
+        )
+        return cursor.rowcount > 0
+
+    def import_legacy(self, records, fingerprint: str | None = None) -> int:
+        prepared = self._prepare(records)
+        fingerprint = fingerprint or _payload_fingerprint(
+            [record for _, record in prepared]
+        )
+        with self.storage.connection(write=True) as connection:
+            if self.storage.legacy_import_seen(connection, self.store_name, fingerprint):
+                return 0
+            count = sum(
+                1
+                for position, (record_key, record) in enumerate(prepared)
+                if self._write_record(
+                    connection,
+                    record_key,
+                    record,
+                    position,
+                    overwrite=False,
+                )
+            )
+            self.storage.record_legacy_import(
+                connection, self.store_name, fingerprint, count
+            )
+        return count
+
+    def replace(self, records) -> int:
+        prepared = self._prepare(records)
+        updated_at = _utc_now()
+        with self.storage.connection(write=True) as connection:
+            connection.execute(
+                "UPDATE onenote_transfer_records SET deleted = 1, updated_at = ? WHERE deleted = 0",
+                (updated_at,),
+            )
+            for position, (record_key, record) in enumerate(prepared):
+                self._write_record(
+                    connection,
+                    record_key,
+                    record,
+                    position,
+                    overwrite=True,
+                )
+        return len(prepared)
+
+    def list(self) -> list[dict]:
+        with self.storage.connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT payload_json FROM onenote_transfer_records
+                WHERE deleted = 0
+                ORDER BY CASE WHEN recorded_at = '' THEN 0 ELSE 1 END DESC,
+                         recorded_at DESC, sort_position, rowid
+                LIMIT ?
+                """,
+                (self.max_records,),
+            ).fetchall()
+        result = []
+        for row in rows:
+            try:
+                payload = json.loads(row["payload_json"])
+            except Exception:
+                continue
+            if isinstance(payload, dict):
+                result.append(payload)
+        return result
+
+    def clear(self) -> None:
+        with self.storage.connection(write=True) as connection:
+            connection.execute(
+                "UPDATE onenote_transfer_records SET deleted = 1, updated_at = ? WHERE deleted = 0",
+                (_utc_now(),),
+            )
+
+
+class OneNoteSavedLinkRepository:
+    store_name = "onenote_saved_links"
+    max_records = 100
+
+    def __init__(self, storage: CVStudioStorage):
+        self.storage = storage
+
+    @staticmethod
+    def _normalize(raw) -> dict | None:
+        clean = _clean_private_record(raw)
+        if clean is None:
+            return None
+        name = _safe_text(clean.get("name"), 80)
+        link = _safe_text(clean.get("link"), 4096)
+        if not name or not link:
+            return None
+        kind = _safe_text(clean.get("kind") or clean.get("type"), 20).lower()
+        clean["kind"] = kind if kind in {"notebook", "section", "page"} else "notebook"
+        clean["name"] = name
+        clean["link"] = link
+        link_id = _safe_text(clean.get("id"), 240)
+        if not link_id:
+            link_id = "legacy-" + _payload_fingerprint({"name": name, "link": link})[:32]
+        clean["id"] = link_id
+        clean["createdAt"] = _safe_text(clean.get("createdAt"), 80)
+        clean["updatedAt"] = _safe_text(clean.get("updatedAt"), 80)
+        return clean
+
+    @classmethod
+    def _prepare(cls, records) -> list[dict]:
+        if not isinstance(records, list):
+            return []
+        clean_records = []
+        seen = set()
+        for raw in records[: cls.max_records]:
+            clean = cls._normalize(raw)
+            if clean is None or clean["id"] in seen:
+                continue
+            seen.add(clean["id"])
+            clean_records.append(clean)
+        return clean_records
+
+    @staticmethod
+    def _write_link(connection, record: dict, position: int, *, overwrite: bool) -> bool:
+        conflict_clause = (
+            """
+            ON CONFLICT(link_id) DO UPDATE SET
+                sort_position = excluded.sort_position,
+                payload_json = excluded.payload_json,
+                updated_at = excluded.updated_at,
+                deleted = 0
+            """
+            if overwrite
+            else "ON CONFLICT(link_id) DO NOTHING"
+        )
+        cursor = connection.execute(
+            """
+            INSERT INTO onenote_saved_links(
+                link_id, sort_position, payload_json, updated_at, deleted
+            ) VALUES (?, ?, ?, ?, 0)
+            """ + conflict_clause,
+            (
+                record["id"],
+                max(0, int(position)),
+                _canonical_json(record),
+                _safe_text(record.get("updatedAt"), 80) or _utc_now(),
+            ),
+        )
+        return cursor.rowcount > 0
+
+    def import_legacy(self, records, fingerprint: str | None = None) -> int:
+        prepared = self._prepare(records)
+        fingerprint = fingerprint or _payload_fingerprint(prepared)
+        with self.storage.connection(write=True) as connection:
+            if self.storage.legacy_import_seen(connection, self.store_name, fingerprint):
+                return 0
+            count = sum(
+                1
+                for position, record in enumerate(prepared)
+                if self._write_link(connection, record, position, overwrite=False)
+            )
+            self.storage.record_legacy_import(
+                connection, self.store_name, fingerprint, count
+            )
+        return count
+
+    def replace(self, records) -> int:
+        prepared = self._prepare(records)
+        with self.storage.connection(write=True) as connection:
+            connection.execute(
+                "UPDATE onenote_saved_links SET deleted = 1, updated_at = ? WHERE deleted = 0",
+                (_utc_now(),),
+            )
+            for position, record in enumerate(prepared):
+                self._write_link(connection, record, position, overwrite=True)
+        return len(prepared)
+
+    def list(self) -> list[dict]:
+        with self.storage.connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT payload_json FROM onenote_saved_links
+                WHERE deleted = 0
+                ORDER BY sort_position, rowid
+                LIMIT ?
+                """,
+                (self.max_records,),
+            ).fetchall()
+        result = []
+        for row in rows:
+            try:
+                payload = json.loads(row["payload_json"])
+            except Exception:
+                continue
+            if isinstance(payload, dict):
+                result.append(payload)
+        return result
+
+    def clear(self) -> None:
+        self.replace([])
+
+
+class BrowserSettingsRepository:
+    store_name = "browser_settings"
+
+    def __init__(self, storage: CVStudioStorage):
+        self.storage = storage
+
+    @staticmethod
+    def _normalize_value(setting_key: str, value) -> str | None:
+        if setting_key not in BROWSER_SETTING_KEYS or not isinstance(value, str):
+            return None
+        if len(value.encode("utf-8")) > _BROWSER_SETTING_MAX_BYTES:
+            return None
+        if _SUSPICIOUS_SECRET_TEXT.search(value):
+            return None
+        try:
+            parsed = json.loads(value)
+        except Exception:
+            return value
+        if not isinstance(parsed, (dict, list)):
+            return value
+        clean = _sanitize_private_json(parsed)
+        if clean is _PRIVATE_JSON_DROP:
+            return None
+        encoded = _canonical_json(clean)
+        if len(encoded.encode("utf-8")) > _BROWSER_SETTING_MAX_BYTES:
+            return None
+        return encoded
+
+    @classmethod
+    def _prepare(cls, settings) -> dict[str, str]:
+        if not isinstance(settings, dict):
+            return {}
+        clean = {}
+        for key, value in settings.items():
+            setting_key = str(key or "")
+            normalized = cls._normalize_value(setting_key, value)
+            if normalized is not None:
+                clean[setting_key] = normalized
+        return clean
+
+    @staticmethod
+    def _write_setting(connection, setting_key: str, value: str, *, overwrite: bool) -> bool:
+        conflict_clause = (
+            """
+            ON CONFLICT(setting_key) DO UPDATE SET
+                value_text = excluded.value_text,
+                updated_at = excluded.updated_at,
+                deleted = 0
+            """
+            if overwrite
+            else "ON CONFLICT(setting_key) DO NOTHING"
+        )
+        cursor = connection.execute(
+            """
+            INSERT INTO browser_settings(setting_key, value_text, updated_at, deleted)
+            VALUES (?, ?, ?, 0)
+            """ + conflict_clause,
+            (setting_key, value, _utc_now()),
+        )
+        return cursor.rowcount > 0
+
+    def import_legacy(self, settings, fingerprint: str | None = None) -> int:
+        prepared = self._prepare(settings)
+        fingerprint = fingerprint or _payload_fingerprint(prepared)
+        with self.storage.connection(write=True) as connection:
+            if self.storage.legacy_import_seen(connection, self.store_name, fingerprint):
+                return 0
+            count = sum(
+                1
+                for key, value in prepared.items()
+                if self._write_setting(connection, key, value, overwrite=False)
+            )
+            self.storage.record_legacy_import(
+                connection, self.store_name, fingerprint, count
+            )
+        return count
+
+    def upsert(self, settings) -> int:
+        prepared = self._prepare(settings)
+        with self.storage.connection(write=True) as connection:
+            for key, value in prepared.items():
+                self._write_setting(connection, key, value, overwrite=True)
+        return len(prepared)
+
+    def delete(self, setting_keys) -> int:
+        keys = []
+        seen = set()
+        if isinstance(setting_keys, list):
+            for raw_key in setting_keys:
+                key = str(raw_key or "")
+                if key in BROWSER_SETTING_KEYS and key not in seen:
+                    seen.add(key)
+                    keys.append(key)
+        with self.storage.connection(write=True) as connection:
+            for key in keys:
+                connection.execute(
+                    """
+                    INSERT INTO browser_settings(setting_key, value_text, updated_at, deleted)
+                    VALUES (?, '', ?, 1)
+                    ON CONFLICT(setting_key) DO UPDATE SET
+                        value_text = '',
+                        updated_at = excluded.updated_at,
+                        deleted = 1
+                    """,
+                    (key, _utc_now()),
+                )
+        return len(keys)
+
+    def load(self) -> dict[str, str]:
+        with self.storage.connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT setting_key, value_text FROM browser_settings
+                WHERE deleted = 0 ORDER BY setting_key
+                """
+            ).fetchall()
+        return {str(row["setting_key"]): str(row["value_text"]) for row in rows}
+
+
 __all__ = [
+    "BROWSER_SETTING_KEYS",
     "BUSY_TIMEOUT_MS",
+    "BrowserSettingsRepository",
     "CVStudioStorage",
     "LeadContactCacheRepository",
     "LeadTitleCacheRepository",
     "MIGRATIONS",
+    "OneNoteSavedLinkRepository",
+    "OneNoteTransferRepository",
     "PPCMetadataRepository",
     "SCHEMA_VERSION",
     "SalaryComponentCacheRepository",
