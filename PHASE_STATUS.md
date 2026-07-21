@@ -3,12 +3,23 @@
 ## Release state
 
 - Approved baseline: v24.6.217
-- Completed release candidate: v24.6.218
+- Completed release: v24.6.218
+- Active corrective release candidate: v24.6.219
 - Baseline Git commit: `c8eeb34c275d374170a5931d69ed95ea213c791a`
 - Working branch: `codex/phase-2a-sqlite`
-- Active phase: none; Phase 2A is complete and stopped
-- Status: v24.6.218 Phase 2A owner/source release complete
-- Current milestone: complete; Phase 2B requires a new explicit owner instruction
+- Active phase: Phase 2A corrective review patch only
+- Status: implementing the five owner-requested post-release review fixes
+- Current milestone: authoritative imports, failure reporting and credential exclusion
+
+## v24.6.219 corrective plan
+
+- Keep SQLite usage rows authoritative when a stale legacy browser mirror has the same record ID.
+- Reject stale PPC metadata conflicts using the existing `updatedAt` contract.
+- Report usage-history clear failures and restore the local compatibility mirror instead of claiming success.
+- Distinguish transient/operational SQLite failures from genuine database corruption.
+- Recursively exclude credential-like fields from usage-history payloads before SQLite or backup persistence.
+- Add focused regressions for every finding, then rerun the complete Phase 2A and release validation set.
+- Advance release surfaces and owner/source evidence to v24.6.219 only after all tests pass; stop without starting Phase 2B.
 
 ## Verified baseline
 
