@@ -6350,15 +6350,139 @@ function cvStudioSafeLocalDataKey(key){
     'cvstudio_onenote_saved_desktop_links_v1':1,'cvstudio_onenote_spelling_correction_v1':1,'cv_studio_onenote_salary_ai_enabled_v1':1,'onenote_source_mode':1,'onenote_ms_client_id':1,'onenote_ms_tenant':1,
     'cvstudio_cv_text_alignment_v1':1,'cvstudio_page_nav_pinned_v1':1,'cvstudio_spider_preview_memory_mode_v1':1,'ja_auto_upload':1,'hy_provider':1,'hy_model':1,'hy_lead_provider':1,'hy_lead_model':1,'hy_search_provider':1,'hy_enrichment_provider':1
   };
-  return !!exact[key]||key.indexOf('hy_ai_route_')===0||key.indexOf('hy_ai_route_model_')===0;
+  if(exact[key])return true;
+  if(/^hy_(?:lead_)?model_(?:anthropic|deepseek|openai)$/.test(key))return true;
+  var feature=key.indexOf('hy_ai_route_model_')===0?key.slice('hy_ai_route_model_'.length):(key.indexOf('hy_ai_route_')===0?key.slice('hy_ai_route_'.length):'');
+  return ['cv_single','summary','appraiser','the_owl','the_spider','cv_batch','ja_create','onenote_salary','jd_anonymizer','company_profile','lead_search','lead_people','lead_email'].indexOf(feature)>=0;
 }
+function cvStudioDurableSettingKey(key){
+  key=String(key||'');
+  return cvStudioSafeLocalDataKey(key)&&key!=='cvstudio_ppc_meta_v1'&&key!=='cvstudio_onenote_saved_desktop_links_v1';
+}
+function cvStudioPrivateSecretField(key){
+  var text=String(key||'').trim().toLowerCase(),compact=text.replace(/[^a-z0-9]/g,'');
+  if(['access_token','refresh_token','client_secret','api_key','authorization','authorization_code','password','credential','credentials','token'].indexOf(text)>=0)return true;
+  var suffixes=['accesstoken','refreshtoken','clientsecret','apikey','authorizationcode','password','credential','credentials','bearertoken','oauthtoken','oauth2token','authtoken','idtoken','sessiontoken','csrftoken','devicecode','secret'];
+  return compact.indexOf('authorization')===0||suffixes.some(function(suffix){return compact.slice(-suffix.length)===suffix;});
+}
+function cvStudioPrivateSafeValue(value,depth){
+  depth=Number(depth||0);if(depth>24)return undefined;
+  if(Array.isArray(value))return value.slice(0,10000).map(function(item){return cvStudioPrivateSafeValue(item,depth+1);}).filter(function(item){return item!==undefined;});
+  if(value&&typeof value==='object'){
+    var out={};Object.keys(value).slice(0,10000).forEach(function(key){if(cvStudioPrivateSecretField(key))return;var safe=cvStudioPrivateSafeValue(value[key],depth+1);if(safe!==undefined)out[String(key).slice(0,160)]=safe;});return out;
+  }
+  if(typeof value==='string')return value.slice(0,262144);
+  if(value===null||typeof value==='number'||typeof value==='boolean')return value;
+  return undefined;
+}
+function cvStudioStableStorageValue(value){
+  if(Array.isArray(value))return '['+value.map(cvStudioStableStorageValue).join(',')+']';
+  if(value&&typeof value==='object')return '{'+Object.keys(value).sort().map(function(key){return JSON.stringify(key)+':'+cvStudioStableStorageValue(value[key]);}).join(',')+'}';
+  var encoded=JSON.stringify(value);return encoded===undefined?'null':encoded;
+}
+function cvStudioSafeExportSettingValue(key,value){
+  value=String(value==null?'':value);
+  if(/(?:\bBearer\s+[A-Za-z0-9._~-]{12,}|\bsk-(?:ant-|proj-)?[A-Za-z0-9_-]{12,}|\b(?:api[_-]?key|client[_-]?secret|access[_-]?token|refresh[_-]?token)\s*[:=])/i.test(value))return null;
+  try{var parsed=JSON.parse(value);if(parsed&&typeof parsed==='object')return JSON.stringify(cvStudioPrivateSafeValue(parsed,0));}catch(e){}
+  return value;
+}
+function cvStudioLocalDataSettingsSnapshot(durableOnly){
+  var settings={};try{for(var i=0;i<localStorage.length;i++){var key=String(localStorage.key(i)||'');if((durableOnly?cvStudioDurableSettingKey(key):cvStudioSafeLocalDataKey(key))){var safe=cvStudioSafeExportSettingValue(key,localStorage.getItem(key));if(safe!==null)settings[key]=safe;}}}catch(e){}
+  return settings;
+}
+var _phase2bSettingsSqliteCache=null;
+var _phase2bSettingsMutationVersion=0;
+var _phase2bSettingsDirtyKeys={};
+var _phase2bSettingsHydrationPromise=null;
+var _phase2bSettingsWriteQueue=Promise.resolve();
+function cvStudioStoragePost(path,payload){
+  return fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload||{})}).then(function(response){return response.json().catch(function(){return {};}).then(function(data){if(!response.ok||!data.ok)throw new Error(data.message||data.error||'Local storage request failed');return data;});});
+}
+function cvStudioQueueSettingsPost(path,payload){
+  _phase2bSettingsWriteQueue=_phase2bSettingsWriteQueue.catch(function(){}).then(function(){return cvStudioStoragePost(path,payload);});
+  return _phase2bSettingsWriteQueue;
+}
+function cvStudioApplyDurableSettings(settings){
+  settings=settings&&typeof settings==='object'&&!Array.isArray(settings)?settings:{};
+  try{
+    var existing=[];for(var i=0;i<localStorage.length;i++){var key=String(localStorage.key(i)||'');if(cvStudioDurableSettingKey(key))existing.push(key);}
+    existing.forEach(function(key){if(!Object.prototype.hasOwnProperty.call(settings,key))localStorage.removeItem(key);});
+    Object.keys(settings).forEach(function(key){if(cvStudioDurableSettingKey(key)&&typeof settings[key]==='string')localStorage.setItem(key,settings[key]);});
+  }catch(e){}
+  _phase2bSettingsSqliteCache=Object.assign({},settings);
+  return _phase2bSettingsSqliteCache;
+}
+function cvStudioRefreshHydratedSettingUi(){
+  try{if(typeof normalizeCvTextAlignment==='function'){window._cvTextAlignment=normalizeCvTextAlignment(localStorage.getItem('cvstudio_cv_text_alignment_v1')||'left');if(typeof renderCvTextAlignmentSetting==='function')renderCvTextAlignmentSetting();}}catch(e){}
+  try{var auto=localStorage.getItem('ja_auto_upload')!=='false';window._jaAutoUpload=auto;var autoBox=document.getElementById('autoUploadToggle'),autoLabel=document.getElementById('autoUploadLabel');if(autoBox)autoBox.checked=auto;if(autoLabel)autoLabel.textContent=auto?'On':'Off';}catch(e){}
+  try{if(typeof oneNoteApiLoadSettings==='function')oneNoteApiLoadSettings();if(typeof oneNoteLoadSpellingCorrectionSetting==='function')oneNoteLoadSpellingCorrectionSetting();var salary=document.getElementById('oneNoteSalaryAiEnabled'),salarySaved=localStorage.getItem('cv_studio_onenote_salary_ai_enabled_v1');if(salary)salary.checked=salarySaved===null?true:salarySaved==='1';if(typeof oneNoteSourceModeChanged==='function')oneNoteSourceModeChanged(true);if(typeof oneNoteUpdateSalaryAiBadge==='function')oneNoteUpdateSalaryAiBadge();}catch(e){}
+  try{if(typeof pageNavPinStored==='function'){window._pageNavPinEnabled=pageNavPinStored();if(typeof updatePageNavPinButton==='function')updatePageNavPinButton();}}catch(e){}
+  try{if(typeof ppcRestoreUiState==='function')ppcRestoreUiState();if(typeof ppcApplyKpiVisibility==='function')ppcApplyKpiVisibility();if(typeof ppcApplyColumnVisibility==='function')ppcApplyColumnVisibility();}catch(e){}
+  try{if(typeof ensureAiRoutingRowsVisible==='function')ensureAiRoutingRowsVisible();if(typeof syncQuickAiProviderPanels==='function')syncQuickAiProviderPanels();}catch(e){}
+}
+function cvStudioDurableSettingSet(key,value){
+  key=String(key||'');value=String(value==null?'':value);
+  try{localStorage.setItem(key,value);}catch(e){return Promise.resolve(false);}
+  if(!cvStudioDurableSettingKey(key))return Promise.resolve(true);
+  _phase2bSettingsMutationVersion+=1;var version=_phase2bSettingsMutationVersion;_phase2bSettingsDirtyKeys[key]=version;
+  if(_phase2bSettingsSqliteCache)_phase2bSettingsSqliteCache[key]=value;
+  var data={};data[key]=value;
+  return cvStudioQueueSettingsPost('/storage/browser-settings/upsert',{settings:data}).then(function(){return true;}).catch(function(error){showToast('Setting remains available in this browser, but durable storage failed. '+String((error&&error.message)||''),'err');return false;});
+}
+function cvStudioDurableSettingRemove(key){
+  key=String(key||'');var previous=null;try{previous=localStorage.getItem(key);localStorage.removeItem(key);}catch(e){return Promise.resolve(false);}
+  if(!cvStudioDurableSettingKey(key))return Promise.resolve(true);
+  _phase2bSettingsMutationVersion+=1;var version=_phase2bSettingsMutationVersion;_phase2bSettingsDirtyKeys[key]=version;
+  if(_phase2bSettingsSqliteCache)delete _phase2bSettingsSqliteCache[key];
+  return cvStudioQueueSettingsPost('/storage/browser-settings/delete',{keys:[key]}).then(function(){return true;}).catch(function(error){
+    if(_phase2bSettingsDirtyKeys[key]===version&&previous!==null){try{localStorage.setItem(key,previous);}catch(e){}if(_phase2bSettingsSqliteCache)_phase2bSettingsSqliteCache[key]=previous;}
+    showToast('Setting was not removed from durable storage. '+String((error&&error.message)||''),'err');return false;
+  });
+}
+function cvStudioHydrateBrowserSettings(){
+  if(_phase2bSettingsHydrationPromise)return _phase2bSettingsHydrationPromise;
+  var startedVersion=_phase2bSettingsMutationVersion,legacy=cvStudioLocalDataSettingsSnapshot(true);
+  _phase2bSettingsHydrationPromise=cvStudioStoragePost('/storage/browser-settings/import',{settings:legacy}).then(function(data){
+    var current=cvStudioLocalDataSettingsSnapshot(true),merged=Object.assign({},data.settings||{}),upserts={},deletes=[];
+    Object.keys(_phase2bSettingsDirtyKeys).forEach(function(key){if(_phase2bSettingsDirtyKeys[key]<=startedVersion)return;if(Object.prototype.hasOwnProperty.call(current,key)){merged[key]=current[key];upserts[key]=current[key];}else{delete merged[key];deletes.push(key);}});
+    cvStudioApplyDurableSettings(merged);cvStudioRefreshHydratedSettingUi();
+    var writes=[];if(Object.keys(upserts).length)writes.push(cvStudioQueueSettingsPost('/storage/browser-settings/upsert',{settings:upserts}).catch(function(){}));if(deletes.length)writes.push(cvStudioQueueSettingsPost('/storage/browser-settings/delete',{keys:deletes}).catch(function(){}));
+    return Promise.all(writes).then(function(){return merged;});
+  }).catch(function(){_phase2bSettingsSqliteCache=cvStudioLocalDataSettingsSnapshot(true);return _phase2bSettingsSqliteCache;});
+  return _phase2bSettingsHydrationPromise;
+}
+var _cvStudioPhase2bSettingsStartupPromise=cvStudioHydrateBrowserSettings();
 function exportCvStudioLocalData(){
-  var settings={};try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(cvStudioSafeLocalDataKey(k))settings[k]=localStorage.getItem(k);}}catch(e){}
-  var payload={product:'CV Studio local data',version:'v24.6.219',schema:1,exportedAt:new Date().toISOString(),includes:['PPC metadata and preferences','saved OneNote links and parser preferences','invoice recipient/settings and draft links','CV alignment and navigation preferences','AI routing/provider selections without API keys'],settings:settings};
+  var settings=cvStudioLocalDataSettingsSnapshot(false);
+  var records={onenote_transfer_records:(typeof oneNoteRecordsLoad==='function'?oneNoteRecordsLoad():[]),onenote_saved_links:(typeof oneNoteReadSavedLinks==='function'?oneNoteReadSavedLinks():[])};
+  var payload={product:'CV Studio local data',version:'v24.6.219',schema:1,exportedAt:new Date().toISOString(),includes:['PPC metadata and preferences','saved OneNote links and parser preferences','OneNote transfer record history (private application data)','invoice recipient/settings and draft links','CV alignment and navigation preferences','AI routing/provider selections without API keys'],settings:settings,records:records};
   var blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='cv_studio_local_data_'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(url);a.remove();},0);showToast('Non-secret local data exported.','ok');
 }
+function cvStudioPersistImportedLocalData(payload){
+  payload=payload||{};var settings=payload.settings&&typeof payload.settings==='object'?payload.settings:{},records=payload.records&&typeof payload.records==='object'?payload.records:{};
+  var hydrations=[cvStudioHydrateBrowserSettings()];
+  if(typeof ppcMetaHydrateFromSQLite==='function')hydrations.push(ppcMetaHydrateFromSQLite());
+  if(typeof oneNoteRecordsHydrateFromSQLite==='function')hydrations.push(oneNoteRecordsHydrateFromSQLite());
+  if(typeof oneNoteLinksHydrateFromSQLite==='function')hydrations.push(oneNoteLinksHydrateFromSQLite());
+  return Promise.all(hydrations.map(function(item){return Promise.resolve(item).catch(function(){});})).then(function(){
+    var writes=[],restored=0,savedLinksFromSettings=null;
+    Object.keys(settings).forEach(function(key){var value=settings[key];if(!cvStudioSafeLocalDataKey(key)||typeof value!=='string')return;
+      if(key==='cvstudio_ppc_meta_v1'){try{var metadata=JSON.parse(value);if(metadata&&typeof metadata==='object'&&!Array.isArray(metadata)){ppcMetaSave(metadata);restored++;}}catch(e){}return;}
+      if(key==='cvstudio_onenote_saved_desktop_links_v1'){try{var links=JSON.parse(value);if(Array.isArray(links))savedLinksFromSettings=links;}catch(e){}return;}
+      if(cvStudioDurableSettingKey(key)){writes.push(cvStudioDurableSettingSet(key,value));restored++;}
+    });
+    var transferRecords=Array.isArray(records.onenote_transfer_records)?records.onenote_transfer_records:null;
+    var savedLinks=Array.isArray(records.onenote_saved_links)?records.onenote_saved_links:savedLinksFromSettings;
+    if(transferRecords){oneNoteRecordsSave(transferRecords);restored+=transferRecords.length;}
+    if(savedLinks){oneNoteWriteSavedLinks(savedLinks);restored+=savedLinks.length;}
+    if(typeof _ppcMetaWriteQueue!=='undefined')writes.push(_ppcMetaWriteQueue.catch(function(){}));
+    if(typeof _oneNoteRecordsLastWritePromise!=='undefined')writes.push(_oneNoteRecordsLastWritePromise);
+    if(typeof _oneNoteLinksLastWritePromise!=='undefined')writes.push(_oneNoteLinksLastWritePromise);
+    return Promise.all(writes.map(function(item){return Promise.resolve(item).catch(function(){return false;});})).then(function(){return restored;});
+  });
+}
 function importCvStudioLocalData(file){
-  if(!file)return;var reader=new FileReader();reader.onload=function(){try{var payload=JSON.parse(String(reader.result||''));if(!payload||payload.product!=='CV Studio local data'||Number(payload.schema)!==1||!payload.settings||typeof payload.settings!=='object')throw new Error('This is not a supported CV Studio local-data backup.');var restored=0;Object.keys(payload.settings).forEach(function(k){if(cvStudioSafeLocalDataKey(k)&&typeof payload.settings[k]==='string'){localStorage.setItem(k,payload.settings[k]);restored++;}});showToast('Restored '+restored+' non-secret local settings. Reloading CV Studio…','ok');setTimeout(function(){location.reload();},700);}catch(e){showToast((e&&e.message)||'Could not restore local data.','err');}};reader.onerror=function(){showToast('Could not read the selected backup file.','err');};reader.readAsText(file);
+  if(!file)return;var reader=new FileReader();reader.onload=async function(){try{var payload=JSON.parse(String(reader.result||''));if(!payload||payload.product!=='CV Studio local data'||Number(payload.schema)!==1||!payload.settings||typeof payload.settings!=='object')throw new Error('This is not a supported CV Studio local-data backup.');var restored=await cvStudioPersistImportedLocalData(payload);showToast('Restored '+restored+' non-secret local settings and records. Reloading CV Studio…','ok');setTimeout(function(){location.reload();},700);}catch(e){showToast((e&&e.message)||'Could not restore local data.','err');}};reader.onerror=function(){showToast('Could not read the selected backup file.','err');};reader.readAsText(file);
 }
 
 function cvStudioFormatBytes(value){
@@ -8790,7 +8914,7 @@ function applyTheSpiderPreviewMemoryMode(mode,clearExisting){
 }
 async function setTheSpiderPreviewMemoryMode(mode,announce){
   mode=/^(auto|low|standard|high)$/.test(String(mode||''))?String(mode):'high';
-  try{localStorage.setItem(THE_SPIDER_PREVIEW_MEMORY_MODE_KEY,mode);}catch(e){}
+  try{cvStudioDurableSettingSet(THE_SPIDER_PREVIEW_MEMORY_MODE_KEY,mode);}catch(e){}
   var result=applyTheSpiderPreviewMemoryMode(mode,true);renderCvStudioDiagnosticStatus(window._cvStudioLastRuntimeDiagnostics||null);
   if(announce){
     var backendCleared=false,backendMessage='';
@@ -10873,7 +10997,7 @@ function renderCvTextAlignmentSetting() {
 function setCvTextAlignment(value, silent) {
   value = normalizeCvTextAlignment(value);
   window._cvTextAlignment = value;
-  try { localStorage.setItem(CV_TEXT_ALIGNMENT_STORE, value); } catch(e) {}
+  try { cvStudioDurableSettingSet(CV_TEXT_ALIGNMENT_STORE, value); } catch(e) {}
   renderCvTextAlignmentSetting();
   if (!silent) showToast(value === 'justify' ? 'Substantive CV body text and bullets will be justified; headings remain left-aligned.' : 'Formatted CV text will align left.', 'ok');
   return value;
@@ -10903,7 +11027,7 @@ window._jaAutoUpload = true; // default on
 
 function setAutoUpload(enable) {
   window._jaAutoUpload = enable;
-  try { localStorage.setItem('ja_auto_upload', enable ? 'true' : 'false'); } catch(e) {}
+  try { cvStudioDurableSettingSet('ja_auto_upload', enable ? 'true' : 'false'); } catch(e) {}
   var lb = document.getElementById('autoUploadLabel');
   if (lb) lb.textContent = enable ? 'On' : 'Off';
   // Update badges
@@ -11731,8 +11855,8 @@ async function saveKey() {
   try {
     await _saveSecureAiSecret(_aiSecretSlot('main',provider),key,false);
     localStorage.removeItem(_providerKeyStore(provider));
-    localStorage.setItem(_providerModelStore(provider), model);
-    localStorage.setItem('hy_provider', provider);
+    cvStudioDurableSettingSet(_providerModelStore(provider), model);
+    cvStudioDurableSettingSet('hy_provider', provider);
     window._hKeysByProvider[provider]='__BACKEND_SECURE__';
     document.getElementById('keyInput').value='';
   } catch(e) { showToast(e.message||'Could not save API key','err'); return; }
@@ -11768,7 +11892,7 @@ async function saveLeadKey() {
   window._hLeadProvider = provider;
   window._hLeadModelsByProvider = window._hLeadModelsByProvider || {};
   window._hLeadModelsByProvider[provider] = model;
-  try { localStorage.setItem('hy_lead_provider', provider); localStorage.setItem(_leadModelStore(provider), model); } catch(e) {}
+  try { cvStudioDurableSettingSet('hy_lead_provider', provider); cvStudioDurableSettingSet(_leadModelStore(provider), model); } catch(e) {}
   window._hLeadKeysByProvider = window._hLeadKeysByProvider || {};
   if (!key) {
     window._hLeadKeysByProvider[provider] = '';
@@ -11960,8 +12084,8 @@ function quickSetAiProvider(feature, provider) {
   provider=provider==='deepseek'?'deepseek':'anthropic';
   try {
     var before=resolveAiRoute(feature);
-    localStorage.setItem(_routeStore(feature),provider);
-    if(before && before.provider!==provider) localStorage.removeItem(_routeModelStore(feature));
+    cvStudioDurableSettingSet(_routeStore(feature),provider);
+    if(before && before.provider!==provider) cvStudioDurableSettingRemove(_routeModelStore(feature));
     refreshAllAiRouteUi();
     var rows=document.getElementById('aiRoutingRows');
     if(rows && rows.children && rows.children.length){var sel=document.getElementById('routeSel_'+feature);if(sel)sel.value=provider;previewAiRoutes();}
@@ -12081,8 +12205,8 @@ function saveAiRoutes() {
       var inp = document.getElementById('routeModel_' + feature);
       var src = sel ? (sel.value || featureDefaultRoute(feature)) : featureDefaultRoute(feature);
       var model = inp ? (inp.value || '').trim() : '';
-      localStorage.setItem(_routeStore(feature), src);
-      if (model) localStorage.setItem(_routeModelStore(feature), model); else localStorage.removeItem(_routeModelStore(feature));
+      cvStudioDurableSettingSet(_routeStore(feature), src);
+      if (model) cvStudioDurableSettingSet(_routeModelStore(feature), model); else cvStudioDurableSettingRemove(_routeModelStore(feature));
     });
     showToast('AI routes saved', 'ok');
     previewAiRoutes();
@@ -12091,7 +12215,7 @@ function saveAiRoutes() {
 }
 function resetAiRoutes() {
   try {
-    AI_ROUTE_ORDER.forEach(function(feature){ localStorage.removeItem(_routeStore(feature)); localStorage.removeItem(_routeModelStore(feature)); });
+    AI_ROUTE_ORDER.forEach(function(feature){ cvStudioDurableSettingRemove(_routeStore(feature)); cvStudioDurableSettingRemove(_routeModelStore(feature)); });
     renderAiRoutingRows();
     refreshAllAiRouteUi();
     showToast('AI routes reset to safe defaults', 'ok');
@@ -12106,7 +12230,7 @@ async function saveSearchProvider() {
   window._hSearchProvider = provider;
   window._hSearchProviderKey = key;
   try {
-    localStorage.setItem('hy_search_provider', provider);
+    cvStudioDurableSettingSet('hy_search_provider', provider);
     localStorage.removeItem('hy_search_provider_key');
     if(provider!=='none') await _saveSecureAiSecret('search_'+provider,key,false);
   } catch(e) {}
@@ -12159,7 +12283,7 @@ async function saveEnrichmentProvider() {
   window._hEnrichmentProvider = provider;
   window._hEnrichmentProviderKey = key;
   try {
-    localStorage.setItem('hy_enrichment_provider', provider);
+    cvStudioDurableSettingSet('hy_enrichment_provider', provider);
     localStorage.removeItem('hy_enrichment_provider_key');
     if(provider!=='none') await _saveSecureAiSecret('enrichment_'+provider,key,false);
   } catch(e) {}
@@ -12822,6 +12946,11 @@ var _oneNoteRows = [];
 var ONE_NOTE_RECORD_KEY = 'cv_studio_onenote_transfer_records_v1';
 var ONE_NOTE_SALARY_AI_KEY = 'cv_studio_onenote_salary_ai_enabled_v1';
 var ONE_NOTE_SPELLING_CORRECTION_KEY = 'cvstudio_onenote_spelling_correction_v1';
+var _oneNoteRecordsSqliteCache = null;
+var _oneNoteRecordsMutationVersion = 0;
+var _oneNoteRecordsHydrationPromise = null;
+var _oneNoteRecordsWriteQueue = Promise.resolve();
+var _oneNoteRecordsLastWritePromise = Promise.resolve(true);
 function oneNoteSpellingCorrectionEnabled() {
   var el = document.getElementById('settingsOneNoteSpellingCorrection');
   if (el) return !!el.checked;
@@ -12841,7 +12970,7 @@ function oneNoteLoadSpellingCorrectionSetting() {
   return enabled;
 }
 function oneNoteSaveSpellingCorrectionSetting() {
-  try { localStorage.setItem(ONE_NOTE_SPELLING_CORRECTION_KEY, oneNoteSpellingCorrectionEnabled() ? '1' : '0'); } catch(e) {}
+  try { cvStudioDurableSettingSet(ONE_NOTE_SPELLING_CORRECTION_KEY, oneNoteSpellingCorrectionEnabled() ? '1' : '0'); } catch(e) {}
 }
 function oneNoteSalaryAiEnabled() {
   var el=document.getElementById('oneNoteSalaryAiEnabled');
@@ -12852,7 +12981,7 @@ function oneNoteSalaryAiConfig() {
   return {enabled:oneNoteSalaryAiEnabled(),provider:route.provider,model:route.model,api_key:route.api_key};
 }
 function oneNoteSaveSalaryAiSetting() {
-  try { localStorage.setItem(ONE_NOTE_SALARY_AI_KEY, oneNoteSalaryAiEnabled() ? '1' : '0'); } catch(e) {}
+  try { cvStudioDurableSettingSet(ONE_NOTE_SALARY_AI_KEY, oneNoteSalaryAiEnabled() ? '1' : '0'); } catch(e) {}
   oneNoteUpdateSalaryAiBadge();
 }
 function oneNoteUpdateSalaryAiBadge(canonical) {
@@ -12968,23 +13097,69 @@ function jaActivityUrl(candidateId) {
            || 'https://app.jobadder.com';
   return base + '/candidates/' + candidateId + '?tab=2&activityView=Activity';
 }
-function oneNoteRecordsLoad() {
+function oneNoteRecordsLegacyLoad() {
   try {
     var parsed = JSON.parse(localStorage.getItem(ONE_NOTE_RECORD_KEY) || '[]');
-    return Array.isArray(parsed) ? parsed.filter(function(item){ return item && typeof item === 'object'; }) : [];
+    return Array.isArray(parsed) ? parsed.map(function(item){return cvStudioPrivateSafeValue(item,0);}).filter(function(item){ return item && typeof item === 'object' && !Array.isArray(item); }).slice(0,200) : [];
   } catch(e) { return []; }
 }
-function oneNoteRecordsSave(records) {
-  try {
-    var safe = Array.isArray(records) ? records.filter(function(item){ return item && typeof item === 'object'; }).slice(0, 200) : [];
-    localStorage.setItem(ONE_NOTE_RECORD_KEY, JSON.stringify(safe));
-  } catch(e) {}
+function oneNoteRecordStorageKey(record) {
+  record=record&&typeof record==='object'?record:{};
+  return record.id?('id:'+String(record.id)):('legacy:'+cvStudioStableStorageValue(record));
 }
+function oneNoteRecordChangedKeys(beforeRecords,afterRecords) {
+  var before={},after={},changed={};
+  (Array.isArray(beforeRecords)?beforeRecords:[]).forEach(function(record){before[oneNoteRecordStorageKey(record)]=cvStudioStableStorageValue(record);});
+  (Array.isArray(afterRecords)?afterRecords:[]).forEach(function(record){after[oneNoteRecordStorageKey(record)]=cvStudioStableStorageValue(record);});
+  Object.keys(before).concat(Object.keys(after)).forEach(function(key){if(!Object.prototype.hasOwnProperty.call(before,key)||!Object.prototype.hasOwnProperty.call(after,key)||before[key]!==after[key])changed[key]=true;});
+  return changed;
+}
+function oneNoteMergeStorageRecords(sqliteRecords,currentRecords,changedKeys) {
+  var merged=[],positions={},current={};
+  (Array.isArray(sqliteRecords)?sqliteRecords:[]).forEach(function(record){var key=oneNoteRecordStorageKey(record);if(!Object.prototype.hasOwnProperty.call(positions,key)){positions[key]=merged.length;merged.push(record);}});
+  (Array.isArray(currentRecords)?currentRecords:[]).forEach(function(record){current[oneNoteRecordStorageKey(record)]=record;});
+  Object.keys(changedKeys||{}).forEach(function(key){var position=positions[key];if(Object.prototype.hasOwnProperty.call(current,key)){if(position===undefined){positions[key]=merged.length;merged.push(current[key]);}else merged[position]=current[key];}else if(position!==undefined){merged[position]=null;}});
+  return merged.filter(function(record){return !!record;}).slice(0,200);
+}
+function oneNoteRecordUnion(primary,secondary) {
+  var out=[],seen={};(Array.isArray(primary)?primary:[]).concat(Array.isArray(secondary)?secondary:[]).forEach(function(record){var key=oneNoteRecordStorageKey(record);if(!seen[key]){seen[key]=true;out.push(record);}});return out.slice(0,200);
+}
+function oneNoteRecordsMirrorSave(records) {
+  try { localStorage.setItem(ONE_NOTE_RECORD_KEY, JSON.stringify(records||[])); } catch(e) {}
+}
+function oneNoteRecordsLoad() {
+  var records=Array.isArray(_oneNoteRecordsSqliteCache)?_oneNoteRecordsSqliteCache:oneNoteRecordsLegacyLoad();
+  return Array.isArray(records)?records.slice():[];
+}
+function oneNoteRecordsQueuePost(path,payload) {
+  _oneNoteRecordsWriteQueue=_oneNoteRecordsWriteQueue.catch(function(){}).then(function(){return cvStudioStoragePost(path,payload);});
+  return _oneNoteRecordsWriteQueue;
+}
+function oneNoteRecordsSave(records) {
+  var safe=Array.isArray(records)?records.map(function(item){return cvStudioPrivateSafeValue(item,0);}).filter(function(item){return item&&typeof item==='object'&&!Array.isArray(item);}).slice(0,200):[];
+  _oneNoteRecordsSqliteCache=safe;_oneNoteRecordsMutationVersion+=1;oneNoteRecordsMirrorSave(safe);
+  _oneNoteRecordsLastWritePromise=oneNoteRecordsQueuePost('/storage/onenote-transfer-records/replace',{records:safe}).then(function(){return true;}).catch(function(error){showToast('OneNote record remains in this browser, but durable storage failed. '+String((error&&error.message)||''),'err');return false;});
+  return true;
+}
+function oneNoteRecordsHydrateFromSQLite() {
+  if(_oneNoteRecordsHydrationPromise)return _oneNoteRecordsHydrationPromise;
+  var startedVersion=_oneNoteRecordsMutationVersion,legacy=oneNoteRecordsLegacyLoad();
+  _oneNoteRecordsHydrationPromise=cvStudioStoragePost('/storage/onenote-transfer-records/import',{records:legacy}).then(function(data){
+    var current=oneNoteRecordsLegacyLoad(),changed=_oneNoteRecordsMutationVersion!==startedVersion?oneNoteRecordChangedKeys(legacy,current):{},merged=oneNoteMergeStorageRecords(data.records,current,changed);
+    _oneNoteRecordsSqliteCache=merged;oneNoteRecordsMirrorSave(merged);
+    if(_oneNoteRecordsMutationVersion!==startedVersion)_oneNoteRecordsLastWritePromise=oneNoteRecordsQueuePost('/storage/onenote-transfer-records/replace',{records:merged}).then(function(){return true;}).catch(function(){return false;});
+    try{oneNoteRenderRecords();oneNoteRefreshCost();}catch(e){}
+    return merged;
+  }).catch(function(){_oneNoteRecordsSqliteCache=oneNoteRecordsLegacyLoad();return _oneNoteRecordsSqliteCache;});
+  return _oneNoteRecordsHydrationPromise;
+}
+window.addEventListener('load',function(){setTimeout(oneNoteRecordsHydrateFromSQLite,0);});
 function oneNoteRecordTransfer(row, resp) {
   var url = (resp && resp.activity_url) || jaActivityUrl(row.candidate_id);
   var canon = (resp && resp.salary_canonical) || null;
   var proc = ((canon || {}).processing || {});
   var rec = {
+    id: 'onr_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,9),
     ts: new Date().toISOString(),
     name: (row.fields && row.fields.name) || row.matched_name || row.email || 'Candidate',
     email: row.email || '',
@@ -13020,6 +13195,7 @@ function oneNoteRecordFailedAiCost(row, resp) {
   var records = oneNoteRecordsLoad();
   if (records.some(function(item){ return item && item.ai_event_key === key; })) return null;
   var rec = {
+    id: 'onr_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,9),
     ts: new Date().toISOString(),
     name: (row.fields && row.fields.name) || row.matched_name || row.email || 'Candidate',
     email: row.email || '',
@@ -13066,8 +13242,15 @@ function oneNoteRenderRecords() {
 }
 function oneNoteClearRecords() {
   if (!window.confirm('Clear OneNote transfer record history from this browser?')) return;
-  oneNoteRecordsSave([]);
+  var previous=oneNoteRecordsLoad();
+  _oneNoteRecordsSqliteCache=[];_oneNoteRecordsMutationVersion+=1;var clearVersion=_oneNoteRecordsMutationVersion;oneNoteRecordsMirrorSave([]);
   oneNoteRenderRecords();
+  var hydration=_oneNoteRecordsHydrationPromise;
+  return (hydration?hydration.catch(function(){}):Promise.resolve()).then(function(){return oneNoteRecordsQueuePost('/storage/onenote-transfer-records/clear',{});}).then(function(){
+    if(_oneNoteRecordsMutationVersion!==clearVersion)return oneNoteRecordsQueuePost('/storage/onenote-transfer-records/replace',{records:oneNoteRecordsLoad()});
+  }).then(function(){showToast('OneNote transfer record history cleared','info');return true;}).catch(function(error){
+    var restored=oneNoteRecordUnion(oneNoteRecordsLoad(),previous);_oneNoteRecordsSqliteCache=restored;_oneNoteRecordsMutationVersion+=1;oneNoteRecordsMirrorSave(restored);oneNoteRenderRecords();showToast('OneNote transfer record history was not cleared. '+String((error&&error.message)||'Local storage is unavailable.'),'err');return false;
+  });
 }
 function oneNoteSwitchMiniTab(which) {
   which = which === 'record' ? 'record' : 'console';
@@ -14015,9 +14198,9 @@ function oneNoteApiSaveSettings(silent) {
     var tenant = ((st && st.value) || (tt && tt.value) || localStorage.getItem('onenote_ms_tenant') || 'common').trim() || 'common';
     var mode = ((sm && sm.value) || (tm && tm.value) || oneNoteStoredSourceMode()).trim().toLowerCase();
     if (!(mode === 'desktop' || mode === 'both')) mode = 'web';
-    localStorage.setItem('onenote_ms_client_id', clientId);
-    localStorage.setItem('onenote_ms_tenant', tenant);
-    localStorage.setItem('onenote_source_mode', mode);
+    cvStudioDurableSettingSet('onenote_ms_client_id', clientId);
+    cvStudioDurableSettingSet('onenote_ms_tenant', tenant);
+    cvStudioDurableSettingSet('onenote_source_mode', mode);
     oneNoteSaveSpellingCorrectionSetting();
     oneNoteApiSyncFields(clientId, tenant, mode);
     try { oneNoteSourceModeChanged(true); } catch(e2) {}
@@ -14037,9 +14220,9 @@ function oneNoteMsSaveSettings() {
     var c = document.getElementById('oneNoteMsClientId');
     var t = document.getElementById('oneNoteMsTenant');
     var m = document.getElementById('oneNoteSourceMode');
-    if (c) localStorage.setItem('onenote_ms_client_id', c.value.trim());
-    if (t) localStorage.setItem('onenote_ms_tenant', t.value.trim() || 'common');
-    if (m) localStorage.setItem('onenote_source_mode', oneNoteSelectedSourceMode());
+    if (c) cvStudioDurableSettingSet('onenote_ms_client_id', c.value.trim());
+    if (t) cvStudioDurableSettingSet('onenote_ms_tenant', t.value.trim() || 'common');
+    if (m) cvStudioDurableSettingSet('onenote_source_mode', oneNoteSelectedSourceMode());
     oneNoteApiLoadSettings();
   } catch(e) {}
 }
@@ -14158,6 +14341,11 @@ function oneNoteLooksLikeLocalNotebookFolderLink(value) {
 }
 var ONE_NOTE_SAVED_LINKS_KEY = 'cvstudio_onenote_saved_desktop_links_v1';
 var ONE_NOTE_SAVED_LINKS_MAX = 100;
+var _oneNoteLinksSqliteCache = null;
+var _oneNoteLinksMutationVersion = 0;
+var _oneNoteLinksHydrationPromise = null;
+var _oneNoteLinksWriteQueue = Promise.resolve();
+var _oneNoteLinksLastWritePromise = Promise.resolve(true);
 function oneNoteSavedLinkKind(value) {
   value = String(value || '').trim().toLowerCase();
   return (value === 'section' || value === 'page') ? value : 'notebook';
@@ -14166,7 +14354,7 @@ function oneNoteSavedLinkKindLabel(value) {
   value = oneNoteSavedLinkKind(value);
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
-function oneNoteReadSavedLinks() {
+function oneNoteReadSavedLinksLegacy() {
   var raw = '';
   try { raw = localStorage.getItem(ONE_NOTE_SAVED_LINKS_KEY) || ''; } catch(e) { return []; }
   if (!raw) return [];
@@ -14176,6 +14364,7 @@ function oneNoteReadSavedLinks() {
   var out = [];
   var seen = {};
   parsed.forEach(function(item, idx){
+    item=cvStudioPrivateSafeValue(item,0);
     if (!item || typeof item !== 'object') return;
     var link = String(item.link || '').trim();
     var name = String(item.name || '').trim().slice(0, 80);
@@ -14183,17 +14372,25 @@ function oneNoteReadSavedLinks() {
     var id = String(item.id || '').trim() || ('legacy-' + idx + '-' + Math.abs(oneNoteSimpleHash(link + '|' + name)));
     if (seen[id]) return;
     seen[id] = true;
-    out.push({
+    out.push(Object.assign({},item,{
       id:id,
       name:name,
       kind:oneNoteSavedLinkKind(item.kind || item.type),
       link:link,
       createdAt:String(item.createdAt || ''),
       updatedAt:String(item.updatedAt || '')
-    });
+    }));
   });
   return out.slice(0, ONE_NOTE_SAVED_LINKS_MAX);
 }
+function oneNoteLinkStorageKey(item){return String((item||{}).id||'legacy:'+cvStudioStableStorageValue(item||{}));}
+function oneNoteLinkChangedKeys(beforeItems,afterItems){
+  var before={},after={},changed={};(Array.isArray(beforeItems)?beforeItems:[]).forEach(function(item){before[oneNoteLinkStorageKey(item)]=cvStudioStableStorageValue(item);});(Array.isArray(afterItems)?afterItems:[]).forEach(function(item){after[oneNoteLinkStorageKey(item)]=cvStudioStableStorageValue(item);});Object.keys(before).concat(Object.keys(after)).forEach(function(key){if(!Object.prototype.hasOwnProperty.call(before,key)||!Object.prototype.hasOwnProperty.call(after,key)||before[key]!==after[key])changed[key]=true;});return changed;
+}
+function oneNoteMergeSavedLinks(sqliteItems,currentItems,changedKeys){
+  var merged=[],positions={},current={};(Array.isArray(sqliteItems)?sqliteItems:[]).forEach(function(item){var key=oneNoteLinkStorageKey(item);if(!Object.prototype.hasOwnProperty.call(positions,key)){positions[key]=merged.length;merged.push(item);}});(Array.isArray(currentItems)?currentItems:[]).forEach(function(item){current[oneNoteLinkStorageKey(item)]=item;});Object.keys(changedKeys||{}).forEach(function(key){var position=positions[key];if(Object.prototype.hasOwnProperty.call(current,key)){if(position===undefined){positions[key]=merged.length;merged.push(current[key]);}else merged[position]=current[key];}else if(position!==undefined)merged[position]=null;});return merged.filter(function(item){return !!item;}).slice(0,ONE_NOTE_SAVED_LINKS_MAX);
+}
+function oneNoteReadSavedLinks(){var items=Array.isArray(_oneNoteLinksSqliteCache)?_oneNoteLinksSqliteCache:oneNoteReadSavedLinksLegacy();return Array.isArray(items)?items.slice():[];}
 function oneNoteSimpleHash(value) {
   var h = 2166136261;
   value = String(value || '');
@@ -14201,14 +14398,34 @@ function oneNoteSimpleHash(value) {
   return h | 0;
 }
 function oneNoteWriteSavedLinks(items) {
+  var previous=oneNoteReadSavedLinks();
   try {
-    localStorage.setItem(ONE_NOTE_SAVED_LINKS_KEY, JSON.stringify((items || []).slice(0, ONE_NOTE_SAVED_LINKS_MAX)));
+    var safe=Array.isArray(items)?items.map(function(item){return cvStudioPrivateSafeValue(item,0);}).filter(function(item){return item&&typeof item==='object'&&!Array.isArray(item);}).slice(0,ONE_NOTE_SAVED_LINKS_MAX):[];
+    _oneNoteLinksSqliteCache=safe;_oneNoteLinksMutationVersion+=1;var version=_oneNoteLinksMutationVersion;
+    localStorage.setItem(ONE_NOTE_SAVED_LINKS_KEY, JSON.stringify(safe));
+    _oneNoteLinksWriteQueue=_oneNoteLinksWriteQueue.catch(function(){}).then(function(){return cvStudioStoragePost('/storage/onenote-saved-links/replace',{links:safe});});
+    _oneNoteLinksLastWritePromise=_oneNoteLinksWriteQueue.then(function(){return true;}).catch(function(error){
+      if(_oneNoteLinksMutationVersion===version){_oneNoteLinksSqliteCache=previous;try{localStorage.setItem(ONE_NOTE_SAVED_LINKS_KEY,JSON.stringify(previous));oneNoteRenderSavedLinks();}catch(e){}}
+      showToast('Saved OneNote links were restored because durable storage failed. '+String((error&&error.message)||''),'err');return false;
+    });
     return true;
   } catch(e) {
     showToast('Could not save OneNote link on this browser', 'err');
     return false;
   }
 }
+function oneNoteLinksHydrateFromSQLite(){
+  if(_oneNoteLinksHydrationPromise)return _oneNoteLinksHydrationPromise;
+  var startedVersion=_oneNoteLinksMutationVersion,legacy=oneNoteReadSavedLinksLegacy();
+  _oneNoteLinksHydrationPromise=cvStudioStoragePost('/storage/onenote-saved-links/import',{links:legacy}).then(function(data){
+    var current=oneNoteReadSavedLinksLegacy(),changed=_oneNoteLinksMutationVersion!==startedVersion?oneNoteLinkChangedKeys(legacy,current):{},merged=oneNoteMergeSavedLinks(data.links,current,changed);
+    _oneNoteLinksSqliteCache=merged;try{localStorage.setItem(ONE_NOTE_SAVED_LINKS_KEY,JSON.stringify(merged));}catch(e){}
+    if(_oneNoteLinksMutationVersion!==startedVersion){_oneNoteLinksWriteQueue=_oneNoteLinksWriteQueue.catch(function(){}).then(function(){return cvStudioStoragePost('/storage/onenote-saved-links/replace',{links:merged});});_oneNoteLinksLastWritePromise=_oneNoteLinksWriteQueue.then(function(){return true;}).catch(function(){return false;});}
+    try{oneNoteRenderSavedLinks();}catch(e){}return merged;
+  }).catch(function(){_oneNoteLinksSqliteCache=oneNoteReadSavedLinksLegacy();return _oneNoteLinksSqliteCache;});
+  return _oneNoteLinksHydrationPromise;
+}
+window.addEventListener('load',function(){setTimeout(oneNoteLinksHydrateFromSQLite,0);});
 function oneNoteNewSavedLinkId() {
   try { if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID(); } catch(e) {}
   return 'osl-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
@@ -14431,7 +14648,7 @@ function oneNoteEnsureSectionPickerVisible(attention) {
 }
 function oneNoteSourceModeChanged(silent) {
   var mode = oneNoteSelectedSourceMode();
-  try { localStorage.setItem('onenote_source_mode', mode); } catch(e) {}
+  try { if(!silent&&localStorage.getItem('onenote_source_mode')!==mode)cvStudioDurableSettingSet('onenote_source_mode', mode); } catch(e) {}
   var settingsModeEl = document.getElementById('settingsOneNoteSourceMode');
   if (settingsModeEl && settingsModeEl.value !== mode) settingsModeEl.value = mode;
   var manual = document.getElementById('oneNoteManualPickerRow');
@@ -15497,7 +15714,7 @@ function ppcInvoiceSettingsLoad(){
 }
 function ppcInvoiceSettingsSave(settings){
   try{
-    localStorage.setItem(PPC_INVOICE_EMAIL_STORE,JSON.stringify({
+    cvStudioDurableSettingSet(PPC_INVOICE_EMAIL_STORE,JSON.stringify({
       recipient:String((settings||{}).recipient||'').trim(),
       greeting:String((settings||{}).greeting||'Syah').trim()||'Syah'
     }));
@@ -15598,7 +15815,7 @@ function ppcOutlookClientLoad(){
   return {client_id:String(d.client_id||'').trim(),tenant:String(d.tenant||'common').trim()||'common'};
 }
 function ppcOutlookClientSave(data){
-  try{localStorage.setItem(PPC_OUTLOOK_CLIENT_STORE,JSON.stringify({client_id:String((data||{}).client_id||'').trim(),tenant:String((data||{}).tenant||'common').trim()||'common'}));}catch(e){}
+  try{cvStudioDurableSettingSet(PPC_OUTLOOK_CLIENT_STORE,JSON.stringify({client_id:String((data||{}).client_id||'').trim(),tenant:String((data||{}).tenant||'common').trim()||'common'}));}catch(e){}
 }
 function ppcOutlookClientIdValid(value){return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value||'').trim());}
 function ppcOutlookStorageLabel(value){
@@ -15751,7 +15968,7 @@ async function ppcCreateOutlookTestDraft(event){
   if(d.account){_ppcOutlookAccount=d.account;ppcUpdateOutlookConnectButton();}showToast('Test draft created. Nothing was sent.','ok');return true;
 }
 function ppcDraftStoreLoad(){try{var d=JSON.parse(localStorage.getItem(PPC_OUTLOOK_DRAFT_STORE)||'{}');return d&&typeof d==='object'&&!Array.isArray(d)?d:{};}catch(e){return {};}}
-function ppcDraftStoreSave(data){try{localStorage.setItem(PPC_OUTLOOK_DRAFT_STORE,JSON.stringify(data||{}));}catch(e){}}
+function ppcDraftStoreSave(data){try{cvStudioDurableSettingSet(PPC_OUTLOOK_DRAFT_STORE,JSON.stringify(data||{}));}catch(e){}}
 function ppcLastDraftFor(id){return ppcDraftStoreLoad()[String(id||'')]||null;}
 function ppcDraftIsRecent(last,minutes){var d=new Date((last||{}).created_at||'');return !!((last||{}).webLink&&!isNaN(d.getTime())&&(Date.now()-d.getTime())<Math.max(1,Number(minutes||30))*60000);}
 function ppcDraftFingerprint(item,settings){
@@ -15862,7 +16079,7 @@ function ppcCaptureUiState(){
     page:Number(_ppcPage||1)
   };
 }
-function ppcUiSave(){try{_ppcSavedUiState=ppcCaptureUiState();localStorage.setItem(PPC_UI_STORE,JSON.stringify(_ppcSavedUiState));}catch(e){}}
+function ppcUiSave(){try{_ppcSavedUiState=ppcCaptureUiState();cvStudioDurableSettingSet(PPC_UI_STORE,JSON.stringify(_ppcSavedUiState));}catch(e){}}
 function ppcSetElementValue(id,value){var el=document.getElementById(id);if(el&&value!==undefined&&value!==null)el.value=String(value);}
 function ppcRestoreUiState(){
   var state=ppcUiLoad();
@@ -15898,7 +16115,7 @@ function ppcKpiVisibilityLoad(){
   try{var saved=JSON.parse(localStorage.getItem(PPC_KPI_VIS_STORE)||'{}');Object.keys(defaults).forEach(function(k){if(typeof saved[k]==='boolean')defaults[k]=saved[k];});}catch(e){}
   return defaults;
 }
-function ppcKpiVisibilitySave(state){try{localStorage.setItem(PPC_KPI_VIS_STORE,JSON.stringify(state||{}));}catch(e){}}
+function ppcKpiVisibilitySave(state){try{cvStudioDurableSettingSet(PPC_KPI_VIS_STORE,JSON.stringify(state||{}));}catch(e){}}
 function ppcApplyKpiVisibility(){
   var state=ppcKpiVisibilityLoad();
   document.querySelectorAll('#ppcKpis [data-kpi]').forEach(function(card){var key=card.getAttribute('data-kpi');card.style.display=state[key]===false?'none':'';});
@@ -15947,7 +16164,7 @@ function ppcColumnVisibilityLoad(){
   try{var saved=JSON.parse(localStorage.getItem(PPC_COLUMN_VIS_STORE)||'{}');Object.keys(defaults).forEach(function(k){if(typeof saved[k]==='boolean')defaults[k]=saved[k];});}catch(e){}
   return defaults;
 }
-function ppcColumnVisibilitySave(state){try{localStorage.setItem(PPC_COLUMN_VIS_STORE,JSON.stringify(state||{}));}catch(e){}}
+function ppcColumnVisibilitySave(state){try{cvStudioDurableSettingSet(PPC_COLUMN_VIS_STORE,JSON.stringify(state||{}));}catch(e){}}
 function ppcApplyColumnVisibility(){
   var state=ppcColumnVisibilityLoad(),visible=0;
   Object.keys(state).forEach(function(k){if(state[k]!==false)visible++;});
@@ -18165,7 +18382,7 @@ function queuePageNavPinRefresh() {
 function setPageNavPin(enabled, persist, notify) {
   _pageNavPinEnabled = !!enabled;
   if (persist !== false) {
-    try { localStorage.setItem(PAGE_NAV_PIN_STORE, _pageNavPinEnabled ? '1' : '0'); } catch(e) {}
+    try { cvStudioDurableSettingSet(PAGE_NAV_PIN_STORE, _pageNavPinEnabled ? '1' : '0'); } catch(e) {}
   }
   updatePageNavPinButton();
   queuePageNavPinRefresh();
@@ -18235,6 +18452,7 @@ window.addEventListener('load', async function() {
 
   // restore key/model
   try {
+    await cvStudioHydrateBrowserSettings();
     await _loadSecureAiInfo();
     var mainProvider = localStorage.getItem('hy_provider') || 'anthropic';
     var leadProvider = localStorage.getItem('hy_lead_provider') || 'anthropic';
@@ -18248,13 +18466,13 @@ window.addEventListener('load', async function() {
     var legacyModel = localStorage.getItem('hy_model');
     if(legacyKey){await _saveSecureAiSecret(_aiSecretSlot('main',mainProvider),legacyKey,false);localStorage.removeItem('hy_key');}
     if (legacyModel && !localStorage.getItem(_providerModelStore(mainProvider))) {
-      localStorage.setItem(_providerModelStore(mainProvider), legacyModel);
+      cvStudioDurableSettingSet(_providerModelStore(mainProvider), legacyModel);
     }
     var legacyLeadKey = localStorage.getItem('hy_lead_key');
     var legacyLeadModel = localStorage.getItem('hy_lead_model');
     if(legacyLeadKey){await _saveSecureAiSecret(_aiSecretSlot('lead',leadProvider),legacyLeadKey,false);localStorage.removeItem('hy_lead_key');}
     if (legacyLeadModel && !localStorage.getItem(_leadModelStore(leadProvider))) {
-      localStorage.setItem(_leadModelStore(leadProvider), legacyLeadModel);
+      cvStudioDurableSettingSet(_leadModelStore(leadProvider), legacyLeadModel);
     }
 
     for (var pp of ['anthropic','deepseek','openai']) {

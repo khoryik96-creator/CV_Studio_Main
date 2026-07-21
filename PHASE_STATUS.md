@@ -9,8 +9,8 @@
 - Working branch: `codex/phase-2b-browser-storage`
 - Active phase: Phase 2B (owner authorized 21 July 2026)
 - Planned private owner/source release: v24.6.220
-- Status: Phase 2B Milestone 3 complete
-- Current milestone: Milestone 4 — frontend migration and export compatibility
+- Status: Phase 2B Milestone 4 complete
+- Current milestone: Milestone 5 — acceptance and release evidence
 
 ## Phase 2B authorization and constraints
 
@@ -100,7 +100,7 @@
 - [x] Inventory and select Phase 2B browser stores/settings.
 - [x] Implement schema migration and repositories.
 - [x] Implement backend bridge routes and structured recovery.
-- [ ] Implement frontend hydration/mirroring and export compatibility.
+- [x] Implement frontend hydration/mirroring and export compatibility.
 - [ ] Complete Phase 2B acceptance and compatibility tests.
 - [ ] Run full regression, static validation and final master review.
 - [ ] Create and byte-verify the v24.6.220 private owner/source release.
@@ -280,6 +280,57 @@ without reinterpreting each feature's established shape.
   storage route handlers.
 - `tests/test_phase2b_app_storage_integration.py` — isolated temporary-database
   integration and structured-recovery coverage.
+
+## Phase 2B Milestone 4 results
+
+- OneNote transfer records and saved links now hydrate from insert-only legacy
+  import into SQLite-authoritative in-memory state while retaining their exact
+  browser keys as transition mirrors.
+- New transfer records receive stable IDs. Existing ID-less records retain
+  canonical full-record identity; no legacy record field is invented merely to
+  satisfy migration.
+- Hydration compares the start and current browser snapshots. Only record IDs
+  or setting keys actually added, changed or removed during the in-flight
+  request may override SQLite. Unchanged stale records—including rows covered
+  by SQLite tombstones—remain absent and cannot be re-saved accidentally.
+- Whole-array record/link writes are serialized. Transfer clear waits for
+  hydration, re-saves genuinely new concurrent records after a successful
+  clear, and restores the prior browser mirror with an error on failure. A
+  failed saved-link replace restores its prior mirror unless a newer mutation
+  has already superseded it.
+- Selected setting write sites now use the exact allowlisted durable bridge.
+  AI-route preview temporarily continues to use raw localStorage and is never
+  persisted as a saved route. Startup awaits settings hydration before legacy
+  model migration, and automatic silent UI restoration does not mark stale
+  values as user changes.
+- The frontend and backend both recursively remove credential-like nested
+  fields while preserving private feature data and safe accounting fields.
+  Export applies the same filter even if durable hydration has not completed.
+- The local-data backup keeps `product`, schema 1 and the legacy `settings`
+  object. It adds optional top-level OneNote transfer/link collections; older
+  v24.6.219 importers ignore those fields while still restoring the settings
+  they understand. Phase 2B imports both historical schema-1 backups and the
+  additive record collections, then waits for durable persistence before
+  reloading.
+- The known Anthropic, DeepSeek and OpenAI per-provider model keys are now
+  included in export/import and SQLite persistence. Unknown provider/model and
+  arbitrary AI-route keys remain rejected.
+- Phase 2A and Phase 2B Node frontend fixtures passed. Phase 2B coverage includes
+  settings and record hydration races, stale tombstones, successful and failed
+  clear/delete, saved-link rollback, allowlist/export filtering and additive
+  schema-1 import persistence.
+- The real owner/source preflight passed both complete inline scripts, pinned
+  `adm-zip` behavior and Python/Node compilation. The 18-assertion live source
+  smoke and repository consistency also passed with schema version 10.
+
+### Milestone 4 files
+
+- `index.html` — Phase 2B browser bridges, selected durable-setting writes,
+  hydration/race recovery, mirror preservation and additive export/import.
+- `tests/test_phase2b_frontend_storage.js` — focused browser-storage and backup
+  compatibility fixture.
+- `tests/run_phase2a_source_smoke.py` — retain the historical entry point while
+  validating the current declared schema version and history count.
 
 ## v24.6.219 corrective plan
 

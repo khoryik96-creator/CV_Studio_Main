@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from owner_build_tools.build_protected import VERSION, write_test_receipt
+from cvstudio_storage import SCHEMA_VERSION
 
 
 def choose_port():
@@ -184,9 +185,9 @@ def main():
                 history = connection.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
             finally:
                 connection.close()
-            check(version == 7, "schema version")
+            check(version == SCHEMA_VERSION, "schema version")
             check(integrity == "ok", "post-run integrity")
-            check(history == 7, "migration history")
+            check(history == SCHEMA_VERSION, "migration history")
 
         print("Phase 2A live source smoke passed: {} assertions".format(checks))
         return 0
