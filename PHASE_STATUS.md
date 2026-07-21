@@ -3,16 +3,16 @@
 ## Release state
 
 - Approved baseline: v24.6.217
-- Completed release: v24.6.219
+- Completed release: v24.6.220
 - Phase 2B source baseline: v24.6.219
 - Phase 2B baseline Git commit: `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`
 - Working branch: `codex/phase-2b-browser-storage`
-- Active phase: Phase 2B (owner authorized 21 July 2026)
-- Planned private owner/source release: v24.6.220
-- Status: Phase 2B Milestone 4 complete
-- Current milestone: Milestone 5 — acceptance and release evidence
+- Active phase: none
+- Completed private owner/source release: v24.6.220
+- Status: Phase 2B complete
+- Current milestone: none; Phase 3 requires new explicit owner authorization
 
-## Phase 2B authorization and constraints
+## Completed Phase 2B authorization and constraints
 
 - Migrate only durable browser-backed records and selected persistent settings
   that need application backup/restore.
@@ -101,10 +101,10 @@
 - [x] Implement schema migration and repositories.
 - [x] Implement backend bridge routes and structured recovery.
 - [x] Implement frontend hydration/mirroring and export compatibility.
-- [ ] Complete Phase 2B acceptance and compatibility tests.
-- [ ] Run full regression, static validation and final master review.
-- [ ] Create and byte-verify the v24.6.220 private owner/source release.
-- [ ] Produce QA report, SHA-256 and Phase 3 handover; stop before Phase 3.
+- [x] Complete Phase 2B acceptance and compatibility tests.
+- [x] Run full regression, static validation and final master review.
+- [x] Create and byte-verify the v24.6.220 private owner/source release.
+- [x] Produce QA report, SHA-256 and Phase 3 handover; stop before Phase 3.
 
 ## Phase 2B Milestone 1 inventory and compatibility contract
 
@@ -332,6 +332,54 @@ without reinterpreting each feature's established shape.
 - `tests/run_phase2a_source_smoke.py` — retain the historical entry point while
   validating the current declared schema version and history count.
 
+## Phase 2B Milestone 5 results
+
+- Full Python discovery passed 26 tests covering the Phase 1 response contract,
+  Phase 2A repositories/foundation/fixture and the Phase 2B schema,
+  repositories and real-Flask route bridge.
+- Both Node frontend fixtures passed. Phase 2B coverage proves authoritative
+  hydration, per-key/per-record race merging, tombstone behavior, clear/delete
+  failure recovery, credential filtering and schema-1 export/import round trips.
+- The real loopback owner/source smoke passed 24 assertions. It exercised the
+  current identity/status contract, DOCX generation, all Phase 2A store paths,
+  all three Phase 2B store imports, schema version/history/integrity and durable
+  Phase 2B rows after shutdown.
+- Python syntax passed for 12 tracked files. JavaScript syntax passed for 20
+  tracked files plus both complete inline `index.html` scripts. Git Bash syntax
+  passed for 5 tracked shell/command files, and the PowerShell parser passed all
+  5 tracked `.ps1` files.
+- Owner-source validation/dependency preflight, repository consistency, Git
+  whitespace validation and the pinned `adm-zip` 0.5.17 behavior all passed.
+- Final comparison with baseline master preserved all 96 existing Flask route
+  URLs and added exactly 11 Phase 2B storage routes. No route was removed or
+  renamed.
+- Every active product, installer, launcher and protected-build source surface
+  agrees on v24.6.220; none retains a v24.6.219 production identifier.
+- The application diff contains no shared-client, background-job,
+  modularisation, lazy-loading, new-workflow, Flask-server-replacement, scoring
+  profile or candidate decision implementation.
+- The private owner/source archive is
+  `cv_studio_v24_6_220_phase2b_browser_storage_owner_source.zip`. It is generated
+  from the final clean Git commit with one `cv_formatter/` root. A fresh
+  extraction contains exactly the tracked files with zero missing, extra or
+  byte-mismatched files. Its SHA-256, source commit, size and exact extraction
+  counts are recorded in the adjacent `.sha256` and `.verification.json`
+  sidecars under `C:\CV-Studio-Codex\releases\v24.6.220\`.
+- The release directory also contains the Phase 2B QA report and gated Phase 3
+  handover. No protected colleague archive was built or claimed because no new
+  native protected compilation/smoke certification was performed.
+
+### Milestone 5 decisions and limitations
+
+- Transfer history remains ordered newest-first using its established timestamp
+  semantics; saved-link order uses the preserved array position.
+- Browser mirrors and all Phase 2A legacy JSON remain present. Phase 2B does not
+  shorten a compatibility window or delete user data.
+- Source-level Windows execution is genuine. Physical Windows/macOS installer
+  execution, native protected builds and live/paid external-service calls were
+  not performed and are not claimed.
+- Phase 3 is not active. Stop at this completed v24.6.220 release.
+
 ## v24.6.219 corrective plan
 
 - Keep SQLite usage rows authoritative when a stale legacy browser mirror has the same record ID.
@@ -519,7 +567,7 @@ None.
 - Clean archive trial: `git archive` produced the required single `cv_formatter/` root with 80 tracked source files; fresh extraction found 80 files, zero missing files, zero extra files and zero byte mismatches.
 - The authoritative owner/source ZIP is generated from the final clean documentation commit. Its SHA-256, byte size, source commit and repeated fresh-extraction result are recorded in adjacent checksum and verification sidecars because an archive cannot contain its own authoritative digest.
 
-## Files changed
+## Historical Phase 2A files changed
 
 - `PHASE_STATUS.md` — baseline evidence, storage inventory, milestone plan and results.
 - `cvstudio_storage.py` — SQLite lifecycle, safety PRAGMAs, integrity checks, ordered schema, migration history, verified backups and redacted diagnostic state.
@@ -538,6 +586,28 @@ None.
 - `cv_studio_v24_6_219_phase2a_corrective_review_qa_report.md` — corrective review and release QA evidence.
 - `CV_STUDIO_V24_6_219_PHASE_2B_HANDOVER.md` — updated owner-gated next-phase handover.
 
+## Phase 2B files changed
+
+- `cvstudio_storage.py` — schema versions 8–10 and three bounded,
+  tombstone-aware repositories.
+- `app.py` — repository wiring and 11 additive same-origin storage bridge
+  routes.
+- `index.html` — selected durable-setting writes, OneNote record/link hydration,
+  serialized mutation recovery and additive schema-1 export/import.
+- `tests/test_phase2b_repositories.py`,
+  `tests/test_phase2b_app_storage_integration.py` and
+  `tests/test_phase2b_frontend_storage.js` — focused Phase 2B migration,
+  repository, route and browser compatibility coverage.
+- `tests/run_phase2a_source_smoke.py` — the retained source-smoke entry point now
+  verifies all three Phase 2B stores and 24 assertions.
+- Production, installer, launcher and protected-build source version surfaces —
+  advanced consistently to v24.6.220.
+- Project control/starter files — Phase 2B completion and the Phase 3 activation
+  gate.
+- `cv_studio_v24_6_220_phase2b_browser_storage_qa_report.md` — Phase 2B release
+  QA evidence.
+- `CV_STUDIO_V24_6_220_PHASE_3_HANDOVER.md` — owner-gated next-phase handover.
+
 ## Next action
 
-Stop. Do not begin Phase 2B or any later phase without a new explicit owner instruction.
+Stop. Do not begin Phase 3 or any later phase without a new explicit owner instruction.

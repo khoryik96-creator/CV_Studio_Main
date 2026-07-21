@@ -6,25 +6,27 @@
 - v24.6.217 baseline owner ZIP SHA-256:
   `c499ea8043f274bf47a4981c84794759f38fc7c761b98ba3939626114a898a59`
 - Phase 2A was completed in v24.6.218 and its five post-release review findings were corrected in **CV Studio v24.6.219**.
-- Current completed private owner/source release: **CV Studio v24.6.219**.
-- Phases 1 and 2A are complete.
-- The owner explicitly authorized **Phase 2B** on 21 July 2026 from clean
-  `master` commit `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`.
-- Active implementation target: **Phase 2B browser-backed durable records and
-  selected persistent settings only**.
-- Complete Phase 2B milestone by milestone, then stop. Do not begin Phase 3.
+- Phase 2B browser-backed durable records and selected settings were completed
+  in **CV Studio v24.6.220**.
+- Current completed private owner/source release: **CV Studio v24.6.220**.
+- Phases 1, 2A and 2B are complete.
+- There is no active implementation target. Stop after Phase 2B unless the
+  owner explicitly starts Phase 3.
 
-## Active scope: Phase 2B
+## Completed scope: Phase 2B
 
-Inventory first, then migrate only durable browser records and selected
-persistent settings that need application backup/restore. Preserve explicit
-import/export and backward-readability contracts for every selected store.
-Temporary UI state remains in `localStorage` where appropriate.
+Phase 2B added schema versions 8–10 and migrated only:
 
-Phase 2B must preserve all Phase 2A SQLite safety, migration, recovery,
-redaction and legacy-compatibility guarantees. It must not expand into shared
-external-service clients, background jobs, backend/frontend modularisation,
-lazy loading or new user-facing workflows.
+- OneNote transfer record history;
+- saved OneNote desktop links;
+- the explicitly allowlisted non-secret browser settings used by local-data
+  backup/restore.
+
+SQLite is authoritative after insert-only legacy import. Tombstones prevent
+stale mirrors from resurrecting deleted values, selected browser keys remain as
+transition mirrors, schema-1 backup files remain readable, and credentials are
+filtered from record/settings persistence. Temporary UI state remains in
+browser storage. No Phase 3 or backburner scope was implemented.
 
 ## Explicit backburner
 
@@ -95,8 +97,8 @@ Before changing code:
 1. Read `ROADMAP.md`.
 2. Read `PHASE_STATUS.md`.
 3. Read `IMPLEMENT.md`.
-4. Read `CV_STUDIO_V24_6_219_PHASE_2B_HANDOVER.md`.
-5. Read `cv_studio_v24_6_219_phase2a_corrective_review_qa_report.md` and the historical v24.6.218 Phase 2A QA report.
+4. Read `CV_STUDIO_V24_6_220_PHASE_3_HANDOVER.md`.
+5. Read `cv_studio_v24_6_220_phase2b_browser_storage_qa_report.md` and the historical Phase 2A QA reports.
 6. Inspect the relevant existing storage paths and tests.
 7. Verify the baseline before implementation.
 
@@ -120,21 +122,23 @@ Stop and ask the owner only when:
 
 Routine implementation decisions do not require owner confirmation.
 
-## Completed definition of done for Phase 2A
+## Completed definition of done for Phase 2B
 
-- No user-data loss from a v24.6.217 fixture.
+- No user-data loss from the v24.6.219 source/schema-7 baseline.
 - Migration is transactional and idempotent.
 - Running migration twice produces no duplicate or destructive effect.
 - A verified timestamped backup is created before schema changes.
 - Database corruption produces a structured request-ID error and recovery guidance.
-- Legacy JSON remains intact and readable.
-- Existing migrated features read and write correctly.
-- Existing non-migrated features remain unchanged.
+- Legacy JSON and selected browser mirrors remain intact and readable.
+- OneNote records, saved links and allowlisted settings read and write through
+  SQLite while retaining transition mirrors and schema-1 export/import.
+- Credential-like fields are excluded recursively.
+- Phase 2A repositories and compatibility contracts remain unchanged.
 - Items 4, 7 and 8 remain untouched.
 - Targeted and full regression tests pass.
 - Python, JavaScript, Bash and PowerShell syntax validation pass.
 - Repository consistency passes.
 - A clean extraction is byte-verified.
 - A new private owner/source ZIP is created.
-- A SHA-256, QA report and Phase 2B handover are produced.
-- Stop after Phase 2A. Do not begin Phase 2B automatically.
+- A SHA-256, QA report and Phase 3 handover are produced.
+- Stop after Phase 2B. Do not begin Phase 3 automatically.

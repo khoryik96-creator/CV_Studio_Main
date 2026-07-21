@@ -1,7 +1,7 @@
 # CV Studio Backburner and Stability Roadmap
 
-Last updated: 20 July 2026  
-Current implementation base: v24.6.219
+Last updated: 21 July 2026
+Current implementation base: v24.6.220
 
 ## Explicit backburner — do not implement until the owner reactivates them
 
@@ -50,11 +50,23 @@ Deferred scope includes Shortlist / Maybe / Reject / Reviewed states, recruiter 
 - credential-like fields are removed recursively before usage persistence;
 - schema version 7 and all Phase 2A compatibility boundaries remain unchanged.
 
+### v24.6.220 — Phase 2B browser-backed durable records and settings
+
+- schema versions 8–10 add OneNote transfer records, saved OneNote links and an
+  exact allowlist of non-secret browser settings;
+- insert-only legacy import, SQLite authority, tombstones and serialized
+  frontend writes prevent stale browser mirrors from resurrecting deleted data;
+- schema-1 local-data backup remains backward readable and adds optional record
+  collections without credential export;
+- every Phase 2A migration, backup, recovery and compatibility contract remains;
+- shared clients, background jobs, modularisation, lazy loading, new workflows
+  and backburner items 4, 7 and 8 remain untouched.
+
 ## Active stability direction
 
-Continue the remaining improvements conservatively and in staged releases:
+No later phase is active. If the owner explicitly starts further work, continue
+the remaining improvements conservatively and in staged releases:
 
-- SQLite/local-storage migration with schema upgrades and backups;
 - shared JobAdder, Microsoft and provider clients;
 - persistent background task management;
 - modular backend/frontend extraction without a rewrite;

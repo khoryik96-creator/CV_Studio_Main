@@ -1,5 +1,5 @@
 CV Studio private source patch base
-Version: v24.6.219
+Version: v24.6.220
 Keep this ZIP for future patches. Do not distribute this source package to colleagues.
 
 JobAdder API investigation source of truth:
@@ -923,3 +923,18 @@ Patch note v24.6.193: cross-platform deterministic adm-zip tree hashing fixes th
 - Classifies SQLite lock contention as retryable `STORAGE_BUSY` instead of corruption and retains restore guidance only for genuine corruption/migration failures.
 - Recursively excludes credential-like usage fields, including nested/camel-case/hyphenated variants, before SQLite and migration-backup persistence.
 - Adds regression fixtures for every correction and leaves schema version 7, legacy files, routes, Phase 2B scope and roadmap items 4, 7 and 8 unchanged.
+
+## v24.6.220 Phase 2B browser-backed durable records and settings
+
+- Adds schema versions 8–10 for OneNote transfer history, saved OneNote links
+  and the exact non-secret settings allowlist used by local-data backup.
+- Uses insert-only legacy import, SQLite-authoritative hydration, tombstones and
+  serialized writes while retaining the established browser keys as transition
+  mirrors.
+- Preserves schema-1 local-data backup compatibility and adds optional transfer
+  and saved-link record collections that older releases safely ignore.
+- Recursively removes credential-like fields and rejects credential setting
+  keys while preserving private application records needed by the features.
+- Keeps Phase 2A data/migrations and every existing route URL intact. Shared
+  clients, background jobs, modularisation, lazy loading, new workflows and
+  roadmap items 4, 7 and 8 remain unchanged.

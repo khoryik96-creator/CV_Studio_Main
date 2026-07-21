@@ -5,10 +5,9 @@
 - v24.6.217 was the approved Phase 2A starting point.
 - v24.6.218 completed the Phase 2A implementation.
 - v24.6.219 is the completed private owner/source Phase 2A corrective release.
-- Phases 1 and 2A are complete.
-- The owner explicitly activated Phase 2B on 21 July 2026 from the clean
-  v24.6.219 `master` tip.
-- Phase 2B is active for the v24.6.220 private owner/source release only.
+- v24.6.220 completed Phase 2B browser-backed durable records and settings.
+- Phases 1, 2A and 2B are complete.
+- No later phase is active. Phase 3 requires a new explicit owner instruction.
 
 ## Phase 1 — Completed
 
@@ -45,7 +44,7 @@ SQLite foundation and lower-risk backend durable-data migration:
 - recursively remove credential-like usage fields before persistence;
 - retain schema version 7, all legacy files and the Phase 2A stop boundary.
 
-## Phase 2B — Active
+## Phase 2B — Completed in v24.6.220
 
 - durable OneNote transfer records and saved desktop links;
 - the existing non-secret local-data-backup setting allowlist, corrected to
@@ -54,9 +53,11 @@ SQLite foundation and lower-risk backend durable-data migration:
   compatibility;
 - temporary UI/session state, credential state and regenerable caches remain in
   their existing browser storage where appropriate;
-- stop after the v24.6.220 owner/source release and Phase 3 handover.
+- schema versions 8–10, each with a verified pre-change backup and transactional
+  restart-safe migration;
+- completed owner/source release, QA evidence and Phase 3 handover.
 
-## Phase 3 — Future
+## Phase 3 — Future, not active
 
 Shared external-service clients:
 

@@ -156,6 +156,56 @@ def main():
             )
             check(status_code == 200 and metadata["metadata"] == ppc, "PPC import")
 
+            transfer_records = [{
+                "id": "source-transfer-fixture",
+                "ts": "2026-07-21T00:00:00Z",
+                "name": "Source transfer fixture",
+                "status": "Transferred",
+                "clientSecret": "redacted-fixture-value",
+            }]
+            status_code, _, transfer = request_json(
+                base,
+                "/storage/onenote-transfer-records/import",
+                method="POST",
+                payload={"records": transfer_records},
+            )
+            check(
+                status_code == 200
+                and transfer["records"][0]["id"] == "source-transfer-fixture"
+                and "clientSecret" not in transfer["records"][0],
+                "OneNote transfer import",
+            )
+
+            saved_links = [{
+                "id": "source-link-fixture",
+                "name": "Source link fixture",
+                "kind": "section",
+                "link": "opaque-source-link",
+            }]
+            status_code, _, links = request_json(
+                base,
+                "/storage/onenote-saved-links/import",
+                method="POST",
+                payload={"links": saved_links},
+            )
+            check(
+                status_code == 200
+                and links["links"][0]["id"] == "source-link-fixture",
+                "OneNote saved-link import",
+            )
+
+            status_code, _, settings = request_json(
+                base,
+                "/storage/browser-settings/import",
+                method="POST",
+                payload={"settings": {"hy_model_openai": "gpt-source-fixture"}},
+            )
+            check(
+                status_code == 200
+                and settings["settings"]["hy_model_openai"] == "gpt-source-fixture",
+                "browser-setting import",
+            )
+
             status_code, _, owner_status = request_json(base, "/owner/integration/status")
             check(status_code == 200 and owner_status["enabled"], "owner status")
             request = urllib.request.Request(
@@ -183,13 +233,25 @@ def main():
                 version = connection.execute("PRAGMA user_version").fetchone()[0]
                 integrity = connection.execute("PRAGMA integrity_check").fetchone()[0]
                 history = connection.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
+                transfer_count = connection.execute(
+                    "SELECT COUNT(*) FROM onenote_transfer_records WHERE deleted = 0"
+                ).fetchone()[0]
+                link_count = connection.execute(
+                    "SELECT COUNT(*) FROM onenote_saved_links WHERE deleted = 0"
+                ).fetchone()[0]
+                setting_count = connection.execute(
+                    "SELECT COUNT(*) FROM browser_settings WHERE deleted = 0"
+                ).fetchone()[0]
             finally:
                 connection.close()
             check(version == SCHEMA_VERSION, "schema version")
             check(integrity == "ok", "post-run integrity")
             check(history == SCHEMA_VERSION, "migration history")
+            check(transfer_count == 1, "durable OneNote transfer row")
+            check(link_count == 1, "durable OneNote saved-link row")
+            check(setting_count == 1, "durable browser-setting row")
 
-        print("Phase 2A live source smoke passed: {} assertions".format(checks))
+        print("CV Studio live source smoke passed: {} assertions".format(checks))
         return 0
     finally:
         if process is not None:
