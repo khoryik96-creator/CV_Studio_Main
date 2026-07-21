@@ -76,12 +76,22 @@ for (const [index, source] of inlineScripts(html).entries()) {
 }
 
 async function testUsageBridge() {
-  const legacy = [{
-    ts: '2026-07-01T00:00:00Z',
-    name: 'Legacy fixture',
-    mode: 'format',
-    cost: 0.125,
-  }];
+  const legacy = [
+    {
+      ts: '2026-07-01T00:00:00Z',
+      name: 'Legacy fixture',
+      mode: 'format',
+      cost: 0.125,
+    },
+    {
+      id: 'stat_sqlite_fixture',
+      ts: '2026-07-02T00:00:00Z',
+      name: 'SQLite fixture',
+      mode: 'lead',
+      cost: 0.25,
+      jaUrl: '',
+    },
+  ];
   const sqlite = [{
     id: 'stat_sqlite_fixture',
     ts: '2026-07-02T00:00:00Z',
@@ -89,6 +99,7 @@ async function testUsageBridge() {
     mode: 'lead',
     cost: 0.25,
     input_tokens: 4,
+    jaUrl: 'https://current.invalid/candidate',
   }];
   const reorderedLegacy = {
     cost: 0.125,
@@ -97,6 +108,8 @@ async function testUsageBridge() {
     ts: '2026-07-01T00:00:00Z',
   };
   const calls = [];
+  const toasts = [];
+  let failClear = false;
   const storage = localStorageFixture({guo_lab_stats: JSON.stringify(legacy)});
   const context = vm.createContext({
     console,
@@ -108,13 +121,16 @@ async function testUsageBridge() {
     Error,
     localStorage: storage,
     renderStats() {},
-    showToast() {},
+    showToast(message, kind) { toasts.push({message, kind}); },
     confirm() { return true; },
     fetch(url, options) {
       const body = JSON.parse((options && options.body) || '{}');
       calls.push({url, body});
       if (url.endsWith('/import')) {
         return Promise.resolve(response({ok: true, records: sqlite.concat([reorderedLegacy])}));
+      }
+      if (failClear && url.endsWith('/clear')) {
+        return Promise.resolve(response({ok: false, message: 'Clear fixture failed'}, false));
       }
       return Promise.resolve(response({ok: true}));
     },
@@ -123,6 +139,7 @@ async function testUsageBridge() {
     'statsLegacyLoad',
     'statsStableStorageValue',
     'statsStorageRecordKey',
+    'statsChangedStorageKeys',
     'statsMergeStorageRecords',
     'statsLegacySave',
     'statsStoragePost',
@@ -141,6 +158,25 @@ async function testUsageBridge() {
   assert.strictEqual(context.statsLoad().length, 2);
   assert.strictEqual(JSON.parse(storage.getItem('guo_lab_stats')).length, 2);
   assert.ok(!Object.prototype.hasOwnProperty.call(context.statsLoad()[1], 'input_tokens'));
+  assert.strictEqual(context.statsLoad()[0].jaUrl, 'https://current.invalid/candidate');
+  assert.strictEqual(context.statsLoad()[0].input_tokens, 4);
+
+  const beforeRace = [
+    {id: 'changed', name: 'Before'},
+    {id: 'unchanged', name: 'Stale legacy'},
+  ];
+  const currentRace = [
+    {id: 'changed', name: 'Browser mutation'},
+    {id: 'unchanged', name: 'Stale legacy'},
+  ];
+  const sqliteRace = [
+    {id: 'changed', name: 'SQLite before mutation'},
+    {id: 'unchanged', name: 'SQLite authoritative'},
+  ];
+  const changedKeys = context.statsChangedStorageKeys(beforeRace, currentRace);
+  const raceMerged = context.statsMergeStorageRecords(sqliteRace, currentRace, changedKeys);
+  assert.strictEqual(raceMerged[0].name, 'Browser mutation');
+  assert.strictEqual(raceMerged[1].name, 'SQLite authoritative');
 
   const next = context.statsLoad();
   next.push({
@@ -155,11 +191,27 @@ async function testUsageBridge() {
   assert.strictEqual(JSON.parse(storage.getItem('guo_lab_stats')).length, 3);
   assert.ok(calls.some(call => call.url.endsWith('/upsert') && call.body.records.length === 3));
 
-  context.clearStats();
-  await context._statsStorageWriteQueue;
+  assert.strictEqual(await context.clearStats(), true);
   assert.strictEqual(storage.getItem('guo_lab_stats'), null);
   assert.deepStrictEqual(Array.from(context.statsLoad()), []);
   assert.ok(calls.some(call => call.url.endsWith('/clear')));
+  assert.ok(toasts.some(toast => toast.kind === 'info' && toast.message === 'History cleared'));
+
+  const retained = [{
+    id: 'stat_retained_fixture',
+    ts: '2026-07-04T00:00:00Z',
+    name: 'Retained after failed clear',
+    mode: 'summary',
+    cost: 0,
+  }];
+  context.statsSave(retained);
+  await context._statsStorageWriteQueue;
+  failClear = true;
+  assert.strictEqual(await context.clearStats(), false);
+  assert.strictEqual(context.statsLoad().length, 1);
+  assert.strictEqual(context.statsLoad()[0].id, 'stat_retained_fixture');
+  assert.strictEqual(JSON.parse(storage.getItem('guo_lab_stats')).length, 1);
+  assert.ok(toasts.some(toast => toast.kind === 'err' && /not cleared/.test(toast.message)));
 }
 
 async function testPpcBridge() {
@@ -172,9 +224,9 @@ async function testPpcBridge() {
   };
   const sqlite = {
     'placement-fixture': {
-      payment: 'Unpaid',
+      payment: 'Paid',
       guaranteeMonths: '3',
-      updatedAt: '2026-07-01T00:00:00Z',
+      updatedAt: '2026-07-03T00:00:00Z',
     },
     'placement-sqlite': {
       payment: 'Paid',
@@ -221,7 +273,7 @@ async function testPpcBridge() {
 
   await context.ppcMetaHydrateFromSQLite();
   const hydrated = context.ppcMetaLoad();
-  assert.strictEqual(hydrated['placement-fixture'].payment, 'Invoiced');
+  assert.strictEqual(hydrated['placement-fixture'].payment, 'Paid');
   assert.strictEqual(hydrated['placement-sqlite'].payment, 'Paid');
   assert.strictEqual(Object.keys(JSON.parse(storage.getItem('cvstudio_ppc_meta_v1'))).length, 2);
 

@@ -604,8 +604,12 @@ def _cvstudio_classify_error(status, message, path=""):
         return "STORAGE_CORRUPT", False, "restore_storage_backup"
     if "storage migration" in low:
         return "STORAGE_MIGRATION_FAILED", False, "restore_storage_backup"
-    if "local storage" in low and ("unavailable" in low or "newer cv studio" in low):
-        return "STORAGE_UNAVAILABLE", False, "restore_storage_backup"
+    if "local storage is busy" in low:
+        return "STORAGE_BUSY", True, "retry"
+    if "local storage" in low and "newer cv studio" in low:
+        return "STORAGE_VERSION_UNSUPPORTED", False, "restore_storage_backup"
+    if "local storage" in low and "unavailable" in low:
+        return "STORAGE_UNAVAILABLE", True, "check_storage_access"
     if status == 429 or "rate limit" in low or "too many requests" in low:
         return "RATE_LIMITED", True, "retry_later"
     if status in (408, 504) or "timed out" in low or "timeout" in low:
@@ -695,10 +699,7 @@ def _cvstudio_storage_error(error):
         retryable=bool(getattr(error, "retryable", False)),
         action=getattr(error, "recovery_action", "restore_storage_backup"),
         details={
-            "recovery": (
-                "Preserve every legacy JSON file. Close CV Studio and restore "
-                "the latest verified migration backup before retrying."
-            )
+            "recovery": getattr(error, "public_message", "Local storage is unavailable.")
         },
     )
 
@@ -11566,6 +11567,47 @@ _PHASE2A_USAGE_SECRET_FIELDS = {
     "access_token", "refresh_token", "client_secret", "api_key", "authorization",
     "authorization_code", "password", "credential", "credentials", "token",
 }
+_PHASE2A_USAGE_SECRET_SUFFIXES = {
+    "accesstoken", "refreshtoken", "clientsecret", "apikey", "authorizationcode",
+    "password", "credential", "credentials", "bearertoken", "oauthtoken",
+    "oauth2token", "authtoken", "idtoken", "sessiontoken", "csrftoken", "secret",
+}
+_PHASE2A_USAGE_DROP = object()
+
+
+def _phase2a_usage_secret_field(key):
+    key_text = str(key or "").strip().lower()
+    if key_text in _PHASE2A_USAGE_SECRET_FIELDS:
+        return True
+    compact = re.sub(r"[^a-z0-9]", "", key_text)
+    return compact.startswith("authorization") or any(
+        compact.endswith(suffix) for suffix in _PHASE2A_USAGE_SECRET_SUFFIXES
+    )
+
+
+def _phase2a_usage_safe_value(value, depth=0):
+    if depth > 24:
+        return _PHASE2A_USAGE_DROP
+    if isinstance(value, dict):
+        clean = {}
+        for key, nested in value.items():
+            key_text = str(key or "")[:120]
+            if _phase2a_usage_secret_field(key_text):
+                continue
+            safe_nested = _phase2a_usage_safe_value(nested, depth + 1)
+            if safe_nested is not _PHASE2A_USAGE_DROP:
+                clean[key_text] = safe_nested
+        return clean
+    if isinstance(value, list):
+        clean = []
+        for nested in value:
+            safe_nested = _phase2a_usage_safe_value(nested, depth + 1)
+            if safe_nested is not _PHASE2A_USAGE_DROP:
+                clean.append(safe_nested)
+        return clean
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    return _PHASE2A_USAGE_DROP
 
 
 def _phase2a_usage_records(payload):
@@ -11577,13 +11619,8 @@ def _phase2a_usage_records(payload):
     for item in payload:
         if not isinstance(item, dict):
             continue
-        clean = {}
-        for key, value in item.items():
-            key_text = str(key or "")[:120]
-            if key_text.lower() in _PHASE2A_USAGE_SECRET_FIELDS:
-                continue
-            clean[key_text] = value
-        records.append(clean)
+        clean = _phase2a_usage_safe_value(item)
+        records.append(clean if isinstance(clean, dict) else {})
     return records
 
 

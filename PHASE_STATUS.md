@@ -8,8 +8,8 @@
 - Baseline Git commit: `c8eeb34c275d374170a5931d69ed95ea213c791a`
 - Working branch: `codex/phase-2a-sqlite`
 - Active phase: Phase 2A corrective review patch only
-- Status: implementing the five owner-requested post-release review fixes
-- Current milestone: authoritative imports, failure reporting and credential exclusion
+- Status: all five owner-requested review fixes implemented; targeted validation passed
+- Current milestone: complete regression, static validation and v24.6.219 release evidence
 
 ## v24.6.219 corrective plan
 
@@ -137,6 +137,18 @@
 None.
 
 ## Test results
+
+### v24.6.219 corrective review patch
+
+- Focused Python suites: 16 tests passed across storage foundation, repositories and real Flask integration.
+- Frontend storage fixture: passed.
+- Stale usage imports with an existing ID are insert-only; SQLite retains newer URL/audit fields.
+- Usage hydration keeps SQLite authoritative except for the specific records mutated in the active page while hydration was in flight.
+- PPC stale or timestamp-free conflicts cannot replace newer SQLite metadata; a genuinely newer `updatedAt` value still wins.
+- A failed usage clear restores the compatibility mirror, reports an error and does not emit a false success notification.
+- A real SQLite writer lock returns retryable `STORAGE_BUSY` with `retry`, then initialises normally after the lock is released.
+- Recursive credential-key exclusion drops top-level, nested, camel-case and hyphenated credential fields while preserving safe usage audit fields such as `input_tokens` and `output_tokens`.
+- Python compilation, inline frontend syntax and diff whitespace validation passed for the corrective checkpoint.
 
 - Baseline Git worktree: clean before Phase 2A edits.
 - Baseline/version surface inspection: passed.

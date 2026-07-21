@@ -18443,12 +18443,31 @@ function statsStorageRecordKey(record) {
   if (record.id) return 'id:' + String(record.id);
   try { return 'legacy:' + statsStableStorageValue(record); } catch(e) { return 'legacy:' + String(record.ts || '') + '|' + String(record.name || '') + '|' + String(record.mode || ''); }
 }
-function statsMergeStorageRecords(sqliteRecords, legacyRecords) {
+function statsChangedStorageKeys(beforeRecords, afterRecords) {
+  var beforeValues = {}, changed = {};
+  (Array.isArray(beforeRecords) ? beforeRecords : []).forEach(function(record){
+    if (!record || typeof record !== 'object' || Array.isArray(record)) return;
+    beforeValues[statsStorageRecordKey(record)] = statsStableStorageValue(record);
+  });
+  (Array.isArray(afterRecords) ? afterRecords : []).forEach(function(record){
+    if (!record || typeof record !== 'object' || Array.isArray(record)) return;
+    var key = statsStorageRecordKey(record);
+    if (Object.prototype.hasOwnProperty.call(beforeValues, key)
+        && beforeValues[key] !== statsStableStorageValue(record)) changed[key] = true;
+  });
+  return changed;
+}
+function statsMergeStorageRecords(sqliteRecords, legacyRecords, legacyConflictKeys) {
   var merged = [], positions = {};
   function add(record) {
     if (!record || typeof record !== 'object' || Array.isArray(record)) return;
     var key = statsStorageRecordKey(record);
-    if (Object.prototype.hasOwnProperty.call(positions, key)) merged[positions[key]] = record;
+    if (Object.prototype.hasOwnProperty.call(positions, key)) {
+      if (legacyConflictKeys === true
+          || (legacyConflictKeys && Object.prototype.hasOwnProperty.call(legacyConflictKeys, key))) {
+        merged[positions[key]] = record;
+      }
+    }
     else { positions[key] = merged.length; merged.push(record); }
   }
   (Array.isArray(sqliteRecords) ? sqliteRecords : []).forEach(add);
@@ -18494,7 +18513,9 @@ function statsHydrateFromSQLite() {
   _statsHydrationPromise = statsStoragePost('/storage/usage-history/import', {records:legacy}).then(function(data){
     var currentLegacy = statsLegacyLoad();
     var clearedDuringHydration = _statsClearVersion > startedVersion;
-    var merged = clearedDuringHydration ? currentLegacy : statsMergeStorageRecords(data.records, currentLegacy);
+    var mutatedDuringHydration = _statsMutationVersion !== startedVersion;
+    var changedKeys = mutatedDuringHydration ? statsChangedStorageKeys(legacy, currentLegacy) : null;
+    var merged = clearedDuringHydration ? currentLegacy : statsMergeStorageRecords(data.records, currentLegacy, changedKeys);
     _statsSqliteCache = merged;
     statsLegacySave(merged);
     if (clearedDuringHydration) {
@@ -18772,13 +18793,32 @@ function exportStatsExcel() {
 
 function clearStats() {
   if (!confirm('Clear all usage history? This cannot be undone.')) return;
+  var previousRecords = statsLoad();
   _statsSqliteCache = [];
   _statsMutationVersion += 1;
   _statsClearVersion = _statsMutationVersion;
+  var clearVersion = _statsMutationVersion;
   try { localStorage.removeItem('guo_lab_stats'); } catch(e) {}
-  statsQueueStoragePost('/storage/usage-history/clear', {}).catch(function(){});
   renderStats();
-  showToast('History cleared', 'info');
+  var hydration = _statsHydrationPromise;
+  return (hydration ? hydration.catch(function(){}) : Promise.resolve()).then(function(){
+    return statsQueueStoragePost('/storage/usage-history/clear', {});
+  }).then(function(){
+    if (_statsMutationVersion !== clearVersion) {
+      return statsQueueStoragePost('/storage/usage-history/upsert', {records:statsLoad()});
+    }
+  }).then(function(){
+    showToast('History cleared', 'info');
+    return true;
+  }).catch(function(error){
+    var restored = statsMergeStorageRecords(previousRecords, statsLoad(), true);
+    _statsSqliteCache = restored;
+    _statsMutationVersion += 1;
+    statsLegacySave(restored);
+    renderStats();
+    showToast('History was not cleared. ' + String((error && error.message) || 'Local storage is unavailable.'), 'err');
+    return false;
+  });
 }
 
 

@@ -234,6 +234,12 @@ class Phase2AAppCacheIntegrationTests(unittest.TestCase):
                 "output_tokens": 2,
                 "api_calls": 1,
                 "pricing_model_key": "fixture-pricing",
+                "apiKey": True,
+                "meta": {
+                    "safe_label": "retained",
+                    "api_key": True,
+                    "nested": [{"x-api-key": True, "output_tokens": 2}],
+                },
             }
         ]
         response = client.post(
@@ -246,6 +252,12 @@ class Phase2AAppCacheIntegrationTests(unittest.TestCase):
         records = response.get_json()["records"]
         self.assertEqual(len(records), 2)
         self.assertEqual(records[1]["pricing_model_key"], "fixture-pricing")
+        self.assertEqual(records[1]["input_tokens"], 4)
+        self.assertNotIn("apiKey", records[1])
+        self.assertEqual(records[1]["meta"]["safe_label"], "retained")
+        self.assertNotIn("api_key", records[1]["meta"])
+        self.assertNotIn("x-api-key", records[1]["meta"]["nested"][0])
+        self.assertEqual(records[1]["meta"]["nested"][0]["output_tokens"], 2)
 
         legacy_ppc = {
             "placement-fixture": {
@@ -318,6 +330,15 @@ class Phase2AAppCacheIntegrationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertEqual(payload["code"], "INVALID_LOCAL_HOST")
         self.assertEqual(payload["action"], "reopen_local_app")
+
+        self.assertEqual(
+            app._cvstudio_classify_error(500, "Local storage is busy."),
+            ("STORAGE_BUSY", True, "retry"),
+        )
+        self.assertEqual(
+            app._cvstudio_classify_error(500, "Local storage is unavailable."),
+            ("STORAGE_UNAVAILABLE", True, "check_storage_access"),
+        )
 
         response = client.get(
             "/jobadder/search_candidate",

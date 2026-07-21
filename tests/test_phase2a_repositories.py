@@ -57,6 +57,11 @@ class Phase2ARepositoryTests(unittest.TestCase):
         self.assertEqual(len(repository.list()), 2)
         self.assertEqual(repository.list()[1]["cost_note"], "fixture")
 
+        stale = dict(legacy[1], outcome="stale-mirror")
+        self.assertEqual(repository.import_legacy([stale]), 0)
+        self.assertEqual(repository.list()[1]["cost_note"], "fixture")
+        self.assertEqual(repository.list()[1]["outcome"], "success")
+
         repository.clear()
         self.assertEqual(repository.list(), [])
 
@@ -155,6 +160,35 @@ class Phase2ARepositoryTests(unittest.TestCase):
         }
         self.assertEqual(repository.upsert(changed), 1)
         self.assertEqual(repository.load(), changed)
+
+        stale = {
+            "placement-fixture": {
+                "payment": "Unpaid",
+                "guaranteeMonths": "3",
+                "updatedAt": "2026-07-01T12:00:00Z",
+            }
+        }
+        self.assertEqual(repository.import_legacy(stale), 0)
+        self.assertEqual(repository.load(), changed)
+
+        timestamp_free = {
+            "placement-fixture": {
+                "payment": "Unpaid",
+                "guaranteeMonths": "3",
+            }
+        }
+        self.assertEqual(repository.import_legacy(timestamp_free), 0)
+        self.assertEqual(repository.load(), changed)
+
+        newer = {
+            "placement-fixture": {
+                "payment": "Invoiced",
+                "guaranteeMonths": "3",
+                "updatedAt": "2026-07-03T00:00:00Z",
+            }
+        }
+        self.assertEqual(repository.import_legacy(newer), 1)
+        self.assertEqual(repository.load(), newer)
 
         self.storage.diagnostic_state_set(
             "last_migration",

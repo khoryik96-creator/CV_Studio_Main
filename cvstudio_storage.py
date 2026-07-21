@@ -33,12 +33,11 @@ class StorageError(RuntimeError):
     """Base class carrying only user-safe recovery information."""
 
     code = "STORAGE_UNAVAILABLE"
-    retryable = False
-    recovery_action = "restore_storage_backup"
+    retryable = True
+    recovery_action = "check_storage_access"
     public_message = (
-        "Local storage is unavailable. Close CV Studio, preserve the legacy "
-        "JSON files, and restore the latest verified migration backup before "
-        "retrying."
+        "Local storage is unavailable. Preserve the legacy JSON files, close "
+        "other CV Studio windows, check local disk space and access, then retry."
     )
 
     def __init__(self, message: str | None = None):
@@ -47,6 +46,8 @@ class StorageError(RuntimeError):
 
 class StorageCorruptionError(StorageError):
     code = "STORAGE_CORRUPT"
+    retryable = False
+    recovery_action = "restore_storage_backup"
     public_message = (
         "The local storage database is corrupt. Close CV Studio, preserve the "
         "legacy JSON files, and restore the latest verified migration backup "
@@ -56,6 +57,8 @@ class StorageCorruptionError(StorageError):
 
 class StorageMigrationError(StorageError):
     code = "STORAGE_MIGRATION_FAILED"
+    retryable = False
+    recovery_action = "restore_storage_backup"
     public_message = (
         "The local storage migration could not be completed safely. Close CV "
         "Studio, preserve the legacy JSON files, and retry after checking the "
@@ -65,10 +68,54 @@ class StorageMigrationError(StorageError):
 
 class StorageVersionError(StorageError):
     code = "STORAGE_VERSION_UNSUPPORTED"
+    retryable = False
+    recovery_action = "restore_storage_backup"
     public_message = (
         "The local storage database was created by a newer CV Studio release. "
         "Use that release or restore a compatible verified migration backup."
     )
+
+
+class StorageBusyError(StorageError):
+    code = "STORAGE_BUSY"
+    retryable = True
+    recovery_action = "retry"
+    public_message = (
+        "Local storage is busy. Wait for the current CV Studio operation to "
+        "finish, close duplicate CV Studio windows if necessary, and retry."
+    )
+
+
+_SQLITE_CORRUPTION_CODES = {
+    int(getattr(sqlite3, "SQLITE_CORRUPT", 11)),
+    int(getattr(sqlite3, "SQLITE_FORMAT", 24)),
+    int(getattr(sqlite3, "SQLITE_NOTADB", 26)),
+}
+_SQLITE_BUSY_CODES = {
+    int(getattr(sqlite3, "SQLITE_BUSY", 5)),
+    int(getattr(sqlite3, "SQLITE_LOCKED", 6)),
+}
+
+
+def _sqlite_storage_error(error: sqlite3.Error) -> StorageError:
+    """Classify SQLite failures without treating ordinary lock/I/O errors as corruption."""
+
+    raw_code = getattr(error, "sqlite_errorcode", None)
+    primary_code = (int(raw_code) & 0xFF) if isinstance(raw_code, int) else None
+    message = str(error or "").strip().lower()
+    if primary_code in _SQLITE_CORRUPTION_CODES or any(
+        fragment in message
+        for fragment in (
+            "database disk image is malformed",
+            "file is not a database",
+            "malformed database schema",
+            "database corruption",
+        )
+    ):
+        return StorageCorruptionError()
+    if primary_code in _SQLITE_BUSY_CODES or "database is locked" in message or "database table is locked" in message:
+        return StorageBusyError()
+    return StorageError()
 
 
 def _utc_now() -> str:
@@ -275,11 +322,11 @@ class CVStudioStorage:
             self._journal_mode = str(journal_row[0] if journal_row else "").lower()
             connection.execute("PRAGMA synchronous = NORMAL")
             return connection
-        except sqlite3.DatabaseError as exc:
+        except sqlite3.Error as exc:
             if connection is not None:
                 connection.close()
-            raise StorageCorruptionError() from exc
-        except (OSError, sqlite3.Error) as exc:
+            raise _sqlite_storage_error(exc) from exc
+        except OSError as exc:
             if connection is not None:
                 connection.close()
             raise StorageError() from exc
@@ -288,8 +335,8 @@ class CVStudioStorage:
     def _integrity_result(connection: sqlite3.Connection) -> str:
         try:
             rows = connection.execute("PRAGMA integrity_check").fetchall()
-        except sqlite3.DatabaseError as exc:
-            raise StorageCorruptionError() from exc
+        except sqlite3.Error as exc:
+            raise _sqlite_storage_error(exc) from exc
         values = [str(row[0] if row else "") for row in rows]
         if values != [_INTEGRITY_OK]:
             raise StorageCorruptionError()
@@ -372,6 +419,10 @@ class CVStudioStorage:
                 pass
             if isinstance(exc, StorageError):
                 raise
+            if isinstance(exc, sqlite3.Error):
+                classified = _sqlite_storage_error(exc)
+                if isinstance(classified, (StorageBusyError, StorageCorruptionError)):
+                    raise classified from exc
             raise StorageMigrationError() from exc
 
     def initialize(self) -> None:
@@ -400,9 +451,9 @@ class CVStudioStorage:
                 self._initialized = False
                 self._last_error = exc
                 raise
-            except sqlite3.DatabaseError as exc:
+            except sqlite3.Error as exc:
                 self._initialized = False
-                self._last_error = StorageCorruptionError()
+                self._last_error = _sqlite_storage_error(exc)
                 raise self._last_error from exc
             except Exception as exc:
                 self._initialized = False
@@ -463,15 +514,16 @@ class CVStudioStorage:
             yield connection
             if write:
                 connection.commit()
-        except sqlite3.DatabaseError as exc:
+        except sqlite3.Error as exc:
             if write:
                 try:
                     connection.rollback()
                 except Exception:
                     pass
-            self._initialized = False
-            error = StorageCorruptionError()
-            self._last_error = error
+            error = _sqlite_storage_error(exc)
+            if isinstance(error, StorageCorruptionError):
+                self._initialized = False
+                self._last_error = error
             raise error from exc
         except Exception:
             if write:
@@ -669,22 +721,28 @@ class UsageHistoryRepository:
         return "legacy:" + _payload_fingerprint(record)
 
     @staticmethod
-    def _write_record(connection, record: dict, source: str) -> None:
+    def _write_record(connection, record: dict, source: str, *, overwrite: bool = True) -> bool:
         payload = dict(record)
         record_id = UsageHistoryRepository._record_key(payload)
         recorded_at = _safe_text(payload.get("ts"), 80)
         updated_at = _utc_now()
-        connection.execute(
+        conflict_clause = (
             """
-            INSERT INTO usage_history(
-                record_id, recorded_at, payload_json, source, updated_at
-            ) VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(record_id) DO UPDATE SET
                 recorded_at = excluded.recorded_at,
                 payload_json = excluded.payload_json,
                 source = excluded.source,
                 updated_at = excluded.updated_at
-            """,
+            """
+            if overwrite
+            else "ON CONFLICT(record_id) DO NOTHING"
+        )
+        cursor = connection.execute(
+            """
+            INSERT INTO usage_history(
+                record_id, recorded_at, payload_json, source, updated_at
+            ) VALUES (?, ?, ?, ?, ?)
+            """ + conflict_clause,
             (
                 record_id,
                 recorded_at,
@@ -693,6 +751,7 @@ class UsageHistoryRepository:
                 updated_at,
             ),
         )
+        return cursor.rowcount > 0
 
     def import_legacy(self, records, fingerprint: str | None = None) -> int:
         if not isinstance(records, list):
@@ -702,12 +761,14 @@ class UsageHistoryRepository:
         with self.storage.connection(write=True) as connection:
             if self.storage.legacy_import_seen(connection, self.store_name, fingerprint):
                 return 0
-            for record in clean:
-                self._write_record(connection, record, "legacy")
-            self.storage.record_legacy_import(
-                connection, self.store_name, fingerprint, len(clean)
+            count = sum(
+                1 for record in clean
+                if self._write_record(connection, record, "legacy", overwrite=False)
             )
-        return len(clean)
+            self.storage.record_legacy_import(
+                connection, self.store_name, fingerprint, count
+            )
+        return count
 
     def upsert(self, records, source: str = "browser") -> int:
         if not isinstance(records, list):
@@ -715,7 +776,7 @@ class UsageHistoryRepository:
         clean = [dict(record) for record in records if isinstance(record, dict)]
         with self.storage.connection(write=True) as connection:
             for record in clean:
-                self._write_record(connection, record, source)
+                self._write_record(connection, record, source, overwrite=True)
         return len(clean)
 
     def list(self) -> list[dict]:
@@ -1012,21 +1073,24 @@ class PPCMetadataRepository:
         if not placement_id or not isinstance(metadata, dict):
             return False
         payload = dict(metadata)
-        connection.execute(
+        updated_at = _safe_text(payload.get("updatedAt"), 80)
+        cursor = connection.execute(
             """
             INSERT INTO ppc_metadata(placement_id, metadata_json, updated_at)
             VALUES (?, ?, ?)
             ON CONFLICT(placement_id) DO UPDATE SET
                 metadata_json = excluded.metadata_json,
                 updated_at = excluded.updated_at
+            WHERE excluded.updated_at <> ''
+              AND (ppc_metadata.updated_at = '' OR excluded.updated_at >= ppc_metadata.updated_at)
             """,
             (
                 placement_id,
                 _canonical_json(payload),
-                _safe_text(payload.get("updatedAt"), 80) or _utc_now(),
+                updated_at,
             ),
         )
-        return True
+        return cursor.rowcount > 0
 
     def import_legacy(self, data, fingerprint: str | None = None) -> int:
         if not isinstance(data, dict):
@@ -1086,6 +1150,7 @@ __all__ = [
     "SCHEMA_VERSION",
     "SalaryComponentCacheRepository",
     "StorageCorruptionError",
+    "StorageBusyError",
     "StorageError",
     "StorageMigrationError",
     "StorageVersionError",

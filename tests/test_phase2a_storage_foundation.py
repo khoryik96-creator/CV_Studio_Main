@@ -8,6 +8,7 @@ from cvstudio_storage import (
     CVStudioStorage,
     MIGRATIONS,
     SCHEMA_VERSION,
+    StorageBusyError,
     StorageCorruptionError,
     StorageMigrationError,
 )
@@ -144,6 +145,30 @@ class Phase2AStorageFoundationTests(unittest.TestCase):
         self.assertEqual(health["code"], "STORAGE_CORRUPT")
         self.assertEqual(health["action"], "restore_storage_backup")
         self.assertNotIn(str(self.root), health["message"])
+
+    def test_database_lock_is_retryable_and_not_reported_as_corruption(self):
+        CVStudioStorage(self.database, busy_timeout_ms=1000).initialize()
+        blocker = sqlite3.connect(str(self.database), isolation_level=None)
+        try:
+            blocker.execute("PRAGMA journal_mode = WAL")
+            blocker.execute("BEGIN EXCLUSIVE")
+            blocker.execute(
+                "UPDATE schema_meta SET value = value WHERE key = 'schema_version'"
+            )
+
+            storage = CVStudioStorage(self.database, busy_timeout_ms=1000)
+            with self.assertRaises(StorageBusyError) as raised:
+                storage.initialize()
+            self.assertEqual(raised.exception.code, "STORAGE_BUSY")
+            self.assertTrue(raised.exception.retryable)
+            self.assertEqual(raised.exception.recovery_action, "retry")
+            self.assertNotIn("corrupt", str(raised.exception).lower())
+        finally:
+            blocker.rollback()
+            blocker.close()
+
+        storage.initialize()
+        self.assertTrue(storage.health()["healthy"])
 
 
 if __name__ == "__main__":
