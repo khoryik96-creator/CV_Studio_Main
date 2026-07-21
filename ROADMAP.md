@@ -3,7 +3,8 @@
 ## Release state
 
 - v24.6.217 was the approved Phase 2A starting point.
-- v24.6.218 is the completed private owner/source Phase 2A release.
+- v24.6.218 completed the Phase 2A implementation.
+- v24.6.219 is the completed private owner/source Phase 2A corrective release.
 - Phases 1 and 2A are complete.
 - Do not begin Phase 2B without an explicit owner request.
 
@@ -33,6 +34,14 @@ SQLite foundation and lower-risk backend durable-data migration:
 12. legacy JSON fallback/import;
 13. idempotency, corruption and rollback tests;
 14. QA, private package and Phase 2B handover.
+
+### v24.6.219 corrective review closure
+
+- preserve SQLite authority when legacy usage or PPC mirrors are stale;
+- make usage-history clear failure-visible and recover its local mirror;
+- distinguish transient SQLite contention from corruption;
+- recursively remove credential-like usage fields before persistence;
+- retain schema version 7, all legacy files and the Phase 2A stop boundary.
 
 ## Phase 2B — Next candidate; not active
 

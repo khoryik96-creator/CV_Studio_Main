@@ -1,5 +1,5 @@
 CV Studio private source patch base
-Version: v24.6.218
+Version: v24.6.219
 Keep this ZIP for future patches. Do not distribute this source package to colleagues.
 
 JobAdder API investigation source of truth:
@@ -914,3 +914,12 @@ Patch note v24.6.193: cross-platform deterministic adm-zip tree hashing fixes th
 - Returns structured request-ID corruption/migration errors with recovery guidance and path-free durable-storage diagnostics.
 - Proves the complete v24.6.217 fixture, double migration, interrupted migration rollback/restart, corruption recovery, legacy byte preservation, Phase 1 regressions and real loopback source smoke.
 - Stops after Phase 2A. Browser notes/settings, shared clients, background jobs, modularisation, lazy loading and roadmap items 4, 7 and 8 remain untouched.
+
+## v24.6.219 Phase 2A post-release review corrections
+
+- Keeps existing SQLite usage rows authoritative when an older legacy browser mirror presents the same record ID, while retaining same-page mutation race handling.
+- Uses PPC `updatedAt` ordering so stale or timestamp-free legacy metadata cannot replace a newer SQLite row.
+- Confirms usage-history clearing only after durable storage succeeds and restores the legacy mirror with an error notification if it fails.
+- Classifies SQLite lock contention as retryable `STORAGE_BUSY` instead of corruption and retains restore guidance only for genuine corruption/migration failures.
+- Recursively excludes credential-like usage fields, including nested/camel-case/hyphenated variants, before SQLite and migration-backup persistence.
+- Adds regression fixtures for every correction and leaves schema version 7, legacy files, routes, Phase 2B scope and roadmap items 4, 7 and 8 unchanged.

@@ -3,13 +3,12 @@
 ## Release state
 
 - Approved baseline: v24.6.217
-- Completed release: v24.6.218
-- Active corrective release candidate: v24.6.219
+- Completed release: v24.6.219
 - Baseline Git commit: `c8eeb34c275d374170a5931d69ed95ea213c791a`
 - Working branch: `codex/phase-2a-sqlite`
-- Active phase: Phase 2A corrective review patch only
-- Status: all five owner-requested review fixes implemented; targeted validation passed
-- Current milestone: complete regression, static validation and v24.6.219 release evidence
+- Active phase: none
+- Status: Phase 2A corrective review patch complete
+- Current milestone: final owner/source archive verification and checksum recording
 
 ## v24.6.219 corrective plan
 
@@ -190,6 +189,9 @@ None.
 - Final v24.6.218 rerun: 16 Python tests, frontend fixture and 18-assertion live source smoke all passed after the version bump.
 - Final version audit: 8 primary version surfaces agree on v24.6.218.
 - Route compatibility audit: all 88 v24.6.217 Flask route URLs remain present; Phase 2A adds 8 local storage routes.
+- Final v24.6.219 rerun: 17 Python tests, frontend fixture and 18-assertion live source smoke all passed after the corrective changes and version bump.
+- Final version audit: 8 primary version surfaces agree on v24.6.219.
+- Corrective scope audit: no prohibited Phase 2B/backburner implementation definitions or shared-client/background-job/lazy-loading symbols were added.
 - Clean archive trial: `git archive` produced the required single `cv_formatter/` root with 80 tracked source files; fresh extraction found 80 files, zero missing files, zero extra files and zero byte mismatches.
 - The authoritative owner/source ZIP is generated from the final clean documentation commit. Its SHA-256, byte size, source commit and repeated fresh-extraction result are recorded in adjacent checksum and verification sidecars because an archive cannot contain its own authoritative digest.
 
@@ -205,10 +207,12 @@ None.
 - `tests/test_phase2a_frontend_storage.js` — inline-JavaScript syntax plus usage/PPC hydration, deduplication, write and clear fixtures.
 - `tests/test_phase2a_v217_fixture.py` — complete legacy store fixture, double import, byte preservation and restart evidence.
 - `tests/run_phase2a_source_smoke.py` — bounded real-loopback source smoke with temporary local state and 18 assertions.
-- Production/installer/launcher/protected-build version surfaces — advanced consistently to v24.6.218.
-- `AGENTS.md`, `ROADMAP.md`, `IMPLEMENT.md`, `CODEX_FIRST_PROMPT.txt`, `README_FIRST.txt`, `BACKBURNER_ROADMAP.md` and `KEEP_PRIVATE_PATCH_BASE.txt` — Phase 2A completion/stop gate and next-phase entry instructions.
+- Production/installer/launcher/protected-build version surfaces — advanced consistently to v24.6.219.
+- `AGENTS.md`, `ROADMAP.md`, `IMPLEMENT.md`, `CODEX_FIRST_PROMPT.txt`, `README_FIRST.txt`, `BACKBURNER_ROADMAP.md` and `KEEP_PRIVATE_PATCH_BASE.txt` — v24.6.219 completion/stop gate and next-phase entry instructions.
 - `cv_studio_v24_6_218_phase2a_sqlite_foundation_qa_report.md` — Phase 2A release QA evidence.
 - `CV_STUDIO_V24_6_218_PHASE_2B_HANDOVER.md` — owner-gated next-phase handover.
+- `cv_studio_v24_6_219_phase2a_corrective_review_qa_report.md` — corrective review and release QA evidence.
+- `CV_STUDIO_V24_6_219_PHASE_2B_HANDOVER.md` — updated owner-gated next-phase handover.
 
 ## Next action
 

@@ -5,7 +5,8 @@
 - Phase 2A migration source baseline: **CV Studio v24.6.217**.
 - v24.6.217 baseline owner ZIP SHA-256:
   `c499ea8043f274bf47a4981c84794759f38fc7c761b98ba3939626114a898a59`
-- Current completed private owner/source release: **CV Studio v24.6.218**.
+- Phase 2A was completed in v24.6.218 and its five post-release review findings were corrected in **CV Studio v24.6.219**.
+- Current completed private owner/source release: **CV Studio v24.6.219**.
 - Phases 1 and 2A are complete.
 - There is no active implementation target. Stop after Phase 2A unless the owner explicitly starts Phase 2B.
 
@@ -78,8 +79,8 @@ Before changing code:
 1. Read `ROADMAP.md`.
 2. Read `PHASE_STATUS.md`.
 3. Read `IMPLEMENT.md`.
-4. Read `CV_STUDIO_V24_6_218_PHASE_2B_HANDOVER.md`.
-5. Read the v24.6.218 Phase 2A QA report.
+4. Read `CV_STUDIO_V24_6_219_PHASE_2B_HANDOVER.md`.
+5. Read `cv_studio_v24_6_219_phase2a_corrective_review_qa_report.md` and the historical v24.6.218 Phase 2A QA report.
 6. Inspect the relevant existing storage paths and tests.
 7. Verify the baseline before implementation.
 

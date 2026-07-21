@@ -5,7 +5,7 @@ title CV Studio Codex Git Setup
 
 echo.
 echo ============================================================
-echo CV Studio v24.6.218 - Codex Git Baseline Setup
+echo CV Studio v24.6.219 - Codex Git Baseline Setup
 echo ============================================================
 echo.
 echo Working folder:
@@ -54,14 +54,14 @@ if not defined GIT_NAME git config --local user.name "CV Studio Owner"
 for /f "delims=" %%A in ('git config --local user.email 2^>nul') do set "GIT_EMAIL=%%A"
 if not defined GIT_EMAIL git config --local user.email "cv-studio-owner@local.invalid"
 
-echo Adding the v24.6.218 baseline files...
+echo Adding the v24.6.219 baseline files...
 git add -A
 if errorlevel 1 goto :failed
 
 git rev-parse --verify HEAD >nul 2>nul
 if errorlevel 1 (
   echo Creating the first baseline commit...
-  git commit -m "CV Studio v24.6.218 baseline"
+  git commit -m "CV Studio v24.6.219 baseline"
   if errorlevel 1 goto :failed
 ) else (
   git diff --cached --quiet

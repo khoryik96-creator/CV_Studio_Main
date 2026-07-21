@@ -1,7 +1,7 @@
 # CV Studio Backburner and Stability Roadmap
 
 Last updated: 20 July 2026  
-Current implementation base: v24.6.218
+Current implementation base: v24.6.219
 
 ## Explicit backburner — do not implement until the owner reactivates them
 
@@ -41,6 +41,14 @@ Deferred scope includes Shortlist / Maybe / Reject / Reviewed states, recruiter 
 - SQLite-first usage history, lead caches, salary-component cache, PPC metadata and non-sensitive diagnostic state;
 - idempotent legacy import plus one-release JSON/localStorage backward readability;
 - structured request-ID recovery for corruption and migration failure.
+
+### v24.6.219 — Phase 2A corrective review closure
+
+- stale legacy usage and PPC mirrors no longer overwrite authoritative SQLite rows;
+- usage clear reports durable failures and restores its compatibility mirror;
+- transient SQLite contention is retryable and is not reported as corruption;
+- credential-like fields are removed recursively before usage persistence;
+- schema version 7 and all Phase 2A compatibility boundaries remain unchanged.
 
 ## Active stability direction
 
