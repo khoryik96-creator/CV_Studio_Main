@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Continue'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 if (-not $Root.EndsWith('\')) { $Root += '\' }
 $Log = Join-Path $Root 'install_log.txt'
-$InstallVersion = 'v24.6.222'
+$InstallVersion = 'v24.6.223'
 $TargetMarker = Join-Path $Root 'PROTECTED_PLATFORM_TARGET.txt'
 $script:IsProtectedPackage = Test-Path -LiteralPath $TargetMarker
 $script:ProtectedNativeExe = Join-Path $Root 'runtime\native\CVStudio.exe'
@@ -628,7 +628,7 @@ function Install-PythonPackages {
     }
     $stampDir = Join-Path $env:APPDATA 'GUOLabCVStudio'
     New-Item -ItemType Directory -Path $stampDir -Force | Out-Null
-    Set-Content -LiteralPath (Join-Path $stampDir '.deps_ok') -Value 'v24.6.222-bundled-pdfium-ocr' -Encoding ASCII
+    Set-Content -LiteralPath (Join-Path $stampDir '.deps_ok') -Value 'v24.6.223-bundled-pdfium-ocr' -Encoding ASCII
     Write-Step '    Python packages ready.'
     return $true
 }

@@ -1,7 +1,7 @@
 # CV Studio Backburner and Stability Roadmap
 
-Last updated: 21 July 2026
-Current implementation base: v24.6.222
+Last updated: 22 July 2026
+Current implementation base: v24.6.223
 
 ## Explicit backburner — do not implement until the owner reactivates them
 
@@ -78,16 +78,28 @@ Deferred scope includes Shortlist / Maybe / Reject / Reviewed states, recruiter 
   durable write fails, and counts only confirmed writes;
 - schema version 10, all routes, mirrors and scope boundaries remain unchanged.
 
+### v24.6.223 — Phase 3 shared external-service clients
+
+- shared JobAdder, Microsoft Graph and AI-provider client foundations sit
+  behind the existing route/helper contracts;
+- safe retry, bounded pagination, one-time Microsoft token refresh, timeout,
+  redaction and structured upstream errors are centralized;
+- chargeable AI calls, JobAdder writes/uploads and Graph draft writes are not
+  replayed after ambiguous transient failures; device-code operations are not
+  replayed;
+- schema version 10, all 107 routes, credential stores and paid-call gates
+  remain unchanged.
+
 ## Active stability direction
 
 No later phase is active. If the owner explicitly starts further work, continue
 the remaining improvements conservatively and in staged releases:
 
-- shared JobAdder, Microsoft and provider clients;
-- persistent background task management;
-- modular backend/frontend extraction without a rewrite;
-- AI cost guardrails and provider-billing reconciliation;
-- frontend lazy loading and remaining explainable-fit/memory refinements.
+- gradual behavior-preserving backend modularisation;
+- persistent background task management, central AI cost guardrails and
+  provider-billing reconciliation;
+- later frontend modularisation, lazy loading and remaining explainable-fit/
+  memory refinements without a rewrite.
 
 ## Safety rule
 

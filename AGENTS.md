@@ -13,17 +13,17 @@
 - Two remaining review findings were corrected in **CV Studio v24.6.222**:
   local-data restore now fails visibly when any requested durable write fails,
   and browser-setting routes reject values the repository cannot persist.
-- Current completed private owner/source release: **CV Studio v24.6.222**.
-- Phases 1, 2A and 2B are complete.
-- The owner explicitly authorized **Phase 3** on 22 July 2026 from clean
-  `master` commit `1be9da48d8307c418d82807cbdaedc9f876a1b15`.
-- Active implementation target: shared external-service client foundations
-  only. Stop after the Phase 3 owner/source release and Phase 4 handover.
+- Shared JobAdder, Microsoft Graph and AI-provider client foundations were
+  completed in **CV Studio v24.6.223** without changing route or storage schema
+  contracts.
+- Current completed private owner/source release: **CV Studio v24.6.223**.
+- Phases 1, 2A, 2B and 3 are complete.
+- There is no active implementation target. Stop after Phase 3 unless the
+  owner explicitly starts Phase 4.
 
-## Active scope: Phase 3
+## Completed scope: Phase 3
 
-Phase 3 is limited to conservative extraction behind the existing route
-contracts of:
+Phase 3 conservatively extracted behind the existing route contracts:
 
 - `JobAdderClient`;
 - `MicrosoftGraphClient`;
@@ -31,11 +31,11 @@ contracts of:
 - centralized retry, pagination, token refresh, timeout, redaction and
   structured external-service error handling.
 
-Inventory existing call sites and response shapes before extraction. Move one
-client at a time with characterization fixtures. Preserve every route URL,
-legacy response field, credential mechanism and paid-call confirmation gate.
-Do not make live credentialed or paid external calls during implementation or
-QA.
+All 107 route URLs, legacy response fields, credential mechanisms and paid-call
+confirmation gates remain. Safe reads receive bounded retries, Microsoft access
+tokens receive one refresh/retry, pagination is capped, and chargeable or other
+unsafe writes are not replayed after ambiguous transient failures. No live credentialed or paid
+external calls were made during implementation or QA.
 
 ## Completed scope: Phase 2B
 
@@ -85,8 +85,8 @@ The SQLite foundation and lower-risk backend durable data migration now include:
 - idempotent migration.
 
 The following were not included during Phase 2A. Shared external-service client
-foundations are now activated only within the Phase 3 boundary above; the other
-items remain out of scope:
+foundations were later completed within Phase 3; the other items remain out of
+scope:
 
 - browser notes/settings migration;
 - credential migration;
@@ -122,10 +122,9 @@ Before changing code:
 1. Read `ROADMAP.md`.
 2. Read `PHASE_STATUS.md`.
 3. Read `IMPLEMENT.md`.
-4. Read `CV_STUDIO_V24_6_222_PHASE_3_HANDOVER.md`.
-5. Read `cv_studio_v24_6_222_phase2b_second_corrective_review_qa_report.md`,
-   the v24.6.221/v24.6.220 Phase 2B QA reports and the historical Phase 2A QA
-   reports.
+4. Read `CV_STUDIO_V24_6_223_PHASE_4_HANDOVER.md`.
+5. Read `cv_studio_v24_6_223_phase3_shared_external_clients_qa_report.md`, the
+   Phase 2B QA reports and the historical Phase 2A QA reports.
 6. Inspect the relevant existing storage paths and tests.
 7. Verify the baseline before implementation.
 
@@ -149,7 +148,7 @@ Stop and ask the owner only when:
 
 Routine implementation decisions do not require owner confirmation.
 
-## Phase 3 definition of done
+## Completed definition of done for Phase 3
 
 - The three shared clients cover the inventoried existing external-service
   call sites without changing route URLs or legacy response fields.

@@ -4,6 +4,7 @@
 
 - Approved baseline: v24.6.217
 - Completed release: v24.6.222
+- Phase 3 release candidate: v24.6.223
 - Phase 2B source baseline: v24.6.219
 - Phase 2B baseline Git commit: `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`
 - Phase 3 source baseline: v24.6.222
@@ -11,9 +12,9 @@
 - Working branch: `codex/phase-3-shared-clients`
 - Active phase: Phase 3
 - Completed private owner/source release: v24.6.222
-- Status: Phase 2B and both corrective review closures are complete; Phase 3 is
-  explicitly owner-authorized
-- Current milestone: Phase 3 Milestone 5 - acceptance and release evidence
+- Status: Phase 3 implementation and final source validation are complete;
+  private owner/source archive closure is in progress
+- Current milestone: Phase 3 Milestone 5 - release packaging and verification
 
 ## Phase 3 authorization and constraints
 
@@ -120,7 +121,7 @@
   token explicitly for account lookup so refresh never re-enters its own lock.
 - Graph safe reads retry transient failures once and a rejected access token is
   refreshed and replayed once. Draft/message POSTs and other unsafe Graph
-  writes are never replayed automatically.
+  writes are never replayed after an ambiguous network, throttle or 5xx failure.
 - Graph collection traversal follows only HTTPS `graph.microsoft.com`
   `@odata.nextLink` values and is capped at 5,000 items and 100 pages. Existing
   route-level `$top` values provide the effective lower item limit.
@@ -294,7 +295,9 @@
   stores, draft idempotency cache and response shapes are unchanged.
 - OneNote notebook/section/page listing follows Graph continuation links only
   up to the caller's existing `$top` cap. Foreign continuation hosts are
-  rejected, repeated links stop, and no draft/message POST is retried.
+  rejected, repeated links stop, and no draft/message POST is retried after an
+  ambiguous transient failure. A definitive HTTP 401 uses the single shared
+  refresh/retry contract.
 - Review found and corrected a refresh-lock re-entry risk before checkpoint:
   post-refresh account lookup now supplies the newly issued token directly to
   the shared client and a regression fixture proves the token provider is not
@@ -302,7 +305,7 @@
 - Focused shared-client and route-characterization suites: 17 tests passed,
   covering device-start response secrecy, OneNote pagination, Outlook draft
   shape, explicit-token lookup, token endpoint form/TLS behavior, one-time 401
-  refresh, reconnect marking, host restriction and unsafe-write non-replay.
+  refresh, reconnect marking, host restriction and unsafe transient non-replay.
 - Complete Python discovery: 43 tests passed. The existing interpreter-exit
   warning for a Phase 2B temporary import directory remains non-failing and no
   Phase 3 resource handle is retained.
@@ -338,6 +341,28 @@
 - Raw-network audit leaves only the previously inventoried local watchdog,
   Tavily/SerpAPI search and Apollo paths in `app.py`; all JobAdder, Microsoft
   Graph and authorized AI-provider calls use the shared client foundations.
+
+## Phase 3 Milestone 5 acceptance results
+
+- Final source review against exact master baseline
+  `1be9da48d8307c418d82807cbdaedc9f876a1b15` found all 107 route URLs intact,
+  schema version 10 unchanged and no credential/background-job/frontend/
+  backburner or Phase 4 implementation drift.
+- The versioned v24.6.223 acceptance run passed all 45 Python tests with
+  `ResourceWarning` treated as an error, both frontend fixtures and 24 live
+  loopback source-smoke assertions.
+- Static validation passed all 15 tracked Python files, 20 JavaScript files and
+  both inline scripts, 5 Bash/command files through Git Bash and 5 PowerShell
+  files through the native parser.
+- Owner-source validation/dependency preflight, repository consistency and Git
+  whitespace checks passed. Consistency repair changed only the expected CRLF
+  form of edited Windows batch/VBS files.
+- Active production, installer, launcher, owner-build and source-smoke version
+  surfaces agree on v24.6.223; prior-version references remain only in
+  historical evidence and baseline descriptions.
+- The Phase 3 QA report and owner-gated Phase 4 handover have been produced.
+  Archive SHA-256/source-commit/fresh-extraction evidence is recorded only after
+  the final clean documentation commit is frozen.
 
 ## Completed Phase 2B authorization and constraints
 

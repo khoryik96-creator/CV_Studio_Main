@@ -8,8 +8,9 @@
 - v24.6.220 completed Phase 2B browser-backed durable records and settings.
 - v24.6.221 corrected all three Phase 2B post-release review findings.
 - v24.6.222 corrected the two remaining Phase 2B durability-review findings.
-- Phases 1, 2A and 2B are complete.
-- No later phase is active. Phase 3 requires a new explicit owner instruction.
+- v24.6.223 completed the shared external-service client foundations in Phase 3.
+- Phases 1, 2A, 2B and 3 are complete.
+- No later phase is active. Phase 4 requires a new explicit owner instruction.
 
 ## Phase 1 — Completed
 
@@ -78,7 +79,7 @@ SQLite foundation and lower-risk backend durable-data migration:
 - retain schema version 10, all Phase 2A/2B compatibility contracts and the
   Phase 3 stop boundary.
 
-## Phase 3 — Future, not active
+## Phase 3 — Completed in v24.6.223
 
 Shared external-service clients:
 
@@ -86,6 +87,12 @@ Shared external-service clients:
 - MicrosoftGraphClient;
 - AIProviderClient;
 - central retry, pagination, refresh, timeout, redaction and error handling.
+
+The three clients remain behind the existing app helpers and all 107 route
+URLs. Safe/idempotent reads have bounded retry, Graph continuation traversal is
+capped, a rejected Microsoft token gets one refresh/retry, and chargeable or
+other unsafe writes are not replayed after ambiguous transient failures. Credential stores, schema
+version 10, paid-call gates and existing response fields remain unchanged.
 
 ## Phase 4 — Future
 

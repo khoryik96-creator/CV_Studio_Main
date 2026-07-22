@@ -1,4 +1,4 @@
-You are continuing development of CV Studio from the completed private v24.6.222 Phase 2B corrective owner/source release.
+You are continuing development of CV Studio from the completed private v24.6.223 Phase 3 owner/source release.
 
 Work locally in this opened cv_formatter folder.
 
@@ -8,16 +8,14 @@ First read:
 - ROADMAP.md
 - PHASE_STATUS.md
 - IMPLEMENT.md
-- CV_STUDIO_V24_6_222_PHASE_3_HANDOVER.md
-- cv_studio_v24_6_222_phase2b_second_corrective_review_qa_report.md
-- cv_studio_v24_6_221_phase2b_corrective_review_qa_report.md
-- cv_studio_v24_6_220_phase2b_browser_storage_qa_report.md
-- cv_studio_v24_6_219_phase2a_corrective_review_qa_report.md
-- cv_studio_v24_6_218_phase2a_sqlite_foundation_qa_report.md
+- CV_STUDIO_V24_6_223_PHASE_4_HANDOVER.md
+- cv_studio_v24_6_223_phase3_shared_external_clients_qa_report.md
+- the Phase 2B QA reports
+- the historical Phase 2A QA reports
 - BACKBURNER_ROADMAP.md
 
-Verify the v24.6.222 source and adjacent SHA-256 sidecar, verify Git, and re-run the Phase 2A/2B safety suites before changing production code.
+Verify the v24.6.223 source and adjacent SHA-256/verification sidecars, verify Git, and re-run the Phase 1/2/3 safety suites before changing production code.
 
-Do not start Phase 3 unless this message is accompanied by the owner's explicit instruction to implement Phase 3. If authorised, implement Phase 3 only, preserve every Phase 2A/2B migration, backup, recovery and compatibility guarantee, and stop before Phase 4.
+Do not start Phase 4 unless this message is accompanied by the owner's explicit instruction to implement Phase 4. If authorised, implement Phase 4 only, preserve every Phase 1/2 storage and Phase 3 external-client contract, and stop before Phase 5.
 
-Do not implement roadmap items 4, 7 or 8. Do not perform credential migration, background-job work, backend/frontend modularisation, lazy loading or new user-facing workflow features unless the owner separately activates them.
+Do not implement roadmap items 4, 7 or 8. Do not perform credential migration, persistent background-job work, frontend modularisation, lazy loading or new user-facing workflow features unless the owner separately activates them.

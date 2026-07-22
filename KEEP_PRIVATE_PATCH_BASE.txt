@@ -1,5 +1,5 @@
 CV Studio private source patch base
-Version: v24.6.222
+Version: v24.6.223
 Keep this ZIP for future patches. Do not distribute this source package to colleagues.
 
 JobAdder API investigation source of truth:
@@ -963,3 +963,23 @@ Patch note v24.6.193: cross-platform deterministic adm-zip tree hashing fixes th
   retry. Independent store writes remain separately transactional.
 - Leaves schema version 10, all routes, transition mirrors, Phase 3 scope and
   roadmap items 4, 7 and 8 unchanged.
+
+## v24.6.223 Phase 3 shared external-service client foundations
+
+- Adds a standard-library shared transport with HTTPS host restrictions,
+  bounded timeout/retry policy, redacted structured errors and safe response
+  parsing behind existing Flask adapters.
+- Routes every JobAdder OAuth/API call through `JobAdderClient`, including
+  bounded offset pagination, one rejected-token refresh/retry and explicit
+  non-replay of candidate/activity/attachment writes after ambiguous transient
+  failures.
+- Routes OneNote and Outlook through separate `MicrosoftGraphClient` instances,
+  retaining their separate protected stores/scopes while adding bounded Graph
+  continuation traversal and one rejected-token refresh/retry.
+- Routes Anthropic, DeepSeek and OpenAI through `AIProviderClient` while
+  preserving DeepSeek tool refusal, OpenAI translation and normalized usage.
+  Chargeable AI POSTs are never automatically retried.
+- Expands upstream-error redaction for API keys, tokens, email addresses and
+  candidate-ID-labelled values without storing request/response bodies.
+- Leaves schema version 10, all 107 routes, legacy fields, credential stores,
+  paid-call gates, Phase 4 scope and roadmap items 4, 7 and 8 unchanged.
