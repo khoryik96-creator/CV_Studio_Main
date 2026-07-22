@@ -152,15 +152,24 @@ class Phase3ClientFoundationTests(unittest.TestCase):
                 "Accept": "application/json",
             },
         )
+
+        class BlockedResponse:
+            def __init__(self):
+                self.closed = False
+
+            def close(self):
+                self.closed = True
+
+        blocked_response = BlockedResponse()
         with self.assertRaises(ExternalServiceError):
-            handler.redirect_request(
+            handler.http_error_302(
                 source,
-                None,
+                blocked_response,
                 302,
                 "Found",
-                {},
-                "https://example.invalid/foreign",
+                {"location": "https://example.invalid/foreign"},
             )
+        self.assertTrue(blocked_response.closed)
 
         redirected = handler.redirect_request(
             source,

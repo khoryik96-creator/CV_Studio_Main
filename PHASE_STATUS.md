@@ -10,10 +10,11 @@
 - Phase 3 source baseline: v24.6.222
 - Phase 3 baseline Git commit: `1be9da48d8307c418d82807cbdaedc9f876a1b15`
 - Working branch: `codex/phase-3-shared-clients`
-- Active phase: none; Phase 4 requires explicit owner authorization
+- Active phase: Phase 3 corrective release only; Phase 4 requires explicit
+  owner authorization
 - Completed private owner/source release: v24.6.223
-- Status: Phase 3 complete; stop before Phase 4
-- Current milestone: none
+- Status: v24.6.224 corrective review closure in progress; stop before Phase 4
+- Current milestone: corrective transport cleanup and release evidence
 
 ## Phase 3 authorization and constraints
 
@@ -400,6 +401,23 @@
   0.5.17 checks, repository consistency and Git whitespace validation pass.
 - This correction changes no route URL, schema, credential store, background
   execution, frontend workflow, backburner item or Phase 4 boundary.
+
+## v24.6.224 Phase 3 corrective release
+
+- On 23 July 2026 the owner authorized correction of both findings from the
+  follow-up review of commit `ce96cec2038e3b828a69e6536ca5b439290c0319`.
+- A rejected foreign or HTTPS-downgrade redirect now closes its upstream
+  response before raising the structured external-service error. Regression
+  coverage exercises the standard-library `http_error_302` path and proves the
+  response is closed.
+- The focused shared-client and route-characterization suites pass 22 tests
+  with `ResourceWarning` treated as an error. No live credential, external-
+  service or paid call was used.
+- The corrective source will advance to v24.6.224 with a new QA report, Phase 4
+  handover, clean owner/source ZIP, SHA-256 and fresh byte-verification evidence.
+  The v24.6.223 artifacts remain immutable historical evidence.
+- No route URL, legacy response field, schema, credential store, frontend
+  workflow, background execution, backburner item or Phase 4 work is included.
 
 ## Completed Phase 2B authorization and constraints
 

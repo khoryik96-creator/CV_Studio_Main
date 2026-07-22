@@ -160,6 +160,10 @@ class _AllowlistedRedirectHandler(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, request_object, fp, code, message, headers, new_url):
         resolved_url = urllib.parse.urljoin(request_object.full_url, str(new_url or ""))
         if self._allowed_hosts and not _host_allowed(resolved_url, self._allowed_hosts):
+            try:
+                fp.close()
+            except Exception:
+                pass
             raise ExternalServiceError(
                 self._service,
                 "{} redirect target is not allowed".format(
