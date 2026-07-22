@@ -6,11 +6,207 @@
 - Completed release: v24.6.222
 - Phase 2B source baseline: v24.6.219
 - Phase 2B baseline Git commit: `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`
-- Working branch: `codex/phase-2b-browser-storage`
-- Active phase: none
+- Phase 3 source baseline: v24.6.222
+- Phase 3 baseline Git commit: `1be9da48d8307c418d82807cbdaedc9f876a1b15`
+- Working branch: `codex/phase-3-shared-clients`
+- Active phase: Phase 3
 - Completed private owner/source release: v24.6.222
-- Status: Phase 2B and both corrective review closures are complete
-- Current milestone: none; Phase 3 requires new explicit owner authorization
+- Status: Phase 2B and both corrective review closures are complete; Phase 3 is
+  explicitly owner-authorized
+- Current milestone: Phase 3 Milestone 2 - `JobAdderClient`
+
+## Phase 3 authorization and constraints
+
+- Owner authorization received on 22 July 2026.
+- Work only from clean master commit
+  `1be9da48d8307c418d82807cbdaedc9f876a1b15` and preserve v24.6.222 as the
+  source baseline.
+- Extract only `JobAdderClient`, `MicrosoftGraphClient` and `AIProviderClient`
+  plus shared retry, pagination, Microsoft token refresh, bounded timeout,
+  redaction and structured external-service error foundations.
+- Inventory call sites, route response shapes, credential boundaries and paid-
+  call risks before moving production calls. Extract one client at a time with
+  characterization fixtures.
+- Preserve all 107 route URLs, legacy response fields, request-ID behavior,
+  credential stores, paid-call confirmation gates and Phase 1/2 storage
+  contracts.
+- Do not make live credentialed or paid external calls.
+- Do not implement schema or credential migration, persistent background jobs,
+  broad backend/frontend modularisation, lazy loading, unrelated workflows or
+  roadmap items 4, 7 or 8.
+- Stop after the Phase 3 private owner/source release, QA report and Phase 4
+  handover. Do not begin Phase 4 automatically.
+
+## Phase 3 entry verification
+
+- The owner `master` worktree and this worktree were clean at entry; no remote
+  is configured, and both resolved to the owner-specified master commit
+  `1be9da48d8307c418d82807cbdaedc9f876a1b15`.
+- All active source version surfaces identify v24.6.222.
+- The authoritative v24.6.222 release directory exists at
+  `C:\CV-Studio-Codex\releases\v24.6.222\` with its owner ZIP, SHA-256,
+  verification JSON, QA report and Phase 3 handover.
+- The independently computed owner-ZIP SHA-256 is
+  `b3caa1e1d32be21f2ea32a9d9eb0a7fe06fdc6c9f687b8abe0bcb8e95fae09dc`,
+  matching both adjacent sidecars. A fresh extraction contained 91 tracked
+  files with zero missing, extra or byte-mismatched files.
+- The documented ignored owner/source dependency was restored with exact
+  `adm-zip` 0.5.17. Entry QA then passed 26 Python tests, both frontend fixtures,
+  24 live-source-smoke assertions, all tracked Python/JavaScript/Bash/PowerShell
+  syntax, owner-source validation/preflight, repository consistency and Git
+  whitespace validation.
+
+## Phase 3 implementation plan
+
+### Milestone 1 - inventory and compatibility fixtures
+
+- Inventory every JobAdder, Microsoft Graph and AI-provider HTTP call, its
+  caller/route, retry, pagination, refresh, timeout and credential behavior.
+- Capture success and error response shapes in no-network characterization
+  fixtures before moving production calls.
+- Define the smallest shared transport/error boundary and redaction contract.
+
+### Milestone 2 - JobAdderClient
+
+- Extract JobAdder authentication, request, pagination and retry behavior behind
+  the existing JobAdder routes.
+- Preserve route URLs, legacy fields, reconnect classification and upload/read
+  semantics with characterization tests.
+
+### Milestone 3 - MicrosoftGraphClient
+
+- Extract Microsoft Graph requests, bounded pagination and token refresh behind
+  the existing Outlook and OneNote routes.
+- Preserve route contracts, consent/reconnect behavior and credential storage.
+
+### Milestone 4 - AIProviderClient and shared resilience
+
+- Extract existing OpenAI-compatible, Anthropic and DeepSeek provider calls
+  behind one provider-aware client boundary.
+- Centralize bounded timeouts, safe retries, response parsing, redaction and
+  structured upstream-error translation without changing paid-call gates or
+  legacy route fields.
+
+### Milestone 5 - acceptance and release evidence
+
+- Run full regression, source smoke, static validation, repository consistency
+  and final route/scope review against the v24.6.222 master baseline.
+- Advance completed owner/source version surfaces only after implementation
+  passes, create and freshly byte-verify the private owner/source ZIP, and
+  produce the QA report, SHA-256 and Phase 4 handover in the release directory.
+- Stop before Phase 4.
+
+## Phase 3 milestones
+
+- [x] Verify the v24.6.222 master/source/package baseline and all entry gates.
+- [x] Inventory external-service call sites and record compatibility fixtures.
+- [ ] Extract and verify `JobAdderClient`.
+- [ ] Extract and verify `MicrosoftGraphClient`.
+- [ ] Extract and verify `AIProviderClient` and shared resilience/error handling.
+- [ ] Run complete regression, static validation and final master review.
+- [ ] Create and byte-verify the Phase 3 private owner/source release.
+- [ ] Produce QA report, SHA-256 and Phase 4 handover; stop before Phase 4.
+
+## Phase 3 decisions and limitations
+
+- Phase 3 is a narrow client-boundary extraction inside the existing monolithic
+  backend; it is not the Phase 4 backend modularisation.
+- Characterization and integration tests use controlled fakes only. Live
+  JobAdder, Microsoft Graph and paid AI requests are not authorized or claimed.
+- Schema version 10 and every Phase 1/2 migration, mirror, tombstone, recovery
+  and structured storage-error contract remain unchanged.
+
+## Phase 3 Milestone 1 results
+
+### JobAdder inventory
+
+- Protected credentials remain in `_ja_creds_store` and the existing operating-
+  system-backed `_cv_secure_*` vault. OAuth authorization-code and refresh
+  exchanges use `id.jobadder.com`; token responses select the validated
+  tenant-specific `*.jobadder.com` API base.
+- Existing request paths comprise candidate search/create/update, original and
+  formatted resume upload, list/custom-field reads, Screening Call activity
+  create/read diagnostics, candidate/profile/salary updates, AI Crawler option,
+  candidate/detail/resume discovery, and read-only PPC placement retrieval.
+- Existing request wrappers are fragmented across `_ja_get_json`,
+  `_ja_post_json`, `_ja_put_json`, `_spider_get_ja_raw`, `_ppc_get_json` and
+  direct route-local `urlopen` calls. Timeouts range from 8 to 40 seconds.
+- AI Crawler GETs alone refresh and retry once after HTTP 401. PPC reads retry
+  HTTP 429 once for a bounded `Retry-After`; other JobAdder reads and writes do
+  not share those behaviors.
+- Candidate discovery paginates by `Offset`/`Limit` against `totalCount`, with
+  duplicate/no-progress diagnostics and a 5,000-record hard cap. PPC queries
+  each placement type independently, performs a count request, advances by the
+  actual rows returned, and preserves per-type completeness diagnostics.
+- Legacy route successes variously return the upstream JSON unchanged,
+  `(status, parsed JSON)` helper tuples, `{ok,response}` upload results, crawler
+  pagination metadata, or normalized PPC rows. Failures retain route-specific
+  `error`, `detail`, `status`, `needs_reconnect`, `query`, diagnostic and
+  fallback fields before the additive request-ID contract is applied.
+
+### Microsoft Graph inventory
+
+- OneNote and Outlook retain separate delegated-token stores and scopes. Both
+  use the existing protected vault, proactive 120-second refresh window,
+  in-memory device-login sessions and the shared Microsoft v2 token endpoint.
+- OneNote Graph calls cover account lookup, notebooks, sections, pages, page
+  content and notebook resolution. Outlook calls cover account lookup and
+  draft creation only; CV Studio has no Graph send-mail path.
+- `_ms_graph_json`, `_ms_graph_post_json`, `_ms_graph_bytes` and
+  `_ms_outlook_graph_json` duplicate request/TLS/timeout logic. They do not
+  currently retry a Graph 401 or follow `@odata.nextLink`; route/helper
+  timeouts range from 15 to 30 seconds.
+- OneNote routes retain their established `items`, `raw_count`, `filters`,
+  `pages`, `combined_text`, `content_type`, connection and legacy error/detail
+  shapes. Outlook draft creation retains its request-ID idempotency cache and
+  `{ok,draft_id,webLink,isDraft,mayRequireEditClick,created_at}` result plus its
+  established friendly error/action/technical-detail fields.
+
+### AI-provider inventory
+
+- Anthropic Messages, DeepSeek's Anthropic-compatible endpoint and OpenAI
+  Responses are all dispatched through `call_llm`. OpenAI request/response
+  translation and provider-neutral usage normalization preserve the shared
+  `{content,usage}` contract and `api_calls=1` accounting.
+- Provider keys remain in the existing protected `_ai_secret_store`; request
+  sentinels are resolved only inside the backend. Default provider timeout is
+  180 seconds with a 15-second minimum. There is no shared retry today.
+- Every successful LLM request may be chargeable. Automatic retries after an
+  ambiguous AI timeout or provider error could double-spend, so Phase 3 will
+  centralize policy but will not retry chargeable POSTs automatically.
+- Existing callers include provider test, CV parsing and repair, generic AI,
+  salary-component extraction, Lead Finder research/refinement, title
+  expansion, blind CV and the owner-only paid DeepSeek probe. The paid probe
+  retains its exact explicit confirmation string and is not run in Phase 3 QA.
+- Tavily/SerpAPI public search, Apollo enrichment and the local update watchdog
+  were inventoried as other raw network call sites. They are not silently
+  folded into one of the three authorized clients and remain unchanged.
+
+### Compatibility fixture and client-boundary decisions
+
+- Added six no-network characterization tests covering the exact 107-route
+  baseline, JobAdder success/error fields, one-refresh crawler behavior,
+  candidate pagination metadata, Microsoft JSON/bytes and OneNote route
+  shapes, Anthropic/OpenAI normalization, DeepSeek web-search refusal and
+  credential redaction.
+- The shared client module will use Python's standard library and dependency-
+  injected token/base callbacks. Existing app-level helper names remain as
+  compatibility adapters so the extraction does not become Phase 4
+  modularisation.
+- Retry is limited to explicitly safe/idempotent reads, bounded throttling and
+  token-refresh operations. JobAdder mutations/uploads, Graph draft creation
+  and AI-provider POSTs are never replayed after an ambiguous failure.
+- HTTP status/body compatibility remains available to mature route handlers;
+  shared structured errors add redacted service/code/retry/action metadata
+  without removing legacy route fields.
+
+### Milestone 1 verification
+
+- `tests/test_phase3_external_client_characterization.py`: 6 tests passed.
+- No live credentials, candidate records, email addresses or paid external
+  calls were used. Fixture credential/record values are explicit placeholders.
+- No application route, storage schema, legacy mirror or production behavior
+  changed in this milestone.
 
 ## Completed Phase 2B authorization and constraints
 

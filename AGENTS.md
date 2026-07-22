@@ -15,8 +15,27 @@
   and browser-setting routes reject values the repository cannot persist.
 - Current completed private owner/source release: **CV Studio v24.6.222**.
 - Phases 1, 2A and 2B are complete.
-- There is no active implementation target. Stop after Phase 2B unless the
-  owner explicitly starts Phase 3.
+- The owner explicitly authorized **Phase 3** on 22 July 2026 from clean
+  `master` commit `1be9da48d8307c418d82807cbdaedc9f876a1b15`.
+- Active implementation target: shared external-service client foundations
+  only. Stop after the Phase 3 owner/source release and Phase 4 handover.
+
+## Active scope: Phase 3
+
+Phase 3 is limited to conservative extraction behind the existing route
+contracts of:
+
+- `JobAdderClient`;
+- `MicrosoftGraphClient`;
+- `AIProviderClient`;
+- centralized retry, pagination, token refresh, timeout, redaction and
+  structured external-service error handling.
+
+Inventory existing call sites and response shapes before extraction. Move one
+client at a time with characterization fixtures. Preserve every route URL,
+legacy response field, credential mechanism and paid-call confirmation gate.
+Do not make live credentialed or paid external calls during implementation or
+QA.
 
 ## Completed scope: Phase 2B
 
@@ -65,11 +84,12 @@ The SQLite foundation and lower-risk backend durable data migration now include:
 - one-release backward readability;
 - idempotent migration.
 
-The following were not included during Phase 2A and remain out of scope until explicitly activated:
+The following were not included during Phase 2A. Shared external-service client
+foundations are now activated only within the Phase 3 boundary above; the other
+items remain out of scope:
 
 - browser notes/settings migration;
 - credential migration;
-- shared JobAdder/Microsoft/provider clients;
 - background jobs;
 - backend or frontend modularisation;
 - lazy loading;
@@ -128,6 +148,23 @@ Stop and ask the owner only when:
 - two choices have materially different compatibility consequences.
 
 Routine implementation decisions do not require owner confirmation.
+
+## Phase 3 definition of done
+
+- The three shared clients cover the inventoried existing external-service
+  call sites without changing route URLs or legacy response fields.
+- Retry, pagination, Microsoft token refresh, bounded timeouts, redaction and
+  structured error translation are centralized and characterization-tested.
+- Credentials remain in their existing protected stores and never enter plain
+  SQLite, logs, fixtures, diagnostics, support bundles or release evidence.
+- No live credentials, paid calls, schema migration, persistent background job,
+  broad modularisation, frontend lazy loading, unrelated workflow or roadmap
+  item 4, 7 or 8 is introduced.
+- Targeted and full regression tests pass, including source smoke and static
+  validation.
+- A clean private owner/source ZIP is freshly extracted and byte-verified; its
+  SHA-256, QA report and Phase 4 handover are copied to the new release folder.
+- Stop after Phase 3. Do not begin Phase 4 automatically.
 
 ## Completed definition of done for Phase 2B
 
