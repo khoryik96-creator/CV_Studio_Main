@@ -6466,20 +6466,38 @@ function cvStudioPersistImportedLocalData(payload){
   if(typeof oneNoteRecordsHydrateFromSQLite==='function')hydrations.push(oneNoteRecordsHydrateFromSQLite());
   if(typeof oneNoteLinksHydrateFromSQLite==='function')hydrations.push(oneNoteLinksHydrateFromSQLite());
   return Promise.all(hydrations.map(function(item){return Promise.resolve(item).catch(function(){});})).then(function(){
-    var writes=[],restored=0,savedLinksFromSettings=null;
+    var writes=[],savedLinksFromSettings=null;
+    function confirmedWrite(write,count,label,requireTrue){
+      return Promise.resolve(write).then(function(result){
+        if(requireTrue&&result!==true)throw new Error('Local-data restore could not persist '+label+' to durable storage.');
+        return count;
+      },function(error){
+        throw new Error('Local-data restore could not persist '+label+' to durable storage. '+String((error&&error.message)||''));
+      });
+    }
     Object.keys(settings).forEach(function(key){var value=settings[key];if(!cvStudioSafeLocalDataKey(key)||typeof value!=='string')return;
-      if(key==='cvstudio_ppc_meta_v1'){try{var metadata=JSON.parse(value);if(metadata&&typeof metadata==='object'&&!Array.isArray(metadata)){ppcMetaSave(metadata);restored++;}}catch(e){}return;}
+      if(key==='cvstudio_ppc_meta_v1'){
+        var metadata=null;try{metadata=JSON.parse(value);}catch(e){return;}
+        if(metadata&&typeof metadata==='object'&&!Array.isArray(metadata)){
+          try{ppcMetaSave(metadata);var ppcWrite=typeof _ppcMetaWriteQueue==='undefined'?Promise.reject(new Error('PPC durable write did not start')):_ppcMetaWriteQueue;writes.push(confirmedWrite(ppcWrite,1,'PPC metadata',false));}
+          catch(error){writes.push(confirmedWrite(Promise.reject(error),1,'PPC metadata',false));}
+        }
+        return;
+      }
       if(key==='cvstudio_onenote_saved_desktop_links_v1'){try{var links=JSON.parse(value);if(Array.isArray(links))savedLinksFromSettings=links;}catch(e){}return;}
-      if(cvStudioDurableSettingKey(key)){writes.push(cvStudioDurableSettingSet(key,value));restored++;}
+      if(cvStudioDurableSettingKey(key))writes.push(confirmedWrite(cvStudioDurableSettingSet(key,value),1,'a browser setting',true));
     });
     var transferRecords=Array.isArray(records.onenote_transfer_records)?records.onenote_transfer_records:null;
     var savedLinks=Array.isArray(records.onenote_saved_links)?records.onenote_saved_links:savedLinksFromSettings;
-    if(transferRecords){oneNoteRecordsSave(transferRecords);restored+=transferRecords.length;}
-    if(savedLinks){oneNoteWriteSavedLinks(savedLinks);restored+=savedLinks.length;}
-    if(typeof _ppcMetaWriteQueue!=='undefined')writes.push(_ppcMetaWriteQueue.catch(function(){}));
-    if(typeof _oneNoteRecordsLastWritePromise!=='undefined')writes.push(_oneNoteRecordsLastWritePromise);
-    if(typeof _oneNoteLinksLastWritePromise!=='undefined')writes.push(_oneNoteLinksLastWritePromise);
-    return Promise.all(writes.map(function(item){return Promise.resolve(item).catch(function(){return false;});})).then(function(){return restored;});
+    if(transferRecords){
+      var recordsAccepted=oneNoteRecordsSave(transferRecords);
+      writes.push(confirmedWrite(recordsAccepted===true&&typeof _oneNoteRecordsLastWritePromise!=='undefined'?_oneNoteRecordsLastWritePromise:false,transferRecords.length,'OneNote transfer records',true));
+    }
+    if(savedLinks){
+      var linksAccepted=oneNoteWriteSavedLinks(savedLinks);
+      writes.push(confirmedWrite(linksAccepted===true&&typeof _oneNoteLinksLastWritePromise!=='undefined'?_oneNoteLinksLastWritePromise:false,savedLinks.length,'saved OneNote links',true));
+    }
+    return Promise.all(writes).then(function(counts){return counts.reduce(function(total,count){return total+count;},0);});
   });
 }
 function importCvStudioLocalData(file){

@@ -7,10 +7,10 @@
 - Phase 2B source baseline: v24.6.219
 - Phase 2B baseline Git commit: `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`
 - Working branch: `codex/phase-2b-browser-storage`
-- Active phase: none
+- Active phase: Phase 2B corrective review follow-up only
 - Completed private owner/source release: v24.6.221
-- Status: Phase 2B and its corrective review closure are complete
-- Current milestone: none; Phase 3 requires new explicit owner authorization
+- Status: two additional Phase 2B review findings are corrected and targeted QA passes
+- Current milestone: full regression and corrective owner/source release evidence
 
 ## Completed Phase 2B authorization and constraints
 
@@ -435,6 +435,45 @@ gate remain unchanged.
 - No shared client, background job, modularisation, lazy loading, new workflow
   or roadmap item 4, 7 or 8 was implemented. Phase 3 remains unauthorized.
 
+## v24.6.222 Phase 2B second review-correction milestone
+
+The owner authorized correction of the two remaining actionable findings on
+`codex/phase-2b-browser-storage`. This is a second narrow Phase 2B corrective
+patch. Schema version 10, the 11 additive storage routes, every legacy mirror
+and the Phase 3/backburner stop boundaries remain unchanged.
+
+- Browser-setting import/upsert validation now uses the repository's canonical
+  value normalizer before reporting success. Oversized or suspicious scalar
+  values receive the existing structured `STORAGE_PAYLOAD_INVALID` response;
+  JSON-valued settings still have credential-like fields removed recursively
+  and persist in canonical form.
+- Schema-1 local-data restore now associates a confirmed count with every
+  requested durable write. A rejected promise or a helper result other than
+  explicit success rejects the restore, so the caller does not show the success
+  message or reload the application after an unpersisted setting or record.
+- PPC metadata write failures are no longer swallowed by the restore path.
+  Transfer-record and saved-link restores require their exact last-write
+  promises to succeed; saved-link synchronous rollback is also failure-visible.
+- Targeted correction gate passed: 16 Python Phase 2A/2B repository and real-
+  Flask integration tests plus the Phase 2B frontend storage fixture.
+- Regression coverage proves rejected setting values return HTTP 400 without
+  changing the existing authoritative value, sanitized JSON remains accepted,
+  successful restore counts are exact, and setting, saved-link and PPC durable
+  failures reject the restore.
+
+### Second corrective decisions and limitations
+
+- The backend and repository share one setting-value normalization contract;
+  route success can no longer mask an entry omitted by repository preparation.
+- The existing browser helpers retain their established live-write behavior and
+  transition mirrors. This correction changes only backup-restore confirmation.
+- Independent store writes cannot form one cross-store SQLite transaction. If a
+  later requested store fails, earlier confirmed stores may already be restored;
+  the operation is reported as failed and does not reload, allowing a safe retry.
+- No schema migration, credential migration, shared client, background job,
+  modularisation, lazy loading, new workflow or roadmap item 4, 7 or 8 is part
+  of this correction. Phase 3 remains unauthorized.
+
 ## v24.6.219 corrective plan
 
 - Keep SQLite usage rows authoritative when a stale legacy browser mirror has the same record ID.
@@ -672,4 +711,6 @@ None.
 
 ## Next action
 
-Stop. Do not begin Phase 3 or any later phase without a new explicit owner instruction.
+Complete the v24.6.222 corrective regression and owner/source release evidence,
+then stop. Do not begin Phase 3 or any later phase without a new explicit owner
+instruction.

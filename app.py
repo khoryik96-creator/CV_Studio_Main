@@ -11783,9 +11783,10 @@ def _phase2b_browser_settings(payload):
     clean = {}
     for raw_key, value in payload.items():
         key = str(raw_key or "")
-        if key not in BROWSER_SETTING_KEYS or not isinstance(value, str):
+        normalized = BrowserSettingsRepository.normalize_value(key, value)
+        if normalized is None:
             return None
-        clean[key] = value
+        clean[key] = normalized
     return clean
 
 

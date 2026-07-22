@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 import tempfile
@@ -246,6 +247,42 @@ class Phase2BAppStorageIntegrationTests(unittest.TestCase):
         self.assertEqual(payload["code"], "STORAGE_PAYLOAD_INVALID")
         self.assertEqual(payload["request_id"], "phase2b-settings-invalid")
         self.assertNotIn("hy_key_openai", self.client.get("/storage/browser-settings").get_json()["settings"])
+
+        sanitized_value = json.dumps(
+            {"page": 2, "nested": {"clientSecret": "redacted-fixture-value"}}
+        )
+        response = self.client.post(
+            "/storage/browser-settings/upsert",
+            json={"settings": {"cvstudio_ppc_ui_state_v1": sanitized_value}},
+            headers=self._headers("phase2b-settings-sanitized"),
+        )
+        self.assertEqual(response.status_code, 200)
+        persisted = self.client.get("/storage/browser-settings").get_json()["settings"]
+        self.assertEqual(
+            json.loads(persisted["cvstudio_ppc_ui_state_v1"]),
+            {"nested": {}, "page": 2},
+        )
+
+        for request_id, rejected_value in (
+            ("phase2b-settings-secret-scalar", "api_key: redacted-fixture-value"),
+            ("phase2b-settings-oversized", "x" * (2 * 1024 * 1024 + 1)),
+        ):
+            with self.subTest(request_id=request_id):
+                response = self.client.post(
+                    "/storage/browser-settings/upsert",
+                    json={"settings": {"hy_provider": rejected_value}},
+                    headers=self._headers(request_id),
+                )
+                payload = response.get_json()
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(payload["code"], "STORAGE_PAYLOAD_INVALID")
+                self.assertEqual(payload["request_id"], request_id)
+                self.assertEqual(
+                    self.client.get("/storage/browser-settings").get_json()[
+                        "settings"
+                    ]["hy_provider"],
+                    "deepseek",
+                )
 
     def test_storage_corruption_uses_existing_structured_recovery_contract(self):
         corrupt_database = Path(self._temporary.name) / "corrupt" / "cv_studio.sqlite3"

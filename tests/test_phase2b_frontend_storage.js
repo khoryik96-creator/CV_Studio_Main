@@ -260,8 +260,8 @@ async function testAdditiveSchemaOneImportPersistence() {
     oneNoteLinksHydrateFromSQLite: () => Promise.resolve([]),
     cvStudioDurableSettingSet(key, value) { calls.settings.push({key, value}); return Promise.resolve(true); },
     ppcMetaSave(value) { calls.ppc = value; },
-    oneNoteRecordsSave(value) { calls.transfers = value; },
-    oneNoteWriteSavedLinks(value) { calls.links = value; },
+    oneNoteRecordsSave(value) { calls.transfers = value; return true; },
+    oneNoteWriteSavedLinks(value) { calls.links = value; return true; },
     _ppcMetaWriteQueue: Promise.resolve(), _oneNoteRecordsLastWritePromise: Promise.resolve(true), _oneNoteLinksLastWritePromise: Promise.resolve(true),
   });
   vm.runInContext(functions(['cvStudioSafeLocalDataKey', 'cvStudioDurableSettingKey', 'cvStudioPersistImportedLocalData']), context);
@@ -278,11 +278,48 @@ async function testAdditiveSchemaOneImportPersistence() {
       onenote_saved_links: [{id: 'record-link'}],
     },
   });
-  assert.ok(restored >= 4);
+  assert.strictEqual(restored, 4);
   assert.deepStrictEqual(calls.settings, [{key: 'hy_model_openai', value: 'gpt-import-fixture'}]);
   assert.strictEqual(calls.ppc['placement-fixture'].payment, 'Paid');
   assert.strictEqual(calls.transfers[0].id, 'import-record');
   assert.strictEqual(calls.links[0].id, 'record-link');
+}
+
+async function testImportRejectsFailedDurableWrites() {
+  async function runScenario(overrides, payload) {
+    const context = vm.createContext(Object.assign({
+      console, Promise, JSON, Object, Array, String, Number, Error,
+      cvStudioHydrateBrowserSettings: () => Promise.resolve({}),
+      ppcMetaHydrateFromSQLite: () => Promise.resolve({}),
+      oneNoteRecordsHydrateFromSQLite: () => Promise.resolve([]),
+      oneNoteLinksHydrateFromSQLite: () => Promise.resolve([]),
+      cvStudioDurableSettingSet: () => Promise.resolve(true),
+      ppcMetaSave() {},
+      oneNoteRecordsSave: () => true,
+      oneNoteWriteSavedLinks: () => true,
+      _ppcMetaWriteQueue: Promise.resolve(),
+      _oneNoteRecordsLastWritePromise: Promise.resolve(true),
+      _oneNoteLinksLastWritePromise: Promise.resolve(true),
+    }, overrides || {}));
+    vm.runInContext(functions(['cvStudioSafeLocalDataKey', 'cvStudioDurableSettingKey', 'cvStudioPersistImportedLocalData']), context);
+    await assert.rejects(
+      context.cvStudioPersistImportedLocalData(payload),
+      /durable storage/i,
+    );
+  }
+
+  await runScenario(
+    {cvStudioDurableSettingSet: () => Promise.resolve(false)},
+    {settings: {hy_model_openai: 'gpt-rejected-fixture'}, records: {}},
+  );
+  await runScenario(
+    {_oneNoteLinksLastWritePromise: Promise.resolve(false)},
+    {settings: {}, records: {onenote_saved_links: [{id: 'rejected-link'}]}},
+  );
+  await runScenario(
+    {_ppcMetaWriteQueue: Promise.reject(new Error('PPC durable fixture failure'))},
+    {settings: {cvstudio_ppc_meta_v1: JSON.stringify({fixture: {payment: 'Paid'}})}, records: {}},
+  );
 }
 
 Promise.resolve()
@@ -290,5 +327,6 @@ Promise.resolve()
   .then(testTransferRecordHydrationAndClearRecovery)
   .then(testSavedLinkHydrationAndWriteRecovery)
   .then(testAdditiveSchemaOneImportPersistence)
+  .then(testImportRejectsFailedDurableWrites)
   .then(() => process.stdout.write('Phase 2B frontend storage fixture passed\n'))
   .catch(error => { process.stderr.write(((error && error.stack) || String(error)) + '\n'); process.exitCode = 1; });

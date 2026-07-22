@@ -1640,7 +1640,7 @@ class BrowserSettingsRepository:
         self.storage = storage
 
     @staticmethod
-    def _normalize_value(setting_key: str, value) -> str | None:
+    def normalize_value(setting_key: str, value) -> str | None:
         if setting_key not in BROWSER_SETTING_KEYS or not isinstance(value, str):
             return None
         if len(value.encode("utf-8")) > _BROWSER_SETTING_MAX_BYTES:
@@ -1668,7 +1668,7 @@ class BrowserSettingsRepository:
         clean = {}
         for key, value in settings.items():
             setting_key = str(key or "")
-            normalized = cls._normalize_value(setting_key, value)
+            normalized = cls.normalize_value(setting_key, value)
             if normalized is not None:
                 clean[setting_key] = normalized
         return clean
