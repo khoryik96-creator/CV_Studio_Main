@@ -1,5 +1,5 @@
 CV Studio private source patch base
-Version: v24.6.221
+Version: v24.6.222
 Keep this ZIP for future patches. Do not distribute this source package to colleagues.
 
 JobAdder API investigation source of truth:
@@ -947,5 +947,19 @@ Patch note v24.6.193: cross-platform deterministic adm-zip tree hashing fixes th
   stale browser controls cannot overwrite current routes.
 - Reapplies the hydrated AI Crawler preview-memory mode and safely schedules
   Auto diagnostics when memory data is not yet available.
+- Leaves schema version 10, all routes, transition mirrors, Phase 3 scope and
+  roadmap items 4, 7 and 8 unchanged.
+
+## v24.6.222 Phase 2B second post-release review corrections
+
+- Uses the browser-settings repository normalizer at the HTTP boundary so an
+  oversized or rejected scalar cannot receive a misleading successful response.
+- Preserves canonical JSON sanitization, structured request-ID errors and the
+  previous authoritative value when a setting payload is rejected.
+- Requires every requested schema-1 restore write to confirm durable success;
+  failed settings, PPC metadata, transfer records or saved links now prevent the
+  success message and automatic reload.
+- Counts only confirmed restores and retains the external backup for a safe
+  retry. Independent store writes remain separately transactional.
 - Leaves schema version 10, all routes, transition mirrors, Phase 3 scope and
   roadmap items 4, 7 and 8 unchanged.

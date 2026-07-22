@@ -3,14 +3,14 @@
 ## Release state
 
 - Approved baseline: v24.6.217
-- Completed release: v24.6.221
+- Completed release: v24.6.222
 - Phase 2B source baseline: v24.6.219
 - Phase 2B baseline Git commit: `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`
 - Working branch: `codex/phase-2b-browser-storage`
-- Active phase: Phase 2B corrective review follow-up only
-- Completed private owner/source release: v24.6.221
-- Status: two additional Phase 2B review findings are corrected and targeted QA passes
-- Current milestone: full regression and corrective owner/source release evidence
+- Active phase: none
+- Completed private owner/source release: v24.6.222
+- Status: Phase 2B and both corrective review closures are complete
+- Current milestone: none; Phase 3 requires new explicit owner authorization
 
 ## Completed Phase 2B authorization and constraints
 
@@ -460,6 +460,27 @@ and the Phase 3/backburner stop boundaries remain unchanged.
   changing the existing authoritative value, sanitized JSON remains accepted,
   successful restore counts are exact, and setting, saved-link and PPC durable
   failures reject the restore.
+- Full regression gate passed: 26 Python tests, both frontend fixtures and the
+  24-assertion live loopback source smoke.
+- Static gate passed for 12 tracked Python files, 20 tracked JavaScript files,
+  both complete inline scripts, 5 Bash entry points and 5 PowerShell scripts.
+- Owner-source validation/preflight, repository consistency and Git whitespace
+  validation passed. Repository consistency repaired only the expected CRLF
+  presentation of edited Windows batch/VBS launcher files before the final pass.
+- Final master review preserves all 96 baseline routes and the 11 additive
+  Phase 2B storage routes, for 107 current URLs and zero removed URLs.
+- The application diff contains no shared client, background job,
+  modularisation, lazy loading, new workflow, Flask-server replacement, scoring
+  profile or candidate-decision implementation.
+- All active product, installer, launcher, protected-build source and starter
+  surfaces agree on v24.6.222. Historical v24.6.221 references remain only in
+  prior release evidence and compatibility history.
+- The private owner/source archive is
+  `cv_studio_v24_6_222_phase2b_second_corrective_owner_source.zip`. It is
+  generated from the final clean release commit with one `cv_formatter/` root;
+  its SHA-256, source commit, byte size and fresh byte-verification counts are
+  recorded in adjacent sidecars under
+  `C:\CV-Studio-Codex\releases\v24.6.222\`.
 
 ### Second corrective decisions and limitations
 
@@ -708,9 +729,14 @@ None.
   handover preserving all corrected Phase 2B contracts.
 - Production, installer, launcher, protected-build and starter-pack version
   surfaces — advanced consistently to v24.6.221.
+- `cv_studio_v24_6_222_phase2b_second_corrective_review_qa_report.md` — second
+  corrective review and release QA evidence.
+- `CV_STUDIO_V24_6_222_PHASE_3_HANDOVER.md` — refreshed owner-gated Phase 3
+  handover preserving both Phase 2B corrective contracts.
+- Production, installer, launcher, protected-build and starter-pack version
+  surfaces — advanced consistently to v24.6.222.
 
 ## Next action
 
-Complete the v24.6.222 corrective regression and owner/source release evidence,
-then stop. Do not begin Phase 3 or any later phase without a new explicit owner
+Stop. Do not begin Phase 3 or any later phase without a new explicit owner
 instruction.

@@ -1,10 +1,10 @@
-CV STUDIO CODEX STARTER PACK — v24.6.221
+CV STUDIO CODEX STARTER PACK — v24.6.222
 
 PURPOSE
 This small pack gives Codex durable project instructions so development no longer depends on one very long chat.
 
 WHERE TO PUT THESE FILES
-1. Extract the private v24.6.221 owner/source ZIP.
+1. Extract the private v24.6.222 owner/source ZIP.
 2. Open the extracted cv_formatter folder.
 3. Copy every file from this starter pack into that cv_formatter folder.
 4. The final folder should contain app.py, index.html, AGENTS.md, ROADMAP.md,
@@ -14,8 +14,8 @@ IMPORTANT
 - This starter pack is for the private development workspace only.
 - It is not a colleague release.
 - Do not delete the original v24.6.217 baseline ZIP, the v24.6.218 Phase 2A ZIP,
-  the v24.6.219 corrective ZIP, the v24.6.220 Phase 2B ZIP or the v24.6.221
-  Phase 2B corrective ZIP.
+  the v24.6.219 corrective ZIP, the v24.6.220 Phase 2B ZIP, the v24.6.221
+  corrective ZIP or the v24.6.222 second corrective ZIP.
 - Roadmap items 4, 7 and 8 remain backburnered.
 - Start Codex by opening the cv_formatter folder itself, not the folder above it.
 

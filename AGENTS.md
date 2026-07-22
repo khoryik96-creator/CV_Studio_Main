@@ -10,7 +10,10 @@
   in **CV Studio v24.6.220**.
 - Its three post-release review findings were corrected in **CV Studio
   v24.6.221** without changing schema version 10 or the Phase 2B scope.
-- Current completed private owner/source release: **CV Studio v24.6.221**.
+- Two remaining review findings were corrected in **CV Studio v24.6.222**:
+  local-data restore now fails visibly when any requested durable write fails,
+  and browser-setting routes reject values the repository cannot persist.
+- Current completed private owner/source release: **CV Studio v24.6.222**.
 - Phases 1, 2A and 2B are complete.
 - There is no active implementation target. Stop after Phase 2B unless the
   owner explicitly starts Phase 3.
@@ -99,9 +102,10 @@ Before changing code:
 1. Read `ROADMAP.md`.
 2. Read `PHASE_STATUS.md`.
 3. Read `IMPLEMENT.md`.
-4. Read `CV_STUDIO_V24_6_221_PHASE_3_HANDOVER.md`.
-5. Read `cv_studio_v24_6_221_phase2b_corrective_review_qa_report.md`, the
-   v24.6.220 Phase 2B QA report and the historical Phase 2A QA reports.
+4. Read `CV_STUDIO_V24_6_222_PHASE_3_HANDOVER.md`.
+5. Read `cv_studio_v24_6_222_phase2b_second_corrective_review_qa_report.md`,
+   the v24.6.221/v24.6.220 Phase 2B QA reports and the historical Phase 2A QA
+   reports.
 6. Inspect the relevant existing storage paths and tests.
 7. Verify the baseline before implementation.
 

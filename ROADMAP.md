@@ -7,6 +7,7 @@
 - v24.6.219 is the completed private owner/source Phase 2A corrective release.
 - v24.6.220 completed Phase 2B browser-backed durable records and settings.
 - v24.6.221 corrected all three Phase 2B post-release review findings.
+- v24.6.222 corrected the two remaining Phase 2B durability-review findings.
 - Phases 1, 2A and 2B are complete.
 - No later phase is active. Phase 3 requires a new explicit owner instruction.
 
@@ -64,6 +65,16 @@ SQLite foundation and lower-risk backend durable-data migration:
   tombstoning replacement;
 - rebuild AI-routing controls from SQLite-authoritative hydrated settings;
 - reapply and schedule Auto diagnostics for the hydrated preview-memory mode;
+- retain schema version 10, all Phase 2A/2B compatibility contracts and the
+  Phase 3 stop boundary.
+
+### v24.6.222 second corrective review closure
+
+- validate allowlisted browser-setting values through the repository's
+  canonical size, secret and JSON-sanitization contract before route success;
+- reject schema-1 local-data restore when any requested setting, PPC metadata,
+  transfer-record or saved-link durable write fails;
+- return only counts from confirmed writes and avoid a false success reload;
 - retain schema version 10, all Phase 2A/2B compatibility contracts and the
   Phase 3 stop boundary.
 

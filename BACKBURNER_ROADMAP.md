@@ -1,7 +1,7 @@
 # CV Studio Backburner and Stability Roadmap
 
 Last updated: 21 July 2026
-Current implementation base: v24.6.221
+Current implementation base: v24.6.222
 
 ## Explicit backburner — do not implement until the owner reactivates them
 
@@ -69,6 +69,14 @@ Deferred scope includes Shortlist / Maybe / Reject / Reviewed states, recruiter 
 - hydrated AI-routing controls and preview-memory behavior now reflect the
   SQLite-authoritative settings;
 - schema version 10 and every existing scope boundary remain unchanged.
+
+### v24.6.222 — Phase 2B second corrective review closure
+
+- browser-setting routes reject values that repository normalization cannot
+  persist while retaining recursive sanitization for JSON settings;
+- local-data restore reports failure and avoids reload when any requested
+  durable write fails, and counts only confirmed writes;
+- schema version 10, all routes, mirrors and scope boundaries remain unchanged.
 
 ## Active stability direction
 
