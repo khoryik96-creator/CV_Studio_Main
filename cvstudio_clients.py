@@ -49,16 +49,17 @@ def redact_external_text(value, maximum=4000):
         text,
     )
     text = re.sub(
-        r"(?i)([?&](?:access_token|refresh_token|client_secret|api_key|code|password|device_code)=)[^&\s]+",
+        r"(?i)([?&](?:access[-_]?token|refresh[-_]?token|client[-_]?secret|api[-_]?key|x-api-key|code|password|device[-_]?code)=)[^&\s]+",
         r"\1[redacted]",
         text,
     )
     text = re.sub(
-        r"(?i)([\"']?(?:access_token|refresh_token|client_secret|api_key|password|device_code)[\"']?\s*[:=]\s*[\"']?)[^\s,;}\"']+",
+        r"(?i)([\"']?(?:access[-_]?token|refresh[-_]?token|client[-_]?secret|api[-_]?key|x-api-key|password|device[-_]?code|candidate[-_]?id)[\"']?\s*[:=]\s*[\"']?)[^\s,;}\"']+",
         r"\1[redacted]",
         text,
     )
     text = re.sub(r"(?i)\b(sk-ant-|sk-proj-|sk-)[A-Za-z0-9_.-]{8,}", "[redacted]", text)
+    text = re.sub(r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", "[redacted-email]", text)
     return text[: max(0, int(maximum or 0))]
 
 
@@ -638,19 +639,24 @@ class MicrosoftGraphClient:
     def token_request(self, request_data, *, tenant="common", endpoint="token", timeout=20):
         safe_tenant = re.sub(r"[^A-Za-z0-9_.-]", "", str(tenant or "common").strip()) or "common"
         endpoint_name = "devicecode" if str(endpoint or "token").lower() == "devicecode" else "token"
+        form_data = dict(request_data or {})
+        retryable_refresh = (
+            endpoint_name == "token"
+            and str(form_data.get("grant_type") or "").strip().lower() == "refresh_token"
+        )
         url = "https://login.microsoftonline.com/{}/oauth2/v2.0/{}".format(safe_tenant, endpoint_name)
         response = self.transport.request(
             "microsoft_graph",
             url,
             method="POST",
-            body=urllib.parse.urlencode(dict(request_data or {})).encode("utf-8"),
+            body=urllib.parse.urlencode(form_data).encode("utf-8"),
             headers={"Content-Type": "application/x-www-form-urlencoded"},
             timeout=timeout,
             timeout_maximum=60,
             context=self._context(),
             allowed_hosts=self.LOGIN_HOSTS,
-            safe_to_retry=True,
-            retries=1,
+            safe_to_retry=retryable_refresh,
+            retries=1 if retryable_refresh else 0,
         )
         return response.json({})
 
@@ -844,3 +850,71 @@ class MicrosoftGraphClient:
         result["value"] = output
         result.pop("@odata.nextLink", None)
         return result
+
+
+class AIProviderClient:
+    """Provider-aware, non-replaying transport for chargeable AI requests."""
+
+    _PROVIDERS = {
+        "anthropic": {
+            "url": "https://api.anthropic.com/v1/messages",
+            "hosts": ("api.anthropic.com",),
+            "api_key_header": "x-api-key",
+            "headers": {"anthropic-version": "2023-06-01"},
+        },
+        "deepseek": {
+            "url": "https://api.deepseek.com/anthropic/v1/messages",
+            "hosts": ("api.deepseek.com",),
+            "api_key_header": "x-api-key",
+            "headers": {"anthropic-version": "2023-06-01"},
+        },
+        "openai": {
+            "url": "https://api.openai.com/v1/responses",
+            "hosts": ("api.openai.com",),
+            "api_key_header": "Authorization",
+            "headers": {},
+        },
+    }
+
+    def __init__(self, transport=None):
+        self.transport = transport or ExternalServiceTransport()
+
+    @staticmethod
+    def _provider_name(provider):
+        name = str(provider or "anthropic").strip().lower()
+        if name in ("", "claude"):
+            return "anthropic"
+        if name == "gpt":
+            return "openai"
+        return name
+
+    def request(self, provider, api_key, payload, *, timeout=180):
+        """Send one AI POST without retrying an ambiguous chargeable call."""
+        provider_name = self._provider_name(provider)
+        config = self._PROVIDERS.get(provider_name)
+        if not config:
+            raise ExternalServiceError(
+                "ai_provider",
+                "Unsupported AI provider",
+                action="open_ai_settings",
+            )
+        headers = {"Content-Type": "application/json"}
+        headers.update(config["headers"])
+        key = str(api_key or "")
+        if config["api_key_header"].lower() == "authorization":
+            headers[config["api_key_header"]] = "Bearer " + key
+        else:
+            headers[config["api_key_header"]] = key
+        response = self.transport.request(
+            "ai_provider",
+            config["url"],
+            method="POST",
+            body=json.dumps(payload or {}).encode("utf-8"),
+            headers=headers,
+            timeout=bounded_timeout(timeout, 180, 15, 300),
+            timeout_maximum=300,
+            allowed_hosts=config["hosts"],
+            safe_to_retry=False,
+            retries=0,
+        )
+        return json.loads(response.body.decode("utf-8", errors="strict"))

@@ -304,5 +304,9 @@ class Phase2BAppStorageIntegrationTests(unittest.TestCase):
         self.assertNotIn(str(self._temporary.name), str(payload))
 
 
+def tearDownModule():
+    _MODULE_TEMPORARY.cleanup()
+
+
 if __name__ == "__main__":
     unittest.main()

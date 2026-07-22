@@ -13,7 +13,7 @@
 - Completed private owner/source release: v24.6.222
 - Status: Phase 2B and both corrective review closures are complete; Phase 3 is
   explicitly owner-authorized
-- Current milestone: Phase 3 Milestone 4 - `AIProviderClient` and shared resilience
+- Current milestone: Phase 3 Milestone 5 - acceptance and release evidence
 
 ## Phase 3 authorization and constraints
 
@@ -102,7 +102,7 @@
 - [x] Inventory external-service call sites and record compatibility fixtures.
 - [x] Extract and verify `JobAdderClient`.
 - [x] Extract and verify `MicrosoftGraphClient`.
-- [ ] Extract and verify `AIProviderClient` and shared resilience/error handling.
+- [x] Extract and verify `AIProviderClient` and shared resilience/error handling.
 - [ ] Run complete regression, static validation and final master review.
 - [ ] Create and byte-verify the Phase 3 private owner/source release.
 - [ ] Produce QA report, SHA-256 and Phase 4 handover; stop before Phase 4.
@@ -124,6 +124,12 @@
 - Graph collection traversal follows only HTTPS `graph.microsoft.com`
   `@odata.nextLink` values and is capped at 5,000 items and 100 pages. Existing
   route-level `$top` values provide the effective lower item limit.
+- AI-provider timeouts retain the existing 15-second minimum and are now capped
+  at 300 seconds. Anthropic, DeepSeek and OpenAI chargeable POSTs are never
+  replayed automatically after an ambiguous transport or upstream failure.
+- Provider request construction is centralized, while DeepSeek tool refusal,
+  OpenAI request/response translation, usage normalization and every existing
+  paid-call confirmation gate remain in their compatibility adapters.
 
 ## Phase 3 Milestone 1 results
 
@@ -303,6 +309,35 @@
 - Live threaded source smoke: 24 assertions passed. Owner-source validation and
   dependency preflight, repository consistency and Git whitespace validation
   passed.
+
+## Phase 3 Milestone 4 results
+
+- `AIProviderClient` now owns the three authorized provider endpoints, API-key
+  header construction, HTTPS host restrictions, request serialization,
+  response parsing, bounded timeouts and structured/redacted upstream errors.
+- Existing `call_anthropic`, `_call_deepseek`, `_call_openai` and `call_llm`
+  adapters preserve provider selection, the Anthropic-compatible request shape,
+  DeepSeek web-tool refusal, OpenAI Responses translation and normalized
+  `{content,usage}` results including `api_calls=1`.
+- Chargeable AI POSTs use an explicit zero-retry policy, including HTTP 429/5xx
+  and ambiguous network/timeout failures. The owner-only DeepSeek probe still
+  requires its exact paid-call confirmation and was not run.
+- Shared redaction now also masks hyphenated API-key/token names, candidate-ID-
+  labelled values and email addresses in upstream error bodies; authentication
+  and cookie headers remain fully redacted.
+- Microsoft device-code creation and polling remain non-replaying. Only an
+  explicit Microsoft `refresh_token` grant receives the centralized bounded
+  token retry, preserving prior device-login behavior.
+- Focused shared-client and characterization suites: 19 tests passed. Complete
+  Python discovery: 45 tests passed under `ResourceWarning`-as-error. A missing
+  historical Phase 2B module cleanup was made explicit so the suite exits with
+  no implicit temporary-directory warning.
+- Both frontend storage fixtures, 24-assertion live source smoke, owner-source
+  validation/dependency preflight, repository consistency and Git whitespace
+  validation passed.
+- Raw-network audit leaves only the previously inventoried local watchdog,
+  Tavily/SerpAPI search and Apollo paths in `app.py`; all JobAdder, Microsoft
+  Graph and authorized AI-provider calls use the shared client foundations.
 
 ## Completed Phase 2B authorization and constraints
 

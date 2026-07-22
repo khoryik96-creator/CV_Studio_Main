@@ -4,6 +4,7 @@ import unittest
 import urllib.error
 
 from cvstudio_clients import (
+    AIProviderClient,
     ExternalServiceError,
     ExternalServiceHTTPError,
     ExternalServiceTransport,
@@ -351,6 +352,27 @@ class Phase3ClientFoundationTests(unittest.TestCase):
         self.assertEqual(kwargs["timeout"], 22)
         self.assertEqual(kwargs["context"], "fixture-context")
 
+        ambiguous = _http_error(503, {"error": "ambiguous device-code failure"})
+        device_calls = []
+
+        def device_opener(request_object, **open_kwargs):
+            device_calls.append((request_object, open_kwargs))
+            raise ambiguous
+
+        client.transport = ExternalServiceTransport(
+            opener=device_opener,
+            sleeper=lambda _delay: None,
+        )
+        with self.assertRaises(ExternalServiceHTTPError) as caught:
+            client.token_request(
+                {"client_id": "fixture-client", "scope": "fixture-scope"},
+                tenant="common",
+                endpoint="devicecode",
+            )
+        ambiguous.close()
+        caught.exception.close()
+        self.assertEqual(len(device_calls), 1)
+
     def test_microsoft_explicit_token_lookup_does_not_reenter_token_provider(self):
         requests_seen = []
 
@@ -373,6 +395,78 @@ class Phase3ClientFoundationTests(unittest.TestCase):
             requests_seen[0][0].get_header("Authorization"),
             "Bearer <fixture-credential>",
         )
+
+    def test_ai_provider_client_preserves_provider_endpoints_headers_and_timeout_bounds(self):
+        requests_seen = []
+
+        def opener(request_object, **kwargs):
+            requests_seen.append((request_object, kwargs))
+            return _FakeResponse({"content": [{"type": "text", "text": "fixture"}]})
+
+        client = AIProviderClient(
+            transport=ExternalServiceTransport(opener=opener, sleeper=lambda _delay: None)
+        )
+        fixture_payload = {"model": "fixture-model", "messages": []}
+        client.request("anthropic", "<fixture-credential-a>", fixture_payload, timeout=2)
+        client.request("deepseek", "<fixture-credential-b>", fixture_payload, timeout=180)
+        client.request("openai", "<fixture-credential-c>", fixture_payload, timeout=999)
+
+        self.assertEqual(
+            [item[0].full_url for item in requests_seen],
+            [
+                "https://api.anthropic.com/v1/messages",
+                "https://api.deepseek.com/anthropic/v1/messages",
+                "https://api.openai.com/v1/responses",
+            ],
+        )
+        self.assertEqual(
+            [item[1]["timeout"] for item in requests_seen],
+            [15, 180, 300],
+        )
+        self.assertEqual(requests_seen[0][0].get_header("X-api-key"), "<fixture-credential-a>")
+        self.assertEqual(requests_seen[1][0].get_header("X-api-key"), "<fixture-credential-b>")
+        self.assertEqual(
+            requests_seen[2][0].get_header("Authorization"),
+            "Bearer <fixture-credential-c>",
+        )
+        self.assertEqual(json.loads(requests_seen[2][0].data), fixture_payload)
+
+    def test_ai_provider_chargeable_post_is_not_retried_and_error_is_redacted(self):
+        calls = []
+        upstream = _http_error(
+            503,
+            {
+                "x-api-key": "<fixture-credential>",
+                "candidate_id": "fixture-private-id",
+                "email": "fixture@example.invalid",
+            },
+            {"Retry-After": "1", "Set-Cookie": "fixture-private-cookie"},
+        )
+
+        def opener(request_object, **kwargs):
+            calls.append((request_object, kwargs))
+            raise upstream
+
+        client = AIProviderClient(
+            transport=ExternalServiceTransport(opener=opener, sleeper=lambda _delay: None)
+        )
+        with self.assertRaises(ExternalServiceHTTPError) as caught:
+            client.request(
+                "anthropic",
+                "<fixture-credential>",
+                {"model": "fixture-model", "messages": []},
+            )
+        upstream.close()
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][0].get_method(), "POST")
+        self.assertNotIn("<fixture-credential>", caught.exception.safe_detail)
+        self.assertNotIn("fixture-private-id", caught.exception.safe_detail)
+        self.assertNotIn("fixture@example.invalid", caught.exception.safe_detail)
+        self.assertEqual(caught.exception.service_code, "AI_PROVIDER_REQUEST_FAILED")
+        self.assertTrue(caught.exception.retryable)
+        self.assertEqual(caught.exception.action, "retry_or_switch_provider")
+        self.assertEqual(caught.exception.redacted_headers["Set-Cookie"], "[redacted]")
+        caught.exception.close()
 
 
 if __name__ == "__main__":

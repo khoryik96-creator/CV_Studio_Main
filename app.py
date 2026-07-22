@@ -238,6 +238,7 @@ from cvstudio_storage import (
     UsageHistoryRepository,
 )
 from cvstudio_clients import (
+    AIProviderClient,
     ExternalServiceError,
     ExternalServiceHTTPError,
     JobAdderClient,
@@ -1229,6 +1230,9 @@ OMISSION & EXTRA SECTIONS RULES:
   - Notice period if stated in the CV → map to candidate.notice_period"""
 
 
+_AI_PROVIDER_CLIENT = AIProviderClient()
+
+
 def call_anthropic(api_key, payload_dict):
     # Internal-only control key. Lets long-running tools fail gracefully instead
     # of leaving the browser waiting until its own timeout fires.
@@ -1239,23 +1243,16 @@ def call_anthropic(api_key, payload_dict):
     except Exception:
         timeout_seconds = 180
 
-    payload = json.dumps(payload_dict).encode("utf-8")
-    req = urllib.request.Request(
-        "https://api.anthropic.com/v1/messages",
-        data=payload,
-        headers={
-            "Content-Type": "application/json",
-            "x-api-key": api_key,
-            "anthropic-version": "2023-06-01"
-        },
-        method="POST"
+    return _AI_PROVIDER_CLIENT.request(
+        "anthropic",
+        api_key,
+        payload_dict,
+        timeout=timeout_seconds,
     )
-    with urllib.request.urlopen(req, timeout=timeout_seconds) as resp:
-        return json.loads(resp.read())
 
 
 # ── Multi-provider LLM support (v22.0) ──────────────────────────────────
-# call_anthropic() above is untouched and remains the default code path.
+# call_anthropic() above remains the default compatibility entry point.
 # call_llm() below is a thin dispatcher every route now goes through; when
 # `provider` is empty/unset/unrecognized it delegates straight to
 # call_anthropic() with the exact same payload, so nothing changes for
@@ -1317,19 +1314,12 @@ def _call_deepseek(api_key, payload_dict, timeout_seconds=180):
             "Configure a Job Search Provider (Tavily or SerpAPI) so DeepSeek can classify "
             "already-fetched results instead, or switch this task back to Claude/GPT."
         )
-    req_url = "https://api.deepseek.com/anthropic/v1/messages"
-    payload = json.dumps(payload_dict).encode("utf-8")
-    req = urllib.request.Request(
-        req_url, data=payload,
-        headers={
-            "Content-Type": "application/json",
-            "x-api-key": api_key,
-            "anthropic-version": "2023-06-01",
-        },
-        method="POST",
+    return _AI_PROVIDER_CLIENT.request(
+        "deepseek",
+        api_key,
+        payload_dict,
+        timeout=timeout_seconds,
     )
-    with urllib.request.urlopen(req, timeout=timeout_seconds) as resp:
-        return json.loads(resp.read())
 
 
 def _llm_usage_int(usage, *keys):
@@ -1478,18 +1468,12 @@ def _call_openai(api_key, payload_dict, timeout_seconds=180):
     depending on whether a given call needs search.
     """
     req_payload = _openai_payload_from_anthropic_shape(payload_dict)
-    req_url = "https://api.openai.com/v1/responses"
-    payload = json.dumps(req_payload).encode("utf-8")
-    req = urllib.request.Request(
-        req_url, data=payload,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
-        },
-        method="POST",
+    data = _AI_PROVIDER_CLIENT.request(
+        "openai",
+        api_key,
+        req_payload,
+        timeout=timeout_seconds,
     )
-    with urllib.request.urlopen(req, timeout=timeout_seconds) as resp:
-        data = json.loads(resp.read())
     return _openai_response_to_anthropic_shape(data)
 
 
