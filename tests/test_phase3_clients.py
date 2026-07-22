@@ -2,6 +2,7 @@ import io
 import json
 import unittest
 import urllib.error
+import urllib.request
 
 from cvstudio_clients import (
     AIProviderClient,
@@ -10,6 +11,7 @@ from cvstudio_clients import (
     ExternalServiceTransport,
     JobAdderClient,
     MicrosoftGraphClient,
+    _AllowlistedRedirectHandler,
     bounded_timeout,
     redact_external_headers,
     redact_external_text,
@@ -139,6 +141,53 @@ class Phase3ClientFoundationTests(unittest.TestCase):
             )
         self.assertEqual(blocked.exception.service_code, "JOBADDER_REQUEST_FAILED")
         self.assertEqual(len(calls), 1)
+
+    def test_transport_redirects_validate_hosts_and_strip_cross_origin_credentials(self):
+        handler = _AllowlistedRedirectHandler("jobadder", ("jobadder.com",))
+        source = urllib.request.Request(
+            "https://api.jobadder.com/v2/fixture",
+            headers={
+                "Authorization": "Bearer <fixture-credential>",
+                "X-Api-Key": "<fixture-credential>",
+                "Accept": "application/json",
+            },
+        )
+        with self.assertRaises(ExternalServiceError):
+            handler.redirect_request(
+                source,
+                None,
+                302,
+                "Found",
+                {},
+                "https://example.invalid/foreign",
+            )
+
+        redirected = handler.redirect_request(
+            source,
+            None,
+            302,
+            "Found",
+            {},
+            "https://downloads.jobadder.com/fixture",
+        )
+        self.assertEqual(redirected.full_url, "https://downloads.jobadder.com/fixture")
+        self.assertIsNone(redirected.get_header("Authorization"))
+        self.assertIsNone(redirected.get_header("X-api-key"))
+        self.assertEqual(redirected.get_header("Accept"), "application/json")
+
+    def test_success_response_headers_remain_case_insensitive(self):
+        client = MicrosoftGraphClient(
+            lambda _force: "<fixture-credential>",
+            transport=ExternalServiceTransport(
+                opener=lambda _request, **_kwargs: _FakeResponse(
+                    b"<p>fixture</p>",
+                    headers={"content-type": "text/html; charset=utf-8"},
+                )
+            ),
+        )
+        body, content_type = client.request_bytes("me/onenote/pages/fixture/content")
+        self.assertEqual(body, b"<p>fixture</p>")
+        self.assertEqual(content_type, "text/html; charset=utf-8")
 
     def test_jobadder_client_refreshes_one_401_and_marks_repeated_rejection(self):
         token_calls = []

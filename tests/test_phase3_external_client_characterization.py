@@ -99,7 +99,7 @@ class Phase3ExternalClientCharacterizationTests(unittest.TestCase):
         with mock.patch.object(app, "_ja_refresh_access_token", return_value="<fixture-credential>"), mock.patch.object(
             app, "_ja_api", side_effect=lambda path: "https://api.jobadder.com/v2/" + path
         ), mock.patch.object(
-            app.urllib.request, "urlopen", return_value=_FakeResponse(success)
+            app._JOBADDER_CLIENT.transport, "_opener", return_value=_FakeResponse(success)
         ) as opened:
             response = self.client.get(
                 "/jobadder/search_candidate?email=",
@@ -121,8 +121,8 @@ class Phase3ExternalClientCharacterizationTests(unittest.TestCase):
         with mock.patch.object(app, "_ja_refresh_access_token", return_value="<fixture-credential>"), mock.patch.object(
             app, "_ja_api", side_effect=lambda path: "https://api.jobadder.com/v2/" + path
         ), mock.patch.object(
-            app.urllib.request,
-            "urlopen",
+            app._JOBADDER_CLIENT.transport,
+            "_opener",
             side_effect=search_errors,
         ):
             response = self.client.get(
@@ -153,7 +153,7 @@ class Phase3ExternalClientCharacterizationTests(unittest.TestCase):
                 raise expired_error
             return _FakeResponse(
                 b"fixture-bytes",
-                headers={"Content-Type": "application/octet-stream", "Content-Disposition": "fixture.bin"},
+                headers={"content-type": "application/octet-stream", "content-disposition": "fixture.bin"},
             )
 
         with mock.patch.object(
@@ -162,7 +162,7 @@ class Phase3ExternalClientCharacterizationTests(unittest.TestCase):
             side_effect=["<fixture-credential-a>", "<fixture-credential-b>"],
         ), mock.patch.object(
             app, "_ja_api", side_effect=lambda path: "https://api.jobadder.com/v2/" + path
-        ), mock.patch.object(app.urllib.request, "urlopen", side_effect=open_with_refresh):
+        ), mock.patch.object(app._JOBADDER_CLIENT.transport, "_opener", side_effect=open_with_refresh):
             raw, content_type, disposition = app._spider_get_ja_raw(
                 "<fixture-credential-a>", "candidates/fixture", timeout=12
             )
@@ -214,6 +214,41 @@ class Phase3ExternalClientCharacterizationTests(unittest.TestCase):
         self.assertIn("Limit=1", page_get.call_args_list[1].args[1])
         self.assertIn("Offset=2", page_get.call_args_list[1].args[1])
 
+    def test_jobadder_diagnostics_preserve_network_error_response_shapes(self):
+        transport = app._JOBADDER_CLIENT.transport
+        with mock.patch.dict(
+            app._ja_creds_store,
+            {"access_token": "<fixture-credential>"},
+            clear=False,
+        ), mock.patch.object(
+            app,
+            "_ja_refresh_access_token",
+            return_value="<fixture-credential>",
+        ), mock.patch.object(
+            transport,
+            "_opener",
+            side_effect=urllib.error.URLError("fixture-offline"),
+        ), mock.patch.object(
+            transport,
+            "_sleeper",
+            return_value=None,
+        ):
+            get_result = app._ja_activity_diagnostic_get("candidates/1/activities", timeout=1)
+            post_result = app._ja_activity_diagnostic_post(
+                "candidates/1/activities",
+                {"fixture": True},
+                timeout=1,
+            )
+
+        for result in (get_result, post_result):
+            self.assertFalse(result["ok"])
+            self.assertIsNone(result["status"])
+            self.assertIn("fixture-offline", result["network_error"])
+            self.assertEqual(result["response_headers"], {})
+            self.assertEqual(result["response_body"], "")
+            self.assertIsNone(result["response_json"])
+        self.assertEqual(post_result["request_payload"], {"fixture": True})
+
     def test_jobadder_json_upload_and_ppc_pagination_contracts(self):
         requests_seen = []
 
@@ -227,7 +262,7 @@ class Phase3ExternalClientCharacterizationTests(unittest.TestCase):
 
         with mock.patch.object(app, "_ja_refresh_access_token", return_value="<fixture-credential>"), mock.patch.object(
             app, "_ja_api", side_effect=lambda path: "https://api.jobadder.com/v2/" + path
-        ), mock.patch.object(app.urllib.request, "urlopen", side_effect=open_jobadder):
+        ), mock.patch.object(app._JOBADDER_CLIENT.transport, "_opener", side_effect=open_jobadder):
             self.assertEqual(app._ja_get_json("fixture", timeout=11), (200, {"fixture": "get"}))
             self.assertEqual(app._ja_put_json("fixture", {"safe": True}, timeout=12), (200, {"fixture": "put"}))
             self.assertEqual(app._ja_post_json("fixture", {"safe": True}, timeout=13), (201, {"fixture": "post"}))
@@ -239,7 +274,7 @@ class Phase3ExternalClientCharacterizationTests(unittest.TestCase):
         with mock.patch.object(app, "_ja_refresh_access_token", return_value="<fixture-credential>"), mock.patch.object(
             app, "_ja_api", side_effect=lambda path: "https://api.jobadder.com/v2/" + path
         ), mock.patch.object(
-            app.urllib.request, "urlopen", return_value=_FakeResponse("fixture upload result", status=201)
+            app._JOBADDER_CLIENT.transport, "_opener", return_value=_FakeResponse("fixture upload result", status=201)
         ) as opened:
             response = self.client.post(
                 "/jobadder/upload_original_cv",
@@ -300,7 +335,7 @@ class Phase3ExternalClientCharacterizationTests(unittest.TestCase):
             return _FakeResponse({"value": [{"title": "Fixture page"}]})
 
         with mock.patch.object(app, "_ms_graph_token", return_value="<fixture-credential>"), mock.patch.object(
-            app.urllib.request, "urlopen", side_effect=open_graph
+            app._ONENOTE_GRAPH_CLIENT.transport, "_opener", side_effect=open_graph
         ):
             listing = app._ms_graph_json(
                 "me/onenote/pages",
@@ -364,7 +399,7 @@ class Phase3ExternalClientCharacterizationTests(unittest.TestCase):
             _FakeResponse({"value": [{"id": "fixture-c"}]}),
         ]
         with mock.patch.object(app, "_ms_graph_token", return_value="<fixture-credential>"), mock.patch.object(
-            app.urllib.request, "urlopen", side_effect=graph_pages
+            app._ONENOTE_GRAPH_CLIENT.transport, "_opener", side_effect=graph_pages
         ) as opened:
             payload = app._ms_graph_json(
                 "me/onenote/pages",
@@ -463,8 +498,8 @@ class Phase3ExternalClientCharacterizationTests(unittest.TestCase):
             "usage": {"input_tokens": 7, "output_tokens": 3},
         }
         with mock.patch.object(
-            app.urllib.request,
-            "urlopen",
+            app._AI_PROVIDER_CLIENT.transport,
+            "_opener",
             return_value=_FakeResponse(anthropic_response),
         ) as opened:
             result = app.call_llm("anthropic", "<fixture-credential>", payload)
@@ -491,8 +526,8 @@ class Phase3ExternalClientCharacterizationTests(unittest.TestCase):
             "usage": {"input_tokens": 11, "output_tokens": 4},
         }
         with mock.patch.object(
-            app.urllib.request,
-            "urlopen",
+            app._AI_PROVIDER_CLIENT.transport,
+            "_opener",
             return_value=_FakeResponse(openai_response),
         ):
             result = app.call_llm("openai", "<fixture-credential>", payload)

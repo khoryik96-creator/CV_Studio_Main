@@ -368,6 +368,39 @@
   final clean Phase 3 completion commit and receives adjacent SHA-256 and
   verification sidecars in `C:\CV-Studio-Codex\releases\v24.6.223\`.
 
+## Phase 3 post-completion corrective review — 23 July 2026
+
+- The owner authorized correction of all three actionable findings from the
+  review of `codex/phase-3-shared-clients` against master commit
+  `1be9da48d8307c418d82807cbdaedc9f876a1b15`.
+- Production urllib redirects now validate every target against the service
+  HTTPS host allowlist. Redirects to a different allowed origin strip
+  authorization, API-key and cookie headers; foreign or HTTPS-downgrade targets
+  fail through the redacted structured external-service error contract.
+- Successful shared-client response headers now retain case-insensitive HTTP
+  lookup semantics while preserving their received names for legacy diagnostic
+  output. Lowercase `content-type` and `content-disposition` therefore continue
+  to populate the existing OneNote and JobAdder fields.
+- JobAdder activity diagnostic GET/POST adapters now translate shared transport
+  network failures back into the established `ok`, `status`, `network_error`,
+  `response_headers`, `response_body` and `response_json` fields. The POST
+  adapter also retains its legacy request metadata.
+- Redirect handling remains inside the production standard-library opener;
+  characterization fixtures inject their no-network opener directly at the
+  transport boundary.
+- Focused Phase 3 client and route-characterization verification passes 22
+  tests, including dedicated redirect, lowercase-header and diagnostic-network
+  regression cases. No live credential, external-service or paid call was used.
+- Complete regression passes 48 Python tests with `ResourceWarning` treated as
+  an error, both frontend storage fixtures and all 24 live loopback source-smoke
+  assertions. Static validation passes all 15 tracked Python files, 20 tracked
+  JavaScript files plus both complete inline scripts, 5 PowerShell files and 5
+  Bash/command entry points through the installed Git Bash runtime.
+- Owner-source validation/dependency preflight, exact vetted/local `adm-zip`
+  0.5.17 checks, repository consistency and Git whitespace validation pass.
+- This correction changes no route URL, schema, credential store, background
+  execution, frontend workflow, backburner item or Phase 4 boundary.
+
 ## Completed Phase 2B authorization and constraints
 
 - Migrate only durable browser-backed records and selected persistent settings

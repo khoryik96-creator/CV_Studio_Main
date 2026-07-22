@@ -29,6 +29,42 @@ _SENSITIVE_HEADER_NAMES = {
 _TRANSIENT_HTTP_STATUSES = {408, 425, 429, 500, 502, 503, 504, 529}
 
 
+class _CaseInsensitiveHeaders(dict):
+    """Small read-compatible mapping that preserves HTTP header semantics."""
+
+    def __init__(self, headers=None):
+        super().__init__()
+        self._header_names = {}
+        try:
+            items = headers.items()
+        except Exception:
+            items = []
+        for key, value in items:
+            self[key] = value
+
+    def __setitem__(self, key, value):
+        name = str(key)
+        folded = name.lower()
+        stored_name = self._header_names.get(folded)
+        if stored_name is None:
+            self._header_names[folded] = name
+            stored_name = name
+        super().__setitem__(stored_name, value)
+
+    def __getitem__(self, key):
+        stored_name = self._header_names.get(str(key).lower(), key)
+        return super().__getitem__(stored_name)
+
+    def __contains__(self, key):
+        return str(key).lower() in self._header_names
+
+    def get(self, key, default=None):
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+
 def bounded_timeout(value, default=20, minimum=1, maximum=180):
     """Return a finite timeout within the client-specific safety bounds."""
     try:
@@ -97,6 +133,53 @@ def _host_allowed(url, allowed_hosts):
     except Exception:
         return False
     return False
+
+
+def _url_origin(url):
+    """Return the normalized origin used for redirect credential decisions."""
+    try:
+        parsed = urllib.parse.urlsplit(str(url or ""))
+        scheme = parsed.scheme.lower()
+        host = str(parsed.hostname or "").lower().rstrip(".")
+        port = parsed.port
+        if port is None:
+            port = 443 if scheme == "https" else 80 if scheme == "http" else None
+        return scheme, host, port
+    except Exception:
+        return "", "", None
+
+
+class _AllowlistedRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Reject foreign redirect targets and never forward secrets cross-origin."""
+
+    def __init__(self, service, allowed_hosts):
+        super().__init__()
+        self._service = str(service or "external_service")
+        self._allowed_hosts = tuple(allowed_hosts or ())
+
+    def redirect_request(self, request_object, fp, code, message, headers, new_url):
+        resolved_url = urllib.parse.urljoin(request_object.full_url, str(new_url or ""))
+        if self._allowed_hosts and not _host_allowed(resolved_url, self._allowed_hosts):
+            raise ExternalServiceError(
+                self._service,
+                "{} redirect target is not allowed".format(
+                    self._service.replace("_", " ").title()
+                ),
+                detail="Blocked redirect to non-service HTTPS host",
+            )
+        redirected = super().redirect_request(
+            request_object,
+            fp,
+            code,
+            message,
+            headers,
+            resolved_url,
+        )
+        if redirected is not None and _url_origin(request_object.full_url) != _url_origin(resolved_url):
+            for name, _value in list(redirected.header_items()):
+                if str(name).lower() in _SENSITIVE_HEADER_NAMES:
+                    redirected.remove_header(name)
+        return redirected
 
 
 def _service_defaults(service, status=0):
@@ -196,9 +279,15 @@ class ExternalServiceTransport:
         self._opener = opener
         self._sleeper = sleeper or time.sleep
 
-    def _open(self, request_object, **kwargs):
-        opener = self._opener or urllib.request.urlopen
-        return opener(request_object, **kwargs)
+    def _open(self, request_object, *, service="", allowed_hosts=(), **kwargs):
+        if self._opener is not None:
+            return self._opener(request_object, **kwargs)
+        context = kwargs.pop("context", None)
+        handlers = [_AllowlistedRedirectHandler(service, allowed_hosts)]
+        if context is not None:
+            handlers.append(urllib.request.HTTPSHandler(context=context))
+        opener = urllib.request.build_opener(*handlers)
+        return opener.open(request_object, **kwargs)
 
     @staticmethod
     def _retry_delay(headers, attempt):
@@ -249,10 +338,15 @@ class ExternalServiceTransport:
             if context is not None:
                 kwargs["context"] = context
             try:
-                with self._open(request_object, **kwargs) as response:
+                with self._open(
+                    request_object,
+                    service=service,
+                    allowed_hosts=allowed_hosts,
+                    **kwargs,
+                ) as response:
                     return ExternalResponse(
                         int(getattr(response, "status", 200) or 200),
-                        dict(getattr(response, "headers", {}) or {}),
+                        _CaseInsensitiveHeaders(getattr(response, "headers", {}) or {}),
                         response.read(),
                         str(getattr(response, "url", "") or url),
                     )

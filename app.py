@@ -9835,6 +9835,13 @@ def _ja_activity_diagnostic_response_headers(headers):
         return {}
 
 
+def _ja_activity_diagnostic_network_error(error):
+    """Preserve the legacy diagnostic field with shared-client redaction."""
+    if isinstance(error, ExternalServiceError):
+        return str(getattr(error, "safe_detail", "") or error)
+    return str(getattr(error, "reason", error))
+
+
 def _ja_activity_diagnostic_get(path, timeout=25):
     """Perform one exact read-only JobAdder OAuth GET and preserve the raw response.
 
@@ -9896,7 +9903,7 @@ def _ja_activity_diagnostic_get(path, timeout=25):
             "response_body": raw_text,
             "response_json": parsed,
         }
-    except urllib.error.URLError as e:
+    except (urllib.error.URLError, ExternalServiceError) as e:
         return {
             "method": "GET",
             "path": path,
@@ -9904,7 +9911,7 @@ def _ja_activity_diagnostic_get(path, timeout=25):
             "started_utc": started,
             "ok": False,
             "status": None,
-            "network_error": str(getattr(e, "reason", e)),
+            "network_error": _ja_activity_diagnostic_network_error(e),
             "response_headers": {},
             "response_body": "",
             "response_json": None,
@@ -10042,11 +10049,11 @@ def _ja_activity_diagnostic_post(path, payload, timeout=25):
             "response_json": parsed,
         })
         return base
-    except urllib.error.URLError as e:
+    except (urllib.error.URLError, ExternalServiceError) as e:
         base.update({
             "ok": False,
             "status": None,
-            "network_error": str(getattr(e, "reason", e)),
+            "network_error": _ja_activity_diagnostic_network_error(e),
             "response_headers": {},
             "response_body": "",
             "response_json": None,
