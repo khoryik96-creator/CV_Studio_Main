@@ -237,6 +237,11 @@ from cvstudio_storage import (
     StorageMigrationError,
     UsageHistoryRepository,
 )
+from cvstudio_clients import (
+    ExternalServiceError,
+    ExternalServiceHTTPError,
+    JobAdderClient,
+)
 
 _CVSTUDIO_VERSION = "v24.6.222"
 _CVSTUDIO_ROOT = _install_package_root()
@@ -708,6 +713,25 @@ def _cvstudio_storage_error(error):
         details={
             "recovery": getattr(error, "public_message", "Local storage is unavailable.")
         },
+    )
+
+
+@app.errorhandler(ExternalServiceError)
+@app.errorhandler(ExternalServiceHTTPError)
+def _cvstudio_external_service_error(error):
+    structured = error.structured()
+    status = int(structured.get("status") or 503)
+    if status < 400 or status > 599:
+        status = 503
+    message = _cvstudio_safe_error_message(str(error), "External service request failed")
+    return _cvstudio_error_payload(
+        structured.get("code") or "EXTERNAL_SERVICE_REQUEST_FAILED",
+        message,
+        status,
+        retryable=bool(structured.get("retryable")),
+        action=structured.get("action") or "",
+        details={"service": structured.get("service"), "upstream": structured.get("detail")},
+        extra={"service": structured.get("service"), "upstream_status": structured.get("status") or 0},
     )
 
 
@@ -2852,18 +2876,7 @@ def _ja_save_store():
 
 
 def _ja_exchange_token(params):
-    req = urllib.request.Request(
-        "https://id.jobadder.com/connect/token",
-        data=urllib.parse.urlencode(params).encode(),
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=20) as resp:
-        raw = resp.read()
-    token = safe_json(raw, {})
-    if not token.get("access_token"):
-        raise RuntimeError("JobAdder returned no access token")
-    return token
+    return _JOBADDER_CLIENT.exchange_token(params, timeout=20)
 
 
 def _ja_apply_token(token, client_id=None, client_secret=None, clear_spider_cache=False):
@@ -3120,6 +3133,13 @@ def _ja_api(path):
     return base + "/" + path.lstrip("/")
 
 
+_JOBADDER_CLIENT = JobAdderClient(
+    api_base_provider=lambda: _ja_api(""),
+    token_provider=lambda force=False: _ja_refresh_access_token(force=force),
+    reconnect_handler=lambda: _ja_mark_reconnect_required(),
+)
+
+
 @app.route("/jobadder/restore_token", methods=["POST"])
 def jobadder_restore_token():
     """One-time migration of legacy browser tokens into protected backend storage."""
@@ -3198,13 +3218,13 @@ def jobadder_search_candidate():
     if not token:
         return jsonify({"error": "Not authenticated"}), 401
     try:
-        req = urllib.request.Request(
-            _ja_api("candidates?email=" + urllib.parse.quote(email)),
-            headers={"Authorization": f"Bearer {token}"}
+        _status, payload = _JOBADDER_CLIENT.request_json(
+            "candidates?email=" + urllib.parse.quote(email),
+            token=token,
+            timeout=15,
+            fallback={"items": []},
         )
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            raw = resp.read()
-            return jsonify(safe_json(raw, {"items": []}))
+        return jsonify(payload)
     except urllib.error.HTTPError as e:
         body = e.read().decode()
         return jsonify({"error": f"JobAdder error: {e.code}", "detail": body}), e.code
@@ -6179,61 +6199,46 @@ def onenote_import_recent():
 # ── OneNote → JobAdder Screening Call Notes ─────────────────────────
 def _ja_post_json(path, payload, timeout=15):
     """POST JSON to a JobAdder API path using the current server-side token."""
-    token = _ja_refresh_access_token(force=False)
-    if not token:
-        raise PermissionError("Not authenticated")
-    body = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        _ja_api(path),
-        data=body,
+    return _JOBADDER_CLIENT.request_json(
+        path,
+        method="POST",
+        body=json.dumps(payload).encode("utf-8"),
         headers={
-            "Authorization": "Bearer " + token,
             "Content-Type": "application/json",
             "Accept": "application/json",
         },
-        method="POST"
+        timeout=timeout,
+        raw_fallback=True,
+        safe_to_retry=False,
+        retries=0,
     )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        raw = resp.read()
-        return resp.status, safe_json(raw, {"raw": raw.decode(errors="replace") if raw else ""})
 
 def _ja_get_json(path, timeout=15):
     """GET JSON from a JobAdder API path using the current server-side token."""
-    token = _ja_refresh_access_token(force=False)
-    if not token:
-        raise PermissionError("Not authenticated")
-    req = urllib.request.Request(
-        _ja_api(path),
-        headers={
-            "Authorization": "Bearer " + token,
-            "Accept": "application/json",
-        },
-        method="GET"
+    return _JOBADDER_CLIENT.request_json(
+        path,
+        method="GET",
+        headers={"Accept": "application/json"},
+        timeout=timeout,
+        raw_fallback=True,
     )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        raw = resp.read()
-        return resp.status, safe_json(raw, {"raw": raw.decode(errors="replace") if raw else ""})
 
 
 def _ja_put_json(path, payload, timeout=20):
     """PUT JSON to a JobAdder API path using the current server-side token."""
-    token = _ja_refresh_access_token(force=False)
-    if not token:
-        raise PermissionError("Not authenticated")
-    body = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        _ja_api(path),
-        data=body,
+    return _JOBADDER_CLIENT.request_json(
+        path,
+        method="PUT",
+        body=json.dumps(payload).encode("utf-8"),
         headers={
-            "Authorization": "Bearer " + token,
             "Content-Type": "application/json",
             "Accept": "application/json",
         },
-        method="PUT"
+        timeout=timeout,
+        raw_fallback=True,
+        safe_to_retry=False,
+        retries=0,
     )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        raw = resp.read()
-        return resp.status, safe_json(raw, {"raw": raw.decode(errors="replace") if raw else ""})
 
 
 def _ja_compact_error_body(body, max_len=1200):
@@ -9837,37 +9842,34 @@ def _ja_activity_diagnostic_get(path, timeout=25):
     if not token:
         raise PermissionError("Not authenticated")
     url = _ja_api(path)
-    req = urllib.request.Request(
-        url,
-        headers={
-            "Authorization": "Bearer " + token,
-            "Accept": "application/json, text/plain, */*",
-        },
-        method="GET",
-    )
     started = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            raw_bytes = resp.read()
-            raw_text = raw_bytes.decode("utf-8", errors="replace")
-            headers = _ja_activity_diagnostic_response_headers(resp.headers)
-            parsed = None
-            if raw_text.strip():
-                try:
-                    parsed = json.loads(raw_text)
-                except Exception:
-                    parsed = None
-            return {
-                "method": "GET",
-                "path": path,
-                "url": url,
-                "started_utc": started,
-                "ok": True,
-                "status": int(getattr(resp, "status", 200) or 200),
-                "response_headers": headers,
-                "response_body": raw_text,
-                "response_json": parsed,
-            }
+        response = _JOBADDER_CLIENT.request_raw(
+            path,
+            method="GET",
+            token=token,
+            timeout=timeout,
+            headers={"Accept": "application/json, text/plain, */*"},
+        )
+        raw_text = response.body.decode("utf-8", errors="replace")
+        headers = _ja_activity_diagnostic_response_headers(response.headers)
+        parsed = None
+        if raw_text.strip():
+            try:
+                parsed = json.loads(raw_text)
+            except Exception:
+                parsed = None
+        return {
+            "method": "GET",
+            "path": path,
+            "url": url,
+            "started_utc": started,
+            "ok": True,
+            "status": int(response.status or 200),
+            "response_headers": headers,
+            "response_body": raw_text,
+            "response_json": parsed,
+        }
     except urllib.error.HTTPError as e:
         raw_bytes = e.read()
         raw_text = raw_bytes.decode("utf-8", errors="replace")
@@ -9981,16 +9983,6 @@ def _ja_activity_diagnostic_post(path, payload, timeout=25):
         raise PermissionError("JobAdder is not connected")
     url = _ja_api(path)
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    req = urllib.request.Request(
-        url,
-        data=body,
-        headers={
-            "Authorization": "Bearer " + token,
-            "Accept": "application/json, text/plain, */*",
-            "Content-Type": "application/json; charset=utf-8",
-        },
-        method="POST",
-    )
     started = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     base = {
         "method": "POST",
@@ -10000,23 +9992,34 @@ def _ja_activity_diagnostic_post(path, payload, timeout=25):
         "request_payload": payload,
     }
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            raw_bytes = resp.read()
-            raw_text = raw_bytes.decode("utf-8", errors="replace")
-            parsed = None
-            if raw_text.strip():
-                try:
-                    parsed = json.loads(raw_text)
-                except Exception:
-                    parsed = None
-            base.update({
-                "ok": True,
-                "status": int(getattr(resp, "status", 200) or 200),
-                "response_headers": _ja_activity_diagnostic_response_headers(resp.headers),
-                "response_body": raw_text,
-                "response_json": parsed,
-            })
-            return base
+        response = _JOBADDER_CLIENT.request_raw(
+            path,
+            method="POST",
+            body=body,
+            token=token,
+            timeout=timeout,
+            headers={
+                "Accept": "application/json, text/plain, */*",
+                "Content-Type": "application/json; charset=utf-8",
+            },
+            safe_to_retry=False,
+            retries=0,
+        )
+        raw_text = response.body.decode("utf-8", errors="replace")
+        parsed = None
+        if raw_text.strip():
+            try:
+                parsed = json.loads(raw_text)
+            except Exception:
+                parsed = None
+        base.update({
+            "ok": True,
+            "status": int(response.status or 200),
+            "response_headers": _ja_activity_diagnostic_response_headers(response.headers),
+            "response_body": raw_text,
+            "response_json": parsed,
+        })
+        return base
     except urllib.error.HTTPError as e:
         raw_bytes = e.read()
         raw_text = raw_bytes.decode("utf-8", errors="replace")
@@ -13476,11 +13479,15 @@ def jobadder_spider_options():
     errors = []
     for list_name in candidate_lists:
         try:
-            req = urllib.request.Request(_ja_api("lists/" + urllib.parse.quote(list_name, safe="")), headers={"Authorization": "Bearer " + token})
-            with urllib.request.urlopen(req, timeout=8) as resp:
-                vals = _spider_extract_option_values(safe_json(resp.read(), {}))
-                if vals:
-                    return jsonify({"items": vals, "source": list_name, "fallback": False})
+            _status, payload = _JOBADDER_CLIENT.request_json(
+                "lists/" + urllib.parse.quote(list_name, safe=""),
+                token=token,
+                timeout=8,
+                fallback={},
+            )
+            vals = _spider_extract_option_values(payload)
+            if vals:
+                return jsonify({"items": vals, "source": list_name, "fallback": False})
         except urllib.error.HTTPError as e:
             errors.append("{}:{}".format(list_name, e.code))
         except Exception as e:
@@ -14367,37 +14374,27 @@ def _spider_mark_jobadder_reconnect_required():
 
 def _spider_get_ja_raw(token, path, timeout=10):
     """GET one JobAdder resource and retry once after a forced OAuth refresh."""
-    active_token = _ja_refresh_access_token(force=False) or str(token or "").strip()
-    if not active_token:
-        raise _SpiderJobAdderReconnectRequired("JobAdder is not connected")
-
-    def perform(access_token):
-        req = urllib.request.Request(_ja_api(path), headers={"Authorization": "Bearer " + access_token})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return resp.read(), resp.headers.get("Content-Type", ""), resp.headers.get("Content-Disposition", "")
-
     try:
-        return perform(active_token)
+        response = _JOBADDER_CLIENT.request_raw(
+            path,
+            method="GET",
+            token=token,
+            timeout=timeout,
+        )
+        return (
+            response.body,
+            response.headers.get("Content-Type", ""),
+            response.headers.get("Content-Disposition", ""),
+        )
     except urllib.error.HTTPError as exc:
-        if exc.code != 401:
-            raise
-        try:
-            refreshed = _ja_refresh_access_token(force=True)
-        except Exception as refresh_exc:
+        if exc.code == 401:
             _spider_mark_jobadder_reconnect_required()
-            raise _SpiderJobAdderReconnectRequired(
-                "JobAdder OAuth refresh failed: {}".format(str(refresh_exc)[:180])
-            )
-        if not refreshed:
-            _spider_mark_jobadder_reconnect_required()
-            raise _SpiderJobAdderReconnectRequired("JobAdder OAuth refresh returned no access token")
-        try:
-            return perform(refreshed)
-        except urllib.error.HTTPError as retry_exc:
-            if retry_exc.code == 401:
-                _spider_mark_jobadder_reconnect_required()
-                raise _SpiderJobAdderReconnectRequired("JobAdder rejected the refreshed OAuth token")
-            raise
+            try:
+                exc.close()
+            except Exception:
+                pass
+            raise _SpiderJobAdderReconnectRequired("JobAdder rejected the refreshed OAuth token")
+        raise
 
 
 def _spider_attachment_candidates(payload):
@@ -14877,106 +14874,64 @@ def _spider_jobadder_keyword_items(token, keyword, max_items=3000, page_size=100
         return [], {"keyword": keyword, "scanned": 0, "reported_total": 0, "pages": 0, "embed_applied": False}
     max_items = max(1, min(5000, int(max_items or 3000)))
     page_size = max(1, min(1000, int(page_size or 1000)))
-    out, seen = [], set()
-    offset = 0
-    pages = 0
-    reported_total = None
-    embed_active = bool(embed)
-    embed_rejected = False
-    incomplete = False
-    warnings = []
-    page_signatures = set()
+    state = {"embed_active": bool(embed), "embed_rejected": False}
+    base_params = [("Keywords", keyword)]
+    if city_state and city_state.lower() != "any":
+        base_params.append(("Location", city_state))
+    if state["embed_active"]:
+        base_params.extend([("Embed", "skills"), ("Embed", "notes")])
 
-    while offset < max_items:
-        if reported_total is not None and offset >= min(reported_total, max_items):
-            break
-        take = min(page_size, max_items - offset)
-        query_params = {"Keywords": keyword, "Limit": take, "Offset": offset}
-        if city_state and city_state.lower() != "any":
-            query_params["Location"] = city_state
-        if embed_active:
-            query_params["Embed"] = ["skills", "notes"]
-        params = urllib.parse.urlencode(query_params, doseq=True)
-        try:
-            raw, _ctype, _dispo = _spider_get_ja_raw(token, "candidates?" + params, timeout=25)
-            parsed = safe_json(raw, {"items": []})
-        except urllib.error.HTTPError as e:
-            # Embed is a scoring enrichment only. Older tenants may reject it;
-            # retry the same page once without Embed rather than failing discovery.
-            if embed_active and e.code in (400, 403, 422):
-                embed_active = False
-                embed_rejected = True
-                continue
-            raise
+    def fetch_page(page_params):
+        query = urllib.parse.urlencode(page_params, doseq=True)
+        raw, _ctype, _dispo = _spider_get_ja_raw(token, "candidates?" + query, timeout=25)
+        return safe_json(raw, {"items": []})
 
-        items, total = _spider_parse_candidate_items(parsed)
-        pages += 1
-        if total not in (None, ""):
-            try:
-                reported_total = max(0, int(total))
-            except Exception:
-                pass
+    def reject_unsupported_embed(error, active_params, _offset, _pages):
+        if state["embed_active"] and int(getattr(error, "code", 0) or 0) in (400, 403, 422):
+            state["embed_active"] = False
+            state["embed_rejected"] = True
+            return [(key, value) for key, value in active_params if str(key).lower() != "embed"]
+        return None
 
-        page_keys = [_spider_candidate_search_key(item) for item in items]
-        # Sort the page identity so the same rows in a different server order are
-        # still recognised as a repeated page. This prevents silent incomplete
-        # scans when JobAdder reshuffles a stale page.
-        signature_keys = sorted(set(page_keys))
-        signature = hashlib.sha1("\n".join(signature_keys).encode("utf-8", errors="ignore")).hexdigest() if signature_keys else "empty"
-        if items and signature in page_signatures:
-            incomplete = True
-            warnings.append("JobAdder repeated a candidate page before totalCount was reached")
-            break
-        page_signatures.add(signature)
+    def page_signature(_items, keys):
+        unique = sorted(set(keys))
+        return hashlib.sha1("\n".join(unique).encode("utf-8", errors="ignore")).hexdigest() if unique else "empty"
 
-        new_unique = 0
-        for item, key in zip(items, page_keys):
-            if key in seen:
-                continue
-            seen.add(key)
-            out.append(item)
-            new_unique += 1
-
-        returned_count = len(items)
-        if returned_count > 0 and new_unique == 0:
-            incomplete = True
-            warnings.append("JobAdder pagination returned no new unique candidates")
-            break
-        if returned_count <= 0:
-            if reported_total is not None and offset < min(reported_total, max_items):
-                incomplete = True
-                warnings.append("JobAdder returned an empty page before totalCount was reached")
-            break
-
-        previous_offset = offset
-        offset += returned_count
-        if offset <= previous_offset:
-            incomplete = True
-            warnings.append("JobAdder pagination made no forward progress")
-            break
-
-        # Without a total, a short page is the only reliable completion signal.
-        if reported_total is None and returned_count < take:
-            break
-
-    effective_total = reported_total if reported_total is not None else len(out)
-    if reported_total is not None and offset >= min(reported_total, max_items) and len(out) < min(reported_total, max_items):
-        incomplete = True
-        warnings.append("JobAdder pagination reached totalCount with duplicate or missing candidate rows")
-    truncated = bool(effective_total > len(out))
-    if reported_total is not None and reported_total > max_items:
-        warnings.append("Candidate search reached the {}-candidate safety cap".format(max_items))
+    out, page_state = _JOBADDER_CLIENT.paginate_offset(
+        "candidates",
+        params=base_params,
+        token=token,
+        max_items=max_items,
+        page_size=page_size,
+        timeout=25,
+        parse_page=_spider_parse_candidate_items,
+        item_key=_spider_candidate_search_key,
+        page_signature=page_signature,
+        total_mode="replace",
+        deduplicate=True,
+        on_http_error=reject_unsupported_embed,
+        fetch_page=fetch_page,
+    )
+    warning_map = {
+        "repeated_page": "JobAdder repeated a candidate page before totalCount was reached",
+        "no_new_unique": "JobAdder pagination returned no new unique candidates",
+        "empty_before_total": "JobAdder returned an empty page before totalCount was reached",
+        "no_progress": "JobAdder pagination made no forward progress",
+        "missing_at_total": "JobAdder pagination reached totalCount with duplicate or missing candidate rows",
+        "cap_reached": "Candidate search reached the {}-candidate safety cap".format(max_items),
+    }
+    warnings = [warning_map[code] for code in page_state.get("codes") or [] if code in warning_map]
     return out, {
         "keyword": keyword,
         "location": city_state,
         "scanned": len(out),
-        "reported_total": effective_total,
-        "pages": pages,
-        "truncated": truncated,
-        "incomplete": incomplete,
+        "reported_total": page_state.get("reported_total"),
+        "pages": page_state.get("pages"),
+        "truncated": bool(page_state.get("truncated")),
+        "incomplete": bool(page_state.get("incomplete")),
         "warnings": warnings[:5],
-        "embed_applied": bool(embed and not embed_rejected),
-        "embed_rejected": embed_rejected,
+        "embed_applied": bool(embed and not state["embed_rejected"]),
+        "embed_rejected": bool(state["embed_rejected"]),
     }
 
 
@@ -15508,15 +15463,18 @@ def jobadder_create_candidate():
             payload[k] = v
         body = json.dumps(payload).encode()
         import sys; print(f"[JA Create] payload keys: {list(payload.keys())}", file=sys.stderr)
-        req = urllib.request.Request(
-            _ja_api("candidates"),
-            data=body,
-            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-            method="POST"
+        _status, result = _JOBADDER_CLIENT.request_json(
+            "candidates",
+            method="POST",
+            body=body,
+            headers={"Content-Type": "application/json"},
+            token=token,
+            timeout=15,
+            fallback={},
+            safe_to_retry=False,
+            retries=0,
         )
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            raw = resp.read()
-            return jsonify(safe_json(raw, {}))
+        return jsonify(result)
     except urllib.error.HTTPError as e:
         body = e.read().decode()
         return jsonify({"error": f"JobAdder error: {e.code}", "detail": body}), e.code
@@ -15538,15 +15496,18 @@ def jobadder_update_candidate():
     try:
         payload = {k: v for k, v in data.items() if v not in (None, "", [], {})}
         body = json.dumps(payload).encode()
-        req = urllib.request.Request(
-            _ja_api("candidates/{}".format(candidate_id)),
-            data=body,
-            headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"},
-            method="PUT"
+        _status, result = _JOBADDER_CLIENT.request_json(
+            "candidates/{}".format(candidate_id),
+            method="PUT",
+            body=body,
+            headers={"Content-Type": "application/json"},
+            token=token,
+            timeout=15,
+            fallback={},
+            safe_to_retry=False,
+            retries=0,
         )
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            raw = resp.read()
-            return jsonify(safe_json(raw, {}))
+        return jsonify(result)
     except urllib.error.HTTPError as e:
         body_err = e.read().decode()
         return jsonify({"error": "JobAdder error: {}".format(e.code), "detail": body_err}), e.code
@@ -15587,18 +15548,19 @@ def jobadder_upload_original_cv():
         body += b"Content-Type: application/octet-stream" + crlf + crlf
         body += file_data + crlf
         body += b"--" + bnd + b"--" + crlf
-        url = _ja_api("candidates/{}/attachments/Resume".format(candidate_id))
-        req = urllib.request.Request(
-            url, data=body,
+        response = _JOBADDER_CLIENT.request_raw(
+            "candidates/{}/attachments/Resume".format(candidate_id),
+            method="POST",
+            body=body,
+            token=token,
             headers={
-                "Authorization": "Bearer " + token,
                 "Content-Type": "multipart/form-data; boundary=" + boundary
             },
-            method="POST"
+            timeout=30,
+            safe_to_retry=False,
+            retries=0,
         )
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            result = resp.read()
-            return jsonify({"ok": True, "response": result.decode() if result else ""})
+        return jsonify({"ok": True, "response": response.body.decode() if response.body else ""})
     except urllib.error.HTTPError as e:
         err_body = e.read().decode()
         return jsonify({"error": "JobAdder error: {}".format(e.code), "detail": err_body}), e.code
@@ -15617,12 +15579,13 @@ def jobadder_lists():
     # JobAdder exposes work types as /v2/worktypes, not /v2/lists/worktype.
     endpoint = "worktypes" if list_name in {"worktype", "worktypes"} else "lists/" + list_name
     try:
-        req = urllib.request.Request(
-            _ja_api(endpoint),
-            headers={"Authorization": "Bearer " + token}
+        _status, payload = _JOBADDER_CLIENT.request_json(
+            endpoint,
+            token=token,
+            timeout=10,
+            fallback={},
         )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            return jsonify(safe_json(resp.read(), {}))
+        return jsonify(payload)
     except urllib.error.HTTPError as e:
         return jsonify({"error": "JobAdder error: {}".format(e.code), "detail": e.read().decode()}), e.code
     except Exception as e:
@@ -15636,12 +15599,13 @@ def jobadder_get_candidate():
     if not token or not candidate_id:
         return jsonify({"error": "Need token and candidate_id"}), 400
     try:
-        req = urllib.request.Request(
-            _ja_api("candidates/{}".format(candidate_id)),
-            headers={"Authorization": "Bearer " + token}
+        _status, payload = _JOBADDER_CLIENT.request_json(
+            "candidates/{}".format(candidate_id),
+            token=token,
+            timeout=10,
+            fallback={},
         )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            return jsonify(safe_json(resp.read(), {}))
+        return jsonify(payload)
     except urllib.error.HTTPError as e:
         return jsonify({"error": e.code, "detail": e.read().decode()}), e.code
     except Exception as e:
@@ -15663,9 +15627,8 @@ def jobadder_debug_endpoints():
     ]
     for url in endpoints:
         try:
-            req = urllib.request.Request(url, headers={"Authorization": "Bearer " + token}, method="GET")
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                results[url] = {"status": resp.status, "ok": True}
+            response = _JOBADDER_CLIENT.request_raw(url, token=token, timeout=10)
+            results[url] = {"status": response.status, "ok": True}
         except urllib.error.HTTPError as e:
             results[url] = {"status": e.code, "ok": False, "detail": e.read().decode()[:200]}
         except Exception as e:
@@ -15696,18 +15659,19 @@ def jobadder_upload_cv():
         body += b"Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document" + crlf + crlf
         body += file_data + crlf
         body += b"--" + bnd + b"--" + crlf
-        url = _ja_api("candidates/{}/attachments/FormattedResume".format(candidate_id))
-        req = urllib.request.Request(
-            url, data=body,
+        response = _JOBADDER_CLIENT.request_raw(
+            "candidates/{}/attachments/FormattedResume".format(candidate_id),
+            method="POST",
+            body=body,
+            token=token,
             headers={
-                "Authorization": "Bearer " + token,
                 "Content-Type": "multipart/form-data; boundary=" + boundary
             },
-            method="POST"
+            timeout=30,
+            safe_to_retry=False,
+            retries=0,
         )
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            result = resp.read()
-            return jsonify({"ok": True, "response": result.decode() if result else ""})
+        return jsonify({"ok": True, "response": response.body.decode() if response.body else ""})
     except urllib.error.HTTPError as e:
         err_body = e.read().decode()
         return jsonify({"error": "JobAdder error: {}".format(e.code), "detail": err_body}), e.code
@@ -22558,23 +22522,17 @@ def _ppc_person_name(value):
 
 
 def _ppc_get_json(token, path, params=None, timeout=30, retry_429=True):
-    url = _ja_api(path)
-    if params:
-        query = urllib.parse.urlencode(params, doseq=True)
-        url += ("&" if "?" in url else "?") + query
-    req = urllib.request.Request(url, headers={"Authorization": "Bearer " + token, "Accept": "application/json"})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return safe_json(resp.read(), {})
+        _status, payload = _JOBADDER_CLIENT.request_json(
+            path,
+            params=params,
+            token=token,
+            timeout=timeout,
+            fallback={},
+            retries=1 if retry_429 else 0,
+        )
+        return payload
     except urllib.error.HTTPError as exc:
-        if exc.code == 429 and retry_429:
-            try:
-                delay = int(exc.headers.get("Retry-After") or "1")
-            except Exception:
-                delay = 1
-            if 0 <= delay <= 5:
-                time.sleep(max(1, delay))
-                return _ppc_get_json(token, path, params=params, timeout=timeout, retry_429=False)
         body = exc.read().decode("utf-8", errors="replace")
         err = RuntimeError("JobAdder error {}: {}".format(exc.code, body[:500]))
         err.http_code = exc.code
@@ -22606,65 +22564,52 @@ def _ppc_fetch_type_collection(token, placement_type, base_params, max_records):
     params_base = list(base_params) + [("Type", placement_type)]
     count_payload = _ppc_get_json(token, "placements", params=params_base + [("Offset", 0), ("Limit", 0)], timeout=35)
     expected = max(0, _ppc_int(count_payload.get("totalCount") if isinstance(count_payload, dict) else None, 0) or 0)
-    rows = []
-    offset = 0
     page_size = min(1000, max_records) if max_records else 0
-    complete = True
-    repeated_page = False
-    empty_before_total = False
-    page_signatures = set()
-    pages = 0
-    observed_total = expected
-    while page_size and offset < expected and len(rows) < max_records:
-        take = min(page_size, max_records - len(rows))
-        params = params_base + [("Offset", offset), ("Limit", take)]
-        payload = _ppc_get_json(token, "placements", params=params, timeout=40)
-        pages += 1
-        page_items = payload.get("items") if isinstance(payload, dict) else []
-        page_items = page_items if isinstance(page_items, list) else []
-        payload_total = _ppc_int(payload.get("totalCount") if isinstance(payload, dict) else None, None)
-        if payload_total is not None:
-            observed_total = max(observed_total, payload_total)
-            expected = max(expected, payload_total)
-        if not page_items:
-            # One retry protects against an occasional empty page response while the
-            # endpoint still reports outstanding rows.
-            time.sleep(0.35)
-            payload = _ppc_get_json(token, "placements", params=params, timeout=40)
-            page_items = payload.get("items") if isinstance(payload, dict) else []
-            page_items = page_items if isinstance(page_items, list) else []
-            if not page_items:
-                empty_before_total = offset < expected
-                complete = not empty_before_total
-                break
-        ids = tuple(str(x.get("placementId") or "") for x in page_items if isinstance(x, dict))
-        content_signature = (len(page_items), ids[:5], ids[-5:])
-        if content_signature in page_signatures and offset > 0:
-            repeated_page = True
-            complete = False
-            break
-        page_signatures.add(content_signature)
-        rows.extend(x for x in page_items if isinstance(x, dict))
-        previous_offset = offset
-        offset += len(page_items)
-        if offset <= previous_offset:
-            complete = False
-            break
-        if offset >= expected:
-            break
-    if len(rows) < expected:
-        complete = False
-    truncated = len(rows) >= max_records and len(rows) < expected if max_records else expected > 0
+    def parse_page(payload):
+        items = payload.get("items") if isinstance(payload, dict) else []
+        total = _ppc_int(payload.get("totalCount") if isinstance(payload, dict) else None, None)
+        return (items if isinstance(items, list) else []), total
+
+    def fetch_page(params):
+        return _ppc_get_json(token, "placements", params=params, timeout=40)
+
+    def page_signature(items, _keys):
+        ids = tuple(str(x.get("placementId") or "") for x in items if isinstance(x, dict))
+        return repr((len(items), ids[:5], ids[-5:]))
+
+    rows, page_state = _JOBADDER_CLIENT.paginate_offset(
+        "placements",
+        params=params_base,
+        token=token,
+        max_items=max_records,
+        page_size=max(1, page_size),
+        timeout=40,
+        parse_page=parse_page,
+        item_key=lambda item: str((item or {}).get("placementId") or "") if isinstance(item, dict) else "",
+        page_signature=page_signature,
+        initial_total=expected,
+        total_mode="max",
+        deduplicate=False,
+        retry_empty=True,
+        empty_retry_delay=0.35,
+        fetch_page=fetch_page,
+    )
+    rows = [item for item in rows if isinstance(item, dict)]
+    codes = set(page_state.get("codes") or [])
+    observed_total = max(expected, int(page_state.get("reported_total") or 0))
+    expected = observed_total
+    truncated = bool(page_state.get("truncated"))
+    complete = bool(not page_state.get("incomplete") and not truncated and len(rows) >= expected)
     return rows, {
         "type": placement_type,
         "expected": expected,
         "observed_total": observed_total,
         "returned": len(rows),
-        "pages": pages,
+        "pages": int(page_state.get("pages") or 0),
         "complete": bool(complete and not truncated),
         "truncated": bool(truncated),
-        "repeated_page": bool(repeated_page),
-        "empty_before_total": bool(empty_before_total),
+        "repeated_page": "repeated_page" in codes,
+        "empty_before_total": "empty_before_total" in codes,
     }
 
 

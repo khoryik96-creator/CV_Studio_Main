@@ -114,19 +114,23 @@ class Phase3ExternalClientCharacterizationTests(unittest.TestCase):
 
         error_url = "https://api.jobadder.com/v2/candidates?email="
         upstream = {"message": "fixture upstream unavailable"}
-        search_error = _http_error(error_url, 503, upstream)
+        search_errors = [
+            _http_error(error_url, 503, upstream),
+            _http_error(error_url, 503, upstream),
+        ]
         with mock.patch.object(app, "_ja_refresh_access_token", return_value="<fixture-credential>"), mock.patch.object(
             app, "_ja_api", side_effect=lambda path: "https://api.jobadder.com/v2/" + path
         ), mock.patch.object(
             app.urllib.request,
             "urlopen",
-            side_effect=search_error,
+            side_effect=search_errors,
         ):
             response = self.client.get(
                 "/jobadder/search_candidate?email=",
                 headers=self._headers("phase3-ja-error"),
             )
-        search_error.close()
+        for search_error in search_errors:
+            search_error.close()
         payload = response.get_json()
         self.assertEqual(response.status_code, 503)
         self.assertEqual(payload["error"], "JobAdder error: 503")
@@ -209,6 +213,79 @@ class Phase3ExternalClientCharacterizationTests(unittest.TestCase):
         self.assertIn("Offset=0", page_get.call_args_list[0].args[1])
         self.assertIn("Limit=1", page_get.call_args_list[1].args[1])
         self.assertIn("Offset=2", page_get.call_args_list[1].args[1])
+
+    def test_jobadder_json_upload_and_ppc_pagination_contracts(self):
+        requests_seen = []
+
+        def open_jobadder(request_object, timeout):
+            requests_seen.append((request_object, timeout))
+            if request_object.get_method() == "GET":
+                return _FakeResponse({"fixture": "get"}, status=200)
+            if request_object.get_method() == "PUT":
+                return _FakeResponse({"fixture": "put"}, status=200)
+            return _FakeResponse({"fixture": "post"}, status=201)
+
+        with mock.patch.object(app, "_ja_refresh_access_token", return_value="<fixture-credential>"), mock.patch.object(
+            app, "_ja_api", side_effect=lambda path: "https://api.jobadder.com/v2/" + path
+        ), mock.patch.object(app.urllib.request, "urlopen", side_effect=open_jobadder):
+            self.assertEqual(app._ja_get_json("fixture", timeout=11), (200, {"fixture": "get"}))
+            self.assertEqual(app._ja_put_json("fixture", {"safe": True}, timeout=12), (200, {"fixture": "put"}))
+            self.assertEqual(app._ja_post_json("fixture", {"safe": True}, timeout=13), (201, {"fixture": "post"}))
+        self.assertEqual([item[0].get_method() for item in requests_seen], ["GET", "PUT", "POST"])
+        self.assertEqual([item[1] for item in requests_seen], [11, 12, 13])
+        self.assertEqual(json.loads(requests_seen[1][0].data), {"safe": True})
+        self.assertEqual(json.loads(requests_seen[2][0].data), {"safe": True})
+
+        with mock.patch.object(app, "_ja_refresh_access_token", return_value="<fixture-credential>"), mock.patch.object(
+            app, "_ja_api", side_effect=lambda path: "https://api.jobadder.com/v2/" + path
+        ), mock.patch.object(
+            app.urllib.request, "urlopen", return_value=_FakeResponse("fixture upload result", status=201)
+        ) as opened:
+            response = self.client.post(
+                "/jobadder/upload_original_cv",
+                data={
+                    "candidate_id": "fixture",
+                    "file": (io.BytesIO(b"fixture document bytes"), "fixture.pdf"),
+                },
+                content_type="multipart/form-data",
+                headers={
+                    "X-CV-Studio-Request": "1",
+                    "X-CV-Studio-Request-ID": "phase3-ja-upload",
+                },
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), {"ok": True, "response": "fixture upload result"})
+        upload_request = opened.call_args.args[0]
+        self.assertEqual(upload_request.get_method(), "POST")
+        self.assertIn("multipart/form-data; boundary=", upload_request.get_header("Content-type"))
+        self.assertIn(b'filename="fixture.pdf"', upload_request.data)
+        self.assertEqual(opened.call_count, 1)
+
+        ppc_payloads = [
+            {"totalCount": 3, "items": []},
+            {"totalCount": 3, "items": [{"placementId": "fixture-a"}, {"placementId": "fixture-b"}]},
+            {"totalCount": 3, "items": [{"placementId": "fixture-c"}]},
+        ]
+        with mock.patch.object(app, "_ppc_get_json", side_effect=ppc_payloads) as ppc_get:
+            rows, diagnostics = app._ppc_fetch_type_collection(
+                "<fixture-credential>", "Permanent", [("Approved", "true")], 3
+            )
+        self.assertEqual(rows, ppc_payloads[1]["items"] + ppc_payloads[2]["items"])
+        self.assertEqual(
+            diagnostics,
+            {
+                "type": "Permanent",
+                "expected": 3,
+                "observed_total": 3,
+                "returned": 3,
+                "pages": 2,
+                "complete": True,
+                "truncated": False,
+                "repeated_page": False,
+                "empty_before_total": False,
+            },
+        )
+        self.assertEqual(ppc_get.call_count, 3)
 
     def test_microsoft_graph_helpers_and_onenote_route_shapes(self):
         calls = []

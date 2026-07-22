@@ -13,7 +13,7 @@
 - Completed private owner/source release: v24.6.222
 - Status: Phase 2B and both corrective review closures are complete; Phase 3 is
   explicitly owner-authorized
-- Current milestone: Phase 3 Milestone 2 - `JobAdderClient`
+- Current milestone: Phase 3 Milestone 3 - `MicrosoftGraphClient`
 
 ## Phase 3 authorization and constraints
 
@@ -100,7 +100,7 @@
 
 - [x] Verify the v24.6.222 master/source/package baseline and all entry gates.
 - [x] Inventory external-service call sites and record compatibility fixtures.
-- [ ] Extract and verify `JobAdderClient`.
+- [x] Extract and verify `JobAdderClient`.
 - [ ] Extract and verify `MicrosoftGraphClient`.
 - [ ] Extract and verify `AIProviderClient` and shared resilience/error handling.
 - [ ] Run complete regression, static validation and final master review.
@@ -207,6 +207,66 @@
   calls were used. Fixture credential/record values are explicit placeholders.
 - No application route, storage schema, legacy mirror or production behavior
   changed in this milestone.
+
+## Phase 3 Milestone 2 results
+
+- Added `cvstudio_clients.py` with the standard-library shared transport,
+  bounded timeouts, allowlisted HTTPS service hosts, credential/header
+  redaction, `HTTPError`-compatible structured upstream failures and the first
+  shared client, `JobAdderClient`.
+- Every JobAdder OAuth, candidate read/write, attachment upload, Screening Call
+  activity, diagnostic read/write, list/custom-field, AI Crawler and PPC
+  placement network call now passes through `JobAdderClient`. There are no
+  JobAdder-specific raw `urlopen` calls left in `app.py`.
+- The app-level `_ja_*`, crawler and PPC helper names remain as compatibility
+  adapters. Existing routes and feature orchestration were not moved out of the
+  monolithic backend.
+- A rejected JobAdder access token now receives one centralized forced refresh
+  and one retry. A second HTTP 401 clears the rejected token through the
+  existing reconnect state, while mature route handlers continue to receive an
+  `HTTPError`-compatible status/body and preserve their legacy fields.
+- Idempotent JobAdder reads retry one bounded transient HTTP/network failure.
+  `Retry-After` is capped at five seconds. Candidate/activity writes and both
+  attachment uploads never replay after an ambiguous transient failure; an
+  authorization rejection may be retried only after a successful token refresh.
+- AI Crawler and PPC `Offset`/`Limit` traversal now share the client's defensive
+  paginator. Existing duplicate-page, no-progress, empty-before-total, cap and
+  completeness diagnostics remain unchanged, including per-placement-type PPC
+  count queries and one bounded empty-page retry.
+- Initial service URLs are constrained to HTTPS JobAdder-owned hosts. Error
+  bodies and structured details redact bearer/API/OAuth credential patterns;
+  authentication/cookie headers are never retained in structured metadata.
+- Added a dedicated structured external-service Flask handler for failures not
+  already translated by a legacy route. It returns the existing request-ID
+  contract with additive redacted service metadata and does not log request or
+  response bodies.
+- Owner protected-build source validation/preflight now requires and compiles
+  `cvstudio_clients.py`; Nuitka continues to follow the app import without a
+  protected-package layout change.
+
+### Milestone 2 decisions and limitations
+
+- JobAdder mutation retries are deliberately narrower than read retries to
+  prevent duplicate candidates, activities or attachments after an ambiguous
+  timeout/5xx response.
+- Existing JobAdder diagnostic route response fields remain available, but the
+  shared transport strips credential-like values from upstream error text
+  before those fields can be returned or recorded.
+- This milestone changes no credential storage, schema, route URL, browser
+  contract, background execution model or user-facing workflow.
+
+### Milestone 2 verification
+
+- Phase 3 client/characterization gate: 12 no-network tests passed, covering
+  retry safety, redaction, timeout/host bounds, one-refresh behavior, repeated
+  rejection, offset pagination, JSON helpers, uploads, PPC diagnostics and
+  established JobAdder route success/error fields.
+- Complete Python discovery: 38 tests passed.
+- Live owner/source smoke: 24 assertions passed.
+- Python compilation, owner-source validation/dependency preflight, repository
+  consistency and Git whitespace validation passed.
+- All 107 baseline route URLs remain; no live credential, candidate record or
+  external/paid call was used.
 
 ## Completed Phase 2B authorization and constraints
 
