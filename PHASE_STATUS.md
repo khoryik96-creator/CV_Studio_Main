@@ -3,18 +3,18 @@
 ## Release state
 
 - Approved baseline: v24.6.217
-- Completed release: v24.6.223
-- Previous completed release: v24.6.222
+- Completed release: v24.6.224
+- Previous completed release: v24.6.223
 - Phase 2B source baseline: v24.6.219
 - Phase 2B baseline Git commit: `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`
 - Phase 3 source baseline: v24.6.222
 - Phase 3 baseline Git commit: `1be9da48d8307c418d82807cbdaedc9f876a1b15`
 - Working branch: `codex/phase-3-shared-clients`
-- Active phase: Phase 3 corrective release only; Phase 4 requires explicit
-  owner authorization
-- Completed private owner/source release: v24.6.223
-- Status: v24.6.224 corrective review closure in progress; stop before Phase 4
-- Current milestone: corrective transport cleanup and release evidence
+- Active phase: none; Phase 4 requires explicit owner authorization
+- Completed private owner/source release: v24.6.224
+- Status: Phase 3 and its corrective review closure are complete; stop before
+  Phase 4
+- Current milestone: none
 
 ## Phase 3 authorization and constraints
 
@@ -413,7 +413,14 @@
 - The focused shared-client and route-characterization suites pass 22 tests
   with `ResourceWarning` treated as an error. No live credential, external-
   service or paid call was used.
-- The corrective source will advance to v24.6.224 with a new QA report, Phase 4
+- The complete regression passed 48 Python tests with `ResourceWarning` treated
+  as an error, both frontend storage fixtures and all 24 live loopback source-
+  smoke assertions. Static validation passed all 15 tracked Python files, 20
+  tracked JavaScript files plus both complete inline scripts, 5 PowerShell files
+  and 5 Bash/command entry points.
+- Owner-source validation/dependency preflight, exact vetted/local `adm-zip`
+  0.5.17 checks, repository consistency and Git whitespace validation passed.
+- The corrected source is released as v24.6.224 with a new QA report, Phase 4
   handover, clean owner/source ZIP, SHA-256 and fresh byte-verification evidence.
   The v24.6.223 artifacts remain immutable historical evidence.
 - No route URL, legacy response field, schema, credential store, frontend
@@ -1145,5 +1152,5 @@ None.
 
 ## Next action
 
-Stop. Do not begin Phase 3 or any later phase without a new explicit owner
+Stop. Do not begin Phase 4 or any later phase without a new explicit owner
 instruction.

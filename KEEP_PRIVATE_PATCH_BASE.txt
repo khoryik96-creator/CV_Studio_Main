@@ -1,5 +1,5 @@
 CV Studio private source patch base
-Version: v24.6.223
+Version: v24.6.224
 Keep this ZIP for future patches. Do not distribute this source package to colleagues.
 
 JobAdder API investigation source of truth:
@@ -983,3 +983,19 @@ Patch note v24.6.193: cross-platform deterministic adm-zip tree hashing fixes th
   candidate-ID-labelled values without storing request/response bodies.
 - Leaves schema version 10, all 107 routes, legacy fields, credential stores,
   paid-call gates, Phase 4 scope and roadmap items 4, 7 and 8 unchanged.
+
+## v24.6.224 Phase 3 post-release review corrections
+
+- Validates every production urllib redirect target against the service HTTPS
+  allowlist and strips authorization, API-key and cookie headers when an
+  allowed redirect changes origin.
+- Closes the upstream redirect response before rejecting a foreign or downgrade
+  target, avoiding response/socket cleanup being deferred to garbage collection.
+- Preserves case-insensitive HTTP response-header lookup for existing OneNote
+  content-type and JobAdder attachment metadata fields.
+- Translates shared JobAdder transport failures back into the established
+  diagnostic network-error response fields.
+- Publishes the corrected source under a distinct v24.6.224 owner/source
+  archive while retaining v24.6.223 artifacts as immutable history.
+- Leaves schema version 10, all 107 routes, credential stores, paid-call gates,
+  Phase 4 scope and roadmap items 4, 7 and 8 unchanged.

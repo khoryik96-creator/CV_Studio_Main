@@ -9,6 +9,7 @@
 - v24.6.221 corrected all three Phase 2B post-release review findings.
 - v24.6.222 corrected the two remaining Phase 2B durability-review findings.
 - v24.6.223 completed the shared external-service client foundations in Phase 3.
+- v24.6.224 corrected all five Phase 3 post-release review findings.
 - Phases 1, 2A, 2B and 3 are complete.
 - No later phase is active. Phase 4 requires a new explicit owner instruction.
 
@@ -79,7 +80,7 @@ SQLite foundation and lower-risk backend durable-data migration:
 - retain schema version 10, all Phase 2A/2B compatibility contracts and the
   Phase 3 stop boundary.
 
-## Phase 3 — Completed in v24.6.223
+## Phase 3 — Completed in v24.6.223; corrected in v24.6.224
 
 Shared external-service clients:
 
@@ -93,6 +94,14 @@ URLs. Safe/idempotent reads have bounded retry, Graph continuation traversal is
 capped, a rejected Microsoft token gets one refresh/retry, and chargeable or
 other unsafe writes are not replayed after ambiguous transient failures. Credential stores, schema
 version 10, paid-call gates and existing response fields remain unchanged.
+
+### v24.6.224 corrective review closure
+
+- validate every redirect target and remove sensitive headers across origins;
+- close rejected redirect responses deterministically;
+- retain case-insensitive response-header lookup;
+- preserve legacy JobAdder diagnostic network-error fields;
+- publish the corrections under a distinct verified owner/source release.
 
 ## Phase 4 — Future
 
