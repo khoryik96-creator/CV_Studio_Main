@@ -3,18 +3,17 @@
 ## Release state
 
 - Approved baseline: v24.6.217
-- Completed release: v24.6.222
-- Phase 3 release candidate: v24.6.223
+- Completed release: v24.6.223
+- Previous completed release: v24.6.222
 - Phase 2B source baseline: v24.6.219
 - Phase 2B baseline Git commit: `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`
 - Phase 3 source baseline: v24.6.222
 - Phase 3 baseline Git commit: `1be9da48d8307c418d82807cbdaedc9f876a1b15`
 - Working branch: `codex/phase-3-shared-clients`
-- Active phase: Phase 3
-- Completed private owner/source release: v24.6.222
-- Status: Phase 3 implementation and final source validation are complete;
-  private owner/source archive closure is in progress
-- Current milestone: Phase 3 Milestone 5 - release packaging and verification
+- Active phase: none; Phase 4 requires explicit owner authorization
+- Completed private owner/source release: v24.6.223
+- Status: Phase 3 complete; stop before Phase 4
+- Current milestone: none
 
 ## Phase 3 authorization and constraints
 
@@ -104,9 +103,9 @@
 - [x] Extract and verify `JobAdderClient`.
 - [x] Extract and verify `MicrosoftGraphClient`.
 - [x] Extract and verify `AIProviderClient` and shared resilience/error handling.
-- [ ] Run complete regression, static validation and final master review.
-- [ ] Create and byte-verify the Phase 3 private owner/source release.
-- [ ] Produce QA report, SHA-256 and Phase 4 handover; stop before Phase 4.
+- [x] Run complete regression, static validation and final master review.
+- [x] Create and byte-verify the Phase 3 private owner/source release.
+- [x] Produce QA report, SHA-256 and Phase 4 handover; stop before Phase 4.
 
 ## Phase 3 decisions and limitations
 
@@ -363,6 +362,11 @@
 - The Phase 3 QA report and owner-gated Phase 4 handover have been produced.
   Archive SHA-256/source-commit/fresh-extraction evidence is recorded only after
   the final clean documentation commit is frozen.
+- A clean archive trial from the versioned release checkpoint produced one
+  `cv_formatter/` root with 96 tracked/extracted files and zero missing, extra
+  or byte-mismatched files. The authoritative archive is regenerated from the
+  final clean Phase 3 completion commit and receives adjacent SHA-256 and
+  verification sidecars in `C:\CV-Studio-Codex\releases\v24.6.223\`.
 
 ## Completed Phase 2B authorization and constraints
 
