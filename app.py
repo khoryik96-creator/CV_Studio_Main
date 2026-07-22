@@ -241,6 +241,7 @@ from cvstudio_clients import (
     ExternalServiceError,
     ExternalServiceHTTPError,
     JobAdderClient,
+    MicrosoftGraphClient,
 )
 
 _CVSTUDIO_VERSION = "v24.6.222"
@@ -3243,6 +3244,10 @@ _ms_graph_refresh_lock = threading.Lock()
 _MS_GRAPH_DEFAULT_SCOPE = "offline_access User.Read Notes.Read"
 _MS_GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 
+
+def _ms_ssl_context():
+    return ssl.create_default_context(cafile=certifi.where()) if certifi else None
+
 def _ms_safe_tenant(value):
     tenant = re.sub(r"[^A-Za-z0-9_.-]", "", str(value or "common").strip())
     return tenant or "common"
@@ -3262,10 +3267,11 @@ def _ms_graph_fetch_account(access_token):
     if not token:
         return {}
     try:
-        req = urllib.request.Request(_MS_GRAPH_BASE + "/me?$select=displayName,mail,userPrincipalName", headers={"Authorization": "Bearer " + token, "Accept": "application/json"})
-        ctx = ssl.create_default_context(cafile=certifi.where()) if certifi else None
-        with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
-            data = safe_json(resp.read(), {})
+        data = _ONENOTE_GRAPH_CLIENT.request_json(
+            "me?$select=displayName,mail,userPrincipalName",
+            timeout=15,
+            access_token=token,
+        )
         return {
             "account_name": str(data.get("displayName") or "").strip(),
             "account_email": str(data.get("mail") or data.get("userPrincipalName") or "").strip(),
@@ -3308,57 +3314,54 @@ def _ms_graph_refresh_access_token(force=False):
 def _ms_graph_token():
     return _ms_graph_refresh_access_token(force=False)
 
+
+def _ms_graph_mark_reconnect_required():
+    with _ms_graph_store_lock:
+        _ms_graph_store.pop("access_token", None)
+        _ms_graph_store["expires_at"] = 0
+        try:
+            _ms_graph_save_store()
+        except Exception:
+            pass
+
+
+_ONENOTE_GRAPH_CLIENT = MicrosoftGraphClient(
+    token_provider=lambda force=False: (
+        _ms_graph_refresh_access_token(force=True) if force else _ms_graph_token()
+    ),
+    not_connected_message="Microsoft OneNote is not connected",
+    reconnect_handler=_ms_graph_mark_reconnect_required,
+    context_provider=_ms_ssl_context,
+)
+
 def _ms_graph_json(path, params=None, timeout=20):
-    token = _ms_graph_token()
-    if not token:
-        raise PermissionError("Microsoft OneNote is not connected")
-    url = path if str(path).lower().startswith("http") else (_MS_GRAPH_BASE + "/" + str(path).lstrip("/"))
-    if params:
-        qs = urllib.parse.urlencode(params)
-        url += ("&" if "?" in url else "?") + qs
-    req = urllib.request.Request(url, headers={
-        "Authorization": "Bearer " + token,
-        "Accept": "application/json",
-    })
-    ctx = ssl.create_default_context(cafile=certifi.where()) if certifi else None
-    with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
-        raw = resp.read()
-        return safe_json(raw, {})
+    top = None
+    if isinstance(params, dict):
+        try:
+            top = int(params.get("$top")) if params.get("$top") not in (None, "") else None
+        except Exception:
+            top = None
+    return _ONENOTE_GRAPH_CLIENT.request_json(
+        path,
+        params=params,
+        timeout=timeout,
+        paginate=bool(top and top > 0),
+        max_items=max(1, min(5000, top or 100)),
+    )
 
 def _ms_graph_post_json(path, body=None, params=None, timeout=25):
-    token = _ms_graph_token()
-    if not token:
-        raise PermissionError("Microsoft OneNote is not connected")
-    url = path if str(path).lower().startswith("http") else (_MS_GRAPH_BASE + "/" + str(path).lstrip("/"))
-    if params:
-        qs = urllib.parse.urlencode(params)
-        url += ("&" if "?" in url else "?") + qs
-    payload = json.dumps(body or {}).encode("utf-8")
-    req = urllib.request.Request(url, data=payload, headers={
-        "Authorization": "Bearer " + token,
-        "Accept": "application/json",
-        "Content-Type": "application/json",
-    }, method="POST")
-    ctx = ssl.create_default_context(cafile=certifi.where()) if certifi else None
-    with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
-        raw = resp.read()
-        return safe_json(raw, {})
+    return _ONENOTE_GRAPH_CLIENT.request_json(
+        path,
+        body=body or {},
+        method="POST",
+        params=params,
+        timeout=timeout,
+        safe_to_retry=False,
+        retries=0,
+    )
 
 def _ms_graph_bytes(path, params=None, timeout=25):
-    token = _ms_graph_token()
-    if not token:
-        raise PermissionError("Microsoft OneNote is not connected")
-    url = path if str(path).lower().startswith("http") else (_MS_GRAPH_BASE + "/" + str(path).lstrip("/"))
-    if params:
-        qs = urllib.parse.urlencode(params)
-        url += ("&" if "?" in url else "?") + qs
-    req = urllib.request.Request(url, headers={
-        "Authorization": "Bearer " + token,
-        "Accept": "text/html,application/json;q=0.9,*/*;q=0.8",
-    })
-    ctx = ssl.create_default_context(cafile=certifi.where()) if certifi else None
-    with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
-        return resp.read(), resp.headers.get("Content-Type", "")
+    return _ONENOTE_GRAPH_CLIENT.request_bytes(path, params=params, timeout=timeout)
 
 class _OneNoteHtmlTextParser(__import__('html.parser').parser.HTMLParser):
     _BLOCK_TAGS = set("address article aside blockquote br div dl fieldset figcaption figure footer form h1 h2 h3 h4 h5 h6 header hr li main nav ol p pre section table tr ul".split())
@@ -3410,12 +3413,12 @@ def _onenote_html_to_text(raw):
     return out[:60000]
 
 def _ms_token_response(req_data, tenant="common", timeout=20):
-    endpoint = "https://login.microsoftonline.com/{}/oauth2/v2.0/token".format(_ms_safe_tenant(tenant))
-    data = urllib.parse.urlencode(req_data).encode()
-    req = urllib.request.Request(endpoint, data=data, headers={"Content-Type":"application/x-www-form-urlencoded"}, method="POST")
-    ctx = ssl.create_default_context(cafile=certifi.where()) if certifi else None
-    with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
-        return safe_json(resp.read(), {})
+    return _ONENOTE_GRAPH_CLIENT.token_request(
+        req_data,
+        tenant=_ms_safe_tenant(tenant),
+        endpoint="token",
+        timeout=timeout,
+    )
 
 
 # PPC rich Outlook drafts use a dedicated delegated token so the existing
@@ -4010,12 +4013,12 @@ if _ms_outlook_store and _ms_outlook_store.get("_storage") == "legacy_machine_bo
         pass
 
 
-def _ms_outlook_refresh_access_token():
+def _ms_outlook_refresh_access_token(force=False):
     with _MS_OUTLOOK_REFRESH_LOCK:
         with _MS_OUTLOOK_STORE_LOCK:
             token = str(_ms_outlook_store.get("access_token") or "").strip()
             expires_at = int(_ms_outlook_store.get("expires_at") or 0)
-            if token and (not expires_at or time.time() < expires_at - 120):
+            if token and not force and (not expires_at or time.time() < expires_at - 120):
                 return token
             refresh = str(_ms_outlook_store.get("refresh_token") or "").strip()
             client_id = str(_ms_outlook_store.get("client_id") or "").strip()
@@ -4059,19 +4062,36 @@ def _ms_outlook_token():
     return _ms_outlook_refresh_access_token()
 
 
+def _ms_outlook_mark_reconnect_required():
+    with _MS_OUTLOOK_STORE_LOCK:
+        _ms_outlook_store.pop("access_token", None)
+        _ms_outlook_store["expires_at"] = 0
+        try:
+            _ms_outlook_save_store()
+        except Exception:
+            pass
+
+
+_OUTLOOK_GRAPH_CLIENT = MicrosoftGraphClient(
+    token_provider=lambda force=False: (
+        _ms_outlook_refresh_access_token(force=True) if force else _ms_outlook_token()
+    ),
+    not_connected_message="Microsoft Outlook drafts are not connected",
+    reconnect_handler=_ms_outlook_mark_reconnect_required,
+    context_provider=_ms_ssl_context,
+)
+
+
 def _ms_outlook_graph_json(path, body=None, method="GET", timeout=25):
-    token = _ms_outlook_token()
-    if not token:
-        raise PermissionError("Microsoft Outlook drafts are not connected")
-    url = path if str(path).lower().startswith("http") else (_MS_GRAPH_BASE + "/" + str(path).lstrip("/"))
-    payload = None if body is None else json.dumps(body).encode("utf-8")
-    headers = {"Authorization": "Bearer " + token, "Accept": "application/json"}
-    if payload is not None:
-        headers["Content-Type"] = "application/json"
-    req = urllib.request.Request(url, data=payload, headers=headers, method=method)
-    ctx = ssl.create_default_context(cafile=certifi.where()) if certifi else None
-    with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
-        return safe_json(resp.read(), {})
+    safe_method = str(method or "GET").upper()
+    return _OUTLOOK_GRAPH_CLIENT.request_json(
+        path,
+        body=body,
+        method=safe_method,
+        timeout=timeout,
+        safe_to_retry=safe_method in ("GET", "HEAD", "OPTIONS"),
+        retries=1 if safe_method in ("GET", "HEAD", "OPTIONS") else 0,
+    )
 
 
 def _ms_outlook_graph_post_json(path, body=None, timeout=25):
@@ -4220,13 +4240,13 @@ def ppc_outlook_device_start():
     tenant = _ms_safe_tenant(data.get("tenant") or "common")
     if not re.fullmatch(r"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}", client_id):
         return jsonify({"error": "Enter a valid Microsoft Outlook app Client ID", "action": "Copy the Application (client) ID from the Microsoft app registration."}), 400
-    endpoint = "https://login.microsoftonline.com/{}/oauth2/v2.0/devicecode".format(tenant)
-    form = urllib.parse.urlencode({"client_id": client_id, "scope": _MS_OUTLOOK_SCOPE}).encode()
     try:
-        req = urllib.request.Request(endpoint, data=form, headers={"Content-Type": "application/x-www-form-urlencoded"}, method="POST")
-        ctx = ssl.create_default_context(cafile=certifi.where()) if certifi else None
-        with urllib.request.urlopen(req, timeout=20, context=ctx) as resp:
-            d = safe_json(resp.read(), {})
+        d = _OUTLOOK_GRAPH_CLIENT.token_request(
+            {"client_id": client_id, "scope": _MS_OUTLOOK_SCOPE},
+            tenant=tenant,
+            endpoint="devicecode",
+            timeout=20,
+        )
         if not d.get("device_code"):
             return jsonify({"error": "Microsoft did not return an Outlook device code", "action": "Check the app registration and try again.", "technical_details": json.dumps(d)[:1200]}), 502
         session_id = secrets.token_urlsafe(24)
@@ -4533,13 +4553,13 @@ def onenote_device_start():
     tenant = _ms_safe_tenant(data.get("tenant") or "common")
     if not client_id:
         return jsonify({"error": "Missing Microsoft app client ID"}), 400
-    endpoint = "https://login.microsoftonline.com/{}/oauth2/v2.0/devicecode".format(tenant)
-    form = urllib.parse.urlencode({"client_id": client_id, "scope": _MS_GRAPH_DEFAULT_SCOPE}).encode()
     try:
-        req = urllib.request.Request(endpoint, data=form, headers={"Content-Type": "application/x-www-form-urlencoded"}, method="POST")
-        ctx = ssl.create_default_context(cafile=certifi.where()) if certifi else None
-        with urllib.request.urlopen(req, timeout=20, context=ctx) as resp:
-            result = safe_json(resp.read(), {})
+        result = _ONENOTE_GRAPH_CLIENT.token_request(
+            {"client_id": client_id, "scope": _MS_GRAPH_DEFAULT_SCOPE},
+            tenant=tenant,
+            endpoint="devicecode",
+            timeout=20,
+        )
         if not result.get("device_code"):
             return jsonify({"error": "Microsoft did not return a device code", "detail": result}), 502
         _ms_graph_cleanup_device_sessions()

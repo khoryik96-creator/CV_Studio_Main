@@ -581,3 +581,266 @@ class JobAdderClient:
             "codes": codes,
             "active_params": active_params,
         }
+
+
+class MicrosoftGraphClient:
+    """Shared Microsoft Graph/OAuth client for separate OneNote/Outlook stores."""
+
+    GRAPH_BASE = "https://graph.microsoft.com/v1.0"
+    GRAPH_HOSTS = ("graph.microsoft.com",)
+    LOGIN_HOSTS = ("login.microsoftonline.com",)
+
+    def __init__(
+        self,
+        token_provider,
+        *,
+        not_connected_message="Microsoft Graph is not connected",
+        reconnect_handler=None,
+        context_provider=None,
+        transport=None,
+    ):
+        self._token_provider = token_provider
+        self._not_connected_message = str(not_connected_message or "Microsoft Graph is not connected")
+        self._reconnect_handler = reconnect_handler
+        self._context_provider = context_provider
+        self.transport = transport or ExternalServiceTransport()
+
+    def _context(self):
+        return self._context_provider() if callable(self._context_provider) else None
+
+    def _token(self, force=False):
+        try:
+            return str(self._token_provider(bool(force)) or "").strip()
+        except TypeError:
+            return str(self._token_provider() or "").strip()
+
+    def _mark_reconnect(self):
+        if callable(self._reconnect_handler):
+            try:
+                self._reconnect_handler()
+            except Exception:
+                pass
+
+    def _graph_url(self, path):
+        raw = str(path or "")
+        url = raw if raw.lower().startswith("https://") else self.GRAPH_BASE + "/" + raw.lstrip("/")
+        if not _host_allowed(url, self.GRAPH_HOSTS):
+            raise ExternalServiceError("microsoft_graph", "Microsoft Graph request target is not allowed")
+        return url
+
+    @staticmethod
+    def _with_params(url, params):
+        if not params:
+            return url
+        query = urllib.parse.urlencode(params, doseq=True)
+        return url + (("&" if "?" in url else "?") + query if query else "")
+
+    def token_request(self, request_data, *, tenant="common", endpoint="token", timeout=20):
+        safe_tenant = re.sub(r"[^A-Za-z0-9_.-]", "", str(tenant or "common").strip()) or "common"
+        endpoint_name = "devicecode" if str(endpoint or "token").lower() == "devicecode" else "token"
+        url = "https://login.microsoftonline.com/{}/oauth2/v2.0/{}".format(safe_tenant, endpoint_name)
+        response = self.transport.request(
+            "microsoft_graph",
+            url,
+            method="POST",
+            body=urllib.parse.urlencode(dict(request_data or {})).encode("utf-8"),
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            timeout=timeout,
+            timeout_maximum=60,
+            context=self._context(),
+            allowed_hosts=self.LOGIN_HOSTS,
+            safe_to_retry=True,
+            retries=1,
+        )
+        return response.json({})
+
+    def request_raw(
+        self,
+        path,
+        *,
+        method="GET",
+        body=None,
+        headers=None,
+        params=None,
+        timeout=25,
+        refresh_on_401=True,
+        safe_to_retry=None,
+        retries=None,
+        access_token=None,
+    ):
+        method = str(method or "GET").upper()
+        supplied_token = str(access_token or "").strip()
+        token = supplied_token or self._token(False)
+        if not token:
+            raise PermissionError(self._not_connected_message)
+        url = self._with_params(self._graph_url(path), params)
+        base_headers = {"Authorization": "Bearer " + token, "Accept": "application/json"}
+        for key, value in dict(headers or {}).items():
+            if str(key).lower() != "authorization":
+                base_headers[str(key)] = str(value)
+        retry_safe = method in ("GET", "HEAD", "OPTIONS") if safe_to_retry is None else bool(safe_to_retry)
+        retry_count = (1 if retry_safe else 0) if retries is None else int(retries or 0)
+
+        def perform(access_token):
+            request_headers = dict(base_headers)
+            request_headers["Authorization"] = "Bearer " + access_token
+            return self.transport.request(
+                "microsoft_graph",
+                url,
+                method=method,
+                body=body,
+                headers=request_headers,
+                timeout=timeout,
+                timeout_maximum=60,
+                context=self._context(),
+                allowed_hosts=self.GRAPH_HOSTS,
+                safe_to_retry=retry_safe,
+                retries=retry_count,
+            )
+
+        try:
+            return perform(token)
+        except ExternalServiceHTTPError as error:
+            if int(error.code or 0) != 401 or not refresh_on_401 or supplied_token:
+                raise
+            try:
+                refreshed = self._token(True)
+            except Exception:
+                self._mark_reconnect()
+                raise
+            if not refreshed:
+                self._mark_reconnect()
+                raise
+            error.close()
+            try:
+                return perform(refreshed)
+            except ExternalServiceHTTPError as retry_error:
+                if int(retry_error.code or 0) == 401:
+                    self._mark_reconnect()
+                raise
+
+    def _request_json_once(
+        self,
+        path,
+        *,
+        body=None,
+        method="GET",
+        params=None,
+        timeout=25,
+        headers=None,
+        safe_to_retry=None,
+        retries=None,
+        access_token=None,
+    ):
+        payload = None if body is None else json.dumps(body).encode("utf-8")
+        request_headers = dict(headers or {})
+        if payload is not None:
+            request_headers.setdefault("Content-Type", "application/json")
+        response = self.request_raw(
+            path,
+            method=method,
+            body=payload,
+            headers=request_headers,
+            params=params,
+            timeout=timeout,
+            safe_to_retry=safe_to_retry,
+            retries=retries,
+            access_token=access_token,
+        )
+        return response.json({})
+
+    def request_json(
+        self,
+        path,
+        *,
+        body=None,
+        method="GET",
+        params=None,
+        timeout=25,
+        headers=None,
+        safe_to_retry=None,
+        retries=None,
+        paginate=False,
+        max_items=100,
+        max_pages=20,
+        access_token=None,
+    ):
+        if paginate:
+            if access_token:
+                raise ExternalServiceError(
+                    "microsoft_graph",
+                    "Explicit-token Microsoft Graph requests cannot paginate",
+                )
+            return self.get_collection(
+                path,
+                params=params,
+                timeout=timeout,
+                max_items=max_items,
+                max_pages=max_pages,
+                headers=headers,
+            )
+        return self._request_json_once(
+            path,
+            body=body,
+            method=method,
+            params=params,
+            timeout=timeout,
+            headers=headers,
+            safe_to_retry=safe_to_retry,
+            retries=retries,
+            access_token=access_token,
+        )
+
+    def request_bytes(self, path, *, params=None, timeout=25, headers=None):
+        response = self.request_raw(
+            path,
+            method="GET",
+            params=params,
+            timeout=timeout,
+            headers=headers or {"Accept": "text/html,application/json;q=0.9,*/*;q=0.8"},
+        )
+        return response.body, response.headers.get("Content-Type", "")
+
+    def get_collection(self, path, *, params=None, timeout=25, max_items=100, max_pages=20, headers=None):
+        """Follow Graph @odata.nextLink within bounded item/page limits."""
+        item_cap = max(1, min(5000, int(max_items or 100)))
+        page_cap = max(1, min(100, int(max_pages or 20)))
+        first = self._request_json_once(
+            path,
+            params=params,
+            timeout=timeout,
+            headers=headers,
+            safe_to_retry=True,
+            retries=1,
+        )
+        if not isinstance(first, dict) or not isinstance(first.get("value"), list):
+            return first
+        output = list(first.get("value") or [])[:item_cap]
+        next_link = str(first.get("@odata.nextLink") or "").strip()
+        seen_links = set()
+        pages = 1
+        while next_link and len(output) < item_cap and pages < page_cap:
+            if next_link in seen_links:
+                break
+            seen_links.add(next_link)
+            page = self._request_json_once(
+                next_link,
+                timeout=timeout,
+                headers=headers,
+                safe_to_retry=True,
+                retries=1,
+            )
+            pages += 1
+            if not isinstance(page, dict):
+                break
+            values = page.get("value") if isinstance(page.get("value"), list) else []
+            remaining = item_cap - len(output)
+            output.extend(values[:remaining])
+            candidate = str(page.get("@odata.nextLink") or "").strip()
+            if not values and candidate == next_link:
+                break
+            next_link = candidate
+        result = dict(first)
+        result["value"] = output
+        result.pop("@odata.nextLink", None)
+        return result

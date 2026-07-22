@@ -353,6 +353,105 @@ class Phase3ExternalClientCharacterizationTests(unittest.TestCase):
         self.assertEqual(payload["request_id"], "phase3-ms-error")
         self.assertTrue(payload["retryable"])
 
+    def test_microsoft_pagination_device_login_and_outlook_draft_shapes(self):
+        graph_pages = [
+            _FakeResponse(
+                {
+                    "value": [{"id": "fixture-a"}, {"id": "fixture-b"}],
+                    "@odata.nextLink": "https://graph.microsoft.com/v1.0/me/onenote/pages?$skiptoken=fixture",
+                }
+            ),
+            _FakeResponse({"value": [{"id": "fixture-c"}]}),
+        ]
+        with mock.patch.object(app, "_ms_graph_token", return_value="<fixture-credential>"), mock.patch.object(
+            app.urllib.request, "urlopen", side_effect=graph_pages
+        ) as opened:
+            payload = app._ms_graph_json(
+                "me/onenote/pages",
+                params={"$top": "3", "$select": "id"},
+                timeout=21,
+            )
+        self.assertEqual(
+            payload,
+            {"value": [{"id": "fixture-a"}, {"id": "fixture-b"}, {"id": "fixture-c"}]},
+        )
+        self.assertEqual(opened.call_count, 2)
+        self.assertIn("%24top=3", opened.call_args_list[0].args[0].full_url)
+        self.assertIn("$skiptoken=fixture", opened.call_args_list[1].args[0].full_url)
+
+        device_payload = {
+            "device_code": "<fixture-credential>",
+            "user_code": "FIXTURE",
+            "verification_uri": "https://microsoft.com/devicelogin",
+            "expires_in": 900,
+            "interval": 5,
+            "message": "Fixture login message",
+        }
+        with mock.patch.object(
+            app._OUTLOOK_GRAPH_CLIENT, "token_request", return_value=device_payload
+        ):
+            response = self.client.post(
+                "/ppc/outlook/device_start",
+                json={"client_id": "00000000-0000-0000-0000-000000000000", "tenant": "common"},
+                headers={
+                    "X-CV-Studio-Request": "1",
+                    "X-CV-Studio-Request-ID": "phase3-outlook-device",
+                },
+            )
+        outlook_login = response.get_json()
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(outlook_login["ok"])
+        self.assertTrue(outlook_login["login_session_id"])
+        self.assertEqual(outlook_login["user_code"], "FIXTURE")
+        self.assertEqual(outlook_login["verification_uri"], "https://microsoft.com/devicelogin")
+        self.assertNotIn("device_code", outlook_login)
+        with app._MS_OUTLOOK_DEVICE_LOCK:
+            app._ms_outlook_device_store.clear()
+
+        onenote_payload = dict(device_payload)
+        with mock.patch.object(
+            app._ONENOTE_GRAPH_CLIENT, "token_request", return_value=onenote_payload
+        ):
+            response = self.client.post(
+                "/onenote/device_start",
+                json={"client_id": "fixture-client", "tenant": "common"},
+                headers={
+                    "X-CV-Studio-Request": "1",
+                    "X-CV-Studio-Request-ID": "phase3-onenote-device",
+                },
+            )
+        onenote_login = response.get_json()
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(onenote_login["login_session_id"])
+        self.assertEqual(onenote_login["user_code"], "FIXTURE")
+        self.assertNotIn("device_code", onenote_login)
+        with app._ms_graph_device_lock:
+            app._ms_graph_device_store.clear()
+
+        draft_result = {
+            "ok": True,
+            "draft_id": "fixture-draft",
+            "webLink": "https://outlook.office.com/mail/deeplink/compose?fixture=1&ispopout=1",
+            "isDraft": True,
+            "mayRequireEditClick": True,
+            "created_at": "2026-07-22T00:00:00Z",
+        }
+        with mock.patch.object(app, "_ms_outlook_create_draft_payload", return_value=draft_result):
+            response = self.client.post(
+                "/ppc/outlook/create_draft",
+                json={
+                    "to": "fixture@example.invalid",
+                    "subject": "Fixture subject",
+                    "html": "<p>Fixture body</p>",
+                },
+                headers={
+                    "X-CV-Studio-Request": "1",
+                    "X-CV-Studio-Request-ID": "phase3-outlook-draft",
+                },
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), draft_result)
+
     def test_ai_provider_dispatch_and_normalized_response_shapes(self):
         payload = {
             "model": "fixture-model",

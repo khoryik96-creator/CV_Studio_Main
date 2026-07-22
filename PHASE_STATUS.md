@@ -13,7 +13,7 @@
 - Completed private owner/source release: v24.6.222
 - Status: Phase 2B and both corrective review closures are complete; Phase 3 is
   explicitly owner-authorized
-- Current milestone: Phase 3 Milestone 3 - `MicrosoftGraphClient`
+- Current milestone: Phase 3 Milestone 4 - `AIProviderClient` and shared resilience
 
 ## Phase 3 authorization and constraints
 
@@ -101,7 +101,7 @@
 - [x] Verify the v24.6.222 master/source/package baseline and all entry gates.
 - [x] Inventory external-service call sites and record compatibility fixtures.
 - [x] Extract and verify `JobAdderClient`.
-- [ ] Extract and verify `MicrosoftGraphClient`.
+- [x] Extract and verify `MicrosoftGraphClient`.
 - [ ] Extract and verify `AIProviderClient` and shared resilience/error handling.
 - [ ] Run complete regression, static validation and final master review.
 - [ ] Create and byte-verify the Phase 3 private owner/source release.
@@ -115,6 +115,15 @@
   JobAdder, Microsoft Graph and paid AI requests are not authorized or claimed.
 - Schema version 10 and every Phase 1/2 migration, mirror, tombstone, recovery
   and structured storage-error contract remain unchanged.
+- Microsoft OneNote and Outlook continue to use separate scopes, protected
+  credential stores and reconnect state. The client accepts a freshly issued
+  token explicitly for account lookup so refresh never re-enters its own lock.
+- Graph safe reads retry transient failures once and a rejected access token is
+  refreshed and replayed once. Draft/message POSTs and other unsafe Graph
+  writes are never replayed automatically.
+- Graph collection traversal follows only HTTPS `graph.microsoft.com`
+  `@odata.nextLink` values and is capped at 5,000 items and 100 pages. Existing
+  route-level `$top` values provide the effective lower item limit.
 
 ## Phase 3 Milestone 1 results
 
@@ -267,6 +276,33 @@
   consistency and Git whitespace validation passed.
 - All 107 baseline route URLs remain; no live credential, candidate record or
   external/paid call was used.
+
+## Phase 3 Milestone 3 results
+
+- `MicrosoftGraphClient` now owns the OneNote and Outlook Graph request/TLS,
+  bounded timeout, transient safe-read retry, one-time 401 token refresh,
+  reconnect marking, JSON/byte parsing, OAuth form request and bounded
+  `@odata.nextLink` traversal foundations.
+- All existing OneNote and Outlook helper and route entry points remain in
+  `app.py`; their separate protected credential stores, scopes, device-session
+  stores, draft idempotency cache and response shapes are unchanged.
+- OneNote notebook/section/page listing follows Graph continuation links only
+  up to the caller's existing `$top` cap. Foreign continuation hosts are
+  rejected, repeated links stop, and no draft/message POST is retried.
+- Review found and corrected a refresh-lock re-entry risk before checkpoint:
+  post-refresh account lookup now supplies the newly issued token directly to
+  the shared client and a regression fixture proves the token provider is not
+  called in that path.
+- Focused shared-client and route-characterization suites: 17 tests passed,
+  covering device-start response secrecy, OneNote pagination, Outlook draft
+  shape, explicit-token lookup, token endpoint form/TLS behavior, one-time 401
+  refresh, reconnect marking, host restriction and unsafe-write non-replay.
+- Complete Python discovery: 43 tests passed. The existing interpreter-exit
+  warning for a Phase 2B temporary import directory remains non-failing and no
+  Phase 3 resource handle is retained.
+- Live threaded source smoke: 24 assertions passed. Owner-source validation and
+  dependency preflight, repository consistency and Git whitespace validation
+  passed.
 
 ## Completed Phase 2B authorization and constraints
 
