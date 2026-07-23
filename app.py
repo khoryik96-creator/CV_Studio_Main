@@ -263,6 +263,23 @@ from cvstudio_diagnostics import (
     sanitize_browser_diagnostics as _phase4_sanitize_browser_diagnostics,
     system_memory_status as _phase4_system_memory_status,
 )
+from cvstudio_document_safety import (
+    MAX_IMAGE_PIXELS as _MAX_IMAGE_PIXELS,
+    MAX_OCR_PAGES as _MAX_OCR_PAGES,
+    MAX_PDF_PAGES as _MAX_PDF_PAGES,
+    MAX_ZIP_ENTRIES as _MAX_ZIP_ENTRIES,
+    MAX_ZIP_EXPANDED_BYTES as _MAX_ZIP_EXPANDED_BYTES,
+    MAX_ZIP_SINGLE_ENTRY_BYTES as _MAX_ZIP_SINGLE_ENTRY_BYTES,
+    OCR_SEMAPHORE as _OCR_SEMAPHORE,
+    OCR_TOTAL_DEADLINE_SECONDS as _OCR_TOTAL_DEADLINE_SECONDS,
+    document_validation_status as _document_validation_status,
+    ocr_image_text as _ocr_image_text,
+    ocr_pdf_pagewise as _ocr_pdf_pagewise,
+    pdf_page_count as _pdf_page_count,
+    render_pdf_page_images as _render_pdf_page_images,
+    safe_image_open as _safe_image_open,
+    validate_zip_payload as _validate_zip_payload,
+)
 
 _CVSTUDIO_VERSION = "v24.6.230"
 _CVSTUDIO_ROOT = _install_package_root()
@@ -773,186 +790,6 @@ def _request_too_large(_error):
         action="use_smaller_file",
         extra={"limit_mb": 80},
     )
-
-
-_MAX_PDF_PAGES = 80
-_MAX_OCR_PAGES = 30
-_MAX_IMAGE_PIXELS = 60_000_000
-_MAX_ZIP_ENTRIES = 2000
-_MAX_ZIP_EXPANDED_BYTES = 160 * 1024 * 1024
-_MAX_ZIP_SINGLE_ENTRY_BYTES = 64 * 1024 * 1024
-_OCR_SEMAPHORE = threading.BoundedSemaphore(1)
-_OCR_TOTAL_DEADLINE_SECONDS = 180
-
-
-def _document_validation_status(exc):
-    """Map hostile/oversized document failures to a client-safe HTTP status."""
-    message = str(exc or "").lower()
-    name = type(exc).__name__.lower()
-    resource_markers = (
-        "safe limit", "too many files", "oversized internal", "unsafe compression",
-        "expands beyond", "dimensions exceed", "decompressionbomb",
-        "processing time limit", "ocr safe limit",
-    )
-    if any(marker in message or marker in name for marker in resource_markers):
-        return 413
-    return 400
-
-
-def _validate_zip_payload(file_bytes, label="document"):
-    """Reject zip bombs and oversized expanded Office/ODT payloads."""
-    try:
-        with zipfile.ZipFile(io.BytesIO(file_bytes)) as archive:
-            infos = archive.infolist()
-            if len(infos) > _MAX_ZIP_ENTRIES:
-                raise ValueError("{} contains too many files".format(label))
-            total = 0
-            for info in infos:
-                size = max(0, int(info.file_size or 0))
-                compressed = max(1, int(info.compress_size or 0))
-                total += size
-                if size > _MAX_ZIP_SINGLE_ENTRY_BYTES:
-                    raise ValueError("{} contains an oversized internal file".format(label))
-                if size > 8 * 1024 * 1024 and size / compressed > 1000:
-                    raise ValueError("{} has an unsafe compression ratio".format(label))
-                if total > _MAX_ZIP_EXPANDED_BYTES:
-                    raise ValueError("{} expands beyond the safe limit".format(label))
-    except zipfile.BadZipFile:
-        raise ValueError("{} is not a valid ZIP-based document".format(label))
-
-
-def _safe_image_open(file_bytes):
-    from PIL import Image
-    Image.MAX_IMAGE_PIXELS = _MAX_IMAGE_PIXELS
-    image = Image.open(io.BytesIO(file_bytes))
-    width, height = image.size
-    if width <= 0 or height <= 0 or width * height > _MAX_IMAGE_PIXELS:
-        image.close()
-        raise ValueError("Image dimensions exceed the safe OCR limit")
-    image.load()
-    return image
-
-
-def _pdf_page_count(file_bytes):
-    import pdfplumber
-    with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
-        count = len(pdf.pages)
-    if count > _MAX_PDF_PAGES:
-        raise ValueError("PDF has {} pages; the safe limit is {}".format(count, _MAX_PDF_PAGES))
-    return count
-
-
-def _ocr_image_text(pytesseract, image, lang="eng", timeout=35):
-    if not _OCR_SEMAPHORE.acquire(timeout=2):
-        raise RuntimeError("OCR is already processing another document. Wait for it to finish and try again.")
-    try:
-        return pytesseract.image_to_string(image, lang=lang, timeout=timeout)
-    finally:
-        _OCR_SEMAPHORE.release()
-
-
-def _render_pdf_page_images(file_bytes, first_page=1, last_page=None, dpi=220, poppler_path=None, timeout=45):
-    """Render a bounded PDF page range without requiring an external Poppler install.
-
-    The packaged PDFium wheel is preferred and its images are copied before the
-    native page/bitmap handles are closed. Poppler/pdf2image remains a fallback
-    for owner/source environments where PDFium is unavailable.
-    """
-    first_page = max(1, int(first_page or 1))
-    last_page = max(first_page, int(last_page or first_page))
-    render_error = None
-    try:
-        import pypdfium2 as pdfium
-        document = pdfium.PdfDocument(file_bytes)
-        images = []
-        try:
-            page_count = len(document)
-            if first_page > page_count:
-                return []
-            last_page = min(last_page, page_count)
-            scale = max(1.0, min(4.0, float(dpi or 220) / 72.0))
-            for page_index in range(first_page - 1, last_page):
-                page = document[page_index]
-                bitmap = None
-                try:
-                    bitmap = page.render(scale=scale)
-                    image = bitmap.to_pil().copy()
-                    images.append(image)
-                finally:
-                    try:
-                        if bitmap is not None:
-                            bitmap.close()
-                    except Exception:
-                        pass
-                    try:
-                        page.close()
-                    except Exception:
-                        pass
-            return images
-        finally:
-            try:
-                document.close()
-            except Exception:
-                pass
-    except Exception as exc:
-        render_error = exc
-
-    try:
-        from pdf2image import convert_from_bytes
-        return convert_from_bytes(
-            file_bytes,
-            dpi=min(240, max(120, int(dpi or 220))),
-            poppler_path=poppler_path,
-            first_page=first_page,
-            last_page=last_page,
-            thread_count=1,
-            timeout=max(5, min(60, int(timeout or 45))),
-        )
-    except Exception as fallback_exc:
-        if render_error is not None:
-            raise RuntimeError(
-                "Built-in PDF renderer failed ({}); Poppler fallback failed ({})".format(
-                    str(render_error)[:180], str(fallback_exc)[:180]
-                )
-            )
-        raise
-
-
-def _ocr_pdf_pagewise(file_bytes, pytesseract, poppler_path=None, dpi=220):
-    """OCR a bounded PDF one page at a time under a total processing deadline."""
-    count = _pdf_page_count(file_bytes)
-    if count > _MAX_OCR_PAGES:
-        raise ValueError("Scanned PDF has {} pages; OCR safe limit is {}".format(count, _MAX_OCR_PAGES))
-    if not _OCR_SEMAPHORE.acquire(timeout=2):
-        raise RuntimeError("OCR is already processing another document. Wait for it to finish and try again.")
-    started = time.monotonic()
-    parts = []
-    try:
-        for page_number in range(1, count + 1):
-            if time.monotonic() - started > _OCR_TOTAL_DEADLINE_SECONDS:
-                raise TimeoutError("OCR exceeded the safe processing time limit")
-            images = _render_pdf_page_images(
-                file_bytes,
-                dpi=min(240, max(120, int(dpi or 220))),
-                poppler_path=poppler_path,
-                first_page=page_number,
-                last_page=page_number,
-                timeout=45,
-            )
-            if not images:
-                continue
-            image = images[0]
-            try:
-                width, height = image.size
-                if width * height > _MAX_IMAGE_PIXELS:
-                    raise ValueError("PDF page dimensions exceed the safe OCR limit")
-                parts.append(pytesseract.image_to_string(image, lang="eng", timeout=35))
-            finally:
-                try: image.close()
-                except Exception: pass
-        return "\n".join(parts)
-    finally:
-        _OCR_SEMAPHORE.release()
 
 
 @app.before_request

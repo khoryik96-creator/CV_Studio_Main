@@ -15,7 +15,7 @@
 - Active phase: Phase 4 — gradual behavior-preserving backend modularisation
 - Completed private owner/source release: v24.6.230
 - Status: Phase 4 explicitly authorized and entry verification complete
-- Current milestone: Phase 4 Milestone 4 — document safety/OCR primitives
+- Current milestone: Phase 4 Milestone 5 — acceptance and release evidence
 
 ## Phase 4 authorization and constraints
 
@@ -109,7 +109,7 @@
 - [x] Add pre-move success/error characterization for the selected areas.
 - [x] Extract and verify the first bounded backend module.
 - [x] Extract and verify the second bounded backend module.
-- [ ] Extract and verify the third bounded backend module.
+- [x] Extract and verify the third bounded backend module.
 - [ ] Run complete regression, static validation and iterative final review.
 - [ ] Create and byte-verify the Phase 4 private owner/source release.
 - [ ] Produce QA report, SHA-256 and Phase 5 handover; stop before Phase 5.
@@ -301,6 +301,29 @@ will leave this registration and security boundary in `app.py`.
 - Support ZIP membership, 256 KiB tail bounds, redaction, request IDs, route
   methods/endpoints, preview-cache locking callbacks and all 18 runtime response
   fields remain unchanged.
+
+## Phase 4 Milestone 4 document-safety result
+
+- Added `cvstudio_document_safety.py` with the established ZIP expansion limits,
+  image/PDF page limits, one shared bounded OCR semaphore, 180-second pagewise
+  OCR deadline, PDFium rendering and Poppler fallback.
+- `app.py` imports the established private constant/helper names as
+  compatibility aliases. Mature OCR, preview, extraction, CV parsing/blinding
+  and AI Crawler call sites therefore require no orchestration or response
+  change.
+- The module has no `app` import, protected-store dependency, persistent path,
+  route registration or startup side effect.
+- The global 80 MiB request boundary, Host/CSRF guards, OCR extension-origin
+  exception and paid browser-session gates remain in their original app-level
+  order.
+- Phase 4 characterization passed all four tests with `ResourceWarning` treated
+  as an error. Complete Python discovery passed 52 tests, both frontend fixtures
+  passed and live source smoke passed all 24 assertions.
+- Python compilation, owner-source validation/preflight, repository consistency,
+  Git whitespace validation and a direct AST check proving no app import passed.
+- ZIP validation, 400/413 classification, missing-file response fields,
+  page/image limits, OCR serialization and renderer fallback behavior remain
+  unchanged. No external service, live credential or paid request was used.
 
 ## Phase 3 authorization and constraints
 
