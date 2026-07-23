@@ -256,6 +256,13 @@ from cvstudio_storage_bridge import (
     phase2a_usage_secret_field as _phase2a_usage_secret_field,
     phase2b_record_array as _phase2b_record_array,
 )
+from cvstudio_diagnostics import (
+    DiagnosticsService,
+    dependency_status as _phase4_dependency_status,
+    redact_support_text as _phase4_redact_support_text,
+    sanitize_browser_diagnostics as _phase4_sanitize_browser_diagnostics,
+    system_memory_status as _phase4_system_memory_status,
+)
 
 _CVSTUDIO_VERSION = "v24.6.230"
 _CVSTUDIO_ROOT = _install_package_root()
@@ -11191,64 +11198,7 @@ def _spider_preview_payload_cache_put(token, candidate_id, attachment_fingerprin
 
 
 def _cvstudio_system_memory_status():
-    """Return best-effort physical-memory totals without adding a dependency."""
-    total = 0
-    available = 0
-    source = "unavailable"
-    try:
-        if os.name == "nt":
-            import ctypes
-            class MEMORYSTATUSEX(ctypes.Structure):
-                _fields_ = [
-                    ("dwLength", ctypes.c_ulong), ("dwMemoryLoad", ctypes.c_ulong),
-                    ("ullTotalPhys", ctypes.c_ulonglong), ("ullAvailPhys", ctypes.c_ulonglong),
-                    ("ullTotalPageFile", ctypes.c_ulonglong), ("ullAvailPageFile", ctypes.c_ulonglong),
-                    ("ullTotalVirtual", ctypes.c_ulonglong), ("ullAvailVirtual", ctypes.c_ulonglong),
-                    ("sullAvailExtendedVirtual", ctypes.c_ulonglong),
-                ]
-            status = MEMORYSTATUSEX()
-            status.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
-            if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
-                total = int(status.ullTotalPhys)
-                available = int(status.ullAvailPhys)
-                source = "GlobalMemoryStatusEx"
-        elif os.path.isfile("/proc/meminfo"):
-            values = {}
-            with open("/proc/meminfo", "r", encoding="utf-8", errors="replace") as handle:
-                for line in handle:
-                    match = re.match(r"^([A-Za-z_()]+):\s+(\d+)\s+kB", line)
-                    if match:
-                        values[match.group(1)] = int(match.group(2)) * 1024
-            total = int(values.get("MemTotal") or 0)
-            available = int(values.get("MemAvailable") or values.get("MemFree") or 0)
-            source = "/proc/meminfo"
-        elif platform.system() == "Darwin":
-            total_raw = subprocess.check_output(["/usr/sbin/sysctl", "-n", "hw.memsize"], timeout=3)
-            total = int(total_raw.decode(errors="replace").strip() or 0)
-            vm_raw = subprocess.check_output(["/usr/bin/vm_stat"], timeout=3).decode(errors="replace")
-            page_size_match = re.search(r"page size of (\d+) bytes", vm_raw)
-            page_size = int(page_size_match.group(1)) if page_size_match else 4096
-            free_pages = 0
-            for label in ("Pages free", "Pages inactive", "Pages speculative", "Pages purgeable"):
-                match = re.search(r"^{}:\s+(\d+)\.".format(re.escape(label)), vm_raw, re.M)
-                if match:
-                    free_pages += int(match.group(1))
-            available = free_pages * page_size
-            source = "sysctl/vm_stat"
-        elif hasattr(os, "sysconf"):
-            page = int(os.sysconf("SC_PAGE_SIZE"))
-            total = page * int(os.sysconf("SC_PHYS_PAGES"))
-            available = page * int(os.sysconf("SC_AVPHYS_PAGES"))
-            source = "sysconf"
-    except Exception:
-        total = max(0, int(total or 0))
-        available = max(0, int(available or 0))
-    return {
-        "total_bytes": max(0, total),
-        "available_bytes": max(0, available),
-        "used_percent": round((1.0 - (float(available) / float(total))) * 100.0, 1) if total > 0 and available >= 0 else None,
-        "source": source,
-    }
+    return _phase4_system_memory_status()
 
 
 def _spider_preview_cache_stats():
@@ -11272,18 +11222,7 @@ def _spider_preview_cache_stats():
 
 
 def _cvstudio_dependency_status():
-    import importlib.util
-    modules = ["flask", "docx", "PIL", "pdfplumber", "pypdfium2", "pytesseract", "openpyxl", "cryptography"]
-    result = {name: bool(importlib.util.find_spec(name)) for name in modules}
-    try:
-        result["libreoffice"] = bool(_find_soffice_binary())
-    except Exception:
-        result["libreoffice"] = False
-    try:
-        result["antiword"] = bool(_find_antiword_binary())
-    except Exception:
-        result["antiword"] = False
-    return result
+    return _phase4_dependency_status(_find_soffice_binary, _find_antiword_binary)
 
 
 def _cvstudio_connection_status_redacted():
@@ -11356,76 +11295,19 @@ def _cvstudio_runtime_diagnostics_payload():
 
 
 def _cvstudio_redact_support_text(text):
-    """Best-effort support-log redaction; preserve diagnostics, not personal secrets."""
-    text = str(text or "")
-    # Remove URL queries before inserting any redaction marker containing spaces.
-    text = re.sub(r'(?i)\b(https?://[^\s?#"\'<>]+)\?[^\s"\'<>]*', r'\1?[query redacted]', text)
-    text = re.sub(r'(?i)(authorization\s*[:=]\s*bearer\s+)[^\s,;]+', r'\1[redacted]', text)
-    secret_names = r'(?:access_token|refresh_token|client_secret|api_key|authorization_code|password)'
-    # Quoted JSON/config values may contain spaces. Keep the original quote style.
-    text = re.sub(
-        r'(?i)(["\']?' + secret_names + r'["\']?\s*[:=]\s*)(["\'])(.*?)\2',
-        lambda match: match.group(1) + match.group(2) + '[redacted]' + match.group(2),
+    return _phase4_redact_support_text(
         text,
+        (
+            (_CVSTUDIO_ROOT, "[cvstudio root]"),
+            (os.path.expanduser("~"), "[home]"),
+        ),
     )
-    text = re.sub(r'(?i)(["\']?' + secret_names + r'["\']?\s*[:=]\s*)[^"\'\s,;}]+', r'\1[redacted]', text)
-    text = re.sub(r'(?i)([?&](?:access_token|refresh_token|client_secret|api_key|code|password)=)[^&\s]+', r'\1[redacted]', text)
-    text = re.sub(r'(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b', '[email redacted]', text)
-    text = re.sub(r'(?i)(/candidates/)(?:\d{4,}|[A-Za-z0-9_-]{16,})', r'\1[id redacted]', text)
-    for path, label in ((_CVSTUDIO_ROOT, "[cvstudio root]"), (os.path.expanduser("~"), "[home]")):
-        if path:
-            variants = {str(path), str(path).replace("\\", "/"), str(path).replace("/", "\\")}
-            for variant in sorted((item for item in variants if item), key=len, reverse=True):
-                text = re.sub(re.escape(variant), label, text, flags=re.I)
-    # Generic home-directory fallback protects logs created on another OS and
-    # copied into this installation before a diagnostic bundle is generated.
-    text = re.sub(r'(?i)\b[A-Z]:[\\]Users[\\][^\r\n]+', '[home path redacted]', text)
-    text = re.sub(r'(?i)(?<![A-Za-z0-9_])/(?:Users|home)/[^/\s]+(?:/[^\s]*)?', '[home path redacted]', text)
-    return text
 
 
 def _cvstudio_sanitize_browser_diagnostics(payload):
-    payload = payload if isinstance(payload, dict) else {}
-    cache = payload.get("cache") if isinstance(payload.get("cache"), dict) else {}
-    viewport = payload.get("viewport") if isinstance(payload.get("viewport"), dict) else {}
-    keys = payload.get("local_storage_keys") if isinstance(payload.get("local_storage_keys"), list) else []
-    recent_errors = payload.get("recent_api_errors") if isinstance(payload.get("recent_api_errors"), list) else []
-
-    def safe_int(value, maximum=4 * 1024 * 1024 * 1024):
-        try:
-            return max(0, min(int(float(value or 0)), int(maximum)))
-        except Exception:
-            return 0
-
-    def safe_float(value, maximum=100.0):
-        try:
-            number = float(value or 0)
-            return max(0.0, min(number if number == number else 0.0, float(maximum)))
-        except Exception:
-            return 0.0
-
-    return {
-        "user_agent": str(payload.get("user_agent") or "")[:500],
-        "active_tab": re.sub(r"[^A-Za-z0-9_.:-]", "", str(payload.get("active_tab") or ""))[:80],
-        "visibility_state": str(payload.get("visibility_state") or "")[:40],
-        "viewport": {"width": safe_int(viewport.get("width"), 100000), "height": safe_int(viewport.get("height"), 100000), "device_pixel_ratio": safe_float(viewport.get("device_pixel_ratio"), 100.0)},
-        "cache": {key: safe_int(cache.get(key)) for key in ("payload_entries", "payload_bytes", "payload_max_bytes", "dom_entries", "dom_bytes", "dom_max_bytes", "prefetch_ready", "prefetch_target")},
-        "memory_mode": re.sub(r"[^A-Za-z0-9_.:-]", "", str(payload.get("memory_mode") or ""))[:30],
-        "local_storage_keys": sorted({str(key)[:120] for key in keys if isinstance(key, str) and not re.search(r"token|secret|password|api[_-]?key|credential", key, re.I)})[:200],
-        "recent_api_errors": [
-            {
-                "at": str(item.get("at") or "")[:40],
-                "path": _cvstudio_redact_support_text(re.sub(r"[?#].*$", "", str(item.get("path") or "")))[:240],
-                "status": safe_int(item.get("status"), 999),
-                "code": re.sub(r"[^A-Z0-9_.:-]", "", str(item.get("code") or "").upper())[:100],
-                "request_id": re.sub(r"[^A-Za-z0-9_.:-]", "", str(item.get("request_id") or ""))[:80],
-                "message": _cvstudio_redact_support_text(str(item.get("message") or ""))[:500],
-                "action": re.sub(r"[^A-Za-z0-9_.:-]", "", str(item.get("action") or ""))[:80],
-                "retryable": bool(item.get("retryable")),
-            }
-            for item in recent_errors[-20:] if isinstance(item, dict)
-        ],
-    }
+    return _phase4_sanitize_browser_diagnostics(
+        payload, _cvstudio_redact_support_text
+    )
 
 
 _OWNER_INTEGRATION_REPORT_LOCK = threading.RLock()
@@ -11714,41 +11596,35 @@ def phase2b_browser_settings_delete():
     return _CVSTUDIO_STORAGE_BRIDGE.browser_settings_delete()
 
 
+_CVSTUDIO_DIAGNOSTICS_SERVICE = DiagnosticsService(
+    request_json=lambda: request.get_json(silent=True) or {},
+    jsonify=jsonify,
+    send_file=send_file,
+    request_id=_cvstudio_current_request_id,
+    runtime_payload=_cvstudio_runtime_diagnostics_payload,
+    cancel_preview_work=_spider_preview_cancel_background_work,
+    clear_preview_cache=_spider_resume_text_cache_clear,
+    preview_cache_stats=_spider_preview_cache_stats,
+    redact_text=_cvstudio_redact_support_text,
+    version=_CVSTUDIO_VERSION,
+    root_path=lambda: _CVSTUDIO_ROOT,
+    runtime_log_path=lambda: _RUNTIME_LOG_PATH,
+)
+
+
 @app.route("/diagnostics/runtime", methods=["GET"])
 def cvstudio_runtime_diagnostics():
-    return jsonify(_cvstudio_runtime_diagnostics_payload())
+    return _CVSTUDIO_DIAGNOSTICS_SERVICE.runtime()
 
 
 @app.route("/diagnostics/clear_preview_cache", methods=["POST"])
 def cvstudio_clear_preview_cache():
-    _spider_preview_cancel_background_work()
-    _spider_resume_text_cache_clear()
-    return jsonify({"ok": True, "request_id": _cvstudio_current_request_id(), "cache": _spider_preview_cache_stats()})
+    return _CVSTUDIO_DIAGNOSTICS_SERVICE.clear_preview()
 
 
 @app.route("/diagnostics/support_bundle", methods=["POST"])
 def cvstudio_support_bundle():
-    body = request.get_json(silent=True) or {}
-    browser = _cvstudio_sanitize_browser_diagnostics(body.get("browser"))
-    generated = time.strftime("%Y%m%d_%H%M%S", time.localtime())
-    buffer = io.BytesIO()
-    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
-        runtime_payload = _cvstudio_runtime_diagnostics_payload()
-        archive.writestr("runtime.json", json.dumps(runtime_payload, ensure_ascii=False, indent=2))
-        archive.writestr("browser.json", json.dumps(browser, ensure_ascii=False, indent=2))
-        archive.writestr("BACKBURNER_ROADMAP.md", (Path(_CVSTUDIO_ROOT) / "BACKBURNER_ROADMAP.md").read_text(encoding="utf-8") if (Path(_CVSTUDIO_ROOT) / "BACKBURNER_ROADMAP.md").is_file() else "Roadmap note not present in this package.")
-        archive.writestr("README.txt", "CV Studio redacted diagnostic bundle\nVersion: {}\nGenerated: {}\nRequest ID: {}\n\nNo API keys, OAuth tokens, CV files, preview payloads or localStorage values are included. Runtime log tails are redacted but may still contain technical file names and error wording; review before sharing outside the support context.\n".format(_CVSTUDIO_VERSION, runtime_payload.get("generated_at"), _cvstudio_current_request_id()))
-        for path, name in ((_RUNTIME_LOG_PATH, "runtime.log.tail.txt"), (_RUNTIME_LOG_PATH + ".1", "runtime.log.1.tail.txt")):
-            try:
-                if os.path.isfile(path):
-                    with open(path, "rb") as handle:
-                        handle.seek(max(0, os.path.getsize(path) - 256 * 1024))
-                        raw = handle.read(256 * 1024).decode("utf-8", errors="replace")
-                    archive.writestr(name, _cvstudio_redact_support_text(raw))
-            except Exception as exc:
-                archive.writestr(name + ".error.txt", "Could not read log tail: {}".format(type(exc).__name__))
-    buffer.seek(0)
-    return send_file(buffer, mimetype="application/zip", as_attachment=True, download_name="cv_studio_diagnostic_bundle_{}_{}.zip".format(_CVSTUDIO_VERSION.replace(".", "_"), generated), max_age=0)
+    return _CVSTUDIO_DIAGNOSTICS_SERVICE.support_bundle()
 
 
 def _spider_candidate_attachment_records(token, candidate_id):

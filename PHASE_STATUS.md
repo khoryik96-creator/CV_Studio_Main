@@ -15,7 +15,7 @@
 - Active phase: Phase 4 — gradual behavior-preserving backend modularisation
 - Completed private owner/source release: v24.6.230
 - Status: Phase 4 explicitly authorized and entry verification complete
-- Current milestone: Phase 4 Milestone 3 — runtime diagnostics/support bundle
+- Current milestone: Phase 4 Milestone 4 — document safety/OCR primitives
 
 ## Phase 4 authorization and constraints
 
@@ -108,7 +108,7 @@
 - [x] Inventory candidate backend areas and select bounded module sequence.
 - [x] Add pre-move success/error characterization for the selected areas.
 - [x] Extract and verify the first bounded backend module.
-- [ ] Extract and verify the second bounded backend module.
+- [x] Extract and verify the second bounded backend module.
 - [ ] Extract and verify the third bounded backend module.
 - [ ] Run complete regression, static validation and iterative final review.
 - [ ] Create and byte-verify the Phase 4 private owner/source release.
@@ -274,6 +274,33 @@ will leave this registration and security boundary in `app.py`.
 - No route URL/method/endpoint, response field, authentication/CSRF/request-size
   boundary, startup side effect, external-service behavior or user workflow
   changed.
+
+## Phase 4 Milestone 3 diagnostics/support result
+
+- Added `cvstudio_diagnostics.py` with cross-platform physical-memory probing,
+  dependency presence probing, support-text redaction, browser diagnostic
+  sanitization and in-memory support-bundle construction.
+- `DiagnosticsService` receives request/response adapters, runtime/cache
+  callbacks, version/root/log providers and the app-level redactor explicitly.
+  It does not import `app` or receive a protected credential store.
+- `app.py` retains the three original diagnostics route decorators and endpoint
+  names as one-line adapters. Runtime snapshot assembly remains app-owned so
+  integration-state initialization and redacted connection booleans preserve
+  their existing order.
+- App-level compatibility helpers retain the established
+  `_cvstudio_system_memory_status`, `_cvstudio_dependency_status`,
+  `_cvstudio_redact_support_text` and
+  `_cvstudio_sanitize_browser_diagnostics` names.
+- The runtime-log path is an injected provider rather than a captured value,
+  preserving test/runtime rebinding and the existing two-tail read behavior.
+- Focused Phase 1 diagnostics/support and Phase 4 characterization verification
+  passed 11 tests with `ResourceWarning` treated as an error.
+- Complete Python discovery passed 52 tests and the live source smoke passed all
+  24 assertions. Python compilation, Git whitespace validation and a direct AST
+  check proving no app import passed.
+- Support ZIP membership, 256 KiB tail bounds, redaction, request IDs, route
+  methods/endpoints, preview-cache locking callbacks and all 18 runtime response
+  fields remain unchanged.
 
 ## Phase 3 authorization and constraints
 
