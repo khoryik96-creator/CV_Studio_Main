@@ -325,6 +325,20 @@ will leave this registration and security boundary in `app.py`.
   page/image limits, OCR serialization and renderer fallback behavior remain
   unchanged. No external service, live credential or paid request was used.
 
+## Phase 4 acceptance review corrections
+
+- The first full baseline-diff review found one compatibility risk: the
+  diagnostics service initially captured runtime/cache/redaction function
+  objects at construction, while the former route bodies resolved those
+  app-level globals on every call.
+- The service wiring now uses explicit forwarding lambdas, preserving runtime
+  and test rebinding without adding an app import or changing initialization
+  order.
+- The repeated review proves the exact ordered 107-route decorator inventory
+  against master, schema version 10, no app import from any extracted module,
+  all 22 Phase 3 client fixtures and all four Phase 4 characterization tests.
+- No further concrete finding remains from this review pass.
+
 ## Phase 3 authorization and constraints
 
 - Owner authorization received on 22 July 2026.
