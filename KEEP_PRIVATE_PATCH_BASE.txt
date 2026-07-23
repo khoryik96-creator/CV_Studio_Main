@@ -1,5 +1,5 @@
 CV Studio private source patch base
-Version: v24.6.224
+Version: v24.6.230
 Keep this ZIP for future patches. Do not distribute this source package to colleagues.
 
 JobAdder API investigation source of truth:
@@ -997,5 +997,18 @@ Patch note v24.6.193: cross-platform deterministic adm-zip tree hashing fixes th
   diagnostic network-error response fields.
 - Publishes the corrected source under a distinct v24.6.224 owner/source
   archive while retaining v24.6.223 artifacts as immutable history.
+- Leaves schema version 10, all 107 routes, credential stores, paid-call gates,
+  Phase 4 scope and roadmap items 4, 7 and 8 unchanged.
+
+## v24.6.230 Phase 3 JobAdder content-negotiation correction
+
+- Moves the default `Accept: application/json` header from
+  `JobAdderClient.request_raw` to `JobAdderClient.request_json`.
+- Keeps raw candidate-CV and attachment downloads representation-neutral while
+  honoring any caller-supplied Accept header case-insensitively.
+- Preserves exact download bytes and response metadata, legacy JobAdder
+  diagnostic error fields, authentication boundaries and retry rules.
+- Uses v24.6.230 as the next non-overwriting owner/source identity because
+  immutable v24.6.225-v24.6.229 release directories already exist.
 - Leaves schema version 10, all 107 routes, credential stores, paid-call gates,
   Phase 4 scope and roadmap items 4, 7 and 8 unchanged.

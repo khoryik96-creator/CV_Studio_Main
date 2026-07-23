@@ -1,7 +1,7 @@
 # CV Studio Backburner and Stability Roadmap
 
 Last updated: 23 July 2026
-Current implementation base: v24.6.224
+Current implementation base: v24.6.230
 
 ## Explicit backburner — do not implement until the owner reactivates them
 
@@ -98,6 +98,15 @@ Deferred scope includes Shortlist / Maybe / Reject / Reviewed states, recruiter 
 - response-header lookups remain case-insensitive and JobAdder diagnostic
   network failures preserve their established fields;
 - the corrected source has a distinct verified owner/source release identity;
+- Phase 4, schema version 10, all 107 routes and the backburner remain unchanged.
+
+### v24.6.230 — Phase 3 content-negotiation corrective closure
+
+- JobAdder JSON requests retain `Accept: application/json`;
+- raw candidate-CV and attachment downloads no longer force JSON negotiation;
+- caller-supplied Accept headers, download behavior and legacy diagnostic error
+  fields remain intact;
+- v24.6.225-v24.6.229 release identities remain immutable;
 - Phase 4, schema version 10, all 107 routes and the backburner remain unchanged.
 
 ## Active stability direction

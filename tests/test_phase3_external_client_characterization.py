@@ -164,15 +164,74 @@ class Phase3ExternalClientCharacterizationTests(unittest.TestCase):
             app, "_ja_api", side_effect=lambda path: "https://api.jobadder.com/v2/" + path
         ), mock.patch.object(app._JOBADDER_CLIENT.transport, "_opener", side_effect=open_with_refresh):
             raw, content_type, disposition = app._spider_get_ja_raw(
-                "<fixture-credential-a>", "candidates/fixture", timeout=12
+                "<fixture-credential-a>",
+                "candidates/fixture",
+                timeout=12,
+                accept_json=True,
             )
         expired_error.close()
         self.assertEqual((raw, content_type, disposition), (b"fixture-bytes", "application/octet-stream", "fixture.bin"))
         self.assertEqual(len(requests_seen), 2)
         self.assertEqual(requests_seen[0][0].get_header("Authorization"), "Bearer <fixture-credential-a>")
         self.assertEqual(requests_seen[1][0].get_header("Authorization"), "Bearer <fixture-credential-b>")
-        self.assertTrue(all(item[0].get_header("Accept") is None for item in requests_seen))
+        self.assertEqual(
+            [item[0].get_header("Accept") for item in requests_seen],
+            ["application/json", "application/json"],
+        )
         self.assertEqual([item[1] for item in requests_seen], [12, 12])
+
+        requests_seen.clear()
+        download_responses = [
+            _FakeResponse(
+                b"fixture-cv",
+                headers={
+                    "content-type": "application/pdf",
+                    "content-disposition": "fixture-cv.pdf",
+                },
+            ),
+            _FakeResponse(
+                b"fixture-attachment",
+                headers={
+                    "content-type": "application/octet-stream",
+                    "content-disposition": "fixture-attachment.bin",
+                },
+            ),
+        ]
+
+        def open_download(request_object, timeout):
+            requests_seen.append((request_object, timeout))
+            return download_responses.pop(0)
+
+        with mock.patch.object(
+            app._JOBADDER_CLIENT.transport,
+            "_opener",
+            side_effect=open_download,
+        ):
+            cv_download = app._spider_get_ja_raw(
+                "<fixture-credential-b>",
+                "candidates/fixture/resume",
+                timeout=12,
+            )
+            attachment_download = app._spider_get_ja_raw(
+                "<fixture-credential-b>",
+                "candidates/fixture/attachments/fixture",
+                timeout=12,
+            )
+        self.assertEqual(
+            cv_download,
+            (b"fixture-cv", "application/pdf", "fixture-cv.pdf"),
+        )
+        self.assertEqual(
+            attachment_download,
+            (
+                b"fixture-attachment",
+                "application/octet-stream",
+                "fixture-attachment.bin",
+            ),
+        )
+        self.assertTrue(
+            all(item[0].get_header("Accept") is None for item in requests_seen)
+        )
 
         page_payloads = [
             {"items": [{"fixture_key": "a"}, {"fixture_key": "b"}], "totalCount": 3},

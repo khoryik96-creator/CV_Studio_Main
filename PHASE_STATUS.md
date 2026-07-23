@@ -3,18 +3,17 @@
 ## Release state
 
 - Approved baseline: v24.6.217
-- Completed release: v24.6.224
-- Previous completed release: v24.6.223
+- Completed release: v24.6.230
+- Previous completed release: v24.6.224
 - Phase 2B source baseline: v24.6.219
 - Phase 2B baseline Git commit: `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`
 - Phase 3 source baseline: v24.6.222
 - Phase 3 baseline Git commit: `1be9da48d8307c418d82807cbdaedc9f876a1b15`
 - Working branch: `codex/phase-3-shared-clients`
-- Active phase: Phase 3 corrective release only; Phase 4 requires explicit
-  owner authorization
-- Completed private owner/source release: v24.6.224
-- Status: v24.6.230 corrective review closure in progress; stop before Phase 4
-- Current milestone: JobAdder raw/JSON content negotiation
+- Active phase: none; Phase 4 requires explicit owner authorization
+- Completed private owner/source release: v24.6.230
+- Status: v24.6.230 corrective review closure complete; stop before Phase 4
+- Current milestone: none
 
 ## Phase 3 authorization and constraints
 
@@ -441,6 +440,22 @@
   JSON and caller-supplied accept behavior.
 - Existing immutable release directories already occupy v24.6.225 through
   v24.6.229, so v24.6.230 is the next non-overwriting release identity.
+- Focused Phase 3 client and route characterization passes 22 tests with
+  `ResourceWarning` treated as an error. The cache integration subset passes 7
+  tests and complete Python discovery passes all 48 tests.
+- Both Node frontend fixtures pass. The live source smoke passes all 24
+  loopback assertions using temporary local state.
+- Static validation passes for 15 tracked Python files, 20 tracked JavaScript
+  files plus both complete inline scripts, 5 PowerShell files and 5 Git Bash
+  shell/command entry points. Owner-source validation/preflight, exact
+  `adm-zip` 0.5.17 behavior, repository consistency and Git whitespace checks
+  pass.
+- The authoritative private archive is generated from the exact final v24.6.230
+  commit with one `cv_formatter/` root. A fresh extraction is required to
+  contain the exact 100 tracked files with zero missing, extra or byte-
+  mismatched files; the adjacent SHA-256 and verification sidecars record the
+  final commit and result.
+- The v24.6.224 archive and sidecars remain unchanged.
 - No route URL, response field, authentication boundary, retry rule, schema,
   credential store, frontend workflow, background execution, backburner item or
   Phase 4 work is included.

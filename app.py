@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.224"
+_INSTALL_RECEIPT_VERSION = "v24.6.230"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -245,7 +245,7 @@ from cvstudio_clients import (
     MicrosoftGraphClient,
 )
 
-_CVSTUDIO_VERSION = "v24.6.224"
+_CVSTUDIO_VERSION = "v24.6.230"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -7466,7 +7466,7 @@ def _ja_spa_browser_bridge(candidate_id, fields, note_text="", email="", salary_
     payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
     compact_payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     script = """(async () => {
-  const helperVersion = 'v24.6.224';
+  const helperVersion = 'v24.6.230';
   const candidateId = %s;
   const payload = %s;
   const profilePath = %s;
@@ -9958,7 +9958,7 @@ def jobadder_onenote_activity_diagnostic():
     generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Candidate Activity Read Test",
-        "cv_studio_version": "v24.6.224",
+        "cv_studio_version": "v24.6.230",
         "generated_utc": generated,
         "safety": {
             "read_only": True,
@@ -10168,7 +10168,7 @@ def jobadder_onenote_activity_create_diagnostic():
     if confirmation != "CREATE ONE MAX LOW TEST":
         return jsonify({"error": "Type CREATE ONE MAX LOW TEST exactly before running the controlled POST."}), 400
 
-    guard_key = ("v24.6.224", candidate_id)
+    guard_key = ("v24.6.230", candidate_id)
     if guard_key in _JA_ACTIVITY_CREATE_DIAG_USED:
         return jsonify({"error": "The one-shot controlled POST has already been run in this CV Studio session. Restarting is intentionally required before any repeat test."}), 409
     # Mark before the network call so a timeout/double-click cannot emit a second POST.
@@ -10197,7 +10197,7 @@ def jobadder_onenote_activity_create_diagnostic():
     generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Official AddCandidateActivity Create Test",
-        "cv_studio_version": "v24.6.224",
+        "cv_studio_version": "v24.6.230",
         "generated_utc": generated,
         "candidate_fixture": {
             "name": "Max Low",
@@ -10938,6 +10938,7 @@ def _spider_fetch_candidate_detail(token, candidate_id):
             token,
             "candidates/{}".format(urllib.parse.quote(str(candidate_id), safe="")),
             timeout=8,
+            accept_json=True,
         )
         parsed = safe_json(raw, {})
         return parsed if isinstance(parsed, dict) else None
@@ -12060,7 +12061,12 @@ def _spider_candidate_attachment_records(token, candidate_id):
         ("Limit", "4"),
     ])
     try:
-        raw, _ctype, _dispo = _spider_get_ja_raw(token, "candidates/{}/attachments?{}".format(cid, params), timeout=10)
+        raw, _ctype, _dispo = _spider_get_ja_raw(
+            token,
+            "candidates/{}/attachments?{}".format(cid, params),
+            timeout=10,
+            accept_json=True,
+        )
         payload = safe_json(raw, {})
         items = payload.get("items") if isinstance(payload, dict) else []
         items = items if isinstance(items, list) else []
@@ -14383,14 +14389,16 @@ def _spider_mark_jobadder_reconnect_required():
     _ja_mark_reconnect_required()
 
 
-def _spider_get_ja_raw(token, path, timeout=10):
+def _spider_get_ja_raw(token, path, timeout=10, *, accept_json=False):
     """GET one JobAdder resource and retry once after a forced OAuth refresh."""
     try:
+        headers = {"Accept": "application/json"} if accept_json else None
         response = _JOBADDER_CLIENT.request_raw(
             path,
             method="GET",
             token=token,
             timeout=timeout,
+            headers=headers,
         )
         return (
             response.body,
@@ -14496,9 +14504,14 @@ def jobadder_spider_candidate_preview():
     preview_max_pages = 2 if prefetch_mode else 12
     preview_dpi = 104 if prefetch_mode else 118
 
-    def get_raw(path, timeout):
+    def get_raw(path, timeout, *, accept_json=False):
         cancel_check()
-        result = _spider_get_ja_raw(token, path, timeout=timeout)
+        result = _spider_get_ja_raw(
+            token,
+            path,
+            timeout=timeout,
+            accept_json=accept_json,
+        )
         cancel_check()
         return result
 
@@ -14667,7 +14680,11 @@ def jobadder_spider_candidate_preview():
     ]:
         cancel_check()
         try:
-            raw, _ctype, _dispo = get_raw(list_path, timeout=10)
+            raw, _ctype, _dispo = get_raw(
+                list_path,
+                timeout=10,
+                accept_json=True,
+            )
             tried.append(list_path)
             listing = safe_json(raw, {})
             for att in _spider_attachment_candidates(listing):
@@ -14894,7 +14911,12 @@ def _spider_jobadder_keyword_items(token, keyword, max_items=3000, page_size=100
 
     def fetch_page(page_params):
         query = urllib.parse.urlencode(page_params, doseq=True)
-        raw, _ctype, _dispo = _spider_get_ja_raw(token, "candidates?" + query, timeout=25)
+        raw, _ctype, _dispo = _spider_get_ja_raw(
+            token,
+            "candidates?" + query,
+            timeout=25,
+            accept_json=True,
+        )
         return safe_json(raw, {"items": []})
 
     def reject_unsupported_embed(error, active_params, _offset, _pages):
@@ -15565,6 +15587,7 @@ def jobadder_upload_original_cv():
             body=body,
             token=token,
             headers={
+                "Accept": "application/json",
                 "Content-Type": "multipart/form-data; boundary=" + boundary
             },
             timeout=30,
@@ -15631,14 +15654,19 @@ def jobadder_debug_endpoints():
         return jsonify({"error": "Need token and candidate_id param"}), 400
     results = {}
     endpoints = [
-        _ja_api("candidates/{}".format(candidate_id)),
-        _ja_api("candidates/{}/resume".format(candidate_id)),
-        _ja_api("candidates/{}/attachments".format(candidate_id)),
-        _ja_api("candidates/{}/documents".format(candidate_id)),
+        (_ja_api("candidates/{}".format(candidate_id)), True),
+        (_ja_api("candidates/{}/resume".format(candidate_id)), False),
+        (_ja_api("candidates/{}/attachments".format(candidate_id)), True),
+        (_ja_api("candidates/{}/documents".format(candidate_id)), True),
     ]
-    for url in endpoints:
+    for url, accept_json in endpoints:
         try:
-            response = _JOBADDER_CLIENT.request_raw(url, token=token, timeout=10)
+            response = _JOBADDER_CLIENT.request_raw(
+                url,
+                token=token,
+                timeout=10,
+                headers={"Accept": "application/json"} if accept_json else None,
+            )
             results[url] = {"status": response.status, "ok": True}
         except urllib.error.HTTPError as e:
             results[url] = {"status": e.code, "ok": False, "detail": e.read().decode()[:200]}
@@ -15676,6 +15704,7 @@ def jobadder_upload_cv():
             body=body,
             token=token,
             headers={
+                "Accept": "application/json",
                 "Content-Type": "multipart/form-data; boundary=" + boundary
             },
             timeout=30,

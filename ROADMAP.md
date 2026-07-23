@@ -10,6 +10,9 @@
 - v24.6.222 corrected the two remaining Phase 2B durability-review findings.
 - v24.6.223 completed the shared external-service client foundations in Phase 3.
 - v24.6.224 corrected all five Phase 3 post-release review findings.
+- v24.6.230 corrected JobAdder raw-request content negotiation without changing
+  the completed Phase 3 scope. Existing v24.6.225-v24.6.229 release identities
+  remain immutable.
 - Phases 1, 2A, 2B and 3 are complete.
 - No later phase is active. Phase 4 requires a new explicit owner instruction.
 
@@ -80,7 +83,7 @@ SQLite foundation and lower-risk backend durable-data migration:
 - retain schema version 10, all Phase 2A/2B compatibility contracts and the
   Phase 3 stop boundary.
 
-## Phase 3 — Completed in v24.6.223; corrected in v24.6.224
+## Phase 3 — Completed in v24.6.223; corrected through v24.6.230
 
 Shared external-service clients:
 
@@ -102,6 +105,15 @@ version 10, paid-call gates and existing response fields remain unchanged.
 - retain case-insensitive response-header lookup;
 - preserve legacy JobAdder diagnostic network-error fields;
 - publish the corrections under a distinct verified owner/source release.
+
+### v24.6.230 content-negotiation corrective closure
+
+- keep `Accept: application/json` as the JobAdder JSON-request default;
+- do not force JSON content negotiation on raw candidate-CV or attachment
+  downloads;
+- honor caller-supplied Accept headers case-insensitively;
+- retain download bytes and metadata, legacy diagnostic error fields,
+  authentication boundaries, retry rules, schema version 10 and all 107 routes.
 
 ## Phase 4 — Future
 

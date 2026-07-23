@@ -20,7 +20,11 @@
   v24.6.224**: redirect targets and cleanup are enforced, response headers keep
   case-insensitive semantics, diagnostic network failures retain their legacy
   fields, and the correction has its own immutable release identity.
-- Current completed private owner/source release: **CV Studio v24.6.224**.
+- The confirmed JobAdder raw-request content-negotiation regression was
+  corrected in **CV Studio v24.6.230**: JSON requests retain their default
+  `Accept: application/json`, while binary downloads remain
+  representation-neutral and caller-supplied Accept headers are honored.
+- Current completed private owner/source release: **CV Studio v24.6.230**.
 - Phases 1, 2A, 2B and 3 are complete.
 - There is no active implementation target. Stop after Phase 3 unless the
   owner explicitly starts Phase 4.
@@ -126,8 +130,10 @@ Before changing code:
 1. Read `ROADMAP.md`.
 2. Read `PHASE_STATUS.md`.
 3. Read `IMPLEMENT.md`.
-4. Read `CV_STUDIO_V24_6_224_PHASE_4_HANDOVER.md`.
-5. Read `cv_studio_v24_6_224_phase3_corrective_review_qa_report.md`, the
+4. Read `CV_STUDIO_V24_6_230_PHASE_4_HANDOVER.md`.
+5. Read
+   `cv_studio_v24_6_230_phase3_content_negotiation_corrective_qa_report.md`,
+   the v24.6.224 corrective QA report, the
    v24.6.223 Phase 3 QA report, the
    Phase 2B QA reports and the historical Phase 2A QA reports.
 6. Inspect the relevant existing storage paths and tests.
