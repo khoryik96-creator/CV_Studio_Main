@@ -469,7 +469,7 @@ class JobAdderClient:
         if not active_token:
             raise PermissionError("Not authenticated")
         url = self._with_params(self._api_url(path), params)
-        base_headers = {"Authorization": "Bearer " + active_token, "Accept": "application/json"}
+        base_headers = {"Authorization": "Bearer " + active_token}
         for key, value in dict(headers or {}).items():
             if str(key).lower() != "authorization":
                 base_headers[str(key)] = str(value)
@@ -514,7 +514,10 @@ class JobAdderClient:
                 raise
 
     def request_json(self, path, *, fallback=None, raw_fallback=False, **kwargs):
-        response = self.request_raw(path, **kwargs)
+        request_headers = dict(kwargs.pop("headers", {}) or {})
+        if not any(str(key).lower() == "accept" for key in request_headers):
+            request_headers["Accept"] = "application/json"
+        response = self.request_raw(path, headers=request_headers, **kwargs)
         if raw_fallback:
             fallback = {"raw": response.body.decode("utf-8", errors="replace") if response.body else ""}
         if fallback is None:

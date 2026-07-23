@@ -10,11 +10,11 @@
 - Phase 3 source baseline: v24.6.222
 - Phase 3 baseline Git commit: `1be9da48d8307c418d82807cbdaedc9f876a1b15`
 - Working branch: `codex/phase-3-shared-clients`
-- Active phase: none; Phase 4 requires explicit owner authorization
+- Active phase: Phase 3 corrective release only; Phase 4 requires explicit
+  owner authorization
 - Completed private owner/source release: v24.6.224
-- Status: Phase 3 and its corrective review closure are complete; stop before
-  Phase 4
-- Current milestone: none
+- Status: v24.6.230 corrective review closure in progress; stop before Phase 4
+- Current milestone: JobAdder raw/JSON content negotiation
 
 ## Phase 3 authorization and constraints
 
@@ -425,6 +425,25 @@
   The v24.6.223 artifacts remain immutable historical evidence.
 - No route URL, legacy response field, schema, credential store, frontend
   workflow, background execution, backburner item or Phase 4 work is included.
+
+## v24.6.230 Phase 3 content-negotiation corrective release
+
+- On 23 July 2026 the owner authorized correction of the confirmed JobAdder
+  content-negotiation regression against v24.6.224 commit
+  `0892dcc1fbec2fb68b4668014792230249c73cae`.
+- `JobAdderClient.request_raw` no longer forces `Accept: application/json`.
+  Binary candidate CV and attachment downloads remain representation-neutral,
+  while explicit caller accept headers retain precedence.
+- `JobAdderClient.request_json` owns the JSON accept default and keeps it across
+  the single rejected-token refresh. Explicit JSON caller headers are honored.
+- Characterization fixtures preserve exact download bytes/content metadata and
+  the established JobAdder diagnostic network-error fields while proving raw,
+  JSON and caller-supplied accept behavior.
+- Existing immutable release directories already occupy v24.6.225 through
+  v24.6.229, so v24.6.230 is the next non-overwriting release identity.
+- No route URL, response field, authentication boundary, retry rule, schema,
+  credential store, frontend workflow, background execution, backburner item or
+  Phase 4 work is included.
 
 ## Completed Phase 2B authorization and constraints
 

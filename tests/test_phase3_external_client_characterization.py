@@ -171,6 +171,7 @@ class Phase3ExternalClientCharacterizationTests(unittest.TestCase):
         self.assertEqual(len(requests_seen), 2)
         self.assertEqual(requests_seen[0][0].get_header("Authorization"), "Bearer <fixture-credential-a>")
         self.assertEqual(requests_seen[1][0].get_header("Authorization"), "Bearer <fixture-credential-b>")
+        self.assertTrue(all(item[0].get_header("Accept") is None for item in requests_seen))
         self.assertEqual([item[1] for item in requests_seen], [12, 12])
 
         page_payloads = [
@@ -216,6 +217,12 @@ class Phase3ExternalClientCharacterizationTests(unittest.TestCase):
 
     def test_jobadder_diagnostics_preserve_network_error_response_shapes(self):
         transport = app._JOBADDER_CLIENT.transport
+        requests_seen = []
+
+        def offline(request_object, **_kwargs):
+            requests_seen.append(request_object)
+            raise urllib.error.URLError("fixture-offline")
+
         with mock.patch.dict(
             app._ja_creds_store,
             {"access_token": "<fixture-credential>"},
@@ -227,7 +234,7 @@ class Phase3ExternalClientCharacterizationTests(unittest.TestCase):
         ), mock.patch.object(
             transport,
             "_opener",
-            side_effect=urllib.error.URLError("fixture-offline"),
+            side_effect=offline,
         ), mock.patch.object(
             transport,
             "_sleeper",
@@ -248,6 +255,18 @@ class Phase3ExternalClientCharacterizationTests(unittest.TestCase):
             self.assertEqual(result["response_body"], "")
             self.assertIsNone(result["response_json"])
         self.assertEqual(post_result["request_payload"], {"fixture": True})
+        self.assertEqual(
+            [request.get_header("Accept") for request in requests_seen],
+            [
+                "application/json, text/plain, */*",
+                "application/json, text/plain, */*",
+                "application/json, text/plain, */*",
+            ],
+        )
+        self.assertEqual(
+            [request.get_method() for request in requests_seen],
+            ["GET", "GET", "POST"],
+        )
 
     def test_jobadder_json_upload_and_ppc_pagination_contracts(self):
         requests_seen = []

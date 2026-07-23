@@ -230,6 +230,10 @@ class Phase3ClientFoundationTests(unittest.TestCase):
             [item[0].get_header("Authorization") for item in requests_seen],
             ["Bearer <fixture-credential-a>", "Bearer <fixture-credential-b>"],
         )
+        self.assertEqual(
+            [item[0].get_header("Accept") for item in requests_seen],
+            ["application/json", "application/json"],
+        )
 
         repeated_errors = [
             _http_error(401, {"message": "expired"}),
@@ -249,7 +253,34 @@ class Phase3ClientFoundationTests(unittest.TestCase):
             error.close()
         caught.exception.close()
         self.assertEqual(len(retry_calls), 2)
+        self.assertTrue(all(item[0].get_header("Accept") is None for item in retry_calls))
         self.assertEqual(reconnects, [True])
+
+        caller_headers = []
+        client.transport = ExternalServiceTransport(
+            opener=lambda request_object, **_kwargs: (
+                caller_headers.append(request_object)
+                or _FakeResponse(b"fixture-pdf")
+            ),
+            sleeper=lambda _delay: None,
+        )
+        response = client.request_raw(
+            "candidates/fixture/attachments/fixture",
+            headers={"Accept": "application/pdf"},
+            refresh_on_401=False,
+        )
+        self.assertEqual(response.body, b"fixture-pdf")
+        self.assertEqual(caller_headers[0].get_header("Accept"), "application/pdf")
+
+        caller_headers.clear()
+        client.request_json(
+            "candidates/fixture",
+            headers={"accept": "application/vnd.jobadder+json"},
+        )
+        self.assertEqual(
+            caller_headers[0].get_header("Accept"),
+            "application/vnd.jobadder+json",
+        )
 
     def test_jobadder_offset_paginator_preserves_caps_and_no_progress_diagnostics(self):
         payloads = [
