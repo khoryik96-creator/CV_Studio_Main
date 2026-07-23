@@ -15,7 +15,7 @@
 - Active phase: Phase 4 — gradual behavior-preserving backend modularisation
 - Completed private owner/source release: v24.6.230
 - Status: Phase 4 explicitly authorized and entry verification complete
-- Current milestone: Phase 4 Milestone 1 — inventory and characterization
+- Current milestone: Phase 4 Milestone 2 — durable-storage HTTP bridge
 
 ## Phase 4 authorization and constraints
 
@@ -105,8 +105,8 @@
 
 - [x] Verify the v24.6.230 master/source/package baseline and all entry gates.
 - [x] Record owner authorization, scope boundaries and milestone plan.
-- [ ] Inventory candidate backend areas and select bounded module sequence.
-- [ ] Add pre-move success/error characterization for the first area.
+- [x] Inventory candidate backend areas and select bounded module sequence.
+- [x] Add pre-move success/error characterization for the selected areas.
 - [ ] Extract and verify the first bounded backend module.
 - [ ] Extract and verify the second bounded backend module.
 - [ ] Extract and verify the third bounded backend module.
@@ -126,6 +126,126 @@
   browser-mirror, update/receipt and rollback contract remain fixed.
 - No protected colleague package will be produced without matching native
   compilation and smoke certification.
+
+## Phase 4 Milestone 1 module inventory and selection
+
+The baseline backend has 22,963 lines in `app.py`, 107 Flask route URLs and five
+global `before_request` functions in this exact order:
+`_assign_cvstudio_request_id`, `_reject_declared_oversize_request`,
+`_reject_non_local_host_header`, `_require_ai_spend_browser_session` and
+`_reject_cross_site_unsafe_request`. The global request limit is 80 MiB. Phase 4
+will leave this registration and security boundary in `app.py`.
+
+### Selected first area — durable-storage HTTP bridge
+
+- Routes: the 19 existing `/storage/*` routes for usage history, PPC metadata,
+  OneNote transfer records, saved OneNote links and allowlisted browser
+  settings. Their exact GET/POST methods and existing endpoint function names
+  remain registered in place.
+- Helper/global dependencies: Flask request JSON, `jsonify`, the current
+  request ID/error-payload adapters, the five repository globals,
+  `BROWSER_SETTING_KEYS`, `BrowserSettingsRepository.normalize_value`, record
+  normalizers and the existing recursive usage-secret filter.
+- Response fields: `ok`, `request_id` and `legacy_preserved` on every success;
+  store-specific `records`, `metadata`, `links`, `settings`, `imported`,
+  `written` or `deleted`; and the established normalized
+  `STORAGE_PAYLOAD_INVALID` or `StorageError` contract on failure.
+- Locks/protected stores: no bridge-owned lock and no protected credential
+  store. Repository transactions retain their existing SQLite locking and
+  validation behavior.
+- Filesystem/state: schema-10 SQLite plus the already-preserved Phase 2A JSON
+  and browser mirrors. The bridge must not open, migrate, back up, delete or
+  reinterpret those stores itself.
+- Startup side effects: repository instances and schema initialization occur
+  before Flask route registration. The extracted bridge receives repository
+  providers after initialization so existing test/runtime compatibility
+  rebinding remains effective.
+- Boundary decision: extract validation and handler orchestration into
+  `cvstudio_storage_bridge.py`; retain all decorators and one-line endpoint
+  adapters in `app.py`.
+
+### Selected second area — redacted runtime diagnostics/support bundle
+
+- Routes: `/diagnostics/runtime` GET, `/diagnostics/clear_preview_cache` POST
+  and `/diagnostics/support_bundle` POST, with their existing endpoint names.
+- Helper/global dependencies: request JSON/current request ID, runtime snapshot
+  and preview-cache callbacks, root/version/log paths, `send_file`, system
+  memory/dependency probes, connection-status booleans and install-receipt
+  status.
+- Response fields: the runtime snapshot's established 18 top-level fields; the
+  clear response's `ok`, `request_id` and `cache`; and the support ZIP's
+  `runtime.json`, `browser.json`, optional roadmap, README and redacted bounded
+  runtime-log tails.
+- Locks/protected stores: diagnostics uses existing preview-cache locks only
+  through injected callbacks. It reads redacted connection booleans and never
+  receives credential values or a protected-store write dependency.
+- Filesystem/state: read-only roadmap and at most 256 KiB from each of two
+  bounded runtime logs. It writes only the in-memory ZIP returned to the caller.
+- Startup side effects: none. Runtime logging, cache creation, protected-store
+  loading and watchdog startup remain in `app.py`.
+- Boundary decision: extract system-memory probing, support-text redaction,
+  browser-payload sanitization and in-memory ZIP construction into
+  `cvstudio_diagnostics.py`; retain runtime state assembly and route decorators
+  in `app.py`.
+
+### Selected third area — document safety/limited OCR primitives
+
+- Directly affected routes: `/ocr/health`, `/ocr`, `/preview-file`,
+  `/extract-text`, `/parse` and `/blind`. The helpers are also used by AI
+  Crawler preview rendering, whose route contracts remain in `app.py`.
+- Helper/global dependencies: ZIP and byte streams, Pillow, pdfplumber,
+  pypdfium2 with pdf2image fallback, pytesseract, monotonic time and one bounded
+  OCR semaphore.
+- Response/error behavior: document-validation failures remain 400 unless they
+  match the established safe-limit/resource markers, which remain 413. Existing
+  route errors retain their legacy `error` text plus normalized `ok`, `message`,
+  `code`, `retryable`, `request_id` and `severity` fields.
+- Locks/protected stores: one process-local bounded OCR semaphore; no protected
+  credential store and no persistent user-data lock.
+- Filesystem/state: helpers operate on caller-supplied bytes and decoded/rendered
+  images. The Poppler path remains a caller dependency; no persistent path or
+  startup write is introduced.
+- Startup/security side effects: none. The 80 MiB request boundary, Host/CSRF
+  guards, extension-only OCR-origin exception and paid browser-session gates
+  for `/parse` and `/blind` remain registered unchanged in `app.py`.
+- Boundary decision: extract constants, the shared semaphore, ZIP/image/PDF
+  safety validation and bounded render/OCR primitives into
+  `cvstudio_document_safety.py`; keep compatibility aliases in `app.py` because
+  mature route and AI Crawler helpers call the established private names.
+
+### Deferred candidates
+
+- Installer receipt, restart/update/rollback and runtime PID/log startup code is
+  intentionally deferred because its import-time side effects and launcher
+  compatibility make it a higher-risk later boundary.
+- JobAdder, Microsoft Graph and AI-provider compatibility orchestration remains
+  around the completed Phase 3 clients; Phase 4 will not reopen their transport
+  policies.
+- Protected secret vaults, OneNote desktop COM/PowerShell integration, AI
+  Crawler orchestration, Lead Finder and CV-generation workflows remain in
+  `app.py` for this gradual release because they have materially larger state,
+  credential or behavior surfaces than the three selected boundaries.
+
+### Milestone 1 characterization result
+
+- Added
+  `tests/test_phase4_backend_modularization_characterization.py` before moving
+  production code.
+- Four tests pass with `ResourceWarning` treated as an error.
+- Coverage fixes the exact route methods and endpoint names for all 28 directly
+  selected routes, the complete 107-route count, all five global request guards,
+  the 80 MiB request boundary and the paid browser-session boundary for
+  `/parse` and `/blind`.
+- Storage coverage fixes every success field family across the 19 bridge routes,
+  recursive usage-secret filtering and representative invalid payloads for all
+  five stores.
+- Diagnostics coverage fixes the 18-field runtime payload, preview-cache clear
+  response, support-bundle members and credential/email/candidate-ID redaction.
+- Document coverage fixes the safety constants, 400/413 classification, ZIP
+  validation, missing-file errors, normalized error fields, paid-session gate
+  and unsafe-request rejection.
+- No production source, route registration, storage schema/data, startup side
+  effect or external call changed during Milestone 1.
 
 ## Phase 3 authorization and constraints
 
