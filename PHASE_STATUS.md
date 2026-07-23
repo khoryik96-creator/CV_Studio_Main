@@ -3,8 +3,8 @@
 ## Release state
 
 - Approved baseline: v24.6.217
-- Completed release: v24.6.230
-- Previous completed release: v24.6.224
+- Completed release: v24.6.231
+- Previous completed release: v24.6.230
 - Phase 2B source baseline: v24.6.219
 - Phase 2B baseline Git commit: `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`
 - Phase 3 source baseline: v24.6.222
@@ -12,10 +12,10 @@
 - Phase 4 source baseline: v24.6.230
 - Phase 4 baseline Git commit: `7a0efcf0bce10b07e034592fb22a6021141d4146`
 - Working branch: `codex/phase-4-backend-modularisation`
-- Active phase: Phase 4 — gradual behavior-preserving backend modularisation
-- Completed private owner/source release: v24.6.230
-- Status: Phase 4 explicitly authorized and entry verification complete
-- Current milestone: Phase 4 Milestone 5 — acceptance and release evidence
+- Active phase: none; Phase 4 is complete
+- Completed private owner/source release: v24.6.231
+- Status: Phase 4 completed; stop before Phase 5
+- Current milestone: none; Phase 5 requires a new explicit owner instruction
 
 ## Phase 4 authorization and constraints
 
@@ -110,9 +110,9 @@
 - [x] Extract and verify the first bounded backend module.
 - [x] Extract and verify the second bounded backend module.
 - [x] Extract and verify the third bounded backend module.
-- [ ] Run complete regression, static validation and iterative final review.
-- [ ] Create and byte-verify the Phase 4 private owner/source release.
-- [ ] Produce QA report, SHA-256 and Phase 5 handover; stop before Phase 5.
+- [x] Run complete regression, static validation and iterative final review.
+- [x] Create and byte-verify the Phase 4 private owner/source release.
+- [x] Produce QA report, SHA-256 and Phase 5 handover; stop before Phase 5.
 
 ## Phase 4 decisions and limitations
 
@@ -338,6 +338,62 @@ will leave this registration and security boundary in `app.py`.
   against master, schema version 10, no app import from any extracted module,
   all 22 Phase 3 client fixtures and all four Phase 4 characterization tests.
 - No further concrete finding remains from this review pass.
+
+## Phase 4 Milestone 5 acceptance and release result
+
+- Advanced all active production, browser, installer, launcher, watchdog,
+  protected-build and starter-pack version surfaces together to v24.6.231.
+- Complete Python discovery passed 52 tests with `ResourceWarning` treated as
+  an error. This includes the Phase 1/2 storage guarantees, all Phase 3 shared
+  clients and the four Phase 4 characterization tests.
+- Both frontend fixtures passed, including compilation of both inline
+  `index.html` scripts. The live source smoke passed all 24 assertions on an
+  ephemeral loopback port with temporary receipt, database and log state.
+- Static validation passed for 19 Python files, 20 JavaScript files plus both
+  inline scripts, five Bash/command files through Git Bash and five PowerShell
+  files. Owner-source validation/preflight, repository consistency and Git
+  whitespace validation also passed.
+- Final review against exact master baseline
+  `7a0efcf0bce10b07e034592fb22a6021141d4146` proves the ordered 107-route
+  inventory, all five global request/security guards, the 80 MiB request
+  boundary, schema version 10 and the absence of an `app` import from any
+  extracted module.
+- The first review finding concerning diagnostics callback rebinding was fixed
+  before release. The repeated focused and full review found no further
+  concrete compatibility, security, persistence or scope issue.
+- No live credential, protected secret, external-service mutation or paid AI
+  call was used. No protected colleague package or native-platform test is
+  claimed.
+- The authoritative v24.6.231 private owner/source ZIP is generated from the
+  final clean release commit with one `cv_formatter/` root. Its SHA-256, byte
+  size, exact `source_commit` and fresh byte-verification result are recorded in
+  adjacent release sidecars.
+
+## Phase 4 files changed
+
+- `cvstudio_storage_bridge.py` — app-independent orchestration for the 19
+  existing durable-storage routes using explicit request/response/repository
+  dependencies.
+- `cvstudio_diagnostics.py` — app-independent redaction, runtime diagnostics
+  and in-memory support-bundle service using explicit providers/callbacks.
+- `cvstudio_document_safety.py` — shared bounded ZIP/image/PDF validation,
+  rendering and serialized OCR primitives.
+- `app.py` — unchanged route decorators/endpoints and bounded compatibility
+  adapters for the three extracted modules.
+- `tests/test_phase4_backend_modularization_characterization.py` —
+  pre-move and continuing route, field, security, storage, diagnostics and
+  document-safety characterization.
+- `owner_build_tools/build_protected.py` — owner-source inventory/preflight
+  includes the three new modules.
+- Production, installer, launcher, watchdog, protected-build and starter-pack
+  version surfaces — advanced consistently to v24.6.231.
+- `AGENTS.md`, `ROADMAP.md`, `PHASE_STATUS.md`, `IMPLEMENT.md`,
+  `CODEX_FIRST_PROMPT.txt`, `README_FIRST.txt`, `BACKBURNER_ROADMAP.md` and
+  `KEEP_PRIVATE_PATCH_BASE.txt` — Phase 4 completion and Phase 5 activation
+  gate.
+- `cv_studio_v24_6_231_phase4_backend_modularisation_qa_report.md` — Phase 4
+  release QA evidence.
+- `CV_STUDIO_V24_6_231_PHASE_5_HANDOVER.md` — owner-gated next-phase handover.
 
 ## Phase 3 authorization and constraints
 
@@ -1510,5 +1566,5 @@ None.
 
 ## Next action
 
-Stop. Do not begin Phase 4 or any later phase without a new explicit owner
+Stop. Do not begin Phase 5 or any later phase without a new explicit owner
 instruction.

@@ -13,8 +13,10 @@
 - v24.6.230 corrected JobAdder raw-request content negotiation without changing
   the completed Phase 3 scope. Existing v24.6.225-v24.6.229 release identities
   remain immutable.
-- Phases 1, 2A, 2B and 3 are complete.
-- No later phase is active. Phase 4 requires a new explicit owner instruction.
+- v24.6.231 completed gradual behavior-preserving backend modularisation in
+  Phase 4.
+- Phases 1, 2A, 2B, 3 and 4 are complete.
+- No later phase is active. Phase 5 requires a new explicit owner instruction.
 
 ## Phase 1 — Completed
 
@@ -115,9 +117,19 @@ version 10, paid-call gates and existing response fields remain unchanged.
 - retain download bytes and metadata, legacy diagnostic error fields,
   authentication boundaries, retry rules, schema version 10 and all 107 routes.
 
-## Phase 4 — Future
+## Phase 4 — Completed in v24.6.231
 
-Gradual backend modularisation without changing behaviour or routes.
+Gradual backend modularisation without changing behaviour or routes:
+
+- extracted the 19-route durable-storage HTTP bridge behind unchanged
+  app-level route decorators and endpoint names;
+- extracted redacted runtime diagnostics, browser-diagnostic sanitization and
+  in-memory support-bundle construction behind explicit callbacks/providers;
+- extracted shared document validation, page/image limits, PDF rendering and
+  serialized OCR primitives behind established compatibility names;
+- retained the exact 107 routes/methods/endpoints, global request/security
+  guards, schema version 10, Phase 1/2 storage guarantees and Phase 3 client
+  contracts.
 
 ## Phase 5 — Future
 

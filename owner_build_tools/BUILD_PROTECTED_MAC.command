@@ -2,7 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 echo "============================================"
-echo "  CV Studio v24.6.230 Protected Mac Build"
+echo "  CV Studio v24.6.231 Protected Mac Build"
 echo "============================================"
 echo ""
 echo "Owner-only builder. Do not send this file or the private source to colleagues."

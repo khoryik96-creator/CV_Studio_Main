@@ -1,7 +1,7 @@
 # CV Studio Backburner and Stability Roadmap
 
 Last updated: 23 July 2026
-Current implementation base: v24.6.230
+Current implementation base: v24.6.231
 
 ## Explicit backburner — do not implement until the owner reactivates them
 
@@ -109,12 +109,24 @@ Deferred scope includes Shortlist / Maybe / Reject / Reviewed states, recruiter 
 - v24.6.225-v24.6.229 release identities remain immutable;
 - Phase 4, schema version 10, all 107 routes and the backburner remain unchanged.
 
+### v24.6.231 — Phase 4 gradual backend modularisation
+
+- the 19 existing durable-storage routes delegate to an explicit, app-independent
+  storage bridge while retaining route decorators, endpoint names, response
+  fields and schema version 10;
+- runtime diagnostics, redaction and in-memory support-bundle construction use
+  an app-independent service with explicit callbacks/providers;
+- shared document validation, PDF/image limits, rendering and serialized OCR
+  primitives use an app-independent module behind compatibility names;
+- all 107 routes, global security/request-size guards, Phase 1/2 storage
+  guarantees and Phase 3 shared-client behavior remain unchanged;
+- Phase 5/6 work and backburner items 4, 7 and 8 remain untouched.
+
 ## Active stability direction
 
-No later phase is active. If the owner explicitly starts further work, continue
+No later phase is active. If the owner explicitly starts Phase 5, continue
 the remaining improvements conservatively and in staged releases:
 
-- gradual behavior-preserving backend modularisation;
 - persistent background task management, central AI cost guardrails and
   provider-billing reconciliation;
 - later frontend modularisation, lazy loading and remaining explainable-fit/

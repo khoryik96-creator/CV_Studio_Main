@@ -1,5 +1,5 @@
 CV Studio private source patch base
-Version: v24.6.230
+Version: v24.6.231
 Keep this ZIP for future patches. Do not distribute this source package to colleagues.
 
 JobAdder API investigation source of truth:
@@ -1012,3 +1012,22 @@ Patch note v24.6.193: cross-platform deterministic adm-zip tree hashing fixes th
   immutable v24.6.225-v24.6.229 release directories already exist.
 - Leaves schema version 10, all 107 routes, credential stores, paid-call gates,
   Phase 4 scope and roadmap items 4, 7 and 8 unchanged.
+
+## v24.6.231 Phase 4 gradual backend modularisation
+
+- Extracts all 19 existing durable-storage route handlers into
+  `cvstudio_storage_bridge.py` behind unchanged app-level decorators/endpoints
+  and explicit repository/request/response dependencies.
+- Extracts redacted system/browser diagnostics and in-memory support-bundle
+  construction into `cvstudio_diagnostics.py` behind explicit state callbacks
+  and path providers.
+- Extracts shared ZIP/image/PDF validation, rendering and serialized OCR
+  primitives into `cvstudio_document_safety.py` behind the established
+  app-level compatibility names.
+- Keeps all extracted modules independent of `app.py`, with no circular import
+  or new startup side effect.
+- Leaves schema version 10, all 107 route methods/endpoints/response fields,
+  authentication/CSRF/request-size boundaries, protected stores, Phase 1/2
+  storage guarantees, Phase 3 client behavior, paid-call gates and backburner
+  items 4, 7 and 8 unchanged.
+- Stops before Phase 5.
