@@ -15,7 +15,7 @@
 - Active phase: Phase 4 — gradual behavior-preserving backend modularisation
 - Completed private owner/source release: v24.6.230
 - Status: Phase 4 explicitly authorized and entry verification complete
-- Current milestone: Phase 4 Milestone 2 — durable-storage HTTP bridge
+- Current milestone: Phase 4 Milestone 3 — runtime diagnostics/support bundle
 
 ## Phase 4 authorization and constraints
 
@@ -107,7 +107,7 @@
 - [x] Record owner authorization, scope boundaries and milestone plan.
 - [x] Inventory candidate backend areas and select bounded module sequence.
 - [x] Add pre-move success/error characterization for the selected areas.
-- [ ] Extract and verify the first bounded backend module.
+- [x] Extract and verify the first bounded backend module.
 - [ ] Extract and verify the second bounded backend module.
 - [ ] Extract and verify the third bounded backend module.
 - [ ] Run complete regression, static validation and iterative final review.
@@ -246,6 +246,34 @@ will leave this registration and security boundary in `app.py`.
   and unsafe-request rejection.
 - No production source, route registration, storage schema/data, startup side
   effect or external call changed during Milestone 1.
+
+## Phase 4 Milestone 2 durable-storage bridge result
+
+- Added `cvstudio_storage_bridge.py` with the Phase 2A usage/PPC validators,
+  Phase 2B record/setting validators and the handler orchestration for all 19
+  existing storage routes.
+- `app.py` retains every original route decorator and endpoint function name.
+  Each endpoint is now a one-line compatibility adapter into one explicitly
+  wired `StorageBridge`.
+- Repository dependencies are providers rather than captured instances. This
+  preserves initialization order and the established integration-test/runtime
+  ability to replace an app-level repository without rebuilding Flask.
+- The extracted module has no `app` import and therefore no circular dependency.
+  It receives request JSON, `jsonify`, structured error/current-request-ID
+  adapters, repository providers, the exact setting allowlist and canonical
+  setting normalizer explicitly.
+- Schema version 10, repository implementations, migration/backup behavior,
+  protected stores, legacy JSON/browser mirrors and error handlers are
+  unchanged.
+- Focused Phase 1/2 repository, real-Flask bridge and Phase 4 characterization
+  verification passed 24 tests with `ResourceWarning` treated as an error.
+- Complete Python discovery passed 52 tests. Both frontend storage fixtures and
+  the 24-assertion live source smoke passed.
+- Python compilation, Git whitespace validation and a direct AST check proving
+  the bridge has no app import passed.
+- No route URL/method/endpoint, response field, authentication/CSRF/request-size
+  boundary, startup side effect, external-service behavior or user workflow
+  changed.
 
 ## Phase 3 authorization and constraints
 

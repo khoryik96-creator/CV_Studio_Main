@@ -244,6 +244,18 @@ from cvstudio_clients import (
     JobAdderClient,
     MicrosoftGraphClient,
 )
+from cvstudio_storage_bridge import (
+    PHASE2A_USAGE_DROP as _PHASE2A_USAGE_DROP,
+    PHASE2A_USAGE_MAX_RECORDS as _PHASE2A_USAGE_MAX_RECORDS,
+    PHASE2A_USAGE_SECRET_FIELDS as _PHASE2A_USAGE_SECRET_FIELDS,
+    PHASE2A_USAGE_SECRET_SUFFIXES as _PHASE2A_USAGE_SECRET_SUFFIXES,
+    StorageBridge,
+    phase2a_ppc_metadata as _phase2a_ppc_metadata,
+    phase2a_usage_records as _phase2a_usage_records,
+    phase2a_usage_safe_value as _phase2a_usage_safe_value,
+    phase2a_usage_secret_field as _phase2a_usage_secret_field,
+    phase2b_record_array as _phase2b_record_array,
+)
 
 _CVSTUDIO_VERSION = "v24.6.230"
 _CVSTUDIO_ROOT = _install_package_root()
@@ -11584,432 +11596,122 @@ def owner_integration_run():
     return jsonify(report), status
 
 
-_PHASE2A_USAGE_MAX_RECORDS = 250000
-_PHASE2A_USAGE_SECRET_FIELDS = {
-    "access_token", "refresh_token", "client_secret", "api_key", "authorization",
-    "authorization_code", "password", "credential", "credentials", "token",
-}
-_PHASE2A_USAGE_SECRET_SUFFIXES = {
-    "accesstoken", "refreshtoken", "clientsecret", "apikey", "authorizationcode",
-    "password", "credential", "credentials", "bearertoken", "oauthtoken",
-    "oauth2token", "authtoken", "idtoken", "sessiontoken", "csrftoken", "secret",
-}
-_PHASE2A_USAGE_DROP = object()
-
-
-def _phase2a_usage_secret_field(key):
-    key_text = str(key or "").strip().lower()
-    if key_text in _PHASE2A_USAGE_SECRET_FIELDS:
-        return True
-    compact = re.sub(r"[^a-z0-9]", "", key_text)
-    return compact.startswith("authorization") or any(
-        compact.endswith(suffix) for suffix in _PHASE2A_USAGE_SECRET_SUFFIXES
-    )
-
-
-def _phase2a_usage_safe_value(value, depth=0):
-    if depth > 24:
-        return _PHASE2A_USAGE_DROP
-    if isinstance(value, dict):
-        clean = {}
-        for key, nested in value.items():
-            key_text = str(key or "")[:120]
-            if _phase2a_usage_secret_field(key_text):
-                continue
-            safe_nested = _phase2a_usage_safe_value(nested, depth + 1)
-            if safe_nested is not _PHASE2A_USAGE_DROP:
-                clean[key_text] = safe_nested
-        return clean
-    if isinstance(value, list):
-        clean = []
-        for nested in value:
-            safe_nested = _phase2a_usage_safe_value(nested, depth + 1)
-            if safe_nested is not _PHASE2A_USAGE_DROP:
-                clean.append(safe_nested)
-        return clean
-    if value is None or isinstance(value, (str, int, float, bool)):
-        return value
-    return _PHASE2A_USAGE_DROP
-
-
-def _phase2a_usage_records(payload):
-    if not isinstance(payload, list):
-        return None
-    if len(payload) > _PHASE2A_USAGE_MAX_RECORDS:
-        return None
-    records = []
-    for item in payload:
-        if not isinstance(item, dict):
-            continue
-        clean = _phase2a_usage_safe_value(item)
-        records.append(clean if isinstance(clean, dict) else {})
-    return records
-
-
-def _phase2a_ppc_metadata(payload):
-    if not isinstance(payload, dict) or len(payload) > 250000:
-        return None
-    clean = {}
-    for placement_id, raw in payload.items():
-        placement_id = str(placement_id or "").strip()[:500]
-        if not placement_id or not isinstance(raw, dict):
-            continue
-        payment = str(raw.get("payment") or "")
-        guarantee = str(raw.get("guaranteeMonths") or "")
-        clean[placement_id] = {
-            "payment": payment if payment in ("Paid", "Unpaid", "Invoiced") else "",
-            "guaranteeMonths": guarantee if re.fullmatch(r"(?:[1-6]|9|12|resigned_backout)", guarantee) else "",
-            "updatedAt": str(raw.get("updatedAt") or "")[:80],
-        }
-    return clean
+_CVSTUDIO_STORAGE_BRIDGE = StorageBridge(
+    request_json=lambda: request.get_json(silent=True) or {},
+    jsonify=jsonify,
+    error_payload=_cvstudio_error_payload,
+    request_id=_cvstudio_current_request_id,
+    usage_repository=lambda: _CVSTUDIO_USAGE_REPOSITORY,
+    ppc_repository=lambda: _CVSTUDIO_PPC_REPOSITORY,
+    transfer_repository=lambda: _CVSTUDIO_ONENOTE_TRANSFER_REPOSITORY,
+    link_repository=lambda: _CVSTUDIO_ONENOTE_LINK_REPOSITORY,
+    browser_settings_repository=lambda: _CVSTUDIO_BROWSER_SETTINGS_REPOSITORY,
+    browser_setting_keys=BROWSER_SETTING_KEYS,
+    browser_setting_normalizer=BrowserSettingsRepository.normalize_value,
+)
 
 
 @app.route("/storage/usage-history", methods=["GET"])
 def phase2a_usage_history_read():
-    return jsonify({
-        "ok": True,
-        "records": _CVSTUDIO_USAGE_REPOSITORY.list(),
-        "request_id": _cvstudio_current_request_id(),
-        "legacy_preserved": True,
-    })
+    return _CVSTUDIO_STORAGE_BRIDGE.usage_history_read()
 
 
 @app.route("/storage/usage-history/import", methods=["POST"])
 def phase2a_usage_history_import():
-    body = request.get_json(silent=True) or {}
-    records = _phase2a_usage_records(body.get("records"))
-    if records is None:
-        return _cvstudio_error_payload(
-            "STORAGE_PAYLOAD_INVALID",
-            "Usage history payload is invalid or too large",
-            400,
-        )
-    imported = _CVSTUDIO_USAGE_REPOSITORY.import_legacy(records)
-    return jsonify({
-        "ok": True,
-        "imported": imported,
-        "records": _CVSTUDIO_USAGE_REPOSITORY.list(),
-        "request_id": _cvstudio_current_request_id(),
-        "legacy_preserved": True,
-    })
+    return _CVSTUDIO_STORAGE_BRIDGE.usage_history_import()
 
 
 @app.route("/storage/usage-history/upsert", methods=["POST"])
 def phase2a_usage_history_upsert():
-    body = request.get_json(silent=True) or {}
-    records = _phase2a_usage_records(body.get("records"))
-    if records is None:
-        return _cvstudio_error_payload(
-            "STORAGE_PAYLOAD_INVALID",
-            "Usage history payload is invalid or too large",
-            400,
-        )
-    written = _CVSTUDIO_USAGE_REPOSITORY.upsert(records)
-    return jsonify({
-        "ok": True,
-        "written": written,
-        "request_id": _cvstudio_current_request_id(),
-        "legacy_preserved": True,
-    })
+    return _CVSTUDIO_STORAGE_BRIDGE.usage_history_upsert()
 
 
 @app.route("/storage/usage-history/clear", methods=["POST"])
 def phase2a_usage_history_clear():
-    _CVSTUDIO_USAGE_REPOSITORY.clear()
-    return jsonify({
-        "ok": True,
-        "request_id": _cvstudio_current_request_id(),
-        "legacy_preserved": True,
-    })
+    return _CVSTUDIO_STORAGE_BRIDGE.usage_history_clear()
 
 
 @app.route("/storage/ppc-metadata", methods=["GET"])
 def phase2a_ppc_metadata_read():
-    return jsonify({
-        "ok": True,
-        "metadata": _CVSTUDIO_PPC_REPOSITORY.load(),
-        "request_id": _cvstudio_current_request_id(),
-        "legacy_preserved": True,
-    })
+    return _CVSTUDIO_STORAGE_BRIDGE.ppc_metadata_read()
 
 
 @app.route("/storage/ppc-metadata/import", methods=["POST"])
 def phase2a_ppc_metadata_import():
-    body = request.get_json(silent=True) or {}
-    metadata = _phase2a_ppc_metadata(body.get("metadata"))
-    if metadata is None:
-        return _cvstudio_error_payload(
-            "STORAGE_PAYLOAD_INVALID",
-            "PPC metadata payload is invalid or too large",
-            400,
-        )
-    imported = _CVSTUDIO_PPC_REPOSITORY.import_legacy(metadata)
-    return jsonify({
-        "ok": True,
-        "imported": imported,
-        "metadata": _CVSTUDIO_PPC_REPOSITORY.load(),
-        "request_id": _cvstudio_current_request_id(),
-        "legacy_preserved": True,
-    })
+    return _CVSTUDIO_STORAGE_BRIDGE.ppc_metadata_import()
 
 
 @app.route("/storage/ppc-metadata/upsert", methods=["POST"])
 def phase2a_ppc_metadata_upsert():
-    body = request.get_json(silent=True) or {}
-    metadata = _phase2a_ppc_metadata(body.get("metadata"))
-    if metadata is None:
-        return _cvstudio_error_payload(
-            "STORAGE_PAYLOAD_INVALID",
-            "PPC metadata payload is invalid or too large",
-            400,
-        )
-    written = _CVSTUDIO_PPC_REPOSITORY.upsert(metadata)
-    return jsonify({
-        "ok": True,
-        "written": written,
-        "request_id": _cvstudio_current_request_id(),
-        "legacy_preserved": True,
-    })
+    return _CVSTUDIO_STORAGE_BRIDGE.ppc_metadata_upsert()
 
 
 @app.route("/storage/ppc-metadata/clear", methods=["POST"])
 def phase2a_ppc_metadata_clear():
-    _CVSTUDIO_PPC_REPOSITORY.clear()
-    return jsonify({
-        "ok": True,
-        "request_id": _cvstudio_current_request_id(),
-        "legacy_preserved": True,
-    })
-
-
-def _phase2b_record_array(payload, maximum, normalizer):
-    if (
-        not isinstance(payload, list)
-        or len(payload) > maximum
-        or any(not isinstance(item, dict) for item in payload)
-    ):
-        return None
-    return normalizer(payload)
+    return _CVSTUDIO_STORAGE_BRIDGE.ppc_metadata_clear()
 
 
 def _phase2b_browser_settings(payload):
-    if not isinstance(payload, dict) or len(payload) > len(BROWSER_SETTING_KEYS):
-        return None
-    clean = {}
-    for raw_key, value in payload.items():
-        key = str(raw_key or "")
-        normalized = BrowserSettingsRepository.normalize_value(key, value)
-        if normalized is None:
-            return None
-        clean[key] = normalized
-    return clean
+    return _CVSTUDIO_STORAGE_BRIDGE.phase2b_browser_settings(payload)
 
 
 def _phase2b_browser_setting_keys(payload):
-    if not isinstance(payload, list) or len(payload) > len(BROWSER_SETTING_KEYS):
-        return None
-    keys = []
-    seen = set()
-    for raw_key in payload:
-        key = str(raw_key or "")
-        if key not in BROWSER_SETTING_KEYS:
-            return None
-        if key not in seen:
-            seen.add(key)
-            keys.append(key)
-    return keys
+    return _CVSTUDIO_STORAGE_BRIDGE.phase2b_browser_setting_keys(payload)
 
 
 @app.route("/storage/onenote-transfer-records", methods=["GET"])
 def phase2b_onenote_transfer_read():
-    return jsonify({
-        "ok": True,
-        "records": _CVSTUDIO_ONENOTE_TRANSFER_REPOSITORY.list(),
-        "request_id": _cvstudio_current_request_id(),
-        "legacy_preserved": True,
-    })
+    return _CVSTUDIO_STORAGE_BRIDGE.onenote_transfer_read()
 
 
 @app.route("/storage/onenote-transfer-records/import", methods=["POST"])
 def phase2b_onenote_transfer_import():
-    body = request.get_json(silent=True) or {}
-    records = _phase2b_record_array(
-        body.get("records"),
-        200,
-        _CVSTUDIO_ONENOTE_TRANSFER_REPOSITORY.normalize_records,
-    )
-    if records is None:
-        return _cvstudio_error_payload(
-            "STORAGE_PAYLOAD_INVALID",
-            "OneNote transfer record payload is invalid or too large",
-            400,
-        )
-    imported = _CVSTUDIO_ONENOTE_TRANSFER_REPOSITORY.import_legacy(records)
-    return jsonify({
-        "ok": True,
-        "imported": imported,
-        "records": _CVSTUDIO_ONENOTE_TRANSFER_REPOSITORY.list(),
-        "request_id": _cvstudio_current_request_id(),
-        "legacy_preserved": True,
-    })
+    return _CVSTUDIO_STORAGE_BRIDGE.onenote_transfer_import()
 
 
 @app.route("/storage/onenote-transfer-records/replace", methods=["POST"])
 def phase2b_onenote_transfer_replace():
-    body = request.get_json(silent=True) or {}
-    records = _phase2b_record_array(
-        body.get("records"),
-        200,
-        _CVSTUDIO_ONENOTE_TRANSFER_REPOSITORY.normalize_records,
-    )
-    if records is None:
-        return _cvstudio_error_payload(
-            "STORAGE_PAYLOAD_INVALID",
-            "OneNote transfer record payload is invalid or too large",
-            400,
-        )
-    written = _CVSTUDIO_ONENOTE_TRANSFER_REPOSITORY.replace(records)
-    return jsonify({
-        "ok": True,
-        "written": written,
-        "request_id": _cvstudio_current_request_id(),
-        "legacy_preserved": True,
-    })
+    return _CVSTUDIO_STORAGE_BRIDGE.onenote_transfer_replace()
 
 
 @app.route("/storage/onenote-transfer-records/clear", methods=["POST"])
 def phase2b_onenote_transfer_clear():
-    _CVSTUDIO_ONENOTE_TRANSFER_REPOSITORY.clear()
-    return jsonify({
-        "ok": True,
-        "request_id": _cvstudio_current_request_id(),
-        "legacy_preserved": True,
-    })
+    return _CVSTUDIO_STORAGE_BRIDGE.onenote_transfer_clear()
 
 
 @app.route("/storage/onenote-saved-links", methods=["GET"])
 def phase2b_onenote_links_read():
-    return jsonify({
-        "ok": True,
-        "links": _CVSTUDIO_ONENOTE_LINK_REPOSITORY.list(),
-        "request_id": _cvstudio_current_request_id(),
-        "legacy_preserved": True,
-    })
+    return _CVSTUDIO_STORAGE_BRIDGE.onenote_links_read()
 
 
 @app.route("/storage/onenote-saved-links/import", methods=["POST"])
 def phase2b_onenote_links_import():
-    body = request.get_json(silent=True) or {}
-    links = _phase2b_record_array(
-        body.get("links"),
-        100,
-        _CVSTUDIO_ONENOTE_LINK_REPOSITORY.normalize_records,
-    )
-    if links is None:
-        return _cvstudio_error_payload(
-            "STORAGE_PAYLOAD_INVALID",
-            "Saved OneNote link payload is invalid or too large",
-            400,
-        )
-    imported = _CVSTUDIO_ONENOTE_LINK_REPOSITORY.import_legacy(links)
-    return jsonify({
-        "ok": True,
-        "imported": imported,
-        "links": _CVSTUDIO_ONENOTE_LINK_REPOSITORY.list(),
-        "request_id": _cvstudio_current_request_id(),
-        "legacy_preserved": True,
-    })
+    return _CVSTUDIO_STORAGE_BRIDGE.onenote_links_import()
 
 
 @app.route("/storage/onenote-saved-links/replace", methods=["POST"])
 def phase2b_onenote_links_replace():
-    body = request.get_json(silent=True) or {}
-    links = _phase2b_record_array(
-        body.get("links"),
-        100,
-        _CVSTUDIO_ONENOTE_LINK_REPOSITORY.normalize_records,
-    )
-    if links is None:
-        return _cvstudio_error_payload(
-            "STORAGE_PAYLOAD_INVALID",
-            "Saved OneNote link payload is invalid or too large",
-            400,
-        )
-    written = _CVSTUDIO_ONENOTE_LINK_REPOSITORY.replace(links)
-    return jsonify({
-        "ok": True,
-        "written": written,
-        "request_id": _cvstudio_current_request_id(),
-        "legacy_preserved": True,
-    })
+    return _CVSTUDIO_STORAGE_BRIDGE.onenote_links_replace()
 
 
 @app.route("/storage/browser-settings", methods=["GET"])
 def phase2b_browser_settings_read():
-    return jsonify({
-        "ok": True,
-        "settings": _CVSTUDIO_BROWSER_SETTINGS_REPOSITORY.load(),
-        "request_id": _cvstudio_current_request_id(),
-        "legacy_preserved": True,
-    })
+    return _CVSTUDIO_STORAGE_BRIDGE.browser_settings_read()
 
 
 @app.route("/storage/browser-settings/import", methods=["POST"])
 def phase2b_browser_settings_import():
-    body = request.get_json(silent=True) or {}
-    settings = _phase2b_browser_settings(body.get("settings"))
-    if settings is None:
-        return _cvstudio_error_payload(
-            "STORAGE_PAYLOAD_INVALID",
-            "Browser setting payload contains an unsupported key or value",
-            400,
-        )
-    imported = _CVSTUDIO_BROWSER_SETTINGS_REPOSITORY.import_legacy(settings)
-    return jsonify({
-        "ok": True,
-        "imported": imported,
-        "settings": _CVSTUDIO_BROWSER_SETTINGS_REPOSITORY.load(),
-        "request_id": _cvstudio_current_request_id(),
-        "legacy_preserved": True,
-    })
+    return _CVSTUDIO_STORAGE_BRIDGE.browser_settings_import()
 
 
 @app.route("/storage/browser-settings/upsert", methods=["POST"])
 def phase2b_browser_settings_upsert():
-    body = request.get_json(silent=True) or {}
-    settings = _phase2b_browser_settings(body.get("settings"))
-    if settings is None:
-        return _cvstudio_error_payload(
-            "STORAGE_PAYLOAD_INVALID",
-            "Browser setting payload contains an unsupported key or value",
-            400,
-        )
-    written = _CVSTUDIO_BROWSER_SETTINGS_REPOSITORY.upsert(settings)
-    return jsonify({
-        "ok": True,
-        "written": written,
-        "request_id": _cvstudio_current_request_id(),
-        "legacy_preserved": True,
-    })
+    return _CVSTUDIO_STORAGE_BRIDGE.browser_settings_upsert()
 
 
 @app.route("/storage/browser-settings/delete", methods=["POST"])
 def phase2b_browser_settings_delete():
-    body = request.get_json(silent=True) or {}
-    keys = _phase2b_browser_setting_keys(body.get("keys"))
-    if keys is None:
-        return _cvstudio_error_payload(
-            "STORAGE_PAYLOAD_INVALID",
-            "Browser setting delete payload contains an unsupported key",
-            400,
-        )
-    deleted = _CVSTUDIO_BROWSER_SETTINGS_REPOSITORY.delete(keys)
-    return jsonify({
-        "ok": True,
-        "deleted": deleted,
-        "request_id": _cvstudio_current_request_id(),
-        "legacy_preserved": True,
-    })
+    return _CVSTUDIO_STORAGE_BRIDGE.browser_settings_delete()
 
 
 @app.route("/diagnostics/runtime", methods=["GET"])
