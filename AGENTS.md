@@ -26,8 +26,24 @@
   representation-neutral and caller-supplied Accept headers are honored.
 - Current completed private owner/source release: **CV Studio v24.6.230**.
 - Phases 1, 2A, 2B and 3 are complete.
-- There is no active implementation target. Stop after Phase 3 unless the
-  owner explicitly starts Phase 4.
+- Phase 4 was explicitly authorized by the owner on **23 July 2026**.
+- Active implementation target: gradual behavior-preserving backend
+  modularisation only. Stop after Phase 4 and do not begin Phase 5.
+
+## Active scope: Phase 4
+
+Phase 4 may extract one bounded cohesive backend area at a time only after its
+routes, helpers, globals, response fields, locks, protected stores, filesystem
+state and startup side effects are inventoried and its success/error behavior is
+characterized. Each module must use explicit dependencies, avoid circular
+imports and preserve route registration, initialization order and required
+app-level compatibility adapters.
+
+Phase 4 must not change the 107 Flask routes, methods or response contracts;
+authentication, CSRF or request-size boundaries; schema version 10; Phase 1/2
+storage guarantees; Phase 3 client policies; update/receipt/backup/restore/
+rollback behavior; request-ID/error/redaction contracts; credential stores; or
+paid-call confirmation gates.
 
 ## Completed scope: Phase 3
 
@@ -175,6 +191,27 @@ Routine implementation decisions do not require owner confirmation.
 - A clean private owner/source ZIP is freshly extracted and byte-verified; its
   SHA-256, QA report and Phase 4 handover are copied to the new release folder.
 - Stop after Phase 3. Do not begin Phase 4 automatically.
+
+## Definition of done for Phase 4
+
+- Each selected backend area has a recorded pre-move dependency/state inventory
+  and characterization coverage for established success and error behavior.
+- Each extraction is bounded, uses explicit dependencies, has no circular
+  import, preserves app-level compatibility adapters and passes targeted tests
+  before the next area begins.
+- All 107 routes, methods, response fields and authentication/CSRF/request-size
+  boundaries remain unchanged.
+- Schema version 10, every Phase 1/2 storage guarantee and every Phase 3 shared-
+  client retry/refresh/pagination/redaction/content-negotiation contract remain
+  unchanged.
+- No credential migration, persistent background job, central AI cost
+  guardrail, frontend modularisation/lazy loading, unrelated workflow, Flask
+  server replacement or roadmap item 7/8 is introduced.
+- Complete regression, source smoke, tracked-language static validation,
+  owner-source preflight, repository consistency and final review pass.
+- A clean private owner/source ZIP is freshly extracted and byte-verified; its
+  SHA-256, QA report and Phase 5 handover are copied to the new release folder.
+- Stop after Phase 4. Do not begin Phase 5 automatically.
 
 ## Completed definition of done for Phase 2B
 

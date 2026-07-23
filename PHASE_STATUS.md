@@ -9,11 +9,123 @@
 - Phase 2B baseline Git commit: `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`
 - Phase 3 source baseline: v24.6.222
 - Phase 3 baseline Git commit: `1be9da48d8307c418d82807cbdaedc9f876a1b15`
-- Working branch: `codex/phase-3-shared-clients`
-- Active phase: none; Phase 4 requires explicit owner authorization
+- Phase 4 source baseline: v24.6.230
+- Phase 4 baseline Git commit: `7a0efcf0bce10b07e034592fb22a6021141d4146`
+- Working branch: `codex/phase-4-backend-modularisation`
+- Active phase: Phase 4 — gradual behavior-preserving backend modularisation
 - Completed private owner/source release: v24.6.230
-- Status: v24.6.230 corrective review closure complete; stop before Phase 4
-- Current milestone: none
+- Status: Phase 4 explicitly authorized and entry verification complete
+- Current milestone: Phase 4 Milestone 1 — inventory and characterization
+
+## Phase 4 authorization and constraints
+
+- Owner authorization received on 23 July 2026.
+- Work only from clean master commit
+  `7a0efcf0bce10b07e034592fb22a6021141d4146` and preserve v24.6.230 as the
+  source baseline.
+- Phase 4 is limited to gradual backend modularisation without changing
+  behavior, routes or response contracts.
+- Before each bounded extraction, inventory routes, helpers/globals, response
+  fields, locks, protected stores, filesystem state and startup side effects;
+  add success/error characterization; then extract with explicit dependencies
+  and no circular imports.
+- Preserve route registration and initialization order, all required app-level
+  compatibility adapters, all 107 routes/methods/response fields, every
+  authentication/CSRF/request-size boundary, schema version 10, Phase 1/2
+  storage guarantees and all Phase 3 shared-client behavior.
+- Preserve request-ID propagation, error normalization/redaction, startup,
+  update, receipt, backup, restore and rollback behavior, paid-call gates and
+  existing external-service URLs, headers and retry rules.
+- Do not make live credentialed or paid external calls.
+- Do not implement credential migration, persistent background jobs/resumable
+  state, central AI cost guardrails/billing reconciliation, frontend
+  modularisation/lazy loading, unrelated workflows, Flask server replacement,
+  roadmap item 7/8 or any Phase 5/6 work.
+- Stop after the Phase 4 private owner/source release, QA report and Phase 5
+  handover. Do not begin Phase 5 automatically.
+
+## Phase 4 entry verification
+
+- The owner `master` worktree and this worktree were clean at entry and both
+  resolved to owner-specified commit
+  `7a0efcf0bce10b07e034592fb22a6021141d4146`.
+- All active source version surfaces identify v24.6.230.
+- The authoritative v24.6.230 release directory contains the owner/source ZIP,
+  SHA-256, verification JSON, QA report and Phase 4 handover.
+- The independently computed owner-ZIP SHA-256 is
+  `b6004e7577e4c1cb5f9543ec526b8c1b7d46c09ce9aea4bf9cb9cc6d7dc6faf3`;
+  the verification sidecar `source_commit` exactly matches the Phase 4 baseline
+  commit.
+- A fresh extraction contained 100 tracked files with zero missing, extra or
+  byte-mismatched files against the baseline Git blobs.
+- The ignored owner/source runtime dependency was restored from the immutable
+  vetted `adm-zip` 0.5.17 tree. Entry QA then passed 48 Python tests with
+  `ResourceWarning` treated as an error, both frontend fixtures, 24 live-source
+  smoke assertions, 22 focused Phase 3 no-network tests, all tracked Python/
+  JavaScript/Bash/PowerShell syntax checks, owner-source validation/preflight,
+  repository consistency and Git whitespace validation.
+- The entry suites re-proved schema version 10 migrations, idempotency,
+  rollback/restart, corruption recovery, tombstones, rejected-replacement
+  preservation, strict setting validation, restore failure visibility, legacy
+  bytes, the exact 107-route inventory and Phase 3 redirect/header/content-
+  negotiation contracts.
+
+## Phase 4 implementation plan
+
+### Milestone 1 — inventory and compatibility fixtures
+
+- Map the monolithic backend into cohesive candidate areas and record each
+  area's routes, helper/global dependencies, response fields, locks, protected
+  stores, filesystem state and startup side effects.
+- Select the smallest low-coupling module boundaries and add characterization
+  fixtures for success and error behavior before production movement.
+- Record the final bounded extraction sequence and explicit dependency design.
+
+### Milestones 2–4 — bounded backend extractions
+
+- Extract one selected cohesive backend area per milestone.
+- Keep Flask route registration and compatibility entry points in their
+  established order unless characterization proves an equivalent explicit
+  registration adapter.
+- Run focused characterization and integration tests, update this record and
+  create a stable Git checkpoint before starting the next extraction.
+
+### Milestone 5 — acceptance and release evidence
+
+- Run complete regression, live source smoke, tracked-language static
+  validation, owner-source preflight, repository consistency and iterative
+  final review against the exact Phase 4 master baseline.
+- Advance completed owner/source version surfaces only after the implementation
+  is clean, create and freshly byte-verify the private owner/source ZIP, and
+  produce the QA report, SHA-256 and Phase 5 handover.
+- Confirm the verification sidecar `source_commit` exactly matches final branch
+  HEAD, copy all artifacts to the new release directory and stop before merge.
+
+## Phase 4 milestones
+
+- [x] Verify the v24.6.230 master/source/package baseline and all entry gates.
+- [x] Record owner authorization, scope boundaries and milestone plan.
+- [ ] Inventory candidate backend areas and select bounded module sequence.
+- [ ] Add pre-move success/error characterization for the first area.
+- [ ] Extract and verify the first bounded backend module.
+- [ ] Extract and verify the second bounded backend module.
+- [ ] Extract and verify the third bounded backend module.
+- [ ] Run complete regression, static validation and iterative final review.
+- [ ] Create and byte-verify the Phase 4 private owner/source release.
+- [ ] Produce QA report, SHA-256 and Phase 5 handover; stop before Phase 5.
+
+## Phase 4 decisions and limitations
+
+- Phase 4 is an incremental structural change, not a rewrite. Candidate areas
+  are not selected merely because code is long; coupling, initialization order
+  and compatibility risk determine the sequence.
+- Characterization and integration tests use local fixtures and controlled
+  fakes only. No live credentialed external-service or paid request is
+  authorized or claimed.
+- Schema version 10 and every existing durable-storage, protected-credential,
+  browser-mirror, update/receipt and rollback contract remain fixed.
+- No protected colleague package will be produced without matching native
+  compilation and smoke certification.
 
 ## Phase 3 authorization and constraints
 
