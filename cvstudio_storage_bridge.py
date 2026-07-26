@@ -46,51 +46,77 @@ PHASE2A_USAGE_SECRET_SUFFIXES = {
 PHASE2A_USAGE_DROP = object()
 
 
-def phase2a_usage_secret_field(key: Any) -> bool:
+def phase2a_usage_secret_field(
+    key: Any,
+    *,
+    secret_fields: set[str] | frozenset[str] = PHASE2A_USAGE_SECRET_FIELDS,
+    secret_suffixes: set[str] | frozenset[str] = PHASE2A_USAGE_SECRET_SUFFIXES,
+) -> bool:
     key_text = str(key or "").strip().lower()
-    if key_text in PHASE2A_USAGE_SECRET_FIELDS:
+    if key_text in secret_fields:
         return True
     compact = re.sub(r"[^a-z0-9]", "", key_text)
     return compact.startswith("authorization") or any(
-        compact.endswith(suffix) for suffix in PHASE2A_USAGE_SECRET_SUFFIXES
+        compact.endswith(suffix) for suffix in secret_suffixes
     )
 
 
-def phase2a_usage_safe_value(value: Any, depth: int = 0) -> Any:
+def phase2a_usage_safe_value(
+    value: Any,
+    depth: int = 0,
+    *,
+    drop: Any = PHASE2A_USAGE_DROP,
+    secret_field: Callable[[Any], bool] = phase2a_usage_secret_field,
+) -> Any:
     if depth > 24:
-        return PHASE2A_USAGE_DROP
+        return drop
     if isinstance(value, dict):
         clean = {}
         for key, nested in value.items():
             key_text = str(key or "")[:120]
-            if phase2a_usage_secret_field(key_text):
+            if secret_field(key_text):
                 continue
-            safe_nested = phase2a_usage_safe_value(nested, depth + 1)
-            if safe_nested is not PHASE2A_USAGE_DROP:
+            safe_nested = phase2a_usage_safe_value(
+                nested,
+                depth + 1,
+                drop=drop,
+                secret_field=secret_field,
+            )
+            if safe_nested is not drop:
                 clean[key_text] = safe_nested
         return clean
     if isinstance(value, list):
         clean = []
         for nested in value:
-            safe_nested = phase2a_usage_safe_value(nested, depth + 1)
-            if safe_nested is not PHASE2A_USAGE_DROP:
+            safe_nested = phase2a_usage_safe_value(
+                nested,
+                depth + 1,
+                drop=drop,
+                secret_field=secret_field,
+            )
+            if safe_nested is not drop:
                 clean.append(safe_nested)
         return clean
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
-    return PHASE2A_USAGE_DROP
+    return drop
 
 
-def phase2a_usage_records(payload: Any) -> list[dict[str, Any]] | None:
+def phase2a_usage_records(
+    payload: Any,
+    *,
+    maximum: int = PHASE2A_USAGE_MAX_RECORDS,
+    safe_value: Callable[[Any], Any] = phase2a_usage_safe_value,
+) -> list[dict[str, Any]] | None:
     if not isinstance(payload, list):
         return None
-    if len(payload) > PHASE2A_USAGE_MAX_RECORDS:
+    if len(payload) > maximum:
         return None
     records = []
     for item in payload:
         if not isinstance(item, dict):
             continue
-        clean = phase2a_usage_safe_value(item)
+        clean = safe_value(item)
         records.append(clean if isinstance(clean, dict) else {})
     return records
 
@@ -131,6 +157,41 @@ def phase2b_record_array(
     return normalizer(payload)
 
 
+def phase2b_browser_settings(
+    payload: Any,
+    browser_setting_keys: set[str] | frozenset[str],
+    browser_setting_normalizer: Callable[[str, Any], str | None],
+) -> dict[str, str] | None:
+    if not isinstance(payload, dict) or len(payload) > len(browser_setting_keys):
+        return None
+    clean = {}
+    for raw_key, value in payload.items():
+        key = str(raw_key or "")
+        normalized = browser_setting_normalizer(key, value)
+        if normalized is None:
+            return None
+        clean[key] = normalized
+    return clean
+
+
+def phase2b_browser_setting_keys(
+    payload: Any,
+    browser_setting_keys: set[str] | frozenset[str],
+) -> list[str] | None:
+    if not isinstance(payload, list) or len(payload) > len(browser_setting_keys):
+        return None
+    keys = []
+    seen = set()
+    for raw_key in payload:
+        key = str(raw_key or "")
+        if key not in browser_setting_keys:
+            return None
+        if key not in seen:
+            seen.add(key)
+            keys.append(key)
+    return keys
+
+
 class StorageBridge:
     """Explicitly wired handlers behind the established app-level endpoints."""
 
@@ -146,8 +207,13 @@ class StorageBridge:
         transfer_repository: Callable[[], Any],
         link_repository: Callable[[], Any],
         browser_settings_repository: Callable[[], Any],
-        browser_setting_keys: set[str] | frozenset[str],
-        browser_setting_normalizer: Callable[[str, Any], str | None],
+        usage_records: Callable[[Any], list[dict[str, Any]] | None],
+        ppc_metadata: Callable[[Any], dict[str, dict[str, str]] | None],
+        record_array: Callable[
+            [Any, int, Callable[[list[dict[str, Any]]], Any]], Any
+        ],
+        browser_settings: Callable[[Any], dict[str, str] | None],
+        browser_setting_keys: Callable[[Any], list[str] | None],
     ):
         self._request_json = request_json
         self._jsonify = jsonify
@@ -158,41 +224,14 @@ class StorageBridge:
         self._transfer_repository = transfer_repository
         self._link_repository = link_repository
         self._browser_settings_repository = browser_settings_repository
-        self._browser_setting_keys = frozenset(browser_setting_keys)
-        self._browser_setting_normalizer = browser_setting_normalizer
+        self._usage_records = usage_records
+        self._ppc_metadata = ppc_metadata
+        self._record_array = record_array
+        self._browser_settings = browser_settings
+        self._browser_setting_keys = browser_setting_keys
 
     def _body(self) -> Any:
         return self._request_json() or {}
-
-    def phase2b_browser_settings(self, payload: Any) -> dict[str, str] | None:
-        if not isinstance(payload, dict) or len(payload) > len(
-            self._browser_setting_keys
-        ):
-            return None
-        clean = {}
-        for raw_key, value in payload.items():
-            key = str(raw_key or "")
-            normalized = self._browser_setting_normalizer(key, value)
-            if normalized is None:
-                return None
-            clean[key] = normalized
-        return clean
-
-    def phase2b_browser_setting_keys(self, payload: Any) -> list[str] | None:
-        if not isinstance(payload, list) or len(payload) > len(
-            self._browser_setting_keys
-        ):
-            return None
-        keys = []
-        seen = set()
-        for raw_key in payload:
-            key = str(raw_key or "")
-            if key not in self._browser_setting_keys:
-                return None
-            if key not in seen:
-                seen.add(key)
-                keys.append(key)
-        return keys
 
     def usage_history_read(self):
         return self._jsonify(
@@ -206,7 +245,7 @@ class StorageBridge:
 
     def usage_history_import(self):
         body = self._body()
-        records = phase2a_usage_records(body.get("records"))
+        records = self._usage_records(body.get("records"))
         if records is None:
             return self._error_payload(
                 "STORAGE_PAYLOAD_INVALID",
@@ -227,7 +266,7 @@ class StorageBridge:
 
     def usage_history_upsert(self):
         body = self._body()
-        records = phase2a_usage_records(body.get("records"))
+        records = self._usage_records(body.get("records"))
         if records is None:
             return self._error_payload(
                 "STORAGE_PAYLOAD_INVALID",
@@ -266,7 +305,7 @@ class StorageBridge:
 
     def ppc_metadata_import(self):
         body = self._body()
-        metadata = phase2a_ppc_metadata(body.get("metadata"))
+        metadata = self._ppc_metadata(body.get("metadata"))
         if metadata is None:
             return self._error_payload(
                 "STORAGE_PAYLOAD_INVALID",
@@ -287,7 +326,7 @@ class StorageBridge:
 
     def ppc_metadata_upsert(self):
         body = self._body()
-        metadata = phase2a_ppc_metadata(body.get("metadata"))
+        metadata = self._ppc_metadata(body.get("metadata"))
         if metadata is None:
             return self._error_payload(
                 "STORAGE_PAYLOAD_INVALID",
@@ -327,7 +366,7 @@ class StorageBridge:
     def onenote_transfer_import(self):
         body = self._body()
         repository = self._transfer_repository()
-        records = phase2b_record_array(
+        records = self._record_array(
             body.get("records"), 200, repository.normalize_records
         )
         if records is None:
@@ -350,7 +389,7 @@ class StorageBridge:
     def onenote_transfer_replace(self):
         body = self._body()
         repository = self._transfer_repository()
-        records = phase2b_record_array(
+        records = self._record_array(
             body.get("records"), 200, repository.normalize_records
         )
         if records is None:
@@ -392,7 +431,7 @@ class StorageBridge:
     def onenote_links_import(self):
         body = self._body()
         repository = self._link_repository()
-        links = phase2b_record_array(
+        links = self._record_array(
             body.get("links"), 100, repository.normalize_records
         )
         if links is None:
@@ -415,7 +454,7 @@ class StorageBridge:
     def onenote_links_replace(self):
         body = self._body()
         repository = self._link_repository()
-        links = phase2b_record_array(
+        links = self._record_array(
             body.get("links"), 100, repository.normalize_records
         )
         if links is None:
@@ -446,7 +485,7 @@ class StorageBridge:
 
     def browser_settings_import(self):
         body = self._body()
-        settings = self.phase2b_browser_settings(body.get("settings"))
+        settings = self._browser_settings(body.get("settings"))
         if settings is None:
             return self._error_payload(
                 "STORAGE_PAYLOAD_INVALID",
@@ -467,7 +506,7 @@ class StorageBridge:
 
     def browser_settings_upsert(self):
         body = self._body()
-        settings = self.phase2b_browser_settings(body.get("settings"))
+        settings = self._browser_settings(body.get("settings"))
         if settings is None:
             return self._error_payload(
                 "STORAGE_PAYLOAD_INVALID",
@@ -486,7 +525,7 @@ class StorageBridge:
 
     def browser_settings_delete(self):
         body = self._body()
-        keys = self.phase2b_browser_setting_keys(body.get("keys"))
+        keys = self._browser_setting_keys(body.get("keys"))
         if keys is None:
             return self._error_payload(
                 "STORAGE_PAYLOAD_INVALID",

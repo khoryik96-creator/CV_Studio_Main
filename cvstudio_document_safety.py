@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import io
-import threading
 import time
-from typing import Any
+from typing import Any, Callable
 import zipfile
 
 
@@ -15,7 +14,6 @@ MAX_IMAGE_PIXELS = 60_000_000
 MAX_ZIP_ENTRIES = 2000
 MAX_ZIP_EXPANDED_BYTES = 160 * 1024 * 1024
 MAX_ZIP_SINGLE_ENTRY_BYTES = 64 * 1024 * 1024
-OCR_SEMAPHORE = threading.BoundedSemaphore(1)
 OCR_TOTAL_DEADLINE_SECONDS = 180
 
 
@@ -39,19 +37,26 @@ def document_validation_status(exc: BaseException) -> int:
     return 400
 
 
-def validate_zip_payload(file_bytes: bytes, label: str = "document") -> None:
+def validate_zip_payload(
+    file_bytes: bytes,
+    label: str = "document",
+    *,
+    max_entries: int = MAX_ZIP_ENTRIES,
+    max_expanded_bytes: int = MAX_ZIP_EXPANDED_BYTES,
+    max_single_entry_bytes: int = MAX_ZIP_SINGLE_ENTRY_BYTES,
+) -> None:
     """Reject zip bombs and oversized expanded Office/ODT payloads."""
     try:
         with zipfile.ZipFile(io.BytesIO(file_bytes)) as archive:
             infos = archive.infolist()
-            if len(infos) > MAX_ZIP_ENTRIES:
+            if len(infos) > max_entries:
                 raise ValueError("{} contains too many files".format(label))
             total = 0
             for info in infos:
                 size = max(0, int(info.file_size or 0))
                 compressed = max(1, int(info.compress_size or 0))
                 total += size
-                if size > MAX_ZIP_SINGLE_ENTRY_BYTES:
+                if size > max_single_entry_bytes:
                     raise ValueError(
                         "{} contains an oversized internal file".format(label)
                     )
@@ -59,7 +64,7 @@ def validate_zip_payload(file_bytes: bytes, label: str = "document") -> None:
                     raise ValueError(
                         "{} has an unsafe compression ratio".format(label)
                     )
-                if total > MAX_ZIP_EXPANDED_BYTES:
+                if total > max_expanded_bytes:
                     raise ValueError(
                         "{} expands beyond the safe limit".format(label)
                     )
@@ -69,27 +74,37 @@ def validate_zip_payload(file_bytes: bytes, label: str = "document") -> None:
         )
 
 
-def safe_image_open(file_bytes: bytes):
+def safe_image_open(
+    file_bytes: bytes,
+    *,
+    max_image_pixels: int = MAX_IMAGE_PIXELS,
+):
     from PIL import Image
 
-    Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
+    Image.MAX_IMAGE_PIXELS = max_image_pixels
     image = Image.open(io.BytesIO(file_bytes))
     width, height = image.size
-    if width <= 0 or height <= 0 or width * height > MAX_IMAGE_PIXELS:
+    if width <= 0 or height <= 0 or width * height > max_image_pixels:
         image.close()
         raise ValueError("Image dimensions exceed the safe OCR limit")
     image.load()
     return image
 
 
-def pdf_page_count(file_bytes: bytes) -> int:
+def pdf_page_count(
+    file_bytes: bytes,
+    *,
+    max_pdf_pages: int = MAX_PDF_PAGES,
+) -> int:
     import pdfplumber
 
     with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
         count = len(pdf.pages)
-    if count > MAX_PDF_PAGES:
+    if count > max_pdf_pages:
         raise ValueError(
-            "PDF has {} pages; the safe limit is {}".format(count, MAX_PDF_PAGES)
+            "PDF has {} pages; the safe limit is {}".format(
+                count, max_pdf_pages
+            )
         )
     return count
 
@@ -99,8 +114,10 @@ def ocr_image_text(
     image: Any,
     lang: str = "eng",
     timeout: int = 35,
+    *,
+    ocr_semaphore: Any,
 ) -> str:
-    if not OCR_SEMAPHORE.acquire(timeout=2):
+    if not ocr_semaphore.acquire(timeout=2):
         raise RuntimeError(
             "OCR is already processing another document. "
             "Wait for it to finish and try again."
@@ -108,7 +125,7 @@ def ocr_image_text(
     try:
         return pytesseract.image_to_string(image, lang=lang, timeout=timeout)
     finally:
-        OCR_SEMAPHORE.release()
+        ocr_semaphore.release()
 
 
 def render_pdf_page_images(
@@ -188,25 +205,33 @@ def ocr_pdf_pagewise(
     pytesseract: Any,
     poppler_path: str | None = None,
     dpi: int = 220,
+    *,
+    pdf_page_count: Callable[[bytes], int],
+    render_pdf_page_images: Callable[..., list[Any]],
+    ocr_semaphore: Any,
+    max_ocr_pages: int,
+    max_image_pixels: int,
+    deadline_seconds: int,
+    monotonic: Callable[[], float] = time.monotonic,
 ) -> str:
     """OCR a bounded PDF one page at a time under a total deadline."""
     count = pdf_page_count(file_bytes)
-    if count > MAX_OCR_PAGES:
+    if count > max_ocr_pages:
         raise ValueError(
             "Scanned PDF has {} pages; OCR safe limit is {}".format(
-                count, MAX_OCR_PAGES
+                count, max_ocr_pages
             )
         )
-    if not OCR_SEMAPHORE.acquire(timeout=2):
+    if not ocr_semaphore.acquire(timeout=2):
         raise RuntimeError(
             "OCR is already processing another document. "
             "Wait for it to finish and try again."
         )
-    started = time.monotonic()
+    started = monotonic()
     parts = []
     try:
         for page_number in range(1, count + 1):
-            if time.monotonic() - started > OCR_TOTAL_DEADLINE_SECONDS:
+            if monotonic() - started > deadline_seconds:
                 raise TimeoutError("OCR exceeded the safe processing time limit")
             images = render_pdf_page_images(
                 file_bytes,
@@ -221,7 +246,7 @@ def ocr_pdf_pagewise(
             image = images[0]
             try:
                 width, height = image.size
-                if width * height > MAX_IMAGE_PIXELS:
+                if width * height > max_image_pixels:
                     raise ValueError(
                         "PDF page dimensions exceed the safe OCR limit"
                     )
@@ -237,4 +262,4 @@ def ocr_pdf_pagewise(
                     pass
         return "\n".join(parts)
     finally:
-        OCR_SEMAPHORE.release()
+        ocr_semaphore.release()

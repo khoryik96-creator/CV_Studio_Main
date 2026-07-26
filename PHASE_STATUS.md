@@ -14,7 +14,8 @@
 - Working branch: `codex/phase-4-backend-modularisation`
 - Active phase: none; Phase 4 is complete
 - Completed private owner/source release: v24.6.231
-- Status: Phase 4 completed; stop before Phase 5
+- Status: Phase 4 completed; post-release corrective review clean on branch;
+  stop before Phase 5
 - Current milestone: none; Phase 5 requires a new explicit owner instruction
 
 ## Phase 4 authorization and constraints
@@ -338,6 +339,51 @@ will leave this registration and security boundary in `app.py`.
   against master, schema version 10, no app import from any extracted module,
   all 22 Phase 3 client fixtures and all four Phase 4 characterization tests.
 - No further concrete finding remains from this review pass.
+
+## Phase 4 post-release corrective review — 26 July 2026
+
+- The owner requested a new full review of Phase 4 commit
+  `0d2b02ec924a7531d96f236396a0620674fcb994` against exact master baseline
+  `7a0efcf0bce10b07e034592fb22a6021141d4146`.
+- Differential probes confirmed three related call-time compatibility
+  regressions that the original route/response characterization did not cover:
+  - `StorageBridge` captured validators, response/error adapters, the browser
+    setting allowlist and canonical normalizer at construction instead of
+    resolving the established app compatibility globals on each request.
+  - `DiagnosticsService` captured the current-request-ID function, Flask
+    response functions and version at construction, and support-bundle browser
+    sanitization bypassed the established app helper.
+  - direct document-helper aliases resolved limits, the OCR semaphore and
+    nested PDF helpers inside the extracted module; the baseline resolved those
+    app compatibility globals at call time. The semaphore was also created
+    earlier during module import instead of at its established app startup
+    position.
+- Corrected the three boundaries with explicit forwarding callbacks and thin
+  app-level wrappers. Storage validators, structured errors, request IDs,
+  setting rules and repositories now resolve per call. Diagnostics now resolves
+  request/response, runtime/cache, redaction/sanitization, version, clock and
+  path dependencies per call. Document safety receives the current limits,
+  semaphore, nested helpers and monotonic clock explicitly.
+- Restored the app-level storage constants and OCR semaphore to their original
+  initialization positions. The extracted modules remain app-independent and
+  introduce no circular import.
+- Added three focused regression tests for storage, diagnostics and document
+  dependency rebinding. All seven Phase 4 characterization tests pass against
+  both the untouched master baseline and the corrected branch.
+- Complete Python discovery passes 55 tests with `ResourceWarning` treated as
+  an error. Both frontend fixtures and all 24 live source-smoke assertions
+  pass.
+- Static validation passes for 19 Python files, 20 JavaScript files plus both
+  inline scripts, five Bash/command files and five PowerShell files.
+  Owner-source preflight, repository consistency and Git whitespace validation
+  pass.
+- The repeated structural review proves the exact ordered 107-route inventory,
+  five global request/security guards, all 18 established app helper
+  signatures, the 80 MiB request limit, schema version 10 and no `app` import
+  from any extracted module. No further concrete finding remains.
+- The immutable v24.6.231 release artifacts were not overwritten or
+  reinterpreted. No new package or release identity was requested, the branch
+  remains unmerged and Phase 5 was not started.
 
 ## Phase 4 Milestone 5 acceptance and release result
 

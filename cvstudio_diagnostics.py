@@ -15,7 +15,6 @@ from pathlib import Path
 import platform
 import re
 import subprocess
-import time
 from typing import Any, Callable, Iterable
 import zipfile
 
@@ -329,7 +328,9 @@ class DiagnosticsService:
         clear_preview_cache: Callable[[], Any],
         preview_cache_stats: Callable[[], dict[str, Any]],
         redact_text: Callable[[Any], str],
-        version: str,
+        sanitize_browser: Callable[[Any], dict[str, Any]],
+        archive_timestamp: Callable[[], str],
+        version: Callable[[], str],
         root_path: Callable[[], str],
         runtime_log_path: Callable[[], str],
     ):
@@ -342,7 +343,9 @@ class DiagnosticsService:
         self._clear_preview_cache = clear_preview_cache
         self._preview_cache_stats = preview_cache_stats
         self._redact_text = redact_text
-        self._version = str(version)
+        self._sanitize_browser = sanitize_browser
+        self._archive_timestamp = archive_timestamp
+        self._version = version
         self._root_path = root_path
         self._runtime_log_path = runtime_log_path
 
@@ -362,10 +365,9 @@ class DiagnosticsService:
 
     def support_bundle(self):
         body = self._request_json() or {}
-        browser = sanitize_browser_diagnostics(
-            body.get("browser"), self._redact_text
-        )
-        generated = time.strftime("%Y%m%d_%H%M%S", time.localtime())
+        browser = self._sanitize_browser(body.get("browser"))
+        version = self._version()
+        generated = self._archive_timestamp()
         buffer = io.BytesIO()
         with zipfile.ZipFile(
             buffer,
@@ -404,7 +406,7 @@ class DiagnosticsService:
                     "error wording; review before sharing outside the support "
                     "context.\n"
                 ).format(
-                    self._version,
+                    version,
                     runtime_payload.get("generated_at"),
                     self._request_id(),
                 ),
@@ -434,7 +436,7 @@ class DiagnosticsService:
             mimetype="application/zip",
             as_attachment=True,
             download_name="cv_studio_diagnostic_bundle_{}_{}.zip".format(
-                self._version.replace(".", "_"), generated
+                version.replace(".", "_"), generated
             ),
             max_age=0,
         )

@@ -245,16 +245,14 @@ from cvstudio_clients import (
     MicrosoftGraphClient,
 )
 from cvstudio_storage_bridge import (
-    PHASE2A_USAGE_DROP as _PHASE2A_USAGE_DROP,
-    PHASE2A_USAGE_MAX_RECORDS as _PHASE2A_USAGE_MAX_RECORDS,
-    PHASE2A_USAGE_SECRET_FIELDS as _PHASE2A_USAGE_SECRET_FIELDS,
-    PHASE2A_USAGE_SECRET_SUFFIXES as _PHASE2A_USAGE_SECRET_SUFFIXES,
     StorageBridge,
-    phase2a_ppc_metadata as _phase2a_ppc_metadata,
-    phase2a_usage_records as _phase2a_usage_records,
-    phase2a_usage_safe_value as _phase2a_usage_safe_value,
-    phase2a_usage_secret_field as _phase2a_usage_secret_field,
-    phase2b_record_array as _phase2b_record_array,
+    phase2a_ppc_metadata as _phase4_phase2a_ppc_metadata,
+    phase2a_usage_records as _phase4_phase2a_usage_records,
+    phase2a_usage_safe_value as _phase4_phase2a_usage_safe_value,
+    phase2a_usage_secret_field as _phase4_phase2a_usage_secret_field,
+    phase2b_browser_setting_keys as _phase4_phase2b_browser_setting_keys,
+    phase2b_browser_settings as _phase4_phase2b_browser_settings,
+    phase2b_record_array as _phase4_phase2b_record_array,
 )
 from cvstudio_diagnostics import (
     DiagnosticsService,
@@ -264,21 +262,20 @@ from cvstudio_diagnostics import (
     system_memory_status as _phase4_system_memory_status,
 )
 from cvstudio_document_safety import (
-    MAX_IMAGE_PIXELS as _MAX_IMAGE_PIXELS,
-    MAX_OCR_PAGES as _MAX_OCR_PAGES,
-    MAX_PDF_PAGES as _MAX_PDF_PAGES,
-    MAX_ZIP_ENTRIES as _MAX_ZIP_ENTRIES,
-    MAX_ZIP_EXPANDED_BYTES as _MAX_ZIP_EXPANDED_BYTES,
-    MAX_ZIP_SINGLE_ENTRY_BYTES as _MAX_ZIP_SINGLE_ENTRY_BYTES,
-    OCR_SEMAPHORE as _OCR_SEMAPHORE,
-    OCR_TOTAL_DEADLINE_SECONDS as _OCR_TOTAL_DEADLINE_SECONDS,
-    document_validation_status as _document_validation_status,
-    ocr_image_text as _ocr_image_text,
-    ocr_pdf_pagewise as _ocr_pdf_pagewise,
-    pdf_page_count as _pdf_page_count,
-    render_pdf_page_images as _render_pdf_page_images,
-    safe_image_open as _safe_image_open,
-    validate_zip_payload as _validate_zip_payload,
+    MAX_IMAGE_PIXELS as _PHASE4_MAX_IMAGE_PIXELS,
+    MAX_OCR_PAGES as _PHASE4_MAX_OCR_PAGES,
+    MAX_PDF_PAGES as _PHASE4_MAX_PDF_PAGES,
+    MAX_ZIP_ENTRIES as _PHASE4_MAX_ZIP_ENTRIES,
+    MAX_ZIP_EXPANDED_BYTES as _PHASE4_MAX_ZIP_EXPANDED_BYTES,
+    MAX_ZIP_SINGLE_ENTRY_BYTES as _PHASE4_MAX_ZIP_SINGLE_ENTRY_BYTES,
+    OCR_TOTAL_DEADLINE_SECONDS as _PHASE4_OCR_TOTAL_DEADLINE_SECONDS,
+    document_validation_status as _phase4_document_validation_status,
+    ocr_image_text as _phase4_ocr_image_text,
+    ocr_pdf_pagewise as _phase4_ocr_pdf_pagewise,
+    pdf_page_count as _phase4_pdf_page_count,
+    render_pdf_page_images as _phase4_render_pdf_page_images,
+    safe_image_open as _phase4_safe_image_open,
+    validate_zip_payload as _phase4_validate_zip_payload,
 )
 
 _CVSTUDIO_VERSION = "v24.6.231"
@@ -789,6 +786,90 @@ def _request_too_large(_error):
         413,
         action="use_smaller_file",
         extra={"limit_mb": 80},
+    )
+
+
+_MAX_PDF_PAGES = _PHASE4_MAX_PDF_PAGES
+_MAX_OCR_PAGES = _PHASE4_MAX_OCR_PAGES
+_MAX_IMAGE_PIXELS = _PHASE4_MAX_IMAGE_PIXELS
+_MAX_ZIP_ENTRIES = _PHASE4_MAX_ZIP_ENTRIES
+_MAX_ZIP_EXPANDED_BYTES = _PHASE4_MAX_ZIP_EXPANDED_BYTES
+_MAX_ZIP_SINGLE_ENTRY_BYTES = _PHASE4_MAX_ZIP_SINGLE_ENTRY_BYTES
+_OCR_SEMAPHORE = threading.BoundedSemaphore(1)
+_OCR_TOTAL_DEADLINE_SECONDS = _PHASE4_OCR_TOTAL_DEADLINE_SECONDS
+
+
+def _document_validation_status(exc):
+    return _phase4_document_validation_status(exc)
+
+
+def _validate_zip_payload(file_bytes, label="document"):
+    return _phase4_validate_zip_payload(
+        file_bytes,
+        label,
+        max_entries=_MAX_ZIP_ENTRIES,
+        max_expanded_bytes=_MAX_ZIP_EXPANDED_BYTES,
+        max_single_entry_bytes=_MAX_ZIP_SINGLE_ENTRY_BYTES,
+    )
+
+
+def _safe_image_open(file_bytes):
+    return _phase4_safe_image_open(
+        file_bytes,
+        max_image_pixels=_MAX_IMAGE_PIXELS,
+    )
+
+
+def _pdf_page_count(file_bytes):
+    return _phase4_pdf_page_count(
+        file_bytes,
+        max_pdf_pages=_MAX_PDF_PAGES,
+    )
+
+
+def _ocr_image_text(pytesseract, image, lang="eng", timeout=35):
+    return _phase4_ocr_image_text(
+        pytesseract,
+        image,
+        lang=lang,
+        timeout=timeout,
+        ocr_semaphore=_OCR_SEMAPHORE,
+    )
+
+
+def _render_pdf_page_images(
+    file_bytes,
+    first_page=1,
+    last_page=None,
+    dpi=220,
+    poppler_path=None,
+    timeout=45,
+):
+    return _phase4_render_pdf_page_images(
+        file_bytes,
+        first_page=first_page,
+        last_page=last_page,
+        dpi=dpi,
+        poppler_path=poppler_path,
+        timeout=timeout,
+    )
+
+
+def _ocr_pdf_pagewise(file_bytes, pytesseract, poppler_path=None, dpi=220):
+    return _phase4_ocr_pdf_pagewise(
+        file_bytes,
+        pytesseract,
+        poppler_path=poppler_path,
+        dpi=dpi,
+        pdf_page_count=lambda payload: _pdf_page_count(payload),
+        render_pdf_page_images=lambda *args, **kwargs: _render_pdf_page_images(
+            *args, **kwargs
+        ),
+        ocr_semaphore=_OCR_SEMAPHORE,
+        max_ocr_pages=_MAX_OCR_PAGES,
+        max_image_pixels=_MAX_IMAGE_PIXELS,
+        deadline_seconds=_OCR_TOTAL_DEADLINE_SECONDS,
+        monotonic=lambda: time.monotonic(),
     )
 
 
@@ -11315,18 +11396,71 @@ def owner_integration_run():
     return jsonify(report), status
 
 
+_PHASE2A_USAGE_MAX_RECORDS = 250000
+_PHASE2A_USAGE_SECRET_FIELDS = {
+    "access_token", "refresh_token", "client_secret", "api_key", "authorization",
+    "authorization_code", "password", "credential", "credentials", "token",
+}
+_PHASE2A_USAGE_SECRET_SUFFIXES = {
+    "accesstoken", "refreshtoken", "clientsecret", "apikey", "authorizationcode",
+    "password", "credential", "credentials", "bearertoken", "oauthtoken",
+    "oauth2token", "authtoken", "idtoken", "sessiontoken", "csrftoken", "secret",
+}
+_PHASE2A_USAGE_DROP = object()
+
+
+def _phase2a_usage_secret_field(key):
+    return _phase4_phase2a_usage_secret_field(
+        key,
+        secret_fields=_PHASE2A_USAGE_SECRET_FIELDS,
+        secret_suffixes=_PHASE2A_USAGE_SECRET_SUFFIXES,
+    )
+
+
+def _phase2a_usage_safe_value(value, depth=0):
+    return _phase4_phase2a_usage_safe_value(
+        value,
+        depth,
+        drop=_PHASE2A_USAGE_DROP,
+        secret_field=lambda key: _phase2a_usage_secret_field(key),
+    )
+
+
+def _phase2a_usage_records(payload):
+    return _phase4_phase2a_usage_records(
+        payload,
+        maximum=_PHASE2A_USAGE_MAX_RECORDS,
+        safe_value=lambda value: _phase2a_usage_safe_value(value),
+    )
+
+
+def _phase2a_ppc_metadata(payload):
+    return _phase4_phase2a_ppc_metadata(payload)
+
+
+def _phase2b_record_array(payload, maximum, normalizer):
+    return _phase4_phase2b_record_array(payload, maximum, normalizer)
+
+
 _CVSTUDIO_STORAGE_BRIDGE = StorageBridge(
     request_json=lambda: request.get_json(silent=True) or {},
-    jsonify=jsonify,
-    error_payload=_cvstudio_error_payload,
-    request_id=_cvstudio_current_request_id,
+    jsonify=lambda payload: jsonify(payload),
+    error_payload=lambda *args, **kwargs: _cvstudio_error_payload(
+        *args, **kwargs
+    ),
+    request_id=lambda: _cvstudio_current_request_id(),
     usage_repository=lambda: _CVSTUDIO_USAGE_REPOSITORY,
     ppc_repository=lambda: _CVSTUDIO_PPC_REPOSITORY,
     transfer_repository=lambda: _CVSTUDIO_ONENOTE_TRANSFER_REPOSITORY,
     link_repository=lambda: _CVSTUDIO_ONENOTE_LINK_REPOSITORY,
     browser_settings_repository=lambda: _CVSTUDIO_BROWSER_SETTINGS_REPOSITORY,
-    browser_setting_keys=BROWSER_SETTING_KEYS,
-    browser_setting_normalizer=BrowserSettingsRepository.normalize_value,
+    usage_records=lambda payload: _phase2a_usage_records(payload),
+    ppc_metadata=lambda payload: _phase2a_ppc_metadata(payload),
+    record_array=lambda payload, maximum, normalizer: _phase2b_record_array(
+        payload, maximum, normalizer
+    ),
+    browser_settings=lambda payload: _phase2b_browser_settings(payload),
+    browser_setting_keys=lambda payload: _phase2b_browser_setting_keys(payload),
 )
 
 
@@ -11371,11 +11505,18 @@ def phase2a_ppc_metadata_clear():
 
 
 def _phase2b_browser_settings(payload):
-    return _CVSTUDIO_STORAGE_BRIDGE.phase2b_browser_settings(payload)
+    return _phase4_phase2b_browser_settings(
+        payload,
+        BROWSER_SETTING_KEYS,
+        lambda key, value: BrowserSettingsRepository.normalize_value(key, value),
+    )
 
 
 def _phase2b_browser_setting_keys(payload):
-    return _CVSTUDIO_STORAGE_BRIDGE.phase2b_browser_setting_keys(payload)
+    return _phase4_phase2b_browser_setting_keys(
+        payload,
+        BROWSER_SETTING_KEYS,
+    )
 
 
 @app.route("/storage/onenote-transfer-records", methods=["GET"])
@@ -11435,15 +11576,21 @@ def phase2b_browser_settings_delete():
 
 _CVSTUDIO_DIAGNOSTICS_SERVICE = DiagnosticsService(
     request_json=lambda: request.get_json(silent=True) or {},
-    jsonify=jsonify,
-    send_file=send_file,
-    request_id=_cvstudio_current_request_id,
+    jsonify=lambda payload: jsonify(payload),
+    send_file=lambda *args, **kwargs: send_file(*args, **kwargs),
+    request_id=lambda: _cvstudio_current_request_id(),
     runtime_payload=lambda: _cvstudio_runtime_diagnostics_payload(),
     cancel_preview_work=lambda: _spider_preview_cancel_background_work(),
     clear_preview_cache=lambda: _spider_resume_text_cache_clear(),
     preview_cache_stats=lambda: _spider_preview_cache_stats(),
     redact_text=lambda value: _cvstudio_redact_support_text(value),
-    version=_CVSTUDIO_VERSION,
+    sanitize_browser=lambda payload: _cvstudio_sanitize_browser_diagnostics(
+        payload
+    ),
+    archive_timestamp=lambda: time.strftime(
+        "%Y%m%d_%H%M%S", time.localtime()
+    ),
+    version=lambda: _CVSTUDIO_VERSION,
     root_path=lambda: _CVSTUDIO_ROOT,
     runtime_log_path=lambda: _RUNTIME_LOG_PATH,
 )

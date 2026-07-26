@@ -484,6 +484,146 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
         self.assertEqual(unsafe.status_code, 403)
         self.assertEqual(unsafe.get_json()["code"], "UNSAFE_LOCAL_REQUEST")
 
+    def test_storage_bridge_resolves_app_compatibility_dependencies_per_call(self):
+        headers = self._headers("phase4-storage-rebinding")
+        with mock.patch.object(app, "_phase2a_usage_records", return_value=None):
+            response = self.client.post(
+                "/storage/usage-history/import",
+                json={"records": []},
+                headers=headers,
+            )
+        self._assert_invalid_payload(response, "phase4-storage-rebinding")
+
+        with app.app.test_request_context("/storage/usage-history"):
+            with mock.patch.object(
+                app, "_cvstudio_current_request_id", return_value="rebound-storage-id"
+            ):
+                response = app.phase2a_usage_history_read()
+        self.assertEqual(response.get_json()["request_id"], "rebound-storage-id")
+
+        marker = object()
+        with app.app.test_request_context(
+            "/storage/usage-history/import",
+            method="POST",
+            json={"records": "invalid"},
+        ):
+            with mock.patch.object(
+                app, "_cvstudio_error_payload", return_value=marker
+            ):
+                self.assertIs(app.phase2a_usage_history_import(), marker)
+
+        with mock.patch.object(app, "BROWSER_SETTING_KEYS", frozenset()):
+            self.assertIsNone(
+                app._phase2b_browser_setting_keys(["hy_provider"])
+            )
+        with mock.patch.object(
+            app.BrowserSettingsRepository,
+            "normalize_value",
+            return_value=None,
+        ):
+            self.assertIsNone(
+                app._phase2b_browser_settings({"hy_provider": "deepseek"})
+            )
+
+    def test_diagnostics_service_resolves_app_dependencies_per_call(self):
+        with app.app.test_request_context(
+            "/diagnostics/clear_preview_cache", method="POST"
+        ):
+            with (
+                mock.patch.object(
+                    app,
+                    "_cvstudio_current_request_id",
+                    return_value="rebound-diagnostics-id",
+                ),
+                mock.patch.object(app, "_spider_preview_cancel_background_work"),
+                mock.patch.object(app, "_spider_resume_text_cache_clear"),
+                mock.patch.object(
+                    app, "_spider_preview_cache_stats", return_value={}
+                ),
+            ):
+                response = app.cvstudio_clear_preview_cache()
+        self.assertEqual(
+            response.get_json()["request_id"], "rebound-diagnostics-id"
+        )
+
+        with app.app.test_request_context(
+            "/diagnostics/support_bundle", method="POST", json={}
+        ):
+            with (
+                mock.patch.object(app, "_CVSTUDIO_VERSION", "v-rebound"),
+                mock.patch.object(
+                    app,
+                    "_cvstudio_sanitize_browser_diagnostics",
+                    return_value={"rebound_sanitizer": True},
+                ),
+            ):
+                response = app.cvstudio_support_bundle()
+        try:
+            self.assertIn(
+                "cv_studio_diagnostic_bundle_v-rebound_",
+                response.headers["Content-Disposition"],
+            )
+            response.direct_passthrough = False
+            with zipfile.ZipFile(io.BytesIO(response.get_data())) as archive:
+                self.assertEqual(
+                    json.loads(archive.read("browser.json")),
+                    {"rebound_sanitizer": True},
+                )
+        finally:
+            response.close()
+
+        marker = object()
+        with app.app.test_request_context(
+            "/diagnostics/support_bundle", method="POST", json={}
+        ):
+            with mock.patch.object(app, "send_file", return_value=marker):
+                self.assertIs(app.cvstudio_support_bundle(), marker)
+
+    def test_document_safety_adapters_resolve_app_dependencies_per_call(self):
+        payload = io.BytesIO()
+        with zipfile.ZipFile(payload, "w") as archive:
+            archive.writestr("one.txt", "fixture")
+        with mock.patch.object(app, "_MAX_ZIP_ENTRIES", 0):
+            with self.assertRaisesRegex(ValueError, "contains too many files"):
+                app._validate_zip_payload(payload.getvalue(), "fixture")
+
+        class FakeSemaphore:
+            def __init__(self):
+                self.acquire_calls = 0
+                self.release_calls = 0
+
+            def acquire(self, timeout=None):
+                self.acquire_calls += 1
+                return True
+
+            def release(self):
+                self.release_calls += 1
+
+        class FakeImage:
+            size = (10, 10)
+
+            def close(self):
+                pass
+
+        semaphore = FakeSemaphore()
+        pytesseract = mock.Mock()
+        pytesseract.image_to_string.return_value = "fixture OCR"
+        with (
+            mock.patch.object(app, "_OCR_SEMAPHORE", semaphore),
+            mock.patch.object(app, "_pdf_page_count", return_value=1) as count,
+            mock.patch.object(
+                app,
+                "_render_pdf_page_images",
+                return_value=[FakeImage()],
+            ) as render,
+        ):
+            result = app._ocr_pdf_pagewise(b"fixture", pytesseract)
+        self.assertEqual(result, "fixture OCR")
+        count.assert_called_once_with(b"fixture")
+        render.assert_called_once()
+        self.assertEqual(semaphore.acquire_calls, 1)
+        self.assertEqual(semaphore.release_calls, 1)
+
 
 def tearDownModule():
     _MODULE_TEMPORARY.cleanup()
