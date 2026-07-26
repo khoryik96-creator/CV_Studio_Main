@@ -487,16 +487,24 @@
   - malformed billing could convert a successful paid inference into a route
     failure, discard returned usage/output and encourage a duplicate retry;
   - a search-provider failure before any AI request could be mislabeled as an
-    ambiguous AI charge.
+    ambiguous AI charge;
+  - authoritative decimals could lose exact precision during float conversion
+    and excessively precise/unbounded values were not rejected centrally;
+  - model/provider identifiers in new guardrail and reconciliation metadata
+    could retain embedded credential-like fragments;
+  - delayed provider billing was collapsed into the generic pending state;
+  - a pre-Apollo local failure could be mislabeled as an attempted AI call, and
+    Apollo operation counts did not include an auth/rate-limit response.
 - The bounded correction now validates output ceilings as positive bounded
   integers and compares the exact decimal estimate to the configured limit
   before transport. It does not clamp or substitute invalid requested values.
 - Billing normalization now requires an explicit three-letter currency,
   rejects provider mismatch, preserves a bounded authoritative native-currency
-  amount without inventing conversion, and represents pending, partial,
-  unavailable and invalid data separately. Raw or malformed billing envelopes
-  are stripped from returned usage; only allowlisted normalized fields or a
-  non-secret status marker survive.
+  amount and exact decimal text without inventing conversion, and represents
+  pending, delayed, partial, unavailable and invalid data separately. Values
+  are bounded to 30 significant digits and 18 decimal places. Raw or malformed
+  billing envelopes are stripped from returned usage; only allowlisted
+  normalized fields or a non-secret status marker survive.
 - A malformed reconciliation envelope no longer discards a successful
   inference response. Returned content and usage remain available, while
   `provider_billing_status=invalid` and
@@ -510,14 +518,19 @@
   provenance.
 - Lead Finder now tracks whether an AI request actually started before adding
   paid-call ambiguity fields, so a Tavily/SerpAPI failure before AI transport
-  cannot be attributed to an AI charge. Existing search-provider billing
-  status remains separate.
+  cannot be attributed to an AI charge. The same explicit boundary separates
+  Apollo enrichment attempts from later AI fallback, and Apollo observed
+  operations count the request even when it returns auth/rate-limit failure.
+  Existing search/enrichment-provider billing status remains separate.
+- New model/provider metadata uses bounded safe identifiers and rejects
+  embedded credential-like fragments; external billing reasons also redact
+  authorization, key, token, secret and password forms.
 - Browser history retains native authoritative amount/currency/source,
   invalid-data and estimate/usage-validation provenance inside the existing
   schema-10 JSON payload. Malformed persisted billing numbers are converted to
   an explicit invalid reconciliation rather than `NaN`, zero or authority.
-- First corrective targeted validation passes 25 Phase 5B Python tests, the
-  Phase 5B frontend fixture and 84 Phase 3/4/5A/5B focused tests with
+- Repeated corrective targeted validation passes 28 Phase 5B Python tests, the
+  Phase 5B frontend fixture and 88 Phase 3/4/5A/5B focused tests with
   `ResourceWarning` treated as an error. Repeated review and complete
   acceptance remain pending.
 - No route, security guard, confirmation gate, provider endpoint/header/

@@ -143,6 +143,30 @@ assert.strictEqual(saved[0].provider_authoritative_cost_usd, null);
 assert.strictEqual(saved[0].reconciliation_status, 'reconciliation_failed');
 assert.strictEqual(saved[0].billing_data_invalid, true);
 
+context.statsRecord('Delayed billing', 'format', 0.001, 'gpt-5.4-mini', '', 'openai', {
+  provider_billing_status: 'delayed',
+  reconciliation_status: 'provider_billing_delayed',
+  billing_data_missing: true,
+});
+assert.strictEqual(saved[0].provider_billing_status, 'delayed');
+assert.strictEqual(saved[0].reconciliation_status, 'provider_billing_delayed');
+assert.strictEqual(saved[0].billing_data_missing, true);
+assert.strictEqual(saved[0].billing_data_invalid, false);
+
+context.statsRecord('Unsafe source', 'format', 0.001, 'gpt-5.4-mini', '', 'openai', {
+  provider_billing_status: 'authoritative',
+  provider_authoritative_cost_usd: 0.001,
+  provider_authoritative_cost: 0.001,
+  provider_authoritative_cost_currency: 'USD',
+  provider_billing_currency: 'USD',
+  provider_billing_source: 'account-secret-reference',
+  reconciliation_status: 'reconciled',
+  billing_data_missing: false,
+});
+assert.strictEqual(saved[0].provider_billing_source, null);
+assert.strictEqual(saved[0].provider_billing_status, 'invalid');
+assert.strictEqual(saved[0].reconciliation_status, 'reconciliation_failed');
+
 const meta = context.statsMetaFromResponse({
   model: 'claude-sonnet-4-6',
   provider: 'anthropic',

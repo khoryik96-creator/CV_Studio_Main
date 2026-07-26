@@ -9009,8 +9009,14 @@ def _ja_salary_cost_provenance(cost, paid_call_status):
         "providerAuthoritativeCostUsd": cost.get(
             "provider_authoritative_cost_usd"
         ),
+        "providerAuthoritativeCostUsdText": cost.get(
+            "provider_authoritative_cost_usd_text"
+        ),
         "providerAuthoritativeCost": cost.get(
             "provider_authoritative_cost"
+        ),
+        "providerAuthoritativeCostText": cost.get(
+            "provider_authoritative_cost_text"
         ),
         "providerAuthoritativeCostCurrency": cost.get(
             "provider_authoritative_cost_currency"
@@ -20735,6 +20741,8 @@ def lead_finder_find_emails():
     contacts the recruiter has not actually chosen to enrich.
     """
     try:
+        ai_request_started = False
+        apollo_request_started = False
         body = request.get_json(force=True, silent=True) or {}
         if not _lead_finder_lock_allowed(body):
             return _lead_finder_locked_response()
@@ -20790,6 +20798,8 @@ def lead_finder_find_emails():
             stop_early = ""
             for p in need_lookup:
                 try:
+                    apollo_request_started = True
+                    apollo_looked_up += 1
                     result = _lead_apollo_enrich_person(provider_api_key, p)
                 except _LeadApolloAuthError as e:
                     stop_early = str(e)
@@ -20801,7 +20811,6 @@ def lead_finder_find_emails():
                     # One person's lookup failing should not abort the whole batch.
                     result = {"email": "", "email_confidence": "", "email_source": "", "verification_status": "Not found"}
                     apollo_warning = (apollo_warning + f" Apollo lookup failed for {p.get('name') or 'one contact'}: {str(e)[:150]}.").strip()
-                apollo_looked_up += 1
                 if result.get("email"):
                     apollo_found += 1
                 p["email"] = result.get("email", "")
@@ -20923,6 +20932,7 @@ RETURN ONLY VALID JSON. No markdown. Shape exactly:
             # a no-web model guess public business emails.
             "_skip_no_web_fallback": True,
         }
+        ai_request_started = True
         data, warning = _lead_call_with_optional_web(api_key, payload, graceful_json=graceful_json, provider=llm_provider)
         raw_text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text" or "text" in b)
         parse_warning = ""
@@ -21002,9 +21012,15 @@ RETURN ONLY VALID JSON. No markdown. Shape exactly:
             locals().get("model", ""),
             locals().get("llm_provider", "anthropic"),
             locals().get("usage"),
-            attempted=True,
+            attempted=bool(
+                locals().get("ai_request_started")
+                or _llm_usage_int(locals().get("usage"), "api_calls")
+            ),
         ))
-        if locals().get("provider_name") == "apollo":
+        if (
+            locals().get("provider_name") == "apollo"
+            and locals().get("apollo_request_started")
+        ):
             out["external_billing"] = _phase5b_unavailable_external_billing(
                 "apollo",
                 observed_operations=locals().get("apollo_looked_up"),
@@ -21021,9 +21037,15 @@ RETURN ONLY VALID JSON. No markdown. Shape exactly:
             e,
             out["model"],
             out["provider"],
-            attempted=True,
+            attempted=bool(
+                locals().get("ai_request_started")
+                or _llm_usage_int(locals().get("usage"), "api_calls")
+            ),
         ))
-        if locals().get("provider_name") == "apollo":
+        if (
+            locals().get("provider_name") == "apollo"
+            and locals().get("apollo_request_started")
+        ):
             out["external_billing"] = _phase5b_unavailable_external_billing(
                 "apollo",
                 observed_operations=locals().get("apollo_looked_up"),
@@ -21041,9 +21063,15 @@ RETURN ONLY VALID JSON. No markdown. Shape exactly:
             locals().get("model", ""),
             locals().get("llm_provider", "anthropic"),
             locals().get("usage"),
-            attempted=bool(locals().get("need_lookup")),
+            attempted=bool(
+                locals().get("ai_request_started")
+                or _llm_usage_int(locals().get("usage"), "api_calls")
+            ),
         ))
-        if locals().get("provider_name") == "apollo":
+        if (
+            locals().get("provider_name") == "apollo"
+            and locals().get("apollo_request_started")
+        ):
             out["external_billing"] = _phase5b_unavailable_external_billing(
                 "apollo",
                 observed_operations=locals().get("apollo_looked_up"),

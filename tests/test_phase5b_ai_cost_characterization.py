@@ -668,6 +668,60 @@ class Phase5BAICostCharacterizationTests(unittest.TestCase):
             payload["billing_reconciliation"]["billing_data_missing"]
         )
 
+    def test_apollo_failure_before_ai_is_not_mislabeled_as_an_ai_call(self):
+        person = {
+            "id": "person-1",
+            "name": "Fixture Person",
+            "company": "Example",
+            "email": "",
+        }
+        local_error = app.urllib.error.HTTPError(
+            "https://example.invalid/cache",
+            503,
+            "fixture pre-Apollo failure",
+            {},
+            io.BytesIO(b'{"error":{"message":"fixture"}}'),
+        )
+        with mock.patch.object(
+            app,
+            "_lead_finder_lock_allowed",
+            return_value=True,
+        ), mock.patch.object(
+            app,
+            "_lead_contact_cache_find",
+            side_effect=local_error,
+        ), mock.patch.object(
+            app,
+            "_lead_apollo_enrich_person",
+        ) as apollo_request, mock.patch.object(
+            app, "_lead_call_with_optional_web"
+        ) as ai_request:
+            response = self._post_paid(
+                "/lead-finder/find-emails",
+                {
+                    "people": [person],
+                    "selected_person_ids": ["person-1"],
+                    "enrichment_provider": {
+                        "provider": "apollo",
+                        "api_key": "<fixture-credential>",
+                    },
+                },
+                "phase5b-apollo-before-ai",
+            )
+        local_error.close()
+        apollo_request.assert_not_called()
+        ai_request.assert_not_called()
+        payload = response.get_json()
+        self.assertEqual(payload["paid_call_status"], "not_called")
+        self.assertEqual(
+            payload["billing_reconciliation"]["reconciliation_status"],
+            "not_called",
+        )
+        self.assertFalse(
+            payload["billing_reconciliation"]["billing_data_missing"]
+        )
+        self.assertNotIn("external_billing", payload)
+
     def test_deepseek_history_cutoff_and_non_secret_storage_boundary_are_explicit(self):
         frontend = Path(app.__file__).with_name("index.html").read_text(
             encoding="utf-8-sig"

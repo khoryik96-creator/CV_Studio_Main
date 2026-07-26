@@ -303,7 +303,7 @@ class Phase5BAICostFoundationTests(unittest.TestCase):
         self.assertTrue(details["billing_data_invalid"])
         self.assertFalse(details["billing_data_missing"])
 
-        pending = extract_provider_billing_result(
+        delayed = extract_provider_billing_result(
             "openai",
             {
                 "provider_billing": {
@@ -315,17 +315,17 @@ class Phase5BAICostFoundationTests(unittest.TestCase):
                 }
             },
         )
-        self.assertIsNone(pending["billing"])
+        self.assertIsNone(delayed["billing"])
         self.assertEqual(
-            pending["error"]["provider_billing_status"],
-            "pending",
+            delayed["error"]["provider_billing_status"],
+            "delayed",
         )
         self.assertEqual(
-            pending["error"]["reconciliation_status"],
-            "provider_billing_pending",
+            delayed["error"]["reconciliation_status"],
+            "provider_billing_delayed",
         )
-        self.assertTrue(pending["error"]["billing_data_missing"])
-        self.assertFalse(pending["error"]["billing_data_invalid"])
+        self.assertTrue(delayed["error"]["billing_data_missing"])
+        self.assertFalse(delayed["error"]["billing_data_invalid"])
 
     def test_no_call_and_missing_usage_have_distinct_reconciliation_states(self):
         no_call = cost_details(
@@ -337,6 +337,10 @@ class Phase5BAICostFoundationTests(unittest.TestCase):
         self.assertEqual(no_call["provider_billing_status"], "not_applicable")
         self.assertEqual(no_call["reconciliation_status"], "not_called")
         self.assertFalse(no_call["billing_data_missing"])
+        self.assertEqual(
+            no_call["usage_validation_status"],
+            "not_applicable",
+        )
 
         billing_without_usage = cost_details(
             "claude-sonnet-4-6",
@@ -362,6 +366,57 @@ class Phase5BAICostFoundationTests(unittest.TestCase):
         self.assertIsNone(
             billing_without_usage["reconciliation_difference_usd"]
         )
+
+    def test_authoritative_amount_precision_and_exact_zero_remain_auditable(self):
+        exact_amount = "0.123456789012345678"
+        details = cost_details(
+            "gpt-5.4-mini",
+            {"input_tokens": 10, "output_tokens": 2, "api_calls": 1},
+            "openai",
+            provider_billing={
+                "authoritative": True,
+                "source": "provider_invoice",
+                "scope": "request",
+                "currency": "USD",
+                "amount": exact_amount,
+            },
+            environ={},
+        )
+        self.assertEqual(
+            details["provider_authoritative_cost_usd_text"],
+            exact_amount,
+        )
+        self.assertEqual(
+            details["provider_authoritative_cost_text"],
+            exact_amount,
+        )
+
+        zero = cost_details(
+            "gpt-5.4-mini",
+            {"input_tokens": 10, "output_tokens": 2, "api_calls": 1},
+            "openai",
+            provider_billing={
+                "authoritative": True,
+                "source": "provider_invoice",
+                "scope": "request",
+                "currency": "USD",
+                "amount": "0",
+            },
+            environ={},
+        )
+        self.assertEqual(zero["provider_authoritative_cost_usd"], 0.0)
+        self.assertEqual(zero["provider_authoritative_cost_usd_text"], "0")
+
+        with self.assertRaises(AICostReconciliationError):
+            normalize_provider_billing(
+                {
+                    "authoritative": True,
+                    "source": "provider_invoice",
+                    "scope": "request",
+                    "currency": "USD",
+                    "amount": "0.0000000000000000001",
+                }
+            )
 
     def test_guardrail_is_disabled_by_default_and_blocks_before_transport(self):
         payload = {
@@ -449,6 +504,21 @@ class Phase5BAICostFoundationTests(unittest.TestCase):
                 environ={AI_COST_GUARDRAIL_ENV: str(slightly_lower)},
             )
 
+    def test_guardrail_failure_metadata_never_echoes_credential_like_model(self):
+        credential_like_model = "sk-ant-secret-that-is-not-a-model"
+        with self.assertRaises(AICostGuardrailError) as blocked:
+            enforce_request_guardrail(
+                "anthropic",
+                {
+                    "model": credential_like_model,
+                    "max_tokens": 1,
+                    "messages": [{"role": "user", "content": "fixture"}],
+                },
+                environ={AI_COST_GUARDRAIL_ENV: "0.000001"},
+            )
+        self.assertNotIn(credential_like_model, repr(blocked.exception.details))
+        self.assertNotIn(credential_like_model, str(blocked.exception))
+
     def test_invalid_guardrail_configuration_fails_before_estimation(self):
         for value in ("not-a-number", "nan", "0", "-1", "10001"):
             with self.subTest(value=value):
@@ -485,6 +555,32 @@ class Phase5BAICostFoundationTests(unittest.TestCase):
         self.assertIsNone(external["provider_authoritative_cost"])
         self.assertTrue(external["billing_data_missing"])
 
+        redacted_external = unavailable_external_billing(
+            "sk-secret-provider",
+            reason=(
+                "Authorization: Bearer sk-secret-token "
+                "api_key=sk-secret-query"
+            ),
+        )
+        self.assertEqual(redacted_external["provider"], "unknown")
+        self.assertNotIn("sk-secret", repr(redacted_external))
+
+        embedded = paid_failure_reconciliation(
+            TimeoutError("fixture timeout"),
+            provider="anthropic",
+            model="model/sk-embedded-secret",
+            attempted=True,
+        )
+        self.assertEqual(
+            embedded["billing_reconciliation"]["model"],
+            "[redacted-or-invalid-model]",
+        )
+        external_embedded = unavailable_external_billing(
+            "search-sk-embedded-secret",
+            reason="fixture",
+        )
+        self.assertEqual(external_embedded["provider"], "unknown")
+
         ambiguous = paid_failure_reconciliation(
             TimeoutError("fixture timeout"),
             provider="anthropic",
@@ -519,6 +615,22 @@ class Phase5BAICostFoundationTests(unittest.TestCase):
         )
         self.assertFalse(
             not_called["billing_reconciliation"]["billing_data_missing"]
+        )
+
+        invalid_usage = paid_failure_reconciliation(
+            ValueError("fixture parse failure"),
+            provider="deepseek",
+            model="deepseek-v4-flash",
+            usage={"input_tokens": -1, "output_tokens": 2, "api_calls": 1},
+            attempted=True,
+        )
+        self.assertEqual(
+            invalid_usage["paid_call_status"],
+            "provider_response_received",
+        )
+        self.assertEqual(
+            invalid_usage["billing_reconciliation"]["usage_authority"],
+            "provider_response_invalid",
         )
 
 
