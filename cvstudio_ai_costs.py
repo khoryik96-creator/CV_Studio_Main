@@ -470,9 +470,18 @@ def cost_details(
         }
     )
     details.update(_reconciliation_fields(float(estimate_usd), provider_billing))
-    config = guardrail_configuration(environ)
-    details["guardrail_enabled"] = config["enabled"]
-    details["guardrail_limit_usd"] = config["limit_usd"]
+    try:
+        config = guardrail_configuration(environ)
+        details["guardrail_enabled"] = config["enabled"]
+        details["guardrail_limit_usd"] = config["limit_usd"]
+        details["guardrail_status"] = (
+            "configured" if config["enabled"] else "disabled"
+        )
+    except AICostGuardrailConfigurationError:
+        # Reconciliation reporting must not hide the original guardrail error.
+        details["guardrail_enabled"] = False
+        details["guardrail_limit_usd"] = None
+        details["guardrail_status"] = "configuration_invalid"
     return details
 
 
@@ -661,13 +670,29 @@ def paid_failure_reconciliation(
     provider: Any,
     model: Any,
     usage: Mapping[str, Any] | None = None,
+    attempted: bool | None = None,
 ) -> dict[str, Any]:
     """Return additive failure status without changing legacy error fields."""
     normalized = normalize_usage(usage)
     calls = usage_int(normalized, "api_calls")
-    if isinstance(error, AICostGuardrailError):
+    if attempted is False:
+        call_status = "not_called"
+        reconciliation = "not_called"
+    elif isinstance(error, AICostGuardrailError) or (
+        "ai cost guardrail" in str(error or "").lower()
+    ):
         call_status = "blocked_before_provider_transport"
         reconciliation = "not_called"
+    elif isinstance(error, AICostReconciliationError):
+        call_status = "provider_response_received"
+        reconciliation = "reconciliation_failed"
+    elif getattr(error, "code", None) is not None or getattr(
+        error,
+        "status",
+        None,
+    ) is not None:
+        call_status = "provider_error_response_received"
+        reconciliation = "provider_billing_unavailable"
     elif calls > 0:
         call_status = "provider_response_received"
         reconciliation = "provider_billing_unavailable"

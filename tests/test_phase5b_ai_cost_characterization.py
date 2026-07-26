@@ -253,7 +253,19 @@ class Phase5BAICostCharacterizationTests(unittest.TestCase):
                 "phase5b-test-success",
             )
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(_LEGACY_AI_SUCCESS_FIELDS["/test"] <= set(response.get_json()))
+        payload = response.get_json()
+        self.assertTrue(_LEGACY_AI_SUCCESS_FIELDS["/test"] <= set(payload))
+        self.assertEqual(
+            payload["cost_details"]["cost_value_type"],
+            "local_estimate",
+        )
+        self.assertEqual(
+            payload["cost_details"]["provider_billing_status"],
+            "unavailable",
+        )
+        self.assertIsNone(
+            payload["cost_details"]["provider_authoritative_cost_usd"]
+        )
 
         parsed_data = {
             "candidate": {},
@@ -348,6 +360,19 @@ class Phase5BAICostCharacterizationTests(unittest.TestCase):
             <= set(payload)
         )
         self.assertFalse(payload["paid_ai_failure"])
+        self.assertEqual(
+            payload["paid_call_status"],
+            "ambiguous_no_provider_usage_returned",
+        )
+        self.assertEqual(
+            payload["billing_reconciliation"]["reconciliation_status"],
+            "ambiguous_provider_charge",
+        )
+        self.assertIsNone(
+            payload["billing_reconciliation"][
+                "provider_authoritative_cost_usd"
+            ]
+        )
 
         fields = {
             "current_salary_breakdown": "MYR 10,000 monthly",
@@ -434,6 +459,19 @@ class Phase5BAICostCharacterizationTests(unittest.TestCase):
                 "costReason",
             }
             <= set(processing)
+        )
+        self.assertEqual(
+            processing["costValueType"],
+            "local_estimate",
+        )
+        self.assertEqual(
+            processing["providerBillingStatus"],
+            "unavailable",
+        )
+        self.assertIsNone(processing["providerAuthoritativeCostUsd"])
+        self.assertEqual(
+            processing["reconciliationStatus"],
+            "provider_billing_unavailable",
         )
 
     def test_paid_transport_is_single_attempt_after_ambiguous_timeout(self):
@@ -522,9 +560,9 @@ class Phase5BAICostCharacterizationTests(unittest.TestCase):
             "token/call/cache details cannot be reconstructed.",
             frontend,
         )
+        self.assertIn("Estimated AI API token cost only", frontend)
         self.assertIn(
-            "AI API token cost only. DeepSeek uses returned cache-hit/cache-miss "
-            "counters when available",
+            "missing provider billing remains explicitly unreconciled",
             frontend,
         )
         self.assertIn(
@@ -544,6 +582,148 @@ class Phase5BAICostCharacterizationTests(unittest.TestCase):
             "enrichment_apollo",
         ):
             self.assertIn(secret_slot, source)
+
+    def test_guardrail_route_failure_owner_probe_and_external_billing_are_visible(self):
+        with mock.patch.dict(
+            os.environ,
+            {AI_COST_GUARDRAIL_ENV: "0.000001"},
+        ), mock.patch.object(
+            app,
+            "_resolve_request_api_key",
+            return_value="sk-ant-fixture",
+        ), mock.patch.object(
+            app._AI_PROVIDER_CLIENT,
+            "request",
+        ) as requested:
+            response = self._post_paid(
+                "/test",
+                {"provider": "anthropic"},
+                "phase5b-guardrail-block",
+            )
+        requested.assert_not_called()
+        payload = response.get_json()
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["code"], "AI_COST_GUARDRAIL_BLOCKED")
+        self.assertEqual(
+            payload["paid_call_status"],
+            "blocked_before_provider_transport",
+        )
+        self.assertEqual(
+            payload["billing_reconciliation"]["reconciliation_status"],
+            "not_called",
+        )
+
+        with mock.patch.dict(
+            app._ai_secret_store,
+            {"main_deepseek": "<fixture-credential>"},
+            clear=False,
+        ), mock.patch.object(
+            app,
+            "_call_deepseek",
+            return_value={
+                "content": [{"type": "text", "text": "OK"}],
+                "usage": {
+                    "input_tokens": 100,
+                    "output_tokens": 10,
+                    "prompt_cache_hit_tokens": 20,
+                    "prompt_cache_miss_tokens": 80,
+                },
+            },
+        ):
+            result = app._owner_integration_deepseek_probe(
+                "RUN ONE PAID DEEPSEEK PROBE"
+            )
+        self.assertTrue(result["ok"])
+        self.assertGreater(result["metadata"]["cost_usd"], 0)
+        self.assertEqual(
+            result["metadata"]["cost_details"]["cost_value_type"],
+            "local_estimate",
+        )
+        self.assertIsNone(
+            result["metadata"]["cost_details"][
+                "provider_authoritative_cost_usd"
+            ]
+        )
+
+        with mock.patch.object(
+            app,
+            "_lead_search_provider_config",
+            return_value={
+                "enabled": True,
+                "provider": "tavily",
+                "api_key": "<fixture-credential>",
+            },
+        ), mock.patch.object(
+            app,
+            "_lead_search_tavily",
+            return_value=[{"title": "Fixture", "url": "https://example.invalid"}],
+        ):
+            response = self.client.post(
+                "/lead-finder/test-search-provider",
+                json={},
+                headers=self._headers("phase5b-search-provider-billing"),
+            )
+        payload = response.get_json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(
+            payload["external_billing"]["provider"],
+            "tavily",
+        )
+        self.assertIsNone(
+            payload["external_billing"]["provider_authoritative_cost"]
+        )
+        self.assertTrue(payload["external_billing"]["billing_data_missing"])
+
+        person = {
+            "id": "person-1",
+            "name": "Fixture Person",
+            "company": "Example",
+            "email": "",
+        }
+        with mock.patch.object(
+            app,
+            "_lead_finder_lock_allowed",
+            return_value=True,
+        ), mock.patch.object(
+            app,
+            "_lead_contact_cache_find",
+            return_value=None,
+        ), mock.patch.object(
+            app,
+            "_lead_contact_cache_store",
+        ), mock.patch.object(
+            app,
+            "_lead_apollo_enrich_person",
+            return_value={
+                "email": "fixture@example.com",
+                "email_confidence": "high",
+                "email_source": "Apollo",
+                "verification_status": "Verified",
+            },
+        ):
+            response = self._post_paid(
+                "/lead-finder/find-emails",
+                {
+                    "people": [person],
+                    "selected_person_ids": ["person-1"],
+                    "enrichment_provider": {
+                        "provider": "apollo",
+                        "api_key": "<fixture-credential>",
+                    },
+                },
+                "phase5b-apollo-billing",
+            )
+        payload = response.get_json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["cost"], 0)
+        self.assertEqual(payload["external_billing"]["provider"], "apollo")
+        self.assertEqual(
+            payload["external_billing"]["observed_operations"],
+            1,
+        )
+        self.assertIsNone(
+            payload["external_billing"]["provider_authoritative_cost"]
+        )
 
 
 def tearDownModule():

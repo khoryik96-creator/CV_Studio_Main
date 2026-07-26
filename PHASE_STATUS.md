@@ -17,8 +17,8 @@
 - Active phase: Phase 5B central AI cost guardrails and provider-billing
   reconciliation
 - Completed private owner/source release: v24.6.234
-- Status: Milestone 2 central accounting and guardrail foundation complete
-- Current milestone: Phase 5B Milestone 3 existing-call integration
+- Status: Milestone 3 existing-call integration complete
+- Current milestone: Phase 5B Milestone 4 acceptance and release evidence
 
 ## Phase 5B authorization and constraints
 
@@ -134,7 +134,7 @@
 - [x] Complete paid-provider, billing, credential and ambiguity inventory.
 - [x] Add pre-change characterization for all in-scope field contracts.
 - [x] Implement and verify the central accounting/guardrail foundation.
-- [ ] Integrate only compatible existing paid-provider call boundaries.
+- [x] Integrate only compatible existing paid-provider call boundaries.
 - [ ] Run complete acceptance and repeated exact-master review.
 - [ ] Create and byte-verify the Phase 5B private owner/source release.
 - [ ] Produce QA report, sidecars and Phase 6 handover; stop before Phase 6.
@@ -372,6 +372,49 @@
 - This is an in-request ceiling, not a persistent budget or aggregate billing
   ledger. No schema, credential, worker, route or data-authority change was
   introduced.
+
+## Phase 5B Milestone 3 existing-call integration result
+
+- All existing browser AI paths now return the same legacy top-level
+  `cost` estimate and `cost_details` fields plus the central provenance and
+  reconciliation fields. Standard provider success responses explicitly say
+  that usage came from the provider, cost came from the local rate table and
+  provider-authoritative cost is unavailable rather than zero.
+- Paid-call failure paths add `paid_call_status` and
+  `billing_reconciliation` without removing or renaming any established error
+  field. The status distinguishes a guardrail block before transport, a
+  definite provider error response, a provider response with returned usage,
+  no call, and an ambiguous failure with no returned usage. Ambiguous failures
+  retain nullable authoritative cost and are never replayed.
+- OneNote salary processing retains every legacy camel-case field and adds
+  estimate/authority/reconciliation/guardrail status. Local and cache paths are
+  explicitly `not_called`; a transport failure is explicit even though the
+  legacy `aiApiCalled` field remains unchanged for compatibility.
+- The owner-only paid DeepSeek probe retains its exact authorization and
+  confirmation. Its legacy `metadata.cost_usd` now reads the established
+  estimate from the correct `cost` field instead of the nonexistent
+  `cost_usd` key that always yielded zero. Additive `cost_details` carries the
+  authority distinction. The helper still makes no call in tests.
+- Tavily/SerpAPI connectivity and configured Lead Finder search responses now
+  expose a separate `external_billing` object with nullable authoritative
+  amount. Apollo enrichment reports its observed lookup count and the same
+  explicit missing-billing status. Their unknown fees remain excluded from the
+  legacy AI token estimate.
+- The usage tracker now labels current totals as estimates, persists the
+  non-secret cost/usage/billing/reconciliation provenance on new schema-10
+  usage-history payloads and exports those columns. It does not migrate or
+  rewrite records. The exact v24.6.215 field-presence cutoff and historical
+  stored values remain unchanged.
+- Added a no-network Node fixture for client-side estimate fallback,
+  backend-provenance propagation, usage-history persistence and the DeepSeek
+  historical cutoff. The three frontend fixtures pass.
+- Fifty-one focused Python tests pass across Phase 5B, the Phase 3 client
+  boundary, Phase 4 modules and Phase 5A journal/recovery integration. They
+  reconfirm 107 routes, five ordered guards, 18 compatibility signatures,
+  schema 10, journal schema 1, initialization order and paid-call zero-retry
+  behavior.
+- No new route, worker, credential slot, schema, journal field, provider
+  endpoint, header, timeout, retry or confirmation gate was introduced.
 
 ## Phase 5A authorization and constraints
 

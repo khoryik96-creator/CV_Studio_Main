@@ -8976,6 +8976,43 @@ def _ja_salary_cost_details(model, usage, provider):
     return _llm_cost_details(model, usage, provider)
 
 
+def _ja_salary_cost_provenance(cost, paid_call_status):
+    cost = cost if isinstance(cost, dict) else {}
+    output = {
+        "paidCallStatus": str(paid_call_status or ""),
+        "estimatedCostUsd": float(cost.get("estimated_cost_usd") or 0.0),
+        "costValueType": str(cost.get("cost_value_type") or "local_estimate"),
+        "costAuthority": str(cost.get("cost_authority") or "local_rate_table"),
+        "usageAuthority": str(cost.get("usage_authority") or "not_returned"),
+        "providerBillingStatus": str(
+            cost.get("provider_billing_status") or "unavailable"
+        ),
+        "providerAuthoritativeCostUsd": cost.get(
+            "provider_authoritative_cost_usd"
+        ),
+        "providerBillingCurrency": cost.get("provider_billing_currency"),
+        "providerBillingSource": cost.get("provider_billing_source"),
+        "reconciliationStatus": str(
+            cost.get("reconciliation_status")
+            or "provider_billing_unavailable"
+        ),
+        "reconciliationDifferenceUsd": cost.get(
+            "reconciliation_difference_usd"
+        ),
+        "billingDataMissing": bool(cost.get("billing_data_missing", True)),
+        "guardrailEnabled": bool(cost.get("guardrail_enabled")),
+        "guardrailLimitUsd": cost.get("guardrail_limit_usd"),
+        "guardrailStatus": str(cost.get("guardrail_status") or ""),
+    }
+    if str(paid_call_status or "").startswith("not_called"):
+        output.update({
+            "providerBillingStatus": "not_applicable",
+            "reconciliationStatus": "not_called",
+            "billingDataMissing": False,
+        })
+    return output
+
+
 def _ja_salary_llm_text(data):
     out = []
     for block in (data or {}).get("content") or []:
@@ -9015,13 +9052,19 @@ def _ja_salary_ai_extract(fields, config=None):
         "costUsd": 0.0,
         "costReason": "Local deterministic salary parser used; no AI API call.",
     }
+    base_processing.update(
+        _ja_salary_cost_provenance(
+            _ja_salary_cost_details("none", {}, "none"),
+            "not_called",
+        )
+    )
     if not enabled or not any(raw.values()):
         return None, base_processing
     cache_key = hashlib.sha256(json.dumps({"v":"salary-ai-v4-typo-tolerant","provider":provider,"model":model,"raw":raw}, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
     cached = _ja_salary_ai_cache_get(cache_key)
     cached_components = _ja_salary_ai_sanitize(cached.get("components")) if isinstance(cached, dict) else None
     if cached_components:
-        return cached_components, {
+        cached_processing = {
             "fieldExtraction": "ai_component_extraction_cache",
             "salaryCalculation": "deterministic_code",
             "aiAttempted": True,
@@ -9036,6 +9079,17 @@ def _ja_salary_ai_extract(fields, config=None):
             "costUsd": 0.0,
             "costReason": "Reused cached AI-extracted components; no new token charge. Deterministic code calculated final values.",
         }
+        cached_processing.update(
+            _ja_salary_cost_provenance(
+                _ja_salary_cost_details(
+                    str(cached.get("model") or model),
+                    {},
+                    str(cached.get("provider") or provider),
+                ),
+                "not_called_cache_hit",
+            )
+        )
+        return cached_components, cached_processing
     if not api_key:
         p=dict(base_processing)
         p.update({"aiAttempted": False, "fallbackReason": "AI salary assist enabled but no saved API key was available.", "costReason": "No AI call; local deterministic fallback."})
@@ -9061,7 +9115,7 @@ def _ja_salary_ai_extract(fields, config=None):
             raise ValueError("AI response did not contain usable salary components")
         cost = _ja_salary_cost_details(model, usage, provider)
         _ja_salary_ai_cache_put(cache_key, components, provider, model)
-        return components, {
+        processing = {
             "fieldExtraction": "ai_component_extraction",
             "salaryCalculation": "deterministic_code",
             "aiAttempted": True,
@@ -9083,9 +9137,27 @@ def _ja_salary_ai_extract(fields, config=None):
             "costMethod": cost.get("cost_method"),
             "costReason": "AI extracted components only; deterministic code calculated final salary values.",
         }
+        processing.update(
+            _ja_salary_cost_provenance(cost, "provider_response_received")
+        )
+        return components, processing
     except Exception as e:
         p = dict(base_processing)
-        cost = _ja_salary_cost_details(model, usage, provider) if api_called else {"input_tokens": 0, "output_tokens": 0, "prompt_cache_hit_tokens": 0, "prompt_cache_miss_tokens": 0, "usd": 0.0, "pricing_known": False, "pricing_model_key": None, "cost_method": "no_api_response"}
+        cost = _ja_salary_cost_details(model, usage, provider)
+        if not api_called:
+            cost = dict(cost)
+            cost.update({
+                "pricing_known": False,
+                "pricing_model_key": None,
+                "cost_method": "no_api_response",
+            })
+        failure = _llm_paid_failure_fields(
+            e,
+            model,
+            provider,
+            usage,
+            attempted=True,
+        )
         p.update({
             "aiAttempted": True,
             "aiUsed": False,
@@ -9105,6 +9177,13 @@ def _ja_salary_ai_extract(fields, config=None):
             "fallbackReason": str(e)[:500],
             "costReason": "AI API returned no usable components; returned token usage/cost was still recorded before local deterministic fallback." if api_called else "AI extraction failed before an API response; local deterministic fallback used.",
         })
+        p.update(
+            _ja_salary_cost_provenance(
+                cost,
+                failure.get("paid_call_status"),
+            )
+        )
+        p["billingReconciliation"] = failure.get("billing_reconciliation")
         return None, p
 
 
@@ -11370,11 +11449,37 @@ def _owner_integration_deepseek_probe(confirmation):
         model = "deepseek-v4-flash"
         payload = {"model": model, "max_tokens": 12, "messages": [{"role": "user", "content": "Reply only with OK"}]}
         data = _call_deepseek(api_key, payload, timeout_seconds=45)
-        usage = data.get("usage") if isinstance(data, dict) else {}
+        usage = _normalize_llm_usage(
+            data.get("usage") if isinstance(data, dict) else {},
+            api_calls=1,
+        )
         cost = _llm_response_cost_fields(model, usage or {}, "deepseek")
-        return _owner_integration_test_result("deepseek_paid_probe", started, ok=True, detail="Small paid DeepSeek request completed", metadata={"model": model, "usage": usage or {}, "cost_usd": cost.get("cost_usd", 0)})
+        return _owner_integration_test_result(
+            "deepseek_paid_probe",
+            started,
+            ok=True,
+            detail="Small paid DeepSeek request completed",
+            metadata={
+                "model": model,
+                "usage": usage or {},
+                "cost_usd": cost.get("cost", 0),
+                "cost_details": cost.get("cost_details") or {},
+            },
+        )
     except Exception as exc:
-        return _owner_integration_test_result("deepseek_paid_probe", started, ok=False, status="failed", detail=str(exc))
+        return _owner_integration_test_result(
+            "deepseek_paid_probe",
+            started,
+            ok=False,
+            status="failed",
+            detail=str(exc),
+            metadata=_llm_paid_failure_fields(
+                exc,
+                "deepseek-v4-flash",
+                "deepseek",
+                attempted=True,
+            ),
+        )
 
 
 @app.route("/owner/integration/status", methods=["GET"])
@@ -15810,9 +15915,24 @@ def test_key():
             msg = err.get("error", {}).get("message", "Unknown")
         except Exception:
             msg = raw.decode("utf-8", errors="replace")[:500] or "Unknown"
-        return jsonify({"ok": False, "error": f"HTTP {e.code}: {msg}"})
+        out = {"ok": False, "error": f"HTTP {e.code}: {msg}"}
+        out.update(_llm_paid_failure_fields(
+            e,
+            locals().get("test_model", ""),
+            locals().get("provider", "anthropic"),
+            attempted=True,
+        ))
+        return jsonify(out)
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)})
+        out = {"ok": False, "error": str(e)}
+        if "test_model" in locals():
+            out.update(_llm_paid_failure_fields(
+                e,
+                test_model,
+                provider,
+                attempted=True,
+            ))
+        return jsonify(out)
 
 
 @app.route("/parse", methods=["POST"])
@@ -16003,6 +16123,13 @@ def parse_cv():
                         ), "paid_ai_failure": bool(_llm_usage_int(usage_total, "api_calls")), "usage": usage_total,
                            "model": model, "provider": llm_provider}
                         out.update(_llm_response_cost_fields(model, usage_total, llm_provider))
+                        out.update(_llm_paid_failure_fields(
+                            repair_err,
+                            model,
+                            llm_provider,
+                            usage_total,
+                            attempted=True,
+                        ))
                         return jsonify(out), 500
         
         usage = usage_total
@@ -16038,13 +16165,28 @@ def parse_cv():
             msg = err.get("error", {}).get("message", "API error")
         except:
             msg = err_body.decode("utf-8", errors="replace")[:300]
-        return jsonify({"error": _provider_error_message(llm_provider, msg)}), 400
+        out = {"error": _provider_error_message(llm_provider, msg)}
+        out.update(_llm_paid_failure_fields(
+            e,
+            model,
+            llm_provider,
+            locals().get("usage_total"),
+            attempted=True,
+        ))
+        return jsonify(out), 400
 
     except json.JSONDecodeError as e:
         usage = locals().get("usage_total") or _merge_llm_usage()
         out = {"error": f"Could not parse AI response as JSON: {str(e)}", "paid_ai_failure": bool(_llm_usage_int(usage, "api_calls")),
                "usage": usage, "model": locals().get("model", ""), "provider": locals().get("llm_provider", "anthropic")}
         out.update(_llm_response_cost_fields(out["model"], usage, out["provider"]))
+        out.update(_llm_paid_failure_fields(
+            e,
+            out["model"],
+            out["provider"],
+            usage,
+            attempted=True,
+        ))
         return jsonify(out), 500
 
     except Exception as e:
@@ -16053,6 +16195,13 @@ def parse_cv():
         out = {"error": str(e), "paid_ai_failure": bool(_llm_usage_int(usage, "api_calls")),
                "usage": usage, "model": locals().get("model", ""), "provider": locals().get("llm_provider", "anthropic")}
         out.update(_llm_response_cost_fields(out["model"], usage, out["provider"]))
+        out.update(_llm_paid_failure_fields(
+            e,
+            out["model"],
+            out["provider"],
+            usage,
+            attempted=bool(locals().get("api_key") and locals().get("cv_text")),
+        ))
         return jsonify(out), 500
 
 
@@ -16134,7 +16283,14 @@ def generate_ai():
                 }
                 out.update(_llm_response_cost_fields(model, usage, llm_provider))
                 return jsonify(out)
-            return jsonify({"error": _provider_error_message(llm_provider, msg)}), 400
+            out = {"error": _provider_error_message(llm_provider, msg)}
+            out.update(_llm_paid_failure_fields(
+                e,
+                model,
+                llm_provider,
+                attempted=True,
+            ))
+            return jsonify(out), 400
 
         usage = data.get("usage", {})
         out = {"ok": True, "content": data.get("content", []), "usage": usage, "model": model, "provider": llm_provider}
@@ -16143,7 +16299,18 @@ def generate_ai():
 
     except Exception as e:
         traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        out = {"error": str(e)}
+        out.update(_llm_paid_failure_fields(
+            e,
+            locals().get("model", ""),
+            locals().get("llm_provider", "anthropic"),
+            attempted=bool(
+                locals().get("api_key")
+                and locals().get("prompt")
+                and "payload" in locals()
+            ),
+        ))
+        return jsonify(out), 500
 
 
 # ── Lead Finder / Market Leads ───────────────────────────────────────────────
@@ -16201,6 +16368,23 @@ def _llm_cost_details(model, usage, provider=None):
 def _llm_response_cost_fields(model, usage, provider=None):
     details = _llm_cost_details(model, usage, provider)
     return {"cost": float(details.get("usd") or 0.0), "cost_details": details}
+
+
+def _llm_paid_failure_fields(
+    error,
+    model,
+    provider=None,
+    usage=None,
+    attempted=None,
+):
+    """Return additive paid-call ambiguity and billing status fields."""
+    return _phase5b_paid_failure_reconciliation(
+        error,
+        provider=provider,
+        model=model,
+        usage=usage,
+        attempted=attempted,
+    )
 
 
 def _lead_provider_from_model(model, provider=None):
@@ -18595,7 +18779,15 @@ def lead_finder_test_search_provider():
             "ok": True,
             "provider": cfg["provider"],
             "count": len(results),
-            "sample": results[:2]
+            "sample": results[:2],
+            "external_billing": _phase5b_unavailable_external_billing(
+                cfg["provider"],
+                observed_operations=1,
+                reason=(
+                    "The connectivity response did not include "
+                    "provider-authoritative billing."
+                ),
+            ),
         })
     except urllib.error.HTTPError as e:
         try:
@@ -18603,9 +18795,29 @@ def lead_finder_test_search_provider():
             msg = err.get("error") or err.get("message") or str(err)[:300]
         except Exception:
             msg = "Search provider HTTP error"
-        return jsonify({"ok": False, "error": str(msg)[:500]}), 400
+        out = {"ok": False, "error": str(msg)[:500]}
+        if "cfg" in locals() and cfg.get("provider"):
+            out["external_billing"] = _phase5b_unavailable_external_billing(
+                cfg["provider"],
+                observed_operations=1,
+                reason=(
+                    "The failed connectivity request returned no "
+                    "provider-authoritative billing."
+                ),
+            )
+        return jsonify(out), 400
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)[:500]}), 500
+        out = {"ok": False, "error": str(e)[:500]}
+        if "cfg" in locals() and cfg.get("provider"):
+            out["external_billing"] = _phase5b_unavailable_external_billing(
+                cfg["provider"],
+                observed_operations=1,
+                reason=(
+                    "The connectivity request returned no "
+                    "provider-authoritative billing."
+                ),
+            )
+        return jsonify(out), 500
 
 @app.route("/lead-finder/title-cache/stats", methods=["GET"])
 def lead_finder_title_cache_stats():
@@ -18835,6 +19047,13 @@ def lead_finder_search():
                 parsed["provider"] = llm_provider
                 parsed["cost"] = _lead_cost(model, usage or {}, llm_provider)
                 parsed["cost_details"] = _lead_cost_details(model, usage or {}, llm_provider)
+                parsed["external_billing"] = _phase5b_unavailable_external_billing(
+                    search_provider.get("provider"),
+                    reason=(
+                        "Search-provider results do not include "
+                        "provider-authoritative billing."
+                    ),
+                )
                 parsed["phase"] = "job_search_provider_fast_extract"
                 if warnings:
                     parsed["warning"] = " ".join(warnings)
@@ -18843,7 +19062,7 @@ def lead_finder_search():
                 # Provider was explicitly configured but returned no results. Do not fall
                 # through to the expensive AI web-search route by default; this was causing
                 # paid AI usage with no extracted leads.
-                return jsonify({
+                out = {
                     "ok": True,
                     "summary": {
                         "candidate_title": role_search_target or target_role or "Candidate",
@@ -18867,7 +19086,15 @@ def lead_finder_search():
                     "cost_details": _lead_cost_details(model, title_expansion_usage or {}, llm_provider),
                     "phase": "job_search_provider_empty",
                     "warning": (f"Search provider {search_provider.get('provider')} returned no usable job results. No fallback search links shown and no AI fallback cost incurred." + (" " + title_expansion_warning if title_expansion_warning else "")).strip()
-                })
+                }
+                out["external_billing"] = _phase5b_unavailable_external_billing(
+                    search_provider.get("provider"),
+                    reason=(
+                        "Search-provider results do not include "
+                        "provider-authoritative billing."
+                    ),
+                )
+                return jsonify(out)
 
         prompt = f"""
 You are building a compliant recruiting job-lead list for Hyppies.
@@ -19100,6 +19327,14 @@ TARGET COUNT
         # 0 leads were extracted. Recruiters need visibility into wasted spend.
         parsed["cost"] = _lead_cost(model, usage, llm_provider)
         parsed["cost_details"] = _lead_cost_details(model, usage, llm_provider)
+        if search_provider.get("enabled"):
+            parsed["external_billing"] = _phase5b_unavailable_external_billing(
+                search_provider.get("provider"),
+                reason=(
+                    "Search-provider results do not include "
+                    "provider-authoritative billing."
+                ),
+            )
         if real_count == 0:
             spend_msg = "Cost transparency: this run returned 0 extracted direct job leads, but any API usage returned by the provider is still displayed so you can monitor wasted spend."
             warning = (warning + " " + spend_msg).strip() if warning else spend_msg
@@ -19114,12 +19349,60 @@ TARGET COUNT
             msg = err.get("error", {}).get("message", "API error")
         except Exception:
             msg = "API error"
-        return jsonify({"error": "API provider error: " + msg}), 400
-    except (TimeoutError, socket.timeout, urllib.error.URLError):
-        return jsonify({"error": "Lead Finder could not reach the API provider. Check internet/API key, then try again with Light depth."}), 504
+        out = {"error": "API provider error: " + msg}
+        out.update(_llm_paid_failure_fields(
+            e,
+            locals().get("model", ""),
+            locals().get("llm_provider", "anthropic"),
+            locals().get("usage") or locals().get("title_expansion_usage"),
+            attempted=True,
+        ))
+        if locals().get("search_provider", {}).get("enabled"):
+            out["external_billing"] = _phase5b_unavailable_external_billing(
+                search_provider.get("provider"),
+                reason=(
+                    "The failed search-provider workflow returned no "
+                    "provider-authoritative billing."
+                ),
+            )
+        return jsonify(out), 400
+    except (TimeoutError, socket.timeout, urllib.error.URLError) as e:
+        out = {"error": "Lead Finder could not reach the API provider. Check internet/API key, then try again with Light depth."}
+        out.update(_llm_paid_failure_fields(
+            e,
+            locals().get("model", ""),
+            locals().get("llm_provider", "anthropic"),
+            locals().get("usage") or locals().get("title_expansion_usage"),
+            attempted=True,
+        ))
+        if locals().get("search_provider", {}).get("enabled"):
+            out["external_billing"] = _phase5b_unavailable_external_billing(
+                search_provider.get("provider"),
+                reason=(
+                    "The timed-out search-provider workflow returned no "
+                    "provider-authoritative billing."
+                ),
+            )
+        return jsonify(out), 504
     except Exception as e:
         traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        out = {"error": str(e)}
+        out.update(_llm_paid_failure_fields(
+            e,
+            locals().get("model", ""),
+            locals().get("llm_provider", "anthropic"),
+            locals().get("usage") or locals().get("title_expansion_usage"),
+            attempted=bool(locals().get("api_key")),
+        ))
+        if locals().get("search_provider", {}).get("enabled"):
+            out["external_billing"] = _phase5b_unavailable_external_billing(
+                search_provider.get("provider"),
+                reason=(
+                    "The search-provider workflow returned no "
+                    "provider-authoritative billing."
+                ),
+            )
+        return jsonify(out), 500
 
 
 
@@ -20349,12 +20632,36 @@ TARGET COUNT
             msg = err.get("error", {}).get("message", "API error")
         except Exception:
             msg = "API error"
-        return jsonify({"error": "API provider error: " + msg}), 400
-    except (TimeoutError, socket.timeout, urllib.error.URLError):
-        return jsonify({"error": "People search could not reach the API provider. Try again after saving job leads."}), 504
+        out = {"error": "API provider error: " + msg}
+        out.update(_llm_paid_failure_fields(
+            e,
+            locals().get("model", ""),
+            locals().get("llm_provider", "anthropic"),
+            locals().get("usage"),
+            attempted=True,
+        ))
+        return jsonify(out), 400
+    except (TimeoutError, socket.timeout, urllib.error.URLError) as e:
+        out = {"error": "People search could not reach the API provider. Try again after saving job leads."}
+        out.update(_llm_paid_failure_fields(
+            e,
+            locals().get("model", ""),
+            locals().get("llm_provider", "anthropic"),
+            locals().get("usage"),
+            attempted=True,
+        ))
+        return jsonify(out), 504
     except Exception as e:
         traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        out = {"error": str(e)}
+        out.update(_llm_paid_failure_fields(
+            e,
+            locals().get("model", ""),
+            locals().get("llm_provider", "anthropic"),
+            locals().get("usage"),
+            attempted=bool(locals().get("api_key") and locals().get("companies")),
+        ))
+        return jsonify(out), 500
 
 
 @app.route("/lead-finder/find-emails", methods=["POST"])
@@ -20469,6 +20776,14 @@ def lead_finder_find_emails():
                 "apollo_found": apollo_found,
                 "cache_hits": cache_hits,
                 "already_resolved": already_resolved,
+                "external_billing": _phase5b_unavailable_external_billing(
+                    "apollo",
+                    observed_operations=apollo_looked_up,
+                    reason=(
+                        "Apollo enrichment responses do not include "
+                        "provider-authoritative billing."
+                    ),
+                ),
                 "warning": warning,
             })
 
@@ -20623,13 +20938,63 @@ RETURN ONLY VALID JSON. No markdown. Shape exactly:
             msg = err.get("error", {}).get("message", "API error")
         except Exception:
             msg = "API error"
-        return jsonify({"error": "API provider error: " + msg}), 400
-    except (TimeoutError, socket.timeout, urllib.error.URLError):
+        out = {"error": "API provider error: " + msg}
+        out.update(_llm_paid_failure_fields(
+            e,
+            locals().get("model", ""),
+            locals().get("llm_provider", "anthropic"),
+            locals().get("usage"),
+            attempted=True,
+        ))
+        if locals().get("provider_name") == "apollo":
+            out["external_billing"] = _phase5b_unavailable_external_billing(
+                "apollo",
+                observed_operations=locals().get("apollo_looked_up"),
+                reason=(
+                    "The failed Apollo workflow returned no "
+                    "provider-authoritative billing."
+                ),
+            )
+        return jsonify(out), 400
+    except (TimeoutError, socket.timeout, urllib.error.URLError) as e:
         safe_people = _lead_sanitize_public_business_emails(people if isinstance(people, list) else []) if 'people' in locals() else []
-        return jsonify({"ok": True, "people": safe_people, "warning": "Email search timed out before enrichment finished; preserved existing people leads without adding emails.", "usage": {"input_tokens": 0, "output_tokens": 0}, "model": model if 'model' in locals() else "claude-sonnet-4-6", "provider": llm_provider if 'llm_provider' in locals() else "anthropic", "cost": 0, "cost_details": _lead_cost_details(model if 'model' in locals() else "claude-sonnet-4-6", {}, llm_provider if 'llm_provider' in locals() else "anthropic")})
+        out = {"ok": True, "people": safe_people, "warning": "Email search timed out before enrichment finished; preserved existing people leads without adding emails.", "usage": {"input_tokens": 0, "output_tokens": 0}, "model": model if 'model' in locals() else "claude-sonnet-4-6", "provider": llm_provider if 'llm_provider' in locals() else "anthropic", "cost": 0, "cost_details": _lead_cost_details(model if 'model' in locals() else "claude-sonnet-4-6", {}, llm_provider if 'llm_provider' in locals() else "anthropic")}
+        out.update(_llm_paid_failure_fields(
+            e,
+            out["model"],
+            out["provider"],
+            attempted=True,
+        ))
+        if locals().get("provider_name") == "apollo":
+            out["external_billing"] = _phase5b_unavailable_external_billing(
+                "apollo",
+                observed_operations=locals().get("apollo_looked_up"),
+                reason=(
+                    "The timed-out Apollo workflow returned no "
+                    "provider-authoritative billing."
+                ),
+            )
+        return jsonify(out)
     except Exception as e:
         traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        out = {"error": str(e)}
+        out.update(_llm_paid_failure_fields(
+            e,
+            locals().get("model", ""),
+            locals().get("llm_provider", "anthropic"),
+            locals().get("usage"),
+            attempted=bool(locals().get("need_lookup")),
+        ))
+        if locals().get("provider_name") == "apollo":
+            out["external_billing"] = _phase5b_unavailable_external_billing(
+                "apollo",
+                observed_operations=locals().get("apollo_looked_up"),
+                reason=(
+                    "The Apollo workflow returned no "
+                    "provider-authoritative billing."
+                ),
+            )
+        return jsonify(out), 500
 
 
 @app.route("/lead-finder/contact-cache/stats", methods=["GET"])
@@ -22080,6 +22445,13 @@ def blind_cv():
             out = {"error": f"AI provider returned invalid JSON. Error: {str(e)}\n\nRaw response (first 1000 chars):\n{raw_text[:1000]}",
                    "paid_ai_failure": True, "usage": usage, "model": model, "provider": llm_provider}
             out.update(_llm_response_cost_fields(model, usage, llm_provider))
+            out.update(_llm_paid_failure_fields(
+                e,
+                model,
+                llm_provider,
+                usage,
+                attempted=True,
+            ))
             return jsonify(out), 500
 
         # Deterministic last line of defence: mask residual employer/client/competitor
@@ -22098,7 +22470,15 @@ def blind_cv():
             msg = err.get("error", {}).get("message", "API error")
         except:
             msg = err_body.decode("utf-8", errors="replace")[:300]
-        return jsonify({"error": _provider_error_message(llm_provider, msg)}), 400
+        out = {"error": _provider_error_message(llm_provider, msg)}
+        out.update(_llm_paid_failure_fields(
+            e,
+            model,
+            llm_provider,
+            locals().get("usage"),
+            attempted=True,
+        ))
+        return jsonify(out), 400
 
     except Exception as e:
         traceback.print_exc()
@@ -22106,6 +22486,13 @@ def blind_cv():
         out = {"error": str(e), "paid_ai_failure": bool(_llm_usage_int(usage, "api_calls")), "usage": usage,
                "model": locals().get("model", ""), "provider": locals().get("llm_provider", "anthropic")}
         out.update(_llm_response_cost_fields(out["model"], usage, out["provider"]))
+        out.update(_llm_paid_failure_fields(
+            e,
+            out["model"],
+            out["provider"],
+            usage,
+            attempted=bool(locals().get("api_key") and locals().get("cv_data")),
+        ))
         return jsonify(out), 500
 
 

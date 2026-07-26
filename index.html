@@ -2614,7 +2614,7 @@
       <div class="stats-tile-sub">CVs blinded</div>
     </div>
     <div class="stats-tile accent-gold">
-      <div class="stats-tile-label">Cost (USD)</div>
+      <div class="stats-tile-label">Estimated Cost (USD)</div>
       <div class="stats-tile-value" id="statsCostUSD">$0.00</div>
       <div class="stats-tile-sub" id="statsCostMYR">RM 0.00</div>
       <div style="margin-top:6px;display:flex;align-items:center;gap:4px;">
@@ -2626,7 +2626,7 @@
       </div>
     </div>
     <div class="stats-tile accent-lead">
-      <div class="stats-tile-label">Lead Finder Cost</div>
+      <div class="stats-tile-label">Lead Finder Estimate</div>
       <div class="stats-tile-value" id="statsLeadCostUSD">$0.0000</div>
       <div class="stats-tile-sub" id="statsLeadCostMYR">RM 0.00 · 0 runs</div>
     </div>
@@ -2638,12 +2638,12 @@
   </div>
 
   <!-- History table -->
-  <div style="font-size:10px;color:var(--text3);margin:0 0 8px;line-height:1.45;">AI API token cost only. DeepSeek uses returned cache-hit/cache-miss counters when available; without a split, input is conservatively priced as cache miss. Provider-key tests and paid failed outputs are recorded. Separate search/enrichment-provider fees are excluded.</div>
+  <div style="font-size:10px;color:var(--text3);margin:0 0 8px;line-height:1.45;">Estimated AI API token cost only, calculated from the local rate table. Standard AI responses provide usage, not invoice-authoritative per-call cost; missing provider billing remains explicitly unreconciled. DeepSeek uses returned cache-hit/cache-miss counters when available; without a split, input is conservatively priced as cache miss. Provider-key tests and paid failed outputs are recorded. Separate search/enrichment-provider fees are excluded.</div>
   <details style="margin:0 0 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);padding:7px 9px;font-size:10px;color:var(--text2);line-height:1.5;">
     <summary style="cursor:pointer;font-weight:700;color:var(--text1);">What can spend DeepSeek tokens?</summary>
     <div style="margin-top:6px;"><strong>Recorded when an API response returns usage:</strong> Single and Batch CV parsing (including repair/continuation calls), CV blinding, JobAdder Create Profile parsing, CV Summary, CV Scoring, The Owl map and chat, AI Crawler Sourcing Notes &amp; Scorecard, Blind JD and retries, Company Profile and retries, OneNote salary-component extraction, Lead Finder AI title expansion/classification/people/email searches, provider-key tests, and paid malformed or empty outputs.</div>
     <div style="margin-top:5px;"><strong>No DeepSeek tokens:</strong> OCR/text extraction, PDFium/preview rendering, DOCX generation, JobAdder candidate search/result retrieval, AI Crawler deterministic Job Fit/result phase, sorting, Boolean highlighting, preview caching/prefetch, salary calculation after extraction, OAuth/connectivity, Outlook drafts, and local exports.</div>
-    <div style="margin-top:5px;"><strong>Not included:</strong> Tavily, SerpAPI, Apollo or other third-party credits/fees. If a provider/network failure returns no usage object, exact tokens or charge cannot be known; CV Studio records only usage actually returned by the provider.</div>
+    <div style="margin-top:5px;"><strong>Not included:</strong> Tavily, SerpAPI, Apollo or other third-party credits/fees. Their billing status is reported separately when those providers are used. If a provider/network failure returns no usage object, exact tokens or charge cannot be known; CV Studio marks the paid call as ambiguous and records only usage actually returned by the provider.</div>
     <div style="margin-top:5px;"><strong>Older history:</strong> records created before v24.6.215 keep their stored cost, but their token/call/cache breakdown cannot be reconstructed and is shown as Legacy · n/a.</div>
   </details>
   <div id="statsTableWrap">
@@ -2654,8 +2654,8 @@
           <th>Date &amp; Time</th>
           <th>Item</th>
           <th>Mode</th>
-          <th>Cost (USD)</th>
-          <th>Cost (MYR)</th>
+          <th>Estimate (USD)</th>
+          <th>Estimate (MYR)</th>
           <th>Tokens / Calls</th>
           <th>Provider / Model</th>
         </tr>
@@ -11248,6 +11248,15 @@ function costDetailsFromResponse(d, fallbackModel, fallbackProvider) {
     copy.api_calls = Number(copy.api_calls || 0);
     copy.model = copy.model || model;
     copy.provider = copy.provider || provider;
+    if (!Object.prototype.hasOwnProperty.call(copy, 'estimated_cost_usd')) copy.estimated_cost_usd = copy.usd;
+    if (!copy.cost_value_type) copy.cost_value_type = 'local_estimate';
+    if (!copy.cost_authority) copy.cost_authority = 'local_rate_table';
+    if (!copy.usage_authority) copy.usage_authority = copy.api_calls > 0 ? 'provider_response' : 'not_returned';
+    if (!copy.provider_billing_status) copy.provider_billing_status = 'unavailable';
+    if (!Object.prototype.hasOwnProperty.call(copy, 'provider_authoritative_cost_usd')) copy.provider_authoritative_cost_usd = null;
+    if (!copy.reconciliation_status) copy.reconciliation_status = 'provider_billing_unavailable';
+    if (!Object.prototype.hasOwnProperty.call(copy, 'reconciliation_difference_usd')) copy.reconciliation_difference_usd = null;
+    if (!Object.prototype.hasOwnProperty.call(copy, 'billing_data_missing')) copy.billing_data_missing = true;
     return copy;
   }
   var usage = normalizeUsageClient(d.usage || {});
@@ -11282,7 +11291,16 @@ function costDetailsFromResponse(d, fallbackModel, fallbackProvider) {
     provider: provider,
     pricing_model_key: pInfo.model_key,
     pricing_known: pInfo.known,
-    cost_method: method
+    cost_method: method,
+    estimated_cost_usd: usd,
+    cost_value_type: 'local_estimate',
+    cost_authority: 'local_rate_table',
+    usage_authority: usage.api_calls > 0 ? 'provider_response' : 'not_returned',
+    provider_billing_status: 'unavailable',
+    provider_authoritative_cost_usd: null,
+    reconciliation_status: 'provider_billing_unavailable',
+    reconciliation_difference_usd: null,
+    billing_data_missing: true
   };
 }
 function responseCost(d, fallbackModel, fallbackProvider) {
@@ -11299,7 +11317,15 @@ function statsMetaFromResponse(d, fallbackModel, fallbackProvider, extra) {
     pricing_model_key: c.pricing_model_key || '',
     pricing_known: c.pricing_known !== false,
     cost_method: c.cost_method || '',
-    cost_note: c.note || ''
+    cost_note: c.note || '',
+    cost_value_type: c.cost_value_type || 'local_estimate',
+    cost_authority: c.cost_authority || 'local_rate_table',
+    usage_authority: c.usage_authority || (Number(c.api_calls || 0) > 0 ? 'provider_response' : 'not_returned'),
+    provider_billing_status: c.provider_billing_status || 'unavailable',
+    provider_authoritative_cost_usd: Object.prototype.hasOwnProperty.call(c, 'provider_authoritative_cost_usd') ? c.provider_authoritative_cost_usd : null,
+    reconciliation_status: c.reconciliation_status || 'provider_billing_unavailable',
+    reconciliation_difference_usd: Object.prototype.hasOwnProperty.call(c, 'reconciliation_difference_usd') ? c.reconciliation_difference_usd : null,
+    billing_data_missing: c.billing_data_missing !== false
   }, extra || {});
 }
 function responseHasPaidUsage(d) {
@@ -13208,7 +13234,7 @@ function oneNoteRecordTransfer(row, resp) {
   oneNoteRecordsSave(records);
   oneNoteRenderRecords();
   var chargeableAi = rec.ai_used || rec.ai_api_called || rec.ai_cost_usd > 0;
-  try { statsRecord(rec.name, 'onenote_activity', rec.ai_cost_usd || 0, chargeableAi ? (rec.ai_model || 'ai-salary-extraction') : 'deterministic-salary-v1', rec.url, chargeableAi ? (rec.ai_provider || 'deepseek') : 'local', {input_tokens:Number(proc.inputTokens||0),output_tokens:Number(proc.outputTokens||0),cache_hit_tokens:Number(proc.promptCacheHitTokens||0),cache_miss_tokens:Number(proc.promptCacheMissTokens||0),api_calls:Number(proc.apiCalls || (proc.aiApiCalled?1:0)),pricing_model_key:proc.pricingModelKey||'',pricing_known:proc.pricingKnown!==false,cost_method:proc.costMethod||'',outcome:'success'}); } catch(e) {}
+  try { statsRecord(rec.name, 'onenote_activity', rec.ai_cost_usd || 0, chargeableAi ? (rec.ai_model || 'ai-salary-extraction') : 'deterministic-salary-v1', rec.url, chargeableAi ? (rec.ai_provider || 'deepseek') : 'local', {input_tokens:Number(proc.inputTokens||0),output_tokens:Number(proc.outputTokens||0),cache_hit_tokens:Number(proc.promptCacheHitTokens||0),cache_miss_tokens:Number(proc.promptCacheMissTokens||0),api_calls:Number(proc.apiCalls || (proc.aiApiCalled?1:0)),pricing_model_key:proc.pricingModelKey||'',pricing_known:proc.pricingKnown!==false,cost_method:proc.costMethod||'',cost_value_type:proc.costValueType||'local_estimate',cost_authority:proc.costAuthority||'local_rate_table',usage_authority:proc.usageAuthority||'',provider_billing_status:proc.providerBillingStatus||'not_applicable',provider_authoritative_cost_usd:proc.providerAuthoritativeCostUsd,reconciliation_status:proc.reconciliationStatus||'not_called',reconciliation_difference_usd:proc.reconciliationDifferenceUsd,billing_data_missing:proc.billingDataMissing===true,outcome:'success'}); } catch(e) {}
   return rec;
 }
 function oneNoteRecordFailedAiCost(row, resp) {
@@ -13242,7 +13268,7 @@ function oneNoteRecordFailedAiCost(row, resp) {
   records.unshift(rec);
   oneNoteRecordsSave(records);
   oneNoteRenderRecords();
-  try { statsRecord(rec.name, 'onenote_salary_failed', rec.ai_cost_usd || 0, rec.ai_model || 'salary-ai-extraction', '', rec.ai_provider || 'deepseek', {input_tokens:Number(proc.inputTokens||0),output_tokens:Number(proc.outputTokens||0),cache_hit_tokens:Number(proc.promptCacheHitTokens||0),cache_miss_tokens:Number(proc.promptCacheMissTokens||0),api_calls:Number(proc.apiCalls || (proc.aiApiCalled?1:0)),pricing_model_key:proc.pricingModelKey||'',pricing_known:proc.pricingKnown!==false,cost_method:proc.costMethod||'',outcome:'failed'}); } catch(e) {}
+  try { statsRecord(rec.name, 'onenote_salary_failed', rec.ai_cost_usd || 0, rec.ai_model || 'salary-ai-extraction', '', rec.ai_provider || 'deepseek', {input_tokens:Number(proc.inputTokens||0),output_tokens:Number(proc.outputTokens||0),cache_hit_tokens:Number(proc.promptCacheHitTokens||0),cache_miss_tokens:Number(proc.promptCacheMissTokens||0),api_calls:Number(proc.apiCalls || (proc.aiApiCalled?1:0)),pricing_model_key:proc.pricingModelKey||'',pricing_known:proc.pricingKnown!==false,cost_method:proc.costMethod||'',cost_value_type:proc.costValueType||'local_estimate',cost_authority:proc.costAuthority||'local_rate_table',usage_authority:proc.usageAuthority||'',provider_billing_status:proc.providerBillingStatus||'unavailable',provider_authoritative_cost_usd:proc.providerAuthoritativeCostUsd,reconciliation_status:proc.reconciliationStatus||'provider_billing_unavailable',reconciliation_difference_usd:proc.reconciliationDifferenceUsd,billing_data_missing:proc.billingDataMissing!==false,outcome:'failed'}); } catch(e) {}
   return rec;
 }
 function oneNoteRenderRecords() {
@@ -18805,6 +18831,14 @@ function statsRecord(candidateName, mode, costUSD, model, jaUrl, provider, meta)
     pricing_known: meta.pricing_known !== false,
     cost_method: meta.cost_method || '',
     cost_note: meta.cost_note || '',
+    cost_value_type: meta.cost_value_type || 'local_estimate',
+    cost_authority: meta.cost_authority || 'local_rate_table',
+    usage_authority: meta.usage_authority || (Number(meta.api_calls || 0) > 0 ? 'provider_response' : 'not_returned'),
+    provider_billing_status: meta.provider_billing_status || 'unavailable',
+    provider_authoritative_cost_usd: meta.provider_authoritative_cost_usd === null || meta.provider_authoritative_cost_usd === undefined ? null : Number(meta.provider_authoritative_cost_usd),
+    reconciliation_status: meta.reconciliation_status || 'provider_billing_unavailable',
+    reconciliation_difference_usd: meta.reconciliation_difference_usd === null || meta.reconciliation_difference_usd === undefined ? null : Number(meta.reconciliation_difference_usd),
+    billing_data_missing: meta.billing_data_missing !== false,
     outcome: meta.outcome || 'success'
   });
   statsSave(records);
@@ -18931,7 +18965,10 @@ function renderStats() {
     var tokenTitle = hasTokenAudit
       ? ('Input: ' + inputTokens.toLocaleString() + ' | Output: ' + outputTokens.toLocaleString()
         + ' | Cache hit: ' + Number(r.cache_hit_tokens || 0).toLocaleString() + ' | Cache miss: ' + Number(r.cache_miss_tokens || 0).toLocaleString()
-        + (r.cost_method ? ' | Method: ' + r.cost_method : '') + (r.outcome === 'failed' ? ' | Outcome: failed after paid API response' : ''))
+        + (r.cost_method ? ' | Method: ' + r.cost_method : '')
+        + ' | Cost: ' + (r.cost_value_type || 'local_estimate')
+        + ' | Billing: ' + (r.reconciliation_status || 'provider_billing_unavailable')
+        + (r.outcome === 'failed' ? ' | Outcome: failed after paid API response' : ''))
       : 'Created before v24.6.215; historical cost is preserved but token/call/cache details cannot be reconstructed.';
     return '<tr>'
       + '<td>' + dateStr + ' ' + timeStr + '</td>'
@@ -18954,11 +18991,11 @@ function exportStatsExcel() {
 
   // Build CSV rows
   var rows = [
-    ['The 郭 Lab — Usage & Cost Report'],
+    ['The 郭 Lab — Usage & Estimated Cost Report'],
     ['Period:', filterLabel],
     ['Exported:', new Date().toLocaleString('en-MY')],
     [],
-    ['Date', 'Time', 'Item', 'Mode', 'Outcome', 'Input Tokens', 'Output Tokens', 'Cache Hit Tokens', 'Cache Miss Tokens', 'API Calls', 'Cost Method', 'Cost (USD)', 'Cost (MYR)', 'Provider', 'Model'],
+    ['Date', 'Time', 'Item', 'Mode', 'Outcome', 'Input Tokens', 'Output Tokens', 'Cache Hit Tokens', 'Cache Miss Tokens', 'API Calls', 'Cost Method', 'Estimate (USD)', 'Estimate (MYR)', 'Cost Authority', 'Usage Authority', 'Billing Status', 'Authoritative Cost (USD)', 'Reconciliation Status', 'Difference (USD)', 'Provider', 'Model'],
   ];
 
   records.slice().reverse().forEach(function(r) {
@@ -18977,6 +19014,12 @@ function exportStatsExcel() {
       r.cost_method || (Object.prototype.hasOwnProperty.call(r, 'input_tokens') ? '' : 'legacy_cost_only'),
       r.cost ? r.cost.toFixed(6) : '0',
       r.cost ? (r.cost * USD_MYR).toFixed(4) : '0',
+      r.cost_authority || (Object.prototype.hasOwnProperty.call(r, 'input_tokens') ? 'local_rate_table' : 'legacy_stored_value'),
+      r.usage_authority || '',
+      r.provider_billing_status || 'unavailable',
+      r.provider_authoritative_cost_usd === null || r.provider_authoritative_cost_usd === undefined ? '' : Number(r.provider_authoritative_cost_usd).toFixed(6),
+      r.reconciliation_status || 'provider_billing_unavailable',
+      r.reconciliation_difference_usd === null || r.reconciliation_difference_usd === undefined ? '' : Number(r.reconciliation_difference_usd).toFixed(6),
       providerLabel(r.provider, r.model),
       (r.model || '').replace('claude-', ''),
     ]);
@@ -18993,21 +19036,21 @@ function exportStatsExcel() {
   var leadExportRecords = records.filter(function(r) { return r.mode === 'lead'; });
   var leadExportUSD = leadExportRecords.reduce(function(s, r) { return s + (r.cost || 0); }, 0);
   rows.push(['Total Lead Finder Runs', leadExportRecords.length]);
-  rows.push(['Total Lead Finder Cost (USD)', '$' + leadExportUSD.toFixed(6)]);
-  rows.push(['Total Lead Finder Cost (MYR)', 'RM ' + (leadExportUSD * USD_MYR).toFixed(4)]);
+  rows.push(['Total Lead Finder Estimate (USD)', '$' + leadExportUSD.toFixed(6)]);
+  rows.push(['Total Lead Finder Estimate (MYR)', 'RM ' + (leadExportUSD * USD_MYR).toFixed(4)]);
   var owlExportRecords = records.filter(function(r) { return r.mode === 'owl'; });
   var owlExportUSD = owlExportRecords.reduce(function(s, r) { return s + (r.cost || 0); }, 0);
   rows.push(['Total The Owl Runs', owlExportRecords.length]);
-  rows.push(['Total The Owl Cost (USD)', '$' + owlExportUSD.toFixed(6)]);
-  rows.push(['Total The Owl Cost (MYR)', 'RM ' + (owlExportUSD * USD_MYR).toFixed(4)]);
+  rows.push(['Total The Owl Estimate (USD)', '$' + owlExportUSD.toFixed(6)]);
+  rows.push(['Total The Owl Estimate (MYR)', 'RM ' + (owlExportUSD * USD_MYR).toFixed(4)]);
   var owlChatExportRecords = records.filter(function(r) { return r.mode === 'owl_chat_auto' || r.mode === 'owl_chat_context' || r.mode === 'owl_chat_general'; });
   var owlChatExportUSD = owlChatExportRecords.reduce(function(s, r) { return s + (r.cost || 0); }, 0);
   rows.push(['Total The Owl Chat Messages', owlChatExportRecords.length]);
-  rows.push(['Total The Owl Chat Cost (USD)', '$' + owlChatExportUSD.toFixed(6)]);
-  rows.push(['Total The Owl Chat Cost (MYR)', 'RM ' + (owlChatExportUSD * USD_MYR).toFixed(4)]);
+  rows.push(['Total The Owl Chat Estimate (USD)', '$' + owlChatExportUSD.toFixed(6)]);
+  rows.push(['Total The Owl Chat Estimate (MYR)', 'RM ' + (owlChatExportUSD * USD_MYR).toFixed(4)]);
   rows.push(['Total Runs', records.length]);
-  rows.push(['Total Cost (USD)', '$' + totalUSD.toFixed(6)]);
-  rows.push(['Total Cost (MYR)', 'RM ' + (totalUSD * USD_MYR).toFixed(4)]);
+  rows.push(['Total Estimate (USD)', '$' + totalUSD.toFixed(6)]);
+  rows.push(['Total Estimate (MYR)', 'RM ' + (totalUSD * USD_MYR).toFixed(4)]);
 
   // Convert to CSV string
   var csv = rows.map(function(row) {
