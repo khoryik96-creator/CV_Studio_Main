@@ -37,7 +37,8 @@ def request_json(base, path, *, method="GET", payload=None, request_id="phase2a-
         with urllib.request.urlopen(request, timeout=60) as response:
             return response.status, dict(response.headers), json.loads(response.read())
     except urllib.error.HTTPError as error:
-        return error.code, dict(error.headers), json.loads(error.read())
+        with error:
+            return error.code, dict(error.headers), json.loads(error.read())
 
 
 def main():
