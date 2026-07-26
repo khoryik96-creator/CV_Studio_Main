@@ -1,3 +1,4 @@
+import hashlib
 import json
 from pathlib import Path
 import tempfile
@@ -9,6 +10,7 @@ from cvstudio_jobs import (
     PersistentJobStateCorruptError,
     PersistentJobStateUnavailableError,
     PersistentJobStore,
+    PersistentJobTransitionError,
     deterministic_job_id,
     sanitize_job_text,
 )
@@ -274,6 +276,160 @@ class Phase5APersistentJobFoundationTests(unittest.TestCase):
         self.assertNotIn("C:\\Private", sanitized)
         self.assertNotIn("/home/private", sanitized)
         self.assertIn("[redacted]", sanitized)
+
+        quoted = (
+            '{"access_token":"quoted secret with spaces",'
+            '"candidate_id":"quoted-candidate",'
+            '"client_secret":"second-secret",'
+            '"password":"escaped \\"secret\\" value"}'
+        )
+        quoted_sanitized = sanitize_job_text(quoted)
+        self.assertNotIn("quoted secret", quoted_sanitized)
+        self.assertNotIn("quoted-candidate", quoted_sanitized)
+        self.assertNotIn("second-secret", quoted_sanitized)
+        self.assertNotIn("escaped", quoted_sanitized)
+
+    def test_request_ids_are_always_digested_even_when_already_hex_shaped(self):
+        store = self._store()
+        store.initialize()
+        raw_request_id = "a" * 64
+        job_id = deterministic_job_id("safe_fixture", "request-id")
+        record = store.begin(
+            job_id,
+            kind="safe_fixture",
+            safety="safe_idempotent_read",
+            request_id=raw_request_id,
+        )
+        self.assertNotEqual(record["request_id"], raw_request_id)
+        self.assertEqual(
+            record["request_id"],
+            hashlib.sha256(
+                raw_request_id.encode("utf-8")
+            ).hexdigest(),
+        )
+        self.assertNotIn(
+            raw_request_id,
+            self.path.read_text(encoding="utf-8"),
+        )
+
+    def test_noncanonical_metadata_is_corrupt_and_never_silently_normalized(
+        self,
+    ):
+        job_id = deterministic_job_id("safe_fixture", "strict-load")
+        store = self._store()
+        store.initialize()
+        store.begin(
+            job_id,
+            kind="safe_fixture",
+            safety="safe_idempotent_read",
+        )
+        store.complete(job_id)
+        canonical = json.loads(self.path.read_text(encoding="utf-8"))
+
+        mutations = {
+            "non-integer schema": lambda payload: payload.update(
+                {"schema": 1.0}
+            ),
+            "unknown top-level field": lambda payload: payload.update(
+                {"access_token": "fixture-secret"}
+            ),
+            "unknown record field": lambda payload: payload["jobs"][0].update(
+                {"candidate_id": "fixture-candidate"}
+            ),
+            "non-finite timestamp": lambda payload: payload["jobs"][0].update(
+                {"updated_at": float("nan")}
+            ),
+            "out-of-range progress": lambda payload: payload["jobs"][0].update(
+                {"progress_current": 101}
+            ),
+            "raw request ID": lambda payload: payload["jobs"][0].update(
+                {"request_id": "phase5a-private-request"}
+            ),
+            "unsanitized error": lambda payload: payload["jobs"][0].update(
+                {"error_summary": '{"api_key":"fixture-secret"}'}
+            ),
+            "non-boolean retry flag": lambda payload: payload["jobs"][0].update(
+                {"retryable": 1}
+            ),
+        }
+        for label, mutate in mutations.items():
+            with self.subTest(label=label):
+                payload = json.loads(json.dumps(canonical))
+                mutate(payload)
+                encoded = json.dumps(payload).encode("utf-8")
+                self.path.write_bytes(encoded)
+                with self.assertRaises(PersistentJobStateCorruptError):
+                    self._store().initialize()
+                self.assertEqual(self.path.read_bytes(), encoded)
+
+    def test_invalid_finish_transitions_are_rejected_without_state_change(self):
+        job_id = deterministic_job_id("safe_fixture", "transition")
+        store = self._store()
+        store.initialize()
+        store.begin(
+            job_id,
+            kind="safe_fixture",
+            safety="safe_idempotent_read",
+        )
+        restarted = self._store()
+        restarted.initialize()
+        self.assertEqual(restarted.get(job_id)["state"], "interrupted")
+        with self.assertRaises(PersistentJobTransitionError):
+            restarted.complete(job_id)
+        self.assertEqual(restarted.get(job_id)["state"], "interrupted")
+
+        restarted.begin(
+            job_id,
+            kind="safe_fixture",
+            safety="safe_idempotent_read",
+        )
+        restarted.complete(job_id)
+        with self.assertRaises(PersistentJobTransitionError):
+            restarted.fail(job_id)
+        self.assertEqual(restarted.get(job_id)["state"], "succeeded")
+        self.assertEqual(restarted.complete(job_id)["state"], "succeeded")
+
+    def test_pruning_never_discards_interrupted_or_needs_attention_evidence(self):
+        safe_id = deterministic_job_id("safe_fixture", "protected-safe")
+        unsafe_id = deterministic_job_id(
+            "unsafe_fixture", "protected-unsafe"
+        )
+        store = self._store(max_jobs=2)
+        store.initialize()
+        store.begin(
+            safe_id,
+            kind="safe_fixture",
+            safety="safe_idempotent_read",
+        )
+        store.begin(
+            unsafe_id,
+            kind="unsafe_fixture",
+            safety="external_mutation",
+        )
+
+        restarted = self._store(max_jobs=2)
+        restarted.initialize()
+        self.assertEqual(restarted.get(safe_id)["state"], "interrupted")
+        self.assertEqual(
+            restarted.get(unsafe_id)["state"], "needs_attention"
+        )
+        third_id = deterministic_job_id("third_fixture", "new")
+        with self.assertRaises(PersistentJobStateUnavailableError):
+            restarted.begin(
+                third_id,
+                kind="third_fixture",
+                safety="local_idempotent",
+            )
+        self.assertEqual(restarted.get(safe_id)["state"], "interrupted")
+        self.assertEqual(
+            restarted.get(unsafe_id)["state"], "needs_attention"
+        )
+        with self.assertRaises(PersistentJobNeedsAttentionError):
+            restarted.begin(
+                unsafe_id,
+                kind="unsafe_fixture",
+                safety="external_mutation",
+            )
 
 
 if __name__ == "__main__":

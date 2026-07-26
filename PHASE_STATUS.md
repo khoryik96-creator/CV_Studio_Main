@@ -14,10 +14,11 @@
 - Phase 5A source baseline: v24.6.232
 - Phase 5A baseline Git commit: `4b366ddde1cf0a398706b52d55b0e82ed2dbc27c`
 - Working branch: `codex/phase-5a-persistent-jobs`
-- Active phase: none — Phase 5A complete; Phase 5B and Phase 6 inactive
+- Active phase: Phase 5A post-release corrective review; Phase 5B/6 inactive
 - Completed private owner/source release: v24.6.233
-- Status: Phase 5A completed within its exact authorized scope
-- Current milestone: none; stop before handoff, merge, Phase 5B or Phase 6
+- Status: owner-requested repeated review against exact master is in progress
+- Current milestone: correct every concrete Phase 5A review finding, repeat
+  review until clean, then publish a distinct corrective owner/source release
 
 ## Phase 5A authorization and constraints
 
@@ -507,6 +508,43 @@
 - No live credentialed request or paid call was made. No protected colleague
   ZIP or native-build claim was made. Stop before handoff/merge and before Phase
   5B or Phase 6.
+
+## Phase 5A post-release repeated-review findings
+
+The owner requested another complete review against exact master after the
+v24.6.233 release, with every finding corrected and the review repeated until
+clean. Five persistence-boundary findings were confirmed:
+
+1. Quoted JSON secret and candidate-ID values could evade the journal error-
+   summary sanitizer, especially when a quoted value contained whitespace or
+   escaped quotes.
+2. A caller-supplied request ID already shaped as 64 lowercase hexadecimal
+   characters was treated as opaque and persisted without a one-way digest.
+3. Schema-1 load validation silently normalized unknown fields, non-finite
+   timestamps, out-of-range progress, non-boolean flags, raw request IDs and
+   unsanitized summaries instead of treating the unchanged journal as corrupt.
+4. Completion/failure helpers accepted invalid transitions from interrupted or
+   incompatible terminal states.
+5. Capacity pruning treated `interrupted` and `needs_attention` as removable.
+   Losing `needs_attention` evidence could permit a later identical unsafe
+   identity to be claimed despite ambiguous prior execution.
+
+Corrections now:
+
+- redact quoted/escaped credential and candidate values plus control
+  characters before any error metadata is accepted;
+- digest every non-empty inbound request ID, including 64-hex-shaped input;
+- require the exact schema-1 top-level/record field sets and canonical bounded
+  types/ranges, finite timestamps, opaque request digests, booleans and already
+  sanitized summaries; corrupt bytes remain unchanged;
+- enforce explicit valid finish transitions with `JOB_STATE_CONFLICT`;
+- prune only completed `succeeded`, `failed` or `cancelled` records and fail
+  visibly when the bound contains only protected active/interrupted/review
+  evidence.
+
+Four additional foundation tests cover these exact findings. All 11 foundation
+tests and the 35-test focused Phase 5A/Phase 4 gate pass without network,
+credentials, external mutations or paid calls.
 
 ## Phase 4 authorization and constraints
 
