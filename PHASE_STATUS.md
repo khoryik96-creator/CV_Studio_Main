@@ -18,7 +18,7 @@
 - Completed private owner/source release: v24.6.232
 - Status: Phase 5A explicitly authorized; entry gates passed and inventory/
   characterization is the first implementation milestone
-- Current milestone: Phase 5A Milestone 1 — inventory and characterization
+- Current milestone: Phase 5A Milestone 2 — bounded persistent-job foundation
 
 ## Phase 5A authorization and constraints
 
@@ -137,8 +137,8 @@
 
 - [x] Verify the v24.6.232 master/source/package baseline and all entry gates.
 - [x] Record owner authorization, scope boundaries and bounded milestone plan.
-- [ ] Complete background-work/state/recovery inventory.
-- [ ] Add pre-change characterization for lifecycle and failure paths.
+- [x] Complete background-work/state/recovery inventory.
+- [x] Add pre-change characterization for lifecycle and failure paths.
 - [ ] Implement and verify the bounded persistent-job foundation.
 - [ ] Integrate only compatible existing background work.
 - [ ] Implement and verify bounded startup/shutdown recovery.
@@ -160,6 +160,193 @@
 - Tests use temporary local state and controlled fakes only. No live
   credentialed external request, paid call, native protected build or physical
   installer test is authorized or claimed.
+
+## Phase 5A Milestone 1 inventory and characterization result
+
+### Runtime threads, executors and shutdown behavior
+
+- One daemon `_watchdog` thread starts at module import before Flask route
+  registration. It sleeps in two-second intervals, leaves heartbeat shutdown
+  disabled while `_HEARTBEAT_TIMEOUT == 0`, and performs one safe loopback
+  `/ping` every 120 seconds. It has no task identifier, progress response,
+  cancellation endpoint or durable state.
+- `/restart` returns an empty HTTP 204 after spawning one daemon restart thread.
+  The thread waits 0.4 seconds, then uses a detached replacement process on
+  Windows or `os.execv` elsewhere. Unauthorized requests retain the legacy
+  `error` field plus global normalized error fields. Restart itself is process
+  control, not resumable user work, and remains outside the job foundation.
+- `jobadder_spider_search` creates bounded per-request thread pools of at most
+  five resume reads and six candidate-detail reads.
+  `jobadder_ppc_placements` creates a bounded per-request pool of at most eight
+  read-only placement-detail reads. The executors are joined before their
+  synchronous route returns; there is no surviving server queue or worker.
+- App startup initializes schema-10 storage before runtime PID/log setup,
+  writes the exact-instance Windows PID file, registers only PID cleanup with
+  `atexit`, starts the watchdog and then registers Flask routes. Normal Flask
+  shutdown has no user-task drain/requeue step. Abrupt exit loses every
+  process-local task/cache object.
+
+### Backend process-local task and coordination state
+
+- JobAdder OAuth uses `_ja_oauth_sessions` under `_ja_oauth_lock`. Entries
+  contain pending/exchanging/complete/error state, expiry and protected login
+  material until the initiating tab polls. `/jobadder/poll_token` returns
+  `status=pending` with HTTP 202, `status/error/detail` on failure, or
+  `status=complete`, `connected` and the established redacted public connection
+  fields. These credential-bearing sessions are explicitly excluded from
+  Phase 5A persistence.
+- OneNote and Outlook device login use `_ms_graph_device_store` and
+  `_ms_outlook_device_store` under their existing locks. `_polling` prevents a
+  concurrent poll; pending/error responses retain route-specific `error`,
+  `status`, `detail`, `action`, `technical_details`, `pending` and
+  `retry_after` fields, while completion returns `ok`, `connected` and the
+  existing public connection/account fields. Device codes and login sessions
+  remain ephemeral and are not persistent jobs.
+- Outlook draft creation uses `_ms_outlook_draft_request_cache`,
+  `_MS_OUTLOOK_DRAFT_LOCK` and a `threading.Event`. A duplicate in-flight
+  request returns HTTP 409 with `error`, `action` and
+  `retry_same_request=True`; a completed duplicate returns the established
+  draft result plus `reused=True`. Successful draft results retain
+  `ok`, `draft_id`, `webLink`, `isDraft`, `mayRequireEditClick` and
+  `created_at`. The cache expires completed entries after 30 minutes and
+  in-progress entries after two minutes, but is lost on restart. Because Graph
+  draft creation is an unsafe external mutation, Phase 5A must not replay it
+  after an ambiguous interruption.
+- Owner integration uses `_OWNER_INTEGRATION_LAST_REPORT` under an `RLock`.
+  `/owner/integration/run` is synchronous and returns `ok`, `product`,
+  `version`, `generated_at`, `request_id`, `summary` and `results`; each result
+  retains `name`, `ok`, `status`, `duration_ms`, `detail` and optional
+  `metadata`. It has no progress or cancellation response. Connected tests need
+  credentials and the DeepSeek probe is paid and separately confirmed, so the
+  route remains outside automatic persistence/resumption.
+- AI Crawler preview data uses `_SPIDER_RESUME_TEXT_CACHE`,
+  `_SPIDER_PREVIEW_PAYLOAD_CACHE`, byte/count/TTL limits and their two locks.
+  Cooperative cancellation is a process-local generation counter protected by
+  `_SPIDER_PREVIEW_CANCEL_LOCK`; expensive rendering is serialized by
+  `_SPIDER_PREVIEW_RENDER_LOCK`. Salary AI and PPC details have their own
+  process-local cache locks. These caches remain regenerable and are not made
+  authoritative job storage.
+- The shared OCR semaphore, protected credential-store locks and Phase 1/2
+  repository locks are coordination primitives, not job queues, and remain in
+  their exact initialization positions.
+
+### Existing background preview lifecycle and response contract
+
+- The only explicit user-work background queue is the AI Crawler preview
+  prefetch queue in `index.html`. It holds candidate work, attempted/failed/
+  target sets, byte budget, current promise, abort controller, generation,
+  paused/running booleans, consecutive failures and stop reason entirely in the
+  browser page process.
+- Each queue item calls the existing synchronous GET
+  `/jobadder/spider_candidate_preview?prefetch=1`. The server performs safe
+  JobAdder reads plus bounded local rendering/extraction and returns only a
+  terminal response. It exposes no job ID or server progress/status route.
+- Successful profile-fallback prefetch retains the exact field set:
+  `ok`, `candidate_id`, `name`, `mode`, `source`, `note`, `preview_text`,
+  `search_text`, `tried`, `attachment_fingerprint`, `preview_cache_hit`,
+  `preview_partial` and `preview_variant`. File-preview variants retain their
+  established additional visual fields.
+- `/jobadder/spider_preview_cancel_prefetch` increments the process-local
+  generation and returns an empty HTTP 204. The interrupted request returns
+  HTTP 409 with `ok`, `error`, `message`, `code`, `retryable`, `request_id`,
+  `severity` and `prefetch_cancelled`; its code remains
+  `PREVIEW_PREFETCH_SUPERSEDED`.
+- Browser progress is queue-derived only: attempted/failed counts, cache bytes,
+  current-running state and stop reasons `memory`, `locked`, `auth` or
+  `failures`. Aborting the request or reloading the page loses queue state. A
+  foreground preview deliberately supersedes background rendering.
+- The operation is safe to restart from its request boundary: JobAdder calls
+  are reads using the Phase 3 bounded safe-read retry policy, local rendering
+  has no external mutation, and completed payloads are cacheable. It is the
+  only existing background-work boundary selected for Phase 5A integration.
+
+### Other long-running synchronous work
+
+- Read-only/idempotent families are OneNote page/desktop imports, AI Crawler
+  search, PPC placement retrieval, document preview/extraction/OCR and local
+  DOCX generation. They return route-specific terminal success fields such as
+  `pages`/`combined_text`, `query`/`items`/`filter_summary`,
+  `items`/`returned`/`complete`/`details_complete`/diagnostics,
+  or file/text payload fields. Failure retains each route's legacy `error`,
+  `detail`, `status`, `needs_reconnect`, `query`, completeness or fallback
+  fields plus global normalization where applicable. None exposes durable
+  progress or cancellation state.
+- Paid AI families are `/parse`, `/generate-ai`, `/blind`, Lead Finder search/
+  people/email paths and the optional owner DeepSeek probe. Their established
+  successes retain `ok`, result data/content, `usage`, `model`, `provider` and
+  cost fields; established failures retain `error` and, where already present,
+  `paid_ai_failure`, usage/model/provider/cost fields. A provider POST is never
+  replayed after an ambiguous failure.
+- Unsafe externally mutating families are Outlook draft creation, JobAdder
+  candidate create/update, original/formatted CV upload and OneNote-to-JobAdder
+  activity creation. Existing success/error shapes and confirmation/session
+  boundaries remain. Phase 3 gives them zero ambiguous-failure retries.
+- The frontend batch formatter, per-tab run indicators and OneNote profile
+  creation keep their file/blob/result rows, running counters and cosmetic
+  progress timers only in page memory. Uploaded `File`/`Blob` objects cannot be
+  reconstructed after restart, and the workflow can cross paid AI and
+  JobAdder-mutation boundaries. They are not safe automatic-resume candidates.
+
+### Filesystem, SQLite and recovery inventory
+
+- Primary authoritative durable data remains `cv_studio.sqlite3` at schema
+  version 10 with its verified migration backups. Phase 5A will not add a table,
+  migration or reinterpret an existing repository.
+- Protected JobAdder, OneNote, Outlook and AI stores retain their current
+  OS-backed mechanisms. No token, key, device code or protected session enters
+  job state.
+- Existing runtime filesystem state comprises bounded runtime/startup logs,
+  exact-instance PID JSON, installer/update/receipt files, transition cache
+  JSON and temporary document/subprocess files. None currently records a
+  resumable user-task lifecycle.
+- Existing recovery is terminal-request based: browsers retry safe reads,
+  credential sessions reconnect, storage errors return request-ID recovery
+  guidance, and ambiguous paid/unsafe writes require explicit user action.
+  There is no startup reconciliation of interrupted user work.
+
+### Retry/idempotency selection and bounded Phase 5A design
+
+- Selected integration: AI Crawler preview prefetch only. It is already
+  explicitly background, cooperatively cancellable and safe/idempotent at the
+  request boundary. Foreground preview behavior remains untracked and unchanged.
+- The foundation will use a separate bounded atomic JSON job journal in the
+  existing private per-user state directory. This is new lifecycle metadata,
+  not a replacement data authority; the primary SQLite schema remains 10.
+- Records will contain only an opaque deterministic job ID, kind, safety class,
+  lifecycle state, bounded stage/progress, attempt/recovery counts, timestamps,
+  request ID and bounded sanitized error code/summary. Candidate IDs, emails,
+  credentials, document content, results and private paths will not be stored.
+- Lifecycle states are `queued`, `running`, `succeeded`, `failed`,
+  `cancel_requested`, `cancelled`, `interrupted` and `needs_attention`.
+  Startup reconciliation is bounded and idempotent: interrupted safe reads are
+  marked retryable for the next identical explicit request; cancelled work is
+  closed; paid/unsafe non-terminal work is marked `needs_attention` and is
+  never run.
+- No background work will silently start at process import. The next identical
+  prefetch request reclaims an interrupted safe job and restarts it from its
+  established idempotent request boundary. Concurrent duplicate claims are
+  rejected rather than duplicated.
+- Existing 200/409/204 preview response fields remain exact. A journal write
+  failure is a new failure-only structured request-ID response and stops the
+  tracked prefetch rather than falsely claiming lifecycle persistence.
+- No new Flask URL is required. All 107 baseline routes, five global guards,
+  18 compatibility signatures and Phase 4 initialization order remain exact.
+
+### Milestone 1 characterization evidence
+
+- Added `tests/test_phase5a_persistent_jobs_characterization.py` before
+  production changes.
+- Six no-network tests pass with `ResourceWarning` treated as an error.
+- Coverage fixes the 33 inventoried long-running/background route method and
+  endpoint pairs, exact 107-route baseline, absence of a pre-existing job API,
+  five ordered global guards, 80 MiB limit, schema version 10 and all 18
+  compatibility signatures/initialization-order markers.
+- Coverage fixes preview-prefetch success/cancellation field sets, empty-204
+  cancellation behavior, process-local generation state, Outlook in-memory
+  idempotency completion/failure behavior and the browser-only crawler/batch/
+  tab/OneNote task-state markers.
+- All external behavior is controlled by fixtures. No live credential,
+  protected secret, external mutation or paid call is used.
 
 ## Phase 4 authorization and constraints
 
