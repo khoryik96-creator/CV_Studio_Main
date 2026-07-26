@@ -11,12 +11,155 @@
 - Phase 3 baseline Git commit: `1be9da48d8307c418d82807cbdaedc9f876a1b15`
 - Phase 4 source baseline: v24.6.230
 - Phase 4 baseline Git commit: `7a0efcf0bce10b07e034592fb22a6021141d4146`
-- Working branch: `codex/phase-4-backend-modularisation`
-- Active phase: none; Phase 4 is complete
+- Phase 5A source baseline: v24.6.232
+- Phase 5A baseline Git commit: `4b366ddde1cf0a398706b52d55b0e82ed2dbc27c`
+- Working branch: `codex/phase-5a-persistent-jobs`
+- Active phase: Phase 5A — persistent background jobs and resumable task state
 - Completed private owner/source release: v24.6.232
-- Status: Phase 4 compatibility corrective release completed; stop before
-  Phase 5
-- Current milestone: none; Phase 5 requires a new explicit owner instruction
+- Status: Phase 5A explicitly authorized; entry gates passed and inventory/
+  characterization is the first implementation milestone
+- Current milestone: Phase 5A Milestone 1 — inventory and characterization
+
+## Phase 5A authorization and constraints
+
+- Owner authorization received on 26 July 2026.
+- Work only from clean master commit
+  `4b366ddde1cf0a398706b52d55b0e82ed2dbc27c` and preserve v24.6.232 as the
+  source baseline.
+- Phase 5A is limited to persistent background jobs and resumable task state
+  for existing authorized background work.
+- Before production implementation, inventory all background/long-running
+  routes and helpers; every in-memory state object, lock and queue; related
+  filesystem and SQLite state; startup/shutdown behavior; existing lifecycle
+  response fields; and retry/idempotency boundaries. Add characterization
+  coverage for established success, progress, cancellation, failure and
+  recovery behavior.
+- Persistent jobs require explicit lifecycle states, bounded recovery,
+  idempotent restart handling and failure-visible writes.
+- Paid or externally mutating operations must never resume silently after an
+  ambiguous failure.
+- Preserve all 107 Flask routes/methods/endpoints/response fields, all five
+  ordered global request/security guards, every authentication/CSRF/request-
+  size/paid-call boundary, all 18 compatibility helper signatures, Phase 4
+  call-time dependency rebinding and initialization order.
+- Preserve request-ID propagation, structured errors/redaction, schema version
+  10, every Phase 1–4 storage/client/modularisation contract, protected
+  credential stores, external-service URLs/headers/retries and unsafe-write
+  non-replay behavior.
+- If Phase 5A would require changing schema version 10, existing data authority,
+  compatibility contracts, paid-call behavior or established recovery
+  semantics, stop and present the exact proposed change before implementation.
+- Do not use live credentials or make paid external calls.
+- Do not implement Phase 5B cost guardrails/provider billing reconciliation,
+  credential migration, frontend modularisation/lazy loading, Phase 6,
+  unrelated workflows, Flask server replacement or backburner items 4, 7 or 8.
+- Stop after the Phase 5A owner/source release. Do not hand off, merge or begin
+  Phase 5B/6 automatically.
+
+## Phase 5A entry verification
+
+- The worktree was clean and detached at entry; both `HEAD` and local `master`
+  resolved exactly to
+  `4b366ddde1cf0a398706b52d55b0e82ed2dbc27c`.
+- All active installed source surfaces identify v24.6.232.
+- The authoritative v24.6.232 release directory contains the owner/source ZIP,
+  checksum, verification sidecar, corrective QA report and Phase 5 handover.
+- The independently recomputed owner/source ZIP SHA-256 is
+  `99255d90a6dd6fa6ce73e1a6baa77e93413595e2b64fc4113003a458f2883c0d`.
+  The verification sidecar `source_commit` exactly matches the Phase 5A
+  baseline/master commit.
+- A fresh extraction contained 108 tracked files and matched every approved
+  Git blob with zero missing, extra or byte-mismatched files.
+- The ignored owner-source `adm-zip` 0.5.17 dependency was restored from the
+  tracked vetted owner payload without changing Git state.
+- Unchanged-source entry regression passed 55 Python tests with
+  `ResourceWarning` treated as an error, 29 focused Phase 3/4 tests, both
+  frontend fixtures and 24 live loopback source-smoke assertions.
+- Static validation passed for 19 tracked Python files, 20 tracked JavaScript
+  files plus both inline scripts, five Bash/command files and five PowerShell
+  files. Owner-source validation/preflight, repository consistency and Git
+  whitespace validation passed.
+
+## Phase 5A bounded milestone plan
+
+### Milestone 1 — inventory and characterization
+
+- Record every existing background/long-running route and helper, lifecycle
+  response field, process-local state object, lock/queue, filesystem/SQLite
+  interaction and startup/shutdown behavior.
+- Classify each operation as read-only/idempotent, paid, externally mutating or
+  ambiguous after interruption; identify exact retry and recovery boundaries.
+- Add no-network characterization tests for success, progress, cancellation,
+  failure, restart/recovery and preserved global compatibility invariants before
+  production behavior changes.
+
+### Milestone 2 — bounded persistent-job foundation
+
+- Add the smallest app-independent durable job-state foundation required by the
+  selected existing work, with explicit dependencies and no circular import.
+- Keep the primary SQLite schema at version 10. Use explicit lifecycle states,
+  failure-visible atomic writes, bounded payloads/redaction and deterministic
+  job identities.
+- Prove write failure visibility, restart idempotency, bounded recovery and
+  conservative classification of interrupted unsafe/paid work.
+
+### Milestone 3 — existing-work integration
+
+- Integrate only the inventoried existing background work that can preserve its
+  route, response, security and non-replay contracts.
+- Retain established app-level entry points, call-time dependency rebinding,
+  initialization order, locks and paid confirmation boundaries.
+- Resume only work proven safe and idempotent. Mark ambiguous paid/external
+  mutations for visible owner action rather than replaying them.
+
+### Milestone 4 — startup, shutdown and recovery
+
+- Reconcile persisted non-terminal state once at the established startup
+  boundary with bounded work and idempotent repeated initialization.
+- Preserve current shutdown behavior and prevent duplicate workers or replay
+  after restart.
+- Characterize clean completion, cancellation, durable-write failure, crash/
+  restart recovery and ambiguous unsafe operation handling.
+
+### Milestone 5 — acceptance and release evidence
+
+- Run complete regression, both frontend fixtures, live source smoke,
+  tracked-language static validation, owner-source preflight, repository
+  consistency and repeated compatibility review against exact Phase 5A master.
+- Advance source version surfaces only after the implementation is clean.
+- Commit the exact final source; create, freshly extract and byte-verify the
+  next private owner/source ZIP; generate SHA-256/verification sidecars, QA
+  report and next owner-gated handover under the new release directory.
+- Confirm sidecar `source_commit` equals final branch HEAD, confirm the worktree
+  is clean and stop before handoff/merge or Phase 5B/6.
+
+## Phase 5A milestones
+
+- [x] Verify the v24.6.232 master/source/package baseline and all entry gates.
+- [x] Record owner authorization, scope boundaries and bounded milestone plan.
+- [ ] Complete background-work/state/recovery inventory.
+- [ ] Add pre-change characterization for lifecycle and failure paths.
+- [ ] Implement and verify the bounded persistent-job foundation.
+- [ ] Integrate only compatible existing background work.
+- [ ] Implement and verify bounded startup/shutdown recovery.
+- [ ] Run complete acceptance and repeated compatibility review.
+- [ ] Create and byte-verify the Phase 5A private owner/source release.
+- [ ] Produce QA report, sidecars and next handover; stop before Phase 5B/6.
+
+## Phase 5A decisions and limitations
+
+- The primary SQLite schema remains version 10. A migration or reinterpretation
+  of existing durable data is not authorized.
+- Phase 5A may create durable state only for new persistent-job identities and
+  lifecycle metadata; it must not absorb credentials or reinterpret existing
+  Phase 1/2 stores.
+- No operation is resumable merely because it ran in a thread. Safe resumption
+  requires an inventoried idempotency boundary and characterization evidence.
+- Paid and externally mutating operations remain non-replaying after ambiguous
+  interruption. Recovery must expose the state and required owner action.
+- Tests use temporary local state and controlled fakes only. No live
+  credentialed external request, paid call, native protected build or physical
+  installer test is authorized or claimed.
 
 ## Phase 4 authorization and constraints
 
@@ -1648,5 +1791,5 @@ None.
 
 ## Next action
 
-Stop. Do not begin Phase 5 or any later phase without a new explicit owner
-instruction.
+Complete Phase 5A Milestone 1 inventory and characterization. Do not implement
+Phase 5B, Phase 6 or any backburner item.

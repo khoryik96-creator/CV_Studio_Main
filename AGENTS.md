@@ -32,8 +32,46 @@
   the established app limits, nested helpers and OCR semaphore.
 - Current completed private owner/source release: **CV Studio v24.6.232**.
 - Phases 1, 2A, 2B, 3 and 4 are complete.
-- There is no active implementation target. Stop after Phase 4 unless the owner
-  explicitly starts Phase 5.
+- The owner explicitly authorized **Phase 5A only** on 26 July 2026:
+  persistent background jobs and resumable task state.
+- Active branch: `codex/phase-5a-persistent-jobs`.
+- Phase 5B AI cost guardrails/provider billing reconciliation and every Phase 6
+  area remain inactive. Stop after the Phase 5A owner/source release.
+
+## Active scope: Phase 5A
+
+Phase 5A may add only the smallest persistent-job foundation necessary to
+preserve and resume existing authorized background work. Before production
+implementation, inventory every existing background or long-running route,
+helper, in-memory state object, lock, queue, filesystem/SQLite interaction and
+startup/shutdown behavior; record current success, progress, cancellation,
+failure and recovery fields; identify retry/idempotency boundaries; and add
+characterization coverage.
+
+Persistent jobs must have explicit lifecycle states, bounded recovery,
+idempotent restart handling and failure-visible durable writes. Paid or
+externally mutating operations must never resume silently after an ambiguous
+failure.
+
+Phase 5A must preserve:
+
+- all 107 Flask routes, methods, endpoint names and established response fields;
+- all five ordered global request/security guards and every authentication,
+  CSRF, request-size and paid-call confirmation boundary;
+- all 18 compatibility helper signatures, Phase 4 call-time dependency
+  rebinding and established initialization order;
+- request-ID propagation, structured errors and redaction;
+- SQLite schema version 10 and every Phase 1–4 storage, client and
+  modularisation contract;
+- protected credential stores, external-service URLs, headers and retry
+  behavior;
+- the rule that unsafe or paid operations are never replayed after ambiguous
+  failure.
+
+If implementation would require changing schema version 10, existing data
+authority, a compatibility contract, paid-call behavior or established
+recovery semantics, stop and present the exact proposed change to the owner
+before implementing it.
 
 ## Completed scope: Phase 4
 
@@ -202,6 +240,28 @@ Routine implementation decisions do not require owner confirmation.
 - A clean private owner/source ZIP is freshly extracted and byte-verified; its
   SHA-256, QA report and Phase 4 handover are copied to the new release folder.
 - Stop after Phase 3. Do not begin Phase 4 automatically.
+
+## Definition of done for Phase 5A
+
+- Existing background/long-running routes, helpers, process-local state, locks,
+  queues, filesystem/SQLite interactions and startup/shutdown behavior are
+  completely inventoried before production implementation.
+- Current success, progress, cancellation, failure, recovery, retry and
+  idempotency contracts are characterization-tested without live credentials,
+  external mutations or paid calls.
+- Only existing authorized background work receives persistent lifecycle state,
+  bounded recovery and idempotent restart handling.
+- Every durable job-state write is failure-visible. No paid or externally
+  mutating operation resumes silently after an ambiguous failure.
+- All 107 routes, five ordered global guards, 18 compatibility signatures,
+  initialization order, schema version 10 and every Phase 1–4 contract remain.
+- Complete regression, both frontend fixtures, source smoke, tracked-language
+  static validation, owner-source preflight, repository consistency and final
+  baseline review pass.
+- A clean private owner/source ZIP is freshly extracted and byte-verified; its
+  SHA-256, verification sidecars, QA report and next owner-gated handover are
+  copied to the new release directory.
+- Stop before handoff or merge. Do not begin Phase 5B or Phase 6.
 
 ## Completed definition of done for Phase 4
 
