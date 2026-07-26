@@ -15,6 +15,8 @@
   remain immutable.
 - v24.6.231 completed gradual behavior-preserving backend modularisation in
   Phase 4.
+- v24.6.232 corrected three Phase 4 app-level compatibility-rebinding
+  regressions without changing the completed Phase 4 scope.
 - Phases 1, 2A, 2B, 3 and 4 are complete.
 - No later phase is active. Phase 5 requires a new explicit owner instruction.
 
@@ -117,7 +119,7 @@ version 10, paid-call gates and existing response fields remain unchanged.
 - retain download bytes and metadata, legacy diagnostic error fields,
   authentication boundaries, retry rules, schema version 10 and all 107 routes.
 
-## Phase 4 — Completed in v24.6.231
+## Phase 4 — Completed in v24.6.231; corrected in v24.6.232
 
 Gradual backend modularisation without changing behaviour or routes:
 
@@ -130,6 +132,16 @@ Gradual backend modularisation without changing behaviour or routes:
 - retained the exact 107 routes/methods/endpoints, global request/security
   guards, schema version 10, Phase 1/2 storage guarantees and Phase 3 client
   contracts.
+
+### v24.6.232 corrective review closure
+
+- restore per-call resolution of storage validators, response/error adapters,
+  browser-setting rules and repository providers;
+- restore per-call resolution of diagnostics request/response, runtime/cache,
+  redaction/sanitization, version, clock and path dependencies;
+- restore document-safety use of app-level limits, nested helpers and the
+  shared OCR semaphore at its original initialization position;
+- retain all Phase 4 module boundaries, all 107 routes and every prior contract.
 
 ## Phase 5 — Future
 

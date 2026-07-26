@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.231"
+_INSTALL_RECEIPT_VERSION = "v24.6.232"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -278,7 +278,7 @@ from cvstudio_document_safety import (
     validate_zip_payload as _phase4_validate_zip_payload,
 )
 
-_CVSTUDIO_VERSION = "v24.6.231"
+_CVSTUDIO_VERSION = "v24.6.232"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -7403,7 +7403,7 @@ def _ja_spa_browser_bridge(candidate_id, fields, note_text="", email="", salary_
     payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
     compact_payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     script = """(async () => {
-  const helperVersion = 'v24.6.231';
+  const helperVersion = 'v24.6.232';
   const candidateId = %s;
   const payload = %s;
   const profilePath = %s;
@@ -9895,7 +9895,7 @@ def jobadder_onenote_activity_diagnostic():
     generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Candidate Activity Read Test",
-        "cv_studio_version": "v24.6.231",
+        "cv_studio_version": "v24.6.232",
         "generated_utc": generated,
         "safety": {
             "read_only": True,
@@ -10105,7 +10105,7 @@ def jobadder_onenote_activity_create_diagnostic():
     if confirmation != "CREATE ONE MAX LOW TEST":
         return jsonify({"error": "Type CREATE ONE MAX LOW TEST exactly before running the controlled POST."}), 400
 
-    guard_key = ("v24.6.231", candidate_id)
+    guard_key = ("v24.6.232", candidate_id)
     if guard_key in _JA_ACTIVITY_CREATE_DIAG_USED:
         return jsonify({"error": "The one-shot controlled POST has already been run in this CV Studio session. Restarting is intentionally required before any repeat test."}), 409
     # Mark before the network call so a timeout/double-click cannot emit a second POST.
@@ -10134,7 +10134,7 @@ def jobadder_onenote_activity_create_diagnostic():
     generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Official AddCandidateActivity Create Test",
-        "cv_studio_version": "v24.6.231",
+        "cv_studio_version": "v24.6.232",
         "generated_utc": generated,
         "candidate_fixture": {
             "name": "Max Low",
@@ -11438,10 +11438,6 @@ def _phase2a_ppc_metadata(payload):
     return _phase4_phase2a_ppc_metadata(payload)
 
 
-def _phase2b_record_array(payload, maximum, normalizer):
-    return _phase4_phase2b_record_array(payload, maximum, normalizer)
-
-
 _CVSTUDIO_STORAGE_BRIDGE = StorageBridge(
     request_json=lambda: request.get_json(silent=True) or {},
     jsonify=lambda payload: jsonify(payload),
@@ -11502,6 +11498,10 @@ def phase2a_ppc_metadata_upsert():
 @app.route("/storage/ppc-metadata/clear", methods=["POST"])
 def phase2a_ppc_metadata_clear():
     return _CVSTUDIO_STORAGE_BRIDGE.ppc_metadata_clear()
+
+
+def _phase2b_record_array(payload, maximum, normalizer):
+    return _phase4_phase2b_record_array(payload, maximum, normalizer)
 
 
 def _phase2b_browser_settings(payload):

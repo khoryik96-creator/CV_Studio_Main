@@ -1,7 +1,7 @@
 # CV Studio Backburner and Stability Roadmap
 
 Last updated: 23 July 2026
-Current implementation base: v24.6.231
+Current implementation base: v24.6.232
 
 ## Explicit backburner — do not implement until the owner reactivates them
 
@@ -121,6 +121,18 @@ Deferred scope includes Shortlist / Maybe / Reject / Reviewed states, recruiter 
 - all 107 routes, global security/request-size guards, Phase 1/2 storage
   guarantees and Phase 3 shared-client behavior remain unchanged;
 - Phase 5/6 work and backburner items 4, 7 and 8 remain untouched.
+
+### v24.6.232 — Phase 4 compatibility corrective closure
+
+- storage and diagnostics services again resolve their established app-level
+  compatibility dependencies at call time;
+- document safety again resolves app limits, nested helpers and the shared OCR
+  semaphore at call time, with the semaphore restored to its original startup
+  position;
+- seven Phase 4 characterization tests pass against both master and the
+  corrected source;
+- all 107 routes, schema version 10, prior storage/client guarantees, Phase 5/6
+  scope and backburner items 4, 7 and 8 remain unchanged.
 
 ## Active stability direction
 

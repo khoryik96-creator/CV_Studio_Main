@@ -1,5 +1,5 @@
 CV Studio private source patch base
-Version: v24.6.231
+Version: v24.6.232
 Keep this ZIP for future patches. Do not distribute this source package to colleagues.
 
 JobAdder API investigation source of truth:
@@ -1029,5 +1029,23 @@ Patch note v24.6.193: cross-platform deterministic adm-zip tree hashing fixes th
 - Leaves schema version 10, all 107 route methods/endpoints/response fields,
   authentication/CSRF/request-size boundaries, protected stores, Phase 1/2
   storage guarantees, Phase 3 client behavior, paid-call gates and backburner
+  items 4, 7 and 8 unchanged.
+- Stops before Phase 5.
+
+## v24.6.232 Phase 4 compatibility corrective review
+
+- Restores per-call app compatibility resolution for durable-storage
+  validators, response/error adapters, request IDs, browser-setting rules and
+  repository providers.
+- Restores per-call app compatibility resolution for diagnostics
+  request/response, runtime/cache, redaction/sanitization, version, clock and
+  path dependencies.
+- Restores document-safety use of the current app limits, nested PDF helpers
+  and shared OCR semaphore, and restores the semaphore to its original app
+  initialization position.
+- Adds rebinding characterization that passes against both the v24.6.230 master
+  baseline and corrected source.
+- Leaves all 107 routes, schema version 10, security boundaries, Phase 1/2
+  storage guarantees, Phase 3 client behavior, Phase 5/6 scope and backburner
   items 4, 7 and 8 unchanged.
 - Stops before Phase 5.

@@ -26,7 +26,11 @@
   representation-neutral and caller-supplied Accept headers are honored.
 - Gradual behavior-preserving backend modularisation was completed in **CV
   Studio v24.6.231** with three bounded app-independent modules.
-- Current completed private owner/source release: **CV Studio v24.6.231**.
+- Its three post-release compatibility findings were corrected in **CV Studio
+  v24.6.232**: storage and diagnostics dependencies again resolve through
+  app-level compatibility globals at call time, and document safety again uses
+  the established app limits, nested helpers and OCR semaphore.
+- Current completed private owner/source release: **CV Studio v24.6.232**.
 - Phases 1, 2A, 2B, 3 and 4 are complete.
 - There is no active implementation target. Stop after Phase 4 unless the owner
   explicitly starts Phase 5.
@@ -44,6 +48,11 @@ authentication, CSRF or request-size boundaries; schema version 10; Phase 1/2
 storage guarantees; Phase 3 client policies; update/receipt/backup/restore/
 rollback behavior; request-ID/error/redaction contracts; credential stores; or
 paid-call confirmation gates.
+
+The v24.6.232 corrective release preserves runtime/test rebinding through
+explicit forwarding callbacks and restores the original app-level
+initialization position of storage compatibility constants and the OCR
+semaphore. The three extracted modules remain app-independent.
 
 ## Completed scope: Phase 3
 
@@ -146,8 +155,9 @@ Before changing code:
 1. Read `ROADMAP.md`.
 2. Read `PHASE_STATUS.md`.
 3. Read `IMPLEMENT.md`.
-4. Read `CV_STUDIO_V24_6_231_PHASE_5_HANDOVER.md`.
+4. Read `CV_STUDIO_V24_6_232_PHASE_5_HANDOVER.md`.
 5. Read
+   `cv_studio_v24_6_232_phase4_compatibility_corrective_qa_report.md`,
    `cv_studio_v24_6_231_phase4_backend_modularisation_qa_report.md`,
    `cv_studio_v24_6_230_phase3_content_negotiation_corrective_qa_report.md`,
    the v24.6.224 corrective QA report, the

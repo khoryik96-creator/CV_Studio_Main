@@ -3,8 +3,8 @@
 ## Release state
 
 - Approved baseline: v24.6.217
-- Completed release: v24.6.231
-- Previous completed release: v24.6.230
+- Completed release: v24.6.232
+- Previous completed release: v24.6.231
 - Phase 2B source baseline: v24.6.219
 - Phase 2B baseline Git commit: `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`
 - Phase 3 source baseline: v24.6.222
@@ -13,9 +13,9 @@
 - Phase 4 baseline Git commit: `7a0efcf0bce10b07e034592fb22a6021141d4146`
 - Working branch: `codex/phase-4-backend-modularisation`
 - Active phase: none; Phase 4 is complete
-- Completed private owner/source release: v24.6.231
-- Status: Phase 4 completed; post-release corrective review clean on branch;
-  stop before Phase 5
+- Completed private owner/source release: v24.6.232
+- Status: Phase 4 compatibility corrective release completed; stop before
+  Phase 5
 - Current milestone: none; Phase 5 requires a new explicit owner instruction
 
 ## Phase 4 authorization and constraints
@@ -381,9 +381,45 @@ will leave this registration and security boundary in `app.py`.
   five global request/security guards, all 18 established app helper
   signatures, the 80 MiB request limit, schema version 10 and no `app` import
   from any extracted module. No further concrete finding remains.
-- The immutable v24.6.231 release artifacts were not overwritten or
-  reinterpreted. No new package or release identity was requested, the branch
-  remains unmerged and Phase 5 was not started.
+- The owner authorized the next valid corrective identity, v24.6.232, on
+  26 July 2026. The immutable v24.6.231 release artifacts were not overwritten
+  or reinterpreted, the branch remains unmerged and Phase 5 was not started.
+
+## v24.6.232 Phase 4 corrective release result
+
+- Advanced all active production, browser, installer, launcher, watchdog,
+  protected-build and starter-pack version surfaces together to v24.6.232.
+- Complete Python discovery passes 55 tests with `ResourceWarning` treated as
+  an error. Both frontend fixtures and the 24-assertion live source smoke pass.
+- All seven Phase 4 characterization tests pass against both the exact master
+  baseline and corrected source, including the three new call-time rebinding
+  fixtures.
+- Static validation passes for all 19 Python files, 20 JavaScript files plus
+  both inline scripts, five Bash/command files and five PowerShell files.
+  Owner-source preflight, repository consistency and Git whitespace validation
+  pass.
+- Final repeated review proves the exact ordered 107-route inventory, five
+  global request/security guards, unchanged error handlers, all 18 established
+  compatibility signatures, the 80 MiB request limit, schema version 10,
+  original app-level initialization positions and no `app` import from any
+  extracted module.
+- The corrective-release final review found one additional definition-order
+  drift: `_phase2b_record_array` preceded the Phase 2A route declarations
+  instead of following them as on master. The side-effect-free wrapper was
+  restored to its exact master-relative position and all suites were repeated.
+- No live credential, protected secret, external-service mutation or paid AI
+  call was used. No protected colleague package or native-platform test is
+  claimed.
+- The authoritative private owner/source archive is
+  `cv_studio_v24_6_232_phase4_compatibility_corrective_owner_source.zip`.
+  It is generated from the exact final clean corrective commit with one
+  `cv_formatter/` root and freshly compared with every tracked Git blob.
+- The authoritative SHA-256, byte size, final `source_commit` and extraction
+  counts are recorded in adjacent sidecars under
+  `C:\CV-Studio-Codex\releases\v24.6.232`.
+- `cv_studio_v24_6_232_phase4_compatibility_corrective_qa_report.md` records
+  the corrective QA evidence and `CV_STUDIO_V24_6_232_PHASE_5_HANDOVER.md`
+  refreshes the owner-gated next-phase handover.
 
 ## Phase 4 Milestone 5 acceptance and release result
 
