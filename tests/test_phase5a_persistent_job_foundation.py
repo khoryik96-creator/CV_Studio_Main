@@ -93,10 +93,14 @@ class Phase5APersistentJobFoundationTests(unittest.TestCase):
         raw = self.path.read_text(encoding="utf-8")
         self.assertNotIn(private_identity, raw)
         self.assertNotIn("candidate_id", raw)
+        self.assertNotIn("phase5a-foundation", raw)
         payload = json.loads(raw)
         self.assertEqual(payload["schema"], 1)
         self.assertEqual(len(payload["jobs"]), 1)
         self.assertEqual(payload["jobs"][0]["id"], job_id)
+        self.assertRegex(
+            payload["jobs"][0]["request_id"], r"^[a-f0-9]{64}$"
+        )
 
         for index in range(3):
             another = deterministic_job_id("local_fixture", str(index))

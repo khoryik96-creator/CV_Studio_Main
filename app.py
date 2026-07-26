@@ -200,7 +200,7 @@ if _restart_delay_raw:
     except Exception:
         pass
 
-from flask import Flask, request, jsonify, send_from_directory, send_file, g
+from flask import Flask, request, jsonify, send_from_directory, send_file, g, after_this_request
 import urllib.request, urllib.error, urllib.parse, json, os, subprocess, tempfile, traceback, sys, re, socket, ssl, ast, platform, base64, hashlib, threading, atexit, logging, secrets, plistlib, zipfile, html
 try:
     import certifi
@@ -243,6 +243,11 @@ from cvstudio_clients import (
     ExternalServiceHTTPError,
     JobAdderClient,
     MicrosoftGraphClient,
+)
+from cvstudio_jobs import (
+    PersistentJobError,
+    PersistentJobStore,
+    deterministic_job_id,
 )
 from cvstudio_storage_bridge import (
     StorageBridge,
@@ -299,6 +304,15 @@ except StorageError as _storage_startup_error:
     # Keep non-storage routes available. Affected routes and diagnostics return
     # the structured request-ID recovery contract once Flask is initialised.
     _CVSTUDIO_STORAGE_STARTUP_ERROR = _storage_startup_error
+
+_CVSTUDIO_JOBS = PersistentJobStore()
+_CVSTUDIO_JOBS_STARTUP_ERROR = None
+try:
+    _CVSTUDIO_JOBS.initialize()
+except PersistentJobError as _jobs_startup_error:
+    # Keep unrelated routes available. Persistent-job operations surface the
+    # same failure through the structured request-ID recovery contract.
+    _CVSTUDIO_JOBS_STARTUP_ERROR = _jobs_startup_error
 
 
 def _cvstudio_legacy_json_read(path, expected_type):
@@ -747,6 +761,28 @@ def _cvstudio_storage_error(error):
         action=getattr(error, "recovery_action", "restore_storage_backup"),
         details={
             "recovery": getattr(error, "public_message", "Local storage is unavailable.")
+        },
+    )
+
+
+@app.errorhandler(PersistentJobError)
+def _cvstudio_persistent_job_error(error):
+    return _cvstudio_error_payload(
+        getattr(error, "code", "JOB_STATE_UNAVAILABLE"),
+        getattr(
+            error,
+            "public_message",
+            "Persistent background task state is unavailable.",
+        ),
+        int(getattr(error, "http_status", 503) or 503),
+        retryable=bool(getattr(error, "retryable", False)),
+        action=getattr(error, "recovery_action", "retry"),
+        details={
+            "recovery": getattr(
+                error,
+                "public_message",
+                "Persistent background task state is unavailable.",
+            )
         },
     )
 
@@ -10908,6 +10944,7 @@ _SPIDER_PREVIEW_PAYLOAD_CACHE_BYTES = 0
 _SPIDER_PREVIEW_CANCEL_LOCK = threading.RLock()
 _SPIDER_PREVIEW_BACKGROUND_GENERATION = 0
 _SPIDER_PREVIEW_RENDER_LOCK = threading.Lock()
+_SPIDER_PREVIEW_PREFETCH_JOB_KIND = "ai_crawler_preview_prefetch"
 
 
 class _SpiderPreviewCancelled(RuntimeError):
@@ -10924,6 +10961,12 @@ def _spider_preview_cancel_background_work():
     with _SPIDER_PREVIEW_CANCEL_LOCK:
         _SPIDER_PREVIEW_BACKGROUND_GENERATION += 1
         return int(_SPIDER_PREVIEW_BACKGROUND_GENERATION)
+
+
+def _spider_preview_cancel_persistent_work():
+    generation = _spider_preview_cancel_background_work()
+    _CVSTUDIO_JOBS.request_cancel_kind(_SPIDER_PREVIEW_PREFETCH_JOB_KIND)
+    return generation
 
 
 def _spider_preview_cancel_check(generation):
@@ -11580,7 +11623,7 @@ _CVSTUDIO_DIAGNOSTICS_SERVICE = DiagnosticsService(
     send_file=lambda *args, **kwargs: send_file(*args, **kwargs),
     request_id=lambda: _cvstudio_current_request_id(),
     runtime_payload=lambda: _cvstudio_runtime_diagnostics_payload(),
-    cancel_preview_work=lambda: _spider_preview_cancel_background_work(),
+    cancel_preview_work=lambda: _spider_preview_cancel_persistent_work(),
     clear_preview_cache=lambda: _spider_resume_text_cache_clear(),
     preview_cache_stats=lambda: _spider_preview_cache_stats(),
     redact_text=lambda value: _cvstudio_redact_support_text(value),
@@ -14008,7 +14051,7 @@ def jobadder_spider_preview_cancel_prefetch():
     # Cancellation exposes no candidate data and remains protected by the local
     # Host/Origin guards. Allow it even after the crawler has just been locked so
     # an already-running background PDFium/LibreOffice job can still be stopped.
-    _spider_preview_cancel_background_work()
+    _spider_preview_cancel_persistent_work()
     return "", 204
 
 
@@ -14027,10 +14070,71 @@ def jobadder_spider_candidate_preview():
     prefetch_mode = str(request.args.get("prefetch") or "").strip().lower() in ("1", "true", "yes", "on")
     validate_only = str(request.args.get("validate") or "").strip().lower() in ("1", "true", "yes", "on")
     background_generation = _spider_preview_background_generation()
+    prefetch_job_id = ""
+    prefetch_job_store = None
+    if prefetch_mode:
+        opaque_cache_key = _spider_resume_cache_key(token, candidate_id)
+        if not opaque_cache_key:
+            opaque_cache_key = hashlib.sha256(
+                candidate_id.encode("utf-8", errors="surrogatepass")
+            ).hexdigest()
+        prefetch_job_id = deterministic_job_id(
+            _SPIDER_PREVIEW_PREFETCH_JOB_KIND,
+            opaque_cache_key,
+        )
+        prefetch_job_store = _CVSTUDIO_JOBS
+        prefetch_job_store.begin(
+            prefetch_job_id,
+            kind=_SPIDER_PREVIEW_PREFETCH_JOB_KIND,
+            safety="safe_idempotent_read",
+            request_id=_cvstudio_current_request_id(),
+            stage="attachment_metadata",
+        )
+
+        @after_this_request
+        def finalize_persistent_prefetch(response):
+            try:
+                payload = response.get_json(silent=True)
+                if (
+                    response.status_code == 409
+                    and isinstance(payload, dict)
+                    and payload.get("prefetch_cancelled")
+                ):
+                    prefetch_job_store.mark_cancelled(prefetch_job_id)
+                elif 200 <= int(response.status_code or 0) < 300:
+                    prefetch_job_store.complete(prefetch_job_id)
+                else:
+                    status = int(response.status_code or 500)
+                    retryable = status >= 500 or status == 429
+                    prefetch_job_store.fail(
+                        prefetch_job_id,
+                        error_code="PREFETCH_HTTP_{}".format(status),
+                        error_summary=(
+                            "Preview prefetch returned HTTP status {}."
+                        ).format(status),
+                        retryable=retryable,
+                        recovery_action=(
+                            "retry_same_request" if retryable else ""
+                        ),
+                    )
+            except PersistentJobError as error:
+                return app.make_response(
+                    _cvstudio_persistent_job_error(error)
+                )
+            return response
+
     if not prefetch_mode and not validate_only:
         # Foreground opens cancel any old background render before they start
         # their own expensive PDFium/OCR/LibreOffice work.
-        _spider_preview_cancel_background_work()
+        _spider_preview_cancel_persistent_work()
+
+    def job_progress(stage, current):
+        if prefetch_job_store is not None:
+            prefetch_job_store.progress(
+                prefetch_job_id,
+                stage=stage,
+                current=current,
+            )
 
     def cancel_check():
         if prefetch_mode:
@@ -14041,6 +14145,7 @@ def jobadder_spider_candidate_preview():
     cancel_check()
     attachment_records = _spider_candidate_attachment_records(token, candidate_id)
     cancel_check()
+    job_progress("attachment_metadata", 15)
     attachment_fingerprint = _spider_attachment_fingerprint(attachment_records) if attachment_records else ""
 
     if validate_only:
@@ -14062,6 +14167,7 @@ def jobadder_spider_candidate_preview():
         cached_payload = _spider_preview_payload_cache_get(token, candidate_id, attachment_fingerprint, "full")
     if cached_payload is not None:
         return jsonify(cached_payload)
+    job_progress("cache_lookup", 25)
 
     preview_max_pages = 2 if prefetch_mode else 12
     preview_dpi = 104 if prefetch_mode else 118
@@ -14129,6 +14235,7 @@ def jobadder_spider_candidate_preview():
     cancel_check()
     detail = _spider_fetch_candidate_detail(token, candidate_id)
     cancel_check()
+    job_progress("candidate_profile", 40)
 
     def respond(payload, status=200, cacheable=True):
         if isinstance(payload, dict):
@@ -14146,6 +14253,7 @@ def jobadder_spider_candidate_preview():
         return jsonify(payload), status
 
     # Official JobAdder candidate-attachment API first.
+    job_progress("official_attachment", 50)
     for record in attachment_records:
         cancel_check()
         attach_id = record.get("attachmentId") or record.get("id")
@@ -14191,6 +14299,7 @@ def jobadder_spider_candidate_preview():
             tried.append(path + ":" + str(exc)[:80])
 
     # Direct resume/document endpoints used by legacy tenant integrations.
+    job_progress("direct_resume", 65)
     direct_paths = [
         "candidates/{}/resume".format(candidate_id_safe),
         "candidates/{}/attachments/Resume".format(candidate_id_safe),
@@ -14236,6 +14345,7 @@ def jobadder_spider_candidate_preview():
             tried.append(path + ":" + str(exc)[:80])
 
     # Attachments/documents listing, then likely resume IDs.
+    job_progress("attachment_discovery", 80)
     for list_path, kind in [
         ("candidates/{}/attachments".format(candidate_id_safe), "attachments"),
         ("candidates/{}/documents".format(candidate_id_safe), "documents"),
@@ -14303,6 +14413,7 @@ def jobadder_spider_candidate_preview():
             tried.append(list_path + ":" + str(exc)[:80])
 
     cancel_check()
+    job_progress("profile_fallback", 90)
     if isinstance(detail, dict) and detail:
         preview_text = _spider_preview_text_from_detail(detail)
         return respond({

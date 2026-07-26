@@ -18,7 +18,7 @@
 - Completed private owner/source release: v24.6.232
 - Status: Phase 5A explicitly authorized; entry gates passed and inventory/
   characterization is the first implementation milestone
-- Current milestone: Phase 5A Milestone 3 — existing-work integration
+- Current milestone: Phase 5A Milestone 4 — startup/shutdown recovery
 
 ## Phase 5A authorization and constraints
 
@@ -140,7 +140,7 @@
 - [x] Complete background-work/state/recovery inventory.
 - [x] Add pre-change characterization for lifecycle and failure paths.
 - [x] Implement and verify the bounded persistent-job foundation.
-- [ ] Integrate only compatible existing background work.
+- [x] Integrate only compatible existing background work.
 - [ ] Implement and verify bounded startup/shutdown recovery.
 - [ ] Run complete acceptance and repeated compatibility review.
 - [ ] Create and byte-verify the Phase 5A private owner/source release.
@@ -308,7 +308,7 @@
 
 - Selected integration: AI Crawler preview prefetch only. It is already
   explicitly background, cooperatively cancellable and safe/idempotent at the
-  request boundary. Foreground preview behavior remains untracked and unchanged.
+  request boundary. Foreground preview remains untracked as a job.
 - The foundation will use a separate bounded atomic JSON job journal in the
   existing private per-user state directory. This is new lifecycle metadata,
   not a replacement data authority; the primary SQLite schema remains 10.
@@ -365,10 +365,10 @@
   changes only after the durable replace succeeds. Terminal records are pruned
   oldest-first, while active work is never silently evicted.
 - Records admit only opaque SHA-256 IDs, bounded kind/safety/stage names,
-  lifecycle/progress values, attempt/recovery counts, timestamps, request IDs
-  and bounded sanitized error/recovery metadata. No input payload, candidate
-  identifier, email, credential, document content, result or private path is
-  accepted.
+  lifecycle/progress values, attempt/recovery counts, timestamps, opaque
+  request-ID digests and bounded sanitized error/recovery metadata. No input
+  payload, candidate identifier, email, credential, document content, result or
+  private path is accepted.
 - Explicit states are `queued`, `running`, `succeeded`, `failed`,
   `cancel_requested`, `cancelled`, `interrupted` and `needs_attention`.
   Conflicting concurrent claims fail with `JOB_ALREADY_RUNNING`.
@@ -389,6 +389,51 @@
   compilation and Git whitespace validation pass.
 - Owner-source validation/preflight now requires and compiles
   `cvstudio_jobs.py`; no protected package or native build is created.
+
+## Phase 5A Milestone 3 existing-work integration result
+
+- `app.py` now initializes one `PersistentJobStore` immediately after the
+  established schema-10 storage initialization. Existing storage, runtime,
+  watchdog, Flask, OCR semaphore and extracted-module relative initialization
+  markers remain in their established order.
+- Only the existing AI Crawler
+  `GET /jobadder/spider_candidate_preview?prefetch=1` boundary is tracked. No
+  new route, worker, queue, polling API, frontend state or result store was
+  added. The route remains a synchronous safe JobAdder read plus bounded local
+  rendering.
+- Each tracked request claims a deterministic double-hashed account/candidate
+  cache identity, writes `running`, records only bounded coarse stages, then
+  durably closes as `succeeded`, `failed` or `cancelled`. Candidate identifiers,
+  access tokens, profile fields, preview content, filenames, results and
+  external response bodies never enter the journal.
+- Request correlation is stored only as a one-way SHA-256 digest, while HTTP
+  responses retain the established original request-ID propagation contract.
+- A matching active claim returns the structured request-ID
+  `JOB_ALREADY_RUNNING` 409 before attachment/profile work begins. An
+  `interrupted` safe record is reclaimed only when the browser explicitly
+  issues the same prefetch request; its attempt counter advances and the route
+  restarts at the established idempotent request boundary.
+- Cooperative prefetch cancellation still uses the established generation
+  counter and 409 `PREVIEW_PREFETCH_SUPERSEDED` response. The existing empty
+  204 cancellation endpoint, foreground supersession and diagnostics cache
+  clear now also durably request cancellation for active preview-prefetch
+  records.
+- Existing successful 200, cooperative-cancellation 409 and cancellation 204
+  response fields/bodies remain exact. A failed begin, progress, completion,
+  failure or cancellation journal write returns a structured request-ID job
+  error rather than claiming persistence succeeded.
+- `PersistentJobError` uses the existing normalized error payload helper and
+  exposes only bounded public recovery guidance. It does not disclose the
+  journal path, private identifiers, credentials or stored detail.
+- Added seven no-network integration tests covering opaque success lifecycle,
+  explicit restart/resume, concurrent-claim rejection, begin/progress write
+  failures, durable cancellation and cooperative cancellation closure. The 27
+  focused Phase 5A/Phase 4 tests pass.
+- Route count remains 107, the five global guards and 80 MiB boundary are
+  unchanged, all 18 compatibility signatures remain exact, primary storage
+  schema remains 10 and Phase 4 call-time service rebinding remains covered.
+  No paid call, external mutation, protected credential access or automatic
+  replay was introduced.
 
 ## Phase 4 authorization and constraints
 

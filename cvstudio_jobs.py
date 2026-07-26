@@ -183,6 +183,15 @@ def _validated_request_id(value):
     return value
 
 
+def _opaque_request_id(value):
+    value = _validated_request_id(value)
+    if not value or _OPAQUE_ID_RE.fullmatch(value):
+        return value
+    return hashlib.sha256(
+        value.encode("utf-8", errors="surrogatepass")
+    ).hexdigest()
+
+
 def _validated_code(value):
     value = str(value or "").strip().upper()
     return value if _CODE_RE.fullmatch(value) else ""
@@ -328,7 +337,7 @@ class PersistentJobStore:
         if safety not in JOB_SAFETY_CLASSES:
             raise ValueError("Unsupported job safety class")
         stage = _validated_name(stage, "job stage")
-        request_id = _validated_request_id(request_id)
+        request_id = _opaque_request_id(request_id)
         with self._lock:
             self._ensure_initialized()
             previous = self._records.get(job_id)
@@ -685,7 +694,7 @@ class PersistentJobStore:
             "started_at": float(value.get("started_at") or 0),
             "updated_at": float(value.get("updated_at") or 0),
             "finished_at": float(value.get("finished_at") or 0),
-            "request_id": _validated_request_id(value.get("request_id")),
+            "request_id": _opaque_request_id(value.get("request_id")),
             "retryable": bool(value.get("retryable")),
             "recovery_action": recovery_action,
             "error_code": _validated_code(value.get("error_code")),
