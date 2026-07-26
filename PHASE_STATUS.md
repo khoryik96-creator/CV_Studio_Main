@@ -17,9 +17,8 @@
 - Active phase: Phase 5B central AI cost guardrails and provider-billing
   reconciliation
 - Completed private owner/source release: v24.6.234
-- Status: Milestone 1 inventory and characterization complete
-- Current milestone: Phase 5B Milestone 2 central accounting and guardrail
-  foundation
+- Status: Milestone 2 central accounting and guardrail foundation complete
+- Current milestone: Phase 5B Milestone 3 existing-call integration
 
 ## Phase 5B authorization and constraints
 
@@ -134,7 +133,7 @@
 - [x] Record owner authorization, scope boundaries and bounded milestone plan.
 - [x] Complete paid-provider, billing, credential and ambiguity inventory.
 - [x] Add pre-change characterization for all in-scope field contracts.
-- [ ] Implement and verify the central accounting/guardrail foundation.
+- [x] Implement and verify the central accounting/guardrail foundation.
 - [ ] Integrate only compatible existing paid-provider call boundaries.
 - [ ] Run complete acceptance and repeated exact-master review.
 - [ ] Create and byte-verify the Phase 5B private owner/source release.
@@ -320,11 +319,59 @@
 - The owner paid-probe result retains its integration-test envelope and
   metadata `model`, `usage`, `cost_usd`. Search-provider test success retains
   `ok`, `provider`, `count`, `sample`; failures retain `ok`, `error`.
-- Seven new no-network Phase 5B characterization tests pass. They cover the
+- Eight no-network Phase 5B characterization tests pass. They cover the
   exact routes/gates/guard order, canonical/native usage, DeepSeek and standard
   calculation behavior, established provider translation, representative
   success/failure/salary fields, single-attempt ambiguous timeout behavior,
-  the v24.6.215 history cutoff and protected credential slots.
+  central app integration, the v24.6.215 history cutoff and protected
+  credential slots.
+
+## Phase 5B Milestone 2 central accounting and guardrail foundation result
+
+- Added app-independent `cvstudio_ai_costs.py`. It owns the existing backend
+  rate table, canonical usage normalization/merging, estimate calculation,
+  strict optional provider-authority normalization, reconciliation, request
+  ceiling evaluation and non-secret missing-billing/failure descriptors.
+- Existing app helper signatures remain unchanged and delegate to the central
+  module. Legacy `cost`, `cost_details.usd`, rates and calculation methods keep
+  their established numeric behavior. Additive cost detail now distinguishes:
+  `estimated_cost_usd`, `cost_value_type=local_estimate`,
+  `cost_authority=local_rate_table`, `usage_authority`,
+  `provider_billing_status`, nullable `provider_authoritative_cost_usd`,
+  billing currency/source, reconciliation status/difference and
+  `billing_data_missing`.
+- Provider billing is accepted only through an explicit authoritative envelope
+  from a provider response, cost report or invoice. Invalid, negative,
+  non-finite, unmarked or unapproved authority fails visibly. Authoritative USD
+  is compared with the local estimate without replacing the legacy estimate.
+  Non-USD authority remains visible but is not converted without an authorized
+  exchange-rate authority.
+- The standard provider responses currently have no such cost envelope, so
+  their billing status is explicitly unavailable and authoritative cost stays
+  `null`. Returned usage remains provider-response authoritative. OpenAI native
+  usage details are retained and its returned cached-token counter is now
+  normalized without changing the established input/output estimate.
+- Added an opt-in call-time request guardrail using
+  `CVSTUDIO_AI_MAX_ESTIMATED_REQUEST_USD`. It is disabled when unset, preserving
+  v24.6.234 behavior. When configured, it estimates a conservative input
+  ceiling at one token per UTF-8 payload byte plus the requested output maximum
+  and blocks before provider transport if the estimate exceeds the limit.
+  Unknown models use the highest known provider rate rather than a cheaper
+  fallback. Invalid limits and blocked calls are failure-visible and contain no
+  prompt or credential content.
+- The guardrail is enforced inside all three established provider compatibility
+  adapters, so browser routes and the separately confirmed owner DeepSeek probe
+  share it without changing route gates, provider endpoints, headers, timeouts
+  or the Phase 3 zero-retry policy.
+- Owner-source validation now requires and compiles the new module. Nine pure
+  foundation tests and eight integration/characterization tests pass with no
+  live request. Tests prove missing authority is not zero, authoritative and
+  non-USD reconciliation, invalid-data failure, disabled/allowed/blocked
+  guardrails, conservative unknown-model pricing, no transport after a block,
+  and propagation of a controlled authoritative fixture.
+- This is an in-request ceiling, not a persistent budget or aggregate billing
+  ledger. No schema, credential, worker, route or data-authority change was
+  introduced.
 
 ## Phase 5A authorization and constraints
 

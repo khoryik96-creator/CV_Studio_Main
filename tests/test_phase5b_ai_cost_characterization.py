@@ -15,6 +15,10 @@ os.environ["CVSTUDIO_DB_PATH"] = str(
     Path(_MODULE_TEMPORARY.name) / "state" / "cv_studio.sqlite3"
 )
 from owner_build_tools.build_protected import write_test_receipt
+from cvstudio_ai_costs import (
+    AI_COST_GUARDRAIL_ENV,
+    AICostGuardrailError,
+)
 
 write_test_receipt(Path(__file__).resolve().parents[1])
 try:
@@ -451,6 +455,63 @@ class Phase5BAICostCharacterizationTests(unittest.TestCase):
         self.assertFalse(kwargs["safe_to_retry"])
         self.assertEqual(kwargs["retries"], 0)
         self.assertEqual(kwargs["timeout"], 45)
+
+    def test_central_guardrail_blocks_app_transport_and_authority_reconciles(self):
+        request_payload = {
+            "model": "claude-sonnet-4-6",
+            "max_tokens": 100,
+            "messages": [{"role": "user", "content": "fixture"}],
+        }
+        with mock.patch.dict(
+            os.environ,
+            {AI_COST_GUARDRAIL_ENV: "0.000001"},
+        ), mock.patch.object(app._AI_PROVIDER_CLIENT, "request") as requested:
+            with self.assertRaises(AICostGuardrailError):
+                app.call_llm(
+                    "anthropic",
+                    "<fixture-credential>",
+                    request_payload,
+                )
+        requested.assert_not_called()
+
+        provider_response = {
+            "content": [{"type": "text", "text": "fixture"}],
+            "usage": {"input_tokens": 10, "output_tokens": 2},
+            "provider_billing": {
+                "authoritative": True,
+                "source": "provider_response",
+                "currency": "USD",
+                "amount": "0.004",
+            },
+        }
+        with mock.patch.dict(
+            os.environ,
+            {},
+            clear=False,
+        ), mock.patch.object(
+            app._AI_PROVIDER_CLIENT,
+            "request",
+            return_value=provider_response,
+        ):
+            os.environ.pop(AI_COST_GUARDRAIL_ENV, None)
+            result = app.call_llm(
+                "anthropic",
+                "<fixture-credential>",
+                request_payload,
+            )
+        details = app._llm_cost_details(
+            "claude-sonnet-4-6",
+            result["usage"],
+            "anthropic",
+        )
+        self.assertEqual(details["cost_value_type"], "local_estimate")
+        self.assertEqual(details["provider_billing_status"], "authoritative")
+        self.assertEqual(details["provider_authoritative_cost_usd"], 0.004)
+        self.assertEqual(details["reconciliation_status"], "reconciled")
+        self.assertNotEqual(
+            details["estimated_cost_usd"],
+            details["provider_authoritative_cost_usd"],
+        )
 
     def test_deepseek_history_cutoff_and_non_secret_storage_boundary_are_explicit(self):
         frontend = Path(app.__file__).with_name("index.html").read_text(

@@ -249,6 +249,19 @@ from cvstudio_jobs import (
     PersistentJobStore,
     deterministic_job_id,
 )
+from cvstudio_ai_costs import (
+    MODEL_PRICING_USD_PER_MILLION as _PHASE5B_MODEL_PRICING,
+    cost_details as _phase5b_cost_details,
+    enforce_request_guardrail as _phase5b_enforce_request_guardrail,
+    extract_provider_billing as _phase5b_extract_provider_billing,
+    merge_usage as _phase5b_merge_usage,
+    normalize_provider as _phase5b_normalize_provider,
+    normalize_usage as _phase5b_normalize_usage,
+    paid_failure_reconciliation as _phase5b_paid_failure_reconciliation,
+    pricing_for_model as _phase5b_pricing_for_model,
+    unavailable_external_billing as _phase5b_unavailable_external_billing,
+    usage_int as _phase5b_usage_int,
+)
 from cvstudio_storage_bridge import (
     StorageBridge,
     phase2a_ppc_metadata as _phase4_phase2a_ppc_metadata,
@@ -661,6 +674,10 @@ def _cvstudio_classify_error(status, message, path=""):
         return "METHOD_NOT_ALLOWED", False, ""
     if status == 413:
         return "REQUEST_TOO_LARGE", False, "use_smaller_file"
+    if "ai cost guardrail configuration" in low:
+        return "AI_COST_GUARDRAIL_CONFIG_INVALID", False, "review_ai_cost_limit"
+    if "ai cost guardrail blocked" in low:
+        return "AI_COST_GUARDRAIL_BLOCKED", False, "review_ai_cost_limit"
     if "storage database is corrupt" in low:
         return "STORAGE_CORRUPT", False, "restore_storage_backup"
     if "storage migration" in low:
@@ -1216,6 +1233,7 @@ def call_anthropic(api_key, payload_dict):
     except Exception:
         timeout_seconds = 180
 
+    _phase5b_enforce_request_guardrail("anthropic", payload_dict)
     return _AI_PROVIDER_CLIENT.request(
         "anthropic",
         api_key,
@@ -1287,6 +1305,7 @@ def _call_deepseek(api_key, payload_dict, timeout_seconds=180):
             "Configure a Job Search Provider (Tavily or SerpAPI) so DeepSeek can classify "
             "already-fetched results instead, or switch this task back to Claude/GPT."
         )
+    _phase5b_enforce_request_guardrail("deepseek", payload_dict)
     return _AI_PROVIDER_CLIENT.request(
         "deepseek",
         api_key,
@@ -1296,45 +1315,16 @@ def _call_deepseek(api_key, payload_dict, timeout_seconds=180):
 
 
 def _llm_usage_int(usage, *keys):
-    fallback = 0
-    for key in keys:
-        try:
-            value = (usage or {}).get(key)
-            if value is None:
-                continue
-            parsed = max(0, int(value or 0))
-            if parsed:
-                return parsed
-            fallback = parsed
-        except Exception:
-            pass
-    return fallback
+    return _phase5b_usage_int(usage, *keys)
 
 
 def _normalize_llm_usage(usage, api_calls=None):
     """Return one provider-neutral usage shape without discarding native counters."""
-    raw = dict(usage or {}) if isinstance(usage, dict) else {}
-    input_tokens = _llm_usage_int(raw, "input_tokens", "prompt_tokens")
-    output_tokens = _llm_usage_int(raw, "output_tokens", "completion_tokens")
-    cache_hit = _llm_usage_int(raw, "prompt_cache_hit_tokens", "cache_read_input_tokens")
-    cache_miss = _llm_usage_int(raw, "prompt_cache_miss_tokens", "cache_creation_input_tokens")
-    if not input_tokens and (cache_hit or cache_miss):
-        input_tokens = cache_hit + cache_miss
-    raw["input_tokens"] = input_tokens
-    raw["output_tokens"] = output_tokens
-    raw["prompt_cache_hit_tokens"] = cache_hit
-    raw["prompt_cache_miss_tokens"] = cache_miss
-    raw["api_calls"] = max(0, int(api_calls or 0)) if api_calls is not None else _llm_usage_int(raw, "api_calls")
-    return raw
+    return _phase5b_normalize_usage(usage, api_calls)
 
 
 def _merge_llm_usage(*usages):
-    total = {"input_tokens": 0, "output_tokens": 0, "prompt_cache_hit_tokens": 0, "prompt_cache_miss_tokens": 0, "api_calls": 0}
-    for usage in usages:
-        norm = _normalize_llm_usage(usage)
-        for key in total:
-            total[key] += _llm_usage_int(norm, key)
-    return total
+    return _phase5b_merge_usage(*usages)
 
 
 def _openai_text_from_content(content):
@@ -1423,13 +1413,14 @@ def _openai_response_to_anthropic_shape(data):
                 for block in (item.get("content") or []):
                     if isinstance(block, dict) and block.get("type") in ("output_text", "text"):
                         text_out += str(block.get("text") or "")
-    usage = data.get("usage") or {}
+    usage = dict(data.get("usage") or {})
     return {
         "content": [{"type": "text", "text": text_out}],
-        "usage": {
-            "input_tokens": usage.get("input_tokens", 0),
-            "output_tokens": usage.get("output_tokens", 0),
-        },
+        "usage": dict(
+            usage,
+            input_tokens=usage.get("input_tokens", 0),
+            output_tokens=usage.get("output_tokens", 0),
+        ),
     }
 
 
@@ -1441,13 +1432,18 @@ def _call_openai(api_key, payload_dict, timeout_seconds=180):
     depending on whether a given call needs search.
     """
     req_payload = _openai_payload_from_anthropic_shape(payload_dict)
+    _phase5b_enforce_request_guardrail("openai", req_payload)
     data = _AI_PROVIDER_CLIENT.request(
         "openai",
         api_key,
         req_payload,
         timeout=timeout_seconds,
     )
-    return _openai_response_to_anthropic_shape(data)
+    translated = _openai_response_to_anthropic_shape(data)
+    billing = _phase5b_extract_provider_billing("openai", data)
+    if billing:
+        translated["_cvstudio_provider_billing"] = billing
+    return translated
 
 
 def call_llm(provider, api_key, payload_dict):
@@ -1480,7 +1476,11 @@ def call_llm(provider, api_key, payload_dict):
         data = call_anthropic(api_key, payload_dict)
     if isinstance(data, dict):
         data = dict(data)
-        data["usage"] = _normalize_llm_usage(data.get("usage"), api_calls=1)
+        billing = _phase5b_extract_provider_billing(provider, data)
+        usage = _normalize_llm_usage(data.get("usage"), api_calls=1)
+        if billing:
+            usage["_cvstudio_provider_billing"] = billing
+        data["usage"] = usage
     return data
 
 
@@ -16190,74 +16190,12 @@ def _lead_extract_json(raw_text):
     raise ValueError("No valid JSON object found in model response")
 
 
-_LLM_MODEL_PRICING = {
-    "claude-sonnet-5": (2.00, 10.00),
-    "claude-sonnet-4-6": (3.00, 15.00),
-    "claude-opus-4-8": (5.00, 25.00),
-    "claude-opus-4-7": (5.00, 25.00),
-    "claude-opus-4-6": (5.00, 25.00),
-    "claude-sonnet-4-5": (3.00, 15.00),
-    "claude-opus-4-5": (5.00, 25.00),
-    "claude-haiku-4-5-20251001": (1.00, 5.00),
-    "deepseek-v4-flash": (0.14, 0.28),
-    "deepseek-v4-pro": (0.435, 0.87),
-    "gpt-5.5": (5.00, 30.00),
-    "gpt-5.5-pro": (30.00, 180.00),
-    "gpt-5.4": (2.50, 15.00),
-    "gpt-5.4-mini": (0.75, 4.50),
-    "gpt-5.4-nano": (0.20, 1.25),
-    "gpt-5.4-pro": (30.00, 180.00),
-}
+_LLM_MODEL_PRICING = _PHASE5B_MODEL_PRICING
 
 
 def _llm_cost_details(model, usage, provider=None):
     """Return one auditable token/cost breakdown for every AI feature."""
-    usage = _normalize_llm_usage(usage)
-    input_tokens = _llm_usage_int(usage, "input_tokens")
-    output_tokens = _llm_usage_int(usage, "output_tokens")
-    hit = _llm_usage_int(usage, "prompt_cache_hit_tokens")
-    miss = _llm_usage_int(usage, "prompt_cache_miss_tokens")
-    api_calls = _llm_usage_int(usage, "api_calls")
-    resolved_provider = _lead_provider_from_model(model, provider)
-    model_key = str(model or "").strip().lower()
-    if resolved_provider == "deepseek":
-        if model_key == "deepseek-v4-pro":
-            hit_rate, miss_rate, out_rate = 0.003625, 0.435, 0.87
-            pricing_key, known = "deepseek-v4-pro", True
-        elif model_key in ("deepseek-v4-flash", "deepseek-chat", "deepseek-reasoner"):
-            hit_rate, miss_rate, out_rate = 0.0028, 0.14, 0.28
-            pricing_key, known = "deepseek-v4-flash", model_key == "deepseek-v4-flash"
-        else:
-            hit_rate, miss_rate, out_rate = 0.0028, 0.14, 0.28
-            pricing_key, known = "deepseek-v4-flash", False
-        residual_input = 0
-        billed_miss = miss
-        if hit or miss:
-            if not input_tokens:
-                input_tokens = hit + miss
-            residual_input = max(0, input_tokens - hit - miss)
-            billed_miss = miss + residual_input
-            usd = hit / 1e6 * hit_rate + billed_miss / 1e6 * miss_rate + output_tokens / 1e6 * out_rate
-            method = "deepseek_returned_cache_hit_miss_tokens" if not residual_input else "deepseek_cache_split_plus_unclassified_input_as_miss"
-        else:
-            residual_input = input_tokens
-            billed_miss = input_tokens
-            usd = input_tokens / 1e6 * miss_rate + output_tokens / 1e6 * out_rate
-            method = "deepseek_input_priced_as_cache_miss_no_split_returned"
-        return {"input_tokens": input_tokens, "output_tokens": output_tokens, "total_tokens": input_tokens + output_tokens,
-                "prompt_cache_hit_tokens": hit, "prompt_cache_miss_tokens": miss, "unclassified_input_tokens": residual_input,
-                "billed_cache_miss_tokens": billed_miss, "api_calls": api_calls, "usd": usd,
-                "model": model, "provider": "deepseek", "pricing_model_key": pricing_key, "pricing_known": known,
-                "cost_method": method,
-                "rates_per_million_usd": {"cache_hit_input": hit_rate, "cache_miss_input": miss_rate, "output": out_rate},
-                "note": "DeepSeek cost uses returned cache-hit/cache-miss counters when available; otherwise all input is conservatively priced as cache miss. Separate search/enrichment-provider fees are excluded."}
-    (input_rate, output_rate), known, pricing_key = _lead_pricing_for_model(model, resolved_provider)
-    usd = input_tokens / 1e6 * input_rate + output_tokens / 1e6 * output_rate
-    return {"input_tokens": input_tokens, "output_tokens": output_tokens, "total_tokens": input_tokens + output_tokens,
-            "prompt_cache_hit_tokens": hit, "prompt_cache_miss_tokens": miss, "api_calls": api_calls, "usd": usd,
-            "model": model, "provider": resolved_provider, "pricing_model_key": pricing_key, "pricing_known": known,
-            "cost_method": "standard_input_output_tokens", "rates_per_million_usd": {"input": input_rate, "output": output_rate},
-            "note": "Estimated API token cost only; separate third-party search/enrichment fees are excluded unless explicitly reported."}
+    return _phase5b_cost_details(model, usage, provider)
 
 
 def _llm_response_cost_fields(model, usage, provider=None):
@@ -16266,31 +16204,11 @@ def _llm_response_cost_fields(model, usage, provider=None):
 
 
 def _lead_provider_from_model(model, provider=None):
-    p = str(provider or "").strip().lower()
-    if p in ("claude", "anthropic"):
-        return "anthropic"
-    if p in ("openai", "gpt"):
-        return "openai"
-    if p == "deepseek":
-        return "deepseek"
-    key = str(model or "").strip().lower()
-    if key.startswith("deepseek"):
-        return "deepseek"
-    if key.startswith(("gpt-", "o1", "o3", "o4")):
-        return "openai"
-    return "anthropic"
+    return _phase5b_normalize_provider(model, provider)
 
 
 def _lead_pricing_for_model(model, provider=None):
-    key = str(model or "").strip().lower()
-    if key in _LLM_MODEL_PRICING:
-        return _LLM_MODEL_PRICING[key], True, key
-    p = _lead_provider_from_model(model, provider)
-    if p == "deepseek":
-        return _LLM_MODEL_PRICING["deepseek-v4-flash"], False, "deepseek-v4-flash"
-    if p == "openai":
-        return _LLM_MODEL_PRICING["gpt-5.5"], False, "gpt-5.5"
-    return _LLM_MODEL_PRICING["claude-sonnet-4-6"], False, "claude-sonnet-4-6"
+    return _phase5b_pricing_for_model(model, provider)
 
 
 def _lead_cost(model, usage, provider=None):
