@@ -151,7 +151,10 @@ class PersistentJobTransitionError(PersistentJobError):
 
 
 def sanitize_job_text(value, limit=240):
-    text = re.sub(r"[\x00-\x1f\x7f]+", " ", str(value or "")).strip()
+    text = str(value or "").encode(
+        "utf-8", errors="replace"
+    ).decode("utf-8")
+    text = re.sub(r"[\x00-\x1f\x7f]+", " ", text).strip()
     text = _BEARER_VALUE_RE.sub(
         lambda match: match.group(1) + "[redacted]", text
     )
@@ -263,6 +266,15 @@ def _validated_timestamp(value, label):
     value = float(value)
     if not math.isfinite(value) or value < 0 or value > _MAX_TIMESTAMP:
         raise ValueError("{} is outside its bounded range".format(label))
+    return value
+
+
+def _unique_json_object(pairs):
+    value = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError("duplicate persistent job state field")
+        value[key] = item
     return value
 
 
@@ -745,7 +757,10 @@ class PersistentJobStore:
             if size <= 0 or size > self.max_bytes:
                 raise ValueError("invalid persistent job state size")
             raw = self.path.read_bytes()
-            payload = json.loads(raw.decode("utf-8"))
+            payload = json.loads(
+                raw.decode("utf-8"),
+                object_pairs_hook=_unique_json_object,
+            )
             if not isinstance(payload, dict):
                 raise ValueError("persistent job state must be an object")
             if set(payload) != _JOURNAL_FIELDS:
@@ -873,30 +888,30 @@ class PersistentJobStore:
         }
 
     def _write_records(self, records):
-        payload = {
-            "schema": JOB_STATE_SCHEMA,
-            "updated_at": self._now(),
-            "jobs": sorted(
-                (dict(record) for record in records.values()),
-                key=lambda record: (
-                    float(record.get("updated_at") or 0),
-                    record["id"],
-                ),
-            ),
-        }
-        encoded = json.dumps(
-            payload,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-            allow_nan=False,
-        ).encode("utf-8")
-        if len(encoded) > self.max_bytes:
-            raise PersistentJobStateUnavailableError(
-                "Persistent job state exceeds its bounded file size."
-            )
         temp_path = None
         try:
+            payload = {
+                "schema": JOB_STATE_SCHEMA,
+                "updated_at": self._now(),
+                "jobs": sorted(
+                    (dict(record) for record in records.values()),
+                    key=lambda record: (
+                        float(record.get("updated_at") or 0),
+                        record["id"],
+                    ),
+                ),
+            }
+            encoded = json.dumps(
+                payload,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            ).encode("utf-8")
+            if len(encoded) > self.max_bytes:
+                raise PersistentJobStateUnavailableError(
+                    "Persistent job state exceeds its bounded file size."
+                )
             self.path.parent.mkdir(parents=True, exist_ok=True)
             fd, raw_temp_path = tempfile.mkstemp(
                 prefix=self.path.name + ".",

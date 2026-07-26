@@ -348,6 +348,9 @@ class Phase5APersistentJobFoundationTests(unittest.TestCase):
             "unsanitized error": lambda payload: payload["jobs"][0].update(
                 {"error_summary": '{"api_key":"fixture-secret"}'}
             ),
+            "invalid Unicode surrogate": lambda payload: payload["jobs"][
+                0
+            ].update({"error_summary": "\ud800"}),
             "non-boolean retry flag": lambda payload: payload["jobs"][0].update(
                 {"retryable": 1}
             ),
@@ -361,6 +364,35 @@ class Phase5APersistentJobFoundationTests(unittest.TestCase):
                 with self.assertRaises(PersistentJobStateCorruptError):
                     self._store().initialize()
                 self.assertEqual(self.path.read_bytes(), encoded)
+
+        canonical_raw = json.dumps(canonical, separators=(",", ":"))
+        duplicate_payloads = [
+            canonical_raw.replace(
+                '"jobs":',
+                '"jobs":[],"jobs":',
+                1,
+            ).encode("utf-8"),
+            canonical_raw.replace(
+                '"kind":"safe_fixture"',
+                '"kind":"hidden_fixture","kind":"safe_fixture"',
+                1,
+            ).encode("utf-8"),
+        ]
+        for encoded in duplicate_payloads:
+            with self.subTest(label="duplicate JSON field"):
+                self.path.write_bytes(encoded)
+                with self.assertRaises(PersistentJobStateCorruptError):
+                    self._store().initialize()
+                self.assertEqual(self.path.read_bytes(), encoded)
+
+    def test_invalid_clock_failure_is_typed_and_does_not_create_state(self):
+        store = PersistentJobStore(
+            self.path,
+            clock=lambda: float("nan"),
+        )
+        with self.assertRaises(PersistentJobStateUnavailableError):
+            store.initialize()
+        self.assertFalse(self.path.exists())
 
     def test_invalid_finish_transitions_are_rejected_without_state_change(self):
         job_id = deterministic_job_id("safe_fixture", "transition")

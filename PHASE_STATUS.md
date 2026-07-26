@@ -546,6 +546,20 @@ Four additional foundation tests cover these exact findings. All 11 foundation
 tests and the 35-test focused Phase 5A/Phase 4 gate pass without network,
 credentials, external mutations or paid calls.
 
+The first repeated review after those corrections found two additional strict-
+boundary cases:
+
+- duplicate JSON object keys could hide unsupported top-level or record data
+  because the standard decoder retained only the last value;
+- an escaped lone Unicode surrogate could pass record parsing and fail before
+  the atomic-write exception wrapper with an untyped encoding error.
+
+The loader now rejects duplicate object keys and noncanonical Unicode while
+preserving the source bytes. Serialization and encoding occur inside the typed
+failure-visible write boundary. A twelfth foundation test proves a non-finite
+clock fails with `JOB_STATE_UNAVAILABLE` without creating state; strict-
+corruption subcases cover duplicate keys and escaped surrogates.
+
 ## Phase 4 authorization and constraints
 
 - Owner authorization received on 23 July 2026.
