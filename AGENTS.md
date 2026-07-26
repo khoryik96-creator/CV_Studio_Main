@@ -45,9 +45,31 @@
 - The JobAdder candidate-not-found dialog and upload-queue `esc2` scope
   regression were corrected in **CV Studio v24.6.237** without changing
   JobAdder routes, requests, candidate creation, uploads or response contracts.
-- Current completed private owner/source release: **CV Studio v24.6.237**.
+- The duplicated standalone Blind JD experience summary was removed from the
+  browser preview, Word export and PDF export in **CV Studio v24.6.238**.
+  `exp_range`, the AI prompt/output schema and recruiter-critical body content
+  remain unchanged.
+- Current completed private owner/source release: **CV Studio v24.6.238**.
 - Phases 1, 2A, 2B, 3, 4, 5A and 5B are complete.
 - Phase 6 remains inactive. There is no active implementation target.
+
+## Completed scope: post-Phase-5B Blind JD display/export corrective
+
+v24.6.238 removes only the duplicated standalone `exp_range` summary from
+`renderAnonJDCard()`, `exportAnonJDDoc()` and `exportAnonJDPDF()`.
+
+The PDF renders the remaining Location and Work tiles across the full available
+metadata width. The source JD, AI prompt, structured Blind JD object/schema,
+requirements, nice-to-have items and all recruiter-critical body content remain
+unchanged.
+
+Focused regression coverage proves the three omissions, retained body
+experience requirements, retained structured `exp_range`, Location/Work
+rendering, output escaping and unchanged unrelated Blind JD sections.
+
+This correction preserves all 107 routes, five guards, 18 compatibility
+signatures, SQLite schema 10, Phase 5A journal schema 1, the v24.6.237 `esc2`
+correction, every Phase 1–5B contract and the Phase 6 stop boundary.
 
 ## Completed scope: post-Phase-5B JobAdder esc2 corrective
 
@@ -262,8 +284,10 @@ Before changing code:
 1. Read `ROADMAP.md`.
 2. Read `PHASE_STATUS.md`.
 3. Read `IMPLEMENT.md`.
-4. Read `CV_STUDIO_V24_6_237_PHASE_6_HANDOVER.md`.
+4. Read `CV_STUDIO_V24_6_238_PHASE_6_HANDOVER.md`.
 5. Read
+   `cv_studio_v24_6_238_blind_jd_exp_summary_corrective_qa_report.md`,
+   `CV_STUDIO_V24_6_237_PHASE_6_HANDOVER.md`,
    `cv_studio_v24_6_237_jobadder_esc2_corrective_qa_report.md`,
    `CV_STUDIO_V24_6_236_PHASE_6_HANDOVER.md`,
    `cv_studio_v24_6_236_phase5b_ai_cost_guardrails_corrective_qa_report.md`,

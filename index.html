@@ -1420,7 +1420,7 @@
 <div class="app">
   <div class="header" style="position:relative;">
     <div>
-      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.237 (Offline) by The 郭 Lab</span></h1>
+      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.238 (Offline) by The 郭 Lab</span></h1>
 
     </div>
     <div class="header-tools">
@@ -5295,7 +5295,7 @@ function renderAnonJDCard(j) {
   }
   function sec(label, html) { return '<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">'+label+'</div>'+html+'</div>'; }
 
-  var meta = [j.location, j.work_mode, j.industry, j.exp_range].filter(function(x){return x&&x!=='null';})
+  var meta = [j.location, j.work_mode, j.industry].filter(function(x){return x&&x!=='null';})
     .map(function(x){ return '<span style="background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:2px 9px;font-size:11px;margin-right:5px;">'+esc2(x)+'</span>'; }).join('');
 
   return '<div style="display:flex;flex-direction:column;gap:2px;">'
@@ -5330,8 +5330,7 @@ function exportAnonJDDoc() {
     j.about_role,
     j.work_mode ? 'Work Arrangement: ' + j.work_mode : '',
     j.location ? 'Location: ' + j.location : '',
-    j.industry ? 'Industry: ' + j.industry : '',
-    j.exp_range ? 'Experience: ' + j.exp_range : ''
+    j.industry ? 'Industry: ' + j.industry : ''
   ].filter(Boolean).join('\n');
   var body = '';
   body += section('About Our Client', j.about_client);
@@ -5399,17 +5398,18 @@ function exportAnonJDPDF() {
 
   var hasLoc = j.location && j.location !== 'null';
   var hasWm  = j.work_mode && j.work_mode !== 'null';
-  var hasExp = j.exp_range && j.exp_range !== 'null';
-  if (hasLoc || hasWm || hasExp) {
+  var metadataTiles = [[hasLoc, 'Location', j.location, C.amberBg, C.amber], [hasWm, 'Work', j.work_mode, C.blueBg, C.blue]]
+    .filter(function(item){ return item[0]; });
+  if (metadataTiles.length) {
     var px = margin;
-    [[hasLoc, 'Location', j.location, C.amberBg, C.amber, 58], [hasWm, 'Work', j.work_mode, C.blueBg, C.blue, 54], [hasExp, 'Exp', j.exp_range, C.purpleBg, C.purple, 46]].forEach(function(item){
-      if (!item[0]) return;
+    var tileGap = 4;
+    var tileWidth = (maxW - tileGap * (metadataTiles.length - 1)) / metadataTiles.length;
+    metadataTiles.forEach(function(item){
       var text = safe(item[1] + ': ' + item[2]);
-      var w = Math.min(Math.max(doc.getTextWidth(text) + 7, item[5]), 78);
-      doc.setFillColor(...item[3]); doc.roundedRect(px, y, w, 7.2, 2, 2, 'F');
+      doc.setFillColor(...item[3]); doc.roundedRect(px, y, tileWidth, 7.2, 2, 2, 'F');
       doc.setFont('helvetica','bold'); doc.setFontSize(7.6); doc.setTextColor(...item[4]);
       doc.text(text, px+3, y+4.8);
-      px += w + 4;
+      px += tileWidth + tileGap;
     });
     y += 14;
   }
@@ -6456,7 +6456,7 @@ var _cvStudioPhase2bSettingsStartupPromise=cvStudioHydrateBrowserSettings();
 function exportCvStudioLocalData(){
   var settings=cvStudioLocalDataSettingsSnapshot(false);
   var records={onenote_transfer_records:(typeof oneNoteRecordsLoad==='function'?oneNoteRecordsLoad():[]),onenote_saved_links:(typeof oneNoteReadSavedLinks==='function'?oneNoteReadSavedLinks():[])};
-  var payload={product:'CV Studio local data',version:'v24.6.237',schema:1,exportedAt:new Date().toISOString(),includes:['PPC metadata and preferences','saved OneNote links and parser preferences','OneNote transfer record history (private application data)','invoice recipient/settings and draft links','CV alignment and navigation preferences','AI routing/provider selections without API keys'],settings:settings,records:records};
+  var payload={product:'CV Studio local data',version:'v24.6.238',schema:1,exportedAt:new Date().toISOString(),includes:['PPC metadata and preferences','saved OneNote links and parser preferences','OneNote transfer record history (private application data)','invoice recipient/settings and draft links','CV alignment and navigation preferences','AI routing/provider selections without API keys'],settings:settings,records:records};
   var blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='cv_studio_local_data_'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(url);a.remove();},0);showToast('Non-secret local data exported.','ok');
 }
 function cvStudioPersistImportedLocalData(payload){
@@ -6615,7 +6615,7 @@ function cvLockedTabLabel() {
 // Unlocks persist across normal browser/app restarts for the same installed build,
 // but deliberately reset after a new CV Studio version is installed. This keeps the
 // lock in place after upgrades while avoiding repeated prompts during daily use.
-var LOCK_UNLOCK_VERSION = 'v24.6.237';
+var LOCK_UNLOCK_VERSION = 'v24.6.238';
 function versionedUnlockKey(base) {
   return base + '_' + String(LOCK_UNLOCK_VERSION || '').replace(/[^0-9A-Za-z]+/g, '_');
 }

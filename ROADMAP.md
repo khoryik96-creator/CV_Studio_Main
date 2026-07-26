@@ -28,6 +28,9 @@
 - v24.6.237 corrected the JobAdder candidate-not-found dialog and upload-queue
   `esc2` scope failure without changing JobAdder routes, requests, candidate
   creation, uploads or response contracts.
+- v24.6.238 removed the duplicated standalone experience summary from Blind JD
+  preview, Word export and PDF export without changing `exp_range`, the AI
+  prompt/output schema or recruiter-critical body content.
 - Phases 1, 2A, 2B, 3, 4, 5A and 5B are complete.
 - No later phase is active. Phase 6 requires a new explicit owner instruction.
 
@@ -192,6 +195,19 @@ Persistent background jobs and resumable task state:
 - source-scope and runtime frontend regressions cover dialog email escaping,
   matched/unmatched queue filenames and status text;
 - all Phase 1–5B contracts and the inactive Phase 6 boundary remain unchanged.
+
+## Post-Phase-5B Blind JD display/export corrective — Completed in v24.6.238
+
+- browser preview no longer displays `exp_range` as a standalone metadata
+  badge beside Location, Work Arrangement and Industry;
+- Word export no longer adds a top `Experience:` line to About the Role;
+- PDF export no longer adds an `Exp:` tile, and the remaining Location and Work
+  tiles share the complete available metadata width;
+- `exp_range` remains in the AI prompt/output schema and structured result;
+- experience requirements in What You Need to Succeed, Nice to Have and other
+  recruiter-critical body content remain unchanged;
+- escaping, all unrelated Blind JD sections, all 107 routes, five guards, 18
+  compatibility signatures, schemas and every Phase 1–5B contract remain.
 
 ## Phase 6 — Future
 

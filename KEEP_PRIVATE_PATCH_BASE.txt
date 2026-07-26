@@ -1,5 +1,5 @@
 CV Studio private source patch base
-Version: v24.6.237
+Version: v24.6.238
 Keep this ZIP for future patches. Do not distribute this source package to colleagues.
 
 JobAdder API investigation source of truth:
@@ -1136,3 +1136,19 @@ Patch note v24.6.193: cross-platform deterministic adm-zip tree hashing fixes th
 - Retains all 107 routes, five guards, 18 compatibility signatures, SQLite
   schema 10, journal schema 1 and every Phase 1–5B contract.
 - Stops before handoff, merge and Phase 6.
+
+## v24.6.238 Blind JD experience-summary corrective
+
+- Removes only the duplicated standalone Blind JD experience summary from the
+  browser preview, Word export and PDF export.
+- Keeps `exp_range` in the AI prompt/output schema and structured result.
+- Keeps experience requirements in What You Need to Succeed, Nice to Have and
+  all recruiter-critical body content.
+- Uses the complete PDF metadata width for the remaining Location and Work
+  tiles with no empty third tile.
+- Adds focused preview/Word/PDF/schema/body/escaping/content-preservation
+  regression coverage.
+- Retains the v24.6.237 `esc2` correction, all 107 routes, five guards, 18
+  compatibility signatures, SQLite schema 10, journal schema 1 and every
+  Phase 1–5B contract.
+- Stops before handoff, merge, JobAdder sign-out/settings work and Phase 6.

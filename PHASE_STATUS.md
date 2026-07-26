@@ -3,8 +3,8 @@
 ## Release state
 
 - Approved baseline: v24.6.217
-- Completed release: v24.6.237
-- Previous completed release: v24.6.236
+- Completed release: v24.6.238
+- Previous completed release: v24.6.237
 - Phase 2B source baseline: v24.6.219
 - Phase 2B baseline Git commit: `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`
 - Phase 3 source baseline: v24.6.222
@@ -15,11 +15,103 @@
 - Phase 5A baseline Git commit: `4b366ddde1cf0a398706b52d55b0e82ed2dbc27c`
 - Phase 5B source baseline: v24.6.234
 - Phase 5B baseline Git commit: `327858799f17d880e37c740f71dfe321ea7bde0a`
-- Working branch: `codex/jobadder-esc2-corrective`
+- Working branch: `codex/blind-jd-exp-summary-corrective`
 - Active phase: none; Phase 6 inactive
-- Completed private owner/source release: v24.6.237
-- Status: JobAdder esc2 corrective release complete
+- Completed private owner/source release: v24.6.238
+- Status: Blind JD experience-summary corrective release complete
 - Current milestone: none; stop before handoff, merge or Phase 6
+
+## Post-Phase-5B Blind JD display/export corrective
+
+### Authorization and entry verification
+
+- The owner authorized only a narrow removal of the duplicated standalone
+  Experience/Exp summary from Blind JD preview, Word export and PDF export.
+  JobAdder sign-out/settings work, Phase 6, unrelated frontend refactoring, AI
+  Crawler work and cost work remained inactive.
+- The worktree was clean and detached at entry. `HEAD` and local `master`
+  resolved exactly to
+  `3894042b496896e9a4f358ac9b0e10270052571b`.
+- Active installed source surfaces identified v24.6.237.
+- `C:\CV-Studio-Codex\releases\v24.6.237` contained the owner/source ZIP,
+  checksum, verification sidecar, corrective QA report and Phase 6 handover.
+- The owner/source ZIP independently recomputed to SHA-256
+  `5bc44d77cb34c0624dbab973a907ce2eba34dee33593c940af41d0e217bf8cd9`;
+  its verification `source_commit` exactly matched approved master.
+- A fresh extraction contained 128 tracked files and matched every approved
+  Git blob with zero missing, extra or byte-mismatched files.
+- The immutable v24.6.237 release artifacts were hashed before work and
+  remained unchanged.
+
+### Current-source inventory and pre-change characterization
+
+- Complete current-source search for `exp_range`, `Experience:` and `Exp:`
+  found exactly one structured Blind JD output-schema field and three
+  duplicated standalone display/export sites:
+  - the metadata badge array in `renderAnonJDCard()`;
+  - the `Experience:` line in `exportAnonJDDoc()`;
+  - the `Exp:` tile in `exportAnonJDPDF()`.
+- `exp_range` was not independently rendered by any other Blind JD preview,
+  print or export surface. Requirements, Nice to Have and other body sections
+  are separate arrays and remain eligible to contain experience requirements.
+- `tests/test_blind_jd_exp_summary_frontend.js` was added before production
+  changes. It failed on all three intended baseline summaries while its prompt/
+  schema and unrelated-content preservation assertions passed.
+- Unchanged-source entry validation passed all 117 Python tests after restoring
+  the documented ignored exact `adm-zip` 0.5.17 runtime copy. All four existing
+  frontend fixtures passed.
+
+### Corrective implementation
+
+- `renderAnonJDCard()` metadata now includes only Location, Work Arrangement
+  and Industry; it no longer reads `j.exp_range`.
+- `exportAnonJDDoc()` retains About the Role, Work Arrangement, Location and
+  Industry but no longer adds a top `Experience:` line.
+- `exportAnonJDPDF()` retains Location and Work tiles, removes the `Exp:` tile
+  and divides the complete 174 mm content width evenly between the present
+  metadata tiles with the established 4 mm gap.
+- The source JD, prompt instructions, raw JSON output schema,
+  `window._lastAnonJD` structured object, requirements, nice-to-have items,
+  recruiter-critical body content and all unrelated Blind JD sections remain
+  unchanged.
+- HTML/Word escaping and PDF text-only rendering remain in their established
+  helper boundaries. The valid local `esc2` helper inside
+  `renderAnonJDCard()` remains unchanged, preserving the v24.6.237 correction.
+
+### Acceptance and release result
+
+- The focused Blind JD fixture passes four cases covering preview, Word, PDF,
+  structured-schema/body preservation, metadata width, escaping and unrelated
+  content.
+- Complete Python discovery passes all 117 tests with `ResourceWarning`
+  treated as an error.
+- The focused Phase 3/4/5A/5B gate passes all 91 tests.
+- All five frontend fixtures pass: the new Blind JD corrective fixture plus
+  the established JobAdder, Phase 2A, Phase 2B and Phase 5B fixtures.
+- Live loopback source smoke passes all 24 assertions.
+- Static validation passes for 27 tracked Python files, 23 tracked JavaScript
+  files plus both complete inline scripts, five Bash/command files and five
+  PowerShell files.
+- Owner-source validation/preflight, vetted `adm-zip` 0.5.17 behavior,
+  repository consistency and Git whitespace validation pass.
+- Repeated exact-master review re-proves all 107 routes, five ordered guards,
+  18 compatibility signatures, SQLite schema 10, journal schema 1, the
+  v24.6.237 `esc2` correction and every Phase 1–5B compatibility/non-replay
+  boundary. Only the three authorized Blind JD render/export paths changed in
+  production logic.
+- Active source identity advanced to the next unused private owner/source
+  version, v24.6.238. Historical v24.6.237 evidence remains immutable.
+- The authoritative archive is
+  `cv_studio_v24_6_238_blind_jd_exp_summary_corrective_owner_source.zip` under
+  `C:\CV-Studio-Codex\releases\v24.6.238`, with adjacent SHA-256 and
+  verification sidecars. It is generated from final branch HEAD and freshly
+  compared against every tracked Git blob with zero missing, extra or
+  byte-mismatched files.
+- `cv_studio_v24_6_238_blind_jd_exp_summary_corrective_qa_report.md` and
+  `CV_STUDIO_V24_6_238_PHASE_6_HANDOVER.md` record the release evidence.
+- No live credential, JobAdder call, paid request, protected colleague build,
+  native compilation, handoff, merge, JobAdder sign-out/settings or Phase 6
+  work was performed.
 
 ## Post-Phase-5B JobAdder esc2 corrective
 
