@@ -38,8 +38,44 @@
   boundaries or the authorized Phase 5A integration.
 - Current completed private owner/source release: **CV Studio v24.6.234**.
 - Phases 1, 2A, 2B, 3, 4 and 5A are complete.
-- Phase 5B AI cost guardrails/provider billing reconciliation and every Phase 6
-  area remain inactive. There is no active implementation target.
+- Phase 5B central AI cost guardrails and provider-billing reconciliation is
+  explicitly owner-authorized and active on branch
+  `codex/phase-5b-ai-cost-guardrails`.
+- Every Phase 6 area remains inactive.
+
+## Active scope: Phase 5B
+
+Phase 5B is limited to the smallest additive central AI cost-guardrail and
+provider-billing-reconciliation foundation. Before production behavior changes,
+the paid-provider routes/helpers and confirmation gates; normalized provider,
+model, usage and cost fields; v24.6.215 DeepSeek detailed-cost cutoff;
+client-side estimates and available provider-authoritative billing fields;
+retry, timeout, failure and ambiguous paid-call boundaries; protected
+credentials and permitted non-secret billing data; and established response
+fields must be inventoried and characterization-tested.
+
+Phase 5B must distinguish estimates from provider-authoritative values.
+Unavailable billing data is never silently treated as zero or authoritative,
+and reconciliation failures remain visible.
+
+Phase 5B preserves:
+
+- all 107 Flask routes, methods, endpoint names and established response
+  fields;
+- all five ordered request/security guards and every authentication, CSRF,
+  request-size and paid-call confirmation boundary;
+- all 18 compatibility helper signatures, Phase 4 call-time dependency
+  rebinding and established initialization order;
+- SQLite schema version 10 and Phase 5A journal metadata schema 1, lifecycle
+  states and non-replay guarantees;
+- Phase 3 provider endpoints, headers, retries, timeouts and the rule that
+  ambiguous paid operations are never automatically replayed;
+- the v24.6.215 DeepSeek detailed-cost history cutoff, redaction boundaries and
+  existing protected credential stores.
+
+Changing any preserved schema, data authority, Phase 5A journal semantics,
+paid confirmation gate, provider retry/non-replay behavior, response contract
+or recovery semantics requires separate explicit owner authorization.
 
 ## Completed scope: Phase 5A
 
@@ -266,6 +302,31 @@ Routine implementation decisions do not require owner confirmation.
   SHA-256, verification sidecars, QA report and next owner-gated handover are
   copied to the new release directory.
 - Stop before handoff or merge. Do not begin Phase 5B or Phase 6.
+
+## Definition of done for Phase 5B
+
+- Every paid-provider route/helper, confirmation gate, normalized accounting
+  field, historical cutoff/calculation, authoritative billing field, retry/
+  timeout/ambiguity boundary, credential boundary and reconciliation response
+  is inventoried before production behavior changes.
+- Pre-change no-network characterization fixes existing success, failure,
+  usage, cost and reconciliation response contracts.
+- One bounded central foundation distinguishes estimates from provider-
+  authoritative billing, keeps missing authority explicit and makes guardrail
+  or reconciliation failures visible.
+- All 107 routes, five guards, 18 compatibility signatures, schema version 10,
+  journal schema 1/recovery semantics, initialization order and prior-phase
+  contracts remain.
+- No live credential, paid call, additional persistent-job family, automatic
+  worker, credential migration, frontend modularisation/lazy loading, Phase 6,
+  unrelated workflow or backburner item 4, 7 or 8 is introduced.
+- Complete regression, both frontend fixtures, source smoke, tracked-language
+  static validation, owner-source preflight, repository consistency and
+  repeated exact-master review pass.
+- A clean next-version private owner/source ZIP is freshly extracted and
+  byte-verified; its SHA-256, verification sidecars, QA report and Phase 6
+  handover are copied to the new release directory.
+- Stop before handoff or merge. Do not begin Phase 6.
 
 ## Completed definition of done for Phase 4
 

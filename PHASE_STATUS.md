@@ -13,11 +13,142 @@
 - Phase 4 baseline Git commit: `7a0efcf0bce10b07e034592fb22a6021141d4146`
 - Phase 5A source baseline: v24.6.232
 - Phase 5A baseline Git commit: `4b366ddde1cf0a398706b52d55b0e82ed2dbc27c`
-- Working branch: `codex/phase-5a-persistent-jobs`
-- Active phase: none; Phase 5A complete and Phase 5B/6 inactive
+- Working branch: `codex/phase-5b-ai-cost-guardrails`
+- Active phase: Phase 5B central AI cost guardrails and provider-billing
+  reconciliation
 - Completed private owner/source release: v24.6.234
-- Status: owner-requested repeated review against exact master is complete
-- Current milestone: none; stop before handoff, merge, Phase 5B or Phase 6
+- Status: owner authorization and unchanged-source entry validation complete
+- Current milestone: Phase 5B Milestone 1 inventory and characterization
+
+## Phase 5B authorization and constraints
+
+- Owner authorization received on 26 July 2026.
+- Work only from clean master commit
+  `327858799f17d880e37c740f71dfe321ea7bde0a` and preserve v24.6.234 as the
+  source baseline.
+- Phase 5B is limited to central AI cost guardrails and provider-billing
+  reconciliation.
+- Before production behavior changes, inventory every paid-provider route,
+  helper and confirmation gate; normalized provider/model/usage/cost fields;
+  the v24.6.215 DeepSeek detailed-cost cutoff and historical calculations;
+  client-side estimates and available provider-authoritative billing fields;
+  retry/timeout/failure/ambiguous-call boundaries; protected credentials and
+  permitted non-secret billing data; and established success, failure and
+  reconciliation response fields. Add characterization coverage first.
+- Reconciliation must distinguish estimates from provider-authoritative
+  values, remain failure-visible and never treat missing billing data as zero
+  or authoritative.
+- Preserve all 107 Flask routes/methods/endpoints/response fields, all five
+  ordered global request/security guards, every authentication/CSRF/request-
+  size/paid-call boundary, all 18 compatibility helper signatures, Phase 4
+  call-time dependency rebinding and established initialization order.
+- Preserve SQLite schema version 10, Phase 5A journal metadata schema 1 and its
+  lifecycle/recovery/non-replay guarantees, Phase 3 endpoints/headers/retries/
+  timeouts, the DeepSeek history cutoff, redaction and protected credential
+  boundaries, and unsafe/paid ambiguous-call non-replay behavior.
+- If Phase 5B would change a preserved schema, data authority, Phase 5A
+  journal semantic, paid confirmation gate, provider retry/non-replay policy,
+  response contract or recovery semantic, stop and present the exact proposed
+  change for separate owner authorization.
+- Do not use live credentials or make paid external calls.
+- Do not add persistent-job families or workers, migrate credentials, perform
+  frontend modularisation/lazy loading, begin Phase 6, add unrelated workflows,
+  replace Flask's server or implement backburner items 4, 7 or 8.
+- Stop after the Phase 5B owner/source release. Do not hand off, merge or begin
+  Phase 6 automatically.
+
+## Phase 5B entry verification
+
+- The worktree was clean and detached at entry; both `HEAD` and local `master`
+  resolved exactly to
+  `327858799f17d880e37c740f71dfe321ea7bde0a`.
+- Active source surfaces identify v24.6.234.
+- `C:\CV-Studio-Codex\releases\v24.6.234` contains the owner/source ZIP,
+  checksum, verification sidecar, Phase 5A corrective QA report and Phase 5B
+  handover.
+- The owner/source ZIP independently recomputed to SHA-256
+  `eb44700e941deb079c55cbff1f200b3c97733f5171e24748088fe38490b5b8cd`;
+  its verification `source_commit` exactly matches approved master.
+- A fresh extraction contained 117 tracked files and matched every Git blob
+  with zero missing, extra or byte-mismatched files.
+- The documented ignored vetted `adm-zip` 0.5.17 dependency was restored
+  without changing tracked Git state.
+- Unchanged-source entry validation passed all 86 Python tests with
+  `ResourceWarning` treated as an error, the 38-test focused Phase 5A/Phase 4
+  gate, both frontend fixtures and all 24 live loopback smoke assertions.
+- Static validation passed for 24 tracked Python files, 20 tracked JavaScript
+  files plus both inline scripts, five Bash/command files and five PowerShell
+  files. Owner-source validation/preflight, repository consistency and Git
+  whitespace validation passed.
+- Existing characterization re-proved the exact 107 routes, five ordered
+  guards, 18 compatibility signatures, schema version 10, initialization
+  markers and Phase 5A recovery/non-replay contracts.
+
+## Phase 5B bounded milestone plan
+
+### Milestone 1 — inventory and characterization
+
+- Record every paid-provider route/helper/confirmation gate and its normalized
+  provider, model, usage, estimate and cost response fields.
+- Record the DeepSeek cutoff/historical calculation contract, provider-
+  authoritative fields, non-secret billing-data boundary, retry/timeout/
+  ambiguity behavior and every success/failure/reconciliation shape.
+- Add no-network pre-change characterization before modifying production
+  behavior.
+
+### Milestone 2 — central accounting and guardrail foundation
+
+- Add the smallest app-independent provider-aware accounting foundation with
+  explicit dependencies and no circular import.
+- Normalize bounded estimate/authority provenance, require explicit missing
+  authority and make invalid or unavailable reconciliation failure-visible.
+- Add configurable in-request guardrail evaluation without changing paid-call
+  confirmation or retry/non-replay boundaries.
+
+### Milestone 3 — existing-call integration
+
+- Integrate only inventoried paid AI compatibility adapters while preserving
+  their route decorators, fields, endpoints, headers, timeouts and zero-retry
+  paid-call policy.
+- Reconcile provider-returned authoritative billing fields when present and
+  keep estimates explicitly labeled when authority is absent.
+- Do not add a route, persistent job, billing worker, credential authority or
+  schema migration.
+
+### Milestone 4 — acceptance and release evidence
+
+- Run complete regression, both frontend fixtures, live source smoke, tracked-
+  language static validation, owner-source preflight, repository consistency
+  and repeated exact-master compatibility review.
+- Advance source version surfaces only after implementation/review are clean.
+- Commit the exact final source; create, freshly extract and byte-verify the
+  next private owner/source ZIP; generate SHA-256/verification sidecars, QA
+  report and Phase 6 handover under the new release directory.
+- Confirm sidecar `source_commit` equals final branch HEAD, confirm a clean
+  worktree and stop before handoff, merge or Phase 6.
+
+## Phase 5B milestones
+
+- [x] Verify the v24.6.234 master/source/package baseline and all entry gates.
+- [x] Record owner authorization, scope boundaries and bounded milestone plan.
+- [ ] Complete paid-provider, billing, credential and ambiguity inventory.
+- [ ] Add pre-change characterization for all in-scope field contracts.
+- [ ] Implement and verify the central accounting/guardrail foundation.
+- [ ] Integrate only compatible existing paid-provider call boundaries.
+- [ ] Run complete acceptance and repeated exact-master review.
+- [ ] Create and byte-verify the Phase 5B private owner/source release.
+- [ ] Produce QA report, sidecars and Phase 6 handover; stop before Phase 6.
+
+## Phase 5B decisions and limitations
+
+- SQLite remains schema version 10 and the separate Phase 5A journal remains
+  metadata schema 1. No migration or durable billing authority is authorized.
+- Provider billing authority, when available in an existing response, must be
+  recorded distinctly from local estimates. Absence of authority remains
+  explicit and is not converted to a zero value.
+- Tests use temporary local state and controlled fakes only. No live
+  credentialed external request, paid call, native protected build or physical
+  installer test is authorized or claimed.
 
 ## Phase 5A authorization and constraints
 
