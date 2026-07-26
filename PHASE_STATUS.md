@@ -17,8 +17,9 @@
 - Active phase: Phase 5B central AI cost guardrails and provider-billing
   reconciliation
 - Completed private owner/source release: v24.6.234
-- Status: owner authorization and unchanged-source entry validation complete
-- Current milestone: Phase 5B Milestone 1 inventory and characterization
+- Status: Milestone 1 inventory and characterization complete
+- Current milestone: Phase 5B Milestone 2 central accounting and guardrail
+  foundation
 
 ## Phase 5B authorization and constraints
 
@@ -131,8 +132,8 @@
 
 - [x] Verify the v24.6.234 master/source/package baseline and all entry gates.
 - [x] Record owner authorization, scope boundaries and bounded milestone plan.
-- [ ] Complete paid-provider, billing, credential and ambiguity inventory.
-- [ ] Add pre-change characterization for all in-scope field contracts.
+- [x] Complete paid-provider, billing, credential and ambiguity inventory.
+- [x] Add pre-change characterization for all in-scope field contracts.
 - [ ] Implement and verify the central accounting/guardrail foundation.
 - [ ] Integrate only compatible existing paid-provider call boundaries.
 - [ ] Run complete acceptance and repeated exact-master review.
@@ -149,6 +150,181 @@
 - Tests use temporary local state and controlled fakes only. No live
   credentialed external request, paid call, native protected build or physical
   installer test is authorized or claimed.
+
+## Phase 5B Milestone 1 inventory and characterization result
+
+### Paid-provider routes, helpers and confirmation gates
+
+- The existing browser-session AI spend set contains exactly eight `POST`
+  routes: `/test`, `/parse`, `/generate-ai`, `/blind`,
+  `/jobadder/onenote_log_screening`, `/lead-finder/search`,
+  `/lead-finder/find-people` and `/lead-finder/find-emails`. The fourth ordered
+  global guard, `_require_ai_spend_browser_session`, protects this exact set.
+  Host/origin/request-size guards and the Lead Finder's existing `1571` local
+  feature lock remain separate and unchanged.
+- `call_llm(provider, api_key, payload_dict)` is the central compatibility
+  dispatcher used by the paid browser routes. It delegates through the existing
+  signatures `call_anthropic(api_key, payload_dict)`,
+  `_call_deepseek(api_key, payload_dict, timeout_seconds=180)` and
+  `_call_openai(api_key, payload_dict, timeout_seconds=180)` to the shared
+  Phase 3 `AIProviderClient`.
+- `/jobadder/onenote_log_screening` optionally invokes
+  `_ja_salary_ai_extract(fields, config=None)` before its established
+  externally mutating JobAdder write. Only the two salary fields enter the AI
+  payload. The later JobAdder mutation and every existing error/fallback field
+  remain outside Phase 5B.
+- The owner-only `/owner/integration/run` route can call one small DeepSeek
+  probe through `_owner_integration_deepseek_probe`. It is outside the browser
+  spend set and retains both owner-integration authorization and the exact
+  `RUN ONE PAID DEEPSEEK PROBE` confirmation. Phase 5B must not weaken or move
+  that confirmation.
+- `/lead-finder/test-search-provider` may consume optional Tavily or SerpAPI
+  third-party quota. It is outside the browser AI spend set and retains its
+  established provider-configuration flow. Tavily/SerpAPI query helpers and
+  Apollo person enrichment can consume separately billed credits, but are not
+  AI token-provider calls and are explicitly excluded from the existing
+  `cost`/`cost_details.usd` value. Changing those gates or folding unknown
+  third-party fees into the legacy token-cost number is not authorized.
+
+### Provider, model, usage and estimate fields
+
+- Provider normalization recognizes `anthropic`/`claude`,
+  `deepseek` and `openai`/`gpt`; model inference uses DeepSeek and GPT prefixes
+  and otherwise defaults to Anthropic. Every existing paid success shape
+  exposes the selected `model` and `provider`.
+- `_normalize_llm_usage` preserves provider-native top-level counters while
+  adding the canonical non-negative fields `input_tokens`, `output_tokens`,
+  `prompt_cache_hit_tokens`, `prompt_cache_miss_tokens` and `api_calls`.
+  Aliases include `prompt_tokens`/`completion_tokens`,
+  `cache_read_input_tokens`/`cache_creation_input_tokens` and DeepSeek's
+  returned hit/miss counters. `_merge_llm_usage` sums only those five canonical
+  fields across deliberate multi-call workflows.
+- `_llm_cost_details` currently produces a local USD estimate with the legacy
+  audit fields `input_tokens`, `output_tokens`, `total_tokens`,
+  `prompt_cache_hit_tokens`, `prompt_cache_miss_tokens`, `api_calls`, `usd`,
+  `model`, `provider`, `pricing_model_key`, `pricing_known`, `cost_method`,
+  `rates_per_million_usd` and `note`. DeepSeek additionally exposes
+  `unclassified_input_tokens` and `billed_cache_miss_tokens`.
+  `_llm_response_cost_fields` maps the same estimate to legacy top-level
+  `cost` and nested `cost_details`.
+- The local rate table covers the established Claude 5/Sonnet 4/Opus 4/Haiku
+  4.5, DeepSeek v4 Flash/Pro and GPT 5.4/5.5 variants. An unrecognized model
+  uses the established provider fallback rate with `pricing_known=false`.
+  That flag describes recognition by the local table; it has never meant that
+  the resulting dollar value is provider-authoritative.
+- DeepSeek uses returned cache-hit/cache-miss counters when present. Any
+  unclassified input is conservatively charged at the local cache-miss rate;
+  if no split is returned, all input is treated as cache miss. This is a local
+  estimate even though the underlying token counters came from the provider.
+
+### DeepSeek history cutoff and browser calculation contract
+
+- The v24.6.215 detailed-history cutoff is field-presence based. Usage rows
+  containing `input_tokens`, `output_tokens` or `api_calls` retain their token,
+  call and cache audit detail. Earlier rows preserve the stored historical
+  numeric cost but display: `Created before v24.6.215; historical cost is
+  preserved but token/call/cache details cannot be reconstructed.`
+- The browser accepts backend `cost_details.usd` when supplied and otherwise
+  repeats the established local calculation. It stores the numeric legacy
+  `cost` with provider/model/token/rate/method audit metadata. Phase 5B may add
+  provenance but must not reinterpret pre-v24.6.215 rows or rewrite historical
+  values.
+- The existing UI accurately excludes Tavily, SerpAPI, Apollo and other
+  third-party fees, but it currently labels the locally calculated amount as
+  `cost` without a machine-readable estimate-versus-authority distinction.
+
+### Provider-authoritative fields and reconciliation boundary
+
+- Anthropic Messages, OpenAI Responses and DeepSeek chat/message responses
+  provide provider-originated usage counters, not an invoice-authoritative
+  per-request USD amount. Anthropic and OpenAI expose separate organization
+  administration cost-report APIs; those need distinct admin credentials and
+  return aggregated cost records. DeepSeek documents returned token/cache
+  usage and a separate account balance endpoint, not a per-call billed amount.
+- Therefore Phase 5B can truthfully classify provider-returned usage as
+  authoritative for the returned response and the current dollar value as a
+  local estimate. Missing invoice authority must be represented explicitly as
+  unavailable, never as `$0`, reconciled or authoritative.
+- Adding admin billing credentials, background polling, organization-level
+  billing routes or a durable billing ledger would cross the protected-secret,
+  worker, schema and data-authority boundaries and is not authorized.
+- Reference contracts inspected on 26 July 2026:
+  [OpenAI organization usage API](https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/usage),
+  [Anthropic Usage and Cost Admin API](https://platform.claude.com/docs/en/manage-claude/usage-cost-api),
+  [Anthropic cost report](https://platform.claude.com/docs/en/api/admin/cost_report),
+  [DeepSeek chat completion usage](https://api-docs.deepseek.com/api/create-chat-completion/)
+  and [DeepSeek balance](https://api-docs.deepseek.com/api/get-user-balance/).
+
+### Retry, timeout, failure and ambiguity inventory
+
+- Phase 3 sends every AI-provider request as one `POST` with
+  `safe_to_retry=false` and `retries=0`. Provider timeouts remain bounded to
+  15–300 seconds; compatibility adapters retain their established defaults and
+  the salary helper retains its 90-second request.
+- `/parse` deliberately makes up to three paid calls only after definite
+  provider responses when repairing malformed/truncated output.
+  `/generate-ai` can make one explicit no-tools follow-up only after a definite
+  HTTP response says web search is unavailable. These are application
+  continuations, not transport replay. A timeout or ambiguous transport
+  failure is never automatically replayed.
+- `/test`, `/parse`, `/generate-ai`, `/blind`, Lead Finder and salary assist
+  retain their established uneven error shapes. Some post-response parsing
+  failures include returned usage and cost; a transport failure can have no
+  usage even though provider charging is ambiguous. Existing zero numeric
+  fields in these legacy shapes mean “no billable usage was returned,” not a
+  proven zero provider charge. Phase 5B must add an explicit ambiguity/status
+  signal without deleting or reinterpreting those legacy values.
+- Tavily/SerpAPI reads retain their bounded safe-read retry behavior. Apollo
+  enrichment remains an externally charged/mutating-ambiguity boundary and is
+  not automatically replayed by Phase 5B.
+
+### Protected credentials and permitted non-secret billing data
+
+- The protected AI store remains `_cv_secure_load("ai")`, backed by the
+  established OS-protected/machine-bound mechanisms. Its only slots are
+  `main_anthropic`, `main_deepseek`, `main_openai`, `lead_anthropic`,
+  `lead_deepseek`, `lead_openai`, `search_tavily`, `search_serpapi` and
+  `enrichment_apollo`. Existing request-key compatibility remains unchanged.
+- API keys, admin keys, OAuth tokens and protected provider/account identifiers
+  remain forbidden from SQLite, the Phase 5A journal, logs, fixtures,
+  diagnostics, support bundles and release evidence.
+- Permitted non-secret values are provider/model identifiers, returned token
+  and cache counters, local rate keys/values, calculation method, estimate and
+  authority status, bounded differences when both values exist, and existing
+  third-party call/result counts. No new persistence authority is introduced.
+
+### Established response fields characterized before production change
+
+- `/test`: success `ok`, `usage`, `model`, `provider`, `cost`,
+  `cost_details`; failure `ok`, `error` plus existing global error additions.
+- `/parse`: success `ok`, `data`, `usage`, `model`, `provider`, `cost`,
+  `cost_details`; post-response failures additionally use `error`,
+  `paid_ai_failure` and the same usage/cost fields. Provider HTTP failures
+  retain their smaller established error shape.
+- `/generate-ai`: success `ok`, `content`, `usage`, `model`, `provider`,
+  `cost`, `cost_details` and optional `warning`; established provider and
+  generic failures remain unchanged.
+- `/blind`: success `ok`, `data`, `usage`, `model`, `provider`, `cost`,
+  `cost_details`; post-response failures retain `error`, `paid_ai_failure` and
+  usage/cost audit fields.
+- OneNote salary processing retains `fieldExtraction`, `salaryCalculation`,
+  `aiAttempted`, `aiUsed`, `aiApiCalled`, `cacheHit`, `provider`, `model`,
+  token/call/cache counters, `costUsd`, `pricingKnown`, `pricingModelKey`,
+  `costMethod`, `costReason` and its existing fallback/cache fields.
+- Lead search success retains `ok`, `summary`, `companies`, `people`, `usage`,
+  `model`, `provider`, `cost`, `cost_details`, `phase` and optional `warning`.
+  People search retains `ok`, `people`, `title_search_angles`, the same AI
+  usage/cost fields, `phase` and optional `warning`. Email enrichment retains
+  `ok`, `people`, usage/model/provider/cost fields and existing cache/Apollo
+  counters and warning where applicable.
+- The owner paid-probe result retains its integration-test envelope and
+  metadata `model`, `usage`, `cost_usd`. Search-provider test success retains
+  `ok`, `provider`, `count`, `sample`; failures retain `ok`, `error`.
+- Seven new no-network Phase 5B characterization tests pass. They cover the
+  exact routes/gates/guard order, canonical/native usage, DeepSeek and standard
+  calculation behavior, established provider translation, representative
+  success/failure/salary fields, single-attempt ambiguous timeout behavior,
+  the v24.6.215 history cutoff and protected credential slots.
 
 ## Phase 5A authorization and constraints
 
