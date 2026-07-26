@@ -569,6 +569,22 @@ bound on the actual byte buffer before JSON parsing. A thirteenth foundation
 test simulates a stale small `stat` result over an oversized actual read and
 proves corrupt-byte preservation.
 
+The fourth repeated review reproduced two remaining safety-boundary gaps:
+
+- quoted `Authorization` and generic token/cookie/credential fields were not
+  covered by the bounded error-summary sanitizer;
+- a syntactically valid legacy or externally altered `interrupted` record with
+  a paid/external-mutation safety class could be reclaimed even though its
+  execution outcome remained ambiguous.
+
+The sanitizer now covers generic OAuth tokens, authorization values, cookies,
+credentials and secrets in addition to the existing specific fields. Job
+claiming independently refuses both `interrupted` and `needs_attention`
+identities for every unsafe class, so malformed or legacy lifecycle metadata
+cannot cross the no-replay boundary. A fourteenth foundation test proves the
+unsafe interrupted case and the sanitizer characterization covers the expanded
+credential forms.
+
 ## Phase 4 authorization and constraints
 
 - Owner authorization received on 23 July 2026.

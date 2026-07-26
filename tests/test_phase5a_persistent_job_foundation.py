@@ -282,13 +282,19 @@ class Phase5APersistentJobFoundationTests(unittest.TestCase):
             '{"access_token":"quoted secret with spaces",'
             '"candidate_id":"quoted-candidate",'
             '"client_secret":"second-secret",'
-            '"password":"escaped \\"secret\\" value"}'
+            '"password":"escaped \\"secret\\" value",'
+            '"Authorization":"Bearer fixture paid token",'
+            '"token":"generic oauth token",'
+            '"cookie":"protected session value"}'
         )
         quoted_sanitized = sanitize_job_text(quoted)
         self.assertNotIn("quoted secret", quoted_sanitized)
         self.assertNotIn("quoted-candidate", quoted_sanitized)
         self.assertNotIn("second-secret", quoted_sanitized)
         self.assertNotIn("escaped", quoted_sanitized)
+        self.assertNotIn("fixture paid token", quoted_sanitized)
+        self.assertNotIn("generic oauth token", quoted_sanitized)
+        self.assertNotIn("protected session", quoted_sanitized)
 
     def test_request_ids_are_always_digested_even_when_already_hex_shaped(self):
         store = self._store()
@@ -435,6 +441,40 @@ class Phase5APersistentJobFoundationTests(unittest.TestCase):
             restarted.fail(job_id)
         self.assertEqual(restarted.get(job_id)["state"], "succeeded")
         self.assertEqual(restarted.complete(job_id)["state"], "succeeded")
+
+    def test_unsafe_interrupted_identity_can_never_be_reclaimed(self):
+        job_id = deterministic_job_id("unsafe_fixture", "ambiguous")
+        store = self._store()
+        store.initialize()
+        store.begin(
+            job_id,
+            kind="unsafe_fixture",
+            safety="paid",
+        )
+        payload = json.loads(self.path.read_text(encoding="utf-8"))
+        record = payload["jobs"][0]
+        record.update(
+            {
+                "state": "interrupted",
+                "stage": "interrupted",
+                "finished_at": record["updated_at"],
+                "retryable": True,
+                "recovery_action": "retry_same_request",
+                "error_code": "JOB_INTERRUPTED",
+                "error_summary": "The previous process stopped.",
+            }
+        )
+        self.path.write_text(json.dumps(payload), encoding="utf-8")
+
+        restarted = self._store()
+        restarted.initialize()
+        with self.assertRaises(PersistentJobNeedsAttentionError):
+            restarted.begin(
+                job_id,
+                kind="unsafe_fixture",
+                safety="paid",
+            )
+        self.assertEqual(restarted.get(job_id)["state"], "interrupted")
 
     def test_pruning_never_discards_interrupted_or_needs_attention_evidence(self):
         safe_id = deterministic_job_id("safe_fixture", "protected-safe")

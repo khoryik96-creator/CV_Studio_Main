@@ -64,8 +64,9 @@ _BEARER_VALUE_RE = re.compile(
 )
 _SECRET_VALUE_RE = re.compile(
     r"""(?ix)(
-        ["']?(?:access[_-]?token|refresh[_-]?token|client[_-]?secret|
-        api[_-]?key|password|device[_-]?code)["']?\s*[:=]\s*
+        ["']?(?:(?:access|refresh|id)?[_-]?token|client[_-]?secret|
+        api[_-]?key|password|device[_-]?code|authorization|credential|
+        cookie|set[_-]?cookie|secret)["']?\s*[:=]\s*
     )(?:"(?:\\.|[^"\\\r\n])*"|'(?:\\.|[^'\\\r\n])*'|[^\s,;}]+)"""
 )
 _CANDIDATE_ID_RE = re.compile(
@@ -428,8 +429,8 @@ class PersistentJobStore:
                 raise PersistentJobConflictError()
             if (
                 previous
-                and previous["state"] == "needs_attention"
                 and previous["safety"] not in SAFE_JOB_CLASSES
+                and previous["state"] in {"interrupted", "needs_attention"}
             ):
                 raise PersistentJobNeedsAttentionError()
             if previous and (
