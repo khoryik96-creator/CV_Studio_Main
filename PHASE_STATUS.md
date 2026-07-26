@@ -3,8 +3,8 @@
 ## Release state
 
 - Approved baseline: v24.6.217
-- Completed release: v24.6.232
-- Previous completed release: v24.6.231
+- Completed release: v24.6.233
+- Previous completed release: v24.6.232
 - Phase 2B source baseline: v24.6.219
 - Phase 2B baseline Git commit: `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`
 - Phase 3 source baseline: v24.6.222
@@ -14,11 +14,10 @@
 - Phase 5A source baseline: v24.6.232
 - Phase 5A baseline Git commit: `4b366ddde1cf0a398706b52d55b0e82ed2dbc27c`
 - Working branch: `codex/phase-5a-persistent-jobs`
-- Active phase: Phase 5A — persistent background jobs and resumable task state
-- Completed private owner/source release: v24.6.232
-- Status: Phase 5A explicitly authorized; entry gates passed and inventory/
-  characterization is the first implementation milestone
-- Current milestone: Phase 5A Milestone 5 — acceptance and release evidence
+- Active phase: none — Phase 5A complete; Phase 5B and Phase 6 inactive
+- Completed private owner/source release: v24.6.233
+- Status: Phase 5A completed within its exact authorized scope
+- Current milestone: none; stop before handoff, merge, Phase 5B or Phase 6
 
 ## Phase 5A authorization and constraints
 
@@ -142,9 +141,9 @@
 - [x] Implement and verify the bounded persistent-job foundation.
 - [x] Integrate only compatible existing background work.
 - [x] Implement and verify bounded startup/shutdown recovery.
-- [ ] Run complete acceptance and repeated compatibility review.
-- [ ] Create and byte-verify the Phase 5A private owner/source release.
-- [ ] Produce QA report, sidecars and next handover; stop before Phase 5B/6.
+- [x] Run complete acceptance and repeated compatibility review.
+- [x] Create and byte-verify the Phase 5A private owner/source release.
+- [x] Produce QA report, sidecars and next handover; stop before Phase 5B/6.
 
 ## Phase 5A decisions and limitations
 
@@ -467,6 +466,47 @@
 - Primary SQLite remains schema 10; no existing authority, compatibility
   signature, route, global guard, credential store, external-client policy,
   paid-call gate or Phase 4 dependency-rebinding contract changed.
+
+## Phase 5A Milestone 5 acceptance and release result
+
+- Source identity advanced to the next unused version, v24.6.233, across the
+  backend, frontend, installer/receipt/launcher, protected-build and private
+  starter-pack surfaces. Historical release evidence remains immutable.
+- Focused acceptance passed all 31 Phase 5A/Phase 4 tests. Complete Python
+  discovery passed all 79 tests with `ResourceWarning` treated as an error.
+- Both frontend storage fixtures passed. Live loopback source smoke passed all
+  24 assertions with temporary receipt, schema-10 database and runtime state.
+- Static validation passed for all 24 tracked Python files, all 20 tracked
+  JavaScript files plus both complete inline scripts, all five Bash/command
+  files and all five PowerShell files.
+- Owner-source validation/preflight, repository consistency and Git whitespace
+  validation passed after the versioned Windows launch/build files were restored
+  to their required BOM-free CRLF representation.
+- Warnings-as-errors smoke found one concrete cleanup issue in the historical
+  harness: an expected HTTP 404 response was read but not closed. The response
+  now closes deterministically, and smoke/regression/static gates were repeated
+  cleanly.
+- AST comparison against exact master
+  `4b366ddde1cf0a398706b52d55b0e82ed2dbc27c` confirms all 107 ordered route
+  URL/method/endpoint tuples remain exact. Only the two selected preview route
+  functions changed; the only new app functions are the job error and durable
+  cancellation adapters.
+- The five ordered global guards, 80 MiB request boundary, 18 compatibility
+  signatures, schema version 10 and established initialization markers remain
+  exact. Phase 1–4 storage/client/module implementations remain unchanged
+  outside version surfaces and the documented bounded integration.
+- Produced
+  `cv_studio_v24_6_233_phase5a_persistent_jobs_qa_report.md` and
+  `CV_STUDIO_V24_6_233_PHASE_5B_HANDOVER.md`. The handover is not Phase 5B
+  authorization.
+- The private owner/source ZIP is generated from the exact final clean commit
+  with one `cv_formatter/` root and copied with SHA-256/verification sidecars
+  to `C:\CV-Studio-Codex\releases\v24.6.233`. A fresh extraction is required to
+  have zero missing, extra or byte-mismatched files; the external verification
+  sidecar records the exact final `source_commit`, byte size and counts.
+- No live credentialed request or paid call was made. No protected colleague
+  ZIP or native-build claim was made. Stop before handoff/merge and before Phase
+  5B or Phase 6.
 
 ## Phase 4 authorization and constraints
 

@@ -1,7 +1,7 @@
 # CV Studio Backburner and Stability Roadmap
 
-Last updated: 23 July 2026
-Current implementation base: v24.6.232
+Last updated: 26 July 2026
+Current implementation base: v24.6.233
 
 ## Explicit backburner — do not implement until the owner reactivates them
 
@@ -134,13 +134,26 @@ Deferred scope includes Shortlist / Maybe / Reject / Reviewed states, recruiter 
 - all 107 routes, schema version 10, prior storage/client guarantees, Phase 5/6
   scope and backburner items 4, 7 and 8 remain unchanged.
 
+### v24.6.233 — Phase 5A persistent background jobs
+
+- a bounded app-independent JSON lifecycle journal tracks only opaque metadata
+  for the existing safe AI Crawler preview-prefetch boundary;
+- startup marks interrupted safe work retryable for an explicit identical
+  request, closes cancellation and never executes or silently replays work;
+- paid and externally mutating ambiguity is classified `needs_attention` and
+  remains non-replaying;
+- journal corruption and write failures are visible without taking unrelated
+  routes down;
+- all 107 routes, schema version 10, security/compatibility boundaries,
+  protected stores, Phase 1–4 guarantees and backburner items 4, 7 and 8 remain.
+
 ## Active stability direction
 
-No later phase is active. If the owner explicitly starts Phase 5, continue
-the remaining improvements conservatively and in staged releases:
+No later phase is active. If the owner explicitly starts Phase 5B, continue
+the remaining improvements conservatively and in a separate staged release:
 
-- persistent background task management, central AI cost guardrails and
-  provider-billing reconciliation;
+- central AI cost guardrails and provider-billing reconciliation without
+  changing Phase 5A recovery or paid-call non-replay semantics;
 - later frontend modularisation, lazy loading and remaining explainable-fit/
   memory refinements without a rewrite.
 

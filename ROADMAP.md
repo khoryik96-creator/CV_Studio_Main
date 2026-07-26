@@ -17,8 +17,10 @@
   Phase 4.
 - v24.6.232 corrected three Phase 4 app-level compatibility-rebinding
   regressions without changing the completed Phase 4 scope.
-- Phases 1, 2A, 2B, 3 and 4 are complete.
-- No later phase is active. Phase 5 requires a new explicit owner instruction.
+- v24.6.233 completed Phase 5A persistent background jobs and resumable task
+  state for the existing safe AI Crawler preview-prefetch boundary.
+- Phases 1, 2A, 2B, 3, 4 and 5A are complete.
+- No later phase is active. Phase 5B requires a new explicit owner instruction.
 
 ## Phase 1 — Completed
 
@@ -143,9 +145,26 @@ Gradual backend modularisation without changing behaviour or routes:
   shared OCR semaphore at its original initialization position;
 - retain all Phase 4 module boundaries, all 107 routes and every prior contract.
 
-## Phase 5 — Future
+## Phase 5A — Completed in v24.6.233
 
-Persistent background jobs and central AI cost guardrails.
+Persistent background jobs and resumable task state:
+
+- an app-independent bounded atomic lifecycle journal separate from schema-10
+  SQLite;
+- explicit queued/running/success/failure/cancellation/interruption/review
+  states;
+- startup reconciliation without automatic execution;
+- explicit-request restart only for the existing safe, idempotent AI Crawler
+  preview-prefetch boundary;
+- visible journal-write failures and no replay of paid or externally mutating
+  work;
+- no new route, worker, frontend workflow or result store.
+
+## Phase 5B — Future
+
+Central AI cost guardrails and provider billing reconciliation require a new
+explicit owner authorization. Do not infer Phase 5B authority from the
+completed Phase 5A release.
 
 ## Phase 6 — Future
 

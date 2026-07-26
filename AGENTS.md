@@ -30,30 +30,29 @@
   v24.6.232**: storage and diagnostics dependencies again resolve through
   app-level compatibility globals at call time, and document safety again uses
   the established app limits, nested helpers and OCR semaphore.
-- Current completed private owner/source release: **CV Studio v24.6.232**.
-- Phases 1, 2A, 2B, 3 and 4 are complete.
-- The owner explicitly authorized **Phase 5A only** on 26 July 2026:
-  persistent background jobs and resumable task state.
-- Active branch: `codex/phase-5a-persistent-jobs`.
+- Persistent background jobs and resumable task state were completed in **CV
+  Studio v24.6.233** for the existing safe AI Crawler preview-prefetch
+  boundary.
+- Current completed private owner/source release: **CV Studio v24.6.233**.
+- Phases 1, 2A, 2B, 3, 4 and 5A are complete.
 - Phase 5B AI cost guardrails/provider billing reconciliation and every Phase 6
-  area remain inactive. Stop after the Phase 5A owner/source release.
+  area remain inactive. There is no active implementation target.
 
-## Active scope: Phase 5A
+## Completed scope: Phase 5A
 
-Phase 5A may add only the smallest persistent-job foundation necessary to
-preserve and resume existing authorized background work. Before production
-implementation, inventory every existing background or long-running route,
-helper, in-memory state object, lock, queue, filesystem/SQLite interaction and
-startup/shutdown behavior; record current success, progress, cancellation,
-failure and recovery fields; identify retry/idempotency boundaries; and add
-characterization coverage.
+Phase 5A added an app-independent bounded atomic JSON lifecycle journal,
+separate from schema-10 SQLite. It tracks only the existing safe, idempotent AI
+Crawler preview-prefetch request boundary. No new Flask route, worker, frontend
+workflow or result store was introduced.
 
-Persistent jobs must have explicit lifecycle states, bounded recovery,
-idempotent restart handling and failure-visible durable writes. Paid or
-externally mutating operations must never resume silently after an ambiguous
-failure.
+The journal stores opaque identities/request correlations and bounded lifecycle,
+progress, attempt and recovery metadata. Candidate identifiers, credentials,
+document/profile content, results and private paths are excluded. Startup
+reconciliation never executes work: safe interrupted reads wait for an explicit
+identical request, cancellation closes, and paid/externally mutating ambiguity
+is non-retryable and requires review.
 
-Phase 5A must preserve:
+Phase 5A preserves:
 
 - all 107 Flask routes, methods, endpoint names and established response fields;
 - all five ordered global request/security guards and every authentication,
@@ -68,10 +67,9 @@ Phase 5A must preserve:
 - the rule that unsafe or paid operations are never replayed after ambiguous
   failure.
 
-If implementation would require changing schema version 10, existing data
-authority, a compatibility contract, paid-call behavior or established
-recovery semantics, stop and present the exact proposed change to the owner
-before implementing it.
+SQLite remains schema version 10. Existing data authority, compatibility
+contracts, paid-call behavior and established recovery semantics did not
+change.
 
 ## Completed scope: Phase 4
 
@@ -193,8 +191,10 @@ Before changing code:
 1. Read `ROADMAP.md`.
 2. Read `PHASE_STATUS.md`.
 3. Read `IMPLEMENT.md`.
-4. Read `CV_STUDIO_V24_6_232_PHASE_5_HANDOVER.md`.
+4. Read `CV_STUDIO_V24_6_233_PHASE_5B_HANDOVER.md`.
 5. Read
+   `cv_studio_v24_6_233_phase5a_persistent_jobs_qa_report.md`,
+   `CV_STUDIO_V24_6_232_PHASE_5_HANDOVER.md`,
    `cv_studio_v24_6_232_phase4_compatibility_corrective_qa_report.md`,
    `cv_studio_v24_6_231_phase4_backend_modularisation_qa_report.md`,
    `cv_studio_v24_6_230_phase3_content_negotiation_corrective_qa_report.md`,
@@ -241,7 +241,7 @@ Routine implementation decisions do not require owner confirmation.
   SHA-256, QA report and Phase 4 handover are copied to the new release folder.
 - Stop after Phase 3. Do not begin Phase 4 automatically.
 
-## Definition of done for Phase 5A
+## Completed definition of done for Phase 5A
 
 - Existing background/long-running routes, helpers, process-local state, locks,
   queues, filesystem/SQLite interactions and startup/shutdown behavior are

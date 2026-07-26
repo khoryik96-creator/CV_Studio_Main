@@ -1,5 +1,5 @@
 CV Studio private source patch base
-Version: v24.6.232
+Version: v24.6.233
 Keep this ZIP for future patches. Do not distribute this source package to colleagues.
 
 JobAdder API investigation source of truth:
@@ -1049,3 +1049,26 @@ Patch note v24.6.193: cross-platform deterministic adm-zip tree hashing fixes th
   storage guarantees, Phase 3 client behavior, Phase 5/6 scope and backburner
   items 4, 7 and 8 unchanged.
 - Stops before Phase 5.
+
+## v24.6.233 Phase 5A persistent background jobs
+
+- Adds app-independent `cvstudio_jobs.py` with a bounded 2 MiB/500-record
+  atomic JSON lifecycle journal separate from schema-10 SQLite.
+- Tracks only the existing safe, idempotent AI Crawler preview-prefetch request
+  boundary; no new Flask route, worker, frontend workflow or result store is
+  added.
+- Uses opaque job identities and request-ID digests. Candidate identifiers,
+  credentials, profile/document content, results and private paths never enter
+  the journal.
+- Persists explicit `queued`, `running`, `succeeded`, `failed`,
+  `cancel_requested`, `cancelled`, `interrupted` and `needs_attention` states
+  with bounded stages, attempts and recovery counts.
+- Reconciles startup state without executing work: safe reads become explicitly
+  retryable, cancellation closes, and paid or externally mutating ambiguity
+  requires visible review and is never replayed.
+- Makes begin/progress/completion/failure/cancellation writes failure-visible
+  through the established structured request-ID error contract.
+- Retains all 107 routes, five ordered global guards, 18 compatibility helper
+  signatures, schema version 10, Phase 1–4 contracts, protected credential
+  stores, paid-call gates and backburner items 4, 7 and 8.
+- Stops before Phase 5B and Phase 6.
