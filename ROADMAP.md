@@ -25,6 +25,9 @@
   reconciliation without changing schema or paid-call replay boundaries.
 - v24.6.236 corrected the bounded Phase 5B post-release findings without
   changing routes, schemas, security gates or provider replay behavior.
+- v24.6.237 corrected the JobAdder candidate-not-found dialog and upload-queue
+  `esc2` scope failure without changing JobAdder routes, requests, candidate
+  creation, uploads or response contracts.
 - Phases 1, 2A, 2B, 3, 4, 5A and 5B are complete.
 - No later phase is active. Phase 6 requires a new explicit owner instruction.
 
@@ -177,6 +180,18 @@ Persistent background jobs and resumable task state:
 - all-or-nothing multi-call reconciliation without duplicate authority;
 - preserved routes, gates, schemas, provider zero-retry and Phase 5A non-replay
   semantics.
+
+## Post-Phase-5B JobAdder corrective — Completed in v24.6.237
+
+- invalid out-of-scope `esc2` calls in the candidate-not-found dialog and
+  formatted-CV upload queue now use the established global `esc()` helper;
+- the upload renderer no longer shadows global `esc()` with its local ID
+  variable;
+- the two valid local `esc2` helpers and card-renderer behavior remain
+  unchanged;
+- source-scope and runtime frontend regressions cover dialog email escaping,
+  matched/unmatched queue filenames and status text;
+- all Phase 1–5B contracts and the inactive Phase 6 boundary remain unchanged.
 
 ## Phase 6 — Future
 

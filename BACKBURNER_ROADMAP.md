@@ -1,7 +1,7 @@
 # CV Studio Backburner and Stability Roadmap
 
 Last updated: 26 July 2026
-Current implementation base: v24.6.236
+Current implementation base: v24.6.237
 
 ## Explicit backburner — do not implement until the owner reactivates them
 
@@ -179,6 +179,19 @@ Deferred scope includes Shortlist / Maybe / Reject / Reviewed states, recruiter 
 - separates Apollo/search-provider failures from AI paid-call ambiguity and
   strengthens credential-like metadata redaction;
 - retains all Phase 5B scope exclusions and every Phase 1–5A contract.
+
+### v24.6.237 — JobAdder esc2 corrective
+
+- the candidate-not-found dialog and formatted-CV upload queue use the
+  established global HTML escaper outside the two legitimate local `esc2`
+  scopes;
+- matched/unmatched queue filenames, status text and dialog email remain
+  HTML-escaped;
+- source-scope coverage prevents new out-of-scope `esc2` calls from being
+  concealed by a global alias;
+- JobAdder routes, request behavior, candidate creation, uploads and response
+  contracts remain unchanged;
+- all Phase 1–5B and backburner boundaries remain unchanged.
 
 ## Active stability direction
 

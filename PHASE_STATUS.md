@@ -3,8 +3,8 @@
 ## Release state
 
 - Approved baseline: v24.6.217
-- Completed release: v24.6.236
-- Previous completed release: v24.6.235
+- Completed release: v24.6.237
+- Previous completed release: v24.6.236
 - Phase 2B source baseline: v24.6.219
 - Phase 2B baseline Git commit: `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`
 - Phase 3 source baseline: v24.6.222
@@ -15,11 +15,94 @@
 - Phase 5A baseline Git commit: `4b366ddde1cf0a398706b52d55b0e82ed2dbc27c`
 - Phase 5B source baseline: v24.6.234
 - Phase 5B baseline Git commit: `327858799f17d880e37c740f71dfe321ea7bde0a`
-- Working branch: `codex/phase-5b-ai-cost-guardrails`
+- Working branch: `codex/jobadder-esc2-corrective`
 - Active phase: none; Phase 6 inactive
-- Completed private owner/source release: v24.6.236
-- Status: Phase 5B corrective review complete
+- Completed private owner/source release: v24.6.237
+- Status: JobAdder esc2 corrective release complete
 - Current milestone: none; stop before handoff, merge or Phase 6
+
+## Post-Phase-5B JobAdder esc2 corrective
+
+### Authorization and entry verification
+
+- The owner authorized a narrow investigation and correction of the JobAdder
+  `esc2 is not defined` browser failure. Phase 6, unrelated frontend
+  refactoring, AI Crawler work and cost-tracking changes remained inactive.
+- The worktree was clean and detached at entry. `HEAD` and local `master`
+  resolved exactly to
+  `e22b05f139a743dc5e690f8ccb7b61a703fffc63`.
+- Active source surfaces identified v24.6.236.
+- `C:\CV-Studio-Codex\releases\v24.6.236` contained the owner/source ZIP,
+  checksum, verification sidecar, corrective QA report and Phase 6 handover.
+- The owner/source ZIP independently recomputed to SHA-256
+  `c60dd25e79616d580449450c943a40760baa7c8aeaaceff21637c88e51a09146`;
+  its verification `source_commit` exactly matched approved master.
+- A fresh extraction contained 125 tracked files and matched every approved
+  Git blob with zero missing, extra or byte-mismatched files.
+- The immutable v24.6.235 and v24.6.236 release artifacts were hashed before
+  work and remained unchanged.
+
+### Diagnosis and pre-change characterization
+
+- Complete source inspection found exactly two legitimate local `esc2`
+  definitions, inside `renderAnonJDCard()` and `renderCompanyCard()`.
+- `showJADialog()` had one invalid out-of-scope `esc2(email)` call.
+  `renderJAUploadList()` had two invalid out-of-scope `esc2()` calls for the
+  filename and status text.
+- The established global `esc()` safely covers all three displayed values.
+- Independent inspection found one additional compatibility hazard:
+  `renderJAUploadList()` declared a local string variable named `esc`. A
+  mechanical call replacement without renaming it would throw
+  `TypeError: esc is not a function`.
+- `tests/test_jobadder_esc2_frontend.js` was added before production changes.
+  It failed on both affected runtime paths with
+  `ReferenceError: esc2 is not defined`, while the two local card-renderer
+  escaping cases passed. Its source inventory identified exactly the three
+  out-of-scope occurrences.
+
+### Corrective implementation
+
+- The dialog email and upload filename/status calls now use global `esc()`.
+- The upload renderer's local ID variable is named `escapedId`; its value and
+  both existing handler uses are unchanged.
+- The two valid local `esc2` helpers and every internal call remain exact
+  baseline code.
+- No global `esc2` alias was added. The source-scope regression now requires
+  every `esc2` definition and call to stay within the two legitimate local
+  renderers, preventing a future scope mistake from being concealed.
+- No JobAdder route, request, candidate-creation path, upload path, response
+  field, credential boundary or external-client policy changed.
+
+### Acceptance and release result
+
+- Complete Python discovery passed all 117 tests with `ResourceWarning`
+  treated as an error.
+- The focused Phase 3/4/5A/5B gate passed all 91 tests.
+- All four frontend fixtures passed: the new JobAdder corrective fixture and
+  the three established Phase 2A, Phase 2B and Phase 5B fixtures.
+- Live loopback source smoke passed all 24 assertions.
+- Static validation passed for 27 tracked Python files, 22 tracked JavaScript
+  files plus both complete inline scripts, five Bash/command files and five
+  PowerShell files.
+- Owner-source validation/preflight, vetted `adm-zip` 0.5.17 behavior,
+  repository consistency and Git whitespace validation passed.
+- Final exact-master review re-proved all 107 routes, five ordered guards,
+  18 compatibility signatures, SQLite schema 10, journal schema 1 and every
+  Phase 1–5B compatibility/non-replay boundary. Only `showJADialog()` and
+  `renderJAUploadList()` changed in production logic.
+- Active source identity advanced to the next unused private owner/source
+  version, v24.6.237. Historical v24.6.235 and v24.6.236 evidence remains
+  immutable.
+- The authoritative archive is
+  `cv_studio_v24_6_237_jobadder_esc2_corrective_owner_source.zip` under
+  `C:\CV-Studio-Codex\releases\v24.6.237`, with adjacent SHA-256 and
+  verification sidecars. It is generated from final branch HEAD and freshly
+  compared against every tracked Git blob with zero missing, extra or
+  byte-mismatched files.
+- `cv_studio_v24_6_237_jobadder_esc2_corrective_qa_report.md` and
+  `CV_STUDIO_V24_6_237_PHASE_6_HANDOVER.md` record the release evidence.
+- No live credential, JobAdder call, paid request, protected colleague build,
+  native compilation, handoff, merge or Phase 6 work was performed.
 
 ## Phase 5B authorization and constraints
 
@@ -2809,5 +2892,5 @@ None.
 
 ## Next action
 
-Complete Phase 5A Milestone 1 inventory and characterization. Do not implement
-Phase 5B, Phase 6 or any backburner item.
+None. Stop before handoff or merge. Do not implement Phase 6 or any backburner
+item without a new explicit owner authorization.

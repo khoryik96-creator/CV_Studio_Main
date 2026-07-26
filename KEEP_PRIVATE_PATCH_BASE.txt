@@ -1,5 +1,5 @@
 CV Studio private source patch base
-Version: v24.6.236
+Version: v24.6.237
 Keep this ZIP for future patches. Do not distribute this source package to colleagues.
 
 JobAdder API investigation source of truth:
@@ -1118,4 +1118,21 @@ Patch note v24.6.193: cross-platform deterministic adm-zip tree hashing fixes th
 - Retains 107 routes, five guards, 18 signatures, SQLite schema 10, journal
   schema 1, paid confirmations, provider zero-retry/non-replay and the
   v24.6.215 DeepSeek history cutoff.
+- Stops before handoff, merge and Phase 6.
+
+## v24.6.237 JobAdder esc2 corrective
+
+- Replaces the three invalid out-of-scope `esc2` calls in the JobAdder
+  candidate-not-found dialog and formatted-CV upload queue with the established
+  global `esc()` helper.
+- Renames only the upload renderer's shadowing local ID variable so global
+  `esc()` remains callable; its value and existing handler uses are unchanged.
+- Keeps both valid local `esc2` helpers and their internal calls inside
+  `renderAnonJDCard()` and `renderCompanyCard()` unchanged.
+- Adds runtime escaping coverage for the dialog, matched/unmatched upload queue
+  entries and both card renderers, plus a complete source-scope inventory.
+- Adds no global `esc2` alias, so future out-of-scope calls fail the regression
+  instead of being concealed.
+- Retains all 107 routes, five guards, 18 compatibility signatures, SQLite
+  schema 10, journal schema 1 and every Phase 1–5B contract.
 - Stops before handoff, merge and Phase 6.

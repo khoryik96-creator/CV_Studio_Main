@@ -42,9 +42,28 @@
 - Its post-release guardrail, usage-validation, reconciliation, precision,
   redaction and paid-boundary findings were corrected in **CV Studio
   v24.6.236** without changing any preserved Phase 5B contract.
-- Current completed private owner/source release: **CV Studio v24.6.236**.
+- The JobAdder candidate-not-found dialog and upload-queue `esc2` scope
+  regression were corrected in **CV Studio v24.6.237** without changing
+  JobAdder routes, requests, candidate creation, uploads or response contracts.
+- Current completed private owner/source release: **CV Studio v24.6.237**.
 - Phases 1, 2A, 2B, 3, 4, 5A and 5B are complete.
 - Phase 6 remains inactive. There is no active implementation target.
+
+## Completed scope: post-Phase-5B JobAdder esc2 corrective
+
+v24.6.237 replaces only the three invalid out-of-scope `esc2` calls in
+`showJADialog()` and `renderJAUploadList()` with the established global `esc()`
+helper. The upload renderer's local ID variable was renamed because it shadowed
+global `esc`; its value and uses are otherwise unchanged.
+
+The valid locally scoped `esc2` helpers inside `renderAnonJDCard()` and
+`renderCompanyCard()` remain unchanged. A source-scope regression requires
+every `esc2` definition and call to remain inside those two renderers. No global
+alias was added.
+
+This correction preserves all 107 routes, five guards, 18 compatibility
+signatures, SQLite schema 10, Phase 5A journal schema 1, every Phase 1–5B
+contract and the Phase 6 stop boundary.
 
 ## Completed scope: Phase 5B
 
@@ -243,8 +262,12 @@ Before changing code:
 1. Read `ROADMAP.md`.
 2. Read `PHASE_STATUS.md`.
 3. Read `IMPLEMENT.md`.
-4. Read `CV_STUDIO_V24_6_234_PHASE_5B_HANDOVER.md`.
+4. Read `CV_STUDIO_V24_6_237_PHASE_6_HANDOVER.md`.
 5. Read
+   `cv_studio_v24_6_237_jobadder_esc2_corrective_qa_report.md`,
+   `CV_STUDIO_V24_6_236_PHASE_6_HANDOVER.md`,
+   `cv_studio_v24_6_236_phase5b_ai_cost_guardrails_corrective_qa_report.md`,
+   `CV_STUDIO_V24_6_234_PHASE_5B_HANDOVER.md`,
    `cv_studio_v24_6_234_phase5a_persistent_jobs_corrective_qa_report.md`,
    `cv_studio_v24_6_233_phase5a_persistent_jobs_qa_report.md`,
    `CV_STUDIO_V24_6_232_PHASE_5_HANDOVER.md`,
