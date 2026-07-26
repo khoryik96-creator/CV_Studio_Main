@@ -3,15 +3,16 @@
 ## Current gate
 
 Phases 1, 2A, 2B, 3, 4 and 5A are complete in private owner/source release
-v24.6.233. There is no active implementation target. Do not make further
+v24.6.234. There is no active implementation target. Do not make further
 production changes or begin Phase 5B or Phase 6 unless the owner explicitly
 starts the exact next milestone.
 
 ## Before a future Phase 5B implementation
 
 1. Read `AGENTS.md`, `ROADMAP.md`, `PHASE_STATUS.md` and `BACKBURNER_ROADMAP.md`.
-2. Read `CV_STUDIO_V24_6_233_PHASE_5B_HANDOVER.md`.
+2. Read `CV_STUDIO_V24_6_234_PHASE_5B_HANDOVER.md`.
 3. Read
+   `cv_studio_v24_6_234_phase5a_persistent_jobs_corrective_qa_report.md`,
    `cv_studio_v24_6_233_phase5a_persistent_jobs_qa_report.md`,
    `CV_STUDIO_V24_6_232_PHASE_5_HANDOVER.md`,
    `cv_studio_v24_6_232_phase4_compatibility_corrective_qa_report.md`,
@@ -20,9 +21,9 @@ starts the exact next milestone.
    the v24.6.224 corrective QA report, the
    v24.6.223 Phase 3 QA report, the
    Phase 2B QA reports and the historical Phase 2A QA reports.
-4. Verify the v24.6.233 source/package checksum against its adjacent SHA-256 and
+4. Verify the v24.6.234 source/package checksum against its adjacent SHA-256 and
    verification sidecars.
-5. Verify Git and create a clean v24.6.233 baseline commit if the extracted
+5. Verify Git and create a clean v24.6.234 baseline commit if the extracted
    folder is not already a repository.
 6. Re-run the Phase 1/2 storage suites, Phase 3 client characterization, Phase
    4 module characterization, Phase 5A persistent-job suites, both frontend

@@ -3,8 +3,8 @@
 ## Release state
 
 - Approved baseline: v24.6.217
-- Completed release: v24.6.233
-- Previous completed release: v24.6.232
+- Completed release: v24.6.234
+- Previous completed release: v24.6.233
 - Phase 2B source baseline: v24.6.219
 - Phase 2B baseline Git commit: `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`
 - Phase 3 source baseline: v24.6.222
@@ -14,11 +14,10 @@
 - Phase 5A source baseline: v24.6.232
 - Phase 5A baseline Git commit: `4b366ddde1cf0a398706b52d55b0e82ed2dbc27c`
 - Working branch: `codex/phase-5a-persistent-jobs`
-- Active phase: Phase 5A post-release corrective review; Phase 5B/6 inactive
-- Completed private owner/source release: v24.6.233
-- Status: owner-requested repeated review against exact master is in progress
-- Current milestone: correct every concrete Phase 5A review finding, repeat
-  review until clean, then publish a distinct corrective owner/source release
+- Active phase: none; Phase 5A complete and Phase 5B/6 inactive
+- Completed private owner/source release: v24.6.234
+- Status: owner-requested repeated review against exact master is complete
+- Current milestone: none; stop before handoff, merge, Phase 5B or Phase 6
 
 ## Phase 5A authorization and constraints
 
@@ -584,6 +583,47 @@ identities for every unsafe class, so malformed or legacy lifecycle metadata
 cannot cross the no-replay boundary. A fourteenth foundation test proves the
 unsafe interrupted case and the sanitizer characterization covers the expanded
 credential forms.
+
+The fifth review started again from exact master and is clean:
+
+- after normalizing only the v24.6.234 release string, all 107 ordered route
+  URL/method/endpoint tuples and all five guard bodies remain exact;
+- the only changed existing app functions are the two authorized preview
+  endpoints and the only new functions are their two bounded job adapters;
+- all 18 compatibility signatures and Phase 4 initialization markers pass;
+- Phase 1–4 storage, client, storage-bridge, diagnostics and document-safety
+  implementation modules remain exact master bytes;
+- adversarial journal, lifecycle, redaction, startup/recovery and released
+  schema-1 compatibility checks have no remaining concrete finding.
+
+### v24.6.234 corrective acceptance and release result
+
+- Source identity advanced from immutable v24.6.233 to the next unused
+  private owner/source version, v24.6.234, across backend, frontend,
+  installer/receipt/launcher, protected-build and starter-pack surfaces.
+- The focused Phase 5A/Phase 4 gate passes all 38 tests: 14 foundation, eight
+  integration, three fresh-process startup, six Phase 5A characterization and
+  seven Phase 4 compatibility tests.
+- Complete Python discovery passes all 86 tests with `ResourceWarning` treated
+  as an error. Both frontend fixtures and all 24 live loopback source-smoke
+  assertions pass.
+- Static validation passes for 24 tracked Python files, 20 tracked JavaScript
+  files and both complete inline scripts, five Bash/command files and five
+  PowerShell files.
+- Owner-source validation/preflight, vetted `adm-zip` 0.5.17 behavior,
+  repository consistency and Git whitespace validation pass.
+- The ten corrective findings and unchanged recovery/non-replay semantics are
+  recorded in
+  `cv_studio_v24_6_234_phase5a_persistent_jobs_corrective_qa_report.md`.
+  `CV_STUDIO_V24_6_234_PHASE_5B_HANDOVER.md` is owner-gated evidence only and
+  does not authorize Phase 5B.
+- The authoritative private archive is
+  `cv_studio_v24_6_234_phase5a_persistent_jobs_corrective_owner_source.zip`
+  under `C:\CV-Studio-Codex\releases\v24.6.234`, with adjacent SHA-256 and
+  verification sidecars. It is generated from final branch HEAD and must
+  freshly extract with zero missing, extra or byte-mismatched files.
+- No live credentialed or paid call, protected colleague build, native-build
+  claim, handoff or merge was made. Phase 5B and Phase 6 remain inactive.
 
 ## Phase 4 authorization and constraints
 

@@ -33,7 +33,10 @@
 - Persistent background jobs and resumable task state were completed in **CV
   Studio v24.6.233** for the existing safe AI Crawler preview-prefetch
   boundary.
-- Current completed private owner/source release: **CV Studio v24.6.233**.
+- Its ten post-release persistence-boundary findings were corrected in **CV
+  Studio v24.6.234** without changing schema version 10, routes, security
+  boundaries or the authorized Phase 5A integration.
+- Current completed private owner/source release: **CV Studio v24.6.234**.
 - Phases 1, 2A, 2B, 3, 4 and 5A are complete.
 - Phase 5B AI cost guardrails/provider billing reconciliation and every Phase 6
   area remain inactive. There is no active implementation target.
@@ -191,8 +194,9 @@ Before changing code:
 1. Read `ROADMAP.md`.
 2. Read `PHASE_STATUS.md`.
 3. Read `IMPLEMENT.md`.
-4. Read `CV_STUDIO_V24_6_233_PHASE_5B_HANDOVER.md`.
+4. Read `CV_STUDIO_V24_6_234_PHASE_5B_HANDOVER.md`.
 5. Read
+   `cv_studio_v24_6_234_phase5a_persistent_jobs_corrective_qa_report.md`,
    `cv_studio_v24_6_233_phase5a_persistent_jobs_qa_report.md`,
    `CV_STUDIO_V24_6_232_PHASE_5_HANDOVER.md`,
    `cv_studio_v24_6_232_phase4_compatibility_corrective_qa_report.md`,

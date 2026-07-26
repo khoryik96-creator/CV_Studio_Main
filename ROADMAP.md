@@ -19,6 +19,8 @@
   regressions without changing the completed Phase 4 scope.
 - v24.6.233 completed Phase 5A persistent background jobs and resumable task
   state for the existing safe AI Crawler preview-prefetch boundary.
+- v24.6.234 corrected all ten Phase 5A post-release persistence-boundary
+  findings without broadening the milestone.
 - Phases 1, 2A, 2B, 3, 4 and 5A are complete.
 - No later phase is active. Phase 5B requires a new explicit owner instruction.
 
@@ -145,7 +147,7 @@ Gradual backend modularisation without changing behaviour or routes:
   shared OCR semaphore at its original initialization position;
 - retain all Phase 4 module boundaries, all 107 routes and every prior contract.
 
-## Phase 5A — Completed in v24.6.233
+## Phase 5A — Completed in v24.6.233; corrected in v24.6.234
 
 Persistent background jobs and resumable task state:
 

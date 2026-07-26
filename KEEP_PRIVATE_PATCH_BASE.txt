@@ -1,5 +1,5 @@
 CV Studio private source patch base
-Version: v24.6.233
+Version: v24.6.234
 Keep this ZIP for future patches. Do not distribute this source package to colleagues.
 
 JobAdder API investigation source of truth:
@@ -1072,3 +1072,14 @@ Patch note v24.6.193: cross-platform deterministic adm-zip tree hashing fixes th
   signatures, schema version 10, Phase 1–4 contracts, protected credential
   stores, paid-call gates and backburner items 4, 7 and 8.
 - Stops before Phase 5B and Phase 6.
+
+## v24.6.234 Phase 5A corrective review
+
+- Corrects ten confirmed journal validation, redaction, lifecycle, pruning,
+  bounded-read and unsafe no-replay findings from repeated master-diff review.
+- Adds regressions for every correction and retains journal metadata schema 1,
+  primary SQLite schema 10, all 107 routes, five guards and 18 compatibility
+  signatures.
+- Does not add Phase 5B cost guardrails, credential migration, new workflows,
+  frontend modularisation, Phase 6 work or backburner items 4, 7 or 8.
+- Stops before handoff, merge, Phase 5B and Phase 6.

@@ -1,7 +1,7 @@
 # CV Studio Backburner and Stability Roadmap
 
 Last updated: 26 July 2026
-Current implementation base: v24.6.233
+Current implementation base: v24.6.234
 
 ## Explicit backburner — do not implement until the owner reactivates them
 
@@ -146,6 +146,20 @@ Deferred scope includes Shortlist / Maybe / Reject / Reviewed states, recruiter 
   routes down;
 - all 107 routes, schema version 10, security/compatibility boundaries,
   protected stores, Phase 1–4 guarantees and backburner items 4, 7 and 8 remain.
+
+### v24.6.234 — Phase 5A corrective review closure
+
+- strict schema-1 journal loading rejects unknown, duplicate, noncanonical,
+  non-finite and out-of-bound metadata while preserving corrupt bytes;
+- request correlations are always one-way digested and bounded summaries cover
+  quoted/generic credentials, authorization values, cookies, private paths and
+  candidate identifiers;
+- lifecycle transitions and pruning retain interrupted/review evidence, and
+  paid or externally mutating interrupted identities cannot be reclaimed;
+- actual bytes read are independently size-bounded across file-replacement
+  races, and every write/clock/encoding failure remains typed and visible;
+- schema version 10, all 107 routes, five guards, 18 compatibility signatures
+  and every Phase 1–4/Phase 5A scope boundary remain unchanged.
 
 ## Active stability direction
 
