@@ -23,6 +23,8 @@
   findings without broadening the milestone.
 - v24.6.235 completed central AI cost guardrails and provider-billing
   reconciliation without changing schema or paid-call replay boundaries.
+- v24.6.236 corrected the bounded Phase 5B post-release findings without
+  changing routes, schemas, security gates or provider replay behavior.
 - Phases 1, 2A, 2B, 3, 4, 5A and 5B are complete.
 - No later phase is active. Phase 6 requires a new explicit owner instruction.
 
@@ -164,12 +166,15 @@ Persistent background jobs and resumable task state:
   work;
 - no new route, worker, frontend workflow or result store.
 
-## Phase 5B — Completed in v24.6.235
+## Phase 5B — Completed in v24.6.235; corrected in v24.6.236
 
 - app-independent usage, estimate, guardrail and reconciliation foundation;
 - opt-in conservative per-request ceiling before provider transport;
 - explicit local-estimate, provider-usage and nullable billing authority;
 - failure-visible invalid/missing/ambiguous billing state;
+- exact authoritative decimal text, distinct delayed/partial billing and
+  unavailable estimates for absent/partial provider usage;
+- all-or-nothing multi-call reconciliation without duplicate authority;
 - preserved routes, gates, schemas, provider zero-retry and Phase 5A non-replay
   semantics.
 

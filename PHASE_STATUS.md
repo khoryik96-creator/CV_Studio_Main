@@ -3,8 +3,8 @@
 ## Release state
 
 - Approved baseline: v24.6.217
-- Completed release: v24.6.235
-- Previous completed release: v24.6.234
+- Completed release: v24.6.236
+- Previous completed release: v24.6.235
 - Phase 2B source baseline: v24.6.219
 - Phase 2B baseline Git commit: `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`
 - Phase 3 source baseline: v24.6.222
@@ -16,11 +16,10 @@
 - Phase 5B source baseline: v24.6.234
 - Phase 5B baseline Git commit: `327858799f17d880e37c740f71dfe321ea7bde0a`
 - Working branch: `codex/phase-5b-ai-cost-guardrails`
-- Active phase: Phase 5B post-release corrective review; Phase 6 inactive
-- Completed private owner/source release: v24.6.235
-- Status: corrective review and regression hardening in progress
-- Current milestone: repeated exact-master corrective review; stop before
-  handoff, merge or Phase 6
+- Active phase: none; Phase 6 inactive
+- Completed private owner/source release: v24.6.236
+- Status: Phase 5B corrective review complete
+- Current milestone: none; stop before handoff, merge or Phase 6
 
 ## Phase 5B authorization and constraints
 
@@ -554,8 +553,22 @@
   an explicit invalid reconciliation rather than `NaN`, zero or authority.
 - Repeated corrective targeted validation passes 31 Phase 5B Python tests, the
   Phase 5B frontend fixture and 91 Phase 3/4/5A/5B focused tests with
-  `ResourceWarning` treated as an error. Repeated review and complete
-  acceptance remain pending.
+  `ResourceWarning` treated as an error.
+- Complete v24.6.236 acceptance passes all 117 Python tests, all three frontend
+  fixtures, 24 live source-smoke assertions, 27 Python files, 21 JavaScript
+  files plus two full inline scripts, five Bash/command files and five
+  PowerShell files. Owner-source validation/preflight, repository consistency,
+  Git whitespace, exact-master 107-route and protected-module scope audits
+  pass.
+- The final private owner/source archive is
+  `cv_studio_v24_6_236_phase5b_ai_cost_guardrails_corrective_owner_source.zip`
+  under `C:\CV-Studio-Codex\releases\v24.6.236`. Its adjacent checksum and
+  verification sidecars record the authoritative digest and exact final
+  `source_commit`; a fresh extraction matches every tracked Git blob with zero
+  missing, extra or byte-mismatched files.
+- The corrective QA report and
+  `CV_STUDIO_V24_6_236_PHASE_6_HANDOVER.md` are copied beside the archive.
+  Phase 6 remains inactive and work stops before handoff or merge.
 - No route, security guard, confirmation gate, provider endpoint/header/
   timeout/retry rule, SQLite schema, journal schema/semantic, credential slot,
   worker or Phase 6 scope changed.

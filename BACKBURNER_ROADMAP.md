@@ -1,7 +1,7 @@
 # CV Studio Backburner and Stability Roadmap
 
 Last updated: 26 July 2026
-Current implementation base: v24.6.235
+Current implementation base: v24.6.236
 
 ## Explicit backburner — do not implement until the owner reactivates them
 
@@ -168,6 +168,17 @@ Deferred scope includes Shortlist / Maybe / Reject / Reviewed states, recruiter 
 - keeps unavailable provider billing nullable and failure-visible;
 - preserves Phase 5A recovery, provider zero-retry behavior and every
   established paid confirmation gate.
+
+### v24.6.236 — Phase 5B corrective review
+
+- distinguishes absent/partial usage from explicit zero counters;
+- preserves exact authoritative decimal text and distinct delayed/partial
+  reconciliation states;
+- rejects malformed, mismatched, over-precise and duplicate/excess billing
+  authority without discarding successful paid output;
+- separates Apollo/search-provider failures from AI paid-call ambiguity and
+  strengthens credential-like metadata redaction;
+- retains all Phase 5B scope exclusions and every Phase 1–5A contract.
 
 ## Active stability direction
 

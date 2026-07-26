@@ -1,5 +1,5 @@
 CV Studio private source patch base
-Version: v24.6.235
+Version: v24.6.236
 Keep this ZIP for future patches. Do not distribute this source package to colleagues.
 
 JobAdder API investigation source of truth:
@@ -1101,4 +1101,21 @@ Patch note v24.6.193: cross-platform deterministic adm-zip tree hashing fixes th
   protected credentials and the v24.6.215 DeepSeek history cutoff.
 - Does not add an admin billing credential, route, ledger, worker, schema,
   Phase 6 work or backburner item 4, 7 or 8.
+- Stops before handoff, merge and Phase 6.
+
+## v24.6.236 Phase 5B corrective review
+
+- Corrects guardrail validation and exact comparison edge cases without
+  changing the opt-in configuration boundary.
+- Distinguishes explicit zero usage from absent/partial counters and prevents
+  missing estimates from appearing as zero in browser display/export.
+- Preserves exact authoritative decimal text, native currency and distinct
+  pending/delayed/partial/unavailable/invalid reconciliation states.
+- Requires complete multi-call billing coverage and rejects excess/duplicate
+  or mixed authority without discarding successful paid output.
+- Separates Tavily/SerpAPI/Apollo failures from AI call ambiguity, counts
+  attempted Apollo operations, and redacts credential-like metadata.
+- Retains 107 routes, five guards, 18 signatures, SQLite schema 10, journal
+  schema 1, paid confirmations, provider zero-retry/non-replay and the
+  v24.6.215 DeepSeek history cutoff.
 - Stops before handoff, merge and Phase 6.

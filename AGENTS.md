@@ -39,14 +39,12 @@
 - Central AI cost guardrails and provider-billing reconciliation were completed
   in **CV Studio v24.6.235** without changing routes, security gates, storage
   schemas, provider retry/non-replay behavior or Phase 5A journal semantics.
-- Current completed private owner/source release: **CV Studio v24.6.235**.
-- The owner authorized a post-release Phase 5B corrective review on 26 July
-  2026 against the exact v24.6.234 master baseline. That bounded review is the
-  active milestone on `codex/phase-5b-ai-cost-guardrails`; it may correct only
-  concrete AI cost-guardrail, estimate-provenance and provider-billing
-  reconciliation defects and must preserve every Phase 5B scope boundary.
+- Its post-release guardrail, usage-validation, reconciliation, precision,
+  redaction and paid-boundary findings were corrected in **CV Studio
+  v24.6.236** without changing any preserved Phase 5B contract.
+- Current completed private owner/source release: **CV Studio v24.6.236**.
 - Phases 1, 2A, 2B, 3, 4, 5A and 5B are complete.
-- Every Phase 6 area remains inactive.
+- Phase 6 remains inactive. There is no active implementation target.
 
 ## Completed scope: Phase 5B
 
@@ -61,6 +59,12 @@ numeric `cost` as a local estimate, keeps missing authority nullable and
 failure-visible, and never converts missing billing into zero or authoritative
 cost. Tavily/SerpAPI/Apollo billing remains separate and explicitly unavailable
 when those provider responses supply no authoritative amount.
+
+The v24.6.236 corrective release makes missing/partial usage, delayed/partial
+billing, malformed or over-precise authority, multi-call coverage and
+duplicate-record ambiguity explicit. Exact authoritative decimal text is
+retained beside compatible numeric fields, and successful paid output is never
+discarded because its billing envelope is malformed.
 
 `CVSTUDIO_AI_MAX_ESTIMATED_REQUEST_USD` is disabled when unset. When configured,
 the central compatibility adapters conservatively evaluate the request before
