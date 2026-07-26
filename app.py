@@ -8999,7 +8999,7 @@ def _ja_salary_cost_provenance(cost, paid_call_status):
     cost = cost if isinstance(cost, dict) else {}
     output = {
         "paidCallStatus": str(paid_call_status or ""),
-        "estimatedCostUsd": float(cost.get("estimated_cost_usd") or 0.0),
+        "estimatedCostUsd": cost.get("estimated_cost_usd"),
         "costValueType": str(cost.get("cost_value_type") or "local_estimate"),
         "costAuthority": str(cost.get("cost_authority") or "local_rate_table"),
         "usageAuthority": str(cost.get("usage_authority") or "not_returned"),

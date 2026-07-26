@@ -494,10 +494,18 @@
     could retain embedded credential-like fragments;
   - delayed provider billing was collapsed into the generic pending state;
   - a pre-Apollo local failure could be mislabeled as an attempted AI call, and
-    Apollo operation counts did not include an auth/rate-limit response.
+    Apollo operation counts did not include an auth/rate-limit response;
+  - a successful provider response with no token counters was synthesized with
+    `api_calls=1` and could therefore appear to have an available zero-dollar
+    estimate instead of missing estimate data;
+  - merged workflows could reconcile one authoritative record against several
+    calls or sum excess/duplicate records, and a cross-record reconciliation
+    defect could still discard an otherwise successful paid output.
 - The bounded correction now validates output ceilings as positive bounded
   integers and compares the exact decimal estimate to the configured limit
-  before transport. It does not clamp or substitute invalid requested values.
+  before transport. Guardrail limits are bounded to 30 significant digits and
+  18 decimal places, and underflowing/unbounded configuration fails visibly.
+  It does not clamp or substitute invalid requested values.
 - Billing normalization now requires an explicit three-letter currency,
   rejects provider mismatch, preserves a bounded authoritative native-currency
   amount and exact decimal text without inventing conversion, and represents
@@ -522,15 +530,30 @@
   Apollo enrichment attempts from later AI fallback, and Apollo observed
   operations count the request even when it returns auth/rate-limit failure.
   Existing search/enrichment-provider billing status remains separate.
+  Non-secret observed-operation counts require bounded non-negative integers;
+  boolean, fractional, non-finite and oversized values remain unavailable.
 - New model/provider metadata uses bounded safe identifiers and rejects
   embedded credential-like fragments; external billing reasons also redact
   authorization, key, token, secret and password forms.
+- Provider responses with absent or partial input/output token counters now
+  retain the legacy numeric `usd` field for response compatibility but set
+  `estimated_cost_usd=null`, `cost_value_type=local_estimate_unavailable`,
+  `usage_validation_status=missing` and
+  `estimate_status=usage_unavailable`. Explicit provider-returned zero token
+  counters remain a valid zero estimate. Mixed multi-call usage is unavailable
+  if any constituent call omitted its counters, and browser display/export
+  uses `n/a`/blank rather than presenting missing estimates as zero.
+- Multi-call billing reconciliation is all-or-nothing: fewer normalized
+  request-scoped billing records than paid calls is `partial`; more records
+  than calls is `invalid`; and mixed-currency/provider defects remain invalid.
+  Embedded reconciliation failures produce safe status fields without
+  throwing away successful content or encouraging a duplicate paid retry.
 - Browser history retains native authoritative amount/currency/source,
   invalid-data and estimate/usage-validation provenance inside the existing
   schema-10 JSON payload. Malformed persisted billing numbers are converted to
   an explicit invalid reconciliation rather than `NaN`, zero or authority.
-- Repeated corrective targeted validation passes 28 Phase 5B Python tests, the
-  Phase 5B frontend fixture and 88 Phase 3/4/5A/5B focused tests with
+- Repeated corrective targeted validation passes 31 Phase 5B Python tests, the
+  Phase 5B frontend fixture and 91 Phase 3/4/5A/5B focused tests with
   `ResourceWarning` treated as an error. Repeated review and complete
   acceptance remain pending.
 - No route, security guard, confirmation gate, provider endpoint/header/

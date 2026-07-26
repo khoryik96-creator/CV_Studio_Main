@@ -19029,12 +19029,13 @@ function renderStats() {
            : r.mode === 'ai_failed' ? '<span class="stats-badge" style="background:#fee2e2;color:#991b1b;border-radius:20px;padding:1px 8px;font-size:11px;font-weight:500;">Paid AI Failed</span>'
            : r.mode === 'lead'     ? '<span class="stats-badge lead">Lead</span>'
            : '<span class="stats-badge format">Format</span>';
-    var costStr = !r.cost ? '$0.0000' : (r.cost < 0.0001 ? '<$0.0001' : '$' + r.cost.toFixed(4));
+    var estimateUnavailable = r.estimate_status === 'usage_unavailable' || r.estimate_status === 'usage_invalid';
+    var costStr = estimateUnavailable ? 'n/a' : (!r.cost ? '$0.0000' : (r.cost < 0.0001 ? '<$0.0001' : '$' + r.cost.toFixed(4)));
     var recProvider = inferProviderFromModel(r.model, r.provider);
     var providerShort = providerLabel(recProvider, r.model);
     var modelShort = recProvider === 'local' ? 'deterministic-salary-v1' : ((r.model || '').replace('claude-','').split('-20')[0] || 'unknown-model');
     var providerModel = providerShort + ' · ' + modelShort;
-    var myrStr = r.cost ? 'RM ' + (r.cost * USD_TO_MYR).toFixed(3) : 'RM 0.000';
+    var myrStr = estimateUnavailable ? 'n/a' : (r.cost ? 'RM ' + (r.cost * USD_TO_MYR).toFixed(3) : 'RM 0.000');
     var hasTokenAudit = Object.prototype.hasOwnProperty.call(r, 'input_tokens') || Object.prototype.hasOwnProperty.call(r, 'output_tokens') || Object.prototype.hasOwnProperty.call(r, 'api_calls');
     var inputTokens = Number(r.input_tokens || 0), outputTokens = Number(r.output_tokens || 0), calls = Number(r.api_calls || 0);
     var tokenText = hasTokenAudit
@@ -19092,8 +19093,8 @@ function exportStatsExcel() {
       r.cost_method || (Object.prototype.hasOwnProperty.call(r, 'input_tokens') ? '' : 'legacy_cost_only'),
       r.estimate_status || '',
       r.usage_validation_status || '',
-      r.cost ? r.cost.toFixed(6) : '0',
-      r.cost ? (r.cost * USD_MYR).toFixed(4) : '0',
+      r.estimate_status === 'usage_unavailable' || r.estimate_status === 'usage_invalid' ? '' : (r.cost ? r.cost.toFixed(6) : '0'),
+      r.estimate_status === 'usage_unavailable' || r.estimate_status === 'usage_invalid' ? '' : (r.cost ? (r.cost * USD_MYR).toFixed(4) : '0'),
       r.cost_authority || (Object.prototype.hasOwnProperty.call(r, 'input_tokens') ? 'local_rate_table' : 'legacy_stored_value'),
       r.usage_authority || '',
       r.provider_billing_status || 'unavailable',

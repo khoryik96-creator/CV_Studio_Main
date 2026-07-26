@@ -602,6 +602,45 @@ class Phase5BAICostCharacterizationTests(unittest.TestCase):
         self.assertTrue(details["billing_data_invalid"])
         self.assertFalse(details["billing_data_missing"])
 
+    def test_successful_response_without_usage_is_not_a_zero_estimate(self):
+        provider_response = {
+            "content": [{"type": "text", "text": "fixture"}],
+        }
+        with mock.patch.dict(
+            os.environ,
+            {},
+            clear=False,
+        ), mock.patch.object(
+            app._AI_PROVIDER_CLIENT,
+            "request",
+            return_value=provider_response,
+        ):
+            os.environ.pop(AI_COST_GUARDRAIL_ENV, None)
+            result = app.call_llm(
+                "anthropic",
+                "<fixture-credential>",
+                {
+                    "model": "claude-sonnet-4-6",
+                    "max_tokens": 100,
+                    "messages": [{"role": "user", "content": "fixture"}],
+                },
+            )
+
+        details = app._llm_cost_details(
+            "claude-sonnet-4-6",
+            result["usage"],
+            "anthropic",
+        )
+        self.assertEqual(result["usage"]["api_calls"], 1)
+        self.assertEqual(details["usd"], 0)
+        self.assertIsNone(details["estimated_cost_usd"])
+        self.assertEqual(details["usage_validation_status"], "missing")
+        self.assertEqual(details["estimate_status"], "usage_unavailable")
+        self.assertEqual(
+            details["provider_billing_status"],
+            "unavailable",
+        )
+
     def test_external_search_failure_is_not_mislabeled_as_an_ai_call(self):
         search_config = {
             "enabled": True,

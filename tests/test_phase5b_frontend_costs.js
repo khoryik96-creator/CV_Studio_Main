@@ -103,6 +103,29 @@ assert.strictEqual(noCall.provider_billing_status, 'not_applicable');
 assert.strictEqual(noCall.reconciliation_status, 'not_called');
 assert.strictEqual(noCall.billing_data_missing, false);
 
+const missingUsage = context.costDetailsFromResponse({
+  model: 'claude-sonnet-4-6',
+  provider: 'anthropic',
+  cost_details: {
+    usd: 0,
+    input_tokens: 0,
+    output_tokens: 0,
+    api_calls: 1,
+    estimated_cost_usd: null,
+    cost_value_type: 'local_estimate_unavailable',
+    usage_authority: 'provider_response_missing',
+    usage_validation_status: 'missing',
+    estimate_status: 'usage_unavailable',
+    provider_billing_status: 'unavailable',
+    reconciliation_status: 'provider_billing_unavailable',
+    billing_data_missing: true,
+  },
+}, '', '');
+assert.strictEqual(missingUsage.estimated_cost_usd, null);
+assert.strictEqual(missingUsage.cost_value_type, 'local_estimate_unavailable');
+assert.strictEqual(missingUsage.usage_validation_status, 'missing');
+assert.strictEqual(missingUsage.estimate_status, 'usage_unavailable');
+
 const nonUsd = context.costDetailsFromResponse({
   model: 'gpt-5.4-mini',
   provider: 'openai',

@@ -327,6 +327,89 @@ class Phase5BAICostFoundationTests(unittest.TestCase):
         self.assertTrue(delayed["error"]["billing_data_missing"])
         self.assertFalse(delayed["error"]["billing_data_invalid"])
 
+    def test_multi_call_billing_must_cover_each_call_without_duplicates(self):
+        billing = {
+            "authoritative": True,
+            "source": "provider_response",
+            "scope": "request",
+            "currency": "USD",
+            "amount": "0.01",
+        }
+        partial_usage = merge_usage(
+            {
+                "input_tokens": 10,
+                "output_tokens": 2,
+                "api_calls": 1,
+                "_cvstudio_provider_billing": billing,
+            },
+            {
+                "input_tokens": 8,
+                "output_tokens": 1,
+                "api_calls": 1,
+            },
+        )
+        partial = cost_details(
+            "claude-sonnet-4-6",
+            partial_usage,
+            "anthropic",
+            environ={},
+        )
+        self.assertEqual(partial["provider_billing_status"], "partial")
+        self.assertEqual(
+            partial["reconciliation_status"],
+            "provider_billing_partial",
+        )
+        self.assertIsNone(partial["provider_authoritative_cost_usd"])
+        self.assertTrue(partial["billing_data_missing"])
+
+        duplicate_usage = merge_usage(
+            {
+                "input_tokens": 10,
+                "output_tokens": 2,
+                "api_calls": 1,
+                "_cvstudio_provider_billing": [billing, billing],
+            }
+        )
+        duplicate = cost_details(
+            "claude-sonnet-4-6",
+            duplicate_usage,
+            "anthropic",
+            environ={},
+        )
+        self.assertEqual(duplicate["provider_billing_status"], "invalid")
+        self.assertEqual(
+            duplicate["reconciliation_status"],
+            "reconciliation_failed",
+        )
+        self.assertIsNone(duplicate["provider_authoritative_cost_usd"])
+        self.assertTrue(duplicate["billing_data_invalid"])
+
+        mixed_currency_usage = merge_usage(
+            {
+                "input_tokens": 10,
+                "output_tokens": 2,
+                "api_calls": 1,
+                "_cvstudio_provider_billing": dict(billing),
+            },
+            {
+                "input_tokens": 8,
+                "output_tokens": 1,
+                "api_calls": 1,
+                "_cvstudio_provider_billing": dict(
+                    billing,
+                    currency="EUR",
+                ),
+            },
+        )
+        mixed = cost_details(
+            "claude-sonnet-4-6",
+            mixed_currency_usage,
+            "anthropic",
+            environ={},
+        )
+        self.assertEqual(mixed["provider_billing_status"], "invalid")
+        self.assertEqual(mixed["reconciliation_status"], "reconciliation_failed")
+
     def test_no_call_and_missing_usage_have_distinct_reconciliation_states(self):
         no_call = cost_details(
             "claude-sonnet-4-6",
@@ -366,6 +449,72 @@ class Phase5BAICostFoundationTests(unittest.TestCase):
         self.assertIsNone(
             billing_without_usage["reconciliation_difference_usd"]
         )
+
+    def test_missing_usage_is_not_a_zero_estimate_but_explicit_zero_is_valid(self):
+        missing_usage = normalize_usage({}, api_calls=1)
+        missing = cost_details(
+            "claude-sonnet-4-6",
+            missing_usage,
+            "anthropic",
+            environ={},
+        )
+        self.assertEqual(missing["usd"], 0)
+        self.assertIsNone(missing["estimated_cost_usd"])
+        self.assertEqual(
+            missing["cost_value_type"],
+            "local_estimate_unavailable",
+        )
+        self.assertEqual(missing["usage_authority"], "provider_response_missing")
+        self.assertEqual(missing["usage_validation_status"], "missing")
+        self.assertEqual(missing["estimate_status"], "usage_unavailable")
+        self.assertEqual(
+            missing["reconciliation_status"],
+            "provider_billing_unavailable",
+        )
+
+        explicit_zero = cost_details(
+            "claude-sonnet-4-6",
+            normalize_usage(
+                {"input_tokens": 0, "output_tokens": 0},
+                api_calls=1,
+            ),
+            "anthropic",
+            environ={},
+        )
+        self.assertEqual(explicit_zero["estimated_cost_usd"], 0)
+        self.assertEqual(explicit_zero["usage_validation_status"], "valid")
+        self.assertEqual(explicit_zero["estimate_status"], "available")
+
+        for partial_usage in (
+            {"input_tokens": 10},
+            {"output_tokens": 2},
+            {"prompt_cache_hit_tokens": 3, "prompt_cache_miss_tokens": 7},
+        ):
+            with self.subTest(partial_usage=partial_usage):
+                partial_counters = cost_details(
+                    "claude-sonnet-4-6",
+                    normalize_usage(partial_usage, api_calls=1),
+                    "anthropic",
+                    environ={},
+                )
+                self.assertIsNone(partial_counters["estimated_cost_usd"])
+                self.assertEqual(
+                    partial_counters["usage_validation_status"],
+                    "missing",
+                )
+
+        partial_merge = merge_usage(
+            {"input_tokens": 10, "output_tokens": 2, "api_calls": 1},
+            normalize_usage({}, api_calls=1),
+        )
+        partial = cost_details(
+            "claude-sonnet-4-6",
+            partial_merge,
+            "anthropic",
+            environ={},
+        )
+        self.assertIsNone(partial["estimated_cost_usd"])
+        self.assertEqual(partial["estimate_status"], "usage_unavailable")
 
     def test_authoritative_amount_precision_and_exact_zero_remain_auditable(self):
         exact_amount = "0.123456789012345678"
@@ -520,7 +669,15 @@ class Phase5BAICostFoundationTests(unittest.TestCase):
         self.assertNotIn(credential_like_model, str(blocked.exception))
 
     def test_invalid_guardrail_configuration_fails_before_estimation(self):
-        for value in ("not-a-number", "nan", "0", "-1", "10001"):
+        for value in (
+            "not-a-number",
+            "nan",
+            "0",
+            "-1",
+            "10001",
+            "1e-1000",
+            "1." + ("0" * 129),
+        ):
             with self.subTest(value=value):
                 with self.assertRaises(AICostGuardrailConfigurationError):
                     enforce_request_guardrail(
@@ -554,6 +711,15 @@ class Phase5BAICostFoundationTests(unittest.TestCase):
         self.assertEqual(external["observed_operations"], 2)
         self.assertIsNone(external["provider_authoritative_cost"])
         self.assertTrue(external["billing_data_missing"])
+        for malformed_operations in (True, -1, 1.5, "nan", 10**13):
+            with self.subTest(observed_operations=malformed_operations):
+                malformed_external = unavailable_external_billing(
+                    "apollo",
+                    observed_operations=malformed_operations,
+                )
+                self.assertIsNone(
+                    malformed_external["observed_operations"]
+                )
 
         redacted_external = unavailable_external_billing(
             "sk-secret-provider",
