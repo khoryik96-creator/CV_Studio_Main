@@ -757,6 +757,8 @@ class PersistentJobStore:
             if size <= 0 or size > self.max_bytes:
                 raise ValueError("invalid persistent job state size")
             raw = self.path.read_bytes()
+            if len(raw) <= 0 or len(raw) > self.max_bytes:
+                raise ValueError("invalid persistent job state size")
             payload = json.loads(
                 raw.decode("utf-8"),
                 object_pairs_hook=_unique_json_object,

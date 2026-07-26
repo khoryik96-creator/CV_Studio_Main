@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 from cvstudio_jobs import (
     PersistentJobConflictError,
@@ -393,6 +394,20 @@ class Phase5APersistentJobFoundationTests(unittest.TestCase):
         with self.assertRaises(PersistentJobStateUnavailableError):
             store.initialize()
         self.assertFalse(self.path.exists())
+
+    def test_actual_read_size_is_bounded_after_the_initial_stat(self):
+        original = b"x" * 4097
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_bytes(original)
+        store = self._store(max_bytes=4096)
+        with mock.patch.object(
+            Path,
+            "stat",
+            return_value=mock.Mock(st_size=128),
+        ):
+            with self.assertRaises(PersistentJobStateCorruptError):
+                store.initialize()
+        self.assertEqual(self.path.read_bytes(), original)
 
     def test_invalid_finish_transitions_are_rejected_without_state_change(self):
         job_id = deterministic_job_id("safe_fixture", "transition")

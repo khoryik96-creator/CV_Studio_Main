@@ -560,6 +560,15 @@ failure-visible write boundary. A twelfth foundation test proves a non-finite
 clock fails with `JOB_STATE_UNAVAILABLE` without creating state; strict-
 corruption subcases cover duplicate keys and escaped surrogates.
 
+The next repeated review preserved the exact master app diff and released
+schema-1 compatibility but found one bounded-read TOCTOU gap: the loader checked
+`stat().st_size` before `read_bytes()` without checking the actual bytes read.
+A concurrent atomic replacement could therefore substitute an oversized file
+between those operations. The loader now enforces the same non-empty/maximum
+bound on the actual byte buffer before JSON parsing. A thirteenth foundation
+test simulates a stale small `stat` result over an oversized actual read and
+proves corrupt-byte preservation.
+
 ## Phase 4 authorization and constraints
 
 - Owner authorization received on 23 July 2026.
