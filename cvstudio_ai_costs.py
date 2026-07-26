@@ -12,6 +12,7 @@ from __future__ import annotations
 from decimal import Decimal, InvalidOperation
 import json
 import os
+import re
 from typing import Any, Mapping
 
 
@@ -19,6 +20,12 @@ AI_COST_GUARDRAIL_ENV = "CVSTUDIO_AI_MAX_ESTIMATED_REQUEST_USD"
 AI_COST_GUARDRAIL_MAX_USD = Decimal("10000")
 AI_COST_BILLING_MAX_AMOUNT = Decimal("1000000000000")
 AI_COST_MAX_RECONCILIATION_RECORDS = 100
+AI_COST_MAX_OUTPUT_TOKENS = 1_000_000_000_000
+AI_COST_MAX_TOKEN_COUNT = 1_000_000_000_000
+
+_PROVIDER_BILLING_FIELD = "_cvstudio_provider_billing"
+_PROVIDER_BILLING_ERROR_FIELD = "_cvstudio_provider_billing_error"
+_USAGE_ERROR_FIELD = "_cvstudio_usage_error"
 
 MODEL_PRICING_USD_PER_MILLION = {
     "claude-sonnet-5": (2.00, 10.00),
@@ -88,6 +95,113 @@ class AICostReconciliationError(AICostError):
     code = "AI_COST_RECONCILIATION_FAILED"
 
 
+def _billing_error_marker(
+    error: BaseException | None = None,
+    *,
+    provider_response_received: bool = False,
+) -> dict[str, Any]:
+    details = (
+        dict(getattr(error, "details", {}) or {})
+        if error is not None
+        else {}
+    )
+    billing_status = str(
+        details.get("provider_billing_status") or "invalid"
+    ).strip().lower()
+    if billing_status not in {
+        "invalid",
+        "partial",
+        "pending",
+        "unavailable",
+    }:
+        billing_status = "invalid"
+    reconciliation = str(
+        details.get("reconciliation_status") or "reconciliation_failed"
+    ).strip().lower()
+    if reconciliation not in {
+        "provider_billing_partial",
+        "provider_billing_pending",
+        "provider_billing_unavailable",
+        "reconciliation_failed",
+    }:
+        reconciliation = "reconciliation_failed"
+    invalid = billing_status == "invalid"
+    missing = billing_status in {"partial", "pending", "unavailable"}
+    return {
+        "provider_billing_status": billing_status,
+        "reconciliation_status": reconciliation,
+        "billing_data_missing": missing,
+        "billing_data_invalid": invalid,
+        "provider_response_received": bool(provider_response_received),
+    }
+
+
+def _sanitize_billing_error_marker(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, Mapping):
+        return None
+    marker = _billing_error_marker()
+    marker["provider_billing_status"] = str(
+        value.get("provider_billing_status") or marker["provider_billing_status"]
+    ).strip().lower()
+    marker["reconciliation_status"] = str(
+        value.get("reconciliation_status") or marker["reconciliation_status"]
+    ).strip().lower()
+    marker["provider_response_received"] = (
+        value.get("provider_response_received") is True
+    )
+    return _billing_error_marker(
+        AICostReconciliationError("", details=marker),
+        provider_response_received=marker["provider_response_received"],
+    )
+
+
+def _usage_counter_is_invalid(value: Any, maximum: int) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, bool):
+        return True
+    try:
+        parsed = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return True
+    return bool(
+        not parsed.is_finite()
+        or parsed < 0
+        or parsed != parsed.to_integral_value()
+        or parsed > maximum
+    )
+
+
+def _usage_error_marker(usage: Mapping[str, Any]) -> str:
+    for key in (
+        "input_tokens",
+        "prompt_tokens",
+        "output_tokens",
+        "completion_tokens",
+        "prompt_cache_hit_tokens",
+        "cache_read_input_tokens",
+        "prompt_cache_miss_tokens",
+        "cache_creation_input_tokens",
+    ):
+        if key in usage and _usage_counter_is_invalid(
+            usage.get(key),
+            AI_COST_MAX_TOKEN_COUNT,
+        ):
+            return "invalid_provider_usage_counter"
+    if "api_calls" in usage and _usage_counter_is_invalid(
+        usage.get("api_calls"),
+        AI_COST_MAX_RECONCILIATION_RECORDS,
+    ):
+        return "invalid_provider_api_call_count"
+    details = usage.get("input_tokens_details")
+    if isinstance(details, Mapping) and _usage_counter_is_invalid(
+        details.get("cached_tokens"),
+        AI_COST_MAX_TOKEN_COUNT,
+    ):
+        return "invalid_provider_usage_counter"
+    return ""
+
+
 def usage_int(usage: Mapping[str, Any] | None, *keys: str) -> int:
     """Return the first positive, otherwise last valid zero, usage counter."""
     fallback = 0
@@ -112,6 +226,46 @@ def normalize_usage(
 ) -> dict[str, Any]:
     """Return the established canonical shape without discarding native fields."""
     raw = dict(usage or {}) if isinstance(usage, Mapping) else {}
+    existing_usage_error = str(raw.pop(_USAGE_ERROR_FIELD, "") or "")
+    usage_error = (
+        existing_usage_error
+        if existing_usage_error in {
+            "inconsistent_provider_usage_counters",
+            "invalid_provider_api_call_count",
+            "invalid_provider_usage_counter",
+        }
+        else _usage_error_marker(raw)
+    )
+    billing_candidate = raw.pop(_PROVIDER_BILLING_FIELD, None)
+    billing_error = _sanitize_billing_error_marker(
+        raw.pop(_PROVIDER_BILLING_ERROR_FIELD, None)
+    )
+    if billing_candidate is not None and billing_error is None:
+        try:
+            if isinstance(billing_candidate, list):
+                if (
+                    not billing_candidate
+                    or len(billing_candidate)
+                    > AI_COST_MAX_RECONCILIATION_RECORDS
+                ):
+                    raise AICostReconciliationError(
+                        "Provider billing record collection is empty or too large"
+                    )
+                normalized_billing = [
+                    normalize_provider_billing(item)
+                    for item in billing_candidate
+                ]
+            else:
+                normalized_billing = normalize_provider_billing(
+                    billing_candidate
+                )
+        except AICostReconciliationError as exc:
+            normalized_billing = None
+            billing_error = _billing_error_marker(exc)
+        if normalized_billing is not None:
+            raw[_PROVIDER_BILLING_FIELD] = normalized_billing
+    if billing_error is not None:
+        raw[_PROVIDER_BILLING_ERROR_FIELD] = billing_error
     input_tokens = usage_int(raw, "input_tokens", "prompt_tokens")
     output_tokens = usage_int(raw, "output_tokens", "completion_tokens")
     cache_hit = usage_int(
@@ -140,6 +294,14 @@ def normalize_usage(
         if api_calls is not None
         else usage_int(raw, "api_calls")
     )
+    if (
+        not usage_error
+        and input_tokens
+        and cache_hit + cache_miss > input_tokens
+    ):
+        usage_error = "inconsistent_provider_usage_counters"
+    if usage_error:
+        raw[_USAGE_ERROR_FIELD] = usage_error
     return raw
 
 
@@ -152,22 +314,51 @@ def merge_usage(*usages: Mapping[str, Any] | None) -> dict[str, Any]:
         "prompt_cache_miss_tokens": 0,
         "api_calls": 0,
     }
-    billing_records = []
+    billing_records: list[dict[str, Any]] = []
+    billing_errors: list[dict[str, Any]] = []
+    usage_errors: list[str] = []
     for usage in usages:
         normalized = normalize_usage(usage)
+        usage_error = str(normalized.get(_USAGE_ERROR_FIELD) or "")
+        if usage_error:
+            usage_errors.append(usage_error)
         for key in tuple(total):
             total[key] += usage_int(normalized, key)
-        billing = normalized.get("_cvstudio_provider_billing")
+        billing_error = _sanitize_billing_error_marker(
+            normalized.get(_PROVIDER_BILLING_ERROR_FIELD)
+        )
+        if billing_error is not None:
+            billing_errors.append(billing_error)
+        billing = normalized.get(_PROVIDER_BILLING_FIELD)
         if isinstance(billing, Mapping):
             billing_records.append(dict(billing))
         elif isinstance(billing, list):
-            billing_records.extend(
-                dict(item) for item in billing if isinstance(item, Mapping)
-            )
-    if len(billing_records) == 1:
-        total["_cvstudio_provider_billing"] = billing_records[0]
+            billing_records.extend(dict(item) for item in billing)
+    if len(billing_records) > AI_COST_MAX_RECONCILIATION_RECORDS:
+        billing_errors.append(_billing_error_marker())
+    if billing_errors:
+        # Never reconcile only the valid subset of a partial/malformed
+        # collection. Prefer the most failure-visible status and discard all
+        # untrusted record content.
+        priority = {"invalid": 4, "partial": 3, "pending": 2, "unavailable": 1}
+        selected = max(
+            billing_errors,
+            key=lambda item: priority.get(
+                str(item.get("provider_billing_status") or ""),
+                0,
+            ),
+        )
+        total[_PROVIDER_BILLING_ERROR_FIELD] = dict(selected)
+    elif len(billing_records) == 1:
+        total[_PROVIDER_BILLING_FIELD] = billing_records[0]
     elif billing_records:
-        total["_cvstudio_provider_billing"] = billing_records
+        total[_PROVIDER_BILLING_FIELD] = billing_records
+    if usage_errors:
+        total[_USAGE_ERROR_FIELD] = (
+            "invalid_provider_usage_counter"
+            if any(item.startswith("invalid_provider") for item in usage_errors)
+            else "inconsistent_provider_usage_counters"
+        )
     return total
 
 
@@ -226,8 +417,26 @@ def _finite_nonnegative_decimal(value: Any, field: str) -> Decimal:
     return parsed
 
 
+def _explicit_billing_provider(value: Any) -> str:
+    provider = str(value or "").strip().lower()
+    aliases = {
+        "anthropic": "anthropic",
+        "claude": "anthropic",
+        "deepseek": "deepseek",
+        "gpt": "openai",
+        "openai": "openai",
+    }
+    if provider not in aliases:
+        raise AICostReconciliationError(
+            "Provider billing provider is invalid"
+        )
+    return aliases[provider]
+
+
 def normalize_provider_billing(
     billing: Mapping[str, Any] | None,
+    *,
+    expected_provider: Any = None,
 ) -> dict[str, Any] | None:
     """Validate an explicitly authoritative, non-secret provider cost record."""
     if billing is None:
@@ -236,17 +445,42 @@ def normalize_provider_billing(
         raise AICostReconciliationError(
             "Provider billing data must be an object"
         )
+    observed_status = str(billing.get("status") or "").strip().lower()
+    status_details = {
+        "pending": {
+            "provider_billing_status": "pending",
+            "reconciliation_status": "provider_billing_pending",
+        },
+        "delayed": {
+            "provider_billing_status": "pending",
+            "reconciliation_status": "provider_billing_pending",
+        },
+        "partial": {
+            "provider_billing_status": "partial",
+            "reconciliation_status": "provider_billing_partial",
+        },
+        "unavailable": {
+            "provider_billing_status": "unavailable",
+            "reconciliation_status": "provider_billing_unavailable",
+        },
+    }.get(observed_status)
+    if status_details is not None:
+        raise AICostReconciliationError(
+            "Provider billing data is not final and authoritative",
+            details=status_details,
+        )
     if billing.get("authoritative") is not True:
         raise AICostReconciliationError(
-            "Provider billing data was not explicitly marked authoritative"
+            "Provider billing data was not explicitly marked authoritative",
+            details=status_details,
         )
     source = str(billing.get("source") or "").strip().lower()
     if source not in _AUTHORITATIVE_BILLING_SOURCES:
         raise AICostReconciliationError(
             "Provider billing source is not an approved authority"
         )
-    currency = str(billing.get("currency") or "USD").strip().upper()
-    if not currency or len(currency) > 12:
+    currency = str(billing.get("currency") or "").strip().upper()
+    if re.fullmatch(r"[A-Z]{3}", currency) is None:
         raise AICostReconciliationError("Provider billing currency is invalid")
     amount = _finite_nonnegative_decimal(
         billing.get("amount"),
@@ -257,13 +491,31 @@ def normalize_provider_billing(
         raise AICostReconciliationError(
             "Provider billing scope must explicitly identify one request"
         )
-    return {
+    expected = (
+        _explicit_billing_provider(expected_provider)
+        if str(expected_provider or "").strip()
+        else ""
+    )
+    supplied_provider = ""
+    if str(billing.get("provider") or "").strip():
+        supplied_provider = _explicit_billing_provider(
+            billing.get("provider")
+        )
+    if expected and supplied_provider and expected != supplied_provider:
+        raise AICostReconciliationError(
+            "Provider billing provider does not match the inference provider"
+        )
+    normalized = {
         "authoritative": True,
         "source": source,
         "scope": "request",
         "currency": currency,
         "amount": float(amount),
     }
+    resolved_provider = expected or supplied_provider
+    if resolved_provider:
+        normalized["provider"] = resolved_provider
+    return normalized
 
 
 def extract_provider_billing(
@@ -283,34 +535,92 @@ def extract_provider_billing(
         candidate = response.get("provider_billing")
     if candidate is None:
         return None
-    normalized = normalize_provider_billing(candidate)
-    if normalized is not None:
-        normalized["provider"] = normalize_provider(None, provider)
-    return normalized
+    expected_provider = normalize_provider(None, provider)
+    return normalize_provider_billing(
+        candidate,
+        expected_provider=expected_provider,
+    )
+
+
+def extract_provider_billing_result(
+    provider: Any,
+    response: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    """Return sanitized billing or a failure-visible status without raw data."""
+    try:
+        return {
+            "billing": extract_provider_billing(provider, response),
+            "error": None,
+        }
+    except AICostReconciliationError as exc:
+        return {
+            "billing": None,
+            "error": _billing_error_marker(
+                exc,
+                provider_response_received=True,
+            ),
+        }
 
 
 def _reconciliation_fields(
     estimate_usd: float,
-    billing: Mapping[str, Any] | list[Mapping[str, Any]] | None,
+    billing: Mapping[str, Any] | list[Any] | None,
+    *,
+    expected_provider: Any = None,
+    provider_called: bool = False,
+    usage_available: bool = False,
+    billing_error: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
+    common = {
+        "provider_authoritative_cost_usd": None,
+        "provider_authoritative_cost": None,
+        "provider_authoritative_cost_currency": None,
+        "provider_billing_currency": None,
+        "provider_billing_source": None,
+        "reconciliation_difference_usd": None,
+        "reconciliation_difference_percent": None,
+        "billing_data_invalid": False,
+    }
+    sanitized_error = _sanitize_billing_error_marker(billing_error)
+    if sanitized_error is not None:
+        return dict(
+            common,
+            provider_billing_status=sanitized_error[
+                "provider_billing_status"
+            ],
+            reconciliation_status=sanitized_error[
+                "reconciliation_status"
+            ],
+            billing_data_missing=sanitized_error["billing_data_missing"],
+            billing_data_invalid=sanitized_error["billing_data_invalid"],
+        )
     if billing is None:
-        return {
-            "provider_billing_status": "unavailable",
-            "provider_authoritative_cost_usd": None,
-            "provider_billing_currency": None,
-            "provider_billing_source": None,
-            "reconciliation_status": "provider_billing_unavailable",
-            "reconciliation_difference_usd": None,
-            "reconciliation_difference_percent": None,
-            "billing_data_missing": True,
-        }
+        if not provider_called:
+            return dict(
+                common,
+                provider_billing_status="not_applicable",
+                reconciliation_status="not_called",
+                billing_data_missing=False,
+            )
+        return dict(
+            common,
+            provider_billing_status="unavailable",
+            reconciliation_status="provider_billing_unavailable",
+            billing_data_missing=True,
+        )
 
     candidates = billing if isinstance(billing, list) else [billing]
     if len(candidates) > AI_COST_MAX_RECONCILIATION_RECORDS:
         raise AICostReconciliationError(
             "Provider billing record count exceeds the reconciliation limit"
         )
-    normalized = [normalize_provider_billing(item) for item in candidates]
+    normalized = [
+        normalize_provider_billing(
+            item,
+            expected_provider=expected_provider,
+        )
+        for item in candidates
+    ]
     normalized = [item for item in normalized if item is not None]
     if not normalized:
         raise AICostReconciliationError(
@@ -323,18 +633,6 @@ def _reconciliation_fields(
             "Provider billing records use multiple currencies"
         )
     currency = next(iter(currencies))
-    if currency != "USD":
-        return {
-            "provider_billing_status": "authoritative_non_usd",
-            "provider_authoritative_cost_usd": None,
-            "provider_billing_currency": currency,
-            "provider_billing_source": ",".join(sorted(sources)),
-            "reconciliation_status": "currency_conversion_unavailable",
-            "reconciliation_difference_usd": None,
-            "reconciliation_difference_percent": None,
-            "billing_data_missing": False,
-        }
-
     authoritative_decimal = sum(
         Decimal(str(item["amount"])) for item in normalized
     )
@@ -342,23 +640,54 @@ def _reconciliation_fields(
         raise AICostReconciliationError(
             "Provider billing total exceeds the reconciliation limit"
         )
-    authoritative_usd = float(authoritative_decimal)
-    difference = authoritative_usd - float(estimate_usd)
-    difference_percent = (
-        difference / float(estimate_usd) * 100.0
-        if float(estimate_usd) > 0
+    authoritative_native = float(authoritative_decimal)
+    if currency != "USD":
+        return dict(
+            common,
+            provider_billing_status="authoritative_non_usd",
+            provider_authoritative_cost=authoritative_native,
+            provider_authoritative_cost_currency=currency,
+            provider_billing_currency=currency,
+            provider_billing_source=",".join(sorted(sources)),
+            reconciliation_status="currency_conversion_unavailable",
+            billing_data_missing=False,
+        )
+    if not usage_available:
+        return dict(
+            common,
+            provider_billing_status="authoritative",
+            provider_authoritative_cost_usd=authoritative_native,
+            provider_authoritative_cost=authoritative_native,
+            provider_authoritative_cost_currency="USD",
+            provider_billing_currency="USD",
+            provider_billing_source=",".join(sorted(sources)),
+            reconciliation_status="estimate_usage_unavailable",
+            billing_data_missing=False,
+        )
+    estimate_decimal = Decimal(str(estimate_usd))
+    difference_decimal = authoritative_decimal - estimate_decimal
+    difference_percent_decimal = (
+        difference_decimal / estimate_decimal * Decimal(100)
+        if estimate_decimal > 0
         else None
     )
-    return {
-        "provider_billing_status": "authoritative",
-        "provider_authoritative_cost_usd": authoritative_usd,
-        "provider_billing_currency": "USD",
-        "provider_billing_source": ",".join(sorted(sources)),
-        "reconciliation_status": "reconciled",
-        "reconciliation_difference_usd": difference,
-        "reconciliation_difference_percent": difference_percent,
-        "billing_data_missing": False,
-    }
+    return dict(
+        common,
+        provider_billing_status="authoritative",
+        provider_authoritative_cost_usd=authoritative_native,
+        provider_authoritative_cost=authoritative_native,
+        provider_authoritative_cost_currency="USD",
+        provider_billing_currency="USD",
+        provider_billing_source=",".join(sorted(sources)),
+        reconciliation_status="reconciled",
+        reconciliation_difference_usd=float(difference_decimal),
+        reconciliation_difference_percent=(
+            float(difference_percent_decimal)
+            if difference_percent_decimal is not None
+            else None
+        ),
+        billing_data_missing=False,
+    )
 
 
 def cost_details(
@@ -378,9 +707,13 @@ def cost_details(
     api_calls = usage_int(normalized, "api_calls")
     resolved_provider = normalize_provider(model, provider)
     model_key = str(model or "").strip().lower()
+    billing_error = _sanitize_billing_error_marker(
+        normalized.get(_PROVIDER_BILLING_ERROR_FIELD)
+    )
+    usage_error = str(normalized.get(_USAGE_ERROR_FIELD) or "")
 
     if provider_billing is None:
-        embedded = normalized.get("_cvstudio_provider_billing")
+        embedded = normalized.get(_PROVIDER_BILLING_FIELD)
         if isinstance(embedded, Mapping) or isinstance(embedded, list):
             provider_billing = embedded
 
@@ -484,21 +817,77 @@ def cost_details(
             ),
         }
 
+    usage_counters_present = bool(
+        api_calls
+        or input_tokens
+        or output_tokens
+        or hit
+        or miss
+    )
+    usage_available = usage_counters_present and not usage_error
+    provider_called = bool(
+        usage_counters_present
+        or usage_error
+        or provider_billing is not None
+        or (
+            billing_error is not None
+            and billing_error.get("provider_response_received") is True
+        )
+    )
     details.update(
         {
-            "estimated_cost_usd": float(estimate_usd),
-            "cost_value_type": "local_estimate",
+            "estimated_cost_usd": (
+                None if usage_error else float(estimate_usd)
+            ),
+            "cost_value_type": (
+                "local_estimate_unavailable"
+                if usage_error
+                else "local_estimate"
+            ),
             "cost_authority": "local_rate_table",
             "usage_authority": (
-                "provider_response" if api_calls > 0 else "not_returned"
+                "provider_response_invalid"
+                if usage_error
+                else (
+                    "provider_response"
+                    if usage_available
+                    else "not_returned"
+                )
+            ),
+            "usage_validation_status": (
+                "invalid" if usage_error else "valid"
+            ),
+            "usage_validation_reason": usage_error or None,
+            "estimate_status": (
+                "usage_invalid"
+                if usage_error
+                else (
+                    "available"
+                if usage_available
+                else (
+                    "usage_unavailable"
+                    if provider_called
+                    else "not_applicable"
+                )
+                )
             ),
         }
     )
-    details.update(_reconciliation_fields(float(estimate_usd), provider_billing))
+    details.update(
+        _reconciliation_fields(
+            float(estimate_usd),
+            provider_billing,
+            expected_provider=resolved_provider,
+            provider_called=provider_called,
+            usage_available=usage_available,
+            billing_error=billing_error,
+        )
+    )
     try:
         config = guardrail_configuration(environ)
         details["guardrail_enabled"] = config["enabled"]
         details["guardrail_limit_usd"] = config["limit_usd"]
+        details["guardrail_limit_usd_text"] = config.get("limit_usd_text")
         details["guardrail_status"] = (
             "configured" if config["enabled"] else "disabled"
         )
@@ -506,6 +895,7 @@ def cost_details(
         # Reconciliation reporting must not hide the original guardrail error.
         details["guardrail_enabled"] = False
         details["guardrail_limit_usd"] = None
+        details["guardrail_limit_usd_text"] = None
         details["guardrail_status"] = "configuration_invalid"
     return details
 
@@ -543,6 +933,7 @@ def guardrail_configuration(
     return {
         "enabled": True,
         "limit_usd": float(limit),
+        "limit_usd_text": str(limit),
         "source": AI_COST_GUARDRAIL_ENV,
     }
 
@@ -590,9 +981,9 @@ def estimate_request_ceiling(
     output_value = clean.get("max_tokens")
     if output_value is None:
         output_value = clean.get("max_output_tokens")
-    try:
-        max_output_tokens = int(output_value or 4096)
-    except (TypeError, ValueError, OverflowError):
+    if output_value is None:
+        max_output_tokens = 4096
+    elif isinstance(output_value, bool) or not isinstance(output_value, int):
         raise AICostGuardrailError(
             "AI cost guardrail blocked the request before provider transport: "
             "the requested output-token ceiling is invalid.",
@@ -604,16 +995,30 @@ def estimate_request_ceiling(
                 "reason": "invalid_output_token_ceiling",
             },
         )
-    if max_output_tokens < 0:
+    else:
+        max_output_tokens = output_value
+    if max_output_tokens <= 0:
         raise AICostGuardrailError(
             "AI cost guardrail blocked the request before provider transport: "
-            "the requested output-token ceiling is negative.",
+            "the requested output-token ceiling must be greater than zero.",
             details={
                 "enabled": True,
                 "status": "blocked",
                 "provider": resolved,
                 "model": str(model)[:160],
-                "reason": "negative_output_token_ceiling",
+                "reason": "nonpositive_output_token_ceiling",
+            },
+        )
+    if max_output_tokens > AI_COST_MAX_OUTPUT_TOKENS:
+        raise AICostGuardrailError(
+            "AI cost guardrail blocked the request before provider transport: "
+            "the requested output-token ceiling exceeds the validation limit.",
+            details={
+                "enabled": True,
+                "status": "blocked",
+                "provider": resolved,
+                "model": str(model)[:160],
+                "reason": "output_token_ceiling_too_large",
             },
         )
     input_rate, output_rate, pricing_key, pricing_known = _guardrail_pricing(
@@ -626,16 +1031,14 @@ def estimate_request_ceiling(
         + Decimal(max_output_tokens) / Decimal(1_000_000)
         * Decimal(str(output_rate))
     )
-    try:
-        estimate_usd = float(estimate_decimal)
-    except (OverflowError, ValueError):
-        estimate_usd = float("inf")
+    estimate_usd = float(estimate_decimal)
     return {
         "provider": resolved,
         "model": str(model)[:160],
         "estimated_input_token_ceiling": estimated_input_tokens,
         "max_output_tokens": max_output_tokens,
         "estimated_request_ceiling_usd": estimate_usd,
+        "estimated_request_ceiling_usd_text": str(estimate_decimal),
         "pricing_model_key": pricing_key,
         "pricing_known": pricing_known,
         "rates_per_million_usd": {
@@ -670,9 +1073,8 @@ def enforce_request_guardrail(
             "source": config["source"],
         }
     )
-    if (
-        float(estimate["estimated_request_ceiling_usd"])
-        > float(config["limit_usd"])
+    if Decimal(estimate["estimated_request_ceiling_usd_text"]) > Decimal(
+        config["limit_usd_text"]
     ):
         estimate["status"] = "blocked"
         raise AICostGuardrailError(
@@ -700,7 +1102,8 @@ def unavailable_external_billing(
     operations = None
     if observed_operations is not None:
         try:
-            operations = max(0, int(observed_operations))
+            parsed_operations = int(observed_operations)
+            operations = parsed_operations if parsed_operations >= 0 else None
         except (TypeError, ValueError, OverflowError):
             operations = None
     return {
@@ -730,6 +1133,9 @@ def paid_failure_reconciliation(
     """Return additive failure status without changing legacy error fields."""
     normalized = normalize_usage(usage)
     calls = usage_int(normalized, "api_calls")
+    billing_error = _sanitize_billing_error_marker(
+        normalized.get(_PROVIDER_BILLING_ERROR_FIELD)
+    )
     if attempted is False:
         call_status = "not_called"
         reconciliation = "not_called"
@@ -741,6 +1147,9 @@ def paid_failure_reconciliation(
     elif isinstance(error, AICostReconciliationError):
         call_status = "provider_response_received"
         reconciliation = "reconciliation_failed"
+    elif calls > 0:
+        call_status = "provider_response_received"
+        reconciliation = "provider_billing_unavailable"
     elif getattr(error, "code", None) is not None or getattr(
         error,
         "status",
@@ -748,12 +1157,25 @@ def paid_failure_reconciliation(
     ) is not None:
         call_status = "provider_error_response_received"
         reconciliation = "provider_billing_unavailable"
-    elif calls > 0:
-        call_status = "provider_response_received"
-        reconciliation = "provider_billing_unavailable"
     else:
         call_status = "ambiguous_no_provider_usage_returned"
         reconciliation = "ambiguous_provider_charge"
+    if billing_error is not None and call_status != "not_called":
+        reconciliation = billing_error["reconciliation_status"]
+    not_called = reconciliation == "not_called"
+    invalid = (
+        billing_error is not None
+        and billing_error.get("billing_data_invalid") is True
+    ) or isinstance(error, AICostReconciliationError)
+    billing_status = (
+        "not_applicable"
+        if not_called
+        else (
+            billing_error["provider_billing_status"]
+            if billing_error is not None
+            else ("invalid" if invalid else "unavailable")
+        )
+    )
     return {
         "paid_call_status": call_status,
         "billing_reconciliation": {
@@ -762,10 +1184,19 @@ def paid_failure_reconciliation(
             "usage_authority": (
                 "provider_response" if calls > 0 else "not_returned"
             ),
-            "provider_billing_status": "unavailable",
+            "provider_billing_status": billing_status,
             "provider_authoritative_cost_usd": None,
             "reconciliation_status": reconciliation,
-            "billing_data_missing": True,
+            "billing_data_missing": (
+                False
+                if not_called or invalid
+                else (
+                    billing_error["billing_data_missing"]
+                    if billing_error is not None
+                    else True
+                )
+            ),
+            "billing_data_invalid": invalid,
         },
     }
 
@@ -781,6 +1212,7 @@ __all__ = [
     "enforce_request_guardrail",
     "estimate_request_ceiling",
     "extract_provider_billing",
+    "extract_provider_billing_result",
     "guardrail_configuration",
     "merge_usage",
     "normalize_provider",

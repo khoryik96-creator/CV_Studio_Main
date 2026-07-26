@@ -11246,17 +11246,24 @@ function costDetailsFromResponse(d, fallbackModel, fallbackProvider) {
     copy.prompt_cache_hit_tokens = Number(copy.prompt_cache_hit_tokens || 0);
     copy.prompt_cache_miss_tokens = Number(copy.prompt_cache_miss_tokens || 0);
     copy.api_calls = Number(copy.api_calls || 0);
+    var suppliedCalled = !!(copy.api_calls || copy.input_tokens || copy.output_tokens || copy.prompt_cache_hit_tokens || copy.prompt_cache_miss_tokens);
     copy.model = copy.model || model;
     copy.provider = copy.provider || provider;
     if (!Object.prototype.hasOwnProperty.call(copy, 'estimated_cost_usd')) copy.estimated_cost_usd = copy.usd;
     if (!copy.cost_value_type) copy.cost_value_type = 'local_estimate';
     if (!copy.cost_authority) copy.cost_authority = 'local_rate_table';
     if (!copy.usage_authority) copy.usage_authority = copy.api_calls > 0 ? 'provider_response' : 'not_returned';
-    if (!copy.provider_billing_status) copy.provider_billing_status = 'unavailable';
+    if (!copy.provider_billing_status) copy.provider_billing_status = suppliedCalled ? 'unavailable' : 'not_applicable';
     if (!Object.prototype.hasOwnProperty.call(copy, 'provider_authoritative_cost_usd')) copy.provider_authoritative_cost_usd = null;
-    if (!copy.reconciliation_status) copy.reconciliation_status = 'provider_billing_unavailable';
+    if (!Object.prototype.hasOwnProperty.call(copy, 'provider_authoritative_cost')) copy.provider_authoritative_cost = copy.provider_authoritative_cost_usd;
+    if (!Object.prototype.hasOwnProperty.call(copy, 'provider_authoritative_cost_currency')) copy.provider_authoritative_cost_currency = copy.provider_billing_currency || (copy.provider_authoritative_cost_usd === null ? null : 'USD');
+    if (!copy.reconciliation_status) copy.reconciliation_status = suppliedCalled ? 'provider_billing_unavailable' : 'not_called';
     if (!Object.prototype.hasOwnProperty.call(copy, 'reconciliation_difference_usd')) copy.reconciliation_difference_usd = null;
-    if (!Object.prototype.hasOwnProperty.call(copy, 'billing_data_missing')) copy.billing_data_missing = true;
+    if (!Object.prototype.hasOwnProperty.call(copy, 'billing_data_missing')) copy.billing_data_missing = suppliedCalled;
+    if (!Object.prototype.hasOwnProperty.call(copy, 'billing_data_invalid')) copy.billing_data_invalid = false;
+    if (!copy.estimate_status) copy.estimate_status = suppliedCalled ? 'available' : 'not_applicable';
+    if (!copy.usage_validation_status) copy.usage_validation_status = 'valid';
+    if (!Object.prototype.hasOwnProperty.call(copy, 'usage_validation_reason')) copy.usage_validation_reason = null;
     return copy;
   }
   var usage = normalizeUsageClient(d.usage || {});
@@ -11279,6 +11286,7 @@ function costDetailsFromResponse(d, fallbackModel, fallbackProvider) {
     usd = usage.input_tokens / 1e6 * rates.in + usage.output_tokens / 1e6 * rates.out;
   }
   if (typeof d.cost === 'number' && isFinite(d.cost)) usd = Number(d.cost);
+  var providerCalled = !!(usage.api_calls || usage.input_tokens || usage.output_tokens || usage.prompt_cache_hit_tokens || usage.prompt_cache_miss_tokens);
   return {
     input_tokens: usage.input_tokens,
     output_tokens: usage.output_tokens,
@@ -11296,11 +11304,19 @@ function costDetailsFromResponse(d, fallbackModel, fallbackProvider) {
     cost_value_type: 'local_estimate',
     cost_authority: 'local_rate_table',
     usage_authority: usage.api_calls > 0 ? 'provider_response' : 'not_returned',
-    provider_billing_status: 'unavailable',
+    provider_billing_status: providerCalled ? 'unavailable' : 'not_applicable',
     provider_authoritative_cost_usd: null,
-    reconciliation_status: 'provider_billing_unavailable',
+    provider_authoritative_cost: null,
+    provider_authoritative_cost_currency: null,
+    provider_billing_currency: null,
+    provider_billing_source: null,
+    reconciliation_status: providerCalled ? 'provider_billing_unavailable' : 'not_called',
     reconciliation_difference_usd: null,
-    billing_data_missing: true
+    billing_data_missing: providerCalled,
+    billing_data_invalid: false,
+    estimate_status: providerCalled ? 'available' : 'not_applicable',
+    usage_validation_status: 'valid',
+    usage_validation_reason: null
   };
 }
 function responseCost(d, fallbackModel, fallbackProvider) {
@@ -11323,9 +11339,17 @@ function statsMetaFromResponse(d, fallbackModel, fallbackProvider, extra) {
     usage_authority: c.usage_authority || (Number(c.api_calls || 0) > 0 ? 'provider_response' : 'not_returned'),
     provider_billing_status: c.provider_billing_status || 'unavailable',
     provider_authoritative_cost_usd: Object.prototype.hasOwnProperty.call(c, 'provider_authoritative_cost_usd') ? c.provider_authoritative_cost_usd : null,
+    provider_authoritative_cost: Object.prototype.hasOwnProperty.call(c, 'provider_authoritative_cost') ? c.provider_authoritative_cost : null,
+    provider_authoritative_cost_currency: c.provider_authoritative_cost_currency || null,
+    provider_billing_currency: c.provider_billing_currency || null,
+    provider_billing_source: c.provider_billing_source || null,
     reconciliation_status: c.reconciliation_status || 'provider_billing_unavailable',
     reconciliation_difference_usd: Object.prototype.hasOwnProperty.call(c, 'reconciliation_difference_usd') ? c.reconciliation_difference_usd : null,
-    billing_data_missing: c.billing_data_missing !== false
+    billing_data_missing: c.billing_data_missing !== false,
+    billing_data_invalid: c.billing_data_invalid === true,
+    estimate_status: c.estimate_status || '',
+    usage_validation_status: c.usage_validation_status || '',
+    usage_validation_reason: c.usage_validation_reason || ''
   }, extra || {});
 }
 function responseHasPaidUsage(d) {
@@ -13234,7 +13258,7 @@ function oneNoteRecordTransfer(row, resp) {
   oneNoteRecordsSave(records);
   oneNoteRenderRecords();
   var chargeableAi = rec.ai_used || rec.ai_api_called || rec.ai_cost_usd > 0;
-  try { statsRecord(rec.name, 'onenote_activity', rec.ai_cost_usd || 0, chargeableAi ? (rec.ai_model || 'ai-salary-extraction') : 'deterministic-salary-v1', rec.url, chargeableAi ? (rec.ai_provider || 'deepseek') : 'local', {input_tokens:Number(proc.inputTokens||0),output_tokens:Number(proc.outputTokens||0),cache_hit_tokens:Number(proc.promptCacheHitTokens||0),cache_miss_tokens:Number(proc.promptCacheMissTokens||0),api_calls:Number(proc.apiCalls || (proc.aiApiCalled?1:0)),pricing_model_key:proc.pricingModelKey||'',pricing_known:proc.pricingKnown!==false,cost_method:proc.costMethod||'',cost_value_type:proc.costValueType||'local_estimate',cost_authority:proc.costAuthority||'local_rate_table',usage_authority:proc.usageAuthority||'',provider_billing_status:proc.providerBillingStatus||'not_applicable',provider_authoritative_cost_usd:proc.providerAuthoritativeCostUsd,reconciliation_status:proc.reconciliationStatus||'not_called',reconciliation_difference_usd:proc.reconciliationDifferenceUsd,billing_data_missing:proc.billingDataMissing===true,outcome:'success'}); } catch(e) {}
+  try { statsRecord(rec.name, 'onenote_activity', rec.ai_cost_usd || 0, chargeableAi ? (rec.ai_model || 'ai-salary-extraction') : 'deterministic-salary-v1', rec.url, chargeableAi ? (rec.ai_provider || 'deepseek') : 'local', {input_tokens:Number(proc.inputTokens||0),output_tokens:Number(proc.outputTokens||0),cache_hit_tokens:Number(proc.promptCacheHitTokens||0),cache_miss_tokens:Number(proc.promptCacheMissTokens||0),api_calls:Number(proc.apiCalls || (proc.aiApiCalled?1:0)),pricing_model_key:proc.pricingModelKey||'',pricing_known:proc.pricingKnown!==false,cost_method:proc.costMethod||'',cost_value_type:proc.costValueType||'local_estimate',cost_authority:proc.costAuthority||'local_rate_table',usage_authority:proc.usageAuthority||'',provider_billing_status:proc.providerBillingStatus||'not_applicable',provider_authoritative_cost_usd:proc.providerAuthoritativeCostUsd,provider_authoritative_cost:proc.providerAuthoritativeCost,provider_authoritative_cost_currency:proc.providerAuthoritativeCostCurrency,provider_billing_currency:proc.providerBillingCurrency,provider_billing_source:proc.providerBillingSource,reconciliation_status:proc.reconciliationStatus||'not_called',reconciliation_difference_usd:proc.reconciliationDifferenceUsd,billing_data_missing:proc.billingDataMissing===true,billing_data_invalid:proc.billingDataInvalid===true,estimate_status:proc.estimateStatus||'',usage_validation_status:proc.usageValidationStatus||'',usage_validation_reason:proc.usageValidationReason||'',outcome:'success'}); } catch(e) {}
   return rec;
 }
 function oneNoteRecordFailedAiCost(row, resp) {
@@ -13268,7 +13292,7 @@ function oneNoteRecordFailedAiCost(row, resp) {
   records.unshift(rec);
   oneNoteRecordsSave(records);
   oneNoteRenderRecords();
-  try { statsRecord(rec.name, 'onenote_salary_failed', rec.ai_cost_usd || 0, rec.ai_model || 'salary-ai-extraction', '', rec.ai_provider || 'deepseek', {input_tokens:Number(proc.inputTokens||0),output_tokens:Number(proc.outputTokens||0),cache_hit_tokens:Number(proc.promptCacheHitTokens||0),cache_miss_tokens:Number(proc.promptCacheMissTokens||0),api_calls:Number(proc.apiCalls || (proc.aiApiCalled?1:0)),pricing_model_key:proc.pricingModelKey||'',pricing_known:proc.pricingKnown!==false,cost_method:proc.costMethod||'',cost_value_type:proc.costValueType||'local_estimate',cost_authority:proc.costAuthority||'local_rate_table',usage_authority:proc.usageAuthority||'',provider_billing_status:proc.providerBillingStatus||'unavailable',provider_authoritative_cost_usd:proc.providerAuthoritativeCostUsd,reconciliation_status:proc.reconciliationStatus||'provider_billing_unavailable',reconciliation_difference_usd:proc.reconciliationDifferenceUsd,billing_data_missing:proc.billingDataMissing!==false,outcome:'failed'}); } catch(e) {}
+  try { statsRecord(rec.name, 'onenote_salary_failed', rec.ai_cost_usd || 0, rec.ai_model || 'salary-ai-extraction', '', rec.ai_provider || 'deepseek', {input_tokens:Number(proc.inputTokens||0),output_tokens:Number(proc.outputTokens||0),cache_hit_tokens:Number(proc.promptCacheHitTokens||0),cache_miss_tokens:Number(proc.promptCacheMissTokens||0),api_calls:Number(proc.apiCalls || (proc.aiApiCalled?1:0)),pricing_model_key:proc.pricingModelKey||'',pricing_known:proc.pricingKnown!==false,cost_method:proc.costMethod||'',cost_value_type:proc.costValueType||'local_estimate',cost_authority:proc.costAuthority||'local_rate_table',usage_authority:proc.usageAuthority||'',provider_billing_status:proc.providerBillingStatus||'unavailable',provider_authoritative_cost_usd:proc.providerAuthoritativeCostUsd,provider_authoritative_cost:proc.providerAuthoritativeCost,provider_authoritative_cost_currency:proc.providerAuthoritativeCostCurrency,provider_billing_currency:proc.providerBillingCurrency,provider_billing_source:proc.providerBillingSource,reconciliation_status:proc.reconciliationStatus||'provider_billing_unavailable',reconciliation_difference_usd:proc.reconciliationDifferenceUsd,billing_data_missing:proc.billingDataMissing!==false,billing_data_invalid:proc.billingDataInvalid===true,estimate_status:proc.estimateStatus||'',usage_validation_status:proc.usageValidationStatus||'',usage_validation_reason:proc.usageValidationReason||'',outcome:'failed'}); } catch(e) {}
   return rec;
 }
 function oneNoteRenderRecords() {
@@ -18813,6 +18837,23 @@ function statsRecord(candidateName, mode, costUSD, model, jaUrl, provider, meta)
   meta = meta && typeof meta === 'object' ? meta : {};
   var records = statsLoad();
   var recordId = 'stat_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,9);
+  var authoritativeUsd = meta.provider_authoritative_cost_usd === null || meta.provider_authoritative_cost_usd === undefined ? null : Number(meta.provider_authoritative_cost_usd);
+  var authoritativeNative = meta.provider_authoritative_cost === null || meta.provider_authoritative_cost === undefined ? null : Number(meta.provider_authoritative_cost);
+  var reconciliationDifference = meta.reconciliation_difference_usd === null || meta.reconciliation_difference_usd === undefined ? null : Number(meta.reconciliation_difference_usd);
+  if (!isFinite(authoritativeUsd)) authoritativeUsd = null;
+  if (!isFinite(authoritativeNative)) authoritativeNative = null;
+  if (!isFinite(reconciliationDifference)) reconciliationDifference = null;
+  var billingCurrencyRaw = String(meta.provider_billing_currency || '').trim().toUpperCase().slice(0, 12);
+  var billingCurrency = /^[A-Z]{3}$/.test(billingCurrencyRaw) ? billingCurrencyRaw : null;
+  var nativeCurrencyRaw = String(meta.provider_authoritative_cost_currency || '').trim().toUpperCase().slice(0, 12);
+  var nativeCurrency = /^[A-Z]{3}$/.test(nativeCurrencyRaw) ? nativeCurrencyRaw : null;
+  var billingStatus = meta.provider_billing_status || 'unavailable';
+  var billingInvalid = meta.billing_data_invalid === true
+    || (!!billingCurrencyRaw && billingCurrency === null)
+    || (!!nativeCurrencyRaw && nativeCurrency === null)
+    || (billingStatus === 'authoritative' && authoritativeUsd === null)
+    || (billingStatus === 'authoritative_non_usd' && authoritativeNative === null);
+  if (billingInvalid) billingStatus = 'invalid';
   records.push({
     id: recordId,
     ts: new Date().toISOString(),
@@ -18834,11 +18875,19 @@ function statsRecord(candidateName, mode, costUSD, model, jaUrl, provider, meta)
     cost_value_type: meta.cost_value_type || 'local_estimate',
     cost_authority: meta.cost_authority || 'local_rate_table',
     usage_authority: meta.usage_authority || (Number(meta.api_calls || 0) > 0 ? 'provider_response' : 'not_returned'),
-    provider_billing_status: meta.provider_billing_status || 'unavailable',
-    provider_authoritative_cost_usd: meta.provider_authoritative_cost_usd === null || meta.provider_authoritative_cost_usd === undefined ? null : Number(meta.provider_authoritative_cost_usd),
-    reconciliation_status: meta.reconciliation_status || 'provider_billing_unavailable',
-    reconciliation_difference_usd: meta.reconciliation_difference_usd === null || meta.reconciliation_difference_usd === undefined ? null : Number(meta.reconciliation_difference_usd),
-    billing_data_missing: meta.billing_data_missing !== false,
+    provider_billing_status: billingStatus,
+    provider_authoritative_cost_usd: authoritativeUsd,
+    provider_authoritative_cost: authoritativeNative,
+    provider_authoritative_cost_currency: nativeCurrency,
+    provider_billing_currency: billingCurrency,
+    provider_billing_source: String(meta.provider_billing_source || '').slice(0, 160) || null,
+    reconciliation_status: billingInvalid ? 'reconciliation_failed' : (meta.reconciliation_status || 'provider_billing_unavailable'),
+    reconciliation_difference_usd: reconciliationDifference,
+    billing_data_missing: billingInvalid ? false : meta.billing_data_missing !== false,
+    billing_data_invalid: billingInvalid,
+    estimate_status: String(meta.estimate_status || '').slice(0, 80),
+    usage_validation_status: String(meta.usage_validation_status || '').slice(0, 80),
+    usage_validation_reason: String(meta.usage_validation_reason || '').slice(0, 160),
     outcome: meta.outcome || 'success'
   });
   statsSave(records);
@@ -18995,7 +19044,7 @@ function exportStatsExcel() {
     ['Period:', filterLabel],
     ['Exported:', new Date().toLocaleString('en-MY')],
     [],
-    ['Date', 'Time', 'Item', 'Mode', 'Outcome', 'Input Tokens', 'Output Tokens', 'Cache Hit Tokens', 'Cache Miss Tokens', 'API Calls', 'Cost Method', 'Estimate (USD)', 'Estimate (MYR)', 'Cost Authority', 'Usage Authority', 'Billing Status', 'Authoritative Cost (USD)', 'Reconciliation Status', 'Difference (USD)', 'Provider', 'Model'],
+    ['Date', 'Time', 'Item', 'Mode', 'Outcome', 'Input Tokens', 'Output Tokens', 'Cache Hit Tokens', 'Cache Miss Tokens', 'API Calls', 'Cost Method', 'Estimate Status', 'Usage Validation', 'Estimate (USD)', 'Estimate (MYR)', 'Cost Authority', 'Usage Authority', 'Billing Status', 'Authoritative Cost (USD)', 'Authoritative Cost (Native)', 'Billing Currency', 'Billing Source', 'Reconciliation Status', 'Difference (USD)', 'Billing Data Invalid', 'Provider', 'Model'],
   ];
 
   records.slice().reverse().forEach(function(r) {
@@ -19012,14 +19061,20 @@ function exportStatsExcel() {
       Object.prototype.hasOwnProperty.call(r, 'cache_miss_tokens') ? Number(r.cache_miss_tokens || 0) : '',
       Object.prototype.hasOwnProperty.call(r, 'api_calls') ? Number(r.api_calls || 0) : '',
       r.cost_method || (Object.prototype.hasOwnProperty.call(r, 'input_tokens') ? '' : 'legacy_cost_only'),
+      r.estimate_status || '',
+      r.usage_validation_status || '',
       r.cost ? r.cost.toFixed(6) : '0',
       r.cost ? (r.cost * USD_MYR).toFixed(4) : '0',
       r.cost_authority || (Object.prototype.hasOwnProperty.call(r, 'input_tokens') ? 'local_rate_table' : 'legacy_stored_value'),
       r.usage_authority || '',
       r.provider_billing_status || 'unavailable',
       r.provider_authoritative_cost_usd === null || r.provider_authoritative_cost_usd === undefined ? '' : Number(r.provider_authoritative_cost_usd).toFixed(6),
+      r.provider_authoritative_cost === null || r.provider_authoritative_cost === undefined ? '' : Number(r.provider_authoritative_cost).toFixed(6),
+      r.provider_billing_currency || r.provider_authoritative_cost_currency || '',
+      r.provider_billing_source || '',
       r.reconciliation_status || 'provider_billing_unavailable',
       r.reconciliation_difference_usd === null || r.reconciliation_difference_usd === undefined ? '' : Number(r.reconciliation_difference_usd).toFixed(6),
+      r.billing_data_invalid === true ? 'yes' : 'no',
       providerLabel(r.provider, r.model),
       (r.model || '').replace('claude-', ''),
     ]);

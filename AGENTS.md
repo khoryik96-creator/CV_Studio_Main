@@ -40,9 +40,13 @@
   in **CV Studio v24.6.235** without changing routes, security gates, storage
   schemas, provider retry/non-replay behavior or Phase 5A journal semantics.
 - Current completed private owner/source release: **CV Studio v24.6.235**.
+- The owner authorized a post-release Phase 5B corrective review on 26 July
+  2026 against the exact v24.6.234 master baseline. That bounded review is the
+  active milestone on `codex/phase-5b-ai-cost-guardrails`; it may correct only
+  concrete AI cost-guardrail, estimate-provenance and provider-billing
+  reconciliation defects and must preserve every Phase 5B scope boundary.
 - Phases 1, 2A, 2B, 3, 4, 5A and 5B are complete.
-- Every Phase 6 area remains inactive. There is no active implementation
-  target.
+- Every Phase 6 area remains inactive.
 
 ## Completed scope: Phase 5B
 

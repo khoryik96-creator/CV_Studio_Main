@@ -94,6 +94,55 @@ assert.strictEqual(fallback.usage_authority, 'provider_response');
 assert.strictEqual(fallback.provider_authoritative_cost_usd, null);
 assert.strictEqual(fallback.billing_data_missing, true);
 
+const noCall = context.costDetailsFromResponse({
+  model: 'claude-sonnet-4-6',
+  provider: 'anthropic',
+  usage: {},
+}, '', '');
+assert.strictEqual(noCall.provider_billing_status, 'not_applicable');
+assert.strictEqual(noCall.reconciliation_status, 'not_called');
+assert.strictEqual(noCall.billing_data_missing, false);
+
+const nonUsd = context.costDetailsFromResponse({
+  model: 'gpt-5.4-mini',
+  provider: 'openai',
+  cost_details: {
+    usd: 0.001,
+    input_tokens: 10,
+    output_tokens: 1,
+    api_calls: 1,
+    provider_billing_status: 'authoritative_non_usd',
+    provider_authoritative_cost_usd: null,
+    provider_authoritative_cost: 0,
+    provider_authoritative_cost_currency: 'EUR',
+    provider_billing_currency: 'EUR',
+    provider_billing_source: 'provider_invoice',
+    reconciliation_status: 'currency_conversion_unavailable',
+    billing_data_missing: false,
+  },
+}, '', '');
+const nonUsdMeta = context.statsMetaFromResponse(
+  {model: 'gpt-5.4-mini', provider: 'openai', cost_details: nonUsd},
+  '',
+  '',
+);
+context.statsRecord('Non-USD', 'format', nonUsd.usd, 'gpt-5.4-mini', '', 'openai', nonUsdMeta);
+assert.strictEqual(saved[0].provider_authoritative_cost, 0);
+assert.strictEqual(saved[0].provider_billing_currency, 'EUR');
+assert.strictEqual(saved[0].billing_data_invalid, false);
+
+context.statsRecord('Malformed', 'format', 0.001, 'gpt-5.4-mini', '', 'openai', {
+  provider_billing_status: 'authoritative',
+  provider_authoritative_cost_usd: 'not-a-number',
+  provider_billing_currency: 'USD',
+  reconciliation_status: 'reconciled',
+  billing_data_missing: false,
+});
+assert.strictEqual(saved[0].provider_billing_status, 'invalid');
+assert.strictEqual(saved[0].provider_authoritative_cost_usd, null);
+assert.strictEqual(saved[0].reconciliation_status, 'reconciliation_failed');
+assert.strictEqual(saved[0].billing_data_invalid, true);
+
 const meta = context.statsMetaFromResponse({
   model: 'claude-sonnet-4-6',
   provider: 'anthropic',

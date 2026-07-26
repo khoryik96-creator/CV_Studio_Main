@@ -253,7 +253,7 @@ from cvstudio_ai_costs import (
     MODEL_PRICING_USD_PER_MILLION as _PHASE5B_MODEL_PRICING,
     cost_details as _phase5b_cost_details,
     enforce_request_guardrail as _phase5b_enforce_request_guardrail,
-    extract_provider_billing as _phase5b_extract_provider_billing,
+    extract_provider_billing_result as _phase5b_extract_provider_billing_result,
     merge_usage as _phase5b_merge_usage,
     normalize_provider as _phase5b_normalize_provider,
     normalize_usage as _phase5b_normalize_usage,
@@ -1432,7 +1432,10 @@ def _call_openai(api_key, payload_dict, timeout_seconds=180):
     depending on whether a given call needs search.
     """
     req_payload = _openai_payload_from_anthropic_shape(payload_dict)
-    _phase5b_enforce_request_guardrail("openai", req_payload)
+    guard_payload = dict(req_payload)
+    if "max_tokens" in payload_dict:
+        guard_payload["max_output_tokens"] = payload_dict.get("max_tokens")
+    _phase5b_enforce_request_guardrail("openai", guard_payload)
     data = _AI_PROVIDER_CLIENT.request(
         "openai",
         api_key,
@@ -1440,9 +1443,12 @@ def _call_openai(api_key, payload_dict, timeout_seconds=180):
         timeout=timeout_seconds,
     )
     translated = _openai_response_to_anthropic_shape(data)
-    billing = _phase5b_extract_provider_billing("openai", data)
+    billing_result = _phase5b_extract_provider_billing_result("openai", data)
+    billing = billing_result.get("billing")
     if billing:
         translated["_cvstudio_provider_billing"] = billing
+    if billing_result.get("error"):
+        translated["_cvstudio_provider_billing_error"] = billing_result["error"]
     return translated
 
 
@@ -1476,10 +1482,23 @@ def call_llm(provider, api_key, payload_dict):
         data = call_anthropic(api_key, payload_dict)
     if isinstance(data, dict):
         data = dict(data)
-        billing = _phase5b_extract_provider_billing(provider, data)
+        billing_result = _phase5b_extract_provider_billing_result(provider, data)
+        billing = billing_result.get("billing")
+        billing_error = (
+            billing_result.get("error")
+            or data.get("_cvstudio_provider_billing_error")
+        )
+        # Raw billing envelopes may contain provider account references or
+        # malformed fields. Never return or persist them; retain only the
+        # normalized allowlist or a sanitized failure status in usage.
+        data.pop("provider_billing", None)
+        data.pop("_cvstudio_provider_billing", None)
+        data.pop("_cvstudio_provider_billing_error", None)
         usage = _normalize_llm_usage(data.get("usage"), api_calls=1)
         if billing:
             usage["_cvstudio_provider_billing"] = billing
+        if billing_error:
+            usage["_cvstudio_provider_billing_error"] = billing_error
         data["usage"] = usage
     return data
 
@@ -8990,6 +9009,12 @@ def _ja_salary_cost_provenance(cost, paid_call_status):
         "providerAuthoritativeCostUsd": cost.get(
             "provider_authoritative_cost_usd"
         ),
+        "providerAuthoritativeCost": cost.get(
+            "provider_authoritative_cost"
+        ),
+        "providerAuthoritativeCostCurrency": cost.get(
+            "provider_authoritative_cost_currency"
+        ),
         "providerBillingCurrency": cost.get("provider_billing_currency"),
         "providerBillingSource": cost.get("provider_billing_source"),
         "reconciliationStatus": str(
@@ -9000,6 +9025,14 @@ def _ja_salary_cost_provenance(cost, paid_call_status):
             "reconciliation_difference_usd"
         ),
         "billingDataMissing": bool(cost.get("billing_data_missing", True)),
+        "billingDataInvalid": bool(cost.get("billing_data_invalid", False)),
+        "estimateStatus": str(cost.get("estimate_status") or ""),
+        "usageValidationStatus": str(
+            cost.get("usage_validation_status") or ""
+        ),
+        "usageValidationReason": str(
+            cost.get("usage_validation_reason") or ""
+        ),
         "guardrailEnabled": bool(cost.get("guardrail_enabled")),
         "guardrailLimitUsd": cost.get("guardrail_limit_usd"),
         "guardrailStatus": str(cost.get("guardrail_status") or ""),
@@ -18846,6 +18879,7 @@ def lead_finder_title_cache_clear():
 def lead_finder_search():
     """Find selected-country job leads first. People discovery is a separate lighter step."""
     try:
+        ai_request_started = False
         body = request.get_json(force=True, silent=True) or {}
         if not _lead_finder_lock_allowed(body):
             return _lead_finder_locked_response()
@@ -18921,6 +18955,7 @@ def lead_finder_search():
                 _lead_title_cache_touch(cached_entry)
                 title_expansion_warning = f"Reused cached AI title angles from a similar previous CV ({int(cache_score * 100)}% content-evidence match) — no extra AI cost."
             else:
+                ai_request_started = True
                 ai_titles, title_expansion_usage, title_expansion_warning = _lead_ai_expand_title_angles(
                     api_key, model, role_search_target, cv_excerpt, candidate_context, industries,
                     primary_families=primary_families, llm_provider=llm_provider
@@ -18995,6 +19030,7 @@ def lead_finder_search():
                     warnings.append(provider_warning)
                 usage = {}
                 if real_count == 0 and bool(body.get("allow_provider_ai_refine")):
+                    ai_request_started = True
                     parsed, ai_warning, usage = _lead_extract_from_search_provider_results(
                         api_key, model, search_provider, provider_results, regions, job_sources, job_title_angles,
                         role_search_target, industries, candidate_context, cv_excerpt,
@@ -19225,6 +19261,7 @@ TARGET COUNT
             "_fallback_timeout_seconds": depth_cfg["fallback_timeout"],
             "_skip_no_web_fallback": True,
         }
+        ai_request_started = True
         data, warning = _lead_call_with_optional_web(api_key, payload, graceful_json=graceful_json, provider=llm_provider)
         raw_text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text" or "text" in b)
         parse_warning = ""
@@ -19355,7 +19392,14 @@ TARGET COUNT
             locals().get("model", ""),
             locals().get("llm_provider", "anthropic"),
             locals().get("usage") or locals().get("title_expansion_usage"),
-            attempted=True,
+            attempted=bool(
+                locals().get("ai_request_started")
+                or _llm_usage_int(
+                    locals().get("usage")
+                    or locals().get("title_expansion_usage"),
+                    "api_calls",
+                )
+            ),
         ))
         if locals().get("search_provider", {}).get("enabled"):
             out["external_billing"] = _phase5b_unavailable_external_billing(
@@ -19373,7 +19417,14 @@ TARGET COUNT
             locals().get("model", ""),
             locals().get("llm_provider", "anthropic"),
             locals().get("usage") or locals().get("title_expansion_usage"),
-            attempted=True,
+            attempted=bool(
+                locals().get("ai_request_started")
+                or _llm_usage_int(
+                    locals().get("usage")
+                    or locals().get("title_expansion_usage"),
+                    "api_calls",
+                )
+            ),
         ))
         if locals().get("search_provider", {}).get("enabled"):
             out["external_billing"] = _phase5b_unavailable_external_billing(
@@ -19392,7 +19443,14 @@ TARGET COUNT
             locals().get("model", ""),
             locals().get("llm_provider", "anthropic"),
             locals().get("usage") or locals().get("title_expansion_usage"),
-            attempted=bool(locals().get("api_key")),
+            attempted=bool(
+                locals().get("ai_request_started")
+                or _llm_usage_int(
+                    locals().get("usage")
+                    or locals().get("title_expansion_usage"),
+                    "api_calls",
+                )
+            ),
         ))
         if locals().get("search_provider", {}).get("enabled"):
             out["external_billing"] = _phase5b_unavailable_external_billing(

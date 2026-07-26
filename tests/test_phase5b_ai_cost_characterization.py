@@ -552,6 +552,122 @@ class Phase5BAICostCharacterizationTests(unittest.TestCase):
             details["provider_authoritative_cost_usd"],
         )
 
+    def test_malformed_billing_does_not_discard_a_successful_paid_response(self):
+        provider_response = {
+            "content": [{"type": "text", "text": "fixture"}],
+            "usage": {"input_tokens": 10, "output_tokens": 2},
+            "provider_billing": {
+                "authoritative": True,
+                "source": "provider_response",
+                "scope": "request",
+                "currency": "USD",
+                "amount": "malformed",
+                "account_token": "<must-not-survive>",
+            },
+        }
+        with mock.patch.dict(
+            os.environ,
+            {},
+            clear=False,
+        ), mock.patch.object(
+            app._AI_PROVIDER_CLIENT,
+            "request",
+            return_value=provider_response,
+        ):
+            os.environ.pop(AI_COST_GUARDRAIL_ENV, None)
+            result = app.call_llm(
+                "anthropic",
+                "<fixture-credential>",
+                {
+                    "model": "claude-sonnet-4-6",
+                    "max_tokens": 100,
+                    "messages": [{"role": "user", "content": "fixture"}],
+                },
+            )
+
+        self.assertEqual(result["content"][0]["text"], "fixture")
+        self.assertEqual(result["usage"]["api_calls"], 1)
+        self.assertNotIn("provider_billing", result)
+        self.assertNotIn("<must-not-survive>", repr(result))
+        details = app._llm_cost_details(
+            "claude-sonnet-4-6",
+            result["usage"],
+            "anthropic",
+        )
+        self.assertEqual(details["provider_billing_status"], "invalid")
+        self.assertEqual(
+            details["reconciliation_status"],
+            "reconciliation_failed",
+        )
+        self.assertTrue(details["billing_data_invalid"])
+        self.assertFalse(details["billing_data_missing"])
+
+    def test_external_search_failure_is_not_mislabeled_as_an_ai_call(self):
+        search_config = {
+            "enabled": True,
+            "provider": "tavily",
+            "api_key": "<fixture-credential>",
+        }
+        external_error = app.urllib.error.HTTPError(
+            "https://example.invalid/search",
+            503,
+            "fixture search-provider failure",
+            {},
+            io.BytesIO(b'{"error":{"message":"fixture"}}'),
+        )
+        with mock.patch.object(
+            app,
+            "_lead_finder_lock_allowed",
+            return_value=True,
+        ), mock.patch.object(
+            app,
+            "_resolve_request_api_key",
+            return_value="sk-ant-fixture",
+        ), mock.patch.object(
+            app,
+            "_lead_search_provider_config",
+            return_value=search_config,
+        ), mock.patch.object(
+            app,
+            "_lead_collect_search_provider_results",
+            side_effect=external_error,
+        ), mock.patch.object(
+            app._AI_PROVIDER_CLIENT,
+            "request",
+        ) as ai_request:
+            response = self._post_paid(
+                "/lead-finder/search",
+                {
+                    "cv_text": "Fixture CV",
+                    "regions": ["Malaysia"],
+                    "job_sources": ["Company career pages"],
+                    "search_provider": {"provider": "tavily"},
+                },
+                "phase5b-external-before-ai",
+            )
+        external_error.close()
+        ai_request.assert_not_called()
+        payload = response.get_json()
+        self.assertEqual(payload["paid_call_status"], "not_called")
+        self.assertEqual(
+            payload["billing_reconciliation"]["provider_billing_status"],
+            "not_applicable",
+        )
+        self.assertEqual(
+            payload["billing_reconciliation"]["reconciliation_status"],
+            "not_called",
+        )
+        self.assertEqual(
+            payload["billing_reconciliation"]["provider_billing_status"],
+            "not_applicable",
+        )
+        self.assertFalse(
+            payload["billing_reconciliation"]["billing_data_missing"]
+        )
+        self.assertFalse(
+            payload["billing_reconciliation"]["billing_data_missing"]
+        )
+
     def test_deepseek_history_cutoff_and_non_secret_storage_boundary_are_explicit(self):
         frontend = Path(app.__file__).with_name("index.html").read_text(
             encoding="utf-8-sig"

@@ -16,10 +16,11 @@
 - Phase 5B source baseline: v24.6.234
 - Phase 5B baseline Git commit: `327858799f17d880e37c740f71dfe321ea7bde0a`
 - Working branch: `codex/phase-5b-ai-cost-guardrails`
-- Active phase: none; Phase 5B complete and Phase 6 inactive
+- Active phase: Phase 5B post-release corrective review; Phase 6 inactive
 - Completed private owner/source release: v24.6.235
-- Status: Phase 5B acceptance and private owner/source release complete
-- Current milestone: none; stop before handoff, merge or Phase 6
+- Status: corrective review and regression hardening in progress
+- Current milestone: repeated exact-master corrective review; stop before
+  handoff, merge or Phase 6
 
 ## Phase 5B authorization and constraints
 
@@ -461,6 +462,67 @@
 - No live credentials, paid/provider call, protected colleague build, native
   compilation or genuine macOS test was performed or claimed. Work stops
   before handoff, merge and Phase 6.
+
+## Phase 5B post-release corrective review
+
+- The owner authorized a complete review of the Phase 5B branch against exact
+  master `327858799f17d880e37c740f71dfe321ea7bde0a` on 26 July 2026. The
+  worktree and branch were clean at review entry; the merge base remains that
+  exact master commit.
+- Added failing regression characterization before production correction for
+  each concrete first-pass finding:
+  - explicit zero, boolean, fractional and string output-token ceilings could
+    be defaulted or truncated during guard evaluation;
+  - float conversion could erase a small but real estimate-versus-limit
+    difference at the enforcement boundary;
+  - merged partial/malformed billing records could silently discard invalid
+    entries and retain unallowlisted provider/account fields;
+  - missing currency and mismatched provider identity could still be accepted
+    as authority;
+  - delayed/partial authority lacked a distinct safe reconciliation state;
+  - non-USD authoritative amounts were discarded even though their currency
+    remained visible;
+  - a no-call result incorrectly claimed provider billing was missing;
+  - malformed usage counters could become a valid-looking zero estimate;
+  - malformed billing could convert a successful paid inference into a route
+    failure, discard returned usage/output and encourage a duplicate retry;
+  - a search-provider failure before any AI request could be mislabeled as an
+    ambiguous AI charge.
+- The bounded correction now validates output ceilings as positive bounded
+  integers and compares the exact decimal estimate to the configured limit
+  before transport. It does not clamp or substitute invalid requested values.
+- Billing normalization now requires an explicit three-letter currency,
+  rejects provider mismatch, preserves a bounded authoritative native-currency
+  amount without inventing conversion, and represents pending, partial,
+  unavailable and invalid data separately. Raw or malformed billing envelopes
+  are stripped from returned usage; only allowlisted normalized fields or a
+  non-secret status marker survive.
+- A malformed reconciliation envelope no longer discards a successful
+  inference response. Returned content and usage remain available, while
+  `provider_billing_status=invalid` and
+  `reconciliation_status=reconciliation_failed` make the accounting defect
+  visible. No automatic retry or replay is introduced.
+- No-call and pre-transport guardrail failures now use
+  `provider_billing_status=not_applicable`,
+  `reconciliation_status=not_called` and `billing_data_missing=false`.
+  Malformed provider token/call counters retain legacy numeric compatibility
+  fields but set the additive estimate to unavailable with invalid-usage
+  provenance.
+- Lead Finder now tracks whether an AI request actually started before adding
+  paid-call ambiguity fields, so a Tavily/SerpAPI failure before AI transport
+  cannot be attributed to an AI charge. Existing search-provider billing
+  status remains separate.
+- Browser history retains native authoritative amount/currency/source,
+  invalid-data and estimate/usage-validation provenance inside the existing
+  schema-10 JSON payload. Malformed persisted billing numbers are converted to
+  an explicit invalid reconciliation rather than `NaN`, zero or authority.
+- First corrective targeted validation passes 25 Phase 5B Python tests, the
+  Phase 5B frontend fixture and 84 Phase 3/4/5A/5B focused tests with
+  `ResourceWarning` treated as an error. Repeated review and complete
+  acceptance remain pending.
+- No route, security guard, confirmation gate, provider endpoint/header/
+  timeout/retry rule, SQLite schema, journal schema/semantic, credential slot,
+  worker or Phase 6 scope changed.
 
 ## Phase 5A authorization and constraints
 
