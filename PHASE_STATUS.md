@@ -18,7 +18,7 @@
 - Completed private owner/source release: v24.6.232
 - Status: Phase 5A explicitly authorized; entry gates passed and inventory/
   characterization is the first implementation milestone
-- Current milestone: Phase 5A Milestone 2 — bounded persistent-job foundation
+- Current milestone: Phase 5A Milestone 3 — existing-work integration
 
 ## Phase 5A authorization and constraints
 
@@ -139,7 +139,7 @@
 - [x] Record owner authorization, scope boundaries and bounded milestone plan.
 - [x] Complete background-work/state/recovery inventory.
 - [x] Add pre-change characterization for lifecycle and failure paths.
-- [ ] Implement and verify the bounded persistent-job foundation.
+- [x] Implement and verify the bounded persistent-job foundation.
 - [ ] Integrate only compatible existing background work.
 - [ ] Implement and verify bounded startup/shutdown recovery.
 - [ ] Run complete acceptance and repeated compatibility review.
@@ -347,6 +347,48 @@
   tab/OneNote task-state markers.
 - All external behavior is controlled by fixtures. No live credential,
   protected secret, external mutation or paid call is used.
+
+## Phase 5A Milestone 2 bounded persistent-job foundation result
+
+- Added app-independent `cvstudio_jobs.py`. It does not import `app`, open the
+  primary SQLite database, access a protected store, start a thread or perform
+  a network request.
+- The separate atomic JSON journal defaults to
+  `cv_studio_jobs.json` in the existing private per-user state directory.
+  Tests may use `CVSTUDIO_JOB_STATE_PATH`; an existing `CVSTUDIO_DB_PATH`
+  override places the journal beside the temporary test database.
+- The journal schema is independent metadata format 1. Primary
+  `cvstudio_storage.py` remains exactly at schema version 10 with no migration,
+  table, backup, repository or authority change.
+- Records are capped at 500 and the journal at 2 MiB. Atomic writes use a
+  same-directory temporary file, flush/fsync and `os.replace`; in-memory state
+  changes only after the durable replace succeeds. Terminal records are pruned
+  oldest-first, while active work is never silently evicted.
+- Records admit only opaque SHA-256 IDs, bounded kind/safety/stage names,
+  lifecycle/progress values, attempt/recovery counts, timestamps, request IDs
+  and bounded sanitized error/recovery metadata. No input payload, candidate
+  identifier, email, credential, document content, result or private path is
+  accepted.
+- Explicit states are `queued`, `running`, `succeeded`, `failed`,
+  `cancel_requested`, `cancelled`, `interrupted` and `needs_attention`.
+  Conflicting concurrent claims fail with `JOB_ALREADY_RUNNING`.
+- Startup recovery converts active safe/idempotent work to explicit retryable
+  `interrupted`, closes cancellation requests, and converts active paid/
+  externally mutating work to non-retryable `needs_attention`. It never
+  executes a job. Reconciliation is idempotent and safe recovery is capped at
+  three interrupted process lifetimes before `JOB_RECOVERY_LIMIT_REACHED`
+  requires an explicit manual retry.
+- Corrupt/unsupported/oversized journals are never overwritten. Atomic write
+  and corruption failures raise typed failure-visible errors with bounded
+  recovery guidance.
+- Added seven foundation tests covering atomic lifecycle, opaque persisted
+  metadata, pruning, concurrent-claim conflict, safe/unsafe/cancel restart
+  classification, idempotent and bounded recovery, write-failure rollback,
+  corrupt-byte preservation, kind cancellation and sensitive-text redaction.
+- All seven tests pass with `ResourceWarning` treated as an error. Python
+  compilation and Git whitespace validation pass.
+- Owner-source validation/preflight now requires and compiles
+  `cvstudio_jobs.py`; no protected package or native build is created.
 
 ## Phase 4 authorization and constraints
 
