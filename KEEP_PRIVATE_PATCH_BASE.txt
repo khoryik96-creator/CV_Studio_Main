@@ -1,5 +1,5 @@
 CV Studio private source patch base
-Version: v24.6.234
+Version: v24.6.235
 Keep this ZIP for future patches. Do not distribute this source package to colleagues.
 
 JobAdder API investigation source of truth:
@@ -1083,3 +1083,22 @@ Patch note v24.6.193: cross-platform deterministic adm-zip tree hashing fixes th
 - Does not add Phase 5B cost guardrails, credential migration, new workflows,
   frontend modularisation, Phase 6 work or backburner items 4, 7 or 8.
 - Stops before handoff, merge, Phase 5B and Phase 6.
+
+## v24.6.235 Phase 5B AI cost guardrails and billing reconciliation
+
+- Adds app-independent `cvstudio_ai_costs.py` for canonical provider usage,
+  the established local rate estimates, opt-in request ceilings and strict
+  billing reconciliation.
+- Keeps legacy numeric `cost` values as estimates while exposing usage
+  authority, cost authority, nullable provider-authoritative cost and explicit
+  reconciliation status.
+- Uses `CVSTUDIO_AI_MAX_ESTIMATED_REQUEST_USD` only when explicitly configured;
+  default behavior is unchanged and blocked requests stop before transport.
+- Marks provider/network ambiguity without replaying paid operations and keeps
+  Tavily, SerpAPI and Apollo billing separate from AI token estimates.
+- Retains all 107 routes, five guards, 18 compatibility signatures, SQLite
+  schema 10, journal schema 1, provider endpoints/headers/timeouts/zero-retry,
+  protected credentials and the v24.6.215 DeepSeek history cutoff.
+- Does not add an admin billing credential, route, ledger, worker, schema,
+  Phase 6 work or backburner item 4, 7 or 8.
+- Stops before handoff, merge and Phase 6.

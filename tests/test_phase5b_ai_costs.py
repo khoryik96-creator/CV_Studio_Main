@@ -96,9 +96,9 @@ class Phase5BAICostFoundationTests(unittest.TestCase):
         billing = {
             "authoritative": True,
             "source": "provider_cost_report",
+            "scope": "request",
             "currency": "USD",
             "amount": "0.0042",
-            "reference": "fixture-redacted-reference",
         }
         reconciled = cost_details(
             "deepseek-v4-flash",
@@ -130,6 +130,7 @@ class Phase5BAICostFoundationTests(unittest.TestCase):
             provider_billing={
                 "authoritative": True,
                 "source": "provider_invoice",
+                "scope": "request",
                 "currency": "EUR",
                 "amount": "0.01",
             },
@@ -148,18 +149,38 @@ class Phase5BAICostFoundationTests(unittest.TestCase):
 
     def test_invalid_billing_authority_fails_visibly(self):
         invalid_records = [
-            {"source": "provider_invoice", "currency": "USD", "amount": "1"},
+            {
+                "source": "provider_invoice",
+                "scope": "request",
+                "currency": "USD",
+                "amount": "1",
+            },
             {
                 "authoritative": True,
                 "source": "client_estimate",
+                "scope": "request",
                 "currency": "USD",
                 "amount": "1",
             },
             {
                 "authoritative": True,
                 "source": "provider_invoice",
+                "scope": "request",
                 "currency": "USD",
                 "amount": "-1",
+            },
+            {
+                "authoritative": True,
+                "source": "provider_invoice",
+                "currency": "USD",
+                "amount": "1",
+            },
+            {
+                "authoritative": True,
+                "source": "provider_invoice",
+                "scope": "request",
+                "currency": "USD",
+                "amount": "1e100",
             },
         ]
         for record in invalid_records:
@@ -204,6 +225,18 @@ class Phase5BAICostFoundationTests(unittest.TestCase):
             )
         self.assertEqual(blocked.exception.details["status"], "blocked")
         self.assertNotIn("fixture", str(blocked.exception))
+
+        for output_value in ("invalid", -1, 10 ** 1000):
+            with self.subTest(output_value=str(output_value)[:20]):
+                with self.assertRaises(AICostGuardrailError):
+                    enforce_request_guardrail(
+                        "openai",
+                        {
+                            "model": "gpt-5.5-pro",
+                            "max_tokens": output_value,
+                        },
+                        environ={AI_COST_GUARDRAIL_ENV: "10000"},
+                    )
 
     def test_invalid_guardrail_configuration_fails_before_estimation(self):
         for value in ("not-a-number", "nan", "0", "-1", "10001"):

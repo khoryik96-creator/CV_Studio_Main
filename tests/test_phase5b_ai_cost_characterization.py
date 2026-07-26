@@ -518,6 +518,7 @@ class Phase5BAICostCharacterizationTests(unittest.TestCase):
             "provider_billing": {
                 "authoritative": True,
                 "source": "provider_response",
+                "scope": "request",
                 "currency": "USD",
                 "amount": "0.004",
             },

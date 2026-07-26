@@ -21,8 +21,10 @@
   state for the existing safe AI Crawler preview-prefetch boundary.
 - v24.6.234 corrected all ten Phase 5A post-release persistence-boundary
   findings without broadening the milestone.
-- Phases 1, 2A, 2B, 3, 4 and 5A are complete.
-- No later phase is active. Phase 5B requires a new explicit owner instruction.
+- v24.6.235 completed central AI cost guardrails and provider-billing
+  reconciliation without changing schema or paid-call replay boundaries.
+- Phases 1, 2A, 2B, 3, 4, 5A and 5B are complete.
+- No later phase is active. Phase 6 requires a new explicit owner instruction.
 
 ## Phase 1 — Completed
 
@@ -162,11 +164,14 @@ Persistent background jobs and resumable task state:
   work;
 - no new route, worker, frontend workflow or result store.
 
-## Phase 5B — Future
+## Phase 5B — Completed in v24.6.235
 
-Central AI cost guardrails and provider billing reconciliation require a new
-explicit owner authorization. Do not infer Phase 5B authority from the
-completed Phase 5A release.
+- app-independent usage, estimate, guardrail and reconciliation foundation;
+- opt-in conservative per-request ceiling before provider transport;
+- explicit local-estimate, provider-usage and nullable billing authority;
+- failure-visible invalid/missing/ambiguous billing state;
+- preserved routes, gates, schemas, provider zero-retry and Phase 5A non-replay
+  semantics.
 
 ## Phase 6 — Future
 

@@ -3,8 +3,8 @@
 ## Release state
 
 - Approved baseline: v24.6.217
-- Completed release: v24.6.234
-- Previous completed release: v24.6.233
+- Completed release: v24.6.235
+- Previous completed release: v24.6.234
 - Phase 2B source baseline: v24.6.219
 - Phase 2B baseline Git commit: `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`
 - Phase 3 source baseline: v24.6.222
@@ -13,12 +13,13 @@
 - Phase 4 baseline Git commit: `7a0efcf0bce10b07e034592fb22a6021141d4146`
 - Phase 5A source baseline: v24.6.232
 - Phase 5A baseline Git commit: `4b366ddde1cf0a398706b52d55b0e82ed2dbc27c`
+- Phase 5B source baseline: v24.6.234
+- Phase 5B baseline Git commit: `327858799f17d880e37c740f71dfe321ea7bde0a`
 - Working branch: `codex/phase-5b-ai-cost-guardrails`
-- Active phase: Phase 5B central AI cost guardrails and provider-billing
-  reconciliation
-- Completed private owner/source release: v24.6.234
-- Status: Milestone 3 existing-call integration complete
-- Current milestone: Phase 5B Milestone 4 acceptance and release evidence
+- Active phase: none; Phase 5B complete and Phase 6 inactive
+- Completed private owner/source release: v24.6.235
+- Status: Phase 5B acceptance and private owner/source release complete
+- Current milestone: none; stop before handoff, merge or Phase 6
 
 ## Phase 5B authorization and constraints
 
@@ -135,9 +136,9 @@
 - [x] Add pre-change characterization for all in-scope field contracts.
 - [x] Implement and verify the central accounting/guardrail foundation.
 - [x] Integrate only compatible existing paid-provider call boundaries.
-- [ ] Run complete acceptance and repeated exact-master review.
-- [ ] Create and byte-verify the Phase 5B private owner/source release.
-- [ ] Produce QA report, sidecars and Phase 6 handover; stop before Phase 6.
+- [x] Run complete acceptance and repeated exact-master review.
+- [x] Create and byte-verify the Phase 5B private owner/source release.
+- [x] Produce QA report, sidecars and Phase 6 handover; stop before Phase 6.
 
 ## Phase 5B decisions and limitations
 
@@ -415,6 +416,51 @@
   behavior.
 - No new route, worker, credential slot, schema, journal field, provider
   endpoint, header, timeout, retry or confirmation gate was introduced.
+
+## Phase 5B Milestone 4 acceptance and release result
+
+- Advanced every active backend, frontend, installer/receipt/launcher,
+  owner-build and test version surface to the next unused private identity,
+  v24.6.235. Historical release evidence remains immutable.
+- Complete Python discovery passed all 104 tests with `ResourceWarning`
+  promoted to an error. The focused Phase 5B/Phase 3/Phase 4/Phase 5A gate
+  passed 51 tests. All three frontend fixtures passed and live loopback source
+  smoke passed all 24 assertions.
+- Static validation passed for 27 tracked Python files, 21 tracked JavaScript
+  files plus both complete inline scripts, five Bash/command files through
+  Git Bash and five PowerShell files. Owner-source validation/preflight,
+  vetted `adm-zip` 0.5.17 behavior, repository consistency and Git whitespace
+  validation passed.
+- Repeated exact-v24.6.234-master review corrected four concrete final
+  hardening findings: authoritative billing now requires explicit per-request
+  scope; billing amount/record totals are bounded and finite; optional billing
+  references are not propagated; invalid, negative or extremely large output
+  ceilings can no longer fall back or clamp below the actual requested value.
+  Repository-owned CRLF repair also restored the three Windows files touched by
+  version advancement.
+- The clean repeated review re-proved all 107 Flask route URL/method/endpoint
+  tuples, the five ordered security guards, 18 compatibility signatures,
+  SQLite schema version 10, journal metadata schema 1, initialization markers,
+  the 80 MiB request limit, protected credential slots, Phase 5A recovery and
+  non-replay behavior, and Phase 3 provider endpoints/headers/timeouts/zero
+  retries for chargeable posts.
+- Existing storage, client, journal, storage-bridge, diagnostics and
+  document-safety modules remain exact v24.6.234 master bytes. The only
+  production scope changes are the new central cost module, bounded app
+  adapters/failure status and estimate-provenance UI described above. No
+  further concrete finding remained.
+- The authoritative private archive is
+  `cv_studio_v24_6_235_phase5b_ai_cost_guardrails_owner_source.zip` under
+  `C:\CV-Studio-Codex\releases\v24.6.235`. It has one `cv_formatter/` root and
+  is freshly extracted against every tracked Git blob with zero missing, extra
+  or byte-mismatched files.
+- The adjacent `.zip.sha256` and `.zip.verification.json` sidecars are
+  authoritative for the final SHA-256, bytes, tracked/extracted file counts,
+  verification time and exact final `source_commit`. The QA report and
+  `CV_STUDIO_V24_6_235_PHASE_6_HANDOVER.md` are copied beside them.
+- No live credentials, paid/provider call, protected colleague build, native
+  compilation or genuine macOS test was performed or claimed. Work stops
+  before handoff, merge and Phase 6.
 
 ## Phase 5A authorization and constraints
 

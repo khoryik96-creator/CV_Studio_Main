@@ -36,27 +36,32 @@
 - Its ten post-release persistence-boundary findings were corrected in **CV
   Studio v24.6.234** without changing schema version 10, routes, security
   boundaries or the authorized Phase 5A integration.
-- Current completed private owner/source release: **CV Studio v24.6.234**.
-- Phases 1, 2A, 2B, 3, 4 and 5A are complete.
-- Phase 5B central AI cost guardrails and provider-billing reconciliation is
-  explicitly owner-authorized and active on branch
-  `codex/phase-5b-ai-cost-guardrails`.
-- Every Phase 6 area remains inactive.
+- Central AI cost guardrails and provider-billing reconciliation were completed
+  in **CV Studio v24.6.235** without changing routes, security gates, storage
+  schemas, provider retry/non-replay behavior or Phase 5A journal semantics.
+- Current completed private owner/source release: **CV Studio v24.6.235**.
+- Phases 1, 2A, 2B, 3, 4, 5A and 5B are complete.
+- Every Phase 6 area remains inactive. There is no active implementation
+  target.
 
-## Active scope: Phase 5B
+## Completed scope: Phase 5B
 
-Phase 5B is limited to the smallest additive central AI cost-guardrail and
-provider-billing-reconciliation foundation. Before production behavior changes,
-the paid-provider routes/helpers and confirmation gates; normalized provider,
-model, usage and cost fields; v24.6.215 DeepSeek detailed-cost cutoff;
-client-side estimates and available provider-authoritative billing fields;
-retry, timeout, failure and ambiguous paid-call boundaries; protected
-credentials and permitted non-secret billing data; and established response
-fields must be inventoried and characterization-tested.
+Phase 5B added the app-independent `cvstudio_ai_costs.py` foundation for
+provider-neutral usage normalization, existing-rate estimates, an opt-in
+per-request cost ceiling and strict reconciliation with explicitly
+authoritative provider billing data.
 
-Phase 5B must distinguish estimates from provider-authoritative values.
-Unavailable billing data is never silently treated as zero or authoritative,
-and reconciliation failures remain visible.
+Standard Anthropic, DeepSeek and OpenAI inference responses provide usage, not
+invoice-authoritative per-call cost. CV Studio therefore labels the established
+numeric `cost` as a local estimate, keeps missing authority nullable and
+failure-visible, and never converts missing billing into zero or authoritative
+cost. Tavily/SerpAPI/Apollo billing remains separate and explicitly unavailable
+when those provider responses supply no authoritative amount.
+
+`CVSTUDIO_AI_MAX_ESTIMATED_REQUEST_USD` is disabled when unset. When configured,
+the central compatibility adapters conservatively evaluate the request before
+provider transport. Invalid limits and requests over the ceiling fail visibly;
+no paid request is automatically replayed.
 
 Phase 5B preserves:
 

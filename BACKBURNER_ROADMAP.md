@@ -1,7 +1,7 @@
 # CV Studio Backburner and Stability Roadmap
 
 Last updated: 26 July 2026
-Current implementation base: v24.6.234
+Current implementation base: v24.6.235
 
 ## Explicit backburner — do not implement until the owner reactivates them
 
@@ -161,15 +161,19 @@ Deferred scope includes Shortlist / Maybe / Reject / Reviewed states, recruiter 
 - schema version 10, all 107 routes, five guards, 18 compatibility signatures
   and every Phase 1–4/Phase 5A scope boundary remain unchanged.
 
+### v24.6.235 — Phase 5B AI cost guardrails and reconciliation
+
+- centralizes provider usage, local estimate and billing-authority provenance;
+- adds an opt-in request ceiling before paid inference transport;
+- keeps unavailable provider billing nullable and failure-visible;
+- preserves Phase 5A recovery, provider zero-retry behavior and every
+  established paid confirmation gate.
+
 ## Active stability direction
 
-No later phase is active. If the owner explicitly starts Phase 5B, continue
-the remaining improvements conservatively and in a separate staged release:
-
-- central AI cost guardrails and provider-billing reconciliation without
-  changing Phase 5A recovery or paid-call non-replay semantics;
-- later frontend modularisation, lazy loading and remaining explainable-fit/
-  memory refinements without a rewrite.
+No later phase is active. If the owner explicitly starts Phase 6, continue
+frontend modularisation, lazy loading and remaining explainable-fit/memory
+refinements conservatively and without a rewrite.
 
 ## Safety rule
 

@@ -17,6 +17,8 @@ from typing import Any, Mapping
 
 AI_COST_GUARDRAIL_ENV = "CVSTUDIO_AI_MAX_ESTIMATED_REQUEST_USD"
 AI_COST_GUARDRAIL_MAX_USD = Decimal("10000")
+AI_COST_BILLING_MAX_AMOUNT = Decimal("1000000000000")
+AI_COST_MAX_RECONCILIATION_RECORDS = 100
 
 MODEL_PRICING_USD_PER_MILLION = {
     "claude-sonnet-5": (2.00, 10.00),
@@ -210,9 +212,16 @@ def _finite_nonnegative_decimal(value: Any, field: str) -> Decimal:
         raise AICostReconciliationError(
             "{} must be a finite non-negative number".format(field)
         )
-    if not parsed.is_finite() or parsed < 0:
+    if (
+        not parsed.is_finite()
+        or parsed < 0
+        or parsed > AI_COST_BILLING_MAX_AMOUNT
+    ):
         raise AICostReconciliationError(
-            "{} must be a finite non-negative number".format(field)
+            "{} must be a finite non-negative number no greater than {}".format(
+                field,
+                AI_COST_BILLING_MAX_AMOUNT,
+            )
         )
     return parsed
 
@@ -243,12 +252,17 @@ def normalize_provider_billing(
         billing.get("amount"),
         "Provider billing amount",
     )
+    scope = str(billing.get("scope") or "").strip().lower()
+    if scope != "request":
+        raise AICostReconciliationError(
+            "Provider billing scope must explicitly identify one request"
+        )
     return {
         "authoritative": True,
         "source": source,
+        "scope": "request",
         "currency": currency,
         "amount": float(amount),
-        "reference": str(billing.get("reference") or "").strip()[:160] or None,
     }
 
 
@@ -292,6 +306,10 @@ def _reconciliation_fields(
         }
 
     candidates = billing if isinstance(billing, list) else [billing]
+    if len(candidates) > AI_COST_MAX_RECONCILIATION_RECORDS:
+        raise AICostReconciliationError(
+            "Provider billing record count exceeds the reconciliation limit"
+        )
     normalized = [normalize_provider_billing(item) for item in candidates]
     normalized = [item for item in normalized if item is not None]
     if not normalized:
@@ -317,7 +335,14 @@ def _reconciliation_fields(
             "billing_data_missing": False,
         }
 
-    authoritative_usd = float(sum(Decimal(str(item["amount"])) for item in normalized))
+    authoritative_decimal = sum(
+        Decimal(str(item["amount"])) for item in normalized
+    )
+    if authoritative_decimal > AI_COST_BILLING_MAX_AMOUNT:
+        raise AICostReconciliationError(
+            "Provider billing total exceeds the reconciliation limit"
+        )
+    authoritative_usd = float(authoritative_decimal)
     difference = authoritative_usd - float(estimate_usd)
     difference_percent = (
         difference / float(estimate_usd) * 100.0
@@ -566,20 +591,48 @@ def estimate_request_ceiling(
     if output_value is None:
         output_value = clean.get("max_output_tokens")
     try:
-        max_output_tokens = max(0, min(1_000_000, int(output_value or 4096)))
+        max_output_tokens = int(output_value or 4096)
     except (TypeError, ValueError, OverflowError):
-        max_output_tokens = 4096
+        raise AICostGuardrailError(
+            "AI cost guardrail blocked the request before provider transport: "
+            "the requested output-token ceiling is invalid.",
+            details={
+                "enabled": True,
+                "status": "blocked",
+                "provider": resolved,
+                "model": str(model)[:160],
+                "reason": "invalid_output_token_ceiling",
+            },
+        )
+    if max_output_tokens < 0:
+        raise AICostGuardrailError(
+            "AI cost guardrail blocked the request before provider transport: "
+            "the requested output-token ceiling is negative.",
+            details={
+                "enabled": True,
+                "status": "blocked",
+                "provider": resolved,
+                "model": str(model)[:160],
+                "reason": "negative_output_token_ceiling",
+            },
+        )
     input_rate, output_rate, pricing_key, pricing_known = _guardrail_pricing(
         model,
         resolved,
     )
-    estimate_usd = (
-        estimated_input_tokens / 1e6 * input_rate
-        + max_output_tokens / 1e6 * output_rate
+    estimate_decimal = (
+        Decimal(estimated_input_tokens) / Decimal(1_000_000)
+        * Decimal(str(input_rate))
+        + Decimal(max_output_tokens) / Decimal(1_000_000)
+        * Decimal(str(output_rate))
     )
+    try:
+        estimate_usd = float(estimate_decimal)
+    except (OverflowError, ValueError):
+        estimate_usd = float("inf")
     return {
         "provider": resolved,
-        "model": str(model),
+        "model": str(model)[:160],
         "estimated_input_token_ceiling": estimated_input_tokens,
         "max_output_tokens": max_output_tokens,
         "estimated_request_ceiling_usd": estimate_usd,
@@ -651,7 +704,9 @@ def unavailable_external_billing(
         except (TypeError, ValueError, OverflowError):
             operations = None
     return {
-        "provider": str(provider or "unknown").strip().lower() or "unknown",
+        "provider": (
+            str(provider or "unknown").strip().lower()[:80] or "unknown"
+        ),
         "provider_billing_status": "unavailable",
         "provider_authoritative_cost": None,
         "provider_billing_currency": None,
@@ -703,7 +758,7 @@ def paid_failure_reconciliation(
         "paid_call_status": call_status,
         "billing_reconciliation": {
             "provider": normalize_provider(model, provider),
-            "model": str(model or ""),
+            "model": str(model or "")[:160],
             "usage_authority": (
                 "provider_response" if calls > 0 else "not_returned"
             ),
