@@ -18,7 +18,7 @@
 - Completed private owner/source release: v24.6.232
 - Status: Phase 5A explicitly authorized; entry gates passed and inventory/
   characterization is the first implementation milestone
-- Current milestone: Phase 5A Milestone 4 — startup/shutdown recovery
+- Current milestone: Phase 5A Milestone 5 — acceptance and release evidence
 
 ## Phase 5A authorization and constraints
 
@@ -141,7 +141,7 @@
 - [x] Add pre-change characterization for lifecycle and failure paths.
 - [x] Implement and verify the bounded persistent-job foundation.
 - [x] Integrate only compatible existing background work.
-- [ ] Implement and verify bounded startup/shutdown recovery.
+- [x] Implement and verify bounded startup/shutdown recovery.
 - [ ] Run complete acceptance and repeated compatibility review.
 - [ ] Create and byte-verify the Phase 5A private owner/source release.
 - [ ] Produce QA report, sidecars and next handover; stop before Phase 5B/6.
@@ -425,15 +425,48 @@
 - `PersistentJobError` uses the existing normalized error payload helper and
   exposes only bounded public recovery guidance. It does not disclose the
   journal path, private identifiers, credentials or stored detail.
-- Added seven no-network integration tests covering opaque success lifecycle,
+- Added eight no-network integration tests covering opaque success lifecycle,
   explicit restart/resume, concurrent-claim rejection, begin/progress write
-  failures, durable cancellation and cooperative cancellation closure. The 27
-  focused Phase 5A/Phase 4 tests pass.
+  failures, corruption recovery, durable cancellation and cooperative
+  cancellation closure.
 - Route count remains 107, the five global guards and 80 MiB boundary are
   unchanged, all 18 compatibility signatures remain exact, primary storage
   schema remains 10 and Phase 4 call-time service rebinding remains covered.
   No paid call, external mutation, protected credential access or automatic
   replay was introduced.
+
+## Phase 5A Milestone 4 startup, shutdown and recovery result
+
+- Real fresh-process app imports now prove startup reconciliation executes once
+  at the new journal boundary after schema-10 storage initialization. A running
+  safe read becomes retryable `interrupted`, a pending cancellation becomes
+  terminal `cancelled`, and an active externally mutating fixture becomes
+  non-retryable `needs_attention`.
+- A second fresh-process import over the reconciled journal reports zero new
+  recovery actions and preserves every record byte-for-byte semantically. No
+  attempt count advances and no job function executes until an explicit request
+  claims safe interrupted work.
+- Recovery is bounded by the foundation's three-interruption limit. The existing
+  tests prove a fourth reconciliation becomes visible
+  `JOB_RECOVERY_LIMIT_REACHED`/`retry_manually`; ambiguous paid/external
+  mutation fixtures never execute and remain owner-review-only.
+- A corrupt journal is preserved exactly. Fresh app import records
+  `JOB_STATE_CORRUPT` but leaves all 107 routes registered and unrelated
+  `/ping` available with its existing empty 204 response. A tracked prefetch
+  claim returns the structured non-retryable request-ID recovery response before
+  attachment/profile work begins.
+- `cvstudio_jobs.py` contains no worker thread, executor, subprocess, network
+  client, app import, `.start()` call or `atexit` registration. Startup never
+  launches or replays work. Existing shutdown behavior remains the single
+  runtime-PID cleanup registration; no task drain, hidden replay or new shutdown
+  hook was added.
+- Added three isolated fresh-process startup tests for one-time reconciliation,
+  idempotent second startup, corrupt-state isolation and absence of execution/
+  shutdown hooks. Together with eight integration, seven foundation, six
+  characterization and seven Phase 4 tests, all 31 focused tests pass.
+- Primary SQLite remains schema 10; no existing authority, compatibility
+  signature, route, global guard, credential store, external-client policy,
+  paid-call gate or Phase 4 dependency-rebinding contract changed.
 
 ## Phase 4 authorization and constraints
 

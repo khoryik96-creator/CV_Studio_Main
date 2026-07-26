@@ -251,6 +251,37 @@ class Phase5APersistentJobIntegrationTests(unittest.TestCase):
         attachment_call.assert_not_called()
         self.assertIsNone(failed_store.get(self.job_id))
 
+    def test_corrupt_startup_state_returns_structured_prefetch_recovery(self):
+        original = b"{phase5a corrupt integration fixture"
+        self.path.write_bytes(original)
+        corrupt_store = PersistentJobStore(self.path)
+        attachment_call = mock.Mock(return_value=[])
+        patches = self._route_patches()
+        with (
+            mock.patch.object(app, "_CVSTUDIO_JOBS", corrupt_store),
+            patches[0],
+            patches[1],
+            patches[2],
+            mock.patch.object(
+                app,
+                "_spider_candidate_attachment_records",
+                attachment_call,
+            ),
+        ):
+            response = app.app.test_client().get(
+                "/jobadder/spider_candidate_preview"
+                "?candidate_id=fixture-candidate&prefetch=1",
+                headers=self._headers("phase5a-corrupt-state"),
+            )
+        self.assertEqual(response.status_code, 503)
+        payload = response.get_json()
+        self.assertEqual(payload["code"], "JOB_STATE_CORRUPT")
+        self.assertFalse(payload["retryable"])
+        self.assertEqual(payload["action"], "review_job_state")
+        self.assertEqual(payload["request_id"], "phase5a-corrupt-state")
+        attachment_call.assert_not_called()
+        self.assertEqual(self.path.read_bytes(), original)
+
     def test_progress_write_failure_replaces_partial_success_with_error(self):
         replace_calls = 0
 
