@@ -11,6 +11,7 @@ import hashlib
 import os
 import platform
 import re
+import stat
 import subprocess
 from pathlib import Path
 from typing import Any, Iterable
@@ -117,6 +118,29 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _is_link_or_reparse(path: Path) -> bool:
+    try:
+        if path.is_symlink():
+            return True
+    except Exception:
+        return True
+    try:
+        is_junction = getattr(path, "is_junction", None)
+        if callable(is_junction) and is_junction():
+            return True
+    except Exception:
+        return True
+    if os.name == "nt":
+        try:
+            attributes = int(
+                getattr(path.lstat(), "st_file_attributes", 0) or 0
+            )
+            return bool(attributes & stat.FILE_ATTRIBUTE_REPARSE_POINT)
+        except Exception:
+            return True
+    return False
+
+
 def _platform_tag() -> str:
     system = platform.system().lower()
     machine = platform.machine().lower()
@@ -198,14 +222,14 @@ def _safe_runtime_files(root: Path) -> list[Path]:
     files: list[Path] = []
     for folder_name in ("bin", "share"):
         folder = root / folder_name
-        if not folder.is_dir() or folder.is_symlink():
+        if not folder.is_dir() or _is_link_or_reparse(folder):
             raise AntiwordDependencyError(
                 "runtime-layout-invalid",
                 "The managed Antiword runtime is incomplete. Re-run the CV "
                 "Studio installer to repair it.",
             )
         for path in folder.rglob("*"):
-            if path.is_symlink():
+            if _is_link_or_reparse(path):
                 raise AntiwordDependencyError(
                     "runtime-link-rejected",
                     "The managed Antiword runtime failed its trust check. "
@@ -228,7 +252,7 @@ def _safe_runtime_files(root: Path) -> list[Path]:
 
 def _parse_manifest(root: Path, expected_hash: str) -> dict[str, str]:
     manifest = root / "SHA256SUMS"
-    if not manifest.is_file() or manifest.is_symlink():
+    if not manifest.is_file() or _is_link_or_reparse(manifest):
         raise AntiwordDependencyError("manifest-missing")
     if _sha256_file(manifest) != expected_hash:
         raise AntiwordDependencyError(
@@ -263,7 +287,7 @@ def _parse_manifest(root: Path, expected_hash: str) -> dict[str, str]:
 
 
 def _functional_check(executable: Path, fixture: Path) -> None:
-    if not fixture.is_file() or fixture.is_symlink():
+    if not fixture.is_file() or _is_link_or_reparse(fixture):
         raise AntiwordDependencyError("functional-fixture-missing")
     if _sha256_file(fixture) != ANTIWORD_FIXTURE_SHA256:
         raise AntiwordDependencyError("functional-fixture-integrity-failed")
@@ -282,6 +306,8 @@ def _functional_check(executable: Path, fixture: Path) -> None:
             check=False,
             **kwargs,
         )
+    except subprocess.TimeoutExpired as exc:
+        raise AntiwordDependencyError("functional-execution-timeout") from exc
     except Exception as exc:
         raise AntiwordDependencyError("functional-execution-failed") from exc
     text = result.stdout.decode("utf-8", errors="replace")
@@ -302,7 +328,7 @@ def _verify_candidate(
     tag: str,
 ) -> tuple[Path, dict[str, Any]]:
     config = _PLATFORMS[tag]
-    if not root.is_dir() or root.is_symlink():
+    if not root.is_dir() or _is_link_or_reparse(root):
         raise AntiwordDependencyError("runtime-missing")
     entries = _parse_manifest(root, str(config["manifest_sha256"]))
     actual_files = _safe_runtime_files(root)

@@ -125,17 +125,19 @@ def dependency_status(
         result["libreoffice"] = bool(soffice_finder())
     except Exception:
         result["libreoffice"] = False
-    try:
-        result["antiword"] = bool(antiword_finder())
-    except Exception:
-        result["antiword"] = False
     if antiword_health is not None:
         try:
             health = antiword_health()
             result["antiword_health"] = (
                 dict(health) if isinstance(health, dict) else {}
             )
+            result["antiword"] = bool(
+                result["antiword_health"].get("available")
+                and result["antiword_health"].get("trusted")
+                and result["antiword_health"].get("functional")
+            )
         except Exception:
+            result["antiword"] = False
             result["antiword_health"] = {
                 "available": False,
                 "trusted": False,
@@ -143,6 +145,11 @@ def dependency_status(
                 "reason": "health-check-failed",
                 "recovery_action": "run_installer",
             }
+    else:
+        try:
+            result["antiword"] = bool(antiword_finder())
+        except Exception:
+            result["antiword"] = False
     return result
 
 

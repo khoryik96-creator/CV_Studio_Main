@@ -402,7 +402,7 @@ function Invoke-CvStudioInstallHealthCheck {
                 $headers = @{ 'Cache-Control'='no-cache'; 'X-CV-Studio-Request-ID'=('installer-' + [guid]::NewGuid().ToString('N').Substring(0,16)) }
                 $status = Invoke-RestMethod -Uri ("http://localhost:{0}/status" -f $port) -Headers $headers -Method Get -TimeoutSec 4
                 $instance = Invoke-RestMethod -Uri ("http://localhost:{0}/instance" -f $port) -Headers $headers -Method Get -TimeoutSec 4
-                $diag = Invoke-RestMethod -Uri ("http://localhost:{0}/diagnostics/runtime" -f $port) -Headers $headers -Method Get -TimeoutSec 8
+                $diag = Invoke-RestMethod -Uri ("http://localhost:{0}/diagnostics/runtime" -f $port) -Headers $headers -Method Get -TimeoutSec 15
                 $report.checks.status = [bool]($status.healthy -and [string]$status.version -eq $InstallVersion)
                 $report.checks.instance = [bool]([string]$instance.version -eq $InstallVersion -and (Normalize-InstallRoot ([string]$instance.root)) -eq (Normalize-InstallRoot $Root))
                 $report.checks.diagnostics = [bool]($diag.ok -and [string]$diag.version -eq $InstallVersion -and $diag.install_receipt.valid)
@@ -672,6 +672,42 @@ function Get-AntiwordVendorRoot {
     return ''
 }
 
+function Invoke-AntiwordFunctionalCheck {
+    param(
+        [string]$Executable,
+        [string]$FixturePath
+    )
+    $process = New-Object System.Diagnostics.Process
+    try {
+        $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+        $startInfo.FileName = $Executable
+        $startInfo.Arguments = '-t "' + $FixturePath + '"'
+        $startInfo.WorkingDirectory = Split-Path -Parent $Executable
+        $startInfo.UseShellExecute = $false
+        $startInfo.CreateNoWindow = $true
+        $startInfo.RedirectStandardOutput = $true
+        $startInfo.RedirectStandardError = $true
+        $null = $startInfo.EnvironmentVariables.Remove('ANTIWORDHOME')
+        $process.StartInfo = $startInfo
+        if (-not $process.Start()) { throw 'functional-execution-failed' }
+        $outputTask = $process.StandardOutput.ReadToEndAsync()
+        $errorTask = $process.StandardError.ReadToEndAsync()
+        if (-not $process.WaitForExit(12000)) {
+            try { $process.Kill() } catch {}
+            try { $null = $process.WaitForExit(2000) } catch {}
+            throw 'functional-execution-timeout'
+        }
+        $output = $outputTask.Result
+        $errorOutput = $errorTask.Result
+        return @{
+            ExitCode = [int]$process.ExitCode
+            Output = [string]($output + $errorOutput)
+        }
+    } finally {
+        $process.Dispose()
+    }
+}
+
 function Test-AntiwordRuntime {
     param(
         [string]$RuntimeRoot,
@@ -682,13 +718,22 @@ function Test-AntiwordRuntime {
         if (-not $RuntimeRoot -or -not (Test-Path -LiteralPath $RuntimeRoot -PathType Container)) {
             throw 'runtime-missing'
         }
+        if (((Get-Item -LiteralPath $RuntimeRoot -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw 'runtime-link-rejected'
+        }
         $manifest = Join-Path $RuntimeRoot 'SHA256SUMS'
         $exe = Join-Path $RuntimeRoot 'bin\antiword.exe'
         if (-not (Test-Path -LiteralPath $manifest -PathType Leaf)) { throw 'manifest-missing' }
+        if (((Get-Item -LiteralPath $manifest -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw 'manifest-link-rejected'
+        }
         if ((Get-FileHash -LiteralPath $manifest -Algorithm SHA256).Hash.ToLowerInvariant() -ne $AntiwordManifestSha256) {
             throw 'manifest-integrity-failed'
         }
         if (-not (Test-Path -LiteralPath $FixturePath -PathType Leaf)) { throw 'functional-fixture-missing' }
+        if (((Get-Item -LiteralPath $FixturePath -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw 'functional-fixture-link-rejected'
+        }
         if ((Get-FileHash -LiteralPath $FixturePath -Algorithm SHA256).Hash.ToLowerInvariant() -ne $AntiwordFixtureSha256) {
             throw 'functional-fixture-integrity-failed'
         }
@@ -710,6 +755,9 @@ function Test-AntiwordRuntime {
         foreach ($folderName in @('bin','share')) {
             $folder = Join-Path $RuntimeRoot $folderName
             if (-not (Test-Path -LiteralPath $folder -PathType Container)) { throw 'runtime-layout-invalid' }
+            if (((Get-Item -LiteralPath $folder -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+                throw 'runtime-link-rejected'
+            }
             foreach ($file in @(Get-ChildItem -LiteralPath $folder -Recurse -File -Force)) {
                 if (($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'runtime-link-rejected' }
                 $full = [IO.Path]::GetFullPath($file.FullName)
@@ -731,22 +779,20 @@ function Test-AntiwordRuntime {
         $signature = Get-AuthenticodeSignature -LiteralPath $exe
         if ([string]$signature.Status -ne 'NotSigned') { throw 'unexpected-authenticode-state' }
 
-        $priorAntiwordHome = $env:ANTIWORDHOME
-        Remove-Item Env:ANTIWORDHOME -ErrorAction SilentlyContinue
-        Push-Location (Split-Path -Parent $exe)
-        try {
-            $output = (& $exe '-t' $FixturePath 2>&1 | Out-String)
-            $exitCode = $LASTEXITCODE
-        } finally {
-            Pop-Location
-            if ($null -ne $priorAntiwordHome) { $env:ANTIWORDHOME = $priorAntiwordHome }
-        }
+        $functionalResult = Invoke-AntiwordFunctionalCheck -Executable $exe -FixturePath $FixturePath
+        $output = [string]$functionalResult.Output
+        $exitCode = [int]$functionalResult.ExitCode
         if ($exitCode -ne 0 -or $output -notmatch 'Universal Declaration of Human Rights' -or $output -notmatch 'All people everywhere have the same human rights') {
             throw 'functional-output-failed'
         }
         return $true
     } catch {
-        $script:AntiwordFailure = [string]$_.Exception.Message
+        $failure = [string]$_.Exception.Message
+        if ($failure -match '^(runtime|manifest|functional|executable|unexpected-authenticode)-[a-z0-9-]+$') {
+            $script:AntiwordFailure = $failure
+        } else {
+            $script:AntiwordFailure = 'verification-failed'
+        }
         return $false
     }
 }
@@ -771,6 +817,7 @@ function Install-VerifiedAntiwordRuntime {
         return $true
     }
 
+    $stage = ''
     try {
         New-Item -ItemType Directory -Path $dependencyBase -Force | Out-Null
         $stage = Join-Path $dependencyBase ('windows-x64.stage.' + [guid]::NewGuid().ToString('N'))
@@ -784,7 +831,12 @@ function Install-VerifiedAntiwordRuntime {
             throw ('staged-runtime-' + $script:AntiwordFailure)
         }
         if (Test-Path -LiteralPath $destination) {
-            $backup = Join-Path $dependencyBase ('windows-x64.invalid.' + (Get-Date -Format 'yyyyMMddHHmmss'))
+            $backup = Join-Path $dependencyBase (
+                'windows-x64.invalid.' +
+                (Get-Date -Format 'yyyyMMddHHmmss') +
+                '.' +
+                [guid]::NewGuid().ToString('N')
+            )
             Move-Item -LiteralPath $destination -Destination $backup -Force
         }
         Move-Item -LiteralPath $stage -Destination $destination
@@ -794,8 +846,17 @@ function Install-VerifiedAntiwordRuntime {
         Write-Step '    Managed Antiword 1.3.5 was repaired from the pinned bundled runtime.'
         return $true
     } catch {
-        $script:AntiwordFailure = [string]$_.Exception.Message
+        $failure = [string]$_.Exception.Message
+        if ($failure -match '^(staged-runtime|installed-runtime)-[a-z0-9-]+$') {
+            $script:AntiwordFailure = $failure
+        } else {
+            $script:AntiwordFailure = 'install-or-repair-failed'
+        }
         return $false
+    } finally {
+        if ($stage -and (Test-Path -LiteralPath $stage)) {
+            Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
+        }
     }
 }
 
@@ -824,11 +885,17 @@ function Invoke-AntiwordInstallerSelfTest {
     ) {
         throw 'Antiword self-test state must be inside the operating-system temporary directory.'
     }
+    if (Test-Path -LiteralPath $stateFull) {
+        throw 'Antiword self-test requires a fresh, non-existent temporary state directory.'
+    }
     $priorLocalAppData = $env:LOCALAPPDATA
     $priorRoot = $Root
     $priorLog = $Log
     try {
         New-Item -ItemType Directory -Path $stateFull -Force | Out-Null
+        if (((Get-Item -LiteralPath $stateFull -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw 'Antiword self-test state cannot be a reparse point.'
+        }
         $env:LOCALAPPDATA = $stateFull
         $script:Log = Join-Path $stateFull 'antiword-installer-self-test.log'
         $vendor = Get-AntiwordVendorRoot

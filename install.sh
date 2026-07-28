@@ -78,7 +78,7 @@ NATIVE_MODE=0; [ -n "$NATIVE_EXE" ] && NATIVE_MODE=1
 mkdir -p "$STATE_DIR"
 
 sha256_file(){
-  shasum -a 256 "$1" | awk '{print tolower($1)}'
+  /usr/bin/shasum -a 256 "$1" | /usr/bin/awk '{print tolower($1)}'
 }
 
 antiword_vendor_root(){
@@ -88,50 +88,95 @@ antiword_vendor_root(){
   return 1
 }
 
+run_antiword_functional_check(){
+  local runtime_root="$1" executable="$2" fixture="$3"
+  local check_dir check_pid timeout_pid check_status output
+  check_dir="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/cvstudio-antiword-check.XXXXXX")" || return 1
+  (
+    cd "$runtime_root/bin" || exit 1
+    exec /usr/bin/env -u ANTIWORDHOME "$executable" -t "$fixture" \
+      >"$check_dir/stdout" 2>"$check_dir/stderr"
+  ) &
+  check_pid=$!
+  (
+    /bin/sleep 12
+    : > "$check_dir/timed-out"
+    /bin/kill "$check_pid" 2>/dev/null || true
+    /bin/sleep 0.2
+    /bin/kill -KILL "$check_pid" 2>/dev/null || true
+  ) &
+  timeout_pid=$!
+  wait "$check_pid"
+  check_status=$?
+  if /bin/kill -0 "$timeout_pid" 2>/dev/null; then
+    /bin/kill "$timeout_pid" 2>/dev/null || true
+  fi
+  wait "$timeout_pid" 2>/dev/null || true
+  if [ -f "$check_dir/timed-out" ]; then
+    /bin/rm -rf "$check_dir"
+    echo '    ERROR: Antiword functional check timed out after 12 seconds.' >&2
+    return 124
+  fi
+  output="$(/bin/cat "$check_dir/stdout" 2>/dev/null || true)"
+  /bin/rm -rf "$check_dir"
+  [ "$check_status" -eq 0 ] || return 1
+  printf '%s' "$output" | /usr/bin/grep -q 'Universal Declaration of Human Rights' || return 1
+  printf '%s' "$output" | /usr/bin/grep -q 'All people everywhere have the same human rights' || return 1
+  return 0
+}
+
 verify_antiword_runtime(){
   runtime_root="$1"; fixture="$2"; tag="$3"; manifest_hash="$4"; executable_hash="$5"
   [ -d "$runtime_root/bin" ] && [ -d "$runtime_root/share" ] && [ -f "$runtime_root/SHA256SUMS" ] || return 1
+  [ ! -L "$runtime_root" ] && [ ! -L "$runtime_root/bin" ] && [ ! -L "$runtime_root/share" ] || return 1
+  [ ! -L "$runtime_root/SHA256SUMS" ] && [ ! -L "$fixture" ] || return 1
   [ "$(sha256_file "$runtime_root/SHA256SUMS")" = "$manifest_hash" ] || return 1
   [ -f "$fixture" ] && [ "$(sha256_file "$fixture")" = "$ANTIWORD_FIXTURE_SHA256" ] || return 1
-  [ -z "$(find "$runtime_root/bin" "$runtime_root/share" -type l -print -quit 2>/dev/null)" ] || return 1
-  actual_count="$(find "$runtime_root/bin" "$runtime_root/share" -type f 2>/dev/null | wc -l | tr -d ' ')"
+  [ -z "$(/usr/bin/find "$runtime_root/bin" "$runtime_root/share" -type l -print -quit 2>/dev/null)" ] || return 1
+  actual_count="$(/usr/bin/find "$runtime_root/bin" "$runtime_root/share" -type f 2>/dev/null | /usr/bin/wc -l | /usr/bin/tr -d ' ')"
   [ "$actual_count" = "$ANTIWORD_FILE_COUNT" ] || return 1
-  line_count="$(wc -l < "$runtime_root/SHA256SUMS" | tr -d ' ')"
+  line_count="$(/usr/bin/wc -l < "$runtime_root/SHA256SUMS" | /usr/bin/tr -d ' ')"
   [ "$line_count" = "$ANTIWORD_FILE_COUNT" ] || return 1
   while IFS='  ' read -r expected relative; do
-    relative="$(printf '%s' "$relative" | sed 's/^ *//')"
-    printf '%s' "$expected" | grep -Eq '^[0-9a-fA-F]{64}$' || return 1
+    relative="$(printf '%s' "$relative" | /usr/bin/sed 's/^ *//')"
+    printf '%s' "$expected" | /usr/bin/grep -Eq '^[0-9a-fA-F]{64}$' || return 1
     case "$relative" in bin/*|share/*) ;; *) return 1;; esac
     case "$relative" in *..*|/*) return 1;; esac
     file_path="$runtime_root/$relative"
     [ -f "$file_path" ] && [ ! -L "$file_path" ] || return 1
-    [ "$(sha256_file "$file_path")" = "$(printf '%s' "$expected" | tr 'A-F' 'a-f')" ] || return 1
+    [ "$(sha256_file "$file_path")" = "$(printf '%s' "$expected" | /usr/bin/tr 'A-F' 'a-f')" ] || return 1
   done < "$runtime_root/SHA256SUMS"
 
   executable="$runtime_root/bin/antiword"
+  [ ! -L "$executable" ] || return 1
   [ "$(sha256_file "$executable")" = "$executable_hash" ] || return 1
-  chmod +x "$executable" 2>/dev/null || return 1
-  native_info="$(file "$executable" 2>/dev/null || true)"
+  /bin/chmod +x "$executable" 2>/dev/null || return 1
+  native_info="$(/usr/bin/file "$executable" 2>/dev/null || true)"
   case "$tag" in
     macos-arm64)
-      printf '%s' "$native_info" | grep -q 'Mach-O 64-bit arm64' || return 1
-      codesign --verify --verbose=2 "$executable" >/dev/null 2>&1 || return 1
+      printf '%s' "$native_info" | /usr/bin/grep -q 'Mach-O 64-bit arm64' || return 1
+      /usr/bin/codesign --verify --verbose=2 "$executable" >/dev/null 2>&1 || return 1
       ;;
     macos-x86_64)
-      printf '%s' "$native_info" | grep -q 'Mach-O 64-bit x86_64' || return 1
+      printf '%s' "$native_info" | /usr/bin/grep -q 'Mach-O 64-bit x86_64' || return 1
       ;;
     *) return 1;;
   esac
-  output="$(cd "$runtime_root/bin" && env -u ANTIWORDHOME "$executable" -t "$fixture" 2>/dev/null)" || return 1
-  printf '%s' "$output" | grep -q 'Universal Declaration of Human Rights' || return 1
-  printf '%s' "$output" | grep -q 'All people everywhere have the same human rights' || return 1
+  run_antiword_functional_check "$runtime_root" "$executable" "$fixture" || return 1
   return 0
+}
+
+remove_antiword_stage(){
+  local stage_path="$1" stage_prefix="$2"
+  case "$stage_path" in
+    "$stage_prefix"*) /bin/rm -rf "$stage_path" ;;
+  esac
 }
 
 install_verified_antiword(){
   vendor="$(antiword_vendor_root 2>/dev/null || true)"
   [ -n "$vendor" ] || { echo '    ERROR: Pinned Antiword bundle is missing.'; return 1; }
-  arch="$(uname -m 2>/dev/null || echo unknown)"
+  arch="$(/usr/bin/uname -m 2>/dev/null || echo unknown)"
   case "$arch" in
     arm64|aarch64)
       tag='macos-arm64'
@@ -158,20 +203,45 @@ install_verified_antiword(){
     echo '    Managed Antiword 1.3.5 is hash-verified and functional.'
     return 0
   fi
-  mkdir -p "$dependency_base" || return 1
-  stage="$dependency_base/$tag.stage.$$"
-  mkdir -p "$stage/fixtures" || return 1
-  cp -R "$source_root/bin" "$source_root/share" "$stage/" || return 1
-  cp "$source_root/SHA256SUMS" "$stage/SHA256SUMS" || return 1
-  cp "$source_fixture" "$stage/fixtures/UDHR-english.doc" || return 1
+  /bin/mkdir -p "$dependency_base" || return 1
+  stage="$(/usr/bin/mktemp -d "$dependency_base/$tag.stage.XXXXXX")" || return 1
+  stage_prefix="$dependency_base/$tag.stage."
+  /bin/mkdir -p "$stage/fixtures" || {
+    remove_antiword_stage "$stage" "$stage_prefix"
+    return 1
+  }
+  /bin/cp -R "$source_root/bin" "$source_root/share" "$stage/" || {
+    remove_antiword_stage "$stage" "$stage_prefix"
+    return 1
+  }
+  /bin/cp "$source_root/SHA256SUMS" "$stage/SHA256SUMS" || {
+    remove_antiword_stage "$stage" "$stage_prefix"
+    return 1
+  }
+  /bin/cp "$source_fixture" "$stage/fixtures/UDHR-english.doc" || {
+    remove_antiword_stage "$stage" "$stage_prefix"
+    return 1
+  }
   verify_antiword_runtime "$stage" "$stage/fixtures/UDHR-english.doc" "$tag" "$manifest_hash" "$executable_hash" || {
+    remove_antiword_stage "$stage" "$stage_prefix"
     echo '    ERROR: Staged Antiword failed verification.'
     return 1
   }
   if [ -e "$destination" ]; then
-    mv "$destination" "$dependency_base/$tag.invalid.$(date +%Y%m%d%H%M%S)" || return 1
+    backup="$dependency_base/$tag.invalid.$(/bin/date +%Y%m%d%H%M%S).$$.$RANDOM"
+    [ ! -e "$backup" ] || {
+      remove_antiword_stage "$stage" "$stage_prefix"
+      return 1
+    }
+    /bin/mv "$destination" "$backup" || {
+      remove_antiword_stage "$stage" "$stage_prefix"
+      return 1
+    }
   fi
-  mv "$stage" "$destination" || return 1
+  /bin/mv "$stage" "$destination" || {
+    remove_antiword_stage "$stage" "$stage_prefix"
+    return 1
+  }
   verify_antiword_runtime "$destination" "$destination_fixture" "$tag" "$manifest_hash" "$executable_hash" || return 1
   echo '    Managed Antiword 1.3.5 was repaired from the pinned bundled runtime.'
 }
@@ -306,7 +376,7 @@ HEALTH_OK=0; HEALTH_ERROR='startup timeout'
 for _i in $(seq 1 180); do
   STATUS_JSON="$(curl -fsS --connect-timeout 1 --max-time 3 -H 'Cache-Control: no-cache' -H "X-CV-Studio-Request-ID: installer-$$-$_i" "http://localhost:$SMOKE_PORT/status" 2>/dev/null || true)"
   IDENTITY="$(curl -fsS --connect-timeout 1 --max-time 3 "http://localhost:$SMOKE_PORT/instance-id" 2>/dev/null || true)"
-  DIAG_JSON="$(curl -fsS --connect-timeout 1 --max-time 5 "http://localhost:$SMOKE_PORT/diagnostics/runtime" 2>/dev/null || true)"
+  DIAG_JSON="$(curl -fsS --connect-timeout 1 --max-time 15 "http://localhost:$SMOKE_PORT/diagnostics/runtime" 2>/dev/null || true)"
   case "$IDENTITY" in "$VERSION|"*"|$SCRIPT_DIR") ID_OK=1;; *) ID_OK=0;; esac
   printf '%s' "$STATUS_JSON" | grep -q '"healthy"[[:space:]]*:[[:space:]]*true' && STATUS_OK=1 || STATUS_OK=0
   printf '%s' "$STATUS_JSON" | grep -q "\"version\"[[:space:]]*:[[:space:]]*\"$VERSION\"" || STATUS_OK=0

@@ -122,6 +122,18 @@ class AntiwordMandatoryDependencyTests(unittest.TestCase):
             self.assertNotIn("shutil.which", source)
             self.assertNotIn("Program Files", source)
 
+    def test_junction_or_reparse_runtime_boundaries_fail_closed(self):
+        class JunctionFixture:
+            @staticmethod
+            def is_symlink():
+                return False
+
+            @staticmethod
+            def is_junction():
+                return True
+
+        self.assertTrue(antiword._is_link_or_reparse(JunctionFixture()))
+
     def test_every_official_artifact_and_corresponding_source_is_pinned(self):
         expected = {
             "packages/antiword_1.3.5_windows_x64_r46.zip":
@@ -203,7 +215,7 @@ class AntiwordMandatoryDependencyTests(unittest.TestCase):
         ) as run:
             with self.assertRaises(antiword.AntiwordDependencyError) as caught:
                 antiword._functional_check(executable, fixture)
-        self.assertEqual(caught.exception.reason, "functional-execution-failed")
+        self.assertEqual(caught.exception.reason, "functional-execution-timeout")
         self.assertEqual(run.call_args.kwargs["timeout"], 12)
         self.assertFalse(run.call_args.kwargs["check"])
 
@@ -233,8 +245,34 @@ class AntiwordMandatoryDependencyTests(unittest.TestCase):
             windows,
         )
         self.assertIn("Test-AntiwordRuntime", windows)
+        self.assertIn("Invoke-AntiwordFunctionalCheck", windows)
+        self.assertIn("WaitForExit(12000)", windows)
+        self.assertIn("WaitForExit(2000)", windows)
+        self.assertNotIn("$process.WaitForExit()", windows)
+        self.assertIn("functional-execution-timeout", windows)
+        self.assertIn("runtime-link-rejected", windows)
+        self.assertIn("manifest-link-rejected", windows)
+        self.assertIn("functional-fixture-link-rejected", windows)
+        self.assertIn("$script:AntiwordFailure = 'verification-failed'", windows)
+        self.assertIn(
+            "$script:AntiwordFailure = 'install-or-repair-failed'",
+            windows,
+        )
+        self.assertIn("[guid]::NewGuid().ToString('N')", windows)
+        self.assertIn(
+            "Remove-Item -LiteralPath $stage -Recurse -Force",
+            windows,
+        )
         self.assertIn("Managed Antiword 1.3.5 is hash-verified", windows)
         self.assertIn("AntiwordSelfTestOnly", windows)
+        self.assertIn(
+            "Antiword self-test requires a fresh, non-existent temporary state directory.",
+            windows,
+        )
+        self.assertIn(
+            "Antiword self-test state cannot be a reparse point.",
+            windows,
+        )
         self.assertIn(
             "Dependency QA cannot issue a receipt or reach the installer main block",
             windows,
@@ -243,6 +281,34 @@ class AntiwordMandatoryDependencyTests(unittest.TestCase):
         self.assertNotIn("Get-Command antiword", windows)
         self.assertIn("install_verified_antiword ||", macos)
         self.assertIn("verify_antiword_runtime", macos)
+        self.assertIn("run_antiword_functional_check", macos)
+        self.assertIn("/bin/sleep 12", macos)
+        self.assertIn('"$check_dir/timed-out"', macos)
+        self.assertIn("timed out after 12 seconds", macos)
+        for trusted_tool in (
+            "/usr/bin/shasum",
+            "/usr/bin/mktemp",
+            "/usr/bin/env",
+            "/usr/bin/find",
+            "/usr/bin/file",
+            "/usr/bin/codesign",
+            "/bin/chmod",
+            "/bin/kill",
+            "/bin/date",
+            "/bin/cp",
+            "/bin/mv",
+            "/bin/rm",
+        ):
+            self.assertIn(trusted_tool, macos)
+        self.assertIn('[ ! -L "$runtime_root" ]', macos)
+        self.assertIn('[ ! -L "$runtime_root/SHA256SUMS" ]', macos)
+        self.assertIn('[ ! -L "$executable" ]', macos)
+        self.assertIn(
+            '/usr/bin/mktemp -d "$dependency_base/$tag.stage.XXXXXX"',
+            macos,
+        )
+        self.assertIn("remove_antiword_stage", macos)
+        self.assertIn('.$$.$RANDOM', macos)
         self.assertIn("Managed Antiword 1.3.5 is hash-verified", macos)
         self.assertIn("ANTIWORD_OK", macos)
 
@@ -273,19 +339,44 @@ class AntiwordMandatoryDependencyTests(unittest.TestCase):
         )
 
     def test_diagnostics_preserve_boolean_and_add_health(self):
-        status = dependency_status(
-            lambda: None,
-            lambda: "verified",
-            lambda: {
+        legacy_finder = mock.Mock(return_value="must-not-run")
+        health_finder = mock.Mock(
+            return_value={
                 "available": True,
                 "trusted": True,
                 "functional": True,
-            },
+            }
+        )
+        status = dependency_status(
+            lambda: None,
+            legacy_finder,
+            health_finder,
         )
         self.assertTrue(status["antiword"])
+        legacy_finder.assert_not_called()
+        health_finder.assert_called_once_with()
         self.assertEqual(
             status["antiword_health"],
             {"available": True, "trusted": True, "functional": True},
+        )
+
+        fallback_finder = mock.Mock(return_value="legacy-compatible")
+        fallback = dependency_status(lambda: None, fallback_finder)
+        self.assertTrue(fallback["antiword"])
+        fallback_finder.assert_called_once_with()
+
+    def test_installer_health_deadlines_cover_one_functional_timeout(self):
+        windows = (ROOT / "INSTALL_CORE.ps1").read_text(
+            encoding="utf-8-sig"
+        )
+        macos = (ROOT / "install.sh").read_text(encoding="utf-8")
+        self.assertIn(
+            '/diagnostics/runtime" -f $port) -Headers $headers -Method Get -TimeoutSec 15',
+            windows,
+        )
+        self.assertIn(
+            '--max-time 15 "http://localhost:$SMOKE_PORT/diagnostics/runtime"',
+            macos,
         )
 
 

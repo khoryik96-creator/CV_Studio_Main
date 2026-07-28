@@ -113,7 +113,8 @@
   without administrator elevation in the CV Studio local state directory,
   validates the staged and installed copies, and fails setup rather than
   issuing a receipt when any trust/function check fails. An invalid prior
-  managed copy is retained with an `.invalid.<timestamp>` name.
+  managed copy is retained with a collision-resistant
+  `.invalid.<timestamp>.<unique-suffix>` name.
 - At runtime CV Studio checks only the managed or exact bundled platform
   runtime. Diagnostics preserve the legacy `dependencies.antiword` boolean and
   add version, engine version, platform, source class, trust method,
@@ -132,6 +133,74 @@
 - LibreOffice, native OLE piece-table parsing, raw scanning and renamed-DOCX
   parsing remain in source as defense-in-depth probes but cannot satisfy a
   verified legacy `.doc` success.
+
+### Exact-master self-review corrections
+
+- The first complete review against exact master
+  `a5762488f7d90fe58f00870b2c0b2944be084e71` found that the new Windows and
+  macOS installer functional checks invoked the controlled `.doc` fixture
+  without their own execution deadline. Runtime extraction was bounded, but a
+  hung approved executable could therefore block installation indefinitely.
+  Windows now uses redirected asynchronous output plus
+  `WaitForExit(12000)`/forced termination, and macOS uses a 12-second watchdog
+  with termination, forced-kill fallback and isolated output cleanup. Python
+  health now distinguishes `functional-execution-timeout` from other launch
+  failures. Regression coverage asserts all three timeout contracts; the
+  focused verifier/document suite and genuine Windows installer self-test pass.
+- The same review found that an interrupted/failed repair could retain a stage
+  directory and that timestamp-only invalid-runtime backup names could collide
+  during rapid repeated repairs. Windows now cleans its GUID-named stage in a
+  `finally` block and adds a GUID to every retained invalid copy. macOS now
+  uses `mktemp` stage names, cleans every pre-install failure path and combines
+  timestamp, process ID and Bash randomness for invalid-copy names. Static
+  installer regression assertions cover unique staging, cleanup and backup
+  naming; the isolated Windows install/idempotency/corruption/repair test
+  exercises the corrected path.
+- A second trust-boundary pass found that the app-independent verifier rejected
+  ordinary links but did not explicitly recognize Windows directory junctions,
+  while the two native installer verifiers did not reject every equivalent
+  Windows reparse point or macOS symlink. The shared verifier now rejects
+  symlinks, junctions and other Windows reparse points. The Windows installer
+  rejects reparse points at the runtime root, manifest, controlled fixture,
+  `bin` and `share` boundaries; macOS applies matching symlink exclusions to
+  the root, directories, manifest, fixture and executable. Focused junction
+  recognition plus static installer assertions cover every boundary, and
+  normal bundled/install/repair verification still passes.
+- The macOS installer prepends Homebrew locations for ordinary dependency
+  discovery, but its Antiword trust gate originally invoked hash,
+  architecture and file-tree utilities through that mutable `PATH`. A
+  shadowing utility could therefore influence the pre-execution installer
+  decision before the later app-level verifier rejected the runtime. Every
+  Antiword hash, manifest, architecture/signature, staging and functional-test
+  primitive is now bound to its macOS system path; only the already hash-
+  verified Antiword executable is launched from the managed/bundled tree.
+  Static regression coverage requires all security-critical absolute tool
+  paths, while Bash syntax and the platform-independent artifact verifier cover
+  the resulting script and exact bytes.
+- Unexpected PowerShell filesystem/process exceptions could also have placed a
+  private package or state path into the new Windows Antiword installer log.
+  Expected verification and staged/installed failure codes remain precise,
+  while unexpected verifier and repair exceptions are now reduced to
+  `verification-failed` or `install-or-repair-failed`. Static regression
+  assertions fix both redaction fallbacks and the Windows installer self-test
+  confirms that actionable known failures remain visible.
+- The isolated Windows QA switch already constrained its state to an explicitly
+  named operating-system temporary directory and could not issue a receipt, but
+  it accepted a pre-created tree whose descendants could be junctions. It now
+  requires a fresh, non-existent state leaf and rejects a reparse point
+  immediately after creating it. Static coverage fixes both restrictions and
+  the genuine isolated self-test continues to pass with a new temporary
+  directory.
+- Diagnostics originally called the full verified finder and the new detailed
+  health callback separately, so one request could execute the controlled
+  fixture twice. Both installer HTTP deadlines were also shorter than a single
+  allowed 12-second functional timeout. When a process hung, polling could
+  abandon the request and overlap another check. Detailed diagnostics now run
+  one authoritative health check, derive the preserved legacy boolean from it,
+  and retain the original two-argument finder behavior for compatibility
+  callers. Windows and macOS installer diagnostics use 15-second request
+  deadlines. Regression coverage proves single-call behavior, the legacy
+  fallback contract and both installer deadlines.
 
 ### Current validation and platform limitation
 
@@ -155,8 +224,9 @@
   and expects runtime diagnostics to report `unsupported-platform`; it never
   claims functional Antiword support or runs the supported-platform `.doc`
   smoke.
-- Focused Antiword/document characterization passes 13 cases. Complete Python
-  discovery passes all 130 tests; all five frontend fixtures and all 24 live
+- Focused Antiword/document validation passes all 22 tests in the two directly
+  affected modules. Complete Python discovery passes all 132 tests; all five
+  frontend fixtures and all 24 live
   source-smoke assertions pass. Python, PowerShell and Bash syntax, protected
   source preflight, exact `adm-zip` behavior, repository consistency and Git
   whitespace validation also pass on Windows.
@@ -167,9 +237,9 @@
   `f430cdfe9446c4b943074d4bf804232761c284f2caa3d4125006b158d8b14af8`
   with no Unicode replacement character, and preserves DOCX generation. The
   temporary non-release QA ZIP is
-  `8a7958aec513d693f742a6a842f4e67c332abf6040a213876c4a257327e9fa54`;
+  `ff61f074bf03433db4d3633f8e46b952a29e4184f27b4062adc762b5a6c6ec44`;
   its smoke JSON is
-  `e7f1fea759b6451ac388a7101a1814d9a2b2f4226969e8ca1be0e5a595100c03`.
+  `690dff2d20cd43c3bd067dc3fde792262c461918bed95a6c6251f14521054242`.
   Neither artifact is copied to the immutable release directory.
 - **Release gate:** CV Studio's macOS installer, diagnostics and compiled
   package have not yet run on genuine Intel and Apple Silicon Macs in this
