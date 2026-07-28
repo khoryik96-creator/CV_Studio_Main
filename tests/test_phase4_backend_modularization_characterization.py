@@ -505,6 +505,21 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
         self.assertIn("Universal Declaration of Human Rights", payload["text"])
         self.assertNotIn("\ufffd", payload["text"])
 
+        mislabeled_route = self.client.post(
+            "/extract-text",
+            data={"file": (io.BytesIO(fixture), "misleading-resume.txt")},
+            headers=headers,
+            content_type="multipart/form-data",
+        )
+        mislabeled_payload = mislabeled_route.get_json()
+        self.assertEqual(mislabeled_route.status_code, 200)
+        self.assertTrue(mislabeled_payload["ok"])
+        self.assertIn(
+            "Universal Declaration of Human Rights",
+            mislabeled_payload["text"],
+        )
+        self.assertNotIn("\ufffd", mislabeled_payload["text"])
+
         ocr = self.client.post(
             "/ocr",
             data={"file": (io.BytesIO(fixture), "verification.doc")},
@@ -552,6 +567,43 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
             mislabeled_source,
             "downloaded legacy DOC resume",
         )
+
+        with mock.patch.object(
+            app,
+            "_spider_extract_legacy_doc_text_for_preview",
+            side_effect=AssertionError(
+                "strong non-DOC magic must not reach Antiword"
+            ),
+        ):
+            with mock.patch.object(
+                app,
+                "_spider_ocr_pdf_download",
+                return_value=("verified PDF text", "PDF magic path"),
+            ):
+                pdf_text, pdf_source = (
+                    app._spider_extract_text_from_download(
+                        b"%PDF-1.4\ninvalid-test-payload",
+                        "application/msword",
+                        "stale-name.doc",
+                    )
+                )
+            self.assertEqual(pdf_text, "verified PDF text")
+            self.assertEqual(pdf_source, "PDF magic path")
+
+            with mock.patch.object(
+                app,
+                "_extract_docx_text_preserve_tables",
+                return_value="Verified DOCX resume experience and skills",
+            ):
+                docx_text, docx_source = (
+                    app._spider_extract_text_from_download(
+                        b"PK\x03\x04test-docx-payload",
+                        "application/msword",
+                        "stale-name.doc",
+                    )
+                )
+            self.assertIn("Verified DOCX resume", docx_text)
+            self.assertEqual(docx_source, "downloaded DOCX resume")
 
         malformed = self.client.post(
             "/extract-text",
@@ -644,23 +696,54 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
                     "misleading-resume.txt",
                 )
             self.assertIs(mislabeled.exception, unavailable)
+            with self.assertRaises(app.AntiwordDependencyError) as office:
+                app._office_bytes_to_pdf_preview(fixture, ".txt")
+            self.assertIs(office.exception, unavailable)
+
+            for content_type, name in (
+                ("text/plain", "misleading-resume.txt"),
+                ("application/pdf", "misleading-resume.pdf"),
+                ("image/png", "misleading-resume.png"),
+            ):
+                with self.subTest(
+                    helper="spider-visual",
+                    content_type=content_type,
+                ):
+                    with self.assertRaises(
+                        app.AntiwordDependencyError
+                    ) as visual:
+                        app._spider_visual_preview_payload(
+                            fixture,
+                            content_type,
+                            name,
+                        )
+                    self.assertIs(visual.exception, unavailable)
+
             for route in ("/extract-text", "/preview-file", "/ocr"):
-                with self.subTest(route=route):
-                    response = self.client.post(
-                        route,
-                        data={"file": (io.BytesIO(fixture), "verification.doc")},
-                        headers=headers,
-                        content_type="multipart/form-data",
-                    )
-                    payload = response.get_json()
-                    self.assertEqual(response.status_code, 424)
-                    self.assertEqual(
-                        payload["code"], "ANTIWORD_DEPENDENCY_UNAVAILABLE"
-                    )
-                    self.assertEqual(payload["action"], "run_installer")
-                    self.assertEqual(
-                        payload["details"]["required_for"], "legacy_doc"
-                    )
+                for name in (
+                    "verification.doc",
+                    "misleading-resume.txt",
+                    "misleading-resume.pdf",
+                    "misleading-resume.png",
+                ):
+                    with self.subTest(route=route, name=name):
+                        response = self.client.post(
+                            route,
+                            data={"file": (io.BytesIO(fixture), name)},
+                            headers=headers,
+                            content_type="multipart/form-data",
+                        )
+                        payload = response.get_json()
+                        self.assertEqual(response.status_code, 424)
+                        self.assertEqual(
+                            payload["code"],
+                            "ANTIWORD_DEPENDENCY_UNAVAILABLE",
+                        )
+                        self.assertEqual(payload["action"], "run_installer")
+                        self.assertEqual(
+                            payload["details"]["required_for"],
+                            "legacy_doc",
+                        )
             with self.assertRaises(app.AntiwordDependencyError):
                 app._spider_extract_legacy_doc_text_for_preview(fixture)
 

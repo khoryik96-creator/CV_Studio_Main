@@ -13374,6 +13374,39 @@ def _spider_is_legacy_word_doc_bytes(raw):
         return True
 
 
+def _document_content_kind(raw):
+    """Return a strong byte-signature classification before metadata fallback."""
+    raw = raw or b""
+    if _spider_is_legacy_word_doc_bytes(raw):
+        return "legacy_doc"
+    if raw.startswith(b"%PDF"):
+        return "pdf"
+    if raw[:2] == b"PK":
+        return "zip"
+    if (
+        raw.startswith(b"\x89PNG\r\n\x1a\n")
+        or raw.startswith(b"\xff\xd8\xff")
+        or raw.startswith((b"II*\x00", b"MM\x00*", b"BM", b"RIFF"))
+    ):
+        return "image"
+    return ""
+
+
+def _document_image_extension(raw):
+    raw = raw or b""
+    if raw.startswith(b"\x89PNG\r\n\x1a\n"):
+        return ".png"
+    if raw.startswith(b"\xff\xd8\xff"):
+        return ".jpg"
+    if raw.startswith((b"II*\x00", b"MM\x00*")):
+        return ".tif"
+    if raw.startswith(b"BM"):
+        return ".bmp"
+    if raw.startswith(b"RIFF"):
+        return ".webp"
+    return ".img"
+
+
 def _spider_clean_doc_text_for_preview(text):
     text = str(text or '')
     text = text.replace('\r', '\n').replace('\x07', ' | ')
@@ -13682,11 +13715,14 @@ def _spider_extract_text_from_download(raw, content_type="", filename="", ocr_pa
             )
         return "", "empty response"
 
-    # JobAdder metadata is not authoritative for the downloaded bytes. Detect
-    # legacy Word before JSON/text handling so an OLE .doc mislabeled as
-    # text/plain (or given a misleading filename) cannot bypass the mandatory
-    # verified Antiword boundary and become binary gibberish.
-    if _spider_is_legacy_word_doc_bytes(raw) or "msword" in content_type or filename.endswith(".doc"):
+    # JobAdder metadata is not authoritative for the downloaded bytes. Strong
+    # signatures take precedence; metadata is used only when the payload has no
+    # recognized identity.
+    content_kind = _document_content_kind(raw)
+    if content_kind == "legacy_doc" or (
+        not content_kind
+        and ("msword" in content_type or filename.endswith(".doc"))
+    ):
         if callable(cancel_check):
             cancel_check()
         text = _spider_extract_legacy_doc_text_for_preview(raw)
@@ -13698,7 +13734,9 @@ def _spider_extract_text_from_download(raw, content_type="", filename="", ocr_pa
 
     parsed = None
     stripped = raw.lstrip()[:1]
-    if "json" in content_type or stripped in (b"{", b"["):
+    if not content_kind and (
+        "json" in content_type or stripped in (b"{", b"[")
+    ):
         try:
             parsed = json.loads(raw.decode("utf-8", errors="replace"))
         except Exception:
@@ -13711,7 +13749,10 @@ def _spider_extract_text_from_download(raw, content_type="", filename="", ocr_pa
             return _spider_preview_text_from_detail(parsed)[:30000], "JobAdder JSON profile"
         return re.sub(r"\s+", " ", " ".join(_spider_flatten(parsed))).strip()[:30000], "JobAdder JSON list"
 
-    if "text" in content_type or filename.endswith((".txt", ".html", ".htm", ".csv", ".rtf")):
+    if not content_kind and (
+        "text" in content_type
+        or filename.endswith((".txt", ".html", ".htm", ".csv", ".rtf"))
+    ):
         try:
             text = raw.decode("utf-8", errors="replace")
         except Exception:
@@ -13722,7 +13763,10 @@ def _spider_extract_text_from_download(raw, content_type="", filename="", ocr_pa
             return text[:30000], "downloaded text/html"
         return "", "downloaded text contained no readable content"
 
-    is_pdf = raw.startswith(b"%PDF") or "pdf" in content_type or filename.endswith(".pdf")
+    is_pdf = content_kind == "pdf" or (
+        not content_kind
+        and ("pdf" in content_type or filename.endswith(".pdf"))
+    )
     if is_pdf:
         try:
             import pdfplumber
@@ -13753,7 +13797,11 @@ def _spider_extract_text_from_download(raw, content_type="", filename="", ocr_pa
             cancel_check()
         return result
 
-    if _spider_is_image_download(raw, content_type, filename):
+    is_image = content_kind == "image" or (
+        not content_kind
+        and _spider_is_image_download(raw, content_type, filename)
+    )
+    if is_image:
         if callable(cancel_check):
             cancel_check()
         result = _spider_ocr_image_download(raw, timeout=min(35, int(ocr_deadline_seconds or 25)))
@@ -13761,7 +13809,11 @@ def _spider_extract_text_from_download(raw, content_type="", filename="", ocr_pa
             cancel_check()
         return result
 
-    if raw[:2] == b"PK" or "word" in content_type or filename.endswith(".docx"):
+    is_docx = content_kind == "zip" or (
+        not content_kind
+        and ("word" in content_type or filename.endswith(".docx"))
+    )
+    if is_docx:
         try:
             if callable(cancel_check):
                 cancel_check()
@@ -14111,21 +14163,41 @@ def _spider_visual_preview_payload(raw, content_type="", filename="", max_pages=
     ctype = str(content_type or "").lower()
     fname = _spider_filename_from_disposition(filename, filename).lower()
     ext = _os.path.splitext(fname)[1].lower()
+    content_kind = _document_content_kind(raw)
     stripped = raw.lstrip()[:1]
-    if "json" in ctype or stripped in (b"{", b"["):
+    if not content_kind and (
+        "json" in ctype or stripped in (b"{", b"[")
+    ):
         return None
-    if raw.startswith(b"%PDF") or "pdf" in ctype or ext == ".pdf":
+    if content_kind == "pdf" or (
+        not content_kind and ("pdf" in ctype or ext == ".pdf")
+    ):
         return _spider_pdf_pages_preview_payload(raw, "actual JobAdder PDF resume", max_pages=max_pages, dpi=dpi, cancel_check=cancel_check)
-    if raw[:8].startswith(b"\x89PNG") or raw[:3] == b"\xff\xd8\xff" or "image/" in ctype or ext in (".png", ".jpg", ".jpeg"):
+    if content_kind == "image" or (
+        not content_kind
+        and ("image/" in ctype or ext in (".png", ".jpg", ".jpeg"))
+    ):
         if callable(cancel_check):
             cancel_check()
         mime = "image/png" if (raw[:8].startswith(b"\x89PNG") or ext == ".png" or "png" in ctype) else "image/jpeg"
         data = _base64.b64encode(raw).decode("ascii")
         return {"visual_mode": "image", "data_url": "data:" + mime + ";base64," + data, "source": "actual JobAdder image resume", "download_disabled": True, "note": "Preview download controls are disabled."}
-    legacy_doc = _spider_is_legacy_word_doc_bytes(raw)
-    looks_office = raw[:2] == b"PK" or legacy_doc or "word" in ctype or "msword" in ctype or "officedocument" in ctype or ext in (".docx", ".doc", ".rtf", ".odt")
+    looks_office = content_kind in {"zip", "legacy_doc"} or (
+        not content_kind
+        and (
+            "word" in ctype
+            or "msword" in ctype
+            or "officedocument" in ctype
+            or ext in (".docx", ".doc", ".rtf", ".odt")
+        )
+    )
     if looks_office:
-        conv_ext = ext or (".docx" if raw[:2] == b"PK" else ".doc" if legacy_doc or "msword" in ctype else ".doc")
+        if content_kind == "legacy_doc":
+            conv_ext = ".doc"
+        elif content_kind == "zip":
+            conv_ext = ".docx"
+        else:
+            conv_ext = ext or (".doc" if "msword" in ctype else ".docx")
         try:
             pdf_bytes, note = _office_bytes_to_pdf_preview(raw, conv_ext, cancel_check=cancel_check)
             if pdf_bytes:
@@ -15930,14 +16002,24 @@ def ocr_endpoint():
         except ImportError:
             return cors_json({"ok": False, "error": "Python package pytesseract is not installed. Run INSTALL.bat again."}, 500)
 
-        # Detect file type by extension and magic bytes.
-        is_pdf = fname_lower.endswith(".pdf") or file_bytes[:4] == b"%PDF"
-        is_docx = fname_lower.endswith(".docx") or file_bytes[:2] == b"PK"
-        is_doc = (
-            fname_lower.endswith(".doc")
-            or file_bytes.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1")
+        # Strong byte signatures take precedence over stale or misleading
+        # upload names so genuine OLE .doc content always reaches Antiword.
+        content_kind = _document_content_kind(file_bytes)
+        is_pdf = content_kind == "pdf" or (
+            not content_kind and fname_lower.endswith(".pdf")
         )
-        is_image = fname_lower.endswith((".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif", ".webp"))
+        is_docx = content_kind == "zip" or (
+            not content_kind and fname_lower.endswith(".docx")
+        )
+        is_doc = content_kind == "legacy_doc" or (
+            not content_kind and fname_lower.endswith(".doc")
+        )
+        is_image = content_kind == "image" or (
+            not content_kind
+            and fname_lower.endswith(
+                (".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif", ".webp")
+            )
+        )
 
         if is_pdf:
             if not tess_ok:
@@ -21537,6 +21619,8 @@ def _office_bytes_to_pdf_preview(file_bytes, ext, cancel_check=None):
     ext = (ext or '.docx').lower()
     if not ext.startswith('.'):
         ext = '.' + ext
+    if _document_content_kind(file_bytes) == "legacy_doc":
+        ext = ".doc"
     if ext == '.doc':
         # A verified installation alone is insufficient: Antiword must also
         # decode this exact document before LibreOffice may render its layout.
@@ -21706,6 +21790,15 @@ def preview_file():
         file_bytes = f.read()
         import base64 as _base64, html as _html, os as _os
         ext = _os.path.splitext(filename)[1].lower()
+        content_kind = _document_content_kind(file_bytes)
+        if content_kind == "legacy_doc":
+            ext = ".doc"
+        elif content_kind == "pdf":
+            ext = ".pdf"
+        elif content_kind == "image":
+            ext = _document_image_extension(file_bytes)
+        elif content_kind == "zip" and ext not in (".docx", ".odt"):
+            ext = ".docx"
         # Avoid freezing the browser by returning huge base64 data URLs. Text
         # extraction can still run separately; only the visual preview is skipped.
         max_visual_bytes = 12 * 1024 * 1024
@@ -21770,6 +21863,15 @@ def extract_text():
         f = request.files['file']
         filename = str(f.filename or '').lower()
         file_bytes = f.read()
+        content_kind = _document_content_kind(file_bytes)
+        if content_kind == "legacy_doc":
+            filename = "verified-upload.doc"
+        elif content_kind == "pdf":
+            filename = "verified-upload.pdf"
+        elif content_kind == "image":
+            filename = "verified-upload" + _document_image_extension(file_bytes)
+        elif content_kind == "zip" and not filename.endswith((".docx", ".odt")):
+            filename = "verified-upload.docx"
 
         text = ""
 

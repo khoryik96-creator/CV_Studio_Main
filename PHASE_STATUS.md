@@ -222,6 +222,31 @@
   Static regression coverage fixes the shared deadline, remaining-budget
   calculation and deadline-aware diagnostics call; Bash syntax validation
   covers the resulting installer.
+- A fresh independent review found that JobAdder visual preview still checked
+  JSON/PDF/image metadata before genuine OLE identity, while its Office helper
+  gated Antiword only for a supplied `.doc` extension. An OLE `.doc` mislabeled
+  as text, PDF or image could therefore reach an alternate renderer. Strong
+  byte identity now precedes visual metadata, and the Office helper forces
+  every genuine legacy Word payload through the exact-document Antiword check
+  regardless of its supplied extension. Characterization coverage exercises
+  the genuine fixture under text/PDF/image metadata, proves no alternative
+  preview succeeds when Antiword is unavailable and proves the structured
+  dependency error propagates.
+- The same review found equivalent extension-first dispatch in the shared
+  `/preview-file` and `/extract-text` upload paths. Genuine OLE `.doc` bytes
+  uploaded with `.txt`, `.pdf` or `.png` names could avoid the legacy branch;
+  plain-text decoding could even return binary gibberish successfully.
+  Central strong-byte classification now canonicalizes genuine OLE content
+  before those routes and the `/ocr` route. Regression coverage proves the
+  mislabeled fixture extracts verified Antiword text when healthy and returns
+  the preserved structured 424 dependency contract from every route when the
+  runtime is unavailable.
+- Finally, the first JobAdder correction had allowed weak `.doc`/`msword`
+  metadata to override genuine PDF or ZIP/DOCX bytes. The shared classification
+  order is now OLE, PDF, ZIP/DOCX and image by bytes, with filename and
+  content type consulted only when no strong identity exists. Focused tests
+  prove PDF and DOCX magic retain their established paths even when both the
+  filename and content type falsely identify a legacy `.doc`.
 
 ### Current validation and platform limitation
 
@@ -258,9 +283,9 @@
   `f430cdfe9446c4b943074d4bf804232761c284f2caa3d4125006b158d8b14af8`
   with no Unicode replacement character, and preserves DOCX generation. The
   temporary non-release QA ZIP is
-  `a0af6d3cbad4271fec597afaec36b547da78cd182c38a5ea6afe81f0a39e707c`;
+  `bb5ff0553094d4ae5a1157a00d26b72d00bc1038209657a919e63e5497f9316f`;
   its smoke JSON is
-  `d2e74fa635a43f79970179a5cca9a62467774511647fe05ca654a2aeb91e8e5a`.
+  `8834d8fb73a900f086d5825fc5a47b69ec8e1051e92581d0913c54ffbfa47d9e`.
   Neither artifact is copied to the immutable release directory.
 - **Release gate:** CV Studio's macOS installer, diagnostics and compiled
   package have not yet run on genuine Intel and Apple Silicon Macs in this
