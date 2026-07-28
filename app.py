@@ -13682,6 +13682,20 @@ def _spider_extract_text_from_download(raw, content_type="", filename="", ocr_pa
             )
         return "", "empty response"
 
+    # JobAdder metadata is not authoritative for the downloaded bytes. Detect
+    # legacy Word before JSON/text handling so an OLE .doc mislabeled as
+    # text/plain (or given a misleading filename) cannot bypass the mandatory
+    # verified Antiword boundary and become binary gibberish.
+    if _spider_is_legacy_word_doc_bytes(raw) or "msword" in content_type or filename.endswith(".doc"):
+        if callable(cancel_check):
+            cancel_check()
+        text = _spider_extract_legacy_doc_text_for_preview(raw)
+        if callable(cancel_check):
+            cancel_check()
+        if text:
+            return text[:30000], "downloaded legacy DOC resume"
+        return "", "legacy DOC resume found but preview extraction failed"
+
     parsed = None
     stripped = raw.lstrip()[:1]
     if "json" in content_type or stripped in (b"{", b"["):
@@ -13762,16 +13776,6 @@ def _spider_extract_text_from_download(raw, content_type="", filename="", ocr_pa
         # A ZIP/Office payload is binary.  Never fall through to raw decoding.
         if raw[:2] == b"PK" or filename.endswith(".docx"):
             return "", "DOCX resume found but text extraction failed"
-
-    if _spider_is_legacy_word_doc_bytes(raw) or "msword" in content_type or filename.endswith(".doc"):
-        if callable(cancel_check):
-            cancel_check()
-        text = _spider_extract_legacy_doc_text_for_preview(raw)
-        if callable(cancel_check):
-            cancel_check()
-        if text:
-            return text[:30000], "downloaded legacy DOC resume"
-        return "", "legacy DOC resume found but preview extraction failed"
 
     # Unknown octet-streams may genuinely be plain text, but accept them only if
     # they pass the resume-text quality check.  Known binary formats have already

@@ -202,6 +202,27 @@
   deadlines. Regression coverage proves single-call behavior, the legacy
   fallback contract and both installer deadlines.
 
+### Independent-review corrections
+
+- The first independent exact-master review found that the JobAdder
+  resume-download extractor processed JSON and generic `text/*` metadata before
+  checking the actual payload for legacy Word OLE bytes. A genuine `.doc`
+  mislabeled as `text/plain` could therefore bypass verified Antiword and be
+  returned as decoded binary gibberish. Legacy OLE bytes, `msword` metadata and
+  `.doc` filenames are now classified before metadata-driven JSON/text paths.
+  Characterization coverage uses the genuine pinned fixture mislabeled as
+  `text/plain`, proves readable Antiword output without replacement characters,
+  and proves an unavailable verified runtime propagates
+  `AntiwordDependencyError`.
+- The same review found that the macOS installer's corrected 15-second
+  diagnostics allowance could be multiplied by all 180 startup-poll
+  iterations. All three health requests now share a 75-second process-relative
+  budget, and each request's maximum is reduced to the remaining
+  budget while diagnostics retain their 15-second per-request allowance.
+  Static regression coverage fixes the shared deadline, remaining-budget
+  calculation and deadline-aware diagnostics call; Bash syntax validation
+  covers the resulting installer.
+
 ### Current validation and platform limitation
 
 - The exact bundled Windows runtime and genuine upstream OLE `.doc` fixture
@@ -237,9 +258,9 @@
   `f430cdfe9446c4b943074d4bf804232761c284f2caa3d4125006b158d8b14af8`
   with no Unicode replacement character, and preserves DOCX generation. The
   temporary non-release QA ZIP is
-  `ff61f074bf03433db4d3633f8e46b952a29e4184f27b4062adc762b5a6c6ec44`;
+  `a0af6d3cbad4271fec597afaec36b547da78cd182c38a5ea6afe81f0a39e707c`;
   its smoke JSON is
-  `690dff2d20cd43c3bd067dc3fde792262c461918bed95a6c6251f14521054242`.
+  `d2e74fa635a43f79970179a5cca9a62467774511647fe05ca654a2aeb91e8e5a`.
   Neither artifact is copied to the immutable release directory.
 - **Release gate:** CV Studio's macOS installer, diagnostics and compiled
   package have not yet run on genuine Intel and Apple Silicon Macs in this

@@ -375,9 +375,27 @@ class AntiwordMandatoryDependencyTests(unittest.TestCase):
             windows,
         )
         self.assertIn(
-            '--max-time 15 "http://localhost:$SMOKE_PORT/diagnostics/runtime"',
+            "HEALTH_DEADLINE=$((SECONDS + 75))",
             macos,
         )
+        self.assertIn(
+            "remaining=$((HEALTH_DEADLINE - SECONDS))",
+            macos,
+        )
+        self.assertIn(
+            '[ "$remaining" -lt "$timeout" ] && timeout="$remaining"',
+            macos,
+        )
+        self.assertIn(
+            'DIAG_JSON="$(health_curl 15 '
+            '"http://localhost:$SMOKE_PORT/diagnostics/runtime"',
+            macos,
+        )
+        health_loop = macos.split(
+            "for _i in $(seq 1 180); do",
+            1,
+        )[1].split("done", 1)[0]
+        self.assertNotIn("curl -fsS", health_loop)
 
 
 if __name__ == "__main__":

@@ -536,6 +536,23 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
         self.assertIn("Universal Declaration of Human Rights", spider_text)
         self.assertEqual(spider_source, "downloaded legacy DOC resume")
 
+        mislabeled_text, mislabeled_source = (
+            app._spider_extract_text_from_download(
+                fixture,
+                "text/plain; charset=utf-8",
+                "misleading-resume.txt",
+            )
+        )
+        self.assertIn(
+            "Universal Declaration of Human Rights",
+            mislabeled_text,
+        )
+        self.assertNotIn("\ufffd", mislabeled_text)
+        self.assertEqual(
+            mislabeled_source,
+            "downloaded legacy DOC resume",
+        )
+
         malformed = self.client.post(
             "/extract-text",
             data={"file": (io.BytesIO(b"not-a-legacy-document"), "malformed.doc")},
@@ -620,6 +637,13 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
             "_require_verified_antiword_runtime",
             side_effect=unavailable,
         ):
+            with self.assertRaises(app.AntiwordDependencyError) as mislabeled:
+                app._spider_extract_text_from_download(
+                    fixture,
+                    "text/plain; charset=utf-8",
+                    "misleading-resume.txt",
+                )
+            self.assertIs(mislabeled.exception, unavailable)
             for route in ("/extract-text", "/preview-file", "/ocr"):
                 with self.subTest(route=route):
                     response = self.client.post(

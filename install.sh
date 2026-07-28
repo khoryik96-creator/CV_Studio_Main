@@ -373,10 +373,26 @@ else
 fi
 HEALTH_PID=$!
 HEALTH_OK=0; HEALTH_ERROR='startup timeout'
+HEALTH_DEADLINE=$((SECONDS + 75))
+health_remaining_seconds(){
+  local remaining
+  remaining=$((HEALTH_DEADLINE - SECONDS))
+  [ "$remaining" -gt 0 ] || return 1
+  printf '%s\n' "$remaining"
+}
+health_curl(){
+  local requested="$1" remaining timeout
+  shift
+  remaining="$(health_remaining_seconds)" || return 1
+  timeout="$requested"
+  [ "$remaining" -lt "$timeout" ] && timeout="$remaining"
+  /usr/bin/curl -fsS --connect-timeout 1 --max-time "$timeout" "$@"
+}
 for _i in $(seq 1 180); do
-  STATUS_JSON="$(curl -fsS --connect-timeout 1 --max-time 3 -H 'Cache-Control: no-cache' -H "X-CV-Studio-Request-ID: installer-$$-$_i" "http://localhost:$SMOKE_PORT/status" 2>/dev/null || true)"
-  IDENTITY="$(curl -fsS --connect-timeout 1 --max-time 3 "http://localhost:$SMOKE_PORT/instance-id" 2>/dev/null || true)"
-  DIAG_JSON="$(curl -fsS --connect-timeout 1 --max-time 15 "http://localhost:$SMOKE_PORT/diagnostics/runtime" 2>/dev/null || true)"
+  health_remaining_seconds >/dev/null || break
+  STATUS_JSON="$(health_curl 3 -H 'Cache-Control: no-cache' -H "X-CV-Studio-Request-ID: installer-$$-$_i" "http://localhost:$SMOKE_PORT/status" 2>/dev/null || true)"
+  IDENTITY="$(health_curl 3 "http://localhost:$SMOKE_PORT/instance-id" 2>/dev/null || true)"
+  DIAG_JSON="$(health_curl 15 "http://localhost:$SMOKE_PORT/diagnostics/runtime" 2>/dev/null || true)"
   case "$IDENTITY" in "$VERSION|"*"|$SCRIPT_DIR") ID_OK=1;; *) ID_OK=0;; esac
   printf '%s' "$STATUS_JSON" | grep -q '"healthy"[[:space:]]*:[[:space:]]*true' && STATUS_OK=1 || STATUS_OK=0
   printf '%s' "$STATUS_JSON" | grep -q "\"version\"[[:space:]]*:[[:space:]]*\"$VERSION\"" || STATUS_OK=0
