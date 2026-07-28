@@ -10,6 +10,7 @@ import argparse
 import base64
 import hashlib
 import hmac
+import importlib.util
 import io
 import json
 import os
@@ -27,8 +28,8 @@ import zipfile
 import zlib
 from pathlib import Path
 
-VERSION = "v24.6.239"
-VERSION_SLUG = "v24_6_239"
+VERSION = "v24.6.240"
+VERSION_SLUG = "v24_6_240"
 PRODUCT = "TheGuoLab-CVStudio"
 RECEIPT_SCHEMA = 2
 TOTP_MASK = bytes([147,57,36,83,116,245,122,57,165,162,176,168,249,50,204,128,45,174,232,56])
@@ -171,7 +172,7 @@ def validate_repository_dependency_state(root: Path) -> None:
             raise RuntimeError(f"POSIX script is not LF-only: {rel}. Run repo_consistency.py --repair.")
 
 def validate_source(root: Path) -> None:
-    required=("app.py","cvstudio_ai_costs.py","cvstudio_clients.py","cvstudio_storage.py","cvstudio_storage_bridge.py","cvstudio_diagnostics.py","cvstudio_document_safety.py","cvstudio_jobs.py","index.html","generate.js","template.docx","package.json","requirements.txt","merge_title_cache.py")
+    required=("app.py","cvstudio_ai_costs.py","cvstudio_antiword.py","cvstudio_clients.py","cvstudio_storage.py","cvstudio_storage_bridge.py","cvstudio_diagnostics.py","cvstudio_document_safety.py","cvstudio_jobs.py","index.html","generate.js","template.docx","package.json","requirements.txt","merge_title_cache.py")
     missing=[x for x in required if not (root/x).exists()]
     if missing: raise RuntimeError("Missing source files: "+", ".join(missing))
     # Build only from the readable owner patch base. The separate Authy QR/key
@@ -186,6 +187,66 @@ def validate_source(root: Path) -> None:
     if VERSION not in app_text or VERSION not in (root/"index.html").read_text(encoding="utf-8-sig"):
         raise RuntimeError(f"Source version surfaces do not contain {VERSION}.")
     validate_repository_dependency_state(root)
+
+
+def validate_antiword_runtime(root: Path, target: str | None = None) -> dict:
+    module_path = root / "cvstudio_antiword.py"
+    spec = importlib.util.spec_from_file_location(
+        "cvstudio_antiword_build_validation", module_path
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError("Mandatory Antiword verifier could not be loaded.")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    vendor = root / "vendor" / "antiword"
+    for relative, expected in module.ANTIWORD_DISTRIBUTION_HASHES.items():
+        artifact = vendor / relative
+        if not artifact.is_file() or module._sha256_file(artifact) != expected:
+            raise RuntimeError(
+                "Mandatory Antiword distribution artifact failed verification: "
+                + relative
+            )
+    for tag, config in module._PLATFORMS.items():
+        runtime = vendor / tag
+        entries = module._parse_manifest(
+            runtime, str(config["manifest_sha256"])
+        )
+        actual = {
+            path.relative_to(runtime).as_posix()
+            for path in module._safe_runtime_files(runtime)
+        }
+        if actual != set(entries):
+            raise RuntimeError(
+                f"Mandatory Antiword {tag} runtime file set is invalid."
+            )
+        for relative, expected in entries.items():
+            if module._sha256_file(runtime / relative) != expected:
+                raise RuntimeError(
+                    f"Mandatory Antiword {tag} runtime hash failed: {relative}"
+                )
+    if target == "linux-x64-test":
+        return {
+            "available": False,
+            "trusted": True,
+            "functional": False,
+            "platform": "linux-x64-test",
+            "version": module.ANTIWORD_PACKAGE_VERSION,
+            "static_platform_manifests_verified": len(module._PLATFORMS),
+            "test_only": True,
+        }
+    health = module.antiword_health(root, root)
+    if not (
+        health.get("available")
+        and health.get("trusted")
+        and health.get("functional")
+        and health.get("manifest_verified")
+        and health.get("functional_fixture_verified")
+    ):
+        raise RuntimeError(
+            "Mandatory Antiword runtime failed native preflight: "
+            + str(health.get("reason") or "unknown verification failure")
+        )
+    return health
 
 
 def vetted_adm_zip_dir(root: Path) -> Path:
@@ -219,10 +280,21 @@ def validate_vetted_adm_zip(root: Path) -> Path:
     return adm_zip
 
 
-def preflight_source(root: Path) -> None:
-    run([sys.executable,"-m","py_compile",str(root/"app.py"),str(root/"cvstudio_ai_costs.py"),str(root/"cvstudio_clients.py"),str(root/"cvstudio_storage.py"),str(root/"cvstudio_storage_bridge.py"),str(root/"cvstudio_diagnostics.py"),str(root/"cvstudio_document_safety.py"),str(root/"cvstudio_jobs.py"),str(root/"merge_title_cache.py")])
+def preflight_source(root: Path, target: str | None = None) -> None:
+    run([sys.executable,"-m","py_compile",str(root/"app.py"),str(root/"cvstudio_ai_costs.py"),str(root/"cvstudio_antiword.py"),str(root/"cvstudio_clients.py"),str(root/"cvstudio_storage.py"),str(root/"cvstudio_storage_bridge.py"),str(root/"cvstudio_diagnostics.py"),str(root/"cvstudio_document_safety.py"),str(root/"cvstudio_jobs.py"),str(root/"merge_title_cache.py")])
     run(["node","--check",str(root/"generate.js")])
     validate_vetted_adm_zip(root)
+    health = validate_antiword_runtime(root, target)
+    print(
+        "Antiword preflight: "
+        f"{health.get('platform')} {health.get('version')} "
+        f"trusted={health.get('trusted')} functional={health.get('functional')}"
+        + (
+            " static-test-only=true"
+            if health.get("test_only")
+            else ""
+        )
+    )
     # The owner/source installation still needs a working local module for
     # direct source-mode DOCX generation and for the owner's own testing. Only
     # its exact version and behavior matter here; the protected artifact never
@@ -746,6 +818,80 @@ def smoke_test(package: Path,source: Path,output: Path,target: str,timeout_secon
             ):
                 raise RuntimeError(f"Compiled package identity mismatch: {ident}")
             result["checks"].append({"url":"/instance","status":r.status,"instance_id":ident.get("instance_id"),"root_verified":True,"pid_verified":True,"port_verified":True})
+        with urllib.request.urlopen(base_url+"/diagnostics/runtime",timeout=30) as r:
+            diagnostics=json.loads(r.read().decode("utf-8"))
+            dependencies=diagnostics.get("dependencies") or {}
+            dependency=dependencies.get("antiword_health") or {}
+            if target=="linux-x64-test":
+                if (
+                    dependencies.get("antiword")
+                    or dependency.get("available")
+                    or dependency.get("reason")!="unsupported-platform"
+                ):
+                    raise RuntimeError(
+                        "Linux test-only package misreported Antiword support."
+                    )
+                result["checks"].append({
+                    "url":"/diagnostics/runtime",
+                    "status":r.status,
+                    "antiword_platform":"unsupported",
+                    "antiword_test_only":True,
+                })
+            else:
+                if not (
+                    dependencies.get("antiword")
+                    and dependency.get("available")
+                    and dependency.get("trusted")
+                    and dependency.get("functional")
+                    and dependency.get("manifest_verified")
+                    and dependency.get("functional_fixture_verified")
+                ):
+                    raise RuntimeError(
+                        "Compiled package Antiword diagnostics failed: "
+                        + str(dependency.get("reason") or "missing health evidence")
+                    )
+                result["checks"].append({
+                    "url":"/diagnostics/runtime",
+                    "status":r.status,
+                    "antiword_version":dependency.get("version"),
+                    "antiword_platform":dependency.get("platform"),
+                    "antiword_trusted":True,
+                    "antiword_functional":True,
+                })
+        if target!="linux-x64-test":
+            fixture=(source/"vendor"/"antiword"/"fixtures"/"UDHR-english.doc").read_bytes()
+            boundary="----CVStudioAntiwordProtectedSmoke"
+            legacy_doc_body=(
+                f"--{boundary}\r\n"
+                'Content-Disposition: form-data; name="file"; filename="UDHR-english.doc"\r\n'
+                "Content-Type: application/msword\r\n\r\n"
+            ).encode("ascii")+fixture+f"\r\n--{boundary}--\r\n".encode("ascii")
+            req=urllib.request.Request(
+                base_url+"/extract-text",
+                data=legacy_doc_body,
+                headers={
+                    "Content-Type":f"multipart/form-data; boundary={boundary}",
+                    "X-CV-Studio-Request":"1",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(req,timeout=60) as r:
+                extracted=json.loads(r.read().decode("utf-8"))
+                text=str(extracted.get("text") or "")
+                if (
+                    r.status!=200
+                    or not extracted.get("ok")
+                    or "Universal Declaration of Human Rights" not in text
+                    or "\ufffd" in text
+                ):
+                    raise RuntimeError("Compiled legacy .doc extraction did not return verified Antiword text.")
+                result["checks"].append({
+                    "url":"/extract-text",
+                    "status":r.status,
+                    "fixture_sha256":hashlib.sha256(fixture).hexdigest(),
+                    "content_verified":True,
+                    "unicode_replacement_absent":True,
+                })
         sample={
             "alignment":"justify",
             "data":{
@@ -822,7 +968,7 @@ def main() -> int:
     ap.add_argument("--skip-obfuscation",action="store_true"); ap.add_argument("--skip-smoke",action="store_true"); args=ap.parse_args()
     source=Path(args.source_root).resolve(); output=Path(args.output_dir).resolve(); target=detect_target(args.target)
     print(f"CV Studio protected build: {VERSION} -> {target}")
-    validate_target_host(target); validate_source(source); preflight_source(source)
+    validate_target_host(target); validate_source(source); preflight_source(source,target)
     try:
         with tempfile.TemporaryDirectory(prefix="cvstudio-protected-build-") as td:
             work=Path(td); pi,pg,protection=protect_javascript(source,work,args.skip_obfuscation); native_source,native_prompt_report=prepare_native_source(source,work); protection["native_prompt_protection"]=native_prompt_report; dist,report=compile_native(source,work,target,native_source)

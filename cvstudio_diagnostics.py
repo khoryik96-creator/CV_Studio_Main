@@ -108,7 +108,8 @@ def system_memory_status() -> dict[str, Any]:
 def dependency_status(
     soffice_finder: Callable[[], Any],
     antiword_finder: Callable[[], Any],
-) -> dict[str, bool]:
+    antiword_health: Callable[[], Any] | None = None,
+) -> dict[str, Any]:
     modules = [
         "flask",
         "docx",
@@ -128,6 +129,20 @@ def dependency_status(
         result["antiword"] = bool(antiword_finder())
     except Exception:
         result["antiword"] = False
+    if antiword_health is not None:
+        try:
+            health = antiword_health()
+            result["antiword_health"] = (
+                dict(health) if isinstance(health, dict) else {}
+            )
+        except Exception:
+            result["antiword_health"] = {
+                "available": False,
+                "trusted": False,
+                "functional": False,
+                "reason": "health-check-failed",
+                "recovery_action": "run_installer",
+            }
     return result
 
 

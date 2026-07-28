@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.239"
+_INSTALL_RECEIPT_VERSION = "v24.6.240"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -295,8 +295,15 @@ from cvstudio_document_safety import (
     safe_image_open as _phase4_safe_image_open,
     validate_zip_payload as _phase4_validate_zip_payload,
 )
+from cvstudio_antiword import (
+    AntiwordDependencyError,
+    antiword_health as _verified_antiword_health,
+    antiword_subprocess_env as _verified_antiword_subprocess_env,
+    find_verified_antiword as _verified_antiword_finder,
+    require_verified_antiword as _require_verified_antiword_runtime,
+)
 
-_CVSTUDIO_VERSION = "v24.6.239"
+_CVSTUDIO_VERSION = "v24.6.240"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -7458,7 +7465,7 @@ def _ja_spa_browser_bridge(candidate_id, fields, note_text="", email="", salary_
     payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
     compact_payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     script = """(async () => {
-  const helperVersion = 'v24.6.239';
+  const helperVersion = 'v24.6.240';
   const candidateId = %s;
   const payload = %s;
   const profilePath = %s;
@@ -10049,7 +10056,7 @@ def jobadder_onenote_activity_diagnostic():
     generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Candidate Activity Read Test",
-        "cv_studio_version": "v24.6.239",
+        "cv_studio_version": "v24.6.240",
         "generated_utc": generated,
         "safety": {
             "read_only": True,
@@ -10259,7 +10266,7 @@ def jobadder_onenote_activity_create_diagnostic():
     if confirmation != "CREATE ONE MAX LOW TEST":
         return jsonify({"error": "Type CREATE ONE MAX LOW TEST exactly before running the controlled POST."}), 400
 
-    guard_key = ("v24.6.239", candidate_id)
+    guard_key = ("v24.6.240", candidate_id)
     if guard_key in _JA_ACTIVITY_CREATE_DIAG_USED:
         return jsonify({"error": "The one-shot controlled POST has already been run in this CV Studio session. Restarting is intentionally required before any repeat test."}), 409
     # Mark before the network call so a timeout/double-click cannot emit a second POST.
@@ -10288,7 +10295,7 @@ def jobadder_onenote_activity_create_diagnostic():
     generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Official AddCandidateActivity Create Test",
-        "cv_studio_version": "v24.6.239",
+        "cv_studio_version": "v24.6.240",
         "generated_utc": generated,
         "candidate_fixture": {
             "name": "Max Low",
@@ -11301,7 +11308,14 @@ def _spider_preview_cache_stats():
 
 
 def _cvstudio_dependency_status():
-    return _phase4_dependency_status(_find_soffice_binary, _find_antiword_binary)
+    return _phase4_dependency_status(
+        _find_soffice_binary,
+        _find_antiword_binary,
+        lambda: _verified_antiword_health(
+            _CVSTUDIO_ROOT,
+            os.path.dirname(os.path.abspath(__file__)),
+        ),
+    )
 
 
 def _cvstudio_connection_status_redacted():
@@ -11860,6 +11874,8 @@ def _spider_fetch_candidate_resume_text(token, candidate_id):
                 _spider_resume_text_cache_put(token, candidate_id, text, source)
                 return text, source
         except _SpiderJobAdderReconnectRequired:
+            raise
+        except AntiwordDependencyError:
             raise
         except Exception:
             continue
@@ -13353,8 +13369,8 @@ def _spider_is_legacy_word_doc_bytes(raw):
         finally:
             ole.close()
     except Exception:
-        # Still let LibreOffice/antiword try it; JobAdder often serves legacy .doc
-        # as generic application/octet-stream without a usable filename.
+        # Still let the verified Antiword path inspect it; JobAdder often serves
+        # legacy .doc as generic application/octet-stream without a usable name.
         return True
 
 
@@ -13381,35 +13397,39 @@ def _spider_doc_text_quality_ok(text):
 
 
 def _spider_extract_legacy_doc_text_for_preview(raw):
-    """Best-effort text fallback for legacy .doc Spider previews.
+    """Verified Antiword text extraction for legacy .doc Spider previews.
 
-    Used only for JobAdder side preview when visual .doc-to-PDF conversion is not
-    possible. It mirrors the safer extraction order used by the normal upload
-    path: antiword, LibreOffice text, native WordDocument piece table, then raw scans.
+    LibreOffice and native parsing remain defense-in-depth probes after a
+    document-specific Antiword failure, but their text is never returned as a
+    verified legacy-.doc result.
     """
     raw = raw or b''
     if not raw:
-        return ''
+        raise AntiwordDependencyError(
+            "document-extraction-failed",
+            "This legacy .doc is empty or unreadable. Convert it to DOCX or "
+            "PDF and retry.",
+        )
 
-    # 1) antiword, if bundled/installed.
+    # 1) The only accepted success path is the pinned, function-verified runtime.
+    antiword = _require_verified_antiword()
     try:
         import tempfile as _tmp, subprocess as _sp, os as _os
-        for antiword in _iter_antiword_binaries():
-            with _tmp.TemporaryDirectory() as td:
-                doc_path = _os.path.join(td, 'input.doc')
-                with open(doc_path, 'wb') as fh:
-                    fh.write(raw)
-                aw_folder = _os.path.dirname(_os.path.abspath(antiword))
-                res = _sp.run([antiword, doc_path], capture_output=True, timeout=20, cwd=aw_folder or None, env=_antiword_env_for_binary(antiword))
-                if res.returncode == 0:
-                    for enc in ('utf-8', 'cp1252', 'latin-1'):
-                        txt = _spider_clean_doc_text_for_preview(res.stdout.decode(enc, errors='ignore'))
-                        if _spider_doc_text_quality_ok(txt):
-                            return txt[:12000]
+        with _tmp.TemporaryDirectory() as td:
+            doc_path = _os.path.join(td, 'input.doc')
+            with open(doc_path, 'wb') as fh:
+                fh.write(raw)
+            aw_folder = _os.path.dirname(_os.path.abspath(antiword))
+            res = _sp.run([antiword, doc_path], capture_output=True, timeout=20, cwd=aw_folder or None, env=_antiword_env_for_binary(antiword))
+            if res.returncode == 0:
+                for enc in ('utf-8', 'cp1252', 'latin-1'):
+                    txt = _spider_clean_doc_text_for_preview(res.stdout.decode(enc, errors='ignore'))
+                    if _spider_doc_text_quality_ok(txt):
+                        return txt[:12000]
     except Exception:
         pass
 
-    # 2) LibreOffice to text, if available.
+    # 2) LibreOffice remains a bounded defense-in-depth probe only.
     try:
         import tempfile as _tmp, subprocess as _sp, os as _os
         soffice = _find_soffice_binary()
@@ -13425,11 +13445,17 @@ def _spider_extract_legacy_doc_text_for_preview(raw):
                     for enc in ('utf-8', 'utf-16', 'cp1252', 'latin-1'):
                         txt = _spider_clean_doc_text_for_preview(data.decode(enc, errors='ignore'))
                         if _spider_doc_text_quality_ok(txt):
-                            return txt[:12000]
+                            raise AntiwordDependencyError(
+                                "document-extraction-failed",
+                                "Verified Antiword could not decode this legacy "
+                                ".doc. Convert it to DOCX or PDF and retry.",
+                            )
+    except AntiwordDependencyError:
+        raise
     except Exception:
         pass
 
-    # 3) Native OLE WordDocument piece table.
+    # 3) Native OLE parsing remains defense-in-depth and cannot satisfy success.
     try:
         import struct as _struct
         import olefile as _olefile
@@ -13484,21 +13510,37 @@ def _spider_extract_legacy_doc_text_for_preview(raw):
                         break
                     txt = _spider_clean_doc_text_for_preview(''.join(pieces))
                     if _spider_doc_text_quality_ok(txt):
-                        return txt[:12000]
+                        raise AntiwordDependencyError(
+                            "document-extraction-failed",
+                            "Verified Antiword could not decode this legacy "
+                            ".doc. Convert it to DOCX or PDF and retry.",
+                        )
         finally:
             ole.close()
+    except AntiwordDependencyError:
+        raise
     except Exception:
         pass
 
-    # 4) Last resort raw scans.
+    # 4) Raw scans are also diagnostic-only and never become accepted output.
     for enc in ('utf-16-le', 'cp1252', 'latin-1'):
         try:
             txt = _spider_clean_doc_text_for_preview(raw[:300000].decode(enc, errors='ignore'))
             if _spider_doc_text_quality_ok(txt):
-                return txt[:12000]
+                raise AntiwordDependencyError(
+                    "document-extraction-failed",
+                    "Verified Antiword could not decode this legacy .doc. "
+                    "Convert it to DOCX or PDF and retry.",
+                )
+        except AntiwordDependencyError:
+            raise
         except Exception:
             pass
-    return ''
+    raise AntiwordDependencyError(
+        "document-extraction-failed",
+        "Verified Antiword could not decode this legacy .doc. Convert it to "
+        "DOCX or PDF and retry.",
+    )
 
 def _spider_tesseract_path():
     import shutil
@@ -13632,6 +13674,12 @@ def _spider_extract_text_from_download(raw, content_type="", filename="", ocr_pa
     content_type = str(content_type or "").lower()
     filename = str(filename or "").lower()
     if not raw:
+        if "msword" in content_type or filename.endswith(".doc"):
+            raise AntiwordDependencyError(
+                "document-extraction-failed",
+                "This legacy .doc is empty or unreadable. Convert it to DOCX "
+                "or PDF and retry.",
+            )
         return "", "empty response"
 
     parsed = None
@@ -14087,6 +14135,8 @@ def _spider_visual_preview_payload(raw, content_type="", filename="", max_pages=
                 )
         except _SpiderPreviewCancelled:
             raise
+        except AntiwordDependencyError:
+            raise
         except Exception:
             pass
         if conv_ext == ".docx" or raw[:2] == b"PK":
@@ -14437,6 +14487,12 @@ def jobadder_spider_candidate_preview():
                 })
         except _SpiderPreviewCancelled:
             raise
+        except AntiwordDependencyError as exc:
+            return respond(
+                _antiword_dependency_payload(exc),
+                424,
+                cacheable=False,
+            )
         except urllib.error.HTTPError as exc:
             tried.append(path + ":" + str(exc.code))
         except Exception as exc:
@@ -14483,6 +14539,12 @@ def jobadder_spider_candidate_preview():
                 })
         except _SpiderPreviewCancelled:
             raise
+        except AntiwordDependencyError as exc:
+            return respond(
+                _antiword_dependency_payload(exc),
+                424,
+                cacheable=False,
+            )
         except urllib.error.HTTPError as exc:
             tried.append(path + ":" + str(exc.code))
         except Exception as exc:
@@ -14545,12 +14607,24 @@ def jobadder_spider_candidate_preview():
                                 })
                         except _SpiderPreviewCancelled:
                             raise
+                        except AntiwordDependencyError as exc:
+                            return respond(
+                                _antiword_dependency_payload(exc),
+                                424,
+                                cacheable=False,
+                            )
                         except urllib.error.HTTPError as exc:
                             tried.append(path + ":" + str(exc.code))
                         except Exception as exc:
                             tried.append(path + ":" + str(exc)[:80])
         except _SpiderPreviewCancelled:
             raise
+        except AntiwordDependencyError as exc:
+            return respond(
+                _antiword_dependency_payload(exc),
+                424,
+                cacheable=False,
+            )
         except urllib.error.HTTPError as exc:
             tried.append(list_path + ":" + str(exc.code))
         except Exception as exc:
@@ -15097,9 +15171,13 @@ def jobadder_spider_search():
                             resume_map[cid] = {"text": str(text or ""), "source": str(source or "")}
                         except _SpiderJobAdderReconnectRequired:
                             raise
+                        except AntiwordDependencyError:
+                            raise
                         except Exception:
                             resume_map[cid] = {"text": "", "source": "resume text unavailable"}
             except _SpiderJobAdderReconnectRequired:
+                raise
+            except AntiwordDependencyError:
                 raise
             except Exception:
                 for cid in resume_ids:
@@ -15107,6 +15185,8 @@ def jobadder_spider_search():
                         text, source = _spider_fetch_candidate_resume_text(token, cid)
                         resume_map[cid] = {"text": str(text or ""), "source": str(source or "")}
                     except _SpiderJobAdderReconnectRequired:
+                        raise
+                    except AntiwordDependencyError:
                         raise
                     except Exception:
                         resume_map[cid] = {"text": "", "source": "resume text unavailable"}
@@ -15277,6 +15357,8 @@ def jobadder_spider_search():
             "needs_reconnect": True,
             "query": query,
         }), 401
+    except AntiwordDependencyError as e:
+        return _antiword_dependency_response(e)
     except urllib.error.HTTPError as e:
         body = e.read().decode(errors="replace")
         if e.code == 401:
@@ -15847,6 +15929,10 @@ def ocr_endpoint():
         # Detect file type by extension and magic bytes.
         is_pdf = fname_lower.endswith(".pdf") or file_bytes[:4] == b"%PDF"
         is_docx = fname_lower.endswith(".docx") or file_bytes[:2] == b"PK"
+        is_doc = (
+            fname_lower.endswith(".doc")
+            or file_bytes.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1")
+        )
         is_image = fname_lower.endswith((".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif", ".webp"))
 
         if is_pdf:
@@ -15875,6 +15961,12 @@ def ocr_endpoint():
                 text = _ocr_image_text(pytesseract, img, lang="eng", timeout=35)
             finally:
                 img.close()
+
+        elif is_doc:
+            try:
+                text = _spider_extract_legacy_doc_text_for_preview(file_bytes)
+            except AntiwordDependencyError as error:
+                return cors_json(_antiword_dependency_payload(error), 424)
 
         elif is_docx:
             try:
@@ -21364,147 +21456,71 @@ def _find_soffice_binary():
 
 
 def _iter_antiword_binaries():
-    """Yield legacy-.doc antiword candidates in a trust-first order.
-
-    Package-local and explicitly installed absolute paths are checked before
-    PATH. On Windows, arbitrary PATH entries are not executed unless the owner
-    explicitly sets CVSTUDIO_ALLOW_UNTRUSTED_ANTIWORD_PATH=1. This prevents a
-    user-writable earlier PATH entry from being run against candidate files.
-    """
-    import shutil as _shutil
-    _root = os.path.dirname(os.path.abspath(__file__))
-    _pf = os.environ.get('ProgramFiles', '')
-    _pf86 = os.environ.get('ProgramFiles(x86)', '')
-    _antiword_home = os.environ.get('ANTIWORDHOME', '')
-
-    package_roots = [
-        os.path.join(_root, 'vendor', 'antiword'),
-        os.path.join(_root, 'antiword'),
-        os.path.join(_root, 'third_party', 'antiword'),
-    ]
-    installed_roots = [
-        os.path.join(_pf, 'Antiword') if _pf else '',
-        os.path.join(_pf, 'antiword') if _pf else '',
-        os.path.join(_pf86, 'Antiword') if _pf86 else '',
-        os.path.join(_pf86, 'antiword') if _pf86 else '',
-        os.path.join('C:/', 'antiword'),
-        _antiword_home,
-    ]
-
-    seen = set()
-
-    def _emit(candidate):
-        if not candidate:
-            return None
-        try:
-            candidate = os.path.abspath(candidate)
-        except Exception:
-            pass
-        key = os.path.normcase(candidate)
-        if key in seen:
-            return None
-        seen.add(key)
-        if os.path.exists(candidate) and os.path.isfile(candidate):
-            return candidate
-        return None
-
-    def _explicit_candidates(roots):
-        for folder in roots:
-            if not folder:
-                continue
-            for candidate in (
-                os.path.join(folder, 'antiword.exe'),
-                os.path.join(folder, 'antiword'),
-                os.path.join(folder, 'bin', 'antiword.exe'),
-                os.path.join(folder, 'bin', 'antiword'),
-                os.path.join(folder, 'bin', 'x64', 'antiword.exe'),
-                os.path.join(folder, 'bin', 'i386', 'antiword.exe'),
-                os.path.join(folder, 'inst', 'antiword.exe'),
-            ):
-                out = _emit(candidate)
-                if out:
-                    yield out
-
-    def _recursive_candidates(roots):
-        for root_dir in roots:
-            if not root_dir or not os.path.isdir(root_dir):
-                continue
-            base_depth = os.path.abspath(root_dir).rstrip(os.sep).count(os.sep)
-            scanned = 0
-            try:
-                for dirpath, dirnames, filenames in os.walk(root_dir):
-                    scanned += 1
-                    if scanned > 400:
-                        break
-                    depth = os.path.abspath(dirpath).rstrip(os.sep).count(os.sep) - base_depth
-                    if depth > 5:
-                        dirnames[:] = []
-                        continue
-                    dirnames[:] = [d for d in dirnames if d.lower() not in {'node_modules', '__pycache__', '.git'}]
-                    for fname in filenames:
-                        if fname.lower() in {'antiword.exe', 'antiword'}:
-                            out = _emit(os.path.join(dirpath, fname))
-                            if out:
-                                yield out
-            except Exception:
-                continue
-
-    # Trusted application-owned files first, including nested portable layouts.
-    yield from _explicit_candidates(package_roots)
-    yield from _recursive_candidates(package_roots)
-
-    # Then known installer destinations / ANTIWORDHOME absolute locations.
-    yield from _explicit_candidates(installed_roots)
-    yield from _recursive_candidates(installed_roots)
-
-    # POSIX package-manager paths are stable system locations. Windows PATH is
-    # user-influenced and therefore opt-in only when it is outside trusted roots.
-    for name in ('antiword', 'antiword.exe'):
-        candidate = _shutil.which(name)
-        if not candidate:
-            continue
-        candidate_abs = os.path.abspath(candidate)
-        trusted_prefixes = [os.path.abspath(p) for p in package_roots + installed_roots if p]
-        trusted = any(
-            os.path.normcase(candidate_abs) == os.path.normcase(prefix)
-            or os.path.normcase(candidate_abs).startswith(os.path.normcase(prefix.rstrip(os.sep) + os.sep))
-            for prefix in trusted_prefixes
-        )
-        if os.name != 'nt':
-            trusted = trusted or candidate_abs.startswith(('/usr/bin/', '/usr/local/bin/', '/opt/homebrew/bin/'))
-        if trusted or os.environ.get('CVSTUDIO_ALLOW_UNTRUSTED_ANTIWORD_PATH') == '1':
-            out = _emit(candidate_abs)
-            if out:
-                yield out
+    """Yield only the exact hash- and function-verified managed runtime."""
+    candidate = _verified_antiword_finder(
+        _CVSTUDIO_ROOT,
+        os.path.dirname(os.path.abspath(__file__)),
+    )
+    if candidate:
+        yield candidate
 
 def _find_antiword_binary():
-    """Return the first detected antiword binary, kept for status/debug callers."""
+    """Return the verified Antiword binary, kept for compatibility callers."""
     return next(_iter_antiword_binaries(), None)
 
 
 def _antiword_env_for_binary(binary_path):
-    """Prepare a conservative env for antiword.
+    """Return the fixed child environment for the pinned Antiword runtime."""
+    return _verified_antiword_subprocess_env()
 
-    Some Windows antiword builds expect mapping/resource files beside the exe.
-    Running with cwd at the binary folder improves those builds, while keeping
-    PATH and the user environment intact.
-    """
-    env = os.environ.copy()
-    try:
-        folder = os.path.dirname(os.path.abspath(binary_path))
-        if folder:
-            env['PATH'] = folder + os.pathsep + env.get('PATH', '')
-            # A few antiword builds honour ANTIWORDHOME; harmless if ignored.
-            env.setdefault('ANTIWORDHOME', folder)
-            # CRAN/r-universe package layouts may keep resources one or two
-            # levels above the executable. Let Antiword search there too.
-            parent = os.path.dirname(folder)
-            grandparent = os.path.dirname(parent) if parent else ''
-            extra_path = os.pathsep.join([p for p in [folder, parent, grandparent] if p])
-            env['PATH'] = extra_path + os.pathsep + env.get('PATH', '')
-    except Exception:
-        pass
-    return env
+
+def _require_verified_antiword():
+    return _require_verified_antiword_runtime(
+        _CVSTUDIO_ROOT,
+        os.path.dirname(os.path.abspath(__file__)),
+    )
+
+
+def _antiword_dependency_response(error):
+    return jsonify(_antiword_dependency_payload(error)), 424
+
+
+def _antiword_dependency_payload(error):
+    reason = str(getattr(error, "reason", "unavailable") or "unavailable")
+    document_failure = reason == "document-extraction-failed"
+    message = _cvstudio_safe_error_message(
+        str(
+            getattr(
+                error,
+                "public_message",
+                "Verified Antiword is required for legacy .doc files. Re-run "
+                "the CV Studio installer, then retry this file.",
+            )
+        )
+    )
+    return {
+        "ok": False,
+        "error": message,
+        "message": message,
+        "code": (
+            "LEGACY_DOC_EXTRACTION_FAILED"
+            if document_failure
+            else "ANTIWORD_DEPENDENCY_UNAVAILABLE"
+        ),
+        "retryable": False,
+        "request_id": _cvstudio_current_request_id(),
+        "severity": "warning",
+        "action": (
+            "convert_to_docx_or_pdf"
+            if document_failure
+            else "run_installer"
+        ),
+        "details": {
+            "dependency": "antiword",
+            "reason": reason,
+            "required_for": "legacy_doc",
+        },
+    }
 
 
 def _office_bytes_to_pdf_preview(file_bytes, ext, cancel_check=None):
@@ -21514,13 +21530,19 @@ def _office_bytes_to_pdf_preview(file_bytes, ext, cancel_check=None):
     foreground open or Clear terminates the disposable headless LibreOffice
     process instead of letting it compete with the active preview.
     """
+    ext = (ext or '.docx').lower()
+    if not ext.startswith('.'):
+        ext = '.' + ext
+    if ext == '.doc':
+        # A verified installation alone is insufficient: Antiword must also
+        # decode this exact document before LibreOffice may render its layout.
+        # The rendered PDF is visual-only and is never treated as extracted
+        # Antiword text.
+        _spider_extract_legacy_doc_text_for_preview(file_bytes)
     soffice = _find_soffice_binary()
     if not soffice:
         return None, 'Exact layout preview for DOC/DOCX/RTF/ODT needs LibreOffice installed; showing text-style fallback.'
     import tempfile as _tempfile, subprocess as _subprocess, os as _os
-    ext = (ext or '.docx').lower()
-    if not ext.startswith('.'):
-        ext = '.' + ext
     try:
         with _tempfile.TemporaryDirectory() as td:
             if callable(cancel_check):
@@ -21725,6 +21747,8 @@ def preview_file():
             return jsonify({"ok": False, "error": "TXT has no document layout. Use Text mode."})
 
         return jsonify({"ok": False, "error": "Visual preview unavailable for this file type."})
+    except AntiwordDependencyError as e:
+        return _antiword_dependency_response(e)
     except Exception as e:
         status = _document_validation_status(e)
         if status == 400 or status == 413:
@@ -21894,6 +21918,8 @@ def extract_text():
             if not (_is_ole_doc or _is_zip_doc):
                 return jsonify({"error": _legacy_doc_error}), 400
             text = ""
+            _verified_antiword_text = False
+            _require_verified_antiword()
 
             def _clean_legacy_doc_text(_raw_text):
                 import re as _re_doc
@@ -21921,8 +21947,8 @@ def extract_text():
                 _signals = len(_re_score.findall(r'(?i)\b(name|email|e-mail|phone|mobile|experience|education|skills|work|project|position)\b|@', _txt[:6000]))
                 return (_bad / _visible) < 0.20 and _signals >= 2
 
-            # Strategy 1: antiword. Prefer bundled/local antiword.exe, then PATH.
-            # Keep this path .doc-only so no other extraction feature can be affected.
+            # Strategy 1: the exact verified managed/bundled Antiword runtime.
+            # PATH and other arbitrary executable locations are never searched.
             try:
                 import subprocess as _sp2, tempfile as _tmp_aw, os as _os_aw
                 for _antiword in _iter_antiword_binaries():
@@ -21944,6 +21970,7 @@ def extract_text():
                                 _aw_text = r2.stdout.decode('cp1252', errors='ignore').strip()
                             if _looks_like_good_doc_text(_aw_text):
                                 text = _aw_text
+                                _verified_antiword_text = True
                                 break
             except Exception:
                 pass
@@ -22065,7 +22092,7 @@ def extract_text():
                 return _clean_piece_text(''.join(_out))
 
             # Strategy 3: native OLE/WordDocument piece-table extraction.
-            # This is critical on Windows installs without antiword/LibreOffice.
+            # This is a defense-in-depth probe and cannot satisfy success.
             if not text:
                 try:
                     _piece_text = _extract_word_binary_piece_table(file_bytes)
@@ -22093,6 +22120,12 @@ def extract_text():
                         text = _docx_renamed_text
                 except Exception:
                     pass
+            if not _verified_antiword_text:
+                raise AntiwordDependencyError(
+                    "document-extraction-failed",
+                    "Verified Antiword could not decode this legacy .doc. "
+                    "Convert it to DOCX or PDF and retry.",
+                )
             if not text:
                 return jsonify({"error": _legacy_doc_error}), 400
             if not _looks_like_good_doc_text(text):
@@ -22178,6 +22211,8 @@ def extract_text():
         text = _normalize_extracted_text_artifacts(text)
         return jsonify({"ok": True, "text": text})
 
+    except AntiwordDependencyError as e:
+        return _antiword_dependency_response(e)
     except Exception as e:
         _extract_name = str(locals().get('filename', '') or '').lower()
         _extract_msg = str(e)

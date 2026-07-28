@@ -1,3 +1,4 @@
 # Preserve exact committed bytes on Windows, macOS, and Linux.
 # Required for protected dependency hashes and manifest reproducibility.
 * -text
+vendor/antiword/** -whitespace

@@ -54,7 +54,44 @@
   v24.6.239** without changing any Blind JD data or content.
 - Current completed private owner/source release: **CV Studio v24.6.239**.
 - Phases 1, 2A, 2B, 3, 4, 5A and 5B are complete.
-- Phase 6 remains inactive. There is no active implementation target.
+- Phase 6 remains inactive.
+- The owner separately authorized the active **pre-Phase-6 mandatory Antiword
+  dependency and packaging milestone** on branch
+  `codex/antiword-mandatory-dependency`. Its reserved, unreleased source
+  identity is v24.6.240. This does not authorize JobAdder settings/sign-out,
+  Phase 6, AI Crawler behavior changes or any backburner item.
+
+## Active scope: pre-Phase-6 mandatory Antiword dependency
+
+Antiword package 1.3.5 (engine 0.37) must be a mandatory, functionally verified
+dependency for every supported Windows x64, macOS Intel and macOS Apple Silicon
+installation. CV Studio may start when it is unavailable so diagnostics and
+repair guidance work, but every legacy `.doc` decoding feature must fail
+explicitly with the structured request-ID contract.
+
+Only exact rOpenSci content-addressed platform packages bound to upstream commit
+`51441d45283512081c08010835b8002af79fe5e6` are approved. Their complete
+`bin`/`share` runtime, original platform archives, GPL-2 text, provenance,
+corresponding source archive and controlled genuine `.doc` fixture remain
+isolated under `vendor/antiword`. PATH, Program Files, `ANTIWORDHOME` and other
+arbitrary executable locations cannot satisfy trust.
+
+Installation and runtime acceptance require the pinned manifest and executable
+hashes, exact file set, expected native architecture/trust state and a bounded
+functional extraction of the controlled fixture. The native OLE parser and
+LibreOffice stay defense-in-depth only and cannot satisfy a verified `.doc`
+success.
+
+Windows x64 has genuine local functional and security verification. The exact
+macOS artifacts have upstream native build/check evidence, but CV Studio's own
+source/protected installer, diagnostics and extraction flow must pass on the
+matching genuine Mac architecture before macOS support or a completed release
+is claimed. Stop at that native gate if no real Mac runner is available.
+
+This milestone must preserve all 107 routes, five guards, 18 compatibility
+signatures, SQLite schema 10, Phase 5A journal schema 1, every Phase 1–5B
+contract and the Phase 6 stop boundary. No live credential, paid call or
+external mutation is authorized.
 
 ## Completed scope: post-Phase-5B Blind JD PDF metadata-overflow corrective
 

@@ -484,6 +484,162 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
         self.assertEqual(unsafe.status_code, 403)
         self.assertEqual(unsafe.get_json()["code"], "UNSAFE_LOCAL_REQUEST")
 
+    def test_legacy_doc_requires_and_uses_verified_antiword(self):
+        fixture = (
+            Path(__file__).resolve().parents[1]
+            / "vendor"
+            / "antiword"
+            / "fixtures"
+            / "UDHR-english.doc"
+        ).read_bytes()
+        headers = self._headers("antiword-functional-route")
+        response = self.client.post(
+            "/extract-text",
+            data={"file": (io.BytesIO(fixture), "verification.doc")},
+            headers=headers,
+            content_type="multipart/form-data",
+        )
+        payload = response.get_json()
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(payload["ok"])
+        self.assertIn("Universal Declaration of Human Rights", payload["text"])
+        self.assertNotIn("\ufffd", payload["text"])
+
+        ocr = self.client.post(
+            "/ocr",
+            data={"file": (io.BytesIO(fixture), "verification.doc")},
+            headers=headers,
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(ocr.status_code, 200)
+        self.assertIn(
+            "Universal Declaration of Human Rights",
+            ocr.get_json()["text"],
+        )
+        with mock.patch.object(app, "_find_soffice_binary", return_value=None):
+            preview = self.client.post(
+                "/preview-file",
+                data={"file": (io.BytesIO(fixture), "verification.doc")},
+                headers=headers,
+                content_type="multipart/form-data",
+            )
+        self.assertEqual(preview.status_code, 200)
+        self.assertNotEqual(
+            preview.get_json().get("code"),
+            "ANTIWORD_DEPENDENCY_UNAVAILABLE",
+        )
+        spider_text, spider_source = app._spider_extract_text_from_download(
+            fixture,
+            "application/msword",
+            "verification.doc",
+        )
+        self.assertIn("Universal Declaration of Human Rights", spider_text)
+        self.assertEqual(spider_source, "downloaded legacy DOC resume")
+
+        malformed = self.client.post(
+            "/extract-text",
+            data={"file": (io.BytesIO(b"not-a-legacy-document"), "malformed.doc")},
+            headers=headers,
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(malformed.status_code, 400)
+        self.assertEqual(malformed.get_json()["code"], "INVALID_REQUEST")
+
+        corrupt_ole = self.client.post(
+            "/extract-text",
+            data={
+                "file": (
+                    io.BytesIO(bytes.fromhex("d0cf11e0a1b11ae1") + (b"\0" * 2048)),
+                    "corrupt.doc",
+                )
+            },
+            headers=headers,
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(corrupt_ole.status_code, 424)
+        self.assertEqual(
+            corrupt_ole.get_json()["code"],
+            "LEGACY_DOC_EXTRACTION_FAILED",
+        )
+        self.assertEqual(
+            corrupt_ole.get_json()["action"],
+            "convert_to_docx_or_pdf",
+        )
+        self.assertEqual(
+            corrupt_ole.get_json()["details"]["reason"],
+            "document-extraction-failed",
+        )
+        for route in ("/preview-file", "/ocr"):
+            with self.subTest(route=route, failure="corrupt-doc"):
+                corrupt_route = self.client.post(
+                    route,
+                    data={
+                        "file": (
+                            io.BytesIO(
+                                bytes.fromhex("d0cf11e0a1b11ae1")
+                                + (b"\0" * 2048)
+                            ),
+                            "corrupt.doc",
+                        )
+                    },
+                    headers=headers,
+                    content_type="multipart/form-data",
+                )
+                self.assertEqual(corrupt_route.status_code, 424)
+                self.assertEqual(
+                    corrupt_route.get_json()["code"],
+                    "LEGACY_DOC_EXTRACTION_FAILED",
+                )
+
+        oversized = self.client.post(
+            "/extract-text",
+            headers=headers,
+            environ_overrides={
+                "CONTENT_LENGTH": str(app.app.config["MAX_CONTENT_LENGTH"] + 1)
+            },
+        )
+        self.assertEqual(oversized.status_code, 413)
+        self.assertEqual(oversized.get_json()["code"], "REQUEST_TOO_LARGE")
+
+        with self.assertRaises(app.AntiwordDependencyError) as empty_error:
+            app._spider_extract_legacy_doc_text_for_preview(b"")
+        self.assertEqual(
+            empty_error.exception.reason,
+            "document-extraction-failed",
+        )
+        with self.assertRaises(app.AntiwordDependencyError):
+            app._spider_extract_text_from_download(
+                b"",
+                "application/msword",
+                "empty.doc",
+            )
+
+        unavailable = app.AntiwordDependencyError("runtime-missing")
+        with mock.patch.object(
+            app,
+            "_require_verified_antiword_runtime",
+            side_effect=unavailable,
+        ):
+            for route in ("/extract-text", "/preview-file", "/ocr"):
+                with self.subTest(route=route):
+                    response = self.client.post(
+                        route,
+                        data={"file": (io.BytesIO(fixture), "verification.doc")},
+                        headers=headers,
+                        content_type="multipart/form-data",
+                    )
+                    payload = response.get_json()
+                    self.assertEqual(response.status_code, 424)
+                    self.assertEqual(
+                        payload["code"], "ANTIWORD_DEPENDENCY_UNAVAILABLE"
+                    )
+                    self.assertEqual(payload["action"], "run_installer")
+                    self.assertEqual(
+                        payload["details"]["required_for"], "legacy_doc"
+                    )
+            with self.assertRaises(app.AntiwordDependencyError):
+                app._spider_extract_legacy_doc_text_for_preview(fixture)
+
     def test_storage_bridge_resolves_app_compatibility_dependencies_per_call(self):
         headers = self._headers("phase4-storage-rebinding")
         with mock.patch.object(app, "_phase2a_usage_records", return_value=None):

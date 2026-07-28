@@ -1,8 +1,18 @@
+param(
+    [switch]$AntiwordSelfTestOnly,
+    [string]$AntiwordSelfTestStateRoot = ''
+)
+
 $ErrorActionPreference = 'Continue'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 if (-not $Root.EndsWith('\')) { $Root += '\' }
 $Log = Join-Path $Root 'install_log.txt'
-$InstallVersion = 'v24.6.239'
+$InstallVersion = 'v24.6.240'
+$AntiwordVersion = '1.3.5'
+$AntiwordRuntimeFileCount = 37
+$AntiwordManifestSha256 = '7d365a89f268a2fc34f815b369474124bc6a1aac02e9b0b57e6dfd5eb5368da0'
+$AntiwordExecutableSha256 = '2cbab2831854ccd5141ea328824a77cb889586db2e97129873d543a52cf3e15c'
+$AntiwordFixtureSha256 = 'f430cdfe9446c4b943074d4bf804232761c284f2caa3d4125006b158d8b14af8'
 $TargetMarker = Join-Path $Root 'PROTECTED_PLATFORM_TARGET.txt'
 $script:IsProtectedPackage = Test-Path -LiteralPath $TargetMarker
 $script:ProtectedNativeExe = Join-Path $Root 'runtime\native\CVStudio.exe'
@@ -161,24 +171,28 @@ function Confirm-InstallerAccess {
     return $false
 }
 
-if (-not (Confirm-InstallerAccess)) {
-    Write-Host 'Access denied. Installation was not started.'
-    try { Add-Content -LiteralPath $Log -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Installer access denied." -Encoding UTF8 } catch {}
-    exit 13
-}
-
 $ReceiptScript = Join-Path $Root 'INSTALL_RECEIPT.ps1'
-if (-not (Test-Path -LiteralPath $ReceiptScript)) {
-    Write-Host 'Access granted, but INSTALL_RECEIPT.ps1 is missing. Re-extract the ZIP and run INSTALL.bat again.'
-    $script:InstallApprovalIssued = $null
-    $script:InstallApprovalNonce = $null
-    $script:InstallApprovalSignature = $null
-    exit 13
+if (-not $AntiwordSelfTestOnly) {
+    if (-not (Confirm-InstallerAccess)) {
+        Write-Host 'Access denied. Installation was not started.'
+        try { Add-Content -LiteralPath $Log -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Installer access denied." -Encoding UTF8 } catch {}
+        exit 13
+    }
+    if (-not (Test-Path -LiteralPath $ReceiptScript)) {
+        Write-Host 'Access granted, but INSTALL_RECEIPT.ps1 is missing. Re-extract the ZIP and run INSTALL.bat again.'
+        $script:InstallApprovalIssued = $null
+        $script:InstallApprovalNonce = $null
+        $script:InstallApprovalSignature = $null
+        exit 13
+    }
+    # The code is validated here, but the machine/package receipt is
+    # deliberately finalized only after every mandatory dependency step
+    # succeeds. A failed or partial install must never become launch-authorized.
+    $script:InstallerAccessApproved = $true
+} else {
+    # Dependency QA cannot issue a receipt or reach the installer main block.
+    $script:InstallerAccessApproved = $false
 }
-# The code is validated here, but the machine/package receipt is deliberately
-# finalized only after every mandatory dependency step succeeds. A failed or
-# partial install must never become launch-authorized.
-$script:InstallerAccessApproved = $true
 
 function Run-Logged {
     param([string]$FilePath, [string[]]$Arguments, [string]$WorkingDirectory = $Root)
@@ -393,7 +407,19 @@ function Invoke-CvStudioInstallHealthCheck {
                 $report.checks.instance = [bool]([string]$instance.version -eq $InstallVersion -and (Normalize-InstallRoot ([string]$instance.root)) -eq (Normalize-InstallRoot $Root))
                 $report.checks.diagnostics = [bool]($diag.ok -and [string]$diag.version -eq $InstallVersion -and $diag.install_receipt.valid)
                 $report.checks.request_id = [bool]([string]$diag.request_id)
-                $report.ok = [bool]($report.checks.status -and $report.checks.instance -and $report.checks.diagnostics -and $report.checks.request_id)
+                $report.checks.antiword = [bool](
+                    $diag.dependencies.antiword -and
+                    $diag.dependencies.antiword_health.available -and
+                    $diag.dependencies.antiword_health.trusted -and
+                    $diag.dependencies.antiword_health.functional
+                )
+                $report.ok = [bool](
+                    $report.checks.status -and
+                    $report.checks.instance -and
+                    $report.checks.diagnostics -and
+                    $report.checks.request_id -and
+                    $report.checks.antiword
+                )
                 if ($report.ok) { break }
             } catch {
                 $report.error = $_.Exception.Message
@@ -628,212 +654,234 @@ function Install-PythonPackages {
     }
     $stampDir = Join-Path $env:APPDATA 'GUOLabCVStudio'
     New-Item -ItemType Directory -Path $stampDir -Force | Out-Null
-    Set-Content -LiteralPath (Join-Path $stampDir '.deps_ok') -Value 'v24.6.239-bundled-pdfium-ocr' -Encoding ASCII
+    Set-Content -LiteralPath (Join-Path $stampDir '.deps_ok') -Value 'v24.6.240-bundled-pdfium-ocr-antiword' -Encoding ASCII
     Write-Step '    Python packages ready.'
     return $true
 }
 
-function Get-AntiwordCandidates {
-    $pf86 = [Environment]::GetEnvironmentVariable('ProgramFiles(x86)')
-    $antiHome = [Environment]::GetEnvironmentVariable('ANTIWORDHOME','Machine')
-    if (-not $antiHome) { $antiHome = [Environment]::GetEnvironmentVariable('ANTIWORDHOME','User') }
-    $roots = @(
+function Get-AntiwordVendorRoot {
+    $candidates = @(
         (Join-Path $Root 'vendor\antiword'),
-        (Join-Path $Root 'antiword'),
-        (Join-Path $Root 'third_party\antiword'),
-        (Join-Path $env:ProgramFiles 'Antiword'),
-        (Join-Path $env:ProgramFiles 'antiword'),
-        $(if ($pf86) { Join-Path $pf86 'Antiword' }),
-        $(if ($pf86) { Join-Path $pf86 'antiword' }),
-        'C:\antiword',
-        $antiHome
-    ) | Where-Object { $_ }
-    $paths = @()
-    foreach ($r in $roots) {
-        $paths += (Join-Path $r 'antiword.exe')
-        $paths += (Join-Path $r 'bin\antiword.exe')
-        $paths += (Join-Path $r 'bin\x64\antiword.exe')
-        $paths += (Join-Path $r 'bin\i386\antiword.exe')
-    }
-    $cmd1 = Get-Command antiword -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -ErrorAction SilentlyContinue
-    $cmd2 = Get-Command antiword.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -ErrorAction SilentlyContinue
-    if ($cmd1) { $paths += $cmd1 }
-    if ($cmd2) { $paths += $cmd2 }
-    foreach ($r in $roots) {
-        if (Test-Path -LiteralPath $r) {
-            try {
-                $paths += @(Get-ChildItem -LiteralPath $r -Recurse -File -Filter 'antiword.exe' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName)
-            } catch {}
+        (Join-Path $Root 'runtime\native\vendor\antiword')
+    )
+    foreach ($candidate in $candidates) {
+        if (Test-Path -LiteralPath (Join-Path $candidate 'windows-x64\SHA256SUMS') -PathType Leaf) {
+            return $candidate
         }
     }
-    $seen = @{}
-    foreach ($p in $paths) {
-        if (-not $p) { continue }
-        $key = $p.ToLowerInvariant()
-        if ($seen.ContainsKey($key)) { continue }
-        $seen[$key] = $true
-        if (Test-Path -LiteralPath $p) { $p }
-    }
+    return ''
 }
 
-function Find-AntiwordPackageSource {
-    $packages = @(
-        (Join-Path $Root 'antiword.zip'),
-        (Join-Path $Root 'vendor\antiword.zip'),
-        (Join-Path $Root 'vendor\antiword\antiword.zip'),
-        (Join-Path $Root 'third_party\antiword.zip')
+function Test-AntiwordRuntime {
+    param(
+        [string]$RuntimeRoot,
+        [string]$FixturePath
     )
-    foreach ($zip in $packages) {
-        if (Test-Path -LiteralPath $zip) { return @{ Type='Zip'; Path=$zip } }
-    }
-    $folders = @(
-        (Join-Path $Root 'vendor\antiword'),
-        (Join-Path $Root 'antiword'),
-        (Join-Path $Root 'third_party\antiword')
-    )
-    foreach ($folder in $folders) {
-        if (Test-Path -LiteralPath (Join-Path $folder 'antiword.exe')) { return @{ Type='Folder'; Path=$folder } }
-    }
-    return $null
-}
-
-function Install-AntiwordFolderToProgramFiles {
-    param([string]$SourceFolder)
-    if (-not $SourceFolder -or -not (Test-Path -LiteralPath (Join-Path $SourceFolder 'antiword.exe'))) { return $false }
-    $resourceDir = Join-Path $SourceFolder 'Resources'
-    if (-not (Test-Path -LiteralPath $resourceDir)) {
-        Write-Step '    Antiword folder has no Resources folder; copying full folder anyway and relying on runtime quality fallback.'
-    }
-    $dest = Join-Path $env:ProgramFiles 'Antiword'
-    Write-Step "    Trying to install Antiword to Program Files: $dest"
-    $tempPs = Join-Path $env:TEMP ("guolab_install_antiword_{0}.ps1" -f ([guid]::NewGuid().ToString('N')))
-    @"
-`$ErrorActionPreference = 'Stop'
-`$src = '$($SourceFolder.Replace("'", "''"))'
-`$dest = Join-Path `$env:ProgramFiles 'Antiword'
-New-Item -ItemType Directory -Path `$dest -Force | Out-Null
-Copy-Item -Path (Join-Path `$src '*') -Destination `$dest -Recurse -Force
-[Environment]::SetEnvironmentVariable('ANTIWORDHOME', `$dest, 'Machine')
-`$machinePath = [Environment]::GetEnvironmentVariable('Path','Machine')
-if (`$machinePath -notlike "*`$dest*") {
-    [Environment]::SetEnvironmentVariable('Path', (`$machinePath.TrimEnd(';') + ';' + `$dest), 'Machine')
-}
-"@ | Set-Content -LiteralPath $tempPs -Encoding UTF8
+    $script:AntiwordFailure = ''
     try {
-        Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$tempPs) -Verb RunAs -Wait
-    } catch {
-        Write-Step "    Program Files Antiword install skipped or blocked by Windows/UAC: $($_.Exception.Message)"
-    }
-    Remove-Item -LiteralPath $tempPs -Force -ErrorAction SilentlyContinue
-    $installed = Join-Path $dest 'antiword.exe'
-    if (Test-Path -LiteralPath $installed) {
-        Add-PathFront $dest
-        $env:ANTIWORDHOME = $dest
-        Write-Step "    Antiword installed/ready: $installed"
-        return $true
-    }
-    return $false
-}
-
-function Install-AntiwordPackageRootToProgramFiles {
-    param([string]$PackageRoot)
-    if (-not $PackageRoot -or -not (Test-Path -LiteralPath $PackageRoot)) { return $false }
-    $exe = Get-ChildItem -LiteralPath $PackageRoot -Recurse -File -Filter 'antiword.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
-    if (-not $exe) { return $false }
-    $dest = Join-Path $env:ProgramFiles 'Antiword'
-    Write-Step "    Trying to install downloaded Antiword package to Program Files: $dest"
-    $tempPs = Join-Path $env:TEMP ("guolab_install_antiword_pkg_{0}.ps1" -f ([guid]::NewGuid().ToString('N')))
-    @"
-`$ErrorActionPreference = 'Stop'
-`$src = '$($PackageRoot.Replace("'", "''"))'
-`$dest = Join-Path `$env:ProgramFiles 'Antiword'
-New-Item -ItemType Directory -Path `$dest -Force | Out-Null
-Copy-Item -Path (Join-Path `$src '*') -Destination `$dest -Recurse -Force
-`$exe = Get-ChildItem -LiteralPath `$dest -Recurse -File -Filter 'antiword.exe' | Select-Object -First 1
-if (`$exe) {
-    # Put a convenience copy at the root if the package stores antiword.exe nested under bin/x64/etc.
-    if (`$exe.FullName -ne (Join-Path `$dest 'antiword.exe')) {
-        Copy-Item -LiteralPath `$exe.FullName -Destination (Join-Path `$dest 'antiword.exe') -Force
-    }
-}
-[Environment]::SetEnvironmentVariable('ANTIWORDHOME', `$dest, 'Machine')
-`$machinePath = [Environment]::GetEnvironmentVariable('Path','Machine')
-if (`$machinePath -notlike "*`$dest*") {
-    [Environment]::SetEnvironmentVariable('Path', (`$machinePath.TrimEnd(';') + ';' + `$dest), 'Machine')
-}
-"@ | Set-Content -LiteralPath $tempPs -Encoding UTF8
-    try {
-        Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$tempPs) -Verb RunAs -Wait
-    } catch {
-        Write-Step "    Program Files Antiword package install skipped or blocked by Windows/UAC: $($_.Exception.Message)"
-    }
-    Remove-Item -LiteralPath $tempPs -Force -ErrorAction SilentlyContinue
-    $installed = Join-Path $dest 'antiword.exe'
-    if (Test-Path -LiteralPath $installed) {
-        Add-PathFront $dest
-        $env:ANTIWORDHOME = $dest
-        Write-Step "    Antiword installed/ready: $installed"
-        return $true
-    }
-    return $false
-}
-
-function Install-AntiwordZipToProgramFiles {
-    param([string]$ZipPath)
-    if (-not $ZipPath -or -not (Test-Path -LiteralPath $ZipPath)) { return $false }
-    $tmp = Join-Path $env:TEMP ('guolab_antiword_tmp_' + [guid]::NewGuid().ToString('N'))
-    try {
-        New-Item -ItemType Directory -Path $tmp -Force | Out-Null
-        Expand-Archive -LiteralPath $ZipPath -DestinationPath $tmp -Force
-        $exe = Get-ChildItem -LiteralPath $tmp -Recurse -File -Filter 'antiword.exe' | Select-Object -First 1
-        if (-not $exe) {
-            Write-Step '    WARNING: antiword.zip did not contain antiword.exe.'
-            return $false
+        if (-not $RuntimeRoot -or -not (Test-Path -LiteralPath $RuntimeRoot -PathType Container)) {
+            throw 'runtime-missing'
         }
-        $srcFolder = Split-Path -Parent $exe.FullName
-        return (Install-AntiwordFolderToProgramFiles -SourceFolder $srcFolder)
+        $manifest = Join-Path $RuntimeRoot 'SHA256SUMS'
+        $exe = Join-Path $RuntimeRoot 'bin\antiword.exe'
+        if (-not (Test-Path -LiteralPath $manifest -PathType Leaf)) { throw 'manifest-missing' }
+        if ((Get-FileHash -LiteralPath $manifest -Algorithm SHA256).Hash.ToLowerInvariant() -ne $AntiwordManifestSha256) {
+            throw 'manifest-integrity-failed'
+        }
+        if (-not (Test-Path -LiteralPath $FixturePath -PathType Leaf)) { throw 'functional-fixture-missing' }
+        if ((Get-FileHash -LiteralPath $FixturePath -Algorithm SHA256).Hash.ToLowerInvariant() -ne $AntiwordFixtureSha256) {
+            throw 'functional-fixture-integrity-failed'
+        }
+
+        $expected = @{}
+        foreach ($line in @(Get-Content -LiteralPath $manifest -Encoding UTF8)) {
+            if ($line -notmatch '^([0-9a-fA-F]{64})  ([^\r\n]+)$') { throw 'manifest-invalid' }
+            $relative = [string]$Matches[2]
+            if ($relative.StartsWith('/') -or $relative.Contains('..') -or -not ($relative.StartsWith('bin/') -or $relative.StartsWith('share/'))) {
+                throw 'manifest-path-invalid'
+            }
+            if ($expected.ContainsKey($relative)) { throw 'manifest-duplicate-path' }
+            $expected[$relative] = ([string]$Matches[1]).ToLowerInvariant()
+        }
+        if ($expected.Count -ne $AntiwordRuntimeFileCount) { throw 'manifest-file-count-invalid' }
+
+        $rootFull = [IO.Path]::GetFullPath($RuntimeRoot).TrimEnd('\') + '\'
+        $actual = @{}
+        foreach ($folderName in @('bin','share')) {
+            $folder = Join-Path $RuntimeRoot $folderName
+            if (-not (Test-Path -LiteralPath $folder -PathType Container)) { throw 'runtime-layout-invalid' }
+            foreach ($file in @(Get-ChildItem -LiteralPath $folder -Recurse -File -Force)) {
+                if (($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'runtime-link-rejected' }
+                $full = [IO.Path]::GetFullPath($file.FullName)
+                if (-not $full.StartsWith($rootFull, [StringComparison]::OrdinalIgnoreCase)) { throw 'runtime-path-escaped' }
+                $relative = $full.Substring($rootFull.Length).Replace('\','/')
+                $actual[$relative] = $true
+            }
+        }
+        if ($actual.Count -ne $expected.Count) { throw 'runtime-file-set-invalid' }
+        foreach ($relative in $expected.Keys) {
+            if (-not $actual.ContainsKey($relative)) { throw 'runtime-file-set-invalid' }
+            $path = Join-Path $RuntimeRoot ($relative.Replace('/','\'))
+            $actualHash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actualHash -ne $expected[$relative]) { throw 'runtime-integrity-failed' }
+        }
+        if ((Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne $AntiwordExecutableSha256) {
+            throw 'executable-integrity-failed'
+        }
+        $signature = Get-AuthenticodeSignature -LiteralPath $exe
+        if ([string]$signature.Status -ne 'NotSigned') { throw 'unexpected-authenticode-state' }
+
+        $priorAntiwordHome = $env:ANTIWORDHOME
+        Remove-Item Env:ANTIWORDHOME -ErrorAction SilentlyContinue
+        Push-Location (Split-Path -Parent $exe)
+        try {
+            $output = (& $exe '-t' $FixturePath 2>&1 | Out-String)
+            $exitCode = $LASTEXITCODE
+        } finally {
+            Pop-Location
+            if ($null -ne $priorAntiwordHome) { $env:ANTIWORDHOME = $priorAntiwordHome }
+        }
+        if ($exitCode -ne 0 -or $output -notmatch 'Universal Declaration of Human Rights' -or $output -notmatch 'All people everywhere have the same human rights') {
+            throw 'functional-output-failed'
+        }
+        return $true
     } catch {
-        Write-Step "    WARNING: Could not expand/install antiword.zip: $($_.Exception.Message)"
+        $script:AntiwordFailure = [string]$_.Exception.Message
         return $false
-    } finally {
-        Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
 
-function Download-AntiwordPackage {
-    Write-Step '    Antiword automatic internet download is disabled because no stable signed/checksummed upstream Windows artifact is available.'
-    return $false
+function Install-VerifiedAntiwordRuntime {
+    $vendor = Get-AntiwordVendorRoot
+    if (-not $vendor) {
+        $script:AntiwordFailure = 'bundled-runtime-missing'
+        return $false
+    }
+    $source = Join-Path $vendor 'windows-x64'
+    $sourceFixture = Join-Path $vendor 'fixtures\UDHR-english.doc'
+    if (-not (Test-AntiwordRuntime -RuntimeRoot $source -FixturePath $sourceFixture)) {
+        return $false
+    }
+
+    $dependencyBase = Join-Path $env:LOCALAPPDATA ("TheGuoLab\CVStudio\dependencies\antiword\{0}" -f $AntiwordVersion)
+    $destination = Join-Path $dependencyBase 'windows-x64'
+    $destinationFixture = Join-Path $destination 'fixtures\UDHR-english.doc'
+    if (Test-AntiwordRuntime -RuntimeRoot $destination -FixturePath $destinationFixture) {
+        Write-Step '    Managed Antiword 1.3.5 is hash-verified and functional.'
+        return $true
+    }
+
+    try {
+        New-Item -ItemType Directory -Path $dependencyBase -Force | Out-Null
+        $stage = Join-Path $dependencyBase ('windows-x64.stage.' + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $stage -Force | Out-Null
+        Copy-Item -LiteralPath (Join-Path $source 'bin') -Destination $stage -Recurse -Force
+        Copy-Item -LiteralPath (Join-Path $source 'share') -Destination $stage -Recurse -Force
+        Copy-Item -LiteralPath (Join-Path $source 'SHA256SUMS') -Destination (Join-Path $stage 'SHA256SUMS') -Force
+        New-Item -ItemType Directory -Path (Join-Path $stage 'fixtures') -Force | Out-Null
+        Copy-Item -LiteralPath $sourceFixture -Destination (Join-Path $stage 'fixtures\UDHR-english.doc') -Force
+        if (-not (Test-AntiwordRuntime -RuntimeRoot $stage -FixturePath (Join-Path $stage 'fixtures\UDHR-english.doc'))) {
+            throw ('staged-runtime-' + $script:AntiwordFailure)
+        }
+        if (Test-Path -LiteralPath $destination) {
+            $backup = Join-Path $dependencyBase ('windows-x64.invalid.' + (Get-Date -Format 'yyyyMMddHHmmss'))
+            Move-Item -LiteralPath $destination -Destination $backup -Force
+        }
+        Move-Item -LiteralPath $stage -Destination $destination
+        if (-not (Test-AntiwordRuntime -RuntimeRoot $destination -FixturePath $destinationFixture)) {
+            throw ('installed-runtime-' + $script:AntiwordFailure)
+        }
+        Write-Step '    Managed Antiword 1.3.5 was repaired from the pinned bundled runtime.'
+        return $true
+    } catch {
+        $script:AntiwordFailure = [string]$_.Exception.Message
+        return $false
+    }
 }
 
 function Check-Antiword {
     Write-Blank
-    Write-Step '[4/7] Checking Antiword for legacy .doc extraction...'
-
-    # 1) Prefer an existing install if already available.
-    $existing = @(Get-AntiwordCandidates)
-    if ($existing.Count -gt 0) {
-        $antiwordExe = $existing[0]
-        Add-PathFront (Split-Path -Parent $antiwordExe)
-        Write-Step "    Antiword found: $antiwordExe"
+    Write-Step '[4/7] Installing and verifying mandatory Antiword for legacy .doc extraction...'
+    if (Install-VerifiedAntiwordRuntime) {
+        Write-Step '    Antiword trust: exact SHA-256 allowlist (upstream binary is unsigned).'
+        Write-Step '    Antiword functional test: genuine legacy Word .doc passed.'
         return $true
     }
+    Write-Step ("    ERROR: Mandatory Antiword verification failed ({0})." -f $script:AntiwordFailure)
+    Write-Step '    Re-extract this exact CV Studio release and run INSTALL.bat again.'
+    return $false
+}
 
-    # 2) If the user placed a portable antiword folder/zip beside CV Studio, install it to Program Files.
-    $pkg = Find-AntiwordPackageSource
-    if ($pkg) {
-        Write-Step "    Local Antiword package found: $($pkg.Path)"
-        $ok = $false
-        if ($pkg.Type -eq 'Zip') { $ok = Install-AntiwordZipToProgramFiles -ZipPath $pkg.Path }
-        if ($pkg.Type -eq 'Folder') { $ok = Install-AntiwordFolderToProgramFiles -SourceFolder $pkg.Path }
-        if ($ok) { return $true }
-        Write-Step '    WARNING: Local Antiword package was found but could not be installed to Program Files.'
+function Invoke-AntiwordInstallerSelfTest {
+    param([string]$StateRoot)
+    if (-not $StateRoot) { throw 'Antiword self-test requires an explicit temporary state root.' }
+    $stateFull = [IO.Path]::GetFullPath($StateRoot)
+    $tempFull = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
+    $stateLeaf = Split-Path -Leaf $stateFull
+    if (
+        -not $stateFull.StartsWith($tempFull, [StringComparison]::OrdinalIgnoreCase) -or
+        -not $stateLeaf.StartsWith('cvstudio-antiword-installer-self-test-')
+    ) {
+        throw 'Antiword self-test state must be inside the operating-system temporary directory.'
     }
+    $priorLocalAppData = $env:LOCALAPPDATA
+    $priorRoot = $Root
+    $priorLog = $Log
+    try {
+        New-Item -ItemType Directory -Path $stateFull -Force | Out-Null
+        $env:LOCALAPPDATA = $stateFull
+        $script:Log = Join-Path $stateFull 'antiword-installer-self-test.log'
+        $vendor = Get-AntiwordVendorRoot
+        if (-not $vendor) { throw 'bundled-runtime-missing' }
+        $source = Join-Path $vendor 'windows-x64'
+        $sourceFixture = Join-Path $vendor 'fixtures\UDHR-english.doc'
+        if (-not (Test-AntiwordRuntime -RuntimeRoot $source -FixturePath $sourceFixture)) {
+            throw ('bundled-runtime-' + $script:AntiwordFailure)
+        }
+        if (-not (Install-VerifiedAntiwordRuntime)) {
+            throw ('initial-install-' + $script:AntiwordFailure)
+        }
+        $managed = Join-Path $stateFull 'TheGuoLab\CVStudio\dependencies\antiword\1.3.5\windows-x64'
+        $fixture = Join-Path $managed 'fixtures\UDHR-english.doc'
+        $firstHash = (Get-FileHash -LiteralPath (Join-Path $managed 'bin\antiword.exe') -Algorithm SHA256).Hash
+        if (-not (Install-VerifiedAntiwordRuntime)) {
+            throw ('idempotent-install-' + $script:AntiwordFailure)
+        }
+        $secondHash = (Get-FileHash -LiteralPath (Join-Path $managed 'bin\antiword.exe') -Algorithm SHA256).Hash
+        if ($firstHash -ne $secondHash) { throw 'idempotent-install-changed-executable' }
+        Add-Content -LiteralPath (Join-Path $managed 'share\antiword\UTF-8.txt') -Value 'self-test-corruption'
+        if (Test-AntiwordRuntime -RuntimeRoot $managed -FixturePath $fixture) {
+            throw 'corrupt-runtime-was-accepted'
+        }
+        if (-not (Install-VerifiedAntiwordRuntime)) {
+            throw ('repair-' + $script:AntiwordFailure)
+        }
+        if (-not (Test-AntiwordRuntime -RuntimeRoot $managed -FixturePath $fixture)) {
+            throw ('repaired-runtime-' + $script:AntiwordFailure)
+        }
+        $script:Root = Join-Path $stateFull 'missing-package\'
+        New-Item -ItemType Directory -Path $script:Root -Force | Out-Null
+        if (Install-VerifiedAntiwordRuntime) { throw 'missing-bundle-reported-success' }
+        Write-Host 'Antiword installer self-test passed: verify, install, idempotency, corruption rejection, repair and missing-bundle failure.'
+    } finally {
+        $script:Root = $priorRoot
+        $script:Log = $priorLog
+        if ($null -eq $priorLocalAppData) {
+            Remove-Item Env:LOCALAPPDATA -ErrorAction SilentlyContinue
+        } else {
+            $env:LOCALAPPDATA = $priorLocalAppData
+        }
+    }
+}
 
-    # 3) Clean fallback. Internet auto-download is intentionally disabled.
-    Write-Step '    Antiword could not be auto-installed. Native .doc extraction fallback remains active.'
-    Write-Step '    This is non-fatal. Legacy .doc files still use CV Studio native extraction fallback.'
-    Write-Step '    Optional manual path: C:\Program Files\Antiword\antiword.exe'
-    return $true
+if ($AntiwordSelfTestOnly) {
+    try {
+        Invoke-AntiwordInstallerSelfTest -StateRoot $AntiwordSelfTestStateRoot
+        exit 0
+    } catch {
+        Write-Host ('Antiword installer self-test failed: ' + [string]$_.Exception.Message)
+        exit 1
+    }
 }
 
 function Check-Tesseract {
@@ -941,7 +989,7 @@ if ($NativeRuntime) {
 if ($ok -and -not (Check-Node)) { $ok = $false }
 if ($ok -and -not $NativeRuntime -and -not (Install-PythonPackages)) { $ok = $false }
 if ($ok -and $NativeRuntime) { Write-Step '[3/7] Python packages are bundled in the protected runtime - skipped.' }
-if ($ok) { Check-Antiword | Out-Null }
+if ($ok -and -not (Check-Antiword)) { $ok = $false }
 if ($ok) { Check-Tesseract | Out-Null }
 if ($ok) { Check-PdfOcrRenderer | Out-Null }
 if ($ok -and -not (Install-NodePackages)) { $ok = $false }

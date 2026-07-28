@@ -15,11 +15,169 @@
 - Phase 5A baseline Git commit: `4b366ddde1cf0a398706b52d55b0e82ed2dbc27c`
 - Phase 5B source baseline: v24.6.234
 - Phase 5B baseline Git commit: `327858799f17d880e37c740f71dfe321ea7bde0a`
-- Working branch: `codex/blind-jd-pdf-overflow-corrective`
+- Working branch: `codex/antiword-mandatory-dependency`
 - Active phase: none; Phase 6 inactive
 - Completed private owner/source release: v24.6.239
-- Status: Blind JD PDF metadata-overflow corrective release complete
-- Current milestone: none; stop before handoff, merge or Phase 6
+- Status: separate pre-Phase-6 Antiword milestone in validation; v24.6.240 is
+  reserved but unreleased
+- Current milestone: mandatory verified Antiword dependency and packaging;
+  stop before JobAdder settings/sign-out, Phase 6, handoff or merge
+
+## Pre-Phase-6 mandatory Antiword dependency and packaging milestone
+
+### Authorization and entry verification
+
+- The owner separately authorized only this dependency/packaging milestone on
+  branch `codex/antiword-mandatory-dependency`; JobAdder settings/sign-out,
+  Phase 6, AI Crawler behavior, cost tracking, frontend modularisation,
+  credential migration and backburner work remain inactive.
+- Entry was a clean worktree at master commit
+  `a5762488f7d90fe58f00870b2c0b2944be084e71`, with v24.6.239 on every active
+  source surface.
+- The immutable v24.6.239 release directory and all adjacent artifacts were
+  re-hashed. Its owner/source ZIP remained exactly
+  `295df2ff6775058af248f2f4b66b0fcf74e00aad01084f9f8e1d47c7d075de2a`,
+  and the verification sidecar `source_commit` exactly matched master.
+- A fresh extraction contained 133 tracked files and compared with master with
+  zero missing, extra or byte-mismatched files. No existing release artifact
+  was changed.
+- All required roadmap, status, implementation, private-patch, installer,
+  protected-build, historical handover and QA sources were read completely
+  before production changes.
+- The unchanged Python baseline ran 117 tests: 116 passed and the existing
+  owner-integration health test failed because the machine receipt belonged to
+  another extracted folder. All five unchanged frontend fixtures passed. The
+  failure is environmental and was recorded before implementation.
+
+### Complete legacy `.doc` and packaging inventory
+
+- The shared `/extract-text` route supplies legacy `.doc` text to CV formatting,
+  Blind CV/JD, Summary, CV Scoring, The Owl, Company, Lead Finder, OneNote
+  upload/profile and related browser workflows.
+- JobAdder AI Crawler preview, prefetch, searchable preview text and bounded
+  resume-scoring enrichment use the separate Spider download/extraction path.
+- `/preview-file` and the Spider visual preview can ask LibreOffice to decode a
+  `.doc` to PDF. `/ocr` formerly treated unknown `.doc` bytes as a plain-text
+  fallback. All of these legacy `.doc` entry points are now in the mandatory
+  dependency boundary.
+- The old runtime searched package folders, Program Files, `C:\antiword`,
+  `ANTIWORDHOME`, POSIX system paths and sometimes PATH, accepted existence
+  without hash/function checks and silently allowed LibreOffice/native/raw
+  fallback success.
+- The old Windows installer reported success when Antiword was missing and
+  advertised the native parser as sufficient. The macOS installer had no
+  Antiword step. Diagnostics exposed only a boolean. Protected builds copied
+  `vendor` under `runtime/native/vendor`; source packages use root `vendor`.
+- Supported deliverables are owner/source Windows and macOS installs plus
+  protected Windows x64, macOS Intel and macOS Apple Silicon builds. The
+  Linux protected target is test-only and is not a supported distribution.
+
+### Provenance, security and redistribution decision
+
+- rOpenSci R-universe records package 1.3.5, GPL-2, upstream commit
+  `51441d45283512081c08010835b8002af79fe5e6`, corresponding-source SHA-256
+  `72e84b33b54c11101cb70d63304ca0283f57a6d0ef518ca6329ff5e6490ad630`
+  and successful Windows/macOS native checks.
+- Exact content-addressed package SHA-256 values are:
+  Windows x64 `9a99f67680475605de009cb85ba94c7dc546eb261a4256d743597fbb24b0ddf8`,
+  macOS Intel `501f2cf83b050fd4a56ab1ecff6fe21295c168eb4a9876d46c259e7ca21cb923`
+  and macOS ARM
+  `17cd193eb8ed3b27d092c60fec181e6a7b6d82eda9741dbec03578396d659e25`.
+- The owner-provided Program Files installation was independently confirmed as
+  package 1.3.5/GPL-2 with unsigned executable SHA-256
+  `5f46d20310baf9e647b658a5a8be70fcc8da940a4c068a34b17e8676bce8ba84`.
+  It is an older rebuild: all official resources matched, but its executable
+  did not match the current content-addressed build, so none of its bytes were
+  copied or trusted for packaging.
+- Windows x64, Mach-O x86_64 and Mach-O arm64 architecture were independently
+  inspected. The macOS binaries link only to system `libSystem`; Intel is
+  unsigned and ARM contains a code-signature load command. Trust is based on
+  exact official archive, complete runtime manifest, executable hash and
+  platform-native architecture/signature checks, not an unsupported publisher
+  signature claim.
+- Microsoft Defender platform `4.18.26060.3008-0`, signature `1.455.390.0`,
+  reported no threats in the official archives/extractions or the comparison
+  installation on 2026-07-28.
+- Full GPL-2 text, attribution/provenance, the original platform archives and
+  exact corresponding-source archive are bundled. The redistribution gate
+  passed for the imported bytes.
+
+### Implementation plan and recovery behavior
+
+- `cvstudio_antiword.py` is the bounded app-independent trust/function
+  foundation. It accepts explicit package/runtime roots, never searches PATH,
+  verifies the compiled-in SHA256SUMS hash, exact 37-file `bin`/`share` set,
+  every file hash, executable hash and controlled fixture hash, then performs
+  a bounded native extraction before returning a binary.
+- The installer validates the bundled platform runtime, copies/repairs it
+  without administrator elevation in the CV Studio local state directory,
+  validates the staged and installed copies, and fails setup rather than
+  issuing a receipt when any trust/function check fails. An invalid prior
+  managed copy is retained with an `.invalid.<timestamp>` name.
+- At runtime CV Studio checks only the managed or exact bundled platform
+  runtime. Diagnostics preserve the legacy `dependencies.antiword` boolean and
+  add version, engine version, platform, source class, trust method,
+  availability, trust, manifest and functional status without a private path.
+- The application remains startable when health fails. `/extract-text`,
+  `/preview-file`, `/ocr`, JobAdder visual/text preview, prefetch and resume
+  scoring return the explicit structured
+  `ANTIWORD_DEPENDENCY_UNAVAILABLE`/`run_installer` contract when the verified
+  runtime is unavailable. A verified runtime that cannot decode a corrupt or
+  incompatible document returns
+  `LEGACY_DOC_EXTRACTION_FAILED`/`convert_to_docx_or_pdf`. PDF, DOCX, image,
+  OCR and other formats retain their established paths.
+- Existing 20-second document execution, 45-second LibreOffice conversion,
+  12 MiB visual and 80 MiB request limits remain. Extraction performs no
+  network request and temporary directories retain automatic cleanup.
+- LibreOffice, native OLE piece-table parsing, raw scanning and renamed-DOCX
+  parsing remain in source as defense-in-depth probes but cannot satisfy a
+  verified legacy `.doc` success.
+
+### Current validation and platform limitation
+
+- The exact bundled Windows runtime and genuine upstream OLE `.doc` fixture
+  pass hash, complete-resource and functional checks. Corruption, extra files
+  and arbitrary PATH/`ANTIWORDHOME` candidates fail closed in focused tests.
+- Windows and macOS installers now contain mandatory fail-closed,
+  idempotent managed-copy validation and include Antiword health in their
+  post-install runtime smoke.
+- The Windows installer self-test passes bundled verification, initial managed
+  install, repeat/idempotency, deliberate corruption rejection, automatic
+  repair and missing-bundle failure in isolated local state. This test mode
+  cannot issue a receipt or reach the installer main block.
+- Owner protected-build preflight verifies every distribution artifact and
+  all three complete runtime manifests, then executes the matching supported
+  native runtime and fixture. Compiled-package smoke requires
+  trusted/functional diagnostics and performs actual multipart
+  `/extract-text` extraction of the pinned OLE fixture.
+- The existing `linux-x64-test` protected proof target remains explicitly
+  non-distributable: it statically verifies all approved platform artifacts
+  and expects runtime diagnostics to report `unsupported-platform`; it never
+  claims functional Antiword support or runs the supported-platform `.doc`
+  smoke.
+- Focused Antiword/document characterization passes 13 cases. Complete Python
+  discovery passes all 130 tests; all five frontend fixtures and all 24 live
+  source-smoke assertions pass. Python, PowerShell and Bash syntax, protected
+  source preflight, exact `adm-zip` behavior, repository consistency and Git
+  whitespace validation also pass on Windows.
+- Genuine Windows x64 protected compilation and runtime smoke pass from the
+  final implementation state. The compiled app reports Antiword 1.3.5 as
+  trusted/functional, performs real multipart `/extract-text` extraction of
+  fixture SHA-256
+  `f430cdfe9446c4b943074d4bf804232761c284f2caa3d4125006b158d8b14af8`
+  with no Unicode replacement character, and preserves DOCX generation. The
+  temporary non-release QA ZIP is
+  `8a7958aec513d693f742a6a842f4e67c332abf6040a213876c4a257327e9fa54`;
+  its smoke JSON is
+  `e7f1fea759b6451ac388a7101a1814d9a2b2f4226969e8ca1be0e5a595100c03`.
+  Neither artifact is copied to the immutable release directory.
+- **Release gate:** CV Studio's macOS installer, diagnostics and compiled
+  package have not yet run on genuine Intel and Apple Silicon Macs in this
+  workspace. Upstream native package checks are strong provenance evidence but
+  do not replace CV Studio-level native verification. No completed v24.6.240
+  release, macOS support claim or protected macOS artifact may be produced
+  until both matching native checks pass. If no real Mac runner is supplied,
+  stop at the stable checkpoint and report this exact blocker.
 
 ## Post-Phase-5B Blind JD PDF metadata-overflow corrective
 
