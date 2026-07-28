@@ -276,6 +276,29 @@
   byte classification. Route coverage forces the `pytesseract` import to fail
   and proves genuine OLE input still returns verified text when Antiword is
   healthy and the preserved 424 response when it is unavailable.
+- A fifth independent review found that an attachment-listing failure was still
+  indistinguishable from a confirmed empty result and could therefore admit an
+  unbound candidate-only text cache entry. Attachment discovery now exposes its
+  success state to the text fetcher, and neither a failed listing nor a
+  confirmed deletion reuses resume text without current bytes. Resume text
+  entries carry the downloaded-content SHA-256, strong content kind and
+  Antiword-verification provenance. Reuse requires the same freshly downloaded
+  bytes; a legacy-DOC hit also rechecks the current verified Antiword runtime.
+  Coverage proves transport and malformed-response listing failures, confirmed
+  deletion, unchanged PDF reuse, replacement-byte invalidation, changed-to-OLE
+  failure and unavailable Antiword on an unchanged verified OLE entry.
+- The same review confirmed that the conservative metadata-cache correction had
+  made the bounded preview cache unreachable. Preview lookup now follows the
+  current download and uses account/candidate plus downloaded-content SHA-256
+  and full/prefetch variant. The established expensive-render reuse remains
+  available for unchanged PDF and DOCX bytes; same metadata with changed bytes
+  misses, changed-to-OLE bytes reach the 424 gate, and profile fallback never
+  receives a reusable content key.
+- The review also found an unused top-level `PIL.Image` import inside `/ocr`
+  that could mask legacy-DOC dispatch in the same way as the earlier Tesseract
+  import. It is removed; image decoding continues through the existing
+  branch-local safe image helper. Healthy and unavailable-Antiword OLE route
+  coverage forces both Pillow and Tesseract imports to fail.
 
 ### Current validation and platform limitation
 
@@ -299,8 +322,8 @@
   and expects runtime diagnostics to report `unsupported-platform`; it never
   claims functional Antiword support or runs the supported-platform `.doc`
   smoke.
-- Focused Antiword/document validation passes all 22 tests in the two directly
-  affected modules. Complete Python discovery passes all 132 tests; all five
+- Focused Antiword/document validation passes all 23 tests in the two directly
+  affected modules. Complete Python discovery passes all 133 tests; all five
   frontend fixtures and all 24 live
   source-smoke assertions pass. Python, PowerShell and Bash syntax, protected
   source preflight, exact `adm-zip` behavior, repository consistency and Git
@@ -312,9 +335,9 @@
   `f430cdfe9446c4b943074d4bf804232761c284f2caa3d4125006b158d8b14af8`
   with no Unicode replacement character, and preserves DOCX generation. The
   temporary non-release QA ZIP is
-  `f4590bf75a8e6d1b212377b689c7941895bbacd63941c360bcc86d1e07002261`;
+  `c8065714edace4dfe41d3298db147c6e420bd16ed375d0fbf04c0503a1db505b`;
   its smoke JSON is
-  `9b2ed8459daa6a1a8ac94b4e14ccbface7ca5ff858814dc81c7a5b1ee2049f45`.
+  `a3c3382d96ac9a2b284397b262f8bdba835a2ffd406751f06c49dc8dd8450768`.
   Neither artifact is copied to the immutable release directory.
 - **Release gate:** CV Studio's macOS installer, diagnostics and compiled
   package have not yet run on genuine Intel and Apple Silicon Macs in this

@@ -11153,9 +11153,16 @@ def _spider_resume_text_cache_clear():
         _SPIDER_PREVIEW_PAYLOAD_CACHE_BYTES = 0
 
 
-def _spider_resume_text_cache_get(token, candidate_id):
+def _spider_download_content_identity(raw):
+    if not isinstance(raw, (bytes, bytearray)) or not raw:
+        return ""
+    return hashlib.sha256(bytes(raw)).hexdigest()
+
+
+def _spider_resume_text_cache_get(token, candidate_id, content_sha256=""):
     key = _spider_resume_cache_key(token, candidate_id)
-    if not key:
+    expected_content = str(content_sha256 or "").strip().lower()
+    if not key or not expected_content:
         return None
     now = time.time()
     with _SPIDER_RESUME_TEXT_CACHE_LOCK:
@@ -11170,13 +11177,28 @@ def _spider_resume_text_cache_get(token, candidate_id):
         if not str(item.get("text") or "").strip():
             _SPIDER_RESUME_TEXT_CACHE.pop(key, None)
             return None
+        if not _receipt_hmac.compare_digest(
+            str(item.get("content_sha256") or "").strip().lower(),
+            expected_content,
+        ):
+            return None
         return dict(item)
 
 
-def _spider_resume_text_cache_put(token, candidate_id, text, source=""):
+def _spider_resume_text_cache_put(
+    token,
+    candidate_id,
+    text,
+    source="",
+    *,
+    content_sha256="",
+    content_kind="",
+    antiword_verified=False,
+):
     clean_text = str(text or "").strip()
+    content_identity = str(content_sha256 or "").strip().lower()
     key = _spider_resume_cache_key(token, candidate_id)
-    if not key or not clean_text:
+    if not key or not clean_text or not content_identity:
         return
     with _SPIDER_RESUME_TEXT_CACHE_LOCK:
         if len(_SPIDER_RESUME_TEXT_CACHE) >= 500:
@@ -11186,6 +11208,9 @@ def _spider_resume_text_cache_put(token, candidate_id, text, source=""):
         _SPIDER_RESUME_TEXT_CACHE[key] = {
             "text": clean_text[:30000],
             "source": str(source or "")[:160],
+            "content_sha256": content_identity,
+            "content_kind": str(content_kind or "")[:32],
+            "antiword_verified": bool(antiword_verified),
             "saved_at": time.time(),
         }
 
@@ -11209,13 +11234,13 @@ def _spider_attachment_fingerprint(records):
     return hashlib.sha256(raw.encode("utf-8", errors="ignore")).hexdigest()
 
 
-def _spider_preview_payload_cache_key(token, candidate_id, attachment_fingerprint, variant="full"):
+def _spider_preview_payload_cache_key(token, candidate_id, content_sha256, variant="full"):
     account_candidate = _spider_resume_cache_key(token, candidate_id)
-    fingerprint = str(attachment_fingerprint or "").strip()
+    content_identity = str(content_sha256 or "").strip().lower()
     variant = "prefetch" if str(variant or "").lower() == "prefetch" else "full"
-    if not account_candidate or not fingerprint:
+    if not account_candidate or not content_identity:
         return ""
-    return hashlib.sha256((account_candidate + "|" + fingerprint + "|" + variant).encode("ascii", errors="ignore")).hexdigest()
+    return hashlib.sha256((account_candidate + "|" + content_identity + "|" + variant).encode("ascii", errors="ignore")).hexdigest()
 
 
 def _spider_preview_payload_cache_cleanup(now=None):
@@ -11230,8 +11255,8 @@ def _spider_preview_payload_cache_cleanup(now=None):
         _SPIDER_PREVIEW_PAYLOAD_CACHE_BYTES = max(0, _SPIDER_PREVIEW_PAYLOAD_CACHE_BYTES - int(item.get("bytes") or 0))
 
 
-def _spider_preview_payload_cache_get(token, candidate_id, attachment_fingerprint, variant="full"):
-    key = _spider_preview_payload_cache_key(token, candidate_id, attachment_fingerprint, variant)
+def _spider_preview_payload_cache_get(token, candidate_id, content_sha256, variant="full"):
+    key = _spider_preview_payload_cache_key(token, candidate_id, content_sha256, variant)
     if not key:
         return None
     with _SPIDER_PREVIEW_PAYLOAD_CACHE_LOCK:
@@ -11247,20 +11272,18 @@ def _spider_preview_payload_cache_get(token, candidate_id, attachment_fingerprin
         if not isinstance(payload, dict) or not payload.get("ok"):
             return None
         payload["preview_cache_hit"] = True
-        payload["attachment_fingerprint"] = str(attachment_fingerprint or "")[:24]
         return payload
 
 
-def _spider_preview_payload_cache_put(token, candidate_id, attachment_fingerprint, payload, variant="full"):
+def _spider_preview_payload_cache_put(token, candidate_id, content_sha256, payload, variant="full"):
     global _SPIDER_PREVIEW_PAYLOAD_CACHE_BYTES
     if not isinstance(payload, dict) or not payload.get("ok"):
         return
-    key = _spider_preview_payload_cache_key(token, candidate_id, attachment_fingerprint, variant)
+    key = _spider_preview_payload_cache_key(token, candidate_id, content_sha256, variant)
     if not key:
         return
     clean = dict(payload)
     clean.pop("preview_cache_hit", None)
-    clean["attachment_fingerprint"] = str(attachment_fingerprint or "")[:24]
     try:
         encoded = json.dumps(clean, ensure_ascii=False, separators=(",", ":"))
     except Exception:
@@ -11812,10 +11835,15 @@ def cvstudio_support_bundle():
     return _CVSTUDIO_DIAGNOSTICS_SERVICE.support_bundle()
 
 
-def _spider_candidate_attachment_records(token, candidate_id):
-    """Return latest Resume/FormattedResume attachment records using the official API."""
+def _spider_candidate_attachment_records(
+    token,
+    candidate_id,
+    *,
+    include_status=False,
+):
+    """Return official resume records, optionally with discovery success."""
     if not token or not candidate_id:
-        return []
+        return ([], False) if include_status else []
     cid = urllib.parse.quote(str(candidate_id), safe="")
     params = urllib.parse.urlencode([
         ("Type", "Resume"),
@@ -11830,19 +11858,21 @@ def _spider_candidate_attachment_records(token, candidate_id):
             timeout=10,
             accept_json=True,
         )
-        payload = safe_json(raw, {})
-        items = payload.get("items") if isinstance(payload, dict) else []
-        items = items if isinstance(items, list) else []
+        payload = safe_json(raw, None)
+        items = payload.get("items") if isinstance(payload, dict) else None
+        if not isinstance(items, list):
+            return ([], False) if include_status else []
         records = [x for x in items if isinstance(x, dict)]
         # Stable two-stage sort: newest within each attachment type, with the
         # original Resume type ahead of FormattedResume.
         records.sort(key=lambda item: str(item.get("createdAt") or ""), reverse=True)
         records.sort(key=lambda item: 0 if str(item.get("type") or "").lower() == "resume" else 1 if str(item.get("type") or "").lower() == "formattedresume" else 2)
-        return records[:4]
+        records = records[:4]
+        return (records, True) if include_status else records
     except _SpiderJobAdderReconnectRequired:
         raise
     except Exception:
-        return []
+        return ([], False) if include_status else []
 
 
 def _spider_fetch_candidate_resume_text(token, candidate_id):
@@ -11855,13 +11885,20 @@ def _spider_fetch_candidate_resume_text(token, candidate_id):
     cid = urllib.parse.quote(str(candidate_id), safe="")
     # One latest attachment keeps discovery request volume bounded. JobAdder's
     # Latest=true response is already ordered with Resume ahead of FormattedResume.
-    records = _spider_candidate_attachment_records(token, candidate_id)[:1]
+    records, discovery_ok = _spider_candidate_attachment_records(
+        token,
+        candidate_id,
+        include_status=True,
+    )
+    records = records[:1]
     if not records:
-        # Candidate-only text cache entries have no attachment/content identity.
-        # Reuse them only while JobAdder exposes no resume attachment.
-        cached = _spider_resume_text_cache_get(token, candidate_id)
-        if cached is not None:
-            return cached.get("text") or "", cached.get("source") or "cached resume"
+        # A confirmed deletion and a transient listing failure must both exclude
+        # candidate-only cache reuse: neither supplies current document bytes.
+        return "", (
+            "resume attachment unavailable"
+            if discovery_ok
+            else "resume attachment discovery failed"
+        )
     for record in records:
         attach_id = record.get("attachmentId") or record.get("id")
         if not attach_id:
@@ -11873,9 +11910,37 @@ def _spider_fetch_candidate_resume_text(token, candidate_id):
                 timeout=12,
             )
             filename = record.get("fileName") or dispo or ""
+            content_sha256 = _spider_download_content_identity(raw)
+            content_kind = _document_content_kind(raw)
+            cached = _spider_resume_text_cache_get(
+                token,
+                candidate_id,
+                content_sha256,
+            )
+            if cached is not None and str(
+                cached.get("content_kind") or ""
+            ) == content_kind:
+                if content_kind == "legacy_doc":
+                    if not cached.get("antiword_verified"):
+                        cached = None
+                    else:
+                        _require_verified_antiword_runtime()
+                if cached is not None:
+                    return (
+                        cached.get("text") or "",
+                        cached.get("source") or "cached resume",
+                    )
             text, source = _spider_extract_text_from_download(raw, ctype, filename, ocr_page_limit=2, ocr_deadline_seconds=18)
             if text:
-                _spider_resume_text_cache_put(token, candidate_id, text, source)
+                _spider_resume_text_cache_put(
+                    token,
+                    candidate_id,
+                    text,
+                    source,
+                    content_sha256=content_sha256,
+                    content_kind=content_kind,
+                    antiword_verified=content_kind == "legacy_doc",
+                )
                 return text, source
         except _SpiderJobAdderReconnectRequired:
             raise
@@ -14450,19 +14515,9 @@ def jobadder_spider_candidate_preview():
             "has_attachment_metadata": bool(attachment_records),
         })
 
-    # Attachment metadata is not a content identity: JobAdder can expose bytes
-    # later without changing the record. Always download a known attachment so
-    # genuine OLE content reaches the exact-document Antiword gate.
-    cached_payload = None
-    if not attachment_records:
-        if prefetch_mode:
-            cached_payload = _spider_preview_payload_cache_get(token, candidate_id, attachment_fingerprint, "full")
-            if cached_payload is None:
-                cached_payload = _spider_preview_payload_cache_get(token, candidate_id, attachment_fingerprint, "prefetch")
-        else:
-            cached_payload = _spider_preview_payload_cache_get(token, candidate_id, attachment_fingerprint, "full")
-    if cached_payload is not None:
-        return jsonify(cached_payload)
+    # Attachment metadata is not a content identity. The bounded preview cache
+    # is therefore consulted only after current bytes have been downloaded and
+    # hashed; profile fallbacks never acquire a reusable content key.
     job_progress("cache_lookup", 25)
 
     preview_max_pages = 2 if prefetch_mode else 12
@@ -14521,12 +14576,63 @@ def jobadder_spider_candidate_preview():
             return "", "Searchable OCR text will be prepared when this candidate is opened."
         return extract_text(raw, ctype, filename)
 
+    def cached_preview(raw):
+        content_sha256 = _spider_download_content_identity(raw)
+        if not content_sha256:
+            return "", None
+        if prefetch_mode:
+            payload = _spider_preview_payload_cache_get(
+                token,
+                candidate_id,
+                content_sha256,
+                "full",
+            )
+            if payload is None:
+                payload = _spider_preview_payload_cache_get(
+                    token,
+                    candidate_id,
+                    content_sha256,
+                    "prefetch",
+                )
+        else:
+            payload = _spider_preview_payload_cache_get(
+                token,
+                candidate_id,
+                content_sha256,
+                "full",
+            )
+        if payload is not None:
+            if _document_content_kind(raw) == "legacy_doc":
+                _require_verified_antiword_runtime()
+            payload = dict(payload)
+            payload["attachment_fingerprint"] = attachment_fingerprint[:24]
+        return content_sha256, payload
+
+    def cache_resume_text(raw, text, source):
+        content_sha256 = _spider_download_content_identity(raw)
+        content_kind = _document_content_kind(raw)
+        _spider_resume_text_cache_put(
+            token,
+            candidate_id,
+            text,
+            source,
+            content_sha256=content_sha256,
+            content_kind=content_kind,
+            antiword_verified=content_kind == "legacy_doc",
+        )
+
     cancel_check()
     detail = _spider_fetch_candidate_detail(token, candidate_id)
     cancel_check()
     job_progress("candidate_profile", 40)
 
-    def respond(payload, status=200, cacheable=True):
+    def respond(
+        payload,
+        status=200,
+        cacheable=True,
+        *,
+        content_sha256="",
+    ):
         if isinstance(payload, dict):
             payload = dict(payload)
             page_count = int(payload.get("page_count") or 0)
@@ -14540,10 +14646,16 @@ def jobadder_spider_candidate_preview():
             if (
                 status == 200
                 and cacheable
-                and not attachment_records
+                and content_sha256
                 and payload.get("ok")
             ):
-                _spider_preview_payload_cache_put(token, candidate_id, attachment_fingerprint, payload, store_variant)
+                _spider_preview_payload_cache_put(
+                    token,
+                    candidate_id,
+                    content_sha256,
+                    payload,
+                    store_variant,
+                )
         return jsonify(payload), status
 
     # Official JobAdder candidate-attachment API first.
@@ -14558,10 +14670,13 @@ def jobadder_spider_candidate_preview():
             raw, ctype, dispo = get_raw(path, timeout=12)
             tried.append(path)
             filename = record.get("fileName") or dispo or ""
+            content_sha256, cached_payload = cached_preview(raw)
+            if cached_payload is not None:
+                return jsonify(cached_payload)
             visual = render_visual(raw, ctype, filename)
             search_text, search_source = visual_search_text(raw, ctype, filename, visual)
             if search_text:
-                _spider_resume_text_cache_put(token, candidate_id, search_text, search_source)
+                cache_resume_text(raw, search_text, search_source)
             if visual:
                 visual = _spider_apply_visual_search_state(visual, search_text, search_source)
                 visual.update({
@@ -14572,7 +14687,10 @@ def jobadder_spider_candidate_preview():
                     "note": filename or "latest resume attachment",
                     "tried": tried,
                 })
-                return respond(visual)
+                return respond(
+                    visual,
+                    content_sha256=content_sha256,
+                )
             if search_text:
                 return respond({
                     "ok": True,
@@ -14584,7 +14702,7 @@ def jobadder_spider_candidate_preview():
                     "preview_text": search_text,
                     "search_text": search_text,
                     "tried": tried,
-                })
+                }, content_sha256=content_sha256)
         except _SpiderPreviewCancelled:
             raise
         except AntiwordDependencyError as exc:
@@ -14610,11 +14728,14 @@ def jobadder_spider_candidate_preview():
         try:
             raw, ctype, dispo = get_raw(path, timeout=10)
             tried.append(path)
+            content_sha256, cached_payload = cached_preview(raw)
+            if cached_payload is not None:
+                return jsonify(cached_payload)
             visual = render_visual(raw, ctype, dispo)
             if visual:
                 search_text, search_source = visual_search_text(raw, ctype, dispo, visual)
                 if search_text:
-                    _spider_resume_text_cache_put(token, candidate_id, search_text, search_source)
+                    cache_resume_text(raw, search_text, search_source)
                 visual = _spider_apply_visual_search_state(visual, search_text, search_source)
                 visual.update({
                     "ok": True,
@@ -14623,10 +14744,13 @@ def jobadder_spider_candidate_preview():
                     "mode": "resume_file",
                     "tried": tried,
                 })
-                return respond(visual)
+                return respond(
+                    visual,
+                    content_sha256=content_sha256,
+                )
             txt, src = extract_text(raw, ctype, dispo)
             if txt:
-                _spider_resume_text_cache_put(token, candidate_id, txt, src)
+                cache_resume_text(raw, txt, src)
                 return respond({
                     "ok": True,
                     "candidate_id": candidate_id,
@@ -14636,7 +14760,7 @@ def jobadder_spider_candidate_preview():
                     "preview_text": txt,
                     "search_text": txt,
                     "tried": tried,
-                })
+                }, content_sha256=content_sha256)
         except _SpiderPreviewCancelled:
             raise
         except AntiwordDependencyError as exc:
@@ -14676,11 +14800,14 @@ def jobadder_spider_candidate_preview():
                             raw2, ctype2, dispo2 = get_raw(path, timeout=12)
                             tried.append(path)
                             filename = att.get("name") or dispo2
+                            content_sha256, cached_payload = cached_preview(raw2)
+                            if cached_payload is not None:
+                                return jsonify(cached_payload)
                             visual = render_visual(raw2, ctype2, filename)
                             if visual:
                                 search_text, search_source = visual_search_text(raw2, ctype2, filename, visual)
                                 if search_text:
-                                    _spider_resume_text_cache_put(token, candidate_id, search_text, search_source)
+                                    cache_resume_text(raw2, search_text, search_source)
                                 visual = _spider_apply_visual_search_state(visual, search_text, search_source)
                                 visual.update({
                                     "ok": True,
@@ -14690,10 +14817,13 @@ def jobadder_spider_candidate_preview():
                                     "note": att.get("name") or visual.get("note") or "resume attachment",
                                     "tried": tried[:12],
                                 })
-                                return respond(visual)
+                                return respond(
+                                    visual,
+                                    content_sha256=content_sha256,
+                                )
                             txt, src = extract_text(raw2, ctype2, filename)
                             if txt:
-                                _spider_resume_text_cache_put(token, candidate_id, txt, src)
+                                cache_resume_text(raw2, txt, src)
                                 return respond({
                                     "ok": True,
                                     "candidate_id": candidate_id,
@@ -14704,7 +14834,7 @@ def jobadder_spider_candidate_preview():
                                     "preview_text": txt,
                                     "search_text": txt,
                                     "tried": tried[:12],
-                                })
+                                }, content_sha256=content_sha256)
                         except _SpiderPreviewCancelled:
                             raise
                         except AntiwordDependencyError as exc:
@@ -15940,7 +16070,6 @@ def ocr_endpoint():
         import base64
         import io
         import shutil
-        from PIL import Image
 
         script_dir = os.path.dirname(os.path.abspath(__file__))
 

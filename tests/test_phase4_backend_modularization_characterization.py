@@ -526,14 +526,14 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
 
         real_import = __import__
 
-        def reject_pytesseract(name, *args, **kwargs):
-            if name == "pytesseract":
+        def reject_optional_ocr_imports(name, *args, **kwargs):
+            if name == "pytesseract" or name == "PIL" or name.startswith("PIL."):
                 raise ImportError("forced missing optional OCR dependency")
             return real_import(name, *args, **kwargs)
 
         with mock.patch(
             "builtins.__import__",
-            side_effect=reject_pytesseract,
+            side_effect=reject_optional_ocr_imports,
         ):
             ocr = self.client.post(
                 "/ocr",
@@ -781,6 +781,7 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
                 return_value={
                     "text": "stale cached candidate profile",
                     "source": "profile fallback",
+                    "content_kind": "pdf",
                 }
             )
             resume_download = mock.Mock(
@@ -799,13 +800,16 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
                 mock.patch.object(
                     app,
                     "_spider_candidate_attachment_records",
-                    return_value=[
-                        {
-                            "attachmentId": "unchanged-resume",
-                            "fileName": "unchanged-resume.txt",
-                            "type": "Resume",
-                        }
-                    ],
+                    return_value=(
+                        [
+                            {
+                                "attachmentId": "unchanged-resume",
+                                "fileName": "unchanged-resume.txt",
+                                "type": "Resume",
+                            }
+                        ],
+                        True,
+                    ),
                 ),
                 mock.patch.object(
                     app,
@@ -821,7 +825,11 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
                         "candidate-with-stale-cache",
                     )
             self.assertIs(cached_resume.exception, unavailable)
-            stale_resume_cache.assert_not_called()
+            stale_resume_cache.assert_called_once_with(
+                "<fixture-token>",
+                "candidate-with-stale-cache",
+                app._spider_download_content_identity(fixture),
+            )
             resume_download.assert_called_once()
 
             with self.assertRaises(app.AntiwordDependencyError) as mislabeled:
@@ -939,7 +947,12 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
                 prefetch_response.get_json()["code"],
                 "ANTIWORD_DEPENDENCY_UNAVAILABLE",
             )
-            stale_preview_cache.assert_not_called()
+            stale_preview_cache.assert_called_once_with(
+                "<fixture-token>",
+                "oversized-ole",
+                app._spider_download_content_identity(oversized_fixture),
+                "full",
+            )
             preview_download.assert_called_once()
             with self.assertRaises(app.AntiwordDependencyError) as office:
                 app._office_bytes_to_pdf_preview(fixture, ".txt")
@@ -947,7 +960,7 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
 
             with mock.patch(
                 "builtins.__import__",
-                side_effect=reject_pytesseract,
+                side_effect=reject_optional_ocr_imports,
             ):
                 ocr_without_pytesseract = self.client.post(
                     "/ocr",
@@ -1012,6 +1025,471 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
                         )
             with self.assertRaises(app.AntiwordDependencyError):
                 app._spider_extract_legacy_doc_text_for_preview(fixture)
+
+    def test_jobadder_resume_caches_use_downloaded_content_identity(self):
+        fixture = (
+            Path(__file__).resolve().parents[1]
+            / "vendor"
+            / "antiword"
+            / "fixtures"
+            / "UDHR-english.doc"
+        ).read_bytes()
+        token = "<fixture-token>"
+        candidate_id = "content-bound-candidate"
+        record = {
+            "attachmentId": "stable-attachment",
+            "fileName": "resume.pdf",
+            "type": "Resume",
+        }
+        old_pdf = b"%PDF-1.4\nold-content"
+        new_pdf = b"%PDF-1.4\nreplacement-content"
+
+        with mock.patch.object(
+            app,
+            "_spider_resume_cache_key",
+            return_value="content-bound-cache-key",
+        ):
+            app._spider_resume_text_cache_clear()
+            app._spider_resume_text_cache_put(
+                token,
+                candidate_id,
+                "old cached PDF resume",
+                "fixture PDF",
+                content_sha256=app._spider_download_content_identity(old_pdf),
+                content_kind="pdf",
+            )
+
+            for discovery_ok, expected_source in (
+                (False, "resume attachment discovery failed"),
+                (True, "resume attachment unavailable"),
+            ):
+                with self.subTest(discovery_ok=discovery_ok):
+                    cache_get = mock.Mock(
+                        wraps=app._spider_resume_text_cache_get
+                    )
+                    with (
+                        mock.patch.object(
+                            app,
+                            "_spider_candidate_attachment_records",
+                            return_value=([], discovery_ok),
+                        ),
+                        mock.patch.object(
+                            app,
+                            "_spider_resume_text_cache_get",
+                            cache_get,
+                        ),
+                    ):
+                        text, source = (
+                            app._spider_fetch_candidate_resume_text(
+                                token,
+                                candidate_id,
+                            )
+                        )
+                    self.assertEqual(text, "")
+                    self.assertEqual(source, expected_source)
+                    cache_get.assert_not_called()
+
+            with mock.patch.object(
+                app,
+                "_spider_get_ja_raw",
+                side_effect=OSError("fixture listing failure"),
+            ):
+                records, discovery_ok = (
+                    app._spider_candidate_attachment_records(
+                        token,
+                        candidate_id,
+                        include_status=True,
+                    )
+                )
+            self.assertEqual(records, [])
+            self.assertFalse(discovery_ok)
+
+            with mock.patch.object(
+                app,
+                "_spider_get_ja_raw",
+                return_value=(
+                    b"{not-valid-json",
+                    "application/json",
+                    "",
+                ),
+            ):
+                records, discovery_ok = (
+                    app._spider_candidate_attachment_records(
+                        token,
+                        candidate_id,
+                        include_status=True,
+                    )
+                )
+            self.assertEqual(records, [])
+            self.assertFalse(discovery_ok)
+
+            unchanged_extractor = mock.Mock(
+                side_effect=AssertionError(
+                    "unchanged content should reuse extracted text"
+                )
+            )
+            with (
+                mock.patch.object(
+                    app,
+                    "_spider_candidate_attachment_records",
+                    return_value=([record], True),
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_get_ja_raw",
+                    return_value=(old_pdf, "application/pdf", "resume.pdf"),
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_extract_text_from_download",
+                    unchanged_extractor,
+                ),
+            ):
+                text, source = app._spider_fetch_candidate_resume_text(
+                    token,
+                    candidate_id,
+                )
+            self.assertEqual(text, "old cached PDF resume")
+            self.assertEqual(source, "fixture PDF")
+            unchanged_extractor.assert_not_called()
+
+            replacement_extractor = mock.Mock(
+                return_value=("replacement PDF resume", "replacement PDF")
+            )
+            with (
+                mock.patch.object(
+                    app,
+                    "_spider_candidate_attachment_records",
+                    return_value=([record], True),
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_get_ja_raw",
+                    return_value=(
+                        new_pdf,
+                        "application/pdf",
+                        "resume.pdf",
+                    ),
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_extract_text_from_download",
+                    replacement_extractor,
+                ),
+            ):
+                text, source = app._spider_fetch_candidate_resume_text(
+                    token,
+                    candidate_id,
+                )
+            self.assertEqual(text, "replacement PDF resume")
+            self.assertEqual(source, "replacement PDF")
+            replacement_extractor.assert_called_once()
+            cached_replacement = app._spider_resume_text_cache_get(
+                token,
+                candidate_id,
+                app._spider_download_content_identity(new_pdf),
+            )
+            self.assertEqual(
+                cached_replacement["text"],
+                "replacement PDF resume",
+            )
+
+            unavailable = app.AntiwordDependencyError("runtime-missing")
+            with (
+                mock.patch.object(
+                    app,
+                    "_spider_candidate_attachment_records",
+                    return_value=([record], True),
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_get_ja_raw",
+                    return_value=(
+                        fixture,
+                        "application/pdf",
+                        "resume.pdf",
+                    ),
+                ),
+                mock.patch.object(
+                    app,
+                    "_require_verified_antiword_runtime",
+                    side_effect=unavailable,
+                ),
+            ):
+                with self.assertRaises(
+                    app.AntiwordDependencyError
+                ) as changed_to_ole:
+                    app._spider_fetch_candidate_resume_text(
+                        token,
+                        candidate_id,
+                    )
+            self.assertIs(changed_to_ole.exception, unavailable)
+
+            app._spider_resume_text_cache_put(
+                token,
+                candidate_id,
+                "verified legacy resume",
+                "verified Antiword",
+                content_sha256=app._spider_download_content_identity(fixture),
+                content_kind="legacy_doc",
+                antiword_verified=True,
+            )
+            with (
+                mock.patch.object(
+                    app,
+                    "_spider_candidate_attachment_records",
+                    return_value=([record], True),
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_get_ja_raw",
+                    return_value=(
+                        fixture,
+                        "application/msword",
+                        "resume.doc",
+                    ),
+                ),
+                mock.patch.object(
+                    app,
+                    "_require_verified_antiword_runtime",
+                    side_effect=unavailable,
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_extract_text_from_download",
+                    side_effect=AssertionError(
+                        "verified OLE cache hit should gate before extraction"
+                    ),
+                ),
+            ):
+                with self.assertRaises(
+                    app.AntiwordDependencyError
+                ) as unchanged_ole:
+                    app._spider_fetch_candidate_resume_text(
+                        token,
+                        candidate_id,
+                    )
+            self.assertIs(unchanged_ole.exception, unavailable)
+
+            headers = self._headers("content-bound-preview-cache")
+            visual_payload = {
+                "visual_mode": "pages",
+                "pages": [{"image": "data:image/webp;base64,fixture"}],
+                "page_count": 1,
+                "shown_pages": 1,
+                "source": "fixture renderer",
+            }
+            for raw, content_type, filename in (
+                (old_pdf, "application/pdf", "resume.pdf"),
+                (b"PK\x03\x04fixture-docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "resume.docx"),
+            ):
+                with self.subTest(cache_format=filename):
+                    app._spider_resume_text_cache_clear()
+                    render = mock.Mock(return_value=visual_payload)
+                    download = mock.Mock(
+                        return_value=(raw, content_type, filename)
+                    )
+                    with (
+                        mock.patch.object(
+                            app,
+                            "_ai_crawler_lock_allowed",
+                            return_value=True,
+                        ),
+                        mock.patch.object(
+                            app,
+                            "_ja_refresh_access_token",
+                            return_value=token,
+                        ),
+                        mock.patch.object(
+                            app,
+                            "_spider_candidate_attachment_records",
+                            return_value=[record],
+                        ),
+                        mock.patch.object(
+                            app,
+                            "_spider_fetch_candidate_detail",
+                            return_value={
+                                "firstName": "Fixture",
+                                "lastName": "Candidate",
+                            },
+                        ),
+                        mock.patch.object(
+                            app,
+                            "_spider_get_ja_raw",
+                            download,
+                        ),
+                        mock.patch.object(
+                            app,
+                            "_spider_visual_preview_payload",
+                            render,
+                        ),
+                        mock.patch.object(
+                            app,
+                            "_spider_extract_text_from_download",
+                            return_value=(
+                                "fixture searchable resume",
+                                "fixture extraction",
+                            ),
+                        ),
+                        mock.patch.object(
+                            app,
+                            "_CVSTUDIO_JOBS",
+                            mock.Mock(),
+                        ),
+                    ):
+                        first = self.client.get(
+                            "/jobadder/spider_candidate_preview"
+                            "?candidate_id=content-bound-candidate&prefetch=1",
+                            headers=headers,
+                        )
+                        second = self.client.get(
+                            "/jobadder/spider_candidate_preview"
+                            "?candidate_id=content-bound-candidate&prefetch=1",
+                            headers=headers,
+                        )
+                    self.assertEqual(first.status_code, 200)
+                    self.assertFalse(
+                        first.get_json()["preview_cache_hit"]
+                    )
+                    self.assertEqual(second.status_code, 200)
+                    self.assertTrue(
+                        second.get_json()["preview_cache_hit"]
+                    )
+                    self.assertEqual(render.call_count, 1)
+                    self.assertEqual(download.call_count, 2)
+
+            app._spider_resume_text_cache_clear()
+            changing_raw = {"value": old_pdf}
+
+            def content_aware_render(raw, *_args, **_kwargs):
+                if app._document_content_kind(raw) == "legacy_doc":
+                    app._require_verified_antiword_runtime()
+                return visual_payload
+
+            render = mock.Mock(side_effect=content_aware_render)
+
+            def changing_download(*_args, **_kwargs):
+                raw = changing_raw["value"]
+                return raw, "application/pdf", "resume.pdf"
+
+            with (
+                mock.patch.object(
+                    app,
+                    "_ai_crawler_lock_allowed",
+                    return_value=True,
+                ),
+                mock.patch.object(
+                    app,
+                    "_ja_refresh_access_token",
+                    return_value=token,
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_candidate_attachment_records",
+                    return_value=[record],
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_fetch_candidate_detail",
+                    return_value={
+                        "firstName": "Fixture",
+                        "lastName": "Candidate",
+                    },
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_get_ja_raw",
+                    side_effect=changing_download,
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_visual_preview_payload",
+                    render,
+                ),
+                mock.patch.object(
+                    app,
+                    "_CVSTUDIO_JOBS",
+                    mock.Mock(),
+                ),
+            ):
+                original = self.client.get(
+                    "/jobadder/spider_candidate_preview"
+                    "?candidate_id=content-bound-candidate&prefetch=1",
+                    headers=headers,
+                )
+                changing_raw["value"] = new_pdf
+                replacement = self.client.get(
+                    "/jobadder/spider_candidate_preview"
+                    "?candidate_id=content-bound-candidate&prefetch=1",
+                    headers=headers,
+                )
+                changing_raw["value"] = fixture
+                with mock.patch.object(
+                    app,
+                    "_require_verified_antiword_runtime",
+                    side_effect=unavailable,
+                ):
+                    changed_to_ole = self.client.get(
+                        "/jobadder/spider_candidate_preview"
+                        "?candidate_id=content-bound-candidate&prefetch=1",
+                        headers=headers,
+                    )
+            self.assertEqual(original.status_code, 200)
+            self.assertEqual(replacement.status_code, 200)
+            self.assertFalse(replacement.get_json()["preview_cache_hit"])
+            self.assertEqual(render.call_count, 3)
+            self.assertEqual(changed_to_ole.status_code, 424)
+            self.assertEqual(
+                changed_to_ole.get_json()["code"],
+                "ANTIWORD_DEPENDENCY_UNAVAILABLE",
+            )
+
+            profile_cache_put = mock.Mock()
+            with (
+                mock.patch.object(
+                    app,
+                    "_ai_crawler_lock_allowed",
+                    return_value=True,
+                ),
+                mock.patch.object(
+                    app,
+                    "_ja_refresh_access_token",
+                    return_value=token,
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_candidate_attachment_records",
+                    return_value=[record],
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_fetch_candidate_detail",
+                    return_value={
+                        "firstName": "Fixture",
+                        "lastName": "Candidate",
+                        "position": "Analyst",
+                    },
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_get_ja_raw",
+                    side_effect=OSError("fixture download unavailable"),
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_preview_payload_cache_put",
+                    profile_cache_put,
+                ),
+            ):
+                profile = self.client.get(
+                    "/jobadder/spider_candidate_preview"
+                    "?candidate_id=content-bound-candidate",
+                    headers=headers,
+                )
+            self.assertEqual(profile.status_code, 200)
+            self.assertEqual(profile.get_json()["mode"], "profile")
+            profile_cache_put.assert_not_called()
+            app._spider_resume_text_cache_clear()
 
     def test_storage_bridge_resolves_app_compatibility_dependencies_per_call(self):
         headers = self._headers("phase4-storage-rebinding")
