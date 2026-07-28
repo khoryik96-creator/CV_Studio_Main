@@ -299,6 +299,13 @@
   import. It is removed; image decoding continues through the existing
   branch-local safe image helper. Healthy and unavailable-Antiword OLE route
   coverage forces both Pillow and Tesseract imports to fail.
+- A sixth independent review found that the two new legacy-DOC cache-hit gates
+  called the imported low-level resolver without its required package/runtime
+  roots. Both now call the established app-level `_require_verified_antiword()`
+  wrapper. Candidate-text and preview-cache regressions prove a healthy
+  unchanged OLE hit rechecks the wrapper without re-extraction/re-rendering and
+  that an unavailable runtime propagates the preserved Antiword dependency
+  failure instead of falling through to missing evidence or profile fallback.
 
 ### Current validation and platform limitation
 
@@ -335,9 +342,9 @@
   `f430cdfe9446c4b943074d4bf804232761c284f2caa3d4125006b158d8b14af8`
   with no Unicode replacement character, and preserves DOCX generation. The
   temporary non-release QA ZIP is
-  `c8065714edace4dfe41d3298db147c6e420bd16ed375d0fbf04c0503a1db505b`;
+  `be2f54dd71b1683b874fbb935bb1ad797d06889c424bcf98542d2bb6eb50dae7`;
   its smoke JSON is
-  `a3c3382d96ac9a2b284397b262f8bdba835a2ffd406751f06c49dc8dd8450768`.
+  `e44014ffbca5bb7a05369991ac6be91bde858441bedfd247a5f0d06cf88d8e78`.
   Neither artifact is copied to the immutable release directory.
 - **Release gate:** CV Studio's macOS installer, diagnostics and compiled
   package have not yet run on genuine Intel and Apple Silicon Macs in this

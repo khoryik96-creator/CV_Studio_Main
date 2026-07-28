@@ -1234,6 +1234,12 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
                 content_kind="legacy_doc",
                 antiword_verified=True,
             )
+            healthy_gate = mock.Mock(return_value="verified-antiword")
+            cached_extractor = mock.Mock(
+                side_effect=AssertionError(
+                    "healthy verified OLE cache hit must not re-extract"
+                )
+            )
             with (
                 mock.patch.object(
                     app,
@@ -1251,7 +1257,42 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
                 ),
                 mock.patch.object(
                     app,
-                    "_require_verified_antiword_runtime",
+                    "_require_verified_antiword",
+                    healthy_gate,
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_extract_text_from_download",
+                    cached_extractor,
+                ),
+            ):
+                text, source = app._spider_fetch_candidate_resume_text(
+                    token,
+                    candidate_id,
+                )
+            self.assertEqual(text, "verified legacy resume")
+            self.assertEqual(source, "verified Antiword")
+            healthy_gate.assert_called_once_with()
+            cached_extractor.assert_not_called()
+
+            with (
+                mock.patch.object(
+                    app,
+                    "_spider_candidate_attachment_records",
+                    return_value=([record], True),
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_get_ja_raw",
+                    return_value=(
+                        fixture,
+                        "application/msword",
+                        "resume.doc",
+                    ),
+                ),
+                mock.patch.object(
+                    app,
+                    "_require_verified_antiword",
                     side_effect=unavailable,
                 ),
                 mock.patch.object(
@@ -1279,6 +1320,162 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
                 "shown_pages": 1,
                 "source": "fixture renderer",
             }
+
+            app._spider_resume_text_cache_clear()
+            fixture_identity = app._spider_download_content_identity(fixture)
+            app._spider_preview_payload_cache_put(
+                token,
+                candidate_id,
+                fixture_identity,
+                {
+                    "ok": True,
+                    "candidate_id": candidate_id,
+                    "mode": "resume_attachment_file",
+                    "visual_mode": "pages",
+                    "pages": [
+                        {
+                            "image": (
+                                "data:image/webp;base64,cached-fixture"
+                            )
+                        }
+                    ],
+                    "page_count": 1,
+                    "shown_pages": 1,
+                    "preview_partial": False,
+                    "preview_variant": "full",
+                },
+                "full",
+            )
+            preview_render = mock.Mock(
+                side_effect=AssertionError(
+                    "healthy verified OLE preview hit must not re-render"
+                )
+            )
+            healthy_preview_gate = mock.Mock(
+                return_value="verified-antiword"
+            )
+            with (
+                mock.patch.object(
+                    app,
+                    "_ai_crawler_lock_allowed",
+                    return_value=True,
+                ),
+                mock.patch.object(
+                    app,
+                    "_ja_refresh_access_token",
+                    return_value=token,
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_candidate_attachment_records",
+                    return_value=[record],
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_fetch_candidate_detail",
+                    return_value={
+                        "firstName": "Fixture",
+                        "lastName": "Candidate",
+                    },
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_get_ja_raw",
+                    return_value=(
+                        fixture,
+                        "application/msword",
+                        "resume.doc",
+                    ),
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_visual_preview_payload",
+                    preview_render,
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_preview_cancel_persistent_work",
+                    return_value=0,
+                ),
+                mock.patch.object(
+                    app,
+                    "_require_verified_antiword",
+                    healthy_preview_gate,
+                ),
+            ):
+                healthy_preview = self.client.get(
+                    "/jobadder/spider_candidate_preview"
+                    "?candidate_id=content-bound-candidate",
+                    headers=headers,
+                )
+            self.assertEqual(healthy_preview.status_code, 200)
+            self.assertTrue(
+                healthy_preview.get_json()["preview_cache_hit"]
+            )
+            healthy_preview_gate.assert_called_once_with()
+            preview_render.assert_not_called()
+
+            with (
+                mock.patch.object(
+                    app,
+                    "_ai_crawler_lock_allowed",
+                    return_value=True,
+                ),
+                mock.patch.object(
+                    app,
+                    "_ja_refresh_access_token",
+                    return_value=token,
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_candidate_attachment_records",
+                    return_value=[record],
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_fetch_candidate_detail",
+                    return_value={
+                        "firstName": "Fixture",
+                        "lastName": "Candidate",
+                    },
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_get_ja_raw",
+                    return_value=(
+                        fixture,
+                        "application/msword",
+                        "resume.doc",
+                    ),
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_visual_preview_payload",
+                    preview_render,
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_preview_cancel_persistent_work",
+                    return_value=0,
+                ),
+                mock.patch.object(
+                    app,
+                    "_require_verified_antiword",
+                    side_effect=unavailable,
+                ),
+            ):
+                unavailable_preview = self.client.get(
+                    "/jobadder/spider_candidate_preview"
+                    "?candidate_id=content-bound-candidate",
+                    headers=headers,
+                )
+            self.assertEqual(unavailable_preview.status_code, 424)
+            self.assertEqual(
+                unavailable_preview.get_json()["code"],
+                "ANTIWORD_DEPENDENCY_UNAVAILABLE",
+            )
+            preview_render.assert_not_called()
+
             for raw, content_type, filename in (
                 (old_pdf, "application/pdf", "resume.pdf"),
                 (b"PK\x03\x04fixture-docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "resume.docx"),
@@ -1363,7 +1560,7 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
 
             def content_aware_render(raw, *_args, **_kwargs):
                 if app._document_content_kind(raw) == "legacy_doc":
-                    app._require_verified_antiword_runtime()
+                    app._require_verified_antiword()
                 return visual_payload
 
             render = mock.Mock(side_effect=content_aware_render)
@@ -1426,7 +1623,7 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
                 changing_raw["value"] = fixture
                 with mock.patch.object(
                     app,
-                    "_require_verified_antiword_runtime",
+                    "_require_verified_antiword",
                     side_effect=unavailable,
                 ):
                     changed_to_ole = self.client.get(

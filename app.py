@@ -11924,7 +11924,7 @@ def _spider_fetch_candidate_resume_text(token, candidate_id):
                     if not cached.get("antiword_verified"):
                         cached = None
                     else:
-                        _require_verified_antiword_runtime()
+                        _require_verified_antiword()
                 if cached is not None:
                     return (
                         cached.get("text") or "",
@@ -14603,7 +14603,7 @@ def jobadder_spider_candidate_preview():
             )
         if payload is not None:
             if _document_content_kind(raw) == "legacy_doc":
-                _require_verified_antiword_runtime()
+                _require_verified_antiword()
             payload = dict(payload)
             payload["attachment_fingerprint"] = attachment_fingerprint[:24]
         return content_sha256, payload
