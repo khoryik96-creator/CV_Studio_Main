@@ -3,17 +3,18 @@
 ## Current gate
 
 Phases 1, 2A, 2B, 3, 4, 5A and 5B are complete in private owner/source release
-v24.6.238. The narrow JobAdder `esc2` and Blind JD experience-summary
-correctives are also complete. There is no active implementation target. Do
-not make further
-production changes or begin Phase 6 unless the owner explicitly starts the
-exact next milestone.
+v24.6.239. The narrow JobAdder `esc2`, Blind JD experience-summary and Blind JD
+PDF metadata-overflow correctives are also complete. There is no active
+implementation target. Do not make further production changes or begin Phase
+6 unless the owner explicitly starts the exact next milestone.
 
 ## Before a future Phase 6 implementation
 
 1. Read `AGENTS.md`, `ROADMAP.md`, `PHASE_STATUS.md` and `BACKBURNER_ROADMAP.md`.
-2. Read `CV_STUDIO_V24_6_238_PHASE_6_HANDOVER.md`.
+2. Read `CV_STUDIO_V24_6_239_PHASE_6_HANDOVER.md`.
 3. Read
+   `cv_studio_v24_6_239_blind_jd_pdf_metadata_overflow_corrective_qa_report.md`,
+   `CV_STUDIO_V24_6_238_PHASE_6_HANDOVER.md`,
    `cv_studio_v24_6_238_blind_jd_exp_summary_corrective_qa_report.md`,
    `CV_STUDIO_V24_6_237_PHASE_6_HANDOVER.md`,
    `cv_studio_v24_6_237_jobadder_esc2_corrective_qa_report.md`,
@@ -31,9 +32,9 @@ exact next milestone.
    the v24.6.224 corrective QA report, the
    v24.6.223 Phase 3 QA report, the
    Phase 2B QA reports and the historical Phase 2A QA reports.
-4. Verify the v24.6.238 source/package checksum against its adjacent SHA-256 and
+4. Verify the v24.6.239 source/package checksum against its adjacent SHA-256 and
    verification sidecars.
-5. Verify Git and create a clean v24.6.238 baseline commit if the extracted
+5. Verify Git and create a clean v24.6.239 baseline commit if the extracted
    folder is not already a repository.
 6. Re-run the Phase 1/2 storage suites, Phase 3 client characterization, Phase
    4 module characterization, Phase 5A persistent-job suites, Phase 5B cost

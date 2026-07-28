@@ -49,9 +49,34 @@
   browser preview, Word export and PDF export in **CV Studio v24.6.238**.
   `exp_range`, the AI prompt/output schema and recruiter-critical body content
   remain unchanged.
-- Current completed private owner/source release: **CV Studio v24.6.238**.
+- The Blind JD PDF header metadata and long Location/Work tile text were
+  corrected to wrap within the available page width in **CV Studio
+  v24.6.239** without changing any Blind JD data or content.
+- Current completed private owner/source release: **CV Studio v24.6.239**.
 - Phases 1, 2A, 2B, 3, 4, 5A and 5B are complete.
 - Phase 6 remains inactive. There is no active implementation target.
+
+## Completed scope: post-Phase-5B Blind JD PDF metadata-overflow corrective
+
+v24.6.239 wraps the first-page Blind JD PDF metadata summary within the
+available header width and wraps long Location/Work values within their padded
+tiles. Present metadata tiles retain the complete 174 mm content width, the
+established 4 mm gap and a shared calculated height.
+
+The v24.6.238 standalone experience-summary removal remains unchanged.
+Structured `exp_range`, the AI prompt/output schema, preview, Word export,
+requirements, nice-to-have items and all recruiter-critical body content remain
+unchanged.
+
+Focused regression coverage uses the exact long Work Arrangement from the
+owner-supplied PDF and proves both header and tile lines stay inside their
+right content edges. Real jsPDF export plus Poppler rendering confirms the
+corrected layout visually.
+
+This correction preserves all 107 routes, five guards, 18 compatibility
+signatures, SQLite schema 10, Phase 5A journal schema 1, the v24.6.237 `esc2`
+and v24.6.238 Blind JD experience-summary corrections, every Phase 1–5B
+contract and the Phase 6 stop boundary.
 
 ## Completed scope: post-Phase-5B Blind JD display/export corrective
 
@@ -284,8 +309,10 @@ Before changing code:
 1. Read `ROADMAP.md`.
 2. Read `PHASE_STATUS.md`.
 3. Read `IMPLEMENT.md`.
-4. Read `CV_STUDIO_V24_6_238_PHASE_6_HANDOVER.md`.
+4. Read `CV_STUDIO_V24_6_239_PHASE_6_HANDOVER.md`.
 5. Read
+   `cv_studio_v24_6_239_blind_jd_pdf_metadata_overflow_corrective_qa_report.md`,
+   `CV_STUDIO_V24_6_238_PHASE_6_HANDOVER.md`,
    `cv_studio_v24_6_238_blind_jd_exp_summary_corrective_qa_report.md`,
    `CV_STUDIO_V24_6_237_PHASE_6_HANDOVER.md`,
    `cv_studio_v24_6_237_jobadder_esc2_corrective_qa_report.md`,

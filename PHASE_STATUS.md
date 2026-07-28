@@ -3,8 +3,8 @@
 ## Release state
 
 - Approved baseline: v24.6.217
-- Completed release: v24.6.238
-- Previous completed release: v24.6.237
+- Completed release: v24.6.239
+- Previous completed release: v24.6.238
 - Phase 2B source baseline: v24.6.219
 - Phase 2B baseline Git commit: `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`
 - Phase 3 source baseline: v24.6.222
@@ -15,11 +15,83 @@
 - Phase 5A baseline Git commit: `4b366ddde1cf0a398706b52d55b0e82ed2dbc27c`
 - Phase 5B source baseline: v24.6.234
 - Phase 5B baseline Git commit: `327858799f17d880e37c740f71dfe321ea7bde0a`
-- Working branch: `codex/blind-jd-exp-summary-corrective`
+- Working branch: `codex/blind-jd-pdf-overflow-corrective`
 - Active phase: none; Phase 6 inactive
-- Completed private owner/source release: v24.6.238
-- Status: Blind JD experience-summary corrective release complete
+- Completed private owner/source release: v24.6.239
+- Status: Blind JD PDF metadata-overflow corrective release complete
 - Current milestone: none; stop before handoff, merge or Phase 6
+
+## Post-Phase-5B Blind JD PDF metadata-overflow corrective
+
+### Authorization and entry verification
+
+- The owner supplied a generated Blind JD PDF with an output defect and
+  authorized correction plus repeated exact-master review. JobAdder
+  sign-out/settings work, Phase 6, unrelated frontend refactoring, AI Crawler
+  work and cost work remained inactive.
+- The worktree was clean on completed v24.6.238 commit
+  `8dd2c1ba0d0e0fc9640997b50d82ce41c7dd129d`; local `master` remained exactly
+  `3894042b496896e9a4f358ac9b0e10270052571b`.
+- Active installed source surfaces identified v24.6.238.
+- `C:\CV-Studio-Codex\releases\v24.6.238` contained the owner/source ZIP,
+  checksum, verification sidecar, corrective QA report and Phase 6 handover.
+- The v24.6.238 owner/source ZIP independently recomputed to SHA-256
+  `ca63ded2c7beef0d1e6853792c7e0c671708acb6cb3d571765bbe0cc9f9c0de8`;
+  its verification `source_commit` exactly matched completed v24.6.238 HEAD.
+- The owner-supplied reproduction PDF recomputed to SHA-256
+  `7aca950544f5068f89877d0ca2a7052047e732d1430f5fbbfea19d6594e94d1e`.
+  Poppler and text inspection confirmed two first-page horizontal overflows:
+  the header metadata summary and the long Work tile.
+- The immutable v24.6.238 release artifacts remained unchanged.
+
+### Corrective implementation
+
+- `exportAnonJDPDF()` splits the first-page Location/Work/Industry summary to
+  the exact width between its established x-position and the right margin.
+- The header rule and following metadata row move down only when the wrapped
+  title/summary requires additional vertical space.
+- Location and Work values split to each tile's padded width. All present tiles
+  share the maximum required calculated height, retain the complete 174 mm
+  metadata width and retain the established 4 mm gap.
+- Preview, Word export, the AI prompt/output schema, structured `exp_range`,
+  requirements, nice-to-have items, recruiter-critical body content and every
+  unrelated Blind JD section remain unchanged.
+- The existing Blind JD fixture now uses the exact long Work Arrangement from
+  the supplied PDF and asserts that header and tile lines stay within their
+  right content edges while both tiles remain equal-height.
+
+### Acceptance and release result
+
+- The focused Blind JD fixture passes five cases covering the v24.6.238
+  experience-summary contracts plus long PDF header/tile wrapping.
+- Real bundled jsPDF export through local Chrome and Poppler rendering visually
+  confirms both pages are unclipped, aligned and legible.
+- Complete Python discovery passes all 117 tests with `ResourceWarning`
+  treated as an error.
+- The focused Phase 3/4/5A/5B and invariant gates pass.
+- All five frontend fixtures and all 24 live loopback smoke assertions pass.
+- Static validation passes for 27 tracked Python files, 23 tracked JavaScript
+  files plus both complete inline scripts, five Bash/command files and five
+  PowerShell files.
+- Owner-source validation/preflight, vetted `adm-zip` 0.5.17 behavior,
+  repository consistency and Git whitespace validation pass.
+- Repeated exact-master review re-proves all 107 routes, five ordered guards,
+  18 compatibility signatures, SQLite schema 10, journal schema 1, the
+  v24.6.237 `esc2` correction, the v24.6.238 experience-summary correction and
+  every Phase 1–5B compatibility/non-replay boundary.
+- Active source identity advanced to the next unused private owner/source
+  version, v24.6.239. Historical v24.6.238 evidence remains immutable.
+- The authoritative archive is
+  `cv_studio_v24_6_239_blind_jd_pdf_metadata_overflow_corrective_owner_source.zip`
+  under `C:\CV-Studio-Codex\releases\v24.6.239`, with adjacent SHA-256 and
+  verification sidecars. It is generated from final branch HEAD and freshly
+  compared against every tracked Git blob with zero missing, extra or
+  byte-mismatched files.
+- `cv_studio_v24_6_239_blind_jd_pdf_metadata_overflow_corrective_qa_report.md`
+  and `CV_STUDIO_V24_6_239_PHASE_6_HANDOVER.md` record the release evidence.
+- No live credential, paid request, external mutation, protected colleague
+  build, native compilation, handoff, merge, JobAdder sign-out/settings or
+  Phase 6 work was performed.
 
 ## Post-Phase-5B Blind JD display/export corrective
 

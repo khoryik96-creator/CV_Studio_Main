@@ -1,7 +1,7 @@
 # CV Studio Backburner and Stability Roadmap
 
-Last updated: 26 July 2026
-Current implementation base: v24.6.238
+Last updated: 28 July 2026
+Current implementation base: v24.6.239
 
 ## Explicit backburner — do not implement until the owner reactivates them
 
@@ -203,6 +203,16 @@ Deferred scope includes Shortlist / Maybe / Reject / Reviewed states, recruiter 
   width without an empty third tile;
 - preserves escaping, unrelated Blind JD content, the v24.6.237 `esc2`
   correction and every Phase 1–5B/backburner boundary.
+
+### v24.6.239 — Blind JD PDF metadata-overflow corrective
+
+- wraps the first-page PDF metadata summary within the available header width;
+- wraps long Location and Work values within their padded, equal-height tiles;
+- preserves the v24.6.238 experience-summary removal, all structured Blind JD
+  data, prompt/schema fields and recruiter-critical body content;
+- adds focused coverage for the exact long Work Arrangement from the supplied
+  PDF and visually verifies the real jsPDF export;
+- preserves every Phase 1–5B and backburner boundary.
 
 ## Active stability direction
 

@@ -1420,7 +1420,7 @@
 <div class="app">
   <div class="header" style="position:relative;">
     <div>
-      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.238 (Offline) by The 郭 Lab</span></h1>
+      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.239 (Offline) by The 郭 Lab</span></h1>
 
     </div>
     <div class="header-tools">
@@ -5392,9 +5392,13 @@ function exportAnonJDPDF() {
   doc.text(titleLines, margin+30, 13);
   doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(...C.muted);
   var meta = [j.location,j.work_mode,j.industry].filter(function(x){return x&&x!=='null';}).join('  |  ');
-  doc.text(safe(meta||'Hyppies'), margin+30, 13+titleLines.length*6+2);
-  doc.setDrawColor(...C.hairline); doc.setLineWidth(0.35); doc.line(margin,35,pageW-margin,35);
-  y = 44;
+  var metaX = margin + 30;
+  var metaY = 13 + titleLines.length * 6 + 2;
+  var metaLines = doc.splitTextToSize(safe(meta||'Hyppies'), pageW - margin - metaX);
+  doc.text(metaLines, metaX, metaY);
+  var headerRuleY = Math.max(35, metaY + (metaLines.length - 1) * 3.4 + 4.5);
+  doc.setDrawColor(...C.hairline); doc.setLineWidth(0.35); doc.line(margin,headerRuleY,pageW-margin,headerRuleY);
+  y = headerRuleY + 9;
 
   var hasLoc = j.location && j.location !== 'null';
   var hasWm  = j.work_mode && j.work_mode !== 'null';
@@ -5404,14 +5408,19 @@ function exportAnonJDPDF() {
     var px = margin;
     var tileGap = 4;
     var tileWidth = (maxW - tileGap * (metadataTiles.length - 1)) / metadataTiles.length;
-    metadataTiles.forEach(function(item){
-      var text = safe(item[1] + ': ' + item[2]);
-      doc.setFillColor(...item[3]); doc.roundedRect(px, y, tileWidth, 7.2, 2, 2, 'F');
+    var tileLayouts = metadataTiles.map(function(item){
+      return { item:item, lines:splitWithFont(item[1] + ': ' + item[2], tileWidth - 6, 'bold', 7.6) };
+    });
+    var maxTileLines = Math.max.apply(null, tileLayouts.map(function(layout){ return layout.lines.length; }));
+    var tileHeight = 7.2 + (maxTileLines - 1) * 3.2;
+    tileLayouts.forEach(function(layout){
+      var item = layout.item;
+      doc.setFillColor(...item[3]); doc.roundedRect(px, y, tileWidth, tileHeight, 2, 2, 'F');
       doc.setFont('helvetica','bold'); doc.setFontSize(7.6); doc.setTextColor(...item[4]);
-      doc.text(text, px+3, y+4.8);
+      doc.text(layout.lines, px+3, y+4.8);
       px += tileWidth + tileGap;
     });
-    y += 14;
+    y += tileHeight + 6.8;
   }
 
   if (j.about_client) { secHdr('About Our Client', C.soft, C.purple, firstParaReserve(j.about_client)); para(j.about_client); if (j.about_role) para(j.about_role, C.muted); y+=2; }
@@ -6456,7 +6465,7 @@ var _cvStudioPhase2bSettingsStartupPromise=cvStudioHydrateBrowserSettings();
 function exportCvStudioLocalData(){
   var settings=cvStudioLocalDataSettingsSnapshot(false);
   var records={onenote_transfer_records:(typeof oneNoteRecordsLoad==='function'?oneNoteRecordsLoad():[]),onenote_saved_links:(typeof oneNoteReadSavedLinks==='function'?oneNoteReadSavedLinks():[])};
-  var payload={product:'CV Studio local data',version:'v24.6.238',schema:1,exportedAt:new Date().toISOString(),includes:['PPC metadata and preferences','saved OneNote links and parser preferences','OneNote transfer record history (private application data)','invoice recipient/settings and draft links','CV alignment and navigation preferences','AI routing/provider selections without API keys'],settings:settings,records:records};
+  var payload={product:'CV Studio local data',version:'v24.6.239',schema:1,exportedAt:new Date().toISOString(),includes:['PPC metadata and preferences','saved OneNote links and parser preferences','OneNote transfer record history (private application data)','invoice recipient/settings and draft links','CV alignment and navigation preferences','AI routing/provider selections without API keys'],settings:settings,records:records};
   var blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='cv_studio_local_data_'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(url);a.remove();},0);showToast('Non-secret local data exported.','ok');
 }
 function cvStudioPersistImportedLocalData(payload){
@@ -6615,7 +6624,7 @@ function cvLockedTabLabel() {
 // Unlocks persist across normal browser/app restarts for the same installed build,
 // but deliberately reset after a new CV Studio version is installed. This keeps the
 // lock in place after upgrades while avoiding repeated prompts during daily use.
-var LOCK_UNLOCK_VERSION = 'v24.6.238';
+var LOCK_UNLOCK_VERSION = 'v24.6.239';
 function versionedUnlockKey(base) {
   return base + '_' + String(LOCK_UNLOCK_VERSION || '').replace(/[^0-9A-Za-z]+/g, '_');
 }

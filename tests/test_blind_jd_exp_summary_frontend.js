@@ -126,6 +126,7 @@ function wordExportOmitsOnlyTopExperienceSummary() {
 class FakePDF {
   constructor() {
     this.textCalls = [];
+    this.textGroups = [];
     this.roundedRects = [];
     this.pages = 1;
     this.internal = {getNumberOfPages: () => this.pages};
@@ -144,12 +145,28 @@ class FakePDF {
   addPage() { this.pages += 1; }
   setPage() {}
   getTextWidth(text) { return String(text).length * 1.5; }
-  splitTextToSize(text) { return [String(text)]; }
+  splitTextToSize(text, width) {
+    const words = String(text).split(/\s+/);
+    const lines = [];
+    let line = '';
+    words.forEach(word => {
+      const candidate = line ? line + ' ' + word : word;
+      if (!line || this.getTextWidth(candidate) <= width) {
+        line = candidate;
+        return;
+      }
+      lines.push(line);
+      line = word;
+    });
+    if (line) lines.push(line);
+    return lines.length ? lines : [''];
+  }
   roundedRect(x, y, width, height, rx, ry, style) {
     this.roundedRects.push({x, y, width, height, rx, ry, style});
   }
   text(value, x, y, options) {
     const values = Array.isArray(value) ? value : [value];
+    this.textGroups.push({values: values.map(String), x, y, options});
     values.forEach(item => this.textCalls.push({value: String(item), x, y, options}));
   }
   save(name) { this.savedName = name; }
@@ -190,6 +207,57 @@ function pdfExportOmitsExpAndUsesMetadataWidth() {
   );
   assert.strictEqual(metadataTiles[1].x + metadataTiles[1].width, 192);
   assert.strictEqual(jd.exp_range, '8+ years <leadership> & delivery');
+}
+
+function pdfLongMetadataWrapsWithinContentBounds() {
+  const jd = Object.assign(blindJDFixture(), {
+    job_title: 'Manager, Regulatory Reporting',
+    location: 'Malaysia',
+    work_mode: 'Office-based with hybrid flexibility (60% office environment as per standard working conditions)',
+    industry: 'Banking & Financial Services',
+  });
+  const context = vm.createContext({
+    console,
+    window: {_lastAnonJD: jd, jspdf: {jsPDF: FakePDF}},
+    Object,
+    Array,
+    String,
+    Date,
+    HYPPIES_LOGO_URI: 'data:image/jpeg;base64,fixture',
+    showToast() {},
+  });
+  vm.runInContext(functions(['cvPdfSafeText', '_safeFileStem', 'exportAnonJDPDF']), context);
+  context.exportAnonJDPDF();
+
+  const doc = FakePDF.instance;
+  const headerMetadata = doc.textGroups.find(group =>
+    group.x === 48 && group.values.join(' ').includes('Office-based with hybrid flexibility'),
+  );
+  assert.ok(headerMetadata, 'PDF should render the header metadata');
+  assert.ok(headerMetadata.values.length > 1, 'long header metadata should wrap');
+  headerMetadata.values.forEach(line => {
+    assert.ok(
+      headerMetadata.x + doc.getTextWidth(line) <= 192,
+      'header metadata line should stay inside the right content edge',
+    );
+  });
+
+  const metadataTiles = doc.roundedRects.slice(0, 2);
+  assert.strictEqual(metadataTiles.length, 2);
+  assert.strictEqual(metadataTiles[0].height, metadataTiles[1].height);
+  assert.ok(metadataTiles[1].height > 7.2, 'metadata tiles should grow for wrapped Work text');
+
+  const workText = doc.textGroups.find(group =>
+    group.x === 110 && group.values.join(' ').startsWith('Work: Office-based'),
+  );
+  assert.ok(workText, 'PDF should render the Work tile text');
+  assert.ok(workText.values.length > 1, 'long Work tile text should wrap');
+  workText.values.forEach(line => {
+    assert.ok(
+      workText.x + doc.getTextWidth(line) <= 189,
+      'Work tile line should stay inside its padded right edge',
+    );
+  });
 }
 
 function expRangeSchemaAndUnrelatedContentRemain() {
@@ -239,6 +307,7 @@ const cases = [
   ['preview omits only the standalone experience badge', previewOmitsOnlyStandaloneExperienceBadge],
   ['Word export omits only the top Experience summary', wordExportOmitsOnlyTopExperienceSummary],
   ['PDF export omits Exp and fills metadata width', pdfExportOmitsExpAndUsesMetadataWidth],
+  ['PDF long metadata wraps within content bounds', pdfLongMetadataWrapsWithinContentBounds],
   ['exp_range schema and unrelated Blind JD content remain', expRangeSchemaAndUnrelatedContentRemain],
 ];
 

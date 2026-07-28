@@ -31,6 +31,8 @@
 - v24.6.238 removed the duplicated standalone experience summary from Blind JD
   preview, Word export and PDF export without changing `exp_range`, the AI
   prompt/output schema or recruiter-critical body content.
+- v24.6.239 corrected long Blind JD PDF header metadata and Location/Work tile
+  overflow without changing structured data, prompts, schemas or body content.
 - Phases 1, 2A, 2B, 3, 4, 5A and 5B are complete.
 - No later phase is active. Phase 6 requires a new explicit owner instruction.
 
@@ -208,6 +210,20 @@ Persistent background jobs and resumable task state:
   recruiter-critical body content remain unchanged;
 - escaping, all unrelated Blind JD sections, all 107 routes, five guards, 18
   compatibility signatures, schemas and every Phase 1–5B contract remain.
+
+## Post-Phase-5B Blind JD PDF metadata-overflow corrective — Completed in v24.6.239
+
+- the first-page metadata summary wraps within the available header width;
+- long Location and Work values wrap inside their padded metadata tiles;
+- all present tiles keep equal calculated height and use the complete 174 mm
+  content width with the established 4 mm gap;
+- the v24.6.238 standalone experience-summary removal, structured `exp_range`,
+  AI prompt/output schema and every recruiter-critical body section remain
+  unchanged;
+- focused no-browser regression and real jsPDF/Poppler visual verification
+  cover the owner-supplied long Work Arrangement;
+- all 107 routes, five guards, 18 compatibility signatures, schemas and every
+  Phase 1–5B contract remain.
 
 ## Phase 6 — Future
 
