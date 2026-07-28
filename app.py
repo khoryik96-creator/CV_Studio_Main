@@ -14157,13 +14157,19 @@ def _spider_visual_preview_payload(raw, content_type="", filename="", max_pages=
     can fall back to extracted/profile text.
     """
     raw = raw or b""
-    if not raw or len(raw) > 12 * 1024 * 1024:
+    if not raw:
         return None
     import base64 as _base64, os as _os
     ctype = str(content_type or "").lower()
     fname = _spider_filename_from_disposition(filename, filename).lower()
     ext = _os.path.splitext(fname)[1].lower()
     content_kind = _document_content_kind(raw)
+    if len(raw) > 12 * 1024 * 1024:
+        if content_kind == "legacy_doc" or (
+            not content_kind and ("msword" in ctype or ext == ".doc")
+        ):
+            _spider_extract_legacy_doc_text_for_preview(raw)
+        return None
     stripped = raw.lstrip()[:1]
     if not content_kind and (
         "json" in ctype or stripped in (b"{", b"[")
@@ -14244,6 +14250,20 @@ def _spider_search_text_from_visual_payload(visual):
     if text:
         return text, "PDFium visual text layer"
     return "", ""
+
+
+def _spider_prefetch_should_defer_ocr(raw, content_type="", filename=""):
+    """Defer only strongly identified PDF/image bytes or metadata fallbacks."""
+    content_kind = _document_content_kind(raw)
+    if content_kind:
+        return content_kind in {"pdf", "image"}
+    ctype = str(content_type or "").lower()
+    name = str(filename or "").lower()
+    return bool(
+        "pdf" in ctype
+        or "image/" in ctype
+        or name.endswith((".pdf", ".png", ".jpg", ".jpeg"))
+    )
 
 
 def _spider_apply_visual_search_state(visual, search_text, search_source):
@@ -14487,18 +14507,11 @@ def jobadder_spider_candidate_preview():
         search_text, search_source = _spider_search_text_from_visual_payload(visual)
         if search_text:
             return search_text, search_source
-        raw_head = (raw or b"")[:8]
-        ctype_l = str(ctype or "").lower()
-        filename_l = str(filename or "").lower()
-        is_pdf_or_image = (
-            raw_head.startswith(b"%PDF")
-            or raw_head.startswith(b"\x89PNG")
-            or raw_head[:3] == b"\xff\xd8\xff"
-            or "pdf" in ctype_l
-            or "image/" in ctype_l
-            or filename_l.endswith((".pdf", ".png", ".jpg", ".jpeg"))
-        )
-        if prefetch_mode and is_pdf_or_image:
+        if prefetch_mode and _spider_prefetch_should_defer_ocr(
+            raw,
+            ctype,
+            filename,
+        ):
             return "", "Searchable OCR text will be prepared when this candidate is opened."
         return extract_text(raw, ctype, filename)
 
@@ -21803,6 +21816,8 @@ def preview_file():
         # extraction can still run separately; only the visual preview is skipped.
         max_visual_bytes = 12 * 1024 * 1024
         if len(file_bytes) > max_visual_bytes:
+            if ext == ".doc":
+                _spider_extract_legacy_doc_text_for_preview(file_bytes)
             return jsonify({"ok": False, "error": "Visual preview skipped for files larger than 12 MB; use Text mode."})
 
         if ext == '.pdf':

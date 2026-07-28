@@ -247,6 +247,17 @@
   content type consulted only when no strong identity exists. Focused tests
   prove PDF and DOCX magic retain their established paths even when both the
   filename and content type falsely identify a legacy `.doc`.
+- A third independent review found that both visual-preview helpers returned
+  their 12 MiB size-only fallback before the new OLE classification and that
+  background prefetch still deferred OCR from weak PDF/image metadata. A
+  genuine oversized `.doc` could therefore skip the exact-document Antiword
+  gate or be cached through profile fallback. Both size-only exits now perform
+  the legacy-document Antiword check first, and prefetch defers OCR only for a
+  strong PDF/image byte identity or for metadata when no strong identity
+  exists. Regression coverage pads the genuine fixture beyond 12 MiB, proves
+  unavailable Antiword propagates the structured dependency failure, proves
+  the healthy visual size fallback remains, and confirms genuine oversized
+  PDF/image identities retain OCR deferral.
 
 ### Current validation and platform limitation
 
@@ -283,9 +294,9 @@
   `f430cdfe9446c4b943074d4bf804232761c284f2caa3d4125006b158d8b14af8`
   with no Unicode replacement character, and preserves DOCX generation. The
   temporary non-release QA ZIP is
-  `bb5ff0553094d4ae5a1157a00d26b72d00bc1038209657a919e63e5497f9316f`;
+  `72441643922adfde6f3f74eabbcb21eeaa43f276abbb0b03b268b0f4104465af`;
   its smoke JSON is
-  `8834d8fb73a900f086d5825fc5a47b69ec8e1051e92581d0913c54ffbfa47d9e`.
+  `01151444c181bfe50c83c9d71fb130f1ad121635290f135b80f49daa474bad65`.
   Neither artifact is copied to the immutable release directory.
 - **Release gate:** CV Studio's macOS installer, diagnostics and compiled
   package have not yet run on genuine Intel and Apple Silicon Macs in this

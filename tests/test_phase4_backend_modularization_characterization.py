@@ -492,6 +492,10 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
             / "fixtures"
             / "UDHR-english.doc"
         ).read_bytes()
+        visual_limit = 12 * 1024 * 1024
+        oversized_fixture = fixture + (
+            b"\0" * (visual_limit + 1 - len(fixture))
+        )
         headers = self._headers("antiword-functional-route")
         response = self.client.post(
             "/extract-text",
@@ -566,6 +570,79 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
         self.assertEqual(
             mislabeled_source,
             "downloaded legacy DOC resume",
+        )
+
+        with mock.patch.object(
+            app,
+            "_spider_extract_legacy_doc_text_for_preview",
+            return_value="verified oversized legacy document",
+        ) as oversized_verifier:
+            oversized_visual = app._spider_visual_preview_payload(
+                oversized_fixture,
+                "application/pdf",
+                "misleading-oversized.pdf",
+            )
+            self.assertIsNone(oversized_visual)
+            oversized_route = self.client.post(
+                "/preview-file",
+                data={
+                    "file": (
+                        io.BytesIO(oversized_fixture),
+                        "misleading-oversized.pdf",
+                    )
+                },
+                headers=headers,
+                content_type="multipart/form-data",
+            )
+            self.assertEqual(oversized_route.status_code, 200)
+            self.assertFalse(oversized_route.get_json()["ok"])
+            self.assertIn(
+                "larger than 12 MB",
+                oversized_route.get_json()["error"],
+            )
+            oversized_route.request.environ["wsgi.input"].close()
+            oversized_route.request.close()
+            oversized_route.close()
+            self.assertEqual(oversized_verifier.call_count, 2)
+
+        self.assertFalse(
+            app._spider_prefetch_should_defer_ocr(
+                oversized_fixture,
+                "application/pdf",
+                "misleading-oversized.pdf",
+            )
+        )
+        oversized_pdf = b"%PDF" + (b"\0" * (visual_limit - 3))
+        oversized_image = b"\x89PNG\r\n\x1a\n" + (
+            b"\0" * (visual_limit - 7)
+        )
+        self.assertIsNone(
+            app._spider_visual_preview_payload(
+                oversized_pdf,
+                "application/msword",
+                "misleading.doc",
+            )
+        )
+        self.assertIsNone(
+            app._spider_visual_preview_payload(
+                oversized_image,
+                "application/msword",
+                "misleading.doc",
+            )
+        )
+        self.assertTrue(
+            app._spider_prefetch_should_defer_ocr(
+                oversized_pdf,
+                "application/msword",
+                "misleading.doc",
+            )
+        )
+        self.assertTrue(
+            app._spider_prefetch_should_defer_ocr(
+                oversized_image,
+                "application/msword",
+                "misleading.doc",
+            )
         )
 
         with mock.patch.object(
@@ -696,6 +773,104 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
                     "misleading-resume.txt",
                 )
             self.assertIs(mislabeled.exception, unavailable)
+            with self.assertRaises(
+                app.AntiwordDependencyError
+            ) as oversized_visual_error:
+                app._spider_visual_preview_payload(
+                    oversized_fixture,
+                    "application/pdf",
+                    "misleading-oversized.pdf",
+                )
+            self.assertIs(
+                oversized_visual_error.exception,
+                unavailable,
+            )
+            oversized_preview = self.client.post(
+                "/preview-file",
+                data={
+                    "file": (
+                        io.BytesIO(oversized_fixture),
+                        "misleading-oversized.pdf",
+                    )
+                },
+                headers=headers,
+                content_type="multipart/form-data",
+            )
+            self.assertEqual(oversized_preview.status_code, 424)
+            self.assertEqual(
+                oversized_preview.get_json()["code"],
+                "ANTIWORD_DEPENDENCY_UNAVAILABLE",
+            )
+            oversized_preview.request.environ["wsgi.input"].close()
+            oversized_preview.request.close()
+            oversized_preview.close()
+
+            prefetch_store = mock.Mock()
+            with (
+                mock.patch.object(
+                    app,
+                    "_ai_crawler_lock_allowed",
+                    return_value=True,
+                ),
+                mock.patch.object(
+                    app,
+                    "_ja_refresh_access_token",
+                    return_value="<fixture-token>",
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_resume_cache_key",
+                    return_value="oversized-ole-prefetch",
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_candidate_attachment_records",
+                    return_value=[
+                        {
+                            "attachmentId": "oversized-ole",
+                            "fileName": "misleading-oversized.pdf",
+                            "type": "Resume",
+                        }
+                    ],
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_preview_payload_cache_get",
+                    return_value=None,
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_fetch_candidate_detail",
+                    return_value={
+                        "firstName": "Fixture",
+                        "lastName": "Candidate",
+                    },
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_get_ja_raw",
+                    return_value=(
+                        oversized_fixture,
+                        "application/pdf",
+                        "misleading-oversized.pdf",
+                    ),
+                ),
+                mock.patch.object(
+                    app,
+                    "_CVSTUDIO_JOBS",
+                    prefetch_store,
+                ),
+            ):
+                prefetch_response = self.client.get(
+                    "/jobadder/spider_candidate_preview"
+                    "?candidate_id=oversized-ole&prefetch=1",
+                    headers=headers,
+                )
+            self.assertEqual(prefetch_response.status_code, 424)
+            self.assertEqual(
+                prefetch_response.get_json()["code"],
+                "ANTIWORD_DEPENDENCY_UNAVAILABLE",
+            )
             with self.assertRaises(app.AntiwordDependencyError) as office:
                 app._office_bytes_to_pdf_preview(fixture, ".txt")
             self.assertIs(office.exception, unavailable)
