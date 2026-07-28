@@ -524,12 +524,23 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
         )
         self.assertNotIn("\ufffd", mislabeled_payload["text"])
 
-        ocr = self.client.post(
-            "/ocr",
-            data={"file": (io.BytesIO(fixture), "verification.doc")},
-            headers=headers,
-            content_type="multipart/form-data",
-        )
+        real_import = __import__
+
+        def reject_pytesseract(name, *args, **kwargs):
+            if name == "pytesseract":
+                raise ImportError("forced missing optional OCR dependency")
+            return real_import(name, *args, **kwargs)
+
+        with mock.patch(
+            "builtins.__import__",
+            side_effect=reject_pytesseract,
+        ):
+            ocr = self.client.post(
+                "/ocr",
+                data={"file": (io.BytesIO(fixture), "verification.doc")},
+                headers=headers,
+                content_type="multipart/form-data",
+            )
         self.assertEqual(ocr.status_code, 200)
         self.assertIn(
             "Universal Declaration of Human Rights",
@@ -766,6 +777,53 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
             "_require_verified_antiword_runtime",
             side_effect=unavailable,
         ):
+            stale_resume_cache = mock.Mock(
+                return_value={
+                    "text": "stale cached candidate profile",
+                    "source": "profile fallback",
+                }
+            )
+            resume_download = mock.Mock(
+                return_value=(
+                    fixture,
+                    "text/plain; charset=utf-8",
+                    "unchanged-resume.txt",
+                )
+            )
+            with (
+                mock.patch.object(
+                    app,
+                    "_spider_resume_text_cache_get",
+                    stale_resume_cache,
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_candidate_attachment_records",
+                    return_value=[
+                        {
+                            "attachmentId": "unchanged-resume",
+                            "fileName": "unchanged-resume.txt",
+                            "type": "Resume",
+                        }
+                    ],
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_get_ja_raw",
+                    resume_download,
+                ),
+            ):
+                with self.assertRaises(
+                    app.AntiwordDependencyError
+                ) as cached_resume:
+                    app._spider_fetch_candidate_resume_text(
+                        "<fixture-token>",
+                        "candidate-with-stale-cache",
+                    )
+            self.assertIs(cached_resume.exception, unavailable)
+            stale_resume_cache.assert_not_called()
+            resume_download.assert_called_once()
+
             with self.assertRaises(app.AntiwordDependencyError) as mislabeled:
                 app._spider_extract_text_from_download(
                     fixture,
@@ -806,6 +864,20 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
             oversized_preview.close()
 
             prefetch_store = mock.Mock()
+            stale_preview_cache = mock.Mock(
+                return_value={
+                    "ok": True,
+                    "mode": "profile",
+                    "text": "stale profile fallback",
+                }
+            )
+            preview_download = mock.Mock(
+                return_value=(
+                    oversized_fixture,
+                    "application/pdf",
+                    "misleading-oversized.pdf",
+                )
+            )
             with (
                 mock.patch.object(
                     app,
@@ -836,7 +908,7 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
                 mock.patch.object(
                     app,
                     "_spider_preview_payload_cache_get",
-                    return_value=None,
+                    stale_preview_cache,
                 ),
                 mock.patch.object(
                     app,
@@ -849,11 +921,7 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
                 mock.patch.object(
                     app,
                     "_spider_get_ja_raw",
-                    return_value=(
-                        oversized_fixture,
-                        "application/pdf",
-                        "misleading-oversized.pdf",
-                    ),
+                    preview_download,
                 ),
                 mock.patch.object(
                     app,
@@ -871,9 +939,32 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
                 prefetch_response.get_json()["code"],
                 "ANTIWORD_DEPENDENCY_UNAVAILABLE",
             )
+            stale_preview_cache.assert_not_called()
+            preview_download.assert_called_once()
             with self.assertRaises(app.AntiwordDependencyError) as office:
                 app._office_bytes_to_pdf_preview(fixture, ".txt")
             self.assertIs(office.exception, unavailable)
+
+            with mock.patch(
+                "builtins.__import__",
+                side_effect=reject_pytesseract,
+            ):
+                ocr_without_pytesseract = self.client.post(
+                    "/ocr",
+                    data={
+                        "file": (
+                            io.BytesIO(fixture),
+                            "misleading-resume.png",
+                        )
+                    },
+                    headers=headers,
+                    content_type="multipart/form-data",
+                )
+            self.assertEqual(ocr_without_pytesseract.status_code, 424)
+            self.assertEqual(
+                ocr_without_pytesseract.get_json()["code"],
+                "ANTIWORD_DEPENDENCY_UNAVAILABLE",
+            )
 
             for content_type, name in (
                 ("text/plain", "misleading-resume.txt"),

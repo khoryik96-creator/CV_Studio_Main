@@ -258,6 +258,24 @@
   unavailable Antiword propagates the structured dependency failure, proves
   the healthy visual size fallback remains, and confirms genuine oversized
   PDF/image identities retain OCR deferral.
+- A fourth independent review found that candidate-only text cache entries were
+  read before attachment discovery and that attachment-fingerprint preview
+  caches could retain a profile fallback even when JobAdder later exposed
+  genuine OLE bytes without changing that metadata. Because the fingerprint is
+  not a content identity, candidate resume text is no longer reused while
+  attachment metadata exists, and preview payloads are neither reused nor
+  written at that boundary. Every such attachment is downloaded on the current
+  request so exact OLE bytes reach Antiword. Focused regressions seed stale
+  candidate/profile cache results, expose known attachments (including the
+  oversized genuine fixture) and prove the downloads occur and return the
+  structured 424 when Antiword is unavailable.
+- The same review found that `/ocr` initialized optional `pytesseract` before
+  classifying the upload. A missing OCR stack could therefore mask both healthy
+  legacy-DOC extraction and Antiword's structured dependency failure.
+  Tesseract discovery now occurs only inside PDF/image handling after strong
+  byte classification. Route coverage forces the `pytesseract` import to fail
+  and proves genuine OLE input still returns verified text when Antiword is
+  healthy and the preserved 424 response when it is unavailable.
 
 ### Current validation and platform limitation
 
@@ -294,9 +312,9 @@
   `f430cdfe9446c4b943074d4bf804232761c284f2caa3d4125006b158d8b14af8`
   with no Unicode replacement character, and preserves DOCX generation. The
   temporary non-release QA ZIP is
-  `72441643922adfde6f3f74eabbcb21eeaa43f276abbb0b03b268b0f4104465af`;
+  `f4590bf75a8e6d1b212377b689c7941895bbacd63941c360bcc86d1e07002261`;
   its smoke JSON is
-  `01151444c181bfe50c83c9d71fb130f1ad121635290f135b80f49daa474bad65`.
+  `9b2ed8459daa6a1a8ac94b4e14ccbface7ca5ff858814dc81c7a5b1ee2049f45`.
   Neither artifact is copied to the immutable release directory.
 - **Release gate:** CV Studio's macOS installer, diagnostics and compiled
   package have not yet run on genuine Intel and Apple Silicon Macs in this

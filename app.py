@@ -11852,13 +11852,17 @@ def _spider_fetch_candidate_resume_text(token, candidate_id):
     often omits that resume text.  This helper closes that evidence gap without
     exposing the full extracted CV in the candidate-card response.
     """
-    cached = _spider_resume_text_cache_get(token, candidate_id)
-    if cached is not None:
-        return cached.get("text") or "", cached.get("source") or "cached resume"
     cid = urllib.parse.quote(str(candidate_id), safe="")
     # One latest attachment keeps discovery request volume bounded. JobAdder's
     # Latest=true response is already ordered with Resume ahead of FormattedResume.
-    for record in _spider_candidate_attachment_records(token, candidate_id)[:1]:
+    records = _spider_candidate_attachment_records(token, candidate_id)[:1]
+    if not records:
+        # Candidate-only text cache entries have no attachment/content identity.
+        # Reuse them only while JobAdder exposes no resume attachment.
+        cached = _spider_resume_text_cache_get(token, candidate_id)
+        if cached is not None:
+            return cached.get("text") or "", cached.get("source") or "cached resume"
+    for record in records:
         attach_id = record.get("attachmentId") or record.get("id")
         if not attach_id:
             continue
@@ -14446,15 +14450,17 @@ def jobadder_spider_candidate_preview():
             "has_attachment_metadata": bool(attachment_records),
         })
 
-    # Background requests may reuse a complete foreground cache entry. Partial
-    # prefetch entries are kept under a separate variant and never satisfy a
-    # later full foreground request.
-    if prefetch_mode:
-        cached_payload = _spider_preview_payload_cache_get(token, candidate_id, attachment_fingerprint, "full")
-        if cached_payload is None:
-            cached_payload = _spider_preview_payload_cache_get(token, candidate_id, attachment_fingerprint, "prefetch")
-    else:
-        cached_payload = _spider_preview_payload_cache_get(token, candidate_id, attachment_fingerprint, "full")
+    # Attachment metadata is not a content identity: JobAdder can expose bytes
+    # later without changing the record. Always download a known attachment so
+    # genuine OLE content reaches the exact-document Antiword gate.
+    cached_payload = None
+    if not attachment_records:
+        if prefetch_mode:
+            cached_payload = _spider_preview_payload_cache_get(token, candidate_id, attachment_fingerprint, "full")
+            if cached_payload is None:
+                cached_payload = _spider_preview_payload_cache_get(token, candidate_id, attachment_fingerprint, "prefetch")
+        else:
+            cached_payload = _spider_preview_payload_cache_get(token, candidate_id, attachment_fingerprint, "full")
     if cached_payload is not None:
         return jsonify(cached_payload)
     job_progress("cache_lookup", 25)
@@ -14531,7 +14537,12 @@ def jobadder_spider_candidate_preview():
             payload["preview_cache_hit"] = False
             payload["preview_partial"] = is_partial
             payload["preview_variant"] = store_variant
-            if status == 200 and cacheable and payload.get("ok"):
+            if (
+                status == 200
+                and cacheable
+                and not attachment_records
+                and payload.get("ok")
+            ):
                 _spider_preview_payload_cache_put(token, candidate_id, attachment_fingerprint, payload, store_variant)
         return jsonify(payload), status
 
@@ -15997,24 +16008,6 @@ def ocr_endpoint():
         fname_lower = (fname or "").lower()
         text = ""
 
-        # Detect Tesseract.
-        try:
-            import pytesseract
-            tess_path = first_existing_file([
-                os.path.join(script_dir, "tesseract", "tesseract.exe"),
-                r"C:\Program Files\Tesseract-OCR\tesseract.exe",
-                r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
-                os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Tesseract-OCR", "tesseract.exe"),
-                "/usr/local/bin/tesseract",
-                "/opt/homebrew/bin/tesseract",
-                "/usr/bin/tesseract",
-            ]) or shutil.which("tesseract")
-            if tess_path:
-                pytesseract.pytesseract.tesseract_cmd = tess_path
-            tess_ok = bool(tess_path or shutil.which("tesseract"))
-        except ImportError:
-            return cors_json({"ok": False, "error": "Python package pytesseract is not installed. Run INSTALL.bat again."}, 500)
-
         # Strong byte signatures take precedence over stale or misleading
         # upload names so genuine OLE .doc content always reaches Antiword.
         content_kind = _document_content_kind(file_bytes)
@@ -16033,6 +16026,26 @@ def ocr_endpoint():
                 (".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif", ".webp")
             )
         )
+
+        pytesseract = None
+        tess_ok = False
+        if is_pdf or is_image:
+            try:
+                import pytesseract
+                tess_path = first_existing_file([
+                    os.path.join(script_dir, "tesseract", "tesseract.exe"),
+                    r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+                    r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+                    os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Tesseract-OCR", "tesseract.exe"),
+                    "/usr/local/bin/tesseract",
+                    "/opt/homebrew/bin/tesseract",
+                    "/usr/bin/tesseract",
+                ]) or shutil.which("tesseract")
+                if tess_path:
+                    pytesseract.pytesseract.tesseract_cmd = tess_path
+                tess_ok = bool(tess_path or shutil.which("tesseract"))
+            except ImportError:
+                return cors_json({"ok": False, "error": "Python package pytesseract is not installed. Run INSTALL.bat again."}, 500)
 
         if is_pdf:
             if not tess_ok:
