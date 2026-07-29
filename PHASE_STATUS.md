@@ -318,6 +318,25 @@
   intact copied bundle resolves as bundled, corrupts the copied mapping file
   and proves both package-only resolution and packaged-tree validation fail,
   then proves the ambient runtime would otherwise have masked the corruption.
+- An eighth independent review found that the isolated protected smoke still
+  inherited explicit `CVSTUDIO_STATE_DIR`, `CVSTUDIO_DB_PATH` and
+  `CVSTUDIO_JOB_STATE_PATH` values from the owner environment. The smoke
+  environment now redirects all three overrides, `HOME` and `LOCALAPPDATA`
+  beneath its temporary root before the receipt or compiled process starts.
+  Regression coverage seeds every prior path with sentinel bytes, initializes
+  the real SQLite store and persistent-job resolver through the constructed
+  smoke environment, proves every resolved path stays below the temporary
+  root and proves every owner sentinel remains byte-identical. The fresh
+  protected build then exercises that same environment helper end to end.
+- The same review found that the Windows installer rejected reparse points at
+  the runtime, `bin` and `share` roots and on files, but could still enumerate
+  through a nested directory junction such as `share\antiword`. Runtime
+  traversal is now explicit and checks each child for a reparse point before
+  descending. The genuine Windows installer self-test moves the complete
+  valid mapping directory outside the runtime, replaces it with a junction,
+  requires `runtime-link-rejected`, safely restores the directory and
+  re-verifies the runtime. Focused Python coverage executes that isolated
+  installer self-test.
 
 ### Current validation and platform limitation
 
@@ -341,8 +360,8 @@
   and expects runtime diagnostics to report `unsupported-platform`; it never
   claims functional Antiword support or runs the supported-platform `.doc`
   smoke.
-- Focused Antiword/document validation passes all 24 tests in the two directly
-  affected modules. Complete Python discovery passes all 134 tests; all five
+- Focused Antiword/document validation passes all 26 tests in the two directly
+  affected modules. Complete Python discovery passes all 136 tests; all five
   frontend fixtures and all 24 live
   source-smoke assertions pass. Python, PowerShell and Bash syntax, protected
   source preflight, exact `adm-zip` behavior, repository consistency and Git
@@ -355,9 +374,9 @@
   `f430cdfe9446c4b943074d4bf804232761c284f2caa3d4125006b158d8b14af8`
   with no Unicode replacement character, and preserves DOCX generation. The
   temporary non-release QA ZIP is
-  `a4621a249ef48f504398e9b0226378216df85aa2881f076b4f5d26020eebe655`;
+  `a9ddf77714d353adc0b6323dda31bb168396475c0ed8b578fe346b72c5f68f09`;
   its smoke JSON is
-  `d00aa5b8cc2aa72f526eaa460ae3ce1941b18bf2104288ec74719dff7489c1b9`.
+  `4156016f31a755bac094f5a83160e21dde05da8320e153c1eb1d56e98609d47d`.
   Neither artifact is copied to the immutable release directory.
 - **Release gate:** CV Studio's macOS installer, diagnostics and compiled
   package have not yet run on genuine Intel and Apple Silicon Macs in this

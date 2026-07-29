@@ -764,6 +764,25 @@ def _choose_smoke_port() -> int:
     return port
 
 
+def protected_smoke_environment(state_root: Path) -> dict[str,str]:
+    """Return an environment whose supported app state stays below state_root."""
+
+    root=Path(state_root).resolve()
+    home=root/"home"
+    local_app_data=root/"localappdata"
+    state=root/"state"
+    for directory in (home,local_app_data,state):
+        directory.mkdir(parents=True,exist_ok=True)
+    env=os.environ.copy()
+    env["HOME"]=str(home)
+    env["LOCALAPPDATA"]=str(local_app_data)
+    env["CVSTUDIO_STATE_DIR"]=str(state)
+    env["CVSTUDIO_DB_PATH"]=str(state/"cv_studio.sqlite3")
+    env["CVSTUDIO_JOB_STATE_PATH"]=str(state/"cv_studio_jobs.json")
+    env["CVSTUDIO_ANTIWORD_PACKAGE_ONLY"]="1"
+    return env
+
+
 def smoke_test(package: Path,source: Path,output: Path,target: str,timeout_seconds: int = 240) -> dict:
     production_port_occupied=_loopback_port_is_occupied(5000)
     smoke_port=_choose_smoke_port()
@@ -773,12 +792,7 @@ def smoke_test(package: Path,source: Path,output: Path,target: str,timeout_secon
     smoke_state=tempfile.TemporaryDirectory(
         prefix="cvstudio-protected-smoke-state-"
     )
-    env=os.environ.copy()
-    if os.name=="nt":
-        env["LOCALAPPDATA"]=smoke_state.name
-    else:
-        env["HOME"]=smoke_state.name
-    env["CVSTUDIO_ANTIWORD_PACKAGE_ONLY"]="1"
+    env=protected_smoke_environment(Path(smoke_state.name))
     receipt,prior=write_test_receipt(package,env); process=None
     result={
         "ok":False,

@@ -10,7 +10,11 @@ from unittest import mock
 
 import cvstudio_antiword as antiword
 from cvstudio_diagnostics import dependency_status
+from cvstudio_jobs import PersistentJobStore, default_job_state_path
+from cvstudio_storage import CVStudioStorage, default_database_path
 from owner_build_tools.build_protected import (
+    protected_smoke_environment,
+    receipt_path,
     validate_antiword_runtime,
     write_test_receipt,
 )
@@ -25,6 +29,79 @@ def sha256(path):
 
 
 class AntiwordMandatoryDependencyTests(unittest.TestCase):
+    def test_protected_smoke_redirects_every_supported_state_override(self):
+        with tempfile.TemporaryDirectory(
+            prefix="cvstudio-antiword-smoke-override-"
+        ) as td:
+            root = Path(td)
+            sentinels = root / "owner-sentinels"
+            sentinel_home = sentinels / "home"
+            sentinel_local = sentinels / "localappdata"
+            sentinel_state = sentinels / "state"
+            for directory in (
+                sentinel_home,
+                sentinel_local,
+                sentinel_state,
+            ):
+                directory.mkdir(parents=True)
+                (directory / "sentinel.txt").write_bytes(b"owner-state")
+            sentinel_db = sentinels / "owner.sqlite3"
+            sentinel_jobs = sentinels / "owner-jobs.json"
+            sentinel_db.write_bytes(b"owner-database")
+            sentinel_jobs.write_bytes(b"owner-journal")
+            seeded = {
+                "HOME": str(sentinel_home),
+                "LOCALAPPDATA": str(sentinel_local),
+                "CVSTUDIO_STATE_DIR": str(sentinel_state),
+                "CVSTUDIO_DB_PATH": str(sentinel_db),
+                "CVSTUDIO_JOB_STATE_PATH": str(sentinel_jobs),
+            }
+            smoke_root = root / "isolated-smoke"
+            with mock.patch.dict(os.environ, seeded, clear=False):
+                environment = protected_smoke_environment(smoke_root)
+            for name in (
+                "HOME",
+                "LOCALAPPDATA",
+                "CVSTUDIO_STATE_DIR",
+                "CVSTUDIO_DB_PATH",
+                "CVSTUDIO_JOB_STATE_PATH",
+            ):
+                self.assertTrue(
+                    Path(environment[name]).resolve().is_relative_to(
+                        smoke_root.resolve()
+                    ),
+                    name,
+                )
+            with mock.patch.dict(
+                os.environ,
+                environment,
+                clear=True,
+            ):
+                database_path = default_database_path()
+                jobs_path = default_job_state_path()
+                storage = CVStudioStorage()
+                storage.initialize()
+                job_store = PersistentJobStore()
+                job_store.initialize()
+                receipt, prior = write_test_receipt(ROOT, environment)
+            self.assertIsNone(prior)
+            for path in (database_path, jobs_path, receipt_path(environment)):
+                self.assertTrue(
+                    path.resolve().is_relative_to(smoke_root.resolve())
+                )
+            self.assertTrue(database_path.exists())
+            self.assertEqual(sentinel_db.read_bytes(), b"owner-database")
+            self.assertEqual(sentinel_jobs.read_bytes(), b"owner-journal")
+            for directory in (
+                sentinel_home,
+                sentinel_local,
+                sentinel_state,
+            ):
+                self.assertEqual(
+                    (directory / "sentinel.txt").read_bytes(),
+                    b"owner-state",
+                )
+
     def test_pinned_windows_runtime_is_complete_trusted_and_functional(self):
         if os.name != "nt":
             self.skipTest("Genuine Windows Antiword execution is Windows-only")
@@ -443,6 +520,42 @@ class AntiwordMandatoryDependencyTests(unittest.TestCase):
             'fixture_sha256":hashlib.sha256(fixture).hexdigest()',
             protected_builder,
         )
+
+    def test_windows_installer_rejects_nested_runtime_junction(self):
+        if os.name != "nt":
+            self.skipTest("Windows junction validation is Windows-only")
+        state = Path(tempfile.gettempdir()) / (
+            "cvstudio-antiword-installer-self-test-"
+            + os.urandom(8).hex()
+        )
+        try:
+            result = subprocess.run(
+                [
+                    "powershell.exe",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(ROOT / "INSTALL_CORE.ps1"),
+                    "-AntiwordSelfTestOnly",
+                    "-AntiwordSelfTestStateRoot",
+                    str(state),
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                timeout=90,
+                check=False,
+            )
+        finally:
+            if state.exists():
+                shutil.rmtree(state)
+        self.assertEqual(
+            result.returncode,
+            0,
+            (result.stdout or "") + (result.stderr or ""),
+        )
+        self.assertIn("nested reparse rejection", result.stdout)
 
     def test_native_parser_is_retained_but_cannot_satisfy_success(self):
         source = (ROOT / "app.py").read_text(encoding="utf-8")

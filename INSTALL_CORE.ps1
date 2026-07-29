@@ -758,12 +758,25 @@ function Test-AntiwordRuntime {
             if (((Get-Item -LiteralPath $folder -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
                 throw 'runtime-link-rejected'
             }
-            foreach ($file in @(Get-ChildItem -LiteralPath $folder -Recurse -File -Force)) {
-                if (($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'runtime-link-rejected' }
-                $full = [IO.Path]::GetFullPath($file.FullName)
-                if (-not $full.StartsWith($rootFull, [StringComparison]::OrdinalIgnoreCase)) { throw 'runtime-path-escaped' }
-                $relative = $full.Substring($rootFull.Length).Replace('\','/')
-                $actual[$relative] = $true
+            $pendingDirectories = [System.Collections.Generic.Stack[string]]::new()
+            $pendingDirectories.Push($folder)
+            while ($pendingDirectories.Count -gt 0) {
+                $currentFolder = $pendingDirectories.Pop()
+                foreach ($entry in @(Get-ChildItem -LiteralPath $currentFolder -Force)) {
+                    if (($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+                        throw 'runtime-link-rejected'
+                    }
+                    $full = [IO.Path]::GetFullPath($entry.FullName)
+                    if (-not $full.StartsWith($rootFull, [StringComparison]::OrdinalIgnoreCase)) {
+                        throw 'runtime-path-escaped'
+                    }
+                    if ($entry.PSIsContainer) {
+                        $pendingDirectories.Push($full)
+                        continue
+                    }
+                    $relative = $full.Substring($rootFull.Length).Replace('\','/')
+                    $actual[$relative] = $true
+                }
             }
         }
         if ($actual.Count -ne $expected.Count) { throw 'runtime-file-set-invalid' }
@@ -926,10 +939,32 @@ function Invoke-AntiwordInstallerSelfTest {
         if (-not (Test-AntiwordRuntime -RuntimeRoot $managed -FixturePath $fixture)) {
             throw ('repaired-runtime-' + $script:AntiwordFailure)
         }
+        $managedMapping = Join-Path $managed 'share\antiword'
+        $externalMapping = Join-Path $stateFull 'valid-external-antiword-mapping'
+        Move-Item -LiteralPath $managedMapping -Destination $externalMapping
+        try {
+            New-Item -ItemType Junction -Path $managedMapping -Target $externalMapping | Out-Null
+            if (Test-AntiwordRuntime -RuntimeRoot $managed -FixturePath $fixture) {
+                throw 'nested-runtime-junction-was-accepted'
+            }
+            if ($script:AntiwordFailure -ne 'runtime-link-rejected') {
+                throw ('nested-runtime-junction-wrong-failure-' + $script:AntiwordFailure)
+            }
+        } finally {
+            if (Test-Path -LiteralPath $managedMapping) {
+                [IO.Directory]::Delete($managedMapping)
+            }
+            if (Test-Path -LiteralPath $externalMapping) {
+                Move-Item -LiteralPath $externalMapping -Destination $managedMapping
+            }
+        }
+        if (-not (Test-AntiwordRuntime -RuntimeRoot $managed -FixturePath $fixture)) {
+            throw ('junction-restored-runtime-' + $script:AntiwordFailure)
+        }
         $script:Root = Join-Path $stateFull 'missing-package\'
         New-Item -ItemType Directory -Path $script:Root -Force | Out-Null
         if (Install-VerifiedAntiwordRuntime) { throw 'missing-bundle-reported-success' }
-        Write-Host 'Antiword installer self-test passed: verify, install, idempotency, corruption rejection, repair and missing-bundle failure.'
+        Write-Host 'Antiword installer self-test passed: verify, install, idempotency, corruption rejection, repair, nested reparse rejection and missing-bundle failure.'
     } finally {
         $script:Root = $priorRoot
         $script:Log = $priorLog
