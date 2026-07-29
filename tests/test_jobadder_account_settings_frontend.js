@@ -191,7 +191,9 @@ async function signOutIsConfirmedSuccessOrderedAndFailureVisible() {
         context.window._jaToken = !!payload.connected;
       },
       clearJALocalAccountState() { events.push('clear-local'); },
-      resetTheSpiderPreviewCaches() { events.push('clear-spider'); },
+      clearTheSpiderJobAdderAccountState() { events.push('clear-spider-account'); },
+      clearPPCJobAdderAccountState() { events.push('clear-ppc-account'); return Promise.resolve(); },
+      invalidateOneNoteJobAdderMatches() { events.push('clear-onenote-account'); },
       refreshIntegrationDiagnostics() { events.push('refresh'); return Promise.resolve(); },
       showToast(message, kind) { events.push('toast:' + kind + ':' + message); },
       Error,
@@ -219,7 +221,9 @@ async function signOutIsConfirmedSuccessOrderedAndFailureVisible() {
   assert.strictEqual(success.events.filter(item => item.startsWith('toast:ok:')).length, 1);
   assert.ok(success.events.includes('toast:ok:Signed out from JobAdder in CV Studio'));
   assert.ok(success.events.includes('clear-local'));
-  assert.ok(success.events.includes('clear-spider'));
+  assert.ok(success.events.includes('clear-spider-account'));
+  assert.ok(success.events.includes('clear-ppc-account'));
+  assert.ok(success.events.includes('clear-onenote-account'));
   assert.ok(success.events.includes('refresh'));
 
   const failure = await run({
@@ -230,8 +234,53 @@ async function signOutIsConfirmedSuccessOrderedAndFailureVisible() {
   assert.strictEqual(failure.result, false);
   assert.strictEqual(failure.token, true);
   assert.ok(!failure.events.includes('clear-local'));
-  assert.ok(!failure.events.includes('clear-spider'));
+  assert.ok(!failure.events.includes('clear-spider-account'));
+  assert.ok(!failure.events.includes('clear-ppc-account'));
+  assert.ok(!failure.events.includes('clear-onenote-account'));
   assert.strictEqual(failure.events.filter(item => item.startsWith('toast:err:')).length, 1);
+}
+
+function tenantBoundBrowserStateInvalidationIsComplete() {
+  const spider = functionSource(html, 'clearTheSpiderJobAdderAccountState');
+  [
+    '_theSpiderSearchRunSeq',
+    'resetTheSpiderPreviewCaches',
+    '_theSpiderLastResults=[]',
+    '_theSpiderSearchContext=null',
+    "getElementById('theSpiderSearchBody')",
+  ].forEach(marker => assert.ok(spider.includes(marker), 'crawler cleanup missing: ' + marker));
+
+  const oneNote = functionSource(html, 'invalidateOneNoteJobAdderMatches');
+  [
+    '_oneNoteJobAdderAccountSeq',
+    "candidate_id = ''",
+    'raw_match = null',
+    'matched_name',
+    'selected = false',
+    'oneNoteRenderRows',
+  ].forEach(marker => assert.ok(oneNote.includes(marker), 'OneNote cleanup missing: ' + marker));
+  const lookup = functionSource(html, 'oneNoteLookupCandidateForRow');
+  assert.ok(lookup.includes('_oneNoteJobAdderAccountSeq'));
+  assert.ok(lookup.includes('jobAdderAccountInvalidated'));
+
+  const ppc = functionSource(html, 'clearPPCJobAdderAccountState');
+  [
+    '_ppcAccountRunSeq',
+    '_ppcItems=[]',
+    '_ppcMemoryCache={}',
+    'ppcCacheClearPersistent',
+  ].forEach(marker => assert.ok(ppc.includes(marker), 'PPC cleanup missing: ' + marker));
+  assert.ok(functionSource(html, 'ppcCacheClearPersistent').includes('PPC_CACHE_FALLBACK_STORE'));
+  const cacheKey = functionSource(html, 'ppcCacheKeyFor');
+  assert.ok(cacheKey.includes('_jaAccountCacheNamespace'));
+  const publicInfo = functionSource(html, 'applyJAPublicInfo');
+  assert.ok(publicInfo.includes('previousAccountCacheNamespace'));
+  assert.ok(publicInfo.includes('nextAccountCacheNamespace'));
+  assert.ok(publicInfo.includes('previousAccountCacheNamespace !== nextAccountCacheNamespace'));
+  assert.ok(functionSource(html, 'jaAccountCacheNamespace').includes('account_cache_namespace'));
+  assert.ok(!functionSource(html, 'saveJobAdderSettings').includes('skipAccountStateInvalidation:true'));
+  assert.ok(functionSource(html, 'signOutJobAdder').includes('skipAccountStateInvalidation:true'));
+  assert.ok(/PPC_CACHE_SCHEMA\s*=\s*5\b/.test(html));
 }
 
 function everyConnectionSurfaceUsesSharedRenderer() {
@@ -260,6 +309,7 @@ const cases = [
   ['changed Client ID cannot reuse old saved secret', changedClientIdCannotReuseOldSavedSecret],
   ['local account state clears without forgetting Client ID', localAccountStateIsClearedWithoutForgettingClientId],
   ['sign-out success ordering and failure visibility', signOutIsConfirmedSuccessOrderedAndFailureVisible],
+  ['tenant-bound browser state invalidation is complete', tenantBoundBrowserStateInvalidationIsComplete],
   ['all connection surfaces use the shared renderer', everyConnectionSurfaceUsesSharedRenderer],
 ];
 

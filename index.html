@@ -1420,7 +1420,7 @@
 <div class="app">
   <div class="header" style="position:relative;">
     <div>
-      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.242 (Offline) by The 郭 Lab</span></h1>
+      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.243 (Offline) by The 郭 Lab</span></h1>
 
     </div>
     <div class="header-tools">
@@ -3429,6 +3429,7 @@ var JA_TOKEN_URL     = 'https://id.jobadder.com/connect/token';
 
 window._jaClientSecretConfigured = false;
 window._jaConfiguredClientId = '';
+window._jaAccountCacheNamespace = '';
 function getJAClientId() {
   var field = document.getElementById('settingsJobAdderClientId');
   if (field && field.value.trim()) return field.value.trim();
@@ -3448,10 +3449,29 @@ function updateJASecretFieldHint() {
   var clientId = idField ? idField.value.trim() : getJAClientId();
   field.placeholder = hasJASavedSecretFor(clientId) ? 'Saved securely · paste to replace' : 'Client secret';
 }
-function applyJAPublicInfo(info) {
+function jaAccountCacheNamespace(info) {
   info = info || {};
+  if (!info.connected) return '';
+  var material = String(info.account_cache_namespace || '').trim();
+  if (!/^[a-f0-9]{64}$/i.test(material)) return '';
+  return 'ja' + material.toLowerCase();
+}
+function applyJAPublicInfo(info, options) {
+  info = info || {};
+  options = options || {};
+  var previousAccountCacheNamespace = String(window._jaAccountCacheNamespace || '');
+  var nextAccountCacheNamespace = jaAccountCacheNamespace(info);
   window._jaClientSecretConfigured = !!info.client_secret_configured;
   window._jaConfiguredClientId = String(info.client_id || '');
+  window._jaAccountCacheNamespace = nextAccountCacheNamespace;
+  if (!options.skipAccountStateInvalidation && previousAccountCacheNamespace
+      && previousAccountCacheNamespace !== nextAccountCacheNamespace) {
+    if (typeof clearTheSpiderJobAdderAccountState === 'function') clearTheSpiderJobAdderAccountState();
+    if (typeof invalidateOneNoteJobAdderMatches === 'function') invalidateOneNoteJobAdderMatches();
+    if (typeof clearPPCJobAdderAccountState === 'function') {
+      Promise.resolve(clearPPCJobAdderAccountState()).catch(function(){});
+    }
+  }
   var idField = document.getElementById('settingsJobAdderClientId');
   if (idField) idField.value = window._jaConfiguredClientId || getJAClientId();
   if (window._jaConfiguredClientId) {
@@ -3672,10 +3692,12 @@ async function signOutJobAdder() {
     });
     var data = await response.json().catch(function(){return {};});
     if (!response.ok || !data.ok || data.connected) throw new Error(data.error || 'JobAdder sign-out failed');
-    applyJAPublicInfo(data);
+    applyJAPublicInfo(data, {skipAccountStateInvalidation:true});
     renderJAConnectionState(data);
     clearJALocalAccountState();
-    resetTheSpiderPreviewCaches();
+    clearTheSpiderJobAdderAccountState();
+    invalidateOneNoteJobAdderMatches();
+    await clearPPCJobAdderAccountState();
     await refreshIntegrationDiagnostics();
     showToast('Signed out from JobAdder in CV Studio', 'ok');
     return true;
@@ -6590,7 +6612,7 @@ var _cvStudioPhase2bSettingsStartupPromise=cvStudioHydrateBrowserSettings();
 function exportCvStudioLocalData(){
   var settings=cvStudioLocalDataSettingsSnapshot(false);
   var records={onenote_transfer_records:(typeof oneNoteRecordsLoad==='function'?oneNoteRecordsLoad():[]),onenote_saved_links:(typeof oneNoteReadSavedLinks==='function'?oneNoteReadSavedLinks():[])};
-  var payload={product:'CV Studio local data',version:'v24.6.242',schema:1,exportedAt:new Date().toISOString(),includes:['PPC metadata and preferences','saved OneNote links and parser preferences','OneNote transfer record history (private application data)','invoice recipient/settings and draft links','CV alignment and navigation preferences','AI routing/provider selections without API keys'],settings:settings,records:records};
+  var payload={product:'CV Studio local data',version:'v24.6.243',schema:1,exportedAt:new Date().toISOString(),includes:['PPC metadata and preferences','saved OneNote links and parser preferences','OneNote transfer record history (private application data)','invoice recipient/settings and draft links','CV alignment and navigation preferences','AI routing/provider selections without API keys'],settings:settings,records:records};
   var blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='cv_studio_local_data_'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(url);a.remove();},0);showToast('Non-secret local data exported.','ok');
 }
 function cvStudioPersistImportedLocalData(payload){
@@ -6749,7 +6771,7 @@ function cvLockedTabLabel() {
 // Unlocks persist across normal browser/app restarts for the same installed build,
 // but deliberately reset after a new CV Studio version is installed. This keeps the
 // lock in place after upgrades while avoiding repeated prompts during daily use.
-var LOCK_UNLOCK_VERSION = 'v24.6.242';
+var LOCK_UNLOCK_VERSION = 'v24.6.243';
 function versionedUnlockKey(base) {
   return base + '_' + String(LOCK_UNLOCK_VERSION || '').replace(/[^0-9A-Za-z]+/g, '_');
 }
@@ -10790,6 +10812,21 @@ function copyTheSpiderReport() {
   if (!txt.trim()) { showToast('No AI Crawler report to copy yet', 'err'); return; }
   navigator.clipboard.writeText(txt).then(function(){ showToast('AI Crawler report copied', 'ok'); }).catch(function(){ showToast('Copy failed', 'err'); });
 }
+function clearTheSpiderJobAdderAccountState() {
+  window._theSpiderSearchRunSeq = (Number(window._theSpiderSearchRunSeq) || 0) + 1;
+  resetTheSpiderPreviewCaches();
+  clearTabRunState('thespider');
+  ackBrowserActivityForTab('thespider');
+  ackBrowserActivityFailedForTab('thespider');
+  var searchOutput = document.getElementById('theSpiderSearchOutput');
+  if (searchOutput) searchOutput.classList.remove('show');
+  var searchBody = document.getElementById('theSpiderSearchBody');
+  if (searchBody) searchBody.innerHTML = '';
+  var status = document.getElementById('theSpiderStatus');
+  if (status) status.textContent = '';
+  window._theSpiderLastResults=[];
+  window._theSpiderSearchContext=null;
+}
 function clearTheSpider() {
   window._theSpiderSearchRunSeq = (Number(window._theSpiderSearchRunSeq) || 0) + 1;
   resetTheSpiderPreviewCaches();
@@ -13159,6 +13196,7 @@ function aiCrawlerLockPayload() { return aiCrawlerIsUnlocked() ? AI_CRAWLER_LOCK
 
 // ── OneNote → JobAdder Screening Call Notes ────────────────────────────────
 var _oneNoteRows = [];
+window._oneNoteJobAdderAccountSeq = 0;
 var ONE_NOTE_RECORD_KEY = 'cv_studio_onenote_transfer_records_v1';
 var ONE_NOTE_SALARY_AI_KEY = 'cv_studio_onenote_salary_ai_enabled_v1';
 var ONE_NOTE_SPELLING_CORRECTION_KEY = 'cvstudio_onenote_spelling_correction_v1';
@@ -14175,8 +14213,14 @@ function oneNoteSyncVisibleInputs() {
 }
 async function oneNoteLookupCandidateForRow(row) {
   if (!row || !oneNoteValidCandidateEmail(row.email)) return false;
+  var accountSeq = Number(window._oneNoteJobAdderAccountSeq) || 0;
   var r = await fetchWithTimeout('/jobadder/search_candidate?email=' + encodeURIComponent(row.email), {}, 16000);
   var d = await r.json().catch(function(){ return {}; });
+  if ((Number(window._oneNoteJobAdderAccountSeq) || 0) !== accountSeq) {
+    var invalidated = new Error('JobAdder account changed while matching. Match again after reconnecting.');
+    invalidated.jobAdderAccountInvalidated = true;
+    throw invalidated;
+  }
   if (!r.ok) throw new Error(d.error || d.detail || ('JobAdder search failed: ' + r.status));
   var items = oneNoteCandidateItems(d);
   var match = items[0] || null;
@@ -14204,6 +14248,7 @@ async function oneNoteMatchRow(idx) {
     showToast(ok ? 'Candidate matched' : 'No JobAdder candidate found for this email', ok ? 'ok' : 'info');
     return ok;
   } catch(e) {
+    if (e && e.jobAdderAccountInvalidated) return false;
     row.status = 'err'; row.statusText = (e.message || 'Match failed').split('\n')[0]; row.selected = false; oneNoteRenderRows();
     showToast(e.message || 'Candidate match failed', 'err');
     return false;
@@ -15390,6 +15435,7 @@ async function oneNoteParseAndMatch() {
     try {
       await oneNoteLookupCandidateForRow(row);
     } catch(e) {
+      if (e && e.jobAdderAccountInvalidated) return false;
       row.status = 'err'; row.statusText = (e.message || 'Match failed').split('\n')[0]; row.selected = false;
     }
     oneNoteRenderRows();
@@ -15781,6 +15827,28 @@ function oneNoteClear() {
   if (summary) summary.textContent = 'No notes parsed yet.';
   oneNoteRenderRows();
 }
+function invalidateOneNoteJobAdderMatches() {
+  window._oneNoteJobAdderAccountSeq = (Number(window._oneNoteJobAdderAccountSeq) || 0) + 1;
+  _oneNoteRows.forEach(function(row) {
+    row.candidate_id = '';
+    row.raw_match = null;
+    row.matched_name = '';
+    row.no_match_found = false;
+    row.selected = false;
+    row.browser_bridge = null;
+    row.activity_url = '';
+    row.retransfer_ready = false;
+    row.status = 'warn';
+    row.statusText = oneNoteValidCandidateEmail(row.email)
+      ? 'JobAdder signed out · Match again after reconnecting'
+      : 'Add email to match';
+  });
+  var summary = document.getElementById('oneNoteSummary');
+  if (summary && _oneNoteRows.length) {
+    summary.textContent = 'JobAdder signed out. Reconnect, then Parse & Match again.';
+  }
+  oneNoteRenderRows();
+}
 
 // ── PPC / Post Placement Care ───────────────────────────────────────────────
 var PPC_META_STORE = 'cvstudio_ppc_meta_v1';
@@ -15795,7 +15863,7 @@ var PPC_OUTLOOK_LEGACY_TOKEN_STORE = 'cvstudio_ppc_outlook_ms_token_v1';
 var PPC_OUTLOOK_DEVICE_STORE = 'cvstudio_ppc_outlook_ms_device_v1';
 var PPC_OUTLOOK_CLIENT_STORE = 'cvstudio_ppc_outlook_ms_client_v1';
 var PPC_OUTLOOK_DRAFT_STORE = 'cvstudio_ppc_outlook_drafts_v1';
-var PPC_CACHE_SCHEMA = 4;
+var PPC_CACHE_SCHEMA = 5;
 var PPC_PAGE_SIZE = 100;
 var _ppcItems = [];
 var _ppcBaseFiltered = [];
@@ -15808,6 +15876,7 @@ var _ppcUiRestored = false;
 var _ppcSavedUiState = null;
 var _ppcActiveQueryKey = '';
 var _ppcMemoryCache = {};
+var _ppcAccountRunSeq = 0;
 var _ppcKpiFilter = '';
 var _ppcSelectedPlacementId = '';
 var _ppcOutlookConnected = false;
@@ -16408,7 +16477,7 @@ function ppcOpenColumnMenu(event){
 function ppcCloseColumnMenu(){var menu=document.getElementById('ppcColumnMenu');if(menu)menu.classList.remove('open');}
 
 function ppcCacheKeyFor(from,to,approved){
-  return ['schema'+PPC_CACHE_SCHEMA,String(from||'')||'*',String(to||'')||'*',approved?'approved':'all'].join('|');
+  return ['schema'+PPC_CACHE_SCHEMA,'account'+String(window._jaAccountCacheNamespace||'none'),String(from||'')||'*',String(to||'')||'*',approved?'approved':'all'].join('|');
 }
 function ppcCacheQueryKey(){
   var from=String((document.getElementById('ppcFrom')||{}).value||''),to=String((document.getElementById('ppcTo')||{}).value||''),approved=!!((document.getElementById('ppcApprovedOnly')||{}).checked);
@@ -16440,20 +16509,67 @@ function ppcCacheOpen(){
 function ppcCacheFallbackLoad(key){try{var d=JSON.parse(localStorage.getItem(PPC_CACHE_FALLBACK_STORE)||'{}');return d&&d.key===key?d:null;}catch(e){return null;}}
 function ppcCacheFallbackSave(record){try{var allItems=(record.items||[]),copy=Object.assign({schema:PPC_CACHE_SCHEMA},record,{items:allItems.slice(0,500),complete:allItems.length<=500&&record.complete!==false});localStorage.setItem(PPC_CACHE_FALLBACK_STORE,JSON.stringify(copy));}catch(e){}}
 async function ppcCacheGet(key){
+  var expectedNamespace=String(window._jaAccountCacheNamespace||''),expectedRunSeq=Number(_ppcAccountRunSeq||0);
+  if(!expectedNamespace)return null;
   if(_ppcMemoryCache[key])return _ppcMemoryCache[key];
   try{
     var db=await ppcCacheOpen();
     var found=await new Promise(function(resolve){var tx=db.transaction(PPC_CACHE_OBJECT_STORE,'readonly'),req=tx.objectStore(PPC_CACHE_OBJECT_STORE).get(key);req.onsuccess=function(){resolve(req.result||null);};req.onerror=function(){resolve(null);};tx.oncomplete=function(){db.close();};});
+    if(expectedNamespace!==String(window._jaAccountCacheNamespace||'')||expectedRunSeq!==Number(_ppcAccountRunSeq||0))return null;
     if(found && Number(found.schema||0)!==PPC_CACHE_SCHEMA) found=null;
     if(found)_ppcMemoryCache[key]=found;
     return found;
-  }catch(e){var fallback=ppcCacheFallbackLoad(key);if(fallback)_ppcMemoryCache[key]=fallback;return fallback;}
+  }catch(e){
+    if(expectedNamespace!==String(window._jaAccountCacheNamespace||'')||expectedRunSeq!==Number(_ppcAccountRunSeq||0))return null;
+    var fallback=ppcCacheFallbackLoad(key);if(fallback)_ppcMemoryCache[key]=fallback;return fallback;
+  }
 }
 async function ppcCachePut(record){
+  var expectedNamespace=String(window._jaAccountCacheNamespace||''),expectedRunSeq=Number(_ppcAccountRunSeq||0);
+  if(!expectedNamespace)return false;
   record=Object.assign({schema:PPC_CACHE_SCHEMA},record||{});
+  if(String(record.key||'').indexOf('account'+expectedNamespace+'|')<0)return false;
   _ppcMemoryCache[record.key]=record;
   ppcCacheFallbackSave(record);
-  try{var db=await ppcCacheOpen();await new Promise(function(resolve,reject){var tx=db.transaction(PPC_CACHE_OBJECT_STORE,'readwrite');tx.objectStore(PPC_CACHE_OBJECT_STORE).put(record);tx.oncomplete=resolve;tx.onerror=function(){reject(tx.error);};});db.close();}catch(e){}
+  try{
+    var db=await ppcCacheOpen();
+    if(expectedNamespace!==String(window._jaAccountCacheNamespace||'')||expectedRunSeq!==Number(_ppcAccountRunSeq||0)){db.close();return false;}
+    await new Promise(function(resolve,reject){var tx=db.transaction(PPC_CACHE_OBJECT_STORE,'readwrite');tx.objectStore(PPC_CACHE_OBJECT_STORE).put(record);tx.oncomplete=resolve;tx.onerror=function(){reject(tx.error);};});
+    db.close();
+  }catch(e){}
+  return true;
+}
+function ppcCacheClearPersistent(){
+  try{localStorage.removeItem(PPC_CACHE_FALLBACK_STORE);}catch(e){}
+  return ppcCacheOpen().then(function(db){
+    return new Promise(function(resolve){
+      var tx=db.transaction(PPC_CACHE_OBJECT_STORE,'readwrite');
+      tx.objectStore(PPC_CACHE_OBJECT_STORE).clear();
+      tx.oncomplete=function(){db.close();resolve(true);};
+      tx.onerror=function(){try{db.close();}catch(e){}resolve(false);};
+      tx.onabort=function(){try{db.close();}catch(e){}resolve(false);};
+    });
+  }).catch(function(){return false;});
+}
+async function clearPPCJobAdderAccountState(){
+  _ppcAccountRunSeq = Number(_ppcAccountRunSeq || 0) + 1;
+  _ppcItems=[];
+  _ppcBaseFiltered=[];
+  _ppcFiltered=[];
+  _ppcMemoryCache={};
+  _ppcActiveQueryKey='';
+  _ppcLoadedAt=0;
+  _ppcSelectedPlacementId='';
+  _ppcInvoicePreviewPlacementId='';
+  _ppcInvoicePreviewMessage=null;
+  _ppcDraftBusy={};
+  ppcCloseInvoicePreview();
+  await ppcCacheClearPersistent();
+  ppcPopulateFilters();
+  ppcApplyFilters(true);
+  var status=document.getElementById('ppcStatus');
+  if(status)status.textContent='JobAdder signed out · reconnect to load placements';
+  return true;
 }
 function ppcSetRange(mode, loadRange, saveState) {
   _ppcRangeMode = mode || 'year';
@@ -16572,6 +16688,8 @@ function ppcLoadedMessage(record,prefix){
   return msg;
 }
 async function ppcLoadCachedRange() {
+  var accountNamespace=String(window._jaAccountCacheNamespace||''),accountRunSeq=Number(_ppcAccountRunSeq||0);
+  if(!accountNamespace)return false;
   var key=ppcCacheQueryKey(),record=await ppcCacheGet(key);
   var from=String((document.getElementById('ppcFrom')||{}).value||''),to=String((document.getElementById('ppcTo')||{}).value||''),approved=!!((document.getElementById('ppcApprovedOnly')||{}).checked);
   if((!record||!Array.isArray(record.items)||record.complete===false)&&(from||to)){
@@ -16581,6 +16699,7 @@ async function ppcLoadCachedRange() {
       await ppcCachePut(record);
     }
   }
+  if(accountRunSeq!==Number(_ppcAccountRunSeq||0)||accountNamespace!==String(window._jaAccountCacheNamespace||''))return false;
   if(!record||!Array.isArray(record.items)||record.complete===false)return false;
   _ppcActiveQueryKey=key;_ppcItems=record.items;_ppcLoadedAt=Number(record.loadedAt||0);
   ppcPopulateFilters();ppcApplyFilters(false);
@@ -16594,6 +16713,8 @@ async function ppcUseCachedRangeOrFetch(){
 }
 async function ppcRefresh(force) {
   if (_ppcLoadingNow) return;
+  var accountNamespace=String(window._jaAccountCacheNamespace||''),accountRunSeq=Number(_ppcAccountRunSeq||0);
+  if(!window._jaToken||!accountNamespace){ppcSetConnected(false);return false;}
   _ppcLoadingNow=true;
   ppcUiSave();
   var btn=document.getElementById('ppcRefreshBtn'), loading=document.getElementById('ppcLoading'), wrap=document.getElementById('ppcTableWrap');
@@ -16613,13 +16734,16 @@ async function ppcRefresh(force) {
     } catch(infoErr) {}
     var r=await fetch('/jobadder/ppc/placements',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({start_date:from,end_date:to,approved_only:approved,force:!!force,max_records:20000,detail_limit:20000})});
     var d=await r.json().catch(function(){return {};});
+    if(accountRunSeq!==Number(_ppcAccountRunSeq||0)||accountNamespace!==String(window._jaAccountCacheNamespace||''))return false;
     if(!r.ok) throw new Error(d.error || d.detail || ('JobAdder PPC error '+r.status));
     _ppcItems=Array.isArray(d.items)?d.items:[];
     _ppcLoadedAt=Date.now();_ppcActiveQueryKey=ppcCacheQueryKey();
     var cacheRecord={key:_ppcActiveQueryKey,items:_ppcItems,loadedAt:_ppcLoadedAt,truncated:!!d.truncated,complete:d.complete!==false,detailsComplete:d.details_complete!==false,totalCount:Number(d.total_count||_ppcItems.length),max_records:d.max_records||20000,warning:d.warning||'',typeDiagnostics:d.type_diagnostics||[]};
     if(cacheRecord.complete){
       await ppcCachePut(cacheRecord);
+      if(accountRunSeq!==Number(_ppcAccountRunSeq||0)||accountNamespace!==String(window._jaAccountCacheNamespace||''))return false;
       if(!from&&!to)await ppcCacheDerivedRangesFromAllTime(cacheRecord,approved);
+      if(accountRunSeq!==Number(_ppcAccountRunSeq||0)||accountNamespace!==String(window._jaAccountCacheNamespace||''))return false;
     }
     ppcSetConnected(true);ppcPopulateFilters();ppcApplyFilters(true);
     var msg='Loaded '+_ppcItems.length+(Number(d.total_count||0)&&Number(d.total_count)!==_ppcItems.length?' of '+Number(d.total_count):'')+' placement'+(_ppcItems.length===1?'':'s')+' from JobAdder';
@@ -16744,10 +16868,20 @@ async function ppcInit(){
     document.addEventListener('keydown',function(e){if(e.key==='Escape'){ppcCloseKpiMenu();ppcCloseColumnMenu();ppcCloseInvoicePreview();}});
     window.addEventListener('resize',function(){ppcCloseKpiMenu();ppcCloseColumnMenu();});window.addEventListener('scroll',function(){ppcCloseKpiMenu();ppcCloseColumnMenu();},true);
   }
-  fetch('/jobadder/api_info').then(function(r){return r.json();}).then(function(d){
-    applyJAPublicInfo(d || {});renderJAConnectionState(d || {});
-    if(d && d.api_url){var m=String(d.api_url).match(/https?:\/\/(?:api\.([a-z0-9]+\.jobadder\.com)|([a-z0-9]+)api\.jobadder\.com)/i);if(m){window._jaWebBase='https://'+(m[1]||(m[2]+'.jobadder.com'));try{localStorage.setItem('ja_web_base',window._jaWebBase);}catch(e){}}}
-  }).catch(function(){ppcSetConnected(false);});
+  var jobAdderInfo=null;
+  try{
+    var jobAdderInfoResponse=await fetch('/jobadder/api_info');
+    jobAdderInfo=await jobAdderInfoResponse.json();
+  }catch(e){
+    jobAdderInfo={connected:false};
+  }
+  applyJAPublicInfo(jobAdderInfo || {});renderJAConnectionState(jobAdderInfo || {});
+  if(!(jobAdderInfo&&jobAdderInfo.connected)){
+    await clearPPCJobAdderAccountState();
+    ppcSetConnected(false);
+    return;
+  }
+  if(jobAdderInfo.api_url){var m=String(jobAdderInfo.api_url).match(/https?:\/\/(?:api\.([a-z0-9]+\.jobadder\.com)|([a-z0-9]+)api\.jobadder\.com)/i);if(m){window._jaWebBase='https://'+(m[1]||(m[2]+'.jobadder.com'));try{localStorage.setItem('ja_web_base',window._jaWebBase);}catch(e){}}}
   var key=ppcCacheQueryKey();
   if(_ppcItems.length&&_ppcActiveQueryKey===key){ppcPopulateFilters();ppcApplyFilters(false);return;}
   var found=await ppcLoadCachedRange();

@@ -107,10 +107,16 @@ Antiword, Blind JD, storage, persistent-job and AI-cost fixtures remain green.
 Automated tests used controlled fixtures and no live JobAdder transport. During
 the one local visual DOM check, the source server discovered an already
 configured protected JobAdder connection on this Windows account; its existing
-startup behavior issued one read-only work-type list request. No JobAdder
-write, upload, OAuth login, paid call, cache product change, secret display or
-credential export occurred. This is recorded because the milestone requested
-no live JobAdder contact.
+startup behavior issued one read-only
+`GET /jobadder/lists?name=worktype`. No JobAdder write, upload, OAuth login,
+paid call, secret display or credential export occurred. No retained evidence
+contains the response payload, account identifier, tenant information, token,
+secret, private URL or candidate data, and no temporary diagnostic output
+remained in Git or release artifacts. The retained evidence does not prove
+that the existing browser handler left localStorage key
+`ja_perm_work_type_id` unchanged. v24.6.243 therefore narrows the earlier
+application-state claim to this supportable disclosure. This is recorded
+because the milestone requested no live JobAdder contact.
 
 ## Preserved boundaries
 

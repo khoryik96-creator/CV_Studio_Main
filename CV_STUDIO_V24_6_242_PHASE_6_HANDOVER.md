@@ -58,7 +58,10 @@ localStorage. The user-facing success text is exactly:
   SQLite schema 10 and journal schema 1.
 - The QA report records one read-only live JobAdder work-type request that
   occurred during local visual inspection; no remote write, upload, OAuth
-  login, paid call or credential exposure occurred.
+  login, paid call or credential exposure occurred. The retained evidence
+  cannot prove that the browser did not refresh its local
+  `ja_perm_work_type_id` key; the v24.6.243 corrective QA record carries this
+  narrower disclosure.
 
 ## Preserved release history
 

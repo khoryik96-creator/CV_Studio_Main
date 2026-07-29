@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+import threading
 import unittest
 from unittest import mock
 
@@ -55,9 +56,11 @@ class JobAdderAccountSettingsSignOutTests(unittest.TestCase):
         self.original_transition = getattr(
             app, "_ja_account_transition_in_progress", False
         )
+        self.original_ppc_detail_cache = dict(app._ppc_detail_cache)
         app._ja_creds_store.clear()
         app._ja_oauth_sessions.clear()
         app._spider_resume_text_cache_clear()
+        app._ppc_detail_cache.clear()
         if hasattr(app, "_ja_critical_writes_active"):
             app._ja_critical_writes_active = 0
         if hasattr(app, "_ja_account_transition_in_progress"):
@@ -69,6 +72,8 @@ class JobAdderAccountSettingsSignOutTests(unittest.TestCase):
         app._ja_oauth_sessions.clear()
         app._ja_oauth_sessions.update(self.original_sessions)
         app._spider_resume_text_cache_clear()
+        app._ppc_detail_cache.clear()
+        app._ppc_detail_cache.update(self.original_ppc_detail_cache)
         if hasattr(app, "_ja_critical_writes_active"):
             app._ja_critical_writes_active = self.original_write_count
         if hasattr(app, "_ja_account_transition_in_progress"):
@@ -148,6 +153,9 @@ class JobAdderAccountSettingsSignOutTests(unittest.TestCase):
             "payload": {"fixture": True}
         }
         app._SPIDER_PREVIEW_PAYLOAD_CACHE_BYTES = 123
+        app._ppc_detail_cache[
+            ("fixture-old-account-namespace", "fixture-placement", "fixture-updated")
+        ] = {"candidate_name": "Fixture Tenant Candidate"}
         saved = []
 
         def secure_save(name, record):
@@ -199,6 +207,7 @@ class JobAdderAccountSettingsSignOutTests(unittest.TestCase):
         self.assertEqual(len(app._SPIDER_RESUME_TEXT_CACHE), 0)
         self.assertEqual(len(app._SPIDER_PREVIEW_PAYLOAD_CACHE), 0)
         self.assertEqual(app._SPIDER_PREVIEW_PAYLOAD_CACHE_BYTES, 0)
+        self.assertEqual(app._ppc_detail_cache, {})
         cancelled.assert_called_once_with()
         payload_text = response.get_data(as_text=True)
         for forbidden in (
@@ -226,6 +235,155 @@ class JobAdderAccountSettingsSignOutTests(unittest.TestCase):
             "oauth_state",
         ):
             self.assertNotIn(forbidden_key, info_payload)
+
+    def test_late_oauth_callback_cannot_recreate_session_after_sign_out(self):
+        app._ja_creds_store.update(
+            {
+                "client_id": "fixture-client-id",
+                "client_secret": "fixture-client-secret",
+            }
+        )
+        app._ja_oauth_sessions["fixture-late-session"] = {
+            "state": "fixture-late-state",
+            "client_id": "fixture-client-id",
+            "client_secret": "fixture-client-secret",
+            "created_at": app.time.time(),
+            "expires_at": app.time.time() + 600,
+            "status": "pending",
+        }
+        exchange_started = threading.Event()
+        release_exchange = threading.Event()
+        callback_result = {}
+
+        def exchange_token(_params):
+            exchange_started.set()
+            self.assertTrue(release_exchange.wait(5))
+            return {
+                "access_token": "fixture-late-access",
+                "refresh_token": "fixture-late-refresh",
+                "api": "https://api.eu.jobadder.com/v2",
+                "expires_in": 3300,
+            }
+
+        def run_callback():
+            with app.app.test_client() as callback_client:
+                callback_result["response"] = callback_client.get(
+                    "/jobadder/callback"
+                    "?code=fixture-late-code&state=fixture-late-state"
+                )
+
+        with mock.patch.object(
+            app, "_ja_exchange_token", side_effect=exchange_token
+        ), mock.patch.object(
+            app, "_cv_secure_save", return_value="fixture-protected-store"
+        ), mock.patch.object(
+            app, "_spider_preview_cancel_persistent_work", return_value=17
+        ):
+            callback_thread = threading.Thread(target=run_callback)
+            callback_thread.start()
+            self.assertTrue(exchange_started.wait(5))
+            signed_out = self.client.post(
+                "/jobadder/sign_out",
+                json={},
+                headers=self._headers("jobadder-late-callback-sign-out"),
+            )
+            self.assertEqual(signed_out.status_code, 200)
+            release_exchange.set()
+            callback_thread.join(5)
+
+        self.assertFalse(callback_thread.is_alive())
+        self.assertIn(callback_result["response"].status_code, {400, 409})
+        self.assertEqual(app._ja_oauth_sessions, {})
+        self.assertNotIn("access_token", app._ja_creds_store)
+        self.assertNotIn("refresh_token", app._ja_creds_store)
+        poll = self.client.post(
+            "/jobadder/poll_token",
+            json={"login_session_id": "fixture-late-session"},
+            headers=self._headers("jobadder-late-callback-poll"),
+        )
+        self.assertEqual(poll.status_code, 404)
+
+    def test_ppc_detail_cache_is_account_namespaced(self):
+        app._ja_creds_store.update(
+            {
+                "client_id": "fixture-client-id",
+                "client_secret": "fixture-client-secret",
+                "access_token": "fixture-access-token",
+                "api_url": "https://api.eu.jobadder.com/v2",
+                "cache_namespace": "fixture-account-a",
+            }
+        )
+
+        def collection(_token, placement_type, _params, _max_records):
+            rows = (
+                [
+                    {
+                        "placementId": "fixture-placement",
+                        "type": "Permanent",
+                        "startDate": "2026-01-01",
+                        "updatedAt": "2026-01-02T00:00:00Z",
+                    }
+                ]
+                if placement_type == "Permanent"
+                else []
+            )
+            return rows, {
+                "type": placement_type,
+                "expected": len(rows),
+                "observed_total": len(rows),
+                "returned": len(rows),
+                "pages": 1,
+                "complete": True,
+                "truncated": False,
+                "repeated_page": False,
+                "empty_before_total": False,
+            }
+
+        detail_calls = []
+
+        def detail(_token, path, **_kwargs):
+            self.assertEqual(path, "placements/fixture-placement")
+            namespace = app._ja_creds_store["cache_namespace"]
+            detail_calls.append(namespace)
+            suffix = "A" if namespace == "fixture-account-a" else "B"
+            return {
+                "placementId": "fixture-placement",
+                "type": "Permanent",
+                "startDate": "2026-01-01",
+                "updatedAt": "2026-01-02T00:00:00Z",
+                "candidate": {
+                    "candidateId": "fixture-candidate-" + suffix.lower(),
+                    "firstName": "Tenant",
+                    "lastName": suffix,
+                },
+            }
+
+        with mock.patch.object(
+            app, "_ppc_fetch_type_collection", side_effect=collection
+        ), mock.patch.object(app, "_ppc_get_json", side_effect=detail):
+            first = self.client.post(
+                "/jobadder/ppc/placements",
+                json={"approved_only": False},
+                headers=self._headers("jobadder-ppc-account-a"),
+            )
+            self.assertEqual(first.status_code, 200)
+            self.assertEqual(first.get_json()["items"][0]["candidate_name"], "Tenant A")
+
+            app._ja_creds_store["cache_namespace"] = "fixture-account-b"
+            second = self.client.post(
+                "/jobadder/ppc/placements",
+                json={"approved_only": False},
+                headers=self._headers("jobadder-ppc-account-b"),
+            )
+            self.assertEqual(second.status_code, 200)
+            self.assertEqual(
+                second.get_json()["items"][0]["candidate_name"], "Tenant B"
+            )
+
+        self.assertEqual(
+            detail_calls,
+            ["fixture-account-a", "fixture-account-b"],
+        )
 
     def test_sign_out_vault_failure_is_visible_and_rolls_back_credentials(self):
         original = {
@@ -471,6 +629,14 @@ class JobAdderAccountSettingsSignOutTests(unittest.TestCase):
             )
         self.assertNotEqual(
             app._ja_creds_store["cache_namespace"], "fixture-old-namespace"
+        )
+        new_public_namespace = app._ja_public_info()["account_cache_namespace"]
+        app._ja_creds_store["cache_namespace"] = "fixture-other-namespace"
+        other_public_namespace = app._ja_public_info()["account_cache_namespace"]
+        self.assertNotEqual(new_public_namespace, other_public_namespace)
+        self.assertNotEqual(
+            other_public_namespace,
+            app._ja_creds_store["cache_namespace"],
         )
         self.assertEqual(len(app._SPIDER_RESUME_TEXT_CACHE), 0)
 

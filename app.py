@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.242"
+_INSTALL_RECEIPT_VERSION = "v24.6.243"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -304,7 +304,7 @@ from cvstudio_antiword import (
     run_verified_antiword as _run_verified_antiword_runtime,
 )
 
-_CVSTUDIO_VERSION = "v24.6.242"
+_CVSTUDIO_VERSION = "v24.6.243"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -2891,17 +2891,60 @@ def _ja_cleanup_sessions():
                 _ja_oauth_sessions.pop(sid, None)
 
 
+def _ja_finish_oauth_exchange_if_active(session_id, updates, remove_keys=()):
+    """Finish only the still-live exchange claimed before remote transport."""
+    with _ja_oauth_lock:
+        current = _ja_oauth_sessions.get(session_id)
+        if not isinstance(current, dict) or current.get("status") != "exchanging":
+            return False
+        current = dict(current)
+        current.update(dict(updates or {}))
+        for key in remove_keys:
+            current.pop(key, None)
+        _ja_oauth_sessions[session_id] = current
+        return True
+
+
 def _ja_public_info():
     with _ja_store_lock:
+        connected = bool(str(_ja_creds_store.get("access_token") or "").strip())
+        private_cache_namespace = str(
+            _ja_creds_store.get("cache_namespace") or ""
+        ).strip()
+        if connected and not private_cache_namespace:
+            legacy_material = "|".join(
+                str(_ja_creds_store.get(key) or "")
+                for key in (
+                    "api_url",
+                    "client_id",
+                    "refresh_token",
+                    "access_token",
+                )
+            )
+            private_cache_namespace = hashlib.sha256(
+                legacy_material.encode("utf-8", errors="ignore")
+            ).hexdigest()
+        browser_cache_namespace = (
+            hashlib.sha256(
+                ("cvstudio-browser-cache-v1|" + private_cache_namespace).encode(
+                    "utf-8", errors="ignore"
+                )
+            ).hexdigest()
+            if connected and private_cache_namespace
+            else ""
+        )
         return {
             "api_url": _ja_normalize_api_base(_ja_creds_store.get("api_url")),
-            "connected": bool(str(_ja_creds_store.get("access_token") or "").strip()),
+            "connected": connected,
             "expires_at": int(_ja_creds_store.get("expires_at") or 0),
             "client_id": str(_ja_creds_store.get("client_id") or ""),
             "needs_reconnect": bool(_ja_creds_store.get("_needs_reconnect")),
             # The browser needs to know whether reconnect can reuse the secret,
             # but the secret itself must never be returned to JavaScript.
             "client_secret_configured": bool(str(_ja_creds_store.get("client_secret") or "").strip()),
+            # This one-way, connection-scoped value lets browser caches reject
+            # cross-account reuse without exposing the protected namespace.
+            "account_cache_namespace": browser_cache_namespace,
             "storage": str(_ja_creds_store.get("_storage") or "backend_secure_store"),
         }
 
@@ -2957,6 +3000,10 @@ def _ja_apply_token(token, client_id=None, client_secret=None, clear_spider_cach
             if clear_spider_cache:
                 try:
                     _spider_resume_text_cache_clear()
+                except Exception:
+                    pass
+                try:
+                    _ppc_detail_cache_clear()
                 except Exception:
                     pass
         except Exception:
@@ -3068,6 +3115,7 @@ def jobadder_store_creds():
                                 raise
                         _ja_oauth_sessions.clear()
                     _spider_resume_text_cache_clear()
+                    _ppc_detail_cache_clear()
             else:
                 with _ja_store_lock:
                     previous = dict(_ja_creds_store)
@@ -3149,32 +3197,47 @@ def jobadder_callback():
         # Keep the token bound to this one login session until the initiating
         # browser tab claims it. A second callback cannot overwrite the active
         # JobAdder account before its own tab finishes polling.
-        with _ja_oauth_lock:
-            current = _ja_oauth_sessions.get(session_id) or {}
-            current.update({
+        completed = _ja_finish_oauth_exchange_if_active(
+            session_id,
+            {
                 "status": "complete",
                 "token": token,
                 "activated": False,
                 "expires_at": time.time() + 300,
-            })
-            _ja_oauth_sessions[session_id] = current
+            },
+        )
+        if not completed:
+            return "<h3>JobAdder login was cancelled or expired. Start Connect again.</h3>", 409
         return """<html><body style="font-family:sans-serif;text-align:center;padding-top:80px;">
             <h2>&#x2705; JobAdder Connected!</h2><p>You can close this window and return to CV Studio.</p>
             <script>window.close();</script></body></html>"""
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode(errors="replace")[:800]
-        with _ja_oauth_lock:
-            current = _ja_oauth_sessions.get(session_id) or {}
-            current.update({"status": "error", "error": "JobAdder token exchange failed", "detail": detail, "expires_at": time.time() + 300})
-            current.pop("client_secret", None)
-            _ja_oauth_sessions[session_id] = current
+        active = _ja_finish_oauth_exchange_if_active(
+            session_id,
+            {
+                "status": "error",
+                "error": "JobAdder token exchange failed",
+                "detail": detail,
+                "expires_at": time.time() + 300,
+            },
+            remove_keys=("client_secret",),
+        )
+        if not active:
+            return "<h3>JobAdder login was cancelled or expired. Start Connect again.</h3>", 409
         return "<h3>JobAdder token exchange failed.</h3><pre>{}</pre>".format(html.escape(detail)), exc.code
     except Exception as exc:
-        with _ja_oauth_lock:
-            current = _ja_oauth_sessions.get(session_id) or {}
-            current.update({"status": "error", "error": str(exc), "expires_at": time.time() + 300})
-            current.pop("client_secret", None)
-            _ja_oauth_sessions[session_id] = current
+        active = _ja_finish_oauth_exchange_if_active(
+            session_id,
+            {
+                "status": "error",
+                "error": str(exc),
+                "expires_at": time.time() + 300,
+            },
+            remove_keys=("client_secret",),
+        )
+        if not active:
+            return "<h3>JobAdder login was cancelled or expired. Start Connect again.</h3>", 409
         return "<h3>JobAdder token exchange failed.</h3>", 500
 
 
@@ -3340,6 +3403,7 @@ def jobadder_sign_out():
                         raise
                 _ja_oauth_sessions.clear()
             _spider_resume_text_cache_clear()
+            _ppc_detail_cache_clear()
         return jsonify({
             "ok": True,
             "connected": False,
@@ -7639,7 +7703,7 @@ def _ja_spa_browser_bridge(candidate_id, fields, note_text="", email="", salary_
     payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
     compact_payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     script = """(async () => {
-  const helperVersion = 'v24.6.242';
+  const helperVersion = 'v24.6.243';
   const candidateId = %s;
   const payload = %s;
   const profilePath = %s;
@@ -10231,7 +10295,7 @@ def jobadder_onenote_activity_diagnostic():
     generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Candidate Activity Read Test",
-        "cv_studio_version": "v24.6.242",
+        "cv_studio_version": "v24.6.243",
         "generated_utc": generated,
         "safety": {
             "read_only": True,
@@ -10442,7 +10506,7 @@ def jobadder_onenote_activity_create_diagnostic():
     if confirmation != "CREATE ONE MAX LOW TEST":
         return jsonify({"error": "Type CREATE ONE MAX LOW TEST exactly before running the controlled POST."}), 400
 
-    guard_key = ("v24.6.242", candidate_id)
+    guard_key = ("v24.6.243", candidate_id)
     if guard_key in _JA_ACTIVITY_CREATE_DIAG_USED:
         return jsonify({"error": "The one-shot controlled POST has already been run in this CV Studio session. Restarting is intentionally required before any repeat test."}), 409
     # Mark before the network call so a timeout/double-click cannot emit a second POST.
@@ -10471,7 +10535,7 @@ def jobadder_onenote_activity_create_diagnostic():
     generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Official AddCandidateActivity Create Test",
-        "cv_studio_version": "v24.6.242",
+        "cv_studio_version": "v24.6.243",
         "generated_utc": generated,
         "candidate_fixture": {
             "name": "Max Low",
@@ -23233,6 +23297,11 @@ _ppc_detail_cache = {}
 _ppc_detail_cache_lock = threading.Lock()
 
 
+def _ppc_detail_cache_clear():
+    with _ppc_detail_cache_lock:
+        _ppc_detail_cache.clear()
+
+
 def _ppc_int(value, default=None):
     try:
         return int(value)
@@ -23385,7 +23454,11 @@ def _ppc_normalize_placement(item):
 def jobadder_ppc_placements():
     """Read JobAdder placements for PPC. This route never writes to JobAdder."""
     data = request.get_json(silent=True) or {}
-    token = str(_ja_creds_store.get("access_token") or "").strip()
+    with _ja_store_lock:
+        token = str(_ja_creds_store.get("access_token") or "").strip()
+        account_cache_namespace = str(
+            _ja_creds_store.get("cache_namespace") or ""
+        ).strip()
     if not token:
         return jsonify({"error": "Connect to JobAdder first"}), 401
     start_date = _ppc_clean_date(data.get("start_date"))
@@ -23488,9 +23561,13 @@ def jobadder_ppc_placements():
         network_ids = []
         for pid in target_ids:
             base = by_id.get(pid) or {}
-            cache_key = (pid, str(base.get("updated_at") or ""))
+            cache_key = (
+                account_cache_namespace,
+                pid,
+                str(base.get("updated_at") or ""),
+            )
             cached = None
-            if not force_details:
+            if account_cache_namespace and not force_details:
                 with _ppc_detail_cache_lock:
                     cached = _ppc_detail_cache.get(cache_key)
             if isinstance(cached, dict):
@@ -23518,9 +23595,31 @@ def jobadder_ppc_placements():
                                 for key, value in enriched.items():
                                     if value not in (None, "", [], {}):
                                         base[key] = value
-                                cache_key = (str(pid), str(base.get("updated_at") or ""))
-                                with _ppc_detail_cache_lock:
-                                    _ppc_detail_cache[cache_key] = dict(enriched)
+                                cache_key = (
+                                    account_cache_namespace,
+                                    str(pid),
+                                    str(base.get("updated_at") or ""),
+                                )
+                                with _ja_store_lock:
+                                    namespace_is_current = bool(
+                                        account_cache_namespace
+                                        and str(
+                                            _ja_creds_store.get(
+                                                "cache_namespace"
+                                            )
+                                            or ""
+                                        ).strip()
+                                        == account_cache_namespace
+                                        and str(
+                                            _ja_creds_store.get("access_token")
+                                            or ""
+                                        ).strip()
+                                    )
+                                    if namespace_is_current:
+                                        with _ppc_detail_cache_lock:
+                                            _ppc_detail_cache[cache_key] = dict(
+                                                enriched
+                                            )
                                 detail_enriched += 1
                         else:
                             detail_failures += 1

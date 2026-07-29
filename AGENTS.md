@@ -65,14 +65,48 @@
   `POST /jobadder/sign_out`, centralizes JobAdder application setup in
   Settings, preserves the legacy disconnect contract and keeps Phase 6
   inactive.
-- Current completed private owner/source release: **CV Studio v24.6.242
+- Its four independent-review account-isolation findings were corrected in
+  **CV Studio v24.6.243**: a late OAuth callback cannot recreate a signed-out
+  session, PPC caches are connection-scoped and transition-safe, AI Crawler
+  search/preview state is invalidated, and OneNote JobAdder matches cannot
+  survive or complete across an account transition.
+- Current completed private owner/source release: **CV Studio v24.6.243
   (Windows x64 only)**.
 - Phases 1, 2A, 2B, 3, 4, 5A and 5B are complete.
 - Phase 6 remains inactive.
-- v24.6.242 makes no Intel or Apple Silicon macOS support claim and produced no
+- v24.6.243 makes no Intel or Apple Silicon macOS support claim and produced no
   macOS artifact. macOS users remain on v24.6.239 until a separately
   authorized native-validation milestone. Phase 6, unrelated AI Crawler
   behavior changes and all backburner items remain inactive.
+
+## Completed scope: JobAdder account-isolation corrective
+
+v24.6.243 preserves the bounded v24.6.242 account-management milestone and
+corrects only its four independent-review findings. OAuth callback completion
+is conditional on the original exchange session still being live, so sign-out
+cannot be undone by a late token response. Backend PPC detail entries use the
+protected account cache namespace, and browser PPC data uses a one-way,
+connection-scoped namespace with in-flight read/write invalidation.
+
+Successful sign-out and a direct account replacement invalidate AI Crawler
+search results, preview/prefetch state, OneNote candidate matches and PPC
+memory, localStorage and IndexedDB cache state. In-flight OneNote/PPC reads
+cannot repopulate state after the account sequence changes. The existing
+critical-write tracker, unsafe-write non-replay behavior, protected Client
+ID/Secret rules and `/jobadder/disconnect` contract remain unchanged.
+
+The recorded v24.6.242 diagnostic request was one read-only
+`GET /jobadder/lists?name=worktype`. It performed no remote write, upload,
+OAuth login or paid action and no sensitive response/account/candidate data
+entered Git, QA evidence, logs or release artifacts. The retained evidence
+cannot prove that the browser's existing handler did not update the local
+`ja_perm_work_type_id` key, so v24.6.243 corrects the earlier over-broad
+application-state claim rather than repeating it.
+
+This corrective preserves exactly 108 routes, five guards, 18 compatibility
+signatures, SQLite schema 10, Phase 5A journal schema 1, Phase 1–5B contracts,
+mandatory Windows Antiword behavior and the v24.6.239 macOS baseline. Phase 6
+remains inactive.
 
 ## Completed scope: pre-Phase-6 JobAdder account management and settings
 
@@ -95,8 +129,10 @@ contains duplicate credential fields or the JobAdder settings gear. All
 connection indicators share the authoritative backend status. Controlled
 automated tests use no live JobAdder credentials or network calls. The
 v24.6.242 QA report records one read-only work-type lookup triggered by
-pre-existing protected credentials during the local visual check; no write,
-upload, OAuth login, paid call or credential exposure occurred.
+pre-existing protected credentials during the local visual check; no remote
+write, upload, OAuth login, paid call or credential exposure occurred. The
+v24.6.243 corrective record clarifies that the retained evidence cannot prove
+the browser's work-type selection key was unchanged locally.
 
 This milestone preserves the five security guards, 18 compatibility
 signatures, SQLite schema 10, Phase 5A journal schema 1, unsafe-write

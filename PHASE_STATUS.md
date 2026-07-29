@@ -3,8 +3,8 @@
 ## Release state
 
 - Approved baseline: v24.6.217
-- Completed release: v24.6.242 (Windows x64 only)
-- Previous completed release: v24.6.241 (Windows x64 only)
+- Completed release: v24.6.243 (Windows x64 only)
+- Previous completed release: v24.6.242 (Windows x64 only)
 - Phase 2B source baseline: v24.6.219
 - Phase 2B baseline Git commit: `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`
 - Phase 3 source baseline: v24.6.222
@@ -17,11 +17,75 @@
 - Phase 5B baseline Git commit: `327858799f17d880e37c740f71dfe321ea7bde0a`
 - Working branch: `codex/jobadder-account-settings-signout`
 - Active phase: none; Phase 6 remains inactive
-- Completed private owner/source release: v24.6.242 (Windows x64 only)
-- Status: separately authorized pre-Phase-6 JobAdder account-management and
-  settings milestone completed from exact v24.6.241 master commit
-  `21408d0457c9e4c5db5018c39333c32420d54339`; macOS remains on v24.6.239
+- Completed private owner/source release: v24.6.243 (Windows x64 only)
+- Status: four findings from the single independent review of v24.6.242 are
+  corrected without broadening the pre-Phase-6 JobAdder milestone; macOS
+  remains on v24.6.239
 - Current stop: before Phase 6, handoff or merge
+
+## v24.6.243 JobAdder account-isolation corrective
+
+### Review boundary and corrections
+
+- The one independent review compared exact master
+  `21408d0457c9e4c5db5018c39333c32420d54339` with exact v24.6.242 head
+  `e7c86bc0020302723ea845cd046d6592f67263d2` and reported four findings.
+  No second reviewer or repeated review-and-fix loop was started.
+- OAuth token exchange can finish only while the session claimed before
+  transport is still live and `exchanging`; a sign-out that clears the session
+  wins over a late callback response.
+- Backend PPC detail entries include the protected account cache namespace.
+  Browser PPC memory, fallback localStorage and IndexedDB cache entries are
+  connection-scoped, cleared on transition and protected from in-flight
+  read/write repopulation.
+- Sign-out and direct account replacement invalidate AI Crawler search results,
+  preview/prefetch state and active run sequence; OneNote candidate matches and
+  in-flight lookups are invalidated; PPC rows, previews, filters and caches are
+  cleared.
+- Protected Client ID/Secret retention, changed-Client-ID rejection,
+  same-Client-ID secret reuse, durable failure visibility, six critical write
+  routes, unsafe non-replay and the exact `/jobadder/disconnect` response
+  remain.
+
+### Recorded lookup disclosure
+
+- The prior diagnostic was one read-only
+  `GET /jobadder/lists?name=worktype`; it was not a write, upload, OAuth login
+  or paid action and did not alter protected credentials.
+- No live response payload, account identifier, tenant information, token,
+  secret, private URL or candidate data was retained in Git history, QA
+  evidence, logs or release artifacts. Temporary diagnostic output was absent
+  from the reviewed tree and release evidence.
+- The retained evidence cannot establish that the existing browser handler did
+  not set or refresh localStorage key `ja_perm_work_type_id`. The v24.6.242
+  QA/handover claim is corrected to this narrower, supportable statement.
+
+### Preserved contracts
+
+- Exactly 108 Flask routes remain; subtracting `/jobadder/sign_out` produces
+  the unchanged 107-route v24.6.241 contract.
+- Five ordered guards, 18 compatibility signatures, SQLite schema 10 and Phase
+  5A journal schema 1 remain.
+- Antiword, Blind JD, AI-cost, Phase 1–5B and unsafe-provider non-replay
+  contracts remain unchanged. This repository has no separately defined Phase
+  5C contract.
+- v24.6.243 remains Windows-x64-only. No Intel or Apple Silicon macOS artifact
+  or claim is produced; macOS users remain on v24.6.239.
+
+### Corrective validation
+
+- Selected Python contract set: 30 passed; all six frontend fixture files
+  passed; local source smoke passed 24 assertions.
+- Tracked syntax passed for 30 Python, 24 JavaScript, five Bash/command and five
+  PowerShell files. Owner Windows-x64 preflight, genuine Antiword extraction,
+  vetted `adm-zip`, repository consistency and whitespace checks passed.
+- The complete regression suite was not rerun, following the owner's explicit
+  post-review restriction.
+- Native Windows-x64 protected build and package-only smoke passed. The
+  colleague archive SHA-256 is
+  `d876c604e8f9121a1314a84f0940d981e5fc910714f5d1fa63098d6280406b6c`.
+- All five v24.6.242 protected-output files rehashed unchanged after the new
+  build.
 
 ## Completed pre-Phase-6 JobAdder account-management and settings milestone
 
@@ -49,8 +113,10 @@
   Phase 1–5B contracts, mandatory Windows Antiword behavior, cost controls and
   the v24.6.239 macOS baseline remain unchanged. Controlled automated tests
   made no live JobAdder calls. The local visual check triggered one read-only
-  work-type lookup from pre-existing protected credentials; no write, upload,
-  OAuth login, paid call or credential exposure occurred. Phase 6 and all
+  work-type lookup from pre-existing protected credentials; no remote write,
+  upload, OAuth login, paid call or credential exposure occurred. The retained
+  evidence cannot prove the browser's local work-type key was unchanged; the
+  v24.6.243 corrective record supplies that disclosure. Phase 6 and all
   unrelated work remain inactive.
 
 ### Final validation and review

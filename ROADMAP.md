@@ -41,6 +41,10 @@
   settings milestone. It adds only `POST /jobadder/sign_out`, centralizes
   JobAdder application setup in Settings and preserves the legacy disconnect
   contract.
+- v24.6.243 corrects the four v24.6.242 independent-review findings by making
+  OAuth callback completion sign-out-aware and fully isolating/invalidation
+  guarding PPC, AI Crawler and OneNote JobAdder account state. No route,
+  schema, provider-write or Phase 6 scope is added.
 - Phases 1, 2A, 2B, 3, 4, 5A and 5B are complete.
 - No later phase is active. Phase 6 requires a new explicit owner instruction.
 

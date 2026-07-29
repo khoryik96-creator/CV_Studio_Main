@@ -35,12 +35,12 @@ owner_build_tools\BUILD_PROTECTED_WINDOWS.bat
 
 The artifact is written to `protected-output`.
 
-## v24.6.242 platform boundary
+## v24.6.243 platform boundary
 
-v24.6.242 is Windows-x64-only. The private GitHub Actions workflow builds and
+v24.6.243 is Windows-x64-only. The private GitHub Actions workflow builds and
 smoke-tests only Windows x64, and the protected builder rejects macOS targets.
 Do not run the historical Mac builder for this version and do not create or
-claim a v24.6.242 macOS artifact.
+claim a v24.6.243 macOS artifact.
 
 Intel and Apple Silicon native validation is deferred to a separately
 authorized milestone. macOS users remain on the last verified release,
@@ -64,7 +64,7 @@ The private-source ZIP remains the only patch base. Never patch from a colleague
 
 Ad-hoc signing, Gatekeeper/MDM behavior, Apple Developer ID signing and
 notarisation require separate Intel and Apple Silicon native validation. None
-is claimed for v24.6.242.
+is claimed for v24.6.243.
 
 ## Authy limitation
 
@@ -102,7 +102,7 @@ The Windows binary is compiled with no-console mode. Normal launch uses `CV Stud
 
 - The builder seals the two largest proprietary prompt constants in a temporary native compile source. The readable owner source remains the future patch base.
 - The exact adm-zip 0.5.17 runtime folder is bundled and checked against a pinned aggregate SHA-256 tree hash. Native smoke tests deliberately remove `NODE_PATH` so they cannot borrow owner dependencies.
-- Platform artifacts contain only their own platform launchers. For v24.6.242, only the Windows-x64 artifact is authorized. The owner-only title-cache merge utility is not included in colleague packages.
+- Platform artifacts contain only their own platform launchers. For v24.6.243, only the Windows-x64 artifact is authorized. The owner-only title-cache merge utility is not included in colleague packages.
 - Launch and smoke validation require the exact version, package root and instance identity, not only a healthy `/ping` response.
 - Colleague packages keep JobAdder, OneNote, Outlook and AI credentials in native/backend protected storage rather than browser localStorage.
 - JobAdder reconnect can reuse a securely stored Client Secret only for the exact same Client ID. The frontend sees only whether a matching secret is configured and never receives the secret value.
