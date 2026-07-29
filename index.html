@@ -1420,7 +1420,7 @@
 <div class="app">
   <div class="header" style="position:relative;">
     <div>
-      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.241 (Offline) by The 郭 Lab</span></h1>
+      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.242 (Offline) by The 郭 Lab</span></h1>
 
     </div>
     <div class="header-tools">
@@ -1611,10 +1611,27 @@
             <details class="integration-technical" id="settingsOutlookTechnicalDetails"><summary style="font-size:10.5px;color:var(--text3);cursor:pointer;">Technical details</summary><pre id="settingsOutlookTechnicalText">No Microsoft error recorded.</pre></details>
           </div>
 
-          <div class="integration-card">
-            <div class="integration-title"><div><div class="integration-name">JobAdder</div><div class="integration-desc">Candidate, activity and PPC placement connection.</div></div><span class="pill" id="settingsJobAdderStatus">Not checked</span></div>
+          <div class="integration-card wide" id="settingsJobAdderCard" tabindex="-1">
+            <div class="integration-title">
+              <div><div class="integration-name">JobAdder</div><div class="integration-desc">Application setup and protected OAuth connection for candidate, activity, upload, PPC and AI Crawler features.</div></div>
+              <span class="pill" id="settingsJobAdderStatus">Not checked</span>
+            </div>
+            <div class="integration-field-grid">
+              <div><label for="settingsJobAdderClientId" style="font-size:9.5px;font-weight:850;color:var(--text3);">Application / Client ID</label><input id="settingsJobAdderClientId" type="text" placeholder="JobAdder application Client ID" autocomplete="off" oninput="updateJASecretFieldHint()"></div>
+              <div><label for="settingsJobAdderClientSecret" style="font-size:9.5px;font-weight:850;color:var(--text3);">Client Secret</label><input id="settingsJobAdderClientSecret" type="password" placeholder="Client secret" data-saved-placeholder="Saved securely · paste to replace" autocomplete="new-password"></div>
+              <div><label for="settingsJobAdderRedirectUri" style="font-size:9.5px;font-weight:850;color:var(--text3);">Redirect URI</label><input id="settingsJobAdderRedirectUri" type="text" readonly value="http://localhost:5000/jobadder/callback"></div>
+              <div><label style="font-size:9.5px;font-weight:850;color:var(--text3);">Developer setup</label><div class="integration-status" style="margin-top:6px;"><a href="https://developer.jobadder.com" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">developer.jobadder.com ↗</a></div></div>
+            </div>
             <div class="integration-status" id="settingsJobAdderDetail">Connection status: —</div>
-            <div class="integration-actions"><button class="kbtn" type="button" onclick="refreshIntegrationDiagnostics()">Refresh status</button><button class="kbtn" type="button" onclick="closeSettingsPanel();switchTab('format')">Open Format CV</button></div>
+            <div class="integration-desc" id="settingsJobAdderSecretStatus">Secure Client Secret: not checked</div>
+            <div class="integration-actions">
+              <button class="kbtn" type="button" onclick="saveJobAdderSettings()">Save settings</button>
+              <button class="kbtn" type="button" id="settingsJobAdderConnectBtn" onclick="jobAdderLogin()">Connect</button>
+              <button class="kbtn" type="button" id="settingsJobAdderReconnectBtn" onclick="jobAdderLogin()" style="display:none;">Reconnect</button>
+              <button class="kbtn" type="button" onclick="refreshIntegrationDiagnostics()">Refresh status</button>
+              <button class="kbtn" type="button" id="settingsJobAdderSignOutBtn" onclick="signOutJobAdder()">Sign out</button>
+            </div>
+            <div class="integration-desc">A blank Client Secret reuses the securely saved secret only when the Client ID is unchanged. Changing the Client ID requires its corresponding replacement secret. Saved secrets are never returned to this page.</div>
           </div>
 
           <div class="integration-card">
@@ -2209,14 +2226,11 @@
             style="font-size:12px;padding:4px 12px;height:30px;white-space:nowrap;">
             🔗 Connect JobAdder
           </button>
-          <button class="sec" onclick="toggleJASettings()" title="JobAdder Settings"
-            style="font-size:13px;padding:4px 8px;height:30px;">⚙</button>
         </div>
       </div>
       <!-- JobAdder sub-bar — sits below card-head, above output -->
       <div id="jaBar" style="display:none;padding:8px 18px;border-bottom:1px solid var(--border);
            background:var(--surface);flex-direction:column;gap:8px;">
-        <!-- Email + upload row -->
         <div id="jaPanel" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <input id="jaEmail" type="email" placeholder=""
             style="font-size:12px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;
@@ -2228,26 +2242,6 @@
           </button>
           <span id="jaStatus" style="font-size:11px;color:var(--text3);"></span>
           <span id="jaConnHint" style="font-size:11px;color:#c05621;display:none;">⚠ Connect JobAdder first (🔗 button above)</span>
-        </div>
-        <!-- Settings row -->
-        <div id="jaSettingsPanel" style="display:none;flex-direction:column;gap:8px;">
-          <div style="font-size:12px;font-weight:600;color:var(--text2);">JobAdder API Credentials</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-            <input id="jaClientId" type="text" placeholder="Client ID" oninput="updateJASecretFieldHint()"
-              style="font-size:12px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;
-                     background:var(--card);color:var(--text1);width:200px;height:30px;"/>
-            <input id="jaClientSecret" type="password" placeholder="Client secret" autocomplete="new-password"
-              style="font-size:12px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;
-                     background:var(--card);color:var(--text1);width:200px;height:30px;"/>
-            <button class="kbtn" onclick="saveJACredentials()"
-              style="height:30px;font-size:12px;">Save</button>
-          </div>
-          <div style="font-size:11px;color:var(--text3);">
-            Get your credentials at
-            <a href="https://developer.jobadder.com" target="_blank" rel="noopener noreferrer"
-               style="color:var(--accent);">developer.jobadder.com</a>
-            — set redirect URI to <code>http://localhost:5000/jobadder/callback</code>
-          </div>
         </div>
       </div>
       <div class="card-body">
@@ -3435,17 +3429,21 @@ var JA_TOKEN_URL     = 'https://id.jobadder.com/connect/token';
 
 window._jaClientSecretConfigured = false;
 window._jaConfiguredClientId = '';
-function getJAClientId()     { try { return localStorage.getItem('ja_client_id') || ''; } catch(e){ return ''; } }
+function getJAClientId() {
+  var field = document.getElementById('settingsJobAdderClientId');
+  if (field && field.value.trim()) return field.value.trim();
+  try { return localStorage.getItem('ja_client_id') || ''; } catch(e){ return ''; }
+}
 function getJAClientSecret() {
-  var field = document.getElementById('jaClientSecret');
+  var field = document.getElementById('settingsJobAdderClientSecret');
   return field ? field.value.trim() : '';
 }
 function hasJASavedSecretFor(clientId) {
   return !!window._jaClientSecretConfigured && String(window._jaConfiguredClientId || '') === String(clientId || '').trim();
 }
 function updateJASecretFieldHint() {
-  var field = document.getElementById('jaClientSecret');
-  var idField = document.getElementById('jaClientId');
+  var field = document.getElementById('settingsJobAdderClientSecret');
+  var idField = document.getElementById('settingsJobAdderClientId');
   if (!field) return;
   var clientId = idField ? idField.value.trim() : getJAClientId();
   field.placeholder = hasJASavedSecretFor(clientId) ? 'Saved securely · paste to replace' : 'Client secret';
@@ -3454,43 +3452,122 @@ function applyJAPublicInfo(info) {
   info = info || {};
   window._jaClientSecretConfigured = !!info.client_secret_configured;
   window._jaConfiguredClientId = String(info.client_id || '');
+  var idField = document.getElementById('settingsJobAdderClientId');
+  if (idField) idField.value = window._jaConfiguredClientId || getJAClientId();
   if (window._jaConfiguredClientId) {
     try {
-      if (!getJAClientId()) localStorage.setItem('ja_client_id', window._jaConfiguredClientId);
+      localStorage.setItem('ja_client_id', window._jaConfiguredClientId);
     } catch(e) {}
   }
   updateJASecretFieldHint();
 }
 
-function toggleJASettings() {
-  var bar    = document.getElementById('jaBar');
-  var panel  = document.getElementById('jaSettingsPanel');
-  var isOpen = panel.style.display === 'flex';
-  // Always show the bar when toggling settings
-  bar.style.display = 'flex';
-  panel.style.display = isOpen ? 'none' : 'flex';
-  if (!isOpen) {
-    document.getElementById('jaClientId').value = getJAClientId();
-    updateJASecretFieldHint();
-  }
+function jaSafeTenantLabel(info) {
+  try {
+    var parsed = new URL(String((info || {}).api_url || ''));
+    return parsed.hostname && parsed.hostname.endsWith('.jobadder.com') ? parsed.hostname : '';
+  } catch(e) { return ''; }
 }
 
-function saveJACredentials() {
-  var id  = document.getElementById('jaClientId').value.trim();
-  var sec = document.getElementById('jaClientSecret').value.trim();
-  var canReuse = hasJASavedSecretFor(id);
-  if (!id || (!sec && !canReuse)) {
-    showToast(!id ? 'Enter the JobAdder Client ID' : 'Enter the JobAdder Client Secret', 'err');
-    return;
+function renderJAConnectionState(info) {
+  info = info || {};
+  var connected = !!info.connected;
+  var reconnect = !!info.needs_reconnect;
+  window._jaToken = connected;
+  var login = document.getElementById('btnJALogin');
+  if (login) {
+    login.textContent = connected ? '✅ JobAdder Connected' : (reconnect ? '↻ Reconnect JobAdder' : '🔗 Connect JobAdder');
+    login.style.color = connected ? '#2f855a' : '';
+  }
+  var email = document.getElementById('jaEmail');
+  var upload = document.getElementById('btnJA');
+  var hint = document.getElementById('jaConnHint');
+  var status = document.getElementById('jaStatus');
+  if (upload) upload.disabled = !connected || !String((email || {}).value || '').trim();
+  if (hint) hint.style.display = connected ? 'none' : 'inline';
+  if (status) status.textContent = connected ? 'JobAdder connected' : (reconnect ? 'Reconnect required' : 'JobAdder not connected');
+
+  var batchBadge = document.getElementById('batchJAConnBadge');
+  if (batchBadge) {
+    batchBadge.textContent = connected ? ('☁ JA: auto-upload ' + (window._jaAutoUpload === false ? 'off' : 'on')) : (reconnect ? '⚠ JA: reconnect required' : '⚠ JA: not connected');
+    batchBadge.style.cssText = 'font-size:11px;font-weight:500;border-radius:20px;padding:2px 10px;margin-left:4px;color:' + (connected ? '#2f855a' : '#c05621') + ';background:' + (connected ? '#f0fff4' : '#fffaf0') + ';border:1px solid ' + (connected ? '#9ae6b4' : '#fbd38d') + ';';
+  }
+  var batchStatus = document.getElementById('batchJAStatus');
+  if (batchStatus) batchStatus.style.display = connected ? 'inline' : 'none';
+
+  var oneNote = document.getElementById('oneNoteConnBadge');
+  if (oneNote) {
+    oneNote.textContent = connected ? 'JobAdder Connected' : (reconnect ? 'Reconnect JobAdder' : 'Connect JobAdder first');
+    oneNote.style.background = connected ? 'rgba(34,197,94,.14)' : 'rgba(245,158,11,.14)';
+  }
+  ppcSetConnected(connected);
+  var spider = document.getElementById('theSpiderBadge');
+  if (spider) {
+    spider.textContent = connected ? 'JobAdder connected' : (reconnect ? 'JobAdder reconnect required' : 'JobAdder not connected');
+    spider.style.color = connected ? '#2f855a' : '#c05621';
+  }
+
+  var settingsBadge = document.getElementById('settingsJobAdderStatus');
+  var settingsDetail = document.getElementById('settingsJobAdderDetail');
+  var secretStatus = document.getElementById('settingsJobAdderSecretStatus');
+  var tenant = jaSafeTenantLabel(info);
+  if (settingsBadge) settingsBadge.textContent = reconnect ? 'Reconnect required' : (connected ? 'Connected' : 'Not connected');
+  if (settingsDetail) settingsDetail.textContent = (reconnect ? 'JobAdder OAuth must be reconnected.' : (connected ? 'JobAdder OAuth connection is available.' : 'JobAdder is signed out in CV Studio.')) + (tenant && connected ? ' Tenant API: ' + tenant + '.' : '');
+  if (secretStatus) secretStatus.textContent = info.client_secret_configured ? 'Secure Client Secret: configured' : 'Secure Client Secret: not configured';
+  var connectBtn = document.getElementById('settingsJobAdderConnectBtn');
+  var reconnectBtn = document.getElementById('settingsJobAdderReconnectBtn');
+  var signOutBtn = document.getElementById('settingsJobAdderSignOutBtn');
+  if (connectBtn) connectBtn.style.display = connected || reconnect ? 'none' : 'inline-flex';
+  if (reconnectBtn) reconnectBtn.style.display = connected || reconnect ? 'inline-flex' : 'none';
+  if (signOutBtn) signOutBtn.disabled = !connected && !reconnect;
+  updateJAUploadConnStatus();
+  updateJACreateConnStatus();
+}
+
+function openJobAdderSettings(message) {
+  setTimeout(function(){
+    var panel = ensureSettingsPanelTopLayer();
+    var backdrop = document.getElementById('settingsBackdrop');
+    if (panel) panel.style.display = 'block';
+    if (backdrop) backdrop.style.display = 'block';
+    if (document.body) document.body.classList.add('settings-open');
+    showSettingsTab('integrations');
+    var card = document.getElementById('settingsJobAdderCard');
+    var detail = document.getElementById('settingsJobAdderDetail');
+    if (message && detail) detail.textContent = message;
+    if (card && card.scrollIntoView) card.scrollIntoView({behavior:'smooth',block:'center'});
+    var field = document.getElementById('settingsJobAdderClientId');
+    if (field) field.focus();
+    refreshIntegrationDiagnostics();
+  }, 0);
+}
+
+async function saveJobAdderSettings() {
+  var id = String((document.getElementById('settingsJobAdderClientId') || {}).value || '').trim();
+  var secretField = document.getElementById('settingsJobAdderClientSecret');
+  var secret = String((secretField || {}).value || '').trim();
+  if (!id || (!secret && !hasJASavedSecretFor(id))) {
+    showToast(!id ? 'Enter the JobAdder Client ID' : 'Enter the JobAdder Client Secret for this Client ID', 'err');
+    return false;
   }
   try {
-    localStorage.setItem('ja_client_id', id);
-    localStorage.removeItem('ja_client_secret');
-  } catch(e) {}
-  document.getElementById('jaSettingsPanel').style.display = 'none';
-  showToast(sec ? 'JobAdder setup ready. Connect to verify and store the secret securely.' : 'Client ID saved. Existing secret remains stored securely.', 'ok');
-  // If already connected show the upload bar, else just hide
-  if (!window._jaToken) document.getElementById('jaBar').style.display = 'none';
+    var response = await fetchWithTimeout('/jobadder/store_creds', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({client_id:id,client_secret:secret,save_only:true})
+    }, 8000);
+    var data = await response.json().catch(function(){return {};});
+    if (!response.ok || !data.ok) throw new Error(data.error || 'Could not save JobAdder settings');
+    if (secretField) secretField.value = '';
+    try { localStorage.setItem('ja_client_id', id); localStorage.removeItem('ja_client_secret'); } catch(e) {}
+    applyJAPublicInfo(data);
+    renderJAConnectionState(data);
+    showToast('JobAdder settings saved securely', 'ok');
+    return true;
+  } catch(e) {
+    showToast(e && e.message ? e.message : 'Could not save JobAdder settings', 'err');
+    return false;
+  }
 }
 
 window._jaToken      = null;   // boolean connection marker; tokens remain backend-only
@@ -3500,10 +3577,26 @@ window._jaDocxBlob   = null;   // set after formatting
 async function jobAdderLogin() {
   var clientId = getJAClientId();
   var clientSecret = getJAClientSecret();
+  if (clientId && !clientSecret && !hasJASavedSecretFor(clientId)) {
+    var enteredClientId = clientId;
+    try {
+      var currentResponse = await fetch('/jobadder/api_info', {cache:'no-store'});
+      var currentInfo = await currentResponse.json().catch(function(){return {};});
+      if (currentResponse.ok) {
+        applyJAPublicInfo(currentInfo);
+        if (String(currentInfo.client_id || '') === enteredClientId) {
+          clientId = enteredClientId;
+        } else {
+          var settingsIdField = document.getElementById('settingsJobAdderClientId');
+          if (settingsIdField) settingsIdField.value = enteredClientId;
+          clientId = enteredClientId;
+        }
+      }
+    } catch(e) {}
+  }
   if (!clientId || (!clientSecret && !hasJASavedSecretFor(clientId))) {
-    showToast('Set your JobAdder Client ID and Secret in ⚙ settings first', 'err');
-    document.getElementById('jaBar').style.display = 'flex';
-    document.getElementById('jaSettingsPanel').style.display = 'flex';
+    openJobAdderSettings('JobAdder application setup is required before connecting. Enter the Client ID and Client Secret, then save or connect.');
+    showToast('Complete JobAdder application setup in Settings → Integrations & Data', 'err');
     return;
   }
   var startRes = await fetchWithTimeout('/jobadder/store_creds', {
@@ -3532,11 +3625,9 @@ async function jobAdderLogin() {
       if (!r.ok) { clearInterval(poll); if(popup)popup.close(); showToast(d.error||'JobAdder login failed','err'); return; }
       if (d.connected) {
         clearInterval(poll); if(popup)popup.close(); window._jaToken=true;
-        window._jaClientSecretConfigured = true;
-        window._jaConfiguredClientId = clientId;
-        var secretField = document.getElementById('jaClientSecret');
+        applyJAPublicInfo(d);
+        var secretField = document.getElementById('settingsJobAdderClientSecret');
         if (secretField) secretField.value = '';
-        updateJASecretFieldHint();
         try {
           ['ja_access_token','ja_refresh_token','ja_token_expiry','ja_client_secret'].forEach(function(k){localStorage.removeItem(k);});
           if (d.api_url) localStorage.setItem('ja_api_url',String(d.api_url).replace(/\/+$/,''));
@@ -3546,9 +3637,8 @@ async function jobAdderLogin() {
           window._jaWebBase=m?'https://'+(m[1]||(m[2]+'.jobadder.com')):'https://app.jobadder.com';
           try{localStorage.setItem('ja_web_base',window._jaWebBase);}catch(e){}
         }
-        updateJAConnectedUI();
-        var bjs=document.getElementById('batchJAStatus'); if(bjs)bjs.style.display='inline';
-        var badge=document.getElementById('batchJAConnBadge'); if(badge){badge.textContent='☁ JA: auto-upload on';badge.style.cssText='font-size:11px;font-weight:500;border-radius:20px;padding:2px 10px;margin-left:4px;color:#2f855a;background:#f0fff4;border:1px solid #9ae6b4;';}
+        updateJAConnectedUI(d);
+        refreshIntegrationDiagnostics();
         showToast('JobAdder connected securely','ok');
       }
     } catch(e) {}
@@ -3556,6 +3646,45 @@ async function jobAdderLogin() {
 }
 
 // ── Step 2: Upload DOCX to JobAdder ──────────────────────────────────
+function clearJALocalAccountState() {
+  try {
+    [
+      'ja_access_token',
+      'ja_refresh_token',
+      'ja_token_expiry',
+      'ja_api_url',
+      'ja_web_base',
+      'ja_perm_work_type_id',
+      'ja_client_secret'
+    ].forEach(function(key){ localStorage.removeItem(key); });
+  } catch(e) {}
+  window._jaWebBase = '';
+  window._jaPermWorkTypeId = null;
+}
+
+async function signOutJobAdder() {
+  if (!window.confirm('Sign out from JobAdder in CV Studio? Your saved application Client ID and Client Secret will be kept securely.')) return false;
+  try {
+    var response = await fetch('/jobadder/sign_out', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:'{}'
+    });
+    var data = await response.json().catch(function(){return {};});
+    if (!response.ok || !data.ok || data.connected) throw new Error(data.error || 'JobAdder sign-out failed');
+    applyJAPublicInfo(data);
+    renderJAConnectionState(data);
+    clearJALocalAccountState();
+    resetTheSpiderPreviewCaches();
+    await refreshIntegrationDiagnostics();
+    showToast('Signed out from JobAdder in CV Studio', 'ok');
+    return true;
+  } catch(e) {
+    showToast(e && e.message ? e.message : 'Could not sign out from JobAdder in CV Studio', 'err');
+    return false;
+  }
+}
+
 async function uploadToJobAdder() {
   var email  = document.getElementById('jaEmail').value.trim();
   var status = document.getElementById('jaStatus');
@@ -3802,7 +3931,7 @@ function showJADialog(email) {
 // ── JobAdder token auto-refresh timer ────────────────────────────────
 setInterval(async function(){
   if(!window._jaToken)return;
-  try{var r=await fetch('/jobadder/refresh_token',{method:'POST'});if(!r.ok&&r.status===401){window._jaToken=null;}}catch(e){}
+  try{var r=await fetch('/jobadder/refresh_token',{method:'POST'}),d=await r.json().catch(function(){return {};});if(r.ok||r.status===401){applyJAPublicInfo(d);renderJAConnectionState(d);}}catch(e){}
 },5*60*1000);
 
 // ── Create Profile Tab ────────────────────────────────────────────────
@@ -6154,16 +6283,21 @@ async function jaProfileUrlAsync(candidateId) {
   try {
     var r=await fetch('/jobadder/api_info',{cache:'no-store'}),d=await r.json();
     applyJAPublicInfo(d);
-    if(d.connected){window._jaToken=true;updateJAConnectedUI();}
+    renderJAConnectionState(d);
+    if(d.connected){updateJAConnectedUI(d);}
     if(d.api_url){var m=String(d.api_url).match(/https?:\/\/(?:api\.([a-z0-9]+\.jobadder\.com)|([a-z0-9]+)api\.jobadder\.com)/i);if(m){window._jaWebBase='https://'+(m[1]||(m[2]+'.jobadder.com'));localStorage.setItem('ja_web_base',window._jaWebBase);}}
   } catch(e) {}
 })();
 
 async function syncTokenToFlask(){ return true; }
 
-function updateJAConnectedUI() {
-  var btn = document.getElementById('btnJALogin');
-  if (btn) { btn.textContent = '✅ JobAdder Connected'; btn.style.color = '#2f855a'; }
+function updateJAConnectedUI(info) {
+  info = Object.assign({
+    connected:true,
+    client_id:window._jaConfiguredClientId || getJAClientId(),
+    client_secret_configured:window._jaClientSecretConfigured
+  }, info || {});
+  renderJAConnectionState(info);
   // Fetch work type list to find Permanent ID
   fetch('/jobadder/lists?name=worktype').then(function(r){ return r.json(); }).then(function(d) {
     var items = d.items || [];
@@ -6173,14 +6307,6 @@ function updateJAConnectedUI() {
       try { localStorage.setItem('ja_perm_work_type_id', perm.workTypeId); } catch(e) {}
     }
   }).catch(function(){});
-  var batchConnBadge = document.getElementById('batchJAConnBadge');
-  if (batchConnBadge) {
-    batchConnBadge.textContent = '☁ JA: auto-upload on';
-    batchConnBadge.style.cssText = 'font-size:11px;font-weight:500;border-radius:20px;padding:2px 10px;margin-left:4px;color:#2f855a;background:#f0fff4;border:1px solid #9ae6b4;';
-  }
-  var bjs = document.getElementById('batchJAStatus');
-  if (bjs) bjs.style.display = 'inline';
-  updateJAUploadConnStatus();
 }
 
 
@@ -6342,8 +6468,7 @@ async function refreshIntegrationDiagnostics(){
       fetch('/ppc/outlook/api_info',{cache:'no-store'}).then(function(r){return r.json();}).catch(function(){return {};})
     ]);
     var ja=results[0]||{},one=results[1]||{},out=results[2]||{};
-    var jaBadge=document.getElementById('settingsJobAdderStatus'),jaDetail=document.getElementById('settingsJobAdderDetail');
-    if(jaBadge)jaBadge.textContent=ja.connected?'Connected':'Not connected';if(jaDetail)jaDetail.textContent=ja.connected?'JobAdder OAuth connection is available.':'Connect JobAdder from Format CV.';
+    applyJAPublicInfo(ja);renderJAConnectionState(ja);
     var oneBadge=document.getElementById('settingsOneNoteIntegrationStatus'),oneDetail=document.getElementById('settingsOneNoteIntegrationDetail');
     if(oneBadge)oneBadge.textContent=one.connected?'Connected':'Not connected';if(oneDetail)oneDetail.textContent=one.connected?'Microsoft OneNote web connection is available.':'Web OneNote is not connected; manual/Desktop modes remain available.';
     _ppcOutlookConnected=!!out.connected;_ppcOutlookAccount=out.account||{};_ppcOutlookStorage=out.storage||'';ppcUpdateOutlookConnectButton();
@@ -6465,7 +6590,7 @@ var _cvStudioPhase2bSettingsStartupPromise=cvStudioHydrateBrowserSettings();
 function exportCvStudioLocalData(){
   var settings=cvStudioLocalDataSettingsSnapshot(false);
   var records={onenote_transfer_records:(typeof oneNoteRecordsLoad==='function'?oneNoteRecordsLoad():[]),onenote_saved_links:(typeof oneNoteReadSavedLinks==='function'?oneNoteReadSavedLinks():[])};
-  var payload={product:'CV Studio local data',version:'v24.6.241',schema:1,exportedAt:new Date().toISOString(),includes:['PPC metadata and preferences','saved OneNote links and parser preferences','OneNote transfer record history (private application data)','invoice recipient/settings and draft links','CV alignment and navigation preferences','AI routing/provider selections without API keys'],settings:settings,records:records};
+  var payload={product:'CV Studio local data',version:'v24.6.242',schema:1,exportedAt:new Date().toISOString(),includes:['PPC metadata and preferences','saved OneNote links and parser preferences','OneNote transfer record history (private application data)','invoice recipient/settings and draft links','CV alignment and navigation preferences','AI routing/provider selections without API keys'],settings:settings,records:records};
   var blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='cv_studio_local_data_'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(url);a.remove();},0);showToast('Non-secret local data exported.','ok');
 }
 function cvStudioPersistImportedLocalData(payload){
@@ -6588,7 +6713,7 @@ function showSettingsTab(name) {
   });
   if (name === 'routing') setTimeout(ensureAiRoutingRowsVisible, 0);
   if (name === 'onenote') setTimeout(oneNoteApiLoadSettings, 0);
-  if (name === 'integrations') { setTimeout(ppcLoadOutlookSettingsPanel, 0); setTimeout(function(){ refreshCvStudioDiagnostics(false); }, 0); setTimeout(refreshOwnerIntegrationStatus, 0); }
+  if (name === 'integrations') { setTimeout(refreshIntegrationDiagnostics, 0); setTimeout(ppcLoadOutlookSettingsPanel, 0); setTimeout(function(){ refreshCvStudioDiagnostics(false); }, 0); setTimeout(refreshOwnerIntegrationStatus, 0); }
   if (name === 'background') setTimeout(renderBackgroundSettings, 0);
   if (name === 'general') setTimeout(renderCvTextAlignmentSetting, 0);
 }
@@ -6624,7 +6749,7 @@ function cvLockedTabLabel() {
 // Unlocks persist across normal browser/app restarts for the same installed build,
 // but deliberately reset after a new CV Studio version is installed. This keeps the
 // lock in place after upgrades while avoiding repeated prompts during daily use.
-var LOCK_UNLOCK_VERSION = 'v24.6.241';
+var LOCK_UNLOCK_VERSION = 'v24.6.242';
 function versionedUnlockKey(base) {
   return base + '_' + String(LOCK_UNLOCK_VERSION || '').replace(/[^0-9A-Za-z]+/g, '_');
 }
@@ -15180,8 +15305,7 @@ function updateOneNoteConnStatus() {
   var badge = document.getElementById('oneNoteConnBadge');
   if (badge) {
     fetch('/jobadder/api_info').then(function(r){ return r.json(); }).then(function(d){
-      badge.textContent = d && d.connected ? 'JobAdder Connected' : 'Connect JobAdder first';
-      badge.style.background = d && d.connected ? 'rgba(34,197,94,.14)' : 'rgba(245,158,11,.14)';
+      applyJAPublicInfo(d || {});renderJAConnectionState(d || {});
     }).catch(function(){ badge.textContent = 'JobAdder unknown'; });
   }
   fetch('/onenote/api_info',{cache:'no-store'}).then(function(r){ return r.json(); }).then(function(d){
@@ -16621,7 +16745,7 @@ async function ppcInit(){
     window.addEventListener('resize',function(){ppcCloseKpiMenu();ppcCloseColumnMenu();});window.addEventListener('scroll',function(){ppcCloseKpiMenu();ppcCloseColumnMenu();},true);
   }
   fetch('/jobadder/api_info').then(function(r){return r.json();}).then(function(d){
-    ppcSetConnected(!!d.connected);
+    applyJAPublicInfo(d || {});renderJAConnectionState(d || {});
     if(d && d.api_url){var m=String(d.api_url).match(/https?:\/\/(?:api\.([a-z0-9]+\.jobadder\.com)|([a-z0-9]+)api\.jobadder\.com)/i);if(m){window._jaWebBase='https://'+(m[1]||(m[2]+'.jobadder.com'));try{localStorage.setItem('ja_web_base',window._jaWebBase);}catch(e){}}}
   }).catch(function(){ppcSetConnected(false);});
   var key=ppcCacheQueryKey();

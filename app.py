@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.241"
+_INSTALL_RECEIPT_VERSION = "v24.6.242"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -201,7 +201,7 @@ if _restart_delay_raw:
         pass
 
 from flask import Flask, request, jsonify, send_from_directory, send_file, g, after_this_request
-import urllib.request, urllib.error, urllib.parse, json, os, subprocess, tempfile, traceback, sys, re, socket, ssl, ast, platform, base64, hashlib, threading, atexit, logging, secrets, plistlib, zipfile, html
+import urllib.request, urllib.error, urllib.parse, json, os, subprocess, tempfile, traceback, sys, re, socket, ssl, ast, platform, base64, hashlib, threading, atexit, logging, secrets, plistlib, zipfile, html, functools
 try:
     import certifi
 except Exception:
@@ -304,7 +304,7 @@ from cvstudio_antiword import (
     run_verified_antiword as _run_verified_antiword_runtime,
 )
 
-_CVSTUDIO_VERSION = "v24.6.241"
+_CVSTUDIO_VERSION = "v24.6.242"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -2822,7 +2822,65 @@ _ja_oauth_sessions = {}
 _ja_oauth_lock = threading.RLock()
 _ja_store_lock = threading.RLock()
 _ja_refresh_lock = threading.Lock()
+_ja_critical_write_state_lock = threading.RLock()
+_ja_critical_writes_active = 0
+_ja_account_transition_in_progress = False
 _JA_SESSION_TTL = 10 * 60
+
+
+def _ja_begin_account_transition():
+    """Prevent sign-out/account replacement from racing an unsafe JA write."""
+    global _ja_account_transition_in_progress
+    with _ja_critical_write_state_lock:
+        if _ja_account_transition_in_progress:
+            return "transition"
+        if _ja_critical_writes_active:
+            return "write"
+        _ja_account_transition_in_progress = True
+        return ""
+
+
+def _ja_end_account_transition():
+    global _ja_account_transition_in_progress
+    with _ja_critical_write_state_lock:
+        _ja_account_transition_in_progress = False
+
+
+def _ja_account_transition_conflict(reason):
+    if reason == "write":
+        return _cvstudio_error_payload(
+            "JOBADDER_WRITE_IN_PROGRESS",
+            "A critical JobAdder write or upload is still in progress. Try Sign Out again after it finishes.",
+            409,
+            retryable=True,
+            action="retry_later",
+        )
+    return _cvstudio_error_payload(
+        "JOBADDER_ACCOUNT_TRANSITION",
+        "Another JobAdder account operation is still in progress.",
+        409,
+        retryable=True,
+        action="retry_later",
+    )
+
+
+def _ja_critical_write_route(route_function):
+    """Track unsafe JA writes without changing their established call contract."""
+    @functools.wraps(route_function)
+    def guarded(*args, **kwargs):
+        global _ja_critical_writes_active
+        with _ja_critical_write_state_lock:
+            if _ja_account_transition_in_progress:
+                return _ja_account_transition_conflict("transition")
+            _ja_critical_writes_active += 1
+        try:
+            return route_function(*args, **kwargs)
+        finally:
+            with _ja_critical_write_state_lock:
+                _ja_critical_writes_active = max(
+                    0, _ja_critical_writes_active - 1
+                )
+    return guarded
 
 
 def _ja_cleanup_sessions():
@@ -2976,18 +3034,82 @@ def jobadder_store_creds():
             client_secret = stored_secret
     if not client_secret:
         return jsonify({"error": "Enter the JobAdder Client Secret. A saved secret can only be reused with the same Client ID."}), 400
+    if bool(data.get("save_only")):
+        with _ja_store_lock:
+            stored_client_id = str(_ja_creds_store.get("client_id") or "").strip()
+        registration_changed = not stored_client_id or not secrets.compare_digest(
+            stored_client_id, client_id
+        )
+        transition_started = False
+        if registration_changed:
+            conflict = _ja_begin_account_transition()
+            if conflict:
+                return _ja_account_transition_conflict(conflict)
+            transition_started = True
+        try:
+            if registration_changed:
+                # A different OAuth application registration cannot inherit any
+                # account/tenant state from the previous registration.
+                with _ja_refresh_lock:
+                    _spider_preview_cancel_persistent_work()
+                    with _ja_oauth_lock:
+                        with _ja_store_lock:
+                            previous = dict(_ja_creds_store)
+                            try:
+                                _ja_creds_store.clear()
+                                _ja_creds_store.update({
+                                    "client_id": client_id,
+                                    "client_secret": client_secret,
+                                })
+                                _ja_save_store()
+                            except Exception:
+                                _ja_creds_store.clear()
+                                _ja_creds_store.update(previous)
+                                raise
+                        _ja_oauth_sessions.clear()
+                    _spider_resume_text_cache_clear()
+            else:
+                with _ja_store_lock:
+                    previous = dict(_ja_creds_store)
+                    try:
+                        _ja_creds_store["client_id"] = client_id
+                        _ja_creds_store["client_secret"] = client_secret
+                        _ja_save_store()
+                    except Exception:
+                        _ja_creds_store.clear()
+                        _ja_creds_store.update(previous)
+                        raise
+            result = _ja_public_info()
+            result["ok"] = True
+            return jsonify(result)
+        except Exception:
+            return _cvstudio_error_payload(
+                "JOBADDER_SETTINGS_SAVE_FAILED",
+                "Could not save JobAdder settings in the protected credential store.",
+                500,
+                action="retry",
+            )
+        finally:
+            if transition_started:
+                _ja_end_account_transition()
     _ja_cleanup_sessions()
     session_id = secrets.token_urlsafe(24)
     state = secrets.token_urlsafe(32)
-    with _ja_oauth_lock:
-        _ja_oauth_sessions[session_id] = {
-            "state": state,
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "created_at": time.time(),
-            "expires_at": time.time() + _JA_SESSION_TTL,
-            "status": "pending",
-        }
+    # Serialize the brief session insertion with sign-out's transition flag.
+    # A session created first is then cleared by sign-out; a later attempt gets
+    # a visible conflict instead of surviving the completed sign-out.
+    with _ja_critical_write_state_lock:
+        if _ja_account_transition_in_progress:
+            return _ja_account_transition_conflict("transition")
+        with _ja_oauth_lock:
+            _ja_oauth_sessions[session_id] = {
+                "state": state,
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "created_at": time.time(),
+                "expires_at": time.time() + _JA_SESSION_TTL,
+                "status": "pending",
+            }
     return jsonify({"login_session_id": session_id, "state": state, "expires_in": _JA_SESSION_TTL})
 
 
@@ -3126,6 +3248,7 @@ _JOBADDER_CLIENT = JobAdderClient(
 
 
 @app.route("/jobadder/restore_token", methods=["POST"])
+@_ja_critical_write_route
 def jobadder_restore_token():
     """One-time migration of legacy browser tokens into protected backend storage."""
     data = request.get_json(silent=True) or {}
@@ -3184,6 +3307,56 @@ def jobadder_disconnect():
     except Exception:
         pass
     return jsonify({"ok": True, "connected": False})
+
+
+@app.route("/jobadder/sign_out", methods=["POST"])
+def jobadder_sign_out():
+    """Sign out locally while retaining the protected application registration."""
+    conflict = _ja_begin_account_transition()
+    if conflict:
+        return _ja_account_transition_conflict(conflict)
+    try:
+        # Wait for an already-running refresh instead of cancelling its network
+        # request. New unsafe writes are blocked by the transition flag.
+        with _ja_refresh_lock:
+            # Persistent prefetch cancellation must be durable before the
+            # credential record changes. A journal write failure is visible.
+            _spider_preview_cancel_persistent_work()
+            with _ja_oauth_lock:
+                with _ja_store_lock:
+                    previous = dict(_ja_creds_store)
+                    reduced = {
+                        key: str(_ja_creds_store.get(key) or "").strip()
+                        for key in ("client_id", "client_secret")
+                        if str(_ja_creds_store.get(key) or "").strip()
+                    }
+                    try:
+                        _ja_creds_store.clear()
+                        _ja_creds_store.update(reduced)
+                        _ja_save_store()
+                    except Exception:
+                        _ja_creds_store.clear()
+                        _ja_creds_store.update(previous)
+                        raise
+                _ja_oauth_sessions.clear()
+            _spider_resume_text_cache_clear()
+        return jsonify({
+            "ok": True,
+            "connected": False,
+            "client_id": str(_ja_creds_store.get("client_id") or ""),
+            "client_secret_configured": bool(
+                str(_ja_creds_store.get("client_secret") or "").strip()
+            ),
+        })
+    except Exception:
+        return _cvstudio_error_payload(
+            "JOBADDER_SIGN_OUT_FAILED",
+            "Could not sign out from JobAdder in CV Studio. The protected account state was not silently discarded.",
+            500,
+            action="retry",
+        )
+    finally:
+        _ja_end_account_transition()
 
 
 @app.route("/jobadder/api_info", methods=["GET"])
@@ -7466,7 +7639,7 @@ def _ja_spa_browser_bridge(candidate_id, fields, note_text="", email="", salary_
     payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
     compact_payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     script = """(async () => {
-  const helperVersion = 'v24.6.241';
+  const helperVersion = 'v24.6.242';
   const candidateId = %s;
   const payload = %s;
   const profilePath = %s;
@@ -9805,6 +9978,7 @@ def jobadder_onenote_browser_bridge():
     return jsonify({"ok": True, "browser_bridge": bridge, "salary_canonical": salary_canonical})
 
 @app.route("/jobadder/onenote_log_screening", methods=["POST"])
+@_ja_critical_write_route
 def jobadder_onenote_log_screening():
     """Create a native Candidate Screening Call from a OneNote screening note.
 
@@ -10057,7 +10231,7 @@ def jobadder_onenote_activity_diagnostic():
     generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Candidate Activity Read Test",
-        "cv_studio_version": "v24.6.241",
+        "cv_studio_version": "v24.6.242",
         "generated_utc": generated,
         "safety": {
             "read_only": True,
@@ -10250,6 +10424,7 @@ def _ja_controlled_official_activity_payload(candidate_id):
 
 
 @app.route("/jobadder/onenote_activity_create_diagnostic", methods=["POST"])
+@_ja_critical_write_route
 def jobadder_onenote_activity_create_diagnostic():
     """Create exactly one controlled Screening Call on the Max Low dummy fixture.
 
@@ -10267,7 +10442,7 @@ def jobadder_onenote_activity_create_diagnostic():
     if confirmation != "CREATE ONE MAX LOW TEST":
         return jsonify({"error": "Type CREATE ONE MAX LOW TEST exactly before running the controlled POST."}), 400
 
-    guard_key = ("v24.6.241", candidate_id)
+    guard_key = ("v24.6.242", candidate_id)
     if guard_key in _JA_ACTIVITY_CREATE_DIAG_USED:
         return jsonify({"error": "The one-shot controlled POST has already been run in this CV Studio session. Restarting is intentionally required before any repeat test."}), 409
     # Mark before the network call so a timeout/double-click cannot emit a second POST.
@@ -10296,7 +10471,7 @@ def jobadder_onenote_activity_create_diagnostic():
     generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Official AddCandidateActivity Create Test",
-        "cv_studio_version": "v24.6.241",
+        "cv_studio_version": "v24.6.242",
         "generated_utc": generated,
         "candidate_fixture": {
             "name": "Max Low",
@@ -15704,7 +15879,7 @@ def jobadder_spider_search():
         return jsonify({"error": str(e), "query": query}), 500
 
 @app.route("/jobadder/create_candidate", methods=["POST"])
-
+@_ja_critical_write_route
 def jobadder_create_candidate():
     """Server-side proxy: create a new candidate."""
     token = _ja_refresh_access_token(force=False)
@@ -15745,6 +15920,7 @@ def jobadder_create_candidate():
         return jsonify({"error": str(e)}), 500
 
 @app.route("/jobadder/update_candidate", methods=["POST"])
+@_ja_critical_write_route
 def jobadder_update_candidate():
     """Update existing candidate profile fields via PUT /candidates/{id}."""
     token = _ja_refresh_access_token(force=False)
@@ -15788,6 +15964,7 @@ def _safe_jobadder_attachment_filename(value, fallback):
 
 
 @app.route("/jobadder/upload_original_cv", methods=["POST"])
+@_ja_critical_write_route
 def jobadder_upload_original_cv():
     """Upload original (unformatted) CV as Resume attachment.
     Endpoint: POST /candidates/{id}/attachments/Resume
@@ -15905,6 +16082,7 @@ def jobadder_debug_endpoints():
     return jsonify(results)
 
 @app.route("/jobadder/upload_cv", methods=["POST"])
+@_ja_critical_write_route
 def jobadder_upload_cv():
     """Upload DOCX as FormattedResume attachment.
     Endpoint: POST /candidates/{id}/attachments/FormattedResume

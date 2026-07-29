@@ -37,6 +37,10 @@
   packaging milestone without producing or claiming a macOS artifact.
 - v24.6.241 corrects only the Windows Antiword verification-to-execution TOCTOU
   race by retaining deny-write/delete/rename handles through process completion.
+- v24.6.242 completes the separately authorized JobAdder account-management and
+  settings milestone. It adds only `POST /jobadder/sign_out`, centralizes
+  JobAdder application setup in Settings and preserves the legacy disconnect
+  contract.
 - Phases 1, 2A, 2B, 3, 4, 5A and 5B are complete.
 - No later phase is active. Phase 6 requires a new explicit owner instruction.
 

@@ -60,14 +60,48 @@
 - Its confirmed verification-to-execution TOCTOU race was corrected in **CV
   Studio v24.6.241** by locking the exact verified Windows runtime through
   process creation and completion.
-- Current completed private owner/source release: **CV Studio v24.6.241
+- The separately authorized JobAdder account-management and settings milestone
+  was completed in **CV Studio v24.6.242**. It adds only
+  `POST /jobadder/sign_out`, centralizes JobAdder application setup in
+  Settings, preserves the legacy disconnect contract and keeps Phase 6
+  inactive.
+- Current completed private owner/source release: **CV Studio v24.6.242
   (Windows x64 only)**.
 - Phases 1, 2A, 2B, 3, 4, 5A and 5B are complete.
 - Phase 6 remains inactive.
-- v24.6.241 makes no Intel or Apple Silicon macOS support claim and produced no
+- v24.6.242 makes no Intel or Apple Silicon macOS support claim and produced no
   macOS artifact. macOS users remain on v24.6.239 until a separately
-  authorized native-validation milestone. JobAdder settings/sign-out, Phase 6,
-  AI Crawler behavior changes and all backburner items remain inactive.
+  authorized native-validation milestone. Phase 6, unrelated AI Crawler
+  behavior changes and all backburner items remain inactive.
+
+## Completed scope: pre-Phase-6 JobAdder account management and settings
+
+The owner separately authorized and v24.6.242 completed a bounded JobAdder
+milestone from exact master commit
+`21408d0457c9e4c5db5018c39333c32420d54339`. It adds only
+`POST /jobadder/sign_out`, bringing the exact route inventory from 107 to 108,
+and moves the existing JobAdder application setup into Settings →
+Integrations & Data.
+
+Normal local sign-out retains the protected Client ID and Client Secret
+while atomically removing OAuth tokens, expiry, tenant/API state, OAuth login
+sessions and tenant-bound AI Crawler caches. An active critical JobAdder write
+or upload produces a visible conflict and is never fake-cancelled or replayed.
+The existing `POST /jobadder/disconnect` compatibility behavior remains
+unchanged.
+
+Format CV retains connect, connection status and upload controls but no longer
+contains duplicate credential fields or the JobAdder settings gear. All
+connection indicators share the authoritative backend status. Controlled
+automated tests use no live JobAdder credentials or network calls. The
+v24.6.242 QA report records one read-only work-type lookup triggered by
+pre-existing protected credentials during the local visual check; no write,
+upload, OAuth login, paid call or credential exposure occurred.
+
+This milestone preserves the five security guards, 18 compatibility
+signatures, SQLite schema 10, Phase 5A journal schema 1, unsafe-write
+non-replay, mandatory Windows Antiword behavior and the v24.6.239 macOS
+baseline. Phase 6 remains inactive, and work stops before handoff or merge.
 
 ## Completed scope: Windows Antiword TOCTOU corrective
 
@@ -375,7 +409,9 @@ Before changing code:
 1. Read `ROADMAP.md`.
 2. Read `PHASE_STATUS.md`.
 3. Read `IMPLEMENT.md`.
-4. Read `CV_STUDIO_V24_6_241_PHASE_6_HANDOVER.md`.
+4. Read `CV_STUDIO_V24_6_242_PHASE_6_HANDOVER.md`,
+   `cv_studio_v24_6_242_jobadder_account_settings_signout_qa_report.md`,
+   `CV_STUDIO_V24_6_241_PHASE_6_HANDOVER.md`.
 5. Read
    `cv_studio_v24_6_241_windows_x64_antiword_toctou_corrective_qa_report.md`,
    `CV_STUDIO_V24_6_240_PHASE_6_HANDOVER.md`,

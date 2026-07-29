@@ -3,8 +3,8 @@
 ## Release state
 
 - Approved baseline: v24.6.217
-- Completed release: v24.6.241 (Windows x64 only)
-- Previous completed release: v24.6.240 (Windows x64 only)
+- Completed release: v24.6.242 (Windows x64 only)
+- Previous completed release: v24.6.241 (Windows x64 only)
 - Phase 2B source baseline: v24.6.219
 - Phase 2B baseline Git commit: `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`
 - Phase 3 source baseline: v24.6.222
@@ -15,13 +15,59 @@
 - Phase 5A baseline Git commit: `4b366ddde1cf0a398706b52d55b0e82ed2dbc27c`
 - Phase 5B source baseline: v24.6.234
 - Phase 5B baseline Git commit: `327858799f17d880e37c740f71dfe321ea7bde0a`
-- Working branch: `codex/antiword-mandatory-dependency`
-- Active phase: none; Phase 6 inactive
-- Completed private owner/source release: v24.6.241 (Windows x64 only)
-- Status: narrow Antiword verification-to-execution TOCTOU corrective complete;
-  macOS remains on v24.6.239
-- Current milestone: complete; stop before JobAdder settings/sign-out, Phase 6,
-  handoff or merge
+- Working branch: `codex/jobadder-account-settings-signout`
+- Active phase: none; Phase 6 remains inactive
+- Completed private owner/source release: v24.6.242 (Windows x64 only)
+- Status: separately authorized pre-Phase-6 JobAdder account-management and
+  settings milestone completed from exact v24.6.241 master commit
+  `21408d0457c9e4c5db5018c39333c32420d54339`; macOS remains on v24.6.239
+- Current stop: before Phase 6, handoff or merge
+
+## Completed pre-Phase-6 JobAdder account-management and settings milestone
+
+### Authorization and preserved boundary
+
+- Entry verification passed from a clean exact-master v24.6.241 baseline. The
+  owner/source ZIP recomputed to
+  `f4c27b897d478b4629ccfe8011d6e9019d8f5c5a7f7b0309941afd4fc8b10e76`;
+  both v24.6.241 verification sidecars name the exact master commit; fresh
+  owner/source and protected Windows-x64 extractions verified; and all
+  v24.6.240/v24.6.241 release artifacts were hash-snapshotted before work.
+- The only authorized route addition is authenticated, CSRF-protected
+  `POST /jobadder/sign_out`. The final inventory contains exactly 108
+  routes while preserving every prior route, method, endpoint name and response
+  field.
+- Normal sign-out preserves the protected JobAdder Client ID and Client Secret,
+  removes all connection/account state, invalidates tenant-bound AI Crawler
+  state and remains failure-visible. Critical writes/uploads cannot be silently
+  cancelled or replayed. Existing `POST /jobadder/disconnect` retains its
+  disconnect-and-forget compatibility meaning.
+- Complete JobAdder application setup moves to Settings → Integrations & Data.
+  Format CV keeps connect/status/upload only. No secret or OAuth token may enter
+  HTML, localStorage, SQLite, diagnostics, fixtures, logs or release evidence.
+- Five guards, 18 compatibility signatures, SQLite schema 10, journal schema 1,
+  Phase 1–5B contracts, mandatory Windows Antiword behavior, cost controls and
+  the v24.6.239 macOS baseline remain unchanged. Controlled automated tests
+  made no live JobAdder calls. The local visual check triggered one read-only
+  work-type lookup from pre-existing protected credentials; no write, upload,
+  OAuth login, paid call or credential exposure occurred. Phase 6 and all
+  unrelated work remain inactive.
+
+### Final validation and review
+
+- Focused JobAdder/backend/cache compatibility: 54 passed.
+- One focused self-review found and corrected exactly two concrete issues: a
+  late OAuth/legacy-restore race and loss of a newly typed Client ID before
+  missing-secret rejection. No repeated review loop or independent reviewer
+  was started.
+- Qualifying complete Python discovery: 149 passed. All six frontend fixture
+  files passed. Source smoke passed 24 assertions.
+- Static validation passed for 29 Python, 23 JavaScript, five Bash/command and
+  five PowerShell files. Owner Windows-x64 preflight, repository consistency,
+  byte-stability and whitespace checks passed.
+- Final contracts: 108 routes, five ordered guards, 18 compatibility
+  signatures, SQLite schema 10 and Phase 5A journal schema 1.
+- All 24 snapshotted v24.6.240/v24.6.241 release files rehashed unchanged.
 
 ## v24.6.241 Windows Antiword TOCTOU corrective
 
