@@ -9,6 +9,7 @@ import unittest
 from unittest import mock
 
 import cvstudio_antiword as antiword
+import owner_build_tools.build_protected as protected_build
 from cvstudio_diagnostics import dependency_status
 from cvstudio_jobs import PersistentJobStore, default_job_state_path
 from cvstudio_storage import CVStudioStorage, default_database_path
@@ -108,9 +109,24 @@ class AntiwordMandatoryDependencyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(
             prefix="cvstudio-antiword-source-state-"
         ) as state:
+            ambient_home = Path(state) / "ambient-home"
+            ambient_resources = ambient_home / ".antiword"
+            ambient_resources.mkdir(parents=True)
+            (ambient_resources / "UTF-8.txt").write_text(
+                "untrusted mapping",
+                encoding="utf-8",
+            )
+            (ambient_resources / "fontnames").write_text(
+                "untrusted font mapping",
+                encoding="utf-8",
+            )
             with mock.patch.dict(
                 os.environ,
-                {"LOCALAPPDATA": state},
+                {
+                    "LOCALAPPDATA": state,
+                    "HOME": str(ambient_home),
+                    "ANTIWORDHOME": str(ambient_resources),
+                },
                 clear=False,
             ):
                 health = antiword.antiword_health(ROOT)
@@ -334,10 +350,6 @@ class AntiwordMandatoryDependencyTests(unittest.TestCase):
         expected = {
             "packages/antiword_1.3.5_windows_x64_r46.zip":
                 "9a99f67680475605de009cb85ba94c7dc546eb261a4256d743597fbb24b0ddf8",
-            "packages/antiword_1.3.5_macos_x86_64_r46.tgz":
-                "501f2cf83b050fd4a56ab1ecff6fe21295c168eb4a9876d46c259e7ca21cb923",
-            "packages/antiword_1.3.5_macos_arm64_r46.tgz":
-                "17cd193eb8ed3b27d092c60fec181e6a7b6d82eda9741dbec03578396d659e25",
             "source/antiword_1.3.5.tar.gz":
                 "72e84b33b54c11101cb70d63304ca0283f57a6d0ef518ca6329ff5e6490ad630",
             "GPL-2.0.txt":
@@ -353,18 +365,23 @@ class AntiwordMandatoryDependencyTests(unittest.TestCase):
             VENDOR / "GPL-2.0.txt"
         ).read_text(encoding="utf-8"))
 
-    def test_macos_artifacts_are_exact_native_architectures(self):
-        x86 = (VENDOR / "macos-x86_64" / "bin" / "antiword").read_bytes()
-        arm = (VENDOR / "macos-arm64" / "bin" / "antiword").read_bytes()
-        self.assertEqual(x86[:8].hex(), "cffaedfe07000001")
-        self.assertEqual(arm[:8].hex(), "cffaedfe0c000001")
+    def test_macos_payloads_are_deferred_and_not_shipped(self):
+        for relative in (
+            "macos-x86_64",
+            "macos-arm64",
+            "packages/antiword_1.3.5_macos_x86_64_r46.tgz",
+            "packages/antiword_1.3.5_macos_arm64_r46.tgz",
+        ):
+            self.assertFalse((VENDOR / relative).exists(), relative)
+        self.assertEqual(set(antiword._PLATFORMS), {"windows-x64"})
         self.assertEqual(
-            sha256(VENDOR / "macos-x86_64" / "bin" / "antiword"),
-            "867f9688d851ec85cb6dd5e70f14abcf53e2c77bf55da20ec6e8b94399904d5f",
-        )
-        self.assertEqual(
-            sha256(VENDOR / "macos-arm64" / "bin" / "antiword"),
-            "d4ad0924e195f5dc6a898d5bdcb734a532446ed927af7e3c49865b11ef5e250d",
+            set(antiword.ANTIWORD_DISTRIBUTION_HASHES),
+            {
+                "packages/antiword_1.3.5_windows_x64_r46.zip",
+                "source/antiword_1.3.5.tar.gz",
+                "GPL-2.0.txt",
+                "fixtures/UDHR-english.doc",
+            },
         )
 
     def test_linux_proof_target_statically_verifies_but_never_claims_support(self):
@@ -373,7 +390,7 @@ class AntiwordMandatoryDependencyTests(unittest.TestCase):
         self.assertTrue(health["trusted"])
         self.assertFalse(health["functional"])
         self.assertTrue(health["test_only"])
-        self.assertEqual(health["static_platform_manifests_verified"], 3)
+        self.assertEqual(health["static_platform_manifests_verified"], 1)
 
     def test_critical_unicode_and_windows_mapping_resources_are_pinned(self):
         expected = {
@@ -386,18 +403,13 @@ class AntiwordMandatoryDependencyTests(unittest.TestCase):
             "share/antiword/Default":
                 "b005fff466673f0a032610d5464302cfdf7ac67485cfb5608357ffb29b51dad4",
         }
-        for platform_tag in (
-            "windows-x64",
-            "macos-x86_64",
-            "macos-arm64",
-        ):
-            self.assertEqual(
-                {
-                    relative: sha256(VENDOR / platform_tag / relative)
-                    for relative in expected
-                },
-                expected,
-            )
+        self.assertEqual(
+            {
+                relative: sha256(VENDOR / "windows-x64" / relative)
+                for relative in expected
+            },
+            expected,
+        )
 
     def test_functional_timeout_is_bounded_and_failure_visible(self):
         if os.name != "nt":
@@ -414,6 +426,14 @@ class AntiwordMandatoryDependencyTests(unittest.TestCase):
         self.assertEqual(caught.exception.reason, "functional-execution-timeout")
         self.assertEqual(run.call_args.kwargs["timeout"], 12)
         self.assertFalse(run.call_args.kwargs["check"])
+        self.assertNotIn(
+            "ANTIWORDHOME",
+            run.call_args.kwargs["env"],
+        )
+        self.assertEqual(
+            Path(run.call_args.kwargs["env"]["HOME"]),
+            executable.parent.resolve(),
+        )
 
     def test_extraction_verifier_has_no_network_or_shell_discovery(self):
         source = Path(antiword.__file__).read_text(encoding="utf-8")
@@ -435,13 +455,16 @@ class AntiwordMandatoryDependencyTests(unittest.TestCase):
         windows = (ROOT / "INSTALL_CORE.ps1").read_text(
             encoding="utf-8-sig"
         )
-        macos = (ROOT / "install.sh").read_text(encoding="utf-8")
         self.assertIn(
             "if ($ok -and -not (Check-Antiword)) { $ok = $false }",
             windows,
         )
         self.assertIn("Test-AntiwordRuntime", windows)
         self.assertIn("Invoke-AntiwordFunctionalCheck", windows)
+        self.assertIn(
+            "$startInfo.EnvironmentVariables['HOME'] = Split-Path -Parent $Executable",
+            windows,
+        )
         self.assertIn("WaitForExit(12000)", windows)
         self.assertIn("WaitForExit(2000)", windows)
         self.assertNotIn("$process.WaitForExit()", windows)
@@ -475,39 +498,6 @@ class AntiwordMandatoryDependencyTests(unittest.TestCase):
         )
         self.assertNotIn("Native .doc extraction fallback remains active", windows)
         self.assertNotIn("Get-Command antiword", windows)
-        self.assertIn("install_verified_antiword ||", macos)
-        self.assertIn("verify_antiword_runtime", macos)
-        self.assertIn("run_antiword_functional_check", macos)
-        self.assertIn("/bin/sleep 12", macos)
-        self.assertIn('"$check_dir/timed-out"', macos)
-        self.assertIn("timed out after 12 seconds", macos)
-        for trusted_tool in (
-            "/usr/bin/shasum",
-            "/usr/bin/mktemp",
-            "/usr/bin/env",
-            "/usr/bin/find",
-            "/usr/bin/file",
-            "/usr/bin/codesign",
-            "/bin/chmod",
-            "/bin/kill",
-            "/bin/date",
-            "/bin/cp",
-            "/bin/mv",
-            "/bin/rm",
-        ):
-            self.assertIn(trusted_tool, macos)
-        self.assertIn('[ ! -L "$runtime_root" ]', macos)
-        self.assertIn('[ ! -L "$runtime_root/SHA256SUMS" ]', macos)
-        self.assertIn('[ ! -L "$executable" ]', macos)
-        self.assertIn(
-            '/usr/bin/mktemp -d "$dependency_base/$tag.stage.XXXXXX"',
-            macos,
-        )
-        self.assertIn("remove_antiword_stage", macos)
-        self.assertIn('.$$.$RANDOM', macos)
-        self.assertIn("Managed Antiword 1.3.5 is hash-verified", macos)
-        self.assertIn("ANTIWORD_OK", macos)
-
         protected_builder = (
             ROOT / "owner_build_tools" / "build_protected.py"
         ).read_text(encoding="utf-8")
@@ -528,7 +518,24 @@ class AntiwordMandatoryDependencyTests(unittest.TestCase):
             "cvstudio-antiword-installer-self-test-"
             + os.urandom(8).hex()
         )
+        ambient_home = Path(tempfile.gettempdir()) / (
+            "cvstudio-antiword-ambient-home-"
+            + os.urandom(8).hex()
+        )
         try:
+            ambient_resources = ambient_home / ".antiword"
+            ambient_resources.mkdir(parents=True)
+            (ambient_resources / "UTF-8.txt").write_text(
+                "untrusted mapping",
+                encoding="utf-8",
+            )
+            (ambient_resources / "fontnames").write_text(
+                "untrusted font mapping",
+                encoding="utf-8",
+            )
+            environment = os.environ.copy()
+            environment["HOME"] = str(ambient_home)
+            environment["ANTIWORDHOME"] = str(ambient_resources)
             result = subprocess.run(
                 [
                     "powershell.exe",
@@ -542,6 +549,7 @@ class AntiwordMandatoryDependencyTests(unittest.TestCase):
                     str(state),
                 ],
                 cwd=ROOT,
+                env=environment,
                 capture_output=True,
                 text=True,
                 timeout=90,
@@ -550,6 +558,8 @@ class AntiwordMandatoryDependencyTests(unittest.TestCase):
         finally:
             if state.exists():
                 shutil.rmtree(state)
+            if ambient_home.exists():
+                shutil.rmtree(ambient_home)
         self.assertEqual(
             result.returncode,
             0,
@@ -601,33 +611,41 @@ class AntiwordMandatoryDependencyTests(unittest.TestCase):
         windows = (ROOT / "INSTALL_CORE.ps1").read_text(
             encoding="utf-8-sig"
         )
-        macos = (ROOT / "install.sh").read_text(encoding="utf-8")
         self.assertIn(
             '/diagnostics/runtime" -f $port) -Headers $headers -Method Get -TimeoutSec 15',
             windows,
         )
-        self.assertIn(
-            "HEALTH_DEADLINE=$((SECONDS + 75))",
-            macos,
+
+    def test_macos_production_files_are_exact_v239_baseline_and_v240_builds_blocked(self):
+        expected_hashes = {
+            "install.sh":
+                "1e28c62ab82692dc0388024cbe5fe5da32d59ec04ecec6e95f5b06d17ea7b47d",
+            "start.sh":
+                "9a74ebe8153df059c7d210bcf1fc8cd4dd0e74a6a8ee790066559ad468ee195e",
+            "restore_previous.sh":
+                "fcda709bd9b5c14c608e770b284320d7cb8439ad71d8c705fda2a9efb9acd217",
+            "owner_build_tools/BUILD_PROTECTED_MAC.command":
+                "e7079c8067d8133e86ef8cad22211b26a22caad2d325dd3614a9bcffd865c432",
+        }
+        self.assertEqual(
+            {relative: sha256(ROOT / relative) for relative in expected_hashes},
+            expected_hashes,
         )
-        self.assertIn(
-            "remaining=$((HEALTH_DEADLINE - SECONDS))",
-            macos,
-        )
-        self.assertIn(
-            '[ "$remaining" -lt "$timeout" ] && timeout="$remaining"',
-            macos,
-        )
-        self.assertIn(
-            'DIAG_JSON="$(health_curl 15 '
-            '"http://localhost:$SMOKE_PORT/diagnostics/runtime"',
-            macos,
-        )
-        health_loop = macos.split(
-            "for _i in $(seq 1 180); do",
-            1,
-        )[1].split("done", 1)[0]
-        self.assertNotIn("curl -fsS", health_loop)
+        workflow = (
+            ROOT / ".github" / "workflows" / "build-protected.yml"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("macos-arm64", workflow)
+        self.assertNotIn("macos-intel", workflow)
+        with mock.patch.object(
+            protected_build.platform, "system", return_value="Darwin"
+        ), mock.patch.object(
+            protected_build.platform, "machine", return_value="arm64"
+        ):
+            with self.assertRaisesRegex(RuntimeError, "Windows-x64-only"):
+                protected_build.detect_target("auto")
+        for target in ("macos-arm64", "macos-intel"):
+            with self.assertRaisesRegex(RuntimeError, "only a Windows-x64"):
+                protected_build.validate_target_host(target)
 
 
 if __name__ == "__main__":

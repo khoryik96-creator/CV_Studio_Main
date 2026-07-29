@@ -52,26 +52,31 @@
 - The Blind JD PDF header metadata and long Location/Work tile text were
   corrected to wrap within the available page width in **CV Studio
   v24.6.239** without changing any Blind JD data or content.
-- Current completed private owner/source release: **CV Studio v24.6.239**.
+- The pre-Phase-6 mandatory verified Antiword dependency and packaging
+  milestone was completed in **CV Studio v24.6.240 for Windows x64 only**.
+  Antiword 1.3.5 is bundled, hash-pinned and functionally verified, and every
+  Windows legacy `.doc` decoding boundary fails explicitly when it is not
+  trusted and ready.
+- Current completed private owner/source release: **CV Studio v24.6.240
+  (Windows x64 only)**.
 - Phases 1, 2A, 2B, 3, 4, 5A and 5B are complete.
 - Phase 6 remains inactive.
-- The owner separately authorized the active **pre-Phase-6 mandatory Antiword
-  dependency and packaging milestone** on branch
-  `codex/antiword-mandatory-dependency`. Its reserved, unreleased source
-  identity is v24.6.240. This does not authorize JobAdder settings/sign-out,
-  Phase 6, AI Crawler behavior changes or any backburner item.
+- v24.6.240 makes no Intel or Apple Silicon macOS support claim and produced no
+  macOS artifact. macOS users remain on v24.6.239 until a separately
+  authorized native-validation milestone. JobAdder settings/sign-out, Phase 6,
+  AI Crawler behavior changes and all backburner items remain inactive.
 
-## Active scope: pre-Phase-6 mandatory Antiword dependency
+## Completed scope: pre-Phase-6 mandatory Antiword dependency
 
 Antiword package 1.3.5 (engine 0.37) must be a mandatory, functionally verified
-dependency for every supported Windows x64, macOS Intel and macOS Apple Silicon
-installation. CV Studio may start when it is unavailable so diagnostics and
-repair guidance work, but every legacy `.doc` decoding feature must fail
-explicitly with the structured request-ID contract.
+dependency for every supported v24.6.240 Windows x64 installation. CV Studio
+may start when it is unavailable so diagnostics and repair guidance work, but
+every legacy `.doc` decoding feature must fail explicitly with the structured
+request-ID contract.
 
 Only exact rOpenSci content-addressed platform packages bound to upstream commit
-`51441d45283512081c08010835b8002af79fe5e6` are approved. Their complete
-`bin`/`share` runtime, original platform archives, GPL-2 text, provenance,
+`51441d45283512081c08010835b8002af79fe5e6` are approved. The complete Windows
+`bin`/`share` runtime, original Windows archive, GPL-2 text, provenance,
 corresponding source archive and controlled genuine `.doc` fixture remain
 isolated under `vendor/antiword`. PATH, Program Files, `ANTIWORDHOME` and other
 arbitrary executable locations cannot satisfy trust.
@@ -82,11 +87,12 @@ functional extraction of the controlled fixture. The native OLE parser and
 LibreOffice stay defense-in-depth only and cannot satisfy a verified `.doc`
 success.
 
-Windows x64 has genuine local functional and security verification. The exact
-macOS artifacts have upstream native build/check evidence, but CV Studio's own
-source/protected installer, diagnostics and extraction flow must pass on the
-matching genuine Mac architecture before macOS support or a completed release
-is claimed. Stop at that native gate if no real Mac runner is available.
+Windows x64 has genuine local functional and security verification. Deferred
+macOS URLs, hashes and inspection notes remain documented future work only;
+the Mac payloads and new mandatory Mac behavior are not shipped. CV Studio's
+installer, diagnostics and extraction flow must pass on each matching genuine
+Mac architecture in a separately authorized milestone before any release newer
+than v24.6.239 may claim macOS support.
 
 This milestone must preserve all 107 routes, five guards, 18 compatibility
 signatures, SQLite schema 10, Phase 5A journal schema 1, every Phase 1–5B

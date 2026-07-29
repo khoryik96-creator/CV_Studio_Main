@@ -31,12 +31,6 @@ ANTIWORD_DISTRIBUTION_HASHES = {
     "packages/antiword_1.3.5_windows_x64_r46.zip": (
         "9a99f67680475605de009cb85ba94c7dc546eb261a4256d743597fbb24b0ddf8"
     ),
-    "packages/antiword_1.3.5_macos_x86_64_r46.tgz": (
-        "501f2cf83b050fd4a56ab1ecff6fe21295c168eb4a9876d46c259e7ca21cb923"
-    ),
-    "packages/antiword_1.3.5_macos_arm64_r46.tgz": (
-        "17cd193eb8ed3b27d092c60fec181e6a7b6d82eda9741dbec03578396d659e25"
-    ),
     "source/antiword_1.3.5.tar.gz": ANTIWORD_SOURCE_SHA256,
     "GPL-2.0.txt": (
         "edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6"
@@ -57,32 +51,6 @@ _PLATFORMS = {
             "9a99f67680475605de009cb85ba94c7dc546eb261a4256d743597fbb24b0ddf8"
         ),
         "native_signature": "unsigned upstream binary; pinned SHA-256",
-    },
-    "macos-x86_64": {
-        "executable": "bin/antiword",
-        "executable_sha256": (
-            "867f9688d851ec85cb6dd5e70f14abcf53e2c77bf55da20ec6e8b94399904d5f"
-        ),
-        "manifest_sha256": (
-            "e616a696828ce938ad90594ce635ee4889d464787cdfd110f5e42efd12418729"
-        ),
-        "package_sha256": (
-            "501f2cf83b050fd4a56ab1ecff6fe21295c168eb4a9876d46c259e7ca21cb923"
-        ),
-        "native_signature": "unsigned upstream binary; pinned SHA-256",
-    },
-    "macos-arm64": {
-        "executable": "bin/antiword",
-        "executable_sha256": (
-            "d4ad0924e195f5dc6a898d5bdcb734a532446ed927af7e3c49865b11ef5e250d"
-        ),
-        "manifest_sha256": (
-            "f07264b33fefd3b12ce0af40f312ea8abd290a71e3d04f2c63a2bb16135cbe9e"
-        ),
-        "package_sha256": (
-            "17cd193eb8ed3b27d092c60fec181e6a7b6d82eda9741dbec03578396d659e25"
-        ),
-        "native_signature": "upstream arm64 code-signature blob plus pinned SHA-256",
     },
 }
 
@@ -146,10 +114,6 @@ def _platform_tag() -> str:
     machine = platform.machine().lower()
     if system == "windows" and machine in {"amd64", "x86_64"}:
         return "windows-x64"
-    if system == "darwin" and machine in {"arm64", "aarch64"}:
-        return "macos-arm64"
-    if system == "darwin" and machine in {"x86_64", "amd64"}:
-        return "macos-x86_64"
     return ""
 
 
@@ -299,8 +263,7 @@ def _functional_check(executable: Path, fixture: Path) -> None:
         raise AntiwordDependencyError("functional-fixture-missing")
     if _sha256_file(fixture) != ANTIWORD_FIXTURE_SHA256:
         raise AntiwordDependencyError("functional-fixture-integrity-failed")
-    child_env = os.environ.copy()
-    child_env.pop("ANTIWORDHOME", None)
+    child_env = antiword_subprocess_env(executable)
     kwargs: dict[str, Any] = {}
     if os.name == "nt" and hasattr(subprocess, "CREATE_NO_WINDOW"):
         kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
@@ -464,13 +427,18 @@ def require_verified_antiword(
     raise AntiwordDependencyError(str(health.get("reason") or "unavailable"))
 
 
-def antiword_subprocess_env() -> dict[str, str]:
+def antiword_subprocess_env(
+    executable: str | os.PathLike[str],
+) -> dict[str, str]:
     """Return a non-searching child environment for the pinned executable."""
 
     env = os.environ.copy()
     # The upstream 0.37 build has a long-standing ANTIWORDHOME buffer check bug.
-    # Its complete resources are found relative to the verified bin directory.
+    # It also searches $HOME/.antiword before its installed mapping directory.
+    # Bind HOME to the already verified bin directory, where the exact file-set
+    # check excludes a user-controlled .antiword resource tree.
     env.pop("ANTIWORDHOME", None)
+    env["HOME"] = str(Path(executable).resolve().parent)
     return env
 
 

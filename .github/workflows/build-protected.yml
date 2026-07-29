@@ -16,12 +16,6 @@ jobs:
           - target: windows-x64
             os: windows-latest
             python: "3.12"
-          - target: macos-arm64
-            os: macos-15
-            python: "3.12"
-          - target: macos-intel
-            os: macos-15-intel
-            python: "3.12"
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
 
@@ -97,7 +91,7 @@ jobs:
       - name: Upload colleague package and public smoke result
         uses: actions/upload-artifact@v4
         with:
-          name: cv-studio-v24.6.219-${{ matrix.target }}-COLLEAGUE
+          name: cv-studio-v24.6.240-${{ matrix.target }}-COLLEAGUE
           path: |
             protected-output/*colleague.zip
             protected-output/*protected_smoke.json
@@ -107,7 +101,7 @@ jobs:
       - name: Upload owner-only compiler diagnostics
         uses: actions/upload-artifact@v4
         with:
-          name: cv-studio-v24.6.219-${{ matrix.target }}-OWNER-DIAGNOSTICS
+          name: cv-studio-v24.6.240-${{ matrix.target }}-OWNER-DIAGNOSTICS
           path: |
             protected-output/*nuitka_report.xml
             protected-output/*runtime.log

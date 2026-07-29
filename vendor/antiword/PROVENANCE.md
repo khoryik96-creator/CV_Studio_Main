@@ -1,8 +1,9 @@
 # Antiword 1.3.5 provenance and redistribution record
 
-This directory contains the mandatory legacy `.doc` runtime authorized for
-CV Studio v24.6.240. It is isolated from CV Studio application source and used
-only for legacy Microsoft Word decoding.
+This directory contains the mandatory Windows-x64 legacy `.doc` runtime
+authorized for CV Studio v24.6.240. It is isolated from CV Studio application
+source and used only for legacy Microsoft Word decoding. v24.6.240 does not
+ship or claim support for Intel or Apple Silicon macOS.
 
 ## Upstream identity
 
@@ -15,9 +16,11 @@ only for legacy Microsoft Word decoding.
 - Package page: <https://ropensci.r-universe.dev/antiword>
 - License declared upstream: GPL-2.
 
-The R-universe package API records the source archive and all three binaries
-below against the same upstream commit and reports successful native checks
-for Windows x64, macOS x86_64 and macOS arm64.
+The R-universe package API records the source archive and all three upstream
+binaries below against the same upstream commit. Only the Windows x64 binary
+is authorized, bundled, installed and verified by CV Studio v24.6.240. The two
+macOS records are retained solely as documented inputs for a future,
+separately authorized native-validation milestone.
 
 ## Exact official artifacts
 
@@ -25,33 +28,32 @@ for Windows x64, macOS x86_64 and macOS arm64.
 | --- | --- | --- |
 | Corresponding source | `https://ropensci.r-universe.dev/src/contrib/antiword_1.3.5.tar.gz` | `72e84b33b54c11101cb70d63304ca0283f57a6d0ef518ca6329ff5e6490ad630` |
 | Windows x64, R 4.6 package | `https://ropensci.r-universe.dev/bin/windows/contrib/4.6/antiword_1.3.5.zip` | `9a99f67680475605de009cb85ba94c7dc546eb261a4256d743597fbb24b0ddf8` |
-| macOS Intel, R 4.6 package | `https://ropensci.r-universe.dev/bin/macosx/big-sur-x86_64/contrib/4.6/antiword_1.3.5.tgz` | `501f2cf83b050fd4a56ab1ecff6fe21295c168eb4a9876d46c259e7ca21cb923` |
-| macOS Apple Silicon, R 4.6 package | `https://ropensci.r-universe.dev/bin/macosx/sonoma-arm64/contrib/4.6/antiword_1.3.5.tgz` | `17cd193eb8ed3b27d092c60fec181e6a7b6d82eda9741dbec03578396d659e25` |
+| Deferred macOS Intel input (not shipped) | `https://ropensci.r-universe.dev/bin/macosx/big-sur-x86_64/contrib/4.6/antiword_1.3.5.tgz` | `501f2cf83b050fd4a56ab1ecff6fe21295c168eb4a9876d46c259e7ca21cb923` |
+| Deferred macOS Apple Silicon input (not shipped) | `https://ropensci.r-universe.dev/bin/macosx/sonoma-arm64/contrib/4.6/antiword_1.3.5.tgz` | `17cd193eb8ed3b27d092c60fec181e6a7b6d82eda9741dbec03578396d659e25` |
 
 R-universe redirects each URL to content-addressed storage whose identifier is
-the same SHA-256. The original archives are retained under `packages/`, and
-the exact corresponding source is retained under `source/`.
+the same SHA-256. The authorized Windows archive is retained under `packages/`
+and the exact corresponding source under `source/`. The deferred macOS
+archives and extracted runtimes are intentionally absent from the v24.6.240
+production and packaging tree.
 
 ## Runtime extraction
 
-Each platform directory contains only the official package's `bin/` and
-`share/` runtime trees plus a generated `SHA256SUMS` file. Each runtime has
-exactly 37 files. CV Studio separately pins the checksum-manifest hash and
-executable hash:
+The Windows platform directory contains only the official package's `bin/`
+and `share/` runtime trees plus a generated `SHA256SUMS` file. It has exactly
+37 files. CV Studio separately pins the checksum-manifest hash and executable
+hash:
 
 | Platform | Executable SHA-256 | SHA256SUMS SHA-256 |
 | --- | --- | --- |
 | Windows x64 | `2cbab2831854ccd5141ea328824a77cb889586db2e97129873d543a52cf3e15c` | `7d365a89f268a2fc34f815b369474124bc6a1aac02e9b0b57e6dfd5eb5368da0` |
-| macOS Intel | `867f9688d851ec85cb6dd5e70f14abcf53e2c77bf55da20ec6e8b94399904d5f` | `e616a696828ce938ad90594ce635ee4889d464787cdfd110f5e42efd12418729` |
-| macOS Apple Silicon | `d4ad0924e195f5dc6a898d5bdcb734a532446ed927af7e3c49865b11ef5e250d` | `f07264b33fefd3b12ce0af40f312ea8abd290a71e3d04f2c63a2bb16135cbe9e` |
 
-Cross-platform file inspection identifies the binaries as PE32+ Windows x64,
-Mach-O x86_64 and Mach-O arm64 respectively. Both macOS executables link only
-to `/usr/lib/libSystem.B.dylib`. The Intel binary has no embedded code
-signature; the Apple Silicon binary has an embedded code-signature load
-command. Runtime trust is therefore based on the exact official archive,
-complete-file manifest, executable hash and native architecture/signature
-checks, not on publisher-signature claims.
+File inspection identifies the shipped executable as PE32+ Windows x64.
+Runtime trust is based on the exact official archive, complete-file manifest,
+executable hash and native Windows architecture checks, not on
+publisher-signature claims. Prior source-level inspection of the deferred
+macOS binaries is recorded as future-work evidence only; it is not native
+validation and supports no v24.6.240 macOS claim.
 
 ## Local comparison and security evidence
 
@@ -91,9 +93,9 @@ Installation and runtime diagnostics accept Antiword only when it extracts the
 two pinned expected phrases from this file within the bounded timeout.
 
 The current Windows x64 runtime was functionally verified on genuine Windows.
-R-universe reports successful native package checks for both exact macOS
-artifacts, whose upstream example executes this fixture. CV Studio's own
-protected macOS packages must additionally pass the existing native build
-smoke and installer/diagnostics checks on the matching real Mac architecture
-before a macOS protected artifact or completed cross-platform release may be
-claimed.
+Windows installation is mandatory and fail-closed. Intel and Apple Silicon
+CV Studio validation is deferred; no v24.6.240 macOS artifact was produced and
+no macOS support claim is made. macOS users remain on v24.6.239 until a
+separately authorized milestone completes native build, installer,
+diagnostics, functional and release-artifact verification on each matching
+architecture.

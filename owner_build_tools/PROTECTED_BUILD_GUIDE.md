@@ -7,7 +7,7 @@ This folder belongs only in the private-source package.
 - Compiles the Python/Flask backend into a native Nuitka standalone executable.
 - Excludes readable backend source, owner Authy enrollment material, private handover/reference notes, build tools and compiler output from colleague packages.
 - Conservatively transforms the browser JavaScript to make casual copying harder.
-- Keeps a minimal `app.py` launcher only so the existing Windows/macOS installer and receipt checks continue to work.
+- Keeps a minimal `app.py` launcher so the Windows installer and receipt checks continue to work.
 
 ## What it cannot make secret
 
@@ -35,23 +35,18 @@ owner_build_tools\BUILD_PROTECTED_WINDOWS.bat
 
 The artifact is written to `protected-output`.
 
-## macOS
+## v24.6.240 platform boundary
 
-Run:
+v24.6.240 is Windows-x64-only. The private GitHub Actions workflow builds and
+smoke-tests only Windows x64, and the protected builder rejects macOS targets.
+Do not run the historical Mac builder for this version and do not create or
+claim a v24.6.240 macOS artifact.
 
-```text
-owner_build_tools/BUILD_PROTECTED_MAC.command
-```
-
-The script detects Apple Silicon (`arm64`) or Intel (`x86_64`) and produces the matching package.
-
-## Building all three packages without owning every Mac architecture
-
-Use the private GitHub Actions workflow in `.github/workflows/build-protected.yml` inside a private repository. It builds and smoke-tests:
-
-- Windows x64;
-- macOS Apple Silicon;
-- macOS Intel.
+Intel and Apple Silicon native validation is deferred to a separately
+authorized milestone. macOS users remain on the last verified release,
+v24.6.239. The v24.6.239 macOS installer, launcher and rollback files remain
+byte-identical in the source tree as future-work inputs; they are excluded
+from the Windows colleague artifact.
 
 Only repository users with access can download workflow artifacts. Keep the repository private and never invite colleagues who should not receive source access. The included `.gitignore` excludes `OWNER_ONLY_AUTHY_SETUP/`, build output, dependencies and runtime logs because the QR/manual setup files are not needed by CI.
 
@@ -65,9 +60,11 @@ Only repository users with access can download workflow artifacts. Keep the repo
 
 The private-source ZIP remains the only patch base. Never patch from a colleague package.
 
-## macOS signing note
+## Deferred macOS signing work
 
-The builder applies an ad-hoc code signature and the Authy-protected installer clears quarantine only from CV Studio's own `runtime/native` directory. This is not Apple notarisation. Organisations with strict Gatekeeper/MDM policy may still require an Apple Developer ID-signed and notarised build.
+Ad-hoc signing, Gatekeeper/MDM behavior, Apple Developer ID signing and
+notarisation require separate Intel and Apple Silicon native validation. None
+is claimed for v24.6.240.
 
 ## Authy limitation
 
@@ -105,17 +102,22 @@ The Windows binary is compiled with no-console mode. Normal launch uses `CV Stud
 
 - The builder seals the two largest proprietary prompt constants in a temporary native compile source. The readable owner source remains the future patch base.
 - The exact adm-zip 0.5.17 runtime folder is bundled and checked against a pinned aggregate SHA-256 tree hash. Native smoke tests deliberately remove `NODE_PATH` so they cannot borrow owner dependencies.
-- Windows and macOS artifacts contain only their own platform launchers. The owner-only title-cache merge utility is not included in colleague packages.
+- Platform artifacts contain only their own platform launchers. For v24.6.240, only the Windows-x64 artifact is authorized. The owner-only title-cache merge utility is not included in colleague packages.
 - Launch and smoke validation require the exact version, package root and instance identity, not only a healthy `/ping` response.
 - Colleague packages keep JobAdder, OneNote, Outlook and AI credentials in native/backend protected storage rather than browser localStorage.
 - JobAdder reconnect can reuse a securely stored Client Secret only for the exact same Client ID. The frontend sees only whether a matching secret is configured and never receives the secret value.
 - Runtime logs rotate continuously and redact common credentials and email addresses. Large/corrupt documents are bounded before preview, extraction or OCR.
-- Windows installers finalize the package-bound receipt only after required setup succeeds; macOS does the same after Node/adm-zip validation.
+- Windows installers finalize the package-bound receipt only after required setup succeeds.
 - CI uploads colleague ZIP/smoke files separately from private compiler diagnostics.
 
 ### Remaining platform reality
 
-Final Windows no-console, DPAPI, VBScript and PowerShell behavior must be checked on Windows. Apple Silicon/Intel binaries, Keychain, LaunchAgent, Gatekeeper and ad-hoc signing must be checked on their matching Macs. Native compilation and prompt sealing materially raise copying effort, but browser JavaScript and offline verifier material remain reversible to a determined specialist.
+Final Windows no-console, DPAPI, VBScript and PowerShell behavior must be
+checked on Windows. Apple Silicon/Intel binaries, Keychain, LaunchAgent,
+Gatekeeper and signing remain explicitly deferred until they can be checked
+on their matching Macs. Native compilation and prompt sealing materially
+raise copying effort, but browser JavaScript and offline verifier material
+remain reversible to a determined specialist.
 
 
 ## v24.6.193 deterministic adm-zip packaging

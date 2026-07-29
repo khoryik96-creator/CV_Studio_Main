@@ -53,10 +53,6 @@ UTF8_BOM = b"\xef\xbb\xbf"
 ANTIWORD_REQUIRED_HASHES = {
     "vendor/antiword/packages/antiword_1.3.5_windows_x64_r46.zip":
         "9a99f67680475605de009cb85ba94c7dc546eb261a4256d743597fbb24b0ddf8",
-    "vendor/antiword/packages/antiword_1.3.5_macos_x86_64_r46.tgz":
-        "501f2cf83b050fd4a56ab1ecff6fe21295c168eb4a9876d46c259e7ca21cb923",
-    "vendor/antiword/packages/antiword_1.3.5_macos_arm64_r46.tgz":
-        "17cd193eb8ed3b27d092c60fec181e6a7b6d82eda9741dbec03578396d659e25",
     "vendor/antiword/source/antiword_1.3.5.tar.gz":
         "72e84b33b54c11101cb70d63304ca0283f57a6d0ef518ca6329ff5e6490ad630",
     "vendor/antiword/GPL-2.0.txt":
@@ -65,11 +61,13 @@ ANTIWORD_REQUIRED_HASHES = {
         "f430cdfe9446c4b943074d4bf804232761c284f2caa3d4125006b158d8b14af8",
     "vendor/antiword/windows-x64/SHA256SUMS":
         "7d365a89f268a2fc34f815b369474124bc6a1aac02e9b0b57e6dfd5eb5368da0",
-    "vendor/antiword/macos-x86_64/SHA256SUMS":
-        "e616a696828ce938ad90594ce635ee4889d464787cdfd110f5e42efd12418729",
-    "vendor/antiword/macos-arm64/SHA256SUMS":
-        "f07264b33fefd3b12ce0af40f312ea8abd290a71e3d04f2c63a2bb16135cbe9e",
 }
+DEFERRED_ANTIWORD_PATHS = (
+    "vendor/antiword/macos-x86_64",
+    "vendor/antiword/macos-arm64",
+    "vendor/antiword/packages/antiword_1.3.5_macos_x86_64_r46.tgz",
+    "vendor/antiword/packages/antiword_1.3.5_macos_arm64_r46.tgz",
+)
 
 
 def _write_text_if_changed(path: Path, text: str, *, newline: str = "\n") -> bool:
@@ -268,6 +266,12 @@ def verify(root: Path) -> dict:
             errors.append(
                 f"mandatory pinned Antiword artifact hash mismatch: {relative}"
             )
+    for relative in DEFERRED_ANTIWORD_PATHS:
+        if (root / relative).exists():
+            errors.append(
+                "deferred macOS Antiword payload must not ship in v24.6.240: "
+                + relative
+            )
     if not (root / "cvstudio_antiword.py").is_file():
         errors.append("mandatory Antiword runtime verifier is missing: cvstudio_antiword.py")
 
@@ -354,7 +358,7 @@ def verify(root: Path) -> dict:
         "posix_script_line_endings": "UTF-8 no-BOM, LF",
         "powershell_helper_encoding": "UTF-8 no-BOM",
         "vbs_launcher_encoding": "UTF-8 no-BOM, CRLF (WSH-safe)",
-        "antiword": "1.3.5 pinned Windows x64 + macOS Intel/ARM runtimes and corresponding source",
+        "antiword": "1.3.5 pinned Windows x64 runtime and corresponding source",
     }
 
 
@@ -378,7 +382,7 @@ def main() -> int:
         for error in result["errors"]:
             print("ERROR:", error)
         return 1
-    print("Private repository is byte-stable and consistent: adm-zip 0.5.17, Antiword 1.3.5 platform runtimes/source, no lock file, exact Git bytes, no-BOM CRLF batch files, BOM-free CRLF .vbs launchers, no-BOM LF POSIX scripts, BOM-free INSTANCE_PORT.ps1/STOP_CORE.ps1/RESTORE_PREVIOUS.ps1.")
+    print("Private repository is byte-stable and consistent: adm-zip 0.5.17, Antiword 1.3.5 Windows-x64 runtime/source, no deferred Mac payload, no lock file, exact Git bytes, no-BOM CRLF batch files, BOM-free CRLF .vbs launchers, no-BOM LF POSIX scripts, BOM-free INSTANCE_PORT.ps1/STOP_CORE.ps1/RESTORE_PREVIOUS.ps1.")
     return 0
 
 

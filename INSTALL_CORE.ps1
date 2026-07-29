@@ -688,6 +688,7 @@ function Invoke-AntiwordFunctionalCheck {
         $startInfo.RedirectStandardOutput = $true
         $startInfo.RedirectStandardError = $true
         $null = $startInfo.EnvironmentVariables.Remove('ANTIWORDHOME')
+        $startInfo.EnvironmentVariables['HOME'] = Split-Path -Parent $Executable
         $process.StartInfo = $startInfo
         if (-not $process.Start()) { throw 'functional-execution-failed' }
         $outputTask = $process.StandardOutput.ReadToEndAsync()

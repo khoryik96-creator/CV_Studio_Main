@@ -1,15 +1,12 @@
 #!/bin/bash
-# The 郭 Lab CV Studio — macOS installer v24.6.240
+# The 郭 Lab CV Studio — macOS installer v24.6.239
 set -u
 printf '%s\n' '============================================' '  The 郭 Lab CV Studio — Mac Setup' '============================================' ''
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 STATE_DIR="$HOME/.guo_lab_cv_studio"
 VENV_DIR="$STATE_DIR/venv"
 RECEIPT_PATH="$STATE_DIR/install_receipt.json"
-VERSION="v24.6.240"
-ANTIWORD_VERSION="1.3.5"
-ANTIWORD_FILE_COUNT="37"
-ANTIWORD_FIXTURE_SHA256="f430cdfe9446c4b943074d4bf804232761c284f2caa3d4125006b158d8b14af8"
+VERSION="v24.6.239"
 TOTP_MASK_HEX="9339245374f57a39a5a2b0a8f932cc802daee838"
 TOTP_MASKED_HEX="3110f491137b761b47abb4b1787aff446496760a"
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
@@ -77,177 +74,8 @@ fi
 NATIVE_MODE=0; [ -n "$NATIVE_EXE" ] && NATIVE_MODE=1
 mkdir -p "$STATE_DIR"
 
-sha256_file(){
-  /usr/bin/shasum -a 256 "$1" | /usr/bin/awk '{print tolower($1)}'
-}
-
-antiword_vendor_root(){
-  for candidate in "$SCRIPT_DIR/vendor/antiword" "$SCRIPT_DIR/runtime/native/vendor/antiword"; do
-    [ -f "$candidate/fixtures/UDHR-english.doc" ] && { printf '%s\n' "$candidate"; return 0; }
-  done
-  return 1
-}
-
-run_antiword_functional_check(){
-  local runtime_root="$1" executable="$2" fixture="$3"
-  local check_dir check_pid timeout_pid check_status output
-  check_dir="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/cvstudio-antiword-check.XXXXXX")" || return 1
-  (
-    cd "$runtime_root/bin" || exit 1
-    exec /usr/bin/env -u ANTIWORDHOME "$executable" -t "$fixture" \
-      >"$check_dir/stdout" 2>"$check_dir/stderr"
-  ) &
-  check_pid=$!
-  (
-    /bin/sleep 12
-    : > "$check_dir/timed-out"
-    /bin/kill "$check_pid" 2>/dev/null || true
-    /bin/sleep 0.2
-    /bin/kill -KILL "$check_pid" 2>/dev/null || true
-  ) &
-  timeout_pid=$!
-  wait "$check_pid"
-  check_status=$?
-  if /bin/kill -0 "$timeout_pid" 2>/dev/null; then
-    /bin/kill "$timeout_pid" 2>/dev/null || true
-  fi
-  wait "$timeout_pid" 2>/dev/null || true
-  if [ -f "$check_dir/timed-out" ]; then
-    /bin/rm -rf "$check_dir"
-    echo '    ERROR: Antiword functional check timed out after 12 seconds.' >&2
-    return 124
-  fi
-  output="$(/bin/cat "$check_dir/stdout" 2>/dev/null || true)"
-  /bin/rm -rf "$check_dir"
-  [ "$check_status" -eq 0 ] || return 1
-  printf '%s' "$output" | /usr/bin/grep -q 'Universal Declaration of Human Rights' || return 1
-  printf '%s' "$output" | /usr/bin/grep -q 'All people everywhere have the same human rights' || return 1
-  return 0
-}
-
-verify_antiword_runtime(){
-  runtime_root="$1"; fixture="$2"; tag="$3"; manifest_hash="$4"; executable_hash="$5"
-  [ -d "$runtime_root/bin" ] && [ -d "$runtime_root/share" ] && [ -f "$runtime_root/SHA256SUMS" ] || return 1
-  [ ! -L "$runtime_root" ] && [ ! -L "$runtime_root/bin" ] && [ ! -L "$runtime_root/share" ] || return 1
-  [ ! -L "$runtime_root/SHA256SUMS" ] && [ ! -L "$fixture" ] || return 1
-  [ "$(sha256_file "$runtime_root/SHA256SUMS")" = "$manifest_hash" ] || return 1
-  [ -f "$fixture" ] && [ "$(sha256_file "$fixture")" = "$ANTIWORD_FIXTURE_SHA256" ] || return 1
-  [ -z "$(/usr/bin/find "$runtime_root/bin" "$runtime_root/share" -type l -print -quit 2>/dev/null)" ] || return 1
-  actual_count="$(/usr/bin/find "$runtime_root/bin" "$runtime_root/share" -type f 2>/dev/null | /usr/bin/wc -l | /usr/bin/tr -d ' ')"
-  [ "$actual_count" = "$ANTIWORD_FILE_COUNT" ] || return 1
-  line_count="$(/usr/bin/wc -l < "$runtime_root/SHA256SUMS" | /usr/bin/tr -d ' ')"
-  [ "$line_count" = "$ANTIWORD_FILE_COUNT" ] || return 1
-  while IFS='  ' read -r expected relative; do
-    relative="$(printf '%s' "$relative" | /usr/bin/sed 's/^ *//')"
-    printf '%s' "$expected" | /usr/bin/grep -Eq '^[0-9a-fA-F]{64}$' || return 1
-    case "$relative" in bin/*|share/*) ;; *) return 1;; esac
-    case "$relative" in *..*|/*) return 1;; esac
-    file_path="$runtime_root/$relative"
-    [ -f "$file_path" ] && [ ! -L "$file_path" ] || return 1
-    [ "$(sha256_file "$file_path")" = "$(printf '%s' "$expected" | /usr/bin/tr 'A-F' 'a-f')" ] || return 1
-  done < "$runtime_root/SHA256SUMS"
-
-  executable="$runtime_root/bin/antiword"
-  [ ! -L "$executable" ] || return 1
-  [ "$(sha256_file "$executable")" = "$executable_hash" ] || return 1
-  /bin/chmod +x "$executable" 2>/dev/null || return 1
-  native_info="$(/usr/bin/file "$executable" 2>/dev/null || true)"
-  case "$tag" in
-    macos-arm64)
-      printf '%s' "$native_info" | /usr/bin/grep -q 'Mach-O 64-bit arm64' || return 1
-      /usr/bin/codesign --verify --verbose=2 "$executable" >/dev/null 2>&1 || return 1
-      ;;
-    macos-x86_64)
-      printf '%s' "$native_info" | /usr/bin/grep -q 'Mach-O 64-bit x86_64' || return 1
-      ;;
-    *) return 1;;
-  esac
-  run_antiword_functional_check "$runtime_root" "$executable" "$fixture" || return 1
-  return 0
-}
-
-remove_antiword_stage(){
-  local stage_path="$1" stage_prefix="$2"
-  case "$stage_path" in
-    "$stage_prefix"*) /bin/rm -rf "$stage_path" ;;
-  esac
-}
-
-install_verified_antiword(){
-  vendor="$(antiword_vendor_root 2>/dev/null || true)"
-  [ -n "$vendor" ] || { echo '    ERROR: Pinned Antiword bundle is missing.'; return 1; }
-  arch="$(/usr/bin/uname -m 2>/dev/null || echo unknown)"
-  case "$arch" in
-    arm64|aarch64)
-      tag='macos-arm64'
-      manifest_hash='f07264b33fefd3b12ce0af40f312ea8abd290a71e3d04f2c63a2bb16135cbe9e'
-      executable_hash='d4ad0924e195f5dc6a898d5bdcb734a532446ed927af7e3c49865b11ef5e250d'
-      ;;
-    x86_64|amd64)
-      tag='macos-x86_64'
-      manifest_hash='e616a696828ce938ad90594ce635ee4889d464787cdfd110f5e42efd12418729'
-      executable_hash='867f9688d851ec85cb6dd5e70f14abcf53e2c77bf55da20ec6e8b94399904d5f'
-      ;;
-    *) echo "    ERROR: Antiword has no approved runtime for architecture $arch."; return 1;;
-  esac
-  source_root="$vendor/$tag"; source_fixture="$vendor/fixtures/UDHR-english.doc"
-  verify_antiword_runtime "$source_root" "$source_fixture" "$tag" "$manifest_hash" "$executable_hash" || {
-    echo '    ERROR: Bundled Antiword failed integrity, architecture, signature, or functional verification.'
-    return 1
-  }
-
-  dependency_base="$STATE_DIR/dependencies/antiword/$ANTIWORD_VERSION"
-  destination="$dependency_base/$tag"
-  destination_fixture="$destination/fixtures/UDHR-english.doc"
-  if verify_antiword_runtime "$destination" "$destination_fixture" "$tag" "$manifest_hash" "$executable_hash"; then
-    echo '    Managed Antiword 1.3.5 is hash-verified and functional.'
-    return 0
-  fi
-  /bin/mkdir -p "$dependency_base" || return 1
-  stage="$(/usr/bin/mktemp -d "$dependency_base/$tag.stage.XXXXXX")" || return 1
-  stage_prefix="$dependency_base/$tag.stage."
-  /bin/mkdir -p "$stage/fixtures" || {
-    remove_antiword_stage "$stage" "$stage_prefix"
-    return 1
-  }
-  /bin/cp -R "$source_root/bin" "$source_root/share" "$stage/" || {
-    remove_antiword_stage "$stage" "$stage_prefix"
-    return 1
-  }
-  /bin/cp "$source_root/SHA256SUMS" "$stage/SHA256SUMS" || {
-    remove_antiword_stage "$stage" "$stage_prefix"
-    return 1
-  }
-  /bin/cp "$source_fixture" "$stage/fixtures/UDHR-english.doc" || {
-    remove_antiword_stage "$stage" "$stage_prefix"
-    return 1
-  }
-  verify_antiword_runtime "$stage" "$stage/fixtures/UDHR-english.doc" "$tag" "$manifest_hash" "$executable_hash" || {
-    remove_antiword_stage "$stage" "$stage_prefix"
-    echo '    ERROR: Staged Antiword failed verification.'
-    return 1
-  }
-  if [ -e "$destination" ]; then
-    backup="$dependency_base/$tag.invalid.$(/bin/date +%Y%m%d%H%M%S).$$.$RANDOM"
-    [ ! -e "$backup" ] || {
-      remove_antiword_stage "$stage" "$stage_prefix"
-      return 1
-    }
-    /bin/mv "$destination" "$backup" || {
-      remove_antiword_stage "$stage" "$stage_prefix"
-      return 1
-    }
-  fi
-  /bin/mv "$stage" "$destination" || {
-    remove_antiword_stage "$stage" "$stage_prefix"
-    return 1
-  }
-  verify_antiword_runtime "$destination" "$destination_fixture" "$tag" "$manifest_hash" "$executable_hash" || return 1
-  echo '    Managed Antiword 1.3.5 was repaired from the pinned bundled runtime.'
-}
-
 # Mandatory Node runtime and DOCX package.
-echo '[1/5] Checking Node.js...'
+echo '[1/4] Checking Node.js...'
 if ! command -v node >/dev/null 2>&1; then
   if command -v brew >/dev/null 2>&1; then
     echo '    Installing Node.js through Homebrew...'
@@ -259,7 +87,7 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 node --version || exit 1
 
-echo '[2/5] Preparing backend runtime...'
+echo '[2/4] Preparing backend runtime...'
 if [ "$NATIVE_MODE" -eq 1 ]; then
   echo '    Protected native backend detected; skipping full Python virtual environment and pip packages.'
   chmod +x "$NATIVE_EXE" 2>/dev/null || true
@@ -273,20 +101,14 @@ else
   "$VENV_PYTHON" -m pip install --disable-pip-version-check -r "$SCRIPT_DIR/requirements.txt" || exit 1
 fi
 
-echo '[3/5] Installing mandatory Antiword for legacy .doc files...'
-install_verified_antiword || {
-  echo '    Installation stopped: verified Antiword is mandatory. Re-extract this exact release and run install.sh again.'
-  exit 1
-}
-
-echo '[4/5] Installing Node packages...'
+echo '[3/4] Installing Node packages...'
 cd "$SCRIPT_DIR" || exit 1
 npm install --ignore-scripts --no-audit --no-fund || { echo '    ERROR: npm install failed.'; exit 1; }
 node -e "require('adm-zip')" || { echo '    ERROR: adm-zip could not be loaded after npm install.'; exit 1; }
 
 # Tesseract remains the OCR engine. PDFium is bundled in protected mode and
 # installed from requirements.txt in source mode, so Poppler is only fallback.
-echo '[5/5] Checking OCR tools...'
+echo '[4/4] Checking OCR tools...'
 if ! command -v tesseract >/dev/null 2>&1; then echo '    Tesseract not found; install with: brew install tesseract'; else echo '    Tesseract ready.'; fi
 if [ "$NATIVE_MODE" -eq 1 ]; then
   echo '    Built-in PDFium renderer is bundled; external Poppler is not required.'
@@ -373,35 +195,16 @@ else
 fi
 HEALTH_PID=$!
 HEALTH_OK=0; HEALTH_ERROR='startup timeout'
-HEALTH_DEADLINE=$((SECONDS + 75))
-health_remaining_seconds(){
-  local remaining
-  remaining=$((HEALTH_DEADLINE - SECONDS))
-  [ "$remaining" -gt 0 ] || return 1
-  printf '%s\n' "$remaining"
-}
-health_curl(){
-  local requested="$1" remaining timeout
-  shift
-  remaining="$(health_remaining_seconds)" || return 1
-  timeout="$requested"
-  [ "$remaining" -lt "$timeout" ] && timeout="$remaining"
-  /usr/bin/curl -fsS --connect-timeout 1 --max-time "$timeout" "$@"
-}
 for _i in $(seq 1 180); do
-  health_remaining_seconds >/dev/null || break
-  STATUS_JSON="$(health_curl 3 -H 'Cache-Control: no-cache' -H "X-CV-Studio-Request-ID: installer-$$-$_i" "http://localhost:$SMOKE_PORT/status" 2>/dev/null || true)"
-  IDENTITY="$(health_curl 3 "http://localhost:$SMOKE_PORT/instance-id" 2>/dev/null || true)"
-  DIAG_JSON="$(health_curl 15 "http://localhost:$SMOKE_PORT/diagnostics/runtime" 2>/dev/null || true)"
+  STATUS_JSON="$(curl -fsS --connect-timeout 1 --max-time 3 -H 'Cache-Control: no-cache' -H "X-CV-Studio-Request-ID: installer-$$-$_i" "http://localhost:$SMOKE_PORT/status" 2>/dev/null || true)"
+  IDENTITY="$(curl -fsS --connect-timeout 1 --max-time 3 "http://localhost:$SMOKE_PORT/instance-id" 2>/dev/null || true)"
+  DIAG_JSON="$(curl -fsS --connect-timeout 1 --max-time 5 "http://localhost:$SMOKE_PORT/diagnostics/runtime" 2>/dev/null || true)"
   case "$IDENTITY" in "$VERSION|"*"|$SCRIPT_DIR") ID_OK=1;; *) ID_OK=0;; esac
   printf '%s' "$STATUS_JSON" | grep -q '"healthy"[[:space:]]*:[[:space:]]*true' && STATUS_OK=1 || STATUS_OK=0
   printf '%s' "$STATUS_JSON" | grep -q "\"version\"[[:space:]]*:[[:space:]]*\"$VERSION\"" || STATUS_OK=0
   printf '%s' "$DIAG_JSON" | grep -q '"valid"[[:space:]]*:[[:space:]]*true' && DIAG_OK=1 || DIAG_OK=0
   printf '%s' "$DIAG_JSON" | grep -q '"request_id"[[:space:]]*:[[:space:]]*"[^"]\+"' || DIAG_OK=0
-  printf '%s' "$DIAG_JSON" | grep -q '"antiword"[[:space:]]*:[[:space:]]*true' && ANTIWORD_OK=1 || ANTIWORD_OK=0
-  printf '%s' "$DIAG_JSON" | grep -q '"functional"[[:space:]]*:[[:space:]]*true' || ANTIWORD_OK=0
-  printf '%s' "$DIAG_JSON" | grep -q '"trusted"[[:space:]]*:[[:space:]]*true' || ANTIWORD_OK=0
-  if [ "$ID_OK" -eq 1 ] && [ "$STATUS_OK" -eq 1 ] && [ "$DIAG_OK" -eq 1 ] && [ "$ANTIWORD_OK" -eq 1 ]; then HEALTH_OK=1; HEALTH_ERROR=''; break; fi
+  if [ "$ID_OK" -eq 1 ] && [ "$STATUS_OK" -eq 1 ] && [ "$DIAG_OK" -eq 1 ]; then HEALTH_OK=1; HEALTH_ERROR=''; break; fi
   kill -0 "$HEALTH_PID" 2>/dev/null || { HEALTH_ERROR='health runtime exited early'; break; }
   sleep 0.4
 done
@@ -414,7 +217,7 @@ if [ -n "$BASE_PYTHON_REPORT" ]; then
   HEALTH_OK="$HEALTH_OK" HEALTH_ERROR="$HEALTH_ERROR" HEALTH_REPORT="$HEALTH_REPORT" VERSION="$VERSION" ROOT="$SCRIPT_DIR" PORT="$SMOKE_PORT" "$BASE_PYTHON_REPORT" - <<'PYHEALTH'
 import json,os,time
 ok=os.environ['HEALTH_OK']=='1'
-r={'ok':ok,'version':os.environ['VERSION'],'root':os.environ['ROOT'],'port':int(os.environ['PORT']),'completed_at':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),'checks':{'status':ok,'instance':ok,'diagnostics':ok,'request_id':ok,'antiword':ok},'error':os.environ.get('HEALTH_ERROR','')}
+r={'ok':ok,'version':os.environ['VERSION'],'root':os.environ['ROOT'],'port':int(os.environ['PORT']),'completed_at':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),'checks':{'status':ok,'instance':ok,'diagnostics':ok,'request_id':ok},'error':os.environ.get('HEALTH_ERROR','')}
 open(os.environ['HEALTH_REPORT'],'w',encoding='utf-8').write(json.dumps(r,indent=2))
 PYHEALTH
 else

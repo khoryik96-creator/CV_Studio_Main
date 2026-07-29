@@ -38,6 +38,7 @@ ADM_ZIP_VERSION = "0.5.17"
 # Aggregate hash of the vetted unpacked adm-zip 0.5.17 file tree. This catches
 # a replaced/repacked dependency even when package.json still claims 0.5.17.
 ADM_ZIP_TREE_SHA256 = "a2919d0a2172129642be0d128b2725cfaf9c7ab3652f51cc85964cb34d618dea"
+RELEASE_TARGET = "windows-x64"
 
 RUNTIME_ASSETS = ("index.html","generate.js","template.docx","cv_studio_logo.png","cv_studio.ico","vendor")
 ROOT_FILES = (
@@ -89,18 +90,24 @@ def sha256_tree(root: Path) -> str:
 def detect_target(value: str) -> str:
     if value != "auto": return value
     system=platform.system().lower(); machine=platform.machine().lower()
-    if system=="windows": return "windows-x64"
-    if system=="darwin": return "macos-arm64" if machine in {"arm64","aarch64"} else "macos-intel"
-    return "linux-x64-test"
+    if system=="windows" and machine in {"amd64","x86_64"}: return RELEASE_TARGET
+    raise RuntimeError(
+        "CV Studio v24.6.240 is a Windows-x64-only release. "
+        "macOS users must remain on the verified v24.6.239 release."
+    )
 
 
 def validate_target_host(target: str) -> None:
     system=platform.system().lower(); machine=platform.machine().lower()
-    if target=="windows-x64" and system!="windows": raise RuntimeError("Windows packages must be built on Windows.")
-    if target.startswith("macos-") and system!="darwin": raise RuntimeError("macOS packages must be built on macOS.")
-    if target=="macos-arm64" and machine not in {"arm64","aarch64"}: raise RuntimeError("Apple Silicon build needs an arm64 Mac.")
-    if target=="macos-intel" and machine in {"arm64","aarch64"}: raise RuntimeError("Intel build needs an Intel Mac runner.")
-    if target=="linux-x64-test" and system!="linux": raise RuntimeError("Linux proof build needs Linux.")
+    if target != RELEASE_TARGET:
+        raise RuntimeError(
+            "CV Studio v24.6.240 may produce only a Windows-x64 artifact."
+        )
+    if system!="windows" or machine not in {"amd64","x86_64"}:
+        raise RuntimeError(
+            "CV Studio v24.6.240 Windows-x64 packages must be built on "
+            "native Windows x64."
+        )
 
 
 
@@ -242,9 +249,7 @@ def validate_antiword_runtime(
             "static_platform_manifests_verified": len(module._PLATFORMS),
             "test_only": True,
         }
-    tag = {
-        "macos-intel": "macos-x86_64",
-    }.get(str(target or ""), str(target or "")) or module._platform_tag()
+    tag = str(target or "") or module._platform_tag()
     if tag not in module._PLATFORMS:
         raise RuntimeError(
             "Mandatory Antiword native preflight target is unsupported: "
@@ -457,6 +462,8 @@ def prepare_native_source(root: Path, work: Path) -> tuple[Path,dict]:
 
 
 def compile_native(root: Path, work: Path, target: str, source_entry: Path | None = None) -> tuple[Path,Path]:
+    if target != RELEASE_TARGET:
+        raise RuntimeError("v24.6.240 native compilation is Windows-x64-only.")
     out=work/"nuitka-output"; out.mkdir()
     report=work/f"nuitka-{target}-report.xml"
     cmd=[sys.executable,"-m","nuitka","--mode=standalone","--assume-yes-for-downloads",
@@ -480,9 +487,6 @@ def compile_native(root: Path, work: Path, target: str, source_entry: Path | Non
     dist=dist_dirs[0]
     exe=next((p for p in sorted(dist.iterdir(),key=lambda p:len(p.name)) if p.is_file() and p.name.lower().startswith("cvstudio")),None)
     if exe is None: raise RuntimeError("Compiled CVStudio executable missing.")
-    if target.startswith("macos-"):
-        run(["codesign","--force","--deep","--sign","-","--timestamp=none",str(exe)],timeout=300)
-        run(["codesign","--verify","--deep","--strict",str(exe)],timeout=120)
     return dist,report
 
 
@@ -526,6 +530,8 @@ os.execv(B,A)
 
 def patch_launchers(root: Path,target: str) -> None:
     """Validate platform launchers; source files are already cross-platform aware."""
+    if target != RELEASE_TARGET:
+        raise RuntimeError("v24.6.240 launcher packaging is Windows-x64-only.")
     if target=="windows-x64":
         for rel in ("START_HIDDEN.vbs", "WATCHDOG.vbs"):
             raw=(root/rel).read_bytes()
@@ -548,34 +554,14 @@ def patch_launchers(root: Path,target: str) -> None:
         restore_bat=(root/"RESTORE_PREVIOUS.bat").read_text(encoding="utf-8-sig")
         if "update_state.json" not in restore_ps or "install_receipt.before_restore" not in restore_ps or "CV Studio.lnk" not in restore_ps or "RESTORE_PREVIOUS.ps1" not in restore_bat:
             raise RuntimeError("Windows transactional rollback launcher is missing or incomplete.")
-    elif target.startswith("macos-"):
-        start=(root/"start.sh").read_text(encoding="utf-8-sig")
-        install=(root/"install.sh").read_text(encoding="utf-8-sig")
-        if "--connect-timeout 2 --max-time 4" not in start or "/instance-id" not in start:
-            raise RuntimeError("macOS launcher lacks bounded package identity checks.")
-        if "Protected native backend detected" not in install or "install-receipt-v1" not in install:
-            raise RuntimeError("macOS installer lacks native/minimal/final receipt flow.")
-        restore=(root/"restore_previous.sh").read_text(encoding="utf-8-sig")
-        if "update_state.json" not in restore or "install_receipt.before_restore" not in restore or "CV Studio.command" not in restore:
-            raise RuntimeError("macOS transactional rollback launcher is missing or incomplete.")
-        # Clear quarantine only from this Authy-authorized runtime.
-        marker='SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"'
-        if marker in install and 'xattr -dr com.apple.quarantine "$SCRIPT_DIR/runtime/native"' not in install:
-            install=install.replace(marker, marker + '\nxattr -dr com.apple.quarantine \"$SCRIPT_DIR/runtime/native\" 2>/dev/null || true', 1)
-            (root/"install.sh").write_text(install,encoding="utf-8")
 
 
 def prune_target_incompatible_launchers(root: Path, target: str) -> None:
     """Do not ship launchers for an operating system the artifact cannot run on."""
+    if target != RELEASE_TARGET:
+        raise RuntimeError("v24.6.240 artifact pruning is Windows-x64-only.")
     if target == "windows-x64":
         remove = ("install.sh", "start.sh", "restore_previous.sh")
-    elif target.startswith("macos-"):
-        remove = (
-            "CV Studio.bat", "INSTALL.bat", "INSTALL_CORE.bat", "INSTALL_CORE.ps1",
-            "INSTALL_RECEIPT.ps1", "START_HIDDEN.vbs",
-            "STOP.bat", "STOP_CORE.ps1", "WATCHDOG.vbs", "INSTANCE_PORT.ps1",
-            "RESTORE_PREVIOUS.bat", "RESTORE_PREVIOUS.ps1", "cv_studio.ico",
-        )
     else:
         remove = ()
     for name in remove:
@@ -603,6 +589,8 @@ def bundle_node_runtime_dependency(source: Path, package: Path) -> None:
 
 def build_package(source: Path,work: Path,out_dir: Path,target: str,dist: Path,nuitka_report: Path,
                   protected_index: Path,protected_generate: Path,protection: dict) -> tuple[Path,Path]:
+    if target != RELEASE_TARGET:
+        raise RuntimeError("v24.6.240 protected packaging is Windows-x64-only.")
     package=work/"package"/"cv_formatter"; native=package/"runtime"/"native"
     shutil.copytree(dist,native)
     for name in RUNTIME_ASSETS:
@@ -663,7 +651,7 @@ def build_package(source: Path,work: Path,out_dir: Path,target: str,dist: Path,n
         target,
         native / "vendor" / "antiword",
     )
-    if target != "linux-x64-test" and packaged_antiword.get("source") != "bundled":
+    if packaged_antiword.get("source") != "bundled":
         raise RuntimeError(
             "Packaged Antiword validation did not resolve the copied bundle."
         )
@@ -784,6 +772,8 @@ def protected_smoke_environment(state_root: Path) -> dict[str,str]:
 
 
 def smoke_test(package: Path,source: Path,output: Path,target: str,timeout_seconds: int = 240) -> dict:
+    if target != RELEASE_TARGET:
+        raise RuntimeError("v24.6.240 protected smoke testing is Windows-x64-only.")
     production_port_occupied=_loopback_port_is_occupied(5000)
     smoke_port=_choose_smoke_port()
     base_url=f"http://127.0.0.1:{smoke_port}"
@@ -1021,7 +1011,7 @@ def smoke_test(package: Path,source: Path,output: Path,target: str,timeout_secon
 
 def main() -> int:
     ap=argparse.ArgumentParser(); ap.add_argument("--source-root",default=str(Path(__file__).resolve().parents[1])); ap.add_argument("--output-dir",default="protected-output")
-    ap.add_argument("--target",choices=("auto","windows-x64","macos-arm64","macos-intel","linux-x64-test"),default="auto")
+    ap.add_argument("--target",choices=("auto","windows-x64"),default="auto")
     ap.add_argument("--smoke-timeout",type=int,default=240,help="Seconds to wait for the compiled server during native smoke testing.")
     ap.add_argument("--skip-obfuscation",action="store_true"); ap.add_argument("--skip-smoke",action="store_true"); args=ap.parse_args()
     source=Path(args.source_root).resolve(); output=Path(args.output_dir).resolve(); target=detect_target(args.target)

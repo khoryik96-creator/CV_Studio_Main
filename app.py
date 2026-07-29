@@ -11271,11 +11271,26 @@ def _spider_preview_payload_cache_get(token, candidate_id, content_sha256, varia
             return None
         if not isinstance(payload, dict) or not payload.get("ok"):
             return None
+        payload["_cache_content_kind"] = str(
+            item.get("content_kind") or ""
+        )
+        payload["_cache_antiword_verified"] = bool(
+            item.get("antiword_verified")
+        )
         payload["preview_cache_hit"] = True
         return payload
 
 
-def _spider_preview_payload_cache_put(token, candidate_id, content_sha256, payload, variant="full"):
+def _spider_preview_payload_cache_put(
+    token,
+    candidate_id,
+    content_sha256,
+    payload,
+    variant="full",
+    *,
+    content_kind="",
+    antiword_verified=False,
+):
     global _SPIDER_PREVIEW_PAYLOAD_CACHE_BYTES
     if not isinstance(payload, dict) or not payload.get("ok"):
         return
@@ -11295,7 +11310,13 @@ def _spider_preview_payload_cache_put(token, candidate_id, content_sha256, paylo
         _spider_preview_payload_cache_cleanup()
         previous = _SPIDER_PREVIEW_PAYLOAD_CACHE.pop(key, None) or {}
         _SPIDER_PREVIEW_PAYLOAD_CACHE_BYTES = max(0, _SPIDER_PREVIEW_PAYLOAD_CACHE_BYTES - int(previous.get("bytes") or 0))
-        _SPIDER_PREVIEW_PAYLOAD_CACHE[key] = {"json": encoded, "bytes": size, "saved_at": time.time()}
+        _SPIDER_PREVIEW_PAYLOAD_CACHE[key] = {
+            "json": encoded,
+            "bytes": size,
+            "content_kind": str(content_kind or "")[:32],
+            "antiword_verified": bool(antiword_verified),
+            "saved_at": time.time(),
+        }
         _SPIDER_PREVIEW_PAYLOAD_CACHE_BYTES += size
         while (_SPIDER_PREVIEW_PAYLOAD_CACHE and (
             len(_SPIDER_PREVIEW_PAYLOAD_CACHE) > _SPIDER_PREVIEW_PAYLOAD_CACHE_MAX_ENTRIES
@@ -11912,6 +11933,8 @@ def _spider_fetch_candidate_resume_text(token, candidate_id):
             filename = record.get("fileName") or dispo or ""
             content_sha256 = _spider_download_content_identity(raw)
             content_kind = _document_content_kind(raw)
+            if _document_is_legacy_doc(raw, ctype, filename):
+                content_kind = "legacy_doc"
             cached = _spider_resume_text_cache_get(
                 token,
                 candidate_id,
@@ -13461,6 +13484,20 @@ def _document_content_kind(raw):
     return ""
 
 
+def _document_is_legacy_doc(raw, content_type="", filename=""):
+    """Apply strong byte identity before legacy-DOC metadata fallback."""
+
+    content_kind = _document_content_kind(raw)
+    if content_kind:
+        return content_kind == "legacy_doc"
+    ctype = str(content_type or "").lower()
+    name = _spider_filename_from_disposition(
+        filename,
+        filename,
+    ).lower()
+    return "msword" in ctype or name.endswith(".doc")
+
+
 def _document_image_extension(raw):
     raw = raw or b""
     if raw.startswith(b"\x89PNG\r\n\x1a\n"):
@@ -13775,8 +13812,13 @@ def _spider_extract_text_from_download(raw, content_type="", filename="", ocr_pa
         cancel_check()
     content_type = str(content_type or "").lower()
     filename = str(filename or "").lower()
+    is_legacy_doc = _document_is_legacy_doc(
+        raw,
+        content_type,
+        filename,
+    )
     if not raw:
-        if "msword" in content_type or filename.endswith(".doc"):
+        if is_legacy_doc:
             raise AntiwordDependencyError(
                 "document-extraction-failed",
                 "This legacy .doc is empty or unreadable. Convert it to DOCX "
@@ -13788,10 +13830,7 @@ def _spider_extract_text_from_download(raw, content_type="", filename="", ocr_pa
     # signatures take precedence; metadata is used only when the payload has no
     # recognized identity.
     content_kind = _document_content_kind(raw)
-    if content_kind == "legacy_doc" or (
-        not content_kind
-        and ("msword" in content_type or filename.endswith(".doc"))
-    ):
+    if is_legacy_doc:
         if callable(cancel_check):
             cancel_check()
         text = _spider_extract_legacy_doc_text_for_preview(raw)
@@ -14233,10 +14272,9 @@ def _spider_visual_preview_payload(raw, content_type="", filename="", max_pages=
     fname = _spider_filename_from_disposition(filename, filename).lower()
     ext = _os.path.splitext(fname)[1].lower()
     content_kind = _document_content_kind(raw)
+    is_legacy_doc = _document_is_legacy_doc(raw, ctype, fname)
     if len(raw) > 12 * 1024 * 1024:
-        if content_kind == "legacy_doc" or (
-            not content_kind and ("msword" in ctype or ext == ".doc")
-        ):
+        if is_legacy_doc:
             _spider_extract_legacy_doc_text_for_preview(raw)
         return None
     stripped = raw.lstrip()[:1]
@@ -14257,7 +14295,7 @@ def _spider_visual_preview_payload(raw, content_type="", filename="", max_pages=
         mime = "image/png" if (raw[:8].startswith(b"\x89PNG") or ext == ".png" or "png" in ctype) else "image/jpeg"
         data = _base64.b64encode(raw).decode("ascii")
         return {"visual_mode": "image", "data_url": "data:" + mime + ";base64," + data, "source": "actual JobAdder image resume", "download_disabled": True, "note": "Preview download controls are disabled."}
-    looks_office = content_kind in {"zip", "legacy_doc"} or (
+    looks_office = content_kind == "zip" or is_legacy_doc or (
         not content_kind
         and (
             "word" in ctype
@@ -14267,7 +14305,7 @@ def _spider_visual_preview_payload(raw, content_type="", filename="", max_pages=
         )
     )
     if looks_office:
-        if content_kind == "legacy_doc":
+        if is_legacy_doc:
             conv_ext = ".doc"
         elif content_kind == "zip":
             conv_ext = ".docx"
@@ -14576,8 +14614,16 @@ def jobadder_spider_candidate_preview():
             return "", "Searchable OCR text will be prepared when this candidate is opened."
         return extract_text(raw, ctype, filename)
 
-    def cached_preview(raw):
+    cache_provenance = {"legacy_doc": False}
+
+    def cached_preview(raw, ctype="", filename=""):
         content_sha256 = _spider_download_content_identity(raw)
+        is_legacy_doc = _document_is_legacy_doc(
+            raw,
+            ctype,
+            filename,
+        )
+        cache_provenance["legacy_doc"] = is_legacy_doc
         if not content_sha256:
             return "", None
         if prefetch_mode:
@@ -14602,15 +14648,28 @@ def jobadder_spider_candidate_preview():
                 "full",
             )
         if payload is not None:
-            if _document_content_kind(raw) == "legacy_doc":
+            cached_kind = str(
+                payload.pop("_cache_content_kind", "") or ""
+            )
+            cached_antiword = bool(
+                payload.pop("_cache_antiword_verified", False)
+            )
+            if is_legacy_doc:
+                if (
+                    cached_kind != "legacy_doc"
+                    or not cached_antiword
+                ):
+                    return content_sha256, None
                 _require_verified_antiword()
             payload = dict(payload)
             payload["attachment_fingerprint"] = attachment_fingerprint[:24]
         return content_sha256, payload
 
-    def cache_resume_text(raw, text, source):
+    def cache_resume_text(raw, ctype, filename, text, source):
         content_sha256 = _spider_download_content_identity(raw)
         content_kind = _document_content_kind(raw)
+        if _document_is_legacy_doc(raw, ctype, filename):
+            content_kind = "legacy_doc"
         _spider_resume_text_cache_put(
             token,
             candidate_id,
@@ -14655,6 +14714,12 @@ def jobadder_spider_candidate_preview():
                     content_sha256,
                     payload,
                     store_variant,
+                    content_kind=(
+                        "legacy_doc"
+                        if cache_provenance["legacy_doc"]
+                        else ""
+                    ),
+                    antiword_verified=cache_provenance["legacy_doc"],
                 )
         return jsonify(payload), status
 
@@ -14670,13 +14735,23 @@ def jobadder_spider_candidate_preview():
             raw, ctype, dispo = get_raw(path, timeout=12)
             tried.append(path)
             filename = record.get("fileName") or dispo or ""
-            content_sha256, cached_payload = cached_preview(raw)
+            content_sha256, cached_payload = cached_preview(
+                raw,
+                ctype,
+                filename,
+            )
             if cached_payload is not None:
                 return jsonify(cached_payload)
             visual = render_visual(raw, ctype, filename)
             search_text, search_source = visual_search_text(raw, ctype, filename, visual)
             if search_text:
-                cache_resume_text(raw, search_text, search_source)
+                cache_resume_text(
+                    raw,
+                    ctype,
+                    filename,
+                    search_text,
+                    search_source,
+                )
             if visual:
                 visual = _spider_apply_visual_search_state(visual, search_text, search_source)
                 visual.update({
@@ -14728,14 +14803,24 @@ def jobadder_spider_candidate_preview():
         try:
             raw, ctype, dispo = get_raw(path, timeout=10)
             tried.append(path)
-            content_sha256, cached_payload = cached_preview(raw)
+            content_sha256, cached_payload = cached_preview(
+                raw,
+                ctype,
+                dispo,
+            )
             if cached_payload is not None:
                 return jsonify(cached_payload)
             visual = render_visual(raw, ctype, dispo)
             if visual:
                 search_text, search_source = visual_search_text(raw, ctype, dispo, visual)
                 if search_text:
-                    cache_resume_text(raw, search_text, search_source)
+                    cache_resume_text(
+                        raw,
+                        ctype,
+                        dispo,
+                        search_text,
+                        search_source,
+                    )
                 visual = _spider_apply_visual_search_state(visual, search_text, search_source)
                 visual.update({
                     "ok": True,
@@ -14750,7 +14835,7 @@ def jobadder_spider_candidate_preview():
                 )
             txt, src = extract_text(raw, ctype, dispo)
             if txt:
-                cache_resume_text(raw, txt, src)
+                cache_resume_text(raw, ctype, dispo, txt, src)
                 return respond({
                     "ok": True,
                     "candidate_id": candidate_id,
@@ -14800,14 +14885,24 @@ def jobadder_spider_candidate_preview():
                             raw2, ctype2, dispo2 = get_raw(path, timeout=12)
                             tried.append(path)
                             filename = att.get("name") or dispo2
-                            content_sha256, cached_payload = cached_preview(raw2)
+                            content_sha256, cached_payload = cached_preview(
+                                raw2,
+                                ctype2,
+                                filename,
+                            )
                             if cached_payload is not None:
                                 return jsonify(cached_payload)
                             visual = render_visual(raw2, ctype2, filename)
                             if visual:
                                 search_text, search_source = visual_search_text(raw2, ctype2, filename, visual)
                                 if search_text:
-                                    cache_resume_text(raw2, search_text, search_source)
+                                    cache_resume_text(
+                                        raw2,
+                                        ctype2,
+                                        filename,
+                                        search_text,
+                                        search_source,
+                                    )
                                 visual = _spider_apply_visual_search_state(visual, search_text, search_source)
                                 visual.update({
                                     "ok": True,
@@ -14823,7 +14918,13 @@ def jobadder_spider_candidate_preview():
                                 )
                             txt, src = extract_text(raw2, ctype2, filename)
                             if txt:
-                                cache_resume_text(raw2, txt, src)
+                                cache_resume_text(
+                                    raw2,
+                                    ctype2,
+                                    filename,
+                                    txt,
+                                    src,
+                                )
                                 return respond({
                                     "ok": True,
                                     "candidate_id": candidate_id,
@@ -21712,7 +21813,7 @@ def _find_antiword_binary():
 
 def _antiword_env_for_binary(binary_path):
     """Return the fixed child environment for the pinned Antiword runtime."""
-    return _verified_antiword_subprocess_env()
+    return _verified_antiword_subprocess_env(binary_path)
 
 
 def _require_verified_antiword():
@@ -21774,9 +21875,13 @@ def _office_bytes_to_pdf_preview(file_bytes, ext, cancel_check=None):
     ext = (ext or '.docx').lower()
     if not ext.startswith('.'):
         ext = '.' + ext
-    if _document_content_kind(file_bytes) == "legacy_doc":
+    is_legacy_doc = _document_is_legacy_doc(
+        file_bytes,
+        filename=ext,
+    )
+    if is_legacy_doc:
         ext = ".doc"
-    if ext == '.doc':
+    if is_legacy_doc:
         # A verified installation alone is insufficient: Antiword must also
         # decode this exact document before LibreOffice may render its layout.
         # The rendered PDF is visual-only and is never treated as extracted

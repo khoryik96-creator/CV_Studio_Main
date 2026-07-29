@@ -3,8 +3,8 @@
 ## Release state
 
 - Approved baseline: v24.6.217
-- Completed release: v24.6.239
-- Previous completed release: v24.6.238
+- Completed release: v24.6.240 (Windows x64 only)
+- Previous completed release: v24.6.239
 - Phase 2B source baseline: v24.6.219
 - Phase 2B baseline Git commit: `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`
 - Phase 3 source baseline: v24.6.222
@@ -17,13 +17,33 @@
 - Phase 5B baseline Git commit: `327858799f17d880e37c740f71dfe321ea7bde0a`
 - Working branch: `codex/antiword-mandatory-dependency`
 - Active phase: none; Phase 6 inactive
-- Completed private owner/source release: v24.6.239
-- Status: separate pre-Phase-6 Antiword milestone in validation; v24.6.240 is
-  reserved but unreleased
-- Current milestone: mandatory verified Antiword dependency and packaging;
-  stop before JobAdder settings/sign-out, Phase 6, handoff or merge
+- Completed private owner/source release: v24.6.240 (Windows x64 only)
+- Status: separate pre-Phase-6 Antiword milestone complete; macOS remains on
+  v24.6.239
+- Current milestone: complete; stop before JobAdder settings/sign-out, Phase 6,
+  handoff or merge
 
 ## Pre-Phase-6 mandatory Antiword dependency and packaging milestone
+
+### Final owner platform scope
+
+- The owner narrowed v24.6.240 to Windows x64 only. Antiword 1.3.5 remains
+  mandatory, bundled, hash-pinned and functionally verified for every Windows
+  x64 legacy `.doc` boundary.
+- No v24.6.240 Intel or Apple Silicon macOS support claim or artifact was
+  produced. macOS users remain on the last verified release, v24.6.239.
+- The v24.6.239 `install.sh`, `start.sh`, `restore_previous.sh` and historical
+  Mac owner-builder command are byte-identical to exact master
+  `a5762488f7d90fe58f00870b2c0b2944be084e71`. The v24.6.240 builder and private
+  CI matrix reject/omit Mac targets, so those baseline files cannot produce a
+  v24.6.240 artifact.
+- The unvalidated Intel and Apple Silicon archive URLs, hashes and inspection
+  notes remain in provenance as future-work evidence. Their archives,
+  extracted runtimes and mandatory installer/runtime changes are absent from
+  the final production and packaging tree.
+- A separately authorized native-validation milestone must validate each Mac
+  architecture before changing the v24.6.239 Mac production baseline or making
+  any newer macOS claim.
 
 ### Authorization and entry verification
 
@@ -68,9 +88,8 @@
   advertised the native parser as sufficient. The macOS installer had no
   Antiword step. Diagnostics exposed only a boolean. Protected builds copied
   `vendor` under `runtime/native/vendor`; source packages use root `vendor`.
-- Supported deliverables are owner/source Windows and macOS installs plus
-  protected Windows x64, macOS Intel and macOS Apple Silicon builds. The
-  Linux protected target is test-only and is not a supported distribution.
+- The only supported v24.6.240 deliverables are the Windows-x64 owner/source
+  package and Windows-x64 protected colleague package.
 
 ### Provenance, security and redistribution decision
 
@@ -98,9 +117,9 @@
 - Microsoft Defender platform `4.18.26060.3008-0`, signature `1.455.390.0`,
   reported no threats in the official archives/extractions or the comparison
   installation on 2026-07-28.
-- Full GPL-2 text, attribution/provenance, the original platform archives and
-  exact corresponding-source archive are bundled. The redistribution gate
-  passed for the imported bytes.
+- Full GPL-2 text, attribution/provenance, the original Windows archive and
+  exact corresponding-source archive are bundled. Deferred Mac archives and
+  extracted runtimes are not shipped.
 
 ### Implementation plan and recovery behavior
 
@@ -134,7 +153,12 @@
   parsing remain in source as defense-in-depth probes but cannot satisfy a
   verified legacy `.doc` success.
 
-### Exact-master self-review corrections
+### Exact-master self-review corrections (including unshipped Mac prototype history)
+
+The macOS-specific entries below record the unvalidated prototype work that
+preceded the final owner scope reduction. They are preserved as future-work
+evidence only; the affected Mac production files and runtime payloads are not
+part of v24.6.240.
 
 - The first complete review against exact master
   `a5762488f7d90fe58f00870b2c0b2944be084e71` found that the new Windows and
@@ -338,34 +362,30 @@
   re-verifies the runtime. Focused Python coverage executes that isolated
   installer self-test.
 
-### Current validation and platform limitation
+### Final validation and platform boundary
 
 - The exact bundled Windows runtime and genuine upstream OLE `.doc` fixture
   pass hash, complete-resource and functional checks. Corruption, extra files
   and arbitrary PATH/`ANTIWORDHOME` candidates fail closed in focused tests.
-- Windows and macOS installers now contain mandatory fail-closed,
-  idempotent managed-copy validation and include Antiword health in their
-  post-install runtime smoke.
+- The Windows installer contains mandatory fail-closed, idempotent managed-copy
+  validation and includes Antiword health in its post-install runtime smoke.
+  The macOS production installer remains exactly v24.6.239.
 - The Windows installer self-test passes bundled verification, initial managed
   install, repeat/idempotency, deliberate corruption rejection, automatic
   repair and missing-bundle failure in isolated local state. This test mode
   cannot issue a receipt or reach the installer main block.
-- Owner protected-build preflight verifies every distribution artifact and
-  all three complete runtime manifests, then executes the matching supported
-  native runtime and fixture. Compiled-package smoke requires
+- Owner protected-build preflight verifies the Windows distribution artifact,
+  complete Windows runtime manifest, corresponding source, license and fixture,
+  then executes the Windows runtime and fixture. Compiled-package smoke requires
   trusted/functional diagnostics and performs actual multipart
   `/extract-text` extraction of the pinned OLE fixture.
-- The existing `linux-x64-test` protected proof target remains explicitly
-  non-distributable: it statically verifies all approved platform artifacts
-  and expects runtime diagnostics to report `unsupported-platform`; it never
-  claims functional Antiword support or runs the supported-platform `.doc`
-  smoke.
-- Focused Antiword/document validation passes all 26 tests in the two directly
-  affected modules. Complete Python discovery passes all 136 tests; all five
-  frontend fixtures and all 24 live
-  source-smoke assertions pass. Python, PowerShell and Bash syntax, protected
-  source preflight, exact `adm-zip` behavior, repository consistency and Git
-  whitespace validation also pass on Windows.
+- The v24.6.240 protected CLI and workflow expose only Windows x64. Mac targets
+  are rejected and deferred Mac payload paths fail repository consistency.
+- Focused Windows Antiword/installer and exact-v24.6.239 macOS-baseline
+  regressions pass. The complete regression suite was run once after the scope
+  adjustment and passed. Python, JavaScript, PowerShell and Bash syntax,
+  protected source preflight, exact `adm-zip` behavior, repository consistency
+  and Git whitespace validation also pass on Windows.
 - Genuine Windows x64 protected compilation and runtime smoke pass from the
   final implementation state. The compiled app reports Antiword 1.3.5 as
   bundled, package-root verified and trusted/functional under isolated
@@ -378,13 +398,10 @@
   its smoke JSON is
   `4156016f31a755bac094f5a83160e21dde05da8320e153c1eb1d56e98609d47d`.
   Neither artifact is copied to the immutable release directory.
-- **Release gate:** CV Studio's macOS installer, diagnostics and compiled
-  package have not yet run on genuine Intel and Apple Silicon Macs in this
-  workspace. Upstream native package checks are strong provenance evidence but
-  do not replace CV Studio-level native verification. No completed v24.6.240
-  release, macOS support claim or protected macOS artifact may be produced
-  until both matching native checks pass. If no real Mac runner is supplied,
-  stop at the stable checkpoint and report this exact blocker.
+- **Platform boundary:** v24.6.240 is Windows-x64-only. Intel and Apple Silicon
+  validation is deferred; no macOS support claim or artifact was produced.
+  macOS users remain on v24.6.239 until a separately authorized native-
+  validation milestone.
 
 ## Post-Phase-5B Blind JD PDF metadata-overflow corrective
 

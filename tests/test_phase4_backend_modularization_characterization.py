@@ -566,6 +566,52 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
         self.assertIn("Universal Declaration of Human Rights", spider_text)
         self.assertEqual(spider_source, "downloaded legacy DOC resume")
 
+        with tempfile.TemporaryDirectory(
+            prefix="cvstudio-antiword-ambient-home-"
+        ) as ambient:
+            ambient_resources = Path(ambient) / ".antiword"
+            ambient_resources.mkdir()
+            (ambient_resources / "UTF-8.txt").write_text(
+                "untrusted mapping",
+                encoding="utf-8",
+            )
+            (ambient_resources / "fontnames").write_text(
+                "untrusted font mapping",
+                encoding="utf-8",
+            )
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "HOME": ambient,
+                    "ANTIWORDHOME": str(ambient_resources),
+                },
+                clear=False,
+            ):
+                antiword_binary = app._require_verified_antiword()
+                child_environment = app._antiword_env_for_binary(
+                    antiword_binary
+                )
+                ambient_text, ambient_source = (
+                    app._spider_extract_text_from_download(
+                        fixture,
+                        "application/msword",
+                        "verification.doc",
+                    )
+                )
+            self.assertNotIn("ANTIWORDHOME", child_environment)
+            self.assertEqual(
+                Path(child_environment["HOME"]),
+                Path(antiword_binary).resolve().parent,
+            )
+            self.assertIn(
+                "Universal Declaration of Human Rights",
+                ambient_text,
+            )
+            self.assertEqual(
+                ambient_source,
+                "downloaded legacy DOC resume",
+            )
+
         mislabeled_text, mislabeled_source = (
             app._spider_extract_text_from_download(
                 fixture,
@@ -1312,6 +1358,110 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
                     )
             self.assertIs(unchanged_ole.exception, unavailable)
 
+            metadata_doc = (
+                b"Name: Metadata Candidate\n"
+                b"Experience: verified legacy resume fixture\n"
+                b"Skills: regression coverage"
+            )
+            metadata_record = {
+                "attachmentId": "metadata-doc",
+                "fileName": "resume.doc",
+                "type": "Resume",
+            }
+            app._spider_resume_text_cache_clear()
+            metadata_extractor = mock.Mock(
+                return_value=(
+                    "verified metadata legacy resume",
+                    "downloaded legacy DOC resume",
+                )
+            )
+            with (
+                mock.patch.object(
+                    app,
+                    "_spider_candidate_attachment_records",
+                    return_value=([metadata_record], True),
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_get_ja_raw",
+                    return_value=(
+                        metadata_doc,
+                        "application/msword",
+                        "resume.doc",
+                    ),
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_extract_text_from_download",
+                    metadata_extractor,
+                ),
+            ):
+                metadata_text, metadata_source = (
+                    app._spider_fetch_candidate_resume_text(
+                        token,
+                        candidate_id,
+                    )
+                )
+            self.assertEqual(
+                metadata_text,
+                "verified metadata legacy resume",
+            )
+            self.assertEqual(
+                metadata_source,
+                "downloaded legacy DOC resume",
+            )
+            metadata_extractor.assert_called_once()
+            metadata_cached = app._spider_resume_text_cache_get(
+                token,
+                candidate_id,
+                app._spider_download_content_identity(metadata_doc),
+            )
+            self.assertEqual(
+                metadata_cached["content_kind"],
+                "legacy_doc",
+            )
+            self.assertTrue(metadata_cached["antiword_verified"])
+
+            with (
+                mock.patch.object(
+                    app,
+                    "_spider_candidate_attachment_records",
+                    return_value=([metadata_record], True),
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_get_ja_raw",
+                    return_value=(
+                        metadata_doc,
+                        "application/msword",
+                        "resume.doc",
+                    ),
+                ),
+                mock.patch.object(
+                    app,
+                    "_require_verified_antiword",
+                    side_effect=unavailable,
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_extract_text_from_download",
+                    side_effect=AssertionError(
+                        "metadata DOC cache hit must gate before extraction"
+                    ),
+                ),
+            ):
+                with self.assertRaises(
+                    app.AntiwordDependencyError
+                ) as metadata_text_unavailable:
+                    app._spider_fetch_candidate_resume_text(
+                        token,
+                        candidate_id,
+                    )
+            self.assertIs(
+                metadata_text_unavailable.exception,
+                unavailable,
+            )
+
             headers = self._headers("content-bound-preview-cache")
             visual_payload = {
                 "visual_mode": "pages",
@@ -1320,6 +1470,147 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
                 "shown_pages": 1,
                 "source": "fixture renderer",
             }
+
+            app._spider_resume_text_cache_clear()
+            metadata_render = mock.Mock(return_value=visual_payload)
+            metadata_search = mock.Mock(
+                return_value=(
+                    "verified metadata legacy resume",
+                    "downloaded legacy DOC resume",
+                )
+            )
+            with (
+                mock.patch.object(
+                    app,
+                    "_ai_crawler_lock_allowed",
+                    return_value=True,
+                ),
+                mock.patch.object(
+                    app,
+                    "_ja_refresh_access_token",
+                    return_value=token,
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_candidate_attachment_records",
+                    return_value=[metadata_record],
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_fetch_candidate_detail",
+                    return_value={
+                        "firstName": "Metadata",
+                        "lastName": "Candidate",
+                    },
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_get_ja_raw",
+                    return_value=(
+                        metadata_doc,
+                        "application/msword",
+                        "resume.doc",
+                    ),
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_visual_preview_payload",
+                    metadata_render,
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_extract_text_from_download",
+                    metadata_search,
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_preview_cancel_persistent_work",
+                    return_value=0,
+                ),
+            ):
+                metadata_preview_first = self.client.get(
+                    "/jobadder/spider_candidate_preview"
+                    "?candidate_id=content-bound-candidate",
+                    headers=headers,
+                )
+            self.assertEqual(metadata_preview_first.status_code, 200)
+            self.assertFalse(
+                metadata_preview_first.get_json()["preview_cache_hit"]
+            )
+            metadata_render.assert_called_once()
+            metadata_search.assert_called_once()
+
+            with (
+                mock.patch.object(
+                    app,
+                    "_ai_crawler_lock_allowed",
+                    return_value=True,
+                ),
+                mock.patch.object(
+                    app,
+                    "_ja_refresh_access_token",
+                    return_value=token,
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_candidate_attachment_records",
+                    return_value=[metadata_record],
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_fetch_candidate_detail",
+                    return_value={
+                        "firstName": "Metadata",
+                        "lastName": "Candidate",
+                    },
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_get_ja_raw",
+                    return_value=(
+                        metadata_doc,
+                        "application/msword",
+                        "resume.doc",
+                    ),
+                ),
+                mock.patch.object(
+                    app,
+                    "_require_verified_antiword",
+                    side_effect=unavailable,
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_visual_preview_payload",
+                    side_effect=AssertionError(
+                        "metadata DOC preview cache hit must not re-render"
+                    ),
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_extract_text_from_download",
+                    side_effect=AssertionError(
+                        "metadata DOC preview cache hit must not re-extract"
+                    ),
+                ),
+                mock.patch.object(
+                    app,
+                    "_spider_preview_cancel_persistent_work",
+                    return_value=0,
+                ),
+            ):
+                metadata_preview_unavailable = self.client.get(
+                    "/jobadder/spider_candidate_preview"
+                    "?candidate_id=content-bound-candidate",
+                    headers=headers,
+                )
+            self.assertEqual(
+                metadata_preview_unavailable.status_code,
+                424,
+            )
+            self.assertEqual(
+                metadata_preview_unavailable.get_json()["code"],
+                "ANTIWORD_DEPENDENCY_UNAVAILABLE",
+            )
 
             app._spider_resume_text_cache_clear()
             fixture_identity = app._spider_download_content_identity(fixture)
@@ -1345,6 +1636,8 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
                     "preview_variant": "full",
                 },
                 "full",
+                content_kind="legacy_doc",
+                antiword_verified=True,
             )
             preview_render = mock.Mock(
                 side_effect=AssertionError(
