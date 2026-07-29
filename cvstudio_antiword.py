@@ -199,13 +199,21 @@ def _candidate_runtimes(
             package / "runtime" / "native" / "vendor" / "antiword",
         )
     )
-    candidates: list[tuple[str, Path, Path]] = [
-        (
-            "managed",
-            _managed_runtime_root(tag),
-            _managed_runtime_root(tag) / "fixtures" / "UDHR-english.doc",
+    candidates: list[tuple[str, Path, Path]] = []
+    # Owner protected-build smoke must certify the copied package, never an
+    # already installed managed runtime on the build host.
+    if str(
+        os.environ.get("CVSTUDIO_ANTIWORD_PACKAGE_ONLY") or ""
+    ).strip() != "1":
+        candidates.append(
+            (
+                "managed",
+                _managed_runtime_root(tag),
+                _managed_runtime_root(tag)
+                / "fixtures"
+                / "UDHR-english.doc",
+            )
         )
-    ]
     for base in vendor_bases:
         candidates.append(
             (

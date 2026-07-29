@@ -10,7 +10,10 @@ from unittest import mock
 
 import cvstudio_antiword as antiword
 from cvstudio_diagnostics import dependency_status
-from owner_build_tools.build_protected import validate_antiword_runtime
+from owner_build_tools.build_protected import (
+    validate_antiword_runtime,
+    write_test_receipt,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,7 +28,18 @@ class AntiwordMandatoryDependencyTests(unittest.TestCase):
     def test_pinned_windows_runtime_is_complete_trusted_and_functional(self):
         if os.name != "nt":
             self.skipTest("Genuine Windows Antiword execution is Windows-only")
-        health = antiword.antiword_health(ROOT)
+        with tempfile.TemporaryDirectory(
+            prefix="cvstudio-antiword-source-state-"
+        ) as state:
+            with mock.patch.dict(
+                os.environ,
+                {"LOCALAPPDATA": state},
+                clear=False,
+            ):
+                health = antiword.antiword_health(ROOT)
+                executable = Path(
+                    antiword.require_verified_antiword(ROOT)
+                )
         self.assertEqual(
             {
                 "available": health["available"],
@@ -55,10 +69,115 @@ class AntiwordMandatoryDependencyTests(unittest.TestCase):
             },
         )
         self.assertNotIn(str(ROOT), json.dumps(health))
-        executable = Path(antiword.require_verified_antiword(ROOT))
         self.assertEqual(
             sha256(executable),
             "2cbab2831854ccd5141ea328824a77cb889586db2e97129873d543a52cf3e15c",
+        )
+
+    def test_package_only_smoke_rejects_ambient_managed_fallback(self):
+        if os.name != "nt":
+            self.skipTest("Windows package-only runtime fixture is Windows-only")
+        with tempfile.TemporaryDirectory(
+            prefix="cvstudio-antiword-package-only-"
+        ) as td:
+            root = Path(td)
+            local_state = root / "ambient-state"
+            managed = (
+                local_state
+                / "TheGuoLab"
+                / "CVStudio"
+                / "dependencies"
+                / "antiword"
+                / antiword.ANTIWORD_PACKAGE_VERSION
+                / "windows-x64"
+            )
+            shutil.copytree(VENDOR / "windows-x64", managed)
+            shutil.copytree(VENDOR / "fixtures", managed / "fixtures")
+
+            package = root / "package"
+            runtime = package / "runtime" / "native"
+            packaged_vendor = runtime / "vendor" / "antiword"
+            shutil.copytree(VENDOR, packaged_vendor)
+            environment = {
+                "LOCALAPPDATA": str(local_state),
+                "CVSTUDIO_ANTIWORD_PACKAGE_ONLY": "1",
+            }
+            receipt, prior = write_test_receipt(
+                package,
+                environment,
+            )
+            self.assertIsNone(prior)
+            self.assertTrue(
+                receipt.is_relative_to(local_state)
+            )
+            receipt.unlink()
+            with mock.patch.dict(
+                os.environ,
+                environment,
+                clear=False,
+            ):
+                bundled = antiword.antiword_health(package, runtime)
+            self.assertTrue(bundled["available"])
+            self.assertEqual(bundled["source"], "bundled")
+            packaged_health = validate_antiword_runtime(
+                ROOT,
+                "windows-x64",
+                packaged_vendor,
+            )
+            self.assertEqual(packaged_health["source"], "bundled")
+
+            mapping = (
+                packaged_vendor
+                / "windows-x64"
+                / "share"
+                / "antiword"
+                / "UTF-8.txt"
+            )
+            mapping.write_bytes(mapping.read_bytes() + b"\ncorrupt")
+            with mock.patch.dict(
+                os.environ,
+                environment,
+                clear=False,
+            ):
+                package_only = antiword.antiword_health(package, runtime)
+            self.assertFalse(package_only["available"])
+            self.assertEqual(
+                package_only["reason"],
+                "runtime-integrity-failed",
+            )
+            with self.assertRaises(RuntimeError):
+                validate_antiword_runtime(
+                    ROOT,
+                    "windows-x64",
+                    packaged_vendor,
+                )
+
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "LOCALAPPDATA": str(local_state),
+                    "CVSTUDIO_ANTIWORD_PACKAGE_ONLY": "0",
+                },
+                clear=False,
+            ):
+                ambient = antiword.antiword_health(package, runtime)
+            self.assertTrue(ambient["available"])
+            self.assertEqual(ambient["source"], "managed")
+
+        builder = (
+            ROOT / "owner_build_tools" / "build_protected.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            'env["CVSTUDIO_ANTIWORD_PACKAGE_ONLY"]="1"',
+            builder,
+        )
+        self.assertIn(
+            'dependency.get("source")=="bundled"',
+            builder,
+        )
+        self.assertIn(
+            'native / "vendor" / "antiword"',
+            builder,
         )
 
     def test_corruption_and_extra_runtime_files_fail_closed(self):

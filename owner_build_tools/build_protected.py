@@ -189,7 +189,11 @@ def validate_source(root: Path) -> None:
     validate_repository_dependency_state(root)
 
 
-def validate_antiword_runtime(root: Path, target: str | None = None) -> dict:
+def validate_antiword_runtime(
+    root: Path,
+    target: str | None = None,
+    vendor_root: Path | None = None,
+) -> dict:
     module_path = root / "cvstudio_antiword.py"
     spec = importlib.util.spec_from_file_location(
         "cvstudio_antiword_build_validation", module_path
@@ -198,7 +202,11 @@ def validate_antiword_runtime(root: Path, target: str | None = None) -> dict:
         raise RuntimeError("Mandatory Antiword verifier could not be loaded.")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    vendor = root / "vendor" / "antiword"
+    vendor = (
+        Path(vendor_root)
+        if vendor_root is not None
+        else root / "vendor" / "antiword"
+    )
     for relative, expected in module.ANTIWORD_DISTRIBUTION_HASHES.items():
         artifact = vendor / relative
         if not artifact.is_file() or module._sha256_file(artifact) != expected:
@@ -234,7 +242,20 @@ def validate_antiword_runtime(root: Path, target: str | None = None) -> dict:
             "static_platform_manifests_verified": len(module._PLATFORMS),
             "test_only": True,
         }
-    health = module.antiword_health(root, root)
+    tag = {
+        "macos-intel": "macos-x86_64",
+    }.get(str(target or ""), str(target or "")) or module._platform_tag()
+    if tag not in module._PLATFORMS:
+        raise RuntimeError(
+            "Mandatory Antiword native preflight target is unsupported: "
+            + str(tag or "unknown")
+        )
+    _executable, health = module._verify_candidate(
+        "bundled",
+        vendor / tag,
+        vendor / "fixtures" / "UDHR-english.doc",
+        tag,
+    )
     if not (
         health.get("available")
         and health.get("trusted")
@@ -637,6 +658,15 @@ def build_package(source: Path,work: Path,out_dir: Path,target: str,dist: Path,n
     allowed={(package/"app.py").resolve()}
     unexpected=[str(p.relative_to(package)) for p in pyfiles if p.resolve() not in allowed]
     if unexpected: raise RuntimeError("Unexpected readable Python files: "+", ".join(unexpected[:20]))
+    packaged_antiword = validate_antiword_runtime(
+        source,
+        target,
+        native / "vendor" / "antiword",
+    )
+    if target != "linux-x64-test" and packaged_antiword.get("source") != "bundled":
+        raise RuntimeError(
+            "Packaged Antiword validation did not resolve the copied bundle."
+        )
     manifest={"product":"CV Studio","version":VERSION,"target":target,"package_type":"native-compiled-protected-colleague",
               "built_at_utc":time.strftime("%Y-%m-%dT%H:%M:%SZ",time.gmtime()),"frontend_protection":protection,"files":{}}
     for p in sorted(package.rglob("*")):
@@ -685,13 +715,15 @@ def machine_source() -> str:
     return "linux|"+(value or platform.node() or "unknown").lower()
 
 
-def receipt_path() -> Path:
-    if os.name=="nt": return Path(os.environ.get("LOCALAPPDATA") or str(Path.home()/"AppData"/"Local"))/"TheGuoLab"/"CVStudio"/"install_receipt.json"
-    return Path.home()/".guo_lab_cv_studio"/"install_receipt.json"
+def receipt_path(environment: dict[str,str] | None = None) -> Path:
+    env = environment or os.environ
+    home = Path(env.get("HOME") or str(Path.home()))
+    if os.name=="nt": return Path(env.get("LOCALAPPDATA") or str(home/"AppData"/"Local"))/"TheGuoLab"/"CVStudio"/"install_receipt.json"
+    return home/".guo_lab_cv_studio"/"install_receipt.json"
 
 
-def write_test_receipt(package_root: Path) -> tuple[Path,bytes|None]:
-    path=receipt_path(); prior=path.read_bytes() if path.exists() else None
+def write_test_receipt(package_root: Path, environment: dict[str,str] | None = None) -> tuple[Path,bytes|None]:
+    path=receipt_path(environment); prior=path.read_bytes() if path.exists() else None
     secret=bytes(a^b for a,b in zip(TOTP_MASK,TOTP_MASKED)); machine=hashlib.sha256(machine_source().encode()).hexdigest()
     issued=time.strftime("%Y-%m-%dT%H:%M:%SZ",time.gmtime()); key=hashlib.sha256(secret+b"|CVStudio|install-receipt-v1").digest()
     root_text=os.path.normcase(os.path.realpath(str(package_root))); root_hash=hashlib.sha256(root_text.encode("utf-8",errors="surrogatepass")).hexdigest()
@@ -738,7 +770,16 @@ def smoke_test(package: Path,source: Path,output: Path,target: str,timeout_secon
     base_url=f"http://127.0.0.1:{smoke_port}"
     native=package/"runtime"/"native"; binary=sorted([p for p in native.iterdir() if p.is_file() and p.name.lower().startswith("cvstudio")],key=lambda p:len(p.name))[0]
     binary.chmod(binary.stat().st_mode|stat.S_IXUSR|stat.S_IXGRP|stat.S_IXOTH)
-    receipt,prior=write_test_receipt(package); process=None
+    smoke_state=tempfile.TemporaryDirectory(
+        prefix="cvstudio-protected-smoke-state-"
+    )
+    env=os.environ.copy()
+    if os.name=="nt":
+        env["LOCALAPPDATA"]=smoke_state.name
+    else:
+        env["HOME"]=smoke_state.name
+    env["CVSTUDIO_ANTIWORD_PACKAGE_ONLY"]="1"
+    receipt,prior=write_test_receipt(package,env); process=None
     result={
         "ok":False,
         "checks":[],
@@ -753,7 +794,6 @@ def smoke_test(package: Path,source: Path,output: Path,target: str,timeout_secon
     startup_log=package/"startup_timing.log"
     started=time.time()
     try:
-        env=os.environ.copy()
         # Do not borrow owner node_modules during smoke testing. generate.js
         # must resolve the exact adm-zip copy inside the colleague package.
         env.pop("NODE_PATH", None)
@@ -845,6 +885,7 @@ def smoke_test(package: Path,source: Path,output: Path,target: str,timeout_secon
                     and dependency.get("functional")
                     and dependency.get("manifest_verified")
                     and dependency.get("functional_fixture_verified")
+                    and dependency.get("source")=="bundled"
                 ):
                     raise RuntimeError(
                         "Compiled package Antiword diagnostics failed: "
@@ -855,6 +896,8 @@ def smoke_test(package: Path,source: Path,output: Path,target: str,timeout_secon
                     "status":r.status,
                     "antiword_version":dependency.get("version"),
                     "antiword_platform":dependency.get("platform"),
+                    "antiword_source":"bundled",
+                    "antiword_runtime_root_verified":True,
                     "antiword_trusted":True,
                     "antiword_functional":True,
                 })
@@ -959,6 +1002,7 @@ def smoke_test(package: Path,source: Path,output: Path,target: str,timeout_secon
             except subprocess.TimeoutExpired: process.kill()
         if prior is None: receipt.unlink(missing_ok=True)
         else: receipt.write_bytes(prior)
+        smoke_state.cleanup()
 
 
 def main() -> int:

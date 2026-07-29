@@ -306,6 +306,18 @@
   unchanged OLE hit rechecks the wrapper without re-extraction/re-rendering and
   that an unavailable runtime propagates the preserved Antiword dependency
   failure instead of falling through to missing evidence or profile fallback.
+- A seventh independent review found that protected-build smoke inherited the
+  host's normal managed Antiword candidate and could therefore certify a
+  damaged package by borrowing a previous installation. Smoke now uses an
+  isolated local state/home and matching temporary receipt, enables a
+  package-only resolver mode, requires diagnostics to report `source: bundled`,
+  and records that the package runtime root was verified. Packaging
+  independently revalidates the copied `runtime/native/vendor/antiword` tree
+  and executes that exact target runtime before the manifest/archive is
+  created. Regression coverage seeds a valid ambient managed runtime, proves an
+  intact copied bundle resolves as bundled, corrupts the copied mapping file
+  and proves both package-only resolution and packaged-tree validation fail,
+  then proves the ambient runtime would otherwise have masked the corruption.
 
 ### Current validation and platform limitation
 
@@ -329,22 +341,23 @@
   and expects runtime diagnostics to report `unsupported-platform`; it never
   claims functional Antiword support or runs the supported-platform `.doc`
   smoke.
-- Focused Antiword/document validation passes all 23 tests in the two directly
-  affected modules. Complete Python discovery passes all 133 tests; all five
+- Focused Antiword/document validation passes all 24 tests in the two directly
+  affected modules. Complete Python discovery passes all 134 tests; all five
   frontend fixtures and all 24 live
   source-smoke assertions pass. Python, PowerShell and Bash syntax, protected
   source preflight, exact `adm-zip` behavior, repository consistency and Git
   whitespace validation also pass on Windows.
 - Genuine Windows x64 protected compilation and runtime smoke pass from the
   final implementation state. The compiled app reports Antiword 1.3.5 as
-  trusted/functional, performs real multipart `/extract-text` extraction of
-  fixture SHA-256
+  bundled, package-root verified and trusted/functional under isolated
+  package-only smoke state, performs real multipart `/extract-text` extraction
+  of fixture SHA-256
   `f430cdfe9446c4b943074d4bf804232761c284f2caa3d4125006b158d8b14af8`
   with no Unicode replacement character, and preserves DOCX generation. The
   temporary non-release QA ZIP is
-  `be2f54dd71b1683b874fbb935bb1ad797d06889c424bcf98542d2bb6eb50dae7`;
+  `a4621a249ef48f504398e9b0226378216df85aa2881f076b4f5d26020eebe655`;
   its smoke JSON is
-  `e44014ffbca5bb7a05369991ac6be91bde858441bedfd247a5f0d06cf88d8e78`.
+  `d00aa5b8cc2aa72f526eaa460ae3ce1941b18bf2104288ec74719dff7489c1b9`.
   Neither artifact is copied to the immutable release directory.
 - **Release gate:** CV Studio's macOS installer, diagnostics and compiled
   package have not yet run on genuine Intel and Apple Silicon Macs in this
