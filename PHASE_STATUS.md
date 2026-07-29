@@ -3,8 +3,8 @@
 ## Release state
 
 - Approved baseline: v24.6.217
-- Completed release: v24.6.240 (Windows x64 only)
-- Previous completed release: v24.6.239
+- Completed release: v24.6.241 (Windows x64 only)
+- Previous completed release: v24.6.240 (Windows x64 only)
 - Phase 2B source baseline: v24.6.219
 - Phase 2B baseline Git commit: `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`
 - Phase 3 source baseline: v24.6.222
@@ -17,11 +17,83 @@
 - Phase 5B baseline Git commit: `327858799f17d880e37c740f71dfe321ea7bde0a`
 - Working branch: `codex/antiword-mandatory-dependency`
 - Active phase: none; Phase 6 inactive
-- Completed private owner/source release: v24.6.240 (Windows x64 only)
-- Status: separate pre-Phase-6 Antiword milestone complete; macOS remains on
-  v24.6.239
+- Completed private owner/source release: v24.6.241 (Windows x64 only)
+- Status: narrow Antiword verification-to-execution TOCTOU corrective complete;
+  macOS remains on v24.6.239
 - Current milestone: complete; stop before JobAdder settings/sign-out, Phase 6,
   handoff or merge
+
+## v24.6.241 Windows Antiword TOCTOU corrective
+
+### Authorization and boundary
+
+- The owner authorized only the single confirmed v24.6.240 independent-review
+  finding: the user-writable Windows runtime could be replaced after hash and
+  functional verification released its handles but before process creation.
+- v24.6.240 release artifacts remain immutable. The correction uses the next
+  valid version, v24.6.241, and remains Windows-x64-only.
+- macOS installer/runtime production files remain at the exact v24.6.239
+  baseline. No v24.6.241 Intel or Apple Silicon claim or artifact is authorized.
+- JobAdder, Phase 6, AI Crawler, schemas, routes and all unrelated work remain
+  outside scope.
+
+### Correction
+
+- `cvstudio_antiword.py` opens the runtime root, pinned manifest, controlled
+  fixture, every parent directory and all 37 manifest-listed runtime files with
+  Windows handles that allow only read sharing. These handles deny write,
+  delete and rename replacement before hashes are computed and remain held
+  through functional and document process completion.
+- One exported `run_verified_antiword()` primitive performs candidate locking,
+  complete existing path/reparse/manifest/file-set/hash validation, genuine
+  fixture extraction and the requested legacy-`.doc` execution without a gap.
+  Both application process-launch paths use this primitive.
+- The child environment removes `ANTIWORDHOME` and binds `HOME` to the locked
+  executable file. Upstream `$HOME/.antiword` lookup therefore cannot be
+  populated to shadow the pinned, locked global mapping resources.
+- Process timeout, start failure and cancellation paths kill/reap the process
+  where applicable and release every handle in deterministic cleanup.
+- `INSTALL_CORE.ps1` applies the equivalent `CreateFileW` read-only,
+  read-share-only protected interval around its mandatory functional process.
+  Its existing hash, unsigned-binary, reparse, repair, idempotency, timeout and
+  false-success gates remain.
+
+### Regression coverage
+
+- Adversarial Windows coverage attempts in-place write, delete, rename and
+  atomic replacement of both `antiword.exe` and a critical UTF-8 mapping
+  resource immediately before process creation. Every attempt is denied during
+  both functional verification and actual extraction.
+- A corrupt executable cannot become trusted/functional even when the mocked
+  process output contains both public fixture markers; process creation is
+  never reached.
+- Success, functional timeout, actual extraction timeout, process-start failure,
+  cancellation and integrity-failure paths prove their locks are released.
+- The real installer self-test proves protected execution, blocked executable
+  and mapping replacement, timeout/failure cleanup, genuine extraction,
+  install, repeated-install idempotency, corruption repair, nested reparse
+  rejection and missing-bundle failure.
+- Static application coverage requires both legacy-`.doc` process-launch paths
+  to use the secured primitive and forbids the old direct launches.
+
+### Final validation and review
+
+- Final focused Antiword/installer plus full Phase 4 document/route
+  characterization: 30 passed.
+- Complete Python discovery ran exactly once after the final application and
+  installer correction: 140 executed, 138 passed. Strict warning handling
+  promoted two unrelated existing `datetime.utcnow()` deprecation warnings in
+  salary-cache and JobAdder diagnostic code to errors. Those paths were not
+  changed or fixed, and the suite was not rerun.
+- All five frontend fixtures passed. Live source smoke passed 24 assertions.
+- Tracked syntax passed for 29 Python, 23 JavaScript, five Bash/command and five
+  PowerShell files. Owner Windows-x64 preflight, both inline scripts, repository
+  consistency and whitespace checks passed.
+- One focused self-review found no remaining concrete actionable issue in the
+  TOCTOU correction. It also reconfirmed the v24.6.239 Mac file hashes,
+  immutable v24.6.240 release hashes, and absence of route/guard/schema or
+  JobAdder/Phase-6 scope drift.
+- No repeated self-review loop or independent reviewer was started.
 
 ## Pre-Phase-6 mandatory Antiword dependency and packaging milestone
 

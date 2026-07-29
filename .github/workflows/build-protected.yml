@@ -91,7 +91,7 @@ jobs:
       - name: Upload colleague package and public smoke result
         uses: actions/upload-artifact@v4
         with:
-          name: cv-studio-v24.6.240-${{ matrix.target }}-COLLEAGUE
+          name: cv-studio-v24.6.241-${{ matrix.target }}-COLLEAGUE
           path: |
             protected-output/*colleague.zip
             protected-output/*protected_smoke.json
@@ -101,7 +101,7 @@ jobs:
       - name: Upload owner-only compiler diagnostics
         uses: actions/upload-artifact@v4
         with:
-          name: cv-studio-v24.6.240-${{ matrix.target }}-OWNER-DIAGNOSTICS
+          name: cv-studio-v24.6.241-${{ matrix.target }}-OWNER-DIAGNOSTICS
           path: |
             protected-output/*nuitka_report.xml
             protected-output/*runtime.log

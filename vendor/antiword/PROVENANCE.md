@@ -1,8 +1,8 @@
 # Antiword 1.3.5 provenance and redistribution record
 
 This directory contains the mandatory Windows-x64 legacy `.doc` runtime
-authorized for CV Studio v24.6.240. It is isolated from CV Studio application
-source and used only for legacy Microsoft Word decoding. v24.6.240 does not
+authorized for CV Studio v24.6.241. It is isolated from CV Studio application
+source and used only for legacy Microsoft Word decoding. v24.6.241 does not
 ship or claim support for Intel or Apple Silicon macOS.
 
 ## Upstream identity
@@ -18,7 +18,7 @@ ship or claim support for Intel or Apple Silicon macOS.
 
 The R-universe package API records the source archive and all three upstream
 binaries below against the same upstream commit. Only the Windows x64 binary
-is authorized, bundled, installed and verified by CV Studio v24.6.240. The two
+is authorized, bundled, installed and verified by CV Studio v24.6.241. The two
 macOS records are retained solely as documented inputs for a future,
 separately authorized native-validation milestone.
 
@@ -34,7 +34,7 @@ separately authorized native-validation milestone.
 R-universe redirects each URL to content-addressed storage whose identifier is
 the same SHA-256. The authorized Windows archive is retained under `packages/`
 and the exact corresponding source under `source/`. The deferred macOS
-archives and extracted runtimes are intentionally absent from the v24.6.240
+archives and extracted runtimes are intentionally absent from the v24.6.241
 production and packaging tree.
 
 ## Runtime extraction
@@ -53,7 +53,24 @@ Runtime trust is based on the exact official archive, complete-file manifest,
 executable hash and native Windows architecture checks, not on
 publisher-signature claims. Prior source-level inspection of the deferred
 macOS binaries is recorded as future-work evidence only; it is not native
-validation and supports no v24.6.240 macOS claim.
+validation and supports no v24.6.241 macOS claim.
+
+## Verification-to-execution identity
+
+CV Studio v24.6.241 corrects the v24.6.240 verification-to-execution race.
+On Windows, verification opens the runtime root, pinned manifest, genuine
+fixture, every manifest parent directory and all 37 manifest-listed files
+with read-only handles that allow only read sharing. These handles deny
+write, delete and rename replacement while hashes are computed and remain
+open through functional or document process creation and completion.
+
+Antiword's child environment removes `ANTIWORDHOME` and binds `HOME` to the
+locked executable file, not a writable directory. The upstream
+`$HOME/.antiword` lookup therefore cannot be populated to shadow the pinned,
+locked global mapping resources. Timeouts, process-start failures and
+cancellation terminate/reap the process where applicable and release every
+handle in deterministic cleanup. Fixture output markers supplement the pinned
+executable/runtime identity; they cannot establish trust on their own.
 
 ## Local comparison and security evidence
 
@@ -94,7 +111,7 @@ two pinned expected phrases from this file within the bounded timeout.
 
 The current Windows x64 runtime was functionally verified on genuine Windows.
 Windows installation is mandatory and fail-closed. Intel and Apple Silicon
-CV Studio validation is deferred; no v24.6.240 macOS artifact was produced and
+CV Studio validation is deferred; no v24.6.241 macOS artifact was produced and
 no macOS support claim is made. macOS users remain on v24.6.239 until a
 separately authorized milestone completes native build, installer,
 diagnostics, functional and release-artifact verification on each matching

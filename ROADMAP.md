@@ -33,6 +33,10 @@
   prompt/output schema or recruiter-critical body content.
 - v24.6.239 corrected long Blind JD PDF header metadata and Location/Work tile
   overflow without changing structured data, prompts, schemas or body content.
+- v24.6.240 completed the mandatory Windows-x64 Antiword dependency and
+  packaging milestone without producing or claiming a macOS artifact.
+- v24.6.241 corrects only the Windows Antiword verification-to-execution TOCTOU
+  race by retaining deny-write/delete/rename handles through process completion.
 - Phases 1, 2A, 2B, 3, 4, 5A and 5B are complete.
 - No later phase is active. Phase 6 requires a new explicit owner instruction.
 

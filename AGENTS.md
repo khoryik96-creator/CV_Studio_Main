@@ -57,14 +57,37 @@
   Antiword 1.3.5 is bundled, hash-pinned and functionally verified, and every
   Windows legacy `.doc` decoding boundary fails explicitly when it is not
   trusted and ready.
-- Current completed private owner/source release: **CV Studio v24.6.240
+- Its confirmed verification-to-execution TOCTOU race was corrected in **CV
+  Studio v24.6.241** by locking the exact verified Windows runtime through
+  process creation and completion.
+- Current completed private owner/source release: **CV Studio v24.6.241
   (Windows x64 only)**.
 - Phases 1, 2A, 2B, 3, 4, 5A and 5B are complete.
 - Phase 6 remains inactive.
-- v24.6.240 makes no Intel or Apple Silicon macOS support claim and produced no
+- v24.6.241 makes no Intel or Apple Silicon macOS support claim and produced no
   macOS artifact. macOS users remain on v24.6.239 until a separately
   authorized native-validation milestone. JobAdder settings/sign-out, Phase 6,
   AI Crawler behavior changes and all backburner items remain inactive.
+
+## Completed scope: Windows Antiword TOCTOU corrective
+
+v24.6.241 preserves the v24.6.240 mandatory Windows-x64 Antiword milestone and
+closes only its verification-to-execution race. Windows read handles deny
+write/delete/rename sharing for the runtime root, manifest, genuine fixture,
+all runtime directories and every manifest-listed file while identity and
+function are verified and while the actual legacy-`.doc` process is created
+and runs.
+
+The application uses one secured execution primitive for both production
+legacy-`.doc` paths. The Windows installer applies the same protected interval
+to its mandatory functional check. `ANTIWORDHOME` remains removed and `HOME`
+is the locked executable file, so a user-controlled mapping tree cannot shadow
+the pinned resources. Timeout, failure and cancellation cleanup terminates and
+reaps the process where applicable and releases all handles.
+
+All v24.6.240 artifacts remain immutable. v24.6.241 remains Windows-x64-only;
+macOS users remain on v24.6.239. JobAdder, Phase 6 and backburner work remain
+inactive.
 
 ## Completed scope: pre-Phase-6 mandatory Antiword dependency
 
@@ -352,8 +375,12 @@ Before changing code:
 1. Read `ROADMAP.md`.
 2. Read `PHASE_STATUS.md`.
 3. Read `IMPLEMENT.md`.
-4. Read `CV_STUDIO_V24_6_239_PHASE_6_HANDOVER.md`.
+4. Read `CV_STUDIO_V24_6_241_PHASE_6_HANDOVER.md`.
 5. Read
+   `cv_studio_v24_6_241_windows_x64_antiword_toctou_corrective_qa_report.md`,
+   `CV_STUDIO_V24_6_240_PHASE_6_HANDOVER.md`,
+   `cv_studio_v24_6_240_windows_x64_antiword_mandatory_qa_report.md`,
+   `CV_STUDIO_V24_6_239_PHASE_6_HANDOVER.md`,
    `cv_studio_v24_6_239_blind_jd_pdf_metadata_overflow_corrective_qa_report.md`,
    `CV_STUDIO_V24_6_238_PHASE_6_HANDOVER.md`,
    `cv_studio_v24_6_238_blind_jd_exp_summary_corrective_qa_report.md`,

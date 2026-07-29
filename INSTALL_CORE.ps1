@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Continue'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 if (-not $Root.EndsWith('\')) { $Root += '\' }
 $Log = Join-Path $Root 'install_log.txt'
-$InstallVersion = 'v24.6.240'
+$InstallVersion = 'v24.6.241'
 $AntiwordVersion = '1.3.5'
 $AntiwordRuntimeFileCount = 37
 $AntiwordManifestSha256 = '7d365a89f268a2fc34f815b369474124bc6a1aac02e9b0b57e6dfd5eb5368da0'
@@ -654,7 +654,7 @@ function Install-PythonPackages {
     }
     $stampDir = Join-Path $env:APPDATA 'GUOLabCVStudio'
     New-Item -ItemType Directory -Path $stampDir -Force | Out-Null
-    Set-Content -LiteralPath (Join-Path $stampDir '.deps_ok') -Value 'v24.6.240-bundled-pdfium-ocr-antiword' -Encoding ASCII
+    Set-Content -LiteralPath (Join-Path $stampDir '.deps_ok') -Value 'v24.6.241-bundled-pdfium-ocr-antiword' -Encoding ASCII
     Write-Step '    Python packages ready.'
     return $true
 }
@@ -672,12 +672,81 @@ function Get-AntiwordVendorRoot {
     return ''
 }
 
+function Initialize-AntiwordRuntimeLock {
+    if ('CVStudioAntiwordRuntimeLock' -as [type]) { return }
+    Add-Type -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
+
+public static class CVStudioAntiwordRuntimeLock
+{
+    private const uint GENERIC_READ = 0x80000000;
+    private const uint FILE_LIST_DIRECTORY = 0x00000001;
+    private const uint FILE_READ_ATTRIBUTES = 0x00000080;
+    private const uint FILE_SHARE_READ = 0x00000001;
+    private const uint OPEN_EXISTING = 3;
+    private const uint FILE_FLAG_BACKUP_SEMANTICS = 0x02000000;
+    private const uint FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000;
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern SafeFileHandle CreateFile(
+        string fileName,
+        uint desiredAccess,
+        uint shareMode,
+        IntPtr securityAttributes,
+        uint creationDisposition,
+        uint flagsAndAttributes,
+        IntPtr templateFile);
+
+    public static SafeFileHandle Open(string path, bool directory)
+    {
+        uint access = directory
+            ? FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES
+            : GENERIC_READ;
+        uint flags = FILE_FLAG_OPEN_REPARSE_POINT;
+        if (directory) { flags |= FILE_FLAG_BACKUP_SEMANTICS; }
+        SafeFileHandle handle = CreateFile(
+            path,
+            access,
+            FILE_SHARE_READ,
+            IntPtr.Zero,
+            OPEN_EXISTING,
+            flags,
+            IntPtr.Zero);
+        if (handle.IsInvalid)
+        {
+            int error = Marshal.GetLastWin32Error();
+            handle.Dispose();
+            throw new Win32Exception(error, "runtime-lock-failed");
+        }
+        return handle;
+    }
+}
+'@
+}
+
+function Add-AntiwordRuntimeLock {
+    param(
+        [System.Collections.Generic.List[Microsoft.Win32.SafeHandles.SafeFileHandle]]$Handles,
+        [System.Collections.Generic.HashSet[string]]$LockedPaths,
+        [string]$Path,
+        [bool]$Directory
+    )
+    $fullPath = [IO.Path]::GetFullPath($Path)
+    if (-not $LockedPaths.Add($fullPath)) { return }
+    $Handles.Add([CVStudioAntiwordRuntimeLock]::Open($fullPath, $Directory))
+}
+
 function Invoke-AntiwordFunctionalCheck {
     param(
         [string]$Executable,
-        [string]$FixturePath
+        [string]$FixturePath,
+        [int]$TimeoutMilliseconds = 12000
     )
     $process = New-Object System.Diagnostics.Process
+    $started = $false
     try {
         $startInfo = New-Object System.Diagnostics.ProcessStartInfo
         $startInfo.FileName = $Executable
@@ -688,12 +757,15 @@ function Invoke-AntiwordFunctionalCheck {
         $startInfo.RedirectStandardOutput = $true
         $startInfo.RedirectStandardError = $true
         $null = $startInfo.EnvironmentVariables.Remove('ANTIWORDHOME')
-        $startInfo.EnvironmentVariables['HOME'] = Split-Path -Parent $Executable
+        # HOME is the locked executable file, so $HOME/.antiword cannot be
+        # created to shadow the pinned global mapping resources.
+        $startInfo.EnvironmentVariables['HOME'] = $Executable
         $process.StartInfo = $startInfo
         if (-not $process.Start()) { throw 'functional-execution-failed' }
+        $started = $true
         $outputTask = $process.StandardOutput.ReadToEndAsync()
         $errorTask = $process.StandardError.ReadToEndAsync()
-        if (-not $process.WaitForExit(12000)) {
+        if (-not $process.WaitForExit($TimeoutMilliseconds)) {
             try { $process.Kill() } catch {}
             try { $null = $process.WaitForExit(2000) } catch {}
             throw 'functional-execution-timeout'
@@ -704,6 +776,16 @@ function Invoke-AntiwordFunctionalCheck {
             ExitCode = [int]$process.ExitCode
             Output = [string]($output + $errorOutput)
         }
+    } catch {
+        if ($started) {
+            try {
+                if (-not $process.HasExited) {
+                    $process.Kill()
+                    $null = $process.WaitForExit(2000)
+                }
+            } catch {}
+        }
+        throw
     } finally {
         $process.Dispose()
     }
@@ -712,19 +794,26 @@ function Invoke-AntiwordFunctionalCheck {
 function Test-AntiwordRuntime {
     param(
         [string]$RuntimeRoot,
-        [string]$FixturePath
+        [string]$FixturePath,
+        [scriptblock]$ProtectedIntervalProbe = $null,
+        [int]$FunctionalTimeoutMilliseconds = 12000
     )
     $script:AntiwordFailure = ''
+    $lockHandles = [System.Collections.Generic.List[Microsoft.Win32.SafeHandles.SafeFileHandle]]::new()
+    $lockedPaths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
     try {
         if (-not $RuntimeRoot -or -not (Test-Path -LiteralPath $RuntimeRoot -PathType Container)) {
             throw 'runtime-missing'
         }
+        Initialize-AntiwordRuntimeLock
+        Add-AntiwordRuntimeLock -Handles $lockHandles -LockedPaths $lockedPaths -Path $RuntimeRoot -Directory $true
         if (((Get-Item -LiteralPath $RuntimeRoot -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
             throw 'runtime-link-rejected'
         }
         $manifest = Join-Path $RuntimeRoot 'SHA256SUMS'
         $exe = Join-Path $RuntimeRoot 'bin\antiword.exe'
         if (-not (Test-Path -LiteralPath $manifest -PathType Leaf)) { throw 'manifest-missing' }
+        Add-AntiwordRuntimeLock -Handles $lockHandles -LockedPaths $lockedPaths -Path $manifest -Directory $false
         if (((Get-Item -LiteralPath $manifest -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
             throw 'manifest-link-rejected'
         }
@@ -732,12 +821,6 @@ function Test-AntiwordRuntime {
             throw 'manifest-integrity-failed'
         }
         if (-not (Test-Path -LiteralPath $FixturePath -PathType Leaf)) { throw 'functional-fixture-missing' }
-        if (((Get-Item -LiteralPath $FixturePath -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
-            throw 'functional-fixture-link-rejected'
-        }
-        if ((Get-FileHash -LiteralPath $FixturePath -Algorithm SHA256).Hash.ToLowerInvariant() -ne $AntiwordFixtureSha256) {
-            throw 'functional-fixture-integrity-failed'
-        }
 
         $expected = @{}
         foreach ($line in @(Get-Content -LiteralPath $manifest -Encoding UTF8)) {
@@ -750,6 +833,32 @@ function Test-AntiwordRuntime {
             $expected[$relative] = ([string]$Matches[1]).ToLowerInvariant()
         }
         if ($expected.Count -ne $AntiwordRuntimeFileCount) { throw 'manifest-file-count-invalid' }
+
+        $directories = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        $null = $directories.Add((Join-Path $RuntimeRoot 'bin'))
+        $null = $directories.Add((Join-Path $RuntimeRoot 'share'))
+        $null = $directories.Add((Split-Path -Parent $FixturePath))
+        foreach ($relative in $expected.Keys) {
+            $parent = Split-Path -Parent (Join-Path $RuntimeRoot ($relative.Replace('/','\')))
+            while ($parent -and -not $parent.Equals($RuntimeRoot, [StringComparison]::OrdinalIgnoreCase)) {
+                $null = $directories.Add($parent)
+                $parent = Split-Path -Parent $parent
+            }
+        }
+        foreach ($directory in @($directories | Sort-Object { ([IO.Path]::GetFullPath($_)).Length })) {
+            Add-AntiwordRuntimeLock -Handles $lockHandles -LockedPaths $lockedPaths -Path $directory -Directory $true
+        }
+        Add-AntiwordRuntimeLock -Handles $lockHandles -LockedPaths $lockedPaths -Path $FixturePath -Directory $false
+        if (((Get-Item -LiteralPath $FixturePath -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw 'functional-fixture-link-rejected'
+        }
+        if ((Get-FileHash -LiteralPath $FixturePath -Algorithm SHA256).Hash.ToLowerInvariant() -ne $AntiwordFixtureSha256) {
+            throw 'functional-fixture-integrity-failed'
+        }
+        foreach ($relative in @($expected.Keys | Sort-Object)) {
+            $path = Join-Path $RuntimeRoot ($relative.Replace('/','\'))
+            Add-AntiwordRuntimeLock -Handles $lockHandles -LockedPaths $lockedPaths -Path $path -Directory $false
+        }
 
         $rootFull = [IO.Path]::GetFullPath($RuntimeRoot).TrimEnd('\') + '\'
         $actual = @{}
@@ -793,7 +902,10 @@ function Test-AntiwordRuntime {
         $signature = Get-AuthenticodeSignature -LiteralPath $exe
         if ([string]$signature.Status -ne 'NotSigned') { throw 'unexpected-authenticode-state' }
 
-        $functionalResult = Invoke-AntiwordFunctionalCheck -Executable $exe -FixturePath $FixturePath
+        if ($ProtectedIntervalProbe) {
+            & $ProtectedIntervalProbe $exe (Join-Path $RuntimeRoot 'share\antiword\UTF-8.txt')
+        }
+        $functionalResult = Invoke-AntiwordFunctionalCheck -Executable $exe -FixturePath $FixturePath -TimeoutMilliseconds $FunctionalTimeoutMilliseconds
         $output = [string]$functionalResult.Output
         $exitCode = [int]$functionalResult.ExitCode
         if ($exitCode -ne 0 -or $output -notmatch 'Universal Declaration of Human Rights' -or $output -notmatch 'All people everywhere have the same human rights') {
@@ -808,6 +920,10 @@ function Test-AntiwordRuntime {
             $script:AntiwordFailure = 'verification-failed'
         }
         return $false
+    } finally {
+        for ($index = $lockHandles.Count - 1; $index -ge 0; $index--) {
+            $lockHandles[$index].Dispose()
+        }
     }
 }
 
@@ -887,6 +1003,82 @@ function Check-Antiword {
     return $false
 }
 
+function Assert-AntiwordPathProtected {
+    param(
+        [string]$Target,
+        [string]$Replacement
+    )
+    $stream = $null
+    $writeBlocked = $false
+    try {
+        $stream = [IO.File]::Open(
+            $Target,
+            [IO.FileMode]::Open,
+            [IO.FileAccess]::ReadWrite,
+            [IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete
+        )
+    } catch [IO.IOException] {
+        $writeBlocked = $true
+    } catch [UnauthorizedAccessException] {
+        $writeBlocked = $true
+    } finally {
+        if ($stream) { $stream.Dispose() }
+    }
+    if (-not $writeBlocked) { throw 'protected-write-was-not-blocked' }
+
+    $deleteBlocked = $false
+    try {
+        [IO.File]::Delete($Target)
+    } catch [IO.IOException] {
+        $deleteBlocked = $true
+    } catch [UnauthorizedAccessException] {
+        $deleteBlocked = $true
+    }
+    if (-not $deleteBlocked -or -not (Test-Path -LiteralPath $Target -PathType Leaf)) {
+        throw 'protected-delete-was-not-blocked'
+    }
+
+    $moved = $Target + '.unexpected-move'
+    $renameBlocked = $false
+    try {
+        [IO.File]::Move($Target, $moved)
+    } catch [IO.IOException] {
+        $renameBlocked = $true
+    } catch [UnauthorizedAccessException] {
+        $renameBlocked = $true
+    }
+    if (-not $renameBlocked -or -not (Test-Path -LiteralPath $Target -PathType Leaf)) {
+        throw 'protected-rename-was-not-blocked'
+    }
+
+    $backup = $Target + '.unexpected-backup'
+    $replaceBlocked = $false
+    try {
+        [IO.File]::Replace($Replacement, $Target, $backup, $true)
+    } catch [IO.IOException] {
+        $replaceBlocked = $true
+    } catch [UnauthorizedAccessException] {
+        $replaceBlocked = $true
+    }
+    if (-not $replaceBlocked -or -not (Test-Path -LiteralPath $Target -PathType Leaf)) {
+        throw 'protected-atomic-replacement-was-not-blocked'
+    }
+}
+
+function Assert-AntiwordPathReleased {
+    param([string]$Target)
+    $stream = [IO.File]::Open(
+        $Target,
+        [IO.FileMode]::Open,
+        [IO.FileAccess]::ReadWrite,
+        [IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete
+    )
+    $stream.Dispose()
+    $moved = $Target + '.release-check'
+    [IO.File]::Move($Target, $moved)
+    [IO.File]::Move($moved, $Target)
+}
+
 function Invoke-AntiwordInstallerSelfTest {
     param([string]$StateRoot)
     if (-not $StateRoot) { throw 'Antiword self-test requires an explicit temporary state root.' }
@@ -930,10 +1122,42 @@ function Invoke-AntiwordInstallerSelfTest {
         }
         $secondHash = (Get-FileHash -LiteralPath (Join-Path $managed 'bin\antiword.exe') -Algorithm SHA256).Hash
         if ($firstHash -ne $secondHash) { throw 'idempotent-install-changed-executable' }
+        $managedExe = Join-Path $managed 'bin\antiword.exe'
+        $managedResource = Join-Path $managed 'share\antiword\UTF-8.txt'
+        $replacementRoot = Join-Path $stateFull 'replacement-attempts'
+        New-Item -ItemType Directory -Path $replacementRoot -Force | Out-Null
+        $exeReplacement = Join-Path $replacementRoot 'antiword-replacement.exe'
+        $resourceReplacement = Join-Path $replacementRoot 'UTF-8-replacement.txt'
+        Copy-Item -LiteralPath $managedExe -Destination $exeReplacement
+        Copy-Item -LiteralPath $managedResource -Destination $resourceReplacement
+        $replacementProbe = {
+            param($lockedExe, $lockedResource)
+            Assert-AntiwordPathProtected -Target $lockedExe -Replacement $exeReplacement
+            Assert-AntiwordPathProtected -Target $lockedResource -Replacement $resourceReplacement
+        }
+        if (-not (Test-AntiwordRuntime -RuntimeRoot $managed -FixturePath $fixture -ProtectedIntervalProbe $replacementProbe)) {
+            throw ('protected-interval-' + $script:AntiwordFailure)
+        }
+        Assert-AntiwordPathReleased -Target $managedExe
+        Assert-AntiwordPathReleased -Target $managedResource
+        if (-not (Test-AntiwordRuntime -RuntimeRoot $managed -FixturePath $fixture -FunctionalTimeoutMilliseconds 0)) {
+            if ($script:AntiwordFailure -ne 'functional-execution-timeout') {
+                throw ('timeout-wrong-failure-' + $script:AntiwordFailure)
+            }
+        } else {
+            throw 'zero-timeout-functional-check-unexpectedly-completed'
+        }
+        Assert-AntiwordPathReleased -Target $managedExe
+        Assert-AntiwordPathReleased -Target $managedResource
+        if (-not (Test-AntiwordRuntime -RuntimeRoot $managed -FixturePath $fixture)) {
+            throw ('post-timeout-runtime-' + $script:AntiwordFailure)
+        }
         Add-Content -LiteralPath (Join-Path $managed 'share\antiword\UTF-8.txt') -Value 'self-test-corruption'
         if (Test-AntiwordRuntime -RuntimeRoot $managed -FixturePath $fixture) {
             throw 'corrupt-runtime-was-accepted'
         }
+        Assert-AntiwordPathReleased -Target $managedExe
+        Assert-AntiwordPathReleased -Target $managedResource
         if (-not (Install-VerifiedAntiwordRuntime)) {
             throw ('repair-' + $script:AntiwordFailure)
         }
@@ -965,7 +1189,7 @@ function Invoke-AntiwordInstallerSelfTest {
         $script:Root = Join-Path $stateFull 'missing-package\'
         New-Item -ItemType Directory -Path $script:Root -Force | Out-Null
         if (Install-VerifiedAntiwordRuntime) { throw 'missing-bundle-reported-success' }
-        Write-Host 'Antiword installer self-test passed: verify, install, idempotency, corruption rejection, repair, nested reparse rejection and missing-bundle failure.'
+        Write-Host 'Antiword installer self-test passed: verify, protected execution, blocked replacement, released timeout/failure locks, install, idempotency, corruption rejection, repair, nested reparse rejection and missing-bundle failure.'
     } finally {
         $script:Root = $priorRoot
         $script:Log = $priorLog

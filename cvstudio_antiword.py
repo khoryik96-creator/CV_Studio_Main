@@ -13,8 +13,9 @@ import platform
 import re
 import stat
 import subprocess
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Iterator, Sequence
 
 
 ANTIWORD_PACKAGE_VERSION = "1.3.5"
@@ -258,24 +259,186 @@ def _parse_manifest(root: Path, expected_hash: str) -> dict[str, str]:
     return entries
 
 
-def _functional_check(executable: Path, fixture: Path) -> None:
-    if not fixture.is_file() or _is_link_or_reparse(fixture):
-        raise AntiwordDependencyError("functional-fixture-missing")
-    if _sha256_file(fixture) != ANTIWORD_FIXTURE_SHA256:
-        raise AntiwordDependencyError("functional-fixture-integrity-failed")
+def _open_windows_runtime_handle(path: Path, *, directory: bool) -> int:
+    """Open a read handle that denies write/delete sharing until it is closed."""
+
+    if os.name != "nt":
+        raise AntiwordDependencyError("unsupported-platform")
+    import ctypes
+    from ctypes import wintypes
+
+    create_file = ctypes.WinDLL(
+        "kernel32", use_last_error=True
+    ).CreateFileW
+    create_file.argtypes = (
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.HANDLE,
+    )
+    create_file.restype = wintypes.HANDLE
+    desired_access = 0x0001 | 0x0080 if directory else 0x80000000
+    flags = 0x00200000 if directory else 0x00200000
+    if directory:
+        flags |= 0x02000000
+    handle = create_file(
+        str(path),
+        desired_access,
+        0x00000001,  # FILE_SHARE_READ only: deny write/delete/rename.
+        None,
+        3,  # OPEN_EXISTING
+        flags,  # OPEN_REPARSE_POINT, plus BACKUP_SEMANTICS for directories.
+        None,
+    )
+    invalid_handle = ctypes.c_void_p(-1).value
+    if handle == invalid_handle:
+        error = ctypes.get_last_error()
+        raise AntiwordDependencyError(
+            "runtime-lock-failed",
+            "The managed Antiword runtime could not be locked for secure "
+            "execution. Close programs using its files, re-run the CV Studio "
+            f"installer, then retry. (Windows error {error})",
+        )
+    return int(handle)
+
+
+def _close_windows_runtime_handle(handle: int) -> None:
+    import ctypes
+    from ctypes import wintypes
+
+    close_handle = ctypes.WinDLL(
+        "kernel32", use_last_error=True
+    ).CloseHandle
+    close_handle.argtypes = (wintypes.HANDLE,)
+    close_handle.restype = wintypes.BOOL
+    close_handle(wintypes.HANDLE(handle))
+
+
+@contextmanager
+def _locked_candidate_runtime(
+    root: Path,
+    fixture: Path,
+    tag: str,
+) -> Iterator[dict[str, str]]:
+    """Lock the exact manifest/runtime/fixture tree through process lifetime."""
+
+    if os.name != "nt" or tag != "windows-x64":
+        raise AntiwordDependencyError("unsupported-platform")
+    if not root.is_dir() or _is_link_or_reparse(root):
+        raise AntiwordDependencyError("runtime-missing")
+
+    config = _PLATFORMS[tag]
+    handles: list[int] = []
+    locked: set[str] = set()
+
+    def lock(path: Path, *, directory: bool) -> None:
+        key = os.path.normcase(str(path.absolute()))
+        if key in locked:
+            return
+        handles.append(
+            _open_windows_runtime_handle(path, directory=directory)
+        )
+        locked.add(key)
+
+    try:
+        # Lock the root and pinned manifest before trusting the manifest's
+        # contents to decide which remaining paths must be protected.
+        lock(root, directory=True)
+        lock(root / "SHA256SUMS", directory=False)
+        entries = _parse_manifest(
+            root, str(config["manifest_sha256"])
+        )
+
+        directories = {root / "bin", root / "share", fixture.parent}
+        for relative in entries:
+            parent = (root / Path(relative)).parent
+            while parent != root:
+                directories.add(parent)
+                parent = parent.parent
+        for directory in sorted(
+            directories, key=lambda item: (len(item.parts), str(item))
+        ):
+            lock(directory, directory=True)
+
+        lock(fixture, directory=False)
+        for relative in sorted(entries):
+            lock(root / Path(relative), directory=False)
+        yield entries
+    finally:
+        for handle in reversed(handles):
+            _close_windows_runtime_handle(handle)
+
+
+def _run_locked_antiword_process(
+    executable: Path,
+    arguments: Sequence[str | os.PathLike[str]],
+    *,
+    timeout: float,
+) -> subprocess.CompletedProcess[bytes]:
+    """Run Antiword while the caller retains the verified runtime locks."""
+
     child_env = antiword_subprocess_env(executable)
     kwargs: dict[str, Any] = {}
     if os.name == "nt" and hasattr(subprocess, "CREATE_NO_WINDOW"):
         kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+    command = [
+        str(executable),
+        *(str(argument) for argument in arguments),
+    ]
+    process = subprocess.Popen(
+        command,
+        cwd=str(executable.parent),
+        env=child_env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        **kwargs,
+    )
     try:
-        result = subprocess.run(
-            [str(executable), "-t", str(fixture)],
-            cwd=str(executable.parent),
-            env=child_env,
-            capture_output=True,
+        stdout, stderr = process.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
+        try:
+            process.kill()
+        except OSError:
+            pass
+        try:
+            stdout, stderr = process.communicate()
+        except Exception:
+            stdout = exc.output or b""
+            stderr = exc.stderr or b""
+        exc.output = stdout
+        exc.stderr = stderr
+        raise
+    except BaseException:
+        try:
+            process.kill()
+        except OSError:
+            pass
+        try:
+            process.communicate()
+        except Exception:
+            pass
+        raise
+    return subprocess.CompletedProcess(
+        command,
+        process.returncode,
+        stdout,
+        stderr,
+    )
+
+
+def _functional_check_locked(executable: Path, fixture: Path) -> None:
+    if not fixture.is_file() or _is_link_or_reparse(fixture):
+        raise AntiwordDependencyError("functional-fixture-missing")
+    if _sha256_file(fixture) != ANTIWORD_FIXTURE_SHA256:
+        raise AntiwordDependencyError("functional-fixture-integrity-failed")
+    try:
+        result = _run_locked_antiword_process(
+            executable,
+            ("-t", fixture),
             timeout=12,
-            check=False,
-            **kwargs,
         )
     except subprocess.TimeoutExpired as exc:
         raise AntiwordDependencyError("functional-execution-timeout") from exc
@@ -292,16 +455,14 @@ def _functional_check(executable: Path, fixture: Path) -> None:
         )
 
 
-def _verify_candidate(
+def _verify_candidate_locked(
     source: str,
     root: Path,
     fixture: Path,
     tag: str,
+    entries: dict[str, str],
 ) -> tuple[Path, dict[str, Any]]:
     config = _PLATFORMS[tag]
-    if not root.is_dir() or _is_link_or_reparse(root):
-        raise AntiwordDependencyError("runtime-missing")
-    entries = _parse_manifest(root, str(config["manifest_sha256"]))
     actual_files = _safe_runtime_files(root)
     actual_relatives = {
         path.relative_to(root).as_posix() for path in actual_files
@@ -322,7 +483,7 @@ def _verify_candidate(
     executable = root / Path(str(config["executable"]))
     if _sha256_file(executable) != str(config["executable_sha256"]):
         raise AntiwordDependencyError("executable-integrity-failed")
-    _functional_check(executable, fixture)
+    _functional_check_locked(executable, fixture)
     return executable, {
         "available": True,
         "trusted": True,
@@ -338,6 +499,41 @@ def _verify_candidate(
         "runtime_file_count": ANTIWORD_RUNTIME_FILE_COUNT,
         "reason": "",
         "recovery_action": "",
+    }
+
+
+def _verify_candidate(
+    source: str,
+    root: Path,
+    fixture: Path,
+    tag: str,
+) -> tuple[Path, dict[str, Any]]:
+    with _locked_candidate_runtime(root, fixture, tag) as entries:
+        return _verify_candidate_locked(
+            source, root, fixture, tag, entries
+        )
+
+
+def _failed_health(tag: str, failures: Sequence[str]) -> dict[str, Any]:
+    reason = next(
+        (item for item in failures if item != "runtime-missing"),
+        failures[0] if failures else "runtime-missing",
+    )
+    return {
+        "available": False,
+        "trusted": False,
+        "functional": False,
+        "version": ANTIWORD_PACKAGE_VERSION,
+        "engine_version": ANTIWORD_ENGINE_VERSION,
+        "platform": tag,
+        "source": "",
+        "trust_method": "pinned-sha256-and-complete-runtime-manifest",
+        "native_signature": _PLATFORMS[tag]["native_signature"],
+        "manifest_verified": False,
+        "functional_fixture_verified": False,
+        "runtime_file_count": 0,
+        "reason": reason,
+        "recovery_action": "run_installer",
     }
 
 
@@ -376,26 +572,43 @@ def resolve_verified_antiword(
             failures.append(exc.reason)
         except Exception:
             failures.append("verification-failed")
-    reason = next(
-        (item for item in failures if item != "runtime-missing"),
-        failures[0] if failures else "runtime-missing",
-    )
-    return None, {
-        "available": False,
-        "trusted": False,
-        "functional": False,
-        "version": ANTIWORD_PACKAGE_VERSION,
-        "engine_version": ANTIWORD_ENGINE_VERSION,
-        "platform": tag,
-        "source": "",
-        "trust_method": "pinned-sha256-and-complete-runtime-manifest",
-        "native_signature": _PLATFORMS[tag]["native_signature"],
-        "manifest_verified": False,
-        "functional_fixture_verified": False,
-        "runtime_file_count": 0,
-        "reason": reason,
-        "recovery_action": "run_installer",
-    }
+    return None, _failed_health(tag, failures)
+
+
+def run_verified_antiword(
+    package_root: str | os.PathLike[str],
+    arguments: Sequence[str | os.PathLike[str]],
+    runtime_root: str | os.PathLike[str] | None = None,
+    *,
+    timeout: float = 20,
+) -> subprocess.CompletedProcess[bytes]:
+    """Verify and execute the exact locked Windows-x64 Antiword runtime."""
+
+    tag = _platform_tag()
+    if not tag or tag not in _PLATFORMS:
+        raise AntiwordDependencyError("unsupported-platform")
+
+    failures: list[str] = []
+    for source, root, fixture in _candidate_runtimes(
+        package_root, runtime_root, tag
+    ):
+        try:
+            with _locked_candidate_runtime(root, fixture, tag) as entries:
+                executable, _health = _verify_candidate_locked(
+                    source, root, fixture, tag, entries
+                )
+                return _run_locked_antiword_process(
+                    executable, arguments, timeout=timeout
+                )
+        except AntiwordDependencyError as exc:
+            failures.append(exc.reason)
+        except (subprocess.TimeoutExpired, OSError):
+            raise
+        except Exception:
+            failures.append("verification-failed")
+
+    health = _failed_health(tag, failures)
+    raise AntiwordDependencyError(str(health["reason"]))
 
 
 def antiword_health(
@@ -435,10 +648,11 @@ def antiword_subprocess_env(
     env = os.environ.copy()
     # The upstream 0.37 build has a long-standing ANTIWORDHOME buffer check bug.
     # It also searches $HOME/.antiword before its installed mapping directory.
-    # Bind HOME to the already verified bin directory, where the exact file-set
-    # check excludes a user-controlled .antiword resource tree.
+    # Bind HOME to the already verified executable *file*. Any attempted
+    # $HOME/.antiword lookup therefore fails with ENOTDIR and falls through to
+    # the pinned, locked global mapping directory.
     env.pop("ANTIWORDHOME", None)
-    env["HOME"] = str(Path(executable).resolve().parent)
+    env["HOME"] = str(Path(executable).resolve())
     return env
 
 
@@ -452,4 +666,5 @@ __all__ = [
     "find_verified_antiword",
     "require_verified_antiword",
     "resolve_verified_antiword",
+    "run_verified_antiword",
 ]

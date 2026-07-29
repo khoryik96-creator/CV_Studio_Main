@@ -1,6 +1,6 @@
 Mandatory Antiword runtime for legacy .doc files
 
-CV Studio v24.6.240 is a Windows-x64-only release. It pins rOpenSci Antiword
+CV Studio v24.6.241 is a Windows-x64-only release. It pins rOpenSci Antiword
 package 1.3.5 (Antiword engine 0.37) for Windows x64. The Windows installer
 copies the exact bundled runtime into CV Studio's managed dependency directory
 and verifies it before completing setup.
@@ -13,6 +13,9 @@ Runtime acceptance requires all of the following:
 - native platform trust checks have the expected result;
 - the bundled genuine legacy Word fixture matches its pinned SHA-256;
 - Antiword extracts the expected fixture text within the bounded timeout.
+- the executable, manifest, fixture, runtime directories and every listed
+  runtime file stay locked against write/delete/rename from hashing through
+  process creation and completion.
 
 CV Studio never discovers Antiword through PATH, Program Files,
 ANTIWORDHOME or other arbitrary executable locations. An existing local
@@ -27,7 +30,7 @@ depth, but their output is never presented as a verified .doc success.
 A verified runtime that cannot decode a corrupt/incompatible document returns
 LEGACY_DOC_EXTRACTION_FAILED with convert-to-DOCX/PDF guidance.
 
-No v24.6.240 macOS runtime or release artifact is shipped or supported. Intel
+No v24.6.241 macOS runtime or release artifact is shipped or supported. Intel
 and Apple Silicon validation is deferred to a separately authorized native
 validation milestone. macOS users remain on the last verified release,
 v24.6.239.

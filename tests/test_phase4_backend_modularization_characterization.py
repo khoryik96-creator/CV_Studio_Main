@@ -601,7 +601,7 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
             self.assertNotIn("ANTIWORDHOME", child_environment)
             self.assertEqual(
                 Path(child_environment["HOME"]),
-                Path(antiword_binary).resolve().parent,
+                Path(antiword_binary).resolve(),
             )
             self.assertIn(
                 "Universal Declaration of Human Rights",

@@ -29,6 +29,26 @@ def sha256(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+class FakeAntiwordProcess:
+    def __init__(self, outcome):
+        self.outcome = outcome
+        self.returncode = 0
+        self.killed = False
+        self.timeouts = []
+
+    def communicate(self, timeout=None):
+        self.timeouts.append(timeout)
+        if self.killed:
+            return b"", b""
+        if isinstance(self.outcome, BaseException):
+            raise self.outcome
+        return self.outcome
+
+    def kill(self):
+        self.killed = True
+        self.returncode = -9
+
+
 class AntiwordMandatoryDependencyTests(unittest.TestCase):
     def test_protected_smoke_redirects_every_supported_state_override(self):
         with tempfile.TemporaryDirectory(
@@ -414,26 +434,254 @@ class AntiwordMandatoryDependencyTests(unittest.TestCase):
     def test_functional_timeout_is_bounded_and_failure_visible(self):
         if os.name != "nt":
             self.skipTest("Windows executable timeout fixture is Windows-only")
-        executable = VENDOR / "windows-x64" / "bin" / "antiword.exe"
-        fixture = VENDOR / "fixtures" / "UDHR-english.doc"
-        with mock.patch.object(
-            antiword.subprocess,
-            "run",
-            side_effect=subprocess.TimeoutExpired("antiword", 12),
-        ) as run:
-            with self.assertRaises(antiword.AntiwordDependencyError) as caught:
-                antiword._functional_check(executable, fixture)
-        self.assertEqual(caught.exception.reason, "functional-execution-timeout")
-        self.assertEqual(run.call_args.kwargs["timeout"], 12)
-        self.assertFalse(run.call_args.kwargs["check"])
-        self.assertNotIn(
-            "ANTIWORDHOME",
-            run.call_args.kwargs["env"],
+        with tempfile.TemporaryDirectory(
+            prefix="cvstudio-antiword-timeout-"
+        ) as td:
+            package = Path(td)
+            copied_vendor = package / "vendor" / "antiword"
+            shutil.copytree(VENDOR, copied_vendor)
+            executable = (
+                copied_vendor
+                / "windows-x64"
+                / "bin"
+                / "antiword.exe"
+            )
+            mapping = (
+                copied_vendor
+                / "windows-x64"
+                / "share"
+                / "antiword"
+                / "UTF-8.txt"
+            )
+            timed_out = FakeAntiwordProcess(
+                subprocess.TimeoutExpired("antiword", 12)
+            )
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "LOCALAPPDATA": str(package / "empty-state"),
+                    "CVSTUDIO_ANTIWORD_PACKAGE_ONLY": "1",
+                },
+                clear=False,
+            ), mock.patch.object(
+                antiword.subprocess,
+                "Popen",
+                return_value=timed_out,
+            ) as popen:
+                health = antiword.antiword_health(package)
+            self.assertFalse(health["available"])
+            self.assertEqual(
+                health["reason"], "functional-execution-timeout"
+            )
+            for protected_path in (executable, mapping):
+                with protected_path.open("r+b"):
+                    pass
+                moved = protected_path.with_name(
+                    protected_path.name + ".released"
+                )
+                protected_path.rename(moved)
+                moved.rename(protected_path)
+        self.assertEqual(timed_out.timeouts, [12, None])
+        self.assertTrue(timed_out.killed)
+        self.assertEqual(
+            popen.call_args.kwargs["stdout"],
+            subprocess.PIPE,
         )
         self.assertEqual(
-            Path(run.call_args.kwargs["env"]["HOME"]),
-            executable.parent.resolve(),
+            popen.call_args.kwargs["stderr"],
+            subprocess.PIPE,
         )
+        self.assertNotIn(
+            "ANTIWORDHOME",
+            popen.call_args.kwargs["env"],
+        )
+        self.assertEqual(
+            Path(popen.call_args.kwargs["env"]["HOME"]),
+            executable.resolve(),
+        )
+
+    def test_verified_execution_blocks_runtime_substitution_until_exit(self):
+        if os.name != "nt":
+            self.skipTest("Windows sharing enforcement is Windows-only")
+        with tempfile.TemporaryDirectory(
+            prefix="cvstudio-antiword-locked-execution-"
+        ) as td:
+            package = Path(td)
+            copied_vendor = package / "vendor" / "antiword"
+            shutil.copytree(VENDOR, copied_vendor)
+            runtime = copied_vendor / "windows-x64"
+            executable = runtime / "bin" / "antiword.exe"
+            mapping = runtime / "share" / "antiword" / "UTF-8.txt"
+            fixture = copied_vendor / "fixtures" / "UDHR-english.doc"
+            replacements = package / "replacement-attempts"
+            replacements.mkdir()
+            exe_replacement = replacements / "antiword.exe"
+            mapping_replacement = replacements / "UTF-8.txt"
+            shutil.copy2(executable, exe_replacement)
+            shutil.copy2(mapping, mapping_replacement)
+            original_popen = subprocess.Popen
+            attempts = []
+
+            def assert_locked(target, replacement):
+                for operation in (
+                    lambda: target.write_bytes(target.read_bytes()),
+                    target.unlink,
+                    lambda: target.rename(
+                        target.with_name(target.name + ".renamed")
+                    ),
+                    lambda: os.replace(replacement, target),
+                ):
+                    with self.assertRaises(OSError):
+                        operation()
+                    attempts.append(target)
+
+            def attempt_replacement_then_start(*args, **kwargs):
+                assert_locked(executable, exe_replacement)
+                assert_locked(mapping, mapping_replacement)
+                return original_popen(*args, **kwargs)
+
+            environment = {
+                "LOCALAPPDATA": str(package / "empty-state"),
+                "CVSTUDIO_ANTIWORD_PACKAGE_ONLY": "1",
+            }
+            with mock.patch.dict(
+                os.environ, environment, clear=False
+            ), mock.patch.object(
+                antiword.subprocess,
+                "Popen",
+                side_effect=attempt_replacement_then_start,
+            ) as popen:
+                result = antiword.run_verified_antiword(
+                    package,
+                    (fixture,),
+                    timeout=20,
+                )
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(popen.call_count, 2)
+            self.assertEqual(len(attempts), 16)
+            for call in popen.call_args_list:
+                self.assertEqual(
+                    Path(call.kwargs["env"]["HOME"]),
+                    executable.resolve(),
+                )
+
+            for protected_path in (executable, mapping):
+                with protected_path.open("r+b"):
+                    pass
+                moved = protected_path.with_name(
+                    protected_path.name + ".released"
+                )
+                protected_path.rename(moved)
+                moved.rename(protected_path)
+            post_replacement = replacements / "post-execution.exe"
+            shutil.copy2(executable, post_replacement)
+            os.replace(post_replacement, executable)
+            with mock.patch.dict(
+                os.environ, environment, clear=False
+            ):
+                self.assertTrue(
+                    antiword.antiword_health(package)["functional"]
+                )
+
+    def test_public_fixture_markers_cannot_bypass_executable_identity(self):
+        if os.name != "nt":
+            self.skipTest("Windows runtime identity is Windows-only")
+        with tempfile.TemporaryDirectory(
+            prefix="cvstudio-antiword-marker-spoof-"
+        ) as td:
+            package = Path(td)
+            copied_vendor = package / "vendor" / "antiword"
+            shutil.copytree(VENDOR, copied_vendor)
+            executable = (
+                copied_vendor
+                / "windows-x64"
+                / "bin"
+                / "antiword.exe"
+            )
+            executable.write_bytes(b"malicious executable")
+            marker_output = "\n".join(antiword._FUNCTIONAL_MARKERS).encode()
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "LOCALAPPDATA": str(package / "empty-state"),
+                    "CVSTUDIO_ANTIWORD_PACKAGE_ONLY": "1",
+                },
+                clear=False,
+            ), mock.patch.object(
+                antiword.subprocess,
+                "Popen",
+                return_value=FakeAntiwordProcess((marker_output, b"")),
+            ) as popen:
+                health = antiword.antiword_health(package)
+            self.assertFalse(health["trusted"])
+            self.assertFalse(health["functional"])
+            self.assertEqual(health["reason"], "runtime-integrity-failed")
+            popen.assert_not_called()
+
+    def test_actual_execution_abort_paths_release_runtime_locks(self):
+        if os.name != "nt":
+            self.skipTest("Windows sharing enforcement is Windows-only")
+        marker_output = "\n".join(antiword._FUNCTIONAL_MARKERS).encode()
+        for label, failure in (
+            (
+                "timeout",
+                subprocess.TimeoutExpired("antiword", 20),
+            ),
+            ("failure", OSError("process start failed")),
+            ("cancellation", KeyboardInterrupt()),
+        ):
+            with self.subTest(label=label), tempfile.TemporaryDirectory(
+                prefix=f"cvstudio-antiword-{label}-release-"
+            ) as td:
+                package = Path(td)
+                copied_vendor = package / "vendor" / "antiword"
+                shutil.copytree(VENDOR, copied_vendor)
+                runtime = copied_vendor / "windows-x64"
+                executable = runtime / "bin" / "antiword.exe"
+                mapping = runtime / "share" / "antiword" / "UTF-8.txt"
+                successful_functional = FakeAntiwordProcess(
+                    (marker_output, b"")
+                )
+                aborted_process = (
+                    failure
+                    if isinstance(failure, OSError)
+                    else FakeAntiwordProcess(failure)
+                )
+                with mock.patch.dict(
+                    os.environ,
+                    {
+                        "LOCALAPPDATA": str(package / "empty-state"),
+                        "CVSTUDIO_ANTIWORD_PACKAGE_ONLY": "1",
+                    },
+                    clear=False,
+                ), mock.patch.object(
+                    antiword.subprocess,
+                    "Popen",
+                    side_effect=[
+                        successful_functional,
+                        aborted_process,
+                    ],
+                ):
+                    with self.assertRaises(type(failure)):
+                        antiword.run_verified_antiword(
+                            package,
+                            (copied_vendor / "fixtures" / "UDHR-english.doc",),
+                            timeout=20,
+                        )
+                if isinstance(aborted_process, FakeAntiwordProcess):
+                    self.assertTrue(aborted_process.killed)
+                    self.assertEqual(
+                        aborted_process.timeouts,
+                        [20, None],
+                    )
+                for protected_path in (executable, mapping):
+                    with protected_path.open("r+b"):
+                        pass
+                    moved = protected_path.with_name(
+                        protected_path.name + ".released"
+                    )
+                    protected_path.rename(moved)
+                    moved.rename(protected_path)
 
     def test_extraction_verifier_has_no_network_or_shell_discovery(self):
         source = Path(antiword.__file__).read_text(encoding="utf-8")
@@ -462,10 +710,14 @@ class AntiwordMandatoryDependencyTests(unittest.TestCase):
         self.assertIn("Test-AntiwordRuntime", windows)
         self.assertIn("Invoke-AntiwordFunctionalCheck", windows)
         self.assertIn(
-            "$startInfo.EnvironmentVariables['HOME'] = Split-Path -Parent $Executable",
+            "$startInfo.EnvironmentVariables['HOME'] = $Executable",
             windows,
         )
-        self.assertIn("WaitForExit(12000)", windows)
+        self.assertIn("[CVStudioAntiwordRuntimeLock]::Open", windows)
+        self.assertIn("FILE_SHARE_READ", windows)
+        self.assertIn("FILE_FLAG_OPEN_REPARSE_POINT", windows)
+        self.assertIn("WaitForExit($TimeoutMilliseconds)", windows)
+        self.assertIn("[int]$TimeoutMilliseconds = 12000", windows)
         self.assertIn("WaitForExit(2000)", windows)
         self.assertNotIn("$process.WaitForExit()", windows)
         self.assertIn("functional-execution-timeout", windows)
@@ -492,6 +744,9 @@ class AntiwordMandatoryDependencyTests(unittest.TestCase):
             "Antiword self-test state cannot be a reparse point.",
             windows,
         )
+        self.assertIn("Assert-AntiwordPathProtected", windows)
+        self.assertIn("Assert-AntiwordPathReleased", windows)
+        self.assertIn("$lockHandles[$index].Dispose()", windows)
         self.assertIn(
             "Dependency QA cannot issue a receipt or reach the installer main block",
             windows,
@@ -566,6 +821,8 @@ class AntiwordMandatoryDependencyTests(unittest.TestCase):
             (result.stdout or "") + (result.stderr or ""),
         )
         self.assertIn("nested reparse rejection", result.stdout)
+        self.assertIn("blocked replacement", result.stdout)
+        self.assertIn("released timeout/failure locks", result.stdout)
 
     def test_native_parser_is_retained_but_cannot_satisfy_success(self):
         source = (ROOT / "app.py").read_text(encoding="utf-8")
@@ -575,6 +832,9 @@ class AntiwordMandatoryDependencyTests(unittest.TestCase):
             "                raise AntiwordDependencyError(",
             source,
         )
+        self.assertEqual(source.count("_run_verified_antiword("), 3)
+        self.assertNotIn("_sp.run([antiword, doc_path]", source)
+        self.assertNotIn("_sp2.run(", source)
         self.assertIn(
             "Native OLE parsing remains defense-in-depth and cannot satisfy success",
             source,

@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.240"
+_INSTALL_RECEIPT_VERSION = "v24.6.241"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -301,9 +301,10 @@ from cvstudio_antiword import (
     antiword_subprocess_env as _verified_antiword_subprocess_env,
     find_verified_antiword as _verified_antiword_finder,
     require_verified_antiword as _require_verified_antiword_runtime,
+    run_verified_antiword as _run_verified_antiword_runtime,
 )
 
-_CVSTUDIO_VERSION = "v24.6.240"
+_CVSTUDIO_VERSION = "v24.6.241"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -7465,7 +7466,7 @@ def _ja_spa_browser_bridge(candidate_id, fields, note_text="", email="", salary_
     payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
     compact_payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     script = """(async () => {
-  const helperVersion = 'v24.6.240';
+  const helperVersion = 'v24.6.241';
   const candidateId = %s;
   const payload = %s;
   const profilePath = %s;
@@ -10056,7 +10057,7 @@ def jobadder_onenote_activity_diagnostic():
     generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Candidate Activity Read Test",
-        "cv_studio_version": "v24.6.240",
+        "cv_studio_version": "v24.6.241",
         "generated_utc": generated,
         "safety": {
             "read_only": True,
@@ -10266,7 +10267,7 @@ def jobadder_onenote_activity_create_diagnostic():
     if confirmation != "CREATE ONE MAX LOW TEST":
         return jsonify({"error": "Type CREATE ONE MAX LOW TEST exactly before running the controlled POST."}), 400
 
-    guard_key = ("v24.6.240", candidate_id)
+    guard_key = ("v24.6.241", candidate_id)
     if guard_key in _JA_ACTIVITY_CREATE_DIAG_USED:
         return jsonify({"error": "The one-shot controlled POST has already been run in this CV Studio session. Restarting is intentionally required before any repeat test."}), 409
     # Mark before the network call so a timeout/double-click cannot emit a second POST.
@@ -10295,7 +10296,7 @@ def jobadder_onenote_activity_create_diagnostic():
     generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Official AddCandidateActivity Create Test",
-        "cv_studio_version": "v24.6.240",
+        "cv_studio_version": "v24.6.241",
         "generated_utc": generated,
         "candidate_fixture": {
             "name": "Max Low",
@@ -13551,15 +13552,14 @@ def _spider_extract_legacy_doc_text_for_preview(raw):
         )
 
     # 1) The only accepted success path is the pinned, function-verified runtime.
-    antiword = _require_verified_antiword()
+    _require_verified_antiword()
     try:
-        import tempfile as _tmp, subprocess as _sp, os as _os
+        import tempfile as _tmp, os as _os
         with _tmp.TemporaryDirectory() as td:
             doc_path = _os.path.join(td, 'input.doc')
             with open(doc_path, 'wb') as fh:
                 fh.write(raw)
-            aw_folder = _os.path.dirname(_os.path.abspath(antiword))
-            res = _sp.run([antiword, doc_path], capture_output=True, timeout=20, cwd=aw_folder or None, env=_antiword_env_for_binary(antiword))
+            res = _run_verified_antiword((doc_path,), timeout=20)
             if res.returncode == 0:
                 for enc in ('utf-8', 'cp1252', 'latin-1'):
                     txt = _spider_clean_doc_text_for_preview(res.stdout.decode(enc, errors='ignore'))
@@ -21823,6 +21823,15 @@ def _require_verified_antiword():
     )
 
 
+def _run_verified_antiword(arguments, *, timeout=20):
+    return _run_verified_antiword_runtime(
+        _CVSTUDIO_ROOT,
+        arguments,
+        os.path.dirname(os.path.abspath(__file__)),
+        timeout=timeout,
+    )
+
+
 def _antiword_dependency_response(error):
     return jsonify(_antiword_dependency_payload(error)), 424
 
@@ -22318,28 +22327,22 @@ def extract_text():
             # Strategy 1: the exact verified managed/bundled Antiword runtime.
             # PATH and other arbitrary executable locations are never searched.
             try:
-                import subprocess as _sp2, tempfile as _tmp_aw, os as _os_aw
-                for _antiword in _iter_antiword_binaries():
-                    with _tmp_aw.TemporaryDirectory() as _td_aw:
-                        _doc_aw = _os_aw.path.join(_td_aw, 'input.doc')
-                        with open(_doc_aw, 'wb') as _fh_aw:
-                            _fh_aw.write(file_bytes)
-                        _aw_folder = _os_aw.path.dirname(_os_aw.path.abspath(_antiword))
-                        r2 = _sp2.run(
-                            [_antiword, _doc_aw],
-                            capture_output=True,
-                            timeout=20,
-                            cwd=_aw_folder or None,
-                            env=_antiword_env_for_binary(_antiword)
-                        )
-                        if r2.returncode == 0:
-                            _aw_text = r2.stdout.decode('utf-8', errors='ignore').strip()
-                            if not _aw_text:
-                                _aw_text = r2.stdout.decode('cp1252', errors='ignore').strip()
-                            if _looks_like_good_doc_text(_aw_text):
-                                text = _aw_text
-                                _verified_antiword_text = True
-                                break
+                import tempfile as _tmp_aw, os as _os_aw
+                with _tmp_aw.TemporaryDirectory() as _td_aw:
+                    _doc_aw = _os_aw.path.join(_td_aw, 'input.doc')
+                    with open(_doc_aw, 'wb') as _fh_aw:
+                        _fh_aw.write(file_bytes)
+                    r2 = _run_verified_antiword(
+                        (_doc_aw,),
+                        timeout=20,
+                    )
+                    if r2.returncode == 0:
+                        _aw_text = r2.stdout.decode('utf-8', errors='ignore').strip()
+                        if not _aw_text:
+                            _aw_text = r2.stdout.decode('cp1252', errors='ignore').strip()
+                        if _looks_like_good_doc_text(_aw_text):
+                            text = _aw_text
+                            _verified_antiword_text = True
             except Exception:
                 pass
 

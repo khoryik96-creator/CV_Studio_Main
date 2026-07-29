@@ -269,7 +269,7 @@ def verify(root: Path) -> dict:
     for relative in DEFERRED_ANTIWORD_PATHS:
         if (root / relative).exists():
             errors.append(
-                "deferred macOS Antiword payload must not ship in v24.6.240: "
+                "deferred macOS Antiword payload must not ship in v24.6.241: "
                 + relative
             )
     if not (root / "cvstudio_antiword.py").is_file():
