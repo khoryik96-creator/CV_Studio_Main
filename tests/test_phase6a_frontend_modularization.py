@@ -1,0 +1,105 @@
+import inspect
+import os
+from pathlib import Path
+import sys
+import tempfile
+import unittest
+
+from owner_build_tools import build_protected
+
+
+_MODULE_TEMPORARY = None
+if "app" in sys.modules:
+    import app
+else:
+    _MODULE_TEMPORARY = tempfile.TemporaryDirectory(
+        prefix="cvstudio-phase6a-app-"
+    )
+    _temporary_root = Path(_MODULE_TEMPORARY.name)
+    _original_database_override = os.environ.get("CVSTUDIO_DB_PATH")
+    _original_local_state = os.environ.get("LOCALAPPDATA")
+    os.environ["CVSTUDIO_DB_PATH"] = str(
+        _temporary_root / "state" / "cv_studio.sqlite3"
+    )
+    os.environ["LOCALAPPDATA"] = str(_temporary_root / "local-state")
+    build_protected.write_test_receipt(Path(__file__).resolve().parents[1])
+    try:
+        import app
+    finally:
+        if _original_database_override is None:
+            os.environ.pop("CVSTUDIO_DB_PATH", None)
+        else:
+            os.environ["CVSTUDIO_DB_PATH"] = _original_database_override
+        if _original_local_state is None:
+            os.environ.pop("LOCALAPPDATA", None)
+        else:
+            os.environ["LOCALAPPDATA"] = _original_local_state
+
+
+ROOT = Path(__file__).resolve().parents[1]
+FRONTEND_MODULES = (
+    "api-transport.js",
+    "page-nav.js",
+    "server-heartbeat.js",
+)
+
+
+class Phase6AFrontendModularizationTests(unittest.TestCase):
+    def test_existing_route_and_vendor_asset_boundary(self):
+        rules = list(app.app.url_map.iter_rules())
+        self.assertEqual(len(rules), 108)
+        vendor_rules = [rule for rule in rules if rule.rule == "/vendor/<path:filename>"]
+        self.assertEqual(len(vendor_rules), 1)
+        self.assertEqual(vendor_rules[0].methods - {"HEAD", "OPTIONS"}, {"GET"})
+
+        module_root = ROOT / "vendor" / "cvstudio"
+        if not module_root.is_dir():
+            return
+        client = app.app.test_client()
+        for filename in FRONTEND_MODULES:
+            response = client.get("/vendor/cvstudio/" + filename)
+            self.assertEqual(response.status_code, 200, filename)
+            self.assertGreater(len(response.data), 100, filename)
+            self.assertIn(b"function", response.data, filename)
+        self.assertEqual(client.get("/vendor/../app.py").status_code, 404)
+
+    def test_owner_protection_and_package_asset_seam(self):
+        module_root = ROOT / "vendor" / "cvstudio"
+        if not module_root.is_dir():
+            return
+
+        self.assertEqual(build_protected.FRONTEND_MODULES, FRONTEND_MODULES)
+        build_protected.validate_source(ROOT)
+        with tempfile.TemporaryDirectory(prefix="cvstudio-phase6a-protection-") as temporary:
+            result = build_protected.protect_javascript(
+                ROOT, Path(temporary), True
+            )
+            self.assertEqual(len(result), 4)
+            protected_index, protected_generate, protected_modules, report = result
+            self.assertTrue(protected_index.is_file())
+            self.assertTrue(protected_generate.is_file())
+            self.assertEqual(
+                sorted(path.name for path in protected_modules.iterdir()),
+                sorted(FRONTEND_MODULES),
+            )
+            self.assertEqual(
+                sorted(report["frontend_modules"]["source_sha256"]),
+                sorted(FRONTEND_MODULES),
+            )
+            self.assertEqual(
+                sorted(report["frontend_modules"]["protected_sha256"]),
+                sorted(FRONTEND_MODULES),
+            )
+
+        build_package_source = inspect.getsource(build_protected.build_package)
+        self.assertIn("protected_modules", build_package_source)
+        self.assertIn("vendor/cvstudio", inspect.getsource(build_protected.smoke_test))
+
+
+def tearDownModule():
+    if _MODULE_TEMPORARY is not None:
+        _MODULE_TEMPORARY.cleanup()
+
+
+if __name__ == "__main__":
+    unittest.main()
