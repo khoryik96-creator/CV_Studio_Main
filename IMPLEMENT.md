@@ -6,11 +6,11 @@ Phases 1, 2A, 2B, 3, 4, 5A and 5B are complete. The separately authorized
 mandatory Windows-x64 Antiword milestone completed in v24.6.240, and its
 verification-to-execution TOCTOU race is corrected in private owner/source
 release v24.6.241. The bounded JobAdder account-management and settings
-milestone is complete in private owner/source release v24.6.242. There is no
-active implementation target after its four independent-review findings were
-corrected in v24.6.243. macOS remains on v24.6.239. Do not make further
-production changes or begin Phase 6 unless the owner explicitly starts the
-exact next milestone.
+milestone is complete in private owner/source release v24.6.242. Phase 6A
+frontend modularisation and the bounded Phase 6B local-jsPDF lazy loading
+change are complete on their source branches without changing the v24.6.243
+installed identity. macOS remains on v24.6.239. Do not begin Phase 6C unless
+the owner explicitly starts that exact next milestone.
 
 ## Before a future Phase 6 implementation
 

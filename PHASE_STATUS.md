@@ -15,15 +15,97 @@
 - Phase 5A baseline Git commit: `4b366ddde1cf0a398706b52d55b0e82ed2dbc27c`
 - Phase 5B source baseline: v24.6.234
 - Phase 5B baseline Git commit: `327858799f17d880e37c740f71dfe321ea7bde0a`
-- Working branch: `agent/phase-6a-frontend-modularisation`
-- Active phase: Phase 6A — behavior-preserving frontend modularisation
+- Working branch: `agent/v24.6.244-phase-6b-lazy-loading`
+- Active phase: Phase 6B — behavior-preserving frontend lazy loading
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: four findings from the single independent review of v24.6.242 are
   corrected without broadening the pre-Phase-6 JobAdder milestone; macOS
   remains on v24.6.239
-- Current stop: after a pushed draft Phase 6A pull request with passing GitHub
-  regression; before merge, Local handoff, release finalization, protected
-  packaging, Phase 6B, Phase 6C or Phase 7
+- Current stop: at draft PR #5 after its single independent-review correction;
+  GitHub Windows-x64 CI is the authoritative post-push gate. Stop before merge,
+  release finalization, protected packaging, Phase 6C or Phase 7.
+
+## Phase 6B authorization, inventory and bounded implementation
+
+### Entry and immutable boundaries
+
+- The owner authorized Phase 6B lazy loading only from exact Codex Cloud HEAD
+  `00235a6923082195b15224febb279c5a9a30f040`. The platform-selected `master`
+  provenance, internal `work` branch and clean worktree satisfy the corrected
+  cloud entry gate; absent remote and tag refs are explicitly non-blocking.
+- Installed source identity remains v24.6.243. No backend, route, schema,
+  installer, release, tag, macOS claim or protected artifact changed.
+- Exactly 108 routes, five ordered guards, 18 compatibility signatures,
+  SQLite schema 10 and Phase 5A journal schema 1 remain mandatory. Phase 6C,
+  Phase 7 and backburner items 4/7/8 remain excluded.
+
+### Frontend and packaging inventory
+
+- `index.html` retains the Phase 6A eager classic-script boundaries for local
+  API transport, pinned navigation and heartbeat/reconnect startup. Those
+  scripts, their globals, DOM/listener order and startup timing remain eager.
+- The tracked `vendor/cvstudio` tree contained those three Phase 6A modules;
+  the only other browser JavaScript asset was the local, tracked
+  `vendor/jspdf.umd.min.js`. It was eagerly parsed before application startup
+  but is referenced only by the four explicit PDF-export actions: Blind JD,
+  Company Profile, CV Scoring and The Owl.
+- The four entry points already owned their source-data readiness checks,
+  established global names and visible jsPDF-unavailable errors. jsPDF has no
+  localStorage/IndexedDB, DOM listener, API transport or startup dependency.
+  Word/DOCX generation, all browser stores and every non-PDF feature remain
+  unchanged.
+- Flask's existing offline vendor route serves both files. Owner protection
+  already validates, transforms, hashes, replaces and smoke-fetches every file
+  named by `FRONTEND_MODULES`, while the complete vendor tree includes jsPDF.
+  Phase 6B extends that list only for the small loader and retains the existing
+  jsPDF packaged URL. No remote runtime or CDN is introduced.
+
+### Selected lazy boundary and behavior
+
+- Only local jsPDF is lazy-loaded. A small eager classic-script loader keeps
+  the existing global model, creates the jsPDF script on the first valid PDF
+  export action and resumes that same global export function after readiness.
+- Concurrent first entries share one network request and each action resumes
+  once. Ready subsequent entries execute synchronously. A failed or incomplete
+  load removes its script, clears in-flight state, preserves each established
+  visible error and permits the next entry to retry without stale promises,
+  duplicate listeners or partially initialized loader state.
+- The loader itself is deterministic and idempotent and has no listeners,
+  storage access, backend request or feature initialization. No startup-
+  critical Phase 6A module or non-PDF asset was deferred.
+- Pre-change characterization recorded the eager dependency and all four
+  global PDF/error entry contracts. The Phase 6B fixture covers source
+  discovery, on-demand timing, concurrent entry, synchronous ready behavior,
+  visible failure cleanup and retry. Existing Blind JD export coverage and
+  Phase 6A protected-asset coverage remain in force.
+
+### Cloud validation and focused review
+
+- The single complete Python discovery ran all 153 tests (eight skipped). One
+  Windows-only Antiword functional-route assertion returned the expected
+  dependency-not-ready HTTP 424 instead of 200 because Linux cannot execute
+  the pinned Windows binary; the other 152 tests completed without a Phase
+  6B failure. The same platform boundary prevented full owner Windows-x64
+  Antiword preflight after Python and all five frontend-module syntax checks
+  passed. No native Windows or PowerShell result is claimed.
+- All eight frontend fixtures passed, including Phase 6A and the new Phase 6B
+  fixture. Live source smoke passed all 24 assertions. Tracked Python,
+  JavaScript and POSIX syntax, repository consistency and whitespace checks
+  passed in Linux.
+- The one focused self-review compared the complete change against exact base
+  `00235a6923082195b15224febb279c5a9a30f040`. It found that one throwing
+  resumed export could prevent another concurrent queued export from running;
+  isolated callback draining and a focused regression corrected that finding.
+  Only the affected Phase 6B fixture, loader syntax and whitespace check were
+  rerun, and all passed. GitHub Windows-x64 CI remains the platform gate after
+  the controller creates the draft pull request.
+- The single independent review of draft PR #5 then found one concrete retry
+  mismatch: all four export guards accepted a partial `window.jspdf` namespace
+  even though the loader requires `window.jspdf.jsPDF`. The guards now use the
+  loader's exact readiness predicate. Focused coverage retains a partial
+  namespace after an incomplete load and proves that the next attempt reloads
+  and succeeds. The Phase 6B fixture, affected JavaScript syntax and whitespace
+  checks passed after this bounded correction; no broader review loop ran.
 
 ## Phase 6A authorization, entry verification and bounded plan
 

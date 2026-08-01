@@ -38,6 +38,7 @@ else:
 
 ROOT = Path(__file__).resolve().parents[1]
 FRONTEND_MODULES = (
+    "lazy-loader.js",
     "api-transport.js",
     "page-nav.js",
     "server-heartbeat.js",
