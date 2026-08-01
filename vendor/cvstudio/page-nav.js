@@ -253,5 +253,3 @@ function initPageNavPin() {
   window.addEventListener('resize', queuePageNavPinRefresh);
   queuePageNavPinRefresh();
 }
-
-document.addEventListener('DOMContentLoaded', initPageNavPin);

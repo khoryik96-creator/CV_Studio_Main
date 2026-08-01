@@ -209,7 +209,7 @@ function pageNavContract() {
   vm.runInContext(sourceOrInline(
     moduleFiles.pageNav,
     'Optional pinned main navigation',
-    'Ensure Settings AI Routing controls exist',
+    "document.addEventListener('DOMContentLoaded', initPageNavPin);",
   ), context);
 
   [
@@ -228,7 +228,8 @@ function pageNavContract() {
     'initPageNavPin',
   ].forEach(name => assert.strictEqual(typeof context[name], 'function', 'missing global ' + name));
   assert.strictEqual(context.PAGE_NAV_PIN_STORE, 'cvstudio_page_nav_pinned_v1');
-  assert.strictEqual(documentListeners.length, 1);
+  assert.strictEqual(documentListeners.length, 0);
+  document.addEventListener('DOMContentLoaded', context.initPageNavPin);
   assert.strictEqual(documentListeners[0].type, 'DOMContentLoaded');
   assert.strictEqual(documentListeners[0].listener, context.initPageNavPin);
 
@@ -342,8 +343,12 @@ function extractedScriptOrderContract() {
   assert.strictEqual(new Set(positions).size, present.length);
   assert.ok(positions[0] < html.indexOf('var JA_REDIRECT_URI'));
   if (positions.length > 1) {
-    assert.ok(positions[1] > html.indexOf('function downloadBatchZip'));
-    assert.ok(positions[1] < html.indexOf('Ensure Settings AI Routing controls exist'));
+    assert.ok(positions[0] < positions[1]);
+    assert.ok(positions[1] < html.indexOf('var JA_REDIRECT_URI'));
+    assert.ok(positions[1] < html.indexOf('var _cvStudioPhase2bSettingsStartupPromise'));
+    const adapter = html.indexOf("document.addEventListener('DOMContentLoaded', initPageNavPin);");
+    assert.ok(adapter > html.indexOf('function downloadBatchZip'));
+    assert.ok(adapter < html.indexOf('Ensure Settings AI Routing controls exist'));
   }
   if (positions.length > 2) {
     assert.ok(positions[2] > html.indexOf('function clearStats'));

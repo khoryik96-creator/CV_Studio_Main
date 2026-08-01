@@ -3364,6 +3364,7 @@
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <script src="/vendor/cvstudio/api-transport.js?v=24.6.243"></script>
+<script src="/vendor/cvstudio/page-nav.js?v=24.6.243"></script>
 <script>
 // ── JobAdder OAuth + Upload ───────────────────────────────────────────
 // Replace these with your JobAdder app credentials from developer.jobadder.com
@@ -18447,9 +18448,7 @@ function downloadBatchZip() {
   showToast('Downloading ' + _batchBlobs.length + ' file' + (_batchBlobs.length !== 1 ? 's' : '') + '...', 'ok');
 }
 
-</script>
-<script src="/vendor/cvstudio/page-nav.js?v=24.6.243"></script>
-<script>
+document.addEventListener('DOMContentLoaded', initPageNavPin);
 
 // Ensure Settings AI Routing controls exist even if the normal load restore path
 // exits early. This keeps the UI visible after hard refresh, cached state quirks,

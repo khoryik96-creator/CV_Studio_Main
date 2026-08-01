@@ -61,6 +61,7 @@ jobs:
           node tests/test_jobadder_esc2_frontend.js
           node tests/test_blind_jd_exp_summary_frontend.js
           node tests/test_jobadder_account_settings_frontend.js
+          node tests/test_phase6a_frontend_modularisation.js
 
       - name: Run live source smoke
         shell: bash
