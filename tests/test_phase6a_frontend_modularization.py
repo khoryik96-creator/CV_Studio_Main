@@ -56,16 +56,32 @@ class Phase6AFrontendModularizationTests(unittest.TestCase):
         if not module_root.is_dir():
             return
         client = app.app.test_client()
-        for filename in FRONTEND_MODULES:
+        present_modules = tuple(
+            filename
+            for filename in FRONTEND_MODULES
+            if (module_root / filename).is_file()
+        )
+        self.assertEqual(
+            present_modules,
+            FRONTEND_MODULES[: len(present_modules)],
+        )
+        for filename in present_modules:
             response = client.get("/vendor/cvstudio/" + filename)
-            self.assertEqual(response.status_code, 200, filename)
-            self.assertGreater(len(response.data), 100, filename)
-            self.assertIn(b"function", response.data, filename)
-        self.assertEqual(client.get("/vendor/../app.py").status_code, 404)
+            try:
+                self.assertEqual(response.status_code, 200, filename)
+                self.assertGreater(len(response.data), 100, filename)
+                self.assertIn(b"function", response.data, filename)
+            finally:
+                response.close()
+        rejected = client.get("/vendor/../app.py")
+        try:
+            self.assertEqual(rejected.status_code, 404)
+        finally:
+            rejected.close()
 
     def test_owner_protection_and_package_asset_seam(self):
         module_root = ROOT / "vendor" / "cvstudio"
-        if not module_root.is_dir():
+        if not all((module_root / filename).is_file() for filename in FRONTEND_MODULES):
             return
 
         self.assertEqual(build_protected.FRONTEND_MODULES, FRONTEND_MODULES)

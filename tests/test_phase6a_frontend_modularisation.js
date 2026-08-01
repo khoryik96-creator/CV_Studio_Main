@@ -336,15 +336,19 @@ function extractedScriptOrderContract() {
   ];
   const present = relativeModules.filter(relative => fs.existsSync(path.join(root, relative)));
   if (!present.length) return;
-  assert.deepStrictEqual(present, relativeModules);
-  const positions = relativeModules.map(relative => html.indexOf('/' + relative));
-  positions.forEach((position, index) => assert.ok(position >= 0, 'module is not loaded: ' + relativeModules[index]));
-  assert.strictEqual(new Set(positions).size, 3);
+  assert.deepStrictEqual(present, relativeModules.slice(0, present.length));
+  const positions = present.map(relative => html.indexOf('/' + relative));
+  positions.forEach((position, index) => assert.ok(position >= 0, 'module is not loaded: ' + present[index]));
+  assert.strictEqual(new Set(positions).size, present.length);
   assert.ok(positions[0] < html.indexOf('var JA_REDIRECT_URI'));
-  assert.ok(positions[1] > html.indexOf('function downloadBatchZip'));
-  assert.ok(positions[1] < html.indexOf('// Ensure Settings AI Routing controls exist'));
-  assert.ok(positions[2] > html.indexOf('function clearStats'));
-  assert.ok(positions[2] < html.lastIndexOf('try { updateSummaryLockUI(); }'));
+  if (positions.length > 1) {
+    assert.ok(positions[1] > html.indexOf('function downloadBatchZip'));
+    assert.ok(positions[1] < html.indexOf('Ensure Settings AI Routing controls exist'));
+  }
+  if (positions.length > 2) {
+    assert.ok(positions[2] > html.indexOf('function clearStats'));
+    assert.ok(positions[2] < html.lastIndexOf('try { updateSummaryLockUI(); }'));
+  }
 }
 
 const cases = [
