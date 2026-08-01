@@ -237,9 +237,13 @@ Persistent background jobs and resumable task state:
 - all 107 routes, five guards, 18 compatibility signatures, schemas and every
   Phase 1–5B contract remain.
 
-## Phase 6 — Future
+## Phase 6 — Active in bounded milestones
 
-Frontend modularisation, lazy loading, remaining adaptive-memory work and final explainable-fit refinements.
+- Phase 6A behavior-preserving frontend modularisation is complete.
+- Phase 6B behavior-preserving frontend lazy loading defers only the local
+  jsPDF asset until one of the four existing PDF-export actions requests it.
+- Phase 6C remaining adaptive-memory work and explainable-fit refinements are
+  not active.
 
 ## Phase 7 — Backburner
 

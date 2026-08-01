@@ -1413,7 +1413,7 @@
   .provider-down-alert{border:1px solid #fecaca;background:#fff1f2;color:#991b1b;border-radius:10px;padding:10px 12px;font-weight:700;line-height:1.45;}
 
 </style>
-<script src="vendor/jspdf.umd.min.js?v=24.6.79"></script>
+<script src="/vendor/cvstudio/lazy-loader.js?v=24.6.243"></script>
 </head>
 <body>
 <div id="settingsBackdrop" onclick="closeSettingsPanel()" aria-hidden="true"></div>
@@ -5457,7 +5457,11 @@ function exportAnonJDDoc() {
 function exportAnonJDPDF() {
   var j = window._lastAnonJD;
   if (!j) { showToast('Generate Blind JD first', 'err'); return; }
-  if (!window.jspdf) { showToast('PDF library not loaded — try Word export instead', 'err'); return; }
+  if (!window.jspdf) {
+    if (window.cvStudioLoadJSPDF) window.cvStudioLoadJSPDF(exportAnonJDPDF, function() { showToast('PDF library not loaded — try Word export instead', 'err'); });
+    else showToast('PDF library not loaded — try Word export instead', 'err');
+    return;
+  }
   var jsPDF = window.jspdf.jsPDF;
   var doc = new jsPDF({ unit:'mm', format:'a4' });
   var margin = 18, pageW = 210, maxW = pageW - margin * 2, lh = 5.5, y = margin;
@@ -5579,7 +5583,11 @@ function exportCompanyDoc() {
 function exportCompanyPDF() {
   var p = window._lastCompanyProfile;
   if (!p) { showToast('Generate a profile first', 'err'); return; }
-  if (!window.jspdf) { showToast('PDF library not loaded — try Word export instead', 'err'); return; }
+  if (!window.jspdf) {
+    if (window.cvStudioLoadJSPDF) window.cvStudioLoadJSPDF(exportCompanyPDF, function() { showToast('PDF library not loaded — try Word export instead', 'err'); });
+    else showToast('PDF library not loaded — try Word export instead', 'err');
+    return;
+  }
   function arr(v) { return Array.isArray(v) ? v : (v ? [String(v)] : []); }
   var jsPDF = window.jspdf.jsPDF;
   var doc = new jsPDF({unit:'mm',format:'a4'});
@@ -7189,7 +7197,11 @@ function exportAppraiserWord() {
 }
 function exportAppraiserPDF() {
   if (!_appraiserResult && !_appraiserRawReport) { showToast('Run CV Scoring first', 'err'); return; }
-  if (!window.jspdf) { showToast('PDF library not loaded — try Word export instead', 'err'); return; }
+  if (!window.jspdf) {
+    if (window.cvStudioLoadJSPDF) window.cvStudioLoadJSPDF(exportAppraiserPDF, function() { showToast('PDF library not loaded — try Word export instead', 'err'); });
+    else showToast('PDF library not loaded — try Word export instead', 'err');
+    return;
+  }
   if (!_appraiserResult && _appraiserRawReport) {
     var RawPDF = window.jspdf.jsPDF; var rawDoc = new RawPDF({unit:'mm', format:'a4'});
     var rawMargin = 18, rawY = 20, rawMaxW = 174, rawLH = 5.3;
@@ -8033,7 +8045,11 @@ function exportTheOwlWord() {
 function exportTheOwlPDF() {
   var text = (window._theOwlPlainText || ((document.getElementById('theOwlBody') || {}).innerText || '')).trim();
   if (!text) { showToast('Generate The Owl map first', 'err'); return; }
-  if (!window.jspdf) { showToast('PDF library not loaded - try Word export instead', 'err'); return; }
+  if (!window.jspdf) {
+    if (window.cvStudioLoadJSPDF) window.cvStudioLoadJSPDF(exportTheOwlPDF, function() { showToast('PDF library not loaded - try Word export instead', 'err'); });
+    else showToast('PDF library not loaded - try Word export instead', 'err');
+    return;
+  }
   var jsPDF = window.jspdf.jsPDF;
   var doc = new jsPDF({ unit:'mm', format:'a4' });
   var pageW=210, pageH=297, margin=14, maxW=pageW-margin*2, y=38;

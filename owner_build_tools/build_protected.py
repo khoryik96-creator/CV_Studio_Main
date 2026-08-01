@@ -42,6 +42,7 @@ RELEASE_TARGET = "windows-x64"
 
 RUNTIME_ASSETS = ("index.html","generate.js","template.docx","cv_studio_logo.png","cv_studio.ico","vendor")
 FRONTEND_MODULES = (
+    "lazy-loader.js",
     "api-transport.js",
     "page-nav.js",
     "server-heartbeat.js",
