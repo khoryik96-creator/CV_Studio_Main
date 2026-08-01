@@ -15,13 +15,235 @@
 - Phase 5A baseline Git commit: `4b366ddde1cf0a398706b52d55b0e82ed2dbc27c`
 - Phase 5B source baseline: v24.6.234
 - Phase 5B baseline Git commit: `327858799f17d880e37c740f71dfe321ea7bde0a`
-- Working branch: `codex/jobadder-account-settings-signout`
-- Active phase: none; Phase 6 remains inactive
+- Working branch: `agent/phase-6a-frontend-modularisation`
+- Active phase: Phase 6A — behavior-preserving frontend modularisation
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: four findings from the single independent review of v24.6.242 are
   corrected without broadening the pre-Phase-6 JobAdder milestone; macOS
   remains on v24.6.239
-- Current stop: before Phase 6, handoff or merge
+- Current stop: after a pushed draft Phase 6A pull request with passing GitHub
+  regression; before merge, Local handoff, release finalization, protected
+  packaging, Phase 6B, Phase 6C or Phase 7
+
+## Phase 6A authorization, entry verification and bounded plan
+
+### Authorization and immutable boundary
+
+- The owner explicitly authorized Phase 6A frontend modularisation only from
+  exact clean GitHub-backed master commit
+  `1fbcb19bdebf5cb99a975b5b732278be242ff086` on branch
+  `agent/phase-6a-frontend-modularisation`.
+- Local `HEAD`, fetched `origin/master` and the merge base all resolved to the
+  exact authorized commit before tracked files changed. The private remote is
+  `khoryik96-creator/CV_Studio_Main`.
+- The annotated immutable `v24.6.243` tag remains object
+  `128bfc429d292c0ecfca34d1b2b474f7c80ee08e` and peels to the required release
+  commit `2507c096eb11c2e7d1361e0c1f7f2609abf625b8` locally and on the remote.
+- Installed source identity remains v24.6.243. This milestone cannot create or
+  mutate a tag, release ZIP, handover, immutable release artifact, protected
+  package or macOS artifact and cannot claim a protected/native build.
+- Exactly 108 routes, five ordered guards, 18 compatibility signatures,
+  SQLite schema 10, Phase 5A journal schema 1, security/credential/paid-call
+  boundaries, provider retry/non-replay behavior and the v24.6.239 macOS
+  boundary remain immutable.
+- Phase 6B lazy loading, Phase 6C adaptive-memory/explainable-fit behavior,
+  Phase 7/backburner items 4/7/8, backend behavior and all unrelated workflow
+  changes remain excluded.
+
+### Read and unchanged-source entry gate
+
+- `AGENTS.md`, `ROADMAP.md`, `PHASE_STATUS.md`, `IMPLEMENT.md`,
+  `BACKBURNER_ROADMAP.md`, the v24.6.243 Phase 6 handover/corrective QA and all
+  directly required v24.6.242 through Phase 2A handover/QA records were read
+  before implementation.
+- The first unchanged Python discovery exposed only the documented ignored
+  working dependency: owner-local DOCX generation could not resolve
+  `adm-zip`. The exact pinned 0.5.17 dependency was restored with the normal
+  no-script/no-lockfile install; no tracked byte changed.
+- The qualifying unchanged-source gate then passed 151 Python tests with
+  `ResourceWarning` treated as an error, all six established frontend fixture
+  files, 24 live source-smoke assertions, tracked Python/JavaScript/Bash/
+  PowerShell syntax, both complete inline scripts, owner Windows-x64 source
+  validation/preflight including genuine bundled Antiword extraction and
+  vetted `adm-zip`, repository consistency and Git whitespace validation.
+- No live credential, provider request, paid call, remote mutation or private
+  customer/candidate data was used.
+
+### Complete frontend inventory relevant to Phase 6A
+
+- `index.html` is 19,588 lines with one bundled jsPDF dependency and two
+  classic inline scripts. The first inline block is the 16,000-line application
+  surface; the second owns reconnect heartbeat plus final startup listeners.
+  Classic script semantics make top-level declarations browser globals and
+  make parser order part of the compatibility contract.
+- The first block begins with the local API transport bootstrap. It captures
+  the native `window.fetch`, adds same-origin request IDs and the established
+  unsafe-request header, normalizes structured JSON failures, keeps a bounded
+  30-entry diagnostic history, dispatches `cvstudio-api-error` and exposes
+  `window.cvStudioNormaliseApiFailure`. Its dependencies are `window`,
+  `Headers`, `URL`, `CustomEvent`, crypto/randomness and the same-origin
+  location; it owns no DOM ID, browser storage or startup listener.
+- The optional pinned-navigation domain owns global
+  `PAGE_NAV_PIN_STORE`, its seven process-local layout/scroll state values and
+  the established `pageNav*`, `clearPageNavFloating`, `refreshPageNavPin`,
+  `queuePageNavPinRefresh`, `setPageNavPin`, `togglePageNavPin` and
+  `initPageNavPin` entry points. It depends on `#pageTabs`,
+  `#pageTabsSpacer`, `#pageNavPinToggle`, `#pageNavPinLabel`,
+  `.page-view.active`, document/body portal layout, scroll/resize/
+  `requestAnimationFrame`, `showToast`, and the existing
+  `cvStudioDurableSettingSet` adapter. Its only storage key is
+  `cvstudio_page_nav_pinned_v1`. Its `DOMContentLoaded` registration must stay
+  before the following Settings/application initialization listener.
+- The second-block reconnect domain has no public global. Its closure owns
+  missed-ping, banner and reload state; immediately posts `/heartbeat`, polls
+  every 20 seconds, displays `#reconnect-banner`/`#reconnect-msg` after four
+  consecutive failures, posts `/restart` with the established restart header,
+  probes `/ping`, and reloads after recovery. It owns no localStorage or
+  IndexedDB state. The immediate ping and listener/timer registration position
+  must remain before the trailing lock/status and PPC token-restore startup.
+- Existing event surfaces outside these seams include document click/keydown,
+  `DOMContentLoaded`, window load/focus/scroll/resize and visibility listeners.
+  Their registration order is preserved. Inline HTML handlers continue to
+  resolve the same classic-script globals.
+- Durable browser data remains in the existing Phase 2A/2B bridges: usage
+  history, PPC metadata, OneNote transfer records, saved OneNote links and the
+  exact non-secret setting allowlist. JobAdder compatibility keys, temporary
+  UI/result snapshots and the connection-scoped PPC IndexedDB/query-cache plus
+  localStorage fallback retain their established ownership. The selected
+  modules do not move or reinterpret any of these stores.
+- All existing fetch URLs and response fields stay in their current feature
+  orchestration. The selected transport bootstrap only preserves the existing
+  wrapper; the reconnect module retains only `/heartbeat`, `/restart` and
+  `/ping`. No Flask route or method changes.
+- CV/Blind JD/Company/The Owl/Lead Finder exports, jsPDF paths, DOCX generation
+  through `generate.js`, Blob/object-URL downloads and Batch/JobAdder upload
+  paths remain inline and unchanged. Their escaping and recent corrective
+  contracts are not extraction candidates in Phase 6A.
+- The six established Node fixtures source-extract named inline functions for
+  Phase 2A/2B storage, Phase 5B costs, JobAdder escaping/account settings and
+  Blind JD export. None of the three selected domains intersects those named
+  extraction seams. Phase 6A adds dedicated behavioral and source-order
+  characterization rather than rewriting the historical fixtures.
+- Flask already serves safe offline assets through the existing
+  `/vendor/<path:filename>` route, and protected packaging already copies the
+  complete `vendor` tree. Tracked CV Studio modules will use a bounded
+  `vendor/cvstudio/` namespace so the 108-route contract remains exact.
+  Owner preflight, conservative JavaScript protection and protected smoke must
+  explicitly validate and package those files rather than leaving a hidden
+  source/protected-asset gap.
+
+### Bounded extraction sequence
+
+1. Add passing pre-move Node/Python characterization for API request/error
+   semantics, page-nav globals/DOM/storage/listener behavior, heartbeat timing
+   and recovery behavior, script order, the exact 108-route contract and the
+   existing protected asset seam.
+2. Extract the API transport bootstrap to one synchronous classic module in
+   `vendor/cvstudio/`, loaded immediately before the application inline block.
+3. Extract the complete optional pinned-navigation definitions to one
+   synchronous classic module while retaining every global name, whole-script
+   hoisting availability and the exact relative `DOMContentLoaded` order through
+   a one-line compatibility registration at its former source position.
+4. Extract only the reconnect heartbeat closure to one synchronous classic
+   module at the beginning of the second-script position, retaining immediate
+   ping/timer behavior and leaving trailing startup calls in place.
+5. Extend owner validation/protection/package smoke for the tracked modules,
+   run affected Phase 6A and historical frontend fixtures after each bounded
+   extraction, then run the one complete final acceptance gate and one exact-
+   baseline self-review required by the owner.
+
+### Implemented extraction boundaries
+
+- `vendor/cvstudio/api-transport.js` contains only the established local API
+  transport bootstrap. It remains a synchronous classic script immediately
+  before the main application script, so `window.fetch`,
+  `window.cvStudioNormaliseApiFailure`, `_cvStudioRecentApiErrors`, request-ID
+  generation, unsafe-request headers, structured failure normalization and the
+  diagnostic event remain available before every existing application caller.
+- `vendor/cvstudio/page-nav.js` contains the optional pinned-navigation state
+  and definitions. It loads synchronously before the main application script,
+  preserving the original whole-script function-hoisting availability for the
+  earlier Phase 2B hydration seam. A one-line compatibility registration stays
+  at the exact former inline position after `downloadBatchZip()` and before the
+  Settings startup listener. All listed `PAGE_NAV_PIN_STORE`, `_pageNav*` state
+  and `pageNav*`/pin globals retain classic-script names and behavior; the DOM
+  IDs, durable key, passive listeners, animation-frame scheduling and
+  `DOMContentLoaded` order are unchanged.
+- `vendor/cvstudio/server-heartbeat.js` contains only the existing reconnect
+  closure. It remains at the beginning of the former second-script position,
+  performs the same immediate `/heartbeat` POST, registers the same 20-second
+  timer and retains the four-miss banner, `/restart` header, `/ping` recovery
+  polling and reload timings before the trailing lock/PPC startup calls.
+- `index.html` uses three deterministic local classic-script tags with the
+  existing v24.6.243 cache key. There is no module mode, dynamic import,
+  bundler, framework, CDN, remote runtime, lazy loading or startup deferral.
+- `owner_build_tools/build_protected.py` now requires and syntax-checks the
+  three tracked files, applies the existing conservative non-global-renaming
+  JavaScript protection (or the explicit copy path), records source/protected
+  hashes, replaces the packaged `vendor/cvstudio` tree with those staged files
+  and smoke-fetches each packaged URL. The existing vendor route and complete
+  offline vendor tree remain authoritative; no protected package was built.
+- `.github/workflows/ci.yml` runs the new Phase 6A browser fixture beside the
+  six established fixture files. Python discovery automatically includes the
+  new Flask route/protected-asset characterization.
+
+### Characterization and bounded regression evidence
+
+- `tests/test_phase6a_frontend_modularisation.js` was added before extraction
+  and passed against the original inline seams. It executes the real inline or
+  extracted sources in isolated browser fixtures and fixes API error/request
+  behavior, page-nav globals/storage/listeners, heartbeat loss/recovery timing
+  and deterministic source order.
+- `tests/test_phase6a_frontend_modularization.py` was added before extraction
+  and passed against the original route/protection surface. As each module
+  appeared it proved the unchanged 108-route inventory, safe existing vendor
+  route, module responses, traversal rejection, owner validation, staged
+  source/protected hash inventory and package/smoke integration.
+- The API extraction passed both new focused fixtures. The navigation
+  extraction additionally passed the existing Phase 2B frontend-storage
+  fixture. The heartbeat/protected-asset extraction passed both complete new
+  fixtures, tracked builder syntax and whitespace validation before its stable
+  checkpoint.
+- JobAdder, PPC/IndexedDB, durable storage hydration, export/generation/jsPDF,
+  CV/Blind JD/Company/Lead Finder/The Owl orchestration and all other inline
+  application domains remain in place and unchanged.
+
+### Exact-baseline review and final acceptance
+
+- The single thorough review compared the complete branch against exact
+  authorized baseline `1fbcb19bdebf5cb99a975b5b732278be242ff086`. It found
+  one concrete timing risk: placing page-nav definitions only at their former
+  textual location removed their original whole-inline-script function
+  hoisting while Phase 2B hydration starts earlier. The focused correction
+  loads those definitions before the main application script and retains only
+  the original registration line at its former position. A regression now
+  proves definition availability before hydration and unchanged listener order.
+- Read-only source equivalence proved that the API and heartbeat modules are
+  exact normalized baseline blocks and that `page-nav.js` plus its one-line
+  compatibility registration exactly reconstructs the baseline navigation
+  block. No extracted block remains duplicated inline, and all three local
+  script references occur exactly once in deterministic order.
+- After the review correction, the affected Phase 6A Python/Node and existing
+  Phase 2B frontend fixtures passed. The required final complete gate then
+  passed 153 Python tests with `ResourceWarning` treated as an error; all six
+  established frontend fixture files plus the Phase 6A fixture; and the live
+  source smoke with all 24 assertions.
+- Tracked syntax passed for 31 Python, 28 JavaScript, five PowerShell and five
+  POSIX shell files. Owner Windows-x64 source validation/preflight passed for
+  all inline/module JavaScript, exact vetted `adm-zip` 0.5.17 and the genuine
+  bundled Antiword 1.3.5 fixture with trusted/functional status. Repository
+  consistency and Git whitespace validation passed.
+- Production changes are limited to `index.html`, the three tracked
+  `vendor/cvstudio` modules and the owner protected-build asset integration.
+  Test/status/CI changes add only characterization, regression execution and
+  this evidence. `app.py`, backend modules, route registration, storage and
+  schemas are untouched; the complete regression retains 108 routes, five
+  guards, 18 compatibility signatures, SQLite schema 10 and Phase 5A journal
+  schema 1.
+- No live credential, network provider request, paid call, external data
+  mutation, customer/candidate data, protected-package build, release ZIP,
+  tag, handover, native/macOS artifact, merge, Phase 6B, Phase 6C, Phase 7 or
+  backburner work occurred.
 
 ## v24.6.243 JobAdder account-isolation corrective
 
