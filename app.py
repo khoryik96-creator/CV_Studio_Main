@@ -13266,6 +13266,7 @@ def _spider_match_fit_percent(candidate, filters, blob_low, discovery_hits):
                 must_terms.append(cleaned_term)
     must_cov, must_hits, _must_clean, must_details = _spider_weighted_coverage(blob_low, must_terms)
     native_confirmed = bool(candidate.get("_spiderNativeBooleanMatched")) if isinstance(candidate, dict) else False
+    must_coverage_before_native_floor = must_cov
     native_floor_applied = False
     if must_cov is not None and native_confirmed and must_cov < 0.60:
         must_cov = 0.60
@@ -13348,6 +13349,9 @@ def _spider_match_fit_percent(candidate, filters, blob_low, discovery_hits):
             "partial": [x.get("term") for x in terms if x.get("status") == "partial"][:12],
             "missing": [x.get("term") for x in terms if x.get("status") == "missing"][:12],
             "native_boolean_floor": bool(item["key"] == "must" and native_floor_applied),
+            "coverage_before_adjustment_percent": int(round(must_coverage_before_native_floor * 100.0)) if item["key"] == "must" and native_floor_applied and must_coverage_before_native_floor is not None else int(round(item["coverage"] * 100.0)),
+            "points_before_adjustment": round((must_coverage_before_native_floor if item["key"] == "must" and native_floor_applied and must_coverage_before_native_floor is not None else item["coverage"]) * max_points, 1),
+            "evidence_status": "unavailable" if not item.get("hits") else "visible",
         })
 
     breakdown = {

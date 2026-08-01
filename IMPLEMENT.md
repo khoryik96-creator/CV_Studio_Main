@@ -9,8 +9,29 @@ release v24.6.241. The bounded JobAdder account-management and settings
 milestone is complete in private owner/source release v24.6.242. Phase 6A
 frontend modularisation and the bounded Phase 6B local-jsPDF lazy loading
 change are complete on their source branches without changing the v24.6.243
-installed identity. macOS remains on v24.6.239. Do not begin Phase 6C unless
-the owner explicitly starts that exact next milestone.
+installed identity. macOS remains on v24.6.239. Phase 6C is authorized only from exact base `fee134792f179de9d75d0de24afe08c27fb526c4` for the bounded adaptive-memory and explainable-fit refinements recorded in `PHASE_STATUS.md`; stop after its tested candidate commit without beginning another phase.
+
+## Phase 6C implementation decision
+
+Keep adaptive memory and Job Fit scoring in their established inline/backend
+boundaries. Auto trusts only internally consistent runtime memory received in the
+last five minutes and otherwise uses Standard; manual selections always win. A
+resolution change updates budgets and trims immediately, while an unchanged
+selection does not clear caches. Present selected/resolved mode, reason, data
+freshness/age and active usage/limits in Settings.
+
+Auto must also schedule the exact end of the five-minute trust window. At that
+deadline, reapply the resolution and rerender status without requiring Settings
+or a diagnostic refresh; a High-to-Standard fallback must update payload, DOM
+and prefetch limits and trim existing caches immediately. Keep only one timer,
+cancel it for manual selection, and do not clear caches merely because the same
+selection/resolution is reapplied.
+
+Do not alter Job Fit arithmetic. Add only explanation provenance for the existing
+native-Boolean/discovery floors, unavailable component evidence and whether resume
+text actually contributed. Preserve response aliases and source labels. The new
+Phase 6C Python/Node fixtures are mandatory alongside every established frontend
+fixture; Windows CI remains the protected/native gate.
 
 ## Before a future Phase 6 implementation
 

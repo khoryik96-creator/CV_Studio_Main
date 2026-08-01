@@ -15,15 +15,57 @@
 - Phase 5A baseline Git commit: `4b366ddde1cf0a398706b52d55b0e82ed2dbc27c`
 - Phase 5B source baseline: v24.6.234
 - Phase 5B baseline Git commit: `327858799f17d880e37c740f71dfe321ea7bde0a`
-- Working branch: `agent/v24.6.244-phase-6b-lazy-loading`
-- Active phase: Phase 6B — behavior-preserving frontend lazy loading
+- Working branch candidate: `agent/v24.6.244-phase-6c-adaptive-memory`
+- Active phase: Phase 6C — adaptive preview memory and explainable Job Fit refinements
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: four findings from the single independent review of v24.6.242 are
   corrected without broadening the pre-Phase-6 JobAdder milestone; macOS
   remains on v24.6.239
-- Current stop: at draft PR #5 after its single independent-review correction;
-  GitHub Windows-x64 CI is the authoritative post-push gate. Stop before merge,
-  release finalization, protected packaging, Phase 6C or Phase 7.
+- Current stop: after the tested Phase 6C candidate commit; GitHub Windows-x64
+  CI is the authoritative controller-side platform gate. Stop before merge,
+  release finalization, protected packaging, Phase 7 or unrelated work.
+
+## Phase 6C authorization, inventory and bounded implementation
+
+- The owner authorized Phase 6C only from exact clean Cloud HEAD
+  `fee134792f179de9d75d0de24afe08c27fb526c4`; the candidate controller branch
+  identity is `agent/v24.6.244-phase-6c-adaptive-memory`. Installed identity
+  remains v24.6.243 and no release, tag or protected package is created.
+- End-to-end inventory confirmed preview mode is a schema-10 allowlisted browser
+  setting hydrated through the Phase 2B bridge; Auto reads redacted same-origin
+  runtime memory diagnostics, applies Low/Standard/High cache and prefetch limits,
+  trims insertion-ordered Map caches, releases evicted DOM URLs, and shares the
+  existing backend clear, prefetch concurrency, persistent-job, reload and
+  JobAdder account-transition invalidation boundaries. Manual profiles remain
+  authoritative and offline operation remains local-Flask-only.
+- The concrete gap was that Auto treated memory globals as indefinitely trusted
+  and the status omitted diagnostic freshness/reason and exact active limits.
+  Auto now accepts only positive, internally consistent memory data received in
+  the last five minutes, otherwise resolves to Standard with an explicit
+  stale/unavailable reason. Lower resolutions trim immediately; reapplying an
+  unchanged selected/resolved profile retains caches rather than repeatedly
+  clearing them. The Settings status states selected mode, resolved profile,
+  reason, freshness/age, current browser/backend limits and usage.
+- Job Fit inventory confirmed the numeric score remains normalized weighted
+  coverage of JD, Boolean/must-have, role and nice-to-have terms, with existing
+  native-Boolean and discovery floors. Location, work arrangement, language,
+  education, salary, industry and target companies remain excluded; hard
+  eligibility, resume-budget selection, profile/detail/resume source labels,
+  response aliases, sorting and rendering boundaries are unchanged.
+- The concrete explanation gaps were hidden pre-floor coverage and ambiguous
+  unavailable evidence. Additive breakdown metadata and escaped rendering now
+  state the points/coverage before a native-Boolean floor, flag components with
+  no visible evidence, retain discovery-floor disclosure, and explicitly say
+  when no resume text contributed. No score, ranking, filter or response alias
+  changed. Focused Python and browser characterization fixes these contracts.
+- Exactly 108 routes, five guards, 18 compatibility signatures, SQLite schema
+  10, journal schema 1, Phase 6A eager order and Phase 6B jsPDF loading/retry
+  remain preserved. GitHub Windows-x64 CI remains the native platform gate.
+- Independent review found that freshness was recalculated only on another
+  interaction. Auto now owns one cancellable deadline for its trusted sample;
+  expiry reapplies Standard limits, trims payload/DOM caches, updates the active
+  prefetch budget and rerenders the decision/statistics. Selecting a manual
+  profile cancels the deadline, and unchanged resolutions still avoid clearing.
 
 ## Phase 6B authorization, inventory and bounded implementation
 
