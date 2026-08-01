@@ -5,8 +5,9 @@
 - Exact base version: merged Phase 6C source v24.6.244.
 - Exact base commit: `c75aa20c5a99ea5e9af84204a19703c90e0c2d36`.
 - Candidate branch: `agent/v24.6.245-long-cv-access-corrective`.
-- Final source commit is recorded authoritatively in the owner/source
-  verification sidecar after packaging.
+- The corrected source commit is the final PR head. A new commit-bound source
+  sidecar is required because the pre-review archive is intentionally immutable
+  and superseded.
 - No paid/live AI request, provider login, JobAdder write or credential-bearing
   operation was used.
 
@@ -31,6 +32,10 @@ generator deliberately stringified remaining objects.
   bullet groups, canonical responsibility/achievement headings, narrowly
   bounded inferred-title annotations, malformed-text preservation and empty
   certification/skill filtering.
+- Corrected both findings from the single independent review: top-level plain
+  responsibility/achievement labels become real heading objects in all three
+  normalizers, and bounded `assumed`, `guessed` and `likely` title commentary is
+  removed only when tied to duties, responsibilities, content or context.
 - DOCX output renders every structured group as a bold heading plus bullets,
   omits empty role-title/section paragraphs, keeps headings with following
   content where practical and never substitutes a company for a missing title.
@@ -63,9 +68,10 @@ generator deliberately stringified remaining objects.
 
 ## Validation
 
-- Complete Python discovery: **161 passed** in 26.333 seconds.
+- Complete Python discovery after the final production correction: **162 passed**
+  in 26.829 seconds.
 - Frontend: **10/10 fixtures passed**.
-- Corrective focused Python: **6/6 passed**.
+- Corrective focused Python: **7/7 passed**.
 - Live source smoke: **24/24 assertions passed**.
 - Tracked Python compilation: passed.
 - Tracked JavaScript plus protected inline-script syntax: passed.
@@ -95,3 +101,6 @@ footer and alignment remain intact.
   this source class.
 - No protected colleague ZIP was built. No macOS artifact or Intel/Apple Silicon
   validation/support claim was produced.
+- The pre-review owner/source ZIP remains immutable at source commit
+  `956eb4d8faf96980a7c4c12739f00a985b6ca2ef`; it is superseded and is not a
+  final artifact for the corrected PR head.

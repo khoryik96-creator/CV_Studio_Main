@@ -132,7 +132,7 @@ function normalizeDateRange(value) {
 
 function stripInferredCvTitle(value) {
   const text = String(value || '').trim();
-  return /\s*[\[(]\s*(?:inferred|implied)\s+(?:from|based\s+on)\s+(?:responsibilit(?:y|ies)|duties|job\s+content|role\s+content|context)\s*[\])]\s*$/i.test(text) ? '' : text;
+  return /\s*[\[(]\s*(?:inferred|implied|assumed|guessed|likely)\s+(?:from|based\s+on)\s+(?:responsibilit(?:y|ies)|duties|job\s+content|role\s+content|context)\s*[\])]\s*$/i.test(text) ? '' : text;
 }
 
 function canonicalCvSectionHeading(value) {
@@ -142,12 +142,16 @@ function canonicalCvSectionHeading(value) {
   return /^achievement/i.test(match[1]) ? 'Key achievements' : 'Key responsibilities';
 }
 
-function normalizeCvBulletItems(items) {
+function normalizeCvBulletItems(items, allowStandaloneSections = true) {
   const source = Array.isArray(items) ? items : ((items == null || items === '') ? [] : [items]);
   const out = [];
   const add = (item) => {
     if (typeof item === 'string') {
       const candidate = item.trim();
+      if (allowStandaloneSections && /^(?:key\s+)?(?:responsibilit(?:y|ies)|achievements?)\s*:?$/i.test(candidate)) {
+        out.push({ heading: canonicalCvSectionHeading(candidate), bullets: [], kind: 'section' });
+        return;
+      }
       if (candidate && ((candidate[0] === '{' && candidate[candidate.length - 1] === '}') || (candidate[0] === '[' && candidate[candidate.length - 1] === ']'))) {
         try {
           const decoded = JSON.parse(candidate);
@@ -169,7 +173,7 @@ function normalizeCvBulletItems(items) {
     }
     const rawHeading = item.heading || item.title || '';
     const heading = canonicalCvSectionHeading(rawHeading);
-    const bullets = normalizeCvBulletItems(item.bullets || item.items || []);
+    const bullets = normalizeCvBulletItems(item.bullets || item.items || [], false);
     if (heading) {
       const group = { heading, bullets };
       if (item.kind) group.kind = String(item.kind);

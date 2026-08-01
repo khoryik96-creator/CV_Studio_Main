@@ -21,8 +21,9 @@
 - Status: four findings from the single independent review of v24.6.242 are
   corrected without broadening the pre-Phase-6 JobAdder milestone; macOS
   remains on v24.6.239
-- Current stop: after owner/source packaging and draft PR; stop before merge,
-  protected colleague packaging, Phase 7 or unrelated work.
+- Current stop: after correcting the draft PR and its CI; a new commit-bound
+  source artifact is still required. Stop before merge, protected colleague
+  packaging, Phase 7 or unrelated work.
 
 ## v24.6.245 long-CV output and access corrective
 
@@ -36,16 +37,25 @@
   Backend, preview and DOCX-generator normalizers decode valid JSON-looking
   bullet groups, canonicalize responsibility/achievement headings, remove only
   bounded inference annotations, filter empty sections and remain idempotent.
+- The single independent review found two bounded normalization gaps. Plain
+  top-level responsibility/achievement labels now become section objects in
+  backend, preview and DOCX paths without promoting content inside an existing
+  group. Parenthetical `assumed`, `guessed` and `likely` annotations tied to
+  duties, responsibilities, content or context are also suppressed, while
+  ordinary explicit titles remain unchanged.
 - DOCX headings use keep-next behavior, structured groups always render as
   headings plus real bullets, empty role titles and empty sections are omitted,
   and the company name is never used as a missing position fallback.
 - CV Scoring is the final feature tab and is protected by version-scoped casual
   access code `1996`. AI Crawler is unlocked and no longer prompts for or sends
   a feature password; the backend compatibility hook permits local requests.
-- Validation completed without live/paid AI: 161 Python tests, all ten frontend
+- Validation completed without live/paid AI: 162 Python tests, all ten frontend
   fixtures, 24 source-smoke assertions, Python/JavaScript/PowerShell syntax,
   owner preflight, repository consistency, whitespace and a rendered real-DOCX
   visual inspection of the supplied corruption pattern.
+- The pre-review v24.6.245 owner/source archive remains immutable at commit
+  `956eb4d8faf96980a7c4c12739f00a985b6ca2ef` and is superseded by the corrected
+  PR head. It must not be used as the final source artifact or overwritten.
 - Windows Antiword preflight passed. No protected colleague package or macOS
   artifact/support claim is produced; macOS remains deferred.
 

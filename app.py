@@ -1963,7 +1963,7 @@ _CV_SECTION_HEADING_RE = re.compile(
     re.I,
 )
 _CV_INFERRED_TITLE_SUFFIX_RE = re.compile(
-    r"\s*[\[(]\s*(?:inferred|implied)\s+(?:from|based\s+on)\s+"
+    r"\s*[\[(]\s*(?:inferred|implied|assumed|guessed|likely)\s+(?:from|based\s+on)\s+"
     r"(?:responsibilit(?:y|ies)|duties|job\s+content|role\s+content|context)\s*[\])]\s*$",
     re.I,
 )
@@ -1989,7 +1989,7 @@ def _canonical_cv_section_heading(value):
     return "Key achievements" if match.group(1).lower().startswith("achievement") else "Key responsibilities"
 
 
-def _normalize_cv_bullet_items(items):
+def _normalize_cv_bullet_items(items, allow_standalone_sections=True):
     """Repair valid JSON-looking bullet strings without changing plain prose."""
     source = items if isinstance(items, list) else ([] if items in (None, "") else [items])
     normalized = []
@@ -1997,6 +1997,10 @@ def _normalize_cv_bullet_items(items):
     def add(item):
         if isinstance(item, str):
             candidate = item.strip()
+            section_heading = _canonical_cv_section_heading(candidate)
+            if allow_standalone_sections and candidate and _CV_SECTION_HEADING_RE.fullmatch(candidate):
+                normalized.append({"heading": section_heading, "bullets": [], "kind": "section"})
+                return
             if candidate and candidate[0] in "[{" and candidate[-1] in "]}":
                 try:
                     decoded = json.loads(candidate)
@@ -2021,7 +2025,10 @@ def _normalize_cv_bullet_items(items):
             return
 
         heading = _canonical_cv_section_heading(item.get("heading") or item.get("title") or "")
-        bullets = _normalize_cv_bullet_items(item.get("bullets") or item.get("items") or [])
+        bullets = _normalize_cv_bullet_items(
+            item.get("bullets") or item.get("items") or [],
+            allow_standalone_sections=False,
+        )
         if heading:
             group = {"heading": heading, "bullets": bullets}
             kind = str(item.get("kind") or "").strip()

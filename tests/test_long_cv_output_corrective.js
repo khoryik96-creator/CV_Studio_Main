@@ -61,6 +61,17 @@ assert.strictEqual(data.candidate.current_position, '');
 assert.strictEqual(data.work_experiences[0].roles[0].title, '');
 assert.strictEqual(data.work_experiences[0].roles[0].bullets[0].heading, 'Key achievements');
 assert.strictEqual(data.work_experiences[0].roles[0].bullets[0].kind, 'section');
+assert.deepStrictEqual(
+  JSON.parse(JSON.stringify(context.cvNormalizeBulletItems(['Key responsibilities', 'Delivered result']))),
+  [{heading:'Key responsibilities', bullets:[], kind:'section'}, 'Delivered result']
+);
+[
+  'Advisor (assumed from duties)',
+  'Advisor (guessed from context)',
+  'Advisor (likely based on responsibilities)',
+].forEach(title => assert.strictEqual(context.cvStripInferredTitle(title), ''));
+assert.strictEqual(context.cvStripInferredTitle('Advisor'), 'Advisor');
+assert.strictEqual(context.cvStripInferredTitle('Advisor (likely to succeed)'), 'Advisor (likely to succeed)');
 
 context.updateCvScoringLockUI();
 assert.strictEqual(tab.innerHTML, 'Locked');

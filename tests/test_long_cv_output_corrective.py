@@ -3,6 +3,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import tempfile
 import unittest
 from unittest import mock
@@ -25,17 +26,18 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         return {
             "candidate": {
                 "name": "Saik Eng Joo",
-                "current_position": "Insurance Agent/Financial Advisor (implied from responsibilities)",
+                "current_position": "Insurance Agent/Financial Advisor (assumed from duties)",
                 "current_company": "MANULIFE",
             },
             "work_experiences": [{
                 "date_range": "2023 to Present",
                 "company": "Example Sdn Bhd",
                 "roles": [{
-                    "title": "Insurance Agent/Financial Advisor (implied from responsibilities)",
+                    "title": "Insurance Agent/Financial Advisor (likely based on responsibilities)",
                     "date_range": "",
                     "reason_for_leaving": "",
                     "bullets": [
+                        "Key responsibilities",
                         '{"heading":"Responsibilities","bullets":["Achievement"]}',
                         '{"bullets":["Successfully achieved over 100% of the annual sales target.","Honored with Best Performing Business Development Manager for year 2024."],"heading":"Business Set up"}',
                         '{"bullets":["Successfully achieved 120% of the annual sales target."],"heading":"Manpower"}',
@@ -83,14 +85,35 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertEqual(role["title"], "")
         self.assertEqual(role["bullets"][0], {
             "heading": "Key responsibilities",
+            "bullets": [],
+            "kind": "section",
+        })
+        self.assertEqual(role["bullets"][1], {
+            "heading": "Key responsibilities",
             "bullets": ["Achievement"],
             "kind": "section",
         })
-        self.assertEqual(role["bullets"][1]["heading"], "Business Set up")
-        self.assertEqual(role["bullets"][3], '{"heading":"malformed","bullets":[}')
+        self.assertEqual(role["bullets"][2]["heading"], "Business Set up")
+        self.assertEqual(role["bullets"][4], '{"heading":"malformed","bullets":[}')
         self.assertEqual(normalized["certifications"], [])
         self.assertEqual(normalized["skills"], [{"category": "Skills", "items": "Leadership"}])
         self.assertEqual(app._normalize_cv_structured_content(copy.deepcopy(normalized)), normalized)
+
+    def test_standalone_sections_and_bounded_inference_variants_are_normalized(self):
+        self.assertEqual(app._normalize_cv_bullet_items(["Key achievement", "Delivered result"]), [
+            {"heading": "Key achievements", "bullets": [], "kind": "section"},
+            "Delivered result",
+        ])
+        for title in (
+            "Advisor (inferred from duties)",
+            "Advisor (implied from responsibilities)",
+            "Advisor (assumed from duties)",
+            "Advisor (guessed from context)",
+            "Advisor (likely based on responsibilities)",
+        ):
+            self.assertEqual(app._strip_cv_inferred_title(title), "")
+        self.assertEqual(app._strip_cv_inferred_title("Advisor"), "Advisor")
+        self.assertEqual(app._strip_cv_inferred_title("Advisor (likely to succeed)"), "Advisor (likely to succeed)")
 
     def test_docx_xml_never_serializes_structured_bullets_or_inferred_title(self):
         response = app.app.test_client().post(
@@ -103,8 +126,15 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
             document_xml = archive.read("word/document.xml").decode("utf-8")
         self.assertNotIn('&quot;heading&quot;:&quot;Business Set up&quot;', document_xml)
         self.assertNotIn('&quot;heading&quot;:&quot;Responsibilities&quot;', document_xml)
-        self.assertNotIn("implied from responsibilities", document_xml)
+        self.assertNotIn("assumed from duties", document_xml)
+        self.assertNotIn("likely based on responsibilities", document_xml)
         self.assertIn("Key responsibilities", document_xml)
+        heading_paragraphs = [
+            paragraph for paragraph in re.findall(r"<w:p\b.*?</w:p>", document_xml, re.S)
+            if "Key responsibilities" in paragraph
+        ]
+        self.assertTrue(heading_paragraphs)
+        self.assertTrue(all("<w:numPr>" not in paragraph for paragraph in heading_paragraphs))
         self.assertIn("Business Set up", document_xml)
         self.assertIn("Successfully achieved over 100%", document_xml)
         self.assertEqual(document_xml.count("<w:t>Skills:</w:t>"), 1)

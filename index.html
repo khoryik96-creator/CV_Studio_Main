@@ -13001,7 +13001,7 @@ function cvNormalizeLanguages(value) {
 
 function cvStripInferredTitle(value) {
   var text = String(value || '').trim();
-  return /\s*[\[(]\s*(?:inferred|implied)\s+(?:from|based\s+on)\s+(?:responsibilit(?:y|ies)|duties|job\s+content|role\s+content|context)\s*[\])]\s*$/i.test(text) ? '' : text;
+  return /\s*[\[(]\s*(?:inferred|implied|assumed|guessed|likely)\s+(?:from|based\s+on)\s+(?:responsibilit(?:y|ies)|duties|job\s+content|role\s+content|context)\s*[\])]\s*$/i.test(text) ? '' : text;
 }
 
 function cvCanonicalSectionHeading(value) {
@@ -13011,12 +13011,17 @@ function cvCanonicalSectionHeading(value) {
   return /^achievement/i.test(match[1]) ? 'Key achievements' : 'Key responsibilities';
 }
 
-function cvNormalizeBulletItems(items) {
+function cvNormalizeBulletItems(items, allowStandaloneSections) {
+  allowStandaloneSections = allowStandaloneSections !== false;
   var source = Array.isArray(items) ? items : ((items == null || items === '') ? [] : [items]);
   var out = [];
   function add(item) {
     if (typeof item === 'string') {
       var candidate = item.trim();
+      if (allowStandaloneSections && /^(?:key\s+)?(?:responsibilit(?:y|ies)|achievements?)\s*:?$/i.test(candidate)) {
+        out.push({ heading: cvCanonicalSectionHeading(candidate), bullets: [], kind: 'section' });
+        return;
+      }
       if (candidate && ((candidate[0] === '{' && candidate[candidate.length - 1] === '}') || (candidate[0] === '[' && candidate[candidate.length - 1] === ']'))) {
         try {
           var decoded = JSON.parse(candidate);
@@ -13038,7 +13043,7 @@ function cvNormalizeBulletItems(items) {
     }
     var rawHeading = item.heading || item.title || '';
     var heading = cvCanonicalSectionHeading(rawHeading);
-    var bullets = cvNormalizeBulletItems(item.bullets || item.items || []);
+    var bullets = cvNormalizeBulletItems(item.bullets || item.items || [], false);
     if (heading) {
       var group = { heading: heading, bullets: bullets };
       if (item.kind) group.kind = String(item.kind);
