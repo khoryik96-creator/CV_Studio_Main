@@ -1413,14 +1413,14 @@
   .provider-down-alert{border:1px solid #fecaca;background:#fff1f2;color:#991b1b;border-radius:10px;padding:10px 12px;font-weight:700;line-height:1.45;}
 
 </style>
-<script src="/vendor/cvstudio/lazy-loader.js?v=24.6.243"></script>
+<script src="/vendor/cvstudio/lazy-loader.js?v=24.6.245"></script>
 </head>
 <body>
 <div id="settingsBackdrop" onclick="closeSettingsPanel()" aria-hidden="true"></div>
 <div class="app">
   <div class="header" style="position:relative;">
     <div>
-      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.243 (Offline) by The 郭 Lab</span></h1>
+      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.245 (Offline) by The 郭 Lab</span></h1>
 
     </div>
     <div class="header-tools">
@@ -1769,7 +1769,6 @@
     <button class="page-tab active" id="tabFormat" onclick="switchTab('format')"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3.8h7l3 3v13.4H7z"></path><path d="M14 3.8v4h4"></path><path d="M9.2 12h5.6M9.2 15.2h4.2"></path></svg></span><span class="tab-label">Format CV</span></button>
     <button class="page-tab" id="tabBatch" onclick="switchTab('batch')"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.8 4.8 7.4 12 11l7.2-3.6z"></path><path d="m4.8 11.2 7.2 3.6 7.2-3.6"></path><path d="m4.8 15 7.2 3.6 7.2-3.6"></path></svg></span><span class="tab-label">Batch Format</span></button>
     <button class="page-tab summary-locked" id="tabSummary" onclick="switchTab('summary')" title="Locked tab"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="10" width="12" height="9" rx="2"></rect><path d="M8.7 10V7.7a3.3 3.3 0 0 1 6.6 0V10"></path></svg></span><span class="tab-label">Locked</span></button>
-    <button class="page-tab" id="tabAppraiser" onclick="switchTab('appraiser')"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7.2"></circle><circle cx="12" cy="12" r="3.2"></circle><path d="M12 2.8v3M21.2 12h-3M12 21.2v-3M2.8 12h3"></path></svg></span><span class="tab-label">CV Scoring</span></button>
     <button class="page-tab" id="tabTheOwl" onclick="switchTab('theowl')"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 7.2 4.8 5.4v7.1c0 4.1 3.1 7.3 7.2 7.3s7.2-3.2 7.2-7.3V5.4l-1.7 1.8"></path><circle cx="9.4" cy="11" r="1.3"></circle><circle cx="14.6" cy="11" r="1.3"></circle><path d="M12 13.2l-1.2 1.3h2.4z"></path></svg></span><span class="tab-label">The Owl</span></button>
     <button class="page-tab" id="tabJDAnon" onclick="switchTab('jdanon')"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12s3.2-5 8.5-5 8.5 5 8.5 5a12.7 12.7 0 0 1-3.2 3.2M14.4 14.4A3.4 3.4 0 0 1 9.6 9.6"></path><path d="M4.5 4.5 19.5 19.5"></path></svg></span><span class="tab-label">Blind JD</span></button>
     <button class="page-tab" id="tabCompany" onclick="switchTab('company')"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 20V5.5h8V20"></path><path d="M13.5 10h5V20"></path><path d="M8 8h2M8 11h2M8 14h2M16 13h.1M16 16h.1"></path></svg></span><span class="tab-label">Company Profile</span></button>
@@ -1778,8 +1777,9 @@
     <button class="page-tab" id="tabOneNote" onclick="switchTab('onenote')"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4.5h9.2l2.8 2.8v12.2H6z"></path><path d="M15.2 4.5v3h3"></path><path d="M8.8 11h6.4M8.8 14h6.4M8.8 17h4.2"></path></svg></span><span class="tab-label">OneNote</span></button>
     <button class="page-tab" id="tabStats" onclick="switchTab('stats')"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 4.5h6v6h-6zM13.5 4.5h6v6h-6zM4.5 13.5h6v6h-6zM13.5 13.5h6v6h-6z"></path></svg></span><span class="tab-label">Dashboard</span></button>
     <button class="page-tab" id="tabPPC" onclick="switchTab('ppc')" title="Post Placement Care"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"></path><path d="M8.5 12h2l1-2.2 1.4 4.4 1.1-2.2h1.5"></path></svg></span><span class="tab-label">PPC</span></button>
-    <button class="page-tab ai-crawler-locked" id="tabTheSpider" onclick="switchTab('thespider')" title="Locked tab"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="10" width="12" height="9" rx="2"></rect><path d="M8.7 10V7.7a3.3 3.3 0 0 1 6.6 0V10"></path></svg></span><span class="tab-label">Locked</span></button>
+    <button class="page-tab" id="tabTheSpider" onclick="switchTab('thespider')" title="AI Crawler"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8.2v10.5M7.5 10.2 4.2 7M16.5 10.2 19.8 7M7 14H3.5M17 14h3.5M7.5 17.2 4.5 20M16.5 17.2l3 2.8"></path><circle cx="12" cy="6.5" r="2.5"></circle><ellipse cx="12" cy="13.5" rx="5" ry="5.5"></ellipse></svg></span><span class="tab-label">AI Crawler</span></button>
     <button class="page-tab lead-locked" id="tabLeadFinder" onclick="switchTab('leadfinder')" title="Locked tab"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="10" width="12" height="9" rx="2"></rect><path d="M8.7 10V7.7a3.3 3.3 0 0 1 6.6 0V10"></path></svg></span><span class="tab-label">Locked</span></button>
+    <button class="page-tab appraiser-locked" id="tabAppraiser" onclick="switchTab('appraiser')" title="Locked tab"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="10" width="12" height="9" rx="2"></rect><path d="M8.7 10V7.7a3.3 3.3 0 0 1 6.6 0V10"></path></svg></span><span class="tab-label">Locked</span></button>
     <button type="button" class="page-nav-pin-toggle" id="pageNavPinToggle" aria-pressed="false" title="Keep these feature buttons visible while scrolling" onclick="togglePageNavPin(event)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 4 6 6"></path><path d="m14 3 7 7-4 1-5 5-1 4-7-7 4-1 5-5z"></path><path d="m8 16-5 5"></path></svg><span id="pageNavPinLabel">Pin tabs</span></button>
   </div>
 
@@ -3363,8 +3363,8 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
-<script src="/vendor/cvstudio/api-transport.js?v=24.6.243"></script>
-<script src="/vendor/cvstudio/page-nav.js?v=24.6.243"></script>
+<script src="/vendor/cvstudio/api-transport.js?v=24.6.245"></script>
+<script src="/vendor/cvstudio/page-nav.js?v=24.6.245"></script>
 <script>
 // ── JobAdder OAuth + Upload ───────────────────────────────────────────
 // Replace these with your JobAdder app credentials from developer.jobadder.com
@@ -4132,13 +4132,13 @@ async function runJACreateAll() {
       // Step 2: Parse CV with the configured route to extract fields
       var jaRoute = aiRoutePayload('ja_create');
       if (!jaRoute.api_key) throw new Error('Save an API key for JobAdder Create Profile route');
-      item.statusText = '⏳ Parsing CV with ' + jaRoute.route.provider_label + '…';
+      item.statusText = '⏳ Parsing ' + (cvParseIsLong(cvText) ? 'long CV' : 'CV') + ' with ' + jaRoute.route.provider_label + '…';
       renderJACreateList();
       var parseRes = await fetchWithTimeout('/parse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ api_key: jaRoute.api_key, cv_text: cvText, model: jaRoute.model, provider: jaRoute.provider })
-      }, 120000);
+      }, cvParseTimeoutMs(cvText));
       var parsed = await parseRes.json().catch(function(){ return {}; });
       if (!parseRes.ok || parsed.error) {
         recordPaidAiFailure('JobAdder Create Profile parse failed', parsed, jaRoute.model, jaRoute.provider);
@@ -6567,7 +6567,7 @@ var _cvStudioPhase2bSettingsStartupPromise=cvStudioHydrateBrowserSettings();
 function exportCvStudioLocalData(){
   var settings=cvStudioLocalDataSettingsSnapshot(false);
   var records={onenote_transfer_records:(typeof oneNoteRecordsLoad==='function'?oneNoteRecordsLoad():[]),onenote_saved_links:(typeof oneNoteReadSavedLinks==='function'?oneNoteReadSavedLinks():[])};
-  var payload={product:'CV Studio local data',version:'v24.6.243',schema:1,exportedAt:new Date().toISOString(),includes:['PPC metadata and preferences','saved OneNote links and parser preferences','OneNote transfer record history (private application data)','invoice recipient/settings and draft links','CV alignment and navigation preferences','AI routing/provider selections without API keys'],settings:settings,records:records};
+  var payload={product:'CV Studio local data',version:'v24.6.245',schema:1,exportedAt:new Date().toISOString(),includes:['PPC metadata and preferences','saved OneNote links and parser preferences','OneNote transfer record history (private application data)','invoice recipient/settings and draft links','CV alignment and navigation preferences','AI routing/provider selections without API keys'],settings:settings,records:records};
   var blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='cv_studio_local_data_'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(url);a.remove();},0);showToast('Non-secret local data exported.','ok');
 }
 function cvStudioPersistImportedLocalData(payload){
@@ -6727,7 +6727,7 @@ function cvLockedTabLabel() {
 // Unlocks persist across normal browser/app restarts for the same installed build,
 // but deliberately reset after a new CV Studio version is installed. This keeps the
 // lock in place after upgrades while avoiding repeated prompts during daily use.
-var LOCK_UNLOCK_VERSION = 'v24.6.243';
+var LOCK_UNLOCK_VERSION = 'v24.6.245';
 function versionedUnlockKey(base) {
   return base + '_' + String(LOCK_UNLOCK_VERSION || '').replace(/[^0-9A-Za-z]+/g, '_');
 }
@@ -6780,6 +6780,42 @@ function requestSummaryUnlock() {
 function requireSummaryUnlocked() {
   if (requestSummaryUnlock()) return true;
   switchTab('format');
+  return false;
+}
+
+var CV_SCORING_LOCK_CODE = '1996';
+function cvScoringIsUnlocked() {
+  return readVersionedUnlock('hy_cv_scoring_unlocked');
+}
+function cvScoringSetUnlocked() {
+  writeVersionedUnlock('hy_cv_scoring_unlocked');
+  updateCvScoringLockUI();
+}
+function updateCvScoringLockUI() {
+  var tab = document.getElementById('tabAppraiser');
+  if (!tab) return;
+  if (cvScoringIsUnlocked()) {
+    tab.innerHTML = cvTabLabel('CV Scoring', 'scoring');
+    tab.classList.remove('appraiser-locked');
+    tab.title = 'CV Scoring';
+    tab.setAttribute('data-base-title', 'CV Scoring');
+  } else {
+    tab.innerHTML = cvLockedTabLabel();
+    tab.classList.add('appraiser-locked');
+    tab.title = 'Locked tab';
+    tab.setAttribute('data-base-title', 'Locked tab');
+  }
+}
+function requestCvScoringUnlock() {
+  if (cvScoringIsUnlocked()) return true;
+  var code = window.prompt('CV Scoring is locked. Enter the 4-digit access code to unlock:');
+  if (code === CV_SCORING_LOCK_CODE) {
+    cvScoringSetUnlocked();
+    showToast('CV Scoring unlocked', 'ok');
+    return true;
+  }
+  window.alert('Incorrect or missing code. Returning to other tabs.');
+  updateCvScoringLockUI();
   return false;
 }
 
@@ -11290,6 +11326,16 @@ async function fetchWithTimeout(url, options, timeoutMs) {
   }
 }
 
+function cvParseIsLong(cvText) {
+  var text = String(cvText || '');
+  var markers = text.match(/^\s*(?:[ivxlcdm]+[.)]\s*)?(?:key\s+)?(?:responsibilit(?:y|ies)|achievements?)\s*:?\s*$/gim) || [];
+  return text.length >= 18000 || markers.length >= 8;
+}
+
+function cvParseTimeoutMs(cvText) {
+  return cvParseIsLong(cvText) ? 330000 : 210000;
+}
+
 // Pricing per million tokens, USD — input / output
 var MODEL_PRICING = {
   'claude-sonnet-5':           { in: 2.00,  out: 10.00 },  // intro pricing through Aug 31 2026
@@ -12721,7 +12767,7 @@ async function startFormat(blind) {
   showProgress();
 
   // ── Step 1: Parse ──────────────────────────────────────────────────────────
-  setProgress(5, 'Step 1 — Parsing CV with ' + route.provider_label + '…', 1, totalSteps);
+  setProgress(5, 'Step 1 — Parsing ' + (cvParseIsLong(raw) ? 'long CV' : 'CV') + ' with ' + route.provider_label + '…', 1, totalSteps);
   setOutput('<div style="color:var(--text3);font-style:italic;padding:20px;">Parsing CV structure…</div>');
 
   var _fakeProgress = 5;
@@ -12733,7 +12779,7 @@ async function startFormat(blind) {
   }, 300);
 
   try {
-    var res = await fetchWithTimeout('/parse', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({api_key: key, api_key_slot: route.api_key_slot, cv_text: raw, model: route.model, provider: route.provider}) }, 180000);
+    var res = await fetchWithTimeout('/parse', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({api_key: key, api_key_slot: route.api_key_slot, cv_text: raw, model: route.model, provider: route.provider}) }, cvParseTimeoutMs(raw));
     var rawText = await res.text();
     var data;
     try { data = JSON.parse(rawText); } catch(je) { throw new Error('Server returned invalid JSON:\n' + rawText.slice(0,600)); }
@@ -12953,7 +12999,82 @@ function cvNormalizeLanguages(value) {
   return out.join(', ');
 }
 
+function cvStripInferredTitle(value) {
+  var text = String(value || '').trim();
+  return /\s*[\[(]\s*(?:inferred|implied)\s+(?:from|based\s+on)\s+(?:responsibilit(?:y|ies)|duties|job\s+content|role\s+content|context)\s*[\])]\s*$/i.test(text) ? '' : text;
+}
+
+function cvCanonicalSectionHeading(value) {
+  var text = String(value || '').trim();
+  var match = text.match(/^(?:key\s+)?(responsibilit(?:y|ies)|achievements?)\s*:?$/i);
+  if (!match) return text;
+  return /^achievement/i.test(match[1]) ? 'Key achievements' : 'Key responsibilities';
+}
+
+function cvNormalizeBulletItems(items) {
+  var source = Array.isArray(items) ? items : ((items == null || items === '') ? [] : [items]);
+  var out = [];
+  function add(item) {
+    if (typeof item === 'string') {
+      var candidate = item.trim();
+      if (candidate && ((candidate[0] === '{' && candidate[candidate.length - 1] === '}') || (candidate[0] === '[' && candidate[candidate.length - 1] === ']'))) {
+        try {
+          var decoded = JSON.parse(candidate);
+          if (decoded && typeof decoded === 'object') {
+            var before = out.length;
+            add(decoded);
+            if (out.length === before) out.push(item);
+            return;
+          }
+        } catch(e) {}
+      }
+      if (candidate) out.push(item);
+      return;
+    }
+    if (Array.isArray(item)) { item.forEach(add); return; }
+    if (!item || typeof item !== 'object') {
+      if (item != null && String(item).trim()) out.push(String(item));
+      return;
+    }
+    var rawHeading = item.heading || item.title || '';
+    var heading = cvCanonicalSectionHeading(rawHeading);
+    var bullets = cvNormalizeBulletItems(item.bullets || item.items || []);
+    if (heading) {
+      var group = { heading: heading, bullets: bullets };
+      if (item.kind) group.kind = String(item.kind);
+      else if (/^(?:key\s+)?(?:responsibilit(?:y|ies)|achievements?)\s*:?$/i.test(String(rawHeading).trim())) group.kind = 'section';
+      out.push(group);
+    } else {
+      bullets.forEach(add);
+    }
+  }
+  source.forEach(add);
+  return out;
+}
+
+function cvNormalizeStructuredData(data) {
+  if (!data || typeof data !== 'object') return data;
+  var candidate = data.candidate || {};
+  candidate.current_position = cvStripInferredTitle(candidate.current_position);
+  data.candidate = candidate;
+  (data.work_experiences || []).forEach(function(exp) {
+    (Array.isArray(exp && exp.roles) ? exp.roles : []).forEach(function(role) {
+      if (!role || typeof role !== 'object') return;
+      role.title = cvStripInferredTitle(role.title);
+      role.bullets = cvNormalizeBulletItems(role.bullets);
+    });
+  });
+  var certifications = Array.isArray(data.certifications) ? data.certifications : (data.certifications ? [data.certifications] : []);
+  data.certifications = certifications.filter(function(value){ return String(value || '').trim(); });
+  var skills = Array.isArray(data.skills) ? data.skills : [];
+  data.skills = skills.filter(function(value){
+    return value && typeof value === 'object' && (String(value.category || '').trim() || String(value.items || '').trim());
+  });
+  return data;
+}
+
 function renderPreview(d) {
+  d = cvNormalizeStructuredData(d);
   var c = d.candidate || {};
   var isEmployed = c.is_employed !== false;
   var posLabel = isEmployed ? 'CURRENT POSITION' : 'LAST POSITION';
@@ -12979,8 +13100,9 @@ function renderPreview(d) {
     for (var ri = 0; ri < roles.length; ri++) {
       var role = roles[ri];
       if (ri === 0) html += '<div class="preview-company">' + esc(cvExperienceHeader(exp)) + '</div>';
-      var rtitle = (roles.length > 1 && role.date_range) ? cvSmartText(role.title, 'title') + ' (' + cvNormDateRange(role.date_range) + ')' : cvSmartText(role.title, 'title');
-      html += '<div class="preview-role">' + esc(rtitle) + '</div>';
+      var plainRoleTitle = cvSmartText(role.title, 'title');
+      var rtitle = plainRoleTitle && roles.length > 1 && role.date_range ? plainRoleTitle + ' (' + cvNormDateRange(role.date_range) + ')' : plainRoleTitle;
+      if (String(rtitle || '').trim()) html += '<div class="preview-role">' + esc(rtitle) + '</div>';
       if (role.reason_for_leaving) html += '<div class="preview-reason">Reason for Leaving: ' + esc(role.reason_for_leaving) + '</div>';
       for (var b of (role.bullets || [])) {
         if (typeof b === 'object' && b.heading) {
@@ -13024,7 +13146,13 @@ function renderPreview(d) {
   // Skills
   if ((d.skills || []).length > 0) {
     html += '<div class="preview-section">SKILLS</div>';
-    for (var s of d.skills) html += '<div class="preview-skill-cat"><strong>' + esc(s.category) + ':</strong> ' + esc(s.items) + '</div>';
+    for (var s of d.skills) {
+      var skillCategory = String(s.category || '').trim();
+      var skillItems = Array.isArray(s.items) ? s.items.filter(function(v){ return String(v || '').trim(); }).join(', ') : String(s.items || '').trim();
+      if (!skillCategory && !skillItems) continue;
+      if (!skillCategory || /^skills?$/i.test(skillCategory)) html += '<div class="preview-skill-cat">' + esc(skillItems) + '</div>';
+      else html += '<div class="preview-skill-cat"><strong>' + esc(skillCategory) + ':</strong> ' + esc(skillItems) + '</div>';
+    }
   }
 
   setOutput(html);
@@ -13150,50 +13278,27 @@ function leadFinderLockPayload() { return leadFinderIsUnlocked() ? LEAD_FINDER_L
 
 
 // ── AI Crawler Lock ─────────────────────────────────────────────────────────
-// Uses the same 4-digit access code as Lead Finder, but retains an independent
-// version-scoped unlock state so either feature can remain locked separately.
-var AI_CRAWLER_LOCK_CODE = '1571';
 function aiCrawlerIsUnlocked() {
-  return readVersionedUnlock('hy_ai_crawler_unlocked');
+  return true;
 }
 function aiCrawlerSetUnlocked() {
-  writeVersionedUnlock('hy_ai_crawler_unlocked');
   updateAiCrawlerLockUI();
 }
 function updateAiCrawlerLockUI() {
   var tab = document.getElementById('tabTheSpider');
   if (!tab) return;
-  if (aiCrawlerIsUnlocked()) {
-    tab.innerHTML = cvTabLabel('AI Crawler', 'spider');
-    tab.classList.remove('ai-crawler-locked');
-    tab.title = tab.getAttribute('data-base-title') || 'AI Crawler';
-    tab.setAttribute('data-base-title', 'AI Crawler');
-  } else {
-    tab.innerHTML = cvLockedTabLabel();
-    tab.classList.add('ai-crawler-locked');
-    tab.title = 'Locked tab';
-    tab.setAttribute('data-base-title', 'Locked tab');
-  }
+  tab.innerHTML = cvTabLabel('AI Crawler', 'spider');
+  tab.classList.remove('ai-crawler-locked');
+  tab.title = 'AI Crawler';
+  tab.setAttribute('data-base-title', 'AI Crawler');
 }
 function requestAiCrawlerUnlock() {
-  if (aiCrawlerIsUnlocked()) return true;
-  var code = window.prompt('AI Crawler is locked. Enter the 4-digit access code to unlock:');
-  if (code === AI_CRAWLER_LOCK_CODE) {
-    aiCrawlerSetUnlocked();
-    try { loadTheSpiderJobAdderOptions(); } catch(e) {}
-    showToast('AI Crawler unlocked', 'ok');
-    return true;
-  }
-  window.alert('Incorrect or missing code. Returning to other tabs.');
-  updateAiCrawlerLockUI();
-  return false;
+  return true;
 }
 function requireAiCrawlerUnlocked() {
-  if (requestAiCrawlerUnlock()) return true;
-  switchTab('format');
-  return false;
+  return true;
 }
-function aiCrawlerLockPayload() { return aiCrawlerIsUnlocked() ? AI_CRAWLER_LOCK_CODE : ''; }
+function aiCrawlerLockPayload() { return ''; }
 
 // ── OneNote → JobAdder Screening Call Notes ────────────────────────────────
 var _oneNoteRows = [];
@@ -16896,6 +17001,9 @@ function switchTab(tab) {
   if (tab === 'summary' && !requestSummaryUnlock()) {
     tab = 'format';
   }
+  if (tab === 'appraiser' && !requestCvScoringUnlock()) {
+    tab = 'format';
+  }
   if (tab === 'leadfinder' && !requestLeadFinderUnlock()) {
     tab = 'format';
   }
@@ -18331,8 +18439,8 @@ async function runBatch() {
       bf.charCount = rawText.length;
 
       // ── Step 1: Parse CV ─────────────────────────────────────────────────
-      batchSetProgress(bf, pcts[1], 'Parsing CV with ' + route.provider_label + '…', makeSteps(1));
-      var pRes = await fetchWithTimeout('/parse', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ api_key: key, api_key_slot: route.api_key_slot, cv_text: rawText, model: route.model, provider: route.provider }) }, 180000);
+      batchSetProgress(bf, pcts[1], 'Parsing ' + (cvParseIsLong(rawText) ? 'long CV' : 'CV') + ' with ' + route.provider_label + '…', makeSteps(1));
+      var pRes = await fetchWithTimeout('/parse', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ api_key: key, api_key_slot: route.api_key_slot, cv_text: rawText, model: route.model, provider: route.provider }) }, cvParseTimeoutMs(rawText));
       var pData = await pRes.json().catch(function(){ return {}; });
       if (!pRes.ok || pData.error) {
         recordPaidAiFailure('Batch CV parse failed — ' + bf.file.name, pData, route.model, route.provider);
@@ -19207,21 +19315,25 @@ function clearStats() {
 
 
 try { updateSummaryLockUI(); } catch(e) {}
+try { updateCvScoringLockUI(); } catch(e) {}
 try { updateLeadFinderLockUI(); } catch(e) {}
 try { updateAiCrawlerLockUI(); } catch(e) {}
 window.addEventListener('load', function(){
   try { updateSummaryLockUI(); } catch(e) {}
+  try { updateCvScoringLockUI(); } catch(e) {}
   try { updateLeadFinderLockUI(); } catch(e) {}
 try { updateAiCrawlerLockUI(); } catch(e) {}
 });
 </script>
-<script src="/vendor/cvstudio/server-heartbeat.js?v=24.6.243"></script>
+<script src="/vendor/cvstudio/server-heartbeat.js?v=24.6.245"></script>
 <script>
 try { updateSummaryLockUI(); } catch(e) {}
+try { updateCvScoringLockUI(); } catch(e) {}
 try { updateLeadFinderLockUI(); } catch(e) {}
 try { updateAiCrawlerLockUI(); } catch(e) {}
 window.addEventListener('load', function(){
   try { updateSummaryLockUI(); } catch(e) {}
+  try { updateCvScoringLockUI(); } catch(e) {}
   try { updateLeadFinderLockUI(); } catch(e) {}
 try { updateAiCrawlerLockUI(); } catch(e) {}
 });

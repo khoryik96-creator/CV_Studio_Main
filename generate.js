@@ -130,8 +130,81 @@ function normalizeDateRange(value) {
   return text.replace(/\s+/g, ' ').trim();
 }
 
+function stripInferredCvTitle(value) {
+  const text = String(value || '').trim();
+  return /\s*[\[(]\s*(?:inferred|implied)\s+(?:from|based\s+on)\s+(?:responsibilit(?:y|ies)|duties|job\s+content|role\s+content|context)\s*[\])]\s*$/i.test(text) ? '' : text;
+}
+
+function canonicalCvSectionHeading(value) {
+  const text = String(value || '').trim();
+  const match = text.match(/^(?:key\s+)?(responsibilit(?:y|ies)|achievements?)\s*:?$/i);
+  if (!match) return text;
+  return /^achievement/i.test(match[1]) ? 'Key achievements' : 'Key responsibilities';
+}
+
+function normalizeCvBulletItems(items) {
+  const source = Array.isArray(items) ? items : ((items == null || items === '') ? [] : [items]);
+  const out = [];
+  const add = (item) => {
+    if (typeof item === 'string') {
+      const candidate = item.trim();
+      if (candidate && ((candidate[0] === '{' && candidate[candidate.length - 1] === '}') || (candidate[0] === '[' && candidate[candidate.length - 1] === ']'))) {
+        try {
+          const decoded = JSON.parse(candidate);
+          if (decoded && typeof decoded === 'object') {
+            const before = out.length;
+            add(decoded);
+            if (out.length === before) out.push(item);
+            return;
+          }
+        } catch (_) {}
+      }
+      if (candidate) out.push(item);
+      return;
+    }
+    if (Array.isArray(item)) { item.forEach(add); return; }
+    if (!item || typeof item !== 'object') {
+      if (item != null && String(item).trim()) out.push(String(item));
+      return;
+    }
+    const rawHeading = item.heading || item.title || '';
+    const heading = canonicalCvSectionHeading(rawHeading);
+    const bullets = normalizeCvBulletItems(item.bullets || item.items || []);
+    if (heading) {
+      const group = { heading, bullets };
+      if (item.kind) group.kind = String(item.kind);
+      else if (/^(?:key\s+)?(?:responsibilit(?:y|ies)|achievements?)\s*:?$/i.test(String(rawHeading).trim())) group.kind = 'section';
+      out.push(group);
+    } else {
+      bullets.forEach(add);
+    }
+  };
+  source.forEach(add);
+  return out;
+}
+
+function normalizeCvStructuredContent(cvData) {
+  if (!cvData || typeof cvData !== 'object') return cvData;
+  const candidate = cvData.candidate || {};
+  candidate.current_position = stripInferredCvTitle(candidate.current_position);
+  cvData.candidate = candidate;
+  (cvData.work_experiences || []).forEach((exp) => {
+    (Array.isArray(exp && exp.roles) ? exp.roles : []).forEach((role) => {
+      if (!role || typeof role !== 'object') return;
+      role.title = stripInferredCvTitle(role.title);
+      role.bullets = normalizeCvBulletItems(role.bullets);
+    });
+  });
+  const certifications = Array.isArray(cvData.certifications) ? cvData.certifications : (cvData.certifications ? [cvData.certifications] : []);
+  cvData.certifications = certifications.filter((value) => String(value || '').trim());
+  const skills = Array.isArray(cvData.skills) ? cvData.skills : [];
+  cvData.skills = skills.filter((value) => value && typeof value === 'object' && (String(value.category || '').trim() || String(value.items || '').trim()));
+  return cvData;
+}
+
 function normalizeCvDataForOutput(cvData) {
   if (!cvData || typeof cvData !== 'object') return cvData;
+  normalizeCvStructuredContent(cvData);
   const c = cvData.candidate || {};
   if (c.current_company) c.current_company = smartTitleText(c.current_company, { company: true });
   if (c.current_position) c.current_position = smartTitleText(c.current_position, { title: true });
@@ -184,19 +257,19 @@ function emptyPara() {
 
 // ── Section headers (blue, bold, 22pt) ────────────────────────────────────────
 function sectionHeader(text) {
-  const pPr = `${LEFT_ALIGNMENT_XML}<w:rPr><w:b/><w:bCs/><w:color w:val="004990"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr>`;
+  const pPr = `${LEFT_ALIGNMENT_XML}<w:keepNext/><w:rPr><w:b/><w:bCs/><w:color w:val="004990"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr>`;
   return para(run(text, { bold: true, color: '004990', size: 22 }), pPr);
 }
 
 // ── Bold black text (16pt for headers, 24pt for titles) ──────────────────────
 function boldBlackPara(text, size = 24) {
-  const pPr = `${LEFT_ALIGNMENT_XML}<w:rPr><w:b/><w:bCs/><w:color w:val="000000"/><w:sz w:val="${size}"/><w:szCs w:val="${size}"/></w:rPr>`;
+  const pPr = `${LEFT_ALIGNMENT_XML}<w:keepNext/><w:rPr><w:b/><w:bCs/><w:color w:val="000000"/><w:sz w:val="${size}"/><w:szCs w:val="${size}"/></w:rPr>`;
   return para(run(text, { bold: true, color: '000000', size }), pPr);
 }
 
 // ── Bullet paragraph (uses ListParagraph style, indent, 24pt size) ────────────
 function bulletPara(text, alignmentXml = BODY_ALIGNMENT_XML) {
-  const t = String(text == null ? '' : (typeof text === 'object' ? JSON.stringify(text) : text));
+  const t = String(text == null ? '' : (typeof text === 'object' ? (text.text || text.heading || '') : text));
   // Parse **bold** inline
   const parts = t.split(/(\*\*[^*]+\*\*)/g);
   let children = '';
@@ -238,7 +311,7 @@ function makeAboutTable(c, cv) {
   // Fallback: if current_position/current_company are empty, derive from most recent work experience
   const firstJob = (cv && cv.work_experiences && cv.work_experiences[0]) || null;
   const firstRole = firstJob && firstJob.roles && firstJob.roles[0];
-  const posValue = c.current_position || (firstRole && firstRole.title) || (firstJob && firstJob.company) || '';
+  const posValue = c.current_position || (firstRole && firstRole.title) || '';
   const compValue = c.current_company || (firstJob && firstJob.company) || '';
   const row2 = `<w:tr>
     ${tc(4820, para(run(posLabel, { bold: true })) + para(run(posValue)), dTop + dBottom + dRight)}
@@ -266,6 +339,8 @@ function makeAboutTable(c, cv) {
 
 // ── Work experience ───────────────────────────────────────────────────────────
 function makeWorkSection(experiences) {
+  experiences = (experiences || []).filter(exp => exp && typeof exp === 'object' && Array.isArray(exp.roles) && exp.roles.length);
+  if (!experiences.length) return '';
   let xml = emptyPara();
   xml += sectionHeader('W O R K   E X P E R I E N C E S                     __________________________________________');
   xml += emptyPara();
@@ -282,9 +357,10 @@ function makeWorkSection(experiences) {
       }
 
       // Role title
-      const roleTitle = (roles.length > 1 && role.date_range)
-        ? `${role.title} (${role.date_range})` : role.title;
-      xml += boldBlackPara(roleTitle, 24);
+      const plainRoleTitle = String(role.title || '').trim();
+      const roleTitle = (plainRoleTitle && roles.length > 1 && role.date_range)
+        ? `${plainRoleTitle} (${role.date_range})` : plainRoleTitle;
+      if (String(roleTitle || '').trim()) xml += boldBlackPara(roleTitle, 24);
 
       // Reason for leaving
       if (role.reason_for_leaving) {
@@ -303,19 +379,11 @@ function makeWorkSection(experiences) {
           xml += bulletPara(b);
         } else if (b && typeof b === 'object' && b.heading) {
           const subBullets = b.bullets || [];
-          if (b.kind === 'project' || subBullets.length >= 3) {
-            // Explicit project headings stay visible even when the project has only 1-2 bullets.
-            if (bi > 0) xml += emptyPara();
-            xml += boldBlackPara(b.heading, 24);
-            for (const sub of subBullets) {
-              xml += bulletPara(sub);
-            }
-          } else {
-            // Compact non-project micro-groups with fewer than 3 bullets.
-            xml += bulletPara(b.heading);
-            for (const sub of subBullets) {
-              xml += bulletPara(sub);
-            }
+          // Structured headings must remain headings regardless of bullet count.
+          if (bi > 0) xml += emptyPara();
+          xml += boldBlackPara(b.heading, 24);
+          for (const sub of subBullets) {
+            xml += bulletPara(sub);
           }
         }
       }
@@ -337,6 +405,8 @@ function makeWorkSection(experiences) {
 
 // ── Education ─────────────────────────────────────────────────────────────────
 function makeEducationSection(education) {
+  education = (education || []).filter(edu => edu && typeof edu === 'object' && (String(edu.institution || '').trim() || String(edu.degree || '').trim() || String(edu.description || '').trim()));
+  if (!education.length) return '';
   let xml = sectionHeader('E D U C A T I O N S  &  T R A I N I N G     ______________________________________');
   xml += emptyPara();
   for (const edu of education) {
@@ -371,10 +441,14 @@ function makeEducationSection(education) {
 
 // ── Additional info ───────────────────────────────────────────────────────────
 function makeAdditionalSection(certs, skills) {
+  certs = (certs || []).filter(c => String(c || '').trim());
+  skills = (skills || []).filter(s => s && typeof s === 'object' && (String(s.category || '').trim() || String(s.items || '').trim()));
+  if (!certs.length && !skills.length) return '';
+
   let xml = sectionHeader('A D D I T I O N A L   I N F O R M A T I O N    ______________________________________');
   xml += emptyPara();
 
-  if (certs && certs.length > 0) {
+  if (certs.length > 0) {
     xml += boldBlackPara('License and Certification:', 24);
     for (const c of certs) {
       xml += bulletPara(c, LEFT_ALIGNMENT_XML);
@@ -382,23 +456,25 @@ function makeAdditionalSection(certs, skills) {
     xml += emptyPara();
   }
 
-  if (skills && skills.length > 0) {
+  if (skills.length > 0) {
     xml += boldBlackPara('Skills:', 24);
     xml += emptyPara();
     for (const s of skills) {
       // Category label on its own bold line
-      xml += boldBlackPara(s.category + ':', 24);
+      const category = String(s.category || '').trim();
+      if (category && !/^skills?$/i.test(category)) xml += boldBlackPara(category + ':', 24);
       // Items — handle both array and newline-separated string
       const rawItems = s.items || '';
       const lines = Array.isArray(rawItems)
         ? rawItems.map(l => String(l).trim()).filter(l => l.length > 0)
         : String(rawItems).split(/\n/).map(l => l.trim()).filter(l => l.length > 0);
+      if (!lines.length) continue;
       if (lines.length > 1) {
         for (const line of lines) {
           xml += bulletPara(line, LEFT_ALIGNMENT_XML);
         }
       } else {
-        xml += para(run(lines[0] || '', { color: '000000', size: 24 }), LEFT_ALIGNMENT_XML);
+        xml += para(run(lines[0], { color: '000000', size: 24 }), LEFT_ALIGNMENT_XML);
       }
       xml += emptyPara();
     }
