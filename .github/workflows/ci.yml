@@ -1,0 +1,110 @@
+name: CV Studio regression
+
+on:
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cv-studio-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  regression:
+    name: Windows x64 regression
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Disable Git line-ending conversion
+        shell: bash
+        run: git config --global core.autocrlf false
+
+      - name: Check out private source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Python dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pywin32
+
+      - name: Run complete Python regression suite
+        shell: bash
+        run: python -m unittest discover -s tests -p 'test_*.py'
+
+      - name: Run all frontend fixtures
+        shell: bash
+        run: |
+          node tests/test_phase2a_frontend_storage.js
+          node tests/test_phase2b_frontend_storage.js
+          node tests/test_phase5b_frontend_costs.js
+          node tests/test_jobadder_esc2_frontend.js
+          node tests/test_blind_jd_exp_summary_frontend.js
+          node tests/test_jobadder_account_settings_frontend.js
+
+      - name: Run live source smoke
+        shell: bash
+        run: python tests/run_phase2a_source_smoke.py
+
+      - name: Validate tracked Python syntax
+        shell: pwsh
+        run: |
+          $files = @(git ls-files '*.py')
+          python -m py_compile @files
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validate tracked JavaScript syntax
+        shell: pwsh
+        run: |
+          foreach ($file in @(git ls-files '*.js')) {
+            node --check $file
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      - name: Validate tracked PowerShell syntax
+        shell: pwsh
+        run: |
+          $failed = $false
+          foreach ($file in @(git ls-files '*.ps1')) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path -LiteralPath $file),
+              [ref]$tokens,
+              [ref]$errors
+            )
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error "$file`: $($_.Message)" }
+              $failed = $true
+            }
+          }
+          if ($failed) { exit 1 }
+
+      - name: Validate tracked POSIX shell syntax
+        shell: bash
+        run: |
+          while IFS= read -r file; do
+            bash -n "$file"
+          done < <(git ls-files '*.sh' '*.command')
+
+      - name: Verify repository consistency
+        shell: bash
+        run: |
+          python owner_build_tools/repo_consistency.py --root .
+          git diff --check
