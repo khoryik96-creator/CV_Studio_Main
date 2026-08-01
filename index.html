@@ -9077,12 +9077,14 @@ function scheduleTheSpiderPreviewMemoryFreshnessDeadline(mode){
   var diagnostic=trustedTheSpiderPreviewMemoryDiagnostic();
   if(!diagnostic.fresh||diagnostic.age_ms===null)return;
   var delay=Math.max(1,THE_SPIDER_PREVIEW_DIAGNOSTIC_FRESH_MS-diagnostic.age_ms+1);
-  _theSpiderPreviewMemoryFreshnessTimer=setTimeout(function(){
+  var timerId=setTimeout(function(){
+    if(_theSpiderPreviewMemoryFreshnessTimer!==timerId)return;
     _theSpiderPreviewMemoryFreshnessTimer=null;
     if(storedTheSpiderPreviewMemoryMode()!=='auto')return;
     applyTheSpiderPreviewMemoryMode('auto',false);
     renderCvStudioDiagnosticStatus(window._cvStudioLastRuntimeDiagnostics||null);
   },delay);
+  _theSpiderPreviewMemoryFreshnessTimer=timerId;
 }
 async function setTheSpiderPreviewMemoryMode(mode,announce){
   mode=/^(auto|low|standard|high)$/.test(String(mode||''))?String(mode):'high';
