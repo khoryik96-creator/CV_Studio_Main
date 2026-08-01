@@ -1,4 +1,4 @@
-name: Build protected CV Studio packages
+name: Build protected CV Studio Windows x64 package
 
 on:
   workflow_dispatch:
