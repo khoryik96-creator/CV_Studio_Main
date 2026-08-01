@@ -249,6 +249,11 @@ Persistent background jobs and resumable task state:
   reason/age/limits/usage; unchanged profiles avoid redundant clearing; Job Fit
   keeps identical numbers while disclosing material floors and unavailable
   evidence without implying unused resume scoring.
+- The Phase 6C independent-review correction schedules the five-minute Auto
+  freshness boundary, so a formerly fresh High decision falls back to Standard,
+  updates active limits and visible statistics, and trims caches immediately
+  without reopening Settings or refreshing diagnostics. Manual profiles cancel
+  that deadline and remain authoritative.
 
 ## Phase 7 — Backburner
 

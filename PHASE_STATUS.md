@@ -61,6 +61,11 @@
 - Exactly 108 routes, five guards, 18 compatibility signatures, SQLite schema
   10, journal schema 1, Phase 6A eager order and Phase 6B jsPDF loading/retry
   remain preserved. GitHub Windows-x64 CI remains the native platform gate.
+- Independent review found that freshness was recalculated only on another
+  interaction. Auto now owns one cancellable deadline for its trusted sample;
+  expiry reapplies Standard limits, trims payload/DOM caches, updates the active
+  prefetch budget and rerenders the decision/statistics. Selecting a manual
+  profile cancels the deadline, and unchanged resolutions still avoid clearing.
 
 ## Phase 6B authorization, inventory and bounded implementation
 

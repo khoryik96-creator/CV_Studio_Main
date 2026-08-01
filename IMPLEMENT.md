@@ -20,6 +20,13 @@ resolution change updates budgets and trims immediately, while an unchanged
 selection does not clear caches. Present selected/resolved mode, reason, data
 freshness/age and active usage/limits in Settings.
 
+Auto must also schedule the exact end of the five-minute trust window. At that
+deadline, reapply the resolution and rerender status without requiring Settings
+or a diagnostic refresh; a High-to-Standard fallback must update payload, DOM
+and prefetch limits and trim existing caches immediately. Keep only one timer,
+cancel it for manual selection, and do not clear caches merely because the same
+selection/resolution is reapplied.
+
 Do not alter Job Fit arithmetic. Add only explanation provenance for the existing
 native-Boolean/discovery floors, unavailable component evidence and whether resume
 text actually contributed. Preserve response aliases and source labels. The new

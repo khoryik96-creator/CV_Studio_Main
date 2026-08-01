@@ -9008,6 +9008,7 @@ var THE_SPIDER_PREVIEW_REVALIDATE_MS = 2 * 60 * 1000;
 var THE_SPIDER_PREVIEW_DIAGNOSTIC_FRESH_MS = 5 * 60 * 1000;
 var _theSpiderPreviewAppliedSelection='';
 var _theSpiderPreviewAppliedResolution='';
+var _theSpiderPreviewMemoryFreshnessTimer=null;
 function storedTheSpiderPreviewMemoryMode(){
   try { var mode=String(localStorage.getItem(THE_SPIDER_PREVIEW_MEMORY_MODE_KEY)||'high'); return /^(auto|low|standard|high)$/.test(mode)?mode:'high'; } catch(e) { return 'high'; }
 }
@@ -9065,9 +9066,23 @@ function applyTheSpiderPreviewMemoryMode(mode,clearExisting){
   var changed=_theSpiderPreviewAppliedSelection!==selected||_theSpiderPreviewAppliedResolution!==resolved;
   if(clearExisting&&changed)resetTheSpiderPreviewCaches();else trimTheSpiderPreviewCachesToLimits();
   _theSpiderPreviewAppliedSelection=selected;_theSpiderPreviewAppliedResolution=resolved;
-  if(window._theSpiderPreviewPrefetchTotal)window._theSpiderPreviewPrefetchBudgetBytes=window._theSpiderPreviewPrefetchTotal>THE_SPIDER_PREVIEW_PREFETCH_BATCH_SIZE?THE_SPIDER_PREVIEW_PREFETCH_MANUAL_MAX_BYTES:THE_SPIDER_PREVIEW_PREFETCH_AUTO_MAX_BYTES;
+  window._theSpiderPreviewPrefetchBudgetBytes=Number(window._theSpiderPreviewPrefetchTotal)>THE_SPIDER_PREVIEW_PREFETCH_BATCH_SIZE?THE_SPIDER_PREVIEW_PREFETCH_MANUAL_MAX_BYTES:THE_SPIDER_PREVIEW_PREFETCH_AUTO_MAX_BYTES;
   updateTheSpiderPreviewCacheStatus();
+  scheduleTheSpiderPreviewMemoryFreshnessDeadline(selected);
   return {selected:selected,resolved:resolved,profile:profile,changed:changed};
+}
+function scheduleTheSpiderPreviewMemoryFreshnessDeadline(mode){
+  if(_theSpiderPreviewMemoryFreshnessTimer!==null){clearTimeout(_theSpiderPreviewMemoryFreshnessTimer);_theSpiderPreviewMemoryFreshnessTimer=null;}
+  if(String(mode||storedTheSpiderPreviewMemoryMode())!=='auto')return;
+  var diagnostic=trustedTheSpiderPreviewMemoryDiagnostic();
+  if(!diagnostic.fresh||diagnostic.age_ms===null)return;
+  var delay=Math.max(1,THE_SPIDER_PREVIEW_DIAGNOSTIC_FRESH_MS-diagnostic.age_ms+1);
+  _theSpiderPreviewMemoryFreshnessTimer=setTimeout(function(){
+    _theSpiderPreviewMemoryFreshnessTimer=null;
+    if(storedTheSpiderPreviewMemoryMode()!=='auto')return;
+    applyTheSpiderPreviewMemoryMode('auto',false);
+    renderCvStudioDiagnosticStatus(window._cvStudioLastRuntimeDiagnostics||null);
+  },delay);
 }
 async function setTheSpiderPreviewMemoryMode(mode,announce){
   mode=/^(auto|low|standard|high)$/.test(String(mode||''))?String(mode):'high';
