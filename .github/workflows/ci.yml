@@ -44,6 +44,10 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt pywin32
 
+      - name: Install Node dependencies
+        shell: bash
+        run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
+
       - name: Run complete Python regression suite
         shell: bash
         run: python -m unittest discover -s tests -p 'test_*.py'
