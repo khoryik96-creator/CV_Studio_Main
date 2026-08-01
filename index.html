@@ -6633,7 +6633,7 @@ function renderCvStudioDiagnosticStatus(data){
   var mem=data&&data.memory&&typeof data.memory==='object'?data.memory:{};
   if(detail){
     var systemText=Number(mem.total_bytes)>0?('System RAM '+cvStudioFormatBytes(mem.total_bytes)+' · available '+cvStudioFormatBytes(mem.available_bytes)):'System RAM unavailable';
-    detail.textContent=profileInfo.profile.label+' profile'+(profileInfo.selected==='auto'?' (Auto → '+profileInfo.profile.label+')':'')+' · '+systemText+'. Diagnostic ZIP excludes keys, tokens, CV files, preview payloads and localStorage values.';
+    detail.textContent='Selected '+(profileInfo.selected==='auto'?'Auto':profileInfo.profile.label)+' · resolved '+profileInfo.profile.label+' · '+profileInfo.reason+' · data '+profileInfo.freshness+(profileInfo.age_ms!==null?' ('+Math.max(0,Math.round(profileInfo.age_ms/1000))+'s old)':'')+' · limits browser '+cvStudioFormatBytes(browserMax)+', backend '+cvStudioFormatBytes(backendMax)+' · usage browser '+cvStudioFormatBytes(browserUsed)+', backend '+cvStudioFormatBytes(backendUsed)+' · '+systemText+'. Diagnostic ZIP excludes keys, tokens, CV files, preview payloads and localStorage values.';
   }
 }
 async function refreshCvStudioDiagnostics(announce){
@@ -6643,6 +6643,7 @@ async function refreshCvStudioDiagnostics(announce){
     window._cvStudioLastRuntimeDiagnostics=d;
     window._cvStudioSystemMemoryTotalBytes=Number(d.memory&&d.memory.total_bytes)||0;
     window._cvStudioSystemMemoryAvailableBytes=Number(d.memory&&d.memory.available_bytes)||0;
+    window._cvStudioSystemMemoryReceivedAt=Date.now();
     if(storedTheSpiderPreviewMemoryMode()==='auto')applyTheSpiderPreviewMemoryMode('auto',false);
     renderCvStudioDiagnosticStatus(d);
     if(announce)showToast('Diagnostics refreshed.','ok');
@@ -9004,24 +9005,40 @@ var THE_SPIDER_PREVIEW_PAYLOAD_MAX_BYTES = 512 * 1024 * 1024;
 var THE_SPIDER_PREVIEW_DOM_MAX_ENTRIES = 3;
 var THE_SPIDER_PREVIEW_DOM_MAX_BYTES = 256 * 1024 * 1024;
 var THE_SPIDER_PREVIEW_REVALIDATE_MS = 2 * 60 * 1000;
+var THE_SPIDER_PREVIEW_DIAGNOSTIC_FRESH_MS = 5 * 60 * 1000;
+var _theSpiderPreviewAppliedSelection='';
+var _theSpiderPreviewAppliedResolution='';
 function storedTheSpiderPreviewMemoryMode(){
   try { var mode=String(localStorage.getItem(THE_SPIDER_PREVIEW_MEMORY_MODE_KEY)||'high'); return /^(auto|low|standard|high)$/.test(mode)?mode:'high'; } catch(e) { return 'high'; }
 }
-function resolvedTheSpiderPreviewMemoryMode(mode){
-  mode=String(mode||storedTheSpiderPreviewMemoryMode());
-  if(mode!=='auto')return THE_SPIDER_PREVIEW_MEMORY_PROFILES[mode]?mode:'high';
-  var total=Number(window._cvStudioSystemMemoryTotalBytes)||0,available=Number(window._cvStudioSystemMemoryAvailableBytes)||0;
-  if(available>0&&available<=3*1024*1024*1024)return 'low';
-  if(available>0&&available<=6*1024*1024*1024)return 'standard';
-  if(!total)return 'standard';
-  if(total<=10*1024*1024*1024)return 'low';
-  if(total<=20*1024*1024*1024)return 'standard';
-  return 'high';
+function trustedTheSpiderPreviewMemoryDiagnostic(){
+  var received=Number(window._cvStudioSystemMemoryReceivedAt)||0,total=Number(window._cvStudioSystemMemoryTotalBytes)||0,available=Number(window._cvStudioSystemMemoryAvailableBytes)||0,age=received?Math.max(0,Date.now()-received):null;
+  var valid=Number.isFinite(total)&&Number.isFinite(available)&&total>0&&available>0&&available<=total;
+  var fresh=valid&&age!==null&&age<=THE_SPIDER_PREVIEW_DIAGNOSTIC_FRESH_MS;
+  return {valid:valid,fresh:fresh,total:valid?total:0,available:valid?available:0,age_ms:age};
 }
+function resolvedTheSpiderPreviewMemoryDecision(mode){
+  mode=String(mode||storedTheSpiderPreviewMemoryMode());
+  if(mode!=='auto'){
+    var manual=THE_SPIDER_PREVIEW_MEMORY_PROFILES[mode]?mode:'high';
+    return {resolved:manual,reason:'Manual selection is authoritative',freshness:'manual',age_ms:null};
+  }
+  var diagnostic=trustedTheSpiderPreviewMemoryDiagnostic();
+  if(!diagnostic.fresh){
+    return {resolved:'standard',reason:diagnostic.valid?'Diagnostic memory data is stale; safe fallback applied':'Trusted memory data is unavailable or malformed; safe fallback applied',freshness:diagnostic.valid?'stale':'unavailable',age_ms:diagnostic.age_ms};
+  }
+  var resolved='high',reason='Fresh trusted memory data supports the High profile';
+  if(diagnostic.available<=3*1024*1024*1024){resolved='low';reason='Fresh available RAM is 3 GB or less';}
+  else if(diagnostic.available<=6*1024*1024*1024){resolved='standard';reason='Fresh available RAM is 6 GB or less';}
+  else if(diagnostic.total<=10*1024*1024*1024){resolved='low';reason='Fresh total RAM is 10 GB or less';}
+  else if(diagnostic.total<=20*1024*1024*1024){resolved='standard';reason='Fresh total RAM is 20 GB or less';}
+  return {resolved:resolved,reason:reason,freshness:'fresh',age_ms:diagnostic.age_ms};
+}
+function resolvedTheSpiderPreviewMemoryMode(mode){return resolvedTheSpiderPreviewMemoryDecision(mode).resolved;}
 function currentTheSpiderPreviewMemoryProfile(){
-  var selected=storedTheSpiderPreviewMemoryMode(),resolved=resolvedTheSpiderPreviewMemoryMode(selected);
+  var selected=storedTheSpiderPreviewMemoryMode(),decision=resolvedTheSpiderPreviewMemoryDecision(selected),resolved=decision.resolved;
   var profile=THE_SPIDER_PREVIEW_MEMORY_PROFILES[resolved]||THE_SPIDER_PREVIEW_MEMORY_PROFILES.high;
-  return {selected:selected,resolved:resolved,profile:profile};
+  return {selected:selected,resolved:resolved,profile:profile,reason:decision.reason,freshness:decision.freshness,age_ms:decision.age_ms};
 }
 function theSpiderPreviewBrowserCacheStats(){
   ensureTheSpiderPreviewCaches();
@@ -9045,16 +9062,19 @@ function applyTheSpiderPreviewMemoryMode(mode,clearExisting){
   var selected=/^(auto|low|standard|high)$/.test(String(mode||''))?String(mode):storedTheSpiderPreviewMemoryMode();
   var resolved=resolvedTheSpiderPreviewMemoryMode(selected),profile=THE_SPIDER_PREVIEW_MEMORY_PROFILES[resolved]||THE_SPIDER_PREVIEW_MEMORY_PROFILES.high;
   THE_SPIDER_PREVIEW_PREFETCH_AUTO_MAX_BYTES=profile.autoBytes;THE_SPIDER_PREVIEW_PREFETCH_MANUAL_MAX_BYTES=profile.manualBytes;THE_SPIDER_PREVIEW_PAYLOAD_MAX_BYTES=profile.payloadBytes;THE_SPIDER_PREVIEW_PAYLOAD_MAX_ENTRIES=profile.payloadEntries;THE_SPIDER_PREVIEW_DOM_MAX_BYTES=profile.domBytes;THE_SPIDER_PREVIEW_DOM_MAX_ENTRIES=profile.domEntries;
-  if(clearExisting)resetTheSpiderPreviewCaches();else trimTheSpiderPreviewCachesToLimits();
+  var changed=_theSpiderPreviewAppliedSelection!==selected||_theSpiderPreviewAppliedResolution!==resolved;
+  if(clearExisting&&changed)resetTheSpiderPreviewCaches();else trimTheSpiderPreviewCachesToLimits();
+  _theSpiderPreviewAppliedSelection=selected;_theSpiderPreviewAppliedResolution=resolved;
   if(window._theSpiderPreviewPrefetchTotal)window._theSpiderPreviewPrefetchBudgetBytes=window._theSpiderPreviewPrefetchTotal>THE_SPIDER_PREVIEW_PREFETCH_BATCH_SIZE?THE_SPIDER_PREVIEW_PREFETCH_MANUAL_MAX_BYTES:THE_SPIDER_PREVIEW_PREFETCH_AUTO_MAX_BYTES;
   updateTheSpiderPreviewCacheStatus();
-  return {selected:selected,resolved:resolved,profile:profile};
+  return {selected:selected,resolved:resolved,profile:profile,changed:changed};
 }
 async function setTheSpiderPreviewMemoryMode(mode,announce){
   mode=/^(auto|low|standard|high)$/.test(String(mode||''))?String(mode):'high';
   try{cvStudioDurableSettingSet(THE_SPIDER_PREVIEW_MEMORY_MODE_KEY,mode);}catch(e){}
   var result=applyTheSpiderPreviewMemoryMode(mode,true);renderCvStudioDiagnosticStatus(window._cvStudioLastRuntimeDiagnostics||null);
   if(announce){
+    if(!result.changed){showToast('AI Crawler preview memory remains '+result.profile.label+'. Existing caches were retained.','ok');return;}
     var backendCleared=false,backendMessage='';
     try{
       var r=await fetch('/diagnostics/clear_preview_cache',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}),d=await r.json().catch(function(){return {};});
@@ -10574,7 +10594,8 @@ function renderSpiderFitBreakdown(c) {
     if(matched.length)termBits.push('Matched: '+matched.slice(0,4).join(', '));
     if(partial.length)termBits.push('Partial: '+partial.slice(0,4).join(', '));
     if(missing.length)termBits.push('Missing: '+missing.slice(0,4).join(', '));
-    if(row.native_boolean_floor)termBits.push('JobAdder native Boolean evidence applied');
+    if(row.native_boolean_floor)termBits.push('Native Boolean floor raised this component from '+String(row.points_before_adjustment==null?0:row.points_before_adjustment)+' to '+String(row.points==null?0:row.points)+' points; visible term coverage was '+String(row.coverage_before_adjustment_percent==null?0:row.coverage_before_adjustment_percent)+'%');
+    if(row.evidence_status==='unavailable')termBits.push('No visible evidence was available for this scored component');
     if(termBits.length)html+='<span class="terms'+(missing.length&&!matched.length&&!partial.length?' missing':'')+'">'+esc(termBits.join(' · '))+'</span>';
     html+='</div>';
   });
@@ -10600,7 +10621,7 @@ function renderTheSpiderCandidates(items, emptyMessage) {
     var fitDetails = '<details class="spider-fit-details"><summary>Why this fit' + (c._spiderResumeScored ? ' · resume scored' : '') + '</summary>';
     if (discoveryList.length) fitDetails += '<div class="spider-discovery-line"><strong>Keyword discovery:</strong> ' + esc(discoveryList.slice(0,6).join(' · ')) + '</div>';
     fitDetails += '<div class="spider-fit-line"><strong>Fit evidence:</strong> ' + esc(matchedList.length ? matchedList.slice(0,5).join(' · ') : 'No additional job-scope evidence visible.') + '</div>';
-    if (c._spiderFitSource) fitDetails += '<div class="spider-muted-line"><strong>Scored from:</strong> ' + esc(c._spiderFitSource) + '</div>';
+    if (c._spiderFitSource) fitDetails += '<div class="spider-muted-line"><strong>Scored from:</strong> ' + esc(c._spiderResumeScored ? c._spiderFitSource : (c._spiderFitSource + ' · no resume text used')) + '</div>';
     if (unknownList.length) fitDetails += '<div class="spider-muted-line"><strong>Gaps / unknown:</strong> ' + esc(unknownList.slice(0,3).join(' · ')) + '</div>';
     fitDetails += renderSpiderFitBreakdown(c);
     fitDetails += '</details>';

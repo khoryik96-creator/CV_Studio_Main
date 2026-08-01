@@ -1,0 +1,20 @@
+'use strict';
+const assert=require('assert');const fs=require('fs');const vm=require('vm');
+const html=fs.readFileSync('index.html','utf8');
+function fn(name){const start=html.indexOf('function '+name+'(');assert.ok(start>=0,name);let brace=html.indexOf('{',start),depth=0;for(let i=brace;i<html.length;i++){if(html[i]==='{')depth++;else if(html[i]==='}'&&--depth===0)return html.slice(start,i+1);}throw new Error(name);}
+const names=['storedTheSpiderPreviewMemoryMode','trustedTheSpiderPreviewMemoryDiagnostic','resolvedTheSpiderPreviewMemoryDecision','resolvedTheSpiderPreviewMemoryMode','currentTheSpiderPreviewMemoryProfile','ensureTheSpiderPreviewCaches','currentTheSpiderPreviewReadyKeys','theSpiderPreviewBrowserCacheStats','trimTheSpiderPreviewCachesToLimits','applyTheSpiderPreviewMemoryMode','renderSpiderFitBreakdown'];
+const profiles=html.match(/var THE_SPIDER_PREVIEW_MEMORY_PROFILES = \{[\s\S]*?\n\};/)[0];
+const constants=html.match(/var THE_SPIDER_PREVIEW_PREFETCH_BATCH_SIZE[\s\S]*?var _theSpiderPreviewAppliedResolution='';/)[0];
+let now=1_000_000,mode='auto',releases=0,resets=0;
+const context={window:{},localStorage:{getItem(){return mode;}},Date:{now(){return now;}},Number,String,Math,Map,Set,Array,Object,JSON,document:{getElementById(){return null;}},releaseTheSpiderPreviewDomEntry(){releases++;},resetTheSpiderPreviewCaches(){resets++;},updateTheSpiderPreviewCacheStatus(){},esc(v){return String(v).replace(/</g,'&lt;');}};
+vm.createContext(context);vm.runInContext(profiles+'\n'+constants+'\n'+names.map(fn).join('\n'),context);
+let d=context.resolvedTheSpiderPreviewMemoryDecision('auto');assert.strictEqual(d.resolved,'standard');assert.strictEqual(d.freshness,'unavailable');
+context.window._cvStudioSystemMemoryTotalBytes=32*1024**3;context.window._cvStudioSystemMemoryAvailableBytes=2*1024**3;context.window._cvStudioSystemMemoryReceivedAt=now;
+d=context.resolvedTheSpiderPreviewMemoryDecision('auto');assert.strictEqual(d.resolved,'low');assert.strictEqual(d.freshness,'fresh');
+now+=5*60*1000+1;d=context.resolvedTheSpiderPreviewMemoryDecision('auto');assert.strictEqual(d.resolved,'standard');assert.strictEqual(d.freshness,'stale');
+mode='high';d=context.resolvedTheSpiderPreviewMemoryDecision('high');assert.strictEqual(d.resolved,'high');assert.ok(d.reason.includes('authoritative'));
+mode='low';context.window._theSpiderPreviewPayloadCache=new Map([['a',{bytes:100}],['b',{bytes:200}]]);context.window._theSpiderPreviewDomCache=new Map();context.applyTheSpiderPreviewMemoryMode('low',true);assert.strictEqual(resets,1);context.applyTheSpiderPreviewMemoryMode('low',true);assert.strictEqual(resets,1,'same resolved selection must not clear again');
+const rendered=context.renderSpiderFitBreakdown({_spiderFitBreakdown:{components:[{label:'Boolean / must-have',points:15,max_points:25,points_before_adjustment:0,coverage_before_adjustment_percent:0,matched:[],partial:[],missing:['Python'],native_boolean_floor:true,evidence_status:'unavailable'}],discovery_floor_applied:true}});
+assert.ok(rendered.includes('raised this component from 0 to 15 points'));assert.ok(rendered.includes('No visible evidence was available'));assert.ok(rendered.includes('10% discovery floor'));
+assert.ok(html.includes("c._spiderResumeScored ? c._spiderFitSource : (c._spiderFitSource + ' · no resume text used')"));
+console.log('PASS: Phase 6C adaptive-memory freshness, stable clearing and truthful fit visibility');

@@ -242,8 +242,13 @@ Persistent background jobs and resumable task state:
 - Phase 6A behavior-preserving frontend modularisation is complete.
 - Phase 6B behavior-preserving frontend lazy loading defers only the local
   jsPDF asset until one of the four existing PDF-export actions requests it.
-- Phase 6C remaining adaptive-memory work and explainable-fit refinements are
-  not active.
+- Phase 6C bounded adaptive preview-memory and explainable-fit refinements are
+  complete on the candidate branch identity
+  `agent/v24.6.244-phase-6c-adaptive-memory`: fresh trusted diagnostics now
+  drive deterministic Auto resolution with a safe Standard fallback and visible
+  reason/age/limits/usage; unchanged profiles avoid redundant clearing; Job Fit
+  keeps identical numbers while disclosing material floors and unavailable
+  evidence without implying unused resume scoring.
 
 ## Phase 7 — Backburner
 
