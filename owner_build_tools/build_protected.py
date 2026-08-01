@@ -41,6 +41,11 @@ ADM_ZIP_TREE_SHA256 = "a2919d0a2172129642be0d128b2725cfaf9c7ab3652f51cc85964cb34
 RELEASE_TARGET = "windows-x64"
 
 RUNTIME_ASSETS = ("index.html","generate.js","template.docx","cv_studio_logo.png","cv_studio.ico","vendor")
+FRONTEND_MODULES = (
+    "api-transport.js",
+    "page-nav.js",
+    "server-heartbeat.js",
+)
 ROOT_FILES = (
     "CV Studio.bat","INSTALL.bat","INSTALL_CORE.bat","INSTALL_CORE.ps1","INSTALL_RECEIPT.ps1",
     "START_HIDDEN.vbs","STOP.bat","STOP_CORE.ps1","WATCHDOG.vbs","INSTANCE_PORT.ps1","RESTORE_PREVIOUS.bat","RESTORE_PREVIOUS.ps1","install.sh","start.sh","restore_previous.sh",
@@ -179,7 +184,9 @@ def validate_repository_dependency_state(root: Path) -> None:
             raise RuntimeError(f"POSIX script is not LF-only: {rel}. Run repo_consistency.py --repair.")
 
 def validate_source(root: Path) -> None:
-    required=("app.py","cvstudio_ai_costs.py","cvstudio_antiword.py","cvstudio_clients.py","cvstudio_storage.py","cvstudio_storage_bridge.py","cvstudio_diagnostics.py","cvstudio_document_safety.py","cvstudio_jobs.py","index.html","generate.js","template.docx","package.json","requirements.txt","merge_title_cache.py")
+    required=("app.py","cvstudio_ai_costs.py","cvstudio_antiword.py","cvstudio_clients.py","cvstudio_storage.py","cvstudio_storage_bridge.py","cvstudio_diagnostics.py","cvstudio_document_safety.py","cvstudio_jobs.py","index.html","generate.js","template.docx","package.json","requirements.txt","merge_title_cache.py") + tuple(
+        "vendor/cvstudio/" + filename for filename in FRONTEND_MODULES
+    )
     missing=[x for x in required if not (root/x).exists()]
     if missing: raise RuntimeError("Missing source files: "+", ".join(missing))
     # Build only from the readable owner patch base. The separate Authy QR/key
@@ -309,6 +316,8 @@ def validate_vetted_adm_zip(root: Path) -> Path:
 def preflight_source(root: Path, target: str | None = None) -> None:
     run([sys.executable,"-m","py_compile",str(root/"app.py"),str(root/"cvstudio_ai_costs.py"),str(root/"cvstudio_antiword.py"),str(root/"cvstudio_clients.py"),str(root/"cvstudio_storage.py"),str(root/"cvstudio_storage_bridge.py"),str(root/"cvstudio_diagnostics.py"),str(root/"cvstudio_document_safety.py"),str(root/"cvstudio_jobs.py"),str(root/"merge_title_cache.py")])
     run(["node","--check",str(root/"generate.js")])
+    for filename in FRONTEND_MODULES:
+        run(["node","--check",str(root/"vendor"/"cvstudio"/filename)])
     validate_vetted_adm_zip(root)
     health = validate_antiword_runtime(root, target)
     print(
@@ -355,16 +364,23 @@ def obfuscate_args(src: Path, dst: Path, rename_globals: bool) -> list[str]:
             "--string-array-threshold","0.45","--transform-object-keys","false","--unicode-escape-sequence","false"]
 
 
-def protect_javascript(root: Path, work: Path, skip: bool) -> tuple[Path,Path,dict]:
+def protect_javascript(root: Path, work: Path, skip: bool) -> tuple[Path,Path,Path,dict]:
     source_index=root/"index.html"; source_generate=root/"generate.js"
     out_index=work/"index.html"; out_generate=work/"generate.js"
+    source_modules=root/"vendor"/"cvstudio"; out_modules=work/"vendor"/"cvstudio"
+    out_modules.mkdir(parents=True,exist_ok=True)
     report={"mode":"copy","inline_blocks":0,
             "source_sha256":{"index.html":sha256_file(source_index),"generate.js":sha256_file(source_generate)},
-            "protected_sha256":{}}
+            "protected_sha256":{},
+            "frontend_modules":{"mode":"copy","source_sha256":{},"protected_sha256":{}}}
+    for filename in FRONTEND_MODULES:
+        report["frontend_modules"]["source_sha256"][filename]=sha256_file(source_modules/filename)
     ob=None if skip else find_obfuscator(root)
     if ob is None:
         if not skip: raise RuntimeError("javascript-obfuscator is required. Run npm install --no-save javascript-obfuscator@4.1.1")
         shutil.copy2(source_index,out_index); shutil.copy2(source_generate,out_generate)
+        for filename in FRONTEND_MODULES:
+            shutil.copy2(source_modules/filename,out_modules/filename)
     else:
         html=source_index.read_text(encoding="utf-8-sig")
         pat=re.compile(r"(?is)(<script([^>]*)>)(.*?)(</script>)")
@@ -381,13 +397,23 @@ def protect_javascript(root: Path, work: Path, skip: bool) -> tuple[Path,Path,di
             cursor=m.end()
         pieces.append(html[cursor:]); out_index.write_text("".join(pieces),encoding="utf-8")
         run([str(ob)]+obfuscate_args(source_generate,out_generate,True),cwd=root,timeout=300)
+        for filename in FRONTEND_MODULES:
+            run(
+                [str(ob)]+obfuscate_args(source_modules/filename,out_modules/filename,False),
+                cwd=root,
+                timeout=300,
+            )
         report.update(mode="javascript-obfuscator-conservative",inline_blocks=block)
+        report["frontend_modules"]["mode"]="javascript-obfuscator-conservative"
     run(["node","--check",str(out_generate)])
+    for filename in FRONTEND_MODULES:
+        run(["node","--check",str(out_modules/filename)])
+        report["frontend_modules"]["protected_sha256"][filename]=sha256_file(out_modules/filename)
     for i,body in enumerate(re.findall(r"(?is)<script(?:\s[^>]*)?>(.*?)</script>",out_index.read_text(encoding="utf-8"))):
         if not body.strip(): continue
         p=work/f"protected_inline_{i}.js"; p.write_text(body,encoding="utf-8"); run(["node","--check",str(p)])
     report["protected_sha256"]={"index.html":sha256_file(out_index),"generate.js":sha256_file(out_generate)}
-    return out_index,out_generate,report
+    return out_index,out_generate,out_modules,report
 
 
 def _seal_native_text(value: str, seed: str) -> str:
@@ -588,7 +614,8 @@ def bundle_node_runtime_dependency(source: Path, package: Path) -> None:
 
 
 def build_package(source: Path,work: Path,out_dir: Path,target: str,dist: Path,nuitka_report: Path,
-                  protected_index: Path,protected_generate: Path,protection: dict) -> tuple[Path,Path]:
+                  protected_index: Path,protected_generate: Path,protected_modules: Path,
+                  protection: dict) -> tuple[Path,Path]:
     if target != RELEASE_TARGET:
         raise RuntimeError("v24.6.243 protected packaging is Windows-x64-only.")
     package=work/"package"/"cv_formatter"; native=package/"runtime"/"native"
@@ -598,6 +625,9 @@ def build_package(source: Path,work: Path,out_dir: Path,target: str,dist: Path,n
         if name=="index.html": shutil.copy2(protected_index,dst)
         elif name=="generate.js": shutil.copy2(protected_generate,dst)
         else: copy_item(src,dst)
+    packaged_modules=native/"vendor"/"cvstudio"
+    shutil.rmtree(packaged_modules)
+    shutil.copytree(protected_modules,packaged_modules)
     for name in ROOT_FILES: copy_item(source/name,package/name)
     bundle_node_runtime_dependency(source, package)
     patch_launchers(package,target)
@@ -842,7 +872,13 @@ def smoke_test(package: Path,source: Path,output: Path,target: str,timeout_secon
             if runtime_tail: detail += "\nRuntime log tail:\n"+runtime_tail
             if timing_tail: detail += "\nStartup timing tail:\n"+timing_tail
             raise RuntimeError(detail)
-        for url in (base_url+"/ping",base_url+"/status",base_url+"/",base_url+"/vendor/jspdf.umd.min.js?v=qa"):
+        for url in (
+            base_url+"/ping",
+            base_url+"/status",
+            base_url+"/",
+            base_url+"/vendor/jspdf.umd.min.js?v=qa",
+            *(base_url+"/vendor/cvstudio/"+filename+"?v=qa" for filename in FRONTEND_MODULES),
+        ):
             with urllib.request.urlopen(url,timeout=15) as r:
                 body=r.read()
                 is_ping=url.endswith("/ping")
@@ -1019,8 +1055,8 @@ def main() -> int:
     validate_target_host(target); validate_source(source); preflight_source(source,target)
     try:
         with tempfile.TemporaryDirectory(prefix="cvstudio-protected-build-") as td:
-            work=Path(td); pi,pg,protection=protect_javascript(source,work,args.skip_obfuscation); native_source,native_prompt_report=prepare_native_source(source,work); protection["native_prompt_protection"]=native_prompt_report; dist,report=compile_native(source,work,target,native_source)
-            artifact,package=build_package(source,work,output,target,dist,report,pi,pg,protection)
+            work=Path(td); pi,pg,pm,protection=protect_javascript(source,work,args.skip_obfuscation); native_source,native_prompt_report=prepare_native_source(source,work); protection["native_prompt_protection"]=native_prompt_report; dist,report=compile_native(source,work,target,native_source)
+            artifact,package=build_package(source,work,output,target,dist,report,pi,pg,pm,protection)
             try: smoke={"ok":None,"skipped":True} if args.skip_smoke else smoke_test(package,source,output,target,args.smoke_timeout)
             except Exception: artifact.unlink(missing_ok=True); raise
             smoke_path=output/f"cv_studio_{VERSION_SLUG}_{target}_protected_smoke.json"; smoke_path.write_text(json.dumps(smoke,indent=2),encoding="utf-8")
