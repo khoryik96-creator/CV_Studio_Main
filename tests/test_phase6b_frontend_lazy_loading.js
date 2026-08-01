@@ -23,6 +23,7 @@ function sourceContract() {
     const next = html.indexOf('\nfunction ', start + 10);
     const source = html.slice(start, next < 0 ? html.length : next);
     assert.ok(start >= 0, 'missing global PDF entry point ' + name);
+    assert.ok(source.includes('if (!(window.jspdf && window.jspdf.jsPDF)) {'), name + ' accepts a partial jsPDF namespace');
     assert.ok(source.includes('window.cvStudioLoadJSPDF(' + name), name + ' does not wait at its existing entry point');
     assert.ok(source.includes(message), name + ' changed its established visible error');
   });
@@ -64,22 +65,35 @@ function loaderContract() {
   assert.strictEqual(calls[calls.length - 1], 'ready', 'ready subsequent entry must remain synchronous');
 
   delete window.jspdf;
-  window.cvStudioLoadJSPDF(() => calls.push('retry-success'), () => calls.push('visible-failure'));
+  window.cvStudioLoadJSPDF(() => calls.push('partial-ready'), () => calls.push('partial-failure'));
   assert.strictEqual(appended.length, 2);
-  appended[1].onerror();
-  assert.strictEqual(calls[calls.length - 1], 'visible-failure');
-  assert.strictEqual(removed.length, 1, 'failed partial script must be removed');
-  window.cvStudioLoadJSPDF(() => calls.push('retry-success'), () => calls.push('retry-failure'));
-  assert.strictEqual(appended.length, 3, 'failure state must be cleared for a safe retry');
-  window.jspdf = {jsPDF: function FakePDF() {}};
+  window.jspdf = {};
+  appended[1].onload();
+  assert.strictEqual(calls[calls.length - 1], 'partial-failure', 'an incomplete namespace must fail visibly');
+  assert.strictEqual(removed.length, 1, 'an incomplete script must be removed');
+  window.cvStudioLoadJSPDF(() => calls.push('partial-retry-success'), () => calls.push('partial-retry-failure'));
+  assert.strictEqual(appended.length, 3, 'a retained partial namespace must not block retry');
+  window.jspdf.jsPDF = function FakePDF() {};
   appended[2].onload();
+  assert.strictEqual(calls[calls.length - 1], 'partial-retry-success');
+
+  delete window.jspdf;
+  window.cvStudioLoadJSPDF(() => calls.push('retry-success'), () => calls.push('visible-failure'));
+  assert.strictEqual(appended.length, 4);
+  appended[3].onerror();
+  assert.strictEqual(calls[calls.length - 1], 'visible-failure');
+  assert.strictEqual(removed.length, 2, 'failed partial script must be removed');
+  window.cvStudioLoadJSPDF(() => calls.push('retry-success'), () => calls.push('retry-failure'));
+  assert.strictEqual(appended.length, 5, 'failure state must be cleared for a safe retry');
+  window.jspdf = {jsPDF: function FakePDF() {}};
+  appended[4].onload();
   assert.strictEqual(calls[calls.length - 1], 'retry-success');
 
   delete window.jspdf;
   window.cvStudioLoadJSPDF(() => { throw new Error('first callback failed'); }, () => calls.push('unexpected-failure'));
   window.cvStudioLoadJSPDF(() => calls.push('after-throw'), () => calls.push('unexpected-failure'));
   window.jspdf = {jsPDF: function FakePDF() {}};
-  appended[3].onload();
+  appended[5].onload();
   assert.strictEqual(calls[calls.length - 1], 'after-throw', 'one export failure must not strand another concurrent entry');
   assert.strictEqual(deferredErrors.length, 1);
 }

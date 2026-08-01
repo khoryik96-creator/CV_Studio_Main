@@ -5457,7 +5457,7 @@ function exportAnonJDDoc() {
 function exportAnonJDPDF() {
   var j = window._lastAnonJD;
   if (!j) { showToast('Generate Blind JD first', 'err'); return; }
-  if (!window.jspdf) {
+  if (!(window.jspdf && window.jspdf.jsPDF)) {
     if (window.cvStudioLoadJSPDF) window.cvStudioLoadJSPDF(exportAnonJDPDF, function() { showToast('PDF library not loaded — try Word export instead', 'err'); });
     else showToast('PDF library not loaded — try Word export instead', 'err');
     return;
@@ -5583,7 +5583,7 @@ function exportCompanyDoc() {
 function exportCompanyPDF() {
   var p = window._lastCompanyProfile;
   if (!p) { showToast('Generate a profile first', 'err'); return; }
-  if (!window.jspdf) {
+  if (!(window.jspdf && window.jspdf.jsPDF)) {
     if (window.cvStudioLoadJSPDF) window.cvStudioLoadJSPDF(exportCompanyPDF, function() { showToast('PDF library not loaded — try Word export instead', 'err'); });
     else showToast('PDF library not loaded — try Word export instead', 'err');
     return;
@@ -7197,7 +7197,7 @@ function exportAppraiserWord() {
 }
 function exportAppraiserPDF() {
   if (!_appraiserResult && !_appraiserRawReport) { showToast('Run CV Scoring first', 'err'); return; }
-  if (!window.jspdf) {
+  if (!(window.jspdf && window.jspdf.jsPDF)) {
     if (window.cvStudioLoadJSPDF) window.cvStudioLoadJSPDF(exportAppraiserPDF, function() { showToast('PDF library not loaded — try Word export instead', 'err'); });
     else showToast('PDF library not loaded — try Word export instead', 'err');
     return;
@@ -8045,7 +8045,7 @@ function exportTheOwlWord() {
 function exportTheOwlPDF() {
   var text = (window._theOwlPlainText || ((document.getElementById('theOwlBody') || {}).innerText || '')).trim();
   if (!text) { showToast('Generate The Owl map first', 'err'); return; }
-  if (!window.jspdf) {
+  if (!(window.jspdf && window.jspdf.jsPDF)) {
     if (window.cvStudioLoadJSPDF) window.cvStudioLoadJSPDF(exportTheOwlPDF, function() { showToast('PDF library not loaded - try Word export instead', 'err'); });
     else showToast('PDF library not loaded - try Word export instead', 'err');
     return;

@@ -15,15 +15,15 @@
 - Phase 5A baseline Git commit: `4b366ddde1cf0a398706b52d55b0e82ed2dbc27c`
 - Phase 5B source baseline: v24.6.234
 - Phase 5B baseline Git commit: `327858799f17d880e37c740f71dfe321ea7bde0a`
-- Working branch: Codex Cloud internal `work` branch from selected `master`
+- Working branch: `agent/v24.6.244-phase-6b-lazy-loading`
 - Active phase: Phase 6B — behavior-preserving frontend lazy loading
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: four findings from the single independent review of v24.6.242 are
   corrected without broadening the pre-Phase-6 JobAdder milestone; macOS
   remains on v24.6.239
-- Current stop: after the tested Phase 6B cloud commit; before controller PR
-  creation, GitHub Windows-x64 CI, merge, Local handoff, release finalization,
-  protected packaging, Phase 6C or Phase 7
+- Current stop: at draft PR #5 after its single independent-review correction;
+  GitHub Windows-x64 CI is the authoritative post-push gate. Stop before merge,
+  release finalization, protected packaging, Phase 6C or Phase 7.
 
 ## Phase 6B authorization, inventory and bounded implementation
 
@@ -99,6 +99,13 @@
   Only the affected Phase 6B fixture, loader syntax and whitespace check were
   rerun, and all passed. GitHub Windows-x64 CI remains the platform gate after
   the controller creates the draft pull request.
+- The single independent review of draft PR #5 then found one concrete retry
+  mismatch: all four export guards accepted a partial `window.jspdf` namespace
+  even though the loader requires `window.jspdf.jsPDF`. The guards now use the
+  loader's exact readiness predicate. Focused coverage retains a partial
+  namespace after an incomplete load and proves that the next attempt reloads
+  and succeeds. The Phase 6B fixture, affected JavaScript syntax and whitespace
+  checks passed after this bounded correction; no broader review loop ran.
 
 ## Phase 6A authorization, entry verification and bounded plan
 
