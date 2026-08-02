@@ -83,6 +83,12 @@
   reaches token refresh and the `JobAdderClient` transport through injected
   callbacks. It is the lowest-risk JobAdder slice; token lifecycle and candidate
   writes follow.
+- v24.6.253 is the active Phase 7B-5c extraction: the JSON candidate-write
+  endpoints (`create_candidate`, `update_candidate`) move into a composed
+  `cvstudio_jobadder_write` service, keeping the `_ja_critical_write_route`
+  guard and non-retryable semantics on the delegating routes. The candidate
+  uploads (multipart) and the OAuth token lifecycle (the most coupled slice,
+  already covered by the Phase 3 sign-out tests) remain for later increments.
 - Phases 1, 2A, 2B, 3, 4, 5A, 5B, 6A–6C and 7A are complete.
 - Phase 7B (one-domain-at-a-time extraction) is active: startup, runtime
   liveness, static web assets and the AI secret store are extracted; JobAdder is
