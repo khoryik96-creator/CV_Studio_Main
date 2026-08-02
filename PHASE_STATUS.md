@@ -3,7 +3,7 @@
 ## Release state
 
 - Approved baseline: v24.6.217
-- Corrective release candidate: v24.6.245 (Windows x64 owner/source only)
+- Corrective release candidate: v24.6.246 (Windows and native macOS validation candidate)
 - Completed release: v24.6.243 (Windows x64 only)
 - Phase 2B source baseline: v24.6.219
 - Phase 2B baseline Git commit: `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`
@@ -15,15 +15,27 @@
 - Phase 5A baseline Git commit: `4b366ddde1cf0a398706b52d55b0e82ed2dbc27c`
 - Phase 5B source baseline: v24.6.234
 - Phase 5B baseline Git commit: `327858799f17d880e37c740f71dfe321ea7bde0a`
-- Working branch candidate: `agent/v24.6.245-long-cv-access-corrective`
-- Active work: post-Phase-6 long-CV output and feature-access corrective
+- Working branch candidate: `agent/v24.6.246-macos-antiword-tesseract-mandatory`
+- Active work: mandatory macOS Antiword and cross-platform Tesseract corrective
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
-- Status: four findings from the single independent review of v24.6.242 are
-  corrected without broadening the pre-Phase-6 JobAdder milestone; macOS
-  remains on v24.6.239
-- Current stop: after correcting the draft PR and its CI; a new commit-bound
-  source artifact is still required. Stop before merge, protected colleague
-  packaging, Phase 7 or unrelated work.
+- Status: v24.6.246 dependency implementation and native validation in progress;
+  the installed completed release remains v24.6.243.
+- Current stop: after native Windows, Intel macOS and Apple Silicon macOS CI.
+  Stop before release, merge, Phase 7 or unrelated work.
+
+## v24.6.246 mandatory macOS Antiword and Tesseract
+
+- Exact base is corrected v24.6.245 PR head
+  `4710236e08775609462e8b04ca2213c13a61938b`.
+- Official R-universe Antiword 1.3.5 Intel and arm64 artifacts are pinned to
+  upstream commit `51441d45283512081c08010835b8002af79fe5e6`, bundled separately,
+  complete-manifest verified and executed from a private immutable snapshot.
+- Windows and macOS installers now fail closed unless Tesseract executes and
+  reports English language data. macOS installs it through Homebrew when
+  available; otherwise setup stops with explicit repair instructions.
+- GitHub CI and protected builds cover native Windows x64, macOS Intel and
+  macOS Apple Silicon. No release or macOS support claim exists until both Mac
+  jobs pass functional fixture and protected smoke validation.
 
 ## v24.6.245 long-CV output and access corrective
 

@@ -28,8 +28,8 @@ import zipfile
 import zlib
 from pathlib import Path
 
-VERSION = "v24.6.245"
-VERSION_SLUG = "v24_6_245"
+VERSION = "v24.6.246"
+VERSION_SLUG = "v24_6_246"
 PRODUCT = "TheGuoLab-CVStudio"
 RECEIPT_SCHEMA = 2
 TOTP_MASK = bytes([147,57,36,83,116,245,122,57,165,162,176,168,249,50,204,128,45,174,232,56])
@@ -38,7 +38,7 @@ ADM_ZIP_VERSION = "0.5.17"
 # Aggregate hash of the vetted unpacked adm-zip 0.5.17 file tree. This catches
 # a replaced/repacked dependency even when package.json still claims 0.5.17.
 ADM_ZIP_TREE_SHA256 = "a2919d0a2172129642be0d128b2725cfaf9c7ab3652f51cc85964cb34d618dea"
-RELEASE_TARGET = "windows-x64"
+RELEASE_TARGETS = ("windows-x64", "macos-intel", "macos-arm64")
 
 RUNTIME_ASSETS = ("index.html","generate.js","template.docx","cv_studio_logo.png","cv_studio.ico","vendor")
 FRONTEND_MODULES = (
@@ -96,24 +96,18 @@ def sha256_tree(root: Path) -> str:
 def detect_target(value: str) -> str:
     if value != "auto": return value
     system=platform.system().lower(); machine=platform.machine().lower()
-    if system=="windows" and machine in {"amd64","x86_64"}: return RELEASE_TARGET
-    raise RuntimeError(
-        "CV Studio v24.6.245 is a Windows-x64-only release. "
-        "macOS users must remain on the verified v24.6.239 release."
-    )
+    if system=="windows" and machine in {"amd64","x86_64"}: return "windows-x64"
+    if system=="darwin" and machine in {"arm64","aarch64"}: return "macos-arm64"
+    if system=="darwin" and machine in {"amd64","x86_64"}: return "macos-intel"
+    raise RuntimeError("CV Studio protected builds require native Windows x64, Intel macOS, or Apple Silicon macOS.")
 
 
 def validate_target_host(target: str) -> None:
     system=platform.system().lower(); machine=platform.machine().lower()
-    if target != RELEASE_TARGET:
-        raise RuntimeError(
-            "CV Studio v24.6.245 may produce only a Windows-x64 artifact."
-        )
-    if system!="windows" or machine not in {"amd64","x86_64"}:
-        raise RuntimeError(
-            "CV Studio v24.6.245 Windows-x64 packages must be built on "
-            "native Windows x64."
-        )
+    if target not in RELEASE_TARGETS: raise RuntimeError("Unsupported protected target: "+target)
+    if target=="windows-x64" and (system!="windows" or machine not in {"amd64","x86_64"}): raise RuntimeError("Windows x64 packages require native Windows x64.")
+    if target=="macos-intel" and (system!="darwin" or machine not in {"amd64","x86_64"}): raise RuntimeError("Intel macOS packages require a native Intel Mac runner.")
+    if target=="macos-arm64" and (system!="darwin" or machine not in {"arm64","aarch64"}): raise RuntimeError("Apple Silicon packages require a native arm64 Mac runner.")
 
 
 
@@ -185,7 +179,7 @@ def validate_repository_dependency_state(root: Path) -> None:
             raise RuntimeError(f"POSIX script is not LF-only: {rel}. Run repo_consistency.py --repair.")
 
 def validate_source(root: Path) -> None:
-    required=("app.py","cvstudio_ai_costs.py","cvstudio_antiword.py","cvstudio_clients.py","cvstudio_storage.py","cvstudio_storage_bridge.py","cvstudio_diagnostics.py","cvstudio_document_safety.py","cvstudio_jobs.py","index.html","generate.js","template.docx","package.json","requirements.txt","merge_title_cache.py") + tuple(
+    required=("app.py","cvstudio_ai_costs.py","cvstudio_antiword.py","cvstudio_tesseract.py","cvstudio_clients.py","cvstudio_storage.py","cvstudio_storage_bridge.py","cvstudio_diagnostics.py","cvstudio_document_safety.py","cvstudio_jobs.py","index.html","generate.js","template.docx","package.json","requirements.txt","merge_title_cache.py") + tuple(
         "vendor/cvstudio/" + filename for filename in FRONTEND_MODULES
     )
     missing=[x for x in required if not (root/x).exists()]
@@ -283,6 +277,19 @@ def validate_antiword_runtime(
     return health
 
 
+def validate_tesseract_runtime(root: Path) -> dict:
+    module_path = root / "cvstudio_tesseract.py"
+    spec = importlib.util.spec_from_file_location("cvstudio_tesseract_build_validation", module_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("Mandatory Tesseract verifier could not be loaded.")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    health = module.tesseract_health(root)
+    if not (health.get("available") and health.get("functional") and health.get("english_language_data")):
+        raise RuntimeError("Mandatory Tesseract preflight failed: " + str(health.get("reason") or "unavailable"))
+    return health
+
+
 def vetted_adm_zip_dir(root: Path) -> Path:
     return root / "owner_build_tools" / "vetted_node" / "adm-zip"
 
@@ -315,7 +322,7 @@ def validate_vetted_adm_zip(root: Path) -> Path:
 
 
 def preflight_source(root: Path, target: str | None = None) -> None:
-    run([sys.executable,"-m","py_compile",str(root/"app.py"),str(root/"cvstudio_ai_costs.py"),str(root/"cvstudio_antiword.py"),str(root/"cvstudio_clients.py"),str(root/"cvstudio_storage.py"),str(root/"cvstudio_storage_bridge.py"),str(root/"cvstudio_diagnostics.py"),str(root/"cvstudio_document_safety.py"),str(root/"cvstudio_jobs.py"),str(root/"merge_title_cache.py")])
+    run([sys.executable,"-m","py_compile",str(root/"app.py"),str(root/"cvstudio_ai_costs.py"),str(root/"cvstudio_antiword.py"),str(root/"cvstudio_tesseract.py"),str(root/"cvstudio_clients.py"),str(root/"cvstudio_storage.py"),str(root/"cvstudio_storage_bridge.py"),str(root/"cvstudio_diagnostics.py"),str(root/"cvstudio_document_safety.py"),str(root/"cvstudio_jobs.py"),str(root/"merge_title_cache.py")])
     run(["node","--check",str(root/"generate.js")])
     for filename in FRONTEND_MODULES:
         run(["node","--check",str(root/"vendor"/"cvstudio"/filename)])
@@ -330,6 +337,12 @@ def preflight_source(root: Path, target: str | None = None) -> None:
             if health.get("test_only")
             else ""
         )
+    )
+    tesseract = validate_tesseract_runtime(root)
+    print(
+        "Tesseract preflight: "
+        f"{tesseract.get('version')} functional={tesseract.get('functional')} "
+        f"english={tesseract.get('english_language_data')}"
     )
     # The owner/source installation still needs a working local module for
     # direct source-mode DOCX generation and for the owner's own testing. Only
@@ -489,8 +502,6 @@ def prepare_native_source(root: Path, work: Path) -> tuple[Path,dict]:
 
 
 def compile_native(root: Path, work: Path, target: str, source_entry: Path | None = None) -> tuple[Path,Path]:
-    if target != RELEASE_TARGET:
-        raise RuntimeError("v24.6.245 native compilation is Windows-x64-only.")
     out=work/"nuitka-output"; out.mkdir()
     report=work/f"nuitka-{target}-report.xml"
     cmd=[sys.executable,"-m","nuitka","--mode=standalone","--assume-yes-for-downloads",
@@ -514,6 +525,9 @@ def compile_native(root: Path, work: Path, target: str, source_entry: Path | Non
     dist=dist_dirs[0]
     exe=next((p for p in sorted(dist.iterdir(),key=lambda p:len(p.name)) if p.is_file() and p.name.lower().startswith("cvstudio")),None)
     if exe is None: raise RuntimeError("Compiled CVStudio executable missing.")
+    if target.startswith("macos-"):
+        run(["codesign","--force","--deep","--sign","-","--timestamp=none",str(exe)],timeout=300)
+        run(["codesign","--verify","--deep","--strict",str(exe)],timeout=120)
     return dist,report
 
 
@@ -557,8 +571,6 @@ os.execv(B,A)
 
 def patch_launchers(root: Path,target: str) -> None:
     """Validate platform launchers; source files are already cross-platform aware."""
-    if target != RELEASE_TARGET:
-        raise RuntimeError("v24.6.245 launcher packaging is Windows-x64-only.")
     if target=="windows-x64":
         for rel in ("START_HIDDEN.vbs", "WATCHDOG.vbs"):
             raw=(root/rel).read_bytes()
@@ -581,14 +593,29 @@ def patch_launchers(root: Path,target: str) -> None:
         restore_bat=(root/"RESTORE_PREVIOUS.bat").read_text(encoding="utf-8-sig")
         if "update_state.json" not in restore_ps or "install_receipt.before_restore" not in restore_ps or "CV Studio.lnk" not in restore_ps or "RESTORE_PREVIOUS.ps1" not in restore_bat:
             raise RuntimeError("Windows transactional rollback launcher is missing or incomplete.")
+    elif target.startswith("macos-"):
+        start=(root/"start.sh").read_text(encoding="utf-8-sig")
+        install=(root/"install.sh").read_text(encoding="utf-8-sig")
+        restore=(root/"restore_previous.sh").read_text(encoding="utf-8-sig")
+        if "--connect-timeout 2 --max-time 4" not in start or "/instance-id" not in start:
+            raise RuntimeError("macOS launcher lacks bounded package identity checks.")
+        if "Protected native backend detected" not in install or "install-receipt-v1" not in install or "Verifying mandatory Antiword" not in install:
+            raise RuntimeError("macOS installer lacks native receipt or mandatory dependency checks.")
+        if "update_state.json" not in restore or "install_receipt.before_restore" not in restore or "CV Studio.command" not in restore:
+            raise RuntimeError("macOS transactional rollback launcher is missing or incomplete.")
 
 
 def prune_target_incompatible_launchers(root: Path, target: str) -> None:
     """Do not ship launchers for an operating system the artifact cannot run on."""
-    if target != RELEASE_TARGET:
-        raise RuntimeError("v24.6.245 artifact pruning is Windows-x64-only.")
     if target == "windows-x64":
         remove = ("install.sh", "start.sh", "restore_previous.sh")
+    elif target.startswith("macos-"):
+        remove = (
+            "CV Studio.bat", "INSTALL.bat", "INSTALL_CORE.bat", "INSTALL_CORE.ps1",
+            "INSTALL_RECEIPT.ps1", "START_HIDDEN.vbs", "STOP.bat", "STOP_CORE.ps1",
+            "WATCHDOG.vbs", "INSTANCE_PORT.ps1", "RESTORE_PREVIOUS.bat",
+            "RESTORE_PREVIOUS.ps1", "cv_studio.ico",
+        )
     else:
         remove = ()
     for name in remove:
@@ -617,8 +644,6 @@ def bundle_node_runtime_dependency(source: Path, package: Path) -> None:
 def build_package(source: Path,work: Path,out_dir: Path,target: str,dist: Path,nuitka_report: Path,
                   protected_index: Path,protected_generate: Path,protected_modules: Path,
                   protection: dict) -> tuple[Path,Path]:
-    if target != RELEASE_TARGET:
-        raise RuntimeError("v24.6.245 protected packaging is Windows-x64-only.")
     package=work/"package"/"cv_formatter"; native=package/"runtime"/"native"
     shutil.copytree(dist,native)
     for name in RUNTIME_ASSETS:
@@ -803,8 +828,6 @@ def protected_smoke_environment(state_root: Path) -> dict[str,str]:
 
 
 def smoke_test(package: Path,source: Path,output: Path,target: str,timeout_seconds: int = 240) -> dict:
-    if target != RELEASE_TARGET:
-        raise RuntimeError("v24.6.245 protected smoke testing is Windows-x64-only.")
     production_port_occupied=_loopback_port_is_occupied(5000)
     smoke_port=_choose_smoke_port()
     base_url=f"http://127.0.0.1:{smoke_port}"
@@ -903,6 +926,17 @@ def smoke_test(package: Path,source: Path,output: Path,target: str,timeout_secon
             diagnostics=json.loads(r.read().decode("utf-8"))
             dependencies=diagnostics.get("dependencies") or {}
             dependency=dependencies.get("antiword_health") or {}
+            tesseract_dependency=dependencies.get("tesseract_health") or {}
+            if not (
+                dependencies.get("tesseract")
+                and tesseract_dependency.get("available")
+                and tesseract_dependency.get("functional")
+                and tesseract_dependency.get("english_language_data")
+            ):
+                raise RuntimeError(
+                    "Compiled package Tesseract diagnostics failed: "
+                    + str(tesseract_dependency.get("reason") or "missing health evidence")
+                )
             if target=="linux-x64-test":
                 if (
                     dependencies.get("antiword")
@@ -940,6 +974,9 @@ def smoke_test(package: Path,source: Path,output: Path,target: str,timeout_secon
                     "antiword_source":"bundled",
                     "antiword_runtime_root_verified":True,
                     "antiword_trusted":True,
+                    "tesseract_version":tesseract_dependency.get("version"),
+                    "tesseract_functional":True,
+                    "tesseract_english_language_data":True,
                     "antiword_functional":True,
                 })
         if target!="linux-x64-test":
@@ -1048,7 +1085,7 @@ def smoke_test(package: Path,source: Path,output: Path,target: str,timeout_secon
 
 def main() -> int:
     ap=argparse.ArgumentParser(); ap.add_argument("--source-root",default=str(Path(__file__).resolve().parents[1])); ap.add_argument("--output-dir",default="protected-output")
-    ap.add_argument("--target",choices=("auto","windows-x64"),default="auto")
+    ap.add_argument("--target",choices=("auto","windows-x64","macos-intel","macos-arm64"),default="auto")
     ap.add_argument("--smoke-timeout",type=int,default=240,help="Seconds to wait for the compiled server during native smoke testing.")
     ap.add_argument("--skip-obfuscation",action="store_true"); ap.add_argument("--skip-smoke",action="store_true"); args=ap.parse_args()
     source=Path(args.source_root).resolve(); output=Path(args.output_dir).resolve(); target=detect_target(args.target)

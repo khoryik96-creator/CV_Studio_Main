@@ -35,18 +35,16 @@ owner_build_tools\BUILD_PROTECTED_WINDOWS.bat
 
 The artifact is written to `protected-output`.
 
-## v24.6.243 platform boundary
+## v24.6.246 candidate platform boundary
 
-v24.6.243 is Windows-x64-only. The private GitHub Actions workflow builds and
-smoke-tests only Windows x64, and the protected builder rejects macOS targets.
-Do not run the historical Mac builder for this version and do not create or
-claim a v24.6.243 macOS artifact.
+The private GitHub Actions workflow builds and smoke-tests Windows x64, Intel
+macOS and Apple Silicon macOS on matching native runners. Every target must
+prove mandatory Tesseract with English data and its matching pinned Antiword
+runtime. A failed architecture job blocks a release claim for that platform.
 
-Intel and Apple Silicon native validation is deferred to a separately
-authorized milestone. macOS users remain on the last verified release,
-v24.6.239. The v24.6.239 macOS installer, launcher and rollback files remain
-byte-identical in the source tree as future-work inputs; they are excluded
-from the Windows colleague artifact.
+The completed v24.6.243 release remains Windows-x64-only. The v24.6.246 work is
+a candidate until all three protected jobs succeed and the owner separately
+authorizes release finalization.
 
 Only repository users with access can download workflow artifacts. Keep the repository private and never invite colleagues who should not receive source access. The included `.gitignore` excludes `OWNER_ONLY_AUTHY_SETUP/`, build output, dependencies and runtime logs because the QR/manual setup files are not needed by CI.
 
@@ -60,11 +58,12 @@ Only repository users with access can download workflow artifacts. Keep the repo
 
 The private-source ZIP remains the only patch base. Never patch from a colleague package.
 
-## Deferred macOS signing work
+## macOS signing boundary
 
-Ad-hoc signing, Gatekeeper/MDM behavior, Apple Developer ID signing and
-notarisation require separate Intel and Apple Silicon native validation. None
-is claimed for v24.6.243.
+Candidate executables receive ad-hoc signing and are checked on matching native
+Intel and Apple Silicon runners. Apple Developer ID signing, notarisation and
+organization-specific Gatekeeper/MDM behavior remain outside this candidate and
+must not be claimed.
 
 ## Authy limitation
 
@@ -102,7 +101,7 @@ The Windows binary is compiled with no-console mode. Normal launch uses `CV Stud
 
 - The builder seals the two largest proprietary prompt constants in a temporary native compile source. The readable owner source remains the future patch base.
 - The exact adm-zip 0.5.17 runtime folder is bundled and checked against a pinned aggregate SHA-256 tree hash. Native smoke tests deliberately remove `NODE_PATH` so they cannot borrow owner dependencies.
-- Platform artifacts contain only their own platform launchers. For v24.6.243, only the Windows-x64 artifact is authorized. The owner-only title-cache merge utility is not included in colleague packages.
+- Platform artifacts contain only their own platform launchers. The owner-only title-cache merge utility is not included in colleague packages.
 - Launch and smoke validation require the exact version, package root and instance identity, not only a healthy `/ping` response.
 - Colleague packages keep JobAdder, OneNote, Outlook and AI credentials in native/backend protected storage rather than browser localStorage.
 - JobAdder reconnect can reuse a securely stored Client Secret only for the exact same Client ID. The frontend sees only whether a matching secret is configured and never receives the secret value.
@@ -113,9 +112,10 @@ The Windows binary is compiled with no-console mode. Normal launch uses `CV Stud
 ### Remaining platform reality
 
 Final Windows no-console, DPAPI, VBScript and PowerShell behavior must be
-checked on Windows. Apple Silicon/Intel binaries, Keychain, LaunchAgent,
-Gatekeeper and signing remain explicitly deferred until they can be checked
-on their matching Macs. Native compilation and prompt sealing materially
+checked on Windows. Apple Silicon/Intel binaries, Keychain, LaunchAgent and
+ad-hoc signing must be checked on their matching native GitHub runners;
+Developer ID notarisation and organization-specific Gatekeeper/MDM behavior
+remain outside the candidate. Native compilation and prompt sealing materially
 raise copying effort, but browser JavaScript and offline verifier material
 remain reversible to a determined specialist.
 

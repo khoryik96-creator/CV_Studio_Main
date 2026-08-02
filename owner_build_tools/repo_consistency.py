@@ -61,13 +61,15 @@ ANTIWORD_REQUIRED_HASHES = {
         "f430cdfe9446c4b943074d4bf804232761c284f2caa3d4125006b158d8b14af8",
     "vendor/antiword/windows-x64/SHA256SUMS":
         "7d365a89f268a2fc34f815b369474124bc6a1aac02e9b0b57e6dfd5eb5368da0",
+    "vendor/antiword/packages/antiword_1.3.5_macos_x86_64_r46.tgz":
+        "0416f1389dc01398cb820ec014e976a5c2198bb103a725f290efce1598f0fced",
+    "vendor/antiword/packages/antiword_1.3.5_macos_arm64_r46.tgz":
+        "1536939cca2c1b9cfcab7721c8982933bf8093eda0460f0e38055e7c826eae9a",
+    "vendor/antiword/macos-intel/SHA256SUMS":
+        "7e403a00b2acd1186c714bc55fe382f2b8a03fb5c430edd16e4d447e3f9f4ee8",
+    "vendor/antiword/macos-arm64/SHA256SUMS":
+        "6c59492af62df5d342c16b3126e588a4bbe855f3ba37f1f9120dc3e5352f6ce3",
 }
-DEFERRED_ANTIWORD_PATHS = (
-    "vendor/antiword/macos-x86_64",
-    "vendor/antiword/macos-arm64",
-    "vendor/antiword/packages/antiword_1.3.5_macos_x86_64_r46.tgz",
-    "vendor/antiword/packages/antiword_1.3.5_macos_arm64_r46.tgz",
-)
 
 
 def _write_text_if_changed(path: Path, text: str, *, newline: str = "\n") -> bool:
@@ -266,14 +268,10 @@ def verify(root: Path) -> dict:
             errors.append(
                 f"mandatory pinned Antiword artifact hash mismatch: {relative}"
             )
-    for relative in DEFERRED_ANTIWORD_PATHS:
-        if (root / relative).exists():
-            errors.append(
-                "deferred macOS Antiword payload must not ship in v24.6.245: "
-                + relative
-            )
     if not (root / "cvstudio_antiword.py").is_file():
         errors.append("mandatory Antiword runtime verifier is missing: cvstudio_antiword.py")
+    if not (root / "cvstudio_tesseract.py").is_file():
+        errors.append("mandatory Tesseract runtime verifier is missing: cvstudio_tesseract.py")
 
     attrs = root / ".gitattributes"
     attr_lines = attrs.read_text(encoding="utf-8-sig").splitlines() if attrs.exists() else []
@@ -358,7 +356,7 @@ def verify(root: Path) -> dict:
         "posix_script_line_endings": "UTF-8 no-BOM, LF",
         "powershell_helper_encoding": "UTF-8 no-BOM",
         "vbs_launcher_encoding": "UTF-8 no-BOM, CRLF (WSH-safe)",
-        "antiword": "1.3.5 pinned Windows x64 runtime and corresponding source",
+        "antiword": "1.3.5 pinned Windows x64, macOS Intel and macOS arm64 runtimes with corresponding source",
     }
 
 
@@ -382,7 +380,7 @@ def main() -> int:
         for error in result["errors"]:
             print("ERROR:", error)
         return 1
-    print("Private repository is byte-stable and consistent: adm-zip 0.5.17, Antiword 1.3.5 Windows-x64 runtime/source, no deferred Mac payload, no lock file, exact Git bytes, no-BOM CRLF batch files, BOM-free CRLF .vbs launchers, no-BOM LF POSIX scripts, BOM-free INSTANCE_PORT.ps1/STOP_CORE.ps1/RESTORE_PREVIOUS.ps1.")
+    print("Private repository is byte-stable and consistent: adm-zip 0.5.17, Antiword 1.3.5 Windows/macOS runtimes and source, mandatory Tesseract verifier, no lock file, exact Git bytes, no-BOM CRLF batch files, BOM-free CRLF .vbs launchers, no-BOM LF POSIX scripts, BOM-free INSTANCE_PORT.ps1/STOP_CORE.ps1/RESTORE_PREVIOUS.ps1.")
     return 0
 
 

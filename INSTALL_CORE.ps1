@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Continue'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 if (-not $Root.EndsWith('\')) { $Root += '\' }
 $Log = Join-Path $Root 'install_log.txt'
-$InstallVersion = 'v24.6.245'
+$InstallVersion = 'v24.6.246'
 $AntiwordVersion = '1.3.5'
 $AntiwordRuntimeFileCount = 37
 $AntiwordManifestSha256 = '7d365a89f268a2fc34f815b369474124bc6a1aac02e9b0b57e6dfd5eb5368da0'
@@ -654,7 +654,7 @@ function Install-PythonPackages {
     }
     $stampDir = Join-Path $env:APPDATA 'GUOLabCVStudio'
     New-Item -ItemType Directory -Path $stampDir -Force | Out-Null
-    Set-Content -LiteralPath (Join-Path $stampDir '.deps_ok') -Value 'v24.6.245-bundled-pdfium-ocr-antiword' -Encoding ASCII
+    Set-Content -LiteralPath (Join-Path $stampDir '.deps_ok') -Value 'v24.6.246-bundled-pdfium-ocr-antiword' -Encoding ASCII
     Write-Step '    Python packages ready.'
     return $true
 }
@@ -1212,18 +1212,61 @@ if ($AntiwordSelfTestOnly) {
 }
 
 function Check-Tesseract {
-    Write-Step '[5/7] Checking Tesseract...'
+    Write-Step '[5/7] Installing and verifying mandatory Tesseract...'
     $pf86 = ${env:ProgramFiles(x86)}
-    $paths = @(
-        (Join-Path $Root 'tesseract\tesseract.exe'),
-        (Join-Path $env:ProgramFiles 'Tesseract-OCR\tesseract.exe'),
-        $(if ($pf86) { Join-Path $pf86 'Tesseract-OCR\tesseract.exe' }),
-        (Join-Path $env:LOCALAPPDATA 'Programs\Tesseract-OCR\tesseract.exe')
-    )
-    $tessExe = Get-FirstExistingFile $paths
-    if ($tessExe) { Add-PathFront (Split-Path -Parent $tessExe); Write-Step "    Tesseract found: $tessExe"; return $true }
-    Write-Step '    WARNING: Tesseract is optional and was not found.'
-    Write-Step '    Automatic unverified installer downloads are disabled. Install Tesseract manually for scanned-image OCR.'
+    $findTesseract = {
+        $paths = @(
+            (Get-Command tesseract.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -ErrorAction SilentlyContinue),
+            (Join-Path $Root 'tesseract\tesseract.exe'),
+            (Join-Path $env:ProgramFiles 'Tesseract-OCR\tesseract.exe'),
+            $(if ($pf86) { Join-Path $pf86 'Tesseract-OCR\tesseract.exe' }),
+            (Join-Path $env:LOCALAPPDATA 'Programs\Tesseract-OCR\tesseract.exe')
+        ) | Where-Object { $_ }
+        return Get-FirstExistingFile $paths
+    }
+    $tessExe = & $findTesseract
+    if (-not $tessExe) {
+        Write-Step '    Tesseract was not found. Installing it through the available Windows package manager...'
+        $winget = Get-Command winget.exe -ErrorAction SilentlyContinue
+        $choco = Get-Command choco.exe -ErrorAction SilentlyContinue
+        try {
+            if ($winget) {
+                & $winget.Source install --id UB-Mannheim.TesseractOCR --exact --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+                if ($LASTEXITCODE -ne 0) { throw "winget exited with code $LASTEXITCODE" }
+            } elseif ($choco) {
+                $installed = $false
+                foreach ($attempt in 1..3) {
+                    & $choco.Source install tesseract --version=5.5.0.20241111 --yes --no-progress
+                    if ($LASTEXITCODE -eq 0) { $installed = $true; break }
+                    Start-Sleep -Seconds (5 * $attempt)
+                }
+                if (-not $installed) { throw 'Chocolatey failed after three attempts.' }
+            } else {
+                throw 'Neither winget nor Chocolatey is available.'
+            }
+        } catch {
+            Write-Step "    ERROR: Automatic Tesseract installation failed: $($_.Exception.Message)"
+            Write-Step '    Install Tesseract OCR with English language data, then run INSTALL.bat again.'
+            return $false
+        }
+        $env:PATH = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User') + ';' + $env:PATH
+        $tessExe = & $findTesseract
+    }
+    if ($tessExe) {
+        try {
+            $versionOutput = (& $tessExe --version 2>&1 | Out-String)
+            $languageOutput = (& $tessExe --list-langs 2>&1 | Out-String)
+            if ($LASTEXITCODE -eq 0 -and $versionOutput -match '(?i)tesseract\s+[0-9]' -and $languageOutput -match '(?m)^eng\s*$') {
+                Add-PathFront (Split-Path -Parent $tessExe)
+                Write-Step "    Tesseract ready with English language data: $tessExe"
+                return $true
+            }
+        } catch {}
+        Write-Step "    ERROR: Tesseract was found but failed its version/English-language functional check: $tessExe"
+        return $false
+    }
+    Write-Step '    ERROR: Tesseract with English language data is mandatory and was not found.'
+    Write-Step '    Install Tesseract OCR with English language data, then run INSTALL.bat again.'
     return $false
 }
 
@@ -1317,7 +1360,7 @@ if ($ok -and -not (Check-Node)) { $ok = $false }
 if ($ok -and -not $NativeRuntime -and -not (Install-PythonPackages)) { $ok = $false }
 if ($ok -and $NativeRuntime) { Write-Step '[3/7] Python packages are bundled in the protected runtime - skipped.' }
 if ($ok -and -not (Check-Antiword)) { $ok = $false }
-if ($ok) { Check-Tesseract | Out-Null }
+if ($ok -and -not (Check-Tesseract)) { $ok = $false }
 if ($ok) { Check-PdfOcrRenderer | Out-Null }
 if ($ok -and -not (Install-NodePackages)) { $ok = $false }
 
