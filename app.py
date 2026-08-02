@@ -311,6 +311,7 @@ from cvstudio_architecture import (
     create_modular_monolith_app as _create_modular_monolith_app,
     finalize_modular_monolith_app as _finalize_modular_monolith_app,
 )
+from cvstudio_startup import StartupService
 
 _CVSTUDIO_VERSION = "v24.6.246"
 _CVSTUDIO_ROOT = _install_package_root()
@@ -2787,113 +2788,24 @@ def _reconcile_work_experience_with_authoritative_table(parsed, cv_text):
     return parsed
 
 
+_CVSTUDIO_STARTUP_SERVICE = StartupService(
+    jsonify=lambda payload: jsonify(payload),
+    root_path=lambda: _CVSTUDIO_ROOT,
+    instance_id=lambda: _CVSTUDIO_INSTANCE_ID,
+)
+
+
 @app.route("/startup/status", methods=["GET"])
 def startup_status():
-    """Check if CV Studio is in startup (cross-platform)."""
-    import platform
-    try:
-        if platform.system() == "Windows":
-            import winreg
-            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-                r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_READ)
-            try:
-                value = str(winreg.QueryValueEx(key, "GUOLabCVStudio")[0] or "")
-                winreg.CloseKey(key)
-                expected = os.path.realpath(os.path.join(_CVSTUDIO_ROOT, "START_HIDDEN.vbs"))
-                expected_command = 'wscript.exe "{}"'.format(expected)
-                configured = os.path.normcase(value.strip()) == os.path.normcase(expected_command)
-                return jsonify({"enabled": bool(configured), "configured": bool(configured), "command": value if configured else "", "instance_id": _CVSTUDIO_INSTANCE_ID})
-            except FileNotFoundError:
-                winreg.CloseKey(key)
-                return jsonify({"enabled": False, "instance_id": _CVSTUDIO_INSTANCE_ID})
-        elif platform.system() == "Darwin":
-            plist = os.path.expanduser("~/Library/LaunchAgents/com.hyppies.cvstudio.{}.plist".format(_CVSTUDIO_INSTANCE_ID))
-            if not os.path.exists(plist):
-                return jsonify({"enabled": False, "instance_id": _CVSTUDIO_INSTANCE_ID})
-            try:
-                with open(plist, "rb") as handle:
-                    data = plistlib.load(handle)
-                args = data.get("ProgramArguments") or []
-                valid = len(args) >= 2 and os.path.realpath(str(args[1])) == os.path.realpath(os.path.join(_CVSTUDIO_ROOT, "start.sh"))
-                proc = subprocess.run(["/bin/launchctl", "print", "gui/{}/com.hyppies.cvstudio.{}".format(os.getuid(), _CVSTUDIO_INSTANCE_ID)], capture_output=True, timeout=8, check=False)
-                return jsonify({"enabled": bool(valid and proc.returncode == 0), "configured": bool(valid), "loaded": proc.returncode == 0, "instance_id": _CVSTUDIO_INSTANCE_ID})
-            except Exception as exc:
-                return jsonify({"enabled": False, "error": str(exc), "instance_id": _CVSTUDIO_INSTANCE_ID})
-        else:
-            return jsonify({"enabled": False, "platform": platform.system()})
-    except Exception as e:
-        return jsonify({"enabled": False, "error": str(e)})
+    return _CVSTUDIO_STARTUP_SERVICE.status()
 
 @app.route("/startup/enable", methods=["POST"])
 def startup_enable():
-    """Add CV Studio to startup (cross-platform)."""
-    import platform
-    script_dir = _CVSTUDIO_ROOT
-    try:
-        if platform.system() == "Windows":
-            import winreg
-            vbs_path = os.path.join(script_dir, "START_HIDDEN.vbs")
-            cmd = f'wscript.exe "{vbs_path}"'
-            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-                r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_SET_VALUE)
-            winreg.SetValueEx(key, "GUOLabCVStudio", 0, winreg.REG_SZ, cmd)
-            winreg.CloseKey(key)
-        elif platform.system() == "Darwin":
-            sh_path = os.path.realpath(os.path.join(script_dir, "start.sh"))
-            plist_dir = os.path.expanduser("~/Library/LaunchAgents")
-            os.makedirs(plist_dir, exist_ok=True)
-            label = "com.hyppies.cvstudio.{}".format(_CVSTUDIO_INSTANCE_ID)
-            plist_path = os.path.join(plist_dir, label + ".plist")
-            payload = {
-                "Label": label,
-                "ProgramArguments": ["/bin/bash", sh_path],
-                "RunAtLoad": True,
-                "KeepAlive": False,
-                "ProcessType": "Interactive",
-            }
-            temp_path = plist_path + ".tmp"
-            with open(temp_path, "wb") as handle:
-                plistlib.dump(payload, handle, fmt=plistlib.FMT_XML, sort_keys=True)
-            os.replace(temp_path, plist_path)
-            domain = "gui/{}".format(os.getuid())
-            subprocess.run(["/bin/launchctl", "bootout", domain + "/" + label], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8, check=False)
-            proc = subprocess.run(["/bin/launchctl", "bootstrap", domain, plist_path], capture_output=True, text=True, timeout=12, check=False)
-            if proc.returncode != 0:
-                return jsonify({"ok": False, "error": (proc.stderr or proc.stdout or "launchctl bootstrap failed")[:800]}), 500
-        else:
-            return jsonify({"ok": False, "error": "Unsupported platform"})
-        return jsonify({"ok": True})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)})
+    return _CVSTUDIO_STARTUP_SERVICE.enable()
 
 @app.route("/startup/disable", methods=["POST"])
 def startup_disable():
-    """Remove CV Studio from startup (cross-platform)."""
-    import platform
-    try:
-        if platform.system() == "Windows":
-            import winreg
-            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-                r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_SET_VALUE)
-            try:
-                value = str(winreg.QueryValueEx(key, "GUOLabCVStudio")[0] or "")
-                expected = os.path.realpath(os.path.join(_CVSTUDIO_ROOT, "START_HIDDEN.vbs"))
-                expected_command = 'wscript.exe "{}"'.format(expected)
-                if os.path.normcase(value.strip()) == os.path.normcase(expected_command):
-                    winreg.DeleteValue(key, "GUOLabCVStudio")
-            except FileNotFoundError:
-                pass
-            winreg.CloseKey(key)
-        elif platform.system() == "Darwin":
-            label = "com.hyppies.cvstudio.{}".format(_CVSTUDIO_INSTANCE_ID)
-            plist_path = os.path.expanduser("~/Library/LaunchAgents/" + label + ".plist")
-            domain = "gui/{}".format(os.getuid())
-            subprocess.run(["/bin/launchctl", "bootout", domain + "/" + label], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8, check=False)
-            if os.path.exists(plist_path):
-                os.remove(plist_path)
-        return jsonify({"ok": True})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)})
+    return _CVSTUDIO_STARTUP_SERVICE.disable()
 
 @app.route("/status", methods=["GET"])
 def status():

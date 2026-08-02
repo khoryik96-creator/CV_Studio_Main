@@ -3,8 +3,8 @@
 ## Release state
 
 - Approved baseline: v24.6.217
-- Current source baseline: v24.6.246
-- Active architecture candidate: v24.6.247 (modular-monolith foundation)
+- Current source baseline: v24.6.247 (modular-monolith foundation, merged)
+- Active architecture candidate: v24.6.248 (Phase 7B-1 startup domain extraction)
 - Completed release: v24.6.243 (Windows x64 only)
 - Phase 2B source baseline: v24.6.219
 - Phase 2B baseline Git commit: `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`
@@ -18,14 +18,47 @@
 - Phase 5B baseline Git commit: `327858799f17d880e37c740f71dfe321ea7bde0a`
 - Phase 7A source baseline Git commit:
   `a6b35d2e0cad977e737622ed7d10e451ed5f7de3`
-- Working branch candidate: `agent/v24.6.247-modular-monolith-foundation`
-- Active work: behavior-preserving modular-monolith composition foundation
+- Phase 7B-1 source baseline Git commit (merged Phase 7A):
+  `54298b9b6a822e1f36c9c101f1ff4edc9c7e835f`
+- Working branch candidate: `claude/phase-7b1-startup-service`
+- Active work: behavior-preserving extraction of the startup domain behind the
+  Phase 7A composition seam
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
-- Status: the v24.6.246 dependency source is merged. Phase 7A is explicitly
-  authorized from that exact clean master baseline; installed source identity
-  remains v24.6.246 during this architecture-only candidate.
-- Current stop: after Phase 7A implementation, regression validation, focused
-  review and commit. Stop before release, merge, Phase 7B or unrelated work.
+- Status: Phase 7A (v24.6.247) is merged. Phase 7B-1 extracts the first bounded
+  domain (cross-platform startup/login-item) from the legacy web shell into a
+  composed service; installed source identity remains v24.6.246 during this
+  architecture-only candidate.
+- Current stop: after Phase 7B-1 implementation, regression validation and
+  focused review. Stop before release, merge, further extractions or unrelated
+  work.
+
+## v24.6.248 Phase 7B-1 startup domain extraction
+
+- Exact source baseline is merged Phase 7A commit
+  `54298b9b6a822e1f36c9c101f1ff4edc9c7e835f`.
+- `cvstudio_startup.py` is a new composed `StartupService` behind the existing
+  `/startup/status`, `/startup/enable` and `/startup/disable` endpoints. The
+  cross-platform login-item logic is a verbatim move from `app.py`; the module
+  receives the install root and instance id through injected callbacks and never
+  imports the application or shared mutable state.
+- The three routes become thin delegators, so the sealed route
+  URL/method/endpoint SHA-256 is byte-identical to the Phase 7A baseline
+  (`f8378b6f3424476eb0683af8e0bbb06ed430675abfe11b74ebed5ab361a20bc9`) and the
+  route count stays at 108. The `startup` module is registered in the acyclic
+  module graph (now eleven modules) as a `domain`-layer dependency of the
+  legacy web shell.
+- Characterization tests were written before the move and capture the exact
+  status/enable/disable contracts, including the shared error-envelope
+  enrichment on the graceful "unsupported platform" path.
+- No new feature, route, schema, credential handling, release, protected
+  package or backburner item is included.
+- Validation passed 178 Python tests (five new Phase 7B-1 cases; one pre-existing
+  Antiword extraction test fails only where no Linux Antiword binary is vendored,
+  identically to master, and nine platform-gated Antiword tests skip on Linux),
+  all ten frontend fixtures, 24 source-smoke assertions, tracked Python,
+  JavaScript and POSIX syntax, and repository consistency and whitespace checks.
+- Native Windows/macOS startup mutation is covered by the platform CI gates; the
+  graceful non-native path is exercised directly.
 
 ## v24.6.247 Phase 7A modular-monolith foundation
 
