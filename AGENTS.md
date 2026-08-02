@@ -71,15 +71,34 @@
   search/preview state is invalidated, and OneNote JobAdder matches cannot
   survive or complete across an account transition.
 - Current completed private owner/source release: **CV Studio v24.6.243
-  (Windows x64 only)**. The v24.6.245 long-CV/access candidate remains unmerged;
-  the current dependency candidate is **v24.6.246** on
-  `agent/v24.6.246-macos-antiword-tesseract-mandatory`.
+  (Windows x64 only)**. v24.6.246 dependency source is merged at
+  `a6b35d2e0cad977e737622ed7d10e451ed5f7de3`; no newer private release has been
+  produced.
 - Phases 1, 2A, 2B, 3, 4, 5A, 5B and 6A–6C are complete in merged source.
-- v24.6.246 is limited to mandatory, architecture-pinned Antiword on Windows,
-  Intel macOS and Apple Silicon macOS; mandatory functional Tesseract checks;
-  and restoration of native macOS CI/protected-build validation. Do not add
-  Phase 7 or unrelated scope. No release/support claim is allowed until both
-  native macOS architectures pass their gates.
+- The owner explicitly activated Phase 7A on
+  `agent/v24.6.247-modular-monolith-foundation`. It is limited to a
+  behavior-preserving composition root, explicit current module boundaries and
+  exact application-contract sealing. Keep Python/Flask and JavaScript, the
+  v24.6.246 installed identity, all native dependency behavior and all existing
+  routes/schemas/gates. Do not add Phase 7B, a language rewrite, a release or
+  unrelated scope.
+
+## Active scope: Phase 7A modular-monolith foundation
+
+Phase 7A starts from exact clean master
+`a6b35d2e0cad977e737622ed7d10e451ed5f7de3`. Add only an app-independent
+composition root and validated current-module inventory, use it to construct
+the established Flask object, and seal the final app against the exact 108
+route URL/method/endpoint contract, five ordered request guards and 80 MiB
+request limit. `app.py` remains the temporary compatibility web shell; no route
+decorator or feature domain moves in this milestone.
+
+Preserve all 18 compatibility signatures, SQLite schema 10, journal schema 1,
+provider and paid-call boundaries, credential handling, mandatory
+Antiword/Tesseract behavior, packaging targets and native gates. Add focused
+architecture characterization plus complete regression and tracked-language
+validation. Stop after a clean commit, before push, PR, release, merge or Phase
+7B. Backburner items 4, 7 and 8 remain inactive.
 
 ## Completed scope: JobAdder account-isolation corrective
 

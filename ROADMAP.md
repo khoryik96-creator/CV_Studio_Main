@@ -45,13 +45,18 @@
   OAuth callback completion sign-out-aware and fully isolating/invalidation
   guarding PPC, AI Crawler and OneNote JobAdder account state. No route,
   schema, provider-write or Phase 6 scope is added.
-- v24.6.245 is the unmerged long-CV output/access corrective candidate.
-- v24.6.246 is the active cross-platform dependency candidate: mandatory
+- v24.6.245 long-CV output/access corrections are merged in the current source.
+- v24.6.246 is the merged cross-platform dependency source: mandatory
   native Antiword on Windows x64, Intel macOS and Apple Silicon macOS;
   mandatory functional Tesseract with English data; and restored native Mac
-  CI/protected builds. It is not a completed release.
-- Phases 1, 2A, 2B, 3, 4, 5A and 5B are complete.
-- No later phase is active. Phase 6 requires a new explicit owner instruction.
+  CI/protected builds. It is not a completed private release.
+- v24.6.247 is the active behavior-preserving modular-monolith foundation.
+  It keeps the Python/Flask and JavaScript stack, introduces an explicit
+  composition root and current module graph, and seals existing Flask contracts
+  before later one-domain-at-a-time extraction.
+- Phases 1, 2A, 2B, 3, 4, 5A, 5B and 6A–6C are complete.
+- Phase 7A is the only active milestone. Phase 7B and the backburner remain
+  inactive.
 
 ## Phase 1 — Completed
 
@@ -281,9 +286,21 @@ Persistent background jobs and resumable task state:
   release requires successful native Windows, Intel Mac and Apple Silicon Mac
   gates; static inspection alone is insufficient.
 
-## Phase 7 — Backburner
+## Phase 7A — Active modular-monolith foundation
 
-Do not implement until explicitly reactivated:
+- retain one repository, process, deployment unit and SQLite authority;
+- retain Python/Flask and JavaScript while architecture changes are isolated;
+- construct Flask through an app-independent composition root;
+- inventory current module ownership and reject invalid or cyclic boundaries;
+- seal the exact 108-route URL/method/endpoint contract, five ordered guards
+  and 80 MiB request limit after legacy route registration;
+- keep `app.py` as a compatibility web shell until later bounded domain moves;
+- preserve all behavior, security, schema, provider and native-package
+  contracts, with no release or Phase 7B work in this milestone.
+
+## Phase 7 backburner features
+
+These remain inactive and are not part of Phase 7A:
 
 - item 4: replace Flask's local server;
 - item 7: saved/versioned AI Crawler scoring profiles;

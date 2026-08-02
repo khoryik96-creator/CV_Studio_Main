@@ -3,7 +3,8 @@
 ## Release state
 
 - Approved baseline: v24.6.217
-- Corrective release candidate: v24.6.246 (Windows and native macOS validation candidate)
+- Current source baseline: v24.6.246
+- Active architecture candidate: v24.6.247 (modular-monolith foundation)
 - Completed release: v24.6.243 (Windows x64 only)
 - Phase 2B source baseline: v24.6.219
 - Phase 2B baseline Git commit: `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`
@@ -15,13 +16,48 @@
 - Phase 5A baseline Git commit: `4b366ddde1cf0a398706b52d55b0e82ed2dbc27c`
 - Phase 5B source baseline: v24.6.234
 - Phase 5B baseline Git commit: `327858799f17d880e37c740f71dfe321ea7bde0a`
-- Working branch candidate: `agent/v24.6.246-macos-antiword-tesseract-mandatory`
-- Active work: mandatory macOS Antiword and cross-platform Tesseract corrective
+- Phase 7A source baseline Git commit:
+  `a6b35d2e0cad977e737622ed7d10e451ed5f7de3`
+- Working branch candidate: `agent/v24.6.247-modular-monolith-foundation`
+- Active work: behavior-preserving modular-monolith composition foundation
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
-- Status: v24.6.246 dependency implementation and native validation in progress;
-  the installed completed release remains v24.6.243.
-- Current stop: after native Windows, Intel macOS and Apple Silicon macOS CI.
-  Stop before release, merge, Phase 7 or unrelated work.
+- Status: the v24.6.246 dependency source is merged. Phase 7A is explicitly
+  authorized from that exact clean master baseline; installed source identity
+  remains v24.6.246 during this architecture-only candidate.
+- Current stop: after Phase 7A implementation, regression validation, focused
+  review and commit. Stop before release, merge, Phase 7B or unrelated work.
+
+## v24.6.247 Phase 7A modular-monolith foundation
+
+- Exact source baseline is clean `origin/master` commit
+  `a6b35d2e0cad977e737622ed7d10e451ed5f7de3`.
+- The owner explicitly authorized modular-monolith work while retaining the
+  Python/Flask backend and JavaScript frontend; no language rewrite is included.
+- `cvstudio_architecture.py` is the app-independent composition root. It owns a
+  validated, acyclic inventory of the existing platform, storage, job, AI-cost,
+  external-client, document, diagnostic, storage-HTTP and legacy-web modules.
+- `app.py` remains the temporary compatibility web shell. It registers every
+  established route and callback, then seals the application against the exact
+  route URL/method/endpoint digest, five ordered request guards and 80 MiB
+  request boundary.
+- Existing extracted modules remain unable to import the legacy `app` shell.
+  Future milestones can move one domain at a time behind this composition seam.
+- Preserve exactly 108 routes, five request guards, 18 compatibility
+  signatures, SQLite schema 10, journal schema 1, external-service behavior,
+  mandatory Antiword/Tesseract boundaries and native packaging behavior.
+- No new feature, route, schema, credential handling, server replacement,
+  release, protected package or backburner item 4/7/8 is included.
+- Focused review corrected the route canonicalizer so Flask's implicit
+  `HEAD`/automatic `OPTIONS` methods are ignored while the two explicitly
+  supported OCR `OPTIONS` methods remain part of the sealed contract.
+- Validation passed 21 focused Phase 7A/4/5A tests across the implementation
+  and final correction, 173 complete Python tests with one expected skip, all
+  ten frontend fixtures, 24 source-smoke assertions, tracked Python,
+  JavaScript, PowerShell and POSIX syntax, Windows x64 owner preflight with
+  trusted functional Antiword and Tesseract, repository consistency and
+  whitespace checks.
+- Native macOS execution and protected packaging were not rerun because this
+  milestone changes neither native dependency nor packaging behavior.
 
 ## v24.6.246 mandatory macOS Antiword and Tesseract
 

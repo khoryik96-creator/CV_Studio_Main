@@ -161,7 +161,7 @@ class Phase5APersistentJobsCharacterizationTests(unittest.TestCase):
             "_RUNTIME_STATE_DIR =",
             "_write_runtime_pid_file()",
             "threading.Thread(target=_watchdog, daemon=True).start()",
-            "app = Flask(__name__, static_folder=None)",
+            "app = _create_modular_monolith_app(__name__, static_folder=None)",
             "_OCR_SEMAPHORE = threading.BoundedSemaphore(1)",
             "def _document_validation_status(exc):",
             "_OWNER_INTEGRATION_REPORT_LOCK = threading.RLock()",
