@@ -50,13 +50,17 @@
   native Antiword on Windows x64, Intel macOS and Apple Silicon macOS;
   mandatory functional Tesseract with English data; and restored native Mac
   CI/protected builds. It is not a completed private release.
-- v24.6.247 is the active behavior-preserving modular-monolith foundation.
+- v24.6.247 is the merged behavior-preserving modular-monolith foundation.
   It keeps the Python/Flask and JavaScript stack, introduces an explicit
   composition root and current module graph, and seals existing Flask contracts
-  before later one-domain-at-a-time extraction.
-- Phases 1, 2A, 2B, 3, 4, 5A, 5B and 6A–6C are complete.
-- Phase 7A is the only active milestone. Phase 7B and the backburner remain
-  inactive.
+  before one-domain-at-a-time extraction.
+- v24.6.248 is the active Phase 7B-1 extraction: the cross-platform startup
+  (login-item) domain moves from the legacy web shell into a composed
+  `cvstudio_startup` service, with the routes kept as thin delegators so the
+  sealed route contract is byte-identical.
+- Phases 1, 2A, 2B, 3, 4, 5A, 5B, 6A–6C and 7A are complete.
+- Phase 7B (one-domain-at-a-time extraction) is active, starting with the
+  startup domain. The backburner remains inactive.
 
 ## Phase 1 — Completed
 
