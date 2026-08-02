@@ -93,6 +93,11 @@ DEFAULT_MODULES = (
         ("cvstudio_startup.py",),
     ),
     ModuleDefinition(
+        "runtime",
+        "domain",
+        ("cvstudio_runtime.py",),
+    ),
+    ModuleDefinition(
         "storage_http",
         "interface",
         ("cvstudio_storage_bridge.py",),
@@ -118,6 +123,7 @@ DEFAULT_MODULES = (
             "documents",
             "external_clients",
             "platform_dependencies",
+            "runtime",
             "startup",
             "storage",
             "storage_http",
