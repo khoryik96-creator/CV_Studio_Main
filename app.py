@@ -315,6 +315,7 @@ from cvstudio_startup import StartupService
 from cvstudio_runtime import RuntimeService
 from cvstudio_web_assets import WebAssetsService
 from cvstudio_secrets import SecretsService
+from cvstudio_jobadder_read import JobAdderReadService
 
 _CVSTUDIO_VERSION = "v24.6.246"
 _CVSTUDIO_ROOT = _install_package_root()
@@ -3329,6 +3330,16 @@ _JOBADDER_CLIENT = JobAdderClient(
     reconnect_handler=lambda: _ja_mark_reconnect_required(),
 )
 
+_CVSTUDIO_JOBADDER_READ_SERVICE = JobAdderReadService(
+    jsonify=lambda payload: jsonify(payload),
+    query_arg=lambda name, default="": request.args.get(name, default),
+    refresh_token=lambda force=False: _ja_refresh_access_token(force=force),
+    client=lambda: _JOBADDER_CLIENT,
+    public_info=lambda: _ja_public_info(),
+    creds_store=lambda: _ja_creds_store,
+    ja_api=lambda path: _ja_api(path),
+)
+
 
 @app.route("/jobadder/restore_token", methods=["POST"])
 @_ja_critical_write_route
@@ -3445,33 +3456,11 @@ def jobadder_sign_out():
 
 @app.route("/jobadder/api_info", methods=["GET"])
 def jobadder_api_info():
-    try:
-        if _ja_creds_store.get("refresh_token"):
-            _ja_refresh_access_token(force=False)
-    except Exception:
-        pass
-    return jsonify(_ja_public_info())
+    return _CVSTUDIO_JOBADDER_READ_SERVICE.api_info()
 
 @app.route("/jobadder/search_candidate", methods=["GET"])
 def jobadder_search_candidate():
-    """Server-side proxy: search candidate by email."""
-    email = request.args.get("email", "")
-    token = _ja_refresh_access_token(force=False)
-    if not token:
-        return jsonify({"error": "Not authenticated"}), 401
-    try:
-        _status, payload = _JOBADDER_CLIENT.request_json(
-            "candidates?email=" + urllib.parse.quote(email),
-            token=token,
-            timeout=15,
-            fallback={"items": []},
-        )
-        return jsonify(payload)
-    except urllib.error.HTTPError as e:
-        body = e.read().decode()
-        return jsonify({"error": f"JobAdder error: {e.code}", "detail": body}), e.code
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    return _CVSTUDIO_JOBADDER_READ_SERVICE.search_candidate()
 
 
 
@@ -16066,76 +16055,15 @@ def jobadder_upload_original_cv():
 
 @app.route("/jobadder/lists", methods=["GET"])
 def jobadder_lists():
-    """Fetch JobAdder list values (worktype, currency etc.) for UI."""
-    token = _ja_refresh_access_token(force=False)
-    if not token:
-        return jsonify({"error": "Not authenticated"}), 401
-    list_name = str(request.args.get("name", "worktype") or "worktype").strip().lower()
-    if not re.fullmatch(r"[a-z0-9_-]+", list_name):
-        return jsonify({"error": "Invalid JobAdder list name"}), 400
-    # JobAdder exposes work types as /v2/worktypes, not /v2/lists/worktype.
-    endpoint = "worktypes" if list_name in {"worktype", "worktypes"} else "lists/" + list_name
-    try:
-        _status, payload = _JOBADDER_CLIENT.request_json(
-            endpoint,
-            token=token,
-            timeout=10,
-            fallback={},
-        )
-        return jsonify(payload)
-    except urllib.error.HTTPError as e:
-        return jsonify({"error": "JobAdder error: {}".format(e.code), "detail": e.read().decode()}), e.code
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    return _CVSTUDIO_JOBADDER_READ_SERVICE.lists()
 
 @app.route("/jobadder/get_candidate", methods=["GET"])
 def jobadder_get_candidate():
-    """Fetch full candidate record to inspect field structure."""
-    token = _ja_refresh_access_token(force=False)
-    candidate_id = request.args.get("candidate_id", "")
-    if not token or not candidate_id:
-        return jsonify({"error": "Need token and candidate_id"}), 400
-    try:
-        _status, payload = _JOBADDER_CLIENT.request_json(
-            "candidates/{}".format(candidate_id),
-            token=token,
-            timeout=10,
-            fallback={},
-        )
-        return jsonify(payload)
-    except urllib.error.HTTPError as e:
-        return jsonify({"error": e.code, "detail": e.read().decode()}), e.code
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    return _CVSTUDIO_JOBADDER_READ_SERVICE.get_candidate()
 
 @app.route("/jobadder/debug_endpoints", methods=["GET"])
 def jobadder_debug_endpoints():
-    """Test which candidate endpoints are available — returns OPTIONS/HEAD info."""
-    token = _ja_refresh_access_token(force=False)
-    candidate_id = request.args.get("candidate_id", "")
-    if not token or not candidate_id:
-        return jsonify({"error": "Need token and candidate_id param"}), 400
-    results = {}
-    endpoints = [
-        (_ja_api("candidates/{}".format(candidate_id)), True),
-        (_ja_api("candidates/{}/resume".format(candidate_id)), False),
-        (_ja_api("candidates/{}/attachments".format(candidate_id)), True),
-        (_ja_api("candidates/{}/documents".format(candidate_id)), True),
-    ]
-    for url, accept_json in endpoints:
-        try:
-            response = _JOBADDER_CLIENT.request_raw(
-                url,
-                token=token,
-                timeout=10,
-                headers={"Accept": "application/json"} if accept_json else None,
-            )
-            results[url] = {"status": response.status, "ok": True}
-        except urllib.error.HTTPError as e:
-            results[url] = {"status": e.code, "ok": False, "detail": e.read().decode()[:200]}
-        except Exception as e:
-            results[url] = {"error": str(e)}
-    return jsonify(results)
+    return _CVSTUDIO_JOBADDER_READ_SERVICE.debug_endpoints()
 
 @app.route("/jobadder/upload_cv", methods=["POST"])
 @_ja_critical_write_route

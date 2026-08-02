@@ -77,6 +77,12 @@
   JobAdder is not one domain — its 26 routes split into auth/token lifecycle,
   read proxies, candidate writes, OneNote screening-call activity and
   spider/PPC concerns — so it is extracted in risk-ascending slices, not at once.
+- v24.6.252 is the active Phase 7B-5b extraction: the read-only JobAdder proxy
+  endpoints (`api_info`, `search_candidate`, `lists`, `get_candidate`,
+  `debug_endpoints`) move into a composed `cvstudio_jobadder_read` service that
+  reaches token refresh and the `JobAdderClient` transport through injected
+  callbacks. It is the lowest-risk JobAdder slice; token lifecycle and candidate
+  writes follow.
 - Phases 1, 2A, 2B, 3, 4, 5A, 5B, 6A–6C and 7A are complete.
 - Phase 7B (one-domain-at-a-time extraction) is active: startup, runtime
   liveness, static web assets and the AI secret store are extracted; JobAdder is
