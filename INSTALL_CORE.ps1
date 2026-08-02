@@ -1256,7 +1256,7 @@ function Check-Tesseract {
         try {
             $versionOutput = (& $tessExe --version 2>&1 | Out-String)
             $languageOutput = (& $tessExe --list-langs 2>&1 | Out-String)
-            if ($LASTEXITCODE -eq 0 -and $versionOutput -match '(?i)tesseract\s+[0-9]' -and $languageOutput -match '(?m)^eng\s*$') {
+            if ($LASTEXITCODE -eq 0 -and $versionOutput -match '(?i)tesseract\s+v?[0-9]' -and $languageOutput -match '(?m)^eng\s*$') {
                 Add-PathFront (Split-Path -Parent $tessExe)
                 Write-Step "    Tesseract ready with English language data: $tessExe"
                 return $true
