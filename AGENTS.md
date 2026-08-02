@@ -71,16 +71,15 @@
   search/preview state is invalidated, and OneNote JobAdder matches cannot
   survive or complete across an account transition.
 - Current completed private owner/source release: **CV Studio v24.6.243
-  (Windows x64 only)**; the current owner/source-only corrective candidate is
-  **v24.6.245** on `agent/v24.6.245-long-cv-access-corrective`.
+  (Windows x64 only)**. The v24.6.245 long-CV/access candidate remains unmerged;
+  the current dependency candidate is **v24.6.246** on
+  `agent/v24.6.246-macos-antiword-tesseract-mandatory`.
 - Phases 1, 2A, 2B, 3, 4, 5A, 5B and 6A–6C are complete in merged source.
-- v24.6.245 is limited to bounded long-CV timeouts, structured output repair,
-  CV Scoring code `1996`, and removal of the AI Crawler password. Do not add
-  protected packaging, Phase 7, or unrelated scope.
-- v24.6.245 makes no Intel or Apple Silicon macOS support claim and produces no
-  macOS artifact. macOS users remain on v24.6.239 until a separately
-  authorized native-validation milestone. Phase 7 and all backburner items
-  remain inactive.
+- v24.6.246 is limited to mandatory, architecture-pinned Antiword on Windows,
+  Intel macOS and Apple Silicon macOS; mandatory functional Tesseract checks;
+  and restoration of native macOS CI/protected-build validation. Do not add
+  Phase 7 or unrelated scope. No release/support claim is allowed until both
+  native macOS architectures pass their gates.
 
 ## Completed scope: JobAdder account-isolation corrective
 

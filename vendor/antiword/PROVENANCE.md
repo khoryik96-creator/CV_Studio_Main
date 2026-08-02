@@ -1,9 +1,9 @@
 # Antiword 1.3.5 provenance and redistribution record
 
-This directory contains the mandatory Windows-x64 legacy `.doc` runtime
-authorized for CV Studio v24.6.241. It is isolated from CV Studio application
-source and used only for legacy Microsoft Word decoding. v24.6.241 does not
-ship or claim support for Intel or Apple Silicon macOS.
+This directory contains the mandatory native legacy `.doc` runtimes authorized
+for the CV Studio v24.6.246 candidate. They are isolated from CV Studio
+application source and used only for legacy Microsoft Word decoding. The last
+completed release remains v24.6.243 until every native candidate gate passes.
 
 ## Upstream identity
 
@@ -16,11 +16,10 @@ ship or claim support for Intel or Apple Silicon macOS.
 - Package page: <https://ropensci.r-universe.dev/antiword>
 - License declared upstream: GPL-2.
 
-The R-universe package API records the source archive and all three upstream
-binaries below against the same upstream commit. Only the Windows x64 binary
-is authorized, bundled, installed and verified by CV Studio v24.6.241. The two
-macOS records are retained solely as documented inputs for a future,
-separately authorized native-validation milestone.
+The R-universe package API records the source archive and platform binaries
+against the same upstream commit. The v24.6.246 candidate authorizes the current
+R 4.6.1 Intel and Apple Silicon rebuilds for native validation alongside the
+existing Windows runtime.
 
 ## Exact official artifacts
 
@@ -28,37 +27,38 @@ separately authorized native-validation milestone.
 | --- | --- | --- |
 | Corresponding source | `https://ropensci.r-universe.dev/src/contrib/antiword_1.3.5.tar.gz` | `72e84b33b54c11101cb70d63304ca0283f57a6d0ef518ca6329ff5e6490ad630` |
 | Windows x64, R 4.6 package | `https://ropensci.r-universe.dev/bin/windows/contrib/4.6/antiword_1.3.5.zip` | `9a99f67680475605de009cb85ba94c7dc546eb261a4256d743597fbb24b0ddf8` |
-| Deferred macOS Intel input (not shipped) | `https://ropensci.r-universe.dev/bin/macosx/big-sur-x86_64/contrib/4.6/antiword_1.3.5.tgz` | `501f2cf83b050fd4a56ab1ecff6fe21295c168eb4a9876d46c259e7ca21cb923` |
-| Deferred macOS Apple Silicon input (not shipped) | `https://ropensci.r-universe.dev/bin/macosx/sonoma-arm64/contrib/4.6/antiword_1.3.5.tgz` | `17cd193eb8ed3b27d092c60fec181e6a7b6d82eda9741dbec03578396d659e25` |
+| macOS Intel R 4.6.1 | `https://r2.ropensci.org/0416f1389dc01398cb820ec014e976a5c2198bb103a725f290efce1598f0fced` | `0416f1389dc01398cb820ec014e976a5c2198bb103a725f290efce1598f0fced` |
+| macOS Apple Silicon R 4.6.1 | `https://r2.ropensci.org/1536939cca2c1b9cfcab7721c8982933bf8093eda0460f0e38055e7c826eae9a` | `1536939cca2c1b9cfcab7721c8982933bf8093eda0460f0e38055e7c826eae9a` |
 
 R-universe redirects each URL to content-addressed storage whose identifier is
-the same SHA-256. The authorized Windows archive is retained under `packages/`
-and the exact corresponding source under `source/`. The deferred macOS
-archives and extracted runtimes are intentionally absent from the v24.6.241
-production and packaging tree.
+the same SHA-256. All three authorized archives are retained under `packages/`,
+their extracted platform runtimes are retained under platform-specific
+directories, and the exact corresponding source remains under `source/`.
 
 ## Runtime extraction
 
-The Windows platform directory contains only the official package's `bin/`
-and `share/` runtime trees plus a generated `SHA256SUMS` file. It has exactly
-37 files. CV Studio separately pins the checksum-manifest hash and executable
-hash:
+Each platform directory contains only the official package's `bin/` and
+`share/` runtime trees plus a generated `SHA256SUMS` file. Each runtime has
+exactly 37 files. CV Studio separately pins every checksum-manifest and
+executable hash:
 
 | Platform | Executable SHA-256 | SHA256SUMS SHA-256 |
 | --- | --- | --- |
 | Windows x64 | `2cbab2831854ccd5141ea328824a77cb889586db2e97129873d543a52cf3e15c` | `7d365a89f268a2fc34f815b369474124bc6a1aac02e9b0b57e6dfd5eb5368da0` |
+| macOS Intel | `afeec28ba1bc3f89e9552f26402312c84d072b91f301200710f113afed36dea7` | `7e403a00b2acd1186c714bc55fe382f2b8a03fb5c430edd16e4d447e3f9f4ee8` |
+| macOS Apple Silicon | `dd4be2c485c589cd4ac8495c9de77510b7496d2acc44deadebab80ec88d6769d` | `6c59492af62df5d342c16b3126e588a4bbe855f3ba37f1f9120dc3e5352f6ce3` |
 
-File inspection identifies the shipped executable as PE32+ Windows x64.
-Runtime trust is based on the exact official archive, complete-file manifest,
-executable hash and native Windows architecture checks, not on
-publisher-signature claims. Prior source-level inspection of the deferred
-macOS binaries is recorded as future-work evidence only; it is not native
-validation and supports no v24.6.241 macOS claim.
+File inspection identifies the executables as PE32+ Windows x64, Mach-O x86_64
+and Mach-O arm64 respectively. Runtime trust is based on the exact official
+archives, complete-file manifests, executable hashes and matching native
+architecture checks, not on publisher-signature claims. A future macOS release
+still requires successful execution on both native Mac architectures.
 
 ## Verification-to-execution identity
 
-CV Studio v24.6.241 corrects the v24.6.240 verification-to-execution race.
-On Windows, verification opens the runtime root, pinned manifest, genuine
+CV Studio v24.6.241 corrected the v24.6.240 Windows
+verification-to-execution race. On Windows, verification opens the runtime
+root, pinned manifest, genuine
 fixture, every manifest parent directory and all 37 manifest-listed files
 with read-only handles that allow only read sharing. These handles deny
 write, delete and rename replacement while hashes are computed and remain
@@ -69,7 +69,10 @@ locked executable file, not a writable directory. The upstream
 `$HOME/.antiword` lookup therefore cannot be populated to shadow the pinned,
 locked global mapping resources. Timeouts, process-start failures and
 cancellation terminate/reap the process where applicable and release every
-handle in deterministic cleanup. Fixture output markers supplement the pinned
+handle in deterministic cleanup. On macOS, the candidate copies the
+manifest-bound runtime and fixture to a private temporary tree, verifies every
+byte, applies user-immutable flags and restrictive modes, and executes from
+that snapshot before removing it. Fixture output markers supplement the pinned
 executable/runtime identity; they cannot establish trust on their own.
 
 ## Local comparison and security evidence
@@ -110,9 +113,7 @@ Installation and runtime diagnostics accept Antiword only when it extracts the
 two pinned expected phrases from this file within the bounded timeout.
 
 The current Windows x64 runtime was functionally verified on genuine Windows.
-Windows installation is mandatory and fail-closed. Intel and Apple Silicon
-CV Studio validation is deferred; no v24.6.241 macOS artifact was produced and
-no macOS support claim is made. macOS users remain on v24.6.239 until a
-separately authorized milestone completes native build, installer,
-diagnostics, functional and release-artifact verification on each matching
-architecture.
+The v24.6.246 candidate requires matching native Intel and Apple Silicon GitHub
+runners to verify installer selection, immutable execution, diagnostics,
+functional extraction and protected-package smoke. No v24.6.246 release or
+macOS support claim exists until both gates pass.

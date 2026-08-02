@@ -45,6 +45,11 @@
   OAuth callback completion sign-out-aware and fully isolating/invalidation
   guarding PPC, AI Crawler and OneNote JobAdder account state. No route,
   schema, provider-write or Phase 6 scope is added.
+- v24.6.245 is the unmerged long-CV output/access corrective candidate.
+- v24.6.246 is the active cross-platform dependency candidate: mandatory
+  native Antiword on Windows x64, Intel macOS and Apple Silicon macOS;
+  mandatory functional Tesseract with English data; and restored native Mac
+  CI/protected builds. It is not a completed release.
 - Phases 1, 2A, 2B, 3, 4, 5A and 5B are complete.
 - No later phase is active. Phase 6 requires a new explicit owner instruction.
 
@@ -265,6 +270,16 @@ Persistent background jobs and resumable task state:
   Crawler feature password.
 - Ship owner/source only after focused real-DOCX verification and the complete
   regression gate. Protected packaging and macOS claims remain excluded.
+
+## Cross-platform dependency corrective — v24.6.246 candidate
+
+- Pin and bundle official Antiword 1.3.5 runtimes for Windows x64, Intel macOS
+  and Apple Silicon macOS, with complete manifests and genuine `.doc` checks.
+- Require functional Tesseract plus English language data at installer,
+  diagnostics, OCR and protected-package boundaries.
+- Restore architecture-matched GitHub macOS CI and protected builds. A future
+  release requires successful native Windows, Intel Mac and Apple Silicon Mac
+  gates; static inspection alone is insufficient.
 
 ## Phase 7 — Backburner
 

@@ -11,8 +11,10 @@ import hashlib
 import os
 import platform
 import re
+import shutil
 import stat
 import subprocess
+import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Sequence
@@ -31,6 +33,12 @@ ANTIWORD_RUNTIME_FILE_COUNT = 37
 ANTIWORD_DISTRIBUTION_HASHES = {
     "packages/antiword_1.3.5_windows_x64_r46.zip": (
         "9a99f67680475605de009cb85ba94c7dc546eb261a4256d743597fbb24b0ddf8"
+    ),
+    "packages/antiword_1.3.5_macos_x86_64_r46.tgz": (
+        "0416f1389dc01398cb820ec014e976a5c2198bb103a725f290efce1598f0fced"
+    ),
+    "packages/antiword_1.3.5_macos_arm64_r46.tgz": (
+        "1536939cca2c1b9cfcab7721c8982933bf8093eda0460f0e38055e7c826eae9a"
     ),
     "source/antiword_1.3.5.tar.gz": ANTIWORD_SOURCE_SHA256,
     "GPL-2.0.txt": (
@@ -52,6 +60,20 @@ _PLATFORMS = {
             "9a99f67680475605de009cb85ba94c7dc546eb261a4256d743597fbb24b0ddf8"
         ),
         "native_signature": "unsigned upstream binary; pinned SHA-256",
+    },
+    "macos-intel": {
+        "executable": "bin/antiword",
+        "executable_sha256": "afeec28ba1bc3f89e9552f26402312c84d072b91f301200710f113afed36dea7",
+        "manifest_sha256": "7e403a00b2acd1186c714bc55fe382f2b8a03fb5c430edd16e4d447e3f9f4ee8",
+        "package_sha256": "0416f1389dc01398cb820ec014e976a5c2198bb103a725f290efce1598f0fced",
+        "native_signature": "official Mach-O x86_64 binary; pinned SHA-256",
+    },
+    "macos-arm64": {
+        "executable": "bin/antiword",
+        "executable_sha256": "dd4be2c485c589cd4ac8495c9de77510b7496d2acc44deadebab80ec88d6769d",
+        "manifest_sha256": "6c59492af62df5d342c16b3126e588a4bbe855f3ba37f1f9120dc3e5352f6ce3",
+        "package_sha256": "1536939cca2c1b9cfcab7721c8982933bf8093eda0460f0e38055e7c826eae9a",
+        "native_signature": "official Mach-O arm64 binary; pinned SHA-256",
     },
 }
 
@@ -115,6 +137,10 @@ def _platform_tag() -> str:
     machine = platform.machine().lower()
     if system == "windows" and machine in {"amd64", "x86_64"}:
         return "windows-x64"
+    if system == "darwin" and machine in {"x86_64", "amd64"}:
+        return "macos-intel"
+    if system == "darwin" and machine in {"arm64", "aarch64"}:
+        return "macos-arm64"
     return ""
 
 
@@ -322,9 +348,54 @@ def _locked_candidate_runtime(
     root: Path,
     fixture: Path,
     tag: str,
-) -> Iterator[dict[str, str]]:
+) -> Iterator[tuple[dict[str, str], Path, Path]]:
     """Lock the exact manifest/runtime/fixture tree through process lifetime."""
 
+    if tag.startswith("macos-"):
+        if platform.system().lower() != "darwin":
+            raise AntiwordDependencyError("unsupported-platform")
+        if not root.is_dir() or _is_link_or_reparse(root):
+            raise AntiwordDependencyError("runtime-missing")
+        immutable = getattr(stat, "UF_IMMUTABLE", None)
+        if immutable is None or not hasattr(os, "chflags"):
+            raise AntiwordDependencyError("runtime-lock-failed")
+        with tempfile.TemporaryDirectory(prefix="cvstudio-antiword-immutable-") as temporary:
+            snapshot = Path(temporary) / tag
+            snapshot_fixture = Path(temporary) / "UDHR-english.doc"
+            shutil.copytree(root, snapshot, symlinks=False)
+            shutil.copy2(fixture, snapshot_fixture)
+            entries = _parse_manifest(snapshot, str(_PLATFORMS[tag]["manifest_sha256"]))
+            protected = [snapshot_fixture, snapshot / "SHA256SUMS"] + [
+                snapshot / Path(relative) for relative in sorted(entries)
+            ]
+            directories = sorted(
+                {snapshot, *(path.parent for path in protected)},
+                key=lambda item: (len(item.parts), str(item)),
+                reverse=True,
+            )
+            executable = snapshot / Path(str(_PLATFORMS[tag]["executable"]))
+            try:
+                for path in protected:
+                    os.chmod(path, 0o500 if path == executable else 0o400)
+                    os.chflags(path, int(path.stat().st_flags) | int(immutable), follow_symlinks=False)
+                for directory in directories:
+                    os.chmod(directory, 0o500)
+                    os.chflags(directory, int(directory.stat().st_flags) | int(immutable), follow_symlinks=False)
+                yield entries, snapshot, snapshot_fixture
+            finally:
+                for directory in reversed(directories):
+                    try:
+                        os.chflags(directory, 0, follow_symlinks=False)
+                        os.chmod(directory, 0o700)
+                    except OSError:
+                        pass
+                for path in protected:
+                    try:
+                        os.chflags(path, 0, follow_symlinks=False)
+                        os.chmod(path, 0o600)
+                    except OSError:
+                        pass
+        return
     if os.name != "nt" or tag != "windows-x64":
         raise AntiwordDependencyError("unsupported-platform")
     if not root.is_dir() or _is_link_or_reparse(root):
@@ -366,7 +437,7 @@ def _locked_candidate_runtime(
         lock(fixture, directory=False)
         for relative in sorted(entries):
             lock(root / Path(relative), directory=False)
-        yield entries
+        yield entries, root, fixture
     finally:
         for handle in reversed(handles):
             _close_windows_runtime_handle(handle)
@@ -508,9 +579,10 @@ def _verify_candidate(
     fixture: Path,
     tag: str,
 ) -> tuple[Path, dict[str, Any]]:
-    with _locked_candidate_runtime(root, fixture, tag) as entries:
+    with _locked_candidate_runtime(root, fixture, tag) as locked:
+        entries, locked_root, locked_fixture = locked
         return _verify_candidate_locked(
-            source, root, fixture, tag, entries
+            source, locked_root, locked_fixture, tag, entries
         )
 
 
@@ -582,7 +654,7 @@ def run_verified_antiword(
     *,
     timeout: float = 20,
 ) -> subprocess.CompletedProcess[bytes]:
-    """Verify and execute the exact locked Windows-x64 Antiword runtime."""
+    """Verify and execute the exact protected native Antiword runtime."""
 
     tag = _platform_tag()
     if not tag or tag not in _PLATFORMS:
@@ -593,9 +665,10 @@ def run_verified_antiword(
         package_root, runtime_root, tag
     ):
         try:
-            with _locked_candidate_runtime(root, fixture, tag) as entries:
+            with _locked_candidate_runtime(root, fixture, tag) as locked:
+                entries, locked_root, locked_fixture = locked
                 executable, _health = _verify_candidate_locked(
-                    source, root, fixture, tag, entries
+                    source, locked_root, locked_fixture, tag, entries
                 )
                 return _run_locked_antiword_process(
                     executable, arguments, timeout=timeout
@@ -651,7 +724,12 @@ def antiword_subprocess_env(
     # Bind HOME to the already verified executable *file*. Any attempted
     # $HOME/.antiword lookup therefore fails with ENOTDIR and falls through to
     # the pinned, locked global mapping directory.
-    env.pop("ANTIWORDHOME", None)
+    if platform.system().lower() == "darwin":
+        env["ANTIWORDHOME"] = str(
+            Path(executable).resolve().parent.parent / "share" / "antiword"
+        )
+    else:
+        env.pop("ANTIWORDHOME", None)
     env["HOME"] = str(Path(executable).resolve())
     return env
 

@@ -370,6 +370,10 @@ class AntiwordMandatoryDependencyTests(unittest.TestCase):
         expected = {
             "packages/antiword_1.3.5_windows_x64_r46.zip":
                 "9a99f67680475605de009cb85ba94c7dc546eb261a4256d743597fbb24b0ddf8",
+            "packages/antiword_1.3.5_macos_x86_64_r46.tgz":
+                "0416f1389dc01398cb820ec014e976a5c2198bb103a725f290efce1598f0fced",
+            "packages/antiword_1.3.5_macos_arm64_r46.tgz":
+                "1536939cca2c1b9cfcab7721c8982933bf8093eda0460f0e38055e7c826eae9a",
             "source/antiword_1.3.5.tar.gz":
                 "72e84b33b54c11101cb70d63304ca0283f57a6d0ef518ca6329ff5e6490ad630",
             "GPL-2.0.txt":
@@ -385,24 +389,29 @@ class AntiwordMandatoryDependencyTests(unittest.TestCase):
             VENDOR / "GPL-2.0.txt"
         ).read_text(encoding="utf-8"))
 
-    def test_macos_payloads_are_deferred_and_not_shipped(self):
-        for relative in (
-            "macos-x86_64",
-            "macos-arm64",
-            "packages/antiword_1.3.5_macos_x86_64_r46.tgz",
-            "packages/antiword_1.3.5_macos_arm64_r46.tgz",
-        ):
-            self.assertFalse((VENDOR / relative).exists(), relative)
-        self.assertEqual(set(antiword._PLATFORMS), {"windows-x64"})
-        self.assertEqual(
-            set(antiword.ANTIWORD_DISTRIBUTION_HASHES),
-            {
-                "packages/antiword_1.3.5_windows_x64_r46.zip",
-                "source/antiword_1.3.5.tar.gz",
-                "GPL-2.0.txt",
-                "fixtures/UDHR-english.doc",
-            },
-        )
+    def test_macos_payloads_are_pinned_and_native_specific(self):
+        self.assertEqual(set(antiword._PLATFORMS), {"windows-x64", "macos-intel", "macos-arm64"})
+        for tag, executable_hash in {
+            "macos-intel": "afeec28ba1bc3f89e9552f26402312c84d072b91f301200710f113afed36dea7",
+            "macos-arm64": "dd4be2c485c589cd4ac8495c9de77510b7496d2acc44deadebab80ec88d6769d",
+        }.items():
+            self.assertEqual(sha256(VENDOR / tag / "bin" / "antiword"), executable_hash)
+            runtime_files = [
+                path
+                for folder in ("bin", "share")
+                for path in (VENDOR / tag / folder).rglob("*")
+                if path.is_file()
+            ]
+            self.assertEqual(len(runtime_files), antiword.ANTIWORD_RUNTIME_FILE_COUNT)
+
+    def test_native_macos_runtime_is_trusted_and_functional(self):
+        if __import__("platform").system().lower() != "darwin":
+            self.skipTest("Genuine macOS Antiword execution is macOS-only")
+        health = antiword.antiword_health(ROOT)
+        self.assertTrue(health["available"])
+        self.assertTrue(health["trusted"])
+        self.assertTrue(health["functional"])
+        self.assertIn(health["platform"], {"macos-intel", "macos-arm64"})
 
     def test_linux_proof_target_statically_verifies_but_never_claims_support(self):
         health = validate_antiword_runtime(ROOT, "linux-x64-test")
@@ -410,7 +419,7 @@ class AntiwordMandatoryDependencyTests(unittest.TestCase):
         self.assertTrue(health["trusted"])
         self.assertFalse(health["functional"])
         self.assertTrue(health["test_only"])
-        self.assertEqual(health["static_platform_manifests_verified"], 1)
+        self.assertEqual(health["static_platform_manifests_verified"], 3)
 
     def test_critical_unicode_and_windows_mapping_resources_are_pinned(self):
         expected = {
@@ -876,36 +885,21 @@ class AntiwordMandatoryDependencyTests(unittest.TestCase):
             windows,
         )
 
-    def test_macos_production_files_are_exact_v239_baseline_and_v240_builds_blocked(self):
-        expected_hashes = {
-            "install.sh":
-                "1e28c62ab82692dc0388024cbe5fe5da32d59ec04ecec6e95f5b06d17ea7b47d",
-            "start.sh":
-                "9a74ebe8153df059c7d210bcf1fc8cd4dd0e74a6a8ee790066559ad468ee195e",
-            "restore_previous.sh":
-                "fcda709bd9b5c14c608e770b284320d7cb8439ad71d8c705fda2a9efb9acd217",
-            "owner_build_tools/BUILD_PROTECTED_MAC.command":
-                "e7079c8067d8133e86ef8cad22211b26a22caad2d325dd3614a9bcffd865c432",
-        }
-        self.assertEqual(
-            {relative: sha256(ROOT / relative) for relative in expected_hashes},
-            expected_hashes,
-        )
+    def test_macos_build_targets_require_matching_native_hosts(self):
         workflow = (
             ROOT / ".github" / "workflows" / "build-protected.yml"
         ).read_text(encoding="utf-8")
-        self.assertNotIn("macos-arm64", workflow)
-        self.assertNotIn("macos-intel", workflow)
+        self.assertIn("macos-arm64", workflow)
+        self.assertIn("macos-intel", workflow)
         with mock.patch.object(
             protected_build.platform, "system", return_value="Darwin"
         ), mock.patch.object(
             protected_build.platform, "machine", return_value="arm64"
         ):
-            with self.assertRaisesRegex(RuntimeError, "Windows-x64-only"):
-                protected_build.detect_target("auto")
-        for target in ("macos-arm64", "macos-intel"):
-            with self.assertRaisesRegex(RuntimeError, "only a Windows-x64"):
-                protected_build.validate_target_host(target)
+            self.assertEqual(protected_build.detect_target("auto"), "macos-arm64")
+            protected_build.validate_target_host("macos-arm64")
+            with self.assertRaisesRegex(RuntimeError, "Intel"):
+                protected_build.validate_target_host("macos-intel")
 
 
 if __name__ == "__main__":

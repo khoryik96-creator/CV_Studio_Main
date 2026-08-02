@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.245"
+_INSTALL_RECEIPT_VERSION = "v24.6.246"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -303,8 +303,12 @@ from cvstudio_antiword import (
     require_verified_antiword as _require_verified_antiword_runtime,
     run_verified_antiword as _run_verified_antiword_runtime,
 )
+from cvstudio_tesseract import (
+    find_tesseract as _find_mandatory_tesseract,
+    tesseract_health as _mandatory_tesseract_health,
+)
 
-_CVSTUDIO_VERSION = "v24.6.245"
+_CVSTUDIO_VERSION = "v24.6.246"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -7827,7 +7831,7 @@ def _ja_spa_browser_bridge(candidate_id, fields, note_text="", email="", salary_
     payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
     compact_payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     script = """(async () => {
-  const helperVersion = 'v24.6.245';
+  const helperVersion = 'v24.6.246';
   const candidateId = %s;
   const payload = %s;
   const profilePath = %s;
@@ -10419,7 +10423,7 @@ def jobadder_onenote_activity_diagnostic():
     generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Candidate Activity Read Test",
-        "cv_studio_version": "v24.6.245",
+        "cv_studio_version": "v24.6.246",
         "generated_utc": generated,
         "safety": {
             "read_only": True,
@@ -10630,7 +10634,7 @@ def jobadder_onenote_activity_create_diagnostic():
     if confirmation != "CREATE ONE MAX LOW TEST":
         return jsonify({"error": "Type CREATE ONE MAX LOW TEST exactly before running the controlled POST."}), 400
 
-    guard_key = ("v24.6.245", candidate_id)
+    guard_key = ("v24.6.246", candidate_id)
     if guard_key in _JA_ACTIVITY_CREATE_DIAG_USED:
         return jsonify({"error": "The one-shot controlled POST has already been run in this CV Studio session. Restarting is intentionally required before any repeat test."}), 409
     # Mark before the network call so a timeout/double-click cannot emit a second POST.
@@ -10659,7 +10663,7 @@ def jobadder_onenote_activity_create_diagnostic():
     generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Official AddCandidateActivity Create Test",
-        "cv_studio_version": "v24.6.245",
+        "cv_studio_version": "v24.6.246",
         "generated_utc": generated,
         "candidate_fixture": {
             "name": "Max Low",
@@ -11716,7 +11720,7 @@ def _spider_preview_cache_stats():
 
 
 def _cvstudio_dependency_status():
-    return _phase4_dependency_status(
+    status = _phase4_dependency_status(
         _find_soffice_binary,
         _find_antiword_binary,
         lambda: _verified_antiword_health(
@@ -11724,6 +11728,14 @@ def _cvstudio_dependency_status():
             os.path.dirname(os.path.abspath(__file__)),
         ),
     )
+    tesseract_health = _mandatory_tesseract_health(_CVSTUDIO_ROOT)
+    status["tesseract"] = bool(
+        tesseract_health.get("available")
+        and tesseract_health.get("functional")
+        and tesseract_health.get("english_language_data")
+    )
+    status["tesseract_health"] = tesseract_health
+    return status
 
 
 def _cvstudio_connection_status_redacted():
@@ -14032,19 +14044,7 @@ def _spider_extract_legacy_doc_text_for_preview(raw):
     )
 
 def _spider_tesseract_path():
-    import shutil
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    candidates = [
-        os.path.join(script_dir, "tesseract", "tesseract.exe"),
-        r"C:\Program Files\Tesseract-OCR\tesseract.exe",
-        r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
-        os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Tesseract-OCR", "tesseract.exe"),
-        "/usr/local/bin/tesseract", "/opt/homebrew/bin/tesseract", "/usr/bin/tesseract",
-    ]
-    for candidate in candidates:
-        if candidate and os.path.isfile(candidate):
-            return candidate
-    return shutil.which("tesseract") or ""
+    return _find_mandatory_tesseract(_CVSTUDIO_ROOT) or ""
 
 
 def _spider_poppler_path():
@@ -16478,15 +16478,8 @@ def ocr_health():
         path_hit = shutil.which("pdfinfo")
         return os.path.dirname(path_hit) if path_hit else None
 
-    tess = first_existing_file([
-        os.path.join(script_dir, "tesseract", "tesseract.exe"),
-        r"C:\Program Files\Tesseract-OCR\tesseract.exe",
-        r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
-        os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Tesseract-OCR", "tesseract.exe"),
-        "/usr/local/bin/tesseract",
-        "/opt/homebrew/bin/tesseract",
-        "/usr/bin/tesseract",
-    ]) or shutil.which("tesseract")
+    tesseract_dependency = _mandatory_tesseract_health(_CVSTUDIO_ROOT)
+    tess = tesseract_dependency.get("executable") or None
 
     poppler = first_poppler_bin()
     try:
@@ -16501,6 +16494,7 @@ def ocr_health():
         "service": "CV Studio OCR Endpoint",
         "endpoint": "/ocr",
         "tesseract": tess or "not found",
+        "tesseract_health": tesseract_dependency,
         "pdf_renderer": "built-in PDFium" if pdfium_ok else ("Poppler fallback" if poppler else "not found"),
         "pdfium_bundled": pdfium_ok,
         "poppler_bin": poppler or "optional / not found",
@@ -16615,18 +16609,10 @@ def ocr_endpoint():
         if is_pdf or is_image:
             try:
                 import pytesseract
-                tess_path = first_existing_file([
-                    os.path.join(script_dir, "tesseract", "tesseract.exe"),
-                    r"C:\Program Files\Tesseract-OCR\tesseract.exe",
-                    r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
-                    os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Tesseract-OCR", "tesseract.exe"),
-                    "/usr/local/bin/tesseract",
-                    "/opt/homebrew/bin/tesseract",
-                    "/usr/bin/tesseract",
-                ]) or shutil.which("tesseract")
+                tess_path = _find_mandatory_tesseract(_CVSTUDIO_ROOT)
                 if tess_path:
                     pytesseract.pytesseract.tesseract_cmd = tess_path
-                tess_ok = bool(tess_path or shutil.which("tesseract"))
+                tess_ok = bool(tess_path)
             except ImportError:
                 return cors_json({"ok": False, "error": "Python package pytesseract is not installed. Run INSTALL.bat again."}, 500)
 
@@ -22524,7 +22510,7 @@ def extract_text():
                     # Never mutate the runtime environment from a request. In a
                     # native Nuitka build sys.executable is CVStudio.exe, not a
                     # Python interpreter, and a network-stalled pip process could
-                    # hang this request indefinitely. The installer owns optional
+                    # hang this request indefinitely. The installer owns mandatory
                     # OCR dependencies and gives a deterministic repair path.
                     try:
                         import pytesseract
@@ -22536,26 +22522,12 @@ def extract_text():
                         )
 
                     # Check Tesseract binary — also look in local tesseract/ folder
-                    local_tess = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tesseract', 'tesseract.exe')
-                    default_tess_paths = [
-                        local_tess,
-                        r'C:\Program Files\Tesseract-OCR\tesseract.exe',
-                        r'C:\Program Files (x86)\Tesseract-OCR\tesseract.exe',
-                        os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Programs', 'Tesseract-OCR', 'tesseract.exe'),
-                        '/usr/local/bin/tesseract',    # Mac Homebrew
-                        '/opt/homebrew/bin/tesseract', # Mac M1/M2
-                        '/usr/bin/tesseract',           # Linux
-                    ]
-                    tess_found = False
-                    for tess_path in default_tess_paths:
-                        if os.path.exists(tess_path):
-                            pytesseract.pytesseract.tesseract_cmd = tess_path
-                            tess_found = True
-                            break
-                    if not tess_found and not shutil.which('tesseract'):
+                    tess_path = _find_mandatory_tesseract(_CVSTUDIO_ROOT)
+                    if not tess_path:
                         raise RuntimeError(
                             "Tesseract is not installed. On Mac run: brew install tesseract. On Windows run INSTALL.bat."
                         )
+                    pytesseract.pytesseract.tesseract_cmd = tess_path
 
                     # Check poppler — local folder first, then system-wide, then PATH
                     _script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -22898,30 +22870,12 @@ def extract_text():
                 from PIL import Image
                 import pytesseract
 
-                # Set tesseract path
-                script_dir = os.path.dirname(os.path.abspath(__file__))
-                local_tess = os.path.join(script_dir, 'tesseract', 'tesseract.exe')
-                for _tc in [
-                    local_tess,
-                    r'C:\Program Files\Tesseract-OCR\tesseract.exe',
-                    r'C:\Program Files (x86)\Tesseract-OCR\tesseract.exe',
-                    '/usr/local/bin/tesseract',
-                    '/opt/homebrew/bin/tesseract',
-                    '/usr/bin/tesseract',
-                ]:
-                    if os.path.exists(_tc):
-                        pytesseract.pytesseract.tesseract_cmd = _tc
-                        break
-                if os.path.exists(local_tess):
-                    pytesseract.pytesseract.tesseract_cmd = local_tess
-                elif os.path.exists(r'C:\Program Files\Tesseract-OCR\tesseract.exe'):
-                    pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-                elif os.path.exists(r'C:\Program Files (x86)\Tesseract-OCR\tesseract.exe'):
-                    pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files (x86)\Tesseract-OCR\tesseract.exe'
-                elif os.path.exists(os.path.expandvars(r'%LOCALAPPDATA%\Programs\Tesseract-OCR\tesseract.exe')):
-                    pytesseract.pytesseract.tesseract_cmd = os.path.expandvars(r'%LOCALAPPDATA%\Programs\Tesseract-OCR\tesseract.exe')
-                elif os.path.exists(os.path.expandvars(r'%PROGRAMFILES(X86)%\Tesseract-OCR\tesseract.exe')):
-                    pytesseract.pytesseract.tesseract_cmd = os.path.expandvars(r'%PROGRAMFILES(X86)%\Tesseract-OCR\tesseract.exe')
+                tess_path = _find_mandatory_tesseract(_CVSTUDIO_ROOT)
+                if not tess_path:
+                    raise RuntimeError(
+                        "Mandatory Tesseract OCR is unavailable. Re-run the CV Studio installer."
+                    )
+                pytesseract.pytesseract.tesseract_cmd = tess_path
 
                 img = _safe_image_open(file_bytes)
                 try:

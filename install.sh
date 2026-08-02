@@ -1,12 +1,12 @@
 #!/bin/bash
-# The 郭 Lab CV Studio — macOS installer v24.6.239
+# The 郭 Lab CV Studio — macOS installer v24.6.246
 set -u
 printf '%s\n' '============================================' '  The 郭 Lab CV Studio — Mac Setup' '============================================' ''
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 STATE_DIR="$HOME/.guo_lab_cv_studio"
 VENV_DIR="$STATE_DIR/venv"
 RECEIPT_PATH="$STATE_DIR/install_receipt.json"
-VERSION="v24.6.239"
+VERSION="v24.6.246"
 TOTP_MASK_HEX="9339245374f57a39a5a2b0a8f932cc802daee838"
 TOTP_MASKED_HEX="3110f491137b761b47abb4b1787aff446496760a"
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
@@ -75,7 +75,7 @@ NATIVE_MODE=0; [ -n "$NATIVE_EXE" ] && NATIVE_MODE=1
 mkdir -p "$STATE_DIR"
 
 # Mandatory Node runtime and DOCX package.
-echo '[1/4] Checking Node.js...'
+echo '[1/5] Checking Node.js...'
 if ! command -v node >/dev/null 2>&1; then
   if command -v brew >/dev/null 2>&1; then
     echo '    Installing Node.js through Homebrew...'
@@ -87,7 +87,7 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 node --version || exit 1
 
-echo '[2/4] Preparing backend runtime...'
+echo '[2/5] Preparing backend runtime...'
 if [ "$NATIVE_MODE" -eq 1 ]; then
   echo '    Protected native backend detected; skipping full Python virtual environment and pip packages.'
   chmod +x "$NATIVE_EXE" 2>/dev/null || true
@@ -101,15 +101,57 @@ else
   "$VENV_PYTHON" -m pip install --disable-pip-version-check -r "$SCRIPT_DIR/requirements.txt" || exit 1
 fi
 
-echo '[3/4] Installing Node packages...'
+echo '[3/5] Verifying mandatory Antiword...'
+ARCH="$(uname -m 2>/dev/null || echo unknown)"
+case "$ARCH" in
+  arm64|aarch64) ANTIWORD_TAG='macos-arm64'; ANTIWORD_MANIFEST='6c59492af62df5d342c16b3126e588a4bbe855f3ba37f1f9120dc3e5352f6ce3' ;;
+  x86_64|amd64) ANTIWORD_TAG='macos-intel'; ANTIWORD_MANIFEST='7e403a00b2acd1186c714bc55fe382f2b8a03fb5c430edd16e4d447e3f9f4ee8' ;;
+  *) echo "    ERROR: Unsupported Mac architecture for Antiword: $ARCH"; exit 1 ;;
+esac
+ANTIWORD_ROOT="$SCRIPT_DIR/vendor/antiword/$ANTIWORD_TAG"
+ANTIWORD_FIXTURE="$SCRIPT_DIR/vendor/antiword/fixtures/UDHR-english.doc"
+ANTIWORD_STAGE_BASE="$(mktemp -d "${TMPDIR:-/tmp}/cvstudio-antiword-install.XXXXXX")" || { echo '    ERROR: Could not create the private Antiword verification directory.'; exit 1; }
+cleanup_antiword_stage(){
+  chflags -R nouchg "$ANTIWORD_STAGE_BASE" 2>/dev/null || true
+  chmod -R u+rwX "$ANTIWORD_STAGE_BASE" 2>/dev/null || true
+  rm -rf "$ANTIWORD_STAGE_BASE" 2>/dev/null || true
+}
+ANTIWORD_STAGE="$ANTIWORD_STAGE_BASE/$ANTIWORD_TAG"
+ANTIWORD_STAGE_FIXTURE="$ANTIWORD_STAGE_BASE/UDHR-english.doc"
+cp -R "$ANTIWORD_ROOT" "$ANTIWORD_STAGE" && cp "$ANTIWORD_FIXTURE" "$ANTIWORD_STAGE_FIXTURE" || { cleanup_antiword_stage; echo '    ERROR: Could not stage bundled Antiword for protected verification.'; exit 1; }
+ANTIWORD_BIN="$ANTIWORD_STAGE/bin/antiword"
+[ -f "$ANTIWORD_STAGE/SHA256SUMS" ] && [ "$(shasum -a 256 "$ANTIWORD_STAGE/SHA256SUMS" | awk '{print $1}')" = "$ANTIWORD_MANIFEST" ] || { cleanup_antiword_stage; echo '    ERROR: Bundled Antiword manifest is missing or damaged.'; exit 1; }
+(cd "$ANTIWORD_STAGE" && shasum -a 256 -c SHA256SUMS >/dev/null) || { cleanup_antiword_stage; echo '    ERROR: Bundled Antiword runtime failed integrity verification.'; exit 1; }
+[ "$(shasum -a 256 "$ANTIWORD_STAGE_FIXTURE" | awk '{print $1}')" = 'f430cdfe9446c4b943074d4bf804232761c284f2caa3d4125006b158d8b14af8' ] || { cleanup_antiword_stage; echo '    ERROR: Antiword functional fixture failed integrity verification.'; exit 1; }
+chmod 500 "$ANTIWORD_BIN" || { cleanup_antiword_stage; echo '    ERROR: Antiword executable permission could not be applied.'; exit 1; }
+xattr -d com.apple.quarantine "$ANTIWORD_BIN" 2>/dev/null || true
+chflags -R uchg "$ANTIWORD_STAGE" "$ANTIWORD_STAGE_FIXTURE" || { cleanup_antiword_stage; echo '    ERROR: Antiword verification snapshot could not be made immutable.'; exit 1; }
+ANTIWORD_OUTPUT="$(ANTIWORDHOME="$ANTIWORD_STAGE/share/antiword" HOME="$ANTIWORD_BIN" "$ANTIWORD_BIN" -t "$ANTIWORD_STAGE_FIXTURE" 2>/dev/null || true)"
+printf '%s' "$ANTIWORD_OUTPUT" | grep -F 'Universal Declaration of Human Rights' >/dev/null && printf '%s' "$ANTIWORD_OUTPUT" | grep -F 'All people everywhere have the same human rights' >/dev/null || { cleanup_antiword_stage; echo '    ERROR: Bundled Antiword failed its genuine .doc functional check.'; exit 1; }
+cleanup_antiword_stage
+echo "    Antiword ready: $ANTIWORD_TAG"
+
+echo '[4/5] Installing Node packages...'
 cd "$SCRIPT_DIR" || exit 1
 npm install --ignore-scripts --no-audit --no-fund || { echo '    ERROR: npm install failed.'; exit 1; }
 node -e "require('adm-zip')" || { echo '    ERROR: adm-zip could not be loaded after npm install.'; exit 1; }
 
-# Tesseract remains the OCR engine. PDFium is bundled in protected mode and
+# Tesseract is the mandatory OCR engine. PDFium is bundled in protected mode and
 # installed from requirements.txt in source mode, so Poppler is only fallback.
-echo '[4/4] Checking OCR tools...'
-if ! command -v tesseract >/dev/null 2>&1; then echo '    Tesseract not found; install with: brew install tesseract'; else echo '    Tesseract ready.'; fi
+echo '[5/5] Checking mandatory OCR tools...'
+if ! command -v tesseract >/dev/null 2>&1; then
+  if command -v brew >/dev/null 2>&1; then
+    echo '    Installing mandatory Tesseract through Homebrew...'
+    brew install tesseract || { echo '    ERROR: Tesseract installation failed.'; exit 1; }
+    export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+  else
+    echo '    ERROR: Tesseract is mandatory. Install Homebrew and run: brew install tesseract'
+    exit 1
+  fi
+fi
+tesseract --version >/dev/null 2>&1 || { echo '    ERROR: Tesseract cannot execute.'; exit 1; }
+tesseract --list-langs 2>/dev/null | grep -Fx 'eng' >/dev/null || { echo '    ERROR: Tesseract English language data is missing.'; exit 1; }
+echo '    Tesseract ready with English language data.'
 if [ "$NATIVE_MODE" -eq 1 ]; then
   echo '    Built-in PDFium renderer is bundled; external Poppler is not required.'
 elif "$VENV_PYTHON" -c 'import pypdfium2' >/dev/null 2>&1; then
@@ -204,6 +246,8 @@ for _i in $(seq 1 180); do
   printf '%s' "$STATUS_JSON" | grep -q "\"version\"[[:space:]]*:[[:space:]]*\"$VERSION\"" || STATUS_OK=0
   printf '%s' "$DIAG_JSON" | grep -q '"valid"[[:space:]]*:[[:space:]]*true' && DIAG_OK=1 || DIAG_OK=0
   printf '%s' "$DIAG_JSON" | grep -q '"request_id"[[:space:]]*:[[:space:]]*"[^"]\+"' || DIAG_OK=0
+  printf '%s' "$DIAG_JSON" | grep -q '"antiword"[[:space:]]*:[[:space:]]*true' || DIAG_OK=0
+  printf '%s' "$DIAG_JSON" | grep -q '"tesseract"[[:space:]]*:[[:space:]]*true' || DIAG_OK=0
   if [ "$ID_OK" -eq 1 ] && [ "$STATUS_OK" -eq 1 ] && [ "$DIAG_OK" -eq 1 ]; then HEALTH_OK=1; HEALTH_ERROR=''; break; fi
   kill -0 "$HEALTH_PID" 2>/dev/null || { HEALTH_ERROR='health runtime exited early'; break; }
   sleep 0.4

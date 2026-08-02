@@ -1,9 +1,9 @@
-Mandatory Antiword runtime for legacy .doc files
+Mandatory Antiword runtime for legacy .doc files on Windows and macOS
 
-CV Studio v24.6.241 is a Windows-x64-only release. It pins rOpenSci Antiword
-package 1.3.5 (Antiword engine 0.37) for Windows x64. The Windows installer
-copies the exact bundled runtime into CV Studio's managed dependency directory
-and verifies it before completing setup.
+The v24.6.246 candidate pins rOpenSci Antiword package 1.3.5 (Antiword engine
+0.37) separately for Windows x64, Intel macOS and Apple Silicon macOS. Each
+installer selects and verifies only its matching native runtime before setup
+can complete.
 
 Runtime acceptance requires all of the following:
 
@@ -13,9 +13,9 @@ Runtime acceptance requires all of the following:
 - native platform trust checks have the expected result;
 - the bundled genuine legacy Word fixture matches its pinned SHA-256;
 - Antiword extracts the expected fixture text within the bounded timeout.
-- the executable, manifest, fixture, runtime directories and every listed
-  runtime file stay locked against write/delete/rename from hashing through
-  process creation and completion.
+- the verified runtime remains protected from replacement through process
+  creation and completion (Windows deny-replacement handles; macOS private
+  immutable snapshot).
 
 CV Studio never discovers Antiword through PATH, Program Files,
 ANTIWORDHOME or other arbitrary executable locations. An existing local
@@ -30,10 +30,9 @@ depth, but their output is never presented as a verified .doc success.
 A verified runtime that cannot decode a corrupt/incompatible document returns
 LEGACY_DOC_EXTRACTION_FAILED with convert-to-DOCX/PDF guidance.
 
-No v24.6.241 macOS runtime or release artifact is shipped or supported. Intel
-and Apple Silicon validation is deferred to a separately authorized native
-validation milestone. macOS users remain on the last verified release,
-v24.6.239.
+The v24.6.246 candidate adds separately pinned Intel and Apple Silicon runtimes.
+Each macOS architecture must pass native installer, immutable-snapshot runtime,
+functional fixture and protected-package smoke checks before release.
 
 See PROVENANCE.md for upstream URLs, immutable hashes, license/source
-compliance, security evidence and the Windows release gate.
+compliance, security evidence and native release gates.

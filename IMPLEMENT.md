@@ -9,11 +9,27 @@ release v24.6.241. The bounded JobAdder account-management and settings
 milestone is complete in private owner/source release v24.6.242. Phase 6A
 frontend modularisation and the bounded Phase 6B local-jsPDF lazy loading
 change are complete on their source branches without changing the v24.6.243
-installed identity. macOS remains on v24.6.239. The bounded v24.6.245
-post-Phase-6 corrective starts from merged source commit
-`c75aa20c5a99ea5e9af84204a19703c90e0c2d36`; it is limited to long-CV parse
-timeouts, structured-output repair, CV Scoring access code `1996`, and removal
-of the AI Crawler password. Stop before merge, protected packaging or Phase 7.
+installed identity. The corrected v24.6.245 long-CV/access candidate is complete
+but unmerged at `4710236e08775609462e8b04ca2213c13a61938b`. The active v24.6.246
+candidate adds mandatory architecture-pinned Antiword for Intel and Apple
+Silicon macOS, makes functional Tesseract plus English data a setup requirement
+on Windows and macOS, and restores native Mac CI/protected-build gates. Stop
+after native CI, before release, merge or Phase 7.
+
+## v24.6.246 native dependency implementation decision
+
+Bundle the current official content-addressed R-universe Antiword 1.3.5 archives
+and exact 37-file runtimes separately for Windows x64, Intel macOS and Apple
+Silicon macOS. macOS verifies and runs only its matching architecture from a
+private immutable snapshot; Windows retains its deny-replacement handle model.
+Every installation and protected smoke must prove genuine `.doc` extraction.
+
+Treat Tesseract as mandatory on every supported platform. Setup may acquire it
+through the platform package manager, but completion requires an executable
+version check and English language data. Runtime diagnostics and all OCR callers
+share the same functional resolver. GitHub's native Windows, Intel Mac and Apple
+Silicon Mac runners are the release gates; no Mac artifact or support claim may
+be made from static inspection alone.
 
 ## v24.6.245 corrective implementation decision
 

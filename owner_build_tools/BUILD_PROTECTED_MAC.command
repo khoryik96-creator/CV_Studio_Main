@@ -2,13 +2,19 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 echo "============================================"
-echo "  CV Studio v24.6.239 Protected Mac Build"
+echo "  CV Studio v24.6.246 Protected Mac Build"
 echo "============================================"
 echo ""
 echo "Owner-only builder. Do not send this file or the private source to colleagues."
 echo ""
 command -v python3 >/dev/null 2>&1 || { echo "ERROR: Python 3.12+ is required."; exit 1; }
 command -v node >/dev/null 2>&1 || { echo "ERROR: Node.js is required."; exit 1; }
+if ! command -v tesseract >/dev/null 2>&1; then
+  command -v brew >/dev/null 2>&1 || { echo "ERROR: Homebrew is required to install mandatory Tesseract."; exit 1; }
+  brew install tesseract
+fi
+tesseract --version
+tesseract --list-langs 2>/dev/null | grep -Fx eng >/dev/null || { echo "ERROR: Mandatory Tesseract English language data is unavailable."; exit 1; }
 python3 owner_build_tools/repo_consistency.py --root . --repair
 python3 -m pip install --disable-pip-version-check --upgrade "nuitka==4.1.3" ordered-set zstandard
 python3 -m pip install --disable-pip-version-check -r requirements.txt
