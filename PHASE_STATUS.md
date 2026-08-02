@@ -3,10 +3,8 @@
 ## Release state
 
 - Approved baseline: v24.6.217
-- Current source baseline: v24.6.247 (modular-monolith foundation, merged)
-- Active architecture candidate: v24.6.250 (Phase 7B-3 static web-asset domain,
-  stacked on the unmerged v24.6.249 Phase 7B-2 and v24.6.248 Phase 7B-1
-  extractions)
+- Current source baseline: v24.6.250 (Phase 7B-1/7B-2/7B-3 extractions merged)
+- Active architecture candidate: v24.6.251 (Phase 7B-4 AI secret-store domain)
 - Completed release: v24.6.243 (Windows x64 only)
 - Phase 2B source baseline: v24.6.219
 - Phase 2B baseline Git commit: `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`
@@ -22,17 +20,50 @@
   `a6b35d2e0cad977e737622ed7d10e451ed5f7de3`
 - Phase 7B-1 source baseline Git commit (merged Phase 7A):
   `54298b9b6a822e1f36c9c101f1ff4edc9c7e835f`
-- Working branch candidate: `claude/phase-7b1-startup-service`
-- Active work: behavior-preserving extraction of the startup domain behind the
-  Phase 7A composition seam
+- Phase 7B-4 source baseline Git commit (merged Phase 7B-3):
+  `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
+- Working branch candidate: `claude/phase-7b4-secrets-service`
+- Active work: behavior-preserving extraction of the AI secret-store domain
+  behind the Phase 7A composition seam
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
-- Status: Phase 7A (v24.6.247) is merged. Phase 7B-1 extracts the first bounded
-  domain (cross-platform startup/login-item) from the legacy web shell into a
-  composed service; installed source identity remains v24.6.246 during this
-  architecture-only candidate.
-- Current stop: after Phase 7B-1 implementation, regression validation and
+- Status: Phase 7A (v24.6.247) and the Phase 7B-1/7B-2/7B-3 extractions
+  (startup, runtime liveness, static web assets) are merged. Phase 7B-4 extracts
+  the AI secret-store management domain; installed source identity remains
+  v24.6.246 during this architecture-only candidate.
+- Current stop: after Phase 7B-4 implementation, regression validation and
   focused review. Stop before release, merge, further extractions or unrelated
   work.
+
+## v24.6.251 Phase 7B-4 AI secret-store domain extraction
+
+- Exact source baseline is merged Phase 7B-3 commit
+  `1e75737cb83e32d4f70d100c0f77a3de720cca9c`.
+- `cvstudio_secrets.py` is a new composed `SecretsService` behind the
+  `/secure-secrets/info`, `/secure-secrets/save` and `/secure-secrets/clear`
+  endpoints. The slot validation, in-place mutation and storage bookkeeping are
+  a verbatim move from `app.py`.
+- Unlike the earlier fully-isolated extractions, this domain operates on the
+  shared, machine-bound AI secret store and the `_cv_secure_save`/
+  `_cv_secure_delete` primitives (also used by the JobAdder and OneNote
+  credential stores). Those stay in `app.py`; the service reaches them only
+  through injected callbacks resolved at call time, so no credential handling is
+  duplicated and the shared store keeps a single owner.
+- The three routes become thin delegators, so the sealed route
+  URL/method/endpoint SHA-256 stays byte-identical to the Phase 7A baseline
+  (`f8378b6f3424476eb0683af8e0bbb06ed430675abfe11b74ebed5ab361a20bc9`) and the
+  route count stays at 108. The `secrets` module joins the acyclic module graph
+  (now fourteen modules) as a `domain`-layer dependency of the legacy web shell.
+- Characterization tests were written before the move and swap the shared store
+  and secure save/delete primitives for in-memory fakes, so they exercise the
+  info/save/clear behaviour (including unknown-slot rejection, blank clearing
+  and backend deletion when empty) without writing real credentials.
+- No new feature, route, schema, credential handling, release, protected
+  package or backburner item is included.
+- Validation passed 196 Python tests (seven new Phase 7B-4 cases; the one
+  pre-existing Antiword extraction failure and nine platform-gated Antiword
+  skips are Linux-only and match master), all ten frontend fixtures, 24
+  source-smoke assertions, tracked Python/JavaScript/POSIX syntax, and
+  repository consistency and whitespace checks.
 
 ## v24.6.250 Phase 7B-3 static web-asset domain extraction
 

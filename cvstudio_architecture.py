@@ -103,6 +103,11 @@ DEFAULT_MODULES = (
         ("cvstudio_web_assets.py",),
     ),
     ModuleDefinition(
+        "secrets",
+        "domain",
+        ("cvstudio_secrets.py",),
+    ),
+    ModuleDefinition(
         "storage_http",
         "interface",
         ("cvstudio_storage_bridge.py",),
@@ -129,6 +134,7 @@ DEFAULT_MODULES = (
             "external_clients",
             "platform_dependencies",
             "runtime",
+            "secrets",
             "startup",
             "storage",
             "storage_http",

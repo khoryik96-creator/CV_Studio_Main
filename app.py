@@ -314,6 +314,7 @@ from cvstudio_architecture import (
 from cvstudio_startup import StartupService
 from cvstudio_runtime import RuntimeService
 from cvstudio_web_assets import WebAssetsService
+from cvstudio_secrets import SecretsService
 
 _CVSTUDIO_VERSION = "v24.6.246"
 _CVSTUDIO_ROOT = _install_package_root()
@@ -4019,40 +4020,29 @@ def _resolve_request_api_key(body, scope="main"):
     return str(_ai_secret_store.get(slot) or "").strip()
 
 
+_CVSTUDIO_SECRETS_SERVICE = SecretsService(
+    jsonify=lambda payload: jsonify(payload),
+    request_json=lambda: request.get_json(silent=True) or {},
+    secret_store=lambda: _ai_secret_store,
+    secret_slots=lambda: _AI_SECRET_SLOTS,
+    secure_save=lambda service, record: _cv_secure_save(service, record),
+    secure_delete=lambda service: _cv_secure_delete(service),
+)
+
+
 @app.route("/secure-secrets/info", methods=["GET"])
 def secure_secrets_info():
-    return jsonify({"configured": {slot: bool(str(_ai_secret_store.get(slot) or "").strip()) for slot in sorted(_AI_SECRET_SLOTS)}, "storage": _ai_secret_store.get("_storage", "backend_secure_store")})
+    return _CVSTUDIO_SECRETS_SERVICE.info()
 
 
 @app.route("/secure-secrets/save", methods=["POST"])
 def secure_secrets_save():
-    data = request.get_json(silent=True) or {}
-    updates = data.get("secrets") if isinstance(data.get("secrets"), dict) else {}
-    for slot, value in updates.items():
-        slot = str(slot or "").strip().lower()
-        if slot not in _AI_SECRET_SLOTS:
-            continue
-        value = str(value or "").strip()
-        if value:
-            _ai_secret_store[slot] = value
-        elif bool(data.get("clear_blank")):
-            _ai_secret_store.pop(slot, None)
-    _ai_secret_store["_storage"] = _cv_secure_save("ai", {k: v for k, v in _ai_secret_store.items() if k in _AI_SECRET_SLOTS})
-    return secure_secrets_info()
+    return _CVSTUDIO_SECRETS_SERVICE.save()
 
 
 @app.route("/secure-secrets/clear", methods=["POST"])
 def secure_secrets_clear():
-    data = request.get_json(silent=True) or {}
-    slots = data.get("slots") if isinstance(data.get("slots"), list) else []
-    for slot in slots:
-        if slot in _AI_SECRET_SLOTS:
-            _ai_secret_store.pop(slot, None)
-    if any(k in _AI_SECRET_SLOTS for k in _ai_secret_store):
-        _ai_secret_store["_storage"] = _cv_secure_save("ai", {k: v for k, v in _ai_secret_store.items() if k in _AI_SECRET_SLOTS})
-    else:
-        _cv_secure_delete("ai")
-    return secure_secrets_info()
+    return _CVSTUDIO_SECRETS_SERVICE.clear()
 
 def _ms_outlook_fallback_read(path=None):
     path = path or _ms_outlook_fallback_store_path()
