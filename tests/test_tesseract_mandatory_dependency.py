@@ -26,7 +26,7 @@ class TesseractMandatoryDependencyTests(unittest.TestCase):
                 tesseract.subprocess,
                 "run",
                 side_effect=[
-                    _Result(stdout="tesseract 5.5.1\n"),
+                    _Result(stderr="tesseract v5.5.1\n"),
                     _Result(stdout="List of available languages in x (1):\neng\n"),
                 ],
             ):

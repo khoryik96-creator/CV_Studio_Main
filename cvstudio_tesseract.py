@@ -67,7 +67,7 @@ def resolve_tesseract(package_root: str | os.PathLike[str]) -> tuple[Path | None
             version_text = "\n".join(
                 part for part in (version_result.stdout, version_result.stderr) if part
             ).strip()
-            match = re.search(r"tesseract\s+([0-9][^\s]*)", version_text, re.I)
+            match = re.search(r"tesseract\s+v?([0-9][^\s]*)", version_text, re.I)
             if version_result.returncode != 0 or not match:
                 failures.append("version-check-failed")
                 continue
