@@ -3,8 +3,9 @@
 ## Release state
 
 - Approved baseline: v24.6.217
-- Current source baseline: v24.6.250 (Phase 7B-1/7B-2/7B-3 extractions merged)
-- Active architecture candidate: v24.6.251 (Phase 7B-4 AI secret-store domain)
+- Current source baseline: v24.6.251 (Phase 7B-4 AI secret-store merged; Phase
+  7B-5a JobAdder coverage net merged)
+- Active architecture candidate: v24.6.252 (Phase 7B-5b read-only JobAdder proxies)
 - Completed release: v24.6.243 (Windows x64 only)
 - Phase 2B source baseline: v24.6.219
 - Phase 2B baseline Git commit: `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`
@@ -33,6 +34,36 @@
 - Current stop: after Phase 7B-4 implementation, regression validation and
   focused review. Stop before release, merge, further extractions or unrelated
   work.
+
+## v24.6.252 Phase 7B-5b read-only JobAdder proxy extraction
+
+- Exact source baseline is merged Phase 7B-5a commit
+  `88ced4a1655148bd5653376826b4a5f6bb3b21b8`.
+- `cvstudio_jobadder_read.py` is a new composed `JobAdderReadService` behind the
+  read-only `/jobadder/api_info`, `/jobadder/search_candidate`,
+  `/jobadder/lists`, `/jobadder/get_candidate` and `/jobadder/debug_endpoints`
+  endpoints. The logic is a verbatim move from `app.py`.
+- The application keeps ownership of the JobAdder OAuth token lifecycle, the
+  shared credentials store and the `JobAdderClient` transport; the service
+  reaches the token refresh, transport, public-info projection, credentials
+  store and API-path helper only through injected callbacks resolved at call
+  time, and performs no writes.
+- The five routes become thin delegators, so the sealed route
+  URL/method/endpoint SHA-256 stays byte-identical to the Phase 7A baseline
+  (`f8378b6f3424476eb0683af8e0bbb06ed430675abfe11b74ebed5ab361a20bc9`) and the
+  route count stays at 108. The `jobadder_read` module joins the acyclic module
+  graph (now fifteen modules) as a `domain`-layer dependency of `external_clients`
+  and of the legacy web shell.
+- Behaviour preservation is proven by the Phase 7B-5a JobAdder coverage net,
+  which was written before this extraction and stays green after it.
+- No new feature, route, schema, credential handling, release or backburner item
+  is included; this is the first (lowest-risk, read-only) slice of the JobAdder
+  extraction. Token lifecycle and candidate writes follow in later slices.
+- Validation passed 203 Python tests (the one pre-existing Antiword extraction
+  failure and nine platform-gated Antiword skips are Linux-only and match
+  master), all ten frontend fixtures, 24 source-smoke assertions, tracked
+  Python/JavaScript/POSIX syntax, and repository consistency and whitespace
+  checks.
 
 ## v24.6.251 Phase 7B-4 AI secret-store domain extraction
 
