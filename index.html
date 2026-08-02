@@ -12744,7 +12744,8 @@ async function startFormat(blind) {
   document.getElementById('blindBadge').style.display = 'none';
   _parsedData = null;
   document.getElementById('jaBar').style.display = 'none';
-  document.getElementById('jaSettingsPanel').style.display = 'none';
+  var _jaSettingsPanel = document.getElementById('jaSettingsPanel');
+  if (_jaSettingsPanel) _jaSettingsPanel.style.display = 'none';
   document.getElementById('jaStatus').textContent = '';
   var bjs3 = document.getElementById('batchJAStatus');
   if (bjs3 && !window._jaToken) bjs3.style.display = 'none';
