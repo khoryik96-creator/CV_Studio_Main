@@ -1234,8 +1234,13 @@ function Check-Tesseract {
                 & $winget.Source install --id UB-Mannheim.TesseractOCR --exact --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
                 if ($LASTEXITCODE -ne 0) { throw "winget exited with code $LASTEXITCODE" }
             } elseif ($choco) {
-                & $choco.Source install tesseract --yes --no-progress
-                if ($LASTEXITCODE -ne 0) { throw "Chocolatey exited with code $LASTEXITCODE" }
+                $installed = $false
+                foreach ($attempt in 1..3) {
+                    & $choco.Source install tesseract --version=5.5.0.20241111 --yes --no-progress
+                    if ($LASTEXITCODE -eq 0) { $installed = $true; break }
+                    Start-Sleep -Seconds (5 * $attempt)
+                }
+                if (-not $installed) { throw 'Chocolatey failed after three attempts.' }
             } else {
                 throw 'Neither winget nor Chocolatey is available.'
             }

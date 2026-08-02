@@ -74,7 +74,13 @@ jobs:
         shell: pwsh
         run: |
           if (-not (Get-Command tesseract.exe -ErrorAction SilentlyContinue)) {
-            choco install tesseract --yes --no-progress
+            $installed = $false
+            foreach ($attempt in 1..3) {
+              choco install tesseract --version=5.5.0.20241111 --yes --no-progress
+              if ($LASTEXITCODE -eq 0) { $installed = $true; break }
+              Start-Sleep -Seconds (5 * $attempt)
+            }
+            if (-not $installed) { throw 'Pinned Tesseract installation failed after three attempts.' }
           }
           $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
           $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
