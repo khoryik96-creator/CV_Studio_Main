@@ -5277,7 +5277,7 @@ async function generateAnonJD() {
   var phAnonStart = document.getElementById('anonJDPlaceholder'); if (phAnonStart) phAnonStart.style.display = 'flex';
 
   try {
-    var data = await callAIProxy(prompt, 4000, true, 3, 'jd_anonymizer');
+    var data = await callAIProxy(prompt, 4000, false, 3, 'jd_anonymizer');
     var rawOut = aiText(data);
     var _anonTotalUsage = normalizeUsageClient({});
     var _anonTotalUsd = 0;
@@ -5326,7 +5326,7 @@ async function generateAnonJD() {
       var retryInstruction = jdAnonParaphraseRetryInstruction(_anonParaphraseIssues);
       var retryPrompt = prompt.replace('\nORIGINAL JD:\n---\n', '\n' + retryInstruction + '\n\nORIGINAL JD:\n---\n');
       if (retryPrompt === prompt) retryPrompt = prompt + retryInstruction;
-      var retryData = await callAIProxy(retryPrompt, 4000, true, 3, 'jd_anonymizer');
+      var retryData = await callAIProxy(retryPrompt, 4000, false, 3, 'jd_anonymizer');
       _anonTrackUsage(retryData, 'Blind JD — Rewrite Retry');
       var retryText = aiText(retryData);
       try {
@@ -12744,7 +12744,8 @@ async function startFormat(blind) {
   document.getElementById('blindBadge').style.display = 'none';
   _parsedData = null;
   document.getElementById('jaBar').style.display = 'none';
-  document.getElementById('jaSettingsPanel').style.display = 'none';
+  var _jaSettingsPanel = document.getElementById('jaSettingsPanel');
+  if (_jaSettingsPanel) _jaSettingsPanel.style.display = 'none';
   document.getElementById('jaStatus').textContent = '';
   var bjs3 = document.getElementById('batchJAStatus');
   if (bjs3 && !window._jaToken) bjs3.style.display = 'none';
