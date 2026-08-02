@@ -65,6 +65,7 @@ class Phase7AModularMonolithFoundationTests(unittest.TestCase):
                 "diagnostics",
                 "startup",
                 "runtime",
+                "web_assets",
                 "storage_http",
                 "legacy_web_shell",
             ),
