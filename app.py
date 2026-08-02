@@ -316,6 +316,7 @@ from cvstudio_runtime import RuntimeService
 from cvstudio_web_assets import WebAssetsService
 from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
+from cvstudio_jobadder_write import JobAdderWriteService
 
 _CVSTUDIO_VERSION = "v24.6.246"
 _CVSTUDIO_ROOT = _install_package_root()
@@ -3338,6 +3339,13 @@ _CVSTUDIO_JOBADDER_READ_SERVICE = JobAdderReadService(
     public_info=lambda: _ja_public_info(),
     creds_store=lambda: _ja_creds_store,
     ja_api=lambda path: _ja_api(path),
+)
+
+_CVSTUDIO_JOBADDER_WRITE_SERVICE = JobAdderWriteService(
+    jsonify=lambda payload: jsonify(payload),
+    request_json=lambda: request.get_json(silent=True) or {},
+    refresh_token=lambda force=False: _ja_refresh_access_token(force=force),
+    client=lambda: _JOBADDER_CLIENT,
 )
 
 
@@ -15926,77 +15934,12 @@ def jobadder_spider_search():
 @app.route("/jobadder/create_candidate", methods=["POST"])
 @_ja_critical_write_route
 def jobadder_create_candidate():
-    """Server-side proxy: create a new candidate."""
-    token = _ja_refresh_access_token(force=False)
-    if not token:
-        return jsonify({"error": "Not authenticated"}), 401
-    data = request.get_json(silent=True) or {}
-    if not data:
-        return jsonify({"error": "Invalid or empty JSON body"}), 400
-    try:
-        # Ensure email is flat string not array (JobAdder API requirement)
-        if "email" in data and isinstance(data["email"], list):
-            data["email"] = data["email"][0].get("address", "") if data["email"] else ""
-        # Build payload — keep non-empty values (dicts/lists are kept if non-empty)
-        payload = {}
-        for k, v in data.items():
-            if v is None or v == "" or v == [] or v == {}: continue
-            # For nested dicts, also strip if all values are empty
-            if isinstance(v, dict) and all(not vv for vv in v.values()): continue
-            payload[k] = v
-        body = json.dumps(payload).encode()
-        import sys; print(f"[JA Create] payload keys: {list(payload.keys())}", file=sys.stderr)
-        _status, result = _JOBADDER_CLIENT.request_json(
-            "candidates",
-            method="POST",
-            body=body,
-            headers={"Content-Type": "application/json"},
-            token=token,
-            timeout=15,
-            fallback={},
-            safe_to_retry=False,
-            retries=0,
-        )
-        return jsonify(result)
-    except urllib.error.HTTPError as e:
-        body = e.read().decode()
-        return jsonify({"error": f"JobAdder error: {e.code}", "detail": body}), e.code
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    return _CVSTUDIO_JOBADDER_WRITE_SERVICE.create_candidate()
 
 @app.route("/jobadder/update_candidate", methods=["POST"])
 @_ja_critical_write_route
 def jobadder_update_candidate():
-    """Update existing candidate profile fields via PUT /candidates/{id}."""
-    token = _ja_refresh_access_token(force=False)
-    if not token:
-        return jsonify({"error": "Not authenticated"}), 401
-    data = request.get_json(silent=True) or {}
-    if not data:
-        return jsonify({"error": "Invalid or empty JSON body"}), 400
-    candidate_id = data.pop("candidateId", "")
-    if not candidate_id:
-        return jsonify({"error": "Missing candidateId"}), 400
-    try:
-        payload = {k: v for k, v in data.items() if v not in (None, "", [], {})}
-        body = json.dumps(payload).encode()
-        _status, result = _JOBADDER_CLIENT.request_json(
-            "candidates/{}".format(candidate_id),
-            method="PUT",
-            body=body,
-            headers={"Content-Type": "application/json"},
-            token=token,
-            timeout=15,
-            fallback={},
-            safe_to_retry=False,
-            retries=0,
-        )
-        return jsonify(result)
-    except urllib.error.HTTPError as e:
-        body_err = e.read().decode()
-        return jsonify({"error": "JobAdder error: {}".format(e.code), "detail": body_err}), e.code
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    return _CVSTUDIO_JOBADDER_WRITE_SERVICE.update_candidate()
 
 def _safe_jobadder_attachment_filename(value, fallback):
     """Keep uploaded names inside one multipart header line."""

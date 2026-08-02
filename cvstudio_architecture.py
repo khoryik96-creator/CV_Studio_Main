@@ -114,6 +114,12 @@ DEFAULT_MODULES = (
         ("external_clients",),
     ),
     ModuleDefinition(
+        "jobadder_write",
+        "domain",
+        ("cvstudio_jobadder_write.py",),
+        ("external_clients",),
+    ),
+    ModuleDefinition(
         "storage_http",
         "interface",
         ("cvstudio_storage_bridge.py",),
@@ -139,6 +145,7 @@ DEFAULT_MODULES = (
             "documents",
             "external_clients",
             "jobadder_read",
+            "jobadder_write",
             "platform_dependencies",
             "runtime",
             "secrets",

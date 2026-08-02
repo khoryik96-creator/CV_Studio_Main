@@ -68,6 +68,7 @@ class Phase7AModularMonolithFoundationTests(unittest.TestCase):
                 "web_assets",
                 "secrets",
                 "jobadder_read",
+                "jobadder_write",
                 "storage_http",
                 "legacy_web_shell",
             ),

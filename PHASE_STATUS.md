@@ -3,9 +3,10 @@
 ## Release state
 
 - Approved baseline: v24.6.217
-- Current source baseline: v24.6.251 (Phase 7B-4 AI secret-store merged; Phase
-  7B-5a JobAdder coverage net merged)
-- Active architecture candidate: v24.6.252 (Phase 7B-5b read-only JobAdder proxies)
+- Current source baseline: v24.6.252 (Phase 7B-5a coverage net + 7B-5b read-only
+  JobAdder proxies merged)
+- Active architecture candidate: v24.6.253 (Phase 7B-5c JobAdder candidate JSON
+  writes)
 - Completed release: v24.6.243 (Windows x64 only)
 - Phase 2B source baseline: v24.6.219
 - Phase 2B baseline Git commit: `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`
@@ -34,6 +35,38 @@
 - Current stop: after Phase 7B-4 implementation, regression validation and
   focused review. Stop before release, merge, further extractions or unrelated
   work.
+
+## v24.6.253 Phase 7B-5c JobAdder candidate JSON write extraction
+
+- Exact source baseline is merged Phase 7B-5b commit
+  `e93be4d7fc542cde7f8a3099f7ee5d0e457965fb`.
+- `cvstudio_jobadder_write.py` is a new composed `JobAdderWriteService` behind
+  the `/jobadder/create_candidate` and `/jobadder/update_candidate` endpoints.
+  The payload construction (email flattening, empty-value stripping, candidateId
+  handling) and the non-retryable POST/PUT transport calls are a verbatim move
+  from `app.py`.
+- The `_ja_critical_write_route` decorator stays on the delegating routes in
+  `app.py`, so the critical-write concurrency guard and non-retry semantics
+  (`safe_to_retry=False`) are unchanged. The application keeps ownership of the
+  OAuth token lifecycle and the `JobAdderClient` transport; the service reaches
+  the token refresh, request body and transport only through injected callbacks.
+- The two routes become thin delegators, so the sealed route
+  URL/method/endpoint SHA-256 stays byte-identical to the Phase 7A baseline
+  (`f8378b6f3424476eb0683af8e0bbb06ed430675abfe11b74ebed5ab361a20bc9`) and the
+  route count stays at 108. The `jobadder_write` module joins the acyclic module
+  graph (now sixteen modules) as a `domain`-layer dependency of `external_clients`.
+- Behaviour preservation is proven by a new Phase 7B-5c write characterization
+  net (POST/PUT endpoint, non-retryable flags, payload construction) written
+  before the move and green after it, plus the Phase 7B-5a unauthenticated
+  coverage. The uploads and the OAuth token lifecycle are deferred to later
+  slices; the token lifecycle also retains its existing Phase 3 sign-out and
+  account-state regression coverage.
+- No new feature, route, schema, credential handling or release is included.
+- Validation passed 207 Python tests (the one pre-existing Antiword extraction
+  failure and nine platform-gated Antiword skips are Linux-only and match
+  master), all ten frontend fixtures, 24 source-smoke assertions, tracked
+  Python/JavaScript/POSIX syntax, and repository consistency and whitespace
+  checks.
 
 ## v24.6.252 Phase 7B-5b read-only JobAdder proxy extraction
 
