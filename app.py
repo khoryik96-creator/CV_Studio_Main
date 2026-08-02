@@ -737,6 +737,10 @@ def _cvstudio_classify_error(status, message, path=""):
     elif "deepseek" in low or "anthropic" in low or "openai" in low or "api provider" in low:
         if status in (401, 403) or "api key" in low or "unauthorized" in low or "authentication" in low:
             return "AI_PROVIDER_AUTH_REQUIRED", False, "open_ai_settings"
+        if status == 402 or "insufficient balance" in low or "insufficient_quota" in low or "exceeded your current quota" in low:
+            return "AI_PROVIDER_INSUFFICIENT_BALANCE", False, "top_up_ai_balance"
+        if status == 422 or "invalid model" in low or "model not found" in low or "unknown model" in low:
+            return "AI_PROVIDER_INVALID_MODEL", False, "reset_ai_model"
         code = "AI_PROVIDER_REQUEST_FAILED"
         retryable = status >= 429
         action = "retry_or_switch_provider" if retryable else "open_ai_settings"
@@ -1474,6 +1478,25 @@ def _call_openai(api_key, payload_dict, timeout_seconds=180):
     return translated
 
 
+_DEEPSEEK_RETIRED_MODELS = {
+    "deepseek-chat": "deepseek-v4-flash",
+    "deepseek-reasoner": "deepseek-v4-flash",
+    "deepseek-v4-flahs": "deepseek-v4-flash",
+}
+
+
+def _migrate_deepseek_model(model):
+    """Map retired/misspelled DeepSeek model names to the current default.
+
+    Idempotent last line of defence at the transport boundary: a stale
+    browser setting (e.g. ``deepseek-chat``) or a typo should not silently
+    fail every DeepSeek feature call. Only known-retired values are rewritten;
+    unrecognised values are left untouched so genuinely new models still pass.
+    """
+    key = str(model or "").strip()
+    return _DEEPSEEK_RETIRED_MODELS.get(key.lower(), key)
+
+
 def call_llm(provider, api_key, payload_dict):
     """Dispatch a Messages-API-shaped request and normalize returned usage.
 
@@ -1486,6 +1509,8 @@ def call_llm(provider, api_key, payload_dict):
         data = call_anthropic(api_key, payload_dict)
     elif provider == "deepseek":
         payload_dict = dict(payload_dict or {})
+        if payload_dict.get("model"):
+            payload_dict["model"] = _migrate_deepseek_model(payload_dict.get("model"))
         timeout_seconds = payload_dict.pop("_timeout_seconds", 180)
         try:
             timeout_seconds = max(15, int(timeout_seconds))
@@ -16508,14 +16533,33 @@ def test_key():
             return jsonify({"ok": False, "error": "No API key provided"})
         if provider in ("", "anthropic", "claude") and not api_key.startswith("sk-ant-"):
             return jsonify({"ok": False, "error": f"Key should start with sk-ant-, got: {api_key[:12]}..."})
-        test_model = {"deepseek": "deepseek-v4-flash", "openai": "gpt-5.5", "gpt": "gpt-5.5"}.get(provider, "claude-haiku-4-5-20251001")
+        default_model = {"deepseek": "deepseek-v4-flash", "openai": "gpt-5.5", "gpt": "gpt-5.5"}.get(provider, "claude-haiku-4-5-20251001")
+        # Test the model the user has actually saved, not a hardcoded one, so a
+        # stale/invalid model (e.g. a retired DeepSeek name) is caught here
+        # rather than silently failing every real feature call.
+        test_model = str(body.get("model") or "").strip() or default_model
+        if provider == "deepseek":
+            test_model = _migrate_deepseek_model(test_model)
+        # A single probe that also exercises strict-JSON output — representative
+        # of the structured tasks (/parse, Blind JD, etc.) without a second call.
         data = call_llm(provider, api_key, {
             "model": test_model,
-            "max_tokens": 10,
-            "messages": [{"role": "user", "content": "hi"}]
+            "max_tokens": 40,
+            "messages": [{"role": "user", "content": 'Reply with only this JSON and nothing else: {"ok": true}'}]
         })
+        text = ""
+        for block in ((data or {}).get("content") or []):
+            if isinstance(block, dict) and block.get("type") == "text":
+                text += block.get("text") or ""
+        json_ok = False
+        try:
+            match = re.search(r"\{.*\}", text, re.DOTALL)
+            if match:
+                json_ok = "ok" in json.loads(match.group(0))
+        except Exception:
+            json_ok = False
         usage = (data or {}).get("usage") or {}
-        out = {"ok": True, "usage": usage, "model": test_model, "provider": provider}
+        out = {"ok": True, "json_ok": json_ok, "usage": usage, "model": test_model, "provider": provider}
         out.update(_llm_response_cost_fields(test_model, usage, provider))
         return jsonify(out)
     except urllib.error.HTTPError as e:
