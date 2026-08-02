@@ -64,6 +64,7 @@ jobs:
           node tests/test_phase6a_frontend_modularisation.js
           node tests/test_phase6b_frontend_lazy_loading.js
           node tests/test_phase6c_adaptive_memory_fit.js
+          node tests/test_long_cv_output_corrective.js
 
       - name: Run live source smoke
         shell: bash

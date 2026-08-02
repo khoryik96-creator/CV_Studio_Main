@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.243"
+_INSTALL_RECEIPT_VERSION = "v24.6.245"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -304,7 +304,7 @@ from cvstudio_antiword import (
     run_verified_antiword as _run_verified_antiword_runtime,
 )
 
-_CVSTUDIO_VERSION = "v24.6.243"
+_CVSTUDIO_VERSION = "v24.6.245"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -1130,7 +1130,7 @@ Output: JSON object matching this exact schema (no variations):
       "company": "Company Name",
       "roles": [
         {
-          "title": "Job Title",
+          "title": "Job Title exactly as stated in the source, or empty string when absent",
           "date_range": "Mon YYYY to Mon YYYY or empty",
           "reason_for_leaving": "Reason text or empty string",
           "bullets": [
@@ -1189,10 +1189,12 @@ RULES:
 - Work experience date ranges must use exactly this style: "Mon YYYY to Mon YYYY" or "Mon YYYY to Present". Convert "Till Date", "Current", hyphens/dashes, and ALL-CAPS months into this style (e.g. "OCT 2022 - Till Date" → "Oct 2022 to Present").
 - Work experience company names and role titles must not be returned in ALL CAPS unless they are genuine acronyms (e.g. COGNIZANT → Cognizant, DATA ECONOMY → Data Economy, WOLTERS KLUWER → Wolters Kluwer, but CGI/AWS/SQL/SAP stay uppercase).
 - candidate.is_employed: set to true ONLY if the candidate has a role that explicitly says "Present", "Current", "Till date", "To date", or similar — AND that role is a full-time, permanent, contract, or consulting role with a company (not freelance or self-employed). If ALL roles have a definite end date (e.g. "Dec 2025", "Feb 2025"), set is_employed to false even if the end date is very recent. If the only "Present" role is freelance or self-employment, set is_employed to false.
-- candidate.current_position and candidate.current_company: ALWAYS populate these — they must NEVER be empty strings. If is_employed is true, fill with the current role title and company. If is_employed is false, STILL fill these with the most recent role title and company from work_experiences (the first/top entry). These fields are required regardless of employment status — leaving them blank is an error.
+- candidate.current_company: populate this from the most recent employer when the source states one.
+- candidate.current_position: populate this only when the source explicitly states the corresponding role title. Never infer a title from responsibilities, achievements, industry, seniority, dates, surrounding context, or common career patterns. If the title is absent, return an empty string.
+- work_experiences[].roles[].title: copy only an explicitly stated source title. Never invent, infer, imply, annotate, or explain a title. Use an empty string when the source provides no title.
 - reason_for_leaving: only if stated in input, else empty string ""
 - summary_bullets: always empty array []
-- bullets: preserve original wording exactly, no paraphrasing. If a role has named sub-sections or categories within it (e.g. "Data Engineering", "Database", or "Regional Finance Oversight:"), represent each as a { "heading": "...", "bullets": [...] } object in the bullets array. Plain bullets with no sub-section go in as plain strings. Mix freely — e.g. ["plain bullet", { "heading": "Data Engineering", "bullets": ["did x", "did y"] }, "another plain bullet"]
+- bullets: preserve original wording exactly, no paraphrasing. If a role has named sub-sections or categories within it (e.g. "Key responsibilities", "Key achievements", "Data Engineering", "Database", or "Regional Finance Oversight:"), represent each as a JSON object, never as JSON serialized inside a string: { "heading": "...", "bullets": ["did x", "did y"], "kind": "section" }. Plain bullets with no sub-section go in as plain strings. Mix freely — e.g. ["plain bullet", { "heading": "Data Engineering", "bullets": ["did x", "did y"], "kind": "section" }, "another plain bullet"]
 - education[].cgpa, education[].honors, and education[].description: do NOT omit these even though they are easy to skip. If the source CV states a CGPA/GPA for a qualification, it MUST be captured in that entry's "cgpa" field exactly as written. If the source CV mentions academic distinctions -- First Class Honours, cum laude variants, Dean's List, academic scholarships/awards, or similar -- for that qualification, it MUST be captured in "honors" exactly as written. If the source CV includes a thesis title, dissertation topic, or a description of a capstone/major project for that qualification, it MUST be captured in "description" — copied verbatim, not summarized or shortened, even if it is several sentences long.
 - All text: fix spelling/typos silently, preserve everything else
 - Missing fields: use empty string "" or empty array []
@@ -1952,14 +1954,136 @@ def _clean_candidate_languages_from_redaction(parsed, cv_text):
         parsed["candidate"] = cand
     return parsed
 
-def _normalize_cv_data_for_output(parsed, source_text=""):
-    """Normalize headings/date/company/title fields for preview and DOCX export.
+_CV_ROLE_DENSE_MARKER_RE = re.compile(
+    r"^\s*(?:[ivxlcdm]+[.)]\s*)?(?:key\s+)?(?:responsibilit(?:y|ies)|achievements?)\s*:?\s*$",
+    re.I | re.M,
+)
+_CV_SECTION_HEADING_RE = re.compile(
+    r"^\s*(?:key\s+)?(responsibilit(?:y|ies)|achievements?)\s*:?\s*$",
+    re.I,
+)
+_CV_INFERRED_TITLE_SUFFIX_RE = re.compile(
+    r"\s*[\[(]\s*(?:inferred|implied|assumed|guessed|likely)\s+(?:from|based\s+on)\s+"
+    r"(?:responsibilit(?:y|ies)|duties|job\s+content|role\s+content|context)\s*[\])]\s*$",
+    re.I,
+)
 
-    This intentionally avoids touching bullet text, summaries, skills, education
-    descriptions, or other free-form content that should remain verbatim.
-    """
+
+def _cv_parse_backend_timeout_seconds(cv_text):
+    """Return the bounded provider timeout for one CV parse request."""
+    text = str(cv_text or "")
+    is_long = len(text) >= 18000 or len(_CV_ROLE_DENSE_MARKER_RE.findall(text)) >= 8
+    return 300 if is_long else 180
+
+
+def _strip_cv_inferred_title(value):
+    text = str(value or "").strip()
+    return "" if _CV_INFERRED_TITLE_SUFFIX_RE.search(text) else text
+
+
+def _canonical_cv_section_heading(value):
+    text = str(value or "").strip()
+    match = _CV_SECTION_HEADING_RE.fullmatch(text)
+    if not match:
+        return text
+    return "Key achievements" if match.group(1).lower().startswith("achievement") else "Key responsibilities"
+
+
+def _normalize_cv_bullet_items(items, allow_standalone_sections=True):
+    """Repair valid JSON-looking bullet strings without changing plain prose."""
+    source = items if isinstance(items, list) else ([] if items in (None, "") else [items])
+    normalized = []
+
+    def add(item):
+        if isinstance(item, str):
+            candidate = item.strip()
+            section_heading = _canonical_cv_section_heading(candidate)
+            if allow_standalone_sections and candidate and _CV_SECTION_HEADING_RE.fullmatch(candidate):
+                normalized.append({"heading": section_heading, "bullets": [], "kind": "section"})
+                return
+            if candidate and candidate[0] in "[{" and candidate[-1] in "]}":
+                try:
+                    decoded = json.loads(candidate)
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    decoded = None
+                if isinstance(decoded, (dict, list)):
+                    before = len(normalized)
+                    add(decoded)
+                    if len(normalized) == before:
+                        normalized.append(item)
+                    return
+            if candidate:
+                normalized.append(item)
+            return
+        if isinstance(item, list):
+            for child in item:
+                add(child)
+            return
+        if not isinstance(item, dict):
+            if item is not None and str(item).strip():
+                normalized.append(str(item))
+            return
+
+        heading = _canonical_cv_section_heading(item.get("heading") or item.get("title") or "")
+        bullets = _normalize_cv_bullet_items(
+            item.get("bullets") or item.get("items") or [],
+            allow_standalone_sections=False,
+        )
+        if heading:
+            group = {"heading": heading, "bullets": bullets}
+            kind = str(item.get("kind") or "").strip()
+            if kind:
+                group["kind"] = kind
+            elif _CV_SECTION_HEADING_RE.fullmatch(str(item.get("heading") or item.get("title") or "")):
+                group["kind"] = "section"
+            normalized.append(group)
+            return
+        for bullet in bullets:
+            add(bullet)
+
+    for value in source:
+        add(value)
+    return normalized
+
+
+def _normalize_cv_structured_content(parsed):
+    """Idempotently repair role bullets, inferred-title annotations and blanks."""
     if not isinstance(parsed, dict):
         return parsed
+    candidate = parsed.get("candidate")
+    if isinstance(candidate, dict):
+        candidate["current_position"] = _strip_cv_inferred_title(candidate.get("current_position"))
+    for exp in parsed.get("work_experiences") or []:
+        if not isinstance(exp, dict):
+            continue
+        for role in exp.get("roles") or []:
+            if not isinstance(role, dict):
+                continue
+            role["title"] = _strip_cv_inferred_title(role.get("title"))
+            role["bullets"] = _normalize_cv_bullet_items(role.get("bullets"))
+    certifications = parsed.get("certifications") or []
+    if not isinstance(certifications, list):
+        certifications = [certifications]
+    parsed["certifications"] = [
+        value for value in certifications
+        if str(value or "").strip()
+    ]
+    skills = parsed.get("skills") or []
+    if not isinstance(skills, list):
+        skills = []
+    parsed["skills"] = [
+        value for value in skills
+        if isinstance(value, dict)
+        and (str(value.get("category") or "").strip() or str(value.get("items") or "").strip())
+    ]
+    return parsed
+
+
+def _normalize_cv_data_for_output(parsed, source_text=""):
+    """Normalize structured CV data for preview and DOCX export."""
+    if not isinstance(parsed, dict):
+        return parsed
+    parsed = _normalize_cv_structured_content(parsed)
     cand = parsed.get("candidate") or {}
     if isinstance(cand, dict):
         if cand.get("current_company"):
@@ -7703,7 +7827,7 @@ def _ja_spa_browser_bridge(candidate_id, fields, note_text="", email="", salary_
     payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
     compact_payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     script = """(async () => {
-  const helperVersion = 'v24.6.243';
+  const helperVersion = 'v24.6.245';
   const candidateId = %s;
   const payload = %s;
   const profilePath = %s;
@@ -10295,7 +10419,7 @@ def jobadder_onenote_activity_diagnostic():
     generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Candidate Activity Read Test",
-        "cv_studio_version": "v24.6.243",
+        "cv_studio_version": "v24.6.245",
         "generated_utc": generated,
         "safety": {
             "read_only": True,
@@ -10506,7 +10630,7 @@ def jobadder_onenote_activity_create_diagnostic():
     if confirmation != "CREATE ONE MAX LOW TEST":
         return jsonify({"error": "Type CREATE ONE MAX LOW TEST exactly before running the controlled POST."}), 400
 
-    guard_key = ("v24.6.243", candidate_id)
+    guard_key = ("v24.6.245", candidate_id)
     if guard_key in _JA_ACTIVITY_CREATE_DIAG_USED:
         return jsonify({"error": "The one-shot controlled POST has already been run in this CV Studio session. Restarting is intentionally required before any repeat test."}), 409
     # Mark before the network call so a timeout/double-click cannot emit a second POST.
@@ -10535,7 +10659,7 @@ def jobadder_onenote_activity_create_diagnostic():
     generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Official AddCandidateActivity Create Test",
-        "cv_studio_version": "v24.6.243",
+        "cv_studio_version": "v24.6.245",
         "generated_utc": generated,
         "candidate_fixture": {
             "name": "Max Low",
@@ -13551,30 +13675,13 @@ def _spider_extract_option_values(payload):
 
 
 
-_AI_CRAWLER_LOCK_CODE = "1571"
-
 def _ai_crawler_lock_allowed(body=None):
-    """Casual local lock guard for AI Crawler routes.
-
-    This mirrors the Lead Finder local access gate. It is not enterprise
-    authentication, but prevents accidental/casual use through the UI and
-    direct local route calls.
-    """
-    try:
-        body = body if isinstance(body, dict) else {}
-        supplied = (
-            request.headers.get("X-AI-Crawler-Code")
-            or body.get("crawler_lock_code")
-            or request.args.get("crawler_lock_code")
-            or ""
-        )
-        return str(supplied).strip() == _AI_CRAWLER_LOCK_CODE
-    except Exception:
-        return False
+    """Compatibility hook retained after removing the AI Crawler password."""
+    return True
 
 
 def _ai_crawler_locked_response():
-    return _cvstudio_error_payload("AI_CRAWLER_LOCKED", "AI Crawler is locked. Unlock the AI Crawler tab with the 4-digit code first.", 423, action="unlock_feature")
+    return _cvstudio_error_payload("AI_CRAWLER_ACCESS_UNAVAILABLE", "AI Crawler access is unavailable.", 503, action="retry")
 
 @app.route("/jobadder/spider_options", methods=["GET"])
 def jobadder_spider_options():
@@ -16676,10 +16783,12 @@ def parse_cv():
         cv_text = _re.sub(r'\n{3,}', '\n\n', cv_text)   # max 2 blank lines
         cv_text = _re.sub(r'[ \t]{2,}', ' ', cv_text)   # collapse spaces
         cv_text = cv_text.strip()
+        parse_timeout_seconds = _cv_parse_backend_timeout_seconds(cv_text)
 
         data = call_llm(llm_provider, api_key, {
             "model": model,
             "max_tokens": 64000,
+            "_timeout_seconds": parse_timeout_seconds,
             "system": SYSTEM_PROMPT,
             "messages": [{"role": "user", "content": f"Parse this raw CV into the JSON schema:\n\n{cv_text}"}]
         })
@@ -16788,6 +16897,7 @@ def parse_cv():
                     s2_data = call_llm(llm_provider, api_key, {
                         "model": model,
                         "max_tokens": 64000,
+                        "_timeout_seconds": parse_timeout_seconds,
                         "system": SYSTEM_PROMPT,
                         "messages": [{"role": "user", "content": brevity_prompt}]
                     })
@@ -16811,6 +16921,7 @@ def parse_cv():
                         s3_data = call_llm(llm_provider, api_key, {
                             "model": model,
                             "max_tokens": 64000,
+                            "_timeout_seconds": parse_timeout_seconds,
                             "messages": [
                                 {"role": "user",  "content": f"Parse this CV into the JSON schema:\n\n{cv_text}"},
                                 {"role": "assistant", "content": raw_text},
@@ -16872,6 +16983,7 @@ def parse_cv():
         parsed = _collapse_incomplete_earlier_career(parsed)
         parsed = _clean_candidate_languages_from_redaction(parsed, cv_text)
         parsed = _normalize_candidate_languages(parsed, cv_text)
+        parsed = _normalize_cv_structured_content(parsed)
         parsed = _normalize_cv_data_for_output(parsed, cv_text)
         out = {"ok": True, "data": parsed, "usage": usage, "model": model, "provider": llm_provider}
         out.update(_llm_response_cost_fields(model, usage, llm_provider))
@@ -21803,6 +21915,7 @@ def generate_docx():
         cv_data = body.get("data")
         if not cv_data:
             return jsonify({"error": "No CV data provided"}), 400
+        cv_data = _normalize_cv_structured_content(cv_data)
         cv_data = _normalize_cv_data_for_output(cv_data)
         cv_data["_document_alignment"] = _normalize_cv_text_alignment(body.get("alignment"))
 

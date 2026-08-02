@@ -28,8 +28,8 @@ import zipfile
 import zlib
 from pathlib import Path
 
-VERSION = "v24.6.243"
-VERSION_SLUG = "v24_6_243"
+VERSION = "v24.6.245"
+VERSION_SLUG = "v24_6_245"
 PRODUCT = "TheGuoLab-CVStudio"
 RECEIPT_SCHEMA = 2
 TOTP_MASK = bytes([147,57,36,83,116,245,122,57,165,162,176,168,249,50,204,128,45,174,232,56])
@@ -98,7 +98,7 @@ def detect_target(value: str) -> str:
     system=platform.system().lower(); machine=platform.machine().lower()
     if system=="windows" and machine in {"amd64","x86_64"}: return RELEASE_TARGET
     raise RuntimeError(
-        "CV Studio v24.6.243 is a Windows-x64-only release. "
+        "CV Studio v24.6.245 is a Windows-x64-only release. "
         "macOS users must remain on the verified v24.6.239 release."
     )
 
@@ -107,11 +107,11 @@ def validate_target_host(target: str) -> None:
     system=platform.system().lower(); machine=platform.machine().lower()
     if target != RELEASE_TARGET:
         raise RuntimeError(
-            "CV Studio v24.6.243 may produce only a Windows-x64 artifact."
+            "CV Studio v24.6.245 may produce only a Windows-x64 artifact."
         )
     if system!="windows" or machine not in {"amd64","x86_64"}:
         raise RuntimeError(
-            "CV Studio v24.6.243 Windows-x64 packages must be built on "
+            "CV Studio v24.6.245 Windows-x64 packages must be built on "
             "native Windows x64."
         )
 
@@ -490,7 +490,7 @@ def prepare_native_source(root: Path, work: Path) -> tuple[Path,dict]:
 
 def compile_native(root: Path, work: Path, target: str, source_entry: Path | None = None) -> tuple[Path,Path]:
     if target != RELEASE_TARGET:
-        raise RuntimeError("v24.6.243 native compilation is Windows-x64-only.")
+        raise RuntimeError("v24.6.245 native compilation is Windows-x64-only.")
     out=work/"nuitka-output"; out.mkdir()
     report=work/f"nuitka-{target}-report.xml"
     cmd=[sys.executable,"-m","nuitka","--mode=standalone","--assume-yes-for-downloads",
@@ -558,7 +558,7 @@ os.execv(B,A)
 def patch_launchers(root: Path,target: str) -> None:
     """Validate platform launchers; source files are already cross-platform aware."""
     if target != RELEASE_TARGET:
-        raise RuntimeError("v24.6.243 launcher packaging is Windows-x64-only.")
+        raise RuntimeError("v24.6.245 launcher packaging is Windows-x64-only.")
     if target=="windows-x64":
         for rel in ("START_HIDDEN.vbs", "WATCHDOG.vbs"):
             raw=(root/rel).read_bytes()
@@ -586,7 +586,7 @@ def patch_launchers(root: Path,target: str) -> None:
 def prune_target_incompatible_launchers(root: Path, target: str) -> None:
     """Do not ship launchers for an operating system the artifact cannot run on."""
     if target != RELEASE_TARGET:
-        raise RuntimeError("v24.6.243 artifact pruning is Windows-x64-only.")
+        raise RuntimeError("v24.6.245 artifact pruning is Windows-x64-only.")
     if target == "windows-x64":
         remove = ("install.sh", "start.sh", "restore_previous.sh")
     else:
@@ -618,7 +618,7 @@ def build_package(source: Path,work: Path,out_dir: Path,target: str,dist: Path,n
                   protected_index: Path,protected_generate: Path,protected_modules: Path,
                   protection: dict) -> tuple[Path,Path]:
     if target != RELEASE_TARGET:
-        raise RuntimeError("v24.6.243 protected packaging is Windows-x64-only.")
+        raise RuntimeError("v24.6.245 protected packaging is Windows-x64-only.")
     package=work/"package"/"cv_formatter"; native=package/"runtime"/"native"
     shutil.copytree(dist,native)
     for name in RUNTIME_ASSETS:
@@ -804,7 +804,7 @@ def protected_smoke_environment(state_root: Path) -> dict[str,str]:
 
 def smoke_test(package: Path,source: Path,output: Path,target: str,timeout_seconds: int = 240) -> dict:
     if target != RELEASE_TARGET:
-        raise RuntimeError("v24.6.243 protected smoke testing is Windows-x64-only.")
+        raise RuntimeError("v24.6.245 protected smoke testing is Windows-x64-only.")
     production_port_occupied=_loopback_port_is_occupied(5000)
     smoke_port=_choose_smoke_port()
     base_url=f"http://127.0.0.1:{smoke_port}"

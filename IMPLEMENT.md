@@ -2,14 +2,31 @@
 
 ## Current gate
 
-Phases 1, 2A, 2B, 3, 4, 5A and 5B are complete. The separately authorized
+Phases 1, 2A, 2B, 3, 4, 5A, 5B and 6A–6C are complete. The separately authorized
 mandatory Windows-x64 Antiword milestone completed in v24.6.240, and its
 verification-to-execution TOCTOU race is corrected in private owner/source
 release v24.6.241. The bounded JobAdder account-management and settings
 milestone is complete in private owner/source release v24.6.242. Phase 6A
 frontend modularisation and the bounded Phase 6B local-jsPDF lazy loading
 change are complete on their source branches without changing the v24.6.243
-installed identity. macOS remains on v24.6.239. Phase 6C is authorized only from exact base `fee134792f179de9d75d0de24afe08c27fb526c4` for the bounded adaptive-memory and explainable-fit refinements recorded in `PHASE_STATUS.md`; stop after its tested candidate commit without beginning another phase.
+installed identity. macOS remains on v24.6.239. The bounded v24.6.245
+post-Phase-6 corrective starts from merged source commit
+`c75aa20c5a99ea5e9af84204a19703c90e0c2d36`; it is limited to long-CV parse
+timeouts, structured-output repair, CV Scoring access code `1996`, and removal
+of the AI Crawler password. Stop before merge, protected packaging or Phase 7.
+
+## v24.6.245 corrective implementation decision
+
+Use one deterministic long-CV predicate in backend and browser. Normal requests
+retain a 180-second provider timeout with a 210-second browser margin; CVs of at
+least 18,000 characters or eight standalone responsibility/achievement markers
+receive 300/330 seconds. Every `/parse` caller must use the shared browser helper.
+
+Normalize imperfect AI structure at the backend response boundary, preview
+boundary and DOCX boundary. Decode only valid JSON-looking structured groups;
+preserve malformed/unknown text, canonicalize section headings, never infer a
+missing title, omit empty labels, and keep the transformation idempotent. Do not
+truncate or rewrite substantive CV content and do not make paid provider calls.
 
 ## Phase 6C implementation decision
 

@@ -255,6 +255,17 @@ Persistent background jobs and resumable task state:
   without reopening Settings or refreshing diagnostics. Manual profiles cancel
   that deadline and remain authoritative.
 
+## Post-Phase-6 corrective — v24.6.245
+
+- Add bounded long/role-dense CV parse timeouts without retrying or truncating
+  paid AI content.
+- Repair serialized structured bullet groups and inferred-title annotations at
+  backend, preview and DOCX boundaries while preserving substantive wording.
+- Keep CV Scoring last and casually locked with code `1996`; remove the AI
+  Crawler feature password.
+- Ship owner/source only after focused real-DOCX verification and the complete
+  regression gate. Protected packaging and macOS claims remain excluded.
+
 ## Phase 7 — Backburner
 
 Do not implement until explicitly reactivated:
