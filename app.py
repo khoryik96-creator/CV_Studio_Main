@@ -200,7 +200,7 @@ if _restart_delay_raw:
     except Exception:
         pass
 
-from flask import Flask, request, jsonify, send_from_directory, send_file, g, after_this_request
+from flask import request, jsonify, send_from_directory, send_file, g, after_this_request
 import urllib.request, urllib.error, urllib.parse, json, os, subprocess, tempfile, traceback, sys, re, socket, ssl, ast, platform, base64, hashlib, threading, atexit, logging, secrets, plistlib, zipfile, html, functools
 try:
     import certifi
@@ -306,6 +306,10 @@ from cvstudio_antiword import (
 from cvstudio_tesseract import (
     find_tesseract as _find_mandatory_tesseract,
     tesseract_health as _mandatory_tesseract_health,
+)
+from cvstudio_architecture import (
+    create_modular_monolith_app as _create_modular_monolith_app,
+    finalize_modular_monolith_app as _finalize_modular_monolith_app,
 )
 
 _CVSTUDIO_VERSION = "v24.6.246"
@@ -650,8 +654,7 @@ def _watchdog():
 
 threading.Thread(target=_watchdog, daemon=True).start()
 
-app = Flask(__name__, static_folder=None)
-app.config["MAX_CONTENT_LENGTH"] = 80 * 1024 * 1024
+app = _create_modular_monolith_app(__name__, static_folder=None)
 logging.getLogger("werkzeug").addFilter(_CVStudioAccessLogFilter())
 
 
@@ -23753,6 +23756,22 @@ def handle_exception(e):
         traceback.print_exc()
     message = _cvstudio_safe_error_message(str(e) or type(e).__name__, "Unexpected local server error")
     return _cvstudio_error_payload("INTERNAL_SERVER_ERROR", message, 500, retryable=True, action="retry", details={"exception_type": type(e).__name__})
+
+
+_CVSTUDIO_ARCHITECTURE = _finalize_modular_monolith_app(
+    app,
+    expected_route_count=108,
+    expected_route_contract_sha256=(
+        "f8378b6f3424476eb0683af8e0bbb06ed430675abfe11b74ebed5ab361a20bc9"
+    ),
+    expected_before_request_handlers=(
+        "_assign_cvstudio_request_id",
+        "_reject_declared_oversize_request",
+        "_reject_non_local_host_header",
+        "_require_ai_spend_browser_session",
+        "_reject_cross_site_unsafe_request",
+    ),
+)
 
 
 if __name__ == "__main__":

@@ -9,12 +9,33 @@ release v24.6.241. The bounded JobAdder account-management and settings
 milestone is complete in private owner/source release v24.6.242. Phase 6A
 frontend modularisation and the bounded Phase 6B local-jsPDF lazy loading
 change are complete on their source branches without changing the v24.6.243
-installed identity. The corrected v24.6.245 long-CV/access candidate is complete
-but unmerged at `4710236e08775609462e8b04ca2213c13a61938b`. The active v24.6.246
-candidate adds mandatory architecture-pinned Antiword for Intel and Apple
-Silicon macOS, makes functional Tesseract plus English data a setup requirement
-on Windows and macOS, and restores native Mac CI/protected-build gates. Stop
-after native CI, before release, merge or Phase 7.
+installed identity. The corrected v24.6.245 long-CV/access source is merged at
+`4c1e9a420830f62b68889518945d889260a3f616`. The v24.6.246 candidate
+added mandatory architecture-pinned Antiword for Intel and Apple Silicon
+macOS, made functional Tesseract plus English data a setup requirement on
+Windows and macOS, and restored native Mac CI/protected-build gates. That
+source is merged at `a6b35d2e0cad977e737622ed7d10e451ed5f7de3`.
+
+Phase 7A is now explicitly authorized on
+`agent/v24.6.247-modular-monolith-foundation`. Keep the v24.6.246 installed
+identity and the Python/Flask plus JavaScript stack. Introduce only the
+composition root, explicit current module inventory and exact application
+contract sealing needed for later one-domain-at-a-time extraction. Stop after
+tests, focused review and commit, before release, merge or Phase 7B.
+
+## v24.6.247 Phase 7A implementation decision
+
+Construct the existing Flask application through `cvstudio_architecture.py`
+without moving route decorators or changing initialization order. Record each
+current app-independent module exactly once in an acyclic dependency registry;
+retain `app.py` as the temporary legacy web shell and sole composition caller.
+
+After all existing decorators and error handlers are registered, seal the app
+against the known 108-route URL/method/endpoint digest, five ordered global
+request guards and 80 MiB request limit. Any drift must fail visibly at startup
+and in focused tests. Protected-source validation must require and compile the
+new architecture module. No route, endpoint name, schema, response, security
+gate, feature, dependency behavior or platform claim may change.
 
 ## v24.6.246 native dependency implementation decision
 
