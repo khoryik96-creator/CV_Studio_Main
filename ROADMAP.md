@@ -54,13 +54,17 @@
   It keeps the Python/Flask and JavaScript stack, introduces an explicit
   composition root and current module graph, and seals existing Flask contracts
   before one-domain-at-a-time extraction.
-- v24.6.248 is the active Phase 7B-1 extraction: the cross-platform startup
+- v24.6.248 is the Phase 7B-1 extraction: the cross-platform startup
   (login-item) domain moves from the legacy web shell into a composed
   `cvstudio_startup` service, with the routes kept as thin delegators so the
   sealed route contract is byte-identical.
+- v24.6.249 is the active Phase 7B-2 extraction: the read-only runtime
+  liveness/identity endpoints (`/status`, `/instance`, `/instance-id`, `/ping`)
+  move into a composed `cvstudio_runtime` service, again as thin delegators.
 - Phases 1, 2A, 2B, 3, 4, 5A, 5B, 6A–6C and 7A are complete.
-- Phase 7B (one-domain-at-a-time extraction) is active, starting with the
-  startup domain. The backburner remains inactive.
+- Phase 7B (one-domain-at-a-time extraction) is active: startup and runtime
+  liveness are extracted; larger domains (documents/formatting, JobAdder,
+  OneNote, Lead Finder) remain for later increments. The backburner is inactive.
 
 ## Phase 1 — Completed
 

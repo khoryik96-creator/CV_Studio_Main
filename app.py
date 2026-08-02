@@ -312,6 +312,7 @@ from cvstudio_architecture import (
     finalize_modular_monolith_app as _finalize_modular_monolith_app,
 )
 from cvstudio_startup import StartupService
+from cvstudio_runtime import RuntimeService
 
 _CVSTUDIO_VERSION = "v24.6.246"
 _CVSTUDIO_ROOT = _install_package_root()
@@ -2807,57 +2808,31 @@ def startup_enable():
 def startup_disable():
     return _CVSTUDIO_STARTUP_SERVICE.disable()
 
+_CVSTUDIO_RUNTIME_SERVICE = RuntimeService(
+    jsonify=lambda payload: jsonify(payload),
+    version=lambda: _CVSTUDIO_VERSION,
+    root_path=lambda: _CVSTUDIO_ROOT,
+    root_hash=lambda: _CVSTUDIO_ROOT_HASH,
+    instance_id=lambda: _CVSTUDIO_INSTANCE_ID,
+    port=lambda: _CVSTUDIO_PORT,
+)
+
+
 @app.route("/status", methods=["GET"])
 def status():
-    """Report the health of the process that is serving this response.
-
-    Older builds counted pythonw.exe/app.py processes, which is inaccurate for
-    native CVStudio executables and can match unrelated Python applications.
-    If this route is executing, the current server process is alive.
-    """
-    executable_name = os.path.basename(str(sys.executable or sys.argv[0] or "")).strip()
-    argv0_name = os.path.basename(str(sys.argv[0] or "")).strip()
-    native_compiled = bool(
-        getattr(sys, "frozen", False)
-        or executable_name.lower().startswith("cvstudio")
-        or argv0_name.lower().startswith("cvstudio")
-    )
-    return jsonify({
-        "status": "running",
-        "version": _CVSTUDIO_VERSION,
-        "healthy": True,
-        "root": _CVSTUDIO_ROOT,
-        "root_hash": _CVSTUDIO_ROOT_HASH,
-        "instance_id": _CVSTUDIO_INSTANCE_ID,
-        "runtime_mode": "native" if native_compiled else "source",
-        "runtime_process": executable_name or argv0_name or "unknown",
-        # Retain the legacy field for older frontends, but make it represent the
-        # one process that is demonstrably serving this request.
-        "pythonw_instances": 1,
-    })
+    return _CVSTUDIO_RUNTIME_SERVICE.status()
 
 @app.route("/instance", methods=["GET"])
 def instance_info():
-    """Identify the exact version and extracted package serving this port."""
-    return jsonify({
-        "product": "CV Studio",
-        "version": _CVSTUDIO_VERSION,
-        "root": _CVSTUDIO_ROOT,
-        "root_hash": _CVSTUDIO_ROOT_HASH,
-        "instance_id": _CVSTUDIO_INSTANCE_ID,
-        "pid": os.getpid(),
-        "port": _CVSTUDIO_PORT,
-    })
+    return _CVSTUDIO_RUNTIME_SERVICE.instance_info()
 
 @app.route("/instance-id", methods=["GET"])
 def instance_id_text():
-    # Plain text is intentionally easy for VBS/bash launchers to validate.
-    return "{}|{}|{}".format(_CVSTUDIO_VERSION, _CVSTUDIO_INSTANCE_ID, _CVSTUDIO_ROOT), 200, {"Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store"}
+    return _CVSTUDIO_RUNTIME_SERVICE.instance_id_text()
 
 @app.route("/ping", methods=["GET"])
 def ping():
-    """Self-ping endpoint — keeps the process warm during idle periods."""
-    return "", 204
+    return _CVSTUDIO_RUNTIME_SERVICE.ping()
 
 # ── JobAdder OAuth and protected credential store ────────────────────
 _ja_creds_store = {}

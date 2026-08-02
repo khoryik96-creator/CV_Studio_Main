@@ -4,7 +4,8 @@
 
 - Approved baseline: v24.6.217
 - Current source baseline: v24.6.247 (modular-monolith foundation, merged)
-- Active architecture candidate: v24.6.248 (Phase 7B-1 startup domain extraction)
+- Active architecture candidate: v24.6.249 (Phase 7B-2 runtime liveness domain,
+  stacked on the unmerged v24.6.248 Phase 7B-1 startup extraction)
 - Completed release: v24.6.243 (Windows x64 only)
 - Phase 2B source baseline: v24.6.219
 - Phase 2B baseline Git commit: `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`
@@ -31,6 +32,30 @@
 - Current stop: after Phase 7B-1 implementation, regression validation and
   focused review. Stop before release, merge, further extractions or unrelated
   work.
+
+## v24.6.249 Phase 7B-2 runtime liveness domain extraction
+
+- Stacked on the unmerged Phase 7B-1 branch `claude/phase-7b1-startup-service`;
+  rebase onto `master` once Phase 7B-1 merges.
+- `cvstudio_runtime.py` is a new composed `RuntimeService` behind the read-only
+  `/status`, `/instance`, `/instance-id` and `/ping` endpoints. The liveness and
+  process-identity logic is a verbatim move from `app.py`; the module receives
+  the version, install root, root hash, instance id and port through injected
+  callbacks and never imports the application or shared mutable state.
+- The four routes become thin delegators, so the sealed route
+  URL/method/endpoint SHA-256 stays byte-identical to the Phase 7A baseline
+  (`f8378b6f3424476eb0683af8e0bbb06ed430675abfe11b74ebed5ab361a20bc9`) and the
+  route count stays at 108. The `runtime` module joins the acyclic module graph
+  (now twelve modules) as a `domain`-layer dependency of the legacy web shell.
+- Characterization tests were written before the move and capture the exact
+  status/instance/instance-id/ping payloads, status codes and launcher headers.
+- No new feature, route, schema, credential handling, release, protected
+  package or backburner item is included.
+- Validation passed 183 Python tests (five new Phase 7B-2 cases; the one
+  pre-existing Antiword extraction failure and nine platform-gated Antiword
+  skips are Linux-only and match master), all ten frontend fixtures, 24
+  source-smoke assertions, tracked Python/JavaScript/POSIX syntax, and
+  repository consistency and whitespace checks.
 
 ## v24.6.248 Phase 7B-1 startup domain extraction
 
