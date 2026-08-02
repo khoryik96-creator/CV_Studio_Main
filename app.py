@@ -313,6 +313,7 @@ from cvstudio_architecture import (
 )
 from cvstudio_startup import StartupService
 from cvstudio_runtime import RuntimeService
+from cvstudio_web_assets import WebAssetsService
 
 _CVSTUDIO_VERSION = "v24.6.246"
 _CVSTUDIO_ROOT = _install_package_root()
@@ -16285,19 +16286,16 @@ def index():
     return resp
 
 
+_CVSTUDIO_WEB_ASSETS_SERVICE = WebAssetsService(
+    jsonify=lambda payload: jsonify(payload),
+    send_from_directory=lambda *args, **kwargs: send_from_directory(*args, **kwargs),
+    source_dir=lambda: os.path.dirname(os.path.abspath(__file__)),
+)
+
+
 @app.route("/vendor/<path:filename>")
 def vendor_asset(filename):
-    """Serve bundled offline browser dependencies used by index.html."""
-    vendor_dir = os.path.realpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "vendor"))
-    raw_name = str(filename or "").replace("\\", "/")
-    safe_name = os.path.normpath(raw_name).replace("\\", "/")
-    if (not safe_name or safe_name.startswith("../") or safe_name.startswith("/")
-            or safe_name != raw_name or not re.fullmatch(r"[A-Za-z0-9._/-]+", safe_name)):
-        return jsonify({"error": "Not found"}), 404
-    asset_path = os.path.realpath(os.path.join(vendor_dir, safe_name))
-    if not asset_path.startswith(vendor_dir + os.sep) or not os.path.isfile(asset_path):
-        return jsonify({"error": "Not found"}), 404
-    return send_from_directory(vendor_dir, safe_name)
+    return _CVSTUDIO_WEB_ASSETS_SERVICE.vendor_asset(filename)
 
 
 def _local_tool_cors_origin():
@@ -16569,25 +16567,17 @@ def ocr_endpoint():
 
 @app.route("/cv_studio_logo.png")
 def app_logo_png():
-    """Serve the app logo explicitly without exposing the full source folder."""
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    return send_from_directory(base_dir, "cv_studio_logo.png")
+    return _CVSTUDIO_WEB_ASSETS_SERVICE.app_logo_png()
 
 
 @app.route("/cv_studio.ico")
 def app_icon_ico():
-    """Serve the bundled Windows/icon asset explicitly."""
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    return send_from_directory(base_dir, "cv_studio.ico")
+    return _CVSTUDIO_WEB_ASSETS_SERVICE.app_icon_ico()
 
 
 @app.route("/favicon.ico")
 def favicon():
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    ico_path = os.path.join(base_dir, "cv_studio.ico")
-    if os.path.isfile(ico_path):
-        return send_from_directory(base_dir, "cv_studio.ico")
-    return send_from_directory(base_dir, "cv_studio_logo.png")
+    return _CVSTUDIO_WEB_ASSETS_SERVICE.favicon()
 
 
 @app.route("/test", methods=["POST"])

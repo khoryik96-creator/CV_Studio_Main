@@ -58,13 +58,18 @@
   (login-item) domain moves from the legacy web shell into a composed
   `cvstudio_startup` service, with the routes kept as thin delegators so the
   sealed route contract is byte-identical.
-- v24.6.249 is the active Phase 7B-2 extraction: the read-only runtime
+- v24.6.249 is the Phase 7B-2 extraction: the read-only runtime
   liveness/identity endpoints (`/status`, `/instance`, `/instance-id`, `/ping`)
   move into a composed `cvstudio_runtime` service, again as thin delegators.
+- v24.6.250 is the active Phase 7B-3 extraction: the static web-asset endpoints
+  (`/vendor/<path>`, `/cv_studio_logo.png`, `/cv_studio.ico`, `/favicon.ico`)
+  move into a composed `cvstudio_web_assets` service, preserving the vendor
+  path-traversal rejection verbatim.
 - Phases 1, 2A, 2B, 3, 4, 5A, 5B, 6A–6C and 7A are complete.
-- Phase 7B (one-domain-at-a-time extraction) is active: startup and runtime
-  liveness are extracted; larger domains (documents/formatting, JobAdder,
-  OneNote, Lead Finder) remain for later increments. The backburner is inactive.
+- Phase 7B (one-domain-at-a-time extraction) is active: startup, runtime
+  liveness and static web assets are extracted; larger coupled domains
+  (documents/formatting, JobAdder, OneNote, Lead Finder, AI-secret store) remain
+  for later increments. The backburner is inactive.
 
 ## Phase 1 — Completed
 
