@@ -65,16 +65,24 @@
   (`/vendor/<path>`, `/cv_studio_logo.png`, `/cv_studio.ico`, `/favicon.ico`)
   move into a composed `cvstudio_web_assets` service, preserving the vendor
   path-traversal rejection verbatim.
-- v24.6.251 is the active Phase 7B-4 extraction: the AI secret-store endpoints
+- v24.6.251 is the Phase 7B-4 extraction: the AI secret-store endpoints
   (`/secure-secrets/info`, `/secure-secrets/save`, `/secure-secrets/clear`) move
   into a composed `cvstudio_secrets` service that operates on the shared,
   machine-bound secret store through injected callbacks, establishing the
   shared-state injection pattern for later coupled domains.
+- Phase 7B-5a begins the JobAdder work coverage-first: it adds a hermetic
+  backend characterization net (mocked token refresh and `JobAdderClient`
+  transport) over the JobAdder route contract, the read-only proxy routes and
+  the unauthenticated critical-write guard, before any JobAdder code is moved.
+  JobAdder is not one domain — its 26 routes split into auth/token lifecycle,
+  read proxies, candidate writes, OneNote screening-call activity and
+  spider/PPC concerns — so it is extracted in risk-ascending slices, not at once.
 - Phases 1, 2A, 2B, 3, 4, 5A, 5B, 6A–6C and 7A are complete.
 - Phase 7B (one-domain-at-a-time extraction) is active: startup, runtime
-  liveness, static web assets and the AI secret store are extracted; larger
-  coupled domains (documents/formatting, JobAdder, OneNote, Lead Finder) remain
-  for later increments. The backburner is inactive.
+  liveness, static web assets and the AI secret store are extracted; JobAdder is
+  being prepared with a coverage net; larger coupled domains
+  (documents/formatting, OneNote, Lead Finder) remain for later increments. The
+  backburner is inactive.
 
 ## Phase 1 — Completed
 
