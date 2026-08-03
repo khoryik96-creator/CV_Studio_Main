@@ -14589,12 +14589,13 @@ def jobadder_spider_search():
                         except _SpiderJobAdderReconnectRequired:
                             raise
                         except AntiwordDependencyError:
-                            raise
+                            # One candidate's legacy .doc that verified Antiword
+                            # cannot decode must not abort the whole sourcing run.
+                            # Skip that resume and keep scoring them on profile data.
+                            resume_map[cid] = {"text": "", "source": "legacy .doc could not be decoded (convert to DOCX/PDF)"}
                         except Exception:
                             resume_map[cid] = {"text": "", "source": "resume text unavailable"}
             except _SpiderJobAdderReconnectRequired:
-                raise
-            except AntiwordDependencyError:
                 raise
             except Exception:
                 for cid in resume_ids:
@@ -14604,7 +14605,7 @@ def jobadder_spider_search():
                     except _SpiderJobAdderReconnectRequired:
                         raise
                     except AntiwordDependencyError:
-                        raise
+                        resume_map[cid] = {"text": "", "source": "legacy .doc could not be decoded (convert to DOCX/PDF)"}
                     except Exception:
                         resume_map[cid] = {"text": "", "source": "resume text unavailable"}
 
