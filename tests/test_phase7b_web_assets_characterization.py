@@ -56,7 +56,7 @@ class Phase7BWebAssetsCharacterizationTests(unittest.TestCase):
 
     def test_web_asset_routes_url_method_endpoint_and_guards_are_exact(self):
         rules = {rule.rule: rule for rule in app.app.url_map.iter_rules()}
-        self.assertEqual(len(rules), 108)
+        self.assertEqual(len(rules), 116)
         for path, (methods, endpoint) in _WEB_ASSET_ROUTES.items():
             self.assertIn(path, rules)
             self.assertEqual(rules[path].methods & {"GET", "POST"}, methods)

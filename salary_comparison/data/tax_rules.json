@@ -1,0 +1,179 @@
+{
+  "rules": [
+    {
+      "country": "Malaysia",
+      "tax_year": 2025,
+      "residency": "Resident",
+      "currency": "MYR",
+      "tax_brackets": [
+        {
+          "lower": 0,
+          "upper": 5000,
+          "rate": 0.0
+        },
+        {
+          "lower": 5000,
+          "upper": 20000,
+          "rate": 0.01
+        },
+        {
+          "lower": 20000,
+          "upper": 35000,
+          "rate": 0.03
+        },
+        {
+          "lower": 35000,
+          "upper": 50000,
+          "rate": 0.06
+        },
+        {
+          "lower": 50000,
+          "upper": 70000,
+          "rate": 0.11
+        },
+        {
+          "lower": 70000,
+          "upper": 100000,
+          "rate": 0.19
+        },
+        {
+          "lower": 100000,
+          "upper": 400000,
+          "rate": 0.25
+        },
+        {
+          "lower": 400000,
+          "upper": 600000,
+          "rate": 0.26
+        },
+        {
+          "lower": 600000,
+          "upper": 2000000,
+          "rate": 0.28
+        },
+        {
+          "lower": 2000000,
+          "upper": null,
+          "rate": 0.3
+        }
+      ],
+      "contribution_rule": {
+        "scheme": "EPF simplified comparison rate",
+        "employee_rate": 0.11,
+        "employer_rate": 0.12,
+        "annual_cap": null,
+        "include_bonus": true,
+        "employee_contribution_tax_deductible": false
+      },
+      "source_urls": [
+        "https://www.hasil.gov.my/en/individual/individual-life-cycle/income-declaration/tax-rate/",
+        "https://www.kwsp.gov.my/en/employer/responsibilities/mandatory-contribution"
+      ],
+      "notes": [
+        "Starter comparison rule only; review against official sources before production use.",
+        "Actual EPF contribution can depend on statutory schedules, age, citizenship and wage band.",
+        "Personal reliefs and rebates are user inputs and are not embedded in the tax brackets.",
+        "Malaysia resident YA2025 tax brackets were checked against the official LHDN 2026 guidance published for YA2025.",
+        "The 25% rate is marginal: it applies only to chargeable income from RM100,001 to RM400,000, not to the taxpayer's entire income.",
+        "The EPF contribution profile remains a simplified comparison assumption and is not marked fully verified."
+      ],
+      "verified": false,
+      "last_updated": "2026-07-31",
+      "tax_brackets_verified": true,
+      "contribution_rule_verified": false,
+      "tax_schedule_title": "LHDN Tax Schedule for Resident Individuals - Year of Assessment 2025"
+    },
+    {
+      "country": "Singapore",
+      "tax_year": 2025,
+      "residency": "Resident",
+      "currency": "SGD",
+      "tax_brackets": [
+        {
+          "lower": 0,
+          "upper": 20000,
+          "rate": 0.0
+        },
+        {
+          "lower": 20000,
+          "upper": 30000,
+          "rate": 0.02
+        },
+        {
+          "lower": 30000,
+          "upper": 40000,
+          "rate": 0.035
+        },
+        {
+          "lower": 40000,
+          "upper": 80000,
+          "rate": 0.07
+        },
+        {
+          "lower": 80000,
+          "upper": 120000,
+          "rate": 0.115
+        },
+        {
+          "lower": 120000,
+          "upper": 160000,
+          "rate": 0.15
+        },
+        {
+          "lower": 160000,
+          "upper": 200000,
+          "rate": 0.18
+        },
+        {
+          "lower": 200000,
+          "upper": 240000,
+          "rate": 0.19
+        },
+        {
+          "lower": 240000,
+          "upper": 280000,
+          "rate": 0.195
+        },
+        {
+          "lower": 280000,
+          "upper": 320000,
+          "rate": 0.2
+        },
+        {
+          "lower": 320000,
+          "upper": 500000,
+          "rate": 0.22
+        },
+        {
+          "lower": 500000,
+          "upper": 1000000,
+          "rate": 0.23
+        },
+        {
+          "lower": 1000000,
+          "upper": null,
+          "rate": 0.24
+        }
+      ],
+      "contribution_rule": {
+        "scheme": "CPF standard full-rate comparison profile",
+        "employee_rate": 0.2,
+        "employer_rate": 0.17,
+        "annual_cap": 102000,
+        "include_bonus": true,
+        "employee_contribution_tax_deductible": true
+      },
+      "source_urls": [
+        "https://www.iras.gov.sg/taxes/individual-income-tax/basics-of-individual-income-tax/tax-residency-and-tax-rates/individual-income-tax-rates",
+        "https://www.cpf.gov.sg/employer/employer-obligations/how-much-cpf-contributions-to-pay"
+      ],
+      "notes": [
+        "Starter comparison rule only; review against official sources before production use.",
+        "CPF varies by age, citizenship or permanent-resident year, and wage ceilings.",
+        "Personal reliefs and rebates are user inputs and are not embedded in the tax brackets."
+      ],
+      "verified": false,
+      "last_updated": "2026-07-31"
+    }
+  ]
+}

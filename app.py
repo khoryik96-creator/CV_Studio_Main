@@ -22092,11 +22092,25 @@ def handle_exception(e):
     return _cvstudio_error_payload("INTERNAL_SERVER_ERROR", message, 500, retryable=True, action="retry", details={"exception_type": type(e).__name__})
 
 
+# --- Salary Comparison feature module ---------------------------------------
+# Self-contained Flask blueprint. Its deterministic tax/FX engine, exporters and
+# approved-rule store live entirely in the salary_comparison package, so the
+# legacy web shell gains only this registration. Persistent data is kept beside
+# the other CV Studio state so version upgrades never reset approved tax rules.
+import salary_comparison as _salary_comparison
+
+app.config.setdefault(
+    "SALARY_COMPARISON_DATA_DIR",
+    os.path.join(_RUNTIME_STATE_DIR, "salary_comparison"),
+)
+_salary_comparison.init_app(app, url_prefix="/salary-comparison")
+
+
 _CVSTUDIO_ARCHITECTURE = _finalize_modular_monolith_app(
     app,
-    expected_route_count=108,
+    expected_route_count=116,
     expected_route_contract_sha256=(
-        "f8378b6f3424476eb0683af8e0bbb06ed430675abfe11b74ebed5ab361a20bc9"
+        "855e04d56c550c35739c70d2dc8d35fc9d2b37d35f76453b7f3d472cf702d18e"
     ),
     expected_before_request_handlers=(
         "_assign_cvstudio_request_id",

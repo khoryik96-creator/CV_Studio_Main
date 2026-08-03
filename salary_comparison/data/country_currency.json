@@ -1,0 +1,29 @@
+{
+  "countries": [
+    {"country": "Malaysia", "currency": "MYR"},
+    {"country": "Singapore", "currency": "SGD"},
+    {"country": "Brunei", "currency": "BND"},
+    {"country": "Cambodia", "currency": "KHR"},
+    {"country": "Indonesia", "currency": "IDR"},
+    {"country": "Laos", "currency": "LAK"},
+    {"country": "Myanmar", "currency": "MMK"},
+    {"country": "Philippines", "currency": "PHP"},
+    {"country": "Thailand", "currency": "THB"},
+    {"country": "Vietnam", "currency": "VND"},
+    {"country": "China", "currency": "CNY"},
+    {"country": "Hong Kong", "currency": "HKD"},
+    {"country": "Australia", "currency": "AUD"},
+    {"country": "United States", "currency": "USD"},
+    {"country": "India", "currency": "INR"},
+    {"country": "United Kingdom", "currency": "GBP"},
+    {"country": "Japan", "currency": "JPY"},
+    {"country": "South Korea", "currency": "KRW"},
+    {"country": "Taiwan", "currency": "TWD"},
+    {"country": "New Zealand", "currency": "NZD"},
+    {"country": "Canada", "currency": "CAD"},
+    {"country": "United Arab Emirates", "currency": "AED"},
+    {"country": "Saudi Arabia", "currency": "SAR"},
+    {"country": "Switzerland", "currency": "CHF"},
+    {"country": "Euro Area", "currency": "EUR"}
+  ]
+}

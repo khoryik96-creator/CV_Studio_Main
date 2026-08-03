@@ -1,0 +1,61 @@
+from copy import deepcopy
+
+import pytest
+
+from salary_comparison.repository import JsonRuleRepository, RuleNotFoundError
+from salary_comparison.validators import RuleValidationError, validate_rule
+
+
+def test_rule_validation_accepts_seed(malaysia_rule):
+    normalized = validate_rule(malaysia_rule)
+    assert normalized["currency"] == "MYR"
+    assert normalized["tax_brackets"][0]["lower"] == 0
+    assert normalized["tax_brackets_verified"] is True
+    assert normalized["contribution_rule_verified"] is False
+
+
+def test_rule_validation_rejects_noncontiguous(malaysia_rule):
+    broken = deepcopy(malaysia_rule)
+    broken["tax_brackets"][1]["lower"] = 6000
+    with pytest.raises(RuleValidationError):
+        validate_rule(broken)
+
+
+def test_rule_validation_rejects_rate_above_one(malaysia_rule):
+    broken = deepcopy(malaysia_rule)
+    broken["contribution_rule"]["employee_rate"] = 1.1
+    with pytest.raises(RuleValidationError):
+        validate_rule(broken)
+
+
+def test_repository_get_and_replace(data_dir, malaysia_rule):
+    repo = JsonRuleRepository(data_dir / "tax_rules.json")
+    assert repo.get_rule("malaysia", 2025, "resident")["currency"] == "MYR"
+    updated = deepcopy(malaysia_rule)
+    updated["notes"] = ["replacement"]
+    repo.publish(updated)
+    fetched = repo.get_rule("Malaysia", 2025, "Resident")
+    assert fetched["notes"] == ["replacement"]
+    assert len([r for r in repo.list_rules() if r["country"] == "Malaysia" and r["tax_year"] == 2025]) == 1
+
+
+def test_repository_missing_rule(data_dir):
+    repo = JsonRuleRepository(data_dir / "tax_rules.json")
+    with pytest.raises(RuleNotFoundError):
+        repo.get_rule("Japan", 2025, "Resident")
+
+def test_rule_validation_rejects_brackets_after_open_end(malaysia_rule):
+    broken = deepcopy(malaysia_rule)
+    broken["tax_brackets"][0]["upper"] = None
+    with pytest.raises(RuleValidationError):
+        validate_rule(broken)
+
+def test_bootstrap_seeds_without_overwriting(tmp_path):
+    from salary_comparison.bootstrap import ensure_data_dir
+    target = tmp_path / "persistent"
+    ensure_data_dir(target)
+    assert (target / "country_currency.json").exists()
+    original = target / "tax_rules.json"
+    original.write_text('{"rules": [{"custom": true}]}', encoding="utf-8")
+    ensure_data_dir(target)
+    assert original.read_text(encoding="utf-8") == '{"rules": [{"custom": true}]}'
