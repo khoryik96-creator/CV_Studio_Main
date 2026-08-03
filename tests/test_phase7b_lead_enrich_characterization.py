@@ -207,6 +207,111 @@ class LeadEnrichCharacterizationTests(unittest.TestCase):
             False,
         )
 
+    # --- job-filter / query-term helpers ---------------------------------
+
+    def test_clean_csv_dedupes_and_limits(self):
+        self.assertEqual(app._lead_clean_csv("a, b; a\nc", 12), ["a", "b", "c"])
+        self.assertEqual(app._lead_clean_csv(["x", "x ", " y"], 2), ["x", "y"])
+        self.assertEqual(app._lead_clean_csv("", 12), [])
+
+    def test_clean_job_filters_normalizes_and_drops_empty(self):
+        self.assertEqual(
+            app._lead_clean_job_filters(
+                {
+                    "must_have": "sap, abap, sap",
+                    "seniority": "  senior ",
+                    "max_days_open": "30x9",
+                    "company_include": "tech",
+                    "exclude_keywords": "",
+                }
+            ),
+            {
+                "must_have": "sap, abap",
+                "seniority": "senior",
+                "max_days_open": "309",
+                "company_include": "tech",
+            },
+        )
+        self.assertEqual(app._lead_clean_job_filters("not a dict"), {})
+
+    def test_job_filter_instruction(self):
+        no_filters = (
+            "No extra relevance filters supplied. Infer relevance from CV, "
+            "target role, regions and selected portals."
+        )
+        self.assertEqual(app._lead_job_filter_instruction({}), no_filters)
+        self.assertEqual(app._lead_job_filter_instruction(None), no_filters)
+        out = app._lead_job_filter_instruction(
+            {"must_have": "SAP", "exclude_keywords": "intern"}
+        )
+        self.assertIn("MUST-HAVE keywords/skills: SAP", out)
+        self.assertIn("EXCLUDE keywords: intern", out)
+
+    def test_filter_and_exclude_query_terms(self):
+        self.assertEqual(
+            app._lead_filter_query_terms(
+                {
+                    "must_have": "sap,abap",
+                    "seniority": "senior",
+                    "company_include": "tech,finance",
+                }
+            ),
+            "sap abap senior tech finance",
+        )
+        self.assertEqual(app._lead_filter_query_terms({}), "")
+        self.assertEqual(
+            app._lead_exclude_query_terms(
+                {"exclude_keywords": "intern, junior", "company_exclude": "acme corp"}
+            ),
+            "-intern -junior -acme-corp",
+        )
+        self.assertEqual(app._lead_exclude_query_terms(None), "")
+
+    # --- email / linkedin helpers ----------------------------------------
+
+    def test_email_domain(self):
+        self.assertEqual(app._lead_email_domain("  John.Doe@Acme.COM "), "acme.com")
+        self.assertEqual(app._lead_email_domain("<a@b.co>"), "b.co")
+        self.assertEqual(app._lead_email_domain("not-an-email"), "")
+        self.assertEqual(app._lead_email_domain(""), "")
+
+    def test_is_company_domain_email(self):
+        self.assertIs(app._lead_is_company_domain_email("a@acme.com", "Acme"), True)
+        self.assertIs(app._lead_is_company_domain_email("a@gmail.com", "Acme"), False)
+        self.assertIs(app._lead_is_company_domain_email("a@example.com", ""), False)
+        self.assertIs(app._lead_is_company_domain_email("bad", ""), False)
+
+    def test_normalize_linkedin_url(self):
+        self.assertEqual(
+            app._lead_normalize_linkedin_url("www.linkedin.com/in/jdoe/"),
+            "https://linkedin.com/in/jdoe",
+        )
+        self.assertEqual(
+            app._lead_normalize_linkedin_url("https://WWW.linkedin.com/in/jdoe?trk=x"),
+            "https://linkedin.com/in/jdoe",
+        )
+        self.assertEqual(app._lead_normalize_linkedin_url("https://acme.com/in/x"), "")
+        self.assertEqual(app._lead_normalize_linkedin_url(""), "")
+
+    def test_sanitize_public_business_emails(self):
+        out = app._lead_sanitize_public_business_emails(
+            [
+                {"email": "a@gmail.com", "company": "Acme"},
+                {"email": "b@acme.com"},
+                {"email": "", "notes": "hi"},
+            ]
+        )
+        # Personal/free-mail email is cleared with a note + Not found status.
+        self.assertEqual(out[0]["email"], "")
+        self.assertEqual(out[0]["verification_status"], "Not found")
+        self.assertIn("Removed personal/free-mail", out[0]["notes"])
+        # Business-domain email is preserved untouched.
+        self.assertEqual(out[1], {"email": "b@acme.com"})
+        # Blank email gets a Not found status but keeps its note.
+        self.assertEqual(out[2]["verification_status"], "Not found")
+        self.assertEqual(out[2]["notes"], "hi")
+        self.assertEqual(app._lead_sanitize_public_business_emails("nope"), [])
+
 
 if __name__ == "__main__":
     unittest.main()

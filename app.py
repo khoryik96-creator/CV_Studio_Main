@@ -15859,15 +15859,27 @@ from cvstudio_lead_match import (
 )
 
 from cvstudio_lead_enrich import (
+    _LEAD_EMAIL_BLOCKED_DOMAIN_SUFFIXES,
+    _LEAD_EMAIL_BLOCKED_PERSONAL_DOMAINS,
+    _LEAD_EMAIL_RE,
     _LEAD_NON_JOB_CONTENT_PATH_MARKERS,
     _lead_canonical_direct_job_url,
     _lead_clean_company_guess,
+    _lead_clean_csv,
+    _lead_clean_job_filters,
+    _lead_email_domain,
+    _lead_exclude_query_terms,
+    _lead_filter_query_terms,
     _lead_guess_company_from_url,
     _lead_guess_portal_from_url,
+    _lead_is_company_domain_email,
     _lead_is_direct_job_url,
     _lead_is_generated_verification_search,
     _lead_is_generic_portal_category_url,
     _lead_is_non_job_content_url,
+    _lead_job_filter_instruction,
+    _lead_normalize_linkedin_url,
+    _lead_sanitize_public_business_emails,
     _lead_source_allowed_by_selection,
     _lead_url_portal,
     _lead_verification_company_text,
@@ -16693,81 +16705,14 @@ def _lead_call_with_optional_web(api_key, payload, warning_prefix="", graceful_j
 
 
 
-def _lead_clean_csv(value, limit=12):
-    if isinstance(value, list):
-        parts = value
-    else:
-        parts = re.split(r"[,;\n]+", str(value or ""))
-    out = []
-    seen = set()
-    for part in parts:
-        part = re.sub(r"\s+", " ", str(part or "")).strip()
-        if not part:
-            continue
-        k = part.lower()
-        if k in seen:
-            continue
-        seen.add(k)
-        out.append(part)
-        if len(out) >= limit:
-            break
-    return out
 
 
-def _lead_clean_job_filters(raw):
-    raw = raw if isinstance(raw, dict) else {}
-    out = {
-        "must_have": ", ".join(_lead_clean_csv(raw.get("must_have"), 12)),
-        "exclude_keywords": ", ".join(_lead_clean_csv(raw.get("exclude_keywords"), 12)),
-        "seniority": re.sub(r"\s+", " ", str(raw.get("seniority") or "")).strip(),
-        "max_days_open": re.sub(r"[^0-9]", "", str(raw.get("max_days_open") or ""))[:3],
-        "work_setup": re.sub(r"\s+", " ", str(raw.get("work_setup") or "")).strip(),
-        "employment_type": re.sub(r"\s+", " ", str(raw.get("employment_type") or "")).strip(),
-        "company_include": ", ".join(_lead_clean_csv(raw.get("company_include"), 10)),
-        "company_exclude": ", ".join(_lead_clean_csv(raw.get("company_exclude"), 10)),
-    }
-    return {k: v for k, v in out.items() if v}
 
 
-def _lead_job_filter_instruction(job_filters):
-    if not job_filters:
-        return "No extra relevance filters supplied. Infer relevance from CV, target role, regions and selected portals."
-    lines = []
-    if job_filters.get("must_have"):
-        lines.append(f"- MUST-HAVE keywords/skills: {job_filters['must_have']}. Prefer and rank higher when these appear, but do not discard otherwise relevant role/title/job leads only because the snippet does not show every stack/skill.")
-    if job_filters.get("exclude_keywords"):
-        lines.append(f"- EXCLUDE keywords: {job_filters['exclude_keywords']}. Remove leads that clearly match these exclusions.")
-    if job_filters.get("seniority"):
-        lines.append(f"- SENIORITY target: {job_filters['seniority']}. Rank/title-match around this level, but include adjacent levels as lower-fit review leads when the job is otherwise relevant.")
-    if job_filters.get("max_days_open"):
-        lines.append(f"- FRESHNESS preference: prioritize jobs posted within {job_filters['max_days_open']} days when date is visible. Do not discard otherwise relevant jobs only because posting date is hidden.")
-    if job_filters.get("work_setup"):
-        lines.append(f"- WORK SETUP preference: {job_filters['work_setup']}. Use as relevance/ranking signal unless it conflicts with selected-country rules.")
-    if job_filters.get("employment_type"):
-        lines.append(f"- EMPLOYMENT TYPE preference: {job_filters['employment_type']}. Prefer ads matching this type.")
-    if job_filters.get("company_include"):
-        lines.append(f"- COMPANY/INDUSTRY INCLUDE: {job_filters['company_include']}. Prefer these sectors/company types, but keep adjacent sectors as lower-fit review leads unless clearly excluded.")
-    if job_filters.get("company_exclude"):
-        lines.append(f"- COMPANY/INDUSTRY EXCLUDE: {job_filters['company_exclude']}. Remove leads that clearly match these exclusions.")
-    return "\n".join(lines)
 
 
-def _lead_filter_query_terms(job_filters):
-    if not job_filters:
-        return ""
-    parts = []
-    for k in ("must_have", "seniority", "work_setup", "employment_type", "company_include"):
-        v = job_filters.get(k)
-        if v:
-            parts.extend(_lead_clean_csv(v, 6) if k in ("must_have", "company_include") else [v])
-    return " ".join(parts[:12]).strip()
 
 
-def _lead_exclude_query_terms(job_filters):
-    if not job_filters:
-        return ""
-    terms = _lead_clean_csv(job_filters.get("exclude_keywords"), 8) + _lead_clean_csv(job_filters.get("company_exclude"), 6)
-    return " ".join("-" + re.sub(r"\s+", "-", t.strip()) for t in terms if t.strip())
 
 
 
@@ -18833,102 +18778,14 @@ def _lead_contact_cache_save(data):
         pass
 
 
-_LEAD_EMAIL_BLOCKED_PERSONAL_DOMAINS = {
-    "gmail.com", "googlemail.com", "yahoo.com", "yahoo.com.my", "yahoo.com.sg", "ymail.com", "rocketmail.com",
-    "hotmail.com", "hotmail.com.my", "hotmail.co.uk", "outlook.com", "outlook.my", "live.com", "live.com.my", "msn.com",
-    "icloud.com", "me.com", "mac.com", "proton.me", "protonmail.com", "pm.me",
-    "aol.com", "mail.com", "email.com", "gmx.com", "gmx.net", "fastmail.com", "hey.com",
-    "tuta.com", "tutanota.com", "zoho.com", "yandex.com", "yandex.ru", "qq.com", "163.com", "126.com",
-    "rediffmail.com", "mail.ru", "inbox.com", "hushmail.com", "lavabit.com"
-}
-_LEAD_EMAIL_BLOCKED_DOMAIN_SUFFIXES = (
-    ".gmail.com", ".googlemail.com", ".yahoo.com", ".hotmail.com", ".outlook.com", ".live.com",
-    ".icloud.com", ".protonmail.com", ".proton.me", ".mail.com", ".gmx.com", ".yandex.com"
-)
-_LEAD_EMAIL_RE = re.compile(r"^[A-Z0-9._%+\-']+@([A-Z0-9.\-]+\.[A-Z]{2,})$", re.I)
 
 
-def _lead_email_domain(email):
-    """Return the normalized domain for a syntactically plausible email."""
-    email = str(email or "").strip().strip("<>()[]{}.,;:'\" ")
-    m = _LEAD_EMAIL_RE.match(email)
-    if not m:
-        return ""
-    domain = m.group(1).lower().strip(".")
-    return domain
 
 
-def _lead_is_company_domain_email(email, company=""):
-    """Accept only non-personal, non-free-mail business-domain emails.
-
-    This intentionally does not guess or pattern-match company domains. It only
-    removes obvious personal/free-mail domains and malformed addresses, because
-    legitimate public business emails can appear on parent-company, agency,
-    conference, or directory domains that do not text-match the company name.
-    """
-    domain = _lead_email_domain(email)
-    if not domain:
-        return False
-    if domain in _LEAD_EMAIL_BLOCKED_PERSONAL_DOMAINS:
-        return False
-    if any(domain.endswith(suffix) for suffix in _LEAD_EMAIL_BLOCKED_DOMAIN_SUFFIXES):
-        return False
-    # Common placeholders/test domains should never be treated as real contacts.
-    if domain in {"example.com", "example.org", "example.net", "test.com", "localhost"}:
-        return False
-    return True
 
 
-def _lead_sanitize_public_business_emails(people):
-    """Clear personal/free-mail or malformed emails before returning/caching.
-
-    The Lead Finder email step is for public business/company-domain review only.
-    LinkedIn/profile URLs can be identity context; email values themselves must
-    come from a non-personal business domain.
-    """
-    if not isinstance(people, list):
-        return []
-    cleaned = []
-    for p in people:
-        if not isinstance(p, dict):
-            continue
-        item = dict(p)
-        email = str(item.get("email") or "").strip()
-        if email and not _lead_is_company_domain_email(email, item.get("company") or ""):
-            item["email"] = ""
-            item["email_confidence"] = ""
-            item["email_source"] = ""
-            item["verification_status"] = "Not found"
-            note = str(item.get("notes") or "").strip()
-            block_note = "Removed personal/free-mail or invalid email; public business-domain email required."
-            item["notes"] = (note + " " + block_note).strip() if note and block_note not in note else (note or block_note)
-        elif not email and not str(item.get("verification_status") or "").strip():
-            item["verification_status"] = "Not found"
-        cleaned.append(item)
-    return cleaned
 
 
-def _lead_normalize_linkedin_url(url):
-    """Strip scheme/www/tracking-param/fragment differences so the same profile
-    always yields the same cache key, regardless of how the URL happened to be
-    written (http vs https, with/without www, with/without trailing slash, with
-    tracking query params attached).
-    """
-    url = str(url or "").strip()
-    if not url:
-        return ""
-    if re.match(r"^(?:www\.)?linkedin\.com/", url, flags=re.I):
-        url = "https://" + url
-    try:
-        u = urllib.parse.urlparse(url)
-        host = (u.netloc or "").lower()
-        if "linkedin.com" not in host:
-            return ""
-        host = re.sub(r"^www\.", "", host)
-        path = u.path.rstrip("/")
-        return f"https://{host}{path}".lower()
-    except Exception:
-        return ""
 
 
 def _lead_contact_cache_key(person):
