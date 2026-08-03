@@ -312,6 +312,65 @@ class LeadEnrichCharacterizationTests(unittest.TestCase):
         self.assertEqual(out[2]["notes"], "hi")
         self.assertEqual(app._lead_sanitize_public_business_emails("nope"), [])
 
+    # --- role-family / title-angle text analysis --------------------------
+
+    _CV = (
+        "Senior SAP FICO consultant with 10 years in S/4HANA finance "
+        "implementations, ABAP debugging and controlling."
+    )
+
+    def test_has_any_and_contains_token(self):
+        self.assertIs(app._lead_has_any("Senior SAP Consultant", ["sap", "oracle"]), True)
+        self.assertIs(app._lead_has_any("Nurse practitioner", ["sap", "oracle"]), False)
+        self.assertIs(app._lead_contains_any_token("sap fico consultant", ["fico", "mm"]), True)
+        self.assertIs(app._lead_contains_any_token("sap mm consultant", ["fico", "sd"]), False)
+
+    def test_family_scores_and_families(self):
+        self.assertEqual(app._lead_family_scores(self._CV), {"sap_erp": 6})
+        self.assertEqual(app._lead_families_from_text(self._CV, 3), ["sap_erp"])
+        self.assertEqual(
+            app._lead_primary_role_families("SAP FICO Consultant", self._CV, "", "ERP"),
+            ["sap_erp"],
+        )
+
+    def test_resolve_search_target_role(self):
+        self.assertEqual(
+            app._lead_resolve_search_target_role("SAP FICO Consultant", self._CV, "", "ERP"),
+            ("SAP FICO Consultant", ""),
+        )
+        # With no explicit role, it derives one from the CV family.
+        self.assertEqual(
+            app._lead_resolve_search_target_role("", self._CV, "", "ERP"),
+            ("SAP Consultant", ""),
+        )
+
+    def test_cv_evidence_tokens_and_signature(self):
+        self.assertEqual(
+            sorted(app._lead_cv_evidence_tokens("sap_erp", self._CV)),
+            ["s/4hana", "sap fico"],
+        )
+        family, evidence = app._lead_cv_content_signature(
+            "SAP FICO Consultant", self._CV, "", "ERP"
+        )
+        self.assertEqual(family, "sap_erp")
+        self.assertEqual(set(evidence), {"sap fico", "s/4hana"})
+
+    def test_job_title_angles(self):
+        angles = app._lead_job_title_angles("SAP FICO Consultant", self._CV, "", "ERP")
+        self.assertEqual(angles[0], "SAP FICO Consultant")
+        self.assertEqual(len(angles), 19)
+        for title in ("SAP Consultant", "S/4HANA Consultant", "ERP Consultant"):
+            self.assertIn(title, angles)
+
+    def test_role_specific_title_bank(self):
+        bank = app._lead_role_specific_title_bank(
+            "SAP FICO Consultant", ["sap", "fico"], self._CV
+        )
+        self.assertIsInstance(bank, list)
+        self.assertEqual(len(bank), 50)
+        for title in ("Head of SAP", "SAP FICO Manager", "CFO"):
+            self.assertIn(title, bank)
+
 
 if __name__ == "__main__":
     unittest.main()

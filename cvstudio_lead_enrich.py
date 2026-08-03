@@ -595,3 +595,538 @@ def _lead_normalize_linkedin_url(url):
         return f"https://{host}{path}".lower()
     except Exception:
         return ""
+
+
+def _lead_has_any(text, terms):
+    """Role-family keyword match with word-boundaries for short tokens.
+
+    Prevents false triggers like HR from words such as "through" or AP from
+    "Spark", which caused unrelated title families to be searched.
+    """
+    text = str(text or "").lower()
+    for term in terms or []:
+        t = str(term or "").strip().lower()
+        if not t:
+            continue
+        if len(t) <= 3 or re.fullmatch(r"[a-z]&[a-z]", t):
+            if re.search(r"(?<![a-z0-9])" + re.escape(t) + r"(?![a-z0-9])", text):
+                return True
+        else:
+            if t in text:
+                return True
+    return False
+
+
+_LEAD_FAMILY_PATTERNS = {
+    "hr": [
+        r"\bhr\s+(executive|assistant|manager|specialist|generalist|officer|administrator|admin|business partner|bp|partner|operations|shared services|shared service)\b",
+        r"\b(human resources|people\s*&\s*culture|talent acquisition|recruiter|recruitment consultant|payroll specialist|employee relations|compensation and benefits|c&b|learning and development|l&d|organizational development|organisation development)\b",
+    ],
+    "data": [
+        r"\b(data engineer|data engineering|senior data engineer|lead data engineer|data platform|data architect|etl|elt|data warehouse|data lake|lakehouse|databricks|snowflake|spark|pyspark|airflow|dbt|analytics engineer|bi developer|business intelligence|data analyst|data scientist|machine learning|mlops|ai engineer|data governance)\b",
+    ],
+    "software_tech": [
+        r"\b(software engineer|software developer|backend developer|front[- ]?end developer|full[- ]?stack developer|mobile developer|qa engineer|test engineer|solution architect|technical architect|cloud engineer|devops|sre|site reliability|platform engineer|infrastructure engineer|cybersecurity|security engineer|application support|production support|systems engineer|network engineer|euc|desktop support|end user computing|it support)\b",
+    ],
+    "finance": [
+        r"\b(finance executive|finance analyst|finance manager|head of finance|chief financial officer|cfo|accountant|accounting|accounts payable|accounts receivable|accounts executive|ap analyst|ar analyst|r2r|record to report|otc|order to cash|p2p|procure to pay|fp&a|financial analyst|financial controller|treasury|tax executive|tax manager|audit executive|internal auditor|shared services analyst|finance operations|payroll executive|payroll specialist|payroll manager|credit control|credit controller|billing executive|billing specialist|collections executive|bookkeeper|cost accountant|general ledger accountant|gl accountant)\b",
+    ],
+    "operations": [
+        r"\b(operations executive|operations specialist|operations analyst|operations manager|head of operations|business operations|process improvement|continuous improvement|supply chain|logistics|warehouse|fulfillment|procurement|purchasing|production supervisor|production manager|manufacturing|plant manager|quality executive|qa executive|qc executive|customer service|contact centre|call center)\b",
+    ],
+    "marketing": [
+        r"\b(marketing executive|marketing specialist|marketing manager|brand executive|brand manager|digital marketing|performance marketing|growth marketer|growth marketing|seo specialist|sem specialist|content marketing|social media|communications executive|communications manager|pr executive|crm executive|campaign manager|ecommerce|e-commerce|trade marketing|market research|events executive)\b",
+    ],
+    "sales": [
+        r"\b(sales executive|sales representative|sales consultant|sales manager|business development|bd manager|account executive|account manager|key account|commercial executive|commercial manager|partnerships manager|channel sales|retail sales|customer success|client success|revenue operations|pre[- ]?sales)\b",
+    ],
+    "legal_risk": [
+        r"\b(legal executive|legal counsel|general counsel|legal advisor|legal manager|contracts specialist|contracts manager|contract manager|company secretary|corporate secretarial|compliance executive|compliance analyst|compliance manager|compliance officer|chief compliance officer|chief risk officer|regulatory compliance|risk analyst|risk manager|operational risk|governance specialist|aml analyst|kyc analyst|data protection officer|privacy specialist)\b",
+    ],
+    "admin": [
+        r"\b(admin executive|administrative assistant|administration manager|office manager|business support|executive assistant|personal assistant|secretary|receptionist|facilities executive|facilities manager|corporate services)\b",
+    ],
+    "product_design": [
+        r"\b(product executive|product analyst|product manager|senior product manager|product owner|product lead|ux designer|ui designer|product designer|ux researcher|service designer|customer experience|cx manager)\b",
+    ],
+    "oil_gas": [
+        r"\b(oil and gas|o&g|petroleum|upstream|downstream|offshore|marine engineer|epc|hse|ehs|process engineer|rotating equipment|static equipment|maintenance engineer|turnaround planner|reliability engineer|energy analyst)\b",
+    ],
+    "consulting_project": [
+        r"\b(management consultant|strategy consultant|business consultant|advisory consultant|transformation consultant|change management|business analyst|senior business analyst|pmo analyst|pmo consultant|project consultant|implementation consultant|project manager|programme manager|program manager|delivery manager)\b",
+    ],
+    "sap_erp": [
+        r"\b(sap fico|sap basis|sap consultant|sap functional|sap solution architect|sap finance|sap mm|sap sd|sap abap|s/4hana|s4hana|erp consultant|erp business analyst|enterprise applications|oracle consultant|workday consultant|microsoft dynamics)\b",
+    ],
+    "database_dba": [
+        r"\b(database administrator|dba|oracle dba|oracle rac|exadata|mysql dba|sql server dba|postgresql dba|postgres dba|mongodb dba|db2 dba|database engineer|database architect|database administration|rman|data guard|golden gate|asm administrator|database reliability engineer|dre)\b",
+    ],
+}
+
+
+_LEAD_TERMINAL_ROLE_TOKENS = {
+    "manager", "head", "director", "vp", "svp", "chief", "lead", "executive", "specialist", "analyst",
+    "engineer", "developer", "consultant", "assistant", "associate", "officer", "accountant", "recruiter",
+    "designer", "scientist", "administrator", "dba", "controller", "auditor", "secretary", "counsel",
+    "marketer", "representative", "technician", "coordinator", "planner", "supervisor", "architect",
+    "partner", "clerk", "principal",
+}
+
+
+_LEAD_SENIORITY_TOKENS = {
+    "senior", "lead", "principal", "head", "director", "vp", "svp", "chief",
+    "junior", "intern", "trainee", "fresh", "assistant", "associate",
+}
+
+
+def _lead_contains_any_token(text, tokens):
+    text = str(text or "")
+    return any(re.search(r"(?<![a-z0-9])" + re.escape(tok) + r"(?![a-z0-9])", text) for tok in tokens)
+
+
+_LEAD_FAMILY_DEFAULT_TITLE = {
+    "hr": "HR Executive",
+    "data": "Data Engineer",
+    "software_tech": "Software Engineer",
+    "finance": "Finance Executive",
+    "operations": "Operations Executive",
+    "marketing": "Marketing Executive",
+    "sales": "Sales Executive",
+    "legal_risk": "Compliance Executive",
+    "admin": "Admin Executive",
+    "product_design": "Product Manager",
+    "oil_gas": "Oil and Gas Engineer",
+    "consulting_project": "Business Analyst",
+    "sap_erp": "SAP Consultant",
+    "database_dba": "Database Administrator",
+}
+
+
+def _lead_family_scores(text):
+    text = re.sub(r"\s+", " ", str(text or "").lower())
+    scores = {}
+    for family, patterns in _LEAD_FAMILY_PATTERNS.items():
+        score = 0
+        for pat in patterns:
+            matches = re.findall(pat, text, flags=re.I)
+            if matches:
+                score += len(matches) * 3
+        # Extra controlled single-token signals. Do not use these for HR because
+        # HR is too easy to contaminate via company names/stakeholder mentions.
+        if family == "data":
+            for tok in ("python", "sql", "spark", "pyspark", "databricks", "snowflake", "airflow", "dbt"):
+                if re.search(r"(?<![a-z0-9])" + re.escape(tok) + r"(?![a-z0-9])", text):
+                    score += 1
+        elif family == "finance":
+            for tok in ("ifrs", "audit", "tax", "treasury", "fp&a"):
+                if re.search(r"(?<![a-z0-9])" + re.escape(tok) + r"(?![a-z0-9])", text):
+                    score += 1
+        elif family == "software_tech":
+            for tok in ("java", "javascript", "react", "node", ".net", "kubernetes", "aws", "azure", "gcp"):
+                if re.search(r"(?<![a-z0-9])" + re.escape(tok) + r"(?![a-z0-9])", text):
+                    score += 1
+        elif family == "database_dba":
+            # These are distinctive enough (unlike generic "sql") to weight more
+            # heavily; a CV listing 2-3 of these is almost certainly a DBA profile
+            # even if it never literally says "database administrator".
+            for tok in ("rac", "exadata", "rman", "asm", "data guard", "dataguard", "goldengate", "golden gate",
+                        "pl/sql", "plsql", "t-sql", "tsql", "asm administrator", "tablespace", "oem", "toad"):
+                if re.search(r"(?<![a-z0-9])" + re.escape(tok) + r"(?![a-z0-9])", text):
+                    score += 2
+        if score:
+            scores[family] = score
+    return scores
+
+
+def _lead_families_from_text(text, max_families=3):
+    scores = _lead_family_scores(text)
+    if not scores:
+        return []
+    best = max(scores.values())
+    # Keep only strong/near-best families. This prevents a random HR mention in a
+    # Data Engineer CV from generating HR title angles.
+    ranked = sorted(scores.items(), key=lambda kv: (-kv[1], kv[0]))
+    return [fam for fam, score in ranked if score >= max(3, best * 0.65)][:max_families]
+
+
+def _lead_primary_role_families(target_role="", cv_text="", candidate_context="", industries=""):
+    target_role = str(target_role or "").strip()
+    target_families = _lead_families_from_text(target_role, max_families=2)
+    if target_role and target_families:
+        return target_families
+    # Only use high-signal CV areas for inference. Full CV text can include many
+    # stakeholder/project words that are not the candidate's own function.
+    cv_focus = str(cv_text or "")[:3500]
+    ctx_focus = str(candidate_context or "")[:1200]
+    ind_focus = str(industries or "")[:500]
+    return _lead_families_from_text(" ".join([cv_focus, ctx_focus, ind_focus]), max_families=2)
+
+
+def _lead_resolve_search_target_role(target_role="", cv_text="", candidate_context="", industries=""):
+    """Protect against stale/manual target-role fields contaminating searches.
+
+    If the target role says HR but the uploaded CV is clearly Data/Finance/etc.,
+    Lead Finder should not search HR jobs. The CV's own strong role family wins,
+    but a warning is returned so the user can see why the search was anchored.
+    """
+    raw_target = re.sub(r"\s+", " ", str(target_role or "")).strip()
+    cv_fams = _lead_primary_role_families("", cv_text, candidate_context, industries)
+    target_fams = _lead_families_from_text(raw_target, max_families=2)
+    if raw_target and target_fams and cv_fams and not set(target_fams).intersection(cv_fams):
+        replacement = _LEAD_FAMILY_DEFAULT_TITLE.get(cv_fams[0], "Relevant open role")
+        return replacement, f'Target role "{raw_target}" looked inconsistent with the uploaded CV role family; Lead Finder anchored job search to "{replacement}" to avoid unrelated job leads.'
+    if raw_target:
+        return raw_target, ""
+    if cv_fams:
+        return _LEAD_FAMILY_DEFAULT_TITLE.get(cv_fams[0], "Relevant open role"), ""
+    return "", ""
+
+
+def _lead_job_title_angles(target_role, cv_text="", candidate_context="", industries=""):
+    """Generate recruiter job-title angles anchored to the candidate's role family.
+
+    Earlier broad versions added title banks for every keyword seen in the CV,
+    which caused failures such as Data Engineer uploads producing HR Executive
+    searches because the CV mentioned HR stakeholders. This version chooses the
+    primary role family first, then expands only within that family.
+    """
+    titles = []
+
+    def add(*items):
+        existing = {t.lower() for t in titles}
+        for item in items:
+            item = re.sub(r"\s+", " ", str(item or "")).strip()
+            if item and item.lower() not in existing:
+                titles.append(item)
+                existing.add(item.lower())
+
+    cleaned_target = re.sub(r"\s+", " ", str(target_role or "")).strip()
+    if cleaned_target:
+        add(cleaned_target)
+        tl = cleaned_target.lower()
+        has_seniority = _lead_contains_any_token(tl, _LEAD_SENIORITY_TOKENS)
+        has_terminal = _lead_contains_any_token(tl, _LEAD_TERMINAL_ROLE_TOKENS)
+        if not _lead_contains_any_token(tl, ("senior", "lead", "principal", "head", "director", "vp", "svp", "chief")):
+            add(f"Senior {cleaned_target}")
+        if not _lead_contains_any_token(tl, ("senior", "lead", "head", "director", "vp", "svp", "chief")):
+            add(f"Lead {cleaned_target}")
+        if not has_terminal:
+            add(f"{cleaned_target} Manager")
+        if not has_seniority:
+            add(f"Assistant {cleaned_target}", f"Junior {cleaned_target}")
+        if not has_terminal:
+            add(f"{cleaned_target} Executive", f"{cleaned_target} Specialist", f"{cleaned_target} Consultant", f"{cleaned_target} Analyst")
+
+    families = _lead_primary_role_families(cleaned_target, cv_text, candidate_context, industries)
+
+    family_titles = {
+        "hr": [
+            "HR Executive", "Human Resources Executive", "HR Specialist", "HR Generalist", "HR Manager",
+            "Senior HR Manager", "HR Business Partner", "People Partner", "People & Culture Manager",
+            "Talent Acquisition Specialist", "Talent Acquisition Partner", "Talent Acquisition Manager", "Recruiter",
+            "Employee Relations Specialist", "Compensation and Benefits Specialist", "Learning and Development Specialist",
+            "HR Operations Specialist", "Payroll Specialist", "HR Shared Services Specialist"
+        ],
+        "operations": [
+            "Operations Executive", "Operations Specialist", "Operations Analyst", "Operations Manager", "Head of Operations",
+            "Business Operations Manager", "Process Improvement Specialist", "Supply Chain Executive", "Supply Chain Analyst",
+            "Supply Chain Manager", "Logistics Executive", "Logistics Manager", "Warehouse Manager", "Procurement Executive",
+            "Procurement Specialist", "Production Supervisor", "Production Manager", "Manufacturing Engineer", "Plant Manager",
+            "Quality Executive", "QA Executive", "QC Executive", "Customer Service Executive", "Customer Service Manager"
+        ],
+        "finance": [
+            "Finance Executive", "Finance Analyst", "Finance Manager", "Head of Finance", "Accountant", "Senior Accountant",
+            "Accounting Manager", "Accounts Executive", "Accounts Payable Specialist", "Accounts Receivable Specialist",
+            "Record to Report Analyst", "Order to Cash Analyst", "Procure to Pay Analyst", "FP&A Analyst", "FP&A Manager",
+            "Financial Analyst", "Financial Controller", "Treasury Analyst", "Treasury Manager", "Tax Executive", "Tax Manager",
+            "Audit Executive", "Internal Auditor", "Shared Services Analyst", "Finance Operations Specialist"
+        ],
+        "marketing": [
+            "Marketing Executive", "Marketing Specialist", "Marketing Manager", "Brand Executive", "Brand Manager",
+            "Digital Marketing Executive", "Digital Marketing Specialist", "Digital Marketing Manager", "Performance Marketing Specialist",
+            "Performance Marketing Manager", "Growth Marketer", "Growth Manager", "SEO Specialist", "SEM Specialist",
+            "Content Marketing Specialist", "Social Media Executive", "Social Media Manager", "Communications Executive",
+            "Communications Manager", "PR Executive", "CRM Executive", "Campaign Manager", "Ecommerce Executive", "Trade Marketing Executive"
+        ],
+        "sales": [
+            "Sales Executive", "Sales Representative", "Sales Consultant", "Sales Manager", "Business Development Executive",
+            "Business Development Manager", "Account Executive", "Account Manager", "Key Account Executive", "Key Account Manager",
+            "Commercial Executive", "Commercial Manager", "Partnerships Manager", "Channel Sales Manager", "Customer Success Executive",
+            "Customer Success Manager", "Pre-Sales Consultant"
+        ],
+        "legal_risk": [
+            "Legal Executive", "Legal Counsel", "Legal Manager", "Contracts Specialist", "Compliance Executive", "Compliance Analyst",
+            "Compliance Manager", "Regulatory Compliance Specialist", "Risk Analyst", "Risk Manager", "Governance Specialist",
+            "AML Analyst", "KYC Analyst", "Data Protection Officer", "Privacy Specialist"
+        ],
+        "admin": [
+            "Admin Executive", "Administrative Assistant", "Administration Manager", "Office Manager", "Business Support Executive",
+            "Business Support Manager", "Executive Assistant", "Personal Assistant", "Secretary", "Receptionist", "Facilities Executive"
+        ],
+        "product_design": [
+            "Product Executive", "Product Analyst", "Product Manager", "Senior Product Manager", "Product Owner", "Product Lead",
+            "Business Analyst", "UX Designer", "UI Designer", "Product Designer", "UX Researcher", "Service Designer",
+            "Customer Experience Executive", "Customer Experience Manager", "CX Manager"
+        ],
+        "oil_gas": [
+            "Oil and Gas Engineer", "Process Engineer", "Project Engineer", "Maintenance Engineer", "Mechanical Engineer",
+            "Electrical Engineer", "Instrumentation Engineer", "HSE Executive", "HSE Manager", "Offshore Engineer", "Marine Engineer",
+            "EPC Project Manager", "Turnaround Planner", "Reliability Engineer", "Rotating Equipment Engineer", "Static Equipment Engineer"
+        ],
+        "consulting_project": [
+            "Consultant", "Senior Consultant", "Management Consultant", "Strategy Consultant", "Business Consultant",
+            "Advisory Consultant", "Transformation Consultant", "Change Management Consultant", "Business Analyst", "Senior Business Analyst",
+            "PMO Analyst", "PMO Consultant", "Project Consultant", "Implementation Consultant", "Project Manager", "Programme Manager"
+        ],
+        "sap_erp": [
+            "SAP FICO Consultant", "SAP Consultant", "SAP Functional Consultant", "SAP Solution Architect", "SAP Finance Lead",
+            "SAP MM Consultant", "SAP SD Consultant", "SAP ABAP Developer", "S/4HANA Consultant", "ERP Consultant",
+            "ERP Business Analyst", "Enterprise Applications Consultant", "Business Applications Analyst", "Oracle Consultant", "Workday Consultant"
+        ],
+        "data": [
+            "Data Engineer", "Senior Data Engineer", "Lead Data Engineer", "Data Platform Engineer", "Data Architect",
+            "ETL Developer", "Data Warehouse Engineer", "Analytics Engineer", "Data Analyst", "Senior Data Analyst",
+            "Business Intelligence Analyst", "BI Developer", "Data Scientist", "Machine Learning Engineer", "MLOps Engineer", "AI Engineer",
+            "Data Governance Analyst"
+        ],
+        "software_tech": [
+            "Software Engineer", "Software Developer", "Backend Developer", "Frontend Developer", "Full Stack Developer", "Mobile Developer",
+            "QA Engineer", "Test Engineer", "Solution Architect", "Technical Architect", "Cloud Engineer", "DevOps Engineer",
+            "SRE Engineer", "Platform Engineer", "Infrastructure Engineer", "Cybersecurity Analyst", "Application Support Analyst",
+            "Production Support Analyst", "IT Project Manager", "Technical Project Manager", "EUC Engineer", "Desktop Support Engineer"
+        ],
+        "database_dba": [
+            "Database Administrator", "Senior Database Administrator", "Oracle DBA", "Oracle RAC DBA", "Exadata DBA",
+            "MySQL DBA", "SQL Server DBA", "PostgreSQL DBA", "MongoDB DBA", "DB2 DBA", "Database Engineer",
+            "Database Architect", "Database Reliability Engineer", "Lead Database Administrator", "Database Team Lead",
+            "Database Consultant", "Data Guard Administrator", "Database Operations Engineer"
+        ],
+    }
+    for fam in families:
+        add(*family_titles.get(fam, []))
+
+    # Fresh-grad signals are level modifiers, not a separate function. Add only a
+    # few safe variants after the primary family has been established.
+    cv_blob = " ".join([str(target_role or ""), str(candidate_context or ""), str(cv_text or "")[:2500]]).lower()
+    if _lead_has_any(cv_blob, ["fresh graduate", "graduate trainee", "management trainee", "entry level", "internship"]):
+        add("Graduate Trainee", "Management Trainee", "Junior Executive", "Junior Specialist", "Entry Level")
+
+    # Last-resort fallback if the role family is genuinely unknown.
+    if not titles:
+        add("Executive", "Senior Executive", "Specialist", "Analyst", "Associate", "Consultant", "Manager")
+    return titles[:40]
+
+
+_LEAD_FAMILY_BOOST_TOKENS = {
+    "data": ("python", "sql", "spark", "pyspark", "databricks", "snowflake", "airflow", "dbt"),
+    "finance": ("ifrs", "audit", "tax", "treasury", "fp&a"),
+    "software_tech": ("java", "javascript", "react", "node", ".net", "kubernetes", "aws", "azure", "gcp"),
+    "database_dba": ("rac", "exadata", "rman", "asm", "data guard", "dataguard", "goldengate", "golden gate",
+                      "pl/sql", "plsql", "t-sql", "tsql", "tablespace", "oem", "toad"),
+}
+
+
+def _lead_cv_evidence_tokens(family, text):
+    """Extract the literal phrases/tokens that justify `family` for this text.
+
+    This is deliberately based on the CV's actual described work (tools,
+    technologies, functional evidence phrases) rather than any job title
+    string, so the cache groups candidates by what they actually do.
+    """
+    text_l = re.sub(r"\s+", " ", str(text or "").lower())
+    tokens = set()
+    for pat in _LEAD_FAMILY_PATTERNS.get(family, []):
+        for m in re.finditer(pat, text_l, flags=re.I):
+            tokens.add(m.group(0).strip())
+    for tok in _LEAD_FAMILY_BOOST_TOKENS.get(family, ()):
+        if re.search(r"(?<![a-z0-9])" + re.escape(tok) + r"(?![a-z0-9])", text_l):
+            tokens.add(tok)
+    return tokens
+
+
+def _lead_cv_content_signature(target_role, cv_text, candidate_context, industries):
+    """Build a (family, evidence_tokens) signature from actual CV content.
+
+    Intentionally NOT based on the typed target_role text alone or the CV's
+    job-title line — a 'System Analyst' whose CV describes Spark/Airflow/ETL
+    work should get the same signature as a candidate titled 'Data Engineer'
+    doing the same work, and a different signature from a 'System Analyst'
+    doing helpdesk/support work. Returns None when no family/evidence is
+    confidently detected (novel/niche roles fall through to a fresh AI call
+    every time rather than risk a bad cache match).
+    """
+    families = _lead_primary_role_families(target_role, cv_text, candidate_context, industries)
+    if not families:
+        return None
+    family = families[0]
+    blob = " ".join([
+        str(target_role or ""), str(candidate_context or "")[:1200],
+        str(cv_text or "")[:6000], str(industries or ""),
+    ])
+    evidence = _lead_cv_evidence_tokens(family, blob)
+    if not evidence:
+        return None
+    return family, evidence
+
+
+def _lead_role_specific_title_bank(target_role, role_terms, cv_text=""):
+    """Generate deterministic role-specific hiring-manager title angles.
+
+    The generic HR title bank is useful, but functional hiring managers vary by
+    role. This helper gives the people-search prompt more role-specific search
+    angles without guessing actual people.
+    """
+    blob = " ".join([str(target_role or ""), " ".join(str(x or "") for x in (role_terms or [])), str(cv_text or "")[:3000]]).lower()
+    titles = []
+
+    def add(*items):
+        for item in items:
+            item = str(item or "").strip()
+            if item and item.lower() not in {t.lower() for t in titles}:
+                titles.append(item)
+
+    # Always useful functional owner patterns. Keep this cross-functional because
+    # Hyppies recruits for tech, HR, finance, ops, marketing, commercial and
+    # general corporate roles.
+    add(
+        "Hiring Manager", "Line Manager", "Reporting Manager", "Team Lead", "Functional Lead",
+        "Senior Manager", "Associate Director", "Director", "Department Head", "Head of", "VP", "General Manager"
+    )
+
+    if _lead_has_any(blob, ["sap", "fico", "s/4", "s4hana", "hana", "erp", "abap", "successfactors", "ariba", "mm", "sd"]):
+        add(
+            "Head of SAP", "SAP Manager", "SAP FICO Manager", "SAP Finance Lead", "SAP Functional Lead",
+            "SAP Solution Architect", "SAP Architect", "ERP Manager", "ERP Applications Manager",
+            "Enterprise Applications Manager", "Business Applications Manager", "IT Applications Manager",
+            "Finance Systems Manager", "S/4HANA Programme Manager", "SAP Delivery Manager", "SAP Practice Lead"
+        )
+    if _lead_has_any(blob, ["data engineer", "data engineering", "etl", "elt", "spark", "databricks", "snowflake", "bigquery", "redshift", "data platform", "lakehouse", "airflow"]):
+        add(
+            "Head of Data", "Head of Data Engineering", "Data Engineering Manager", "Data Platform Manager",
+            "Director of Data Engineering", "Director of Data Analytics", "Analytics Engineering Manager",
+            "Data Architect", "Data Platform Lead", "BI Manager", "Data Warehouse Manager",
+            "Chief Data Officer", "VP Data", "Data & Analytics Lead"
+        )
+    if _lead_has_any(blob, ["machine learning", "ml engineer", "mlops", "ai", "genai", "llm", "rag", "computer vision", "nlp", "data scientist"]):
+        add(
+            "Head of AI", "Head of Machine Learning", "AI/ML Manager", "MLOps Lead", "Data Science Manager",
+            "Director of AI", "AI Engineering Manager", "Machine Learning Engineering Manager", "Chief AI Officer",
+            "Applied AI Lead", "GenAI Lead", "Analytics Director"
+        )
+    if _lead_has_any(blob, ["software engineer", "developer", "java", ".net", "frontend", "backend", "full stack", "mobile", "react", "node", "spring"]):
+        add(
+            "Engineering Manager", "Software Engineering Manager", "Development Manager", "Head of Engineering",
+            "Application Development Manager", "Technical Architect", "Solution Architect", "Delivery Manager",
+            "CTO", "VP Engineering", "Software Development Lead"
+        )
+    if _lead_has_any(blob, ["cloud", "devops", "sre", "site reliability", "platform", "kubernetes", "terraform", "aws", "azure", "gcp", "infrastructure"]):
+        add(
+            "Head of Cloud", "Cloud Engineering Manager", "Platform Engineering Manager", "DevOps Manager",
+            "SRE Manager", "Infrastructure Manager", "Head of Infrastructure", "Cloud Architect",
+            "Platform Lead", "Technology Operations Manager", "IT Operations Manager"
+        )
+    if _lead_has_any(blob, ["database administrator", "dba", "oracle dba", "oracle rac", "exadata", "mysql dba", "sql server dba", "postgresql dba", "postgres dba", "mongodb dba", "db2 dba", "database engineer", "database architect", "data guard", "golden gate"]):
+        add(
+            "Head of Database", "Database Manager", "Database Team Lead", "Head of Infrastructure",
+            "Infrastructure Manager", "Head of DBA", "Database Operations Manager", "IT Infrastructure Manager",
+            "Head of IT Operations", "Database Architect", "Technology Operations Manager", "Head of Systems"
+        )
+    if _lead_has_any(blob, ["application support", "production support", "l2", "l3", "incident", "service delivery", "control-m", "geneos", "itil", "trading support"]):
+        add(
+            "Application Support Manager", "Production Support Manager", "Support Lead", "Service Delivery Manager",
+            "Incident Manager", "Technology Operations Manager", "IT Operations Manager", "Run The Bank Lead",
+            "Trading Support Manager", "Operations Lead", "Application Manager"
+        )
+    if _lead_has_any(blob, ["project manager", "programme", "program manager", "pmo", "transformation", "business analyst", "ba", "product owner", "scrum"]):
+        add(
+            "Programme Manager", "Program Director", "Project Director", "PMO Lead", "Head of Transformation",
+            "Transformation Lead", "Delivery Director", "Business Change Manager", "Product Lead",
+            "Product Owner Lead", "Agile Delivery Lead", "Business Analysis Manager"
+        )
+    if _lead_has_any(blob, ["payments", "swift", "rentas", "iso20022", "core banking", "banking", "cards", "fintech", "rpp", "fpx"]):
+        add(
+            "Head of Payments", "Payments Technology Lead", "Core Banking Lead", "Banking Applications Manager",
+            "Payments Product Manager", "Transaction Banking Technology Manager", "Digital Banking Lead",
+            "Financial Services Technology Director", "Banking Transformation Lead"
+        )
+    if _lead_has_any(blob, ["risk", "compliance", "audit", "governance", "credit risk", "basel", "ifrs9", "aml", "privacy", "pdpa", "security"]):
+        add(
+            "Head of Risk", "Risk Manager", "Credit Risk Manager", "Compliance Manager", "Head of Compliance",
+            "Audit Manager", "Governance Manager", "Information Security Manager", "CISO", "Data Protection Officer",
+            "Privacy Manager", "Operational Risk Manager"
+        )
+    if _lead_has_any(blob, ["finance", "accounting", "fp&a", "controller", "treasury", "tax", "audit", "shared service", "ssc"]):
+        add(
+            "Finance Manager", "Finance Controller", "Head of Finance", "FP&A Manager", "Treasury Manager",
+            "Shared Services Manager", "Finance Transformation Lead", "Record-to-Report Manager", "Order-to-Cash Manager"
+        )
+    if _lead_has_any(blob, ["sales", "business development", "account manager", "customer success", "marketing", "growth", "commercial"]):
+        add(
+            "Sales Manager", "Business Development Manager", "Commercial Director", "Head of Sales",
+            "Customer Success Manager", "Marketing Manager", "Growth Lead", "Revenue Operations Manager"
+        )
+    if _lead_has_any(blob, ["hr", "human resources", "talent", "recruiter", "people"]):
+        add(
+            "Head of HR", "HR Manager", "Talent Acquisition Manager", "People Partner", "HR Business Partner",
+            "Head of People", "Recruitment Lead", "Talent Lead"
+        )
+
+    if _lead_has_any(blob, ["operations", "operation manager", "ops", "supply chain", "logistics", "warehouse", "fulfillment", "procurement", "purchasing", "production", "manufacturing", "plant", "factory", "quality", "qa", "qc", "continuous improvement", "lean", "six sigma", "customer service", "contact centre", "call center"]):
+        add(
+            "Head of Operations", "Operations Manager", "Senior Operations Manager", "Operations Director", "COO",
+            "General Manager Operations", "Site Manager", "Plant Manager", "Manufacturing Manager", "Production Manager",
+            "Supply Chain Manager", "Head of Supply Chain", "Logistics Manager", "Warehouse Manager", "Fulfillment Manager",
+            "Procurement Manager", "Purchasing Manager", "Quality Manager", "Continuous Improvement Manager",
+            "Customer Service Manager", "Contact Centre Manager"
+        )
+    if _lead_has_any(blob, ["marketing", "brand", "digital marketing", "performance marketing", "growth", "seo", "sem", "content", "social media", "communications", "pr", "crm", "campaign", "ecommerce", "e-commerce", "trade marketing", "market research"]):
+        add(
+            "Marketing Manager", "Senior Marketing Manager", "Head of Marketing", "Marketing Director", "CMO",
+            "Brand Manager", "Senior Brand Manager", "Digital Marketing Manager", "Performance Marketing Manager",
+            "Growth Manager", "Growth Lead", "Content Marketing Manager", "Social Media Manager", "Communications Manager",
+            "PR Manager", "CRM Manager", "Campaign Manager", "Ecommerce Manager", "Trade Marketing Manager",
+            "Market Research Manager"
+        )
+    if _lead_has_any(blob, ["sales", "business development", "bd", "account manager", "key account", "commercial", "partnership", "channel", "retail", "customer success", "client success", "revenue", "presales", "pre-sales"]):
+        add(
+            "Sales Manager", "Senior Sales Manager", "Head of Sales", "Sales Director", "Commercial Manager",
+            "Commercial Director", "Business Development Manager", "Head of Business Development", "Key Account Manager",
+            "Strategic Account Manager", "Partnerships Manager", "Channel Manager", "Retail Manager", "Country Manager",
+            "Customer Success Manager", "Head of Customer Success", "Revenue Operations Manager", "Pre-Sales Manager"
+        )
+    if _lead_has_any(blob, ["hr", "human resources", "people", "talent", "employee relations", "compensation", "benefits", "c&b", "learning", "l&d", "organizational development", "od", "hr operations", "payroll", "recruitment", "talent acquisition"]):
+        add(
+            "Head of HR", "HR Director", "HR Manager", "Senior HR Manager", "HR Business Partner", "Senior HR Business Partner",
+            "People Partner", "People & Culture Manager", "Head of People", "Talent Acquisition Manager", "Head of Talent Acquisition",
+            "Recruitment Lead", "Talent Lead", "Employee Relations Manager", "Compensation and Benefits Manager", "C&B Manager",
+            "Learning and Development Manager", "L&D Manager", "Organizational Development Manager", "HR Operations Manager",
+            "Payroll Manager"
+        )
+    if _lead_has_any(blob, ["finance", "accounting", "accounts", "fp&a", "financial planning", "controller", "treasury", "tax", "ap", "ar", "r2r", "record to report", "order to cash", "otc", "procure to pay", "p2p", "shared service", "ssc", "audit"]):
+        add(
+            "Finance Manager", "Senior Finance Manager", "Head of Finance", "Finance Director", "CFO", "Financial Controller",
+            "Group Financial Controller", "FP&A Manager", "Financial Planning and Analysis Manager", "Treasury Manager",
+            "Tax Manager", "Accounting Manager", "Accounts Payable Manager", "Accounts Receivable Manager",
+            "Record-to-Report Manager", "Order-to-Cash Manager", "Procure-to-Pay Manager", "Shared Services Manager",
+            "Finance Operations Manager", "Finance Transformation Lead", "Audit Manager"
+        )
+    if _lead_has_any(blob, ["legal", "lawyer", "counsel", "contract", "corporate secretarial", "company secretary", "compliance", "regulatory", "privacy", "pdpa", "risk", "governance", "aml", "kyc"]):
+        add(
+            "Head of Legal", "Legal Director", "Legal Manager", "Legal Counsel", "Senior Legal Counsel", "General Counsel",
+            "Contracts Manager", "Company Secretary", "Corporate Secretarial Manager", "Compliance Manager", "Head of Compliance",
+            "Regulatory Compliance Manager", "Risk Manager", "Operational Risk Manager", "Governance Manager", "AML Manager", "KYC Manager",
+            "Data Protection Officer", "Privacy Manager"
+        )
+    if _lead_has_any(blob, ["admin", "administration", "office manager", "secretary", "personal assistant", "pa", "executive assistant", "ea", "business support", "reception", "facilities"]):
+        add(
+            "Administration Manager", "Admin Manager", "Office Manager", "Business Support Manager", "Facilities Manager",
+            "Executive Assistant Manager", "Corporate Services Manager", "Head of Administration", "Office Operations Manager"
+        )
+    if _lead_has_any(blob, ["product", "product manager", "product owner", "ux", "ui", "designer", "researcher", "service design", "customer experience", "cx"]):
+        add(
+            "Product Manager", "Senior Product Manager", "Group Product Manager", "Head of Product", "Product Director",
+            "Product Owner Lead", "UX Manager", "Design Manager", "Head of Design", "UX Research Manager",
+            "Customer Experience Manager", "CX Manager", "Service Design Lead"
+        )
+
+    return titles[:60]
