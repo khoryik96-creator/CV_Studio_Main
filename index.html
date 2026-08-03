@@ -1414,6 +1414,175 @@
 
 </style>
 <script src="/vendor/cvstudio/lazy-loader.js?v=24.6.246"></script>
+<script>
+/* CV Studio Doctor — built-in diagnostic recorder.
+ * Records JS errors, unhandled rejections, failed/slow network calls and
+ * console errors from page load. Press Ctrl+Shift+D (or run cvDoctor.open())
+ * to view/copy a redacted report. Never captures API keys, CV/JD text,
+ * prompts or request/response bodies. */
+(function () {
+  "use strict";
+  if (window.cvDoctor && window.cvDoctor._installed) return;
+  var MAX = 80, started = new Date();
+  var errors = [], rejections = [], consoleMsgs = [], netFails = [];
+  function redact(v) {
+    var s = String(v == null ? "" : v);
+    try {
+      s = s.replace(/sk-[A-Za-z0-9_\-]{6,}/g, "sk-***REDACTED***");
+      s = s.replace(/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/g, "***email***");
+      s = s.replace(/\b[A-Za-z0-9_\-]{40,}\b/g, "***token***");
+    } catch (e) {}
+    return s.length > 500 ? s.slice(0, 500) + "…" : s;
+  }
+  function ts() { return new Date().toISOString().slice(11, 23); }
+  function push(a, x) { a.push(x); if (a.length > MAX) a.shift(); }
+  window.addEventListener("error", function (e) {
+    push(errors, { t: ts(), msg: redact(e && e.message), at: (e && (e.filename || "") + ":" + (e.lineno || "") + ":" + (e.colno || "")) });
+    refreshBadge();
+  });
+  window.addEventListener("unhandledrejection", function (e) {
+    var r = e && e.reason;
+    push(rejections, { t: ts(), msg: redact(r && (r.message || r)), stack: redact(r && r.stack ? String(r.stack).split("\n").slice(0, 4).join(" | ") : "") });
+    refreshBadge();
+  });
+  ["error", "warn"].forEach(function (level) {
+    var orig = console[level];
+    console[level] = function () {
+      try {
+        push(consoleMsgs, { t: ts(), level: level, msg: redact(Array.prototype.map.call(arguments, function (a) {
+          try { return typeof a === "string" ? a : JSON.stringify(a); } catch (e) { return String(a); }
+        }).join(" ")) });
+      } catch (e) {}
+      return orig.apply(console, arguments);
+    };
+  });
+  var origFetch = window.fetch;
+  if (typeof origFetch === "function") {
+    window.fetch = function (input, init) {
+      var url = "", method = (init && init.method) || (input && input.method) || "GET", path = "";
+      try { url = typeof input === "string" ? input : (input && input.url) || ""; } catch (e) {}
+      try { path = url.replace(/^https?:\/\/[^/]+/i, "").replace(/\?.*$/, ""); } catch (e) { path = url; }
+      var t0 = Date.now();
+      return origFetch.apply(this, arguments).then(function (res) {
+        var ms = Date.now() - t0;
+        if (!res || !res.ok) {
+          var rec = { t: ts(), method: method, path: path, status: res ? res.status : "?", ms: ms, body: "" };
+          try { res.clone().text().then(function (t) { rec.body = redact(t).slice(0, 300); }).catch(function () {}); } catch (e) {}
+          push(netFails, rec); refreshBadge();
+        } else if (ms > 20000) { push(netFails, { t: ts(), method: method, path: path, status: res.status + " (SLOW)", ms: ms, body: "" }); refreshBadge(); }
+        return res;
+      }).catch(function (err) {
+        push(netFails, { t: ts(), method: method, path: path, status: "NETWORK-FAIL", ms: Date.now() - t0, body: redact(err && err.message) });
+        refreshBadge(); throw err;
+      });
+    };
+  }
+  function configSnapshot() {
+    var L = [];
+    try { var m = (document.body && document.body.innerText || "").match(/v\d+\.\d+\.\d+[^\s)]*/); L.push("App version: " + (m ? m[0] : "unknown")); } catch (e) {}
+    try { var a = document.querySelector(".page-view.active, .view.active"); L.push("Active view: " + (a ? (a.id || a.className) : "unknown")); } catch (e) {}
+    try {
+      var feats = ["cv_single", "cv_batch", "summary", "appraiser", "the_owl", "the_spider", "ja_create", "onenote_salary", "jd_anonymizer", "company_profile", "lead_search", "lead_people", "lead_email"];
+      if (typeof aiRoutePayload === "function") {
+        L.push("AI routes (provider / model / key):");
+        feats.forEach(function (f) { try { var r = aiRoutePayload(f) || {}; L.push("  " + f + " = " + (r.provider || "?") + " / " + (r.model || "?") + " / key:" + (r.api_key ? "SET" : "MISSING")); } catch (e) { L.push("  " + f + " = <error>"); } });
+      } else { L.push("AI routes: resolver unavailable"); }
+    } catch (e) {}
+    try { var j = (document.body && document.body.innerText || ""); L.push("JobAdder: " + (/JobAdder Connected/i.test(j) ? "Connected" : (/Not connected/i.test(j) ? "Not connected" : "unknown"))); } catch (e) {}
+    return L.join("\n");
+  }
+  function missingElements() {
+    var ids = {}, missing = [];
+    try {
+      var sc = document.getElementsByTagName("script"), re = /getElementById\(\s*['"]([A-Za-z0-9_\-]+)['"]\s*\)/g, mm;
+      for (var i = 0; i < sc.length; i++) { var src = sc[i].textContent || ""; while ((mm = re.exec(src))) ids[mm[1]] = true; }
+    } catch (e) {}
+    Object.keys(ids).forEach(function (id) { try { if (!document.getElementById(id)) missing.push(id); } catch (e) {} });
+    return missing;
+  }
+  function buildReport() {
+    var L = [];
+    L.push("=== CV STUDIO DIAGNOSTIC REPORT ===");
+    L.push("Generated: " + new Date().toISOString());
+    L.push("Recording since: " + started.toISOString());
+    L.push("URL: " + redact(location.href));
+    L.push("User agent: " + navigator.userAgent);
+    L.push(""); L.push("--- CONFIG (no secrets) ---"); L.push(configSnapshot()); L.push("");
+    var miss = missingElements();
+    L.push("--- MISSING ELEMENTS (referenced by JS, absent from page): " + miss.length + " ---");
+    L.push(miss.length ? miss.join(", ") : "(none)"); L.push("");
+    L.push("--- UNHANDLED PROMISE REJECTIONS: " + rejections.length + " ---");
+    rejections.forEach(function (r) { L.push("[" + r.t + "] " + r.msg + (r.stack ? ("  ::  " + r.stack) : "")); }); if (!rejections.length) L.push("(none)"); L.push("");
+    L.push("--- JS ERRORS: " + errors.length + " ---");
+    errors.forEach(function (e) { L.push("[" + e.t + "] " + e.msg + "  @ " + e.at); }); if (!errors.length) L.push("(none)"); L.push("");
+    L.push("--- FAILED / SLOW NETWORK: " + netFails.length + " ---");
+    netFails.forEach(function (n) { L.push("[" + n.t + "] " + n.method + " " + n.path + " → " + n.status + " (" + n.ms + "ms)" + (n.body ? ("  body: " + n.body) : "")); }); if (!netFails.length) L.push("(none)"); L.push("");
+    L.push("--- CONSOLE error/warn: " + consoleMsgs.length + " ---");
+    consoleMsgs.forEach(function (c) { L.push("[" + c.t + "] " + c.level + ": " + c.msg); }); if (!consoleMsgs.length) L.push("(none)"); L.push("");
+    L.push("=== END REPORT ===");
+    return L.join("\n");
+  }
+  var badge, panel;
+  function counts() { return errors.length + rejections.length + netFails.length; }
+  function refreshBadge() {
+    if (!badge) return;
+    var c = counts();
+    badge.style.display = c ? "block" : "none";
+    badge.textContent = "🩺 Doctor ⚠ " + c;
+  }
+  function mkBtn(label, color) { var b = document.createElement("button"); b.textContent = label; b.style.cssText = "background:" + color + ";color:#fff;border:none;border-radius:7px;padding:6px 10px;font:600 12px system-ui;cursor:pointer;"; return b; }
+  function makeUI() {
+    if (badge || !document.body) return;
+    badge = document.createElement("button");
+    badge.style.cssText = "position:fixed;right:16px;bottom:16px;z-index:2147483647;display:none;background:#c0392b;color:#fff;border:none;border-radius:20px;padding:9px 14px;font:600 13px system-ui,sans-serif;box-shadow:0 6px 18px rgba(0,0,0,.25);cursor:pointer;";
+    badge.onclick = openPanel;
+    document.body.appendChild(badge);
+    refreshBadge();
+  }
+  function openPanel() {
+    if (!document.body) return;
+    if (panel) { panel.remove(); panel = null; return; }
+    panel = document.createElement("div");
+    panel.style.cssText = "position:fixed;right:16px;bottom:60px;z-index:2147483647;width:min(560px,92vw);max-height:70vh;background:#fff;color:#1a2230;border:1px solid #cfd8e6;border-radius:12px;box-shadow:0 18px 48px rgba(0,0,0,.28);display:flex;flex-direction:column;font:13px system-ui,sans-serif;overflow:hidden;";
+    var head = document.createElement("div");
+    head.style.cssText = "display:flex;gap:8px;align-items:center;padding:10px 12px;border-bottom:1px solid #e7edf5;background:#f6f9fd;";
+    head.innerHTML = "<b style='flex:1'>🩺 CV Studio Doctor</b>";
+    var copyBtn = mkBtn("📋 Copy Report", "#1463f3"), dlBtn = mkBtn("⬇ Download", "#5a6b85"), clrBtn = mkBtn("Clear", "#8a97ab"), xBtn = mkBtn("✕", "#8a97ab");
+    head.appendChild(copyBtn); head.appendChild(dlBtn); head.appendChild(clrBtn); head.appendChild(xBtn);
+    var ta = document.createElement("textarea");
+    ta.readOnly = true; ta.value = buildReport();
+    ta.style.cssText = "flex:1;margin:0;border:none;padding:10px 12px;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;resize:none;white-space:pre;overflow:auto;background:#fff;color:#1a2230;";
+    var note = document.createElement("div");
+    note.style.cssText = "padding:7px 12px;border-top:1px solid #e7edf5;color:#5a6b85;font-size:11.5px;background:#f6f9fd;";
+    note.textContent = "Redacted (no keys / CV text). Reproduce the bug, then Copy Report and paste to Claude.";
+    panel.appendChild(head); panel.appendChild(ta); panel.appendChild(note);
+    document.body.appendChild(panel);
+    copyBtn.onclick = function () {
+      ta.value = buildReport(); ta.select(); var ok = false;
+      try { ok = document.execCommand("copy"); } catch (e) {}
+      if (navigator.clipboard) { try { navigator.clipboard.writeText(ta.value); ok = true; } catch (e) {} }
+      copyBtn.textContent = ok ? "✓ Copied" : "Select all & Ctrl+C"; setTimeout(function () { copyBtn.textContent = "📋 Copy Report"; }, 1800);
+    };
+    dlBtn.onclick = function () {
+      try { var b = new Blob([buildReport()], { type: "text/plain" }), a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = "cv-studio-diagnostic-" + new Date().toISOString().replace(/[:.]/g, "-") + ".txt"; a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000); } catch (e) {}
+    };
+    clrBtn.onclick = function () { errors.length = rejections.length = consoleMsgs.length = netFails.length = 0; ta.value = buildReport(); refreshBadge(); };
+    xBtn.onclick = function () { panel.remove(); panel = null; };
+  }
+  window.addEventListener("keydown", function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "D" || e.key === "d")) { e.preventDefault(); makeUI(); openPanel(); }
+  });
+  window.cvDoctor = {
+    _installed: true,
+    open: function () { makeUI(); if (!panel) openPanel(); },
+    report: buildReport,
+    copy: function () { try { navigator.clipboard.writeText(buildReport()); } catch (e) {} return buildReport(); },
+    clear: function () { errors.length = rejections.length = consoleMsgs.length = netFails.length = 0; refreshBadge(); },
+    data: function () { return { errors: errors, rejections: rejections, netFails: netFails, consoleMsgs: consoleMsgs }; }
+  };
+  if (document.body) makeUI(); else document.addEventListener("DOMContentLoaded", makeUI);
+})();
+</script>
 </head>
 <body>
 <div id="settingsBackdrop" onclick="closeSettingsPanel()" aria-hidden="true"></div>
