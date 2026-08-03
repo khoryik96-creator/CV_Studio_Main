@@ -70,6 +70,7 @@ class Phase7AModularMonolithFoundationTests(unittest.TestCase):
                 "jobadder_read",
                 "jobadder_write",
                 "onenote_text",
+                "outlook_crypto",
                 "storage_http",
                 "legacy_web_shell",
             ),

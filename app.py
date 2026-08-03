@@ -3682,86 +3682,31 @@ def _ms_outlook_dpapi_store_path():
     return os.path.join(os.path.dirname(_install_receipt_path()), "outlook_token_store_v2.dpapi")
 
 
+from cvstudio_outlook_crypto import (
+    keystream as _ms_outlook_keystream,
+    dpapi_transform as _ms_outlook_dpapi_transform,
+    store_key as _outlook_crypto_store_key,
+    protect_record as _outlook_crypto_protect_record,
+    unprotect_record as _outlook_crypto_unprotect_record,
+)
+
+
 def _ms_outlook_store_key(schema=None):
-    schema = int(schema or _MS_OUTLOOK_STORE_SCHEMA)
-    material = ("CVStudio|OutlookTokenStore|v{}|".format(schema) + _install_receipt_machine_hash()).encode("utf-8")
-    return _receipt_hmac.new(_install_receipt_signing_key(), material, _receipt_hashlib.sha256).digest()
-
-
-def _ms_outlook_keystream(key, nonce, size):
-    out = bytearray()
-    counter = 0
-    while len(out) < size:
-        block = _receipt_hmac.new(key, nonce + counter.to_bytes(8, "big"), _receipt_hashlib.sha256).digest()
-        out.extend(block)
-        counter += 1
-    return bytes(out[:size])
+    return _outlook_crypto_store_key(
+        schema, _install_receipt_machine_hash(), _install_receipt_signing_key()
+    )
 
 
 def _ms_outlook_protect_record(record, schema=None):
-    schema = int(schema or _MS_OUTLOOK_STORE_SCHEMA)
-    key = _ms_outlook_store_key(schema)
-    nonce = os.urandom(16)
-    plain = json.dumps(record, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
-    stream = _ms_outlook_keystream(key, nonce, len(plain))
-    cipher = bytes(a ^ b for a, b in zip(plain, stream))
-    aad = ("CVStudio|OutlookTokenStore|v{}".format(schema)).encode("ascii")
-    mac = _receipt_hmac.new(key, aad + nonce + cipher, _receipt_hashlib.sha256).hexdigest()
-    return {
-        "schema": schema,
-        "nonce": base64.urlsafe_b64encode(nonce).decode("ascii"),
-        "ciphertext": base64.urlsafe_b64encode(cipher).decode("ascii"),
-        "mac": mac,
-    }
+    return _outlook_crypto_protect_record(
+        record, _install_receipt_machine_hash(), _install_receipt_signing_key(), schema=schema
+    )
 
 
 def _ms_outlook_unprotect_record(payload):
-    if not isinstance(payload, dict):
-        raise ValueError("Unsupported Outlook token store")
-    schema = int(payload.get("schema") or 0)
-    if schema not in (1, _MS_OUTLOOK_STORE_SCHEMA):
-        raise ValueError("Unsupported Outlook token store")
-    key = _ms_outlook_store_key(schema)
-    nonce = base64.urlsafe_b64decode(str(payload.get("nonce") or "").encode("ascii"))
-    cipher = base64.urlsafe_b64decode(str(payload.get("ciphertext") or "").encode("ascii"))
-    received = str(payload.get("mac") or "").lower()
-    aad = ("CVStudio|OutlookTokenStore|v{}".format(schema)).encode("ascii")
-    expected = _receipt_hmac.new(key, aad + nonce + cipher, _receipt_hashlib.sha256).hexdigest()
-    if not received or not _receipt_hmac.compare_digest(received, expected):
-        raise ValueError("Outlook token store integrity check failed")
-    stream = _ms_outlook_keystream(key, nonce, len(cipher))
-    plain = bytes(a ^ b for a, b in zip(cipher, stream))
-    data = json.loads(plain.decode("utf-8"))
-    return data if isinstance(data, dict) else {}
-
-
-def _ms_outlook_dpapi_transform(data, protect=True):
-    if os.name != "nt":
-        raise RuntimeError("Windows DPAPI is unavailable")
-    import ctypes
-    from ctypes import wintypes
-
-    class DATA_BLOB(ctypes.Structure):
-        _fields_ = [("cbData", wintypes.DWORD), ("pbData", ctypes.POINTER(ctypes.c_ubyte))]
-
-    raw = bytes(data or b"")
-    buffer = ctypes.create_string_buffer(raw, max(1, len(raw)))
-    in_blob = DATA_BLOB(len(raw), ctypes.cast(buffer, ctypes.POINTER(ctypes.c_ubyte)))
-    out_blob = DATA_BLOB()
-    crypt32 = ctypes.windll.crypt32
-    kernel32 = ctypes.windll.kernel32
-    flags = 0x1  # CRYPTPROTECT_UI_FORBIDDEN
-    if protect:
-        ok = crypt32.CryptProtectData(ctypes.byref(in_blob), "CV Studio Outlook", None, None, None, flags, ctypes.byref(out_blob))
-    else:
-        ok = crypt32.CryptUnprotectData(ctypes.byref(in_blob), None, None, None, None, flags, ctypes.byref(out_blob))
-    if not ok:
-        raise ctypes.WinError()
-    try:
-        return ctypes.string_at(out_blob.pbData, out_blob.cbData)
-    finally:
-        if out_blob.pbData:
-            kernel32.LocalFree(out_blob.pbData)
+    return _outlook_crypto_unprotect_record(
+        payload, _install_receipt_machine_hash(), _install_receipt_signing_key()
+    )
 
 
 def _ms_outlook_keychain_account():
