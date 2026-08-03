@@ -10961,7 +10961,7 @@ async function runTheSpiderJobAdderSearch(opts) {
   var all=[]; var errors=[]; var filterSummaries=[]; var reconnectRequired=false;
   for (var i=0;i<queries.length;i++) {
     try {
-      var r = await fetchWithTimeout('/jobadder/spider_search', {method:'POST', headers:{'Content-Type':'application/json','X-AI-Crawler-Code':aiCrawlerLockPayload()}, body:JSON.stringify({query:queries[i], limit:200, filters:spiderFilters, crawler_lock_code:aiCrawlerLockPayload()})}, 240000);
+      var r = await fetchWithTimeout('/jobadder/spider_search', {method:'POST', headers:{'Content-Type':'application/json','X-AI-Crawler-Code':aiCrawlerLockPayload()}, body:JSON.stringify({query:queries[i], limit:200, filters:spiderFilters, crawler_lock_code:aiCrawlerLockPayload()})}, 420000);
       var d = await r.json().catch(function(){ return {}; });
       if (window._theSpiderSearchRunSeq !== runId) return;
       if (r.status === 401 || d.needs_reconnect) {
