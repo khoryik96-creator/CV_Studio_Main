@@ -122,7 +122,7 @@ take domains in **non-overlapping `app.py` regions** and never share a branch.
 
 | Account | Domain | New module | app.py region | Branch prefix |
 |---------|--------|-----------|---------------|---------------|
-| **Einstein** | PPC (Post Placement Care) — pure `_ppc_*` placement helpers only. The `/ppc/outlook/*` pure logic (`_ms_outlook_*`, e.g. `_ms_outlook_validate_draft_input`) is **deferred to the MS-Graph/Outlook module, not PPC** — a lone `_ms_outlook_*` helper belongs with the Outlook cluster, not placements. | `cvstudio_ppc.py` | ~21,660–21,850 | `einstein/*` |
+| **Einstein** | OneNote + Outlook / MS-Graph — service-module domain, extracted in slices. **Slice 1 = pure helpers** (`_ms_safe_tenant`, `_ms_outlook_account_normalize`, `_ms_outlook_error_payload`, `_ms_outlook_validate_draft_input` — incl. the one deferred out of PPC). Service slices (Outlook handlers, then OneNote handlers) follow. (PPC `cvstudio_ppc.py` landed in #40.) | `cvstudio_msgraph.py` | ~3,140–5,650 | `einstein/*` |
 | **Claude** | Lead Finder enrichment — pure `_lead_*` URL/company/email/verification helpers | `cvstudio_lead_enrich.py` | ~16,200–19,300 | `claude/*` |
 
 Rules while both are active:
@@ -159,9 +159,9 @@ Prioritized backlog:
 
 | Domain | Region | Shape | Suggested owner | Status |
 |--------|--------|-------|-----------------|--------|
-| PPC (Post Placement Care) — `_ppc_*` placements only | ~21,660–21,850 | pure closure | Einstein | PR #40 open (rebased, verified 116/`855e04d5…`); `/ppc/outlook/*` deferred to the OneNote + Outlook row |
+| PPC (Post Placement Care) — `_ppc_*` placements only | ~21,660–21,850 | pure closure | Einstein | ✅ merged (#40); `/ppc/outlook/*` deferred to the OneNote + Outlook row |
 | Lead Finder enrichment (URL/company) | ~15,750–19,600 | pure closure | Claude | slice 1 merged/queued; more `_lead_*` slices remain |
-| **OneNote + Outlook / MS-Graph domain** (OneNote Graph + desktop-COM handlers, **plus** the `/ppc/outlook/*` `_ms_outlook_*` cluster incl. `_ms_outlook_validate_draft_input`) | ~3,980–4,900 | service module | **Einstein (next)** | unclaimed — same MS-Graph service-module shape; absorbs the Outlook logic deferred out of PPC |
+| **OneNote + Outlook / MS-Graph domain** (OneNote Graph + desktop-COM handlers, **plus** the `/ppc/outlook/*` `_ms_outlook_*` cluster incl. `_ms_outlook_validate_draft_input`) | ~3,140–4,900 | service module (sliced) | **Einstein** | CLAIMED — slice 1 (pure helpers → `cvstudio_msgraph.py`) done on `einstein/phase-7b-onenote-outlook`; service slices (Outlook handlers, then OneNote handlers) remain |
 | Spider / AI Crawler enrichment (`_spider_*`) | ~9,880–11,600 | pure closure | Claude (later) | ⚠️ has the .doc/OCR characterization-test minefield; tests-first is mandatory |
 | Core CV/AI pipeline pure helpers (`/parse`, `/generate-ai`, DOCX mapping) | ~15,300–21,600 | pure closure | either (last) | most sensitive; scope carefully, extract last |
 

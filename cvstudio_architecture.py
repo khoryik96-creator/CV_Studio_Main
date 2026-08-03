@@ -160,6 +160,11 @@ DEFAULT_MODULES = (
         ("cvstudio_ppc.py",),
     ),
     ModuleDefinition(
+        "msgraph",
+        "domain",
+        ("cvstudio_msgraph.py",),
+    ),
+    ModuleDefinition(
         "salary_comparison",
         "interface",
         (
@@ -205,6 +210,7 @@ DEFAULT_MODULES = (
             "cv_normalize",
             "lead_match",
             "lead_enrich",
+            "msgraph",
             "onenote_text",
             "outlook_crypto",
             "platform_dependencies",
