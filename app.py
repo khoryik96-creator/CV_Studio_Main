@@ -1332,6 +1332,16 @@ def _call_deepseek(api_key, payload_dict, timeout_seconds=180):
             "Configure a Job Search Provider (Tavily or SerpAPI) so DeepSeek can classify "
             "already-fetched results instead, or switch this task back to Claude/GPT."
         )
+    # DeepSeek V4 enables chain-of-thought "thinking" by default, which makes
+    # every call spend its output budget on hidden reasoning first -- observed
+    # as 30-160s latency (and mixed reasoning_content that can break strict-JSON
+    # parsing) on CV Studio's structured extraction/generation tasks: /parse,
+    # Blind JD, Company Profile, The Owl and AI Crawler. None of these benefit
+    # from thinking, so disable it explicitly via the Anthropic-compatible field
+    # (accepted values: "adaptive"/"enabled"/"disabled"). A caller may still opt
+    # in by setting "thinking" itself. Only the final text content is returned.
+    if "thinking" not in payload_dict:
+        payload_dict["thinking"] = {"type": "disabled"}
     _phase5b_enforce_request_guardrail("deepseek", payload_dict)
     return _AI_PROVIDER_CLIENT.request(
         "deepseek",
