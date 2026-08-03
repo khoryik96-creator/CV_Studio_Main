@@ -109,3 +109,24 @@ in binary mode preserving CRLF.
   `origin/master` before new work so you don't diverge.
 - Keep this file current: when a deferred item is finished or a new trap is
   found, update section 7/8.
+
+### Current work split (two concurrent accounts)
+
+Every modularization extraction touches `app.py`, `cvstudio_architecture.py`,
+and `tests/test_phase7a_modular_monolith_foundation.py`, so the two accounts
+take domains in **non-overlapping `app.py` regions** and never share a branch.
+
+| Account | Domain | New module | app.py region | Branch prefix |
+|---------|--------|-----------|---------------|---------------|
+| **Einstein** | PPC (Post Placement Care) — pure `_ppc_*` helpers + `/ppc/outlook/*` pure logic | `cvstudio_ppc.py` | ~3,980–4,300 and ~21,660–21,850 | `einstein/*` |
+| **Claude** | Lead Finder enrichment — pure `_lead_*` URL/company/email/verification helpers | `cvstudio_lead_enrich.py` | ~16,200–19,300 | `claude/*` |
+
+Rules while both are active:
+1. Separate branches — never commit to the other account's branch.
+2. `git fetch` + rebase onto `origin/master` before starting and before every push.
+3. One domain each until merged; do not both edit the same `app.py` region.
+4. Whoever merges second rebases and resolves the small conflict in
+   `cvstudio_architecture.py` (the `DEFAULT_MODULES` tuple + `legacy_web_shell`
+   deps) and the phase7a names tuple. The route SHA does **not** move for pure
+   extractions, so the route-contract test files stay untouched.
+5. Update this table when a domain lands or a new one is picked up.
