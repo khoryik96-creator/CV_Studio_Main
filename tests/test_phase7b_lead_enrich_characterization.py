@@ -460,6 +460,63 @@ class LeadEnrichCharacterizationTests(unittest.TestCase):
         ):
             self.assertTrue(callable(getattr(app, name)), name)
 
+    # --- json extraction / provider mapping / source selection -----------
+
+    def test_extract_json(self):
+        self.assertEqual(
+            app._lead_extract_json('prefix ```json\n{"a": 1, "b": [2,3]}\n``` suffix'),
+            {"a": 1, "b": [2, 3]},
+        )
+        self.assertEqual(app._lead_extract_json('[{"x":1}]'), {"x": 1})
+        with self.assertRaises(ValueError):
+            app._lead_extract_json("no json here")
+
+    def test_selected_source_site(self):
+        self.assertEqual(
+            app._lead_selected_source_site(["LinkedIn"], ""),
+            ("LinkedIn Jobs", "www.linkedin.com/jobs"),
+        )
+        self.assertEqual(
+            app._lead_selected_source_site(["JobStreet", "Indeed"], ""),
+            ("JobStreet", "my.jobstreet.com"),
+        )
+
+    def test_best_selected_source_verification_url(self):
+        url, note = app._lead_best_selected_source_verification_url(
+            "Acme", "SAP Consultant", ["LinkedIn"], ""
+        )
+        self.assertEqual(
+            url,
+            'https://www.google.com/search?q=%22Acme%22%20%22SAP%20Consultant%22'
+            "%20site%3Awww.linkedin.com/jobs",
+        )
+        self.assertIn("verification search for LinkedIn Jobs", note)
+
+    def test_fake_anthropic_response(self):
+        self.assertEqual(
+            app._lead_fake_anthropic_response({"leads": []}),
+            {
+                "content": [{"type": "text", "text": '{"leads": []}'}],
+                "usage": {"input_tokens": 0, "output_tokens": 0},
+            },
+        )
+
+    def test_search_provider_queries(self):
+        self.assertEqual(
+            app._lead_search_provider_queries(
+                ["LinkedIn"], ["SAP Consultant"], ["Malaysia"], "SAP Consultant", None, 4
+            ),
+            ['site:linkedin.com/jobs "SAP Consultant" Malaysia job'],
+        )
+
+    def test_cleanup_urls_by_selected_sources_keeps_selected(self):
+        out, note = app._lead_cleanup_urls_by_selected_sources(
+            [{"job_url": "https://www.linkedin.com/jobs/view/1", "source_url": ""}],
+            ["LinkedIn"],
+        )
+        self.assertEqual(out[0]["job_url"], "https://www.linkedin.com/jobs/view/1")
+        self.assertEqual(note, "")
+
 
 if __name__ == "__main__":
     unittest.main()

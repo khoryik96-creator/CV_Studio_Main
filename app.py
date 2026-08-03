@@ -15751,47 +15751,6 @@ def generate_ai():
 
 
 # ── Lead Finder / Market Leads ───────────────────────────────────────────────
-def _lead_extract_json(raw_text):
-    """Extract the first JSON object from a model response safely.
-
-    Lead Finder should not return 0 just because the model wrapped JSON in
-    prose/code fences or left a harmless trailing comma. This parser still only
-    accepts object-like data, but it is more forgiving than strict json.loads.
-    """
-    raw_text = (raw_text or "").strip().lstrip("﻿")
-    raw_text = re.sub(r"[​‌‍]", "", raw_text)
-    if raw_text.startswith("```json"):
-        raw_text = raw_text[7:].strip()
-    if raw_text.startswith("```"):
-        raw_text = raw_text[3:].strip()
-    if raw_text.endswith("```"):
-        raw_text = raw_text[:-3].strip()
-
-    candidates = [raw_text]
-    start = raw_text.find("{")
-    end = raw_text.rfind("}")
-    if start >= 0 and end > start:
-        candidates.append(raw_text[start:end+1])
-
-    for candidate in candidates:
-        candidate = candidate.strip()
-        if not candidate:
-            continue
-        repaired = re.sub(r",\s*([}\]])", r"\1", candidate)
-        for item in (candidate, repaired):
-            try:
-                obj = json.loads(item)
-                if isinstance(obj, dict):
-                    return obj
-            except Exception:
-                pass
-            try:
-                obj = ast.literal_eval(item)
-                if isinstance(obj, dict):
-                    return obj
-            except Exception:
-                pass
-    raise ValueError("No valid JSON object found in model response")
 
 
 _LLM_MODEL_PRICING = _PHASE5B_MODEL_PRICING
@@ -15869,16 +15828,20 @@ from cvstudio_lead_enrich import (
     _LEAD_SENIORITY_TOKENS,
     _LEAD_TERMINAL_ROLE_TOKENS,
     _lead_apply_basic_job_filters,
+    _lead_best_selected_source_verification_url,
     _lead_best_verification_url,
     _lead_canonical_direct_job_url,
     _lead_clean_company_guess,
     _lead_clean_csv,
     _lead_clean_job_filters,
+    _lead_cleanup_urls_by_selected_sources,
     _lead_contains_any_token,
     _lead_cv_content_signature,
     _lead_cv_evidence_tokens,
     _lead_email_domain,
     _lead_exclude_query_terms,
+    _lead_extract_json,
+    _lead_fake_anthropic_response,
     _lead_families_from_text,
     _lead_family_scores,
     _lead_filter_by_regions,
@@ -15915,6 +15878,8 @@ from cvstudio_lead_enrich import (
     _lead_reviewable_job_lead,
     _lead_role_specific_title_bank,
     _lead_sanitize_public_business_emails,
+    _lead_search_provider_queries,
+    _lead_selected_source_site,
     _lead_source_allowed_by_selection,
     _lead_url_portal,
     _lead_verification_company_text,
@@ -15956,139 +15921,6 @@ from cvstudio_lead_enrich import (
 
 
 
-def _lead_selected_source_site(job_sources, portal_hint=""):
-    """Pick the best site: restriction for a selected-source verification search.
-
-    If the model labels a lead as LinkedIn but gives an Indeed source URL, the
-    recruiter selected LinkedIn, so Verify Source should search LinkedIn rather
-    than opening the unselected Indeed page. Prefer the visible portal hint when
-    it is one of the selected chips; otherwise use the first selected portal in a
-    stable priority order.
-    """
-    selected = [str(s or "").strip().lower() for s in (job_sources or []) if str(s or "").strip()]
-    hint = str(portal_hint or "").strip().lower()
-
-    def has(*needles):
-        return any(any(n in s for n in needles) for s in selected)
-
-    ordered = []
-    if "linkedin" in hint and has("linkedin"):
-        ordered.append(("LinkedIn Jobs", "www.linkedin.com/jobs"))
-    if "jobstreet" in hint and has("jobstreet"):
-        ordered.append(("JobStreet", "my.jobstreet.com"))
-    if "jobsdb" in hint and has("jobsdb"):
-        ordered.append(("JobsDB", "jobsdb.com"))
-    if "indeed" in hint and has("indeed"):
-        ordered.append(("Indeed", "indeed.com"))
-    if "glassdoor" in hint and has("glassdoor"):
-        ordered.append(("Glassdoor", "glassdoor.com"))
-    if "hiredly" in hint and has("hiredly"):
-        ordered.append(("Hiredly", "hiredly.com"))
-
-    priority = [
-        ("LinkedIn Jobs", "www.linkedin.com/jobs", ("linkedin",)),
-        ("JobStreet", "my.jobstreet.com", ("jobstreet",)),
-        ("JobsDB", "jobsdb.com", ("jobsdb",)),
-        ("Indeed", "indeed.com", ("indeed",)),
-        ("Glassdoor", "glassdoor.com", ("glassdoor",)),
-        ("Hiredly", "hiredly.com", ("hiredly",)),
-        ("MyCareersFuture", "mycareersfuture.gov.sg", ("mycareersfuture",)),
-        ("Kalibrr", "kalibrr.com", ("kalibrr",)),
-        ("Foundit", "foundit.my", ("foundit", "monster")),
-    ]
-    for label, site, needles in priority:
-        if has(*needles):
-            ordered.append((label, site))
-
-    seen = set()
-    for label, site in ordered:
-        if site in seen:
-            continue
-        seen.add(site)
-        return label, site
-    if has("company", "career"):
-        return "Company career pages", ""
-    if has("other public", "other portal"):
-        return "selected public job portals", ""
-    return "selected source", ""
-
-
-def _lead_best_selected_source_verification_url(company, role, job_sources, portal_hint=""):
-    """Build a review URL constrained to the selected source chips.
-
-    This is used when a lead is otherwise useful, but the returned URL belongs to
-    an unselected portal (for example a LinkedIn-only run where the model/provider
-    returned an Indeed search URL).
-    """
-    company = _lead_verification_company_text(company)
-    role = re.sub(r"\s+", " ", str(role or "")).strip()
-    label, site = _lead_selected_source_site(job_sources, portal_hint)
-    q_parts = [f'"{company}"'] if company else []
-    q_parts += [f'"{role}"'] if role else []
-    if site:
-        q_parts.append(f"site:{site}")
-    else:
-        q_parts.append(str(label or "jobs"))
-    if not q_parts:
-        return "", ""
-    search_url = "https://www.google.com/search?q=" + urllib.parse.quote(" ".join(q_parts))
-    note = f"Removed a URL from an unselected portal and replaced it with a targeted verification search for {label}."
-    return search_url, note
-
-
-def _lead_cleanup_urls_by_selected_sources(parsed, job_sources):
-    """Remove job/source URLs from portals the user did not select.
-
-    Provider filtering already blocks most cross-source provider results, but the
-    AI/refine path can still return a row labelled as one selected source while
-    placing an Indeed/Glassdoor/etc. URL in source_url. This final safety pass
-    prevents a LinkedIn-only run from opening Indeed links, a JobStreet-only run
-    from opening LinkedIn links, and so on.
-    """
-    if not isinstance(parsed, dict):
-        return parsed, ""
-    selected = [str(s or "").strip() for s in (job_sources or []) if str(s or "").strip()]
-    if not selected:
-        return parsed, ""
-    companies = parsed.get("companies") or []
-    if not isinstance(companies, list):
-        return parsed, ""
-    changed = 0
-    for c in companies:
-        if not isinstance(c, dict):
-            continue
-        role = c.get("matched_role") or c.get("title") or c.get("hiring_signal") or ""
-        portal_hint = c.get("job_portal") or ""
-        bad_urls = []
-
-        job_url = str(c.get("job_url") or "").strip()
-        if job_url and not _lead_is_generated_verification_search(job_url):
-            portal = _lead_guess_portal_from_url(job_url, portal_hint)
-            if not _lead_source_allowed_by_selection(job_url, portal, selected):
-                bad_urls.append(job_url)
-                c["job_url"] = ""
-                c["job_url_quality"] = "needs_verification"
-                c["lead_kind"] = "job_lead_needs_verification"
-
-        source_url = str(c.get("source_url") or "").strip()
-        if source_url and not _lead_is_generated_verification_search(source_url):
-            portal = _lead_guess_portal_from_url(source_url, portal_hint)
-            if not _lead_source_allowed_by_selection(source_url, portal, selected):
-                bad_urls.append(source_url)
-                c["source_url"] = ""
-
-        if bad_urls:
-            if not str(c.get("source_url") or "").strip():
-                best_url, gen_note = _lead_best_selected_source_verification_url(c.get("company"), role, selected, portal_hint)
-                if best_url:
-                    c["source_url"] = best_url
-                if gen_note:
-                    existing_note = str(c.get("source_note") or "").strip()
-                    c["source_note"] = (existing_note + " " + gen_note).strip() if existing_note and gen_note not in existing_note else (existing_note or gen_note)
-            changed += 1
-    if changed:
-        return parsed, f"Cleaned {changed} cross-source URL(s) that belonged to unselected job portals."
-    return parsed, ""
 
 
 
@@ -16112,12 +15944,10 @@ def _lead_cleanup_urls_by_selected_sources(parsed, job_sources):
 
 
 
-def _lead_fake_anthropic_response(obj):
-    """Build a minimal Anthropic-like response so routes can return partial JSON instead of 504."""
-    return {
-        "content": [{"type": "text", "text": json.dumps(obj or {}, ensure_ascii=False)}],
-        "usage": {"input_tokens": 0, "output_tokens": 0},
-    }
+
+
+
+
 
 
 def _lead_call_with_optional_web(api_key, payload, warning_prefix="", graceful_json=None, provider="anthropic"):
@@ -16244,27 +16074,6 @@ def _lead_search_provider_config(raw):
 
 
 
-def _lead_search_provider_queries(job_sources, title_angles, regions, target_role="", job_filters=None, max_queries=8):
-    titles = [str(t).strip() for t in (title_angles or []) if str(t).strip()]
-    if target_role and target_role not in titles:
-        titles.insert(0, str(target_role).strip())
-    titles = titles[:4] or [str(target_role or "job").strip()]
-    srcs = [str(s).strip() for s in (job_sources or []) if str(s).strip()][:4] or ["jobs"]
-    regs = [str(r).strip() for r in (regions or []) if str(r).strip()][:3] or [""]
-    include = _lead_filter_query_terms(job_filters or {})
-    exclude = _lead_exclude_query_terms(job_filters or {})
-    queries = []
-    for src in srcs:
-        hint = _lead_portal_domain_hint(src)
-        for reg in regs:
-            for title in titles:
-                q = f'{hint} "{title}" {reg} job {include} {exclude}'.strip()
-                q = re.sub(r"\s+", " ", q)
-                if q not in queries:
-                    queries.append(q)
-                if len(queries) >= max_queries:
-                    return queries
-    return queries[:max_queries]
 
 
 def _lead_ssl_context():
