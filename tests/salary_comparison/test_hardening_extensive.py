@@ -301,6 +301,43 @@ def test_ai_preview_forces_unverified_and_requested_sources(monkeypatch, malaysi
     assert rule["source_urls"] == ["https://example.com/tax", "https://example.com/contribution"]
 
 
+def test_ai_preview_uses_host_key_resolver_and_ignores_browser_key(monkeypatch, malaysia_rule):
+    monkeypatch.setattr("salary_comparison.ai_rule_updater._public_source_url", lambda value: value)
+    monkeypatch.setattr("salary_comparison.ai_rule_updater.fetch_official_source", lambda value: "official text")
+    seen: dict[str, str] = {}
+
+    def fake_deepseek(api_key, model, prompt):
+        seen["api_key"] = api_key
+        return deepcopy(malaysia_rule), {"input_tokens": 1, "output_tokens": 1}
+
+    monkeypatch.setattr("salary_comparison.ai_rule_updater._call_deepseek", fake_deepseek)
+    result = preview_rule_update(
+        {
+            "provider": "deepseek", "api_key": "BROWSER-KEY-SHOULD-BE-IGNORED", "model": "model",
+            "country": "Malaysia", "tax_year": 2025, "residency": "Resident",
+            "tax_url": "https://example.com/tax", "contribution_url": "https://example.com/contribution",
+        },
+        key_resolver=lambda provider: "HOST-STORED-KEY" if provider == "deepseek" else "",
+    )
+    # The host-resolved key is used and the browser-supplied key is never seen.
+    assert seen["api_key"] == "HOST-STORED-KEY"
+    assert result["rule"]["verified"] is False
+
+
+def test_ai_preview_missing_host_key_is_clear_error(monkeypatch):
+    monkeypatch.setattr("salary_comparison.ai_rule_updater._public_source_url", lambda value: value)
+    monkeypatch.setattr("salary_comparison.ai_rule_updater.fetch_official_source", lambda value: "official text")
+    with pytest.raises(AiRuleUpdateError, match="No securely saved"):
+        preview_rule_update(
+            {
+                "provider": "deepseek", "api_key": "", "model": "model",
+                "country": "Malaysia", "tax_year": 2025, "residency": "Resident",
+                "tax_url": "https://example.com/tax", "contribution_url": "https://example.com/contribution",
+            },
+            key_resolver=lambda provider: "",
+        )
+
+
 def _report_args(malaysia_rule):
     a_input = scenario(name="Current <Role> & Package\x00")
     b_input = scenario(name="Offer / Singapore", monthly_base=9000)

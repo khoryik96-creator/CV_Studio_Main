@@ -1009,6 +1009,7 @@ _AI_SPEND_EXACT_PATHS = frozenset({
     "/lead-finder/search",
     "/lead-finder/find-people",
     "/lead-finder/find-emails",
+    "/salary-comparison/api/rules/preview",
 })
 
 
@@ -22103,6 +22104,18 @@ app.config.setdefault(
     "SALARY_COMPARISON_DATA_DIR",
     os.path.join(_RUNTIME_STATE_DIR, "salary_comparison"),
 )
+
+
+def _salary_comparison_resolve_key(provider):
+    """Resolve a saved DeepSeek/Claude key from CV Studio's shared AI secret
+    store for the Salary Comparison rule-updater.  The stored key never leaves
+    the server and a browser-supplied key is never persisted."""
+    return _resolve_request_api_key(
+        {"provider": provider, "api_key": "__BACKEND_SECURE__"}, scope="main"
+    )
+
+
+app.config["SALARY_COMPARISON_KEY_RESOLVER"] = _salary_comparison_resolve_key
 _salary_comparison.init_app(app, url_prefix="/salary-comparison")
 
 

@@ -188,7 +188,12 @@
       <div class="field-grid two">
         <label class="field"><span>Provider</span><select id="rule_provider"><option value="deepseek">DeepSeek</option><option value="claude">Claude</option></select></label>
         <label class="field"><span>Model ID</span><input id="rule_model" placeholder="Enter exact provider model ID"></label>
+        {% if host_managed_ai %}
+        <input id="rule_api_key" type="hidden" value="">
+        <div class="field span-two"><span>API key</span><p class="modal-copy" style="margin:4px 0 0;">Uses your saved CV Studio DeepSeek/Claude key, resolved on the server. Configure it in CV Studio → Settings → AI. Provider and model follow the “Salary Comparison — Tax rules” AI route.</p></div>
+        {% else %}
         <label class="field span-two"><span>API key</span><input id="rule_api_key" type="password" autocomplete="off" placeholder="Used once and never saved"></label>
+        {% endif %}
         <label class="field"><span>Country</span><select id="rule_country"></select></label>
         <label class="field"><span>Tax year</span><input id="rule_tax_year" type="number" min="2020" max="2100" value="2026"></label>
         <label class="field"><span>Residency profile</span><select id="rule_residency"><option>Resident</option><option>Non-Resident</option></select></label>
@@ -208,6 +213,7 @@
     </form>
   </dialog>
 
+  <script>window.SALARY_HOST_MANAGED = {{ 'true' if host_managed_ai else 'false' }};</script>
   <script src="{{ url_for('salary_comparison.static', filename='salary_comparison/salary-comparison.js') }}"></script>
 </body>
 </html>

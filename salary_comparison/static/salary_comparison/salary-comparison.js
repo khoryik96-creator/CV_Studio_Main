@@ -383,6 +383,26 @@
     return token ? { "X-Salary-Admin-Token": token } : {};
   }
 
+  function applyHostAiRoute() {
+    // In CV Studio-hosted mode the provider key is resolved on the server and
+    // the provider/model follow the "Salary Comparison" AI route configured in
+    // CV Studio settings. Same-origin localStorage carries the resolved route.
+    if (!window.SALARY_HOST_MANAGED) return;
+    try {
+      const raw = window.localStorage.getItem("cvstudio_salary_ai_route");
+      if (!raw) return;
+      const snap = JSON.parse(raw);
+      if (snap && (snap.provider === "deepseek" || snap.provider === "claude")) {
+        el("rule_provider").value = snap.provider;
+      }
+      if (snap && typeof snap.model === "string" && snap.model.trim()) {
+        el("rule_model").value = snap.model.trim();
+      }
+    } catch (error) {
+      /* Non-fatal: fall back to the on-page provider/model selection. */
+    }
+  }
+
   async function previewRule() {
     setRuleNotice("");
     pendingRule = null;
@@ -453,7 +473,8 @@
       resetButton.addEventListener("click", resetSamples);
       exportPdfButton.addEventListener("click", () => exportReport("pdf"));
       exportWordButton.addEventListener("click", () => exportReport("word"));
-      rulesButton.addEventListener("click", () => rulesModal.showModal());
+      rulesButton.addEventListener("click", () => { applyHostAiRoute(); rulesModal.showModal(); });
+      applyHostAiRoute();
       previewRuleButton.addEventListener("click", previewRule);
       publishRuleButton.addEventListener("click", publishRule);
       calculate();

@@ -107,7 +107,12 @@ def _request_bool(value: Any, field_name: str) -> bool:
 
 @bp.get("/")
 def index():
-    return render_template("salary_comparison/index.html")
+    # When a host key resolver is wired (CV Studio), the provider key is
+    # resolved server-side; the page must not prompt for or send a key.
+    host_managed_ai = bool(current_app.config.get("SALARY_COMPARISON_KEY_RESOLVER"))
+    return render_template(
+        "salary_comparison/index.html", host_managed_ai=host_managed_ai
+    )
 
 
 @bp.get("/api/config")
@@ -257,7 +262,10 @@ def export_api(export_format: str):
 def rules_preview_api():
     if not _admin_allowed():
         return jsonify({"error": "Invalid administrator token."}), 403
-    return jsonify(preview_rule_update(_json_object()))
+    resolver = current_app.config.get("SALARY_COMPARISON_KEY_RESOLVER")
+    if resolver is not None and not callable(resolver):
+        resolver = None
+    return jsonify(preview_rule_update(_json_object(), key_resolver=resolver))
 
 
 @bp.post("/api/rules/publish")
