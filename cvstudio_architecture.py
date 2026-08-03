@@ -140,6 +140,11 @@ DEFAULT_MODULES = (
         ("cvstudio_lead_match.py",),
     ),
     ModuleDefinition(
+        "spider_boolean",
+        "domain",
+        ("cvstudio_spider_boolean.py",),
+    ),
+    ModuleDefinition(
         "storage_http",
         "interface",
         ("cvstudio_storage_bridge.py",),
@@ -173,6 +178,7 @@ DEFAULT_MODULES = (
             "platform_dependencies",
             "runtime",
             "secrets",
+            "spider_boolean",
             "startup",
             "storage",
             "storage_http",
