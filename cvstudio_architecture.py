@@ -130,6 +130,11 @@ DEFAULT_MODULES = (
         ("cvstudio_outlook_crypto.py",),
     ),
     ModuleDefinition(
+        "cv_normalize",
+        "domain",
+        ("cvstudio_cv_normalize.py",),
+    ),
+    ModuleDefinition(
         "storage_http",
         "interface",
         ("cvstudio_storage_bridge.py",),
@@ -156,6 +161,7 @@ DEFAULT_MODULES = (
             "external_clients",
             "jobadder_read",
             "jobadder_write",
+            "cv_normalize",
             "onenote_text",
             "outlook_crypto",
             "platform_dependencies",
