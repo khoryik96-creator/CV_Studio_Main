@@ -73,6 +73,7 @@ class Phase7AModularMonolithFoundationTests(unittest.TestCase):
                 "outlook_crypto",
                 "cv_normalize",
                 "lead_match",
+                "spider_boolean",
                 "storage_http",
                 "legacy_web_shell",
             ),
