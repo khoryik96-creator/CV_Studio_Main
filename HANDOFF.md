@@ -109,6 +109,10 @@ in binary mode preserving CRLF.
   `origin/master` before new work so you don't diverge.
 - Keep this file current: when a deferred item is finished or a new trap is
   found, update section 7/8.
+- **Live status log:** this file is the durable playbook; GitHub issue #35
+  ("🤝 Multi-Agent Coordination Log") is the append-only log of who is doing
+  what *right now*. Post there when starting, pausing, or finishing notable work
+  so the other account can see in-flight state without reading commits.
 
 ### Current work split (two concurrent accounts)
 

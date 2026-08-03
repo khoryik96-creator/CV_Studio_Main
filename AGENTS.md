@@ -1,5 +1,24 @@
 # CV Studio Codex Rules
 
+## Multi-agent coordination
+
+Two or more agent sessions (Claude Code, Codex) may work on this repo at the
+same time. Two complementary systems keep them aligned:
+
+- **`HANDOFF.md`** — the durable playbook and backlog: conventions, traps, the
+  extraction backlog and the claim protocol. Read it first; it is the source of
+  truth for *what to do* and *how*.
+- **GitHub issue #35** ("🤝 Multi-Agent Coordination Log") — the live,
+  append-only status log: *who is doing what right now*. Before starting work
+  that touches shared files or opens a PR, check it for other in-flight
+  sessions, and post a short comment when starting, pausing, or finishing
+  notable work (branch, files/modules touched, anything the next session should
+  know about or avoid).
+
+Branch naming: one account tags its branches with the `einstein/` prefix
+(e.g. `einstein/<topic>`) so branch and PR lists show which account did the work
+at a glance. The other account keeps its own existing branch naming.
+
 ## Completed release
 
 - Phase 2A migration source baseline: **CV Studio v24.6.217**.
