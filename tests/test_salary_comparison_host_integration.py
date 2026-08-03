@@ -40,6 +40,17 @@ class SalaryComparisonHostIntegrationTests(unittest.TestCase):
             "/salary-comparison/api/rules/preview", app._AI_SPEND_EXACT_PATHS
         )
 
+    def test_hosted_salary_page_hides_key_field_and_flags_host_managed(self):
+        client = app.app.test_client()
+        response = client.get("/salary-comparison/")
+        self.assertEqual(response.status_code, 200)
+        html = response.get_data(as_text=True)
+        # Host-managed: the page must not prompt for a provider key and must
+        # signal server-side key resolution to its script.
+        self.assertIn("window.SALARY_HOST_MANAGED = true", html)
+        self.assertIn('id="rule_api_key" type="hidden"', html)
+        self.assertNotIn('id="rule_api_key" type="password"', html)
+
     def test_key_resolver_is_wired_into_the_blueprint(self):
         resolver = app.app.config.get("SALARY_COMPARISON_KEY_RESOLVER")
         self.assertTrue(callable(resolver))

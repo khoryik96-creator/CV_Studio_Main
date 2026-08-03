@@ -107,7 +107,12 @@ def _request_bool(value: Any, field_name: str) -> bool:
 
 @bp.get("/")
 def index():
-    return render_template("salary_comparison/index.html")
+    # When a host key resolver is wired (CV Studio), the provider key is
+    # resolved server-side; the page must not prompt for or send a key.
+    host_managed_ai = bool(current_app.config.get("SALARY_COMPARISON_KEY_RESOLVER"))
+    return render_template(
+        "salary_comparison/index.html", host_managed_ai=host_managed_ai
+    )
 
 
 @bp.get("/api/config")

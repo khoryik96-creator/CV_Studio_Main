@@ -34,6 +34,14 @@ def test_index_loads(client):
     assert b"Marginal tax rate" in response.data
 
 
+def test_standalone_index_prompts_for_one_time_key(client):
+    # Without a host key resolver the page must keep its own one-time key field.
+    response = client.get("/salary-comparison/")
+    html = response.get_data(as_text=True)
+    assert "window.SALARY_HOST_MANAGED = false" in html
+    assert 'id="rule_api_key" type="password"' in html
+
+
 def test_config_lists_countries_and_rules(client):
     response = client.get("/salary-comparison/api/config")
     data = response.get_json()
