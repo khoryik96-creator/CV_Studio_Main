@@ -130,3 +130,42 @@ Rules while both are active:
    deps) and the phase7a names tuple. The route SHA does **not** move for pure
    extractions, so the route-contract test files stay untouched.
 5. Update this table when a domain lands or a new one is picked up.
+
+### Backlog and claim protocol (what to do next)
+
+When you finish your current domain, **claim the next unclaimed item below**
+(edit its row to `CLAIMED by <account> <date>`), branch, rebase on
+`origin/master`, and go. Do not start a domain already claimed by the other
+account, and do not both work the same `app.py` region at once. Every item
+follows the same recipe (HANDOFF §2): characterization tests first, move the
+cluster, register in `cvstudio_architecture.py` + `build_protected.py`, keep the
+route SHA `855e04d5…` constant, verify locally.
+
+Two shapes of extraction:
+- **Pure-helper closure** (easiest): a set of functions using only stdlib/other
+  helpers, no Flask/app/network. Move them to `cvstudio_*.py`; `app.py`
+  re-exports. Use an AST dependency-closure pass to find an exact self-contained
+  set (see how `cvstudio_lead_enrich.py` was scoped).
+- **Service module** (Graph/stateful): keep the Flask routes in `app.py`, move
+  the handler bodies into a service class that receives its dependencies through
+  explicit callbacks (see `cvstudio_secrets.py`, `cvstudio_jobadder_*.py`). Used
+  when the code touches MS Graph, the secret store, or request state.
+
+Prioritized backlog:
+
+| Domain | Region | Shape | Suggested owner | Status |
+|--------|--------|-------|-----------------|--------|
+| PPC (Post Placement Care) | ~3,980–4,300 + ~21,660–21,850 | pure + service | Einstein | in progress |
+| Lead Finder enrichment (URL/company) | ~15,750–19,600 | pure closure | Claude | slice 1 merged/queued; more `_lead_*` slices remain |
+| **OneNote domain** (Graph + desktop-COM handlers) | ~4,270–4,900 | service module | **Einstein (next)** | unclaimed — same MS-Graph shape as PPC's Outlook work |
+| Spider / AI Crawler enrichment (`_spider_*`) | ~9,880–11,600 | pure closure | Claude (later) | ⚠️ has the .doc/OCR characterization-test minefield; tests-first is mandatory |
+| Core CV/AI pipeline pure helpers (`/parse`, `/generate-ai`, DOCX mapping) | ~15,300–21,600 | pure closure | either (last) | most sensitive; scope carefully, extract last |
+
+Notes:
+- Lead Finder still has ~74 `_lead_*` helpers beyond the first URL/company
+  slice (search-provider result parsing, title-angle logic, contact/email
+  helpers). Claude keeps taking those slices, so Einstein should stay out of the
+  ~15,750–19,600 region.
+- OneNote's `_onenote_*` helpers hit MS Graph / the OneNote desktop app, so they
+  are a service-module extraction, not a pure closure — the same pattern PPC's
+  `/ppc/outlook/*` handlers use.
