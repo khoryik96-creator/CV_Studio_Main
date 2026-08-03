@@ -166,6 +166,52 @@ class CallLlmMigrationTests(unittest.TestCase):
         self.assertEqual(captured["model"], "deepseek-v4-pro")
 
 
+class DeepSeekThinkingDisableTests(unittest.TestCase):
+    """_call_deepseek must disable DeepSeek V4 chain-of-thought by default.
+
+    Thinking-on-by-default made structured calls take 30-160s; the fix injects
+    the Anthropic-compatible ``thinking: {"type": "disabled"}`` field unless the
+    caller opts in.
+    """
+
+    def setUp(self):
+        self._client = app._AI_PROVIDER_CLIENT
+
+    def tearDown(self):
+        app._AI_PROVIDER_CLIENT = self._client
+
+    def _capture(self):
+        captured = {}
+
+        class FakeClient:
+            def request(self, provider, api_key, payload_dict, timeout=180):
+                captured["provider"] = provider
+                captured["payload"] = payload_dict
+                return {"content": [{"type": "text", "text": "ok"}], "usage": {}}
+
+        app._AI_PROVIDER_CLIENT = FakeClient()
+        return captured
+
+    def test_thinking_disabled_by_default(self):
+        captured = self._capture()
+        app._call_deepseek("key", {"model": "deepseek-v4-flash", "messages": [], "max_tokens": 5})
+        self.assertEqual(captured["payload"].get("thinking"), {"type": "disabled"})
+
+    def test_caller_thinking_preference_preserved(self):
+        captured = self._capture()
+        app._call_deepseek(
+            "key",
+            {"model": "deepseek-v4-flash", "messages": [], "max_tokens": 5, "thinking": {"type": "enabled"}},
+        )
+        self.assertEqual(captured["payload"].get("thinking"), {"type": "enabled"})
+
+    def test_caller_payload_not_mutated(self):
+        captured = self._capture()
+        original = {"model": "deepseek-v4-flash", "messages": [], "max_tokens": 5}
+        app._call_deepseek("key", original)
+        self.assertNotIn("thinking", original)
+
+
 class TestRouteTests(unittest.TestCase):
     def setUp(self):
         self._orig = app.call_llm
