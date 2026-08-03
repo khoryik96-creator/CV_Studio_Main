@@ -30,7 +30,7 @@ const storage = new Map();
 let promptValue = '';
 const context = {
   console, JSON, String, Array, Object,
-  LOCK_UNLOCK_VERSION: 'v24.6.254',
+  LOCK_UNLOCK_VERSION: 'v24.6.246',
   CV_SCORING_LOCK_CODE: '1996',
   window: {prompt(){ return promptValue; }, alert(){}},
   localStorage: {getItem(k){ return storage.get(k) || null; }, setItem(k,v){ storage.set(k,v); }},
