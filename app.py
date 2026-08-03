@@ -3141,6 +3141,7 @@ def _ms_ssl_context():
 # The stateful token/store/graph service handlers stay in this web shell for now
 # and move in later slices; this import never pulls app into the module.
 from cvstudio_msgraph import (
+    OutlookService,
     _ms_outlook_account_normalize,
     _ms_outlook_error_payload,
     _ms_outlook_validate_draft_input,
@@ -3288,58 +3289,16 @@ def _ms_token_response(req_data, tenant="common", timeout=20):
     )
 
 
-# PPC rich Outlook drafts use a dedicated delegated token so the existing
-# OneNote connector keeps its narrower Notes.Read permission and refresh flow.
-# Tokens use the operating-system secret store when available: Windows DPAPI,
-# macOS Keychain, and the authenticated machine-bound file only as a fallback.
-# The browser never receives an access or refresh token. CV Studio creates draft
-# messages only; it never calls a Microsoft Graph send endpoint.
-_MS_OUTLOOK_SCOPE = "offline_access User.Read Mail.ReadWrite"
-_MS_OUTLOOK_STORE_SCHEMA = 2
-_MS_OUTLOOK_STORE_LOCK = threading.RLock()
-_MS_OUTLOOK_REFRESH_LOCK = threading.Lock()
-_MS_OUTLOOK_DEVICE_LOCK = threading.RLock()
-_MS_OUTLOOK_DRAFT_LOCK = threading.RLock()
-_MS_OUTLOOK_KEYCHAIN_SERVICE = "TheGuoLab.CVStudio.Outlook"
-
-
-def _ms_outlook_legacy_store_path():
-    return os.path.join(os.path.dirname(_install_receipt_path()), "outlook_token_store_v1.json")
-
-
-def _ms_outlook_fallback_store_path():
-    return os.path.join(os.path.dirname(_install_receipt_path()), "outlook_token_store_v2.json")
-
-
-def _ms_outlook_dpapi_store_path():
-    return os.path.join(os.path.dirname(_install_receipt_path()), "outlook_token_store_v2.dpapi")
-
-
+# The PPC rich-Outlook-draft token store, lifecycle and handlers live in the
+# OutlookService in cvstudio_msgraph (Phase 7B). The generic secret vault below
+# still shares two low-level primitives with it — the Outlook token-store
+# cryptography and the macOS Keychain availability/account naming — so those
+# stay here. The Outlook crypto keystream/DPAPI transform are imported for the
+# generic _cv_secure_* store.
 from cvstudio_outlook_crypto import (
     keystream as _ms_outlook_keystream,
     dpapi_transform as _ms_outlook_dpapi_transform,
-    store_key as _outlook_crypto_store_key,
-    protect_record as _outlook_crypto_protect_record,
-    unprotect_record as _outlook_crypto_unprotect_record,
 )
-
-
-def _ms_outlook_store_key(schema=None):
-    return _outlook_crypto_store_key(
-        schema, _install_receipt_machine_hash(), _install_receipt_signing_key()
-    )
-
-
-def _ms_outlook_protect_record(record, schema=None):
-    return _outlook_crypto_protect_record(
-        record, _install_receipt_machine_hash(), _install_receipt_signing_key(), schema=schema
-    )
-
-
-def _ms_outlook_unprotect_record(payload):
-    return _outlook_crypto_unprotect_record(
-        payload, _install_receipt_machine_hash(), _install_receipt_signing_key()
-    )
 
 
 def _ms_outlook_keychain_account():
@@ -3354,79 +3313,6 @@ def _ms_outlook_keychain_available():
         return proc.returncode in (0, 1)
     except Exception:
         return False
-
-
-def _ms_outlook_primary_storage_kind():
-    if os.name == "nt":
-        return "windows_dpapi"
-    if _ms_outlook_keychain_available():
-        return "macos_keychain"
-    return "machine_bound_file"
-
-
-def _ms_outlook_vault_read_primary():
-    kind = _ms_outlook_primary_storage_kind()
-    if kind == "windows_dpapi":
-        path = _ms_outlook_dpapi_store_path()
-        with open(path, "rb") as handle:
-            plain = _ms_outlook_dpapi_transform(handle.read(), protect=False)
-        data = json.loads(plain.decode("utf-8"))
-        return (data if isinstance(data, dict) else {}), kind
-    if kind == "macos_keychain":
-        proc = subprocess.run(
-            ["security", "find-generic-password", "-a", _ms_outlook_keychain_account(), "-s", _MS_OUTLOOK_KEYCHAIN_SERVICE, "-w"],
-            capture_output=True, text=True, timeout=10, check=False,
-        )
-        if proc.returncode != 0:
-            raise FileNotFoundError("Outlook Keychain item is unavailable")
-        data = json.loads((proc.stdout or "").strip())
-        return (data if isinstance(data, dict) else {}), kind
-    raise FileNotFoundError("No dedicated operating-system vault")
-
-
-def _ms_outlook_vault_write_primary(record):
-    kind = _ms_outlook_primary_storage_kind()
-    text = json.dumps(record, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
-    if kind == "windows_dpapi":
-        path = _ms_outlook_dpapi_store_path()
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        protected = _ms_outlook_dpapi_transform(text.encode("utf-8"), protect=True)
-        temp_path = path + ".tmp"
-        with open(temp_path, "wb") as handle:
-            handle.write(protected)
-            handle.flush()
-            try:
-                os.fsync(handle.fileno())
-            except Exception:
-                pass
-        os.replace(temp_path, path)
-        return kind
-    if kind == "macos_keychain":
-        proc = subprocess.run(
-            ["security", "add-generic-password", "-U", "-a", _ms_outlook_keychain_account(), "-s", _MS_OUTLOOK_KEYCHAIN_SERVICE, "-w", text],
-            capture_output=True, text=True, timeout=15, check=False,
-        )
-        if proc.returncode != 0:
-            raise RuntimeError((proc.stderr or proc.stdout or "Could not save Outlook token in macOS Keychain")[:500])
-        return kind
-    raise RuntimeError("No dedicated operating-system vault")
-
-
-def _ms_outlook_vault_delete_primary():
-    kind = _ms_outlook_primary_storage_kind()
-    try:
-        if kind == "windows_dpapi":
-            os.remove(_ms_outlook_dpapi_store_path())
-        elif kind == "macos_keychain":
-            subprocess.run(
-                ["security", "delete-generic-password", "-a", _ms_outlook_keychain_account(), "-s", _MS_OUTLOOK_KEYCHAIN_SERVICE],
-                capture_output=True, timeout=10, check=False,
-            )
-    except FileNotFoundError:
-        pass
-    except Exception:
-        pass
-
 
 
 # Generic backend secret vault for JobAdder, OneNote and AI/search keys. It uses
@@ -3615,578 +3501,76 @@ def secure_secrets_save():
 def secure_secrets_clear():
     return _CVSTUDIO_SECRETS_SERVICE.clear()
 
-def _ms_outlook_fallback_read(path=None):
-    path = path or _ms_outlook_fallback_store_path()
-    with open(path, "r", encoding="utf-8") as handle:
-        return _ms_outlook_unprotect_record(json.load(handle))
-
-
-def _ms_outlook_fallback_write(record):
-    path = _ms_outlook_fallback_store_path()
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    protected = _ms_outlook_protect_record(record)
-    temp_path = path + ".tmp"
-    with open(temp_path, "w", encoding="utf-8") as handle:
-        json.dump(protected, handle, ensure_ascii=False, separators=(",", ":"))
-        handle.flush()
-        try:
-            os.fsync(handle.fileno())
-        except Exception:
-            pass
-    try:
-        os.chmod(temp_path, 0o600)
-    except Exception:
-        pass
-    os.replace(temp_path, path)
-    try:
-        os.chmod(path, 0o600)
-    except Exception:
-        pass
-    return "machine_bound_file"
-
-
-def _ms_outlook_record_for_storage(store):
-    account = store.get("account") if isinstance(store.get("account"), dict) else {}
-    return {
-        "schema": _MS_OUTLOOK_STORE_SCHEMA,
-        "access_token": str(store.get("access_token") or ""),
-        "refresh_token": str(store.get("refresh_token") or ""),
-        "client_id": str(store.get("client_id") or ""),
-        "tenant": _ms_safe_tenant(store.get("tenant") or "common"),
-        "expires_at": int(store.get("expires_at") or 0),
-        "account": {
-            "id": str(account.get("id") or ""),
-            "displayName": str(account.get("displayName") or ""),
-            "email": str(account.get("email") or ""),
-        },
-    }
-
-
-def _ms_outlook_load_store():
-    # Primary OS vault first.
-    try:
-        data, kind = _ms_outlook_vault_read_primary()
-        if data:
-            data["_storage"] = kind
-            return data
-    except Exception:
-        pass
-    # Authenticated file fallback.
-    try:
-        data = _ms_outlook_fallback_read()
-        if data:
-            data["_storage"] = "machine_bound_file"
-            return data
-    except Exception:
-        pass
-    # One-time migration from v24.6.180's legacy protected file.
-    try:
-        data = _ms_outlook_fallback_read(_ms_outlook_legacy_store_path())
-        if data:
-            data["_storage"] = "legacy_machine_bound_file"
-            return data
-    except Exception:
-        pass
-    return {}
-
-
-def _ms_outlook_save_store():
-    with _MS_OUTLOOK_STORE_LOCK:
-        record = _ms_outlook_record_for_storage(_ms_outlook_store)
-        if not record["access_token"] and not record["refresh_token"]:
-            _ms_outlook_delete_all_secret_stores()
-            return
-        kind = ""
-        try:
-            kind = _ms_outlook_vault_write_primary(record)
-            try:
-                os.remove(_ms_outlook_fallback_store_path())
-            except FileNotFoundError:
-                pass
-        except Exception:
-            kind = _ms_outlook_fallback_write(record)
-        _ms_outlook_store["_storage"] = kind
-        try:
-            os.remove(_ms_outlook_legacy_store_path())
-        except FileNotFoundError:
-            pass
-        except Exception:
-            pass
-
-
-def _ms_outlook_delete_all_secret_stores():
-    _ms_outlook_vault_delete_primary()
-    for path in (_ms_outlook_fallback_store_path(), _ms_outlook_legacy_store_path(), _ms_outlook_dpapi_store_path()):
-        try:
-            os.remove(path)
-        except FileNotFoundError:
-            pass
-        except Exception:
-            pass
-
-
-def _ms_outlook_clear_store():
-    with _MS_OUTLOOK_STORE_LOCK:
-        _ms_outlook_store.clear()
-        _ms_outlook_delete_all_secret_stores()
-
-
-_ms_outlook_store = _ms_outlook_load_store()
-_ms_outlook_device_store = {}
-_ms_outlook_draft_request_cache = {}
-# Migrate the v24.6.180 fallback file into the operating-system vault when possible.
-if _ms_outlook_store and _ms_outlook_store.get("_storage") == "legacy_machine_bound_file":
-    try:
-        _ms_outlook_save_store()
-    except Exception:
-        pass
-
-
-def _ms_outlook_refresh_access_token(force=False):
-    with _MS_OUTLOOK_REFRESH_LOCK:
-        with _MS_OUTLOOK_STORE_LOCK:
-            token = str(_ms_outlook_store.get("access_token") or "").strip()
-            expires_at = int(_ms_outlook_store.get("expires_at") or 0)
-            if token and not force and (not expires_at or time.time() < expires_at - 120):
-                return token
-            refresh = str(_ms_outlook_store.get("refresh_token") or "").strip()
-            client_id = str(_ms_outlook_store.get("client_id") or "").strip()
-            tenant = _ms_safe_tenant(_ms_outlook_store.get("tenant") or "common")
-        if not refresh or not client_id:
-            raise PermissionError("Microsoft Outlook drafts are not connected")
-        try:
-            tok = _ms_token_response({
-                "client_id": client_id,
-                "grant_type": "refresh_token",
-                "refresh_token": refresh,
-                "scope": _MS_OUTLOOK_SCOPE,
-            }, tenant=tenant)
-        except Exception as exc:
-            with _MS_OUTLOOK_STORE_LOCK:
-                _ms_outlook_store.pop("access_token", None)
-                _ms_outlook_store["expires_at"] = 0
-                _ms_outlook_save_store()
-            raise PermissionError("Microsoft Outlook connection expired; reconnect Outlook") from exc
-        access_token = str(tok.get("access_token") or "").strip()
-        if not access_token:
-            raise PermissionError("Microsoft returned no Outlook access token; reconnect Outlook")
-        with _MS_OUTLOOK_STORE_LOCK:
-            _ms_outlook_store.update({
-                "access_token": access_token,
-                "refresh_token": str(tok.get("refresh_token") or refresh),
-                "client_id": client_id,
-                "tenant": tenant,
-                "expires_at": int(time.time() + int(tok.get("expires_in") or 3300)),
-            })
-            _ms_outlook_save_store()
-        return access_token
-
-
-def _ms_outlook_token():
-    with _MS_OUTLOOK_STORE_LOCK:
-        token = str(_ms_outlook_store.get("access_token") or "").strip()
-        expires_at = int(_ms_outlook_store.get("expires_at") or 0)
-    if token and (not expires_at or time.time() < expires_at - 120):
-        return token
-    return _ms_outlook_refresh_access_token()
-
-
-def _ms_outlook_mark_reconnect_required():
-    with _MS_OUTLOOK_STORE_LOCK:
-        _ms_outlook_store.pop("access_token", None)
-        _ms_outlook_store["expires_at"] = 0
-        try:
-            _ms_outlook_save_store()
-        except Exception:
-            pass
-
-
-_OUTLOOK_GRAPH_CLIENT = MicrosoftGraphClient(
-    token_provider=lambda force=False: (
-        _ms_outlook_refresh_access_token(force=True) if force else _ms_outlook_token()
+# ── Outlook rich-draft service (Phase 7B) ──────────────────────────────────
+# The Outlook token store, lifecycle, MS-Graph calls, device-login sessions,
+# draft idempotency cache and the eight /ppc/outlook/* handler bodies live in
+# the OutlookService. The web shell owns the token endpoint, the graph client
+# factory and the install-receipt identity, and keeps the Flask routes.
+_OUTLOOK_SERVICE = OutlookService(
+    jsonify=lambda payload: jsonify(payload),
+    request_json=lambda: request.get_json(silent=True) or {},
+    token_response=_ms_token_response,
+    graph_client_factory=lambda token_provider, reconnect_handler: MicrosoftGraphClient(
+        token_provider=token_provider,
+        not_connected_message="Microsoft Outlook drafts are not connected",
+        reconnect_handler=reconnect_handler,
+        context_provider=_ms_ssl_context,
     ),
-    not_connected_message="Microsoft Outlook drafts are not connected",
-    reconnect_handler=_ms_outlook_mark_reconnect_required,
-    context_provider=_ms_ssl_context,
+    receipt_path=_install_receipt_path,
+    machine_hash=_install_receipt_machine_hash,
+    signing_key=_install_receipt_signing_key,
 )
 
 
-def _ms_outlook_graph_json(path, body=None, method="GET", timeout=25):
-    safe_method = str(method or "GET").upper()
-    return _OUTLOOK_GRAPH_CLIENT.request_json(
-        path,
-        body=body,
-        method=safe_method,
-        timeout=timeout,
-        safe_to_retry=safe_method in ("GET", "HEAD", "OPTIONS"),
-        retries=1 if safe_method in ("GET", "HEAD", "OPTIONS") else 0,
-    )
-
-
-def _ms_outlook_graph_post_json(path, body=None, timeout=25):
-    return _ms_outlook_graph_json(path, body=body or {}, method="POST", timeout=timeout)
-
-
-def _ms_outlook_refresh_account():
-    profile = _ms_outlook_graph_json("me?$select=id,displayName,mail,userPrincipalName", timeout=20)
-    account = _ms_outlook_account_normalize(profile)
-    with _MS_OUTLOOK_STORE_LOCK:
-        _ms_outlook_store["account"] = account
-        _ms_outlook_save_store()
-    return account
-
-
+# Two Outlook helpers are called elsewhere in the web shell (the combined MS
+# status surface and the diagnostics probe); keep thin app-level aliases so
+# those call sites stay unchanged.
 def _ms_outlook_public_info():
-    with _MS_OUTLOOK_STORE_LOCK:
-        has_access = bool(str(_ms_outlook_store.get("access_token") or "").strip())
-        has_refresh = bool(str(_ms_outlook_store.get("refresh_token") or "").strip())
-        account = _ms_outlook_store.get("account") if isinstance(_ms_outlook_store.get("account"), dict) else {}
-        return {
-            "connected": bool(has_access or has_refresh),
-            "client_id": str(_ms_outlook_store.get("client_id") or ""),
-            "tenant": _ms_outlook_store.get("tenant", "common"),
-            "expires_at": _ms_outlook_store.get("expires_at", 0),
-            "storage": str(_ms_outlook_store.get("_storage") or _ms_outlook_primary_storage_kind()),
-            "account": {
-                "id": str(account.get("id") or ""),
-                "displayName": str(account.get("displayName") or ""),
-                "email": str(account.get("email") or ""),
-            },
-        }
+    return _OUTLOOK_SERVICE.public_info()
 
 
-def _ms_outlook_cleanup_device_sessions():
-    now = time.time()
-    with _MS_OUTLOOK_DEVICE_LOCK:
-        for key in list(_ms_outlook_device_store):
-            if float((_ms_outlook_device_store.get(key) or {}).get("expires_at") or 0) <= now:
-                _ms_outlook_device_store.pop(key, None)
-
-
-def _ms_outlook_cleanup_draft_cache():
-    now = time.time()
-    cutoff = now - 1800
-    abandoned_cutoff = now - 120
-    with _MS_OUTLOOK_DRAFT_LOCK:
-        for key in list(_ms_outlook_draft_request_cache):
-            entry = _ms_outlook_draft_request_cache.get(key) or {}
-            in_progress = bool(entry.get("in_progress"))
-            stamp = float(entry.get("cached_at") or entry.get("started_at") or 0)
-            if (not in_progress and stamp < cutoff) or (in_progress and stamp < abandoned_cutoff):
-                removed = _ms_outlook_draft_request_cache.pop(key, None) or {}
-                event = removed.get("event")
-                if event:
-                    try:
-                        event.set()
-                    except Exception:
-                        pass
-
-
-def _ms_outlook_draft_request_fail(request_id):
-    if not request_id:
-        return
-    with _MS_OUTLOOK_DRAFT_LOCK:
-        entry = _ms_outlook_draft_request_cache.pop(request_id, None) or {}
-        event = entry.get("event")
-        if event:
-            try:
-                event.set()
-            except Exception:
-                pass
-
-
-def _ms_outlook_draft_request_complete(request_id, payload_hash, result):
-    if not request_id:
-        return
-    with _MS_OUTLOOK_DRAFT_LOCK:
-        entry = _ms_outlook_draft_request_cache.get(request_id) or {}
-        event = entry.get("event")
-        _ms_outlook_draft_request_cache[request_id] = {
-            "payload_hash": payload_hash,
-            "result": dict(result or {}),
-            "cached_at": time.time(),
-            "in_progress": False,
-            "event": event,
-        }
-        if event:
-            try:
-                event.set()
-            except Exception:
-                pass
+def _ms_outlook_graph_json(path, body=None, method="GET", timeout=25):
+    return _OUTLOOK_SERVICE.graph_json(path, body=body, method=method, timeout=timeout)
 
 
 @app.route("/ppc/outlook/api_info", methods=["GET"])
 def ppc_outlook_api_info():
-    return jsonify(_ms_outlook_public_info())
+    return _OUTLOOK_SERVICE.api_info()
 
 
 @app.route("/ppc/outlook/test_connection", methods=["POST"])
 def ppc_outlook_test_connection():
-    try:
-        account = _ms_outlook_refresh_account()
-        result = _ms_outlook_public_info()
-        result.update({"ok": True, "account": account})
-        return jsonify(result)
-    except PermissionError as exc:
-        return jsonify({"error": str(exc), "action": "Reconnect Outlook.", "needs_reconnect": True}), 401
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode(errors="replace")
-        payload = _ms_outlook_error_payload(body, exc.code, "Microsoft Outlook connection test")
-        payload["needs_reconnect"] = exc.code in (400, 401, 403)
-        return jsonify(payload), exc.code
-    except Exception as exc:
-        return jsonify({"error": "Could not test the Microsoft Outlook connection", "action": "Check the internet connection and try again.", "technical_details": str(exc)[:1200]}), 500
+    return _OUTLOOK_SERVICE.test_connection()
 
 
 @app.route("/ppc/outlook/refresh_token", methods=["POST"])
 def ppc_outlook_refresh_token():
-    try:
-        _ms_outlook_refresh_access_token()
-        result = _ms_outlook_public_info()
-        result.update({"ok": True, "connected": True})
-        return jsonify(result)
-    except PermissionError as exc:
-        return jsonify({"error": str(exc), "action": "Reconnect Outlook.", "needs_reconnect": True}), 401
-    except Exception as exc:
-        return jsonify({"error": "Could not refresh Microsoft Outlook", "action": "Reconnect Outlook.", "technical_details": str(exc)[:1200], "needs_reconnect": True}), 500
+    return _OUTLOOK_SERVICE.refresh_token()
 
 
 @app.route("/ppc/outlook/disconnect", methods=["POST"])
 def ppc_outlook_disconnect():
-    _ms_outlook_clear_store()
-    with _MS_OUTLOOK_DEVICE_LOCK:
-        _ms_outlook_device_store.clear()
-    with _MS_OUTLOOK_DRAFT_LOCK:
-        _ms_outlook_draft_request_cache.clear()
-    return jsonify({"ok": True, "connected": False, "storage": _ms_outlook_primary_storage_kind()})
+    return _OUTLOOK_SERVICE.disconnect()
 
 
 @app.route("/ppc/outlook/device_start", methods=["POST"])
 def ppc_outlook_device_start():
-    import secrets
-    data = request.get_json(silent=True) or {}
-    client_id = str(data.get("client_id") or "").strip()
-    tenant = _ms_safe_tenant(data.get("tenant") or "common")
-    if not re.fullmatch(r"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}", client_id):
-        return jsonify({"error": "Enter a valid Microsoft Outlook app Client ID", "action": "Copy the Application (client) ID from the Microsoft app registration."}), 400
-    try:
-        d = _OUTLOOK_GRAPH_CLIENT.token_request(
-            {"client_id": client_id, "scope": _MS_OUTLOOK_SCOPE},
-            tenant=tenant,
-            endpoint="devicecode",
-            timeout=20,
-        )
-        if not d.get("device_code"):
-            return jsonify({"error": "Microsoft did not return an Outlook device code", "action": "Check the app registration and try again.", "technical_details": json.dumps(d)[:1200]}), 502
-        session_id = secrets.token_urlsafe(24)
-        expires_in = max(60, int(d.get("expires_in") or 900))
-        with _MS_OUTLOOK_DEVICE_LOCK:
-            _ms_outlook_cleanup_device_sessions()
-            _ms_outlook_device_store[session_id] = {
-                "device_code": str(d.get("device_code") or ""),
-                "client_id": client_id,
-                "tenant": tenant,
-                "expires_at": time.time() + expires_in,
-            }
-        return jsonify({
-            "ok": True,
-            "login_session_id": session_id,
-            "user_code": d.get("user_code") or "",
-            "verification_uri": d.get("verification_uri") or d.get("verification_url") or "https://microsoft.com/devicelogin",
-            "expires_in": expires_in,
-            "interval": int(d.get("interval") or 5),
-            "message": d.get("message") or "",
-        })
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode(errors="replace")
-        return jsonify(_ms_outlook_error_payload(body, exc.code, "Microsoft Outlook login")), exc.code
-    except Exception as exc:
-        return jsonify({"error": "Could not start Microsoft Outlook login", "action": "Check the internet connection and try again.", "technical_details": str(exc)[:1200]}), 500
+    return _OUTLOOK_SERVICE.device_start()
 
 
 @app.route("/ppc/outlook/device_poll", methods=["POST"])
 def ppc_outlook_device_poll():
-    data = request.get_json(silent=True) or {}
-    session_id = str(data.get("login_session_id") or "").strip()
-    _ms_outlook_cleanup_device_sessions()
-    with _MS_OUTLOOK_DEVICE_LOCK:
-        current_session = _ms_outlook_device_store.get(session_id) or {}
-        if current_session.get("_polling"):
-            return jsonify({"error": "This Outlook login is already being checked. Wait a moment and try again."}), 409
-        if current_session:
-            current_session["_polling"] = True
-            _ms_outlook_device_store[session_id] = current_session
-        session = dict(current_session)
-    if not session_id or not session:
-        return jsonify({"error": "The Outlook login session expired or does not exist", "action": "Start Outlook login again."}), 400
-    client_id = str(session.get("client_id") or "").strip()
-    tenant = _ms_safe_tenant(session.get("tenant") or "common")
-    device_code = str(session.get("device_code") or "").strip()
-    try:
-        tok = _ms_token_response({
-            "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
-            "client_id": client_id,
-            "device_code": device_code,
-        }, tenant=tenant)
-        access_token = str(tok.get("access_token") or "").strip()
-        if not access_token:
-            return jsonify({"error": "Microsoft returned no Outlook access token", "action": "Restart the Outlook connection.", "technical_details": json.dumps(tok)[:1200]}), 502
-        with _MS_OUTLOOK_STORE_LOCK:
-            _ms_outlook_store.clear()
-            _ms_outlook_store.update({
-                "access_token": access_token,
-                "refresh_token": str(tok.get("refresh_token") or ""),
-                "client_id": client_id,
-                "tenant": tenant,
-                "expires_at": int(time.time() + int(tok.get("expires_in") or 3300)),
-                "account": {},
-            })
-            _ms_outlook_save_store()
-        try:
-            account = _ms_outlook_refresh_account()
-        except Exception:
-            account = {}
-        with _MS_OUTLOOK_DEVICE_LOCK:
-            _ms_outlook_device_store.pop(session_id, None)
-        result = _ms_outlook_public_info()
-        result.update({"ok": True, "connected": True, "account": account or result.get("account")})
-        return jsonify(result)
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode(errors="replace")
-        payload = _ms_outlook_error_payload(body, exc.code, "Microsoft Outlook login")
-        if payload.get("pending"):
-            return jsonify(payload), 202
-        if "expired" in str(payload.get("error_code") or "").lower() or exc.code in (400, 401):
-            if "authorization_pending" not in body and "slow_down" not in body:
-                with _MS_OUTLOOK_DEVICE_LOCK:
-                    _ms_outlook_device_store.pop(session_id, None)
-        return jsonify(payload), exc.code
-    except Exception as exc:
-        return jsonify({"error": "Could not finish Microsoft Outlook login", "action": "Try again or restart the Outlook connection.", "technical_details": str(exc)[:1200]}), 500
-    finally:
-        with _MS_OUTLOOK_DEVICE_LOCK:
-            current_session = _ms_outlook_device_store.get(session_id)
-            if current_session:
-                current_session.pop("_polling", None)
-                _ms_outlook_device_store[session_id] = current_session
-
-
-def _ms_outlook_create_draft_payload(recipient, subject, html_body):
-    payload = {
-        "subject": subject,
-        "body": {"contentType": "HTML", "content": html_body},
-        "toRecipients": [{"emailAddress": {"address": recipient}}],
-    }
-    draft = _ms_outlook_graph_post_json("me/messages", payload, timeout=30)
-    web_link = str(draft.get("webLink") or "").strip()
-    if not draft.get("id") or not web_link:
-        raise RuntimeError("Microsoft created no usable Outlook draft link")
-    if "ispopout=" not in web_link.lower():
-        web_link += ("&" if "?" in web_link else "?") + "ispopout=1"
-    return {
-        "ok": True,
-        "draft_id": draft.get("id"),
-        "webLink": web_link,
-        "isDraft": True,
-        "mayRequireEditClick": True,
-        "created_at": datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
-    }
+    return _OUTLOOK_SERVICE.device_poll()
 
 
 @app.route("/ppc/outlook/create_draft", methods=["POST"])
 def ppc_outlook_create_draft():
-    data = request.get_json(silent=True) or {}
-    request_id = str(data.get("request_id") or "").strip()
-    if request_id and not re.fullmatch(r"[A-Za-z0-9_.:-]{8,180}", request_id):
-        return jsonify({"error": "Invalid Outlook draft request ID"}), 400
-    try:
-        recipient, subject, html_body = _ms_outlook_validate_draft_input(data)
-    except ValueError as exc:
-        return jsonify({"error": str(exc)}), 400
-    except OverflowError as exc:
-        return jsonify({"error": str(exc)}), 413
-    payload_hash = hashlib.sha256((recipient + "\n" + subject + "\n" + html_body).encode("utf-8")).hexdigest()
-    _ms_outlook_cleanup_draft_cache()
-
-    # Reserve this idempotency key before Graph is called. A concurrent retry
-    # with the same request ID and payload waits for the first request instead
-    # of creating a second draft. Different content with the same ID is rejected.
-    wait_event = None
-    creator = True
-    if request_id:
-        with _MS_OUTLOOK_DRAFT_LOCK:
-            cached = _ms_outlook_draft_request_cache.get(request_id)
-            if cached:
-                if cached.get("payload_hash") != payload_hash:
-                    return jsonify({"error": "This draft request ID was already used for different content"}), 409
-                if cached.get("result"):
-                    result = dict(cached.get("result") or {})
-                    result["reused"] = True
-                    return jsonify(result)
-                wait_event = cached.get("event")
-                creator = False
-            else:
-                wait_event = threading.Event()
-                _ms_outlook_draft_request_cache[request_id] = {
-                    "payload_hash": payload_hash,
-                    "started_at": time.time(),
-                    "cached_at": time.time(),
-                    "in_progress": True,
-                    "event": wait_event,
-                }
-
-    if request_id and not creator:
-        if wait_event and wait_event.wait(timeout=40):
-            with _MS_OUTLOOK_DRAFT_LOCK:
-                cached = _ms_outlook_draft_request_cache.get(request_id) or {}
-                result = dict(cached.get("result") or {})
-            if result:
-                result["reused"] = True
-                return jsonify(result)
-        return jsonify({
-            "error": "The matching Outlook draft request is still being processed",
-            "action": "Wait a moment and use Open last draft or retry the same request.",
-            "retry_same_request": True,
-        }), 409
-
-    try:
-        result = _ms_outlook_create_draft_payload(recipient, subject, html_body)
-        _ms_outlook_draft_request_complete(request_id, payload_hash, result)
-        return jsonify(result)
-    except PermissionError as exc:
-        _ms_outlook_draft_request_fail(request_id)
-        return jsonify({"error": str(exc), "action": "Reconnect Outlook.", "needs_reconnect": True}), 401
-    except urllib.error.HTTPError as exc:
-        _ms_outlook_draft_request_fail(request_id)
-        body = exc.read().decode(errors="replace")
-        payload = _ms_outlook_error_payload(body, exc.code, "Microsoft Outlook draft creation")
-        payload["needs_reconnect"] = exc.code in (400, 401, 403)
-        return jsonify(payload), exc.code
-    except Exception as exc:
-        _ms_outlook_draft_request_fail(request_id)
-        return jsonify({"error": "Could not create the Microsoft Outlook draft", "action": "Use Copy formatted, then review Technical details.", "technical_details": str(exc)[:1200]}), 500
+    return _OUTLOOK_SERVICE.create_draft()
 
 
 @app.route("/ppc/outlook/create_test_draft", methods=["POST"])
 def ppc_outlook_create_test_draft():
-    try:
-        account = _ms_outlook_refresh_account()
-        recipient = str(account.get("email") or "").strip()
-        if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", recipient):
-            return jsonify({"error": "The connected Microsoft account has no usable email address", "action": "Reconnect with a mailbox-enabled Microsoft account."}), 400
-        body = '<div style="font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#000000;"><p>CV Studio Outlook connection test.</p><p>This is a draft only. Nothing was sent.</p></div>'
-        result = _ms_outlook_create_draft_payload(recipient, "CV Studio Outlook draft test", body)
-        result["account"] = account
-        return jsonify(result)
-    except PermissionError as exc:
-        return jsonify({"error": str(exc), "action": "Reconnect Outlook.", "needs_reconnect": True}), 401
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode(errors="replace")
-        payload = _ms_outlook_error_payload(body, exc.code, "Microsoft Outlook test draft")
-        payload["needs_reconnect"] = exc.code in (400, 401, 403)
-        return jsonify(payload), exc.code
-    except Exception as exc:
-        return jsonify({"error": "Could not create the Microsoft Outlook test draft", "action": "Review Technical details and try again.", "technical_details": str(exc)[:1200]}), 500
+    return _OUTLOOK_SERVICE.create_test_draft()
 
 
 @app.route("/onenote/api_info", methods=["GET"])

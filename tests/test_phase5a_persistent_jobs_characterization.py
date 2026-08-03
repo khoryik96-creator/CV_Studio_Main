@@ -287,29 +287,29 @@ class Phase5APersistentJobsCharacterizationTests(unittest.TestCase):
     def test_existing_in_memory_task_and_idempotency_state_is_ephemeral(self):
         self.assertIsInstance(app._ja_oauth_sessions, dict)
         self.assertIsInstance(app._ms_graph_device_store, dict)
-        self.assertIsInstance(app._ms_outlook_device_store, dict)
-        self.assertIsInstance(app._ms_outlook_draft_request_cache, dict)
+        self.assertIsInstance(app._OUTLOOK_SERVICE._device_store, dict)
+        self.assertIsInstance(app._OUTLOOK_SERVICE._draft_cache, dict)
         self.assertIsInstance(app._SPIDER_RESUME_TEXT_CACHE, dict)
         self.assertIsInstance(app._OWNER_INTEGRATION_LAST_REPORT, dict)
         self.assertIsInstance(app._ppc_detail_cache, dict)
 
-        original = dict(app._ms_outlook_draft_request_cache)
+        original = dict(app._OUTLOOK_SERVICE._draft_cache)
         event = threading.Event()
         try:
-            app._ms_outlook_draft_request_cache.clear()
-            app._ms_outlook_draft_request_cache["fixture-request"] = {
+            app._OUTLOOK_SERVICE._draft_cache.clear()
+            app._OUTLOOK_SERVICE._draft_cache["fixture-request"] = {
                 "payload_hash": "fixture-hash",
                 "in_progress": True,
                 "started_at": 1,
                 "cached_at": 1,
                 "event": event,
             }
-            app._ms_outlook_draft_request_complete(
+            app._OUTLOOK_SERVICE._draft_request_complete(
                 "fixture-request",
                 "fixture-hash",
                 {"ok": True, "draft_id": "fixture-draft"},
             )
-            completed = app._ms_outlook_draft_request_cache["fixture-request"]
+            completed = app._OUTLOOK_SERVICE._draft_cache["fixture-request"]
             self.assertEqual(
                 set(completed),
                 {"payload_hash", "result", "cached_at", "in_progress", "event"},
@@ -318,13 +318,13 @@ class Phase5APersistentJobsCharacterizationTests(unittest.TestCase):
             self.assertEqual(completed["result"]["draft_id"], "fixture-draft")
             self.assertTrue(event.is_set())
 
-            app._ms_outlook_draft_request_fail("fixture-request")
+            app._OUTLOOK_SERVICE._draft_request_fail("fixture-request")
             self.assertNotIn(
-                "fixture-request", app._ms_outlook_draft_request_cache
+                "fixture-request", app._OUTLOOK_SERVICE._draft_cache
             )
         finally:
-            app._ms_outlook_draft_request_cache.clear()
-            app._ms_outlook_draft_request_cache.update(original)
+            app._OUTLOOK_SERVICE._draft_cache.clear()
+            app._OUTLOOK_SERVICE._draft_cache.update(original)
 
     def test_frontend_background_orchestration_state_is_page_process_local(self):
         source = (
