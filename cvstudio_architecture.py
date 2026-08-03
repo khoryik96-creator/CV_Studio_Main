@@ -120,6 +120,11 @@ DEFAULT_MODULES = (
         ("external_clients",),
     ),
     ModuleDefinition(
+        "onenote_text",
+        "domain",
+        ("cvstudio_onenote_text.py",),
+    ),
+    ModuleDefinition(
         "storage_http",
         "interface",
         ("cvstudio_storage_bridge.py",),
@@ -146,6 +151,7 @@ DEFAULT_MODULES = (
             "external_clients",
             "jobadder_read",
             "jobadder_write",
+            "onenote_text",
             "platform_dependencies",
             "runtime",
             "secrets",
