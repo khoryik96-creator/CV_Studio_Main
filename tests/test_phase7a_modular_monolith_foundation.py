@@ -74,6 +74,7 @@ class Phase7AModularMonolithFoundationTests(unittest.TestCase):
                 "cv_normalize",
                 "lead_match",
                 "spider_boolean",
+                "blind_mask",
                 "storage_http",
                 "legacy_web_shell",
             ),

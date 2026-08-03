@@ -145,6 +145,11 @@ DEFAULT_MODULES = (
         ("cvstudio_spider_boolean.py",),
     ),
     ModuleDefinition(
+        "blind_mask",
+        "domain",
+        ("cvstudio_blind_mask.py",),
+    ),
+    ModuleDefinition(
         "storage_http",
         "interface",
         ("cvstudio_storage_bridge.py",),
@@ -166,6 +171,7 @@ DEFAULT_MODULES = (
             "composition_root",
             "ai_costs",
             "background_jobs",
+            "blind_mask",
             "diagnostics",
             "documents",
             "external_clients",
