@@ -135,6 +135,11 @@ DEFAULT_MODULES = (
         ("cvstudio_cv_normalize.py",),
     ),
     ModuleDefinition(
+        "lead_match",
+        "domain",
+        ("cvstudio_lead_match.py",),
+    ),
+    ModuleDefinition(
         "storage_http",
         "interface",
         ("cvstudio_storage_bridge.py",),
@@ -162,6 +167,7 @@ DEFAULT_MODULES = (
             "jobadder_read",
             "jobadder_write",
             "cv_normalize",
+            "lead_match",
             "onenote_text",
             "outlook_crypto",
             "platform_dependencies",
