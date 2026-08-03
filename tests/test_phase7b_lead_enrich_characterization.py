@@ -207,6 +207,316 @@ class LeadEnrichCharacterizationTests(unittest.TestCase):
             False,
         )
 
+    # --- job-filter / query-term helpers ---------------------------------
+
+    def test_clean_csv_dedupes_and_limits(self):
+        self.assertEqual(app._lead_clean_csv("a, b; a\nc", 12), ["a", "b", "c"])
+        self.assertEqual(app._lead_clean_csv(["x", "x ", " y"], 2), ["x", "y"])
+        self.assertEqual(app._lead_clean_csv("", 12), [])
+
+    def test_clean_job_filters_normalizes_and_drops_empty(self):
+        self.assertEqual(
+            app._lead_clean_job_filters(
+                {
+                    "must_have": "sap, abap, sap",
+                    "seniority": "  senior ",
+                    "max_days_open": "30x9",
+                    "company_include": "tech",
+                    "exclude_keywords": "",
+                }
+            ),
+            {
+                "must_have": "sap, abap",
+                "seniority": "senior",
+                "max_days_open": "309",
+                "company_include": "tech",
+            },
+        )
+        self.assertEqual(app._lead_clean_job_filters("not a dict"), {})
+
+    def test_job_filter_instruction(self):
+        no_filters = (
+            "No extra relevance filters supplied. Infer relevance from CV, "
+            "target role, regions and selected portals."
+        )
+        self.assertEqual(app._lead_job_filter_instruction({}), no_filters)
+        self.assertEqual(app._lead_job_filter_instruction(None), no_filters)
+        out = app._lead_job_filter_instruction(
+            {"must_have": "SAP", "exclude_keywords": "intern"}
+        )
+        self.assertIn("MUST-HAVE keywords/skills: SAP", out)
+        self.assertIn("EXCLUDE keywords: intern", out)
+
+    def test_filter_and_exclude_query_terms(self):
+        self.assertEqual(
+            app._lead_filter_query_terms(
+                {
+                    "must_have": "sap,abap",
+                    "seniority": "senior",
+                    "company_include": "tech,finance",
+                }
+            ),
+            "sap abap senior tech finance",
+        )
+        self.assertEqual(app._lead_filter_query_terms({}), "")
+        self.assertEqual(
+            app._lead_exclude_query_terms(
+                {"exclude_keywords": "intern, junior", "company_exclude": "acme corp"}
+            ),
+            "-intern -junior -acme-corp",
+        )
+        self.assertEqual(app._lead_exclude_query_terms(None), "")
+
+    # --- email / linkedin helpers ----------------------------------------
+
+    def test_email_domain(self):
+        self.assertEqual(app._lead_email_domain("  John.Doe@Acme.COM "), "acme.com")
+        self.assertEqual(app._lead_email_domain("<a@b.co>"), "b.co")
+        self.assertEqual(app._lead_email_domain("not-an-email"), "")
+        self.assertEqual(app._lead_email_domain(""), "")
+
+    def test_is_company_domain_email(self):
+        self.assertIs(app._lead_is_company_domain_email("a@acme.com", "Acme"), True)
+        self.assertIs(app._lead_is_company_domain_email("a@gmail.com", "Acme"), False)
+        self.assertIs(app._lead_is_company_domain_email("a@example.com", ""), False)
+        self.assertIs(app._lead_is_company_domain_email("bad", ""), False)
+
+    def test_normalize_linkedin_url(self):
+        self.assertEqual(
+            app._lead_normalize_linkedin_url("www.linkedin.com/in/jdoe/"),
+            "https://linkedin.com/in/jdoe",
+        )
+        self.assertEqual(
+            app._lead_normalize_linkedin_url("https://WWW.linkedin.com/in/jdoe?trk=x"),
+            "https://linkedin.com/in/jdoe",
+        )
+        self.assertEqual(app._lead_normalize_linkedin_url("https://acme.com/in/x"), "")
+        self.assertEqual(app._lead_normalize_linkedin_url(""), "")
+
+    def test_sanitize_public_business_emails(self):
+        out = app._lead_sanitize_public_business_emails(
+            [
+                {"email": "a@gmail.com", "company": "Acme"},
+                {"email": "b@acme.com"},
+                {"email": "", "notes": "hi"},
+            ]
+        )
+        # Personal/free-mail email is cleared with a note + Not found status.
+        self.assertEqual(out[0]["email"], "")
+        self.assertEqual(out[0]["verification_status"], "Not found")
+        self.assertIn("Removed personal/free-mail", out[0]["notes"])
+        # Business-domain email is preserved untouched.
+        self.assertEqual(out[1], {"email": "b@acme.com"})
+        # Blank email gets a Not found status but keeps its note.
+        self.assertEqual(out[2]["verification_status"], "Not found")
+        self.assertEqual(out[2]["notes"], "hi")
+        self.assertEqual(app._lead_sanitize_public_business_emails("nope"), [])
+
+    # --- role-family / title-angle text analysis --------------------------
+
+    _CV = (
+        "Senior SAP FICO consultant with 10 years in S/4HANA finance "
+        "implementations, ABAP debugging and controlling."
+    )
+
+    def test_has_any_and_contains_token(self):
+        self.assertIs(app._lead_has_any("Senior SAP Consultant", ["sap", "oracle"]), True)
+        self.assertIs(app._lead_has_any("Nurse practitioner", ["sap", "oracle"]), False)
+        self.assertIs(app._lead_contains_any_token("sap fico consultant", ["fico", "mm"]), True)
+        self.assertIs(app._lead_contains_any_token("sap mm consultant", ["fico", "sd"]), False)
+
+    def test_family_scores_and_families(self):
+        self.assertEqual(app._lead_family_scores(self._CV), {"sap_erp": 6})
+        self.assertEqual(app._lead_families_from_text(self._CV, 3), ["sap_erp"])
+        self.assertEqual(
+            app._lead_primary_role_families("SAP FICO Consultant", self._CV, "", "ERP"),
+            ["sap_erp"],
+        )
+
+    def test_resolve_search_target_role(self):
+        self.assertEqual(
+            app._lead_resolve_search_target_role("SAP FICO Consultant", self._CV, "", "ERP"),
+            ("SAP FICO Consultant", ""),
+        )
+        # With no explicit role, it derives one from the CV family.
+        self.assertEqual(
+            app._lead_resolve_search_target_role("", self._CV, "", "ERP"),
+            ("SAP Consultant", ""),
+        )
+
+    def test_cv_evidence_tokens_and_signature(self):
+        self.assertEqual(
+            sorted(app._lead_cv_evidence_tokens("sap_erp", self._CV)),
+            ["s/4hana", "sap fico"],
+        )
+        family, evidence = app._lead_cv_content_signature(
+            "SAP FICO Consultant", self._CV, "", "ERP"
+        )
+        self.assertEqual(family, "sap_erp")
+        self.assertEqual(set(evidence), {"sap fico", "s/4hana"})
+
+    def test_job_title_angles(self):
+        angles = app._lead_job_title_angles("SAP FICO Consultant", self._CV, "", "ERP")
+        self.assertEqual(angles[0], "SAP FICO Consultant")
+        self.assertEqual(len(angles), 19)
+        for title in ("SAP Consultant", "S/4HANA Consultant", "ERP Consultant"):
+            self.assertIn(title, angles)
+
+    def test_role_specific_title_bank(self):
+        bank = app._lead_role_specific_title_bank(
+            "SAP FICO Consultant", ["sap", "fico"], self._CV
+        )
+        self.assertIsInstance(bank, list)
+        self.assertEqual(len(bank), 50)
+        for title in ("Head of SAP", "SAP FICO Manager", "CFO"):
+            self.assertIn(title, bank)
+
+    # --- search-result -> leads parsing / filtering / freshness ----------
+
+    def test_int_0_100_clamps(self):
+        self.assertEqual(app._lead_int_0_100(150, 0), 100)
+        self.assertEqual(app._lead_int_0_100("abc", 5), 5)
+        self.assertEqual(app._lead_int_0_100(-3, 0), 0)
+        self.assertEqual(app._lead_int_0_100("42", 0), 42)
+
+    def test_freshness_label(self):
+        self.assertEqual(app._lead_freshness_label(1), "1 day(s) open")
+        self.assertEqual(app._lead_freshness_label(10), "8-14 days open")
+        self.assertEqual(app._lead_freshness_label(45), "30+ days open")
+        self.assertEqual(app._lead_freshness_label(None), "Unknown")
+
+    def test_google_jobs_query_and_portal_hints(self):
+        self.assertEqual(
+            app._lead_google_jobs_query("sap consultant kuala lumpur"),
+            "sap consultant kuala lumpur jobs",
+        )
+        self.assertEqual(app._lead_portal_domain_hint("LinkedIn"), "site:linkedin.com/jobs")
+        self.assertEqual(app._lead_portal_domain_hint("JobStreet"), "site:jobstreet.com")
+        self.assertEqual(app._lead_portal_domain_hint("Company Careers"), "careers jobs")
+
+    def test_portal_search_url(self):
+        self.assertEqual(
+            app._lead_portal_search_url("LinkedIn", "SAP Consultant", ["Malaysia"], None),
+            "https://www.linkedin.com/jobs/search/?keywords=SAP+Consultant&location=Malaysia",
+        )
+
+    def test_normalize_company_urls_demotes_indirect_job_url(self):
+        out = app._lead_normalize_company_urls(
+            {"company": "Acme", "company_url": "acme.com", "job_url": "https://acme.com/careers/1"}
+        )
+        # A non-direct job URL is demoted to source_url with a quality flag.
+        self.assertEqual(out["job_url"], "")
+        self.assertEqual(out["source_url"], "https://acme.com/careers/1")
+        self.assertEqual(out["job_url_quality"], "source_or_search_result_only")
+
+    def test_guess_role_company_from_search_result(self):
+        self.assertEqual(
+            app._lead_guess_role_company_from_search_result(
+                "SAP Consultant at Acme Corp - LinkedIn", "Great role for SAP FICO...", ["SAP Consultant"]
+            ),
+            ("SAP Consultant", "Acme Corp"),
+        )
+
+    def test_make_search_fallback_leads_shape(self):
+        leads = app._lead_make_search_fallback_leads(
+            ["LinkedIn"], ["SAP Consultant"], ["Malaysia"], "SAP Consultant", 3, None
+        )
+        self.assertEqual(len(leads), 1)
+        lead = leads[0]
+        self.assertEqual(lead["id"], "search_1")
+        self.assertEqual(lead["lead_kind"], "fallback_search_link")
+        self.assertEqual(lead["job_portal"], "LinkedIn")
+        self.assertEqual(lead["matched_role"], "SAP Consultant")
+        self.assertEqual(
+            lead["source_url"],
+            "https://www.linkedin.com/jobs/search/?keywords=SAP+Consultant&location=Malaysia",
+        )
+        self.assertEqual(lead["job_url"], "")
+
+    def test_all_search_parsing_helpers_are_reexported(self):
+        # Guards the verbatim move: every function in this slice must resolve
+        # through app after extraction into cvstudio_lead_enrich.
+        for name in (
+            "_lead_apply_basic_job_filters",
+            "_lead_best_verification_url",
+            "_lead_filter_by_regions",
+            "_lead_filter_by_title_angles",
+            "_lead_filter_people_by_input_companies",
+            "_lead_freshness_label",
+            "_lead_google_jobs_query",
+            "_lead_guess_role_company_from_search_result",
+            "_lead_guess_title_company_from_context",
+            "_lead_int_0_100",
+            "_lead_keep_only_direct_job_leads",
+            "_lead_make_search_fallback_leads",
+            "_lead_normalize_company_fit_freshness",
+            "_lead_normalize_company_urls",
+            "_lead_parse_posted_date",
+            "_lead_portal_domain_hint",
+            "_lead_portal_search_url",
+            "_lead_provider_results_to_leads",
+            "_lead_recover_job_leads_from_text",
+            "_lead_reviewable_job_lead",
+        ):
+            self.assertTrue(callable(getattr(app, name)), name)
+
+    # --- json extraction / provider mapping / source selection -----------
+
+    def test_extract_json(self):
+        self.assertEqual(
+            app._lead_extract_json('prefix ```json\n{"a": 1, "b": [2,3]}\n``` suffix'),
+            {"a": 1, "b": [2, 3]},
+        )
+        self.assertEqual(app._lead_extract_json('[{"x":1}]'), {"x": 1})
+        with self.assertRaises(ValueError):
+            app._lead_extract_json("no json here")
+
+    def test_selected_source_site(self):
+        self.assertEqual(
+            app._lead_selected_source_site(["LinkedIn"], ""),
+            ("LinkedIn Jobs", "www.linkedin.com/jobs"),
+        )
+        self.assertEqual(
+            app._lead_selected_source_site(["JobStreet", "Indeed"], ""),
+            ("JobStreet", "my.jobstreet.com"),
+        )
+
+    def test_best_selected_source_verification_url(self):
+        url, note = app._lead_best_selected_source_verification_url(
+            "Acme", "SAP Consultant", ["LinkedIn"], ""
+        )
+        self.assertEqual(
+            url,
+            'https://www.google.com/search?q=%22Acme%22%20%22SAP%20Consultant%22'
+            "%20site%3Awww.linkedin.com/jobs",
+        )
+        self.assertIn("verification search for LinkedIn Jobs", note)
+
+    def test_fake_anthropic_response(self):
+        self.assertEqual(
+            app._lead_fake_anthropic_response({"leads": []}),
+            {
+                "content": [{"type": "text", "text": '{"leads": []}'}],
+                "usage": {"input_tokens": 0, "output_tokens": 0},
+            },
+        )
+
+    def test_search_provider_queries(self):
+        self.assertEqual(
+            app._lead_search_provider_queries(
+                ["LinkedIn"], ["SAP Consultant"], ["Malaysia"], "SAP Consultant", None, 4
+            ),
+            ['site:linkedin.com/jobs "SAP Consultant" Malaysia job'],
+        )
+
+    def test_cleanup_urls_by_selected_sources_keeps_selected(self):
+        out, note = app._lead_cleanup_urls_by_selected_sources(
+            [{"job_url": "https://www.linkedin.com/jobs/view/1", "source_url": ""}],
+            ["LinkedIn"],
+        )
+        self.assertEqual(out[0]["job_url"], "https://www.linkedin.com/jobs/view/1")
+        self.assertEqual(note, "")
+
 
 if __name__ == "__main__":
     unittest.main()
