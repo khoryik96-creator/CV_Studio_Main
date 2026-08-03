@@ -6,7 +6,7 @@ import json
 import re
 import socket
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Callable, Optional
 from urllib.parse import urlparse
 
 import requests
@@ -287,7 +287,20 @@ def _requested_identity(raw_rule: dict[str, Any], country: str, tax_year: int, r
         )
 
 
-def preview_rule_update(payload: dict[str, Any]) -> dict[str, Any]:
+def preview_rule_update(
+    payload: dict[str, Any],
+    *,
+    key_resolver: Optional[Callable[[str], str]] = None,
+) -> dict[str, Any]:
+    """Generate an AI rule proposal for human review.
+
+    When ``key_resolver`` is supplied (the CV Studio host wires it to the
+    shared, machine-bound AI secret store), the provider key is resolved on the
+    server for the requested provider and any browser-supplied ``api_key`` is
+    ignored and never persisted.  When it is absent (standalone mode) the
+    one-time key must be supplied in the request payload and is likewise never
+    stored.
+    """
     if not isinstance(payload, dict):
         raise AiRuleUpdateError("Rule update request must be a JSON object.")
     provider = str(payload.get("provider") or "").strip().lower()
@@ -304,6 +317,15 @@ def preview_rule_update(payload: dict[str, Any]) -> dict[str, Any]:
 
     if provider not in {"deepseek", "claude"}:
         raise AiRuleUpdateError("Provider must be DeepSeek or Claude.")
+    if key_resolver is not None:
+        # Host-managed mode: never trust or persist a browser-supplied key;
+        # resolve the shared provider key on the server instead.
+        api_key = str(key_resolver(provider) or "").strip()
+        if not api_key:
+            raise AiRuleUpdateError(
+                f"No securely saved {provider} key was found in CV Studio settings. "
+                "Add it under AI provider settings and try again."
+            )
     if not api_key:
         raise AiRuleUpdateError("API key is required and is not stored.")
     if len(api_key) > 1000:

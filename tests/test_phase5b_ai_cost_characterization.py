@@ -40,6 +40,7 @@ _PAID_BROWSER_ROUTE_CONTRACTS = {
     "/lead-finder/search": ({"POST"}, "lead_finder_search"),
     "/lead-finder/find-people": ({"POST"}, "lead_finder_find_people"),
     "/lead-finder/find-emails": ({"POST"}, "lead_finder_find_emails"),
+    "/salary-comparison/api/rules/preview": ({"POST"}, "salary_comparison.rules_preview_api"),
 }
 
 _LEGACY_COST_FIELDS = {

@@ -257,7 +257,10 @@ def export_api(export_format: str):
 def rules_preview_api():
     if not _admin_allowed():
         return jsonify({"error": "Invalid administrator token."}), 403
-    return jsonify(preview_rule_update(_json_object()))
+    resolver = current_app.config.get("SALARY_COMPARISON_KEY_RESOLVER")
+    if resolver is not None and not callable(resolver):
+        resolver = None
+    return jsonify(preview_rule_update(_json_object(), key_resolver=resolver))
 
 
 @bp.post("/api/rules/publish")
