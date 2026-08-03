@@ -140,6 +140,11 @@ DEFAULT_MODULES = (
         ("cvstudio_lead_match.py",),
     ),
     ModuleDefinition(
+        "lead_enrich",
+        "domain",
+        ("cvstudio_lead_enrich.py",),
+    ),
+    ModuleDefinition(
         "spider_boolean",
         "domain",
         ("cvstudio_spider_boolean.py",),
@@ -194,6 +199,7 @@ DEFAULT_MODULES = (
             "jobadder_write",
             "cv_normalize",
             "lead_match",
+            "lead_enrich",
             "onenote_text",
             "outlook_crypto",
             "platform_dependencies",

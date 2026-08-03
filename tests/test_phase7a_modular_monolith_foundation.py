@@ -73,6 +73,7 @@ class Phase7AModularMonolithFoundationTests(unittest.TestCase):
                 "outlook_crypto",
                 "cv_normalize",
                 "lead_match",
+                "lead_enrich",
                 "spider_boolean",
                 "blind_mask",
                 "salary_comparison",
