@@ -9857,14 +9857,30 @@ from cvstudio_spider_boolean import (
     _spider_boolean_positive_terms,
     _spider_boolean_terms,
     _spider_boolean_tokens,
+    _spider_candidate_blob,
+    _spider_candidate_id,
     _spider_clean_doc_text_for_preview,
     _spider_discovery_keyword_match,
+    _spider_flatten,
+    _spider_has_any,
     _spider_hit_terms,
+    _spider_max_years_value,
+    _spider_min_years_value,
     _spider_normalized_record_label,
+    _spider_parse_employment_month,
+    _spider_pick_field_text,
+    _spider_residential_classes,
+    _spider_residential_status_text,
+    _spider_status_aliases,
+    _spider_status_target,
+    _spider_structured_employment_years,
     _spider_term_coverage,
     _spider_term_matches,
     _spider_terms,
     _spider_terms_for_fit,
+    _spider_visible_years,
+    _spider_work_setup_aliases,
+    _spider_years_bounds,
 )
 
 
@@ -9874,254 +9890,21 @@ from cvstudio_spider_boolean import (
 
 
 
-def _spider_min_years_value(value):
-    try:
-        n = int(float(str(value or "0").strip() or 0))
-    except Exception:
-        n = 0
-    return max(0, min(40, n))
 
 
-def _spider_max_years_value(value):
-    """Return an inclusive upper experience bound, or ``None`` for no maximum.
-
-    The UI uses 40 as its LinkedIn-style open-ended right edge (40+), so a
-    selected value of 40 intentionally means no upper cap rather than excluding
-    a candidate with more than forty years of visible experience.
-    """
-    if value is None or str(value).strip() == "":
-        return None
-    try:
-        n = int(float(str(value).strip()))
-    except Exception:
-        return None
-    n = max(0, min(40, n))
-    return None if n >= 40 else n
 
 
-def _spider_years_bounds(filters):
-    filters = filters if isinstance(filters, dict) else {}
-    minimum = _spider_min_years_value(
-        filters.get("years_min")
-        if filters.get("years_min") is not None
-        else (filters.get("years") or filters.get("experience_years"))
-    )
-    maximum = _spider_max_years_value(
-        filters.get("years_max")
-        if filters.get("years_max") is not None
-        else filters.get("experience_years_max")
-    )
-    if maximum is not None and maximum < minimum:
-        maximum = minimum
-    return minimum, maximum
 
 
-def _spider_parse_employment_month(value, is_end=False):
-    raw = re.sub(r"\s+", " ", str(value or "")).strip()
-    if not raw:
-        return None
-    if re.search(r"\b(?:present|current|now|ongoing|to date)\b", raw, re.I):
-        today = date.today()
-        return today.year * 12 + (today.month - 1)
-    m = re.search(r"(?<!\d)((?:19|20)\d{2})(?:[-/.](1[0-2]|0?[1-9]))?(?!\d)", raw)
-    if not m:
-        month_names = {
-            "jan": 1, "january": 1, "feb": 2, "february": 2, "mar": 3, "march": 3,
-            "apr": 4, "april": 4, "may": 5, "jun": 6, "june": 6, "jul": 7, "july": 7,
-            "aug": 8, "august": 8, "sep": 9, "sept": 9, "september": 9,
-            "oct": 10, "october": 10, "nov": 11, "november": 11, "dec": 12, "december": 12,
-        }
-        m2 = re.search(
-            r"\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|"
-            r"jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)"
-            r"[\s,./-]+((?:19|20)\d{2})\b",
-            raw,
-            re.I,
-        )
-        if not m2:
-            return None
-        month = month_names.get(m2.group(1).lower()[:3])
-        year = int(m2.group(2))
-    else:
-        year = int(m.group(1))
-        month = int(m.group(2)) if m.group(2) else (12 if is_end else 1)
-    if year < 1950 or year > date.today().year + 1 or not month:
-        return None
-    return year * 12 + (month - 1)
 
 
-def _spider_structured_employment_years(candidate):
-    """Calculate non-overlapping career duration from JobAdder employment history."""
-    roots = []
-    if isinstance(candidate, dict):
-        roots.append(candidate)
-        detail = candidate.get("_spiderDetail")
-        if isinstance(detail, dict):
-            roots.append(detail)
-    intervals = []
-    seen_records = set()
-    for root in roots:
-        employment = root.get("employment") if isinstance(root.get("employment"), dict) else {}
-        histories = []
-        for key in ("history", "employmentHistory", "workHistory", "positions"):
-            value = employment.get(key)
-            if isinstance(value, list):
-                histories.extend(value)
-        for key in ("employmentHistory", "workHistory", "positions"):
-            value = root.get(key)
-            if isinstance(value, list):
-                histories.extend(value)
-        for record in histories[:200]:
-            if not isinstance(record, dict):
-                continue
-            signature = repr(sorted((str(k), str(v)) for k, v in record.items() if k in {
-                "start", "startDate", "from", "dateFrom", "end", "endDate", "to", "dateTo", "employer", "position"
-            }))
-            if signature in seen_records:
-                continue
-            seen_records.add(signature)
-            start_raw = next((record.get(k) for k in ("start", "startDate", "from", "dateFrom", "dateStarted") if record.get(k)), None)
-            end_raw = next((record.get(k) for k in ("end", "endDate", "to", "dateTo", "dateFinished") if record.get(k)), None)
-            start_month = _spider_parse_employment_month(start_raw, is_end=False)
-            end_month = _spider_parse_employment_month(end_raw or "Present", is_end=True)
-            if start_month is None or end_month is None or end_month < start_month:
-                continue
-            intervals.append((start_month, end_month + 1))
-    if not intervals:
-        return None
-    intervals.sort()
-    merged = []
-    for start_month, end_month in intervals:
-        if not merged or start_month > merged[-1][1]:
-            merged.append([start_month, end_month])
-        else:
-            merged[-1][1] = max(merged[-1][1], end_month)
-    total_months = sum(max(0, end_month - start_month) for start_month, end_month in merged)
-    return round(total_months / 12.0, 2) if total_months > 0 else None
 
 
-def _spider_visible_years(candidate):
-    """Return explicit or structured career experience without age/location guesses.
-
-    Structured JobAdder employment history remains authoritative. Text fallback
-    accepts common recruiter wording (``3 yrs exp``, ``18 months experience``,
-    ``10 years overall experience``) but still requires an explicit experience
-    marker in the same phrase. Generic elapsed time such as ``20 years in
-    Malaysia`` or ``graduated 12 years ago`` therefore remains unknown.
-    """
-    structured = _spider_structured_employment_years(candidate)
-    if structured is not None:
-        return structured
-
-    text = _spider_pick_field_text(
-        candidate,
-        ["totalexperience", "experienceyears", "yearsexperience", "experience", "profile", "summary"],
-    )
-    if not text:
-        text = _spider_candidate_blob(candidate)
-    text = re.sub(r"\s+", " ", str(text or ""))
-    vals = []
-    qualifier = (
-        r"(?:overall\s+|total\s+|relevant\s+|professional\s+|hands[- ]on\s+|"
-        r"industry\s+|working\s+|commercial\s+|technical\s+|practical\s+|"
-        r"[A-Za-z][A-Za-z0-9+#./-]{1,24}\s+){0,3}"
-    )
-    year_patterns = [
-        # 3 years overall experience / 3+ yrs AWS experience / 3 yrs exp
-        rf"(?<!\d)(\d{{1,2}}(?:\.\d+)?)(?:\+)?\s*(?:years?|yrs?)\s+(?:of\s+)?{qualifier}(?:experience|exp)\b",
-        # overall experience: 3 years / AWS experience of 3 yrs
-        rf"\b{qualifier}(?:experience|exp)\s*(?:of\s*)?[:=-]?\s*(\d{{1,2}}(?:\.\d+)?)(?:\+)?\s*(?:years?|yrs?)\b",
-        # over/nearly 3 years of relevant experience
-        rf"\b(?:over|more\s+than|around|approximately|approx\.?|nearly)\s+(\d{{1,2}}(?:\.\d+)?)\s*(?:years?|yrs?)\s+(?:of\s+)?{qualifier}(?:experience|exp)\b",
-    ]
-    month_patterns = [
-        rf"(?<!\d)(\d{{1,3}}(?:\.\d+)?)(?:\+)?\s*(?:months?|mths?|mos?)\s+(?:of\s+)?{qualifier}(?:experience|exp)\b",
-        rf"\b{qualifier}(?:experience|exp)\s*(?:of\s*)?[:=-]?\s*(\d{{1,3}}(?:\.\d+)?)(?:\+)?\s*(?:months?|mths?|mos?)\b",
-    ]
-    for pattern in year_patterns:
-        for m in re.finditer(pattern, text, re.I):
-            try:
-                value = float(m.group(1))
-            except Exception:
-                continue
-            if 0 <= value <= 60:
-                vals.append(value)
-    for pattern in month_patterns:
-        for m in re.finditer(pattern, text, re.I):
-            try:
-                months = float(m.group(1))
-            except Exception:
-                continue
-            if 0 <= months <= 720:
-                vals.append(round(months / 12.0, 2))
-    return max(vals) if vals else None
-
-def _spider_flatten(value, depth=0):
-    if depth > 5 or value is None:
-        return []
-    if isinstance(value, str):
-        return [value]
-    if isinstance(value, (int, float, bool)):
-        return [str(value)]
-    if isinstance(value, list):
-        out = []
-        for x in value[:80]:
-            out.extend(_spider_flatten(x, depth + 1))
-        return out
-    if isinstance(value, dict):
-        out = []
-        for k, v in list(value.items())[:120]:
-            # Internal discovery/scoring metadata must never become candidate evidence.
-            if str(k).startswith("_spider"):
-                continue
-            out.append(str(k))
-            out.extend(_spider_flatten(v, depth + 1))
-        return out
-    return [str(value)]
 
 
-def _spider_candidate_blob(candidate):
-    """Build candidate evidence with the latest resume first.
-
-    Candidate detail objects can be large.  Resume text used to be appended after
-    the detail JSON and then lost to the 20,000-character evidence ceiling, which
-    could leave every result on the same 10% discovery floor.  Reserve the front of
-    the blob for the latest extracted CV and fill the remaining space with profile
-    fields, excluding the duplicate ``resumeText`` key from the second pass.
-    """
-    resume_text = ""
-    profile_value = candidate
-    if isinstance(candidate, dict):
-        resume_text = re.sub(r"\s+", " ", str(candidate.get("resumeText") or "")).strip()[:14000]
-        if "resumeText" in candidate:
-            profile_value = {k: v for k, v in candidate.items() if k != "resumeText"}
-    profile_text = re.sub(r"\s+", " ", " ".join(_spider_flatten(profile_value))).strip()
-    if resume_text:
-        remaining = max(0, 20000 - len(resume_text) - 1)
-        return (resume_text + " " + profile_text[:remaining]).strip()
-    return profile_text[:20000]
 
 
-def _spider_pick_field_text(candidate, key_patterns):
-    """Extract text from likely matching fields without assuming one JobAdder schema."""
-    pats = [p.lower() for p in key_patterns]
-    found = []
 
-    def walk(obj, depth=0):
-        if depth > 5 or obj is None:
-            return
-        if isinstance(obj, dict):
-            for k, v in obj.items():
-                lk = str(k).lower()
-                if any(p in lk for p in pats):
-                    found.extend(_spider_flatten(v, depth + 1))
-                walk(v, depth + 1)
-        elif isinstance(obj, list):
-            for x in obj[:80]:
-                walk(x, depth + 1)
-
-    walk(candidate)
-    return re.sub(r"\s+", " ", " ".join(found)).strip()[:6000]
 
 
 _SPIDER_COUNTRY_DEFINITIONS = {
@@ -10180,8 +9963,6 @@ for _spider_country_key, _spider_country_def in _SPIDER_COUNTRY_DEFINITIONS.item
 
 
 
-def _spider_has_any(text, terms):
-    return any(_spider_term_matches(text, term) for term in (terms or []))
 
 
 def _spider_country_profile(country):
@@ -10290,126 +10071,16 @@ def _spider_country_match(candidate, country):
     return "unknown", (explicit_country or location_text)[:120]
 
 
-def _spider_status_aliases(status):
-    target = _spider_status_target(status)
-    return {
-        "citizen": ["citizen", "citizenship", "local citizen", "malaysian citizen", "singapore citizen"],
-        "permanent_resident": ["permanent resident", "permanent residency", "pr status", "pr holder"],
-        "no_visa_required": ["no visa required", "no sponsorship required", "unrestricted work rights", "full working rights", "right to work without sponsorship"],
-        "work_visa": ["work visa", "employment pass", "s pass", "work permit", "sponsorship required", "requires sponsorship", "visa required"],
-    }.get(target, [str(status or "").strip()] if str(status or "").strip() else [])
 
 
-def _spider_status_target(status):
-    s = re.sub(r"\s+", " ", str(status or "")).strip().lower()
-    if not s or s == "any":
-        return ""
-    if "citizen" in s:
-        return "citizen"
-    if "permanent" in s or s == "pr":
-        return "permanent_resident"
-    if "no visa" in s or "no sponsorship" in s:
-        return "no_visa_required"
-    if "work visa" in s or "visa required" in s or "employment pass" in s:
-        return "work_visa"
-    return s
 
 
-def _spider_residential_status_text(candidate):
-    """Read only fields that are actually labelled as residency/work-rights data."""
-    found = []
-    direct_markers = (
-        "residentialstatus", "residencystatus", "residencestatus", "residency", "visastatus", "righttowork", "workright",
-        "workrights", "citizenship", "immigrationstatus", "workauthorization", "workauthorisation",
-    )
-    label_markers = (
-        "residential status", "residence status", "residency", "visa status", "right to work", "work right",
-        "work rights", "citizenship", "immigration status", "work authorization", "work authorisation",
-    )
-    label_keys = {"label", "name", "title", "fieldname", "customfieldname", "question", "displayname"}
-    value_keys = {"value", "values", "text", "option", "options", "selected", "selectedvalue", "answer"}
-
-    def add(value, depth):
-        for part in _spider_flatten(value, depth + 1):
-            part = re.sub(r"\s+", " ", str(part or "")).strip()
-            if part:
-                found.append(part)
-
-    def walk(obj, depth=0):
-        if obj is None or depth > 7:
-            return
-        if isinstance(obj, dict):
-            normalized = {re.sub(r"[^a-z0-9]", "", str(k).lower()): (k, v) for k, v in obj.items()}
-            for norm, (key, value) in normalized.items():
-                if any(marker in norm for marker in direct_markers):
-                    add(value, depth)
-            label_text = " ".join(
-                str(v or "") for norm, (k, v) in normalized.items()
-                if norm in label_keys and not isinstance(v, (dict, list))
-            ).lower()
-            if label_text and any(marker in label_text for marker in label_markers):
-                for norm, (key, value) in normalized.items():
-                    if norm in value_keys:
-                        add(value, depth)
-            for value in obj.values():
-                walk(value, depth + 1)
-        elif isinstance(obj, list):
-            for value in obj[:100]:
-                walk(value, depth + 1)
-
-    walk(candidate)
-    # Stable de-duplication keeps diagnostics short.
-    seen, unique = set(), []
-    for part in found:
-        key = part.lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        unique.append(part)
-    return " | ".join(unique)[:4000]
 
 
-def _spider_residential_classes(text):
-    source = re.sub(r"\s+", " ", str(text or "")).strip()
-    low = source.lower()
-    classes = set()
-    exact_values = {re.sub(r"[^a-z0-9]+", " ", x).strip() for x in re.split(r"[|,;/\n\r]+", low) if x.strip()}
-    if _spider_has_any(source, ["local citizen", "malaysian citizen", "singapore citizen", "citizenship", "citizen"]):
-        classes.add("citizen")
-    if _spider_has_any(source, ["permanent resident", "permanent residency", "pr status", "pr holder"]) or "pr" in exact_values:
-        classes.add("permanent_resident")
-    if _spider_has_any(source, ["no visa required", "no sponsorship required", "unrestricted work rights", "full working rights", "right to work without sponsorship"]):
-        classes.add("no_visa_required")
-    if _spider_has_any(source, ["work visa", "employment pass", "s pass", "work permit", "sponsorship required", "requires sponsorship", "visa required"]) or exact_values.intersection({"ep", "sp", "s pass", "employment pass"}):
-        classes.add("work_visa")
-    return classes
 
 
-def _spider_work_setup_aliases(work_setup):
-    s = str(work_setup or "").strip().lower()
-    if not s or s == "any":
-        return []
-    if "remote" in s:
-        return ["remote", "work from home", "wfh"]
-    if "hybrid" in s:
-        return ["hybrid"]
-    if "site" in s or "office" in s:
-        return ["on-site", "onsite", "office based", "office-based"]
-    return [s]
 
 
-def _spider_candidate_id(candidate):
-    if not isinstance(candidate, dict):
-        return ""
-    for key in ["candidateId", "candidateID", "candidate_id", "id", "candidate", "entityId"]:
-        val = candidate.get(key)
-        if isinstance(val, dict):
-            for sub in ["candidateId", "id", "value"]:
-                if val.get(sub):
-                    return str(val.get(sub))
-        elif val:
-            return str(val)
-    return ""
 
 
 def _spider_fetch_candidate_detail(token, candidate_id):
