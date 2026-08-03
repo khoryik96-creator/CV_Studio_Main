@@ -7,6 +7,7 @@ error-payload translator, and Outlook draft-input validation. Verbatim move, so
 these assertions equally describe the legacy web-shell behaviour.
 """
 
+import os
 import unittest
 
 import cvstudio_msgraph as mg
@@ -104,9 +105,126 @@ class ValidateDraftInputTests(unittest.TestCase):
             mg._ms_outlook_validate_draft_input({"to": "a@b.com", "subject": "s", "html": "x" * 250001})
 
 
+class _FakeGraphClient:
+    """Records token_request calls; request_json is unused in these tests."""
+
+    def __init__(self, token_provider=None, reconnect_handler=None):
+        self.token_provider = token_provider
+        self.reconnect_handler = reconnect_handler
+        self.token_request_result = {}
+
+    def token_request(self, *args, **kwargs):
+        return self.token_request_result
+
+    def request_json(self, *args, **kwargs):
+        raise AssertionError("network not expected in these tests")
+
+
+def _make_service(tmpdir, token_response=None):
+    """Build an OutlookService with offline fakes and a temp receipt dir."""
+    receipt = os.path.join(tmpdir, "install_receipt.json")
+    return mg.OutlookService(
+        jsonify=lambda payload: payload,
+        request_json=lambda: _make_service._next_request or {},
+        token_response=token_response or (lambda req, tenant="common": {}),
+        graph_client_factory=lambda token_provider, reconnect_handler: _FakeGraphClient(token_provider, reconnect_handler),
+        receipt_path=lambda: receipt,
+        machine_hash=lambda: "fixture-machine-hash-000000000000",
+        signing_key=lambda: b"fixture-signing-key-32-bytes-long!!",
+    )
+
+
+_make_service._next_request = None
+
+
+class OutlookServiceStorageTests(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        self._tmp = tempfile.mkdtemp(prefix="outlook-svc-")
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self._tmp, ignore_errors=True)
+
+    def test_empty_store_reports_not_connected(self):
+        svc = _make_service(self._tmp)
+        info = svc.public_info()
+        self.assertFalse(info["connected"])
+        self.assertEqual(info["account"], {"id": "", "displayName": "", "email": ""})
+
+    def test_machine_bound_round_trip_persists_tokens(self):
+        # On Linux the primary vault is unavailable, so save writes the
+        # authenticated machine-bound fallback file; a fresh instance must load
+        # it back and report connected.
+        svc = _make_service(self._tmp)
+        with svc._store_lock:
+            svc._store.update({
+                "access_token": "fixture-access",
+                "refresh_token": "fixture-refresh",
+                "client_id": "00000000-0000-0000-0000-000000000000",
+                "tenant": "common",
+                "expires_at": 4102444800,
+                "account": {"id": "1", "displayName": "Ada", "email": "ada@example.invalid"},
+            })
+            svc._save_store()
+        reopened = _make_service(self._tmp)
+        info = reopened.public_info()
+        self.assertTrue(info["connected"])
+        self.assertEqual(info["account"]["email"], "ada@example.invalid")
+        self.assertEqual(info["storage"], "machine_bound_file")
+
+    def test_disconnect_clears_store_and_reports_disconnected(self):
+        svc = _make_service(self._tmp)
+        with svc._store_lock:
+            svc._store.update({"access_token": "x", "refresh_token": "y", "client_id": "c"})
+            svc._save_store()
+        result = svc.disconnect()
+        self.assertFalse(result["connected"])
+        self.assertFalse(svc.public_info()["connected"])
+        # A fresh instance sees no persisted secret either.
+        self.assertFalse(_make_service(self._tmp).public_info()["connected"])
+
+    def test_device_start_rejects_invalid_client_id(self):
+        svc = _make_service(self._tmp)
+        _make_service._next_request = {"client_id": "not-a-guid", "tenant": "common"}
+        try:
+            payload, status = svc.device_start()
+        finally:
+            _make_service._next_request = None
+        self.assertEqual(status, 400)
+        self.assertIn("Client ID", payload["error"])
+
+    def test_token_refresh_uses_injected_token_response(self):
+        calls = []
+
+        def fake_token_response(req, tenant="common"):
+            calls.append((req, tenant))
+            return {"access_token": "fresh-access", "refresh_token": "fresh-refresh", "expires_in": 3600}
+
+        svc = _make_service(self._tmp, token_response=fake_token_response)
+        with svc._store_lock:
+            svc._store.update({
+                "refresh_token": "old-refresh",
+                "client_id": "00000000-0000-0000-0000-000000000000",
+                "tenant": "common",
+                "expires_at": 0,
+            })
+        token = svc._refresh_access_token(force=True)
+        self.assertEqual(token, "fresh-access")
+        self.assertEqual(calls[0][0]["grant_type"], "refresh_token")
+
+    def test_refresh_without_credentials_raises_permission_error(self):
+        svc = _make_service(self._tmp)
+        with self.assertRaises(PermissionError):
+            svc._refresh_access_token(force=True)
+
+
 class ModuleHygieneTests(unittest.TestCase):
     def test_module_does_not_import_app(self):
         self.assertNotIn("app", getattr(mg, "__dict__", {}))
+
+    def test_outlook_service_exposed(self):
+        self.assertTrue(hasattr(mg, "OutlookService"))
 
     def test_expected_symbols_present(self):
         for name in [

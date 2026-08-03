@@ -501,7 +501,7 @@ class Phase3ExternalClientCharacterizationTests(unittest.TestCase):
             "message": "Fixture login message",
         }
         with mock.patch.object(
-            app._OUTLOOK_GRAPH_CLIENT, "token_request", return_value=device_payload
+            app._OUTLOOK_SERVICE._graph_client, "token_request", return_value=device_payload
         ):
             response = self.client.post(
                 "/ppc/outlook/device_start",
@@ -518,8 +518,8 @@ class Phase3ExternalClientCharacterizationTests(unittest.TestCase):
         self.assertEqual(outlook_login["user_code"], "FIXTURE")
         self.assertEqual(outlook_login["verification_uri"], "https://microsoft.com/devicelogin")
         self.assertNotIn("device_code", outlook_login)
-        with app._MS_OUTLOOK_DEVICE_LOCK:
-            app._ms_outlook_device_store.clear()
+        with app._OUTLOOK_SERVICE._device_lock:
+            app._OUTLOOK_SERVICE._device_store.clear()
 
         onenote_payload = dict(device_payload)
         with mock.patch.object(
@@ -549,7 +549,7 @@ class Phase3ExternalClientCharacterizationTests(unittest.TestCase):
             "mayRequireEditClick": True,
             "created_at": "2026-07-22T00:00:00Z",
         }
-        with mock.patch.object(app, "_ms_outlook_create_draft_payload", return_value=draft_result):
+        with mock.patch.object(app._OUTLOOK_SERVICE, "_create_draft_payload", return_value=draft_result):
             response = self.client.post(
                 "/ppc/outlook/create_draft",
                 json={
