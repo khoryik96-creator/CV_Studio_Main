@@ -118,7 +118,7 @@ take domains in **non-overlapping `app.py` regions** and never share a branch.
 
 | Account | Domain | New module | app.py region | Branch prefix |
 |---------|--------|-----------|---------------|---------------|
-| **Einstein** | PPC (Post Placement Care) — pure `_ppc_*` helpers + `/ppc/outlook/*` pure logic | `cvstudio_ppc.py` | ~3,980–4,300 and ~21,660–21,850 | `einstein/*` |
+| **Einstein** | PPC (Post Placement Care) — pure `_ppc_*` placement helpers only. The `/ppc/outlook/*` pure logic (`_ms_outlook_*`, e.g. `_ms_outlook_validate_draft_input`) is **deferred to the MS-Graph/Outlook module, not PPC** — a lone `_ms_outlook_*` helper belongs with the Outlook cluster, not placements. | `cvstudio_ppc.py` | ~21,660–21,850 | `einstein/*` |
 | **Claude** | Lead Finder enrichment — pure `_lead_*` URL/company/email/verification helpers | `cvstudio_lead_enrich.py` | ~16,200–19,300 | `claude/*` |
 
 Rules while both are active:
@@ -155,9 +155,9 @@ Prioritized backlog:
 
 | Domain | Region | Shape | Suggested owner | Status |
 |--------|--------|-------|-----------------|--------|
-| PPC (Post Placement Care) | ~3,980–4,300 + ~21,660–21,850 | pure + service | Einstein | in progress |
+| PPC (Post Placement Care) — `_ppc_*` placements only | ~21,660–21,850 | pure closure | Einstein | PR #40 open (rebased, verified 116/`855e04d5…`); `/ppc/outlook/*` deferred to the OneNote + Outlook row |
 | Lead Finder enrichment (URL/company) | ~15,750–19,600 | pure closure | Claude | slice 1 merged/queued; more `_lead_*` slices remain |
-| **OneNote domain** (Graph + desktop-COM handlers) | ~4,270–4,900 | service module | **Einstein (next)** | unclaimed — same MS-Graph shape as PPC's Outlook work |
+| **OneNote + Outlook / MS-Graph domain** (OneNote Graph + desktop-COM handlers, **plus** the `/ppc/outlook/*` `_ms_outlook_*` cluster incl. `_ms_outlook_validate_draft_input`) | ~3,980–4,900 | service module | **Einstein (next)** | unclaimed — same MS-Graph service-module shape; absorbs the Outlook logic deferred out of PPC |
 | Spider / AI Crawler enrichment (`_spider_*`) | ~9,880–11,600 | pure closure | Claude (later) | ⚠️ has the .doc/OCR characterization-test minefield; tests-first is mandatory |
 | Core CV/AI pipeline pure helpers (`/parse`, `/generate-ai`, DOCX mapping) | ~15,300–21,600 | pure closure | either (last) | most sensitive; scope carefully, extract last |
 
@@ -167,5 +167,6 @@ Notes:
   helpers). Claude keeps taking those slices, so Einstein should stay out of the
   ~15,750–19,600 region.
 - OneNote's `_onenote_*` helpers hit MS Graph / the OneNote desktop app, so they
-  are a service-module extraction, not a pure closure — the same pattern PPC's
-  `/ppc/outlook/*` handlers use.
+  are a service-module extraction, not a pure closure. This domain now also
+  folds in the `/ppc/outlook/*` `_ms_outlook_*` cluster (deferred out of PPC),
+  since it is the same MS-Graph service-module shape.

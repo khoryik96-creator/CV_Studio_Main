@@ -155,6 +155,11 @@ DEFAULT_MODULES = (
         ("cvstudio_blind_mask.py",),
     ),
     ModuleDefinition(
+        "ppc",
+        "domain",
+        ("cvstudio_ppc.py",),
+    ),
+    ModuleDefinition(
         "salary_comparison",
         "interface",
         (
@@ -203,6 +208,7 @@ DEFAULT_MODULES = (
             "onenote_text",
             "outlook_crypto",
             "platform_dependencies",
+            "ppc",
             "runtime",
             "salary_comparison",
             "secrets",
