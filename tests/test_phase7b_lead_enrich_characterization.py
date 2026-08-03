@@ -371,6 +371,95 @@ class LeadEnrichCharacterizationTests(unittest.TestCase):
         for title in ("Head of SAP", "SAP FICO Manager", "CFO"):
             self.assertIn(title, bank)
 
+    # --- search-result -> leads parsing / filtering / freshness ----------
+
+    def test_int_0_100_clamps(self):
+        self.assertEqual(app._lead_int_0_100(150, 0), 100)
+        self.assertEqual(app._lead_int_0_100("abc", 5), 5)
+        self.assertEqual(app._lead_int_0_100(-3, 0), 0)
+        self.assertEqual(app._lead_int_0_100("42", 0), 42)
+
+    def test_freshness_label(self):
+        self.assertEqual(app._lead_freshness_label(1), "1 day(s) open")
+        self.assertEqual(app._lead_freshness_label(10), "8-14 days open")
+        self.assertEqual(app._lead_freshness_label(45), "30+ days open")
+        self.assertEqual(app._lead_freshness_label(None), "Unknown")
+
+    def test_google_jobs_query_and_portal_hints(self):
+        self.assertEqual(
+            app._lead_google_jobs_query("sap consultant kuala lumpur"),
+            "sap consultant kuala lumpur jobs",
+        )
+        self.assertEqual(app._lead_portal_domain_hint("LinkedIn"), "site:linkedin.com/jobs")
+        self.assertEqual(app._lead_portal_domain_hint("JobStreet"), "site:jobstreet.com")
+        self.assertEqual(app._lead_portal_domain_hint("Company Careers"), "careers jobs")
+
+    def test_portal_search_url(self):
+        self.assertEqual(
+            app._lead_portal_search_url("LinkedIn", "SAP Consultant", ["Malaysia"], None),
+            "https://www.linkedin.com/jobs/search/?keywords=SAP+Consultant&location=Malaysia",
+        )
+
+    def test_normalize_company_urls_demotes_indirect_job_url(self):
+        out = app._lead_normalize_company_urls(
+            {"company": "Acme", "company_url": "acme.com", "job_url": "https://acme.com/careers/1"}
+        )
+        # A non-direct job URL is demoted to source_url with a quality flag.
+        self.assertEqual(out["job_url"], "")
+        self.assertEqual(out["source_url"], "https://acme.com/careers/1")
+        self.assertEqual(out["job_url_quality"], "source_or_search_result_only")
+
+    def test_guess_role_company_from_search_result(self):
+        self.assertEqual(
+            app._lead_guess_role_company_from_search_result(
+                "SAP Consultant at Acme Corp - LinkedIn", "Great role for SAP FICO...", ["SAP Consultant"]
+            ),
+            ("SAP Consultant", "Acme Corp"),
+        )
+
+    def test_make_search_fallback_leads_shape(self):
+        leads = app._lead_make_search_fallback_leads(
+            ["LinkedIn"], ["SAP Consultant"], ["Malaysia"], "SAP Consultant", 3, None
+        )
+        self.assertEqual(len(leads), 1)
+        lead = leads[0]
+        self.assertEqual(lead["id"], "search_1")
+        self.assertEqual(lead["lead_kind"], "fallback_search_link")
+        self.assertEqual(lead["job_portal"], "LinkedIn")
+        self.assertEqual(lead["matched_role"], "SAP Consultant")
+        self.assertEqual(
+            lead["source_url"],
+            "https://www.linkedin.com/jobs/search/?keywords=SAP+Consultant&location=Malaysia",
+        )
+        self.assertEqual(lead["job_url"], "")
+
+    def test_all_search_parsing_helpers_are_reexported(self):
+        # Guards the verbatim move: every function in this slice must resolve
+        # through app after extraction into cvstudio_lead_enrich.
+        for name in (
+            "_lead_apply_basic_job_filters",
+            "_lead_best_verification_url",
+            "_lead_filter_by_regions",
+            "_lead_filter_by_title_angles",
+            "_lead_filter_people_by_input_companies",
+            "_lead_freshness_label",
+            "_lead_google_jobs_query",
+            "_lead_guess_role_company_from_search_result",
+            "_lead_guess_title_company_from_context",
+            "_lead_int_0_100",
+            "_lead_keep_only_direct_job_leads",
+            "_lead_make_search_fallback_leads",
+            "_lead_normalize_company_fit_freshness",
+            "_lead_normalize_company_urls",
+            "_lead_parse_posted_date",
+            "_lead_portal_domain_hint",
+            "_lead_portal_search_url",
+            "_lead_provider_results_to_leads",
+            "_lead_recover_job_leads_from_text",
+            "_lead_reviewable_job_lead",
+        ):
+            self.assertTrue(callable(getattr(app, name)), name)
+
 
 if __name__ == "__main__":
     unittest.main()
