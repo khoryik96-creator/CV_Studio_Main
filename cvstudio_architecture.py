@@ -125,6 +125,11 @@ DEFAULT_MODULES = (
         ("cvstudio_onenote_text.py",),
     ),
     ModuleDefinition(
+        "outlook_crypto",
+        "domain",
+        ("cvstudio_outlook_crypto.py",),
+    ),
+    ModuleDefinition(
         "storage_http",
         "interface",
         ("cvstudio_storage_bridge.py",),
@@ -152,6 +157,7 @@ DEFAULT_MODULES = (
             "jobadder_read",
             "jobadder_write",
             "onenote_text",
+            "outlook_crypto",
             "platform_dependencies",
             "runtime",
             "secrets",
