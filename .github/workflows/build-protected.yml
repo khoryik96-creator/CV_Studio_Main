@@ -2,26 +2,50 @@ name: Build protected CV Studio packages
 
 on:
   workflow_dispatch:
+    inputs:
+      targets:
+        description: "Which platforms to build (Windows-only is far cheaper on Actions minutes)"
+        type: choice
+        default: windows-x64
+        options:
+          - windows-x64
+          - all
+          - macos-only
 
 permissions:
   contents: read
 
 jobs:
+  # Cheap 1x ubuntu runner: pick the build matrix from the chosen target so
+  # only the requested (paid) runners are ever allocated. A Windows-only build
+  # skips the two macOS runners, which bill at 10x minutes each.
+  select-targets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.pick.outputs.matrix }}
+    steps:
+      - name: Resolve build matrix
+        id: pick
+        shell: bash
+        run: |
+          win='{"target":"windows-x64","os":"windows-latest","python":"3.12"}'
+          mac_intel='{"target":"macos-intel","os":"macos-15-intel","python":"3.12"}'
+          mac_arm='{"target":"macos-arm64","os":"macos-15","python":"3.12"}'
+          case "${{ inputs.targets }}" in
+            all)        matrix="{\"include\":[$win,$mac_intel,$mac_arm]}" ;;
+            macos-only) matrix="{\"include\":[$mac_intel,$mac_arm]}" ;;
+            *)          matrix="{\"include\":[$win]}" ;;
+          esac
+          echo "Selected targets: ${{ inputs.targets }}"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
   build:
     name: ${{ matrix.target }}
+    needs: select-targets
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - target: windows-x64
-            os: windows-latest
-            python: "3.12"
-          - target: macos-intel
-            os: macos-15-intel
-            python: "3.12"
-          - target: macos-arm64
-            os: macos-15
-            python: "3.12"
+      matrix: ${{ fromJSON(needs.select-targets.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
 
@@ -128,7 +152,7 @@ jobs:
       - name: Upload colleague package and public smoke result
         uses: actions/upload-artifact@v4
         with:
-          name: cv-studio-v24.6.246-${{ matrix.target }}-COLLEAGUE
+          name: cv-studio-v24.6.254-${{ matrix.target }}-COLLEAGUE
           path: |
             protected-output/*colleague.zip
             protected-output/*protected_smoke.json
@@ -138,7 +162,7 @@ jobs:
       - name: Upload owner-only compiler diagnostics
         uses: actions/upload-artifact@v4
         with:
-          name: cv-studio-v24.6.246-${{ matrix.target }}-OWNER-DIAGNOSTICS
+          name: cv-studio-v24.6.254-${{ matrix.target }}-OWNER-DIAGNOSTICS
           path: |
             protected-output/*nuitka_report.xml
             protected-output/*runtime.log
