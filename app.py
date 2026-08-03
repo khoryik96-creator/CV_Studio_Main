@@ -3137,9 +3137,16 @@ _MS_GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 def _ms_ssl_context():
     return ssl.create_default_context(cafile=certifi.where()) if certifi else None
 
-def _ms_safe_tenant(value):
-    tenant = re.sub(r"[^A-Za-z0-9_.-]", "", str(value or "common").strip())
-    return tenant or "common"
+# Pure Microsoft Graph / Outlook helpers live in cvstudio_msgraph (Phase 7B).
+# The stateful token/store/graph service handlers stay in this web shell for now
+# and move in later slices; this import never pulls app into the module.
+from cvstudio_msgraph import (
+    _ms_outlook_account_normalize,
+    _ms_outlook_error_payload,
+    _ms_outlook_validate_draft_input,
+    _ms_safe_tenant,
+)
+
 
 def _ms_graph_save_store():
     record = {k: _ms_graph_store.get(k) for k in ("access_token", "refresh_token", "client_id", "tenant", "expires_at", "account_email", "account_name") if _ms_graph_store.get(k) not in (None, "")}
@@ -3724,78 +3731,6 @@ def _ms_outlook_clear_store():
         _ms_outlook_delete_all_secret_stores()
 
 
-def _ms_outlook_account_normalize(raw):
-    raw = raw if isinstance(raw, dict) else {}
-    return {
-        "id": str(raw.get("id") or ""),
-        "displayName": str(raw.get("displayName") or "").strip(),
-        "email": str(raw.get("mail") or raw.get("userPrincipalName") or raw.get("email") or "").strip(),
-    }
-
-
-def _ms_outlook_error_payload(raw_body, status=0, context="Microsoft Outlook"):
-    text = raw_body.decode(errors="replace") if isinstance(raw_body, bytes) else str(raw_body or "")
-    data = safe_json(text, {})
-    err = data.get("error") if isinstance(data, dict) else None
-    code = ""
-    description = ""
-    if isinstance(err, dict):
-        code = str(err.get("code") or "")
-        description = str(err.get("message") or "")
-        inner = err.get("innerError") if isinstance(err.get("innerError"), dict) else {}
-        if not code:
-            code = str(inner.get("code") or "")
-    elif isinstance(err, str):
-        code = err
-        description = str(data.get("error_description") or data.get("error_uri") or "")
-    if not code and isinstance(data, dict):
-        code = str(data.get("code") or "")
-    combined = (code + " " + description + " " + text).lower()
-    friendly = "{} request failed".format(context)
-    action = "Review Technical details and try again."
-    pending = False
-    if "authorization_pending" in combined:
-        friendly = "Microsoft Outlook login is still waiting for approval."
-        action = "Finish the Microsoft device login, then click Finish Outlook Login again."
-        pending = True
-    elif "slow_down" in combined:
-        friendly = "Microsoft asked CV Studio to slow down the login check."
-        action = "Wait a few seconds, then click Finish Outlook Login again."
-        pending = True
-    elif "unauthorized_client" in combined or "aadsts700016" in combined or "invalid_client" in combined:
-        friendly = "The Microsoft Outlook app Client ID is invalid or not enabled for this tenant."
-        action = "Check the Client ID and tenant, then enable public-client/device-code authentication in the Microsoft app registration."
-    elif "consent_required" in combined or "interaction_required" in combined:
-        friendly = "Microsoft needs the Outlook permissions to be approved again."
-        action = "Reconnect Outlook and approve User.Read and Mail.ReadWrite. An administrator may need to grant consent."
-    elif "insufficient" in combined or "erroraccessdenied" in combined or "authorization_requestdenied" in combined:
-        friendly = "The connected Microsoft account does not have permission to create Outlook drafts."
-        action = "Add delegated Mail.ReadWrite to the app registration, grant consent, then reconnect Outlook."
-    elif "access_denied" in combined or "authorization_declined" in combined:
-        friendly = "Microsoft Outlook login was cancelled or denied."
-        action = "Start the Outlook connection again and approve the requested permissions."
-    elif "expired_token" in combined or "code_expired" in combined:
-        friendly = "The Microsoft Outlook login code expired."
-        action = "Start Outlook login again to get a fresh device code."
-    elif "invalid_grant" in combined:
-        friendly = "The Microsoft Outlook session expired or was revoked."
-        action = "Disconnect and reconnect Outlook."
-    elif status == 401:
-        friendly = "The Microsoft Outlook connection expired."
-        action = "Reconnect Outlook."
-    elif status == 403:
-        friendly = "Microsoft refused permission to create the Outlook draft."
-        action = "Confirm delegated Mail.ReadWrite is granted, then reconnect Outlook."
-    return {
-        "error": friendly,
-        "error_code": code or ("HTTP_{}".format(status) if status else "MICROSOFT_ERROR"),
-        "action": action,
-        "pending": pending,
-        "technical_details": text[:2400],
-        "status": int(status or 0),
-    }
-
-
 _ms_outlook_store = _ms_outlook_load_store()
 _ms_outlook_device_store = {}
 _ms_outlook_draft_request_cache = {}
@@ -4134,21 +4069,6 @@ def ppc_outlook_device_poll():
             if current_session:
                 current_session.pop("_polling", None)
                 _ms_outlook_device_store[session_id] = current_session
-
-
-def _ms_outlook_validate_draft_input(data):
-    recipient = str(data.get("to") or "").strip()
-    subject = re.sub(r"[\r\n\t]+", " ", str(data.get("subject") or "")).strip()
-    html_body = str(data.get("html") or "").strip()
-    if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", recipient):
-        raise ValueError("Invalid Outlook draft recipient")
-    if not subject:
-        raise ValueError("Missing Outlook draft subject")
-    if not html_body:
-        raise ValueError("Missing Outlook draft HTML body")
-    if len(subject) > 998 or len(html_body) > 250000:
-        raise OverflowError("Outlook draft content is too large")
-    return recipient, subject, html_body
 
 
 def _ms_outlook_create_draft_payload(recipient, subject, html_body):
