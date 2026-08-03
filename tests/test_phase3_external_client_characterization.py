@@ -69,7 +69,7 @@ class Phase3ExternalClientCharacterizationTests(unittest.TestCase):
 
     def test_service_route_inventory_preserves_v246222_baseline(self):
         routes = {rule.rule for rule in app.app.url_map.iter_rules()}
-        self.assertEqual(len(routes), 108)
+        self.assertEqual(len(routes), 116)
         self.assertTrue(
             {
                 "/jobadder/search_candidate",

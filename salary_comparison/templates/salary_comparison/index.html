@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Salary Comparison</title>
+  <link rel="stylesheet" href="{{ url_for('salary_comparison.static', filename='salary_comparison/salary-comparison.css') }}">
+</head>
+<body>
+  <main class="salary-shell" id="salaryApp">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">CV Studio module</p>
+        <h1>International Salary Comparison</h1>
+        <p class="subtitle">Compare take-home pay, tax, EPF/CPF or pension contributions, bonuses and total gross plus employer EPF across countries.</p>
+      </div>
+      <div class="header-actions">
+        <button class="button ghost" type="button" id="resetButton">Reset sample</button>
+        <button class="button ghost export-button" type="button" id="exportPdfButton">Export PDF</button>
+        <button class="button ghost export-button" type="button" id="exportWordButton">Export Word</button>
+        <button class="button secondary" type="button" id="rulesButton">Tax rule updater</button>
+        <button class="button primary" type="button" id="calculateButton">Calculate comparison</button>
+      </div>
+    </header>
+
+    <section class="notice" id="globalNotice" hidden></section>
+
+    <section class="comparison-strip" aria-label="Comparison summary">
+      <article class="summary-card emphasis">
+        <span>Net annual difference</span>
+        <strong id="summaryNetDifference">—</strong>
+        <small>Scenario B minus Scenario A</small>
+      </article>
+      <article class="summary-card">
+        <span>Net uplift</span>
+        <strong id="summaryUplift">—</strong>
+        <small>Compared with Scenario A</small>
+      </article>
+      <article class="summary-card">
+        <span>Total Gross plus Employer EPF difference</span>
+        <strong id="summaryEmployerDifference">—</strong>
+        <small>Scenario B minus Scenario A</small>
+      </article>
+      <article class="summary-card">
+        <span>Reporting currency</span>
+        <strong id="summaryCurrency">—</strong>
+        <small>Both scenarios use one currency</small>
+      </article>
+    </section>
+
+    <section class="scenario-grid">
+      <article class="scenario-card" data-scenario="a">
+        <div class="scenario-heading">
+          <div>
+            <span class="scenario-label">Scenario A</span>
+            <input class="scenario-name" id="a_name" value="Current role" aria-label="Scenario A name">
+          </div>
+          <span class="status-pill neutral" id="a_status">Not calculated</span>
+        </div>
+        <div class="section-title">Role and location</div>
+        <div class="field-grid two">
+          <label class="field"><span>Country</span><select id="a_country"></select></label>
+          <label class="field"><span>Tax year</span><select id="a_tax_year"></select></label>
+          <label class="field"><span>Residency</span><select id="a_residency"></select></label>
+          <label class="field readonly"><span>Local currency</span><output id="a_local_currency">—</output></label>
+        </div>
+
+        <div class="section-title">Compensation</div>
+        <div class="field-grid two">
+          <label class="field"><span>Monthly base</span><input id="a_monthly_base" type="number" min="0" step="100" value="12000"></label>
+          <label class="field"><span>Monthly fixed allowance</span><input id="a_monthly_fixed_allowance" type="number" min="0" step="100" value="500"></label>
+          <label class="field"><span>Guaranteed bonus months</span><input id="a_guaranteed_bonus_months" type="number" min="0" step="0.1" value="1"><small class="field-help">Contractual bonus calculated from monthly base. Example: 1 month = one month of base salary.</small></label>
+          <label class="field"><span>Sign-On Bonus</span><input id="a_sign_on_bonus" type="number" min="0" step="100" value="0"><small class="field-help">One-off payment for joining the company. It is entered as a cash amount and is not treated as a recurring annual bonus.</small></label>
+          <label class="field variable-bonus-field span-two"><span>Variable performance bonus</span><div class="bonus-input"><select id="a_variable_bonus_mode" aria-label="Variable bonus calculation method"><option value="percentage">Percentage of annual base</option><option value="months">Months of monthly base</option></select><div class="suffix-input"><input id="a_variable_bonus_value" type="number" min="0" max="100" step="0.1" value="10"><span id="a_variable_bonus_suffix">%</span></div></div><small class="field-help">Non-guaranteed or target performance bonus. Choose the method stated in the offer.</small></label>
+          <label class="field"><span>Other taxable income</span><input id="a_other_taxable_income" type="number" min="0" step="100" value="0"></label>
+        </div>
+
+        <details class="advanced-panel">
+          <summary>Optional deductions and overrides</summary>
+          <div class="field-grid two advanced-content">
+            <label class="field"><span>Personal tax reliefs</span><input id="a_personal_tax_reliefs" type="number" min="0" step="100" value="9000"></label>
+            <label class="field"><span>Other after-tax deductions</span><input id="a_other_after_tax_deductions" type="number" min="0" step="100" value="0"></label>
+            <label class="field"><span>Employee contribution override</span><div class="suffix-input"><input id="a_employee_contribution_rate_override" type="number" min="0" max="100" step="0.1"><span>%</span></div></label>
+            <label class="field"><span>Employer contribution override</span><div class="suffix-input"><input id="a_employer_contribution_rate_override" type="number" min="0" max="100" step="0.1"><span>%</span></div></label>
+            <label class="field"><span>Contribution remuneration cap</span><input id="a_contribution_cap_override" type="number" min="0" step="100"></label>
+            <label class="field"><span>Include bonus in contribution base</span><select id="a_include_bonus_in_contribution_base"><option value="true">Yes</option><option value="false">No</option></select></label>
+            <label class="field"><span>Reporting currency</span><select id="a_reporting_currency"></select></label>
+            <label class="field"><span>Manual FX override</span><input id="a_fx_rate_override" type="number" min="0" step="0.000001" placeholder="Automatic"></label>
+          </div>
+        </details>
+
+        <div class="results-card" id="a_results">
+          <div class="result-hero">
+            <div class="hero-metric gross"><span>Gross monthly</span><strong data-key="gross_monthly_cash">—</strong><small>Annual gross averaged over 12 months</small></div>
+            <div class="hero-metric net"><span>Net monthly</span><strong data-key="net_monthly_cash">—</strong><small>After estimated tax and employee deductions</small></div>
+          </div>
+          <div class="result-grid">
+            <div><span>Gross annual</span><strong data-key="gross_annual_cash">—</strong></div>
+            <div><span>Net annual</span><strong data-key="net_annual_cash">—</strong></div>
+            <div><span>Income tax</span><strong data-key="estimated_income_tax">—</strong></div>
+            <div><span>Marginal tax rate</span><strong data-key="marginal_income_tax_rate" data-format="rate">—</strong></div>
+            <div><span>Employee contribution</span><strong data-key="employee_contribution">—</strong></div>
+            <div><span>Employer contribution</span><strong data-key="employer_contribution">—</strong></div>
+            <div><span>Effective tax rate on gross</span><strong data-key="effective_income_tax_rate" data-format="rate">—</strong></div>
+            <div><span>Total Gross plus Employer EPF</span><strong data-key="total_employer_cost">—</strong></div>
+          </div>
+          <div class="fx-note" id="a_fx_note">FX will be loaded automatically.</div>
+        </div>
+      </article>
+
+      <article class="scenario-card" data-scenario="b">
+        <div class="scenario-heading">
+          <div>
+            <span class="scenario-label">Scenario B</span>
+            <input class="scenario-name" id="b_name" value="Overseas offer" aria-label="Scenario B name">
+          </div>
+          <span class="status-pill neutral" id="b_status">Not calculated</span>
+        </div>
+        <div class="section-title">Role and location</div>
+        <div class="field-grid two">
+          <label class="field"><span>Country</span><select id="b_country"></select></label>
+          <label class="field"><span>Tax year</span><select id="b_tax_year"></select></label>
+          <label class="field"><span>Residency</span><select id="b_residency"></select></label>
+          <label class="field readonly"><span>Local currency</span><output id="b_local_currency">—</output></label>
+        </div>
+
+        <div class="section-title">Compensation</div>
+        <div class="field-grid two">
+          <label class="field"><span>Monthly base</span><input id="b_monthly_base" type="number" min="0" step="100" value="9000"></label>
+          <label class="field"><span>Monthly fixed allowance</span><input id="b_monthly_fixed_allowance" type="number" min="0" step="100" value="600"></label>
+          <label class="field"><span>Guaranteed bonus months</span><input id="b_guaranteed_bonus_months" type="number" min="0" step="0.1" value="1"><small class="field-help">Contractual bonus calculated from monthly base. Example: 1 month = one month of base salary.</small></label>
+          <label class="field"><span>Sign-On Bonus</span><input id="b_sign_on_bonus" type="number" min="0" step="100" value="0"><small class="field-help">One-off payment for joining the company. It is entered as a cash amount and is not treated as a recurring annual bonus.</small></label>
+          <label class="field variable-bonus-field span-two"><span>Variable performance bonus</span><div class="bonus-input"><select id="b_variable_bonus_mode" aria-label="Variable bonus calculation method"><option value="percentage">Percentage of annual base</option><option value="months">Months of monthly base</option></select><div class="suffix-input"><input id="b_variable_bonus_value" type="number" min="0" max="100" step="0.1" value="10"><span id="b_variable_bonus_suffix">%</span></div></div><small class="field-help">Non-guaranteed or target performance bonus. Choose the method stated in the offer.</small></label>
+          <label class="field"><span>Other taxable income</span><input id="b_other_taxable_income" type="number" min="0" step="100" value="0"></label>
+        </div>
+
+        <details class="advanced-panel">
+          <summary>Optional deductions and overrides</summary>
+          <div class="field-grid two advanced-content">
+            <label class="field"><span>Personal tax reliefs</span><input id="b_personal_tax_reliefs" type="number" min="0" step="100" value="0"></label>
+            <label class="field"><span>Other after-tax deductions</span><input id="b_other_after_tax_deductions" type="number" min="0" step="100" value="0"></label>
+            <label class="field"><span>Employee contribution override</span><div class="suffix-input"><input id="b_employee_contribution_rate_override" type="number" min="0" max="100" step="0.1"><span>%</span></div></label>
+            <label class="field"><span>Employer contribution override</span><div class="suffix-input"><input id="b_employer_contribution_rate_override" type="number" min="0" max="100" step="0.1"><span>%</span></div></label>
+            <label class="field"><span>Contribution remuneration cap</span><input id="b_contribution_cap_override" type="number" min="0" step="100"></label>
+            <label class="field"><span>Include bonus in contribution base</span><select id="b_include_bonus_in_contribution_base"><option value="true">Yes</option><option value="false">No</option></select></label>
+            <label class="field"><span>Reporting currency</span><select id="b_reporting_currency"></select></label>
+            <label class="field"><span>Manual FX override</span><input id="b_fx_rate_override" type="number" min="0" step="0.000001" placeholder="Automatic"></label>
+          </div>
+        </details>
+
+        <div class="results-card" id="b_results">
+          <div class="result-hero">
+            <div class="hero-metric gross"><span>Gross monthly</span><strong data-key="gross_monthly_cash">—</strong><small>Annual gross averaged over 12 months</small></div>
+            <div class="hero-metric net"><span>Net monthly</span><strong data-key="net_monthly_cash">—</strong><small>After estimated tax and employee deductions</small></div>
+          </div>
+          <div class="result-grid">
+            <div><span>Gross annual</span><strong data-key="gross_annual_cash">—</strong></div>
+            <div><span>Net annual</span><strong data-key="net_annual_cash">—</strong></div>
+            <div><span>Income tax</span><strong data-key="estimated_income_tax">—</strong></div>
+            <div><span>Marginal tax rate</span><strong data-key="marginal_income_tax_rate" data-format="rate">—</strong></div>
+            <div><span>Employee contribution</span><strong data-key="employee_contribution">—</strong></div>
+            <div><span>Employer contribution</span><strong data-key="employer_contribution">—</strong></div>
+            <div><span>Effective tax rate on gross</span><strong data-key="effective_income_tax_rate" data-format="rate">—</strong></div>
+            <div><span>Total Gross plus Employer EPF</span><strong data-key="total_employer_cost">—</strong></div>
+          </div>
+          <div class="fx-note" id="b_fx_note">FX will be loaded automatically.</div>
+        </div>
+      </article>
+    </section>
+
+    <section class="analysis-panel" id="analysisPanel" hidden>
+      <div class="analysis-heading">
+        <div><p class="eyebrow">Decision view</p><h2>What changes between the offers</h2></div>
+        <span class="reporting-badge" id="analysisCurrency">—</span>
+      </div>
+      <div class="bars" id="comparisonBars"></div>
+      <div class="disclaimer">Indicative planning only. Results may differ because of rebates, age, citizenship, residency stage, wage ceilings, benefits and payroll rounding. Review AI-updated rules before production use.</div>
+    </section>
+  </main>
+
+  <dialog class="modal" id="rulesModal">
+    <form method="dialog" class="modal-card" id="rulesForm">
+      <div class="modal-heading">
+        <div><p class="eyebrow">Administrator tool</p><h2>Tax and contribution rule updater</h2></div>
+        <button class="icon-button" value="cancel" aria-label="Close">×</button>
+      </div>
+      <p class="modal-copy">DeepSeek or Claude reads only the official source pages and proposes structured rules. Nothing is published until you review and approve it.</p>
+      <div class="field-grid two">
+        <label class="field"><span>Provider</span><select id="rule_provider"><option value="deepseek">DeepSeek</option><option value="claude">Claude</option></select></label>
+        <label class="field"><span>Model ID</span><input id="rule_model" placeholder="Enter exact provider model ID"></label>
+        <label class="field span-two"><span>API key</span><input id="rule_api_key" type="password" autocomplete="off" placeholder="Used once and never saved"></label>
+        <label class="field"><span>Country</span><select id="rule_country"></select></label>
+        <label class="field"><span>Tax year</span><input id="rule_tax_year" type="number" min="2020" max="2100" value="2026"></label>
+        <label class="field"><span>Residency profile</span><select id="rule_residency"><option>Resident</option><option>Non-Resident</option></select></label>
+        <label class="field span-two"><span>Official tax URL</span><input id="rule_tax_url" type="url"></label>
+        <label class="field span-two"><span>Official contribution URL</span><input id="rule_contribution_url" type="url"></label>
+        <label class="field span-two"><span>Admin token, when configured</span><input id="rule_admin_token" type="password" autocomplete="off"></label>
+      </div>
+      <div class="proposal" id="ruleProposal" hidden>
+        <div class="proposal-heading"><strong>Proposed rule</strong><span id="ruleUsage"></span></div>
+        <pre id="ruleProposalJson"></pre>
+      </div>
+      <div class="modal-actions">
+        <button class="button ghost" type="button" id="previewRuleButton">Preview update</button>
+        <button class="button primary" type="button" id="publishRuleButton" disabled>Approve and publish</button>
+      </div>
+      <div class="notice" id="ruleNotice" hidden></div>
+    </form>
+  </dialog>
+
+  <script src="{{ url_for('salary_comparison.static', filename='salary_comparison/salary-comparison.js') }}"></script>
+</body>
+</html>

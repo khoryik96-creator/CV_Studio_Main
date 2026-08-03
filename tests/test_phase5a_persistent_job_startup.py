@@ -114,7 +114,7 @@ print(json.dumps({
 
         first = self._run_app_import((safe_id, cancel_id, unsafe_id))
         self.assertEqual(first["startup_error"], "")
-        self.assertEqual(first["routes"], 108)
+        self.assertEqual(first["routes"], 116)
         self.assertEqual(
             first["summary"]["startup_recovery"],
             {
@@ -182,7 +182,7 @@ print(json.dumps({
         )
         self.assertEqual(payload["startup_error"], "JOB_STATE_CORRUPT")
         self.assertEqual(payload["ping_status"], 204)
-        self.assertEqual(payload["routes"], 108)
+        self.assertEqual(payload["routes"], 116)
         self.assertEqual(self.job_path.read_bytes(), original)
 
     def test_job_foundation_has_no_worker_network_or_shutdown_hook(self):

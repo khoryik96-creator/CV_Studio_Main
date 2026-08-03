@@ -103,7 +103,7 @@ class JobAdderAccountSettingsSignOutTests(unittest.TestCase):
 
     def test_route_inventory_adds_only_sign_out_to_exact_v246241_contract(self):
         routes = {rule.rule: rule for rule in app.app.url_map.iter_rules()}
-        self.assertEqual(len(routes), 108)
+        self.assertEqual(len(routes), 116)
         self.assertIn("/jobadder/sign_out", routes)
         sign_out = routes["/jobadder/sign_out"]
         self.assertEqual(sign_out.endpoint, "jobadder_sign_out")
@@ -111,8 +111,16 @@ class JobAdderAccountSettingsSignOutTests(unittest.TestCase):
             set(sign_out.methods) - {"HEAD", "OPTIONS"},
             {"POST"},
         )
+        # The Salary Comparison feature module adds its own namespaced routes;
+        # exclude them (and sign-out) so this check stays focused on proving the
+        # sign-out delta against the exact v24.6.241 base contract.
+        _salary_routes = {
+            rule.rule
+            for rule in app.app.url_map.iter_rules()
+            if rule.rule.startswith("/salary-comparison")
+        }
         self.assertEqual(
-            self._route_contract(exclude={"/jobadder/sign_out"}),
+            self._route_contract(exclude={"/jobadder/sign_out"} | _salary_routes),
             (107, _V246241_ROUTE_CONTRACT_SHA256),
         )
 
