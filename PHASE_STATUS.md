@@ -36,6 +36,95 @@
   focused review. Stop before release, merge, further extractions or unrelated
   work.
 
+## Phase 7B-8 JobAdder typo-correction extraction
+
+- `cvstudio_ja_typos.py` is a new pure-helper module holding seven JobAdder
+  recruitment/salary typo-correction functions and their four data tables, moved
+  verbatim from `app.py`: bounded edit distance (`_ja_edit_distance_limited`),
+  casing preservation (`_ja_case_like`), alias/fuzzy typo targeting
+  (`_ja_recruitment_typo_target`), and the field-level corrections for screening
+  notes, notice-period text and salary strings (`_ja_correct_recruitment_typos`,
+  `_ja_correct_screening_field_typos`, `_ja_correct_notice_typos`,
+  `_ja_salary_normalize_recruiter_typos`), plus `_JA_RECRUITMENT_TYPO_ALIASES`,
+  `_JA_RECRUITMENT_FUZZY_TERMS`, `_JA_RECRUITMENT_PROTECTED_WORDS` and
+  `_JA_SALARY_TYPO_RULES`.
+- The cluster is a clean pure closure: the only import is the standard library
+  `re`, there are no app-function dependencies, and the four data tables are used
+  only inside the cluster. `app.py` re-exports all eleven names, so no caller
+  changes and the sealed route SHA is unchanged.
+- The `ja_typos` module joins the acyclic graph as a `domain`-layer dependency of
+  the legacy web shell. Registered in `cvstudio_architecture.py`,
+  `owner_build_tools/build_protected.py`, and the Phase 7A foundation names tuple.
+- Behaviour preservation is proven by a new characterization net (edit distance,
+  casing, alias targeting, multi-typo text correction, screening-field and
+  notice/salary corrections) plus a re-export identity assertion.
+- Validation passed the full local Python suite (542 passed, 9 platform-gated
+  Antiword skips; the single pre-existing Antiword extraction failure is
+  Linux-only and reproduces byte-identically on master).
+
+## Phase 7B-7 Spider JD-scoring and candidate-fit extraction
+
+- `cvstudio_spider_score.py` is a new pure-helper module holding twelve Spider
+  JD-scoring and candidate-fit functions moved verbatim from `app.py`, plus the
+  `_SPIDER_JD_HEADING_PREFIX_RE` heading regex they use: JD heading/section
+  parsing and relevance-term extraction (`_spider_strip_jd_heading_prefix`,
+  `_spider_jd_heading_section`, `_spider_jd_scoring_lines`,
+  `_spider_jd_relevance_terms`), fit-term handling (`_spider_ignored_fit_term`,
+  `_spider_strip_context_fit_term`, `_spider_context_only_fit_term`), weighted
+  term coverage (`_spider_weighted_coverage`), the candidate fit-percentage and
+  overall item score (`_spider_match_fit_percent`, `_spider_item_score`), and
+  JobAdder option-payload flattening (`_spider_option_fallbacks`,
+  `_spider_extract_option_values`).
+- The cluster is a clean pure closure: it depends only on the standard library
+  (`re`) and the already-extracted `cvstudio_spider_boolean` — no Flask, app
+  globals, network, provider, or Antiword/OCR access. The interleaved `.doc`/OCR
+  functions and the `_spider_preview_name`/`jobadder_spider_options` route stay
+  in the shell. `app.py` re-exports the twelve names (and the heading regex), so
+  no caller changes and the sealed route SHA is unchanged.
+- The `spider_score` module joins the acyclic graph as a `domain`-layer
+  dependency of `spider_boolean` and the legacy web shell. Registered in
+  `cvstudio_architecture.py`, `owner_build_tools/build_protected.py`, and the
+  Phase 7A foundation names tuple.
+- Behaviour preservation is proven by a new characterization net (JD parsing,
+  weighted coverage, `match_fit_percent`/`item_score` on a representative
+  candidate, option flattening) plus a re-export identity assertion.
+- Validation passed the full local Python suite (529 passed, 9 platform-gated
+  Antiword skips; the single pre-existing Antiword extraction failure is
+  Linux-only and reproduces byte-identically on master), including the module
+  graph and route-contract tests.
+
+## Phase 7B-6 Spider candidate data-shaping extraction
+
+- `cvstudio_spider_summary.py` is a new pure-helper module holding ten Spider
+  candidate data-shaping functions moved verbatim from `app.py`: numeric
+  coercion (`_spider_number`), salary/notice/card snapshots
+  (`_spider_salary_snapshot`, `_spider_notice_snapshot`, `_spider_card_fields`,
+  `_spider_custom_field_value`), record-identity keys
+  (`_spider_custom_record_key`, `_spider_work_record_key`), and the summary/detail
+  deep-merge (`_spider_merge_record_lists`, `_spider_merge_missing_json`,
+  `_spider_merge_candidate_summary_and_detail`).
+- The cluster is a clean pure closure: it depends only on the standard library
+  and the already-extracted `cvstudio_spider_boolean` (`_spider_flatten`,
+  `_spider_normalized_record_label`) — no Flask, app globals, network, or
+  provider access. `app.py` re-exports the ten names, so no caller changes and
+  the sealed route URL/method/endpoint SHA-256 is unchanged (pure-helper move,
+  no route touched).
+- The `spider_summary` module joins the acyclic module graph as a `domain`-layer
+  dependency of `spider_boolean` and of the legacy web shell. Registered in
+  `cvstudio_architecture.py`, `owner_build_tools/build_protected.py`, and the
+  Phase 7A foundation names tuple.
+- Behaviour preservation is proven by a new characterization net written before
+  the move (expected values captured from the original `app._spider_*`
+  functions) and green after it, plus a re-export identity assertion.
+- No new feature, route, schema, credential handling or release is included.
+  The remaining pure Spider cluster (JD-scoring / fit-term matching,
+  ~10,160–11,100) is a self-contained follow-up slice; the `.doc`/OCR cluster
+  stays in the shell.
+- Validation passed the full local Python suite (519 passed, 9 platform-gated
+  Antiword skips; the single pre-existing Antiword extraction failure is
+  Linux-only and reproduces byte-identically on master), including the module
+  graph and route-contract tests.
+
 ## v24.6.253 Phase 7B-5c JobAdder candidate JSON write extraction
 
 - Exact source baseline is merged Phase 7B-5b commit

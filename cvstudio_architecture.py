@@ -150,6 +150,23 @@ DEFAULT_MODULES = (
         ("cvstudio_spider_boolean.py",),
     ),
     ModuleDefinition(
+        "spider_summary",
+        "domain",
+        ("cvstudio_spider_summary.py",),
+        ("spider_boolean",),
+    ),
+    ModuleDefinition(
+        "spider_score",
+        "domain",
+        ("cvstudio_spider_score.py",),
+        ("spider_boolean",),
+    ),
+    ModuleDefinition(
+        "ja_typos",
+        "domain",
+        ("cvstudio_ja_typos.py",),
+    ),
+    ModuleDefinition(
         "blind_mask",
         "domain",
         ("cvstudio_blind_mask.py",),
@@ -225,6 +242,9 @@ DEFAULT_MODULES = (
             "salary_comparison",
             "secrets",
             "spider_boolean",
+            "spider_summary",
+            "spider_score",
+            "ja_typos",
             "startup",
             "storage",
             "storage_http",
