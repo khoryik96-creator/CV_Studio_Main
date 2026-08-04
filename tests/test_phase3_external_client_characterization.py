@@ -431,8 +431,8 @@ class Phase3ExternalClientCharacterizationTests(unittest.TestCase):
         self.assertEqual(calls[0][0].get_header("Authorization"), "Bearer <fixture-credential>")
 
         with mock.patch.object(
-            app,
-            "_ms_graph_json",
+            app._ONENOTE_SERVICE,
+            "graph_json",
             return_value={"value": [{"id": "fixture-page", "title": "Fixture page"}]},
         ):
             response = self.client.get(
@@ -448,8 +448,8 @@ class Phase3ExternalClientCharacterizationTests(unittest.TestCase):
         graph_url = "https://graph.microsoft.com/v1.0/me/onenote/pages"
         graph_error = _http_error(graph_url, 503, {"error": {"code": "serviceUnavailable"}})
         with mock.patch.object(
-            app,
-            "_ms_graph_json",
+            app._ONENOTE_SERVICE,
+            "graph_json",
             side_effect=graph_error,
         ):
             response = self.client.get(
