@@ -112,12 +112,13 @@ class _FakeGraphClient:
         self.token_provider = token_provider
         self.reconnect_handler = reconnect_handler
         self.token_request_result = {}
+        self.request_json_result = {}
 
     def token_request(self, *args, **kwargs):
         return self.token_request_result
 
     def request_json(self, *args, **kwargs):
-        raise AssertionError("network not expected in these tests")
+        return self.request_json_result
 
 
 def _make_service(tmpdir, token_response=None):
@@ -219,11 +220,12 @@ class OutlookServiceStorageTests(unittest.TestCase):
             svc._refresh_access_token(force=True)
 
 
-def _make_onenote_service(store_backend, token_response=None, request=None):
+def _make_onenote_service(store_backend, token_response=None, request=None, args=None):
     """Build a OneNoteGraphService with in-memory secure store + fake client."""
     return mg.OneNoteGraphService(
         jsonify=lambda payload: payload,
         request_json=lambda: request or {},
+        request_args=lambda: args or {},
         token_response=token_response or (lambda req, tenant="common": {}),
         secure_save=lambda service, record: (store_backend.__setitem__(service, dict(record)) or "backend_secure_store"),
         secure_load=lambda service: dict(store_backend.get(service) or {}),
@@ -272,6 +274,31 @@ class OneNoteGraphServiceTests(unittest.TestCase):
         svc = _make_onenote_service(backend)
         self.assertTrue(svc.api_info()["connected"])
         self.assertEqual(svc._store["access_token"], "persisted")
+
+    def test_notebooks_handler_shapes_graph_value(self):
+        svc = _make_onenote_service({}, args={})
+        svc._graph_client.request_json_result = {"value": [{"id": "nb1"}, {"id": "nb2"}]}
+        out = svc.notebooks()
+        self.assertEqual(out["raw_count"], 2)
+        self.assertEqual([n["id"] for n in out["items"]], ["nb1", "nb2"])
+
+    def test_section_pages_requires_section_id(self):
+        svc = _make_onenote_service({}, args={})
+        payload, status = svc.section_pages()
+        self.assertEqual(status, 400)
+        self.assertIn("section id", payload["error"])
+
+    def test_page_content_requires_id(self):
+        svc = _make_onenote_service({}, args={})
+        payload, status = svc.page_content()
+        self.assertEqual(status, 400)
+        self.assertIn("page id", payload["error"])
+
+    def test_import_selected_rejects_empty_selection(self):
+        svc = _make_onenote_service({}, request={"page_ids": []})
+        payload, status = svc.import_selected()
+        self.assertEqual(status, 400)
+        self.assertIn("No OneNote pages selected", payload["error"])
 
 
 class ModuleHygieneTests(unittest.TestCase):
