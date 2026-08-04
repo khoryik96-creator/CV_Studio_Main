@@ -41,6 +41,24 @@ def test_required_export_and_bonus_controls_exist():
         assert text in html
 
 
+def test_reset_and_clear_controls_exist():
+    html = HTML.read_text(encoding="utf-8")
+    assert 'id="resetButton"' in html
+    assert 'id="clearButton"' in html
+    assert "Clear all" in html
+
+
+def test_inputs_persist_across_reload_via_local_storage():
+    js = JS.read_text(encoding="utf-8")
+    # The last entered inputs are remembered so a reload does not snap back to
+    # the sample defaults, and can be wiped by the Clear all control.
+    assert "INPUT_STORAGE_KEY" in js
+    assert "restoreInputs" in js
+    assert "saveInputs" in js
+    assert "clearInputs" in js
+    assert "localStorage.setItem(INPUT_STORAGE_KEY" in js
+
+
 def test_css_has_responsive_and_loading_states():
     css = CSS.read_text(encoding="utf-8")
     assert "@media" in css
