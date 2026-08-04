@@ -78,6 +78,7 @@ class Phase7AModularMonolithFoundationTests(unittest.TestCase):
                 "blind_mask",
                 "ppc",
                 "msgraph",
+                "onenote_desktop",
                 "salary_comparison",
                 "storage_http",
                 "legacy_web_shell",
