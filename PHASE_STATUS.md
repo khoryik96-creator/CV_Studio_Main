@@ -36,6 +36,37 @@
   focused review. Stop before release, merge, further extractions or unrelated
   work.
 
+## Phase 7B-7 Spider JD-scoring and candidate-fit extraction
+
+- `cvstudio_spider_score.py` is a new pure-helper module holding twelve Spider
+  JD-scoring and candidate-fit functions moved verbatim from `app.py`, plus the
+  `_SPIDER_JD_HEADING_PREFIX_RE` heading regex they use: JD heading/section
+  parsing and relevance-term extraction (`_spider_strip_jd_heading_prefix`,
+  `_spider_jd_heading_section`, `_spider_jd_scoring_lines`,
+  `_spider_jd_relevance_terms`), fit-term handling (`_spider_ignored_fit_term`,
+  `_spider_strip_context_fit_term`, `_spider_context_only_fit_term`), weighted
+  term coverage (`_spider_weighted_coverage`), the candidate fit-percentage and
+  overall item score (`_spider_match_fit_percent`, `_spider_item_score`), and
+  JobAdder option-payload flattening (`_spider_option_fallbacks`,
+  `_spider_extract_option_values`).
+- The cluster is a clean pure closure: it depends only on the standard library
+  (`re`) and the already-extracted `cvstudio_spider_boolean` — no Flask, app
+  globals, network, provider, or Antiword/OCR access. The interleaved `.doc`/OCR
+  functions and the `_spider_preview_name`/`jobadder_spider_options` route stay
+  in the shell. `app.py` re-exports the twelve names (and the heading regex), so
+  no caller changes and the sealed route SHA is unchanged.
+- The `spider_score` module joins the acyclic graph as a `domain`-layer
+  dependency of `spider_boolean` and the legacy web shell. Registered in
+  `cvstudio_architecture.py`, `owner_build_tools/build_protected.py`, and the
+  Phase 7A foundation names tuple.
+- Behaviour preservation is proven by a new characterization net (JD parsing,
+  weighted coverage, `match_fit_percent`/`item_score` on a representative
+  candidate, option flattening) plus a re-export identity assertion.
+- Validation passed the full local Python suite (529 passed, 9 platform-gated
+  Antiword skips; the single pre-existing Antiword extraction failure is
+  Linux-only and reproduces byte-identically on master), including the module
+  graph and route-contract tests.
+
 ## Phase 7B-6 Spider candidate data-shaping extraction
 
 - `cvstudio_spider_summary.py` is a new pure-helper module holding ten Spider
