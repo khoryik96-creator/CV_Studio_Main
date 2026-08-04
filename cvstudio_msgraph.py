@@ -822,3 +822,296 @@ class OutlookService:
             return self._jsonify(payload), exc.code
         except Exception as exc:
             return self._jsonify({"error": "Could not create the Microsoft Outlook test draft", "action": "Review Technical details and try again.", "technical_details": str(exc)[:1200]}), 500
+
+
+class OneNoteGraphService:
+    """OneNote Microsoft Graph connection layer as an explicitly wired service.
+
+    Owns the OneNote token store (backend secure store), the delegated-token
+    lifecycle, the shared Graph client and its JSON/bytes call helpers, the
+    device-login sessions, and the six connection route handler bodies
+    (api_info, store_token, refresh_token, disconnect, device_start,
+    device_poll). The OneNote *content* handlers (notebooks/sections/pages/
+    import) and the desktop-COM cluster stay in the web shell for now and call
+    the shared Graph helpers through app-level aliases; they move in later
+    slices.
+
+    Every application dependency (Flask jsonify/request JSON, the MS token
+    endpoint, the secure-store save/load/delete, and the Graph client factory)
+    is injected, so this module never imports ``app``. Verbatim move of the
+    legacy web-shell ``_ms_graph_*`` helpers.
+    """
+
+    _DEFAULT_SCOPE = "offline_access User.Read Notes.Read"
+    _BASE = "https://graph.microsoft.com/v1.0"
+
+    def __init__(
+        self,
+        *,
+        jsonify,
+        request_json,
+        token_response,
+        secure_save,
+        secure_load,
+        secure_delete,
+        graph_client_factory,
+    ):
+        self._jsonify = jsonify
+        self._request_json = request_json
+        self._token_response = token_response
+        self._secure_save = secure_save
+        self._secure_delete = secure_delete
+        self._store_lock = threading.RLock()
+        self._device_lock = threading.RLock()
+        self._refresh_lock = threading.Lock()
+        self._store = {}
+        self._device_store = {}
+        loaded = secure_load("onenote")
+        if isinstance(loaded, dict):
+            self._store.update(loaded)
+        self._graph_client = graph_client_factory(
+            token_provider=lambda force=False: (
+                self._refresh_access_token(force=True) if force else self._token()
+            ),
+            reconnect_handler=self._mark_reconnect_required,
+        )
+
+    # ── store / token lifecycle ────────────────────────────────────────────
+    def _save_store(self):
+        record = {k: self._store.get(k) for k in ("access_token", "refresh_token", "client_id", "tenant", "expires_at", "account_email", "account_name") if self._store.get(k) not in (None, "")}
+        if record:
+            self._store["_storage"] = self._secure_save("onenote", record)
+        else:
+            self._secure_delete("onenote")
+
+    def _fetch_account(self, access_token):
+        token = str(access_token or "").strip()
+        if not token:
+            return {}
+        try:
+            data = self._graph_client.request_json(
+                "me?$select=displayName,mail,userPrincipalName",
+                timeout=15,
+                access_token=token,
+            )
+            return {
+                "account_name": str(data.get("displayName") or "").strip(),
+                "account_email": str(data.get("mail") or data.get("userPrincipalName") or "").strip(),
+            }
+        except Exception:
+            return {}
+
+    def _refresh_access_token(self, force=False):
+        with self._refresh_lock:
+            token = str(self._store.get("access_token") or "").strip()
+            expires_at = int(self._store.get("expires_at") or 0)
+            if token and not force and (not expires_at or expires_at > time.time() + 120):
+                return token
+            refresh = str(self._store.get("refresh_token") or "").strip()
+            client_id = str(self._store.get("client_id") or "").strip()
+            tenant = _ms_safe_tenant(self._store.get("tenant") or "common")
+            if not refresh or not client_id:
+                return token
+            tok = self._token_response({"client_id": client_id, "grant_type": "refresh_token", "refresh_token": refresh, "scope": self._DEFAULT_SCOPE}, tenant=tenant)
+            if not tok.get("access_token"):
+                raise PermissionError("Microsoft OneNote refresh returned no access token")
+            with self._store_lock:
+                previous = dict(self._store)
+                try:
+                    self._store.update({
+                        "access_token": tok.get("access_token", ""),
+                        "refresh_token": tok.get("refresh_token", refresh),
+                        "client_id": client_id,
+                        "tenant": tenant,
+                        "expires_at": int(time.time() + int(tok.get("expires_in") or 3300)),
+                    })
+                    self._store.update(self._fetch_account(self._store.get("access_token")))
+                    self._save_store()
+                except Exception:
+                    self._store.clear(); self._store.update(previous)
+                    raise
+                return str(self._store.get("access_token") or "")
+
+    def _token(self):
+        return self._refresh_access_token(force=False)
+
+    def _mark_reconnect_required(self):
+        with self._store_lock:
+            self._store.pop("access_token", None)
+            self._store["expires_at"] = 0
+            try:
+                self._save_store()
+            except Exception:
+                pass
+
+    # ── graph calls (shared with the content handlers via app aliases) ─────
+    def graph_json(self, path, params=None, timeout=20):
+        top = None
+        if isinstance(params, dict):
+            try:
+                top = int(params.get("$top")) if params.get("$top") not in (None, "") else None
+            except Exception:
+                top = None
+        return self._graph_client.request_json(
+            path,
+            params=params,
+            timeout=timeout,
+            paginate=bool(top and top > 0),
+            max_items=max(1, min(5000, top or 100)),
+        )
+
+    def graph_post_json(self, path, body=None, params=None, timeout=25):
+        return self._graph_client.request_json(
+            path,
+            body=body or {},
+            method="POST",
+            params=params,
+            timeout=timeout,
+            safe_to_retry=False,
+            retries=0,
+        )
+
+    def graph_bytes(self, path, params=None, timeout=25):
+        return self._graph_client.request_bytes(path, params=params, timeout=timeout)
+
+    def _cleanup_device_sessions(self):
+        now = time.time()
+        with self._device_lock:
+            for sid in list(self._device_store):
+                if float((self._device_store.get(sid) or {}).get("expires_at") or 0) <= now:
+                    self._device_store.pop(sid, None)
+
+    # ── route handler bodies (routes stay in the web shell) ────────────────
+    def api_info(self):
+        try:
+            if self._store.get("refresh_token"):
+                self._refresh_access_token(force=False)
+        except Exception:
+            pass
+        return self._jsonify({
+            "connected": bool(self._store.get("access_token")),
+            "client_id": self._store.get("client_id", ""),
+            "tenant": self._store.get("tenant", "common"),
+            "expires_at": self._store.get("expires_at", 0),
+            "account_email": self._store.get("account_email", ""),
+            "account_name": self._store.get("account_name", ""),
+            "storage": self._store.get("_storage", "backend_secure_store"),
+        })
+
+    def store_token(self):
+        """One-time migration from legacy browser token storage."""
+        data = self._request_json()
+        token = str(data.get("access_token") or "").strip()
+        if not token:
+            return self._jsonify({"ok": True, "connected": bool(self._store.get("access_token"))})
+        with self._store_lock:
+            previous = dict(self._store)
+            try:
+                self._store["access_token"] = token
+                for key in ("refresh_token", "client_id"):
+                    if data.get(key): self._store[key] = str(data.get(key))
+                if data.get("tenant"): self._store["tenant"] = _ms_safe_tenant(data.get("tenant"))
+                try: self._store["expires_at"] = int(data.get("expires_at") or time.time() + int(data.get("expires_in") or 3300))
+                except Exception: self._store["expires_at"] = int(time.time() + 3300)
+                self._save_store()
+            except Exception:
+                self._store.clear(); self._store.update(previous)
+                raise
+        return self._jsonify({"ok": True, "connected": True})
+
+    def refresh_token(self):
+        try:
+            self._refresh_access_token(force=True)
+            return self._jsonify({"ok": True, "connected": True, "expires_at": self._store.get("expires_at", 0)})
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode(errors="replace")
+            return self._jsonify({"error": "Microsoft token refresh failed", "status": exc.code, "detail": body[:800]}), exc.code
+        except Exception as exc:
+            return self._jsonify({"error": str(exc)}), 500
+
+    def disconnect(self):
+        with self._store_lock:
+            self._store.clear()
+            self._secure_delete("onenote")
+        with self._device_lock:
+            self._device_store.clear()
+        return self._jsonify({"ok": True, "connected": False})
+
+    def device_start(self):
+        data = self._request_json()
+        client_id = str(data.get("client_id") or "").strip()
+        tenant = _ms_safe_tenant(data.get("tenant") or "common")
+        if not client_id:
+            return self._jsonify({"error": "Missing Microsoft app client ID"}), 400
+        try:
+            result = self._graph_client.token_request(
+                {"client_id": client_id, "scope": self._DEFAULT_SCOPE},
+                tenant=tenant,
+                endpoint="devicecode",
+                timeout=20,
+            )
+            if not result.get("device_code"):
+                return self._jsonify({"error": "Microsoft did not return a device code", "detail": result}), 502
+            self._cleanup_device_sessions()
+            session_id = _secrets.token_urlsafe(24)
+            expires_in = int(result.get("expires_in") or 900)
+            with self._device_lock:
+                self._device_store[session_id] = {"device_code": result.get("device_code"), "client_id": client_id, "tenant": tenant, "expires_at": time.time() + expires_in}
+            public = {k: v for k, v in result.items() if k != "device_code"}
+            public["login_session_id"] = session_id
+            return self._jsonify(public)
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode(errors="replace")
+            return self._jsonify({"error": "Microsoft device login failed", "status": exc.code, "detail": body[:800]}), exc.code
+        except Exception as exc:
+            return self._jsonify({"error": str(exc)}), 500
+
+    def device_poll(self):
+        data = self._request_json()
+        session_id = str(data.get("login_session_id") or "").strip()
+        if not session_id:
+            return self._jsonify({"error": "Start Microsoft login first"}), 400
+        self._cleanup_device_sessions()
+        with self._device_lock:
+            current_session = self._device_store.get(session_id) or {}
+            if current_session.get("_polling"):
+                return self._jsonify({"error": "This Microsoft login is already being checked. Wait a moment and try again."}), 409
+            if current_session:
+                current_session["_polling"] = True
+                self._device_store[session_id] = current_session
+            session = dict(current_session)
+        if not session:
+            return self._jsonify({"error": "Microsoft login session expired"}), 404
+        try:
+            tok = self._token_response({"grant_type": "urn:ietf:params:oauth:grant-type:device_code", "client_id": session["client_id"], "device_code": session["device_code"]}, tenant=session["tenant"])
+            if not tok.get("access_token"):
+                return self._jsonify({"error": "Microsoft returned no access token", "detail": tok}), 502
+            with self._store_lock:
+                previous = dict(self._store)
+                try:
+                    self._store.update({
+                        "access_token": tok.get("access_token", ""),
+                        "refresh_token": tok.get("refresh_token", ""),
+                        "client_id": session["client_id"],
+                        "tenant": session["tenant"],
+                        "expires_at": int(time.time() + int(tok.get("expires_in") or 3300)),
+                    })
+                    self._store.update(self._fetch_account(self._store.get("access_token")))
+                    self._save_store()
+                except Exception:
+                    self._store.clear(); self._store.update(previous)
+                    raise
+            with self._device_lock:
+                self._device_store.pop(session_id, None)
+            return self._jsonify({"ok": True, "connected": True, "client_id": session["client_id"], "tenant": session["tenant"], "expires_at": self._store["expires_at"]})
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode(errors="replace")
+            return self._jsonify({"error": "Microsoft login not complete", "status": exc.code, "detail": body[:800]}), exc.code
+        except Exception as exc:
+            return self._jsonify({"error": str(exc)}), 500
+        finally:
+            with self._device_lock:
+                current_session = self._device_store.get(session_id)
+                if current_session:
+                    current_session.pop("_polling", None)
+                    self._device_store[session_id] = current_session

@@ -412,7 +412,7 @@ class Phase3ExternalClientCharacterizationTests(unittest.TestCase):
                 )
             return _FakeResponse({"value": [{"title": "Fixture page"}]})
 
-        with mock.patch.object(app, "_ms_graph_token", return_value="<fixture-credential>"), mock.patch.object(
+        with mock.patch.object(app._ONENOTE_SERVICE, "_token", return_value="<fixture-credential>"), mock.patch.object(
             app._ONENOTE_GRAPH_CLIENT.transport, "_opener", side_effect=open_graph
         ):
             listing = app._ms_graph_json(
@@ -476,7 +476,7 @@ class Phase3ExternalClientCharacterizationTests(unittest.TestCase):
             ),
             _FakeResponse({"value": [{"id": "fixture-c"}]}),
         ]
-        with mock.patch.object(app, "_ms_graph_token", return_value="<fixture-credential>"), mock.patch.object(
+        with mock.patch.object(app._ONENOTE_SERVICE, "_token", return_value="<fixture-credential>"), mock.patch.object(
             app._ONENOTE_GRAPH_CLIENT.transport, "_opener", side_effect=graph_pages
         ) as opened:
             payload = app._ms_graph_json(

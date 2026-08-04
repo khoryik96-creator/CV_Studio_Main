@@ -3034,141 +3034,25 @@ def jobadder_search_candidate():
 
 
 # ── Microsoft OneNote (Graph) import connector ────────────────────────
-_ms_graph_store = {}
-_ms_graph_device_store = {}
-_ms_graph_store_lock = threading.RLock()
-_ms_graph_device_lock = threading.RLock()
-_ms_graph_refresh_lock = threading.Lock()
-
-_MS_GRAPH_DEFAULT_SCOPE = "offline_access User.Read Notes.Read"
-_MS_GRAPH_BASE = "https://graph.microsoft.com/v1.0"
-
-
 def _ms_ssl_context():
     return ssl.create_default_context(cafile=certifi.where()) if certifi else None
 
-# Pure Microsoft Graph / Outlook helpers live in cvstudio_msgraph (Phase 7B).
-# The stateful token/store/graph service handlers stay in this web shell for now
-# and move in later slices; this import never pulls app into the module.
+# The OneNote Graph connection layer (token store, lifecycle, shared Graph
+# client, JSON/bytes helpers, device sessions and the six connection handlers)
+# lives in the OneNoteGraphService in cvstudio_msgraph (Phase 7B). It is
+# instantiated further below once the secure-store and token-endpoint helpers
+# exist; app-level aliases (_ms_graph_json/_ms_graph_store/etc.) keep the
+# OneNote content handlers and the external MS-status surface unchanged. The
+# OutlookService is also imported here. This import never pulls app into the
+# module.
 from cvstudio_msgraph import (
+    OneNoteGraphService,
     OutlookService,
     _ms_outlook_account_normalize,
     _ms_outlook_error_payload,
     _ms_outlook_validate_draft_input,
     _ms_safe_tenant,
 )
-
-
-def _ms_graph_save_store():
-    record = {k: _ms_graph_store.get(k) for k in ("access_token", "refresh_token", "client_id", "tenant", "expires_at", "account_email", "account_name") if _ms_graph_store.get(k) not in (None, "")}
-    if record:
-        _ms_graph_store["_storage"] = _cv_secure_save("onenote", record)
-    else:
-        _cv_secure_delete("onenote")
-
-
-
-
-def _ms_graph_fetch_account(access_token):
-    token = str(access_token or "").strip()
-    if not token:
-        return {}
-    try:
-        data = _ONENOTE_GRAPH_CLIENT.request_json(
-            "me?$select=displayName,mail,userPrincipalName",
-            timeout=15,
-            access_token=token,
-        )
-        return {
-            "account_name": str(data.get("displayName") or "").strip(),
-            "account_email": str(data.get("mail") or data.get("userPrincipalName") or "").strip(),
-        }
-    except Exception:
-        return {}
-
-def _ms_graph_refresh_access_token(force=False):
-    with _ms_graph_refresh_lock:
-        token = str(_ms_graph_store.get("access_token") or "").strip()
-        expires_at = int(_ms_graph_store.get("expires_at") or 0)
-        if token and not force and (not expires_at or expires_at > time.time() + 120):
-            return token
-        refresh = str(_ms_graph_store.get("refresh_token") or "").strip()
-        client_id = str(_ms_graph_store.get("client_id") or "").strip()
-        tenant = _ms_safe_tenant(_ms_graph_store.get("tenant") or "common")
-        if not refresh or not client_id:
-            return token
-        tok = _ms_token_response({"client_id": client_id, "grant_type": "refresh_token", "refresh_token": refresh, "scope": _MS_GRAPH_DEFAULT_SCOPE}, tenant=tenant)
-        if not tok.get("access_token"):
-            raise PermissionError("Microsoft OneNote refresh returned no access token")
-        with _ms_graph_store_lock:
-            previous = dict(_ms_graph_store)
-            try:
-                _ms_graph_store.update({
-                    "access_token": tok.get("access_token", ""),
-                    "refresh_token": tok.get("refresh_token", refresh),
-                    "client_id": client_id,
-                    "tenant": tenant,
-                    "expires_at": int(time.time() + int(tok.get("expires_in") or 3300)),
-                })
-                _ms_graph_store.update(_ms_graph_fetch_account(_ms_graph_store.get("access_token")))
-                _ms_graph_save_store()
-            except Exception:
-                _ms_graph_store.clear(); _ms_graph_store.update(previous)
-                raise
-            return str(_ms_graph_store.get("access_token") or "")
-
-
-def _ms_graph_token():
-    return _ms_graph_refresh_access_token(force=False)
-
-
-def _ms_graph_mark_reconnect_required():
-    with _ms_graph_store_lock:
-        _ms_graph_store.pop("access_token", None)
-        _ms_graph_store["expires_at"] = 0
-        try:
-            _ms_graph_save_store()
-        except Exception:
-            pass
-
-
-_ONENOTE_GRAPH_CLIENT = MicrosoftGraphClient(
-    token_provider=lambda force=False: (
-        _ms_graph_refresh_access_token(force=True) if force else _ms_graph_token()
-    ),
-    not_connected_message="Microsoft OneNote is not connected",
-    reconnect_handler=_ms_graph_mark_reconnect_required,
-    context_provider=_ms_ssl_context,
-)
-
-def _ms_graph_json(path, params=None, timeout=20):
-    top = None
-    if isinstance(params, dict):
-        try:
-            top = int(params.get("$top")) if params.get("$top") not in (None, "") else None
-        except Exception:
-            top = None
-    return _ONENOTE_GRAPH_CLIENT.request_json(
-        path,
-        params=params,
-        timeout=timeout,
-        paginate=bool(top and top > 0),
-        max_items=max(1, min(5000, top or 100)),
-    )
-
-def _ms_graph_post_json(path, body=None, params=None, timeout=25):
-    return _ONENOTE_GRAPH_CLIENT.request_json(
-        path,
-        body=body or {},
-        method="POST",
-        params=params,
-        timeout=timeout,
-        safe_to_retry=False,
-        retries=0,
-    )
-
-def _ms_graph_bytes(path, params=None, timeout=25):
-    return _ONENOTE_GRAPH_CLIENT.request_bytes(path, params=params, timeout=timeout)
 
 from cvstudio_onenote_text import (
     _OneNoteHtmlTextParser,
@@ -3357,7 +3241,38 @@ _loaded_ja_store = _cv_secure_load("jobadder")
 if isinstance(_loaded_ja_store, dict) and _loaded_ja_store.get("api_url"):
     _loaded_ja_store["api_url"] = _ja_normalize_api_base(_loaded_ja_store.get("api_url"))
 _ja_creds_store.update(_loaded_ja_store if isinstance(_loaded_ja_store, dict) else {})
-_ms_graph_store.update(_cv_secure_load("onenote"))
+# ── OneNote Graph connection service (Phase 7B) ────────────────────────────
+# Instantiated here (after the secure store and token endpoint exist). The
+# service owns the OneNote token store and loads it from the backend secure
+# store in __init__. App-level aliases keep the OneNote content handlers, the
+# shared _ms_token_response helper and the external MS-status surface working
+# against the service's shared Graph client and store.
+_ONENOTE_SERVICE = OneNoteGraphService(
+    jsonify=lambda payload: jsonify(payload),
+    request_json=lambda: request.get_json(silent=True) or {},
+    token_response=_ms_token_response,
+    secure_save=lambda service, record: _cv_secure_save(service, record),
+    secure_load=lambda service: _cv_secure_load(service),
+    secure_delete=lambda service: _cv_secure_delete(service),
+    graph_client_factory=lambda token_provider, reconnect_handler: MicrosoftGraphClient(
+        token_provider=token_provider,
+        not_connected_message="Microsoft OneNote is not connected",
+        reconnect_handler=reconnect_handler,
+        context_provider=_ms_ssl_context,
+    ),
+)
+
+# Shared aliases: the OneNote content handlers and desktop cluster still call
+# these graph helpers, _ms_token_response uses the shared client, and the
+# external MS-status surface reads the store (by reference, so it stays live).
+_ONENOTE_GRAPH_CLIENT = _ONENOTE_SERVICE._graph_client
+_ms_graph_store = _ONENOTE_SERVICE._store
+_ms_graph_store_lock = _ONENOTE_SERVICE._store_lock
+_ms_graph_device_store = _ONENOTE_SERVICE._device_store
+_ms_graph_device_lock = _ONENOTE_SERVICE._device_lock
+_ms_graph_json = _ONENOTE_SERVICE.graph_json
+_ms_graph_post_json = _ONENOTE_SERVICE.graph_post_json
+_ms_graph_bytes = _ONENOTE_SERVICE.graph_bytes
 _ai_secret_store = _cv_secure_load("ai")
 
 _AI_SECRET_SLOTS = frozenset({
@@ -3485,156 +3400,32 @@ def ppc_outlook_create_test_draft():
 
 @app.route("/onenote/api_info", methods=["GET"])
 def onenote_api_info():
-    try:
-        if _ms_graph_store.get("refresh_token"):
-            _ms_graph_refresh_access_token(force=False)
-    except Exception:
-        pass
-    return jsonify({
-        "connected": bool(_ms_graph_store.get("access_token")),
-        "client_id": _ms_graph_store.get("client_id", ""),
-        "tenant": _ms_graph_store.get("tenant", "common"),
-        "expires_at": _ms_graph_store.get("expires_at", 0),
-        "account_email": _ms_graph_store.get("account_email", ""),
-        "account_name": _ms_graph_store.get("account_name", ""),
-        "storage": _ms_graph_store.get("_storage", "backend_secure_store"),
-    })
+    return _ONENOTE_SERVICE.api_info()
 
 
 @app.route("/onenote/store_token", methods=["POST"])
 def onenote_store_token():
-    """One-time migration from legacy browser token storage."""
-    data = request.get_json(silent=True) or {}
-    token = str(data.get("access_token") or "").strip()
-    if not token:
-        return jsonify({"ok": True, "connected": bool(_ms_graph_store.get("access_token"))})
-    with _ms_graph_store_lock:
-        previous = dict(_ms_graph_store)
-        try:
-            _ms_graph_store["access_token"] = token
-            for key in ("refresh_token", "client_id"):
-                if data.get(key): _ms_graph_store[key] = str(data.get(key))
-            if data.get("tenant"): _ms_graph_store["tenant"] = _ms_safe_tenant(data.get("tenant"))
-            try: _ms_graph_store["expires_at"] = int(data.get("expires_at") or time.time() + int(data.get("expires_in") or 3300))
-            except Exception: _ms_graph_store["expires_at"] = int(time.time() + 3300)
-            _ms_graph_save_store()
-        except Exception:
-            _ms_graph_store.clear(); _ms_graph_store.update(previous)
-            raise
-    return jsonify({"ok": True, "connected": True})
+    return _ONENOTE_SERVICE.store_token()
 
 
 @app.route("/onenote/refresh_token", methods=["POST"])
 def onenote_refresh_token():
-    try:
-        _ms_graph_refresh_access_token(force=True)
-        return jsonify({"ok": True, "connected": True, "expires_at": _ms_graph_store.get("expires_at", 0)})
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode(errors="replace")
-        return jsonify({"error": "Microsoft token refresh failed", "status": exc.code, "detail": body[:800]}), exc.code
-    except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
+    return _ONENOTE_SERVICE.refresh_token()
 
 
 @app.route("/onenote/disconnect", methods=["POST"])
 def onenote_disconnect():
-    with _ms_graph_store_lock:
-        _ms_graph_store.clear()
-        _cv_secure_delete("onenote")
-    with _ms_graph_device_lock:
-        _ms_graph_device_store.clear()
-    return jsonify({"ok": True, "connected": False})
-
-
-def _ms_graph_cleanup_device_sessions():
-    now = time.time()
-    with _ms_graph_device_lock:
-        for sid in list(_ms_graph_device_store):
-            if float((_ms_graph_device_store.get(sid) or {}).get("expires_at") or 0) <= now:
-                _ms_graph_device_store.pop(sid, None)
+    return _ONENOTE_SERVICE.disconnect()
 
 
 @app.route("/onenote/device_start", methods=["POST"])
 def onenote_device_start():
-    data = request.get_json(silent=True) or {}
-    client_id = str(data.get("client_id") or "").strip()
-    tenant = _ms_safe_tenant(data.get("tenant") or "common")
-    if not client_id:
-        return jsonify({"error": "Missing Microsoft app client ID"}), 400
-    try:
-        result = _ONENOTE_GRAPH_CLIENT.token_request(
-            {"client_id": client_id, "scope": _MS_GRAPH_DEFAULT_SCOPE},
-            tenant=tenant,
-            endpoint="devicecode",
-            timeout=20,
-        )
-        if not result.get("device_code"):
-            return jsonify({"error": "Microsoft did not return a device code", "detail": result}), 502
-        _ms_graph_cleanup_device_sessions()
-        session_id = secrets.token_urlsafe(24)
-        expires_in = int(result.get("expires_in") or 900)
-        with _ms_graph_device_lock:
-            _ms_graph_device_store[session_id] = {"device_code": result.get("device_code"), "client_id": client_id, "tenant": tenant, "expires_at": time.time() + expires_in}
-        public = {k: v for k, v in result.items() if k != "device_code"}
-        public["login_session_id"] = session_id
-        return jsonify(public)
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode(errors="replace")
-        return jsonify({"error": "Microsoft device login failed", "status": exc.code, "detail": body[:800]}), exc.code
-    except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
+    return _ONENOTE_SERVICE.device_start()
 
 
 @app.route("/onenote/device_poll", methods=["POST"])
 def onenote_device_poll():
-    data = request.get_json(silent=True) or {}
-    session_id = str(data.get("login_session_id") or "").strip()
-    if not session_id:
-        return jsonify({"error": "Start Microsoft login first"}), 400
-    _ms_graph_cleanup_device_sessions()
-    with _ms_graph_device_lock:
-        current_session = _ms_graph_device_store.get(session_id) or {}
-        if current_session.get("_polling"):
-            return jsonify({"error": "This Microsoft login is already being checked. Wait a moment and try again."}), 409
-        if current_session:
-            current_session["_polling"] = True
-            _ms_graph_device_store[session_id] = current_session
-        session = dict(current_session)
-    if not session:
-        return jsonify({"error": "Microsoft login session expired"}), 404
-    try:
-        tok = _ms_token_response({"grant_type": "urn:ietf:params:oauth:grant-type:device_code", "client_id": session["client_id"], "device_code": session["device_code"]}, tenant=session["tenant"])
-        if not tok.get("access_token"):
-            return jsonify({"error": "Microsoft returned no access token", "detail": tok}), 502
-        with _ms_graph_store_lock:
-            previous = dict(_ms_graph_store)
-            try:
-                _ms_graph_store.update({
-                    "access_token": tok.get("access_token", ""),
-                    "refresh_token": tok.get("refresh_token", ""),
-                    "client_id": session["client_id"],
-                    "tenant": session["tenant"],
-                    "expires_at": int(time.time() + int(tok.get("expires_in") or 3300)),
-                })
-                _ms_graph_store.update(_ms_graph_fetch_account(_ms_graph_store.get("access_token")))
-                _ms_graph_save_store()
-            except Exception:
-                _ms_graph_store.clear(); _ms_graph_store.update(previous)
-                raise
-        with _ms_graph_device_lock:
-            _ms_graph_device_store.pop(session_id, None)
-        return jsonify({"ok": True, "connected": True, "client_id": session["client_id"], "tenant": session["tenant"], "expires_at": _ms_graph_store["expires_at"]})
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode(errors="replace")
-        return jsonify({"error": "Microsoft login not complete", "status": exc.code, "detail": body[:800]}), exc.code
-    except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
-    finally:
-        with _ms_graph_device_lock:
-            current_session = _ms_graph_device_store.get(session_id)
-            if current_session:
-                current_session.pop("_polling", None)
-                _ms_graph_device_store[session_id] = current_session
+    return _ONENOTE_SERVICE.device_poll()
 
 
 
