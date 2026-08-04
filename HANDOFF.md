@@ -123,7 +123,7 @@ take domains in **non-overlapping `app.py` regions** and never share a branch.
 | Account | Domain | New module | app.py region | Branch prefix |
 |---------|--------|-----------|---------------|---------------|
 | **Einstein** | OneNote + Outlook / MS-Graph — **domain wrapped.** Slice 1 = pure helpers (#41). Slice 2 = `OutlookService` (#43). Slice 3a = `OneNoteGraphService` connection layer + 6 `/onenote/*` conn handlers. The OneNote content handlers + `_onenote_desktop_*` COM cluster are deliberately left in the shell (low value / partly unverifiable — see backlog). | `cvstudio_msgraph.py` | ~3,120–5,650 | `einstein/*` |
-| **Claude** | Spider / AI Crawler — pure candidate data-shaping (`cvstudio_spider_summary`) + JD-scoring/fit-term matching (`cvstudio_spider_score`). Lead Finder pure `_lead_*` closures are largely exhausted; remaining `_lead_*` are network/cache (service-module shape). | `cvstudio_spider_summary.py`, `cvstudio_spider_score.py` | ~9,900–10,810 | `claude/*` |
+| **Claude** | Spider / AI Crawler pure closures (`cvstudio_spider_summary`, `cvstudio_spider_score`) + JobAdder typo-correction (`cvstudio_ja_typos`). Lead Finder & Spider pure `_lead_*`/`_spider_*` closures are largely exhausted; the remaining `_ja_*`/`_lead_*` are service-module shape (network/cache/LLM). | `cvstudio_spider_summary.py`, `cvstudio_spider_score.py`, `cvstudio_ja_typos.py` | ~9,900–10,810; `_ja_*` typo cluster | `claude/*` |
 
 Rules while both are active:
 1. Separate branches — never commit to the other account's branch.

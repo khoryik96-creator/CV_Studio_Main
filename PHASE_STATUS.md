@@ -36,6 +36,32 @@
   focused review. Stop before release, merge, further extractions or unrelated
   work.
 
+## Phase 7B-8 JobAdder typo-correction extraction
+
+- `cvstudio_ja_typos.py` is a new pure-helper module holding seven JobAdder
+  recruitment/salary typo-correction functions and their four data tables, moved
+  verbatim from `app.py`: bounded edit distance (`_ja_edit_distance_limited`),
+  casing preservation (`_ja_case_like`), alias/fuzzy typo targeting
+  (`_ja_recruitment_typo_target`), and the field-level corrections for screening
+  notes, notice-period text and salary strings (`_ja_correct_recruitment_typos`,
+  `_ja_correct_screening_field_typos`, `_ja_correct_notice_typos`,
+  `_ja_salary_normalize_recruiter_typos`), plus `_JA_RECRUITMENT_TYPO_ALIASES`,
+  `_JA_RECRUITMENT_FUZZY_TERMS`, `_JA_RECRUITMENT_PROTECTED_WORDS` and
+  `_JA_SALARY_TYPO_RULES`.
+- The cluster is a clean pure closure: the only import is the standard library
+  `re`, there are no app-function dependencies, and the four data tables are used
+  only inside the cluster. `app.py` re-exports all eleven names, so no caller
+  changes and the sealed route SHA is unchanged.
+- The `ja_typos` module joins the acyclic graph as a `domain`-layer dependency of
+  the legacy web shell. Registered in `cvstudio_architecture.py`,
+  `owner_build_tools/build_protected.py`, and the Phase 7A foundation names tuple.
+- Behaviour preservation is proven by a new characterization net (edit distance,
+  casing, alias targeting, multi-typo text correction, screening-field and
+  notice/salary corrections) plus a re-export identity assertion.
+- Validation passed the full local Python suite (542 passed, 9 platform-gated
+  Antiword skips; the single pre-existing Antiword extraction failure is
+  Linux-only and reproduces byte-identically on master).
+
 ## Phase 7B-7 Spider JD-scoring and candidate-fit extraction
 
 - `cvstudio_spider_score.py` is a new pure-helper module holding twelve Spider

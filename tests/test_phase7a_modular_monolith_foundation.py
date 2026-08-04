@@ -77,6 +77,7 @@ class Phase7AModularMonolithFoundationTests(unittest.TestCase):
                 "spider_boolean",
                 "spider_summary",
                 "spider_score",
+                "ja_typos",
                 "blind_mask",
                 "ppc",
                 "msgraph",

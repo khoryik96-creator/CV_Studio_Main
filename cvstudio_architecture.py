@@ -162,6 +162,11 @@ DEFAULT_MODULES = (
         ("spider_boolean",),
     ),
     ModuleDefinition(
+        "ja_typos",
+        "domain",
+        ("cvstudio_ja_typos.py",),
+    ),
+    ModuleDefinition(
         "blind_mask",
         "domain",
         ("cvstudio_blind_mask.py",),
@@ -233,6 +238,7 @@ DEFAULT_MODULES = (
             "spider_boolean",
             "spider_summary",
             "spider_score",
+            "ja_typos",
             "startup",
             "storage",
             "storage_http",
