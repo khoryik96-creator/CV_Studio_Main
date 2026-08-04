@@ -1,12 +1,32 @@
-// ── Heartbeat: ping server every 10s ─────────────────────────────────
-// Auto-detects server loss and auto-reloads when server comes back
+// ── Heartbeat: ping server, auto-detect loss, auto-recover ───────────
+// The local server does not auto-shut-down; a "connection lost" almost always
+// means the machine slept or the tab was backgrounded, which stalls in-flight
+// fetches. So the ping has a hard timeout, and returning to the tab / coming
+// back online triggers an immediate re-check instead of waiting for the next
+// interval — the banner recovers on its own without a manual reload.
 (function () {
   var _serverLost   = false;
   var _banner       = null;
   var _missedPings  = 0;
   var _reloadQueued = false;
+  var _lastPingAt   = 0;
   var PING_INTERVAL  = 20000;   // ping every 20s
-  var MISS_THRESHOLD = 4;       // 4 missed pings (80s) before showing banner
+  var MISS_THRESHOLD = 4;       // 4 missed pings (~80s) before showing banner
+  var FETCH_TIMEOUT  = 8000;    // give up on a stuck request after 8s
+
+  function timedFetch(url, options) {
+    options = options || {};
+    var ctrl = null, timer = null;
+    try {
+      ctrl = new AbortController();
+      options.signal = ctrl.signal;
+      timer = setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, FETCH_TIMEOUT);
+    } catch (e) { ctrl = null; }
+    return fetch(url, options).then(
+      function (r) { if (timer) clearTimeout(timer); return r; },
+      function (e) { if (timer) clearTimeout(timer); throw e; }
+    );
+  }
 
   function showReconnectBanner(recovering) {
     var bg = recovering ? "#2f855a" : "#c05621";
@@ -30,7 +50,7 @@
       _banner.innerHTML = "";
       var msg = document.createElement("span");
       msg.id = "reconnect-msg";
-      msg.textContent = "⚠ Server connection lost — click Restart or double-click CV Studio on Desktop";
+      msg.textContent = "⚠ Server connection lost — reconnecting…";
       var btn = document.createElement("button");
       btn.textContent = "↻ Restart Server";
       btn.style.cssText = "background:#fff;color:#c05621;border:none;border-radius:6px;padding:4px 12px;font-size:13px;font-weight:600;cursor:pointer;";
@@ -44,12 +64,12 @@
     var btn = document.querySelector("#reconnect-banner button");
     if (btn) { btn.textContent = "⏳ Waiting for server..."; btn.disabled = true; }
     // Try Flask restart first (works if server is slow, not if it's dead)
-    fetch("/restart", {method:"POST", credentials:"same-origin", headers:{"X-CV-Studio-Restart":"1"}}).catch(function(){});
+    timedFetch("/restart", {method:"POST", credentials:"same-origin", headers:{"X-CV-Studio-Restart":"1"}}).catch(function(){});
     // Keep polling every 3s — watchdog should revive it within ~45s
     var attempts = 0;
     var poll = setInterval(function() {
       attempts++;
-      fetch("/ping").then(function(r) {
+      timedFetch("/ping").then(function(r) {
         if (r.ok || r.status === 204) {
           clearInterval(poll);
           location.reload();
@@ -72,11 +92,14 @@
   }
 
   function ping() {
-    fetch("/heartbeat", { method: "POST" })
+    _lastPingAt = Date.now();
+    timedFetch("/heartbeat", { method: "POST" })
       .then(function (r) {
         if (r.ok || r.status === 204) {
-          if (_serverLost) {
-            // Server is back — show green banner then auto-reload
+          if (_serverLost && !_reloadQueued) {
+            // Server is reachable again — show green banner then auto-reload
+            // (a reload re-syncs the loopback session cookie in case the
+            // process actually restarted while we were unreachable).
             _serverLost   = false;
             _missedPings  = 0;
             _reloadQueued = true;
@@ -89,13 +112,29 @@
       })
       .catch(function () {
         _missedPings++;
-        // Only flag as lost after 2 consecutive misses (avoid single blip)
+        // Only flag as lost after MISS_THRESHOLD consecutive misses (avoid a
+        // single blip from a slow request or a momentary background throttle).
         if (_missedPings >= MISS_THRESHOLD && !_serverLost) {
           _serverLost = true;
           showReconnectBanner(false);
         }
       });
   }
+
+  // Re-check immediately when the user comes back to the tab or the machine
+  // wakes / reconnects, so recovery does not wait for the next 20s interval.
+  function pingNow() {
+    if (_reloadQueued) return;
+    if (Date.now() - _lastPingAt < 1500) return; // throttle bursts of events
+    ping();
+  }
+
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible") pingNow();
+  });
+  window.addEventListener("focus", pingNow);
+  window.addEventListener("online", pingNow);
+  window.addEventListener("pageshow", pingNow);
 
   ping(); // immediate ping on load
   setInterval(ping, PING_INTERVAL);
