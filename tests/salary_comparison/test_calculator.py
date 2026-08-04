@@ -42,7 +42,8 @@ def test_malaysia_sample_calculation(malaysia_rule):
     assert result.guaranteed_bonus == 12000
     assert result.variable_bonus == 14400
     assert result.gross_annual_cash == 176400
-    assert result.gross_monthly_cash == 14700
+    # Gross monthly excludes the variable performance bonus: 162000 / 12.
+    assert result.gross_monthly_cash == 13500
     assert result.employee_contribution == 19404
     assert result.estimated_income_tax == 26250
     assert result.marginal_income_tax_rate == 0.25
@@ -65,6 +66,13 @@ def test_net_ex_variable_recomputes_tax_and_contributions(malaysia_rule):
     dropped = result.net_annual_cash - result.net_annual_cash_ex_variable
     assert 0 < dropped < result.variable_bonus
     assert result.net_annual_cash_ex_variable == 121530
+
+
+def test_gross_monthly_excludes_variable_bonus(malaysia_rule):
+    result = calculate_scenario(base_scenario(), malaysia_rule, 1.0)
+    # Monthly gross is the fixed annual cash (excl. variable bonus) over 12.
+    assert result.gross_monthly_cash == round(result.gross_annual_cash_ex_variable / 12, 2)
+    assert result.gross_monthly_cash < result.gross_annual_cash / 12
 
 
 def test_ex_variable_equals_full_when_no_variable_bonus(malaysia_rule):

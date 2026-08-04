@@ -339,7 +339,10 @@ def calculate_scenario(
         other_taxable_income=_money(other_taxable_income),
         gross_annual_cash=_money(gross),
         gross_annual_cash_ex_variable=_money(gross_ex_variable),
-        gross_monthly_cash=_money(gross / Decimal("12")),
+        # Gross monthly reflects only fixed cash and fixed bonuses; the
+        # non-guaranteed variable performance bonus is excluded because it is not
+        # a dependable monthly figure.
+        gross_monthly_cash=_money(gross_ex_variable / Decimal("12")),
         contribution_base=_money(contribution_base),
         employee_contribution_rate=_rate(employee_rate),
         employer_contribution_rate=_rate(employer_rate),
