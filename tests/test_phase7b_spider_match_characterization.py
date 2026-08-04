@@ -91,6 +91,54 @@ class SpiderMatchCharacterizationTests(unittest.TestCase):
         for token in ("jane@acme.com", "SAP Consultant", "Malaysian Citizen"):
             self.assertIn(token, blob)
 
+    def test_country_aliases(self):
+        my = app._spider_country_aliases("Malaysia")
+        self.assertEqual(my[0], "malaysia")
+        self.assertIn("kuala lumpur", my)
+        self.assertIn("penang", my)
+        # ISO code resolves to the same canonical alias list.
+        self.assertEqual(app._spider_country_aliases("MY"), my)
+        # An unknown country falls back to the raw term.
+        self.assertEqual(app._spider_country_aliases("Narnia"), ["Narnia"])
+
+    def test_country_profile(self):
+        my = app._spider_country_profile("Malaysia")
+        self.assertEqual(my["canonical"], "malaysia")
+        self.assertEqual(my["names"], ["malaysia"])
+        self.assertEqual(my["codes"], {"MYS", "MY"})
+        self.assertIn("kuala lumpur", my["places"])
+        sg = app._spider_country_profile("Singapore")
+        self.assertEqual(sg["canonical"], "singapore")
+        self.assertEqual(sg["codes"], {"SG", "SGP"})
+        narnia = app._spider_country_profile("Narnia")
+        self.assertEqual(narnia["canonical"], "narnia")
+        self.assertEqual(narnia["codes"], set())
+        self.assertEqual(narnia["places"], [])
+
+    def test_location_identity_and_country_match(self):
+        cand = {
+            "summary": "Based in Kuala Lumpur, Malaysia. Malaysian citizen.",
+            "address": {"country": "Malaysia"},
+        }
+        self.assertEqual(
+            app._spider_location_identity(cand), (set(), "Malaysia", "country Malaysia")
+        )
+        self.assertEqual(app._spider_country_match(cand, "Malaysia"), ("match", "Malaysia"))
+        self.assertEqual(
+            app._spider_country_match(cand, "Singapore"), ("mismatch", "Malaysia")
+        )
+
+    def test_country_constants_reexported(self):
+        for name in (
+            "_SPIDER_COUNTRY_DEFINITIONS",
+            "_SPIDER_COUNTRY_NAME_LOOKUP",
+            "_SPIDER_COUNTRY_CODE_LOOKUP",
+        ):
+            self.assertIsInstance(getattr(app, name), dict)
+        # Lookups are populated from the definitions build loop.
+        self.assertIn("malaysia", app._SPIDER_COUNTRY_NAME_LOOKUP)
+        self.assertIn("MY", app._SPIDER_COUNTRY_CODE_LOOKUP)
+
     def test_all_helpers_reexported(self):
         for name in (
             "_spider_min_years_value", "_spider_max_years_value", "_spider_years_bounds",
@@ -99,6 +147,8 @@ class SpiderMatchCharacterizationTests(unittest.TestCase):
             "_spider_pick_field_text", "_spider_has_any", "_spider_status_aliases",
             "_spider_status_target", "_spider_residential_status_text",
             "_spider_residential_classes", "_spider_work_setup_aliases", "_spider_candidate_id",
+            "_spider_country_profile", "_spider_country_aliases",
+            "_spider_location_identity", "_spider_country_match",
         ):
             self.assertTrue(callable(getattr(app, name)), name)
 
