@@ -59,7 +59,7 @@ def test_compare_endpoint(client):
     assert response.status_code == 200
     assert data["scenario_a"]["local_currency"] == "MYR"
     assert data["scenario_b"]["local_currency"] == "SGD"
-    assert data["scenario_a"]["gross_monthly_cash"] == 14700
+    assert data["scenario_a"]["gross_monthly_cash"] == 13500
     assert data["scenario_a"]["marginal_income_tax_rate"] == 0.25
     assert data["comparison"]["reporting_currency"] == "MYR"
 

@@ -55,7 +55,8 @@ def test_randomized_salary_accounting_identities():
                 "reporting_currency": rule["currency"],
             }
             result = calculate_scenario(scenario, rule, 1)
-            assert abs(result.gross_monthly_cash * 12 - result.gross_annual_cash) <= 0.12
+            # Gross monthly annualises the fixed cash only (excludes variable bonus).
+            assert abs(result.gross_monthly_cash * 12 - result.gross_annual_cash_ex_variable) <= 0.12
             assert abs(
                 result.net_annual_cash
                 - (result.gross_annual_cash - result.employee_contribution - result.estimated_income_tax - result.other_after_tax_deductions)
