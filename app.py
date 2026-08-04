@@ -3059,6 +3059,7 @@ from cvstudio_msgraph import (
     _ms_outlook_error_payload,
     _ms_outlook_validate_draft_input,
     _ms_safe_tenant,
+    _onenote_parse_date_bound,
 )
 
 from cvstudio_onenote_text import (
@@ -3257,6 +3258,7 @@ _ja_creds_store.update(_loaded_ja_store if isinstance(_loaded_ja_store, dict) el
 _ONENOTE_SERVICE = OneNoteGraphService(
     jsonify=lambda payload: jsonify(payload),
     request_json=lambda: request.get_json(silent=True) or {},
+    request_args=lambda: request.args,
     token_response=_ms_token_response,
     secure_save=lambda service, record: _cv_secure_save(service, record),
     secure_load=lambda service: _cv_secure_load(service),
@@ -3280,6 +3282,11 @@ _ms_graph_device_lock = _ONENOTE_SERVICE._device_lock
 _ms_graph_json = _ONENOTE_SERVICE.graph_json
 _ms_graph_post_json = _ONENOTE_SERVICE.graph_post_json
 _ms_graph_bytes = _ONENOTE_SERVICE.graph_bytes
+# The OneNote desktop route handlers (desktop_pages / manual_pages) that remain
+# in the shell still call these page-listing helpers, now owned by the service.
+_onenote_list_notebook_pages = _ONENOTE_SERVICE._list_notebook_pages
+_onenote_list_section_pages = _ONENOTE_SERVICE._list_section_pages
+_onenote_get_all_notebooks_and_sections = _ONENOTE_SERVICE._get_all_notebooks_and_sections
 _ai_secret_store = _cv_secure_load("ai")
 
 _AI_SECRET_SLOTS = frozenset({
@@ -3444,148 +3451,23 @@ def onenote_device_poll():
 
 
 
-def _onenote_list_notebook_pages(notebook_id, top=50, search="", date_from_iso="", date_to_iso="", date_mode="created"):
-    """List pages across all sections in a selected notebook, then filter locally."""
-    pages, seen = [], set()
-    raw_count = 0
-    d = _ms_graph_json("me/onenote/notebooks/{}/sections".format(_onenote_graph_id(notebook_id)), params={"$select":"id,displayName,createdDateTime,lastModifiedDateTime,parentNotebook,links,pagesUrl", "$orderby":"displayName", "$top":"100"}, timeout=25)
-    sections = (d.get("value") if isinstance(d, dict) else []) or []
-    per_section_top = max(1, min(int(top or 50), 100))
-    for sec in sections:
-        sid = str((sec or {}).get("id") or "").strip()
-        if not sid:
-            continue
-        try:
-            sec_pages, sec_raw = _onenote_list_section_pages(sid, per_section_top, search, date_from_iso, date_to_iso, date_mode)
-            raw_count += int(sec_raw or 0)
-            for pg in sec_pages or []:
-                pid = str((pg or {}).get("id") or "")
-                if pid and pid not in seen:
-                    pg["_parentSectionName"] = str((sec or {}).get("displayName") or "")
-                    seen.add(pid); pages.append(pg)
-        except Exception:
-            continue
-    pages.sort(key=lambda it: str((it or {}).get("lastModifiedDateTime") or (it or {}).get("createdDateTime") or ""), reverse=True)
-    return pages[:max(1, min(int(top or 50), 100))], raw_count
 
 @app.route("/onenote/notebooks", methods=["GET"])
 def onenote_notebooks():
-    """List Microsoft OneNote notebooks for the picker UI."""
-    try:
-        top = max(1, min(int(request.args.get("top") or 100), 200))
-    except Exception:
-        top = 100
-    params = {"$select":"id,displayName,createdDateTime,lastModifiedDateTime", "$orderby":"displayName", "$top": str(top)}
-    try:
-        d = _ms_graph_json("me/onenote/notebooks", params=params, timeout=25)
-        items = d.get("value") if isinstance(d, dict) else []
-        return jsonify({"items": items or [], "raw_count": len(items or [])})
-    except PermissionError as e:
-        return jsonify({"error": str(e)}), 401
-    except urllib.error.HTTPError as e:
-        body = e.read().decode(errors="replace")
-        return jsonify({"error":"Microsoft OneNote notebooks failed", "status": e.code, "detail": body[:1000]}), e.code
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    return _ONENOTE_SERVICE.notebooks()
 
 @app.route("/onenote/sections", methods=["GET"])
 def onenote_sections():
-    """List sections globally or within one notebook for the picker UI."""
-    notebook_id = str(request.args.get("notebook_id") or "").strip()
-    try:
-        top = max(1, min(int(request.args.get("top") or 200), 200))
-    except Exception:
-        top = 200
-    if notebook_id:
-        path = "me/onenote/notebooks/{}/sections".format(_onenote_graph_id(notebook_id))
-    else:
-        path = "me/onenote/sections"
-    params = {"$select":"id,displayName,createdDateTime,lastModifiedDateTime,parentNotebook,links,pagesUrl", "$orderby":"displayName", "$top": str(top)}
-    try:
-        d = _ms_graph_json(path, params=params, timeout=25)
-        items = d.get("value") if isinstance(d, dict) else []
-        return jsonify({"items": items or [], "raw_count": len(items or []), "notebook_id": notebook_id})
-    except PermissionError as e:
-        return jsonify({"error": str(e)}), 401
-    except urllib.error.HTTPError as e:
-        body = e.read().decode(errors="replace")
-        return jsonify({"error":"Microsoft OneNote sections failed", "status": e.code, "detail": body[:1000]}), e.code
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    return _ONENOTE_SERVICE.sections()
 
-def _onenote_list_section_pages(section_id, top=50, search="", date_from_iso="", date_to_iso="", date_mode="created"):
-    top = max(1, min(int(top or 50), 100))
-    fetch_top = min(200, max(top, 200 if (date_from_iso or date_to_iso or search) else top))
-    params = {"$select":"id,title,createdDateTime,lastModifiedDateTime,links", "$orderby":"lastModifiedDateTime desc", "$top": str(fetch_top)}
-    path = "me/onenote/sections/{}/pages".format(_onenote_graph_id(section_id))
-    d = _ms_graph_json(path, params=params, timeout=25)
-    items = (d.get("value") if isinstance(d, dict) else []) or []
-    items = _onenote_date_filtered_items(items, date_from_iso, date_to_iso, date_mode)
-    items = _onenote_text_search_items(items, search)
-    return items[:top], len(items)
 
-def _onenote_get_all_notebooks_and_sections(limit=200):
-    notebooks, sections = [], []
-    try:
-        d = _ms_graph_json("me/onenote/notebooks", params={"$select":"id,displayName,createdDateTime,lastModifiedDateTime,links", "$orderby":"displayName", "$top":"100"}, timeout=25)
-        notebooks = (d.get("value") if isinstance(d, dict) else []) or []
-    except Exception:
-        notebooks = []
-    seen = set()
-    for nb in notebooks:
-        nbid = str((nb or {}).get("id") or "").strip()
-        if not nbid:
-            continue
-        try:
-            path = "me/onenote/notebooks/{}/sections".format(_onenote_graph_id(nbid))
-            d = _ms_graph_json(path, params={"$select":"id,displayName,createdDateTime,lastModifiedDateTime,parentNotebook,links,pagesUrl", "$orderby":"displayName", "$top":str(limit)}, timeout=25)
-            for sec in ((d.get("value") if isinstance(d, dict) else []) or []):
-                sid = str((sec or {}).get("id") or "")
-                if sid and sid not in seen:
-                    sec["_parentNotebookName"] = nb.get("displayName", "")
-                    seen.add(sid); sections.append(sec)
-        except Exception:
-            continue
-    if not sections:
-        try:
-            d = _ms_graph_json("me/onenote/sections", params={"$select":"id,displayName,createdDateTime,lastModifiedDateTime,parentNotebook,links,pagesUrl", "$orderby":"displayName", "$top":str(limit)}, timeout=25)
-            sections = (d.get("value") if isinstance(d, dict) else []) or []
-        except Exception:
-            sections = []
-    return notebooks, sections
 
 
 
 
 @app.route("/onenote/section_pages", methods=["GET"])
 def onenote_section_pages():
-    """List pages from a selected OneNote section, applying local search/date filters."""
-    section_id = str(request.args.get("section_id") or "").strip()
-    if not section_id:
-        return jsonify({"error":"Missing OneNote section id"}), 400
-    try:
-        top = max(1, min(int(request.args.get("top") or 50), 100))
-    except Exception:
-        top = 50
-    search = str(request.args.get("search") or "").strip()
-    date_from_iso = _onenote_parse_date_bound(request.args.get("date_from") or request.args.get("from"), end_of_day=False)
-    date_to_iso = _onenote_parse_date_bound(request.args.get("date_to") or request.args.get("to"), end_of_day=True)
-    date_mode = _onenote_normalize_date_mode(request.args.get("date_mode") or request.args.get("date_type") or request.args.get("mode"))
-    try:
-        items, raw_count = _onenote_list_section_pages(section_id, top, search, date_from_iso, date_to_iso, date_mode)
-        return jsonify({
-            "items": items,
-            "raw_count": raw_count,
-            "section_id": section_id,
-            "filters": {"search": search, "date_from": date_from_iso, "date_to": date_to_iso, "date_mode": date_mode, "requested_top": top},
-        })
-    except PermissionError as e:
-        return jsonify({"error": str(e)}), 401
-    except urllib.error.HTTPError as e:
-        body = e.read().decode(errors="replace")
-        return jsonify({"error":"Microsoft OneNote section pages failed", "status": e.code, "detail": body[:1000]}), e.code
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    return _ONENOTE_SERVICE.section_pages()
 
 
 
@@ -3859,173 +3741,22 @@ def onenote_manual_pages():
 
 @app.route("/onenote/import_selected", methods=["POST"])
 def onenote_import_selected():
-    """Import only explicitly selected OneNote pages to avoid duplicate JobAdder logging."""
-    data = request.get_json(silent=True) or {}
-    page_ids = data.get("page_ids") or data.get("ids") or []
-    meta_items = data.get("pages") or []
-    if not isinstance(page_ids, list):
-        page_ids = []
-    seen, clean_ids = set(), []
-    for raw in page_ids:
-        pid = str(raw or "").strip()
-        if pid and pid not in seen:
-            seen.add(pid); clean_ids.append(pid)
-    if not clean_ids:
-        return jsonify({"error":"No OneNote pages selected. Scan a section/manual link first, then tick at least one page."}), 400
-    clean_ids = clean_ids[:50]
-    meta = {}
-    if isinstance(meta_items, list):
-        for it in meta_items:
-            if isinstance(it, dict) and str(it.get("id") or "").strip():
-                meta[str(it.get("id")).strip()] = it
-    try:
-        pages, combined = [], []
-        for pid in clean_ids:
-            it = meta.get(pid) or {}
-            title = str(it.get("title") or it.get("displayName") or "Selected OneNote page")
-            source = str(it.get("_source") or "").lower()
-            try:
-                if source == "desktop" or str(pid).startswith("desktop:") or it.get("desktop_id"):
-                    text = _onenote_desktop_page_text(it.get("desktop_id") or pid)
-                    ct = "application/onenote-desktop+xml"
-                else:
-                    raw, ct = _ms_graph_bytes("me/onenote/pages/{}/content".format(_onenote_graph_id(pid)), timeout=25)
-                    text = _onenote_html_to_text(raw)
-            except Exception as inner:
-                text = "[Could not read OneNote page content: {}]".format(str(inner)[:200])
-                ct = ""
-            page = {
-                "id": pid,
-                "title": title,
-                "lastModifiedDateTime": it.get("lastModifiedDateTime", ""),
-                "createdDateTime": it.get("createdDateTime", ""),
-                "content_type": ct,
-                "source": source or ("desktop" if it.get("desktop_id") else "graph"),
-                "text": text,
-                "preview": text[:600],
-            }
-            pages.append(page)
-            if text:
-                combined.append("--- OneNote Page: {} ---\n{}".format(title, text))
-        return jsonify({"ok": True, "pages": pages, "combined_text": "\n\n".join(combined), "selected_count": len(clean_ids)})
-    except PermissionError as e:
-        return jsonify({"error": str(e)}), 401
-    except urllib.error.HTTPError as e:
-        body = e.read().decode(errors="replace")
-        return jsonify({"error":"Microsoft OneNote selected-page import failed", "status": e.code, "detail": body[:1000]}), e.code
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    return _ONENOTE_SERVICE.import_selected()
 
 @app.route("/onenote/pages", methods=["GET"])
 def onenote_pages():
-    try:
-        top = max(1, min(int(request.args.get("top") or 20), 50))
-    except Exception:
-        top = 20
-    search = str(request.args.get("search") or "").strip()
-    params = {"$select":"id,title,createdDateTime,lastModifiedDateTime,links", "$orderby":"lastModifiedDateTime desc", "$top": str(top)}
-    if search:
-        params["search"] = search[:120]
-    try:
-        d = _ms_graph_json("me/onenote/pages", params=params, timeout=25)
-        items = d.get("value") if isinstance(d, dict) else []
-        return jsonify({"items": items or [], "raw_count": len(items or [])})
-    except PermissionError as e:
-        return jsonify({"error": str(e)}), 401
-    except urllib.error.HTTPError as e:
-        body = e.read().decode(errors="replace")
-        return jsonify({"error":"Microsoft OneNote pages failed", "status": e.code, "detail": body[:1000]}), e.code
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    return _ONENOTE_SERVICE.pages()
 
 @app.route("/onenote/page_content", methods=["GET"])
 def onenote_page_content():
-    page_id = str(request.args.get("id") or "").strip()
-    if not page_id:
-        return jsonify({"error":"Missing OneNote page id"}), 400
-    try:
-        raw, content_type = _ms_graph_bytes("me/onenote/pages/{}/content".format(urllib.parse.quote(page_id, safe='')), timeout=25)
-        text = _onenote_html_to_text(raw)
-        return jsonify({"ok": True, "id": page_id, "content_type": content_type, "text": text})
-    except PermissionError as e:
-        return jsonify({"error": str(e)}), 401
-    except urllib.error.HTTPError as e:
-        body = e.read().decode(errors="replace")
-        return jsonify({"error":"Microsoft OneNote page content failed", "status": e.code, "detail": body[:1000]}), e.code
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    return _ONENOTE_SERVICE.page_content()
 
 
-def _onenote_parse_date_bound(value, end_of_day=False):
-    """Return a UTC-ish ISO timestamp string for YYYY-MM-DD/date-like input."""
-    raw = str(value or "").strip()
-    if not raw:
-        return ""
-    m = re.match(r"^(\d{4})-(\d{2})-(\d{2})", raw)
-    if not m:
-        return ""
-    suffix = "23:59:59Z" if end_of_day else "00:00:00Z"
-    return "{}-{}-{}T{}".format(m.group(1), m.group(2), m.group(3), suffix)
 
 
 @app.route("/onenote/import_recent", methods=["POST"])
 def onenote_import_recent():
-    data = request.get_json(silent=True) or {}
-    try:
-        top = max(1, min(int(data.get("top") or 10), 100))
-    except Exception:
-        top = 10
-    search = str(data.get("search") or "").strip()
-    date_from_iso = _onenote_parse_date_bound(data.get("date_from") or data.get("from"), end_of_day=False)
-    date_to_iso = _onenote_parse_date_bound(data.get("date_to") or data.get("to"), end_of_day=True)
-    date_mode = _onenote_normalize_date_mode(data.get("date_mode") or data.get("date_type") or "either")
-    try:
-        # v24.6.80: date/range scanning is intentionally filtered locally after
-        # reading recent OneNote pages. This avoids relying on Microsoft Graph
-        # OneNote $filter support, which can vary by tenant/client behavior.
-        fetch_top = max(top, 50 if (date_from_iso or date_to_iso) else top)
-        fetch_top = min(fetch_top, 100)
-        params = {"$select":"id,title,createdDateTime,lastModifiedDateTime", "$orderby":"lastModifiedDateTime desc", "$top": str(fetch_top)}
-        if search:
-            params["search"] = search[:120]
-        d = _ms_graph_json("me/onenote/pages", params=params, timeout=25)
-        raw_items = (d.get("value") if isinstance(d, dict) else []) or []
-        items = [it for it in raw_items if _onenote_page_in_date_range(it, date_from_iso, date_to_iso, date_mode)]
-        items = items[:top]
-        pages, combined = [], []
-        for it in items:
-            pid = str(it.get("id") or "")
-            if not pid:
-                continue
-            try:
-                raw = _ms_graph_bytes("me/onenote/pages/{}/content".format(urllib.parse.quote(pid, safe='')), timeout=25)[0]
-                text = _onenote_html_to_text(raw)
-            except Exception as inner:
-                text = "[Could not read OneNote page content: {}]".format(str(inner)[:200])
-            title = str(it.get("title") or "Untitled OneNote page")
-            pages.append({
-                "id": pid,
-                "title": title,
-                "lastModifiedDateTime": it.get("lastModifiedDateTime", ""),
-                "createdDateTime": it.get("createdDateTime", ""),
-                "text": text,
-                "preview": text[:600],
-            })
-            if text:
-                combined.append("--- OneNote Page: {} ---\n{}".format(title, text))
-        return jsonify({
-            "ok": True,
-            "pages": pages,
-            "combined_text": "\n\n".join(combined),
-            "filters": {"search": search, "date_from": date_from_iso, "date_to": date_to_iso, "date_mode": date_mode, "requested_top": top, "scanned_pages": len(raw_items)},
-        })
-    except PermissionError as e:
-        return jsonify({"error": str(e)}), 401
-    except urllib.error.HTTPError as e:
-        body = e.read().decode(errors="replace")
-        return jsonify({"error":"Microsoft OneNote import failed", "status": e.code, "detail": body[:1000]}), e.code
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    return _ONENOTE_SERVICE.import_recent()
 
 
 # ── OneNote → JobAdder Screening Call Notes ─────────────────────────
