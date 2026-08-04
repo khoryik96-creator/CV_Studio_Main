@@ -107,6 +107,7 @@
       updateLocalCurrency(prefix);
     }
     setOptions(el("rule_country"), countryNames, "Malaysia");
+    setOptions(el("viewCurrency"), currencies, "MYR");
   }
 
   function numberValue(id, scale = 1) {
@@ -195,7 +196,9 @@
     el("summaryNetDifference").textContent = formatMoney(comparison.net_annual_difference, comparison.reporting_currency);
     el("summaryEmployerDifference").textContent = formatMoney(comparison.employer_cost_difference, comparison.reporting_currency);
     el("summaryUplift").textContent = formatRate(comparison.net_uplift_rate);
-    el("analysisCurrency").textContent = comparison.reporting_currency;
+    if (el("viewCurrency").value !== comparison.reporting_currency) {
+      el("viewCurrency").value = comparison.reporting_currency;
+    }
     renderBars(data.scenario_a, data.scenario_b);
     el("analysisPanel").hidden = false;
   }
@@ -335,7 +338,9 @@
     });
     el(`${prefix}_reporting_currency`).addEventListener("change", () => {
       const other = prefix === "a" ? "b" : "a";
-      el(`${other}_reporting_currency`).value = el(`${prefix}_reporting_currency`).value;
+      const chosen = el(`${prefix}_reporting_currency`).value;
+      el(`${other}_reporting_currency`).value = chosen;
+      el("viewCurrency").value = chosen;
       scheduleCalculation();
     });
     document.querySelectorAll(`[id^="${prefix}_"]`).forEach((node) => {
@@ -375,6 +380,7 @@
       el(`${prefix}_fx_rate_override`).value = "";
       updateLocalCurrency(prefix);
     }
+    el("viewCurrency").value = "MYR";
     calculate();
   }
 
@@ -471,6 +477,14 @@
       updateVariableBonusControl("b");
       calculateButton.addEventListener("click", calculate);
       resetButton.addEventListener("click", resetSamples);
+      el("viewCurrency").addEventListener("change", () => {
+        // A single decision-view control drives the display currency for both
+        // scenarios, then recomputes with fresh FX.
+        const chosen = el("viewCurrency").value;
+        el("a_reporting_currency").value = chosen;
+        el("b_reporting_currency").value = chosen;
+        calculate();
+      });
       exportPdfButton.addEventListener("click", () => exportReport("pdf"));
       exportWordButton.addEventListener("click", () => exportReport("word"));
       rulesButton.addEventListener("click", () => { applyHostAiRoute(); rulesModal.showModal(); });
