@@ -51,6 +51,21 @@ class SalaryComparisonHostIntegrationTests(unittest.TestCase):
         self.assertIn('id="rule_api_key" type="hidden"', html)
         self.assertNotIn('id="rule_api_key" type="password"', html)
 
+    def test_salary_page_is_frameable_same_origin_only(self):
+        client = app.app.test_client()
+        salary = client.get("/salary-comparison/")
+        # The embedded page may be framed by the same-origin CV Studio shell.
+        self.assertEqual(salary.headers.get("X-Frame-Options"), "SAMEORIGIN")
+        self.assertEqual(
+            salary.headers.get("Content-Security-Policy"), "frame-ancestors 'self'"
+        )
+        # Every other route keeps the strict anti-clickjacking default.
+        index = client.get("/")
+        self.assertEqual(index.headers.get("X-Frame-Options"), "DENY")
+        self.assertEqual(
+            index.headers.get("Content-Security-Policy"), "frame-ancestors 'none'"
+        )
+
     def test_key_resolver_is_wired_into_the_blueprint(self):
         resolver = app.app.config.get("SALARY_COMPARISON_KEY_RESOLVER")
         self.assertTrue(callable(resolver))

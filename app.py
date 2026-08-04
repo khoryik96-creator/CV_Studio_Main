@@ -1097,8 +1097,15 @@ def _cvstudio_security_headers(response):
     request_id = _cvstudio_current_request_id()
     if request_id:
         response.headers.setdefault("X-CV-Studio-Request-ID", request_id)
-    response.headers.setdefault("Content-Security-Policy", "frame-ancestors 'none'")
-    response.headers.setdefault("X-Frame-Options", "DENY")
+    # The Salary Comparison page is embedded as a same-origin iframe inside the
+    # CV Studio shell, so it is allowed to be framed by this origin only; every
+    # other route keeps the strict anti-clickjacking default.
+    if request.path.startswith("/salary-comparison"):
+        response.headers.setdefault("Content-Security-Policy", "frame-ancestors 'self'")
+        response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    else:
+        response.headers.setdefault("Content-Security-Policy", "frame-ancestors 'none'")
+        response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("Referrer-Policy", "no-referrer")
     response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
