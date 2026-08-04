@@ -219,12 +219,68 @@ class OutlookServiceStorageTests(unittest.TestCase):
             svc._refresh_access_token(force=True)
 
 
+def _make_onenote_service(store_backend, token_response=None, request=None):
+    """Build a OneNoteGraphService with in-memory secure store + fake client."""
+    return mg.OneNoteGraphService(
+        jsonify=lambda payload: payload,
+        request_json=lambda: request or {},
+        token_response=token_response or (lambda req, tenant="common": {}),
+        secure_save=lambda service, record: (store_backend.__setitem__(service, dict(record)) or "backend_secure_store"),
+        secure_load=lambda service: dict(store_backend.get(service) or {}),
+        secure_delete=lambda service: store_backend.pop(service, None),
+        graph_client_factory=lambda token_provider, reconnect_handler: _FakeGraphClient(token_provider, reconnect_handler),
+    )
+
+
+class OneNoteGraphServiceTests(unittest.TestCase):
+    def test_empty_store_api_info_not_connected(self):
+        svc = _make_onenote_service({})
+        info = svc.api_info()
+        self.assertFalse(info["connected"])
+        self.assertEqual(info["storage"], "backend_secure_store")
+
+    def test_store_token_persists_to_secure_store(self):
+        backend = {}
+        svc = _make_onenote_service(backend, request={"access_token": "tok", "refresh_token": "ref", "client_id": "cid"})
+        result = svc.store_token()
+        self.assertTrue(result["connected"])
+        self.assertEqual(backend["onenote"]["access_token"], "tok")
+        self.assertTrue(svc.api_info()["connected"])
+
+    def test_disconnect_clears_store_and_secure_delete(self):
+        backend = {"onenote": {"access_token": "tok"}}
+        svc = _make_onenote_service(backend)
+        self.assertTrue(svc.api_info()["connected"])
+        result = svc.disconnect()
+        self.assertFalse(result["connected"])
+        self.assertNotIn("onenote", backend)
+        self.assertFalse(svc.api_info()["connected"])
+
+    def test_device_start_requires_client_id(self):
+        svc = _make_onenote_service({}, request={"client_id": "", "tenant": "common"})
+        payload, status = svc.device_start()
+        self.assertEqual(status, 400)
+        self.assertIn("client ID", payload["error"])
+
+    def test_refresh_without_credentials_is_noop(self):
+        # No refresh_token/client_id → returns the (empty) current token, no call.
+        svc = _make_onenote_service({})
+        self.assertEqual(svc._refresh_access_token(force=True), "")
+
+    def test_loads_existing_secure_store_on_construction(self):
+        backend = {"onenote": {"access_token": "persisted", "client_id": "cid"}}
+        svc = _make_onenote_service(backend)
+        self.assertTrue(svc.api_info()["connected"])
+        self.assertEqual(svc._store["access_token"], "persisted")
+
+
 class ModuleHygieneTests(unittest.TestCase):
     def test_module_does_not_import_app(self):
         self.assertNotIn("app", getattr(mg, "__dict__", {}))
 
-    def test_outlook_service_exposed(self):
+    def test_services_exposed(self):
         self.assertTrue(hasattr(mg, "OutlookService"))
+        self.assertTrue(hasattr(mg, "OneNoteGraphService"))
 
     def test_expected_symbols_present(self):
         for name in [

@@ -122,7 +122,7 @@ take domains in **non-overlapping `app.py` regions** and never share a branch.
 
 | Account | Domain | New module | app.py region | Branch prefix |
 |---------|--------|-----------|---------------|---------------|
-| **Einstein** | OneNote + Outlook / MS-Graph — service-module domain, extracted in slices. **Slice 1** = pure helpers (PR #41). **Slice 2** = the full Outlook service (`OutlookService`: token store, OS-vault/keychain/fallback lifecycle, MS-Graph calls, device-login sessions, draft idempotency cache + the 8 `/ppc/outlook/*` handlers). **Remaining:** the OneNote `/onenote/*` `_ms_graph_*` handlers. (PPC `cvstudio_ppc.py` landed in #40.) | `cvstudio_msgraph.py` | ~3,140–5,650 | `einstein/*` |
+| **Einstein** | OneNote + Outlook / MS-Graph — **domain wrapped.** Slice 1 = pure helpers (#41). Slice 2 = `OutlookService` (#43). Slice 3a = `OneNoteGraphService` connection layer + 6 `/onenote/*` conn handlers. The OneNote content handlers + `_onenote_desktop_*` COM cluster are deliberately left in the shell (low value / partly unverifiable — see backlog). | `cvstudio_msgraph.py` | ~3,120–5,650 | `einstein/*` |
 | **Claude** | Lead Finder enrichment — pure `_lead_*` URL/company/email/verification helpers | `cvstudio_lead_enrich.py` | ~16,200–19,300 | `claude/*` |
 
 Rules while both are active:
@@ -161,7 +161,7 @@ Prioritized backlog:
 |--------|--------|-------|-----------------|--------|
 | PPC (Post Placement Care) — `_ppc_*` placements only | ~21,660–21,850 | pure closure | Einstein | ✅ merged (#40); `/ppc/outlook/*` deferred to the OneNote + Outlook row |
 | Lead Finder enrichment (URL/company) | ~15,750–19,600 | pure closure | Claude | slice 1 merged/queued; more `_lead_*` slices remain |
-| **OneNote + Outlook / MS-Graph domain** → now just **OneNote** `/onenote/*` `_ms_graph_*` handlers (Graph + desktop-COM) | ~4,000–5,650 | service module | **Einstein** | CLAIMED — slice 1 (pure helpers, PR #41) + slice 2 (`OutlookService`, the 8 `/ppc/outlook/*` handlers, on `einstein/phase-7b-outlook-service`) done. OneNote handlers remain as slice 3. |
+| ~~OneNote content + desktop-COM~~ **(deliberately left in the web shell — low priority)** | ~3,600–5,650 | — | — | **Domain wrapped at the connection service.** Slices 1 (#41), 2 (`OutlookService`, #43), 3a (`OneNoteGraphService` connection layer + 6 conn handlers) done. The remaining `/onenote/*` content handlers are thin `_ms_graph_json`-alias wrappers whose extraction is mostly churn and needs extra straddling aliases (the `_onenote_list_*` helpers are shared with `manual_pages`); the `_onenote_desktop_*` cluster is Windows-only COM/PowerShell that CI/Linux cannot exercise at all. Net value is low and partly unverifiable, so leave them in `app.py`. The `_onenote_*` screening/clean helpers stay too (shared with candidate-import). Reopen only if the shell is being split for another reason. |
 | Spider / AI Crawler enrichment (`_spider_*`) | ~9,880–11,600 | pure closure | Claude (later) | ⚠️ has the .doc/OCR characterization-test minefield; tests-first is mandatory |
 | Core CV/AI pipeline pure helpers (`/parse`, `/generate-ai`, DOCX mapping) | ~15,300–21,600 | pure closure | either (last) | most sensitive; scope carefully, extract last |
 
