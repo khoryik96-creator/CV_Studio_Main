@@ -1570,11 +1570,23 @@ def call_llm(provider, api_key, payload_dict):
 from cvstudio_cv_normalize import (
     _CV_LANGUAGE_ALIASES,
     _CV_LANGUAGE_ALIAS_TO_STANDARD,
+    _CV_MONTH_NUMBER,
     _CV_REDACTED_LANGUAGE_RE,
+    _CV_ROLE_DENSE_MARKER_RE,
     _WORK_TABLE_DATE_RE,
     _canonical_cv_section_heading,
     _canonical_language_name,
+    _cv_combine_date_ranges,
+    _cv_date_parts,
+    _cv_date_sort_point,
     _cv_lang_alias_re,
+    _cv_match_key,
+    _cv_parse_backend_timeout_seconds,
+    _cv_plain_bullet_texts,
+    _cv_project_group_sort_key,
+    _cv_text_similarity,
+    _cv_token_overlap_score,
+    _cv_token_set,
     _language_evidence_text,
     _language_has_source_evidence,
     _normalize_candidate_language_value,
@@ -1760,17 +1772,6 @@ def _clean_candidate_languages_from_redaction(parsed, cv_text):
         parsed["candidate"] = cand
     return parsed
 
-_CV_ROLE_DENSE_MARKER_RE = re.compile(
-    r"^\s*(?:[ivxlcdm]+[.)]\s*)?(?:key\s+)?(?:responsibilit(?:y|ies)|achievements?)\s*:?\s*$",
-    re.I | re.M,
-)
-
-
-def _cv_parse_backend_timeout_seconds(cv_text):
-    """Return the bounded provider timeout for one CV parse request."""
-    text = str(cv_text or "")
-    is_long = len(text) >= 18000 or len(_CV_ROLE_DENSE_MARKER_RE.findall(text)) >= 8
-    return 300 if is_long else 180
 
 
 
@@ -1785,78 +1786,20 @@ def _cv_parse_backend_timeout_seconds(cv_text):
 
 
 
-def _cv_match_key(value):
-    return re.sub(r"[^a-z0-9]+", "", str(value or "").lower())
 
 
-def _cv_token_set(value):
-    stop = {"the", "and", "of", "a", "an", "company", "technologies", "technology", "solution", "solutions", "sdn", "bhd", "pte", "ltd", "pvt", "inc", "llc", "llp", "corp", "co"}
-    return {t for t in re.findall(r"[a-z0-9]+", str(value or "").lower()) if t and t not in stop}
 
 
-def _cv_token_overlap_score(a, b):
-    aa = _cv_token_set(a)
-    bb = _cv_token_set(b)
-    if not aa or not bb:
-        return 0.0
-    return len(aa & bb) / max(len(aa), len(bb))
 
 
-def _cv_date_parts(date_range):
-    text = _normalize_cv_date_range(date_range)
-    if not text:
-        return "", ""
-    parts = re.split(r"\s+to\s+", text, maxsplit=1, flags=re.I)
-    if len(parts) == 1:
-        return parts[0].strip(), ""
-    return parts[0].strip(), parts[1].strip()
 
 
-def _cv_combine_date_ranges(date_ranges):
-    """Combine role date ranges from newest-first source rows into one span."""
-    cleaned = [_normalize_cv_date_range(d) for d in (date_ranges or []) if str(d or "").strip()]
-    if not cleaned:
-        return ""
-    if len(cleaned) == 1:
-        return cleaned[0]
-    newest_start, newest_end = _cv_date_parts(cleaned[0])
-    oldest_start, oldest_end = _cv_date_parts(cleaned[-1])
-    end = newest_end or newest_start
-    start = oldest_start or newest_start
-    if not start:
-        return cleaned[0]
-    if not end:
-        end = "Present" if any("present" in d.lower() for d in cleaned) else (newest_end or newest_start)
-    return f"{start} to {end}".strip()
 
 
-_CV_MONTH_NUMBER = {
-    "jan": 1, "january": 1, "feb": 2, "february": 2,
-    "mar": 3, "march": 3, "apr": 4, "april": 4, "may": 5,
-    "jun": 6, "june": 6, "jul": 7, "july": 7, "aug": 8, "august": 8,
-    "sep": 9, "sept": 9, "september": 9, "oct": 10, "october": 10,
-    "nov": 11, "november": 11, "dec": 12, "december": 12,
-}
 
 
-def _cv_date_sort_point(value, end=False):
-    """Return a sortable (year, month) point from a CV date/range fragment."""
-    text = str(value or "").strip()
-    if not text:
-        return None
-    if re.search(r"\b(?:present|current|now|till\s*date|to\s*date)\b", text, re.I):
-        return (9999, 12)
-    matches = list(re.finditer(
-        r"\b(?:(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+)?(\d{4})\b",
-        text,
-        re.I,
-    ))
-    if not matches:
-        return None
-    match = matches[-1] if end else matches[0]
-    month_text = (match.group(1) or "").lower().rstrip(".")
-    month = _CV_MONTH_NUMBER.get(month_text, 12 if end else 1)
-    return (int(match.group(2)), month)
+
+
 
 
 def _order_same_company_roles_newest_first(parsed):
@@ -1918,28 +1861,8 @@ def _order_same_company_roles_newest_first(parsed):
     return parsed
 
 
-def _cv_plain_bullet_texts(items):
-    out = []
-    for item in items or []:
-        if isinstance(item, str):
-            out.append(item)
-        elif isinstance(item, dict):
-            for sub in item.get("bullets") or []:
-                if isinstance(sub, str):
-                    out.append(sub)
-    return out
 
 
-def _cv_text_similarity(a, b):
-    aa = re.sub(r"[^a-z0-9]+", " ", str(a or "").lower()).strip()
-    bb = re.sub(r"[^a-z0-9]+", " ", str(b or "").lower()).strip()
-    if not aa or not bb:
-        return 0.0
-    aset, bset = set(aa.split()), set(bb.split())
-    token_score = len(aset & bset) / max(len(aset), len(bset)) if aset and bset else 0.0
-    # Prefixes survive PDF line-wrap and punctuation differences particularly well.
-    prefix_score = 1.0 if aa[:55] == bb[:55] else 0.0
-    return max(token_score, prefix_score)
 
 
 def _extract_explicit_project_blocks(cv_text):
@@ -2031,19 +1954,6 @@ def _extract_explicit_project_blocks(cv_text):
     return blocks
 
 
-def _cv_project_group_sort_key(block):
-    """Chronological project order inside a role; broad ad-hoc work goes last."""
-    heading = str((block or {}).get("heading") or (block or {}).get("title") or "")
-    generic = bool(re.search(r"\b(?:ad[ -]?hoc|business proposals?|general support|ongoing support|various projects?)\b", heading, re.I))
-    duration = _normalize_cv_date_range((block or {}).get("duration") or "")
-    start_text, _ = _cv_date_parts(duration)
-    start = _cv_date_sort_point(start_text or duration, end=False)
-    # Known dated projects first in ascending order, then undated, then generic/ad-hoc.
-    if generic:
-        return (2, (9999, 12), int((block or {}).get("source_index") or 0))
-    if start:
-        return (0, start, int((block or {}).get("source_index") or 0))
-    return (1, (9998, 12), int((block or {}).get("source_index") or 0))
 
 
 def _restore_explicit_project_headings(parsed, cv_text):
