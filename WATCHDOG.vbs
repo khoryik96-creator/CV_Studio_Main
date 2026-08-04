@@ -57,7 +57,7 @@ Sub LaunchServer()
 End Sub
 
 Do
-  WScript.Sleep 45000
+  WScript.Sleep 15000
   Dim ident:ident=Trim(HttpGet(identityURL))
   If SameIdentity(ident) Then
     missed=0
