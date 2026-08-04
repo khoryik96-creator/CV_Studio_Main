@@ -9562,6 +9562,7 @@ async function fetchTheSpiderPreviewPayload(candidateId, controller, timeoutMs, 
   var query = '?candidate_id=' + encodeURIComponent(candidateId);
   if (options.prefetch) query += '&prefetch=1';
   if (options.validate) query += '&validate=1';
+  if (options.allowUnverified) query += '&allow_unverified=1';
   var timer = setTimeout(function(){ try { controller.abort(); } catch(e) {} }, Math.max(1000, Number(timeoutMs) || 45000));
   try {
     var r = await fetch('/jobadder/spider_candidate_preview' + query, {method:'GET',headers:{'X-AI-Crawler-Code':aiCrawlerLockPayload()},signal:controller.signal});
@@ -9569,6 +9570,8 @@ async function fetchTheSpiderPreviewPayload(candidateId, controller, timeoutMs, 
     if (!r.ok || d.error) {
       var previewErr = new Error(d.error || ('Preview failed: ' + r.status));
       previewErr.status = r.status;
+      previewErr.code = d.code || '';
+      previewErr.action = d.action || '';
       previewErr.needsReconnect = !!d.needs_reconnect || r.status === 401;
       previewErr.prefetchCancelled = !!d.prefetch_cancelled;
       throw previewErr;
@@ -10582,7 +10585,7 @@ async function openTheSpiderCandidatePreview(candidateId, idx, options) {
   try {
     var d;
     if (promotedPrefetch && !options.forceNetwork) d = await promotedPrefetch;
-    else d = await fetchTheSpiderPreviewPayload(candidateId, controller, 45000, {});
+    else d = await fetchTheSpiderPreviewPayload(candidateId, controller, 45000, {allowUnverified: !!options.allowUnverified});
     if (window._theSpiderPreviewRequestSeq !== requestSeq || window._theSpiderPreviewRequestedCandidateId !== String(candidateId || '')) return;
     putTheSpiderPreviewPayloadCache(candidateId, d, local);
     preloadTheSpiderPreviewImages(d, d.preview_partial ? 2 : 12);
@@ -10598,6 +10601,26 @@ async function openTheSpiderCandidatePreview(candidateId, idx, options) {
     if (!pane) return;
     pane.innerHTML = renderTheSpiderCandidatePreviewPane({source:'Preview unavailable', note:e.message || 'JobAdder preview failed', preview_text:localTheSpiderCandidatePreview(local)}, local);
     initializeTheSpiderPreviewFinder();
+    // Verified Antiword could not decode this legacy .doc. Offer an explicit,
+    // one-click native recovery (unverified) instead of forcing a manual convert.
+    if (e && Number(e.status) === 424 && (e.action === 'convert_to_docx_or_pdf' || e.code === 'LEGACY_DOC_EXTRACTION_FAILED') && !options.allowUnverified) {
+      try {
+        var recoverBar = document.createElement('div');
+        recoverBar.style.cssText = 'padding:10px 12px;border-top:1px solid #e2e8f0;';
+        var recoverBtn = document.createElement('button');
+        recoverBtn.className = 'btn';
+        recoverBtn.type = 'button';
+        recoverBtn.textContent = '↻ Recover text (unverified)';
+        recoverBtn.title = 'Extract this legacy .doc with the built-in parser. The text is not Antiword-verified — review before use.';
+        recoverBtn.onclick = function(){ openTheSpiderCandidatePreview(candidateId, idx, {forceNetwork:true, allowUnverified:true}); };
+        var recoverNote = document.createElement('div');
+        recoverNote.style.cssText = 'font-size:12px;color:#64748b;margin-top:6px;';
+        recoverNote.textContent = 'Antiword could not decode this .doc (often a Unicode-body Word file). Recover the text with the built-in parser — not verified, so review before use.';
+        recoverBar.appendChild(recoverBtn);
+        recoverBar.appendChild(recoverNote);
+        (pane.querySelector('.spider-cv-preview-empty') || pane).appendChild(recoverBar);
+      } catch(_recoverErr) {}
+    }
     showToast('AI Crawler preview unavailable: ' + (e.message || 'Unknown error'), 'err');
   } finally {
     if (window._theSpiderPreviewAbortController === controller) window._theSpiderPreviewAbortController = null;

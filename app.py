@@ -9106,6 +9106,92 @@ def _spider_extract_legacy_doc_text_for_preview(raw):
         "DOCX or PDF and retry.",
     )
 
+def _spider_recover_legacy_doc_text_unverified(raw):
+    """Best-effort native text recovery from a legacy OLE .doc.
+
+    Used ONLY behind an explicit opt-in when verified Antiword cannot decode a
+    document it should be able to (e.g. a Word 97 file whose body is stored as
+    UTF-16 Unicode). Parses the Word piece table (CLX) and decodes each piece as
+    compressed cp1252 or 16-bit UTF-16LE. Returns cleaned plain text or ''.
+
+    This output is NOT Antiword-verified: callers must label it accordingly and
+    must never cache or persist it as a verified legacy-.doc result. It cannot be
+    reached by the default extraction path and therefore does not weaken the
+    verified-Antiword guarantee.
+    """
+    raw = raw or b''
+    if not raw:
+        return ""
+    try:
+        import struct as _struct
+        import olefile as _olefile
+        ole = _olefile.OleFileIO(io.BytesIO(raw))
+    except Exception:
+        return ""
+    try:
+        if not ole.exists('WordDocument'):
+            return ""
+        word = ole.openstream('WordDocument').read()
+        if len(word) < 0x0200:
+            return ""
+        flags = _struct.unpack_from('<H', word, 0x0A)[0]
+        table_name = '1Table' if (flags & 0x0200) else '0Table'
+        if not ole.exists(table_name):
+            return ""
+        table = ole.openstream(table_name).read()
+        fc_clx = _struct.unpack_from('<I', word, 0x01A2)[0]
+        lcb_clx = _struct.unpack_from('<I', word, 0x01A6)[0]
+        if not lcb_clx or fc_clx >= len(table):
+            return ""
+        clx = table[fc_clx:fc_clx + lcb_clx]
+        pos = 0
+        pieces = []
+        while pos < len(clx):
+            b = clx[pos]
+            if b == 0x01 and pos + 3 <= len(clx):
+                cb = _struct.unpack_from('<H', clx, pos + 1)[0]
+                pos += 3 + cb
+                continue
+            if b != 0x02 or pos + 5 > len(clx):
+                pos += 1
+                continue
+            lcb = _struct.unpack_from('<I', clx, pos + 1)[0]
+            pcdt = clx[pos + 5:pos + 5 + lcb]
+            if len(pcdt) < 16:
+                break
+            n = (len(pcdt) - 4) // 12
+            if n <= 0:
+                break
+            cps = [_struct.unpack_from('<I', pcdt, i * 4)[0] for i in range(n + 1)]
+            base = 4 * (n + 1)
+            for i in range(n):
+                cp0, cp1 = cps[i], cps[i + 1]
+                if cp1 <= cp0:
+                    continue
+                off = base + (i * 8)
+                if off + 6 > len(pcdt):
+                    continue
+                fc_comp = _struct.unpack_from('<I', pcdt, off + 2)[0]
+                compressed = bool(fc_comp & 0x40000000)
+                fc = fc_comp & 0x3FFFFFFF
+                chars = cp1 - cp0
+                if compressed:
+                    piece = word[fc // 2:(fc // 2) + chars].decode('cp1252', errors='ignore')
+                else:
+                    piece = word[fc:fc + (chars * 2)].decode('utf-16-le', errors='ignore')
+                if piece:
+                    pieces.append(piece)
+            break
+        return _spider_clean_doc_text_for_preview(''.join(pieces))
+    except Exception:
+        return ""
+    finally:
+        try:
+            ole.close()
+        except Exception:
+            pass
+
+
 def _spider_tesseract_path():
     return _find_mandatory_tesseract(_CVSTUDIO_ROOT) or ""
 
@@ -9879,6 +9965,11 @@ def jobadder_spider_candidate_preview():
 
     prefetch_mode = str(request.args.get("prefetch") or "").strip().lower() in ("1", "true", "yes", "on")
     validate_only = str(request.args.get("validate") or "").strip().lower() in ("1", "true", "yes", "on")
+    # Opt-in only: recover text from a legacy .doc that verified Antiword cannot
+    # decode, using the in-process native parser. The recruiter must explicitly
+    # request it (the UI sends this after the verified path returns a decode
+    # failure); the recovered text is labelled unverified and never cached.
+    allow_unverified_doc = str(request.args.get("allow_unverified") or "").strip().lower() in ("1", "true", "yes", "on")
     background_generation = _spider_preview_background_generation()
     prefetch_job_id = ""
     prefetch_job_store = None
@@ -10002,7 +10093,27 @@ def jobadder_spider_candidate_preview():
         cancel_check()
         with _SPIDER_PREVIEW_RENDER_LOCK:
             cancel_check()
-            result = _spider_extract_text_from_download(raw, ctype, filename, cancel_check=cancel_check if prefetch_mode else None)
+            try:
+                result = _spider_extract_text_from_download(raw, ctype, filename, cancel_check=cancel_check if prefetch_mode else None)
+            except AntiwordDependencyError as exc:
+                # Default path is unchanged: re-raise so verified-Antiword failures
+                # still return 424. Only when the recruiter explicitly opted in do
+                # we recover the text natively for a legacy .doc the verified
+                # runtime could not decode, clearly labelled and never cached.
+                if (
+                    allow_unverified_doc
+                    and getattr(exc, "reason", "") == "document-extraction-failed"
+                    and _document_is_legacy_doc(raw, ctype, filename)
+                ):
+                    recovered = _spider_recover_legacy_doc_text_unverified(raw)
+                    if _spider_doc_text_quality_ok(recovered):
+                        cache_provenance["unverified_recovery"] = True
+                        cancel_check()
+                        return (
+                            recovered[:30000],
+                            "legacy .doc recovered without Antiword (unverified — review before use)",
+                        )
+                raise
             cancel_check()
             return result
 
@@ -10079,6 +10190,10 @@ def jobadder_spider_candidate_preview():
         return content_sha256, payload
 
     def cache_resume_text(raw, ctype, filename, text, source):
+        # Never persist unverified native-recovery text: it must not be served to
+        # a later request as if it were a verified legacy-.doc result.
+        if cache_provenance.get("unverified_recovery"):
+            return
         content_sha256 = _spider_download_content_identity(raw)
         content_kind = _document_content_kind(raw)
         if _document_is_legacy_doc(raw, ctype, filename):
