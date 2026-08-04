@@ -36,6 +36,38 @@
   focused review. Stop before release, merge, further extractions or unrelated
   work.
 
+## Phase 7B-6 Spider candidate data-shaping extraction
+
+- `cvstudio_spider_summary.py` is a new pure-helper module holding ten Spider
+  candidate data-shaping functions moved verbatim from `app.py`: numeric
+  coercion (`_spider_number`), salary/notice/card snapshots
+  (`_spider_salary_snapshot`, `_spider_notice_snapshot`, `_spider_card_fields`,
+  `_spider_custom_field_value`), record-identity keys
+  (`_spider_custom_record_key`, `_spider_work_record_key`), and the summary/detail
+  deep-merge (`_spider_merge_record_lists`, `_spider_merge_missing_json`,
+  `_spider_merge_candidate_summary_and_detail`).
+- The cluster is a clean pure closure: it depends only on the standard library
+  and the already-extracted `cvstudio_spider_boolean` (`_spider_flatten`,
+  `_spider_normalized_record_label`) — no Flask, app globals, network, or
+  provider access. `app.py` re-exports the ten names, so no caller changes and
+  the sealed route URL/method/endpoint SHA-256 is unchanged (pure-helper move,
+  no route touched).
+- The `spider_summary` module joins the acyclic module graph as a `domain`-layer
+  dependency of `spider_boolean` and of the legacy web shell. Registered in
+  `cvstudio_architecture.py`, `owner_build_tools/build_protected.py`, and the
+  Phase 7A foundation names tuple.
+- Behaviour preservation is proven by a new characterization net written before
+  the move (expected values captured from the original `app._spider_*`
+  functions) and green after it, plus a re-export identity assertion.
+- No new feature, route, schema, credential handling or release is included.
+  The remaining pure Spider cluster (JD-scoring / fit-term matching,
+  ~10,160–11,100) is a self-contained follow-up slice; the `.doc`/OCR cluster
+  stays in the shell.
+- Validation passed the full local Python suite (519 passed, 9 platform-gated
+  Antiword skips; the single pre-existing Antiword extraction failure is
+  Linux-only and reproduces byte-identically on master), including the module
+  graph and route-contract tests.
+
 ## v24.6.253 Phase 7B-5c JobAdder candidate JSON write extraction
 
 - Exact source baseline is merged Phase 7B-5b commit

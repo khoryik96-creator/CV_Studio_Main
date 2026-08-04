@@ -75,6 +75,7 @@ class Phase7AModularMonolithFoundationTests(unittest.TestCase):
                 "lead_match",
                 "lead_enrich",
                 "spider_boolean",
+                "spider_summary",
                 "blind_mask",
                 "ppc",
                 "msgraph",
