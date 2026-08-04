@@ -42,7 +42,7 @@ locally:
 
 ```bash
 python -m venv .venv_test
-.venv_test/bin/pip install flask pytest python-docx olefile reportlab beautifulsoup4 pypdf requests
+.venv_test/bin/pip install flask pytest python-docx olefile reportlab beautifulsoup4 pypdf requests openpyxl
 SALARY_COMPARISON_DATA_DIR=/tmp/sal/data .venv_test/bin/python -m pytest tests/ -q
 ```
 
@@ -161,7 +161,8 @@ Prioritized backlog:
 |--------|--------|-------|-----------------|--------|
 | PPC (Post Placement Care) — `_ppc_*` placements only | ~21,660–21,850 | pure closure | Einstein | ✅ merged (#40); `/ppc/outlook/*` deferred to the OneNote + Outlook row |
 | Lead Finder enrichment (URL/company) | ~15,750–19,600 | pure closure | Claude | slice 1 merged/queued; more `_lead_*` slices remain |
-| ~~OneNote content + desktop-COM~~ **(deliberately left in the web shell — low priority)** | ~3,600–5,650 | — | — | **Domain wrapped at the connection service.** Slices 1 (#41), 2 (`OutlookService`, #43), 3a (`OneNoteGraphService` connection layer + 6 conn handlers) done. The remaining `/onenote/*` content handlers are thin `_ms_graph_json`-alias wrappers whose extraction is mostly churn and needs extra straddling aliases (the `_onenote_list_*` helpers are shared with `manual_pages`); the `_onenote_desktop_*` cluster is Windows-only COM/PowerShell that CI/Linux cannot exercise at all. Net value is low and partly unverifiable, so leave them in `app.py`. The `_onenote_*` screening/clean helpers stay too (shared with candidate-import). Reopen only if the shell is being split for another reason. |
+| OneNote desktop-COM cluster → **`cvstudio_onenote_desktop.py`** (done) | ~3,585–4,251 | pure module (Windows COM, lazy-imported) | **Einstein** | Done — the 17 `_onenote_desktop_*` / `_onenote_com_error_label` / `_onenote_match_desktop_section_from_manual` helpers moved byte-for-byte into `cvstudio_onenote_desktop.py`; the `/onenote/desktop_*` + `manual_pages` route handlers stay in the shell and import them back (same pattern as `cvstudio_onenote_text`). Windows-only, so verified by compile + import + route contract only (no Linux behavioral coverage). |
+| OneNote Graph **content** handlers (notebooks/sections/pages/import) — remaining, **optional/low value** | ~3,440–4,670 | service methods | — | Thin `_ms_graph_json`-alias wrappers. Moving them into `OneNoteGraphService` is mostly churn + needs `request_args` injection and extra straddling aliases (`_onenote_list_*` shared with `manual_pages`), and does not retire the `_ms_graph_json` alias (external MS-status probe still uses it). Left in the shell unless the shell is being split for another reason. `_onenote_*` screening/clean helpers stay (shared with candidate-import). |
 | Spider / AI Crawler enrichment (`_spider_*`) | ~9,880–11,600 | pure closure | Claude (later) | ⚠️ has the .doc/OCR characterization-test minefield; tests-first is mandatory |
 | Core CV/AI pipeline pure helpers (`/parse`, `/generate-ai`, DOCX mapping) | ~15,300–21,600 | pure closure | either (last) | most sensitive; scope carefully, extract last |
 

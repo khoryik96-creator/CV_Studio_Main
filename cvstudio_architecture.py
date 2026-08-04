@@ -165,6 +165,11 @@ DEFAULT_MODULES = (
         ("cvstudio_msgraph.py",),
     ),
     ModuleDefinition(
+        "onenote_desktop",
+        "domain",
+        ("cvstudio_onenote_desktop.py",),
+    ),
+    ModuleDefinition(
         "salary_comparison",
         "interface",
         (
@@ -211,6 +216,7 @@ DEFAULT_MODULES = (
             "lead_match",
             "lead_enrich",
             "msgraph",
+            "onenote_desktop",
             "onenote_text",
             "outlook_crypto",
             "platform_dependencies",
