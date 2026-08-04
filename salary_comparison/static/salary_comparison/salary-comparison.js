@@ -5,6 +5,7 @@
   const notice = document.getElementById("globalNotice");
   const calculateButton = document.getElementById("calculateButton");
   const resetButton = document.getElementById("resetButton");
+  const clearButton = document.getElementById("clearButton");
   const rulesButton = document.getElementById("rulesButton");
   const exportPdfButton = document.getElementById("exportPdfButton");
   const exportExcelButton = document.getElementById("exportExcelButton");
@@ -322,8 +323,87 @@
   }
 
   function scheduleCalculation() {
+    saveInputs();
     clearTimeout(calculationTimer);
     calculationTimer = setTimeout(calculate, 650);
+  }
+
+  // ── Input persistence ──────────────────────────────────────────────────────
+  // Remember the last entered scenario inputs in same-origin localStorage so a
+  // reload restores them instead of snapping back to the sample defaults. The
+  // rules-modal fields (including any API key) are deliberately never persisted.
+  const INPUT_STORAGE_KEY = "cvstudio_salary_inputs_v1";
+
+  function persistableControls() {
+    const nodes = Array.from(
+      document.querySelectorAll(".scenario-card input, .scenario-card select")
+    );
+    const viewCurrency = el("viewCurrency");
+    if (viewCurrency) nodes.push(viewCurrency);
+    return nodes.filter((node) => node.id);
+  }
+
+  function saveInputs() {
+    try {
+      const data = {};
+      for (const node of persistableControls()) data[node.id] = node.value;
+      window.localStorage.setItem(INPUT_STORAGE_KEY, JSON.stringify(data));
+    } catch (error) {
+      /* Storage unavailable or full — persistence is best-effort, never fatal. */
+    }
+  }
+
+  function restoreInputs() {
+    let data;
+    try {
+      const raw = window.localStorage.getItem(INPUT_STORAGE_KEY);
+      if (!raw) return false;
+      data = JSON.parse(raw);
+    } catch (error) {
+      return false;
+    }
+    if (!data || typeof data !== "object") return false;
+    const has = (id) => Object.prototype.hasOwnProperty.call(data, id);
+    // Restore the country first so the tax-year options can be rebuilt for it
+    // before the saved year is applied.
+    for (const prefix of ["a", "b"]) {
+      if (has(`${prefix}_country`)) el(`${prefix}_country`).value = data[`${prefix}_country`];
+      updateLocalCurrency(prefix);
+      populateYear(prefix, has(`${prefix}_tax_year`) ? data[`${prefix}_tax_year`] : undefined);
+    }
+    // Restore every remaining control (country/tax_year already handled above).
+    for (const node of persistableControls()) {
+      if (node.id.endsWith("_country") || node.id.endsWith("_tax_year")) continue;
+      if (has(node.id)) node.value = data[node.id];
+    }
+    updateVariableBonusControl("a");
+    updateVariableBonusControl("b");
+    return true;
+  }
+
+  function clearInputs() {
+    for (const node of persistableControls()) {
+      if (node.tagName === "SELECT") {
+        node.selectedIndex = 0;
+      } else {
+        node.value = "";
+      }
+    }
+    // Persist the emptied state so a reload keeps it cleared instead of snapping
+    // back to the built-in field defaults. "Reset sample" repopulates the sample.
+    saveInputs();
+    for (const prefix of ["a", "b"]) {
+      updateLocalCurrency(prefix);
+      updateVariableBonusControl(prefix);
+      const container = el(`${prefix}_results`);
+      container.querySelectorAll("[data-key]").forEach((node) => { node.textContent = "—"; });
+      el(`${prefix}_fx_note`).textContent = "FX will be loaded automatically.";
+      const status = el(`${prefix}_status`);
+      status.textContent = "Not calculated";
+      status.className = "status-pill neutral";
+    }
+    el("analysisPanel").hidden = true;
+    setNotice("All inputs cleared. Enter new values to compare.", "success");
   }
 
   function bindScenario(prefix) {
@@ -381,6 +461,7 @@
       updateLocalCurrency(prefix);
     }
     el("viewCurrency").value = "MYR";
+    saveInputs();
     calculate();
   }
 
@@ -475,14 +556,18 @@
       bindScenario("b");
       updateVariableBonusControl("a");
       updateVariableBonusControl("b");
+      // Restore the last entered inputs (if any) over the sample defaults.
+      restoreInputs();
       calculateButton.addEventListener("click", calculate);
       resetButton.addEventListener("click", resetSamples);
+      if (clearButton) clearButton.addEventListener("click", clearInputs);
       el("viewCurrency").addEventListener("change", () => {
         // A single decision-view control drives the display currency for both
         // scenarios, then recomputes with fresh FX.
         const chosen = el("viewCurrency").value;
         el("a_reporting_currency").value = chosen;
         el("b_reporting_currency").value = chosen;
+        saveInputs();
         calculate();
       });
       exportPdfButton.addEventListener("click", () => exportReport("pdf"));
