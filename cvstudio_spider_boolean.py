@@ -800,3 +800,167 @@ def _spider_candidate_id(candidate):
         elif val:
             return str(val)
     return ""
+
+
+_SPIDER_COUNTRY_DEFINITIONS = {
+    "malaysia": {
+        "names": ["malaysia"], "codes": ["MY", "MYS"],
+        "places": [
+            "kuala lumpur", "labuan", "putrajaya", "johor", "kedah", "kelantan", "melaka", "malacca",
+            "negeri sembilan", "pahang", "penang", "pulau pinang", "perak", "perlis", "sabah", "sarawak",
+            "selangor", "terengganu", "johor bahru", "iskandar puteri", "alor setar", "sungai petani",
+            "kota bharu", "seremban", "nilai", "kuantan", "george town", "georgetown", "butterworth",
+            "bayan lepas", "ipoh", "kangar", "kota kinabalu", "sandakan", "tawau", "kuching", "miri",
+            "sibu", "bintulu", "shah alam", "petaling jaya", "subang jaya", "klang", "cyberjaya",
+            "kajang", "bangi", "kuala terengganu",
+        ],
+    },
+    "singapore": {"names": ["singapore"], "codes": ["SG", "SGP"], "places": ["singapore"]},
+    "indonesia": {
+        "names": ["indonesia"], "codes": ["ID", "IDN"],
+        "places": ["jakarta", "bandung", "surabaya", "medan", "semarang", "yogyakarta", "jogjakarta", "bali", "denpasar", "bekasi", "tangerang"],
+    },
+    "philippines": {
+        "names": ["philippines", "the philippines"], "codes": ["PH", "PHL"],
+        "places": ["manila", "metro manila", "makati", "taguig", "quezon city", "pasig", "cebu", "davao", "calabarzon"],
+    },
+    "brunei": {"names": ["brunei", "brunei darussalam"], "codes": ["BN", "BRN"], "places": ["bandar seri begawan", "kuala belait", "seria"]},
+    "india": {
+        "names": ["india"], "codes": ["IN", "IND"],
+        "places": ["bengaluru", "bangalore", "mumbai", "new delhi", "delhi", "hyderabad", "pune", "chennai", "kolkata", "gurugram", "gurgaon", "noida"],
+    },
+    "thailand": {"names": ["thailand"], "codes": ["TH", "THA"], "places": ["bangkok", "chiang mai", "phuket", "chonburi"]},
+    "vietnam": {"names": ["vietnam", "viet nam"], "codes": ["VN", "VNM"], "places": ["ho chi minh city", "saigon", "hanoi", "da nang"]},
+    "cambodia": {"names": ["cambodia"], "codes": ["KH", "KHM"], "places": ["phnom penh", "siem reap"]},
+    "laos": {"names": ["laos", "lao pdr"], "codes": ["LA", "LAO"], "places": ["vientiane"]},
+    "myanmar": {"names": ["myanmar", "burma"], "codes": ["MM", "MMR"], "places": ["yangon", "mandalay"]},
+    "china": {"names": ["china", "mainland china"], "codes": ["CN", "CHN"], "places": ["beijing", "shanghai", "shenzhen", "guangzhou", "hangzhou"]},
+    "hong kong": {"names": ["hong kong", "hong kong sar"], "codes": ["HK", "HKG"], "places": ["hong kong"]},
+    "taiwan": {"names": ["taiwan"], "codes": ["TW", "TWN"], "places": ["taipei", "kaohsiung", "taichung"]},
+    "japan": {"names": ["japan"], "codes": ["JP", "JPN"], "places": ["tokyo", "osaka", "yokohama", "nagoya"]},
+    "south korea": {"names": ["south korea", "korea, republic of", "republic of korea"], "codes": ["KR", "KOR"], "places": ["seoul", "busan", "incheon"]},
+    "australia": {"names": ["australia"], "codes": ["AU", "AUS"], "places": ["sydney", "melbourne", "brisbane", "perth", "adelaide", "canberra"]},
+    "new zealand": {"names": ["new zealand"], "codes": ["NZ", "NZL"], "places": ["auckland", "wellington", "christchurch"]},
+    "united arab emirates": {"names": ["united arab emirates", "uae"], "codes": ["AE", "ARE"], "places": ["dubai", "abu dhabi", "sharjah"]},
+    "united kingdom": {"names": ["united kingdom", "uk", "great britain"], "codes": ["GB", "GBR"], "places": ["london", "manchester", "birmingham", "edinburgh"]},
+    "united states": {"names": ["united states", "united states of america", "usa", "u.s.a."], "codes": ["US", "USA"], "places": ["new york", "san francisco", "los angeles", "seattle", "chicago", "boston"]},
+}
+
+_SPIDER_COUNTRY_NAME_LOOKUP = {}
+_SPIDER_COUNTRY_CODE_LOOKUP = {}
+for _spider_country_key, _spider_country_def in _SPIDER_COUNTRY_DEFINITIONS.items():
+    _SPIDER_COUNTRY_NAME_LOOKUP[_spider_country_key] = _spider_country_key
+    for _spider_country_name in _spider_country_def.get("names", []):
+        _SPIDER_COUNTRY_NAME_LOOKUP[str(_spider_country_name).strip().lower()] = _spider_country_key
+    for _spider_country_code in _spider_country_def.get("codes", []):
+        _SPIDER_COUNTRY_CODE_LOOKUP[str(_spider_country_code).strip().upper()] = _spider_country_key
+
+
+
+
+
+
+def _spider_country_profile(country):
+    raw = re.sub(r"\s+", " ", str(country or "")).strip()
+    low = raw.lower()
+    if not low or low == "any":
+        return None
+    canonical = _SPIDER_COUNTRY_NAME_LOOKUP.get(low) or _SPIDER_COUNTRY_CODE_LOOKUP.get(raw.upper())
+    if canonical:
+        data = _SPIDER_COUNTRY_DEFINITIONS[canonical]
+        return {
+            "canonical": canonical,
+            "names": list(data.get("names") or [canonical]),
+            "codes": {str(x).upper() for x in data.get("codes", [])},
+            "places": list(data.get("places") or []),
+        }
+    return {"canonical": low, "names": [raw], "codes": set(), "places": []}
+
+
+def _spider_country_aliases(country):
+    profile = _spider_country_profile(country)
+    if not profile:
+        return []
+    return list(profile.get("names") or []) + list(profile.get("places") or [])
+
+
+def _spider_location_identity(candidate):
+    """Return explicit country codes/names and broader city/state/address text."""
+    codes, country_values, location_values = set(), [], []
+    code_keys = {"countrycode", "countryiso", "countryiso2", "countryiso3", "isocountrycode", "countryidcode"}
+    country_keys = {"country", "countryname"}
+    location_keys = {"location", "address", "city", "state", "province", "suburb", "region", "town"}
+
+    def add_text(bucket, value, depth):
+        for part in _spider_flatten(value, depth + 1):
+            part = re.sub(r"\s+", " ", str(part or "")).strip()
+            if part:
+                bucket.append(part)
+
+    def add_codes(value, depth):
+        for part in _spider_flatten(value, depth + 1):
+            for token in re.findall(r"(?<![A-Za-z])([A-Za-z]{2,3})(?![A-Za-z])", str(part or "")):
+                up = token.upper()
+                if up in _SPIDER_COUNTRY_CODE_LOOKUP:
+                    codes.add(up)
+
+    def walk(obj, depth=0):
+        if obj is None or depth > 6:
+            return
+        if isinstance(obj, dict):
+            for key, value in list(obj.items())[:160]:
+                norm = re.sub(r"[^a-z0-9]", "", str(key).lower())
+                if norm in code_keys:
+                    add_codes(value, depth)
+                if norm in country_keys:
+                    add_text(country_values, value, depth)
+                    add_codes(value, depth)
+                if norm in location_keys:
+                    add_text(location_values, value, depth)
+                walk(value, depth + 1)
+        elif isinstance(obj, list):
+            for value in obj[:100]:
+                walk(value, depth + 1)
+
+    walk(candidate)
+    return codes, re.sub(r"\s+", " ", " ".join(country_values)).strip()[:3000], re.sub(r"\s+", " ", " ".join(location_values)).strip()[:6000]
+
+
+def _spider_country_match(candidate, country):
+    """Return (match|mismatch|unknown, evidence) using codes before place inference."""
+    target = _spider_country_profile(country)
+    if not target:
+        return "match", ""
+    codes, explicit_country, location_text = _spider_location_identity(candidate)
+    target_codes = set(target.get("codes") or set())
+    if codes and target_codes.intersection(codes):
+        return "match", "country code " + sorted(target_codes.intersection(codes))[0]
+    recognized_code_countries = {_SPIDER_COUNTRY_CODE_LOOKUP[c] for c in codes if c in _SPIDER_COUNTRY_CODE_LOOKUP}
+    if recognized_code_countries and target.get("canonical") not in recognized_code_countries:
+        return "mismatch", "country code " + ", ".join(sorted(codes))
+
+    # Explicit country names outrank city/state inference.
+    if _spider_has_any(explicit_country, target.get("names")):
+        return "match", explicit_country[:120]
+    for canonical, definition in _SPIDER_COUNTRY_DEFINITIONS.items():
+        if canonical == target.get("canonical"):
+            continue
+        if _spider_has_any(explicit_country, definition.get("names")):
+            return "mismatch", explicit_country[:120]
+
+    if _spider_has_any(location_text, target.get("names")):
+        return "match", location_text[:120]
+    for canonical, definition in _SPIDER_COUNTRY_DEFINITIONS.items():
+        if canonical == target.get("canonical"):
+            continue
+        if _spider_has_any(location_text, definition.get("names")):
+            return "mismatch", location_text[:120]
+
+    if _spider_has_any(location_text, target.get("places")):
+        return "match", location_text[:120]
+    for canonical, definition in _SPIDER_COUNTRY_DEFINITIONS.items():
+        if canonical == target.get("canonical"):
+            continue
+        if _spider_has_any(location_text, definition.get("places")):
+            return "mismatch", location_text[:120]
+    return "unknown", (explicit_country or location_text)[:120]
