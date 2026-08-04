@@ -75,21 +75,21 @@ def test_simulated_pdf_export_route(monkeypatch):
     assert "/" not in result["download_name"]
 
 
-def test_simulated_word_export_route(monkeypatch):
+def test_simulated_excel_export_route(monkeypatch):
     routes, fake_request = _load_routes_with_fake_flask(monkeypatch)
     fake_request.get_json = lambda force=True: {"scenario_a": {}, "scenario_b": {}}
     monkeypatch.setattr(routes, "_calculate_comparison", lambda payload: _stub_calculation())
-    monkeypatch.setattr(routes, "build_docx_report", lambda *args: b"PK-test")
-    result = routes.export_api("word")
+    monkeypatch.setattr(routes, "build_xlsx_report", lambda *args: b"PK-test")
+    result = routes.export_api("excel")
     assert result["content"] == b"PK-test"
-    assert result["mimetype"].endswith("wordprocessingml.document")
-    assert result["download_name"].endswith(".docx")
+    assert result["mimetype"].endswith("spreadsheetml.sheet")
+    assert result["download_name"].endswith(".xlsx")
 
 
 def test_simulated_export_route_rejects_unknown_format(monkeypatch):
     routes, fake_request = _load_routes_with_fake_flask(monkeypatch)
     fake_request.get_json = lambda force=True: {"scenario_a": {}, "scenario_b": {}}
     monkeypatch.setattr(routes, "_calculate_comparison", lambda payload: _stub_calculation())
-    response, status = routes.export_api("xlsx")
+    response, status = routes.export_api("csv")
     assert status == 400
-    assert "PDF or Word" in response["error"]
+    assert "PDF or Excel" in response["error"]

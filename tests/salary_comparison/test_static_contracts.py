@@ -35,7 +35,7 @@ def test_all_literal_dom_ids_referenced_by_js_exist_in_template():
 def test_required_export_and_bonus_controls_exist():
     html = HTML.read_text(encoding="utf-8")
     for text in [
-        "Export PDF", "Export Word", "Sign-On Bonus", "Percentage of annual base",
+        "Export PDF", "Export Excel", "Sign-On Bonus", "Percentage of annual base",
         "Months of monthly base", "Gross monthly", "Net monthly", "Total Gross plus Employer EPF",
     ]:
         assert text in html

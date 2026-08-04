@@ -9,7 +9,7 @@ from io import BytesIO
 from pathlib import Path
 
 import pytest
-from docx import Document
+from openpyxl import load_workbook
 from pypdf import PdfReader
 
 from salary_comparison.ai_rule_updater import (
@@ -22,7 +22,7 @@ from salary_comparison.ai_rule_updater import (
     preview_rule_update,
 )
 from salary_comparison.calculator import CalculationError, calculate_scenario, marginal_tax_rate, progressive_tax
-from salary_comparison.exporter import build_docx_report, build_pdf_report, safe_filename
+from salary_comparison.exporter import build_pdf_report, build_xlsx_report, safe_filename
 from salary_comparison.fx_service import FxService, FxServiceError
 from salary_comparison.repository import JsonRuleRepository, RuleRepositoryError
 from salary_comparison.validators import RuleValidationError, validate_rule
@@ -352,14 +352,20 @@ def _report_args(malaysia_rule):
 def test_exports_remove_invalid_xml_control_characters(malaysia_rule):
     args = _report_args(malaysia_rule)
     pdf = build_pdf_report(*args)
-    docx = build_docx_report(*args)
+    xlsx = build_xlsx_report(*args)
     assert pdf.startswith(b"%PDF")
-    assert docx.startswith(b"PK")
+    assert xlsx.startswith(b"PK")
     pdf_text = "\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(pdf)).pages)
-    doc = Document(BytesIO(docx))
-    word_text = "\n".join(node.text or "" for node in doc.element.xpath(".//w:t"))
+    workbook = load_workbook(BytesIO(xlsx))
+    excel_text = "\n".join(
+        str(cell.value)
+        for sheet in workbook.worksheets
+        for row in sheet.iter_rows()
+        for cell in row
+        if cell.value is not None
+    )
     assert "Current <Role> & Package" in pdf_text
-    assert "Current <Role> & Package" in word_text
+    assert "Current <Role> & Package" in excel_text
 
 
 def test_safe_filename_handles_windows_reserved_names():

@@ -5,14 +5,18 @@
 // back online triggers an immediate re-check instead of waiting for the next
 // interval — the banner recovers on its own without a manual reload.
 (function () {
-  var _serverLost   = false;
-  var _banner       = null;
-  var _missedPings  = 0;
-  var _reloadQueued = false;
-  var _lastPingAt   = 0;
-  var PING_INTERVAL  = 20000;   // ping every 20s
-  var MISS_THRESHOLD = 4;       // 4 missed pings (~80s) before showing banner
-  var FETCH_TIMEOUT  = 8000;    // give up on a stuck request after 8s
+  var _serverLost      = false;
+  var _banner          = null;
+  var _missedPings     = 0;
+  var _reloadQueued    = false;
+  var _lastPingAt      = 0;
+  var _recoverTimer    = null;
+  var _recoverAttempts = 0;
+  var PING_INTERVAL     = 20000;  // steady-state: ping every 20s (idle cost unchanged)
+  var RECOVER_INTERVAL  = 2500;   // once a ping is missed, poll fast until healthy again
+  var RECOVER_MAX_TRIES = 48;     // cap the fast burst at ~2 min, then fall back to slow
+  var MISS_THRESHOLD    = 4;      // consecutive misses before showing the banner
+  var FETCH_TIMEOUT     = 8000;   // give up on a stuck request after 8s
 
   function timedFetch(url, options) {
     options = options || {};
@@ -91,6 +95,27 @@
     if (_banner) { _banner.remove(); _banner = null; }
   }
 
+  // While the connection looks lost, poll quickly — a short burst, not a
+  // permanent fast interval — so recovery happens within a couple of seconds
+  // instead of waiting out the 20s cadence. The burst stops the instant a ping
+  // succeeds, and self-caps after ~2 minutes so a server that stays down does
+  // not leave a 2.5s loop pinned forever; a later wake/focus event restarts it.
+  function startFastRecovery() {
+    if (_recoverTimer || _reloadQueued) return;
+    _recoverAttempts = 0;
+    _recoverTimer = setInterval(function () {
+      if (_reloadQueued) { stopFastRecovery(); return; }
+      _recoverAttempts++;
+      if (_recoverAttempts > RECOVER_MAX_TRIES) { stopFastRecovery(); return; }
+      ping();
+    }, RECOVER_INTERVAL);
+  }
+
+  function stopFastRecovery() {
+    if (_recoverTimer) { clearInterval(_recoverTimer); _recoverTimer = null; }
+    _recoverAttempts = 0;
+  }
+
   function ping() {
     _lastPingAt = Date.now();
     timedFetch("/heartbeat", { method: "POST" })
@@ -103,15 +128,22 @@
             _serverLost   = false;
             _missedPings  = 0;
             _reloadQueued = true;
+            stopFastRecovery();
             showReconnectBanner(true);
             setTimeout(function () { location.reload(); }, 1500);
           } else {
+            // Healthy ping — clear any miss streak and end the fast burst.
             _missedPings = 0;
+            stopFastRecovery();
           }
         }
       })
       .catch(function () {
         _missedPings++;
+        // A missed ping is the first sign of trouble; start polling fast right
+        // away so we notice recovery in ~2.5s rather than up to 20s. This burst
+        // costs nothing at idle — it only runs while a ping is actually failing.
+        startFastRecovery();
         // Only flag as lost after MISS_THRESHOLD consecutive misses (avoid a
         // single blip from a slow request or a momentary background throttle).
         if (_missedPings >= MISS_THRESHOLD && !_serverLost) {

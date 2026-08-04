@@ -7,13 +7,9 @@ from io import BytesIO
 from typing import Any, Mapping
 from xml.sax.saxutils import escape as xml_escape
 
-from docx import Document
-from docx.enum.section import WD_ORIENT
-from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.oxml import OxmlElement
-from docx.oxml.ns import qn
-from docx.shared import Inches, Pt, RGBColor
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.utils import get_column_letter
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4, landscape
@@ -147,7 +143,8 @@ def _result_rows(result: Mapping[str, Any]) -> list[tuple[str, str]]:
         ("Sign-On Bonus", _money(result.get("sign_on_bonus", result.get("fixed_annual_bonus", 0)), currency)),
         ("Variable performance bonus", _money(result["variable_bonus"], currency)),
         ("Other taxable income", _money(result["other_taxable_income"], currency)),
-        ("Gross annual cash", _money(result["gross_annual_cash"], currency)),
+        ("Gross annual cash (incl. variable bonus)", _money(result["gross_annual_cash"], currency)),
+        ("Gross annual cash (excl. variable bonus)", _money(result["gross_annual_cash_ex_variable"], currency)),
         ("Gross monthly cash", _money(result["gross_monthly_cash"], currency)),
         ("Contribution base", _money(result["contribution_base"], currency)),
         ("Employee contribution rate", _rate(result["employee_contribution_rate"])),
@@ -157,7 +154,8 @@ def _result_rows(result: Mapping[str, Any]) -> list[tuple[str, str]]:
         ("Taxable income", _money(result["taxable_income"], currency)),
         ("Estimated income tax", _money(result["estimated_income_tax"], currency)),
         ("Marginal income tax rate", _rate(result["marginal_income_tax_rate"])),
-        ("Net annual cash", _money(result["net_annual_cash"], currency)),
+        ("Net annual cash (incl. variable bonus)", _money(result["net_annual_cash"], currency)),
+        ("Net annual cash (excl. variable bonus)", _money(result["net_annual_cash_ex_variable"], currency)),
         ("Net monthly cash", _money(result["net_monthly_cash"], currency)),
         ("Total Gross plus Employer EPF", _money(result["total_employer_cost"], currency)),
         ("Effective tax rate on gross", _rate(result["effective_income_tax_rate"])),
@@ -185,58 +183,98 @@ def _rule_note(result: Mapping[str, Any]) -> str:
     return _clean_text(f"Rule status: {tax_status}; {contribution_status}; last updated {updated}.")
 
 
-def _set_cell_shading(cell, fill: str) -> None:
-    tc_pr = cell._tc.get_or_add_tcPr()
-    shd = tc_pr.find(qn("w:shd"))
-    if shd is None:
-        shd = OxmlElement("w:shd")
-        tc_pr.append(shd)
-    shd.set(qn("w:fill"), fill)
+# ── Excel workbook export ────────────────────────────────────────────────────
+# Colours mirror the PDF report. openpyxl fills use eight-digit ARGB values, so
+# the shared six-digit hex constants are prefixed with an opaque alpha channel.
+_XLSX_NAVY = f"FF{NAVY}"
+_XLSX_BLUE = f"FF{BLUE}"
+_XLSX_PALE_BLUE = f"FF{PALE_BLUE}"
+_XLSX_PALE_GREEN = f"FF{PALE_GREEN}"
+_XLSX_PALE_GREY = f"FF{PALE_GREY}"
+_XLSX_MID_GREY = f"FF{MID_GREY}"
+_XLSX_DARK_GREY = f"FF{DARK_GREY}"
+_XLSX_WHITE = "FFFFFFFF"
+
+_XLSX_THIN = Side(style="thin", color=_XLSX_MID_GREY)
+_XLSX_BORDER = Border(left=_XLSX_THIN, right=_XLSX_THIN, top=_XLSX_THIN, bottom=_XLSX_THIN)
+_XLSX_LEFT = Alignment(horizontal="left", vertical="center", wrap_text=True)
+_XLSX_RIGHT = Alignment(horizontal="right", vertical="center", wrap_text=True)
 
 
-def _set_cell_text(cell, text: str, *, bold: bool = False, color: str = DARK_GREY, size: float = 9) -> None:
-    text = _clean_text(text)
-    cell.text = ""
-    paragraph = cell.paragraphs[0]
-    paragraph.paragraph_format.space_after = Pt(0)
-    run = paragraph.add_run(text)
-    run.bold = bold
-    run.font.name = "Aptos"
-    run.font.size = Pt(size)
-    run.font.color.rgb = RGBColor.from_string(color)
-    cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+def _xlsx_fill(argb: str) -> PatternFill:
+    return PatternFill(fill_type="solid", fgColor=argb)
 
 
-def _word_table(document: Document, rows: list[tuple[str, str]], *, title: str) -> None:
-    heading = document.add_paragraph()
-    heading.paragraph_format.space_before = Pt(8)
-    heading.paragraph_format.space_after = Pt(4)
-    run = heading.add_run(title.upper())
-    run.bold = True
-    run.font.name = "Aptos"
-    run.font.size = Pt(9)
-    run.font.color.rgb = RGBColor.from_string(BLUE)
+def _xlsx_metric_table(
+    ws,
+    start_row: int,
+    title: str,
+    headers: list[str],
+    rows: list[tuple[str, ...]],
+    *,
+    bold_labels: frozenset[str] = frozenset(),
+    green_labels: frozenset[str] = frozenset(),
+) -> int:
+    """Write a titled, header-shaded, zebra-striped table and return the next free row."""
+    columns = len(headers)
+    last_col = get_column_letter(columns)
 
-    table = document.add_table(rows=1, cols=2)
-    table.alignment = WD_TABLE_ALIGNMENT.CENTER
-    table.autofit = False
-    table.columns[0].width = Inches(2.25)
-    table.columns[1].width = Inches(2.15)
-    header = table.rows[0].cells
-    _set_cell_text(header[0], "Metric", bold=True, color=WHITE)
-    _set_cell_text(header[1], "Value", bold=True, color=WHITE)
-    _set_cell_shading(header[0], NAVY)
-    _set_cell_shading(header[1], NAVY)
-    for index, (label, value) in enumerate(rows):
-        cells = table.add_row().cells
-        _set_cell_text(cells[0], label, color=DARK_GREY)
-        _set_cell_text(cells[1], value, bold=label in {"Net annual cash", "Net monthly cash", "Total Gross plus Employer EPF"}, color=NAVY)
-        if index % 2:
-            _set_cell_shading(cells[0], PALE_GREY)
-            _set_cell_shading(cells[1], PALE_GREY)
+    title_cell = ws.cell(row=start_row, column=1, value=_clean_text(title))
+    title_cell.font = Font(name="Calibri", bold=True, size=11, color=_XLSX_BLUE)
+    ws.merge_cells(f"A{start_row}:{last_col}{start_row}")
+    header_row = start_row + 1
+    for index, text in enumerate(headers, start=1):
+        cell = ws.cell(row=header_row, column=index, value=_clean_text(text))
+        cell.font = Font(name="Calibri", bold=True, size=10, color=_XLSX_WHITE)
+        cell.fill = _xlsx_fill(_XLSX_NAVY)
+        cell.border = _XLSX_BORDER
+        cell.alignment = _XLSX_LEFT if index == 1 else _XLSX_RIGHT
+
+    for offset, row in enumerate(rows):
+        current = header_row + 1 + offset
+        label = str(row[0])
+        striped = offset % 2 == 1
+        is_green = label in green_labels
+        is_bold = label in bold_labels
+        for index in range(1, columns + 1):
+            value = row[index - 1] if index - 1 < len(row) else ""
+            cell = ws.cell(row=current, column=index, value=_clean_text(value))
+            cell.border = _XLSX_BORDER
+            cell.alignment = _XLSX_LEFT if index == 1 else _XLSX_RIGHT
+            colour = _XLSX_BLUE if index == 1 else _XLSX_NAVY
+            cell.font = Font(name="Calibri", size=10, bold=is_bold, color=colour if index == 1 else _XLSX_DARK_GREY if not is_bold else _XLSX_NAVY)
+            if is_green:
+                cell.fill = _xlsx_fill(_XLSX_PALE_GREEN)
+            elif striped:
+                cell.fill = _xlsx_fill(_XLSX_PALE_GREY)
+    return header_row + 1 + len(rows) + 1
 
 
-def build_docx_report(
+def _xlsx_sheet_title(ws, title: str, subtitle: str, columns: int) -> int:
+    last_col = get_column_letter(columns)
+    heading = ws.cell(row=1, column=1, value=_clean_text(title))
+    heading.font = Font(name="Calibri", bold=True, size=18, color=_XLSX_NAVY)
+    ws.merge_cells(f"A1:{last_col}1")
+    ws.row_dimensions[1].height = 26
+    if subtitle:
+        sub = ws.cell(row=2, column=1, value=_clean_text(subtitle))
+        sub.font = Font(name="Calibri", size=9, color=_XLSX_DARK_GREY)
+        sub.alignment = Alignment(wrap_text=True, vertical="center")
+        ws.merge_cells(f"A2:{last_col}2")
+        return 4
+    return 3
+
+
+def _xlsx_note(ws, row: int, text: str, columns: int) -> int:
+    last_col = get_column_letter(columns)
+    cell = ws.cell(row=row, column=1, value=_clean_text(text))
+    cell.font = Font(name="Calibri", italic=True, size=8, color=_XLSX_DARK_GREY)
+    cell.alignment = Alignment(wrap_text=True, vertical="top")
+    ws.merge_cells(f"A{row}:{last_col}{row}")
+    return row + 2
+
+
+def build_xlsx_report(
     scenario_a_input: Mapping[str, Any],
     scenario_b_input: Mapping[str, Any],
     result_a: Mapping[str, Any],
@@ -244,214 +282,117 @@ def build_docx_report(
     comparison: Mapping[str, Any],
     fx_metadata: Mapping[str, Any],
 ) -> bytes:
-    """Build a stable three-page landscape Word report.
-
-    Page 1 is a concise comparison. Pages 2 and 3 contain one scenario each,
-    with inputs and calculated results in parallel columns. Keeping each
-    scenario on its own page avoids Word/LibreOffice orphaning a nested-table
-    heading at a page boundary.
-    """
-    document = Document()
-    section = document.sections[0]
-    section.orientation = WD_ORIENT.LANDSCAPE
-    section.page_width, section.page_height = section.page_height, section.page_width
-    section.top_margin = Inches(0.45)
-    section.bottom_margin = Inches(0.45)
-    section.left_margin = Inches(0.55)
-    section.right_margin = Inches(0.55)
-
-    styles = document.styles
-    styles["Normal"].font.name = "Aptos"
-    styles["Normal"].font.size = Pt(8.5)
-
-    def set_page_title(title_text: str, subtitle_text: str | None = None) -> None:
-        title = document.add_paragraph()
-        title.alignment = WD_ALIGN_PARAGRAPH.LEFT
-        title.paragraph_format.space_before = Pt(0)
-        title.paragraph_format.space_after = Pt(2)
-        title.paragraph_format.keep_with_next = True
-        title_run = title.add_run(_clean_text(title_text))
-        title_run.bold = True
-        title_run.font.name = "Aptos Display"
-        title_run.font.size = Pt(20)
-        title_run.font.color.rgb = RGBColor.from_string(NAVY)
-        if subtitle_text:
-            subtitle = document.add_paragraph()
-            subtitle.paragraph_format.space_before = Pt(0)
-            subtitle.paragraph_format.space_after = Pt(7)
-            subtitle.paragraph_format.keep_with_next = True
-            subtitle_run = subtitle.add_run(_clean_text(subtitle_text))
-            subtitle_run.font.name = "Aptos"
-            subtitle_run.font.size = Pt(8)
-            subtitle_run.font.color.rgb = RGBColor.from_string(DARK_GREY)
-
-    def add_compact_metric_table(cell, rows: list[tuple[str, str]], title_text: str) -> None:
-        heading = cell.add_paragraph()
-        heading.paragraph_format.space_before = Pt(0)
-        heading.paragraph_format.space_after = Pt(2)
-        heading.paragraph_format.keep_with_next = True
-        run = heading.add_run(_clean_text(title_text.upper()))
-        run.bold = True
-        run.font.name = "Aptos"
-        run.font.size = Pt(8)
-        run.font.color.rgb = RGBColor.from_string(BLUE)
-
-        table = cell.add_table(rows=1, cols=2)
-        table.autofit = False
-        table.columns[0].width = Inches(2.35)
-        table.columns[1].width = Inches(2.25)
-        table.alignment = WD_TABLE_ALIGNMENT.CENTER
-
-        header = table.rows[0].cells
-        _set_cell_text(header[0], "Metric", bold=True, color=WHITE, size=7)
-        _set_cell_text(header[1], "Value", bold=True, color=WHITE, size=7)
-        _set_cell_shading(header[0], NAVY)
-        _set_cell_shading(header[1], NAVY)
-
-        key_labels = {
-            "Gross annual cash", "Gross monthly cash", "Net annual cash",
-            "Net monthly cash", "Total Gross plus Employer EPF",
-        }
-        for index, (label, value) in enumerate(rows):
-            cells = table.add_row().cells
-            _set_cell_text(cells[0], label, color=DARK_GREY, size=6.8)
-            _set_cell_text(cells[1], value, bold=label in key_labels, color=NAVY, size=6.8)
-            if index % 2:
-                _set_cell_shading(cells[0], PALE_GREY)
-                _set_cell_shading(cells[1], PALE_GREY)
-            for current_cell in cells:
-                tc_pr = current_cell._tc.get_or_add_tcPr()
-                tc_mar = tc_pr.first_child_found_in("w:tcMar")
-                if tc_mar is None:
-                    tc_mar = OxmlElement("w:tcMar")
-                    tc_pr.append(tc_mar)
-                for edge, value_twips in (("top", "20"), ("left", "45"), ("bottom", "20"), ("right", "45")):
-                    node = tc_mar.find(qn(f"w:{edge}"))
-                    if node is None:
-                        node = OxmlElement(f"w:{edge}")
-                        tc_mar.append(node)
-                    node.set(qn("w:w"), value_twips)
-                    node.set(qn("w:type"), "dxa")
-
-    # Page 1: report overview.
-    set_page_title(
-        REPORT_TITLE,
-        f"Generated {datetime.now().strftime('%d %b %Y, %H:%M')} | "
-        f"Reporting currency: {_clean_text(comparison['reporting_currency'])}",
-    )
-
-    summary_table = document.add_table(rows=1, cols=4)
-    summary_table.alignment = WD_TABLE_ALIGNMENT.CENTER
-    summary_table.autofit = False
-    summary_items = _comparison_rows(comparison)
-    for index, (label, value) in enumerate(summary_items):
-        cell = summary_table.rows[0].cells[index]
-        cell.width = Inches(2.55)
-        _set_cell_shading(cell, NAVY if index == 1 else PALE_BLUE)
-        cell.text = ""
-        paragraph = cell.paragraphs[0]
-        paragraph.paragraph_format.space_before = Pt(0)
-        paragraph.paragraph_format.space_after = Pt(0)
-        label_run = paragraph.add_run(_clean_text(label) + "\n")
-        label_run.bold = True
-        label_run.font.name = "Aptos"
-        label_run.font.size = Pt(7.5)
-        label_run.font.color.rgb = RGBColor.from_string(WHITE if index == 1 else BLUE)
-        value_run = paragraph.add_run(_clean_text(value))
-        value_run.bold = True
-        value_run.font.name = "Aptos Display"
-        value_run.font.size = Pt(12)
-        value_run.font.color.rgb = RGBColor.from_string(WHITE if index == 1 else NAVY)
-
-    spacer = document.add_paragraph()
-    spacer.paragraph_format.space_after = Pt(2)
-
+    """Build a three-sheet Excel workbook: a comparison overview then one sheet per scenario."""
     reporting = str(comparison["reporting_currency"])
+
+    def reported(result: Mapping[str, Any], key: str) -> str:
+        return _money(result[key] * result["fx_rate"], reporting)
+
+    workbook = Workbook()
+
+    # Sheet 1: side-by-side comparison.
+    overview = workbook.active
+    overview.title = "Comparison"
+    overview.sheet_view.showGridLines = False
+    overview.column_dimensions["A"].width = 42
+    overview.column_dimensions["B"].width = 26
+    overview.column_dimensions["C"].width = 26
+
+    row = _xlsx_sheet_title(
+        overview,
+        REPORT_TITLE,
+        f"Generated {datetime.now().strftime('%d %b %Y, %H:%M')}  |  Reporting currency: {reporting}",
+        3,
+    )
+    row = _xlsx_metric_table(
+        overview,
+        row,
+        "Headline comparison",
+        ["Metric", "Value"],
+        _comparison_rows(comparison),
+        bold_labels=frozenset({"Net annual difference"}),
+    )
+    name_a = _scenario_name(scenario_a_input, "Scenario A")
+    name_b = _scenario_name(scenario_b_input, "Scenario B")
+    net_incl = "Net annual cash (incl. variable bonus)"
+    net_excl = "Net annual cash (excl. variable bonus)"
     overview_rows = [
-        ("Gross annual cash", _money(result_a["gross_annual_cash"] * result_a["fx_rate"], reporting), _money(result_b["gross_annual_cash"] * result_b["fx_rate"], reporting)),
-        ("Gross monthly cash", _money(result_a["gross_monthly_cash"] * result_a["fx_rate"], reporting), _money(result_b["gross_monthly_cash"] * result_b["fx_rate"], reporting)),
-        ("Net annual cash", _money(result_a["net_annual_reporting"], reporting), _money(result_b["net_annual_reporting"], reporting)),
-        ("Net monthly cash", _money(result_a["net_monthly_cash"] * result_a["fx_rate"], reporting), _money(result_b["net_monthly_cash"] * result_b["fx_rate"], reporting)),
+        ("Gross annual cash (incl. variable bonus)", reported(result_a, "gross_annual_cash"), reported(result_b, "gross_annual_cash")),
+        ("Gross annual cash (excl. variable bonus)", reported(result_a, "gross_annual_cash_ex_variable"), reported(result_b, "gross_annual_cash_ex_variable")),
+        ("Gross monthly cash", reported(result_a, "gross_monthly_cash"), reported(result_b, "gross_monthly_cash")),
+        (net_incl, _money(result_a["net_annual_reporting"], reporting), _money(result_b["net_annual_reporting"], reporting)),
+        (net_excl, reported(result_a, "net_annual_cash_ex_variable"), reported(result_b, "net_annual_cash_ex_variable")),
+        ("Net monthly cash", reported(result_a, "net_monthly_cash"), reported(result_b, "net_monthly_cash")),
         ("Total Gross plus Employer EPF", _money(result_a["employer_cost_reporting"], reporting), _money(result_b["employer_cost_reporting"], reporting)),
         ("Marginal tax rate", _rate(result_a["marginal_income_tax_rate"]), _rate(result_b["marginal_income_tax_rate"])),
         ("Effective tax rate on gross", _rate(result_a["effective_income_tax_rate"]), _rate(result_b["effective_income_tax_rate"])),
         ("Employee deduction rate", _rate(result_a["total_employee_deduction_rate"]), _rate(result_b["total_employee_deduction_rate"])),
     ]
-    overview = document.add_table(rows=1, cols=3)
-    overview.alignment = WD_TABLE_ALIGNMENT.CENTER
-    overview.autofit = False
-    overview.columns[0].width = Inches(3.55)
-    overview.columns[1].width = Inches(3.3)
-    overview.columns[2].width = Inches(3.3)
-    headers = overview.rows[0].cells
-    for cell, text in zip(headers, ("Metric", _scenario_name(scenario_a_input, "Scenario A"), _scenario_name(scenario_b_input, "Scenario B"))):
-        _set_cell_text(cell, text, bold=True, color=WHITE, size=8)
-        _set_cell_shading(cell, NAVY)
-    for row_index, (label, value_a, value_b) in enumerate(overview_rows):
-        cells = overview.add_row().cells
-        _set_cell_text(cells[0], label, color=DARK_GREY, size=8)
-        _set_cell_text(cells[1], value_a, bold=label in {"Net annual cash", "Net monthly cash", "Total Gross plus Employer EPF"}, color=NAVY, size=8)
-        _set_cell_text(cells[2], value_b, bold=label in {"Net annual cash", "Net monthly cash", "Total Gross plus Employer EPF"}, color=NAVY, size=8)
-        if row_index % 2:
-            for cell in cells:
-                _set_cell_shading(cell, PALE_GREY)
-        if label in {"Net annual cash", "Net monthly cash"}:
-            for cell in cells:
-                _set_cell_shading(cell, PALE_GREEN)
+    row = _xlsx_metric_table(
+        overview,
+        row,
+        "Side-by-side overview",
+        ["Metric", name_a, name_b],
+        overview_rows,
+        bold_labels=frozenset({net_incl, net_excl, "Total Gross plus Employer EPF"}),
+        green_labels=frozenset({net_incl, net_excl}),
+    )
+    _xlsx_note(overview, row, DISCLAIMER, 3)
 
-    disclaimer = document.add_paragraph()
-    disclaimer.paragraph_format.space_before = Pt(8)
-    disclaimer.paragraph_format.space_after = Pt(0)
-    disclaimer_run = disclaimer.add_run(DISCLAIMER)
-    disclaimer_run.italic = True
-    disclaimer_run.font.name = "Aptos"
-    disclaimer_run.font.size = Pt(7.5)
-    disclaimer_run.font.color.rgb = RGBColor.from_string(DARK_GREY)
-
-    # Pages 2 and 3: one scenario per page with two parallel detail tables.
+    # Sheets 2 and 3: one scenario each.
     scenario_specs = (
         (scenario_a_input, result_a, "Scenario A", fx_metadata.get("scenario_a") or {}),
         (scenario_b_input, result_b, "Scenario B", fx_metadata.get("scenario_b") or {}),
     )
+    result_bold = frozenset({
+        "Gross annual cash (incl. variable bonus)",
+        "Gross annual cash (excl. variable bonus)",
+        "Net annual cash (incl. variable bonus)",
+        "Net annual cash (excl. variable bonus)",
+        "Total Gross plus Employer EPF",
+    })
     for scenario, result, fallback, fx in scenario_specs:
-        document.add_page_break()
-        set_page_title(
+        # Excel sheet titles must be unique, <=31 chars and free of : \ / ? * [ ].
+        # safe_filename already strips the forbidden characters; dedupe defensively
+        # in case both scenarios share a name.
+        base_title = safe_filename(_scenario_name(scenario, fallback), fallback)[:28] or fallback
+        title = base_title
+        suffix = 2
+        while title in workbook.sheetnames:
+            title = f"{base_title[:26]}-{suffix}"
+            suffix += 1
+        sheet = workbook.create_sheet(title=title)
+        sheet.sheet_view.showGridLines = False
+        sheet.column_dimensions["A"].width = 46
+        sheet.column_dimensions["B"].width = 30
+        row = _xlsx_sheet_title(
+            sheet,
             _scenario_name(scenario, fallback),
-            f"{result['country']} | {result['tax_year']} | {result['residency']} | {_rule_note(result)}",
+            f"{result['country']}  |  {result['tax_year']}  |  {result['residency']}  |  {_rule_note(result)}",
+            2,
         )
-        columns = document.add_table(rows=1, cols=2)
-        columns.alignment = WD_TABLE_ALIGNMENT.CENTER
-        columns.autofit = False
-        columns.columns[0].width = Inches(5.0)
-        columns.columns[1].width = Inches(5.0)
-        left, right = columns.rows[0].cells
-        left.text = ""
-        right.text = ""
-        add_compact_metric_table(left, _input_rows(scenario, result), "Inputs and assumptions")
-        add_compact_metric_table(right, _result_rows(result), "Calculated results")
-
-        fx_note = document.add_paragraph()
-        fx_note.paragraph_format.space_before = Pt(4)
-        fx_note.paragraph_format.space_after = Pt(0)
-        fx_run = fx_note.add_run(_clean_text(
-            f"FX source: {fx.get('source', 'not recorded')}"
-            + (" (cached)" if fx.get("cached") else "")
-            + ("; stale fallback used" if fx.get("stale") else "")
-        ))
-        fx_run.font.name = "Aptos"
-        fx_run.font.size = Pt(7)
-        fx_run.font.color.rgb = RGBColor.from_string(DARK_GREY)
-
-    footer = section.footer.paragraphs[0]
-    footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    footer_run = footer.add_run("CV Studio Salary Comparison")
-    footer_run.font.name = "Aptos"
-    footer_run.font.size = Pt(7.5)
-    footer_run.font.color.rgb = RGBColor.from_string(DARK_GREY)
+        row = _xlsx_metric_table(
+            sheet, row, "Inputs and assumptions", ["Metric", "Value"], _input_rows(scenario, result)
+        )
+        row = _xlsx_metric_table(
+            sheet, row, "Calculated results", ["Metric", "Value"], _result_rows(result),
+            bold_labels=result_bold,
+        )
+        _xlsx_note(
+            sheet,
+            row,
+            "FX source: {source}{cached}{stale}".format(
+                source=fx.get("source", "not recorded"),
+                cached=" (cached)" if fx.get("cached") else "",
+                stale="; stale fallback used" if fx.get("stale") else "",
+            ),
+            2,
+        )
 
     output = BytesIO()
-    document.save(output)
+    workbook.save(output)
     return output.getvalue()
+
 
 def _pdf_styles():
     styles = getSampleStyleSheet()
@@ -470,8 +411,8 @@ def _pdf_styles():
             "ReportSubtitle",
             parent=styles["Normal"],
             fontName="Helvetica",
-            fontSize=8.5,
-            leading=11,
+            fontSize=10,
+            leading=13,
             textColor=colors.HexColor(f"#{DARK_GREY}"),
             spaceAfter=5 * mm,
         ),
@@ -479,43 +420,43 @@ def _pdf_styles():
             "Section",
             parent=styles["Heading3"],
             fontName="Helvetica-Bold",
-            fontSize=7.8,
-            leading=9,
+            fontSize=10.5,
+            leading=13,
             textColor=colors.HexColor(f"#{BLUE}"),
-            spaceBefore=1.2 * mm,
-            spaceAfter=0.7 * mm,
+            spaceBefore=3 * mm,
+            spaceAfter=1.6 * mm,
         ),
         "scenario": ParagraphStyle(
             "Scenario",
             parent=styles["Heading2"],
             fontName="Helvetica-Bold",
-            fontSize=11.5,
-            leading=13,
+            fontSize=16,
+            leading=19,
             textColor=colors.HexColor(f"#{NAVY}"),
-            spaceAfter=1 * mm,
+            spaceAfter=1.5 * mm,
         ),
         "small": ParagraphStyle(
             "Small",
             parent=styles["Normal"],
             fontName="Helvetica",
-            fontSize=6.4,
-            leading=7.3,
+            fontSize=8.5,
+            leading=10.5,
             textColor=colors.HexColor(f"#{DARK_GREY}"),
         ),
         "cell": ParagraphStyle(
             "Cell",
             parent=styles["Normal"],
             fontName="Helvetica",
-            fontSize=5.9,
-            leading=6.8,
+            fontSize=9.5,
+            leading=12,
             textColor=colors.HexColor(f"#{DARK_GREY}"),
         ),
         "value": ParagraphStyle(
             "Value",
             parent=styles["Normal"],
             fontName="Helvetica-Bold",
-            fontSize=5.9,
-            leading=6.8,
+            fontSize=9.5,
+            leading=12,
             alignment=TA_RIGHT,
             textColor=colors.HexColor(f"#{NAVY}"),
         ),
@@ -523,8 +464,8 @@ def _pdf_styles():
             "Disclaimer",
             parent=styles["Normal"],
             fontName="Helvetica-Oblique",
-            fontSize=6.4,
-            leading=7.3,
+            fontSize=8.5,
+            leading=10.5,
             textColor=colors.HexColor(f"#{DARK_GREY}"),
         ),
     }
@@ -535,13 +476,13 @@ def _pdf_metric_table(rows: list[tuple[str, str]], styles: Mapping[str, Paragrap
         [Paragraph(xml_escape(_clean_text(label)), styles["cell"]), Paragraph(xml_escape(_clean_text(value)), styles["value"])]
         for label, value in rows
     ]
-    table = Table(data, colWidths=[width * 0.53, width * 0.47], repeatRows=0)
+    table = Table(data, colWidths=[width * 0.56, width * 0.44], repeatRows=0)
     commands: list[tuple] = [
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 4),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-        ("TOPPADDING", (0, 0), (-1, -1), 1.1),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 1.1),
+        ("LEFTPADDING", (0, 0), (-1, -1), 7),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+        ("TOPPADDING", (0, 0), (-1, -1), 3.4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3.4),
         ("LINEBELOW", (0, 0), (-1, -1), 0.25, colors.HexColor(f"#{MID_GREY}")),
     ]
     for idx in range(len(data)):
@@ -642,37 +583,43 @@ def build_pdf_report(
         "OverviewHeader",
         parent=styles["value"],
         fontName="Helvetica-Bold",
-        fontSize=7,
-        leading=8,
+        fontSize=9.5,
+        leading=11,
         textColor=colors.white,
     )
+
+    def _ov(result: Mapping[str, Any], key: str) -> str:
+        return _money(result[key] * result["fx_rate"], reporting)
+
     overview_rows = [
         [
             Paragraph("Metric", overview_header),
             Paragraph(xml_escape(_scenario_name(scenario_a_input, "Scenario A")), overview_header),
             Paragraph(xml_escape(_scenario_name(scenario_b_input, "Scenario B")), overview_header),
         ],
-        [Paragraph("Gross annual cash", styles["cell"]), Paragraph(_money(result_a["gross_annual_cash"] * result_a["fx_rate"], reporting), styles["value"]), Paragraph(_money(result_b["gross_annual_cash"] * result_b["fx_rate"], reporting), styles["value"])],
-        [Paragraph("Gross monthly cash", styles["cell"]), Paragraph(_money(result_a["gross_monthly_cash"] * result_a["fx_rate"], reporting), styles["value"]), Paragraph(_money(result_b["gross_monthly_cash"] * result_b["fx_rate"], reporting), styles["value"])],
-        [Paragraph("Net annual cash", styles["cell"]), Paragraph(_money(result_a["net_annual_reporting"], reporting), styles["value"]), Paragraph(_money(result_b["net_annual_reporting"], reporting), styles["value"])],
-        [Paragraph("Net monthly cash", styles["cell"]), Paragraph(_money(result_a["net_monthly_cash"] * result_a["fx_rate"], reporting), styles["value"]), Paragraph(_money(result_b["net_monthly_cash"] * result_b["fx_rate"], reporting), styles["value"])],
+        [Paragraph("Gross annual cash (incl. variable bonus)", styles["cell"]), Paragraph(_ov(result_a, "gross_annual_cash"), styles["value"]), Paragraph(_ov(result_b, "gross_annual_cash"), styles["value"])],
+        [Paragraph("Gross annual cash (excl. variable bonus)", styles["cell"]), Paragraph(_ov(result_a, "gross_annual_cash_ex_variable"), styles["value"]), Paragraph(_ov(result_b, "gross_annual_cash_ex_variable"), styles["value"])],
+        [Paragraph("Gross monthly cash", styles["cell"]), Paragraph(_ov(result_a, "gross_monthly_cash"), styles["value"]), Paragraph(_ov(result_b, "gross_monthly_cash"), styles["value"])],
+        [Paragraph("Net annual cash (incl. variable bonus)", styles["cell"]), Paragraph(_money(result_a["net_annual_reporting"], reporting), styles["value"]), Paragraph(_money(result_b["net_annual_reporting"], reporting), styles["value"])],
+        [Paragraph("Net annual cash (excl. variable bonus)", styles["cell"]), Paragraph(_ov(result_a, "net_annual_cash_ex_variable"), styles["value"]), Paragraph(_ov(result_b, "net_annual_cash_ex_variable"), styles["value"])],
+        [Paragraph("Net monthly cash", styles["cell"]), Paragraph(_ov(result_a, "net_monthly_cash"), styles["value"]), Paragraph(_ov(result_b, "net_monthly_cash"), styles["value"])],
         [Paragraph("Total Gross plus Employer EPF", styles["cell"]), Paragraph(_money(result_a["employer_cost_reporting"], reporting), styles["value"]), Paragraph(_money(result_b["employer_cost_reporting"], reporting), styles["value"])],
         [Paragraph("Marginal tax rate", styles["cell"]), Paragraph(_rate(result_a["marginal_income_tax_rate"]), styles["value"]), Paragraph(_rate(result_b["marginal_income_tax_rate"]), styles["value"])],
         [Paragraph("Effective tax rate on gross", styles["cell"]), Paragraph(_rate(result_a["effective_income_tax_rate"]), styles["value"]), Paragraph(_rate(result_b["effective_income_tax_rate"]), styles["value"])],
         [Paragraph("Employee deduction rate", styles["cell"]), Paragraph(_rate(result_a["total_employee_deduction_rate"]), styles["value"]), Paragraph(_rate(result_b["total_employee_deduction_rate"]), styles["value"])],
     ]
-    overview = Table(overview_rows, colWidths=[document.width * 0.36, document.width * 0.32, document.width * 0.32])
+    overview = Table(overview_rows, colWidths=[document.width * 0.40, document.width * 0.30, document.width * 0.30])
     overview.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(f"#{NAVY}")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-        ("TOPPADDING", (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("LEFTPADDING", (0, 0), (-1, -1), 7),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
         ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor(f"#{MID_GREY}")),
-        ("BACKGROUND", (0, 2), (-1, 2), colors.HexColor(f"#{PALE_GREEN}")),
         ("BACKGROUND", (0, 4), (-1, 4), colors.HexColor(f"#{PALE_GREEN}")),
+        ("BACKGROUND", (0, 5), (-1, 5), colors.HexColor(f"#{PALE_GREEN}")),
     ]))
     story.extend([
         Paragraph("SIDE-BY-SIDE OVERVIEW", styles["section"]),
