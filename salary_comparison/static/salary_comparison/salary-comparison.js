@@ -7,7 +7,7 @@
   const resetButton = document.getElementById("resetButton");
   const rulesButton = document.getElementById("rulesButton");
   const exportPdfButton = document.getElementById("exportPdfButton");
-  const exportWordButton = document.getElementById("exportWordButton");
+  const exportExcelButton = document.getElementById("exportExcelButton");
   const rulesModal = document.getElementById("rulesModal");
   const previewRuleButton = document.getElementById("previewRuleButton");
   const publishRuleButton = document.getElementById("publishRuleButton");
@@ -275,11 +275,11 @@
     if (el("b_reporting_currency").value !== reportingA) {
       el("b_reporting_currency").value = reportingA;
     }
-    const button = format === "pdf" ? exportPdfButton : exportWordButton;
+    const button = format === "pdf" ? exportPdfButton : exportExcelButton;
     const originalText = button.textContent;
     exportPdfButton.disabled = true;
-    exportWordButton.disabled = true;
-    button.textContent = format === "pdf" ? "Preparing PDF…" : "Preparing Word…";
+    exportExcelButton.disabled = true;
+    button.textContent = format === "pdf" ? "Preparing PDF…" : "Preparing Excel…";
     try {
       const response = await fetch(apiUrl(`api/export/${format}`), {
         method: "POST",
@@ -290,16 +290,16 @@
         const body = await response.json().catch(() => ({}));
         throw new Error(body.error || `Export failed (${response.status})`);
       }
-      const extension = format === "pdf" ? "pdf" : "docx";
+      const extension = format === "pdf" ? "pdf" : "xlsx";
       const blob = await response.blob();
       const filename = filenameFromDisposition(response, `salary-comparison.${extension}`);
       downloadBlob(blob, filename);
-      setNotice(`${format === "pdf" ? "PDF" : "Word"} report exported successfully.`, "success");
+      setNotice(`${format === "pdf" ? "PDF" : "Excel"} report exported successfully.`, "success");
     } catch (error) {
       setNotice(error.message);
     } finally {
       exportPdfButton.disabled = false;
-      exportWordButton.disabled = false;
+      exportExcelButton.disabled = false;
       button.textContent = originalText;
     }
   }
@@ -486,7 +486,7 @@
         calculate();
       });
       exportPdfButton.addEventListener("click", () => exportReport("pdf"));
-      exportWordButton.addEventListener("click", () => exportReport("word"));
+      exportExcelButton.addEventListener("click", () => exportReport("excel"));
       rulesButton.addEventListener("click", () => { applyHostAiRoute(); rulesModal.showModal(); });
       applyHostAiRoute();
       previewRuleButton.addEventListener("click", previewRule);

@@ -51,6 +51,29 @@ def test_malaysia_sample_calculation(malaysia_rule):
     assert result.total_employer_cost == 197568
 
 
+def test_gross_ex_variable_subtracts_the_variable_bonus(malaysia_rule):
+    result = calculate_scenario(base_scenario(), malaysia_rule, 1.0)
+    assert result.variable_bonus == 14400
+    assert result.gross_annual_cash_ex_variable == result.gross_annual_cash - result.variable_bonus
+    assert result.gross_annual_cash_ex_variable == 162000
+
+
+def test_net_ex_variable_recomputes_tax_and_contributions(malaysia_rule):
+    result = calculate_scenario(base_scenario(), malaysia_rule, 1.0)
+    # Removing the variable bonus lowers net cash, but by less than the bonus
+    # itself because the bonus also drew income tax and statutory contributions.
+    dropped = result.net_annual_cash - result.net_annual_cash_ex_variable
+    assert 0 < dropped < result.variable_bonus
+    assert result.net_annual_cash_ex_variable == 121530
+
+
+def test_ex_variable_equals_full_when_no_variable_bonus(malaysia_rule):
+    result = calculate_scenario(base_scenario(variable_bonus_pct=0), malaysia_rule, 1.0)
+    assert result.variable_bonus == 0
+    assert result.gross_annual_cash_ex_variable == result.gross_annual_cash
+    assert result.net_annual_cash_ex_variable == result.net_annual_cash
+
+
 def test_sign_on_bonus_and_other_income(malaysia_rule):
     result = calculate_scenario(
         base_scenario(monthly_base=10000, sign_on_bonus=2000, other_taxable_income=1000),

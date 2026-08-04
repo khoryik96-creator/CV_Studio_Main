@@ -4,11 +4,11 @@ import json
 from io import BytesIO
 from pathlib import Path
 
-from docx import Document
+from openpyxl import load_workbook
 from pypdf import PdfReader
 
 from salary_comparison.calculator import calculate_scenario, compare_results
-from salary_comparison.exporter import build_docx_report, build_pdf_report, safe_filename
+from salary_comparison.exporter import build_pdf_report, build_xlsx_report, safe_filename
 
 
 def _rule(country: str) -> dict:
@@ -73,6 +73,10 @@ def test_pdf_export_is_valid_and_contains_report_text():
     assert "Sign-On Bonus" in text
     assert "1.5 months of monthly base" in text
     assert "Total Gross plus Employer EPF" in text
+    assert "Gross annual cash (incl. variable bonus)" in text
+    assert "Gross annual cash (excl. variable bonus)" in text
+    assert "Net annual cash (incl. variable bonus)" in text
+    assert "Net annual cash (excl. variable bonus)" in text
 
 
 def test_pdf_export_escapes_scenario_markup():
@@ -86,12 +90,16 @@ def test_pdf_export_escapes_scenario_markup():
     assert "Current <Role> & Package" in text
 
 
-def test_word_export_is_valid_and_contains_report_text():
-    content = build_docx_report(*_report_args())
+def test_excel_export_is_valid_and_contains_report_text():
+    content = build_xlsx_report(*_report_args())
     assert content.startswith(b"PK")
-    document = Document(BytesIO(content))
+    workbook = load_workbook(BytesIO(content))
     combined = "\n".join(
-        node.text or "" for node in document.element.xpath(".//w:t")
+        str(cell.value)
+        for sheet in workbook.worksheets
+        for row in sheet.iter_rows()
+        for cell in row
+        if cell.value is not None
     )
     assert "International Salary Comparison" in combined
     assert "Current role" in combined
@@ -102,3 +110,11 @@ def test_word_export_is_valid_and_contains_report_text():
     assert "Sign-On Bonus" in combined
     assert "1.5 months of monthly base" in combined
     assert "Total Gross plus Employer EPF" in combined
+    assert "Gross annual cash (incl. variable bonus)" in combined
+    assert "Net annual cash (excl. variable bonus)" in combined
+
+
+def test_excel_export_has_three_sheets():
+    workbook = load_workbook(BytesIO(build_xlsx_report(*_report_args())))
+    assert len(workbook.worksheets) == 3
+    assert workbook.worksheets[0].title == "Comparison"

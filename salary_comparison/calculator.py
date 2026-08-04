@@ -114,6 +114,7 @@ class ScenarioResult:
     variable_bonus: float
     other_taxable_income: float
     gross_annual_cash: float
+    gross_annual_cash_ex_variable: float
     gross_monthly_cash: float
     contribution_base: float
     employee_contribution_rate: float
@@ -125,6 +126,7 @@ class ScenarioResult:
     marginal_income_tax_rate: float
     other_after_tax_deductions: float
     net_annual_cash: float
+    net_annual_cash_ex_variable: float
     net_monthly_cash: float
     total_employer_cost: float
     effective_income_tax_rate: float
@@ -286,6 +288,24 @@ def calculate_scenario(
 
     net_annual = gross - employee_contribution - estimated_tax - other_after_tax_deductions
     employer_cost = gross + employer_contribution
+
+    # Same offer with the non-guaranteed variable performance bonus removed.
+    # Recompute contributions and income tax from the reduced gross rather than
+    # simply subtracting the bonus, so the "excluding variable bonus" net cash
+    # reflects the tax and statutory contributions that the bonus itself drew.
+    gross_ex_variable = gross - variable_bonus
+    contribution_base_ex = gross_ex_variable if include_bonus else annual_base + annual_allowance
+    contributable_ex = contribution_base_ex if cap is None else min(contribution_base_ex, cap)
+    employee_contribution_ex = contributable_ex * employee_rate
+    taxable_income_ex = max(
+        Decimal("0"),
+        gross_ex_variable - personal_reliefs - (employee_contribution_ex if deductible else Decimal("0")),
+    )
+    estimated_tax_ex = progressive_tax(taxable_income_ex, brackets)
+    net_annual_ex_variable = (
+        gross_ex_variable - employee_contribution_ex - estimated_tax_ex - other_after_tax_deductions
+    )
+
     fx = _d(fx_rate)
     if fx <= 0:
         raise CalculationError("FX rate must be greater than zero.")
@@ -318,6 +338,7 @@ def calculate_scenario(
         variable_bonus=_money(variable_bonus),
         other_taxable_income=_money(other_taxable_income),
         gross_annual_cash=_money(gross),
+        gross_annual_cash_ex_variable=_money(gross_ex_variable),
         gross_monthly_cash=_money(gross / Decimal("12")),
         contribution_base=_money(contribution_base),
         employee_contribution_rate=_rate(employee_rate),
@@ -329,6 +350,7 @@ def calculate_scenario(
         marginal_income_tax_rate=_rate(marginal_rate),
         other_after_tax_deductions=_money(other_after_tax_deductions),
         net_annual_cash=_money(net_annual),
+        net_annual_cash_ex_variable=_money(net_annual_ex_variable),
         net_monthly_cash=_money(net_annual / Decimal("12")),
         total_employer_cost=_money(employer_cost),
         effective_income_tax_rate=_rate(effective_tax_rate),

@@ -11,7 +11,7 @@ from flask import Blueprint, current_app, jsonify, render_template, request, sen
 from .ai_rule_updater import AiRuleUpdateError, preview_rule_update
 from .bootstrap import ensure_data_dir
 from .calculator import CalculationError, calculate_scenario, compare_results
-from .exporter import build_docx_report, build_pdf_report, safe_filename
+from .exporter import build_pdf_report, build_xlsx_report, safe_filename
 from .fx_service import FxService, FxServiceError
 from .repository import JsonRuleRepository, RuleNotFoundError, RuleRepositoryError
 from .validators import RuleValidationError
@@ -225,8 +225,8 @@ def compare_api():
 @bp.post("/api/export/<export_format>")
 def export_api(export_format: str):
     format_name = str(export_format or "").strip().lower()
-    if format_name not in {"pdf", "word", "docx"}:
-        return jsonify({"error": "Export format must be PDF or Word."}), 400
+    if format_name not in {"pdf", "excel", "xlsx"}:
+        return jsonify({"error": "Export format must be PDF or Excel."}), 400
 
     scenario_a, scenario_b, response = _calculate_comparison(_json_object())
     name_a = str(scenario_a.get("name") or "Scenario-A")
@@ -246,9 +246,9 @@ def export_api(export_format: str):
         mimetype = "application/pdf"
         extension = "pdf"
     else:
-        content = build_docx_report(*export_args)
-        mimetype = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        extension = "docx"
+        content = build_xlsx_report(*export_args)
+        mimetype = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        extension = "xlsx"
     return send_file(
         BytesIO(content),
         mimetype=mimetype,

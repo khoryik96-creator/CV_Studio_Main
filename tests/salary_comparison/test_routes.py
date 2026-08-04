@@ -25,7 +25,7 @@ def test_index_loads(client):
     assert b"International Salary Comparison" in response.data
     assert b"Tax rule updater" in response.data
     assert b"Export PDF" in response.data
-    assert b"Export Word" in response.data
+    assert b"Export Excel" in response.data
     assert b"Sign-On Bonus" in response.data
     assert b"Percentage of annual base" in response.data
     assert b"Months of monthly base" in response.data
@@ -75,24 +75,25 @@ def test_export_pdf_endpoint(client):
     assert "attachment" in response.headers["Content-Disposition"]
 
 
-def test_export_word_endpoint(client):
-    response = client.post("/salary-comparison/api/export/word", json={
+def test_export_excel_endpoint(client):
+    response = client.post("/salary-comparison/api/export/excel", json={
         "scenario_a": scenario("Malaysia", "MYR", 12000, 500, 9000),
         "scenario_b": scenario("Singapore", "MYR", 9000, 600, 0),
     })
     assert response.status_code == 200
-    assert response.mimetype == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    assert response.mimetype == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     assert response.data.startswith(b"PK")
+    assert response.headers["Content-Disposition"].endswith('.xlsx"') or ".xlsx" in response.headers["Content-Disposition"]
     assert "attachment" in response.headers["Content-Disposition"]
 
 
 def test_export_rejects_unknown_format(client):
-    response = client.post("/salary-comparison/api/export/xlsx", json={
+    response = client.post("/salary-comparison/api/export/csv", json={
         "scenario_a": scenario("Malaysia", "MYR", 12000, 500, 9000),
         "scenario_b": scenario("Singapore", "MYR", 9000, 600, 0),
     })
     assert response.status_code == 400
-    assert "PDF or Word" in response.get_json()["error"]
+    assert "PDF or Excel" in response.get_json()["error"]
 
 
 def test_compare_missing_rule_returns_clear_error(client):
