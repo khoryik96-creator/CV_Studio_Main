@@ -31,6 +31,25 @@ _MONTH_ABBR = {
 }
 
 
+# Number -> house-style month abbreviation, so numeric "MM/YYYY" dates (which
+# some parse runs emit instead of "Mon YYYY") are normalised to the same style.
+_MONTH_ABBR_BY_NUMBER = {
+    1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun",
+    7: "Jul", 8: "Aug", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec",
+}
+
+
+def _numeric_month_year_repl(match):
+    """Convert a numeric MM/YYYY (or M/YYYY) token to house-style "Mon YYYY".
+
+    A month outside 1-12 is left untouched (it is not a month/year token).
+    """
+    month = int(match.group(1))
+    if 1 <= month <= 12:
+        return f"{_MONTH_ABBR_BY_NUMBER[month]} {match.group(2)}"
+    return match.group(0)
+
+
 _COMPANY_TOKEN_MAP = {
     "SDN": "Sdn", "BHD": "Bhd", "PTE": "Pte", "LTD": "Ltd", "LMT": "Lmt",
     "PVT": "Pvt", "INC": "Inc", "LLC": "LLC", "LLP": "LLP", "PLC": "PLC",
@@ -153,6 +172,9 @@ def _normalize_cv_date_range(value):
     def month_repl(m):
         return _normalize_month_token(m.group(0))
     text = re.sub(r"\b(January|February|March|April|June|July|August|September|Sept|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\b", month_repl, text, flags=re.I)
+    # Numeric MM/YYYY -> "Mon YYYY" so date format is consistent regardless of
+    # whether a given parse run emitted "06/2024" or "Jun 2024".
+    text = re.sub(r"\b(\d{1,2})/(\d{4})\b", _numeric_month_year_repl, text)
     text = re.sub(r"\s+", " ", text).strip()
     return text
 
@@ -552,6 +574,9 @@ def _cv_date_sort_point(value, end=False):
         return None
     if re.search(r"\b(?:present|current|now|till\s*date|to\s*date)\b", text, re.I):
         return (9999, 12)
+    # Numeric MM/YYYY carries the month too; normalise to "Mon YYYY" first so a
+    # date like "06/2024" sorts at month granularity, not just its year.
+    text = re.sub(r"\b(\d{1,2})/(\d{4})\b", _numeric_month_year_repl, text)
     matches = list(re.finditer(
         r"\b(?:(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+)?(\d{4})\b",
         text,
