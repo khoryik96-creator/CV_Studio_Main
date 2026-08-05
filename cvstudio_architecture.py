@@ -145,6 +145,12 @@ DEFAULT_MODULES = (
         ("cvstudio_lead_enrich.py",),
     ),
     ModuleDefinition(
+        "lead_cache",
+        "domain",
+        ("cvstudio_lead_cache.py",),
+        ("lead_enrich",),
+    ),
+    ModuleDefinition(
         "spider_boolean",
         "domain",
         ("cvstudio_spider_boolean.py",),
@@ -232,6 +238,7 @@ DEFAULT_MODULES = (
             "cv_normalize",
             "lead_match",
             "lead_enrich",
+            "lead_cache",
             "msgraph",
             "onenote_desktop",
             "onenote_text",

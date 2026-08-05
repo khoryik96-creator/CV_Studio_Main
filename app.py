@@ -12278,6 +12278,8 @@ def _lead_cost_details(model, usage, provider=None):
     return _llm_cost_details(model, usage, provider)
 
 
+from cvstudio_lead_cache import LeadCacheService as _LeadCacheService
+
 from cvstudio_lead_match import (
     _lead_blob_has_alias,
     _lead_company_is_actually_role_text,
@@ -13719,30 +13721,11 @@ _LEAD_TITLE_CACHE_SIM_THRESHOLD = 0.45
 
 
 def _lead_title_cache_load():
-    legacy, fingerprint = _cvstudio_legacy_json_read(_LEAD_TITLE_CACHE_PATH, dict)
-    try:
-        if isinstance(legacy, dict) and isinstance(legacy.get("entries"), list):
-            _CVSTUDIO_LEAD_TITLE_REPOSITORY.import_legacy(legacy, fingerprint)
-        return _CVSTUDIO_LEAD_TITLE_REPOSITORY.load()
-    except StorageError:
-        raise
-    except Exception:
-        if isinstance(legacy, dict) and isinstance(legacy.get("entries"), list):
-            return legacy
-        return {"entries": []}
+    return _LEAD_CACHE_SERVICE.title_cache_load()
 
 
 def _lead_title_cache_save(data):
-    try:
-        _CVSTUDIO_LEAD_TITLE_REPOSITORY.save(data)
-        try:
-            _cvstudio_legacy_json_write(_LEAD_TITLE_CACHE_PATH, data)
-        except Exception:
-            pass
-    except StorageError:
-        raise
-    except Exception:
-        pass
+    return _LEAD_CACHE_SERVICE.title_cache_save(data)
 
 
 
@@ -13750,162 +13733,57 @@ def _lead_title_cache_save(data):
 
 
 def _lead_title_cache_find(family, evidence, threshold=_LEAD_TITLE_CACHE_SIM_THRESHOLD):
-    data = _lead_title_cache_load()
-    best, best_score = None, 0.0
-    for entry in data.get("entries", []):
-        if entry.get("family") != family:
-            continue
-        ev = set(entry.get("evidence") or [])
-        if not ev or not evidence:
-            continue
-        inter = len(ev & evidence)
-        union = len(ev | evidence)
-        score = (inter / union) if union else 0.0
-        if score > best_score:
-            best_score, best = score, entry
-    if best and best_score >= threshold:
-        return best, best_score
-    return None, 0.0
+    return _LEAD_CACHE_SERVICE.title_cache_find(family, evidence, threshold)
 
 
 def _lead_title_cache_store(family, evidence, titles):
-    data = _lead_title_cache_load()
-    entries = data.get("entries", [])
-    entries.append({
-        "family": family,
-        "evidence": sorted(evidence),
-        "titles": titles,
-        "created_at": datetime.utcnow().isoformat(),
-        "hits": 0,
-    })
-    if len(entries) > _LEAD_TITLE_CACHE_MAX_ENTRIES:
-        entries = entries[-_LEAD_TITLE_CACHE_MAX_ENTRIES:]
-    data["entries"] = entries
-    _lead_title_cache_save(data)
+    return _LEAD_CACHE_SERVICE.title_cache_store(family, evidence, titles)
 
 
 _LEAD_CONTACT_CACHE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lead_contact_cache.json")
 _LEAD_CONTACT_CACHE_MAX_ENTRIES = 10000
 
+# Repositories and paths are passed as callables because the test-suite
+# reassigns these module globals after import (e.g. swapping in a corrupt-storage
+# repository) and expects the cache to read the current value on each call.
+_LEAD_CACHE_SERVICE = _LeadCacheService(
+    title_repository=lambda: _CVSTUDIO_LEAD_TITLE_REPOSITORY,
+    contact_repository=lambda: _CVSTUDIO_LEAD_CONTACT_REPOSITORY,
+    title_path=lambda: _LEAD_TITLE_CACHE_PATH,
+    contact_path=lambda: _LEAD_CONTACT_CACHE_PATH,
+    legacy_json_read=_cvstudio_legacy_json_read,
+    legacy_json_write=_cvstudio_legacy_json_write,
+    storage_error=StorageError,
+    title_max_entries=_LEAD_TITLE_CACHE_MAX_ENTRIES,
+    contact_max_entries=_LEAD_CONTACT_CACHE_MAX_ENTRIES,
+    title_sim_threshold=_LEAD_TITLE_CACHE_SIM_THRESHOLD,
+    normalize_linkedin_url=_lead_normalize_linkedin_url,
+    is_company_domain_email=_lead_is_company_domain_email,
+)
+
 
 def _lead_contact_cache_load():
-    legacy, fingerprint = _cvstudio_legacy_json_read(_LEAD_CONTACT_CACHE_PATH, dict)
-    try:
-        if isinstance(legacy, dict) and isinstance(legacy.get("entries"), dict):
-            _CVSTUDIO_LEAD_CONTACT_REPOSITORY.import_legacy(legacy, fingerprint)
-        return _CVSTUDIO_LEAD_CONTACT_REPOSITORY.load()
-    except StorageError:
-        raise
-    except Exception:
-        if isinstance(legacy, dict) and isinstance(legacy.get("entries"), dict):
-            return legacy
-        return {"entries": {}}
+    return _LEAD_CACHE_SERVICE.contact_cache_load()
 
 
 def _lead_contact_cache_save(data):
-    try:
-        _CVSTUDIO_LEAD_CONTACT_REPOSITORY.save(data)
-        try:
-            _cvstudio_legacy_json_write(_LEAD_CONTACT_CACHE_PATH, data)
-        except Exception:
-            pass
-    except StorageError:
-        raise
-    except Exception:
-        pass
-
-
-
-
-
-
-
-
-
-
+    return _LEAD_CACHE_SERVICE.contact_cache_save(data)
 
 
 def _lead_contact_cache_key(person):
-    """A LinkedIn profile URL is the most reliable identity anchor when present
-    (two different people are essentially never the same profile URL). Falling
-    back to name+company is a reasonable second choice, but is more prone to
-    collisions (common names, similarly-named companies) so is only used when
-    no profile URL is available at all.
-    """
-    person = person or {}
-    li = _lead_normalize_linkedin_url(person.get("profile_url") or person.get("linkedin_url"))
-    if li:
-        return "li:" + li
-    name = re.sub(r"\s+", " ", str(person.get("name") or "").strip().lower())
-    company = re.sub(r"\s+", " ", str(person.get("company") or "").strip().lower())
-    if name and company:
-        return "nc:" + name + "|" + company
-    return ""
+    return _LEAD_CACHE_SERVICE.contact_cache_key(person)
 
 
 def _lead_contact_cache_find(person):
-    key = _lead_contact_cache_key(person)
-    if not key:
-        return None
-    data = _lead_contact_cache_load()
-    cached = data.get("entries", {}).get(key)
-    if not isinstance(cached, dict):
-        return None
-    # Do not let previous misses become permanent. A cached "Not found" with
-    # no email is retry-eligible, so Apollo/AI can try again on a later run.
-    if not str(cached.get("email") or "").strip() and str(cached.get("verification_status") or "").strip().lower() == "not found":
-        return None
-    return cached
+    return _LEAD_CACHE_SERVICE.contact_cache_find(person)
 
 
 def _lead_contact_cache_store(person, email_data):
-    key = _lead_contact_cache_key(person)
-    if not key:
-        return
-    email_data = dict(email_data or {})
-    email = str(email_data.get("email") or "").strip()
-    if not email or not _lead_is_company_domain_email(email, (person or {}).get("company") or email_data.get("company") or ""):
-        # Failed/Not-found/personal-email results should not poison the cache.
-        # If an older version cached a miss, remove it so the person can be retried.
-        data = _lead_contact_cache_load()
-        entries = data.get("entries", {})
-        if key in entries:
-            entries.pop(key, None)
-            data["entries"] = entries
-            _lead_contact_cache_save(data)
-        return
-    data = _lead_contact_cache_load()
-    entries = data.get("entries", {})
-    existing = entries.get(key) or {}
-    entries[key] = {
-        "email": email,
-        "email_confidence": email_data.get("email_confidence", ""),
-        "email_source": email_data.get("email_source", ""),
-        "verification_status": email_data.get("verification_status", ""),
-        "cached_at": datetime.utcnow().isoformat(),
-        "hits": int(existing.get("hits") or 0),
-    }
-    if len(entries) > _LEAD_CONTACT_CACHE_MAX_ENTRIES:
-        # Drop the least-reused entries first, matching the merge tool's logic.
-        ordered = sorted(entries.items(), key=lambda kv: int(kv[1].get("hits") or 0))
-        for k, _ in ordered[: len(entries) - _LEAD_CONTACT_CACHE_MAX_ENTRIES]:
-            entries.pop(k, None)
-    data["entries"] = entries
-    _lead_contact_cache_save(data)
+    return _LEAD_CACHE_SERVICE.contact_cache_store(person, email_data)
 
 
 def _lead_contact_cache_touch(person):
-    try:
-        key = _lead_contact_cache_key(person)
-        if not key:
-            return
-        data = _lead_contact_cache_load()
-        entries = data.get("entries", {})
-        if key in entries:
-            entries[key]["hits"] = int(entries[key].get("hits") or 0) + 1
-            _lead_contact_cache_save(data)
-    except Exception:
-        pass
+    return _LEAD_CACHE_SERVICE.contact_cache_touch(person)
 
 
 class _LeadApolloRateLimited(Exception):
@@ -14000,16 +13878,7 @@ def _lead_apollo_enrich_person(api_key, person, timeout=15):
 
 
 def _lead_title_cache_touch(matched_entry):
-    """Best-effort hit counter. Not critical if a concurrent write races it."""
-    try:
-        data = _lead_title_cache_load()
-        for e in data.get("entries", []):
-            if e.get("family") == matched_entry.get("family") and e.get("evidence") == matched_entry.get("evidence"):
-                e["hits"] = int(e.get("hits") or 0) + 1
-                break
-        _lead_title_cache_save(data)
-    except Exception:
-        pass
+    return _LEAD_CACHE_SERVICE.title_cache_touch(matched_entry)
 
 
 def _lead_ai_expand_title_angles(api_key, model, target_role, cv_excerpt, candidate_context, industries, primary_families=None, max_titles=18, timeout=20, llm_provider="anthropic"):

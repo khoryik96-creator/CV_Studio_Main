@@ -74,6 +74,7 @@ class Phase7AModularMonolithFoundationTests(unittest.TestCase):
                 "cv_normalize",
                 "lead_match",
                 "lead_enrich",
+                "lead_cache",
                 "spider_boolean",
                 "spider_summary",
                 "spider_score",
