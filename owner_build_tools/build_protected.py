@@ -60,7 +60,7 @@ SALARY_COMPARISON_MODULES = (
 )
 ROOT_FILES = (
     "CV Studio.bat","INSTALL.bat","INSTALL_CORE.bat","INSTALL_CORE.ps1","INSTALL_RECEIPT.ps1",
-    "START_HIDDEN.vbs","STOP.bat","STOP_CORE.ps1","WATCHDOG.vbs","INSTANCE_PORT.ps1","RESTORE_PREVIOUS.bat","RESTORE_PREVIOUS.ps1","install.sh","start.sh","restore_previous.sh",
+    "START_HIDDEN.vbs","STOP.bat","STOP_CORE.ps1","FORCE_STOP.bat","FORCE_STOP.ps1","WATCHDOG.vbs","INSTANCE_PORT.ps1","RESTORE_PREVIOUS.bat","RESTORE_PREVIOUS.ps1","install.sh","start.sh","restore_previous.sh",
     "package.json","requirements.txt","cv_studio_logo.png","cv_studio.ico",
 )
 BANNED_DIRS = {"__pycache__",".git",".pytest_cache",".mypy_cache"}
@@ -153,7 +153,7 @@ def validate_repository_dependency_state(root: Path) -> None:
     if git_guard not in workflow_text or workflow_text.index(git_guard) > workflow_text.index("uses: actions/checkout@v4"):
         raise RuntimeError("Protected workflow must disable core.autocrlf before actions/checkout.")
     batch_files = (
-        "CV Studio.bat", "INSTALL.bat", "INSTALL_CORE.bat", "MERGE_TITLE_CACHE.bat", "RESTORE_PREVIOUS.bat", "STOP.bat",
+        "CV Studio.bat", "INSTALL.bat", "INSTALL_CORE.bat", "MERGE_TITLE_CACHE.bat", "RESTORE_PREVIOUS.bat", "STOP.bat", "FORCE_STOP.bat",
         "owner_build_tools/BUILD_PROTECTED_WINDOWS.bat",
         "owner_build_tools/APPLY_PRIVATE_REPO_FIX_WINDOWS.bat",
     )
@@ -178,7 +178,7 @@ def validate_repository_dependency_state(root: Path) -> None:
             raise RuntimeError(f"{rel} is not CRLF-only. Run repo_consistency.py --repair.")
         if not raw.lower().startswith(b"option explicit"):
             raise RuntimeError(f"{rel} does not begin with Option Explicit at byte zero.")
-    for rel in ("INSTANCE_PORT.ps1", "STOP_CORE.ps1", "RESTORE_PREVIOUS.ps1"):
+    for rel in ("INSTANCE_PORT.ps1", "STOP_CORE.ps1", "FORCE_STOP.ps1", "RESTORE_PREVIOUS.ps1"):
         helper_raw = (root / rel).read_bytes()
         if helper_raw.startswith(b"\xef\xbb\xbf"):
             raise RuntimeError(f"{rel} contains a UTF-8 BOM. Run repo_consistency.py --repair.")
@@ -604,6 +604,10 @@ def patch_launchers(root: Path,target: str) -> None:
         restore_bat=(root/"RESTORE_PREVIOUS.bat").read_text(encoding="utf-8-sig")
         if "update_state.json" not in restore_ps or "install_receipt.before_restore" not in restore_ps or "CV Studio.lnk" not in restore_ps or "RESTORE_PREVIOUS.ps1" not in restore_bat:
             raise RuntimeError("Windows transactional rollback launcher is missing or incomplete.")
+        force_bat=(root/"FORCE_STOP.bat").read_text(encoding="utf-8-sig")
+        force_ps=(root/"FORCE_STOP.ps1").read_text(encoding="utf-8-sig")
+        if "FORCE_STOP.ps1" not in force_bat or "Get-NetTCPConnection" not in force_ps or "watchdog.vbs" not in force_ps.lower() or "LocalPort 5000" not in force_ps:
+            raise RuntimeError("Windows FORCE_STOP launcher is missing or not port-5000/watchdog scoped.")
     elif target.startswith("macos-"):
         start=(root/"start.sh").read_text(encoding="utf-8-sig")
         install=(root/"install.sh").read_text(encoding="utf-8-sig")
