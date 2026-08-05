@@ -9106,6 +9106,46 @@ def _spider_extract_legacy_doc_text_for_preview(raw):
         "DOCX or PDF and retry.",
     )
 
+
+def _spider_scan_doc_text_runs(buf, min_run=6):
+    """'strings'-style readable-text recovery from a raw byte buffer.
+
+    A last-resort fallback for legacy .doc files whose Word piece table (CLX)
+    cannot be parsed structurally (fast-saved documents, unusual or truncated
+    CLX layouts). Scans for runs of printable characters stored two ways:
+
+      * 8-bit cp1252/Latin-1 text (contiguous printable bytes), and
+      * ASCII/Latin text stored as UTF-16LE (printable low byte + 0x00 high
+        byte), which is exactly how a Unicode-body Word 97 file stores prose.
+
+    Returns cleaned plain text or ''. This output is never Antiword-verified and
+    is only reachable from the explicit opt-in recovery path.
+    """
+    buf = buf or b""
+    if not buf:
+        return ""
+    low = rb"\x09\x0a\x0d\x20-\x7e\xa0-\xff"
+    try:
+        ascii_parts = re.findall(rb"[" + low + rb"]{%d,}" % int(min_run), buf)
+        ascii_text = _spider_clean_doc_text_for_preview(
+            "\n".join(p.decode("cp1252", errors="ignore") for p in ascii_parts)
+        )
+        utf16_parts = re.findall(
+            rb"(?:[" + low + rb"]\x00){%d,}" % int(min_run), buf
+        )
+        utf16_text = _spider_clean_doc_text_for_preview(
+            "\n".join(p.decode("utf-16-le", errors="ignore") for p in utf16_parts)
+        )
+    except Exception:
+        return ""
+
+    def _alpha(text):
+        return sum(1 for c in text if c.isalpha())
+
+    # Prefer whichever layout yielded more real alphabetic content.
+    return utf16_text if _alpha(utf16_text) >= _alpha(ascii_text) else ascii_text
+
+
 def _spider_recover_legacy_doc_text_unverified(raw):
     """Best-effort native text recovery from a legacy OLE .doc.
 
@@ -9182,7 +9222,17 @@ def _spider_recover_legacy_doc_text_unverified(raw):
                 if piece:
                     pieces.append(piece)
             break
-        return _spider_clean_doc_text_for_preview(''.join(pieces))
+        cleaned = _spider_clean_doc_text_for_preview(''.join(pieces))
+        if _spider_doc_text_quality_ok(cleaned):
+            return cleaned
+        # The structured piece-table parse produced nothing usable (fast-saved
+        # or unusual CLX). Fall back to a printable-run scan of the main text
+        # stream, then the whole file, before giving up. Still never verified.
+        for source in (word, raw):
+            scanned = _spider_scan_doc_text_runs(source)
+            if _spider_doc_text_quality_ok(scanned):
+                return scanned
+        return cleaned
     except Exception:
         return ""
     finally:
@@ -9190,6 +9240,32 @@ def _spider_recover_legacy_doc_text_unverified(raw):
             ole.close()
         except Exception:
             pass
+
+
+def _spider_unverified_doc_recovery_text(raw, ctype, filename, allow_unverified):
+    """Return opt-in unverified recovery text for a legacy .doc, or ''.
+
+    Shared by every AntiwordDependencyError handler in the AI Crawler preview
+    flow so the recruiter's explicit ``allow_unverified`` opt-in is honoured no
+    matter where the verified-Antiword gate raised. In particular the *visual*
+    render path (`_office_bytes_to_pdf_preview`) runs the verified-Antiword gate
+    before extraction, so for a legacy .doc it raises before `extract_text` — the
+    place the opt-in recovery used to live — is ever called. Centralising the
+    decision here closes that gap.
+
+    The result is never Antiword-verified: callers must label it and must never
+    cache it. Recovery requires the explicit opt-in and a real legacy .doc, and
+    is still bounded by the same `_spider_doc_text_quality_ok` gate, so this
+    cannot weaken the verified-Antiword guarantee.
+    """
+    if not allow_unverified:
+        return ""
+    if not _document_is_legacy_doc(raw, ctype, filename):
+        return ""
+    recovered = _spider_recover_legacy_doc_text_unverified(raw)
+    if _spider_doc_text_quality_ok(recovered):
+        return recovered[:30000]
+    return ""
 
 
 def _spider_tesseract_path():
@@ -10095,27 +10171,59 @@ def jobadder_spider_candidate_preview():
             cancel_check()
             try:
                 result = _spider_extract_text_from_download(raw, ctype, filename, cancel_check=cancel_check if prefetch_mode else None)
-            except AntiwordDependencyError as exc:
+            except AntiwordDependencyError:
                 # Default path is unchanged: re-raise so verified-Antiword failures
                 # still return 424. Only when the recruiter explicitly opted in do
-                # we recover the text natively for a legacy .doc the verified
-                # runtime could not decode, clearly labelled and never cached.
-                if (
-                    allow_unverified_doc
-                    and getattr(exc, "reason", "") == "document-extraction-failed"
-                    and _document_is_legacy_doc(raw, ctype, filename)
-                ):
-                    recovered = _spider_recover_legacy_doc_text_unverified(raw)
-                    if _spider_doc_text_quality_ok(recovered):
-                        cache_provenance["unverified_recovery"] = True
-                        cancel_check()
-                        return (
-                            recovered[:30000],
-                            "legacy .doc recovered without Antiword (unverified — review before use)",
-                        )
+                # we recover the text natively for a legacy .doc, clearly labelled
+                # and never cached. The native parser does not use Antiword at all,
+                # so recovery is offered for *any* Antiword failure reason on a
+                # legacy .doc — not only "document-extraction-failed" (verified
+                # Antiword decoded nothing) but also cases where the verified
+                # runtime could not run (e.g. runtime-missing/functional-*): the
+                # recruiter still gets an explicit, labelled recovery option.
+                recovered = _spider_unverified_doc_recovery_text(
+                    raw, ctype, filename, allow_unverified_doc
+                )
+                if recovered:
+                    cache_provenance["unverified_recovery"] = True
+                    cancel_check()
+                    return (
+                        recovered,
+                        "legacy .doc recovered without Antiword (unverified — review before use)",
+                    )
                 raise
             cancel_check()
             return result
+
+    def recover_unverified_doc_response(raw, ctype, filename):
+        """Serve opt-in unverified recovery when a legacy-.doc AntiwordDependency
+        error surfaced from any preview stage — including the visual render,
+        whose verified-Antiword gate raises before ``extract_text`` runs. Returns
+        a ready 200 response or None to fall through to the 424. The recovered
+        text is labelled unverified and never cached (``cacheable=False`` plus the
+        provenance flag)."""
+        recovered = _spider_unverified_doc_recovery_text(
+            raw, ctype, filename, allow_unverified_doc
+        )
+        if not recovered:
+            return None
+        cache_provenance["unverified_recovery"] = True
+        content_sha256 = _spider_download_content_identity(raw)
+        return respond(
+            {
+                "ok": True,
+                "candidate_id": candidate_id,
+                "name": _spider_preview_name(candidate_id, detail),
+                "mode": "resume_text",
+                "source": "legacy .doc recovered without Antiword (unverified — review before use)",
+                "note": filename or "legacy .doc recovered without Antiword",
+                "preview_text": recovered,
+                "search_text": recovered,
+                "tried": tried[:12],
+            },
+            content_sha256=content_sha256,
+            cacheable=False,
+        )
 
     def visual_search_text(raw, ctype, filename, visual):
         """Reuse visual text and keep background prefetch genuinely lightweight.
@@ -10309,6 +10417,9 @@ def jobadder_spider_candidate_preview():
         except _SpiderPreviewCancelled:
             raise
         except AntiwordDependencyError as exc:
+            recovered_response = recover_unverified_doc_response(raw, ctype, filename)
+            if recovered_response is not None:
+                return recovered_response
             return respond(
                 _antiword_dependency_payload(exc),
                 424,
@@ -10377,6 +10488,9 @@ def jobadder_spider_candidate_preview():
         except _SpiderPreviewCancelled:
             raise
         except AntiwordDependencyError as exc:
+            recovered_response = recover_unverified_doc_response(raw, ctype, dispo)
+            if recovered_response is not None:
+                return recovered_response
             return respond(
                 _antiword_dependency_payload(exc),
                 424,
@@ -10467,6 +10581,9 @@ def jobadder_spider_candidate_preview():
                         except _SpiderPreviewCancelled:
                             raise
                         except AntiwordDependencyError as exc:
+                            recovered_response = recover_unverified_doc_response(raw2, ctype2, filename)
+                            if recovered_response is not None:
+                                return recovered_response
                             return respond(
                                 _antiword_dependency_payload(exc),
                                 424,
