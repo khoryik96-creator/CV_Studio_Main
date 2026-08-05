@@ -217,3 +217,83 @@ def _lead_search_serpapi(api_key, query, max_results=8, timeout=18):
             "query": query
         })
     return out
+
+
+class LeadSearchOrchestrator:
+    """Search-provider gathering as an explicitly wired service (Phase 7B).
+
+    Owns the provider-config resolution (which reads the AI secret store for a
+    backend-stored Tavily/SerpAPI key) and the multi-query collection loop. The
+    web shell keeps the Flask routes and the ``_lead_*`` names; it constructs
+    this with its app-level dependencies injected as callables so the module
+    never imports ``app``.
+
+    The cross-called helpers (``search_provider_config``, ``search_tavily``,
+    ``search_serpapi``, ``search_provider_queries``) are injected as callables
+    that resolve the *current* app-level name on each call, not bound once at
+    construction. The phase5b characterization tests patch
+    ``app._lead_search_provider_config`` / ``app._lead_search_tavily`` / ... and
+    expect the collection loop to honour the patch; the late-binding callables
+    preserve that seam exactly. ``secret_store`` is likewise a zero-arg callable
+    because the store global can be reassigned by tests.
+    """
+
+    def __init__(
+        self,
+        *,
+        secret_store,
+        search_provider_config,
+        search_tavily,
+        search_serpapi,
+        search_provider_queries,
+    ):
+        self._secret_store = secret_store
+        self._search_provider_config = search_provider_config
+        self._search_tavily = search_tavily
+        self._search_serpapi = search_serpapi
+        self._search_provider_queries = search_provider_queries
+
+    def search_provider_config(self, raw):
+        raw = raw if isinstance(raw, dict) else {}
+        provider = str(raw.get("provider") or raw.get("type") or "none").strip().lower()
+        if provider in {"", "off", "disabled", "none"}:
+            provider = "none"
+        # Keep provider names intentionally small and explicit for safety.
+        if provider not in {"none", "tavily", "serpapi"}:
+            provider = "none"
+        key = str(raw.get("api_key") or raw.get("key") or "").strip()
+        if (not key or key == "__BACKEND_SECURE__") and provider in {"tavily", "serpapi"}:
+            key = str(self._secret_store().get("search_" + provider) or "").strip()
+        return {"provider": provider, "api_key": key, "enabled": provider != "none" and bool(key)}
+
+    def collect_search_provider_results(self, search_provider, job_sources, title_angles, regions, target_role="", job_filters=None, depth="standard"):
+        cfg = self._search_provider_config(search_provider)
+        if not cfg.get("enabled"):
+            return [], []
+        max_queries = {"light": 5, "standard": 8, "deep": 12}.get(str(depth or "standard").lower(), 8)
+        per_query = {"light": 5, "standard": 7, "deep": 8}.get(str(depth or "standard").lower(), 7)
+        queries = self._search_provider_queries(job_sources, title_angles, regions, target_role, job_filters, max_queries=max_queries)
+        results = []
+        warnings = []
+        seen = set()
+        for q in queries:
+            try:
+                if cfg["provider"] == "tavily":
+                    batch = self._search_tavily(cfg["api_key"], q, max_results=per_query, timeout=16)
+                elif cfg["provider"] == "serpapi":
+                    batch = self._search_serpapi(cfg["api_key"], q, max_results=per_query, timeout=16)
+                else:
+                    batch = []
+                for item in batch:
+                    url = str(item.get("url") or "").strip()
+                    title = str(item.get("title") or "").strip()
+                    key = (url or title).lower().rstrip("/")
+                    if not key or key in seen:
+                        continue
+                    seen.add(key)
+                    results.append(item)
+            except Exception as e:
+                warnings.append(f"{cfg['provider']} query failed: {str(e)[:160]}")
+            if len(results) >= {"light": 24, "standard": 40, "deep": 60}.get(str(depth or "standard").lower(), 40):
+                break
+        return results, warnings

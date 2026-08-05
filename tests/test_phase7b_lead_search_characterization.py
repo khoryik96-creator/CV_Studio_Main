@@ -136,6 +136,106 @@ class SerpapiNormaliserTests(unittest.TestCase):
         self.assertEqual(out[0]["provider"], "serpapi")
 
 
+class OrchestratorConfigTests(unittest.TestCase):
+    def _orch(self, secret_store=None, **calls):
+        defaults = dict(
+            secret_store=lambda: (secret_store or {}),
+            search_provider_config=lambda raw: orch.search_provider_config(raw),
+            search_tavily=lambda *a, **k: [],
+            search_serpapi=lambda *a, **k: [],
+            search_provider_queries=lambda *a, **k: [],
+        )
+        defaults.update(calls)
+        orch = ls.LeadSearchOrchestrator(**defaults)
+        return orch
+
+    def test_disabled_when_no_provider(self):
+        orch = self._orch()
+        cfg = orch.search_provider_config({"provider": "none"})
+        self.assertEqual(cfg, {"provider": "none", "api_key": "", "enabled": False})
+
+    def test_unknown_provider_coerced_to_none(self):
+        orch = self._orch()
+        self.assertEqual(orch.search_provider_config({"provider": "bing"})["provider"], "none")
+
+    def test_inline_key_enables_provider(self):
+        orch = self._orch()
+        cfg = orch.search_provider_config({"provider": "tavily", "api_key": "inline-key"})
+        self.assertEqual(cfg, {"provider": "tavily", "api_key": "inline-key", "enabled": True})
+
+    def test_backend_secure_falls_back_to_secret_store(self):
+        orch = self._orch(secret_store={"search_serpapi": "stored-key"})
+        cfg = orch.search_provider_config({"provider": "serpapi", "api_key": "__BACKEND_SECURE__"})
+        self.assertEqual(cfg["api_key"], "stored-key")
+        self.assertTrue(cfg["enabled"])
+
+    def test_secret_store_read_is_late_bound(self):
+        # Reassigning what the injected callable returns must be picked up.
+        store = {"search_tavily": "k1"}
+        orch = ls.LeadSearchOrchestrator(
+            secret_store=lambda: store,
+            search_provider_config=lambda raw: orch.search_provider_config(raw),
+            search_tavily=lambda *a, **k: [],
+            search_serpapi=lambda *a, **k: [],
+            search_provider_queries=lambda *a, **k: [],
+        )
+        self.assertEqual(orch.search_provider_config({"provider": "tavily", "key": ""})["api_key"], "k1")
+        store["search_tavily"] = "k2"
+        self.assertEqual(orch.search_provider_config({"provider": "tavily", "key": ""})["api_key"], "k2")
+
+
+class OrchestratorCollectTests(unittest.TestCase):
+    def _orch(self, **overrides):
+        defaults = dict(
+            secret_store=lambda: {},
+            search_provider_config=lambda raw: {"provider": "tavily", "api_key": "k", "enabled": True},
+            search_tavily=lambda *a, **k: [],
+            search_serpapi=lambda *a, **k: [],
+            search_provider_queries=lambda *a, **k: ["q1", "q2"],
+        )
+        defaults.update(overrides)
+        return ls.LeadSearchOrchestrator(**defaults)
+
+    def test_disabled_config_short_circuits(self):
+        orch = self._orch(search_provider_config=lambda raw: {"provider": "none", "enabled": False})
+        self.assertEqual(orch.collect_search_provider_results({}, [], [], []), ([], []))
+
+    def test_dedupes_by_url_then_title(self):
+        batches = iter([
+            [{"url": "https://a.example/1", "title": "A"}, {"url": "https://a.example/1/", "title": "dupe"}],
+            [{"url": "", "title": "A"}],  # title "a" already seen via first item's url? no -> new key "a"
+        ])
+        orch = self._orch(search_tavily=lambda *a, **k: next(batches))
+        results, warnings = orch.collect_search_provider_results({}, [], [], [])
+        urls = [r.get("url") for r in results]
+        # Trailing-slash duplicate collapsed; distinct title-only item kept.
+        self.assertEqual(urls, ["https://a.example/1", ""])
+        self.assertEqual(warnings, [])
+
+    def test_provider_exception_is_captured_as_warning(self):
+        def boom(*a, **k):
+            raise RuntimeError("tavily down")
+        orch = self._orch(search_tavily=boom)
+        results, warnings = orch.collect_search_provider_results({}, [], [], [])
+        self.assertEqual(results, [])
+        self.assertEqual(len(warnings), 2)  # one per query
+        self.assertIn("tavily query failed: tavily down", warnings[0])
+
+    def test_serpapi_provider_dispatch(self):
+        called = {}
+        def serp(*a, **k):
+            called["hit"] = True
+            return [{"url": "https://s.example", "title": "S"}]
+        orch = self._orch(
+            search_provider_config=lambda raw: {"provider": "serpapi", "api_key": "k", "enabled": True},
+            search_serpapi=serp,
+            search_provider_queries=lambda *a, **k: ["q1"],
+        )
+        results, _ = orch.collect_search_provider_results({}, [], [], [])
+        self.assertTrue(called.get("hit"))
+        self.assertEqual(results[0]["url"], "https://s.example")
+
+
 class FetchJsonUrlTests(unittest.TestCase):
     def test_cert_error_is_reraised_with_actionable_message(self):
         err = ls.urllib.error.URLError("CERTIFICATE_VERIFY_FAILED: unable to get local issuer")

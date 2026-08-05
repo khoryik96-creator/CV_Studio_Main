@@ -12536,17 +12536,7 @@ def _lead_call_with_optional_web(api_key, payload, warning_prefix="", graceful_j
 
 
 def _lead_search_provider_config(raw):
-    raw = raw if isinstance(raw, dict) else {}
-    provider = str(raw.get("provider") or raw.get("type") or "none").strip().lower()
-    if provider in {"", "off", "disabled", "none"}:
-        provider = "none"
-    # Keep provider names intentionally small and explicit for safety.
-    if provider not in {"none", "tavily", "serpapi"}:
-        provider = "none"
-    key = str(raw.get("api_key") or raw.get("key") or "").strip()
-    if (not key or key == "__BACKEND_SECURE__") and provider in {"tavily", "serpapi"}:
-        key = str(_ai_secret_store.get("search_" + provider) or "").strip()
-    return {"provider": provider, "api_key": key, "enabled": provider != "none" and bool(key)}
+    return _LEAD_SEARCH_ORCHESTRATOR.search_provider_config(raw)
 
 
 
@@ -12558,6 +12548,7 @@ def _lead_search_provider_config(raw):
 # verbatim into cvstudio_lead_search (Phase 7B). Re-imported here so the
 # app-level names, call sites and mock.patch.object seams are unchanged.
 from cvstudio_lead_search import (
+    LeadSearchOrchestrator as _LeadSearchOrchestrator,
     _lead_fetch_json_url,
     _lead_search_serpapi,
     _lead_search_tavily,
@@ -12565,37 +12556,29 @@ from cvstudio_lead_search import (
 )
 
 
+# _lead_search_provider_config + _lead_collect_search_provider_results are
+# gathered into LeadSearchOrchestrator (Phase 7B). These stay thin app-level
+# delegators so the names remain patchable module attributes and every call
+# site + mock.patch.object seam is unchanged; the orchestrator reaches the
+# cross-called _lead_* names and the secret store back through app-resolving
+# callables (see construction below).
 def _lead_collect_search_provider_results(search_provider, job_sources, title_angles, regions, target_role="", job_filters=None, depth="standard"):
-    cfg = _lead_search_provider_config(search_provider)
-    if not cfg.get("enabled"):
-        return [], []
-    max_queries = {"light": 5, "standard": 8, "deep": 12}.get(str(depth or "standard").lower(), 8)
-    per_query = {"light": 5, "standard": 7, "deep": 8}.get(str(depth or "standard").lower(), 7)
-    queries = _lead_search_provider_queries(job_sources, title_angles, regions, target_role, job_filters, max_queries=max_queries)
-    results = []
-    warnings = []
-    seen = set()
-    for q in queries:
-        try:
-            if cfg["provider"] == "tavily":
-                batch = _lead_search_tavily(cfg["api_key"], q, max_results=per_query, timeout=16)
-            elif cfg["provider"] == "serpapi":
-                batch = _lead_search_serpapi(cfg["api_key"], q, max_results=per_query, timeout=16)
-            else:
-                batch = []
-            for item in batch:
-                url = str(item.get("url") or "").strip()
-                title = str(item.get("title") or "").strip()
-                key = (url or title).lower().rstrip("/")
-                if not key or key in seen:
-                    continue
-                seen.add(key)
-                results.append(item)
-        except Exception as e:
-            warnings.append(f"{cfg['provider']} query failed: {str(e)[:160]}")
-        if len(results) >= {"light": 24, "standard": 40, "deep": 60}.get(str(depth or "standard").lower(), 40):
-            break
-    return results, warnings
+    return _LEAD_SEARCH_ORCHESTRATOR.collect_search_provider_results(
+        search_provider, job_sources, title_angles, regions, target_role, job_filters, depth
+    )
+
+
+_LEAD_SEARCH_ORCHESTRATOR = _LeadSearchOrchestrator(
+    # All injected as callables that resolve the CURRENT app-level name on each
+    # call: phase5b patches app._lead_search_provider_config / _lead_search_tavily
+    # / _lead_search_serpapi and expects the collection loop to honour the patch,
+    # and _ai_secret_store can be reassigned by tests.
+    secret_store=lambda: _ai_secret_store,
+    search_provider_config=lambda raw: _lead_search_provider_config(raw),
+    search_tavily=lambda *a, **k: _lead_search_tavily(*a, **k),
+    search_serpapi=lambda *a, **k: _lead_search_serpapi(*a, **k),
+    search_provider_queries=lambda *a, **k: _lead_search_provider_queries(*a, **k),
+)
 
 
 
