@@ -9106,6 +9106,46 @@ def _spider_extract_legacy_doc_text_for_preview(raw):
         "DOCX or PDF and retry.",
     )
 
+
+def _spider_scan_doc_text_runs(buf, min_run=6):
+    """'strings'-style readable-text recovery from a raw byte buffer.
+
+    A last-resort fallback for legacy .doc files whose Word piece table (CLX)
+    cannot be parsed structurally (fast-saved documents, unusual or truncated
+    CLX layouts). Scans for runs of printable characters stored two ways:
+
+      * 8-bit cp1252/Latin-1 text (contiguous printable bytes), and
+      * ASCII/Latin text stored as UTF-16LE (printable low byte + 0x00 high
+        byte), which is exactly how a Unicode-body Word 97 file stores prose.
+
+    Returns cleaned plain text or ''. This output is never Antiword-verified and
+    is only reachable from the explicit opt-in recovery path.
+    """
+    buf = buf or b""
+    if not buf:
+        return ""
+    low = rb"\x09\x0a\x0d\x20-\x7e\xa0-\xff"
+    try:
+        ascii_parts = re.findall(rb"[" + low + rb"]{%d,}" % int(min_run), buf)
+        ascii_text = _spider_clean_doc_text_for_preview(
+            "\n".join(p.decode("cp1252", errors="ignore") for p in ascii_parts)
+        )
+        utf16_parts = re.findall(
+            rb"(?:[" + low + rb"]\x00){%d,}" % int(min_run), buf
+        )
+        utf16_text = _spider_clean_doc_text_for_preview(
+            "\n".join(p.decode("utf-16-le", errors="ignore") for p in utf16_parts)
+        )
+    except Exception:
+        return ""
+
+    def _alpha(text):
+        return sum(1 for c in text if c.isalpha())
+
+    # Prefer whichever layout yielded more real alphabetic content.
+    return utf16_text if _alpha(utf16_text) >= _alpha(ascii_text) else ascii_text
+
+
 def _spider_recover_legacy_doc_text_unverified(raw):
     """Best-effort native text recovery from a legacy OLE .doc.
 
@@ -9182,7 +9222,17 @@ def _spider_recover_legacy_doc_text_unverified(raw):
                 if piece:
                     pieces.append(piece)
             break
-        return _spider_clean_doc_text_for_preview(''.join(pieces))
+        cleaned = _spider_clean_doc_text_for_preview(''.join(pieces))
+        if _spider_doc_text_quality_ok(cleaned):
+            return cleaned
+        # The structured piece-table parse produced nothing usable (fast-saved
+        # or unusual CLX). Fall back to a printable-run scan of the main text
+        # stream, then the whole file, before giving up. Still never verified.
+        for source in (word, raw):
+            scanned = _spider_scan_doc_text_runs(source)
+            if _spider_doc_text_quality_ok(scanned):
+                return scanned
+        return cleaned
     except Exception:
         return ""
     finally:
