@@ -68,6 +68,9 @@ const MONTH_ABBR = {
   jun:'Jun', june:'Jun', jul:'Jul', july:'Jul', aug:'Aug', august:'Aug', sep:'Sep', sept:'Sep', september:'Sep',
   oct:'Oct', october:'Oct', nov:'Nov', november:'Nov', dec:'Dec', december:'Dec'
 };
+// Number -> house-style month abbreviation, mirroring cvstudio_cv_normalize so
+// numeric "MM/YYYY" dates normalise to the same "Mon YYYY" style.
+const MONTH_ABBR_BY_NUMBER = { 1:'Jan', 2:'Feb', 3:'Mar', 4:'Apr', 5:'May', 6:'Jun', 7:'Jul', 8:'Aug', 9:'Sep', 10:'Oct', 11:'Nov', 12:'Dec' };
 const COMPANY_TOKEN_MAP = { SDN:'Sdn', BHD:'Bhd', PTE:'Pte', LTD:'Ltd', LMT:'Lmt', PVT:'Pvt', INC:'Inc', LLC:'LLC', LLP:'LLP', PLC:'PLC', CORP:'Corp', CO:'Co', COMPANY:'Company', TECH:'Tech' };
 const COMPANY_BRAND_TOKEN_MAP = { IFAST:'iFAST', GRABPAY:'GrabPay', DATAIKU:'Dataiku', YOUTUBE:'YouTube' };
 const ACRONYM_KEEP = new Set(['AI','ML','BI','IT','HR','QA','UA','UX','UI','PMO','PM','AWS','GCP','SQL','ETL','ELT','SSIS','SSRS','SSAS','ADF','DBA','RDS','EMR','EC2','S3','IAM','API','APAC','SEA','ERP','SAP','FICO','MSBI','MSC','IBM','CGI','EPAM','TCS','HP','HSBC','DBS','OCBC','UOB','AIA','IHH','RHB','CIMB','EY','KPMG','PWC','BNM','AML','LLC','LLP','PLC']);
@@ -126,6 +129,12 @@ function normalizeDateRange(value) {
   text = text.replace(/\s+to\s+/gi, ' to ');
   text = text.replace(/\b(January|February|March|April|June|July|August|September|Sept|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\b/gi, function(m){
     return MONTH_ABBR[String(m).toLowerCase().replace(/\.$/, '')] || m;
+  });
+  // Numeric MM/YYYY -> "Mon YYYY" so date format is consistent regardless of
+  // whether a given parse run emitted "06/2024" or "Jun 2024".
+  text = text.replace(/\b(\d{1,2})\/(\d{4})\b/g, function(m, mm, yyyy){
+    const n = parseInt(mm, 10);
+    return (n >= 1 && n <= 12) ? (MONTH_ABBR_BY_NUMBER[n] + ' ' + yyyy) : m;
   });
   return text.replace(/\s+/g, ' ').trim();
 }

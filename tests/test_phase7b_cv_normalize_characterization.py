@@ -37,6 +37,28 @@ class DateAndMonthTests(unittest.TestCase):
     def test_date_range_already_normal_preserved(self):
         self.assertEqual(cn._normalize_cv_date_range("2019 to 2021"), "2019 to 2021")
 
+    def test_date_range_numeric_month_year_to_house_style(self):
+        # A parse run that emits "06/2024" must normalise to the same "Mon YYYY"
+        # form as a run that emits "Jun 2024", so re-formatting is consistent.
+        self.assertEqual(
+            cn._normalize_cv_date_range("06/2024 to 07/2026"), "Jun 2024 to Jul 2026"
+        )
+        self.assertEqual(cn._normalize_cv_date_range("6/2024"), "Jun 2024")
+        self.assertEqual(
+            cn._normalize_cv_date_range("05/2009 to Present"), "May 2009 to Present"
+        )
+        # Already-textual and year-only ranges are unchanged.
+        self.assertEqual(
+            cn._normalize_cv_date_range("Jun 2024 to Jul 2026"), "Jun 2024 to Jul 2026"
+        )
+        self.assertEqual(cn._normalize_cv_date_range("2004 to 2008"), "2004 to 2008")
+        # An out-of-range month is not a month token; leave it alone.
+        self.assertEqual(cn._normalize_cv_date_range("13/2024"), "13/2024")
+
+    def test_date_sort_point_reads_numeric_month(self):
+        self.assertEqual(cn._cv_date_sort_point("06/2024", end=False), (2024, 6))
+        self.assertEqual(cn._cv_date_sort_point("06/2024 to 07/2026", end=True), (2026, 7))
+
 
 class LanguageTests(unittest.TestCase):
     def test_canonical_language_name(self):
