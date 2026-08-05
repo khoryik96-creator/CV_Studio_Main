@@ -13,6 +13,20 @@ import re
 import urllib.parse
 from datetime import date
 
+# Several helpers here (the region/company filters) call into the sister pure
+# module cvstudio_lead_match. Those names were only in the web shell's namespace
+# originally; once _lead_filter_by_regions / _lead_filter_people_by_input_companies
+# were extracted into this module they raised NameError on the main
+# /lead-finder/search path. Import them so they resolve in this module.
+from cvstudio_lead_match import (
+    _lead_company_is_actually_role_text,
+    _lead_company_matches_title_angles,
+    _lead_company_names_match,
+    _lead_has_apac,
+    _lead_location_allowed,
+    _lead_norm_company_name,
+)
+
 
 def _lead_is_direct_job_url(url):
     """Best-effort classifier for direct job-ad URLs vs portal home/search/listing pages."""

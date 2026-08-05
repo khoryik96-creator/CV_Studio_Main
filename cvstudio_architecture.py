@@ -143,6 +143,7 @@ DEFAULT_MODULES = (
         "lead_enrich",
         "domain",
         ("cvstudio_lead_enrich.py",),
+        ("lead_match",),
     ),
     ModuleDefinition(
         "lead_cache",
