@@ -3,6 +3,10 @@ OWNER_ONLY_AUTHY_SETUP/
 
 # Generated/build/runtime files
 node_modules/
+# Local throwaway test virtualenvs (see HANDOFF.md §3)
+.venv_test/
+.venv/
+venv/
 protected-output/
 __pycache__/
 *.pyc
