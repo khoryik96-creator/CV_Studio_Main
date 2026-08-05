@@ -1246,11 +1246,12 @@ SECTION MAPPING RULES — very important:
 
 OMISSION & EXTRA SECTIONS RULES:
 - Do NOT place phone numbers, email addresses, physical addresses, LinkedIn URLs, or location/relocation info into the formatted CV body (skills, summary, work experience bullets, education, additional information). HOWEVER, still extract these into candidate.email, candidate.phone, candidate.linkedin, and candidate.address in the JSON — the app uses them for JobAdder matching and upload.
+- SALARY / REMUNERATION — OMIT ENTIRELY: Never include any salary, remuneration, or compensation detail anywhere in the formatted CV body or JSON. This covers current/present salary, expected/asking/desired/target salary, base pay, monthly or annual salary figures, bonus, commission, incentives, allowances (transport/housing/meal/etc.), EPF/KWSP/benefits amounts, and total package/CTC figures — whether written inline or under a section labelled Current Remuneration, Remuneration, Compensation, Salary, Expected Salary, Current Salary, Salary Expectation, Package, or similar. Drop the whole section and every such figure; do NOT map it to a skills category, Additional Information, or any other field. This overrides the catch-all mapping rule below. (Notice period is NOT salary — keep mapping it to candidate.notice_period per the rule below.)
 - KEEP & map to Additional Information skills categories:
   - GitHub links, personal websites, portfolio URLs, Behance, Dribbble → { "category": "Portfolio & Links", "items": "GitHub: https://... | Website: https://..." }
   - Patents section → { "category": "Patents", "items": "Patent title (Patent number, Year)\nPatent title (Patent number, Year)" } — preserve each patent as a separate line with full detail
   - Publications, Research Papers → { "category": "Publications", "items": "Title (Journal, Year)\nTitle (Journal, Year)" }
-  - Any other section that does not fit work_experiences, education, certifications, or skills (e.g. Interests, References, Projects, Open Source, Speaking Engagements, Conference Talks) → add as its own skills category with a sensible category name, preserve all content
+  - Any other section that does not fit work_experiences, education, certifications, or skills (e.g. Interests, References, Projects, Open Source, Speaking Engagements, Conference Talks) → add as its own skills category with a sensible category name, preserve all content. EXCEPTION: never apply this catch-all to salary/remuneration/compensation content — that is omitted entirely per the SALARY / REMUNERATION rule above.
   - Relocate/Open to relocation info → omit
   - Notice period if stated in the CV → map to candidate.notice_period"""
 
