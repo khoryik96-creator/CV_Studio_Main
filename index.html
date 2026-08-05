@@ -586,6 +586,10 @@
   .page-tab.lead-locked, .page-tab.summary-locked, .page-tab.ai-crawler-locked { min-width: 44px; justify-content: center; }
   .page-tab.tab-done::after { background: var(--green); box-shadow: 0 0 0 3px rgba(29,106,58,0.14); }
   .page-tab.tab-failed::after { background: var(--red); box-shadow: 0 0 0 3px rgba(163,45,45,0.14); }
+  /* Drag-to-reorder page tabs: the tab being dragged fades; neighbours shift via the existing transition. */
+  .page-tabs.tabs-reordering { cursor: grabbing; }
+  .page-tab.tab-dragging { opacity: 0.4; cursor: grabbing; }
+  .page-tabs.tabs-reordering .page-tab:not(.tab-dragging):hover { background: var(--blue-light); }
   .settings-tabs { display:flex; gap:6px; margin:0 0 12px; padding:4px; background:var(--surface2); border:1px solid var(--border); border-radius:10px; flex-wrap:wrap; }
   .settings-tab { border:0; border-radius:8px; padding:7px 11px; background:transparent; color:var(--text2); font-size:12px; font-weight:700; cursor:pointer; }
   .settings-tab:hover { background:var(--border); color:var(--text1); }
@@ -17278,6 +17282,129 @@ function switchTab(tab) {
     if (salaryFrame && !salaryFrame.getAttribute('src')) salaryFrame.setAttribute('src', '/salary-comparison/');
   }
   if (typeof queuePageNavPinRefresh === 'function') queuePageNavPinRefresh();
+}
+
+// ── Drag-to-reorder page tabs ────────────────────────────────────────────────
+// Click and hold any main tab (Batch, Create Profile, AI Crawler — locked tabs
+// too) and drag it to a new position. The order is saved per browser and
+// restored on the next reload. Purely front-end: no route or backend change, so
+// the sealed route contract is untouched. A plain click still switches tabs; a
+// drag reorders, because HTML5 dragstart only fires on an actual drag.
+var PAGE_TAB_ORDER_KEY = 'cvstudio_page_tab_order';
+
+function pageTabOrderSave(container) {
+  try {
+    var ids = Array.prototype.map.call(
+      container.querySelectorAll('.page-tab'),
+      function (el) { return el.id; }
+    ).filter(Boolean);
+    localStorage.setItem(PAGE_TAB_ORDER_KEY, JSON.stringify(ids));
+  } catch (e) {}
+}
+
+function pageTabOrderApplySaved(container) {
+  var saved;
+  try { saved = JSON.parse(localStorage.getItem(PAGE_TAB_ORDER_KEY) || 'null'); } catch (e) { saved = null; }
+  if (!Array.isArray(saved) || !saved.length) return;
+  // The pin toggle is not a tab and always stays last.
+  var pin = container.querySelector('.page-nav-pin-toggle');
+  var tabs = Array.prototype.slice.call(container.querySelectorAll('.page-tab'));
+  var byId = {};
+  tabs.forEach(function (t) { if (t.id) byId[t.id] = t; });
+  // Desired order = saved tabs that still exist, then any tabs added since
+  // (e.g. a new feature in an update) in their original position.
+  var ordered = [];
+  saved.forEach(function (id) { if (byId[id]) { ordered.push(byId[id]); delete byId[id]; } });
+  tabs.forEach(function (t) { if (t.id && byId[t.id]) ordered.push(t); });
+  ordered.forEach(function (t) { container.insertBefore(t, pin || null); });
+  if (pin) container.appendChild(pin);
+}
+
+function resetPageTabOrder() {
+  try { localStorage.removeItem(PAGE_TAB_ORDER_KEY); } catch (e) {}
+}
+
+function initPageTabReordering() {
+  var container = document.getElementById('pageTabs');
+  if (!container || container._reorderReady) return;
+  container._reorderReady = true;
+
+  pageTabOrderApplySaved(container);
+  Array.prototype.forEach.call(container.querySelectorAll('.page-tab'), function (tab) {
+    tab.setAttribute('draggable', 'true');
+  });
+
+  var dragged = null;
+
+  function getDragAfterElement(x, y) {
+    var candidates = Array.prototype.slice.call(
+      container.querySelectorAll('.page-tab:not(.tab-dragging)')
+    );
+    // Prefer tabs on the same visual row (the bar can wrap on narrow widths).
+    var sameRow = candidates.filter(function (el) {
+      var b = el.getBoundingClientRect();
+      return y >= b.top && y <= b.bottom;
+    });
+    var pool = sameRow.length ? sameRow : candidates;
+    var closest = { offset: -Infinity, element: null };
+    pool.forEach(function (el) {
+      var b = el.getBoundingClientRect();
+      var offset = x - (b.left + b.width / 2);
+      if (offset < 0 && offset > closest.offset) {
+        closest = { offset: offset, element: el };
+      }
+    });
+    return closest.element;
+  }
+
+  container.addEventListener('dragstart', function (e) {
+    var tab = e.target && e.target.closest ? e.target.closest('.page-tab') : null;
+    if (!tab || !container.contains(tab)) return;
+    dragged = tab;
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      // Firefox needs data set for a drag to start.
+      try { e.dataTransfer.setData('text/plain', tab.id || 'tab'); } catch (err) {}
+    }
+    container.classList.add('tabs-reordering');
+    // Add after a tick so the drag image is captured at full opacity.
+    setTimeout(function () { if (dragged) dragged.classList.add('tab-dragging'); }, 0);
+  });
+
+  container.addEventListener('dragover', function (e) {
+    if (!dragged) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    var pin = container.querySelector('.page-nav-pin-toggle');
+    var after = getDragAfterElement(e.clientX, e.clientY);
+    if (after == null) {
+      container.insertBefore(dragged, pin || null);
+    } else if (after !== dragged) {
+      container.insertBefore(dragged, after);
+    }
+  });
+
+  container.addEventListener('drop', function (e) {
+    if (dragged) e.preventDefault();
+  });
+
+  container.addEventListener('dragend', function () {
+    if (!dragged) return;
+    dragged.classList.remove('tab-dragging');
+    container.classList.remove('tabs-reordering');
+    dragged = null;
+    // Keep the pin toggle last regardless of where the drag ended.
+    var pin = container.querySelector('.page-nav-pin-toggle');
+    if (pin) container.appendChild(pin);
+    pageTabOrderSave(container);
+    if (typeof queuePageNavPinRefresh === 'function') queuePageNavPinRefresh();
+  });
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initPageTabReordering);
+} else {
+  initPageTabReordering();
 }
 
 // ── Lead Finder Tab ──────────────────────────────────────────────────────────
