@@ -145,6 +145,19 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertIn("Never invent, infer, imply, annotate, or explain a title", app.SYSTEM_PROMPT)
         self.assertIn("never as JSON serialized inside a string", app.SYSTEM_PROMPT)
 
+    def test_prompt_omits_salary_and_remuneration_details(self):
+        # Candidates sometimes include current/expected salary or a remuneration
+        # section in their source CV; the formatted CV must never carry it over.
+        self.assertIn("SALARY / REMUNERATION — OMIT ENTIRELY", app.SYSTEM_PROMPT)
+        self.assertIn("expected/asking/desired/target salary", app.SYSTEM_PROMPT)
+        # The catch-all extra-section mapping must not re-capture salary content.
+        self.assertIn(
+            "never apply this catch-all to salary/remuneration/compensation content",
+            app.SYSTEM_PROMPT,
+        )
+        # Notice period stays a first-class candidate field, not salary.
+        self.assertIn("Notice period is NOT salary", app.SYSTEM_PROMPT)
+
     def test_ai_crawler_backend_no_longer_requires_password(self):
         with app.app.test_request_context("/jobadder/spider_options"):
             self.assertTrue(app._ai_crawler_lock_allowed({}))
