@@ -10098,11 +10098,15 @@ def jobadder_spider_candidate_preview():
             except AntiwordDependencyError as exc:
                 # Default path is unchanged: re-raise so verified-Antiword failures
                 # still return 424. Only when the recruiter explicitly opted in do
-                # we recover the text natively for a legacy .doc the verified
-                # runtime could not decode, clearly labelled and never cached.
+                # we recover the text natively for a legacy .doc, clearly labelled
+                # and never cached. The native parser does not use Antiword at all,
+                # so recovery is offered for *any* Antiword failure reason on a
+                # legacy .doc — not only "document-extraction-failed" (verified
+                # Antiword decoded nothing) but also cases where the verified
+                # runtime could not run (e.g. runtime-missing/functional-*): the
+                # recruiter still gets an explicit, labelled recovery option.
                 if (
                     allow_unverified_doc
-                    and getattr(exc, "reason", "") == "document-extraction-failed"
                     and _document_is_legacy_doc(raw, ctype, filename)
                 ):
                     recovered = _spider_recover_legacy_doc_text_unverified(raw)

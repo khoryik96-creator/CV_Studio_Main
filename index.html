@@ -10603,7 +10603,7 @@ async function openTheSpiderCandidatePreview(candidateId, idx, options) {
     initializeTheSpiderPreviewFinder();
     // Verified Antiword could not decode this legacy .doc. Offer an explicit,
     // one-click native recovery (unverified) instead of forcing a manual convert.
-    if (e && Number(e.status) === 424 && (e.action === 'convert_to_docx_or_pdf' || e.code === 'LEGACY_DOC_EXTRACTION_FAILED') && !options.allowUnverified) {
+    if (e && Number(e.status) === 424 && (e.action === 'convert_to_docx_or_pdf' || e.action === 'run_installer' || e.code === 'LEGACY_DOC_EXTRACTION_FAILED' || e.code === 'ANTIWORD_DEPENDENCY_UNAVAILABLE') && !options.allowUnverified) {
       try {
         var recoverBar = document.createElement('div');
         recoverBar.style.cssText = 'padding:10px 12px;border-top:1px solid #e2e8f0;';

@@ -62,10 +62,15 @@ class RecoveryIsStrictlyOptInTests(unittest.TestCase):
             self.source,
         )
 
-    def test_recovery_requires_explicit_opt_in_and_document_failure(self):
+    def test_recovery_requires_explicit_opt_in_for_a_legacy_doc(self):
+        # Recovery still requires the explicit opt-in and a real legacy .doc, but
+        # is no longer gated on the specific Antiword failure reason: the native
+        # parser needs no Antiword, so any Antiword failure on a legacy .doc can
+        # be recovered when the recruiter opts in (e.g. verified runtime missing,
+        # not only "verified Antiword decoded nothing").
         self.assertIn("allow_unverified_doc = str(request.args.get(\"allow_unverified\")", self.source)
-        self.assertIn("if (\n                    allow_unverified_doc", self.source)
-        self.assertIn('getattr(exc, "reason", "") == "document-extraction-failed"', self.source)
+        self.assertIn("if (\n                    allow_unverified_doc\n                    and _document_is_legacy_doc(raw, ctype, filename)\n                ):", self.source)
+        self.assertNotIn('getattr(exc, "reason", "") == "document-extraction-failed"', self.source)
 
     def test_recovered_text_is_never_cached(self):
         self.assertIn('if cache_provenance.get("unverified_recovery"):', self.source)
