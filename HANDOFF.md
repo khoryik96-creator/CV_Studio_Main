@@ -123,7 +123,7 @@ take domains in **non-overlapping `app.py` regions** and never share a branch.
 | Account | Domain | New module | app.py region | Branch prefix |
 |---------|--------|-----------|---------------|---------------|
 | **Einstein** | OneNote + Outlook / MS-Graph — **domain done.** Slice 1 = pure helpers (#41). Slice 2 = `OutlookService` (#43). Slice 3a = `OneNoteGraphService` connection layer (#47). Desktop-COM → `cvstudio_onenote_desktop.py` (#53). Content handlers (notebooks/sections/pages/import + list helpers) now in `OneNoteGraphService`. Only the 3 `/onenote/desktop_*`+`manual_pages` route bodies remain in the shell (thin delegators to the desktop module + service-owned page-list helpers via aliases). `_onenote_*` screening/clean helpers stay (shared with candidate-import). | `cvstudio_msgraph.py`, `cvstudio_onenote_desktop.py` | — | `einstein/*` |
-| **Claude** | Spider / AI Crawler pure closures (`cvstudio_spider_summary`, `cvstudio_spider_score`) + JobAdder typo-correction (`cvstudio_ja_typos`). Lead Finder & Spider pure `_lead_*`/`_spider_*` closures are largely exhausted; the remaining `_ja_*`/`_lead_*` are service-module shape (network/cache/LLM). | `cvstudio_spider_summary.py`, `cvstudio_spider_score.py`, `cvstudio_ja_typos.py` | ~9,900–10,810; `_ja_*` typo cluster | `claude/*` |
+| **Claude** | Spider / AI Crawler pure closures (`cvstudio_spider_summary`, `cvstudio_spider_score`) + JobAdder typo-correction (`cvstudio_ja_typos`). Lead Finder domain **reassigned to Einstein 2026-08-05** (Claude ran out of quota before continuing it). Remaining `_ja_*` are service-module shape (network/cache/LLM). | `cvstudio_spider_summary.py`, `cvstudio_spider_score.py`, `cvstudio_ja_typos.py` | ~9,900–10,810; `_ja_*` typo cluster | `claude/*` |
 
 Rules while both are active:
 1. Separate branches — never commit to the other account's branch.
@@ -160,17 +160,18 @@ Prioritized backlog:
 | Domain | Region | Shape | Suggested owner | Status |
 |--------|--------|-------|-----------------|--------|
 | PPC (Post Placement Care) — `_ppc_*` placements only | ~21,660–21,850 | pure closure | Einstein | ✅ merged (#40); `/ppc/outlook/*` deferred to the OneNote + Outlook row |
-| Lead Finder enrichment (URL/company) | ~15,750–19,600 | pure closure | Claude | slice 1 merged/queued; more `_lead_*` slices remain |
+| Lead Finder enrichment (URL/company) | ~15,750–19,600 | pure closure | **Einstein** (reassigned 2026-08-05; Claude ran out of quota mid-handoff) | CLAIMED by Einstein 2026-08-05; slice 1 merged (#39/#42), ~29 `_lead_*` helpers still in `app.py` |
 | OneNote desktop-COM cluster → **`cvstudio_onenote_desktop.py`** (done) | ~3,585–4,251 | pure module (Windows COM, lazy-imported) | **Einstein** | Done — the 17 `_onenote_desktop_*` / `_onenote_com_error_label` / `_onenote_match_desktop_section_from_manual` helpers moved byte-for-byte into `cvstudio_onenote_desktop.py`; the `/onenote/desktop_*` + `manual_pages` route handlers stay in the shell and import them back (same pattern as `cvstudio_onenote_text`). Windows-only, so verified by compile + import + route contract only (no Linux behavioral coverage). |
 | OneNote Graph **content** handlers → `OneNoteGraphService` (done) | — | service methods | **Einstein** | Done — notebooks/sections/section_pages/pages/page_content/import_recent/import_selected + the `_onenote_list_*` / `_get_all_notebooks_and_sections` helpers and `_onenote_parse_date_bound` moved into `OneNoteGraphService` (`request_args` injected). The 3 desktop route bodies remain in the shell and reach the page-list helpers + `_onenote_parse_date_bound` via app-level aliases. `_ms_graph_json`/`_ms_graph_store` aliases still kept for the external MS-status/diagnostics probes. |
 | Spider / AI Crawler enrichment (`_spider_*`) | ~9,880–11,600 | pure closure | Claude | slice 1 = candidate data-shaping (10 helpers → `cvstudio_spider_summary.py`) done; slice 2 = JD-scoring/fit-term matching (12 helpers + heading regex → `cvstudio_spider_score.py`) done. Remaining pure bits are small leftovers (`_spider_preview_name`, option-payload trivia) interleaved with must-stay Flask routes. ⚠️ the .doc/OCR cluster (`_spider_*_legacy_doc_*`, tesseract/poppler/pdfium, >11,000) is the characterization-test minefield — leave in the shell; tests-first is mandatory for anything else |
 | Core CV/AI pipeline pure helpers (`/parse`, `/generate-ai`, DOCX mapping) | ~15,300–21,600 | pure closure | either (last) | most sensitive; scope carefully, extract last |
 
 Notes:
-- Lead Finder still has ~74 `_lead_*` helpers beyond the first URL/company
+- Lead Finder still has ~29 `_lead_*` helpers beyond the first URL/company
   slice (search-provider result parsing, title-angle logic, contact/email
-  helpers). Claude keeps taking those slices, so Einstein should stay out of the
-  ~15,750–19,600 region.
+  helpers). Reassigned to Einstein 2026-08-05 (Claude ran out of quota before
+  posting the handoff) — Claude should now stay out of the ~15,750–19,600
+  region.
 - OneNote's `_onenote_*` helpers hit MS Graph / the OneNote desktop app, so they
   are a service-module extraction, not a pure closure. This domain now also
   folds in the `/ppc/outlook/*` `_ms_outlook_*` cluster (deferred out of PPC),

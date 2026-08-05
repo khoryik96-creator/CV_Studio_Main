@@ -12278,6 +12278,8 @@ def _lead_cost_details(model, usage, provider=None):
     return _llm_cost_details(model, usage, provider)
 
 
+from cvstudio_lead_cache import LeadCacheService as _LeadCacheService
+
 from cvstudio_lead_match import (
     _lead_blob_has_alias,
     _lead_company_is_actually_role_text,
@@ -12534,238 +12536,49 @@ def _lead_call_with_optional_web(api_key, payload, warning_prefix="", graceful_j
 
 
 def _lead_search_provider_config(raw):
-    raw = raw if isinstance(raw, dict) else {}
-    provider = str(raw.get("provider") or raw.get("type") or "none").strip().lower()
-    if provider in {"", "off", "disabled", "none"}:
-        provider = "none"
-    # Keep provider names intentionally small and explicit for safety.
-    if provider not in {"none", "tavily", "serpapi"}:
-        provider = "none"
-    key = str(raw.get("api_key") or raw.get("key") or "").strip()
-    if (not key or key == "__BACKEND_SECURE__") and provider in {"tavily", "serpapi"}:
-        key = str(_ai_secret_store.get("search_" + provider) or "").strip()
-    return {"provider": provider, "api_key": key, "enabled": provider != "none" and bool(key)}
+    return _LEAD_SEARCH_ORCHESTRATOR.search_provider_config(raw)
 
 
 
 
 
 
-def _lead_ssl_context():
-    """Use certifi's CA bundle when available.
-
-    Some Windows/Python installs carry an outdated certificate store. That can
-    cause SerpAPI/Tavily tests to fail with SSL: CERTIFICATE_VERIFY_FAILED even
-    when the API key is valid. certifi keeps an updated Mozilla CA bundle and is
-    safe to use for HTTPS verification; this does not disable SSL verification.
-    """
-    if certifi:
-        try:
-            return ssl.create_default_context(cafile=certifi.where())
-        except Exception:
-            return None
-    return None
+# _lead_ssl_context / _lead_fetch_json_url / _lead_search_tavily /
+# _lead_search_serpapi are the search-provider HTTP primitives, extracted
+# verbatim into cvstudio_lead_search (Phase 7B). Re-imported here so the
+# app-level names, call sites and mock.patch.object seams are unchanged.
+from cvstudio_lead_search import (
+    LeadSearchOrchestrator as _LeadSearchOrchestrator,
+    _lead_fetch_json_url,
+    _lead_search_serpapi,
+    _lead_search_tavily,
+    _lead_ssl_context,
+)
 
 
-def _lead_fetch_json_url(url, method="GET", data=None, headers=None, timeout=18):
-    encoded = None
-    if data is not None:
-        encoded = json.dumps(data).encode("utf-8")
-    req = urllib.request.Request(url, data=encoded, headers=headers or {}, method=method)
-    context = _lead_ssl_context()
-    try:
-        if context is not None:
-            resp_cm = urllib.request.urlopen(req, timeout=timeout, context=context)
-        else:
-            resp_cm = urllib.request.urlopen(req, timeout=timeout)
-        with resp_cm as resp:
-            return json.loads(resp.read().decode("utf-8", errors="replace"))
-    except urllib.error.URLError as e:
-        reason = getattr(e, "reason", e)
-        msg = str(reason)
-        if "CERTIFICATE_VERIFY_FAILED" in msg or "certificate verify failed" in msg.lower() or "certificate has expired" in msg.lower():
-            raise urllib.error.URLError(
-                "SSL certificate verification failed while contacting the search provider. "
-                "This usually means the local Python certificate bundle is outdated. "
-                "CV Studio now uses certifi when installed; run INSTALL.bat/install.sh once, "
-                "or run: pip install --upgrade certifi. Original error: " + msg
-            )
-        raise
-
-
-def _lead_search_tavily(api_key, query, max_results=6, timeout=18):
-    payload = {
-        "query": query,
-        "search_depth": "basic",
-        "max_results": max(1, min(int(max_results or 6), 10)),
-        "include_answer": False,
-        "include_raw_content": False
-    }
-    # Tavily's current Search API uses Bearer authentication in the
-    # Authorization header. Older examples sometimes placed api_key in the
-    # JSON body; using the header avoids 401s on current accounts.
-    data = _lead_fetch_json_url(
-        "https://api.tavily.com/search",
-        method="POST",
-        data=payload,
-        headers={"Content-Type": "application/json", "Authorization": "Bearer " + str(api_key or "").strip()},
-        timeout=timeout
-    )
-    out = []
-    for r in data.get("results") or []:
-        if not isinstance(r, dict):
-            continue
-        out.append({
-            "title": str(r.get("title") or "").strip(),
-            "url": str(r.get("url") or "").strip(),
-            "snippet": str(r.get("content") or r.get("snippet") or "").strip(),
-            "published_date": str(r.get("published_date") or "").strip(),
-            "provider": "tavily",
-            "query": query
-        })
-    return out
-
-
-
-def _lead_search_serpapi(api_key, query, max_results=8, timeout=18):
-    """Search SerpAPI for job results.
-
-    Prefer SerpAPI's Google Jobs engine because organic Google search often
-    returns generic JobStreet/LinkedIn listing pages. Google Jobs results carry
-    structured title/company/location fields and apply_options links, which are
-    much more likely to become usable Job Leads.
-    """
-    out = []
-    # 1) Structured Google Jobs results first.
-    try:
-        google_jobs_query = _lead_google_jobs_query(query)
-        params_jobs = urllib.parse.urlencode({
-            "engine": "google_jobs",
-            "q": google_jobs_query,
-            "api_key": api_key,
-            "hl": "en",
-            "num": max(1, min(int(max_results or 8), 10))
-        })
-        data_jobs = _lead_fetch_json_url(
-            "https://serpapi.com/search.json?" + params_jobs,
-            method="GET",
-            headers={"Accept": "application/json"},
-            timeout=timeout
-        )
-        for r in data_jobs.get("jobs_results") or []:
-            if not isinstance(r, dict):
-                continue
-            apply_url = ""
-            structured_apply_source = ""
-            # Prefer apply links from an actual employer/ATS/job-board page, not
-            # Google search/listing pages. Google Jobs apply_options are already
-            # job-specific enough to become reviewable Job Leads when title and
-            # company are structured.
-            for opt in r.get("apply_options") or []:
-                if not isinstance(opt, dict):
-                    continue
-                link = str(opt.get("link") or "").strip()
-                if not re.match(r"^https?://", link, re.I):
-                    continue
-                host = urllib.parse.urlparse(link).netloc.lower()
-                if "google." in host or "serpapi" in host:
-                    continue
-                if _lead_is_direct_job_url(link):
-                    apply_url = link
-                    structured_apply_source = str(opt.get("title") or "").strip()
-                    break
-                if not apply_url:
-                    apply_url = link
-                    structured_apply_source = str(opt.get("title") or "").strip()
-            related_url = ""
-            for opt in r.get("related_links") or []:
-                if isinstance(opt, dict) and re.match(r"^https?://", str(opt.get("link") or ""), re.I):
-                    related_url = str(opt.get("link") or "").strip()
-                    break
-            detected = r.get("detected_extensions") or {}
-            posted_at = ""
-            if isinstance(detected, dict):
-                posted_at = str(detected.get("posted_at") or detected.get("posted_at_text") or "").strip()
-            out.append({
-                "title": str(r.get("title") or "").strip(),
-                "url": apply_url or related_url,
-                "snippet": str(r.get("description") or "").strip(),
-                "published_date": posted_at or str(r.get("posted_at") or "").strip(),
-                "provider": "serpapi_google_jobs",
-                "query": google_jobs_query,
-                "original_query": query,
-                "company_name": str(r.get("company_name") or "").strip(),
-                "location": str(r.get("location") or "").strip(),
-                "via": str(r.get("via") or "").strip(),
-                "apply_source": structured_apply_source,
-                "structured_job_result": bool(str(r.get("title") or "").strip() and str(r.get("company_name") or "").strip() and apply_url),
-                "apply_options": r.get("apply_options") or []
-            })
-        if out:
-            return out
-    except Exception:
-        # Fall back to organic below. The caller captures provider warnings per query.
-        pass
-
-    # 2) Organic fallback. This is less reliable and may return listing pages;
-    # downstream direct-job filtering will remove those.
-    params = urllib.parse.urlencode({
-        "engine": "google",
-        "q": query,
-        "api_key": api_key,
-        "num": max(1, min(int(max_results or 8), 10))
-    })
-    data = _lead_fetch_json_url(
-        "https://serpapi.com/search.json?" + params,
-        method="GET",
-        headers={"Accept": "application/json"},
-        timeout=timeout
-    )
-    for r in data.get("organic_results") or []:
-        if not isinstance(r, dict):
-            continue
-        out.append({
-            "title": str(r.get("title") or "").strip(),
-            "url": str(r.get("link") or r.get("url") or "").strip(),
-            "snippet": str(r.get("snippet") or "").strip(),
-            "published_date": str(r.get("date") or "").strip(),
-            "provider": "serpapi",
-            "query": query
-        })
-    return out
-
-
+# _lead_search_provider_config + _lead_collect_search_provider_results are
+# gathered into LeadSearchOrchestrator (Phase 7B). These stay thin app-level
+# delegators so the names remain patchable module attributes and every call
+# site + mock.patch.object seam is unchanged; the orchestrator reaches the
+# cross-called _lead_* names and the secret store back through app-resolving
+# callables (see construction below).
 def _lead_collect_search_provider_results(search_provider, job_sources, title_angles, regions, target_role="", job_filters=None, depth="standard"):
-    cfg = _lead_search_provider_config(search_provider)
-    if not cfg.get("enabled"):
-        return [], []
-    max_queries = {"light": 5, "standard": 8, "deep": 12}.get(str(depth or "standard").lower(), 8)
-    per_query = {"light": 5, "standard": 7, "deep": 8}.get(str(depth or "standard").lower(), 7)
-    queries = _lead_search_provider_queries(job_sources, title_angles, regions, target_role, job_filters, max_queries=max_queries)
-    results = []
-    warnings = []
-    seen = set()
-    for q in queries:
-        try:
-            if cfg["provider"] == "tavily":
-                batch = _lead_search_tavily(cfg["api_key"], q, max_results=per_query, timeout=16)
-            elif cfg["provider"] == "serpapi":
-                batch = _lead_search_serpapi(cfg["api_key"], q, max_results=per_query, timeout=16)
-            else:
-                batch = []
-            for item in batch:
-                url = str(item.get("url") or "").strip()
-                title = str(item.get("title") or "").strip()
-                key = (url or title).lower().rstrip("/")
-                if not key or key in seen:
-                    continue
-                seen.add(key)
-                results.append(item)
-        except Exception as e:
-            warnings.append(f"{cfg['provider']} query failed: {str(e)[:160]}")
-        if len(results) >= {"light": 24, "standard": 40, "deep": 60}.get(str(depth or "standard").lower(), 40):
-            break
-    return results, warnings
+    return _LEAD_SEARCH_ORCHESTRATOR.collect_search_provider_results(
+        search_provider, job_sources, title_angles, regions, target_role, job_filters, depth
+    )
+
+
+_LEAD_SEARCH_ORCHESTRATOR = _LeadSearchOrchestrator(
+    # All injected as callables that resolve the CURRENT app-level name on each
+    # call: phase5b patches app._lead_search_provider_config / _lead_search_tavily
+    # / _lead_search_serpapi and expects the collection loop to honour the patch,
+    # and _ai_secret_store can be reassigned by tests.
+    secret_store=lambda: _ai_secret_store,
+    search_provider_config=lambda raw: _lead_search_provider_config(raw),
+    search_tavily=lambda *a, **k: _lead_search_tavily(*a, **k),
+    search_serpapi=lambda *a, **k: _lead_search_serpapi(*a, **k),
+    search_provider_queries=lambda *a, **k: _lead_search_provider_queries(*a, **k),
+)
 
 
 
@@ -13719,30 +13532,11 @@ _LEAD_TITLE_CACHE_SIM_THRESHOLD = 0.45
 
 
 def _lead_title_cache_load():
-    legacy, fingerprint = _cvstudio_legacy_json_read(_LEAD_TITLE_CACHE_PATH, dict)
-    try:
-        if isinstance(legacy, dict) and isinstance(legacy.get("entries"), list):
-            _CVSTUDIO_LEAD_TITLE_REPOSITORY.import_legacy(legacy, fingerprint)
-        return _CVSTUDIO_LEAD_TITLE_REPOSITORY.load()
-    except StorageError:
-        raise
-    except Exception:
-        if isinstance(legacy, dict) and isinstance(legacy.get("entries"), list):
-            return legacy
-        return {"entries": []}
+    return _LEAD_CACHE_SERVICE.title_cache_load()
 
 
 def _lead_title_cache_save(data):
-    try:
-        _CVSTUDIO_LEAD_TITLE_REPOSITORY.save(data)
-        try:
-            _cvstudio_legacy_json_write(_LEAD_TITLE_CACHE_PATH, data)
-        except Exception:
-            pass
-    except StorageError:
-        raise
-    except Exception:
-        pass
+    return _LEAD_CACHE_SERVICE.title_cache_save(data)
 
 
 
@@ -13750,162 +13544,57 @@ def _lead_title_cache_save(data):
 
 
 def _lead_title_cache_find(family, evidence, threshold=_LEAD_TITLE_CACHE_SIM_THRESHOLD):
-    data = _lead_title_cache_load()
-    best, best_score = None, 0.0
-    for entry in data.get("entries", []):
-        if entry.get("family") != family:
-            continue
-        ev = set(entry.get("evidence") or [])
-        if not ev or not evidence:
-            continue
-        inter = len(ev & evidence)
-        union = len(ev | evidence)
-        score = (inter / union) if union else 0.0
-        if score > best_score:
-            best_score, best = score, entry
-    if best and best_score >= threshold:
-        return best, best_score
-    return None, 0.0
+    return _LEAD_CACHE_SERVICE.title_cache_find(family, evidence, threshold)
 
 
 def _lead_title_cache_store(family, evidence, titles):
-    data = _lead_title_cache_load()
-    entries = data.get("entries", [])
-    entries.append({
-        "family": family,
-        "evidence": sorted(evidence),
-        "titles": titles,
-        "created_at": datetime.utcnow().isoformat(),
-        "hits": 0,
-    })
-    if len(entries) > _LEAD_TITLE_CACHE_MAX_ENTRIES:
-        entries = entries[-_LEAD_TITLE_CACHE_MAX_ENTRIES:]
-    data["entries"] = entries
-    _lead_title_cache_save(data)
+    return _LEAD_CACHE_SERVICE.title_cache_store(family, evidence, titles)
 
 
 _LEAD_CONTACT_CACHE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lead_contact_cache.json")
 _LEAD_CONTACT_CACHE_MAX_ENTRIES = 10000
 
+# Repositories and paths are passed as callables because the test-suite
+# reassigns these module globals after import (e.g. swapping in a corrupt-storage
+# repository) and expects the cache to read the current value on each call.
+_LEAD_CACHE_SERVICE = _LeadCacheService(
+    title_repository=lambda: _CVSTUDIO_LEAD_TITLE_REPOSITORY,
+    contact_repository=lambda: _CVSTUDIO_LEAD_CONTACT_REPOSITORY,
+    title_path=lambda: _LEAD_TITLE_CACHE_PATH,
+    contact_path=lambda: _LEAD_CONTACT_CACHE_PATH,
+    legacy_json_read=_cvstudio_legacy_json_read,
+    legacy_json_write=_cvstudio_legacy_json_write,
+    storage_error=StorageError,
+    title_max_entries=_LEAD_TITLE_CACHE_MAX_ENTRIES,
+    contact_max_entries=_LEAD_CONTACT_CACHE_MAX_ENTRIES,
+    title_sim_threshold=_LEAD_TITLE_CACHE_SIM_THRESHOLD,
+    normalize_linkedin_url=_lead_normalize_linkedin_url,
+    is_company_domain_email=_lead_is_company_domain_email,
+)
+
 
 def _lead_contact_cache_load():
-    legacy, fingerprint = _cvstudio_legacy_json_read(_LEAD_CONTACT_CACHE_PATH, dict)
-    try:
-        if isinstance(legacy, dict) and isinstance(legacy.get("entries"), dict):
-            _CVSTUDIO_LEAD_CONTACT_REPOSITORY.import_legacy(legacy, fingerprint)
-        return _CVSTUDIO_LEAD_CONTACT_REPOSITORY.load()
-    except StorageError:
-        raise
-    except Exception:
-        if isinstance(legacy, dict) and isinstance(legacy.get("entries"), dict):
-            return legacy
-        return {"entries": {}}
+    return _LEAD_CACHE_SERVICE.contact_cache_load()
 
 
 def _lead_contact_cache_save(data):
-    try:
-        _CVSTUDIO_LEAD_CONTACT_REPOSITORY.save(data)
-        try:
-            _cvstudio_legacy_json_write(_LEAD_CONTACT_CACHE_PATH, data)
-        except Exception:
-            pass
-    except StorageError:
-        raise
-    except Exception:
-        pass
-
-
-
-
-
-
-
-
-
-
+    return _LEAD_CACHE_SERVICE.contact_cache_save(data)
 
 
 def _lead_contact_cache_key(person):
-    """A LinkedIn profile URL is the most reliable identity anchor when present
-    (two different people are essentially never the same profile URL). Falling
-    back to name+company is a reasonable second choice, but is more prone to
-    collisions (common names, similarly-named companies) so is only used when
-    no profile URL is available at all.
-    """
-    person = person or {}
-    li = _lead_normalize_linkedin_url(person.get("profile_url") or person.get("linkedin_url"))
-    if li:
-        return "li:" + li
-    name = re.sub(r"\s+", " ", str(person.get("name") or "").strip().lower())
-    company = re.sub(r"\s+", " ", str(person.get("company") or "").strip().lower())
-    if name and company:
-        return "nc:" + name + "|" + company
-    return ""
+    return _LEAD_CACHE_SERVICE.contact_cache_key(person)
 
 
 def _lead_contact_cache_find(person):
-    key = _lead_contact_cache_key(person)
-    if not key:
-        return None
-    data = _lead_contact_cache_load()
-    cached = data.get("entries", {}).get(key)
-    if not isinstance(cached, dict):
-        return None
-    # Do not let previous misses become permanent. A cached "Not found" with
-    # no email is retry-eligible, so Apollo/AI can try again on a later run.
-    if not str(cached.get("email") or "").strip() and str(cached.get("verification_status") or "").strip().lower() == "not found":
-        return None
-    return cached
+    return _LEAD_CACHE_SERVICE.contact_cache_find(person)
 
 
 def _lead_contact_cache_store(person, email_data):
-    key = _lead_contact_cache_key(person)
-    if not key:
-        return
-    email_data = dict(email_data or {})
-    email = str(email_data.get("email") or "").strip()
-    if not email or not _lead_is_company_domain_email(email, (person or {}).get("company") or email_data.get("company") or ""):
-        # Failed/Not-found/personal-email results should not poison the cache.
-        # If an older version cached a miss, remove it so the person can be retried.
-        data = _lead_contact_cache_load()
-        entries = data.get("entries", {})
-        if key in entries:
-            entries.pop(key, None)
-            data["entries"] = entries
-            _lead_contact_cache_save(data)
-        return
-    data = _lead_contact_cache_load()
-    entries = data.get("entries", {})
-    existing = entries.get(key) or {}
-    entries[key] = {
-        "email": email,
-        "email_confidence": email_data.get("email_confidence", ""),
-        "email_source": email_data.get("email_source", ""),
-        "verification_status": email_data.get("verification_status", ""),
-        "cached_at": datetime.utcnow().isoformat(),
-        "hits": int(existing.get("hits") or 0),
-    }
-    if len(entries) > _LEAD_CONTACT_CACHE_MAX_ENTRIES:
-        # Drop the least-reused entries first, matching the merge tool's logic.
-        ordered = sorted(entries.items(), key=lambda kv: int(kv[1].get("hits") or 0))
-        for k, _ in ordered[: len(entries) - _LEAD_CONTACT_CACHE_MAX_ENTRIES]:
-            entries.pop(k, None)
-    data["entries"] = entries
-    _lead_contact_cache_save(data)
+    return _LEAD_CACHE_SERVICE.contact_cache_store(person, email_data)
 
 
 def _lead_contact_cache_touch(person):
-    try:
-        key = _lead_contact_cache_key(person)
-        if not key:
-            return
-        data = _lead_contact_cache_load()
-        entries = data.get("entries", {})
-        if key in entries:
-            entries[key]["hits"] = int(entries[key].get("hits") or 0) + 1
-            _lead_contact_cache_save(data)
-    except Exception:
-        pass
+    return _LEAD_CACHE_SERVICE.contact_cache_touch(person)
 
 
 class _LeadApolloRateLimited(Exception):
@@ -14000,16 +13689,7 @@ def _lead_apollo_enrich_person(api_key, person, timeout=15):
 
 
 def _lead_title_cache_touch(matched_entry):
-    """Best-effort hit counter. Not critical if a concurrent write races it."""
-    try:
-        data = _lead_title_cache_load()
-        for e in data.get("entries", []):
-            if e.get("family") == matched_entry.get("family") and e.get("evidence") == matched_entry.get("evidence"):
-                e["hits"] = int(e.get("hits") or 0) + 1
-                break
-        _lead_title_cache_save(data)
-    except Exception:
-        pass
+    return _LEAD_CACHE_SERVICE.title_cache_touch(matched_entry)
 
 
 def _lead_ai_expand_title_angles(api_key, model, target_role, cv_excerpt, candidate_context, industries, primary_families=None, max_titles=18, timeout=20, llm_provider="anthropic"):
