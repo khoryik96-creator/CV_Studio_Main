@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.247"
+_INSTALL_RECEIPT_VERSION = "v24.6.248"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -318,7 +318,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.247"
+_CVSTUDIO_VERSION = "v24.6.248"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -5026,7 +5026,7 @@ def _ja_spa_browser_bridge(candidate_id, fields, note_text="", email="", salary_
     payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
     compact_payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     script = """(async () => {
-  const helperVersion = 'v24.6.247';
+  const helperVersion = 'v24.6.248';
   const candidateId = %s;
   const payload = %s;
   const profilePath = %s;
@@ -7349,7 +7349,7 @@ def jobadder_onenote_activity_diagnostic():
     generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Candidate Activity Read Test",
-        "cv_studio_version": "v24.6.247",
+        "cv_studio_version": "v24.6.248",
         "generated_utc": generated,
         "safety": {
             "read_only": True,
@@ -7560,7 +7560,7 @@ def jobadder_onenote_activity_create_diagnostic():
     if confirmation != "CREATE ONE MAX LOW TEST":
         return jsonify({"error": "Type CREATE ONE MAX LOW TEST exactly before running the controlled POST."}), 400
 
-    guard_key = ("v24.6.247", candidate_id)
+    guard_key = ("v24.6.248", candidate_id)
     if guard_key in _JA_ACTIVITY_CREATE_DIAG_USED:
         return jsonify({"error": "The one-shot controlled POST has already been run in this CV Studio session. Restarting is intentionally required before any repeat test."}), 409
     # Mark before the network call so a timeout/double-click cannot emit a second POST.
@@ -7589,7 +7589,7 @@ def jobadder_onenote_activity_create_diagnostic():
     generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Official AddCandidateActivity Create Test",
-        "cv_studio_version": "v24.6.247",
+        "cv_studio_version": "v24.6.248",
         "generated_utc": generated,
         "candidate_fixture": {
             "name": "Max Low",
@@ -12428,89 +12428,9 @@ from cvstudio_lead_enrich import (
 
 
 def _lead_call_with_optional_web(api_key, payload, warning_prefix="", graceful_json=None, provider="anthropic"):
-    """Call the selected LLM provider with web search; retry without tools, then degrade gracefully.
-
-    The old implementation could spend ~60s on web search, then another ~35s on
-    fallback, then still return 504. This version never lets a secondary timeout
-    crash Lead Finder when graceful_json is supplied.
-    """
-    warning = ""
-    payload = dict(payload or {})
-    primary_timeout = int(payload.pop("_primary_timeout_seconds", payload.get("_timeout_seconds", 75)))
-    fallback_timeout = int(payload.pop("_fallback_timeout_seconds", 25))
-    skip_no_web_fallback = bool(payload.pop("_skip_no_web_fallback", False))
-    provider = str(provider or "anthropic").strip().lower()
-
-    def graceful(msg):
-        if graceful_json is None:
-            raise TimeoutError(msg)
-        return _lead_fake_anthropic_response(graceful_json), (warning_prefix or msg)
-
-    # DeepSeek cannot browse the web at all -- if this call needs live search,
-    # fail gracefully upfront with a clear, actionable message instead of
-    # sending the tool anyway (it would just be silently dropped) or raising
-    # an opaque exception mid-request.
-    if payload.get("tools") and not _LLM_PROVIDER_INFO.get(provider, {}).get("supports_web_search", True):
-        msg = (
-            "DeepSeek cannot browse the web itself for this search. Configure a Job Search "
-            "Provider (Tavily or SerpAPI) so results can be fetched first and DeepSeek can "
-            "classify them, or switch this search back to Claude/GPT."
-        )
-        if skip_no_web_fallback:
-            return graceful(msg)
-        fallback = dict(payload)
-        fallback.pop("tools", None)
-        fallback["_timeout_seconds"] = fallback_timeout
-        try:
-            data = call_llm(provider, api_key, fallback)
-            warning = warning_prefix or msg
-            return data, warning
-        except (TimeoutError, socket.timeout, urllib.error.URLError):
-            return graceful(msg)
-
-    try:
-        call_payload = dict(payload)
-        call_payload["_timeout_seconds"] = primary_timeout
-        data = call_llm(provider, api_key, call_payload)
-        return data, warning
-    except urllib.error.HTTPError as e:
-        # HTTPError is a subclass of URLError, so keep this block before
-        # the generic timeout/network handler below.
-        err_body = e.read()
-        try:
-            err = json.loads(err_body)
-            msg = err.get("error", {}).get("message", "API error")
-        except Exception:
-            msg = err_body.decode("utf-8", errors="replace")[:500]
-        if payload.get("tools") and re.search(r"web[_\s-]?search|tool|permission|not enabled|not authorized|unsupported", msg, re.I):
-            if skip_no_web_fallback:
-                return graceful("Live web search is unavailable for this API key/workspace; no fallback search links were shown.")
-            fallback = dict(payload)
-            fallback.pop("tools", None)
-            fallback["_timeout_seconds"] = fallback_timeout
-            try:
-                data = call_llm(provider, api_key, fallback)
-                warning = (warning_prefix or "Web search unavailable for this API key/workspace; continued without live crawling. Results may be less current.")
-                return data, warning
-            except (TimeoutError, socket.timeout, urllib.error.URLError):
-                return graceful("Web search was unavailable and the no-web fallback also timed out; returned partial results instead of failing.")
-        raise
-    except (TimeoutError, socket.timeout, urllib.error.URLError):
-        # Web search can occasionally hang for longer than the browser timeout.
-        # Retry once without tools so the local app returns a usable response.
-        if payload.get("tools"):
-            if skip_no_web_fallback:
-                return graceful("Live web search timed out; no fallback search links were shown and no no-web retry was run.")
-            fallback = dict(payload)
-            fallback.pop("tools", None)
-            fallback["_timeout_seconds"] = fallback_timeout
-            try:
-                data = call_llm(provider, api_key, fallback)
-                warning = (warning_prefix or "Live web search timed out; continued with fast AI-only matching. Results are a starting point and should be reviewed against live job/company sources.")
-                return data, warning
-            except (TimeoutError, socket.timeout, urllib.error.URLError):
-                return graceful("Live web search and no-web fallback both timed out; returned partial results instead of failing.")
-        return graceful("Lead Finder API request timed out; returned partial results instead of failing.")
+    return _LEAD_SEARCH_ORCHESTRATOR.call_with_optional_web(
+        api_key, payload, warning_prefix=warning_prefix, graceful_json=graceful_json, provider=provider
+    )
 
 
 
@@ -12578,6 +12498,12 @@ _LEAD_SEARCH_ORCHESTRATOR = _LeadSearchOrchestrator(
     search_tavily=lambda *a, **k: _lead_search_tavily(*a, **k),
     search_serpapi=lambda *a, **k: _lead_search_serpapi(*a, **k),
     search_provider_queries=lambda *a, **k: _lead_search_provider_queries(*a, **k),
+    # call_llm and _lead_call_with_optional_web are patched at app level by the
+    # phase5b tests, and _ai_secret_store / _LLM_PROVIDER_INFO can be reassigned;
+    # resolve each current app global on every call.
+    call_llm=lambda *a, **k: call_llm(*a, **k),
+    provider_info=lambda: _LLM_PROVIDER_INFO,
+    call_with_optional_web=lambda *a, **k: _lead_call_with_optional_web(*a, **k),
 )
 
 
@@ -12594,210 +12520,18 @@ _LEAD_SEARCH_ORCHESTRATOR = _LeadSearchOrchestrator(
 
 
 def _lead_extract_from_search_provider_results(api_key, model, search_provider, provider_results, regions, job_sources, title_angles, target_role, industries, candidate_context, cv_excerpt, company_n=12, job_filters=None, llm_provider="anthropic"):
-    """Classify search-provider URL/snippet results into job leads.
-
-    This is intentionally no-web-search: the search provider has already done the
-    retrieval. Claude only cleans/classifies snippets, which is faster and more
-    reliable than asking it to browse job portals itself.
-    """
-    if not provider_results:
-        return {"summary": {}, "companies": [], "people": []}, "", {}
-    provider_name = _lead_search_provider_config(search_provider).get("provider") or "search_provider"
-    compact_results = []
-    for i, r in enumerate(provider_results[:70], 1):
-        if not isinstance(r, dict):
-            continue
-        compact_results.append({
-            "n": i,
-            "title": str(r.get("title") or "")[:240],
-            "url": str(r.get("url") or "")[:500],
-            "snippet": str(r.get("snippet") or "")[:700],
-            "published_date": str(r.get("published_date") or "")[:80],
-            "provider": str(r.get("provider") or provider_name),
-            "query": str(r.get("query") or "")[:240]
-        })
-    filter_instruction = _lead_job_filter_instruction(job_filters or {})
-    prompt = f"""
-You are cleaning job-search API results into recruiter job leads.
-
-IMPORTANT
-- The search provider already returned URLs/snippets. Do NOT browse further.
-- Extract actual job leads only when the title/snippet/URL gives enough public evidence.
-- If a result is only a generic portal search page, do not pretend it is a real job lead; set lead_kind='fallback_search_link'.
-- If the URL is a direct job ad, set job_url to that URL and job_url_quality='direct_job_ad'.
-- If it is only a search/listing/source page, leave job_url empty and put the URL in source_url with job_url_quality='source_or_search_result_only'.
-- Keep selected-country/remote rules and relevance filters.
-- Broad recruiter review mode: include adjacent, partial-fit, or lower tech-stack-fit job leads when the role/company/location is relevant. Do not discard just because the full tech stack is not visible or not perfect; reflect weaker fit in job_fit_percent and why_matched.
-
-REGIONS
-{json.dumps(regions, ensure_ascii=False)}
-
-SELECTED JOB SOURCES
-{json.dumps(job_sources, ensure_ascii=False)}
-
-ROLE/TITLE ANGLES
-{json.dumps(title_angles[:14], ensure_ascii=False)}
-
-RELEVANCE FILTERS
-{filter_instruction}
-
-TARGET ROLE
-{target_role or 'Infer from CV/context'}
-
-INDUSTRY FOCUS
-{industries or 'Infer from CV/context'}
-
-RECRUITER CONTEXT
-{candidate_context[:900] or 'No extra context provided.'}
-
-CANDIDATE CV EXCERPT
-{cv_excerpt[:3000]}
-
-SEARCH PROVIDER RESULTS
-{json.dumps(compact_results, ensure_ascii=False)}
-
-RETURN ONLY VALID JSON. No markdown. Shape exactly:
-{{
-  "summary": {{
-    "candidate_title": "best-fit candidate title",
-    "seniority": "junior/mid/senior/lead/head/etc",
-    "core_skills": ["skill"],
-    "target_roles": ["role"],
-    "target_job_title_angles": ["role/title angle searched"],
-    "job_filters_used": {{}},
-    "regions": ["region"],
-    "location_filter": "selected countries are hard filters; include selected-country jobs and remote roles only when eligibility is evident",
-    "job_sources_used": ["portal/source"],
-    "source_strategy": "Search provider API results classified into job leads",
-    "job_fit_method": "Job Fit % estimates role/skill/seniority/location alignment, but lower-fit leads are still shown for recruiter review unless explicitly excluded.",
-    "freshness_method": "date_posted and days_open are taken from search result snippet/provider data where available; otherwise Unknown",
-    "compliance_note": "public search/job/business sources only"
-  }},
-  "companies": [
-    {{
-      "id": "co_1",
-      "company": "Company name or empty for fallback link",
-      "country": "Country",
-      "region": "City/region if known",
-      "industry": "Industry",
-      "job_portal": "portal/source",
-      "matched_role": "Relevant open role title",
-      "hiring_signal": "public job ad/search result signal",
-      "date_posted": "YYYY-MM-DD, relative text, provider date, or empty string",
-      "days_open": "",
-      "job_freshness": "Today / 1-7 days open / 8-14 days open / 15-30 days open / 30+ days open / Unknown",
-      "job_url": "DIRECT job-ad URL only or empty string",
-      "job_url_quality": "direct_job_ad / needs_verification / source_or_search_result_only",
-      "company_url": "URL or empty string",
-      "job_fit_percent": 0,
-      "match_score": 0,
-      "why_matched": "short reason based on CV and result evidence",
-      "source_url": "best evidence URL or empty string",
-      "source_note": "source/provider/snippet evidence summary",
-      "date_found": "{date.today().isoformat()}",
-      "lead_kind": "extracted_job_lead / fallback_search_link"
-    }}
-  ],
-  "people": []
-}}
-
-TARGET COUNT
-- Return up to {int(company_n)} good leads.
-- Prefer extracted_job_lead with company + role evidence.
-- Do not invent companies from weak snippets.
-""".strip()
-    payload = {
-        "model": model,
-        "max_tokens": min(5200, max(2800, int(company_n) * 260)),
-        "messages": [{"role": "user", "content": prompt}],
-        "_timeout_seconds": 65,
-    }
-    data = call_llm(llm_provider, api_key, payload)
-    raw_text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text" or "text" in b)
-    try:
-        parsed = _lead_extract_json(raw_text)
-    except Exception:
-        parsed = {"summary": {}, "companies": [], "people": []}
-        return parsed, "Search provider returned results, but AI classification produced malformed output.", data.get("usage", {}) or {}
-    parsed["people"] = []
-    parsed = _lead_normalize_company_fit_freshness(parsed)
-    parsed, location_warning = _lead_filter_by_regions(parsed, regions)
-    parsed = _lead_normalize_company_fit_freshness(parsed)
-    parsed, filter_warning = _lead_apply_basic_job_filters(parsed, job_filters or {})
-    parsed.setdefault("summary", {})
-    if isinstance(parsed.get("summary"), dict):
-        parsed["summary"].setdefault("target_job_title_angles", title_angles)
-        parsed["summary"].setdefault("job_filters_used", job_filters or {})
-        parsed["summary"].setdefault("regions", regions)
-        parsed["summary"].setdefault("job_sources_used", job_sources)
-        parsed["summary"]["source_strategy"] = f"{provider_name} search API results classified into job leads"
-        parsed["summary"]["search_provider_used"] = provider_name
-        parsed["summary"]["search_provider_results_seen"] = len(provider_results)
-    warning = ""
-    if location_warning:
-        warning = location_warning
-    if filter_warning:
-        warning = (warning + " " + filter_warning).strip() if warning else filter_warning
-    return parsed, warning, data.get("usage", {}) or {}
+    return _LEAD_SEARCH_ORCHESTRATOR.extract_from_search_provider_results(
+        api_key, model, search_provider, provider_results, regions, job_sources, title_angles,
+        target_role, industries, candidate_context, cv_excerpt, company_n=company_n,
+        job_filters=job_filters, llm_provider=llm_provider,
+    )
 
 def _lead_quick_job_search(api_key, model, regions, job_sources, title_angles, target_role, industries, candidate_context, cv_excerpt, company_n=6, job_filters=None, llm_provider="anthropic"):
-    """Smaller emergency live-search call when the full job-lead prompt times out.
-
-    It asks for fewer fields and fewer leads, then the existing normalizer fills
-    defaults. This gives the app a second chance to return real job leads before
-    falling back to search links.
-    """
-    quick_titles = [t for t in (title_angles or []) if str(t).strip()][:8]
-    quick_sources = [s for s in (job_sources or []) if str(s).strip()][:4]
-    job_filters = job_filters or {}
-    filter_instruction = _lead_job_filter_instruction(job_filters)
-    prompt = f"""
-Find live public job ads for a recruiter. Return ONLY valid JSON.
-
-Rules:
-- Use public web/job portal results only. No people, no emails.
-- Selected locations are hard filters: {json.dumps(regions, ensure_ascii=False)}.
-- Search selected portals only: {json.dumps(quick_sources, ensure_ascii=False)}.
-- Use these role/title angles: {json.dumps(quick_titles, ensure_ascii=False)}.
-- Apply these relevance filters: {filter_instruction}
-- Do not invent companies. If only a search/listing URL is available, put it in source_url and leave job_url empty.
-- job_url must be a direct job-ad URL only.
-
-Target role: {target_role or 'infer from CV'}
-Industries: {industries or 'infer'}
-Recruiter context: {(candidate_context or '')[:900]}
-CV excerpt: {(cv_excerpt or '')[:1800]}
-
-JSON shape:
-{{"summary":{{"candidate_title":"","target_job_title_angles":{json.dumps(quick_titles, ensure_ascii=False)},"job_filters_used":{json.dumps(job_filters, ensure_ascii=False)},"regions":{json.dumps(regions, ensure_ascii=False)},"job_sources_used":{json.dumps(quick_sources, ensure_ascii=False)},"source_strategy":"quick live job search fallback"}},"companies":[{{"company":"","country":"","region":"","industry":"","job_portal":"","matched_role":"","hiring_signal":"","date_posted":"","days_open":"","job_freshness":"Unknown","job_url":"","job_url_quality":"","company_url":"","job_fit_percent":0,"match_score":0,"why_matched":"","source_url":"","source_note":"","date_found":"{date.today().isoformat()}"}}],"people":[]}}
-Target: up to {int(company_n)} real job leads.
-""".strip()
-    graceful = {"summary": {"target_job_title_angles": quick_titles, "job_filters_used": job_filters, "regions": regions, "job_sources_used": quick_sources, "source_strategy": "quick live job search fallback timed out"}, "companies": [], "people": []}
-    payload = {
-        "model": model,
-        "max_tokens": 3200,
-        "messages": [{"role": "user", "content": prompt}],
-        "tools": [{"type": "web_search_20250305", "name": "web_search", "max_uses": 2}],
-        "_primary_timeout_seconds": 58,
-        "_fallback_timeout_seconds": 3,
-        "_skip_no_web_fallback": True,
-    }
-    data, warning = _lead_call_with_optional_web(api_key, payload, warning_prefix="Quick job-search fallback did not complete.", graceful_json=graceful, provider=llm_provider)
-    raw_text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text" or "text" in b)
-    try:
-        parsed = _lead_extract_json(raw_text)
-    except Exception:
-        parsed = graceful
-        warning = (warning + " API returned malformed quick-search output.").strip()
-    parsed["people"] = []
-    parsed = _lead_normalize_company_fit_freshness(parsed)
-    parsed, loc_warning = _lead_filter_by_regions(parsed, regions)
-    parsed, filter_warning = _lead_apply_basic_job_filters(parsed, job_filters)
-    if filter_warning:
-        warning = (warning + " " + filter_warning).strip()
-    if loc_warning:
-        warning = (warning + " " + loc_warning).strip()
-    return parsed, warning, data.get("usage", {})
+    return _LEAD_SEARCH_ORCHESTRATOR.quick_job_search(
+        api_key, model, regions, job_sources, title_angles, target_role, industries,
+        candidate_context, cv_excerpt, company_n=company_n, job_filters=job_filters,
+        llm_provider=llm_provider,
+    )
 
 
 

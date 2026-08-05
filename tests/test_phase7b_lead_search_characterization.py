@@ -13,6 +13,21 @@ from unittest import mock
 import cvstudio_lead_search as ls
 
 
+def _llm_stub_deps():
+    """The three LLM-path injected deps, inert for config/collect tests."""
+    def _unused_call_llm(*a, **k):  # pragma: no cover - not exercised here
+        raise AssertionError("call_llm should not be reached in this test")
+
+    def _unused_cwow(*a, **k):  # pragma: no cover - not exercised here
+        raise AssertionError("call_with_optional_web should not be reached")
+
+    return dict(
+        call_llm=_unused_call_llm,
+        provider_info=lambda: {},
+        call_with_optional_web=_unused_cwow,
+    )
+
+
 class SslContextTests(unittest.TestCase):
     def test_returns_context_when_certifi_present(self):
         sentinel = object()
@@ -144,6 +159,7 @@ class OrchestratorConfigTests(unittest.TestCase):
             search_tavily=lambda *a, **k: [],
             search_serpapi=lambda *a, **k: [],
             search_provider_queries=lambda *a, **k: [],
+            **_llm_stub_deps(),
         )
         defaults.update(calls)
         orch = ls.LeadSearchOrchestrator(**defaults)
@@ -178,6 +194,7 @@ class OrchestratorConfigTests(unittest.TestCase):
             search_tavily=lambda *a, **k: [],
             search_serpapi=lambda *a, **k: [],
             search_provider_queries=lambda *a, **k: [],
+            **_llm_stub_deps(),
         )
         self.assertEqual(orch.search_provider_config({"provider": "tavily", "key": ""})["api_key"], "k1")
         store["search_tavily"] = "k2"
@@ -192,6 +209,7 @@ class OrchestratorCollectTests(unittest.TestCase):
             search_tavily=lambda *a, **k: [],
             search_serpapi=lambda *a, **k: [],
             search_provider_queries=lambda *a, **k: ["q1", "q2"],
+            **_llm_stub_deps(),
         )
         defaults.update(overrides)
         return ls.LeadSearchOrchestrator(**defaults)
@@ -234,6 +252,109 @@ class OrchestratorCollectTests(unittest.TestCase):
         results, _ = orch.collect_search_provider_results({}, [], [], [])
         self.assertTrue(called.get("hit"))
         self.assertEqual(results[0]["url"], "https://s.example")
+
+
+class OrchestratorCallWithOptionalWebTests(unittest.TestCase):
+    def _orch(self, call_llm, provider_info=None):
+        return ls.LeadSearchOrchestrator(
+            secret_store=lambda: {},
+            search_provider_config=lambda raw: {},
+            search_tavily=lambda *a, **k: [],
+            search_serpapi=lambda *a, **k: [],
+            search_provider_queries=lambda *a, **k: [],
+            call_llm=call_llm,
+            provider_info=lambda: (provider_info or {"anthropic": {"supports_web_search": True}}),
+            call_with_optional_web=lambda *a, **k: None,
+        )
+
+    def test_happy_path_returns_data_and_no_warning(self):
+        orch = self._orch(lambda provider, key, payload: {"content": [{"type": "text", "text": "ok"}]})
+        data, warning = orch.call_with_optional_web("k", {"model": "m", "messages": []}, provider="anthropic")
+        self.assertEqual(data["content"][0]["text"], "ok")
+        self.assertEqual(warning, "")
+
+    def test_provider_without_web_search_and_tools_degrades_upfront(self):
+        calls = []
+        def fake(provider, key, payload):
+            calls.append(payload)
+            return {"content": [{"type": "text", "text": "no-web"}]}
+        orch = self._orch(fake, provider_info={"deepseek": {"supports_web_search": False}})
+        data, warning = orch.call_with_optional_web(
+            "k", {"model": "m", "messages": [], "tools": [{"type": "web_search"}]}, provider="deepseek"
+        )
+        # tools stripped for the no-web fallback call.
+        self.assertNotIn("tools", calls[0])
+        self.assertTrue(warning)  # actionable message surfaced
+
+    def test_timeout_with_graceful_json_returns_fake_response(self):
+        def boom(*a, **k):
+            raise TimeoutError("slow")
+        orch = self._orch(boom)
+        graceful = {"summary": {}, "companies": [], "people": []}
+        data, warning = orch.call_with_optional_web("k", {"messages": []}, graceful_json=graceful)
+        # _lead_fake_anthropic_response wraps graceful JSON as a content block.
+        self.assertIn("content", data)
+        self.assertTrue(warning)
+
+    def test_timeout_without_graceful_raises(self):
+        def boom(*a, **k):
+            raise TimeoutError("slow")
+        orch = self._orch(boom)
+        with self.assertRaises(TimeoutError):
+            orch.call_with_optional_web("k", {"messages": []}, graceful_json=None)
+
+
+class OrchestratorExtractAndQuickTests(unittest.TestCase):
+    def _orch(self, **overrides):
+        d = dict(
+            secret_store=lambda: {},
+            search_provider_config=lambda raw: {"provider": "tavily", "api_key": "k", "enabled": True},
+            search_tavily=lambda *a, **k: [],
+            search_serpapi=lambda *a, **k: [],
+            search_provider_queries=lambda *a, **k: [],
+            call_llm=lambda *a, **k: {"content": [{"type": "text", "text": "{}"}], "usage": {}},
+            provider_info=lambda: {},
+            call_with_optional_web=lambda *a, **k: ({"content": [{"type": "text", "text": "{}"}]}, ""),
+        )
+        d.update(overrides)
+        return ls.LeadSearchOrchestrator(**d)
+
+    def test_extract_empty_provider_results_short_circuits(self):
+        orch = self._orch()
+        out = orch.extract_from_search_provider_results(
+            "k", "m", {}, [], ["MY"], [], [], "", "", "", "", company_n=5
+        )
+        self.assertEqual(out, ({"summary": {}, "companies": [], "people": []}, "", {}))
+
+    def test_extract_calls_llm_and_annotates_summary(self):
+        seen = {}
+        def fake_llm(provider, key, payload):
+            seen["provider"] = provider
+            return {"content": [{"type": "text", "text": '{"companies":[],"people":[]}'}], "usage": {"input_tokens": 1}}
+        orch = self._orch(call_llm=fake_llm)
+        parsed, warning, usage = orch.extract_from_search_provider_results(
+            "k", "m", {"provider": "tavily"}, [{"title": "T", "url": "u"}], ["MY"],
+            ["src"], ["angle"], "role", "ind", "ctx", "cv", company_n=5, llm_provider="anthropic",
+        )
+        self.assertEqual(seen["provider"], "anthropic")
+        self.assertEqual(parsed["summary"]["search_provider_used"], "tavily")
+        self.assertEqual(parsed["summary"]["search_provider_results_seen"], 1)
+        self.assertEqual(usage, {"input_tokens": 1})
+
+    def test_quick_delegates_to_call_with_optional_web(self):
+        captured = {}
+        def fake_cwow(api_key, payload, warning_prefix="", graceful_json=None, provider="anthropic"):
+            captured["tools"] = payload.get("tools")
+            captured["skip"] = payload.get("_skip_no_web_fallback")
+            return {"content": [{"type": "text", "text": '{"companies":[],"people":[]}'}]}, ""
+        orch = self._orch(call_with_optional_web=fake_cwow)
+        parsed, warning, usage = orch.quick_job_search(
+            "k", "m", ["MY"], ["src"], ["angle"], "role", "ind", "ctx", "cv", company_n=3,
+        )
+        # quick always requests the web-search tool and skips the no-web fallback.
+        self.assertTrue(captured["tools"])
+        self.assertTrue(captured["skip"])
+        self.assertEqual(parsed["people"], [])
 
 
 class FetchJsonUrlTests(unittest.TestCase):

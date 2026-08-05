@@ -517,6 +517,18 @@ class LeadEnrichCharacterizationTests(unittest.TestCase):
         self.assertEqual(out[0]["job_url"], "https://www.linkedin.com/jobs/view/1")
         self.assertEqual(note, "")
 
+    def test_filter_by_regions_resolves_has_apac_cross_module(self):
+        # Regression: _lead_filter_by_regions references _lead_has_apac, which
+        # lives in cvstudio_lead_match. Before it was imported into this module,
+        # any call with a dict raised NameError (the region filter is on the
+        # main /lead-finder/search path). APAC regions pass everything through.
+        parsed = {"companies": [{"country": "Germany", "region": "Berlin"}], "people": []}
+        passed, warning = app._lead_filter_by_regions(dict(parsed), ["APAC"])
+        self.assertEqual(len(passed["companies"]), 1)
+        # A concrete country still evaluates without raising.
+        filtered, _ = app._lead_filter_by_regions(dict(parsed), ["Malaysia"])
+        self.assertIsInstance(filtered, dict)
+
 
 if __name__ == "__main__":
     unittest.main()
