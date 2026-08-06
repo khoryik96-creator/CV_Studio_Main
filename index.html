@@ -1417,7 +1417,7 @@
   .provider-down-alert{border:1px solid #fecaca;background:#fff1f2;color:#991b1b;border-radius:10px;padding:10px 12px;font-weight:700;line-height:1.45;}
 
 </style>
-<script src="/vendor/cvstudio/lazy-loader.js?v=24.6.249"></script>
+<script src="/vendor/cvstudio/lazy-loader.js?v=24.6.250"></script>
 <script>
 /* CV Studio Doctor — built-in diagnostic recorder.
  * Records JS errors, unhandled rejections, failed/slow network calls and
@@ -1597,7 +1597,7 @@
 <div class="app">
   <div class="header" style="position:relative;">
     <div>
-      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.249 (Offline) by The 郭 Lab</span></h1>
+      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.250 (Offline) by The 郭 Lab</span></h1>
 
     </div>
     <div class="header-tools">
@@ -3545,8 +3545,8 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
-<script src="/vendor/cvstudio/api-transport.js?v=24.6.249"></script>
-<script src="/vendor/cvstudio/page-nav.js?v=24.6.249"></script>
+<script src="/vendor/cvstudio/api-transport.js?v=24.6.250"></script>
+<script src="/vendor/cvstudio/page-nav.js?v=24.6.250"></script>
 <script>
 // ── JobAdder OAuth + Upload ───────────────────────────────────────────
 // Replace these with your JobAdder app credentials from developer.jobadder.com
@@ -6749,7 +6749,7 @@ var _cvStudioPhase2bSettingsStartupPromise=cvStudioHydrateBrowserSettings();
 function exportCvStudioLocalData(){
   var settings=cvStudioLocalDataSettingsSnapshot(false);
   var records={onenote_transfer_records:(typeof oneNoteRecordsLoad==='function'?oneNoteRecordsLoad():[]),onenote_saved_links:(typeof oneNoteReadSavedLinks==='function'?oneNoteReadSavedLinks():[])};
-  var payload={product:'CV Studio local data',version:'v24.6.249',schema:1,exportedAt:new Date().toISOString(),includes:['PPC metadata and preferences','saved OneNote links and parser preferences','OneNote transfer record history (private application data)','invoice recipient/settings and draft links','CV alignment and navigation preferences','AI routing/provider selections without API keys'],settings:settings,records:records};
+  var payload={product:'CV Studio local data',version:'v24.6.250',schema:1,exportedAt:new Date().toISOString(),includes:['PPC metadata and preferences','saved OneNote links and parser preferences','OneNote transfer record history (private application data)','invoice recipient/settings and draft links','CV alignment and navigation preferences','AI routing/provider selections without API keys'],settings:settings,records:records};
   var blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='cv_studio_local_data_'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(url);a.remove();},0);showToast('Non-secret local data exported.','ok');
 }
 function cvStudioPersistImportedLocalData(payload){
@@ -6909,7 +6909,7 @@ function cvLockedTabLabel() {
 // Unlocks persist across normal browser/app restarts for the same installed build,
 // but deliberately reset after a new CV Studio version is installed. This keeps the
 // lock in place after upgrades while avoiding repeated prompts during daily use.
-var LOCK_UNLOCK_VERSION = 'v24.6.249';
+var LOCK_UNLOCK_VERSION = 'v24.6.250';
 function versionedUnlockKey(base) {
   return base + '_' + String(LOCK_UNLOCK_VERSION || '').replace(/[^0-9A-Za-z]+/g, '_');
 }
@@ -19682,7 +19682,7 @@ window.addEventListener('load', function(){
 try { updateAiCrawlerLockUI(); } catch(e) {}
 });
 </script>
-<script src="/vendor/cvstudio/server-heartbeat.js?v=24.6.249"></script>
+<script src="/vendor/cvstudio/server-heartbeat.js?v=24.6.250"></script>
 <script>
 try { updateSummaryLockUI(); } catch(e) {}
 try { updateCvScoringLockUI(); } catch(e) {}

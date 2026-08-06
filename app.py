@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.249"
+_INSTALL_RECEIPT_VERSION = "v24.6.250"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -318,7 +318,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.249"
+_CVSTUDIO_VERSION = "v24.6.250"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -1142,7 +1142,7 @@ Output: JSON object matching this exact schema (no variations):
       "state": "state/province or empty string",
       "countryCode": "2-letter ISO country code e.g. AU, MY, SG, or empty string"
     },
-    "notice_period": "X month(s) or empty string",
+    "notice_period": "verbatim notice/availability text from the CV (e.g. '1 month', 'Immediate', 'Available from 1 August 2026 onwards') or empty string",
     "current_position": "Job Title or empty string",
     "current_company": "Company Name or empty string",
     "is_employed": true,
@@ -1193,7 +1193,8 @@ RULES:
 - For project-based CVs, preserve every explicit project/client heading instead of flattening all project bullets into one anonymous list. Put the role title first, then each project heading, then that project's bullets. Never place a project heading before the role title.
 - Represent each project group inside the relevant role as {"heading": "Project Name – Client", "bullets": ["project bullet", "project bullet"]}. Assign projects to the employment role covering the project start date; if a project spans several promotions or is ongoing across the full employer period, place it under the newest/current applicable role. Preserve the project wording and bullet content.
 - Within each role, order dated project groups chronologically from the role's earliest project to its latest project. Put broad ongoing/ad-hoc support or business-proposal groups last.
-- For a company with multiple roles, the top-level date_range MUST span from the earliest role start date to the latest role end date (e.g. if roles are "Sep 2024 to Nov 2025" and "Nov 2025 to Present", the company date_range is "Sep 2024 to Present")
+- For a company with multiple roles, the top-level date_range MUST span from the earliest role start date to the latest role end date (e.g. if roles are "Sep 2024 to Nov 2025" and "Nov 2025 to Present", the company date_range is "Sep 2024 to Present"). The company date_range must never end before it starts.
+- SEPARATE STINTS AT THE SAME EMPLOYER: only group roles under one work-experience entry when they are ONE continuous, back-to-back tenure (a promotion path with adjoining dates). If the candidate worked at the same employer across DISTINCT, non-adjacent periods (a gap between them, or a later return), emit each period as its OWN separate work-experience entry in reverse-chronological position — do not merge them into a single entry. It is correct for the same company name to appear more than once in work_experiences.
 - candidate.email: extract the candidate's email address (look for patterns like name@domain.com anywhere in the CV, including in header lines mixed with phone/location/linkedin separated by | or spaces). Return exactly as written, or empty string if not found
 - candidate.phone: extract the candidate's mobile or phone number exactly as written, or empty string if not found
 - candidate.linkedin: extract the LinkedIn profile URL if present.
@@ -1235,6 +1236,7 @@ SECTION MAPPING RULES — very important:
 - If a skills section has sub-headings with bullet points (e.g. "Oracle:" followed by bullets, "PostgreSQL:" followed by bullets), map EACH sub-heading as its own skill category, and join its bullet points into the "items" field separated by newline characters (\n). Preserve the full detail of every bullet point exactly.
 - Any section labelled Certifications, Certificates, Licenses, Accreditations, Professional Certifications → map into "certifications" array
 - Any section labelled Training, Trainings, Professional Development, Courses, Short Courses, Workshops → map each training/course as an item in "certifications" array (they appear together under Additional Information)
+- CERTIFICATION/TRAINING DATES — KEEP THEM: when a certification or training states a date or year (e.g. "12/2023", "2019", "Nov 2019"), preserve it in the certification item exactly as given. Do not drop the date. Keep the issuing body/institution too.
 - Any section labelled Languages → map to candidate.languages field ONLY when it clearly belongs to the candidate. Extract language names ONLY — strip all proficiency levels, fluency descriptions, written/spoken qualifiers. Standardize language names: English; Bahasa Malaysia for Malay/Bahasa Melayu/BM; Chinese for Mandarin/Cantonese/Hokkien/Hakka/other Chinese dialects. Only include languages explicitly stated in the CV.
 - REDACTED LANGUAGE GUARD: If a Languages section or candidate.languages value is explicitly redacted/masked/withheld (e.g. "[redacted]", "redacted", "confidential", "masked", "hidden", "***", "xxx", "████"), do not infer or invent languages from it. Leave candidate.languages as an empty string in that case. Do not use broad template/filler assumptions to remove languages; only ignore explicit redaction/masking.
 - Any section labelled Awards, Achievements, Honours, Accomplishments → add as a skills category: { "category": "Awards & Achievements", "items": "Award 1\nAward 2" }
@@ -1253,7 +1255,7 @@ OMISSION & EXTRA SECTIONS RULES:
   - Publications, Research Papers → { "category": "Publications", "items": "Title (Journal, Year)\nTitle (Journal, Year)" }
   - Any other section that does not fit work_experiences, education, certifications, or skills (e.g. Interests, References, Projects, Open Source, Speaking Engagements, Conference Talks) → add as its own skills category with a sensible category name, preserve all content. EXCEPTION: never apply this catch-all to salary/remuneration/compensation content — that is omitted entirely per the SALARY / REMUNERATION rule above.
   - Relocate/Open to relocation info → omit
-  - Notice period if stated in the CV → map to candidate.notice_period"""
+  - Notice period if stated in the CV → map to candidate.notice_period VERBATIM. Copy the exact wording the CV uses (a month count like "1 month", "Immediate", or an availability date like "Available from 1 August 2026 onwards"). Never infer, round, or invent a value, and never convert an availability date into a month count. If no notice/availability is stated, return an empty string."""
 
 
 _AI_PROVIDER_CLIENT = AIProviderClient()
@@ -1585,6 +1587,7 @@ from cvstudio_cv_normalize import (
     _canonical_cv_section_heading,
     _canonical_language_name,
     _cv_combine_date_ranges,
+    _cv_company_span_from_roles,
     _cv_date_parts,
     _cv_date_sort_point,
     _cv_lang_alias_re,
@@ -1854,17 +1857,36 @@ def _order_same_company_roles_newest_first(parsed):
         ), reverse=True)
         exp["roles"] = [item[3] for item in decorated]
 
-    # Keep the header's current position aligned with the first/current role.
+    # Recompute each employer's header date range from its roles' ranges so the
+    # company span can never be backwards or truncated relative to the roles
+    # shown under it. Only overrides when the roles actually carry dates.
+    for exp in exps:
+        if not isinstance(exp, dict):
+            continue
+        span = _cv_company_span_from_roles(exp.get("roles") or [])
+        if span:
+            exp["date_range"] = span
+
+    # Keep the header's current position aligned with the first/current role, and
+    # derive employment status: the candidate is "current" only when the latest
+    # role is open-ended (Present). A concrete end date means they have left, so
+    # the header must read LAST POSITION, not CURRENT POSITION.
     cand = parsed.get("candidate") or {}
     if isinstance(cand, dict) and exps:
         top_exp = exps[0] if isinstance(exps[0], dict) else {}
         top_roles = top_exp.get("roles") or []
         if top_roles and isinstance(top_roles[0], dict):
-            top_date = top_roles[0].get("date_range") or top_exp.get("date_range") or ""
-            if re.search(r"\bPresent\b", _normalize_cv_date_range(top_date), re.I):
+            top_date = _normalize_cv_date_range(top_roles[0].get("date_range") or top_exp.get("date_range") or "")
+            _, top_end = _cv_date_parts(top_date)
+            end_blob = top_end or top_date
+            if re.search(r"\bPresent\b", end_blob, re.I):
                 cand["current_position"] = top_roles[0].get("title") or cand.get("current_position") or ""
                 cand["current_company"] = top_exp.get("company") or cand.get("current_company") or ""
                 cand["is_employed"] = True
+            elif re.search(r"\d{4}", end_blob):
+                # Concrete end year with no "Present" -> the latest engagement has
+                # a stated end, so the candidate has left.
+                cand["is_employed"] = False
         parsed["candidate"] = cand
     return parsed
 
@@ -5026,7 +5048,7 @@ def _ja_spa_browser_bridge(candidate_id, fields, note_text="", email="", salary_
     payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
     compact_payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     script = """(async () => {
-  const helperVersion = 'v24.6.249';
+  const helperVersion = 'v24.6.250';
   const candidateId = %s;
   const payload = %s;
   const profilePath = %s;
@@ -7349,7 +7371,7 @@ def jobadder_onenote_activity_diagnostic():
     generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Candidate Activity Read Test",
-        "cv_studio_version": "v24.6.249",
+        "cv_studio_version": "v24.6.250",
         "generated_utc": generated,
         "safety": {
             "read_only": True,
@@ -7560,7 +7582,7 @@ def jobadder_onenote_activity_create_diagnostic():
     if confirmation != "CREATE ONE MAX LOW TEST":
         return jsonify({"error": "Type CREATE ONE MAX LOW TEST exactly before running the controlled POST."}), 400
 
-    guard_key = ("v24.6.249", candidate_id)
+    guard_key = ("v24.6.250", candidate_id)
     if guard_key in _JA_ACTIVITY_CREATE_DIAG_USED:
         return jsonify({"error": "The one-shot controlled POST has already been run in this CV Studio session. Restarting is intentionally required before any repeat test."}), 409
     # Mark before the network call so a timeout/double-click cannot emit a second POST.
@@ -7589,7 +7611,7 @@ def jobadder_onenote_activity_create_diagnostic():
     generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Official AddCandidateActivity Create Test",
-        "cv_studio_version": "v24.6.249",
+        "cv_studio_version": "v24.6.250",
         "generated_utc": generated,
         "candidate_fixture": {
             "name": "Max Low",

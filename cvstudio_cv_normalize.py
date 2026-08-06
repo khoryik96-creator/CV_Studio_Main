@@ -558,6 +558,41 @@ def _cv_combine_date_ranges(date_ranges):
     return f"{start} to {end}".strip()
 
 
+def _cv_company_span_from_roles(roles):
+    """Recompute an employer's overall date range from its roles' ranges.
+
+    Returns "<earliest start> to <latest end>" derived from the role with the
+    earliest start and the role with the latest end, so a company header can
+    never be backwards (e.g. "Jan 2020 to Dec 2019") or truncated relative to
+    the roles shown beneath it. Returns "" when no role carries a parseable
+    date, so callers only override the provided company date when the roles
+    actually supply one.
+    """
+    best_start = None  # (sort_point, display_text)
+    best_end = None
+    for role in roles or []:
+        if not isinstance(role, dict):
+            continue
+        rng = _normalize_cv_date_range(role.get("date_range") or "")
+        if not rng:
+            continue
+        start_text, end_text = _cv_date_parts(rng)
+        start_point = _cv_date_sort_point(start_text or rng, end=False)
+        end_blob = end_text or start_text or rng
+        end_point = _cv_date_sort_point(end_blob, end=True)
+        if start_point is not None and (best_start is None or start_point < best_start[0]):
+            best_start = (start_point, start_text or rng)
+        if end_point is not None and (best_end is None or end_point > best_end[0]):
+            best_end = (end_point, end_blob)
+    if best_start is None and best_end is None:
+        return ""
+    start = best_start[1] if best_start else best_end[1]
+    end = best_end[1] if best_end else best_start[1]
+    if start == end:
+        return start
+    return f"{start} to {end}".strip()
+
+
 _CV_MONTH_NUMBER = {
     "jan": 1, "january": 1, "feb": 2, "february": 2,
     "mar": 3, "march": 3, "apr": 4, "april": 4, "may": 5,
