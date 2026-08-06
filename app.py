@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.253"
+_INSTALL_RECEIPT_VERSION = "v24.6.254"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -318,7 +318,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.253"
+_CVSTUDIO_VERSION = "v24.6.254"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -1211,7 +1211,7 @@ RULES:
 - candidate.address.city: city from address section, or empty string
 - candidate.address.state: state/province from address, or empty string
 - candidate.address.countryCode: 2-letter ISO country code from address (e.g. AU for Australia, MY for Malaysia), or empty string
-- candidate.name: always output in Title Case (capitalize first letter of each word, lowercase the rest), e.g. "MOHAMMAD AJMER BIN ABDUL HASAN" → "Mohammad Ajmer Bin Abdul Hasan"
+- candidate.name: the person's full name ONLY — never the address, city, country, email, phone, or a job title. It is normally the most prominent line at the very top of the CV (contact lines such as address/phone/email usually follow it, sometimes preceded by icon glyphs). Always output in Title Case (capitalize first letter of each word, lowercase the rest), e.g. "MOHAMMAD AJMER BIN ABDUL HASAN" → "Mohammad Ajmer Bin Abdul Hasan"
 - Work experience date ranges must use exactly this style: "Mon YYYY to Mon YYYY" or "Mon YYYY to Present". Convert "Till Date", "Current", hyphens/dashes, and ALL-CAPS months into this style (e.g. "OCT 2022 - Till Date" → "Oct 2022 to Present").
 - DATE ACCURACY: transcribe every start and end month/year EXACTLY as written in the source. Never shift, round, guess, or invent a month or year. Only "Present"/"Current"/"Till date" (or no end at all) may become "to Present" — a stated end date such as a specific month/year is NEVER rewritten as "Present".
 - Work experience company names and role titles must not be returned in ALL CAPS unless they are genuine acronyms (e.g. COGNIZANT → Cognizant, DATA ECONOMY → Data Economy, WOLTERS KLUWER → Wolters Kluwer, but CGI/AWS/SQL/SAP stay uppercase).
@@ -1606,6 +1606,7 @@ from cvstudio_cv_normalize import (
     _language_has_source_evidence,
     _normalize_candidate_language_value,
     _normalize_candidate_languages,
+    _correct_mistagged_candidate_name,
     _normalize_cv_bullet_items,
     _normalize_cv_data_for_output,
     _normalize_cv_date_range,
@@ -5074,7 +5075,7 @@ def _ja_spa_browser_bridge(candidate_id, fields, note_text="", email="", salary_
     payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
     compact_payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     script = """(async () => {
-  const helperVersion = 'v24.6.253';
+  const helperVersion = 'v24.6.254';
   const candidateId = %s;
   const payload = %s;
   const profilePath = %s;
@@ -7397,7 +7398,7 @@ def jobadder_onenote_activity_diagnostic():
     generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Candidate Activity Read Test",
-        "cv_studio_version": "v24.6.253",
+        "cv_studio_version": "v24.6.254",
         "generated_utc": generated,
         "safety": {
             "read_only": True,
@@ -7608,7 +7609,7 @@ def jobadder_onenote_activity_create_diagnostic():
     if confirmation != "CREATE ONE MAX LOW TEST":
         return jsonify({"error": "Type CREATE ONE MAX LOW TEST exactly before running the controlled POST."}), 400
 
-    guard_key = ("v24.6.253", candidate_id)
+    guard_key = ("v24.6.254", candidate_id)
     if guard_key in _JA_ACTIVITY_CREATE_DIAG_USED:
         return jsonify({"error": "The one-shot controlled POST has already been run in this CV Studio session. Restarting is intentionally required before any repeat test."}), 409
     # Mark before the network call so a timeout/double-click cannot emit a second POST.
@@ -7637,7 +7638,7 @@ def jobadder_onenote_activity_create_diagnostic():
     generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Official AddCandidateActivity Create Test",
-        "cv_studio_version": "v24.6.253",
+        "cv_studio_version": "v24.6.254",
         "generated_utc": generated,
         "candidate_fixture": {
             "name": "Max Low",
@@ -12112,6 +12113,7 @@ def parse_cv():
             if mp:
                 cand["phone"] = mp.group(0).strip()
                 parsed["candidate"] = cand
+        parsed = _correct_mistagged_candidate_name(parsed, cv_text)
         parsed = _reconcile_work_experience_with_authoritative_table(parsed, cv_text)
         parsed = _order_same_company_roles_newest_first(parsed)
         parsed = _restore_explicit_project_headings(parsed, cv_text)
