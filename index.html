@@ -16675,15 +16675,32 @@ async function ppcConfirmCreateInvoiceDraft(event){
   try{opened.opener=null;opened.location.replace(rich.webLink);}catch(e){try{opened.location.href=rich.webLink;}catch(ignore){}}
   var note='Rich Outlook draft created. Calibri 11, black text, bold labels and aligned colons are preserved. Outlook may require clicking Edit.';if(rich.reused)note+=' The existing result for this request was reused.';showToast(note,'ok');ppcRender();return false;
 }
+function ppcOutlookOwaOrigin(){
+  // Use the exact OWA host Graph already handed us (e.g. outlook.cloud.microsoft)
+  // so the compose deeplink opens WITHOUT a cross-host redirect — a redirect from
+  // outlook.office.com to the tenant host drops the compose intent and lands on
+  // the inbox instead. Fall back to the modern default host.
+  try{
+    var all=ppcDraftStoreLoad()||{};
+    for(var k in all){var wl=all[k]&&all[k].webLink;if(wl){var m=String(wl).match(/^https?:\/\/[^\/]+/i);if(m)return m[0];}}
+  }catch(e){}
+  try{
+    var acct=(_ppcOutlookAccount&&(_ppcOutlookAccount.webLink||_ppcOutlookAccount.owaUrl))||'';
+    var am=String(acct).match(/^https?:\/\/[^\/]+/i);if(am)return am[0];
+  }catch(e){}
+  return 'https://outlook.cloud.microsoft';
+}
 function ppcOutlookComposeUrl(to,subject){
-  // Outlook web "new message" deeplink. Opening a fresh compose is the only path
-  // that lets Outlook auto-insert the user's real signature (including image);
-  // an API-created draft never gets it. Body is left empty on purpose so the
-  // signature is untouched and the user pastes the copied invoice above it.
-  var params=[];
+  // Outlook web "new message" deeplink. A fresh compose is the only path that
+  // lets Outlook auto-insert the user's real signature (including image); an
+  // API-created draft never gets it. Body is left empty on purpose so the
+  // signature is untouched and the user pastes the copied invoice above it. The
+  // exvsurl/ispopout params match the working read deeplink so it opens a real
+  // compose popout on the tenant host.
+  var params=['exvsurl=1','ispopout=1'];
   if(to)params.push('to='+encodeURIComponent(to));
   if(subject)params.push('subject='+encodeURIComponent(subject));
-  return 'https://outlook.office.com/mail/deeplink/compose'+(params.length?('?'+params.join('&')):'');
+  return ppcOutlookOwaOrigin()+'/mail/deeplink/compose?'+params.join('&');
 }
 async function ppcComposeInvoiceInOutlook(event){
   if(event){event.preventDefault();event.stopPropagation();}
