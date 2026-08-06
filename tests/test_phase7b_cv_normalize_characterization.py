@@ -94,6 +94,32 @@ class DateAndMonthTests(unittest.TestCase):
             "Jan 2020 to Mar 2021",
         )
 
+    def test_iso_year_month_dates_normalized_not_shredded(self):
+        # ISO YYYY-MM ranges must become "Mon YYYY to Mon YYYY", not be split by
+        # the hyphen->"to" step into "2020 to 06 to 2025 to 07".
+        self.assertEqual(
+            cn._normalize_cv_date_range("2020-06 – 2025-07"), "Jun 2020 to Jul 2025"
+        )
+        self.assertEqual(
+            cn._normalize_cv_date_range("2016-01 – 2019-12"), "Jan 2016 to Dec 2019"
+        )
+        self.assertEqual(
+            cn._normalize_cv_date_range("2025-03 – Present"), "Mar 2025 to Present"
+        )
+        # ISO with a day drops the day.
+        self.assertEqual(
+            cn._normalize_cv_date_range("2020-06-15 to 2025-07-31"), "Jun 2020 to Jul 2025"
+        )
+
+    def test_pretranslate_iso_dates_targets_only_dates(self):
+        self.assertEqual(
+            cn._cv_pretranslate_iso_dates("UOB Indonesia 2020-06 – 2025-07"),
+            "UOB Indonesia Jun 2020 – Jul 2025",
+        )
+        # Year-only ranges, phone numbers, percentages, versions untouched.
+        for junk in ["2016 – Present", "+6281310272131", "reduce by 30%", "RHEL 7 to RHEL 8", "192-168 lab"]:
+            self.assertEqual(cn._cv_pretranslate_iso_dates(junk), junk)
+
 
 class LanguageTests(unittest.TestCase):
     def test_canonical_language_name(self):
