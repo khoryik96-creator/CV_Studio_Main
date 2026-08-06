@@ -50,6 +50,31 @@ def _numeric_month_year_repl(match):
     return match.group(0)
 
 
+def _iso_year_month_repl(match):
+    """Convert an ISO YYYY-MM (day already stripped) token to "Mon YYYY"."""
+    month = int(match.group(2))
+    if 1 <= month <= 12:
+        return f"{_MONTH_ABBR_BY_NUMBER[month]} {match.group(1)}"
+    return match.group(0)
+
+
+def _cv_pretranslate_iso_dates(text):
+    """Rewrite ISO-style YYYY-MM and YYYY-MM-DD dates to house-style "Mon YYYY".
+
+    Some CVs write experience dates year-first, e.g. "2020-06" or "2020-06-15".
+    Providers read that format unreliably -- they mis-tag the month or year, or
+    turn a real end date into "Present" -- whereas they read "Jun 2020"
+    correctly, so converting the source up front removes the ambiguity. Only
+    a 19xx/20xx year with a 01-12 month is touched, which does not match phone
+    numbers, percentages, version strings, or amounts. The day is dropped.
+    """
+    text = str(text or "")
+    # YYYY-MM-DD first (drop the day), then the bare YYYY-MM.
+    text = re.sub(r"\b((?:19|20)\d{2})-(0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])\b", _iso_year_month_repl, text)
+    text = re.sub(r"\b((?:19|20)\d{2})-(0[1-9]|1[0-2])\b", _iso_year_month_repl, text)
+    return text
+
+
 _COMPANY_TOKEN_MAP = {
     "SDN": "Sdn", "BHD": "Bhd", "PTE": "Pte", "LTD": "Ltd", "LMT": "Lmt",
     "PVT": "Pvt", "INC": "Inc", "LLC": "LLC", "LLP": "LLP", "PLC": "PLC",
@@ -165,6 +190,9 @@ def _normalize_cv_date_range(value):
     text = text.replace("–", "-").replace("—", "-").replace("−", "-")
     text = re.sub(r"\b(till\s*date|till\s*now|to\s*date|current|presently|now)\b", "Present", text, flags=re.I)
     text = re.sub(r"\bpresent\b", "Present", text, flags=re.I)
+    # Convert ISO YYYY-MM(-DD) to "Mon YYYY" BEFORE turning "-" into "to", so an
+    # ISO range like "2020-06 to 2025-07" is not shredded into "2020 to 06 ...".
+    text = _cv_pretranslate_iso_dates(text)
     # Convert source separators to the house style "to".
     text = re.sub(r"\s*-\s*", " to ", text)
     text = re.sub(r"\s+to\s+", " to ", text, flags=re.I)
@@ -609,8 +637,9 @@ def _cv_date_sort_point(value, end=False):
         return None
     if re.search(r"\b(?:present|current|now|till\s*date|to\s*date)\b", text, re.I):
         return (9999, 12)
-    # Numeric MM/YYYY carries the month too; normalise to "Mon YYYY" first so a
-    # date like "06/2024" sorts at month granularity, not just its year.
+    # Numeric MM/YYYY and ISO YYYY-MM carry the month too; normalise both to
+    # "Mon YYYY" first so e.g. "06/2024" or "2024-06" sort at month granularity.
+    text = _cv_pretranslate_iso_dates(text)
     text = re.sub(r"\b(\d{1,2})/(\d{4})\b", _numeric_month_year_repl, text)
     matches = list(re.finditer(
         r"\b(?:(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+)?(\d{4})\b",

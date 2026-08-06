@@ -125,6 +125,11 @@ function normalizeDateRange(value) {
   text = text.replace(/[–—−]/g, '-');
   text = text.replace(/\b(till\s*date|till\s*now|to\s*date|current|presently|now)\b/gi, 'Present');
   text = text.replace(/\bpresent\b/gi, 'Present');
+  // ISO YYYY-MM(-DD) -> "Mon YYYY" BEFORE turning "-" into "to", so a range like
+  // "2020-06 to 2025-07" is not shredded into "2020 to 06 to 2025 to 07".
+  const isoRepl = function(m, yyyy, mm){ const n = parseInt(mm, 10); return (n >= 1 && n <= 12) ? (MONTH_ABBR_BY_NUMBER[n] + ' ' + yyyy) : m; };
+  text = text.replace(/\b((?:19|20)\d{2})-(0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])\b/g, isoRepl);
+  text = text.replace(/\b((?:19|20)\d{2})-(0[1-9]|1[0-2])\b/g, isoRepl);
   text = text.replace(/\s*-\s*/g, ' to ');
   text = text.replace(/\s+to\s+/gi, ' to ');
   text = text.replace(/\b(January|February|March|April|June|July|August|September|Sept|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\b/gi, function(m){
