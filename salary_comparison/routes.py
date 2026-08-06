@@ -27,9 +27,16 @@ bp = Blueprint(
 
 def _data_dir() -> Path:
     configured = current_app.config.get("SALARY_COMPARISON_DATA_DIR")
-    if configured:
-        return ensure_data_dir(Path(configured))
-    return ensure_data_dir(Path(__file__).resolve().parent / "data")
+    target = Path(configured) if configured else Path(__file__).resolve().parent / "data"
+    try:
+        return ensure_data_dir(target)
+    except OSError as exc:
+        # Seeding the data directory can fail on a fresh install (missing default
+        # data file, or a directory that is not writable). Surface it as a clear,
+        # handled error instead of an opaque 500.
+        raise RuleRepositoryError(
+            f"Unable to prepare the salary-comparison data directory ({target}): {exc}"
+        ) from exc
 
 
 def _repo() -> JsonRuleRepository:
@@ -293,4 +300,12 @@ def handled_error(exc: Exception):
 @bp.errorhandler(Exception)
 def unexpected_error(exc: Exception):
     current_app.logger.exception("Salary comparison error")
-    return jsonify({"error": "Unexpected salary-comparison error."}), 500
+    # This blueprint runs inside the owner's local CV Studio build, and the
+    # handled_error path above already returns the exception message and type.
+    # Surface the same detail here so an unexpected failure is diagnosable
+    # instead of an opaque "Unexpected salary-comparison error."
+    return jsonify({
+        "error": "Unexpected salary-comparison error.",
+        "detail": str(exc),
+        "type": type(exc).__name__,
+    }), 500
