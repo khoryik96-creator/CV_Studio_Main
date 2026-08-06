@@ -2953,7 +2953,7 @@
   <div class="ppc-modal" id="ppcInvoicePreviewModal" role="dialog" aria-modal="true" aria-labelledby="ppcInvoicePreviewTitle" onclick="if(event.target===this)ppcCloseInvoicePreview()">
     <div class="ppc-modal-card">
       <div class="ppc-modal-head">
-        <div><div id="ppcInvoicePreviewTitle" style="font-size:14px;font-weight:900;color:var(--text1);">Review Outlook invoice draft</div><div style="font-size:10.5px;color:var(--text3);margin-top:3px;">Review the exact recipient, subject and rich HTML body before CV Studio creates a draft.</div></div>
+        <div><div id="ppcInvoicePreviewTitle" style="font-size:14px;font-weight:900;color:var(--text1);">Review Outlook invoice draft</div><div style="font-size:10.5px;color:var(--text3);margin-top:3px;">Review the recipient, subject and rich HTML body. “Copy &amp; open in Outlook” opens a new email with your signature — paste (Ctrl+V) the invoice above it.</div></div>
         <button class="sec" type="button" onclick="ppcCloseInvoicePreview()" aria-label="Close invoice preview">×</button>
       </div>
       <div class="ppc-modal-body">
@@ -2970,7 +2970,8 @@
       <div class="ppc-modal-actions">
         <button class="sec" type="button" onclick="ppcCloseInvoicePreview()">Cancel</button>
         <button class="sec" type="button" onclick="ppcCopyInvoicePreviewFormatted()">Copy formatted</button>
-        <button class="primary" type="button" id="ppcInvoicePreviewCreateBtn" onclick="ppcConfirmCreateInvoiceDraft(event)">Create Outlook Draft</button>
+        <button class="sec" type="button" id="ppcInvoicePreviewCreateBtn" onclick="ppcConfirmCreateInvoiceDraft(event)" title="Creates a draft via the Microsoft Graph API. Faster, but Outlook does not add your signature to API-created drafts.">Save API draft (no signature)</button>
+        <button class="primary" type="button" onclick="ppcComposeInvoiceInOutlook(event)" title="Copies the formatted invoice and opens a new Outlook email so your real signature is added automatically. Paste (Ctrl+V) the invoice into the body above your signature.">Copy &amp; open in Outlook</button>
       </div>
     </div>
   </div>
@@ -16673,6 +16674,36 @@ async function ppcConfirmCreateInvoiceDraft(event){
   if(opened.closed){showToast('The draft was created, but the reserved browser tab was closed. Use Open last draft.','info');ppcRender();return false;}
   try{opened.opener=null;opened.location.replace(rich.webLink);}catch(e){try{opened.location.href=rich.webLink;}catch(ignore){}}
   var note='Rich Outlook draft created. Calibri 11, black text, bold labels and aligned colons are preserved. Outlook may require clicking Edit.';if(rich.reused)note+=' The existing result for this request was reused.';showToast(note,'ok');ppcRender();return false;
+}
+function ppcOutlookComposeUrl(to,subject){
+  // Outlook web "new message" deeplink. Opening a fresh compose is the only path
+  // that lets Outlook auto-insert the user's real signature (including image);
+  // an API-created draft never gets it. Body is left empty on purpose so the
+  // signature is untouched and the user pastes the copied invoice above it.
+  var params=[];
+  if(to)params.push('to='+encodeURIComponent(to));
+  if(subject)params.push('subject='+encodeURIComponent(subject));
+  return 'https://outlook.office.com/mail/deeplink/compose'+(params.length?('?'+params.join('&')):'');
+}
+async function ppcComposeInvoiceInOutlook(event){
+  if(event){event.preventDefault();event.stopPropagation();}
+  var id=String(_ppcInvoicePreviewPlacementId||'');if(!id)return false;
+  var item=ppcFindPlacement(id),settings=ppcInvoicePreviewSettings();if(!item)return false;
+  if(settings.recipient&&!ppcInvoiceEmailValid(settings.recipient)){var err=document.getElementById('ppcInvoicePreviewError');if(err){err.textContent='Enter a valid invoice recipient email, or clear it.';err.classList.add('show');}return false;}
+  ppcInvoiceSettingsSave({recipient:settings.recipient||ppcInvoiceSettingsLoad().recipient||'',greeting:settings.greeting});
+  var message=ppcBuildInvoiceEmail(item,settings);
+  // Start the clipboard write and open the tab inside the click gesture so the
+  // browser allows both, then redirect the tab to the compose deeplink.
+  var copyPromise=ppcCopyInvoiceFormatted(id,true,settings);
+  var win=null;try{win=window.open('about:blank','_blank');}catch(e){}
+  var copied=false;try{copied=await copyPromise;}catch(e){}
+  var url=ppcOutlookComposeUrl(settings.recipient,message.subject);
+  if(win){try{win.opener=null;win.location.replace(url);}catch(e){try{win.location.href=url;}catch(ignore){}}}
+  else{try{window.open(url,'_blank');}catch(e){}}
+  ppcCloseInvoicePreview();
+  if(copied)showToast('Invoice copied. In the new Outlook email, click in the body and paste (Ctrl+V / Cmd+V) above your signature, then send.','ok');
+  else showToast('Opened a new Outlook email. The clipboard was blocked — use “Copy formatted”, then paste the invoice into the email above your signature.','info');
+  ppcRender();return false;
 }
 function ppcIsoDate(d) {
   var y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
