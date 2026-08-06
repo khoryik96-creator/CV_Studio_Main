@@ -28,8 +28,8 @@ import zipfile
 import zlib
 from pathlib import Path
 
-VERSION = "v24.6.255"
-VERSION_SLUG = "v24_6_255"
+VERSION = "v24.6.256"
+VERSION_SLUG = "v24_6_256"
 PRODUCT = "TheGuoLab-CVStudio"
 RECEIPT_SCHEMA = 2
 TOTP_MASK = bytes([147,57,36,83,116,245,122,57,165,162,176,168,249,50,204,128,45,174,232,56])
@@ -519,7 +519,13 @@ def compile_native(root: Path, work: Path, target: str, source_entry: Path | Non
          "--low-memory","--jobs=1","--output-dir="+str(out),"--output-filename=CVStudio",
          "--report="+str(report),"--include-package-data=certifi",
          "--include-package=pypdfium2","--include-package=pypdfium2_raw",
-         "--include-package-data=pypdfium2","--include-package-data=pypdfium2_raw"]
+         "--include-package-data=pypdfium2","--include-package-data=pypdfium2_raw",
+         # The salary_comparison blueprint ships non-Python assets (data/*.json
+         # seed files, Jinja templates, static CSS/JS). Nuitka standalone omits
+         # package data unless told, so the protected build must bundle them or
+         # the module fails at runtime (missing seed data -> ensure_data_dir
+         # FileNotFoundError; missing templates -> render_template error).
+         "--include-package=salary_comparison","--include-package-data=salary_comparison"]
     if target=="windows-x64":
         cmd += ["--windows-console-mode=disable","--windows-icon-from-ico="+str(root/"cv_studio.ico")]
         # Imports are present in app.py and followed by Nuitka. Keep explicit

@@ -112,6 +112,13 @@ class Phase6AFrontendModularizationTests(unittest.TestCase):
         self.assertIn("protected_modules", build_package_source)
         self.assertIn("vendor/cvstudio", inspect.getsource(build_protected.smoke_test))
 
+        # The protected build must bundle the salary_comparison package data
+        # (seed JSON, Jinja templates, static assets); Nuitka standalone omits
+        # package data unless explicitly included, and their absence 500s the
+        # module at runtime.
+        compile_source = inspect.getsource(build_protected.compile_native)
+        self.assertIn("--include-package-data=salary_comparison", compile_source)
+
 
 def tearDownModule():
     if _MODULE_TEMPORARY is not None:
