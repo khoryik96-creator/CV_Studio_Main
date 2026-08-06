@@ -310,9 +310,20 @@ def _language_evidence_text(cv_text):
         return ""
     chunks = []
     lines = [ln.strip() for ln in re.split(r"\r?\n", text) if ln.strip()]
+    # A parenthesised proficiency descriptor marks a language declaration line on
+    # its own, e.g. "Malay (Professional Working):". This matters for two-column
+    # CV layouts where PDF extraction interleaves the LANGUAGES sidebar with other
+    # sections, pushing later languages beyond the heading's line window.
+    paren_proficiency = re.compile(
+        r"\([^)]*\b(?:professional|working|native|conversational|fluen\w+|proficien\w+|"
+        r"elementary|limited|intermediate|advanced|basic|mother\s*tongue|bilingual)\b[^)]*\)",
+        re.I,
+    )
     for i, line in enumerate(lines):
         if re.search(r"\blanguages?\b|\blinguistic\b|\bspoken\b|\bfluent\b|\bproficient\b|\bbilingual\b|\btrilingual\b|\bmultilingual\b|\bmother tongue\b", line, re.I):
             chunks.extend(lines[i:i+4])
+        elif paren_proficiency.search(line):
+            chunks.append(line)
         elif re.search(r"\b(?:speak|speaks|speaking|read|reads|reading|write|writes|writing|communicat(?:e|es|ing)|correspond(?:ence|s|ing))\b", line, re.I):
             chunks.append(line)
     # Also catch compact resume sections like "Languages: English, Malay" within paragraphs.
