@@ -59,6 +59,41 @@ class DateAndMonthTests(unittest.TestCase):
         self.assertEqual(cn._cv_date_sort_point("06/2024", end=False), (2024, 6))
         self.assertEqual(cn._cv_date_sort_point("06/2024 to 07/2026", end=True), (2026, 7))
 
+    def test_company_span_from_roles_spans_earliest_to_latest(self):
+        # Roles listed out of order (and a backwards company header) must yield a
+        # correct earliest-start to latest-end span.
+        roles = [
+            {"date_range": "Jan 2020 to Mar 2021"},
+            {"date_range": "Apr 2018 to Dec 2019"},
+            {"date_range": "Dec 2015 to Mar 2018"},
+        ]
+        self.assertEqual(cn._cv_company_span_from_roles(roles), "Dec 2015 to Mar 2021")
+
+    def test_company_span_preserves_present_and_normalizes_numeric(self):
+        self.assertEqual(
+            cn._cv_company_span_from_roles(
+                [{"date_range": "Jan 2024 to Present"}, {"date_range": "Jan 2022 to Dec 2023"}]
+            ),
+            "Jan 2022 to Present",
+        )
+        self.assertEqual(
+            cn._cv_company_span_from_roles(
+                [{"date_range": "06/2024 to 07/2026"}, {"date_range": "01/2022 to 05/2024"}]
+            ),
+            "Jan 2022 to Jul 2026",
+        )
+
+    def test_company_span_empty_when_roles_have_no_dates(self):
+        # No parseable date -> "" so callers keep the provided company date.
+        self.assertEqual(cn._cv_company_span_from_roles([{"title": "X"}, {"title": "Y"}]), "")
+        self.assertEqual(cn._cv_company_span_from_roles([]), "")
+
+    def test_company_span_single_role(self):
+        self.assertEqual(
+            cn._cv_company_span_from_roles([{"date_range": "Jan 2020 to Mar 2021"}]),
+            "Jan 2020 to Mar 2021",
+        )
+
 
 class LanguageTests(unittest.TestCase):
     def test_canonical_language_name(self):

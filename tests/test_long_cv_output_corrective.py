@@ -145,6 +145,15 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertIn("Never invent, infer, imply, annotate, or explain a title", app.SYSTEM_PROMPT)
         self.assertIn("never as JSON serialized inside a string", app.SYSTEM_PROMPT)
 
+    def test_prompt_keeps_notice_verbatim_cert_dates_and_separate_stints(self):
+        # #3 notice period must be copied verbatim, not coerced into a month count.
+        self.assertIn("map to candidate.notice_period VERBATIM", app.SYSTEM_PROMPT)
+        self.assertNotIn('"notice_period": "X month(s) or empty string"', app.SYSTEM_PROMPT)
+        # #4 certification/training dates must be preserved.
+        self.assertIn("CERTIFICATION/TRAINING DATES — KEEP THEM", app.SYSTEM_PROMPT)
+        # #2 distinct stints at the same employer stay separate entries.
+        self.assertIn("SEPARATE STINTS AT THE SAME EMPLOYER", app.SYSTEM_PROMPT)
+
     def test_prompt_omits_salary_and_remuneration_details(self):
         # Candidates sometimes include current/expected salary or a remuneration
         # section in their source CV; the formatted CV must never carry it over.
@@ -161,6 +170,38 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
     def test_ai_crawler_backend_no_longer_requires_password(self):
         with app.app.test_request_context("/jobadder/spider_options"):
             self.assertTrue(app._ai_crawler_lock_allowed({}))
+
+    def test_company_header_span_recomputed_and_left_candidate_is_last_position(self):
+        parsed = {
+            "candidate": {"current_position": "Head of Modern Trade", "is_employed": True},
+            "work_experiences": [
+                {"company": "Mondelez", "date_range": "Jun 2024 to Jul 2026",
+                 "roles": [{"title": "Head of Modern Trade", "date_range": ""}]},
+                {"company": "Unilever", "date_range": "Jan 2020 to Dec 2019", "roles": [
+                    {"title": "Head of Trade Marketing", "date_range": "Jan 2020 to Mar 2021"},
+                    {"title": "Head of Sales Operation", "date_range": "Apr 2018 to Dec 2019"},
+                    {"title": "National Sales Manager", "date_range": "Dec 2015 to Mar 2018"},
+                ]},
+            ],
+        }
+        out = app._order_same_company_roles_newest_first(parsed)
+        # #1 backwards/incomplete company header recomputed from roles.
+        self.assertEqual(out["work_experiences"][1]["date_range"], "Dec 2015 to Mar 2021")
+        # Single-role employer with the date on the entry (not the role) is left as-is.
+        self.assertEqual(out["work_experiences"][0]["date_range"], "Jun 2024 to Jul 2026")
+        # #3 latest role ends on a concrete past date (no "Present") -> candidate has left.
+        self.assertFalse(out["candidate"]["is_employed"])
+
+    def test_present_latest_role_marks_candidate_employed(self):
+        parsed = {
+            "candidate": {},
+            "work_experiences": [
+                {"company": "Acme", "date_range": "",
+                 "roles": [{"title": "Engineer", "date_range": "Jan 2024 to Present"}]},
+            ],
+        }
+        out = app._order_same_company_roles_newest_first(parsed)
+        self.assertTrue(out["candidate"]["is_employed"])
 
 
 if __name__ == "__main__":
