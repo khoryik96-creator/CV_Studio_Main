@@ -110,3 +110,39 @@ def test_publish_requires_admin_token_when_configured(app):
     client = app.test_client()
     response = client.post("/salary-comparison/api/rules/publish", json={"rule": {}})
     assert response.status_code == 403
+
+
+def test_unwritable_data_dir_returns_clean_handled_error(tmp_path):
+    # A data directory that cannot be seeded must surface a clear 400, not an
+    # opaque 500 "Unexpected salary-comparison error."
+    from flask import Flask
+    import salary_comparison
+
+    application = Flask(__name__)
+    application.config.update(
+        TESTING=True,
+        SALARY_COMPARISON_DATA_DIR="/proc/nonexistent/cannot_create_here",
+    )
+    salary_comparison.init_app(application, url_prefix="/salary-comparison")
+    response = application.test_client().get("/salary-comparison/api/config")
+    assert response.status_code == 400
+    payload = response.get_json()
+    assert payload["type"] == "RuleRepositoryError"
+    assert "data directory" in payload["error"].lower()
+
+
+def test_unexpected_error_response_is_diagnosable(client, monkeypatch):
+    # An unexpected (unhandled) exception must report its type and detail so the
+    # actual failure is visible instead of only the generic message.
+    from salary_comparison import routes as sc_routes
+
+    def boom():
+        raise RuntimeError("synthetic failure for diagnostics")
+
+    monkeypatch.setattr(sc_routes, "_country_map", boom)
+    response = client.get("/salary-comparison/api/config")
+    assert response.status_code == 500
+    payload = response.get_json()
+    assert payload["error"] == "Unexpected salary-comparison error."
+    assert payload["type"] == "RuntimeError"
+    assert "synthetic failure for diagnostics" in payload["detail"]
