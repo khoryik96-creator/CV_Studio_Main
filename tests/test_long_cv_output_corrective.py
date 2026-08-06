@@ -241,6 +241,27 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertIn("EMPLOYER NAME FIDELITY", app.SYSTEM_PROMPT)
         self.assertIn("ROLE TITLE FIDELITY", app.SYSTEM_PROMPT)
 
+    def test_all_languages_kept_despite_interleaved_two_column_layout(self):
+        # LANGUAGES sidebar interleaved with work history by PDF extraction: all
+        # three declared languages must survive (not just the first), and be
+        # canonicalised. A language with no source line is still dropped.
+        cv_text = (
+            "LANGUAGES Head of Modern Trade 07/2023 - 05/2024\n"
+            "Reckitt\n"
+            "Chinese (Professional Working):\n"
+            "• Reignited MT business with quarter-to-quarter growth\n"
+            "Malay (Professional Working):\n"
+            "• Led both MT key account management teams\n"
+            "English (Professional Working):\n"
+        )
+        parsed = {"candidate": {"languages": "Chinese, Malay, English, French"}}
+        out = app._normalize_candidate_languages(parsed, cv_text)
+        result = out["candidate"]["languages"]
+        self.assertIn("English", result)
+        self.assertIn("Bahasa Malaysia", result)
+        self.assertIn("Chinese", result)
+        self.assertNotIn("French", result)  # no source line -> dropped
+
 
 if __name__ == "__main__":
     unittest.main()

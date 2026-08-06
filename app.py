@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.252"
+_INSTALL_RECEIPT_VERSION = "v24.6.253"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -318,7 +318,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.252"
+_CVSTUDIO_VERSION = "v24.6.253"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -1240,7 +1240,7 @@ SECTION MAPPING RULES — very important:
 - Any section labelled Certifications, Certificates, Licenses, Accreditations, Professional Certifications → map into "certifications" array
 - Any section labelled Training, Trainings, Professional Development, Courses, Short Courses, Workshops → map each training/course as an item in "certifications" array (they appear together under Additional Information)
 - CERTIFICATION/TRAINING DATES — KEEP THEM: when a certification or training states a date or year (e.g. "12/2023", "2019", "Nov 2019"), preserve it in the certification item exactly as given. Do not drop the date. Keep the issuing body/institution too.
-- Any section labelled Languages → map to candidate.languages field ONLY when it clearly belongs to the candidate. Extract language names ONLY — strip all proficiency levels, fluency descriptions, written/spoken qualifiers. Standardize language names: English; Bahasa Malaysia for Malay/Bahasa Melayu/BM; Chinese for Mandarin/Cantonese/Hokkien/Hakka/other Chinese dialects. Only include languages explicitly stated in the CV.
+- Any section labelled Languages → map to candidate.languages field ONLY when it clearly belongs to the candidate. Extract EVERY language listed — capture all of them, not just the first (a two-column CV may interleave the Languages sidebar with other sections, e.g. "Chinese (Professional Working)", "Malay (Professional Working)", "English (Professional Working)" separated by other lines; include all three). Extract language names ONLY — strip all proficiency levels, fluency descriptions, written/spoken qualifiers. Standardize language names: English; Bahasa Malaysia for Malay/Bahasa Melayu/BM; Chinese for Mandarin/Cantonese/Hokkien/Hakka/other Chinese dialects. Only include languages explicitly stated in the CV.
 - REDACTED LANGUAGE GUARD: If a Languages section or candidate.languages value is explicitly redacted/masked/withheld (e.g. "[redacted]", "redacted", "confidential", "masked", "hidden", "***", "xxx", "████"), do not infer or invent languages from it. Leave candidate.languages as an empty string in that case. Do not use broad template/filler assumptions to remove languages; only ignore explicit redaction/masking.
 - Any section labelled Awards, Achievements, Honours, Accomplishments → add as a skills category: { "category": "Awards & Achievements", "items": "Award 1\nAward 2" }
 - Any section labelled Volunteer, Volunteering, Community, Extracurricular → add as a skills category: { "category": "Volunteer & Community", "items": "Activity 1\nActivity 2" }
@@ -5074,7 +5074,7 @@ def _ja_spa_browser_bridge(candidate_id, fields, note_text="", email="", salary_
     payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
     compact_payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     script = """(async () => {
-  const helperVersion = 'v24.6.252';
+  const helperVersion = 'v24.6.253';
   const candidateId = %s;
   const payload = %s;
   const profilePath = %s;
@@ -7397,7 +7397,7 @@ def jobadder_onenote_activity_diagnostic():
     generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Candidate Activity Read Test",
-        "cv_studio_version": "v24.6.252",
+        "cv_studio_version": "v24.6.253",
         "generated_utc": generated,
         "safety": {
             "read_only": True,
@@ -7608,7 +7608,7 @@ def jobadder_onenote_activity_create_diagnostic():
     if confirmation != "CREATE ONE MAX LOW TEST":
         return jsonify({"error": "Type CREATE ONE MAX LOW TEST exactly before running the controlled POST."}), 400
 
-    guard_key = ("v24.6.252", candidate_id)
+    guard_key = ("v24.6.253", candidate_id)
     if guard_key in _JA_ACTIVITY_CREATE_DIAG_USED:
         return jsonify({"error": "The one-shot controlled POST has already been run in this CV Studio session. Restarting is intentionally required before any repeat test."}), 409
     # Mark before the network call so a timeout/double-click cannot emit a second POST.
@@ -7637,7 +7637,7 @@ def jobadder_onenote_activity_create_diagnostic():
     generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Official AddCandidateActivity Create Test",
-        "cv_studio_version": "v24.6.252",
+        "cv_studio_version": "v24.6.253",
         "generated_utc": generated,
         "candidate_fixture": {
             "name": "Max Low",

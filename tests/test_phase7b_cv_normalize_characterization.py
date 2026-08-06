@@ -121,6 +121,32 @@ class DateAndMonthTests(unittest.TestCase):
             self.assertEqual(cn._cv_pretranslate_iso_dates(junk), junk)
 
 
+class LanguageEvidenceTests(unittest.TestCase):
+    # Two-column CV whose LANGUAGES sidebar is interleaved with work history by
+    # PDF extraction, so the 2nd/3rd languages fall outside the heading's line
+    # window. Each "X (Professional Working)" line must still count as evidence.
+    INTERLEAVED = (
+        "LANGUAGES Head of Modern Trade 07/2023 - 05/2024\n"
+        "Reckitt\n"
+        "Chinese (Professional Working):\n"
+        "• Reignited MT business with quarter-to-quarter growth\n"
+        "Malay (Professional Working):\n"
+        "• Led both MT key account management teams\n"
+        "English (Professional Working):\n"
+    )
+
+    def test_parenthesised_proficiency_lines_are_evidence(self):
+        for lang in ("Chinese", "Bahasa Malaysia", "English"):
+            self.assertTrue(
+                cn._language_has_source_evidence(lang, self.INTERLEAVED),
+                f"expected source evidence for {lang}",
+            )
+
+    def test_language_with_no_source_line_has_no_evidence(self):
+        self.assertFalse(cn._language_has_source_evidence("French", self.INTERLEAVED))
+        self.assertFalse(cn._language_has_source_evidence("Japanese", self.INTERLEAVED))
+
+
 class LanguageTests(unittest.TestCase):
     def test_canonical_language_name(self):
         # The alias->standard map is mutated at runtime by other code paths, so
