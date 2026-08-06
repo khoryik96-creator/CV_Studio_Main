@@ -381,6 +381,95 @@ def _normalize_candidate_languages(parsed, cv_text=""):
     return parsed
 
 
+# Address / contact markers that mean a value is a location or contact line, not
+# a person's name. Kept broad enough to catch English street types and the
+# South-East-Asian address vocabulary these CVs use.
+_CV_LOCATION_MARKER_RE = re.compile(
+    r"\b(?:avenue|ave|street|st|road|rd|lane|ln|drive|dr|boulevard|blvd|highway|"
+    r"jalan|jln|lorong|lrg|taman|kampung|kampong|kg|bandar|persiaran|lebuh|lebuhraya|"
+    r"block|blok|suite|unit|floor|tingkat|apartment|apt|residency|residence|condominium|"
+    r"postcode|poskod|malaysia|singapore|indonesia|brunei|thailand|vietnam|philippines|"
+    r"selangor|kuala\s+lumpur|putrajaya|cyberjaya|petaling|subang|shah\s+alam|klang|"
+    r"johor|penang|perak|kedah|kelantan|terengganu|pahang|melaka|negeri\s+sembilan|"
+    r"sarawak|sabah|labuan|bangi|cheras|ampang|kajang|seremban)\b",
+    re.I,
+)
+
+_CV_NAME_WORD_RE = re.compile(r"[A-Za-z][A-Za-z'.\-/]*")
+
+
+def _name_is_location_like(value):
+    """True when a candidate.name value is really a location/contact line.
+
+    Person names do not carry an email, a phone/street number, or address
+    vocabulary; a value that does was mis-tagged (e.g. the address landed in the
+    name field on a CV whose header uses icon glyphs).
+    """
+    s = str(value or "").strip()
+    if not s:
+        return False
+    if "@" in s:
+        return True
+    if re.search(r"\d", s):  # names do not contain digits; addresses/phones do
+        return True
+    return bool(_CV_LOCATION_MARKER_RE.search(s))
+
+
+def _looks_like_person_name(value):
+    """Conservative check that a line is a plausible person name."""
+    s = str(value or "").strip().strip(",").strip()
+    if not s or "@" in s or re.search(r"\d", s):
+        return False
+    if "," in s or _CV_LOCATION_MARKER_RE.search(s):
+        return False
+    words = s.split()
+    if not (1 < len(words) <= 6):
+        return False
+    return all(_CV_NAME_WORD_RE.fullmatch(w) for w in words)
+
+
+def _recover_candidate_name_from_text(cv_text):
+    """Recover the candidate name from the top of the CV.
+
+    Scans the first few non-empty lines (stripping leading "(cid:NNNN)" icon-font
+    glyphs that PDF extraction leaves before contact lines) and returns the first
+    that reads as a person name. Returns "" when none qualifies.
+    """
+    seen = 0
+    for raw in str(cv_text or "").splitlines():
+        line = re.sub(r"^(?:\(cid:\d+\)\s*)+", "", str(raw).strip()).strip()
+        if not line:
+            continue
+        seen += 1
+        if _looks_like_person_name(line):
+            return line
+        if seen >= 5:
+            break
+    return ""
+
+
+def _correct_mistagged_candidate_name(parsed, cv_text=""):
+    """Repair a candidate.name that was populated with a location/contact line.
+
+    Only acts when the name is missing or clearly not a person name, and only
+    replaces it when a plausible name can be recovered from the CV header, so a
+    correct (if unusual) name is never discarded.
+    """
+    if not isinstance(parsed, dict):
+        return parsed
+    cand = parsed.get("candidate")
+    if not isinstance(cand, dict):
+        return parsed
+    name = str(cand.get("name") or "").strip()
+    if name and not _name_is_location_like(name):
+        return parsed
+    recovered = _recover_candidate_name_from_text(cv_text)
+    if recovered:
+        cand["name"] = recovered
+        parsed["candidate"] = cand
+    return parsed
+
+
 _CV_SECTION_HEADING_RE = re.compile(
     r"^\s*(?:key\s+)?(responsibilit(?:y|ies)|achievements?)\s*:?\s*$",
     re.I,

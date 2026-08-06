@@ -147,6 +147,45 @@ class LanguageEvidenceTests(unittest.TestCase):
         self.assertFalse(cn._language_has_source_evidence("Japanese", self.INTERLEAVED))
 
 
+class CandidateNameCorrectionTests(unittest.TestCase):
+    HEADER = (
+        "MOHD AZMAN BIN HAMZAH\n"
+        "(cid:44476)(cid:44478)(cid:44477) Bangi Avenue, Selangor, Malaysia\n"
+        "(cid:44562)(cid:44563) 011-11237201\n"
+        "(cid:44604)(cid:44605) azman.mgsb@gmail.com\n"
+        "PROFESSIONAL SUMMARY\n"
+    )
+
+    def test_location_like_name_is_detected(self):
+        self.assertTrue(cn._name_is_location_like("Bangi Avenue, Selangor, Malaysia"))
+        self.assertTrue(cn._name_is_location_like("azman.mgsb@gmail.com"))
+        self.assertTrue(cn._name_is_location_like("011-11237201"))
+        self.assertFalse(cn._name_is_location_like("Mohd Azman Bin Hamzah"))
+        self.assertFalse(cn._name_is_location_like("Parlindungan Tampubolon, S.Kom, M.Kom"))
+
+    def test_recovers_name_from_header_stripping_icon_glyphs(self):
+        self.assertEqual(cn._recover_candidate_name_from_text(self.HEADER), "MOHD AZMAN BIN HAMZAH")
+
+    def test_correct_replaces_only_a_mistagged_name(self):
+        # Mis-tagged: location landed in the name field -> recovered from header.
+        p = {"candidate": {"name": "Bangi Avenue, Selangor, Malaysia"}}
+        self.assertEqual(
+            cn._correct_mistagged_candidate_name(p, self.HEADER)["candidate"]["name"],
+            "MOHD AZMAN BIN HAMZAH",
+        )
+        # A correct name is never touched.
+        p2 = {"candidate": {"name": "Isaac Lee"}}
+        self.assertEqual(
+            cn._correct_mistagged_candidate_name(p2, self.HEADER)["candidate"]["name"], "Isaac Lee"
+        )
+
+    def test_mistagged_name_is_kept_when_no_recovery_available(self):
+        # Never blank a name: with no usable header line, leave the value as-is.
+        p = {"candidate": {"name": "Kuala Lumpur, Malaysia"}}
+        out = cn._correct_mistagged_candidate_name(p, "SKILLS\nPython\nLinux\n")
+        self.assertEqual(out["candidate"]["name"], "Kuala Lumpur, Malaysia")
+
+
 class LanguageTests(unittest.TestCase):
     def test_canonical_language_name(self):
         # The alias->standard map is mutated at runtime by other code paths, so
