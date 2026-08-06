@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.251"
+_INSTALL_RECEIPT_VERSION = "v24.6.252"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -318,7 +318,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.251"
+_CVSTUDIO_VERSION = "v24.6.252"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -1215,6 +1215,8 @@ RULES:
 - Work experience date ranges must use exactly this style: "Mon YYYY to Mon YYYY" or "Mon YYYY to Present". Convert "Till Date", "Current", hyphens/dashes, and ALL-CAPS months into this style (e.g. "OCT 2022 - Till Date" → "Oct 2022 to Present").
 - DATE ACCURACY: transcribe every start and end month/year EXACTLY as written in the source. Never shift, round, guess, or invent a month or year. Only "Present"/"Current"/"Till date" (or no end at all) may become "to Present" — a stated end date such as a specific month/year is NEVER rewritten as "Present".
 - Work experience company names and role titles must not be returned in ALL CAPS unless they are genuine acronyms (e.g. COGNIZANT → Cognizant, DATA ECONOMY → Data Economy, WOLTERS KLUWER → Wolters Kluwer, but CGI/AWS/SQL/SAP stay uppercase).
+- EMPLOYER NAME FIDELITY: return each employer name as written in the source. Do not invent, swap, translate, expand an abbreviation, contract a full name, or borrow a name from a different role/company. You may drop a trailing legal form (Sdn Bhd, Pte Ltd, PT, Tbk, Inc, LLC) and fix casing, but the core name must match the source exactly. Never output a company name that does not appear in the CV.
+- ROLE TITLE FIDELITY: return each role title exactly as written in the source. Do not paraphrase, generalise, "clean up", shorten, or invent a title (e.g. do NOT turn "Dispatcher Technical Support" into "Customer Care Consultant", or "Senior Linux System Administrator" into "Senior Systems Administrator"). Keep every qualifier the source states (Linux, Non-Wintel, AVP, etc.).
 - candidate.is_employed: set to true ONLY if the candidate has a role that explicitly says "Present", "Current", "Till date", "To date", or similar — AND that role is a full-time, permanent, contract, or consulting role with a company (not freelance or self-employed). If ALL roles have a definite end date (e.g. "Dec 2025", "Feb 2025"), set is_employed to false even if the end date is very recent. If the only "Present" role is freelance or self-employment, set is_employed to false.
 - candidate.current_company: populate this from the most recent employer when the source states one.
 - candidate.current_position: populate this only when the source explicitly states the corresponding role title. Never infer a title from responsibilities, achievements, industry, seniority, dates, surrounding context, or common career patterns. If the title is absent, return an empty string.
@@ -2166,8 +2168,22 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
     known_titles.sort(key=len, reverse=True)
 
     in_history = False
-    history_heading = re.compile(r"^(?:EMPLOYMENT|WORK|CAREER|PROFESSIONAL)\s+(?:HISTORY|EXPERIENCE|EXPERIENCES)\b", re.I)
-    stop_heading = re.compile(r"^(?:EDUCATION|ACADEMIC|CERTIFICATION|CERTIFICATIONS|REFERENCE|REFERENCES|SKILLS|TECHNICAL SKILLS|ADDITIONAL INFORMATION|LANGUAGES?)\b", re.I)
+    history_heading = re.compile(
+        r"^(?:EMPLOYMENT|WORK|CAREER|PROFESSIONAL)\s+(?:HISTORY|EXPERIENCES?)\b"
+        r"|^(?:HISTORY|EXPERIENCES?)\s*:?\s*$",
+        re.I,
+    )
+    stop_heading = re.compile(r"^(?:EDUCATION|ACADEMIC|CERTIFICATION|CERTIFICATIONS|REFERENCE|REFERENCES|SKILLS|TECHNICAL SKILLS|ADDITIONAL INFORMATION|LANGUAGES?|PROJECTS?)\b", re.I)
+    _mon_sub = r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?"
+    # Title-first header lines: "<Title> — <Company> <DateRange>" with the date
+    # trailing (e.g. "Dispatcher Technical Support — PT. Foo (Bar) Mar 2011 to Feb 2013").
+    # The date is captured at the end first, then the remaining head is split into
+    # title/company on the em/en dash or pipe separator.
+    title_first_date_at_end = re.compile(
+        r"\s+[—–\-]?\s*((?:" + _mon_sub + r"\s+)?\d{4}\s*(?:to|[-–—])\s*(?:(?:" + _mon_sub + r"\s+)?\d{4}|Present|Current|Till\s*Date|To\s*Date))\s*$",
+        re.I,
+    )
+    title_first_split = re.compile(r"^(?P<title>[A-Za-z][^—–|]{1,90}?)\s*[—–|]\s*(?P<company>.+)$")
     date_prefix = re.compile(
         r"^((?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+)?\d{4}\s*(?:-|–|—|to)\s*(?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+)?(?:\d{4}|Present|Current|Till\s*Date|To\s*Date))\s+(.+)$",
         re.I,
@@ -2188,23 +2204,31 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
         if not in_history or re.match(r"^(?:Year|Date|Dates)\s+Company\s+Role$", line, re.I):
             continue
         dm = date_prefix.match(line)
-        if not dm:
+        if dm:
+            date_cell, rest = dm.group(1).strip(), dm.group(2).strip()
+            title_cell = ""
+            company_cell = ""
+            for known_title in known_titles:
+                tm = re.search(r"(?:^|\s)" + re.escape(known_title) + r"\s*$", rest, re.I)
+                if tm:
+                    title_cell = known_title
+                    company_cell = rest[:tm.start()].strip()
+                    break
+            if not title_cell:
+                gm = generic_title.search(rest)
+                if gm:
+                    title_cell = gm.group(1).strip()
+                    company_cell = rest[:gm.start()].strip()
+            add_row(date_cell, company_cell, title_cell)
             continue
-        date_cell, rest = dm.group(1).strip(), dm.group(2).strip()
-        title_cell = ""
-        company_cell = ""
-        for known_title in known_titles:
-            tm = re.search(r"(?:^|\s)" + re.escape(known_title) + r"\s*$", rest, re.I)
-            if tm:
-                title_cell = known_title
-                company_cell = rest[:tm.start()].strip()
-                break
-        if not title_cell:
-            gm = generic_title.search(rest)
-            if gm:
-                title_cell = gm.group(1).strip()
-                company_cell = rest[:gm.start()].strip()
-        add_row(date_cell, company_cell, title_cell)
+
+        # Title-first layout: "<Title> — <Company> <DateRange>" (date trailing).
+        tail = title_first_date_at_end.search(line)
+        if tail:
+            head = line[:tail.start()].strip()
+            split = title_first_split.match(head)
+            if split:
+                add_row(tail.group(1).strip(), split.group("company").strip(), split.group("title").strip())
 
     return rows
 
@@ -5050,7 +5074,7 @@ def _ja_spa_browser_bridge(candidate_id, fields, note_text="", email="", salary_
     payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
     compact_payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     script = """(async () => {
-  const helperVersion = 'v24.6.251';
+  const helperVersion = 'v24.6.252';
   const candidateId = %s;
   const payload = %s;
   const profilePath = %s;
@@ -7373,7 +7397,7 @@ def jobadder_onenote_activity_diagnostic():
     generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Candidate Activity Read Test",
-        "cv_studio_version": "v24.6.251",
+        "cv_studio_version": "v24.6.252",
         "generated_utc": generated,
         "safety": {
             "read_only": True,
@@ -7584,7 +7608,7 @@ def jobadder_onenote_activity_create_diagnostic():
     if confirmation != "CREATE ONE MAX LOW TEST":
         return jsonify({"error": "Type CREATE ONE MAX LOW TEST exactly before running the controlled POST."}), 400
 
-    guard_key = ("v24.6.251", candidate_id)
+    guard_key = ("v24.6.252", candidate_id)
     if guard_key in _JA_ACTIVITY_CREATE_DIAG_USED:
         return jsonify({"error": "The one-shot controlled POST has already been run in this CV Studio session. Restarting is intentionally required before any repeat test."}), 409
     # Mark before the network call so a timeout/double-click cannot emit a second POST.
@@ -7613,7 +7637,7 @@ def jobadder_onenote_activity_create_diagnostic():
     generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Official AddCandidateActivity Create Test",
-        "cv_studio_version": "v24.6.251",
+        "cv_studio_version": "v24.6.252",
         "generated_utc": generated,
         "candidate_fixture": {
             "name": "Max Low",
