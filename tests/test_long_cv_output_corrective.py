@@ -203,6 +203,44 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         out = app._order_same_company_roles_newest_first(parsed)
         self.assertTrue(out["candidate"]["is_employed"])
 
+    def test_title_first_header_lines_are_authoritative_over_provider_drift(self):
+        # "<Title> — <Company> <DateRange>" lines under an EXPERIENCE heading
+        # (date trailing) must be extracted from the source and correct provider
+        # hallucinations of employer name, title, and dates.
+        cv_text = app._cv_pretranslate_iso_dates(
+            "EXPERIENCE\n"
+            "Senior Linux System Administrator — Zand Bank 2025-03 – Present\n"
+            "AVP Non-Wintel System Administrator — UOB Indonesia 2020-06 – 2025-07\n"
+            "Dispatcher Technical Support — PT. Supra Primatama Nusantara (Biznet) 2011-03 – 2013-02\n"
+            "IT Support — PT. Elka Prakarsa Utama 2010-01 – 2011-12\n"
+            "EDUCATION\n"
+            "Bina Nusantara University 2019 – 2021\n"
+        )
+        rows = app._extract_authoritative_work_rows(cv_text, {})
+        # Four work rows; the education line is not captured.
+        self.assertEqual(len(rows), 4)
+        self.assertEqual(rows[0]["title"], "Senior Linux System Administrator")
+        self.assertEqual(rows[0]["company"], "Zand Bank")
+        self.assertEqual(rows[1]["date_range"], "Jun 2020 to Jul 2025")
+        self.assertEqual(rows[3]["company"], "PT. Elka Prakarsa Utama")
+
+        # Provider hallucinated a different company/title; reconciliation corrects it.
+        parsed = {"work_experiences": [
+            {"company": "Nusa Network Prakarsa", "date_range": "Feb 2010 to Feb 2011",
+             "roles": [{"title": "Customer Care Consultant", "date_range": "", "bullets": ["kept bullet"]}]},
+        ]}
+        out = app._reconcile_work_experience_with_authoritative_table(parsed, cv_text)
+        companies = {e["company"] for e in out["work_experiences"]}
+        titles = {r.get("title") for e in out["work_experiences"] for r in e["roles"]}
+        self.assertIn("PT. Elka Prakarsa Utama", companies)
+        self.assertNotIn("Nusa Network Prakarsa", companies)
+        self.assertIn("IT Support", titles)
+        self.assertNotIn("Customer Care Consultant", titles)
+
+    def test_prompt_requires_employer_and_title_fidelity(self):
+        self.assertIn("EMPLOYER NAME FIDELITY", app.SYSTEM_PROMPT)
+        self.assertIn("ROLE TITLE FIDELITY", app.SYSTEM_PROMPT)
+
 
 if __name__ == "__main__":
     unittest.main()
