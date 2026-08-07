@@ -144,6 +144,56 @@ async function apiTransportContract() {
   assert.strictEqual(window._cvStudioRecentApiErrors.slice(-1)[0].code, 'NETWORK_ERROR');
 }
 
+async function apiTimeoutContract() {
+  const timers = [];
+  let hangSignal = null;
+  const nativeFetch = function(input, init) {
+    // Simulate a request that never resolves on its own but rejects on abort,
+    // exactly like a real fetch tied to an AbortSignal.
+    hangSignal = init && init.signal;
+    return new Promise((_resolve, reject) => {
+      if (hangSignal) hangSignal.addEventListener('abort', () => {
+        const err = new Error('aborted'); err.name = 'AbortError'; reject(err);
+      });
+    });
+  };
+  const window = {
+    fetch: nativeFetch,
+    location: {href: 'http://127.0.0.1:5000/', origin: 'http://127.0.0.1:5000'},
+    crypto: {getRandomValues(bytes){ for (let i = 0; i < bytes.length; i += 1) bytes[i] = i + 1; return bytes; }},
+    dispatchEvent() {},
+  };
+  const context = vm.createContext({
+    console, window, Headers, URL, Uint8Array, Date, Math, JSON, Object, Array, String, Number, Promise, Error,
+    AbortController,
+    CustomEvent: function(){},
+    setTimeout(fn, ms) { timers.push({fn, ms}); return timers.length; },
+    clearTimeout() {},
+  });
+  vm.runInContext(sourceOrInline(
+    moduleFiles.api,
+    '// Central local API transport',
+    '// Replace these with your JobAdder app credentials',
+  ), context);
+
+  // A same-origin GET gets the default deadline: a timer is armed, and firing it
+  // aborts the request and surfaces a distinct TIMEOUT error (not a generic one).
+  const pending = window.fetch('/status', {method: 'GET'});
+  await flushPromises();
+  const deadline = timers.find(entry => entry.ms === 60000);
+  assert.ok(deadline, 'same-origin GET arms the default 60s deadline');
+  deadline.fn();
+  await assert.rejects(pending, error => error.code === 'TIMEOUT' && error.cvStudioTimeout === true);
+  assert.strictEqual(window._cvStudioRecentApiErrors.slice(-1)[0].code, 'TIMEOUT');
+
+  // Opt-out (cvStudioNoTimeout) and non-GET both skip the default deadline.
+  timers.length = 0;
+  window.fetch('/stream', {method: 'GET', cvStudioNoTimeout: true});
+  window.fetch('/mutate', {method: 'POST'});
+  await flushPromises();
+  assert.strictEqual(timers.length, 0, 'opt-out GET and POST get no default deadline');
+}
+
 function pageNavContract() {
   const documentListeners = [];
   const windowListeners = [];
@@ -407,6 +457,7 @@ function extractedScriptOrderContract() {
 
 const cases = [
   ['local API transport request/error compatibility', apiTransportContract],
+  ['local API transport deadline policy', apiTimeoutContract],
   ['page navigation globals, storage and listener compatibility', pageNavContract],
   ['server heartbeat timing and recovery compatibility', heartbeatContract],
   ['deterministic extracted script ordering', extractedScriptOrderContract],
