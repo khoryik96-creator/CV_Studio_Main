@@ -82,6 +82,7 @@ class Phase7AModularMonolithFoundationTests(unittest.TestCase):
                 "ja_typos",
                 "salary_parse",
                 "ja_answers",
+                "ja_salary_notice",
                 "blind_mask",
                 "ppc",
                 "msgraph",

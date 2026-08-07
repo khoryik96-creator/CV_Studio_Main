@@ -191,6 +191,12 @@ DEFAULT_MODULES = (
         ("cvstudio_ja_answers.py",),
     ),
     ModuleDefinition(
+        "ja_salary_notice",
+        "domain",
+        ("cvstudio_ja_salary_notice.py",),
+        ("salary_parse", "ja_typos"),
+    ),
+    ModuleDefinition(
         "blind_mask",
         "domain",
         ("cvstudio_blind_mask.py",),
@@ -273,6 +279,7 @@ DEFAULT_MODULES = (
             "ja_typos",
             "salary_parse",
             "ja_answers",
+            "ja_salary_notice",
             "startup",
             "storage",
             "storage_http",
