@@ -135,6 +135,12 @@ DEFAULT_MODULES = (
         ("cvstudio_cv_normalize.py",),
     ),
     ModuleDefinition(
+        "cv_reconcile",
+        "domain",
+        ("cvstudio_cv_reconcile.py",),
+        ("cv_normalize",),
+    ),
+    ModuleDefinition(
         "lead_match",
         "domain",
         ("cvstudio_lead_match.py",),
@@ -266,6 +272,7 @@ DEFAULT_MODULES = (
             "jobadder_read",
             "jobadder_write",
             "cv_normalize",
+            "cv_reconcile",
             "lead_match",
             "lead_enrich",
             "lead_cache",
