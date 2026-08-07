@@ -256,8 +256,12 @@ async function heartbeatContract() {
   const timeouts = [];
   const prepended = [];
   const requests = [];
+  const listeners = {};
   let online = false;
   let reloads = 0;
+  let intervalId = 0;
+  let hang = false;
+  const hangResolvers = [];
 
   function elementFixture() {
     return {
@@ -271,31 +275,43 @@ async function heartbeatContract() {
       remove() {},
     };
   }
+  function record(type, fn) { (listeners[type] = listeners[type] || []).push(fn); }
   const document = {
     body: {prepend(node) { prepended.push(node); }},
     createElement() { return elementFixture(); },
     querySelector() { return null; },
     getElementById() { return null; },
+    visibilityState: 'visible',
+    addEventListener(type, fn) { record(type, fn); },
   };
+  const window = { addEventListener(type, fn) { record(type, fn); } };
   function fetch(url, options) {
     requests.push({url, options});
+    if (hang) return new Promise(resolve => hangResolvers.push(() => resolve({ok: true, status: 204})));
     if (!online) return Promise.reject(new Error('server unavailable'));
     return Promise.resolve({ok: true, status: 204});
   }
   const context = vm.createContext({
     console,
     document,
+    window,
     fetch,
     location: {reload() { reloads += 1; }},
     setInterval(listener, milliseconds) {
-      intervals.push({listener, milliseconds});
-      return intervals.length;
+      const id = ++intervalId;
+      intervals.push({id, listener, milliseconds});
+      return id;
     },
-    clearInterval() {},
+    clearInterval(id) {
+      const index = intervals.findIndex(entry => entry.id === id);
+      if (index >= 0) intervals.splice(index, 1);
+    },
     setTimeout(listener, milliseconds) {
       timeouts.push({listener, milliseconds});
       return timeouts.length;
     },
+    clearTimeout() {},
+    Date,
     Promise,
   });
   vm.runInContext(sourceOrInline(
@@ -304,25 +320,58 @@ async function heartbeatContract() {
     'try { updateSummaryLockUI(); }',
   ), context);
 
+  const steadyInterval = () => intervals.find(entry => entry.milliseconds === 20000);
+  const recoveryInterval = () => intervals.find(entry => entry.milliseconds === 2500);
+
+  // Immediate ping on load hits /heartbeat via POST, and one steady interval is scheduled.
   await flushPromises();
   assert.strictEqual(requests[0].url, '/heartbeat');
   assert.strictEqual(requests[0].options.method, 'POST');
-  assert.strictEqual(intervals.length, 1);
-  assert.strictEqual(intervals[0].milliseconds, 20000);
-  for (let count = 0; count < 3; count += 1) {
-    intervals[0].listener();
+  assert.ok(steadyInterval(), 'steady 20s interval is scheduled');
+
+  // The load ping failed (offline) so a fast-recovery burst is now scheduled too —
+  // asserting scheduler state, not a permanently fixed interval count.
+  assert.ok(recoveryInterval(), 'fast-recovery interval starts after a missed ping');
+
+  // In-flight guard: while one request is pending, extra triggers (steady tick +
+  // wake/focus/online/pageshow) must not open a second overlapping request.
+  online = true;
+  hang = true;
+  const pendingStart = requests.length;
+  steadyInterval().listener();
+  await flushPromises();
+  assert.strictEqual(requests.length, pendingStart + 1, 'one heartbeat starts while pending');
+  steadyInterval().listener();
+  (listeners.focus || []).forEach(fn => fn());
+  (listeners.online || []).forEach(fn => fn());
+  (listeners.pageshow || []).forEach(fn => fn());
+  await flushPromises();
+  assert.strictEqual(requests.length, pendingStart + 1, 'in-flight guard prevents overlapping heartbeats');
+  hang = false;
+  hangResolvers.splice(0).forEach(resolve => resolve());
+  await flushPromises();
+
+  // Drive four consecutive misses to raise the lost-server banner.
+  online = false;
+  for (let count = 0; count < 4; count += 1) {
+    const tick = steadyInterval();
+    assert.ok(tick, 'steady interval still scheduled during outage');
+    tick.listener();
     await flushPromises();
   }
   assert.strictEqual(prepended.length, 1);
   assert.strictEqual(prepended[0].id, 'reconnect-banner');
   assert.strictEqual(prepended[0].style.background, '#c05621');
   assert.ok(prepended[0].children.some(child => child.textContent.endsWith('Restart Server')));
+  assert.ok(recoveryInterval(), 'fast recovery is running during the outage');
 
+  // Recovery: a healthy ping flips to the green banner, stops the fast burst, and reloads once.
   online = true;
-  intervals[0].listener();
+  steadyInterval().listener();
   await flushPromises();
   assert.strictEqual(prepended[0].style.background, '#2f855a');
   assert.ok(prepended[0].innerHTML.includes('reloading automatically'));
+  assert.ok(!recoveryInterval(), 'fast recovery stops once the server is healthy again');
   const reloadTimeout = timeouts.find(entry => entry.milliseconds === 1500);
   assert.ok(reloadTimeout);
   reloadTimeout.listener();

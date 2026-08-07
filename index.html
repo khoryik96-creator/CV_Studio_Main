@@ -9441,7 +9441,22 @@ function putTheSpiderPreviewPayloadCache(candidateId, payload, localCandidate) {
     totalBytes -= Number(old.bytes) || 0;
   }
   updateTheSpiderPreviewCacheStatus();
-  return entry;
+  // If the just-inserted entry was immediately evicted for exceeding the cap,
+  // report that it was not retained rather than describing a dead entry.
+  return window._theSpiderPreviewPayloadCache.has(key) ? entry : null;
+}
+function theSpiderPreviewPrefetchLiveBytes() {
+  // Authoritative live total: the bytes of prefetch-target payloads still
+  // resident in the cache. Used for the budget decision so eviction/removal is
+  // reflected immediately, instead of a monotonic counter that only ever grows
+  // and drifts above real usage (stopping prefetch with a false "memory" cap).
+  ensureTheSpiderPreviewCaches();
+  var targets = window._theSpiderPreviewPrefetchTargets;
+  var bytes = 0;
+  window._theSpiderPreviewPayloadCache.forEach(function(entry, key){
+    if (!(targets instanceof Set) || targets.has(key)) bytes += Number(entry && entry.bytes) || 0;
+  });
+  return bytes;
 }
 function preloadTheSpiderPreviewImages(payload, maxPages) {
   var sources = [];
@@ -9678,6 +9693,7 @@ async function runTheSpiderPreviewPrefetchQueue() {
   try {
     while (!window._theSpiderPreviewPrefetchPaused && generation === Number(window._theSpiderPreviewPrefetchGeneration) && window._theSpiderPreviewPrefetchQueue.length) {
       var prefetchBudget = Math.max(1, Number(window._theSpiderPreviewPrefetchBudgetBytes) || THE_SPIDER_PREVIEW_PREFETCH_AUTO_MAX_BYTES);
+      window._theSpiderPreviewPrefetchBytes = theSpiderPreviewPrefetchLiveBytes();
       if (Number(window._theSpiderPreviewPrefetchBytes || 0) >= prefetchBudget) {
         window._theSpiderPreviewPrefetchStopReason = 'memory';
         window._theSpiderPreviewPrefetchQueue = [];
@@ -9697,8 +9713,8 @@ async function runTheSpiderPreviewPrefetchQueue() {
         if (!aiCrawlerIsUnlocked()) return;
         window._theSpiderPreviewPrefetchAttempted.add(item.key);
         window._theSpiderPreviewPrefetchConsecutiveFailures = 0;
-        var entry = putTheSpiderPreviewPayloadCache(item.candidateId, payload, local);
-        window._theSpiderPreviewPrefetchBytes = Number(window._theSpiderPreviewPrefetchBytes || 0) + Number(entry && entry.bytes || 0);
+        putTheSpiderPreviewPayloadCache(item.candidateId, payload, local);
+        window._theSpiderPreviewPrefetchBytes = theSpiderPreviewPrefetchLiveBytes();
         preloadTheSpiderPreviewImages(payload, Math.min(2, Number(payload.shown_pages) || 2));
       } catch(e) {
         if (e && e.prefetchCancelled) {

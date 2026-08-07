@@ -12,6 +12,9 @@
   var _lastPingAt      = 0;
   var _recoverTimer    = null;
   var _recoverAttempts = 0;
+  var _inFlight        = false;  // only one heartbeat request in flight at a time
+  var _pingSeq         = 0;      // monotonic id assigned to each ping
+  var _lastResolvedSeq = 0;      // highest ping whose completion we have applied
   var PING_INTERVAL     = 20000;  // steady-state: ping every 20s (idle cost unchanged)
   var RECOVER_INTERVAL  = 2500;   // once a ping is missed, poll fast until healthy again
   var RECOVER_MAX_TRIES = 48;     // cap the fast burst at ~2 min, then fall back to slow
@@ -116,10 +119,29 @@
     _recoverAttempts = 0;
   }
 
+  // A completion is only actionable if no newer ping has already resolved. With
+  // the in-flight guard this is normally always true, but it is a cheap guard
+  // against a slow/aborted request landing after a newer one and flipping state
+  // back (a false "connection lost", or hiding a real outage).
+  function acceptCompletion(seq) {
+    if (seq <= _lastResolvedSeq) return false;
+    _lastResolvedSeq = seq;
+    return true;
+  }
+
   function ping() {
+    // Never overlap heartbeats: the steady interval, the fast-recovery burst,
+    // and the wake/focus/online/pageshow retries all funnel through here, so a
+    // single in-flight guard keeps exactly one request outstanding. The 8s
+    // timedFetch deadline guarantees the guard is always released.
+    if (_inFlight || _reloadQueued) return;
+    _inFlight = true;
     _lastPingAt = Date.now();
+    var seq = ++_pingSeq;
     timedFetch("/heartbeat", { method: "POST" })
       .then(function (r) {
+        _inFlight = false;
+        if (!acceptCompletion(seq)) return;
         if (r.ok || r.status === 204) {
           if (_serverLost && !_reloadQueued) {
             // Server is reachable again — show green banner then auto-reload
@@ -139,6 +161,8 @@
         }
       })
       .catch(function () {
+        _inFlight = false;
+        if (!acceptCompletion(seq)) return;
         _missedPings++;
         // A missed ping is the first sign of trouble; start polling fast right
         // away so we notice recovery in ~2.5s rather than up to 20s. This burst
