@@ -1,7 +1,7 @@
 # CV Studio — Collaboration / Handoff Notes
 
 Read this before making changes. CV Studio is a Flask **modular monolith**
-(single `app.py`, ~13k lines, currently **v24.6.267**). The owner runs a **local
+(single `app.py`, ~13k lines, currently **v24.6.268**). The owner runs a **local
 source build** at `localhost:5000` and uses **DeepSeek** for all AI providers.
 Several conventions below are non-obvious traps that the code alone won't warn
 you about.

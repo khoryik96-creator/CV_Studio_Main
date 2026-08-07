@@ -72,6 +72,7 @@ class Phase7AModularMonolithFoundationTests(unittest.TestCase):
                 "onenote_text",
                 "outlook_crypto",
                 "cv_normalize",
+                "cv_reconcile",
                 "lead_match",
                 "lead_enrich",
                 "lead_cache",
