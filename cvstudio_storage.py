@@ -1252,6 +1252,48 @@ class SalaryComponentCacheRepository:
                 result[str(row["cache_key"])] = payload
         return result
 
+    def get(self, cache_key: str):
+        """Fetch a single cached entry without materialising the whole map."""
+        cache_key = _safe_text(cache_key, 500)
+        if not cache_key:
+            return None
+        with self.storage.connection() as connection:
+            row = connection.execute(
+                "SELECT payload_json FROM salary_component_cache WHERE cache_key = ?",
+                (cache_key,),
+            ).fetchone()
+        if not row:
+            return None
+        try:
+            payload = json.loads(row["payload_json"])
+        except Exception:
+            return None
+        return payload if isinstance(payload, dict) else None
+
+    def put(self, cache_key: str, entry: dict, cap: int = 0) -> bool:
+        """Upsert one row and trim to the newest ``cap`` in a single transaction.
+
+        Replaces the load-modify-save-whole-map path.  On conflict the existing
+        row keeps its rowid (insertion order), so trimming the lowest rowids over
+        the cap drops the oldest entries — matching the previous newest-N policy.
+        """
+        with self.storage.connection(write=True) as connection:
+            if not self._write_entry(connection, cache_key, entry):
+                return False
+            if cap and cap > 0:
+                connection.execute(
+                    """
+                    DELETE FROM salary_component_cache
+                    WHERE rowid IN (
+                        SELECT rowid FROM salary_component_cache
+                        ORDER BY rowid DESC
+                        LIMIT -1 OFFSET ?
+                    )
+                    """,
+                    (int(cap),),
+                )
+        return True
+
     def clear(self) -> None:
         self.save({})
 

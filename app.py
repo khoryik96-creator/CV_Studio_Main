@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.257"
+_INSTALL_RECEIPT_VERSION = "v24.6.258"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -318,7 +318,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.257"
+_CVSTUDIO_VERSION = "v24.6.258"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -5075,7 +5075,7 @@ def _ja_spa_browser_bridge(candidate_id, fields, note_text="", email="", salary_
     payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
     compact_payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     script = """(async () => {
-  const helperVersion = 'v24.6.257';
+  const helperVersion = 'v24.6.258';
   const candidateId = %s;
   const payload = %s;
   const profilePath = %s;
@@ -6233,32 +6233,51 @@ def _ja_salary_ai_cache_load():
         return legacy if isinstance(legacy, dict) else {}
 
 
+def _ja_salary_ai_cache_import_legacy_locked():
+    """Import any legacy JSON once (fingerprint-guarded inside the repository)."""
+    legacy, fingerprint = _cvstudio_legacy_json_read(_SALARY_AI_CACHE_PATH, dict)
+    if legacy is not None:
+        _CVSTUDIO_SALARY_REPOSITORY.import_legacy(legacy, fingerprint)
+    return legacy
+
+
 def _ja_salary_ai_cache_get(cache_key):
+    key = str(cache_key or "")
     with _SALARY_AI_CACHE_LOCK:
-        item = _ja_salary_ai_cache_load().get(str(cache_key or ""))
+        try:
+            _ja_salary_ai_cache_import_legacy_locked()
+            item = _CVSTUDIO_SALARY_REPOSITORY.get(key)  # single-row read, no whole-map load
+        except StorageError:
+            raise
+        except Exception:
+            item = None
     return item if isinstance(item, dict) else None
 
 
 def _ja_salary_ai_cache_put(cache_key, components, provider, model):
     if not cache_key or not isinstance(components, dict):
         return
+    entry = {
+        "components": components,
+        "provider": provider,
+        "model": model,
+        "savedAt": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+    }
     with _SALARY_AI_CACHE_LOCK:
-        data = _ja_salary_ai_cache_load()
-        data[str(cache_key)] = {
-            "components": components,
-            "provider": provider,
-            "model": model,
-            "savedAt": datetime.utcnow().isoformat(timespec="seconds") + "Z",
-        }
-        # keep newest 500 entries by insertion order
-        if len(data) > 500:
-            data = dict(list(data.items())[-500:])
-        _CVSTUDIO_SALARY_REPOSITORY.save(data)
         try:
-            _cvstudio_legacy_json_write(_SALARY_AI_CACHE_PATH, data, indent=2)
+            _ja_salary_ai_cache_import_legacy_locked()
+            # Row-level upsert + newest-500 trim in one transaction, instead of
+            # loading, mutating and rewriting the entire map.
+            _CVSTUDIO_SALARY_REPOSITORY.put(str(cache_key), entry, cap=500)
+        except StorageError:
+            raise
         except Exception:
-            # SQLite is authoritative; keep the existing legacy file untouched
-            # if this compatibility mirror cannot be updated.
+            return
+        try:
+            # Keep the legacy JSON mirror consistent with SQLite (compatibility
+            # contract). SQLite is authoritative if the mirror cannot be updated.
+            _cvstudio_legacy_json_write(_SALARY_AI_CACHE_PATH, _CVSTUDIO_SALARY_REPOSITORY.load(), indent=2)
+        except Exception:
             pass
 
 
@@ -7398,7 +7417,7 @@ def jobadder_onenote_activity_diagnostic():
     generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Candidate Activity Read Test",
-        "cv_studio_version": "v24.6.257",
+        "cv_studio_version": "v24.6.258",
         "generated_utc": generated,
         "safety": {
             "read_only": True,
@@ -7609,7 +7628,7 @@ def jobadder_onenote_activity_create_diagnostic():
     if confirmation != "CREATE ONE MAX LOW TEST":
         return jsonify({"error": "Type CREATE ONE MAX LOW TEST exactly before running the controlled POST."}), 400
 
-    guard_key = ("v24.6.257", candidate_id)
+    guard_key = ("v24.6.258", candidate_id)
     if guard_key in _JA_ACTIVITY_CREATE_DIAG_USED:
         return jsonify({"error": "The one-shot controlled POST has already been run in this CV Studio session. Restarting is intentionally required before any repeat test."}), 409
     # Mark before the network call so a timeout/double-click cannot emit a second POST.
@@ -7638,7 +7657,7 @@ def jobadder_onenote_activity_create_diagnostic():
     generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Official AddCandidateActivity Create Test",
-        "cv_studio_version": "v24.6.257",
+        "cv_studio_version": "v24.6.258",
         "generated_utc": generated,
         "candidate_fixture": {
             "name": "Max Low",
