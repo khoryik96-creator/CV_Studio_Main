@@ -1417,7 +1417,7 @@
   .provider-down-alert{border:1px solid #fecaca;background:#fff1f2;color:#991b1b;border-radius:10px;padding:10px 12px;font-weight:700;line-height:1.45;}
 
 </style>
-<script src="/vendor/cvstudio/lazy-loader.js?v=24.6.257"></script>
+<script src="/vendor/cvstudio/lazy-loader.js?v=24.6.258"></script>
 <script>
 /* CV Studio Doctor — built-in diagnostic recorder.
  * Records JS errors, unhandled rejections, failed/slow network calls and
@@ -1597,7 +1597,7 @@
 <div class="app">
   <div class="header" style="position:relative;">
     <div>
-      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.257 (Offline) by The 郭 Lab</span></h1>
+      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.258 (Offline) by The 郭 Lab</span></h1>
 
     </div>
     <div class="header-tools">
@@ -3544,8 +3544,8 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
-<script src="/vendor/cvstudio/api-transport.js?v=24.6.257"></script>
-<script src="/vendor/cvstudio/page-nav.js?v=24.6.257"></script>
+<script src="/vendor/cvstudio/api-transport.js?v=24.6.258"></script>
+<script src="/vendor/cvstudio/page-nav.js?v=24.6.258"></script>
 <script>
 // ── JobAdder OAuth + Upload ───────────────────────────────────────────
 // Replace these with your JobAdder app credentials from developer.jobadder.com
@@ -6274,7 +6274,7 @@ function renderJAUploadList() {
   if (_jaUploadQueue.length === 0) { list.innerHTML = ''; return; }
   list.innerHTML = _jaUploadQueue.map(function(item) {
     var sc = item.status === 'done' ? '#2f855a' : item.status === 'error' ? 'var(--red)' : item.status === 'uploading' ? '#2b6cb0' : 'var(--text3)';
-    var escapedId = item.id.replace(/'/g, "\'");
+    var escapedId = escJsAttr(item.id);
     return '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;">'
       + '<span style="font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📄 ' + esc(item.file.name) + '</span>'
       + '<input type="email" placeholder="" value="' + escAttr(item.email) + '"'
@@ -6557,7 +6557,7 @@ function updateBackgroundPreview(cfg) {
 function renderBackgroundSettings() {
   var grid = document.getElementById('bgPresetGrid');
   if (grid && !grid.getAttribute('data-rendered')) {
-    grid.innerHTML = CV_BG_PRESETS.map(function(p){ return '<button type="button" class="bg-swatch" data-bg-id="' + esc(p.id) + '" onclick="setBackgroundPreset(\'' + esc(p.id) + '\')" style="background:' + esc(p.preview) + '">' + esc(p.label) + '</button>'; }).join('');
+    grid.innerHTML = CV_BG_PRESETS.map(function(p){ return '<button type="button" class="bg-swatch" data-bg-id="' + esc(p.id) + '" onclick="setBackgroundPreset(\'' + escJsAttr(p.id) + '\')" style="background:' + esc(p.preview) + '">' + esc(p.label) + '</button>'; }).join('');
     grid.setAttribute('data-rendered', '1');
   }
   updateBackgroundPreview(backgroundLoadSettings());
@@ -6748,7 +6748,7 @@ var _cvStudioPhase2bSettingsStartupPromise=cvStudioHydrateBrowserSettings();
 function exportCvStudioLocalData(){
   var settings=cvStudioLocalDataSettingsSnapshot(false);
   var records={onenote_transfer_records:(typeof oneNoteRecordsLoad==='function'?oneNoteRecordsLoad():[]),onenote_saved_links:(typeof oneNoteReadSavedLinks==='function'?oneNoteReadSavedLinks():[])};
-  var payload={product:'CV Studio local data',version:'v24.6.257',schema:1,exportedAt:new Date().toISOString(),includes:['PPC metadata and preferences','saved OneNote links and parser preferences','OneNote transfer record history (private application data)','invoice recipient/settings and draft links','CV alignment and navigation preferences','AI routing/provider selections without API keys'],settings:settings,records:records};
+  var payload={product:'CV Studio local data',version:'v24.6.258',schema:1,exportedAt:new Date().toISOString(),includes:['PPC metadata and preferences','saved OneNote links and parser preferences','OneNote transfer record history (private application data)','invoice recipient/settings and draft links','CV alignment and navigation preferences','AI routing/provider selections without API keys'],settings:settings,records:records};
   var blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='cv_studio_local_data_'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(url);a.remove();},0);showToast('Non-secret local data exported.','ok');
 }
 function cvStudioPersistImportedLocalData(payload){
@@ -6908,7 +6908,7 @@ function cvLockedTabLabel() {
 // Unlocks persist across normal browser/app restarts for the same installed build,
 // but deliberately reset after a new CV Studio version is installed. This keeps the
 // lock in place after upgrades while avoiding repeated prompts during daily use.
-var LOCK_UNLOCK_VERSION = 'v24.6.257';
+var LOCK_UNLOCK_VERSION = 'v24.6.258';
 function versionedUnlockKey(base) {
   return base + '_' + String(LOCK_UNLOCK_VERSION || '').replace(/[^0-9A-Za-z]+/g, '_');
 }
@@ -15804,7 +15804,7 @@ function oneNoteInput(idx, key, label, required) {
   var val = f[key] || '';
   var missing = required && !String(val || '').trim();
   return '<div class="onenote-field ' + (missing ? 'missing' : (required ? '' : 'optional')) + '"><b>' + esc(label) + (required ? ' *' : '') + '</b>'
-    + '<textarea class="onenote-edit-field ' + (missing ? 'missing' : '') + '" rows="1" data-onenote-row="' + idx + '" data-onenote-key="' + escAttr(key) + '" oninput="oneNoteSetFieldLive(' + idx + ',\'' + escAttr(key) + '\',this.value)" onchange="oneNoteSetField(' + idx + ',\'' + escAttr(key) + '\',this.value)">' + esc(val) + '</textarea></div>';
+    + '<textarea class="onenote-edit-field ' + (missing ? 'missing' : '') + '" rows="1" data-onenote-row="' + idx + '" data-onenote-key="' + escAttr(key) + '" oninput="oneNoteSetFieldLive(' + idx + ',\'' + escJsAttr(key) + '\',this.value)" onchange="oneNoteSetField(' + idx + ',\'' + escJsAttr(key) + '\',this.value)">' + esc(val) + '</textarea></div>';
 }
 function oneNoteRatingInput(idx) {
   var row = _oneNoteRows[idx] || {}, f = row.fields || {};
@@ -18298,7 +18298,7 @@ function renderLeadCompanies() {
     if (c.why_matched) html += '<div class="lead-card-bodyline"><strong>Why matched:</strong> ' + esc(c.why_matched) + '</div>';
     html += '<div class="lead-card-footer">';
     if (isFallbackSearch) html += '<span class="lead-card-check" style="color:var(--text3);">Fallback link — open/review manually before people search</span>';
-    else html += '<label class="lead-card-check"><input type="checkbox" class="lead-check" ' + (checked ? 'checked ' : '') + 'onclick="leadToggleCompanySelection(\'' + escAttr(cid) + '\', this.checked); renderLeadCompanies();" /> Select for people search</label>';
+    else html += '<label class="lead-card-check"><input type="checkbox" class="lead-check" ' + (checked ? 'checked ' : '') + 'onclick="leadToggleCompanySelection(\'' + escJsAttr(cid) + '\', this.checked); renderLeadCompanies();" /> Select for people search</label>';
     html += '<span style="color:var(--text3);font-size:11px;">Posted: ' + esc(c.date_posted || 'Unknown') + (c.source_note ? ' · ' + esc(c.source_note).slice(0,120) : '') + '</span>';
     html += '</div>';
     html += '</div>';
@@ -18332,7 +18332,7 @@ function renderLeadPeople() {
     html += '</div></div>';
     html += '<div class="lead-card-actions">' + (url ? '<a class="lead-link-btn" href="' + escAttr(url) + '" target="_blank" rel="noopener">↗ Open Profile</a>' : '<span class="lead-link-btn disabled">No profile link</span>') + '</div>';
     html += '</div>';
-    if (!p.email) html += '<label class="lead-card-check"><input type="checkbox" class="lead-check" ' + (checked ? 'checked ' : '') + 'onclick="leadTogglePersonSelection(\'' + escAttr(pid) + '\', this.checked); renderLeadPeople();" /> Select for email search</label>';
+    if (!p.email) html += '<label class="lead-card-check"><input type="checkbox" class="lead-check" ' + (checked ? 'checked ' : '') + 'onclick="leadTogglePersonSelection(\'' + escJsAttr(pid) + '\', this.checked); renderLeadPeople();" /> Select for email search</label>';
     if (p.email) html += '<div class="lead-card-bodyline"><span class="lead-badge email">' + esc(p.email) + '</span> <span style="color:var(--text3);">' + esc(p.email_confidence || '') + '</span></div>';
     else html += '<div class="lead-card-bodyline"><span style="color:var(--text3);">No public business email found yet</span></div>';
     if (p.notes) html += '<div class="lead-card-bodyline"><strong>Evidence / note:</strong> ' + esc(p.notes) + '</div>';
@@ -18349,6 +18349,20 @@ function renderLeadPeople() {
 
 function escAttr(s) {
   return esc(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function jsStrEscape(s) {
+  return String(s == null ? '' : s)
+    .replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"')
+    .replace(/\n/g, '\\n').replace(/\r/g, '\\r')
+    .replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+}
+function escJsAttr(s) {
+  // Safe for a value placed inside a JS string literal that itself sits inside an
+  // inline HTML handler attribute, e.g. onclick="fn('VALUE')". The browser
+  // HTML-decodes the attribute before the JS runs, so HTML-escaping alone
+  // (escAttr) lets an entity like &#39; decode back to a quote and break out of
+  // the JS string. JS-escape first, then HTML-escape for the attribute layer.
+  return escAttr(jsStrEscape(s));
 }
 
 function leadIsDirectJobUrl(url) {
@@ -19733,7 +19747,7 @@ window.addEventListener('load', function(){
 try { updateAiCrawlerLockUI(); } catch(e) {}
 });
 </script>
-<script src="/vendor/cvstudio/server-heartbeat.js?v=24.6.257"></script>
+<script src="/vendor/cvstudio/server-heartbeat.js?v=24.6.258"></script>
 <script>
 try { updateSummaryLockUI(); } catch(e) {}
 try { updateCvScoringLockUI(); } catch(e) {}
