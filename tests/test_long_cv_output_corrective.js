@@ -47,8 +47,10 @@ vm.createContext(context);
   'requireAiCrawlerUnlocked','aiCrawlerLockPayload'
 ].forEach(name => vm.runInContext(fn(name), context));
 
-assert.strictEqual(context.cvParseTimeoutMs('x'.repeat(17999)), 210000);
-assert.strictEqual(context.cvParseTimeoutMs('x'.repeat(18000)), 330000);
+assert.strictEqual(context.cvParseTimeoutMs('x'.repeat(7999)), 210000);
+assert.strictEqual(context.cvParseTimeoutMs('x'.repeat(8000)), 330000);
+// A real dense 8-page CV (~9-10k extracted chars) must get the long fetch budget.
+assert.strictEqual(context.cvParseTimeoutMs('x'.repeat(9808)), 330000);
 assert.strictEqual(context.cvParseTimeoutMs(Array(8).fill('Key responsibilities').join('\n')), 330000);
 assert.strictEqual((html.match(/fetchWithTimeout\('\/parse'/g) || []).length, 3);
 assert.ok(html.includes('}, cvParseTimeoutMs(cvText));'));

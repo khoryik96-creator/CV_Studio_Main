@@ -637,7 +637,12 @@ _CV_ROLE_DENSE_MARKER_RE = re.compile(
 def _cv_parse_backend_timeout_seconds(cv_text):
     """Return the bounded provider timeout for one CV parse request."""
     text = str(cv_text or "")
-    is_long = len(text) >= 18000 or len(_CV_ROLE_DENSE_MARKER_RE.findall(text)) >= 8
+    # 8000 chars ~= a dense multi-page CV (a real 8-page CV extracts to ~9-10k
+    # chars). The old 18000 threshold left such CVs on the 180s budget, so a
+    # DeepSeek parse that occasionally ran past 180s was cut off mid-parse. The
+    # timeout is a ceiling, not a fixed wait, so granting the 300s budget more
+    # readily has no cost for CVs that parse quickly.
+    is_long = len(text) >= 8000 or len(_CV_ROLE_DENSE_MARKER_RE.findall(text)) >= 8
     return 300 if is_long else 180
 
 

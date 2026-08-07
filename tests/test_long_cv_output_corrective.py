@@ -51,8 +51,11 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         }
 
     def test_long_cv_timeout_is_bounded_and_role_dense(self):
-        self.assertEqual(app._cv_parse_backend_timeout_seconds("x" * 17999), 180)
-        self.assertEqual(app._cv_parse_backend_timeout_seconds("x" * 18000), 300)
+        self.assertEqual(app._cv_parse_backend_timeout_seconds("x" * 7999), 180)
+        self.assertEqual(app._cv_parse_backend_timeout_seconds("x" * 8000), 300)
+        # A real dense 8-page CV extracts to ~9-10k chars and must get the long
+        # (300s) budget, not be cut off at 180s.
+        self.assertEqual(app._cv_parse_backend_timeout_seconds("x" * 9808), 300)
         dense = "\n".join(["Key responsibilities"] * 7)
         self.assertEqual(app._cv_parse_backend_timeout_seconds(dense), 180)
         dense += "\nKey achievement"
