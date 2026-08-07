@@ -81,6 +81,38 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(call.call_args.args[2]["_timeout_seconds"], 300)
 
+    def test_parse_retry_does_not_shorten_candidate_content(self):
+        # When the first parse returns unrepairable JSON, the retry must NOT ask
+        # the model to shorten the CV (a formatter must never silently drop
+        # bullets/roles/skills). It re-requests full, complete JSON instead.
+        valid = json.dumps({
+            "candidate": {}, "work_experiences": [], "education": [],
+            "certifications": [], "skills": [],
+        })
+        calls = []
+
+        def fake_call_llm(provider, api_key, payload):
+            calls.append(payload)
+            text = "This is not valid JSON at all." if len(calls) == 1 else valid
+            return {"content": [{"type": "text", "text": text}], "usage": {}}
+
+        with (
+            mock.patch.object(app, "call_llm", side_effect=fake_call_llm),
+            mock.patch.object(app, "_ai_spend_session_allowed", return_value=True),
+        ):
+            response = app.app.test_client().post(
+                "/parse",
+                json={"api_key": "fixture-key", "cv_text": "Kelana Edy Zainudin\nWork Experience\n"},
+                headers={"Origin": "http://127.0.0.1:5000", "X-CV-Studio-Request": "1"},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertGreaterEqual(len(calls), 2, "the retry strategy should have fired")
+        retry_prompt = calls[1]["messages"][0]["content"]
+        self.assertNotIn("max 15 words", retry_prompt)
+        self.assertNotIn("max 8 bullet", retry_prompt)
+        self.assertNotIn("keep output short", retry_prompt)
+        self.assertIn("Preserve EVERY", retry_prompt)
+
     def test_structured_normalization_is_idempotent_and_factual(self):
         normalized = app._normalize_cv_structured_content(self.fixture())
         role = normalized["work_experiences"][0]["roles"][0]

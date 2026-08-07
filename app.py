@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.266"
+_INSTALL_RECEIPT_VERSION = "v24.6.267"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -318,7 +318,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.266"
+_CVSTUDIO_VERSION = "v24.6.267"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -4575,7 +4575,7 @@ def _ja_spa_browser_bridge(candidate_id, fields, note_text="", email="", salary_
     payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
     compact_payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     script = """(async () => {
-  const helperVersion = 'v24.6.266';
+  const helperVersion = 'v24.6.267';
   const candidateId = %s;
   const payload = %s;
   const profilePath = %s;
@@ -5190,7 +5190,7 @@ def jobadder_onenote_activity_diagnostic():
     generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Candidate Activity Read Test",
-        "cv_studio_version": "v24.6.266",
+        "cv_studio_version": "v24.6.267",
         "generated_utc": generated,
         "safety": {
             "read_only": True,
@@ -5362,7 +5362,7 @@ def jobadder_onenote_activity_create_diagnostic():
     if confirmation != "CREATE ONE MAX LOW TEST":
         return jsonify({"error": "Type CREATE ONE MAX LOW TEST exactly before running the controlled POST."}), 400
 
-    guard_key = ("v24.6.266", candidate_id)
+    guard_key = ("v24.6.267", candidate_id)
     if guard_key in _JA_ACTIVITY_CREATE_DIAG_USED:
         return jsonify({"error": "The one-shot controlled POST has already been run in this CV Studio session. Restarting is intentionally required before any repeat test."}), 409
     # Mark before the network call so a timeout/double-click cannot emit a second POST.
@@ -5391,7 +5391,7 @@ def jobadder_onenote_activity_create_diagnostic():
     generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Official AddCandidateActivity Create Test",
-        "cv_studio_version": "v24.6.266",
+        "cv_studio_version": "v24.6.267",
         "generated_utc": generated,
         "candidate_fixture": {
             "name": "Max Low",
@@ -9773,14 +9773,20 @@ def parse_cv():
             if repaired:
                 parsed = repaired
             else:
-                # ── Strategy 2: Re-send full CV with strict brevity instructions ──
+                # ── Strategy 2: Re-send the full CV asking for compact, COMPLETE JSON ──
+                # A CV formatter must never silently shorten the candidate's content, so
+                # this retry preserves every role/bullet/skill in full and only asks for
+                # whitespace-free JSON to save output tokens. If it still truncates,
+                # Strategy 3 continues losslessly from the first attempt.
                 strategy2_parsed = None
                 try:
                     brevity_prompt = (
-                        "Parse this CV into the required JSON schema. "
-                        "IMPORTANT — keep output short: max 15 words per bullet point, "
-                        "max 8 bullet points per role, max 6 skills per category. "
-                        "Output ONLY valid JSON, no markdown fences, no explanation.\n\n"
+                        "Your previous response was not valid JSON. Parse this CV into the "
+                        "required JSON schema again and return ONLY complete, valid JSON — "
+                        "no markdown fences, no explanation. Preserve EVERY role and EVERY "
+                        "bullet point in full; do not shorten, summarise, drop, or cap "
+                        "bullets, roles, or skills. Emit compact JSON without unnecessary "
+                        "whitespace to stay within output limits.\n\n"
                         + cv_text
                     )
                     s2_data = call_llm(llm_provider, api_key, {
