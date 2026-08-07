@@ -85,6 +85,17 @@ in binary mode preserving CRLF.
 
 ## 7. Recently completed (already on `master`)
 
+- **JobAdder `_ja_*` extractions (Einstein, took over from Claude):**
+  `cvstudio_salary_parse.py` — pure salary currency/amount parse + format + LLM
+  usage/cost helpers (#79). `cvstudio_ja_answers.py` — JobAdder screening-question
+  answer builders (presentability/rating payload bundles), pure closure. Both are
+  behaviour-preserving verbatim moves; `app.py` re-exports; route SHA held.
+  ⚠️ #79 originally shipped **without** registering `cvstudio_salary_parse.py` in
+  `cvstudio_architecture.py` / `build_protected.py` / the phase7a names tuple —
+  fixed in the `ja_answers` slice. **Lesson: every new module must be added to all
+  three (registry, build manifest, phase7a `registry.names`) or the protected
+  build silently omits it.**
+
 - **Salary Comparison** fully integrated (PRs #33, #34): self-contained
   `salary_comparison/` blueprint at `/salary-comparison/`, reuses saved AI keys
   server-side, dedicated "Salary Comparison — Tax rules" AI route, and a
@@ -123,7 +134,8 @@ take domains in **non-overlapping `app.py` regions** and never share a branch.
 | Account | Domain | New module | app.py region | Branch prefix |
 |---------|--------|-----------|---------------|---------------|
 | **Einstein** | OneNote + Outlook / MS-Graph — **domain done.** Slice 1 = pure helpers (#41). Slice 2 = `OutlookService` (#43). Slice 3a = `OneNoteGraphService` connection layer (#47). Desktop-COM → `cvstudio_onenote_desktop.py` (#53). Content handlers (notebooks/sections/pages/import + list helpers) now in `OneNoteGraphService`. Only the 3 `/onenote/desktop_*`+`manual_pages` route bodies remain in the shell (thin delegators to the desktop module + service-owned page-list helpers via aliases). `_onenote_*` screening/clean helpers stay (shared with candidate-import). | `cvstudio_msgraph.py`, `cvstudio_onenote_desktop.py` | — | `einstein/*` |
-| **Claude** | Spider / AI Crawler pure closures (`cvstudio_spider_summary`, `cvstudio_spider_score`) + JobAdder typo-correction (`cvstudio_ja_typos`). Lead Finder domain **reassigned to Einstein 2026-08-05** (Claude ran out of quota before continuing it). Remaining `_ja_*` are service-module shape (network/cache/LLM). | `cvstudio_spider_summary.py`, `cvstudio_spider_score.py`, `cvstudio_ja_typos.py` | ~9,900–10,810; `_ja_*` typo cluster | `claude/*` |
+| **Claude** | Spider / AI Crawler pure closures (`cvstudio_spider_summary`, `cvstudio_spider_score`) + JobAdder typo-correction (`cvstudio_ja_typos`) — **core closures done (#54).** Lead Finder domain **reassigned to Einstein 2026-08-05**, and the **remaining Spider `_spider_*` + JobAdder `_ja_*` domain reassigned to Einstein 2026-08-07** (Claude out of quota). | `cvstudio_spider_summary.py`, `cvstudio_spider_score.py`, `cvstudio_ja_typos.py` | done | `claude/*` |
+| **Einstein (took over `_ja_*`/`_spider_*`)** | JobAdder `_ja_*` service extractions + any safe Spider leftovers. Salary parse/format → `cvstudio_salary_parse.py` (#79). Screening-answer builders → `cvstudio_ja_answers.py` (this slice). Remaining `_ja_*` = salary AI/cache/notice + `_ja_activity`/`_ja_candidate`/`_ja_spa` service clusters (network/`_JOBADDER_CLIENT`/LLM — need injection). ⚠️ Spider `.doc`/OCR/tesseract/poppler/pdfium cluster (>11,000) **stays in the shell** (characterization-test minefield; tests-first mandatory). | `cvstudio_salary_parse.py`, `cvstudio_ja_answers.py` | `_ja_*` cluster; `_spider_*` leftovers | `einstein/*` |
 
 Rules while both are active:
 1. Separate branches — never commit to the other account's branch.
