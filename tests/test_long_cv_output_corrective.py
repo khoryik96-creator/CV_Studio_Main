@@ -240,6 +240,54 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertIn("IT Support", titles)
         self.assertNotIn("Customer Care Consultant", titles)
 
+    def test_company_first_dash_headers_keep_fields_bullets_and_extra_roles(self):
+        # "<Company> — <Title> | <DateRange>" headers (the reverse of the Zand
+        # Bank layout). The authoritative-row extractor must NOT swap employer and
+        # title, and reconciliation must not blank the bullets or drop a role the
+        # single-line row regex could not see (multi-line / undated entries).
+        cv_text = app._cv_pretranslate_iso_dates(
+            "Work Experience\n"
+            "TDCX – Product Support Engineer | Mar 2026 – Present\n"
+            "Fujitsu Malaysia Sdn. Bhd. – System Engineer | Nov 2023 – Feb 2026\n"
+            "Hong Leong Bank – IT Manager (Unix & Storage) | May 2022 – Nov 2023\n"
+            "Hewlett-Packard – ITO Service Delivery | Aug 2009 – Dec 2018\n"
+            "Education\n"
+        )
+        parsed = {
+            "candidate": {"current_company": "TDCX", "current_position": "Product Support Engineer"},
+            "work_experiences": [
+                {"company": "TDCX", "date_range": "Mar 2026 to Present",
+                 "roles": [{"title": "Product Support Engineer", "date_range": "Mar 2026 to Present", "bullets": ["b1", "b2", "b3"]}]},
+                {"company": "Fujitsu Malaysia Sdn. Bhd.", "date_range": "Nov 2023 to Feb 2026",
+                 "roles": [{"title": "System Engineer", "date_range": "Nov 2023 to Feb 2026", "bullets": ["b1"]}]},
+                {"company": "Hong Leong Bank", "date_range": "May 2022 to Nov 2023",
+                 "roles": [{"title": "IT Manager (Unix & Storage)", "date_range": "May 2022 to Nov 2023", "bullets": ["b1"]}]},
+                # Present in the parse but NOT as a one-line table row (multi-line
+                # in the real CV). Must survive reconciliation, not be dropped.
+                {"company": "Toyota Malaysia", "date_range": "Dec 2018 to May 2022",
+                 "roles": [{"title": "Resident Infrastructure Engineer", "date_range": "Dec 2018 to May 2022", "bullets": ["b1", "b2"]}]},
+                {"company": "Hewlett-Packard", "date_range": "Aug 2009 to Dec 2018",
+                 "roles": [{"title": "ITO Service Delivery", "date_range": "Aug 2009 to Dec 2018", "bullets": ["b1"]}]},
+            ],
+        }
+
+        # Fix A: the extracted rows must not swap title/company.
+        rows = app._extract_authoritative_work_rows(cv_text, parsed)
+        tdcx_row = next(r for r in rows if app._cv_match_key(r["company"]) == app._cv_match_key("TDCX"))
+        self.assertEqual(app._cv_match_key(tdcx_row["title"]), app._cv_match_key("Product Support Engineer"))
+
+        # Fix B: reconciliation preserves every role (incl. the off-table one) with bullets.
+        out = app._reconcile_work_experience_with_authoritative_table(
+            __import__("json").loads(__import__("json").dumps(parsed)), cv_text)
+        companies = [e["company"] for e in out["work_experiences"]]
+        self.assertEqual(len(out["work_experiences"]), 5)
+        self.assertIn("Toyota Malaysia", companies)
+        self.assertEqual(out["work_experiences"][0]["company"], "TDCX")
+        self.assertEqual(out["work_experiences"][0]["roles"][0]["title"], "Product Support Engineer")
+        self.assertTrue(all(e["roles"][0]["bullets"] for e in out["work_experiences"]))
+        self.assertEqual(out["candidate"]["current_company"], "TDCX")
+        self.assertEqual(out["candidate"]["current_position"], "Product Support Engineer")
+
     def test_prompt_requires_employer_and_title_fidelity(self):
         self.assertIn("EMPLOYER NAME FIDELITY", app.SYSTEM_PROMPT)
         self.assertIn("ROLE TITLE FIDELITY", app.SYSTEM_PROMPT)

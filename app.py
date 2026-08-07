@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.265"
+_INSTALL_RECEIPT_VERSION = "v24.6.266"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -318,7 +318,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.265"
+_CVSTUDIO_VERSION = "v24.6.266"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -2194,6 +2194,25 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
         re.I,
     )
 
+    def _dash_side_is_role_title(text):
+        """Does this side of a "X — Y" header read as the role TITLE (vs employer)?
+
+        The dash split is ambiguous: some CVs write "<Title> — <Company>" and
+        others "<Company> — <Title>". Prefer the provider-parsed titles
+        (known_titles) as ground truth, then fall back to the generic job-title
+        shape. Used to decide orientation so the employer and title are not swapped.
+        """
+        cleaned = str(text or "").strip()
+        if not cleaned:
+            return False
+        key = _cv_match_key(cleaned)
+        for kt in known_titles:
+            if key and key == _cv_match_key(kt):
+                return True
+            if _cv_token_overlap_score(cleaned, kt) >= 0.67:
+                return True
+        return bool(generic_title.search(cleaned))
+
     for line in lines:
         if not line:
             continue
@@ -2223,13 +2242,24 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
             add_row(date_cell, company_cell, title_cell)
             continue
 
-        # Title-first layout: "<Title> — <Company> <DateRange>" (date trailing).
+        # Dash header with trailing date: "<Title> — <Company> <DateRange>" OR
+        # the reverse "<Company> — <Title> | <DateRange>". Disambiguate which side
+        # is the role title so the employer and title are not swapped (which would
+        # also blank the matched bullets during reconciliation). Strip any stray
+        # pipe the trailing-date capture leaves behind.
         tail = title_first_date_at_end.search(line)
         if tail:
             head = line[:tail.start()].strip()
             split = title_first_split.match(head)
             if split:
-                add_row(tail.group(1).strip(), split.group("company").strip(), split.group("title").strip())
+                side_left = split.group("title").strip().strip("|").strip()
+                side_right = split.group("company").strip().strip("|").strip()
+                if _dash_side_is_role_title(side_right) and not _dash_side_is_role_title(side_left):
+                    # "<Company> — <Title>" order: the right side is the title.
+                    add_row(tail.group(1).strip(), side_left, side_right)
+                else:
+                    # Default "<Title> — <Company>" order.
+                    add_row(tail.group(1).strip(), side_right, side_left)
 
     return rows
 
@@ -2358,6 +2388,15 @@ def _reconcile_work_experience_with_authoritative_table(parsed, cv_text):
             rebuilt.append(exp)
             last_exp = exp
             last_comp_key = comp_key
+
+    # If every detected table row matched a provider-parsed role AND the provider
+    # parse contains MORE roles than the table, the table is an incomplete subset
+    # of an already-correct parse -- a role the row regex could not see, such as a
+    # multi-line "Title / Client: X / dates / (Vendors)" block or an undated
+    # early-career line. There is no drift to correct here, so trust the fuller
+    # parse rather than rebuilding a skeleton that silently drops those roles.
+    if rows and matched_count == len(rows) and len(flat) > len(rows):
+        return parsed
 
     # Safety valve: do not replace a richly parsed CV with mostly empty skeletons
     # unless the parsed output is obviously suspicious. This protects unusual CVs
@@ -4536,7 +4575,7 @@ def _ja_spa_browser_bridge(candidate_id, fields, note_text="", email="", salary_
     payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
     compact_payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     script = """(async () => {
-  const helperVersion = 'v24.6.265';
+  const helperVersion = 'v24.6.266';
   const candidateId = %s;
   const payload = %s;
   const profilePath = %s;
@@ -5151,7 +5190,7 @@ def jobadder_onenote_activity_diagnostic():
     generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Candidate Activity Read Test",
-        "cv_studio_version": "v24.6.265",
+        "cv_studio_version": "v24.6.266",
         "generated_utc": generated,
         "safety": {
             "read_only": True,
@@ -5323,7 +5362,7 @@ def jobadder_onenote_activity_create_diagnostic():
     if confirmation != "CREATE ONE MAX LOW TEST":
         return jsonify({"error": "Type CREATE ONE MAX LOW TEST exactly before running the controlled POST."}), 400
 
-    guard_key = ("v24.6.265", candidate_id)
+    guard_key = ("v24.6.266", candidate_id)
     if guard_key in _JA_ACTIVITY_CREATE_DIAG_USED:
         return jsonify({"error": "The one-shot controlled POST has already been run in this CV Studio session. Restarting is intentionally required before any repeat test."}), 409
     # Mark before the network call so a timeout/double-click cannot emit a second POST.
@@ -5352,7 +5391,7 @@ def jobadder_onenote_activity_create_diagnostic():
     generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Official AddCandidateActivity Create Test",
-        "cv_studio_version": "v24.6.265",
+        "cv_studio_version": "v24.6.266",
         "generated_utc": generated,
         "candidate_fixture": {
             "name": "Max Low",

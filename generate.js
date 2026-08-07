@@ -86,7 +86,7 @@ function smartTokenCase(token, opts = {}) {
   else if (opts.company && /^[A-Za-z]+$/.test(stripped) && /[a-z]/.test(stripped) && /[A-Z]/.test(stripped) && !(stripped.charAt(0) === stripped.charAt(0).toUpperCase() && stripped.slice(1) === stripped.slice(1).toLowerCase())) replacement = stripped;
   else if (opts.company && COMPANY_TOKEN_MAP[upper]) replacement = COMPANY_TOKEN_MAP[upper];
   else if (opts.title && TITLE_TOKEN_MAP[upper]) replacement = TITLE_TOKEN_MAP[upper];
-  else if (ACRONYM_KEEP.has(upper) || (upper.length <= 3 && upper === stripped && /^[A-Z]+$/.test(stripped))) replacement = upper;
+  else if (ACRONYM_KEEP.has(upper) || (upper.length <= 3 && upper === stripped && /^[A-Z]+$/.test(stripped)) || (upper === stripped && /^[A-Z]{2,}$/.test(stripped) && !/[AEIOU]/.test(stripped))) replacement = upper;
   else return raw.toLowerCase().replace(/[A-Za-z]+/g, function(w){ return w.charAt(0).toUpperCase() + w.slice(1); });
   const idx = raw.indexOf(stripped);
   return idx >= 0 ? raw.slice(0, idx) + replacement + raw.slice(idx + stripped.length) : replacement;
