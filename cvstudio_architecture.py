@@ -180,6 +180,17 @@ DEFAULT_MODULES = (
         ("cvstudio_ja_typos.py",),
     ),
     ModuleDefinition(
+        "salary_parse",
+        "domain",
+        ("cvstudio_salary_parse.py",),
+        ("ja_typos",),
+    ),
+    ModuleDefinition(
+        "ja_answers",
+        "domain",
+        ("cvstudio_ja_answers.py",),
+    ),
+    ModuleDefinition(
         "blind_mask",
         "domain",
         ("cvstudio_blind_mask.py",),
@@ -260,6 +271,8 @@ DEFAULT_MODULES = (
             "spider_summary",
             "spider_score",
             "ja_typos",
+            "salary_parse",
+            "ja_answers",
             "startup",
             "storage",
             "storage_http",
