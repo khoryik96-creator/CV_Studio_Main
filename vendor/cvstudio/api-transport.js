@@ -28,6 +28,12 @@
     return data;
   }
   window.cvStudioNormaliseApiFailure=normaliseFailure;
+  // Central deadline policy so a stalled local route can't hang a button forever.
+  // Only same-origin GET/HEAD (status, settings, diagnostics, startup polls — the
+  // hang-prone reads) get a default deadline; mutations/uploads/AI keep their
+  // current unbounded behaviour unless they opt in with init.timeout. Any caller
+  // can override the deadline (init.timeout, ms) or disable it (init.cvStudioNoTimeout).
+  var DEFAULT_GET_TIMEOUT_MS = 60000;
   window.fetch = async function(input, init) {
     init = init || {};
     var method = String(init.method || (input && input.method) || 'GET').toUpperCase();
@@ -40,12 +46,40 @@
       if (unsafe && !headers.has('X-CV-Studio-Request')) headers.set('X-CV-Studio-Request', '1');
       init.headers = headers;
     }
+    var timeoutMs = 0;
+    if (Number(init.timeout) > 0) timeoutMs = Number(init.timeout);
+    else if (sameOrigin && !unsafe && init.cvStudioNoTimeout !== true && method !== 'CONNECT') timeoutMs = DEFAULT_GET_TIMEOUT_MS;
+    var timeoutCtrl = null, timeoutTimer = null, callerSignal = init.signal, onCallerAbort = null, timedOut = false;
+    if (timeoutMs > 0 && typeof AbortController !== 'undefined' && init.cvStudioNoTimeout !== true) {
+      try {
+        timeoutCtrl = new AbortController();
+        timeoutTimer = setTimeout(function(){ timedOut = true; try { timeoutCtrl.abort(); } catch(e){} }, timeoutMs);
+        // Merge the caller's own AbortController with our deadline so neither is lost.
+        if (callerSignal) {
+          if (callerSignal.aborted) { try { timeoutCtrl.abort(); } catch(e){} }
+          else { onCallerAbort = function(){ try { timeoutCtrl.abort(); } catch(e){} }; try { callerSignal.addEventListener('abort', onCallerAbort); } catch(e){} }
+        }
+        init.signal = timeoutCtrl.signal;
+      } catch(e) { timeoutCtrl = null; }
+    }
+    function clearDeadline(){ if (timeoutTimer) { try { clearTimeout(timeoutTimer); } catch(e){} timeoutTimer = null; } if (onCallerAbort && callerSignal) { try { callerSignal.removeEventListener('abort', onCallerAbort); } catch(e){} onCallerAbort = null; } }
     var response;
     try{response=await _cvStudioFetch(input,init);}catch(err){
+      clearDeadline();
       var rid='';try{rid=String(new Headers(init.headers||{}).get('X-CV-Studio-Request-ID')||'');}catch(e){}
       var rawPath='';try{rawPath=String(typeof input==='string'?input:(input&&input.url)||'').replace(window.location.origin,'');}catch(e){}
+      // Our deadline fired (as opposed to the caller aborting their own signal) —
+      // surface a distinct TIMEOUT error instead of a generic network failure.
+      if (timedOut && !(callerSignal && callerSignal.aborted)) {
+        var terr = new Error('Request timed out after ' + Math.round(timeoutMs/1000) + 's — the local server may be busy or unresponsive. Try again, or relaunch CV Studio.');
+        try { terr.name = 'TimeoutError'; } catch(e){}
+        terr.code = 'TIMEOUT'; terr.cvStudioTimeout = true; terr.retryable = true; terr.cvStudioRequestId = rid;
+        pushApiError({at:new Date().toISOString(),path:rawPath,status:0,code:'TIMEOUT',request_id:rid,message:terr.message.slice(0,500),action:'retry',retryable:true});
+        throw terr;
+      }
       var entry={at:new Date().toISOString(),path:rawPath,status:0,code:'NETWORK_ERROR',request_id:rid,message:String(err&&err.message||'Network request failed').slice(0,500),action:'retry',retryable:true};pushApiError(entry);try{err.cvStudioRequestId=rid;}catch(e){}throw err;
     }
+    clearDeadline();
     try{response.cvStudioRequestId=String(response.headers.get('X-CV-Studio-Request-ID')||'');}catch(e){}
     var originalJson=response.json.bind(response),originalText=response.text.bind(response);
     response.json=async function(){return normaliseFailure(await originalJson(),response);};

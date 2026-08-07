@@ -6233,32 +6233,51 @@ def _ja_salary_ai_cache_load():
         return legacy if isinstance(legacy, dict) else {}
 
 
+def _ja_salary_ai_cache_import_legacy_locked():
+    """Import any legacy JSON once (fingerprint-guarded inside the repository)."""
+    legacy, fingerprint = _cvstudio_legacy_json_read(_SALARY_AI_CACHE_PATH, dict)
+    if legacy is not None:
+        _CVSTUDIO_SALARY_REPOSITORY.import_legacy(legacy, fingerprint)
+    return legacy
+
+
 def _ja_salary_ai_cache_get(cache_key):
+    key = str(cache_key or "")
     with _SALARY_AI_CACHE_LOCK:
-        item = _ja_salary_ai_cache_load().get(str(cache_key or ""))
+        try:
+            _ja_salary_ai_cache_import_legacy_locked()
+            item = _CVSTUDIO_SALARY_REPOSITORY.get(key)  # single-row read, no whole-map load
+        except StorageError:
+            raise
+        except Exception:
+            item = None
     return item if isinstance(item, dict) else None
 
 
 def _ja_salary_ai_cache_put(cache_key, components, provider, model):
     if not cache_key or not isinstance(components, dict):
         return
+    entry = {
+        "components": components,
+        "provider": provider,
+        "model": model,
+        "savedAt": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+    }
     with _SALARY_AI_CACHE_LOCK:
-        data = _ja_salary_ai_cache_load()
-        data[str(cache_key)] = {
-            "components": components,
-            "provider": provider,
-            "model": model,
-            "savedAt": datetime.utcnow().isoformat(timespec="seconds") + "Z",
-        }
-        # keep newest 500 entries by insertion order
-        if len(data) > 500:
-            data = dict(list(data.items())[-500:])
-        _CVSTUDIO_SALARY_REPOSITORY.save(data)
         try:
-            _cvstudio_legacy_json_write(_SALARY_AI_CACHE_PATH, data, indent=2)
+            _ja_salary_ai_cache_import_legacy_locked()
+            # Row-level upsert + newest-500 trim in one transaction, instead of
+            # loading, mutating and rewriting the entire map.
+            _CVSTUDIO_SALARY_REPOSITORY.put(str(cache_key), entry, cap=500)
+        except StorageError:
+            raise
         except Exception:
-            # SQLite is authoritative; keep the existing legacy file untouched
-            # if this compatibility mirror cannot be updated.
+            return
+        try:
+            # Keep the legacy JSON mirror consistent with SQLite (compatibility
+            # contract). SQLite is authoritative if the mirror cannot be updated.
+            _cvstudio_legacy_json_write(_SALARY_AI_CACHE_PATH, _CVSTUDIO_SALARY_REPOSITORY.load(), indent=2)
+        except Exception:
             pass
 
 
