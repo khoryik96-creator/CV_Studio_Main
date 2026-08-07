@@ -428,6 +428,41 @@ async function heartbeatContract() {
   assert.strictEqual(reloads, 1);
 }
 
+function escJsAttrContract() {
+  // escJsAttr() escapes a value for a JS string literal that itself sits inside an
+  // inline HTML handler attribute. Simulate the browser: HTML-decode the attribute,
+  // then run the resulting handler, and assert the value round-trips inertly (no
+  // breakout) even for a crafted payload.
+  function grab(signature) {
+    const start = html.indexOf(signature);
+    if (start < 0) throw new Error('missing ' + signature);
+    let depth = 0, started = false;
+    for (let j = html.indexOf('{', start); j < html.length; j += 1) {
+      if (html[j] === '{') { depth += 1; started = true; }
+      else if (html[j] === '}') { depth -= 1; if (started && depth === 0) return html.slice(start, j + 1); }
+    }
+    throw new Error('unbalanced ' + signature);
+  }
+  const sandbox = vm.createContext({});
+  vm.runInContext(
+    [grab('function esc('), grab('function escAttr('), grab('function jsStrEscape('), grab('function escJsAttr(')].join('\n')
+      + '\nthis.escJsAttr = escJsAttr;',
+    sandbox,
+  );
+  function htmlDecode(value) {
+    return value.replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+      .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+  }
+  const payloads = ['co_1', "a'b", 'x"y', "co_1'); alert(88); //", '</script>', 'a\\b', 'l1\nl2'];
+  for (const raw of payloads) {
+    const attr = sandbox.escJsAttr(raw);
+    const runner = vm.createContext({captured: null, fn(value) { this.captured = value; }});
+    runner.fn = function(value) { runner.captured = value; };
+    vm.runInContext("fn('" + htmlDecode(attr) + "')", runner);
+    assert.strictEqual(runner.captured, raw, 'escJsAttr breakout/mismatch for ' + JSON.stringify(raw));
+  }
+}
+
 function extractedScriptOrderContract() {
   const relativeModules = [
     'vendor/cvstudio/api-transport.js',
@@ -460,6 +495,7 @@ const cases = [
   ['local API transport deadline policy', apiTimeoutContract],
   ['page navigation globals, storage and listener compatibility', pageNavContract],
   ['server heartbeat timing and recovery compatibility', heartbeatContract],
+  ['inline handler value escaping (escJsAttr)', escJsAttrContract],
   ['deterministic extracted script ordering', extractedScriptOrderContract],
 ];
 
