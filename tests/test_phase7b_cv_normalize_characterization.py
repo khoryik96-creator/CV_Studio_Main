@@ -219,13 +219,41 @@ class LanguageTests(unittest.TestCase):
 
 
 class BulletAndStructuredContentTests(unittest.TestCase):
-    def test_standalone_section_becomes_section_dict(self):
-        # Matches the contract asserted in test_long_cv_output_corrective.
+    def test_standalone_label_absorbs_following_bullets(self):
+        # A sub-section label the provider emitted as a flat bullet takes the
+        # loose bullets that follow it as its own, rather than rendering as an
+        # empty label above orphaned siblings. Matches the contract asserted in
+        # test_long_cv_output_corrective.
         out = cn._normalize_cv_bullet_items(["Key achievement", "Delivered result"])
         self.assertEqual(out, [
-            {"heading": "Key achievements", "bullets": [], "kind": "section"},
-            "Delivered result",
+            {"heading": "Key achievements", "bullets": ["Delivered result"], "kind": "section"},
         ])
+
+    def test_bare_label_with_nothing_following_is_dropped(self):
+        out = cn._normalize_cv_bullet_items(["Real bullet", "Key responsibilities"])
+        self.assertEqual(out, ["Real bullet"])
+
+    def test_correctly_nested_section_is_untouched(self):
+        nested = [{"heading": "Key responsibilities", "bullets": ["a", "b"], "kind": "section"}, "c"]
+        self.assertEqual(cn._normalize_cv_bullet_items(nested), nested)
+
+    def test_leading_source_bullet_markers_are_stripped(self):
+        # DOCX/plain-text bullets that carry their own marker must not render as
+        # "- Received…" once the formatter adds its own bullet.
+        out = cn._normalize_cv_bullet_items([
+            "-Received customer complaint",
+            "• Provide technical support",
+            "– Ensure closing all incoming calls",
+        ])
+        self.assertEqual(out, [
+            "Received customer complaint",
+            "Provide technical support",
+            "Ensure closing all incoming calls",
+        ])
+
+    def test_leading_marker_strip_preserves_figures_and_internal_dashes(self):
+        out = cn._normalize_cv_bullet_items(["-5% cost variance recorded", "5-star client rating"])
+        self.assertEqual(out, ["-5% cost variance recorded", "5-star client rating"])
 
     def test_structured_content_smoke(self):
         parsed = {"experience": [{"title": "engineer", "bullets": ["Did a thing"]}]}

@@ -498,6 +498,71 @@ def _canonical_cv_section_heading(value):
     return "Key achievements" if match.group(1).lower().startswith("achievement") else "Key responsibilities"
 
 
+_CV_LEADING_BULLET_MARKER_RE = re.compile(
+    r"^\s*(?:"
+    r"[•●▪◦‣∙·▶►➤⁃∙»›]"  # glyph bullets: always markers
+    r"|[*‐-―-](?=\s|[^\W\d_])"  # dash/asterisk: only before whitespace or a letter (protects "-5%")
+    r")\s*"
+)
+
+
+def _strip_leading_bullet_marker(text):
+    """Drop a list marker the source bullet carried in its own text.
+
+    DOCX/plain-text CVs sometimes deliver bullets with the visible marker baked
+    into the string (e.g. ``-Received calls`` or ``• Provide support``). The
+    formatter renders its own bullet, so the literal marker must be removed or it
+    shows up as ``- Received calls`` in the output. Glyph bullets are always
+    markers; a leading dash/asterisk is stripped only when followed by whitespace
+    or a letter, so figures like ``-5% variance`` are left intact.
+    """
+    value = str(text or "")
+    for _ in range(5):  # tolerate a short run like "• - "
+        stripped = _CV_LEADING_BULLET_MARKER_RE.sub("", value, count=1)
+        if stripped == value:
+            break
+        value = stripped
+    return value
+
+
+def _absorb_orphan_section_labels(items):
+    """Attach loose bullets to an empty section label that introduces them.
+
+    When a provider emits a sub-section label such as ``Key responsibilities``
+    as a flat bullet string instead of nesting the duties under it, the label
+    becomes an empty ``{"heading": ..., "bullets": [], "kind": "section"}`` group
+    followed by the real bullets as loose siblings -- which renders as a lone
+    label with nothing beneath it. Re-attach the following plain bullets to the
+    label so it introduces its duties as intended, and drop the label outright
+    when nothing follows it (a bare label carries no information).
+    """
+    result = []
+    index = 0
+    count = len(items)
+    while index < count:
+        item = items[index]
+        if (
+            isinstance(item, dict)
+            and item.get("kind") == "section"
+            and not item.get("bullets")
+            and str(item.get("heading") or "").strip()
+        ):
+            collected = []
+            nxt = index + 1
+            while nxt < count and isinstance(items[nxt], str):
+                collected.append(items[nxt])
+                nxt += 1
+            if collected:
+                merged = dict(item)
+                merged["bullets"] = collected
+                result.append(merged)
+            index = nxt
+            continue
+        result.append(item)
+        index += 1
+    return result
+
+
 def _normalize_cv_bullet_items(items, allow_standalone_sections=True):
     """Repair valid JSON-looking bullet strings without changing plain prose."""
     source = items if isinstance(items, list) else ([] if items in (None, "") else [items])
@@ -505,7 +570,7 @@ def _normalize_cv_bullet_items(items, allow_standalone_sections=True):
 
     def add(item):
         if isinstance(item, str):
-            candidate = item.strip()
+            candidate = _strip_leading_bullet_marker(item).strip()
             section_heading = _canonical_cv_section_heading(candidate)
             if allow_standalone_sections and candidate and _CV_SECTION_HEADING_RE.fullmatch(candidate):
                 normalized.append({"heading": section_heading, "bullets": [], "kind": "section"})
@@ -522,7 +587,7 @@ def _normalize_cv_bullet_items(items, allow_standalone_sections=True):
                         normalized.append(item)
                     return
             if candidate:
-                normalized.append(item)
+                normalized.append(candidate)
             return
         if isinstance(item, list):
             for child in item:
@@ -552,6 +617,11 @@ def _normalize_cv_bullet_items(items, allow_standalone_sections=True):
 
     for value in source:
         add(value)
+    # Standalone section labels ("Key responsibilities" etc.) are only created at
+    # the level where they are allowed; re-attach the loose bullets that follow
+    # such an orphaned label so it does not render as an empty heading.
+    if allow_standalone_sections:
+        normalized = _absorb_orphan_section_labels(normalized)
     return normalized
 
 

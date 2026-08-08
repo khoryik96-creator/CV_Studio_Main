@@ -52,6 +52,20 @@ not functional on Linux; it is a Windows-only runtime). Everything else must
 pass (~388 tests). **Do not commit `.venv_test/`** — it is not gitignored, so
 stage files explicitly and never `git add .`.
 
+**Previewing CV formatting without a browser/Word.** Most formatting work is
+deterministic (reconcile + normalize + `generate.js`), so you rarely need to
+install and open a `.docx`. Two loops:
+- **Logic/structure bugs:** reproduce directly against the pure functions in a
+  pytest (e.g. feed a bullet list to `_normalize_cv_bullet_items`) — seconds, no
+  AI, no Word. This is how the "Key responsibilities" orphan-label bug was found
+  and fixed.
+- **Eyeball the rendered output:** `python preview_format.py parsed.json` renders
+  the CV through the real `/generate-docx` pipeline and prints it as text, with
+  `•` marking real bullets and no marker for headings — so a stray-bullet-vs-
+  heading issue is visible in the terminal. Pass a second arg to also write the
+  `.docx`. Feed it the `data` object from a real `/parse` response (captured
+  once) to iterate offline with no repeated AI cost.
+
 ## 4. Git workflow
 
 - Develop on your designated branch; commit and push there.
