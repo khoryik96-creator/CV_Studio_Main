@@ -443,6 +443,37 @@ class ContinuousEmployerGroupingTests(unittest.TestCase):
 
         self.assertEqual(len(normalized["work_experiences"]), 2)
 
+    def test_merged_roles_are_sorted_newest_first_even_when_provider_order_is_oldest_first(self):
+        parsed = {
+            "work_experiences": [
+                {
+                    "company": "Example Co",
+                    "date_range": "Jan 2018 to Dec 2019",
+                    "roles": [
+                        {"title": "Analyst", "date_range": "", "bullets": []}
+                    ],
+                },
+                {
+                    "company": "Example Co",
+                    "date_range": "Jan 2020 to Mar 2021",
+                    "roles": [
+                        {"title": "Manager", "date_range": "", "bullets": []}
+                    ],
+                },
+            ]
+        }
+
+        normalized = cn._normalize_cv_data_for_output(parsed)
+
+        self.assertEqual(len(normalized["work_experiences"]), 1)
+        self.assertEqual(
+            [
+                role["title"]
+                for role in normalized["work_experiences"][0]["roles"]
+            ],
+            ["Manager", "Analyst"],
+        )
+
 
 class SourceEnumeratorCleanupTests(unittest.TestCase):
     def test_bare_source_enumerators_are_removed_without_touching_false_positives(self):
@@ -509,6 +540,26 @@ class EducationAndSkillsConsistencyTests(unittest.TestCase):
             normalized["education"][0]["date_range"],
             "Jun 2004 to May 2008",
         )
+
+    def test_education_does_not_expand_a_single_graduation_year(self):
+        parsed = {
+            "education": [
+                {
+                    "institution": "Multimedia University",
+                    "degree": "Bachelor of Business Administration",
+                    "date_range": "2008",
+                }
+            ]
+        }
+        source = (
+            "Bachelor of Business Administration\n"
+            "06/2004 - 05/2008\n"
+            "Multimedia University\n"
+        )
+
+        normalized = cn._normalize_cv_data_for_output(parsed, source)
+
+        self.assertEqual(normalized["education"][0]["date_range"], "2008")
 
     def test_core_expertise_always_normalizes_to_bullet_items(self):
         expected = [

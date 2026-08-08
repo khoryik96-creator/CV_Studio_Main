@@ -181,13 +181,16 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   first, then accepts a validated temporary DOCX conversion only after that
   exact document is rejected. It prefers installed Microsoft Word on Windows
   and otherwise uses LibreOffice when available. The resulting DOCX reuses the
-  existing table and nested-list extraction. The owner-supplied incompatible
+  existing table and nested-list extraction. Execution-time Antiword trust
+  failures remain fatal, and timed-out converters terminate their wrapper and
+  recorded native process trees. The owner-supplied incompatible
   DOC passed a genuine Windows `/extract-text` test through Microsoft Word.
   The same branch removes `No Degree`/`Not specified`/`N/A` education
   placeholders while protecting real `Non-Degree Certificate` wording. It also
   covers the owner's exact Isaac/Faizal formatting regressions: continuous
   Unilever/DKSH promotion paths are grouped without merging gapped returns,
-  employer blocks are sorted newest-first, source education months are restored,
+  employer blocks and their dated roles are sorted newest-first, source
+  education months are restored only for matching two-endpoint year ranges,
   Core Expertise is a real bullet list, and bare `a.`/`i.`/`1-`/`a-`
   source labels are removed before Word supplies the visible list marker.
 - **AI Crawler ".doc: flag, don't decode"**: skip decoding an undecodable legacy

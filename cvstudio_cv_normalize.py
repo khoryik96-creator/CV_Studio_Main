@@ -736,10 +736,16 @@ def _normalize_cv_data_for_output(parsed, source_text=""):
                     role["date_range"] = _normalize_cv_date_range(role.get("date_range"))
                 if role.get("title"):
                     role["title"] = _smart_title_text(role.get("title"), title=True)
+    normalized_experiences = _merge_adjacent_continuous_company_stints(
+        parsed.get("work_experiences") or []
+    )
+    for exp in normalized_experiences:
+        if isinstance(exp, dict):
+            exp["roles"] = _sort_cv_roles_reverse_chronological(
+                exp.get("roles") or []
+            )
     parsed["work_experiences"] = _sort_work_experiences_reverse_chronological(
-        _merge_adjacent_continuous_company_stints(
-            parsed.get("work_experiences") or []
-        )
+        normalized_experiences
     )
     for edu in parsed.get("education") or []:
         if not isinstance(edu, dict):
@@ -1025,6 +1031,21 @@ def _sort_work_experiences_reverse_chronological(experiences):
     return [exp for _, exp in sorted(indexed, key=sort_key)]
 
 
+def _sort_cv_roles_reverse_chronological(roles):
+    """Sort dated roles newest-first while keeping unknown dates stable."""
+    indexed = list(enumerate(roles or []))
+
+    def sort_key(item):
+        index, role = item
+        interval = _cv_experience_interval(role)
+        if interval is None:
+            return (1, 0, 0, index)
+        start, end = interval
+        return (0, -end, -start, index)
+
+    return [role for _, role in sorted(indexed, key=sort_key)]
+
+
 def _recover_education_date_range(education, source_text):
     """Restore source month precision when the provider returned years only."""
     if not isinstance(education, dict) or not str(source_text or "").strip():
@@ -1062,6 +1083,8 @@ def _recover_education_date_range(education, source_text):
         return ""
 
     current_years = re.findall(r"\b\d{4}\b", current)
+    if len(current_years) != 2:
+        return ""
     best = None
     for match in range_re.finditer(source):
         distance = min(abs(match.start() - anchor) for anchor in anchors)
@@ -1070,9 +1093,8 @@ def _recover_education_date_range(education, source_text):
         candidate = _normalize_cv_date_range(match.group("range"))
         candidate_years = re.findall(r"\b\d{4}\b", candidate)
         if (
-            len(current_years) >= 2
-            and len(candidate_years) >= 2
-            and (current_years[0], current_years[-1])
+            len(candidate_years) != 2
+            or (current_years[0], current_years[-1])
             != (candidate_years[0], candidate_years[-1])
         ):
             continue

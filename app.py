@@ -11822,6 +11822,107 @@ def _legacy_doc_word_powershell_candidates():
     return found
 
 
+def _converter_process_creation_options():
+    """Return process-group options used by optional document converters."""
+    import subprocess as _subprocess
+
+    if os.name == "nt":
+        return {
+            "creationflags": int(
+                getattr(_subprocess, "CREATE_NO_WINDOW", 0) or 0
+            ) | int(
+                getattr(_subprocess, "CREATE_NEW_PROCESS_GROUP", 0) or 0
+            )
+        }
+    return {"start_new_session": True}
+
+
+def _terminate_converter_process_tree(process, *, extra_pids=()):
+    """Best-effort termination for a timed-out converter and its children."""
+    import signal as _signal
+    import shutil as _shutil
+    import subprocess as _subprocess
+
+    if os.name == "nt":
+        system_root = os.environ.get("SystemRoot") or r"C:\Windows"
+        taskkill = os.path.join(system_root, "System32", "taskkill.exe")
+        if not os.path.isfile(taskkill):
+            taskkill = _shutil.which("taskkill.exe") or ""
+        pids = []
+        for value in list(extra_pids or ()) + [getattr(process, "pid", None)]:
+            try:
+                pid = int(value)
+            except (TypeError, ValueError):
+                continue
+            if pid > 0 and pid not in pids:
+                pids.append(pid)
+        if taskkill:
+            for pid in pids:
+                try:
+                    _subprocess.run(
+                        [taskkill, "/PID", str(pid), "/T", "/F"],
+                        stdin=_subprocess.DEVNULL,
+                        stdout=_subprocess.DEVNULL,
+                        stderr=_subprocess.DEVNULL,
+                        timeout=5,
+                        check=False,
+                        creationflags=int(
+                            getattr(_subprocess, "CREATE_NO_WINDOW", 0) or 0
+                        ),
+                    )
+                except Exception:
+                    # cleanup-only: the direct process kill below remains.
+                    pass
+    else:
+        try:
+            os.killpg(int(process.pid), _signal.SIGKILL)
+        except Exception:
+            # cleanup-only: fall back to killing the direct process below.
+            pass
+    try:
+        process.kill()
+    except Exception:
+        # cleanup-only: the process may already have exited.
+        pass
+    try:
+        process.communicate(timeout=5)
+    except Exception:
+        # cleanup-only: termination is already best-effort and bounded.
+        pass
+
+
+def _run_converter_subprocess(command, *, timeout, extra_pid_path=""):
+    """Run one converter and tear down its process tree on failure/timeout."""
+    import subprocess as _subprocess
+
+    process = _subprocess.Popen(
+        command,
+        stdin=_subprocess.DEVNULL,
+        stdout=_subprocess.PIPE,
+        stderr=_subprocess.PIPE,
+        **_converter_process_creation_options(),
+    )
+    try:
+        stdout, stderr = process.communicate(timeout=max(1.0, float(timeout)))
+    except Exception:
+        extra_pids = []
+        if extra_pid_path:
+            try:
+                with open(extra_pid_path, "r", encoding="ascii") as handle:
+                    extra_pids.append(int(handle.read().strip()))
+            except Exception:
+                # cleanup-only: no recorded native PID is available.
+                pass
+        _terminate_converter_process_tree(process, extra_pids=extra_pids)
+        raise
+    return _subprocess.CompletedProcess(
+        command,
+        process.returncode,
+        stdout,
+        stderr,
+    )
+
+
 def _convert_legacy_doc_with_microsoft_word(file_bytes, *, timeout=45):
     """Convert one legacy DOC to macro-free DOCX through installed Word.
 
@@ -11831,18 +11932,42 @@ def _convert_legacy_doc_with_microsoft_word(file_bytes, *, timeout=45):
     """
     if os.name != "nt" or not file_bytes:
         return b""
-    import subprocess as _subprocess
     import tempfile as _tempfile
 
-    script = r'''param([string]$InputPath, [string]$OutputPath)
+    script = r'''param([string]$InputPath, [string]$OutputPath, [string]$ProcessIdPath)
 $ErrorActionPreference = 'Stop'
 $word = $null
 $document = $null
+$existingWordProcessIds = @(
+    Get-Process -Name WINWORD -ErrorAction SilentlyContinue |
+        ForEach-Object { [uint32]$_.Id }
+)
 try {
     $word = New-Object -ComObject Word.Application
     $word.Visible = $false
     $word.DisplayAlerts = 0
     try { $word.AutomationSecurity = 3 } catch {}
+    try {
+        Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public static class CVStudioWordNativeMethods {
+    [DllImport("user32.dll")]
+    public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+}
+"@
+        [uint32]$wordProcessId = 0
+        [void][CVStudioWordNativeMethods]::GetWindowThreadProcessId(
+            [IntPtr]$word.Hwnd,
+            [ref]$wordProcessId
+        )
+        if (
+            $wordProcessId -gt 0 -and
+            $existingWordProcessIds -notcontains $wordProcessId
+        ) {
+            [IO.File]::WriteAllText($ProcessIdPath, [string]$wordProcessId)
+        }
+    } catch {}
     $document = $word.Documents.Open($InputPath, $false, $true, $false)
     $document.SaveAs2($OutputPath, 16)
     if (-not (Test-Path -LiteralPath $OutputPath)) {
@@ -11874,14 +11999,12 @@ finally {
                 input_path = os.path.join(td, "input.doc")
                 output_path = os.path.join(td, "input.docx")
                 script_path = os.path.join(td, "convert.ps1")
+                process_id_path = os.path.join(td, "word-process-id.txt")
                 with open(input_path, "wb") as handle:
                     handle.write(file_bytes)
                 with open(script_path, "w", encoding="utf-8", newline="\n") as handle:
                     handle.write(script)
-                creationflags = int(
-                    getattr(_subprocess, "CREATE_NO_WINDOW", 0) or 0
-                )
-                result = _subprocess.run(
+                result = _run_converter_subprocess(
                     [
                         powershell,
                         "-NoLogo",
@@ -11895,12 +12018,11 @@ finally {
                         input_path,
                         "-OutputPath",
                         output_path,
+                        "-ProcessIdPath",
+                        process_id_path,
                     ],
-                    stdin=_subprocess.DEVNULL,
-                    stdout=_subprocess.PIPE,
-                    stderr=_subprocess.PIPE,
                     timeout=max(1.0, remaining),
-                    creationflags=creationflags,
+                    extra_pid_path=process_id_path,
                 )
                 if result.returncode == 0 and os.path.isfile(output_path):
                     with open(output_path, "rb") as handle:
@@ -11915,7 +12037,6 @@ def _convert_legacy_doc_with_libreoffice(file_bytes, *, timeout=45):
     if not file_bytes:
         return b""
     import pathlib as _pathlib
-    import subprocess as _subprocess
     import tempfile as _tempfile
 
     soffice = _find_soffice_binary()
@@ -11931,10 +12052,7 @@ def _convert_legacy_doc_with_libreoffice(file_bytes, *, timeout=45):
             profile_path.mkdir()
             with open(input_path, "wb") as handle:
                 handle.write(file_bytes)
-            creationflags = int(
-                getattr(_subprocess, "CREATE_NO_WINDOW", 0) or 0
-            )
-            result = _subprocess.run(
+            result = _run_converter_subprocess(
                 [
                     soffice,
                     "--headless",
@@ -11949,11 +12067,7 @@ def _convert_legacy_doc_with_libreoffice(file_bytes, *, timeout=45):
                     td,
                     input_path,
                 ],
-                stdin=_subprocess.DEVNULL,
-                stdout=_subprocess.PIPE,
-                stderr=_subprocess.PIPE,
                 timeout=max(1.0, float(timeout)),
-                creationflags=creationflags,
             )
             if result.returncode == 0 and os.path.isfile(output_path):
                 with open(output_path, "rb") as handle:
@@ -12495,6 +12609,7 @@ def extract_text():
                 return jsonify({"error": _legacy_doc_error}), 400
             text = ""
             _verified_antiword_text = False
+            _antiword_run_completed = False
             _require_verified_antiword()
 
             def _clean_legacy_doc_text(_raw_text):
@@ -12535,6 +12650,7 @@ def extract_text():
                         (_doc_aw,),
                         timeout=20,
                     )
+                    _antiword_run_completed = True
                     if r2.returncode == 0:
                         _aw_text = r2.stdout.decode('utf-8', errors='ignore').strip()
                         if not _aw_text:
@@ -12542,6 +12658,8 @@ def extract_text():
                         if _looks_like_good_doc_text(_aw_text):
                             text = _aw_text
                             _verified_antiword_text = True
+            except AntiwordDependencyError:
+                raise
             except Exception:
                 pass
 
@@ -12551,7 +12669,7 @@ def extract_text():
             # cross-platform optional fallback. Neither converter may bypass a
             # missing or untrusted Antiword runtime because the mandatory gate
             # above runs first.
-            if not _verified_antiword_text:
+            if _antiword_run_completed and not _verified_antiword_text:
                 try:
                     _converted_docx, _converter = (
                         _convert_legacy_doc_to_docx_bytes(file_bytes)

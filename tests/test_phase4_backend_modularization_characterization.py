@@ -2,6 +2,7 @@ import io
 import json
 import os
 from pathlib import Path
+import subprocess
 import tempfile
 import unittest
 import zipfile
@@ -1168,6 +1169,79 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
             "ANTIWORD_DEPENDENCY_UNAVAILABLE",
         )
         converter.assert_not_called()
+
+    def test_extract_text_never_uses_docx_converter_after_execution_time_trust_failure(self):
+        converter = mock.Mock()
+        headers = self._headers("legacy-doc-run-trust-failure")
+        with (
+            mock.patch.object(
+                app,
+                "_require_verified_antiword",
+                return_value="verified-before-run",
+            ),
+            mock.patch.object(
+                app,
+                "_run_verified_antiword",
+                side_effect=app.AntiwordDependencyError(
+                    "manifest-hash-mismatch"
+                ),
+            ),
+            mock.patch.object(
+                app,
+                "_convert_legacy_doc_to_docx_bytes",
+                converter,
+            ),
+        ):
+            response = self.client.post(
+                "/extract-text",
+                data={
+                    "file": (
+                        io.BytesIO(
+                            bytes.fromhex("d0cf11e0a1b11ae1")
+                            + (b"\0" * 2048)
+                        ),
+                        "runtime-changed-after-preflight.doc",
+                    )
+                },
+                headers=headers,
+                content_type="multipart/form-data",
+            )
+
+        payload = response.get_json()
+        self.assertEqual(response.status_code, 424)
+        self.assertEqual(payload["code"], "ANTIWORD_DEPENDENCY_UNAVAILABLE")
+        self.assertEqual(payload["action"], "run_installer")
+        converter.assert_not_called()
+
+    def test_converter_timeout_terminates_wrapper_and_recorded_native_process(self):
+        process = mock.Mock(pid=1234, returncode=None)
+        process.communicate.side_effect = subprocess.TimeoutExpired(
+            cmd=["converter"],
+            timeout=1,
+        )
+        with tempfile.TemporaryDirectory() as td:
+            process_id_path = Path(td) / "native-process-id.txt"
+            process_id_path.write_text("5678", encoding="ascii")
+            with (
+                mock.patch("subprocess.Popen", return_value=process),
+                mock.patch.object(
+                    app,
+                    "_converter_process_creation_options",
+                    return_value={},
+                ),
+                mock.patch.object(
+                    app,
+                    "_terminate_converter_process_tree",
+                ) as terminate,
+            ):
+                with self.assertRaises(subprocess.TimeoutExpired):
+                    app._run_converter_subprocess(
+                        ["converter"],
+                        timeout=1,
+                        extra_pid_path=str(process_id_path),
+                    )
+
+        terminate.assert_called_once_with(process, extra_pids=[5678])
 
     def test_legacy_doc_converter_prefers_word_and_validates_libreoffice_fallback(self):
         from docx import Document

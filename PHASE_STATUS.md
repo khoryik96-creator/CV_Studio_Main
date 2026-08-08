@@ -43,12 +43,14 @@
   master. It is not merged and has no pull request.
 - `/extract-text` still requires and runs the exact verified Antiword runtime
   first for every genuine legacy Word OLE payload. A missing, untrusted or
-  non-functional runtime retains the structured 424/install-repair contract.
+  non-functional runtime retains the structured 424/install-repair contract,
+  including when execution-time verification fails after preflight.
 - When verified Antiword rejects only the supplied document, CV Studio can now
   convert that document to a temporary macro-free DOCX through locally
   installed Microsoft Word on Windows, or LibreOffice where available. The
   resulting OOXML package is safety-validated and parsed through the existing
-  DOCX table/list path before it can satisfy extraction.
+  DOCX table/list path before it can satisfy extraction. Timed-out converters
+  terminate the wrapper process tree and the separately recorded Word process.
 - Genuine Windows testing used the owner-supplied Antiword-incompatible DOC:
   Microsoft Word conversion produced a valid DOCX and the real `/extract-text`
   route returned 19,247 characters with status 200. The private
@@ -59,10 +61,12 @@
 - The owner-marked Isaac comparison is now deterministic rather than
   provider-dependent: adjacent continuous Dec 2015-Mar 2021 Unilever roles and
   May 2008-Oct 2011 DKSH roles share one employer block, while the separate
-  Johor/earlier Unilever entries remain separate. Employer blocks are sorted
-  newest-first, so Jun 2014-Nov 2015 Nestle precedes Sep 2013-May 2014 Unilever.
+  Johor/earlier Unilever entries remain separate. Employer blocks and their
+  dated roles are sorted newest-first, so Jun 2014-Nov 2015 Nestle precedes
+  Sep 2013-May 2014 Unilever even if provider order is inconsistent.
 - Education month precision is restored from nearby source evidence only when
-  its years match the parsed entry (`06/2004-05/2008` becomes
+  both endpoint years match the parsed entry; a single graduation year is not
+  expanded (`06/2004-05/2008` becomes
   `Jun 2004 to May 2008`). Core Expertise arrays, newline lists and
   comma-separated strings normalize to real Word bullets.
 - The owner-supplied Faizal outputs exposed literal bare enumerators beside
