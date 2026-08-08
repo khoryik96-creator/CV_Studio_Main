@@ -54,6 +54,29 @@ class VersionSingleSourceTests(unittest.TestCase):
                         f"drifted from VERSION ({expected!r}).",
                     )
 
+    def test_no_unmanaged_current_version_literal_in_code_files(self):
+        # Every occurrence of the *current* version token in an anchored file must
+        # be covered by an anchor, or it silently drifts on the next bump (this is
+        # exactly how the build slug and several app.py literals slipped before).
+        # Historical mentions (e.g. "v24.6.106" in changelog comments) are a
+        # different string and are correctly not counted.
+        for rel, patterns in bump_version.ANCHORS.items():
+            data = (ROOT / rel).read_bytes()
+            for token, is_slug in ((self.dotted, False), (self.slug, True)):
+                total = len(re.findall(re.escape(token), data))
+                anchored = 0
+                for pattern in patterns:
+                    if (rb"_\d+_" in pattern) == is_slug:
+                        anchored += len(list(re.finditer(pattern, data)))
+                self.assertEqual(
+                    anchored,
+                    total,
+                    f"{rel}: {total - anchored} occurrence(s) of {token!r} are not "
+                    "covered by an anchor -- they will drift on the next bump. "
+                    "Either anchor them in bump_version.ANCHORS or make them "
+                    "reference the managed _CVSTUDIO_VERSION constant.",
+                )
+
     def test_install_receipt_and_display_version_agree(self):
         # The two app.py constants gate the boot-time receipt trap and the
         # /health-style surfaces respectively; both must equal VERSION.
