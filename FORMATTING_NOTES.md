@@ -10,8 +10,12 @@ DeepSeek for AI. Current version is tracked in the repo-root `VERSION` file.
 ## The pipeline (source doc → formatted DOCX)
 
 1. **`/extract-text`** (`app.py`) — pulls raw text from the upload: `pdfplumber`
-   for PDF, `antiword` for legacy `.doc`, OCR (`pytesseract` + poppler) fallback
-   for scanned / undecodable files.
+   for PDF and verified `antiword` first for legacy `.doc`. If the verified
+   runtime rejects only that document, an optional installed Microsoft Word
+   (Windows) or LibreOffice converter may create a temporary macro-free DOCX;
+   CV Studio validates it and reuses the normal DOCX table/list extractor. A
+   converter never bypasses a missing or untrusted Antiword runtime. OCR
+   (`pytesseract` + poppler) remains the scanned-file fallback.
 2. **`/parse`** (`parse_cv` in `app.py`) — an AI call (DeepSeek/Claude via
    `call_llm`, using `SYSTEM_PROMPT`) turns raw text into structured JSON:
    `{candidate, work_experiences[roles[bullets]], education, certifications,
@@ -45,6 +49,7 @@ this:
 | lone `• Key responsibilities` above its duties | a sub-heading emitted as a flat bullet | `_absorb_orphan_section_labels` |
 | `to 2001` for a graduation year | leading `- 2001` in a DOCX list | `_normalize_cv_date_range` (leading-dash strip) |
 | lone `-` / `--` bullets | marker-only residue | drop in `_normalize_cv_bullet_items` |
+| `No Degree` under a school | provider placeholder for a missing qualification | `_normalize_cv_data_for_output` clears only known empty-degree placeholders |
 
 ### Key files/functions (`cvstudio_cv_normalize.py`)
 

@@ -104,6 +104,19 @@ _TITLE_TOKEN_MAP = {
 }
 
 
+_CV_EMPTY_EDUCATION_DEGREE_RE = re.compile(
+    r"^(?:no\s+degree|degree\s+(?:not\s+)?(?:specified|stated)|"
+    r"not\s+(?:specified|stated)|n\s*/?\s*a|none|unknown)$",
+    re.I,
+)
+
+
+_CV_NO_DEGREE_PREFIX_RE = re.compile(
+    r"^no\s+degree\s*(?::|[-\u2013\u2014])\s*(.+?)\s*$",
+    re.I,
+)
+
+
 def _smart_word_case(token, *, company=False, title=False):
     if token is None:
         return ""
@@ -701,8 +714,16 @@ def _normalize_cv_data_for_output(parsed, source_text=""):
                 if role.get("title"):
                     role["title"] = _smart_title_text(role.get("title"), title=True)
     for edu in parsed.get("education") or []:
-        if isinstance(edu, dict) and edu.get("date_range"):
+        if not isinstance(edu, dict):
+            continue
+        if edu.get("date_range"):
             edu["date_range"] = _normalize_cv_date_range(edu.get("date_range"))
+        degree = str(edu.get("degree") or "").strip()
+        no_degree_prefix = _CV_NO_DEGREE_PREFIX_RE.fullmatch(degree)
+        if no_degree_prefix:
+            edu["degree"] = no_degree_prefix.group(1).strip()
+        elif _CV_EMPTY_EDUCATION_DEGREE_RE.fullmatch(degree):
+            edu["degree"] = ""
     return parsed
 
 

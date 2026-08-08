@@ -37,6 +37,27 @@
   focused review. Stop before release, merge, further extractions or unrelated
   work.
 
+## v24.6.276 legacy-DOC compatibility and education-placeholder candidate
+
+- Branch `chatgpt/v24.6.276-legacy-doc-fallback` starts from clean v24.6.275
+  master. It is not merged and has no pull request.
+- `/extract-text` still requires and runs the exact verified Antiword runtime
+  first for every genuine legacy Word OLE payload. A missing, untrusted or
+  non-functional runtime retains the structured 424/install-repair contract.
+- When verified Antiword rejects only the supplied document, CV Studio can now
+  convert that document to a temporary macro-free DOCX through locally
+  installed Microsoft Word on Windows, or LibreOffice where available. The
+  resulting OOXML package is safety-validated and parsed through the existing
+  DOCX table/list path before it can satisfy extraction.
+- Genuine Windows testing used the owner-supplied Antiword-incompatible DOC:
+  Microsoft Word conversion produced a valid DOCX and the real `/extract-text`
+  route returned 19,247 characters with status 200. The private
+  source document and converted output are not committed.
+- Education placeholders such as `No Degree`, `Not specified` and `N/A` are
+  omitted deterministically. Real qualification wording, including
+  `Non-Degree Certificate`, remains unchanged.
+- No route, guard, schema, JobAdder, Lead Finder or CV wording contract changes.
+
 ## Phase 7B-8 JobAdder typo-correction extraction
 
 - `cvstudio_ja_typos.py` is a new pure-helper module holding seven JobAdder

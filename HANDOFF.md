@@ -176,6 +176,15 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
+- **Legacy `.doc` conversion fallback — STAGED ON BRANCH, NOT MERGED.** Branch
+  `chatgpt/v24.6.276-legacy-doc-fallback` keeps verified Antiword mandatory and
+  first, then accepts a validated temporary DOCX conversion only after that
+  exact document is rejected. It prefers installed Microsoft Word on Windows
+  and otherwise uses LibreOffice when available. The resulting DOCX reuses the
+  existing table and nested-list extraction. The owner-supplied incompatible
+  DOC passed a genuine Windows `/extract-text` test through Microsoft Word.
+  The same branch removes `No Degree`/`Not specified`/`N/A` education
+  placeholders while protecting real `Non-Degree Certificate` wording.
 - **AI Crawler ".doc: flag, don't decode"**: skip decoding an undecodable legacy
   `.doc` while still surfacing the candidate. Deferred pending measurement of
   whether `.doc` decode vs. PDF OCR is the real bottleneck; a naive attempt

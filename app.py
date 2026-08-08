@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.275"
+_INSTALL_RECEIPT_VERSION = "v24.6.276"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -318,7 +318,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.275"
+_CVSTUDIO_VERSION = "v24.6.276"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -1193,6 +1193,7 @@ RULES:
 - For project-based CVs, preserve every explicit project/client heading instead of flattening all project bullets into one anonymous list. Put the role title first, then each project heading, then that project's bullets. Never place a project heading before the role title.
 - Represent each project group inside the relevant role as {"heading": "Project Name – Client", "bullets": ["project bullet", "project bullet"]}. Assign projects to the employment role covering the project start date; if a project spans several promotions or is ongoing across the full employer period, place it under the newest/current applicable role. Preserve the project wording and bullet content.
 - Within each role, order dated project groups chronologically from the role's earliest project to its latest project. Put broad ongoing/ad-hoc support or business-proposal groups last.
+- If an education entry has no stated degree or qualification, leave `degree` empty. Never output placeholder labels such as "No Degree", "Not specified", or "N/A". If the source states a non-degree qualification such as SPM, PMR, UPSR, a certificate, or a training programme, return the qualification name directly without a "No Degree:" prefix.
 - For a company with multiple roles, the top-level date_range MUST span from the earliest role start date to the latest role end date (e.g. if roles are "Sep 2024 to Nov 2025" and "Nov 2025 to Present", the company date_range is "Sep 2024 to Present"). The company date_range must never end before it starts.
 - SEPARATE STINTS AT THE SAME EMPLOYER: only group roles under one work-experience entry when they are ONE continuous, back-to-back tenure (a promotion path with adjoining dates). If the candidate worked at the same employer across DISTINCT, non-adjacent periods (a gap between them, or a later return), emit each period as its OWN separate work-experience entry in reverse-chronological position — do not merge them into a single entry. It is correct for the same company name to appear more than once in work_experiences.
 - candidate.email: extract the candidate's email address (look for patterns like name@domain.com anywhere in the CV, including in header lines mixed with phone/location/linkedin separated by | or spaces). Return exactly as written, or empty string if not found
@@ -3855,7 +3856,7 @@ def _ja_spa_browser_bridge(candidate_id, fields, note_text="", email="", salary_
     payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
     compact_payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     script = """(async () => {
-  const helperVersion = 'v24.6.275';
+  const helperVersion = 'v24.6.276';
   const candidateId = %s;
   const payload = %s;
   const profilePath = %s;
@@ -11776,6 +11777,220 @@ def _find_soffice_binary():
     return None
 
 
+def _legacy_doc_word_powershell_candidates():
+    """Return Windows PowerShell hosts that may match installed Word's bitness."""
+    if os.name != "nt":
+        return []
+    import shutil as _shutil
+
+    system_root = os.environ.get("SystemRoot") or r"C:\Windows"
+    candidates = [
+        os.path.join(
+            system_root,
+            "SysWOW64",
+            "WindowsPowerShell",
+            "v1.0",
+            "powershell.exe",
+        ),
+        os.path.join(
+            system_root,
+            "System32",
+            "WindowsPowerShell",
+            "v1.0",
+            "powershell.exe",
+        ),
+        _shutil.which("powershell.exe"),
+        _shutil.which("pwsh.exe"),
+    ]
+    found = []
+    seen = set()
+    for candidate in candidates:
+        if not candidate or not os.path.isfile(candidate):
+            continue
+        normalized = os.path.normcase(os.path.realpath(candidate))
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        found.append(candidate)
+    return found
+
+
+def _convert_legacy_doc_with_microsoft_word(file_bytes, *, timeout=45):
+    """Convert one legacy DOC to macro-free DOCX through installed Word.
+
+    Word is an optional local desktop dependency, not part of the protected
+    package. Both 32-bit and 64-bit PowerShell hosts are tried because COM
+    registration follows the installed Office bitness.
+    """
+    if os.name != "nt" or not file_bytes:
+        return b""
+    import subprocess as _subprocess
+    import tempfile as _tempfile
+
+    script = r'''param([string]$InputPath, [string]$OutputPath)
+$ErrorActionPreference = 'Stop'
+$word = $null
+$document = $null
+try {
+    $word = New-Object -ComObject Word.Application
+    $word.Visible = $false
+    $word.DisplayAlerts = 0
+    try { $word.AutomationSecurity = 3 } catch {}
+    $document = $word.Documents.Open($InputPath, $false, $true, $false)
+    $document.SaveAs2($OutputPath, 16)
+    if (-not (Test-Path -LiteralPath $OutputPath)) {
+        throw 'Word did not create the converted document.'
+    }
+}
+finally {
+    if ($null -ne $document) {
+        $document.Close(0)
+        [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($document)
+    }
+    if ($null -ne $word) {
+        $word.Quit()
+        [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($word)
+    }
+    [GC]::Collect()
+    [GC]::WaitForPendingFinalizers()
+}
+'''
+    deadline = time.monotonic() + max(1.0, float(timeout))
+    for powershell in _legacy_doc_word_powershell_candidates():
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        try:
+            with _tempfile.TemporaryDirectory(
+                prefix="cvstudio-legacy-doc-word-"
+            ) as td:
+                input_path = os.path.join(td, "input.doc")
+                output_path = os.path.join(td, "input.docx")
+                script_path = os.path.join(td, "convert.ps1")
+                with open(input_path, "wb") as handle:
+                    handle.write(file_bytes)
+                with open(script_path, "w", encoding="utf-8", newline="\n") as handle:
+                    handle.write(script)
+                creationflags = int(
+                    getattr(_subprocess, "CREATE_NO_WINDOW", 0) or 0
+                )
+                result = _subprocess.run(
+                    [
+                        powershell,
+                        "-NoLogo",
+                        "-NoProfile",
+                        "-NonInteractive",
+                        "-ExecutionPolicy",
+                        "Bypass",
+                        "-File",
+                        script_path,
+                        "-InputPath",
+                        input_path,
+                        "-OutputPath",
+                        output_path,
+                    ],
+                    stdin=_subprocess.DEVNULL,
+                    stdout=_subprocess.PIPE,
+                    stderr=_subprocess.PIPE,
+                    timeout=max(1.0, remaining),
+                    creationflags=creationflags,
+                )
+                if result.returncode == 0 and os.path.isfile(output_path):
+                    with open(output_path, "rb") as handle:
+                        return handle.read()
+        except Exception:
+            continue
+    return b""
+
+
+def _convert_legacy_doc_with_libreoffice(file_bytes, *, timeout=45):
+    """Convert one legacy DOC to DOCX through an optional LibreOffice install."""
+    if not file_bytes:
+        return b""
+    import pathlib as _pathlib
+    import subprocess as _subprocess
+    import tempfile as _tempfile
+
+    soffice = _find_soffice_binary()
+    if not soffice:
+        return b""
+    try:
+        with _tempfile.TemporaryDirectory(
+            prefix="cvstudio-legacy-doc-libreoffice-"
+        ) as td:
+            input_path = os.path.join(td, "input.doc")
+            output_path = os.path.join(td, "input.docx")
+            profile_path = _pathlib.Path(td, "profile")
+            profile_path.mkdir()
+            with open(input_path, "wb") as handle:
+                handle.write(file_bytes)
+            creationflags = int(
+                getattr(_subprocess, "CREATE_NO_WINDOW", 0) or 0
+            )
+            result = _subprocess.run(
+                [
+                    soffice,
+                    "--headless",
+                    "--nologo",
+                    "--nodefault",
+                    "--nolockcheck",
+                    "--nofirststartwizard",
+                    "-env:UserInstallation=" + profile_path.resolve().as_uri(),
+                    "--convert-to",
+                    "docx:Office Open XML Text",
+                    "--outdir",
+                    td,
+                    input_path,
+                ],
+                stdin=_subprocess.DEVNULL,
+                stdout=_subprocess.PIPE,
+                stderr=_subprocess.PIPE,
+                timeout=max(1.0, float(timeout)),
+                creationflags=creationflags,
+            )
+            if result.returncode == 0 and os.path.isfile(output_path):
+                with open(output_path, "rb") as handle:
+                    return handle.read()
+    except Exception:  # best-effort optional converter; caller retains the 424 path
+        pass
+    return b""
+
+
+def _convert_legacy_doc_to_docx_bytes(file_bytes):
+    """Return a validated temporary DOCX conversion and its converter label.
+
+    This helper is called only after the mandatory verified Antiword runtime
+    has run and rejected the exact document. Conversion cannot make a missing
+    or untrusted Antiword installation pass the legacy-DOC gate.
+    """
+    if not (
+        file_bytes
+        and file_bytes.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1")
+    ):
+        return b"", ""
+    converters = (
+        ("microsoft-word", _convert_legacy_doc_with_microsoft_word),
+        ("libreoffice", _convert_legacy_doc_with_libreoffice),
+    )
+    deadline = time.monotonic() + 35.0
+    for label, converter in converters:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        try:
+            converted = converter(file_bytes, timeout=remaining) or b""
+            if not converted.startswith(b"PK"):
+                continue
+            _validate_zip_payload(converted, "DOCX")
+            from docx import Document as _ConvertedDocument
+
+            _ConvertedDocument(io.BytesIO(converted))
+            return converted, label
+        except Exception:
+            continue
+    return b"", ""
+
+
 def _iter_antiword_binaries():
     """Yield only the exact hash- and function-verified managed runtime."""
     candidate = _verified_antiword_finder(
@@ -12125,6 +12340,7 @@ def extract_text():
 
         text = ""
         bullet_levels = []
+        legacy_doc_converter = ""
 
         if filename.endswith('.pdf'):
             import pdfplumber
@@ -12322,7 +12538,32 @@ def extract_text():
             except Exception:
                 pass
 
-            # Strategy 2: LibreOffice/soffice conversion to txt (if installed). Often the cleanest .doc path.
+            # Strategy 2: after the verified runtime has rejected this exact
+            # document, convert it to a validated macro-free DOCX. Microsoft
+            # Word is preferred on Windows for fidelity; LibreOffice is the
+            # cross-platform optional fallback. Neither converter may bypass a
+            # missing or untrusted Antiword runtime because the mandatory gate
+            # above runs first.
+            if not _verified_antiword_text:
+                try:
+                    _converted_docx, _converter = (
+                        _convert_legacy_doc_to_docx_bytes(file_bytes)
+                    )
+                    if _converted_docx:
+                        _converted_text = _extract_docx_text_preserve_tables(
+                            _converted_docx
+                        )
+                        if _looks_like_good_doc_text(_converted_text):
+                            text = _converted_text
+                            legacy_doc_converter = _converter
+                            bullet_levels = _extract_docx_bullet_levels(
+                                _converted_docx
+                            )
+                except Exception:  # best-effort converter; diagnostic probes remain available
+                    pass
+
+            # Strategy 3: LibreOffice/soffice conversion to txt (if installed).
+            # This remains a diagnostic-only probe when DOCX conversion failed.
             if not text:
                 try:
                     import subprocess as _sp_lo, tempfile as _tmp_lo, os as _os_lo, shutil as _sh_lo
@@ -12438,7 +12679,7 @@ def extract_text():
                     break
                 return _clean_piece_text(''.join(_out))
 
-            # Strategy 3: native OLE/WordDocument piece-table extraction.
+            # Strategy 4: native OLE/WordDocument piece-table extraction.
             # This is a defense-in-depth probe and cannot satisfy success.
             if not text:
                 try:
@@ -12448,7 +12689,7 @@ def extract_text():
                 except Exception:
                     pass
 
-            # Strategy 4: last-resort raw scans, but only accept them if they look like real text.
+            # Strategy 5: last-resort raw scans, but only accept them if they look like real text.
             if not text:
                 try:
                     _raw_try = _clean_legacy_doc_text(file_bytes.decode('utf-16-le', errors='ignore'))
@@ -12457,7 +12698,7 @@ def extract_text():
                 except Exception:
                     pass
 
-            # Strategy 5: python-docx (works only if .doc is actually .docx renamed)
+            # Strategy 6: python-docx (works only if .doc is actually .docx renamed)
             if not text:
                 try:
                     from docx import Document as _Doc
@@ -12467,7 +12708,7 @@ def extract_text():
                         text = _docx_renamed_text
                 except Exception:
                     pass
-            if not _verified_antiword_text:
+            if not (_verified_antiword_text or legacy_doc_converter):
                 raise AntiwordDependencyError(
                     "document-extraction-failed",
                     "Verified Antiword could not decode this legacy .doc. "
@@ -12538,7 +12779,14 @@ def extract_text():
 
         # Clean PDF/font/OCR artefacts without deleting ligature fragments.
         text = _normalize_extracted_text_artifacts(text)
-        return jsonify({"ok": True, "text": text, "bullet_levels": bullet_levels})
+        response_payload = {
+            "ok": True,
+            "text": text,
+            "bullet_levels": bullet_levels,
+        }
+        if legacy_doc_converter:
+            response_payload["legacy_doc_converter"] = legacy_doc_converter
+        return jsonify(response_payload)
 
     except AntiwordDependencyError as e:
         return _antiword_dependency_response(e)

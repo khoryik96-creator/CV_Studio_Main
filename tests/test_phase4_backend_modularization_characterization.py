@@ -1072,6 +1072,154 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
             with self.assertRaises(app.AntiwordDependencyError):
                 app._spider_extract_legacy_doc_text_for_preview(fixture)
 
+    def test_extract_text_accepts_validated_docx_conversion_after_document_specific_antiword_failure(self):
+        from docx import Document
+
+        converted = io.BytesIO()
+        document = Document()
+        document.add_paragraph("Sample Candidate")
+        document.add_paragraph("Experience")
+        document.add_paragraph(
+            "Head of Information Technology with extensive infrastructure, "
+            "cloud, security, project and vendor management experience."
+        )
+        document.add_paragraph("Education")
+        document.add_paragraph("Bachelor Degree in Computer Science")
+        document.save(converted)
+
+        antiword_result = mock.Mock(returncode=1, stdout=b"")
+        converter = mock.Mock(
+            return_value=(converted.getvalue(), "microsoft-word")
+        )
+        headers = self._headers("legacy-doc-conversion-fallback")
+        with (
+            mock.patch.object(
+                app,
+                "_require_verified_antiword",
+                return_value="verified-antiword",
+            ),
+            mock.patch.object(
+                app,
+                "_run_verified_antiword",
+                return_value=antiword_result,
+            ),
+            mock.patch.object(
+                app,
+                "_convert_legacy_doc_to_docx_bytes",
+                converter,
+            ),
+        ):
+            response = self.client.post(
+                "/extract-text",
+                data={
+                    "file": (
+                        io.BytesIO(
+                            bytes.fromhex("d0cf11e0a1b11ae1")
+                            + (b"\0" * 2048)
+                        ),
+                        "compatible-but-unsupported.doc",
+                    )
+                },
+                headers=headers,
+                content_type="multipart/form-data",
+            )
+
+        payload = response.get_json()
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(payload["ok"])
+        self.assertIn("Head of Information Technology", payload["text"])
+        self.assertIn("Bachelor Degree in Computer Science", payload["text"])
+        self.assertEqual(payload["legacy_doc_converter"], "microsoft-word")
+        converter.assert_called_once()
+
+    def test_extract_text_never_uses_docx_converter_to_bypass_unavailable_antiword(self):
+        converter = mock.Mock()
+        headers = self._headers("legacy-doc-converter-does-not-bypass-gate")
+        with (
+            mock.patch.object(
+                app,
+                "_require_verified_antiword",
+                side_effect=app.AntiwordDependencyError("runtime-missing"),
+            ),
+            mock.patch.object(
+                app,
+                "_convert_legacy_doc_to_docx_bytes",
+                converter,
+            ),
+        ):
+            response = self.client.post(
+                "/extract-text",
+                data={
+                    "file": (
+                        io.BytesIO(
+                            bytes.fromhex("d0cf11e0a1b11ae1")
+                            + (b"\0" * 2048)
+                        ),
+                        "untrusted-runtime.doc",
+                    )
+                },
+                headers=headers,
+                content_type="multipart/form-data",
+            )
+
+        self.assertEqual(response.status_code, 424)
+        self.assertEqual(
+            response.get_json()["code"],
+            "ANTIWORD_DEPENDENCY_UNAVAILABLE",
+        )
+        converter.assert_not_called()
+
+    def test_legacy_doc_converter_prefers_word_and_validates_libreoffice_fallback(self):
+        from docx import Document
+
+        converted = io.BytesIO()
+        document = Document()
+        document.add_paragraph("Experience and education conversion fixture")
+        document.save(converted)
+        valid_docx = converted.getvalue()
+        legacy_doc = bytes.fromhex("d0cf11e0a1b11ae1") + (b"\0" * 2048)
+
+        word = mock.Mock(return_value=valid_docx)
+        libreoffice = mock.Mock(return_value=valid_docx)
+        with (
+            mock.patch.object(
+                app,
+                "_convert_legacy_doc_with_microsoft_word",
+                word,
+            ),
+            mock.patch.object(
+                app,
+                "_convert_legacy_doc_with_libreoffice",
+                libreoffice,
+            ),
+        ):
+            payload, label = app._convert_legacy_doc_to_docx_bytes(legacy_doc)
+        self.assertEqual(payload, valid_docx)
+        self.assertEqual(label, "microsoft-word")
+        word.assert_called_once_with(legacy_doc, timeout=mock.ANY)
+        libreoffice.assert_not_called()
+
+        word.reset_mock()
+        libreoffice.reset_mock()
+        word.return_value = b"not a DOCX package"
+        with (
+            mock.patch.object(
+                app,
+                "_convert_legacy_doc_with_microsoft_word",
+                word,
+            ),
+            mock.patch.object(
+                app,
+                "_convert_legacy_doc_with_libreoffice",
+                libreoffice,
+            ),
+        ):
+            payload, label = app._convert_legacy_doc_to_docx_bytes(legacy_doc)
+        self.assertEqual(payload, valid_docx)
+        self.assertEqual(label, "libreoffice")
+        word.assert_called_once_with(legacy_doc, timeout=mock.ANY)
+        libreoffice.assert_called_once_with(legacy_doc, timeout=mock.ANY)
+
     def test_jobadder_resume_caches_use_downloaded_content_identity(self):
         fixture = (
             Path(__file__).resolve().parents[1]

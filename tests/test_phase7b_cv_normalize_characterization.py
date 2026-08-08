@@ -305,6 +305,49 @@ class BulletAndStructuredContentTests(unittest.TestCase):
         self.assertIsInstance(out, dict)
 
 
+class EducationPlaceholderTests(unittest.TestCase):
+    def test_no_degree_placeholders_are_omitted_without_touching_real_qualifications(self):
+        parsed = {
+            "education": [
+                {"institution": "School A", "degree": "No Degree"},
+                {"institution": "School B", "degree": "Degree not specified"},
+                {"institution": "School C", "degree": "N/A"},
+                {"institution": "School C2", "degree": "No Degree: SPM"},
+                {
+                    "institution": "School C3",
+                    "degree": "No Degree: Computer System Operation And Management",
+                },
+                {
+                    "institution": "School D",
+                    "degree": "Non-Degree Certificate in Leadership",
+                },
+                {
+                    "institution": "University E",
+                    "degree": "Bachelor of Computer Science",
+                },
+            ]
+        }
+
+        normalized = cn._normalize_cv_data_for_output(parsed)
+
+        self.assertEqual(normalized["education"][0]["degree"], "")
+        self.assertEqual(normalized["education"][1]["degree"], "")
+        self.assertEqual(normalized["education"][2]["degree"], "")
+        self.assertEqual(normalized["education"][3]["degree"], "SPM")
+        self.assertEqual(
+            normalized["education"][4]["degree"],
+            "Computer System Operation And Management",
+        )
+        self.assertEqual(
+            normalized["education"][5]["degree"],
+            "Non-Degree Certificate in Leadership",
+        )
+        self.assertEqual(
+            normalized["education"][6]["degree"],
+            "Bachelor of Computer Science",
+        )
+
+
 class ModuleHygieneTests(unittest.TestCase):
     def test_module_does_not_import_app(self):
         import sys
