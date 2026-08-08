@@ -246,24 +246,33 @@ class BulletAndStructuredContentTests(unittest.TestCase):
     def test_leading_outline_labels_are_stripped(self):
         # Manual outline labels (kept or dropped inconsistently by the parser)
         # are removed so output is deterministic; nesting is conveyed by indent.
+        # Covers the full range of styles: a. a.) 1. 1.) (a) (vi) b) i. 1- a- -1 -2 -a.
         cases = {
             "a. Manchester united": "Manchester united",
+            "a.) Manchester united": "Manchester united",
+            "1. Increased sales": "Increased sales",
+            "1.) Increased sales": "Increased sales",
             "(b) Physical Server": "Physical Server",
             "(vi)ensure closing calls": "ensure closing calls",  # glued paren
+            "b) Second item": "Second item",
+            "iii. Third item": "Third item",
             "1- Responsible for X": "Responsible for X",
             "a- Administrating things": "Administrating things",
-            "i. Wonderful world": "Wonderful world",
-            "2. Increased sales": "Increased sales",
+            "-1 First numbered item": "First numbered item",
+            "-2 Second numbered item": "Second numbered item",
+            "-a Lettered item": "Lettered item",
         }
         for raw, expected in cases.items():
             self.assertEqual(cn._strip_leading_bullet_marker(raw), expected)
 
     def test_leading_marker_strip_preserves_real_content(self):
-        # A marker must be followed by whitespace (except the unambiguous
-        # parenthesized enumerator), so code/math/abbreviation prose is untouched.
+        # An enumerator needs a trailing space (except the unambiguous "(x)"
+        # form), and a bare word after a dash is not an enumerator, so code /
+        # math / abbreviation / hyphenated prose is untouched.
         for text in [
-            "*args and kwargs", "**bold text**", "5 * 3 = 15", "-5 degrees C",
+            "*args and kwargs", "**bold text**", "5 * 3 = 15",
             "No. 5 priority", "e.g. do the thing", "C-3PO droid", "24/7 support",
+            "e-1 form field", "AI/ML adoption", "-managed vendors",
         ]:
             self.assertEqual(cn._strip_leading_bullet_marker(text), text)
 

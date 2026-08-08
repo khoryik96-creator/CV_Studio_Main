@@ -76,16 +76,17 @@ assert.deepStrictEqual(
   ]))),
   ['Maintaining all server in the office such', 'Mail Server', 'Networking']
 );
-// A marker must be followed by whitespace, so code/math-like prose is untouched.
-['*args', '**bold**', '5 * 3', 'No. 5 priority', 'e.g. do it', '24/7 support'].forEach(t => assert.deepStrictEqual(
+// Enumerators need a trailing space (bar the "(x)" form) and a bare word after
+// a dash is not one, so code/math/abbreviation/hyphenated prose is untouched.
+['*args', '**bold**', '5 * 3', 'No. 5 priority', 'e.g. do it', '24/7 support', 'e-1 form', 'AI/ML', '-managed vendors'].forEach(t => assert.deepStrictEqual(
   JSON.parse(JSON.stringify(context.cvNormalizeBulletItems([t]))), [t]
 ));
-// Manual outline labels (a., (b), (vi) glued, 1-, i.) are stripped deterministically.
+// Every outline-label style is stripped deterministically: a. a.) 1.) (b) (vi) b) i. 1- -1 -a.
 assert.deepStrictEqual(
   JSON.parse(JSON.stringify(context.cvNormalizeBulletItems([
-    'a. Manchester united', '(b) Physical Server', '(vi)ensure closing calls', '1- Responsible', 'i. Wonderful world',
+    'a. One', 'a.) Two', '1.) Three', '(b) Four', '(vi)Five', 'b) Six', 'i. Seven', '1- Eight', '-1 Nine', '-a Ten',
   ]))),
-  ['Manchester united', 'Physical Server', 'ensure closing calls', 'Responsible', 'Wonderful world']
+  ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten']
 );
 [
   'Advisor (assumed from duties)',
