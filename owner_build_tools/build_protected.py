@@ -525,7 +525,13 @@ def compile_native(root: Path, work: Path, target: str, source_entry: Path | Non
          # package data unless told, so the protected build must bundle them or
          # the module fails at runtime (missing seed data -> ensure_data_dir
          # FileNotFoundError; missing templates -> render_template error).
-         "--include-package=salary_comparison","--include-package-data=salary_comparison"]
+         "--include-package=salary_comparison","--include-package-data=salary_comparison",
+         # Waitress is imported lazily inside app._run_cvstudio_server() (so the
+         # dev-server fallback still works if it is absent). Nuitka does not
+         # follow that conditional import, so force it in -- otherwise the frozen
+         # build ships without Waitress and silently serves on the Werkzeug dev
+         # server instead of the intended production server.
+         "--include-package=waitress"]
     if target=="windows-x64":
         cmd += ["--windows-console-mode=disable","--windows-icon-from-ico="+str(root/"cv_studio.ico")]
         # Imports are present in app.py and followed by Nuitka. Keep explicit
