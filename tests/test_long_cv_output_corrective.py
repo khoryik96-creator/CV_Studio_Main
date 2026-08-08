@@ -240,6 +240,108 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertNotIn("E D U C A T I O N S  &amp;  T R A I N I N G", document_xml)
         self.assertNotIn("<w:t>Example Sdn Bhd</w:t></w:r></w:p></w:tc>\n    <w:tc", document_xml)
 
+    def test_bullet_match_key_strips_markers_and_outline_labels(self):
+        # Must stay in lockstep with generate.js bulletMatchKey.
+        self.assertEqual(app._cv_bullet_match_key("* Mail Server"), "mail server")
+        self.assertEqual(app._cv_bullet_match_key("(a) Physical Server"), "physical server")
+        self.assertEqual(app._cv_bullet_match_key("1- VMware"), "vmware")
+        self.assertEqual(app._cv_bullet_match_key("iii. Wonderful world"), "wonderful world")
+        self.assertEqual(app._cv_bullet_match_key("Manchester United"), "manchester united")
+        # Idempotent on an already-normalized key.
+        self.assertEqual(app._cv_bullet_match_key("manchester united"), "manchester united")
+
+    def test_extract_docx_bullet_levels_reads_nesting(self):
+        import docx
+        from docx.oxml import OxmlElement
+        from docx.oxml.ns import qn
+
+        doc = docx.Document()
+
+        def add_bullet(text, level):
+            paragraph = doc.add_paragraph(text)
+            pPr = paragraph._p.get_or_add_pPr()
+            numPr = OxmlElement("w:numPr")
+            ilvl = OxmlElement("w:ilvl")
+            ilvl.set(qn("w:val"), str(level))
+            num_id = OxmlElement("w:numId")
+            num_id.set(qn("w:val"), "1")
+            numPr.append(ilvl)
+            numPr.append(num_id)
+            pPr.append(numPr)
+
+        add_bullet("Operating System", 0)
+        add_bullet("Manchester united", 1)
+        add_bullet("Wonderful world", 2)
+        doc.add_paragraph("Not a list item")
+
+        buffer = io.BytesIO()
+        doc.save(buffer)
+        levels = app._extract_docx_bullet_levels(buffer.getvalue())
+        # Only nesting (level >= 1) is recorded; text is stored as a match key.
+        self.assertEqual(levels, [
+            {"text": "manchester united", "level": 1},
+            {"text": "wonderful world", "level": 2},
+        ])
+
+    def _ilvl_by_text(self, document_xml, target):
+        for paragraph in re.findall(r"<w:p\b.*?</w:p>", document_xml, re.S):
+            text = "".join(re.findall(r"<w:t[^>]*>(.*?)</w:t>", paragraph))
+            if target in text:
+                match = re.search(r'<w:ilvl w:val="(\d+)"', paragraph)
+                return match.group(1) if match else None
+        return "MISSING"
+
+    def test_nested_bullet_levels_restored_in_generated_docx(self):
+        data = {
+            "candidate": {"name": "Test Candidate"},
+            "work_experiences": [{
+                "company": "Acme",
+                "date_range": "2020 to 2021",
+                "roles": [{"title": "Engineer", "bullets": [
+                    "Operating systems overview",
+                    "Manchester united",
+                    "Wonderful world",
+                ]}],
+            }],
+        }
+        levels = [
+            {"text": "manchester united", "level": 1},
+            {"text": "wonderful world", "level": 2},
+        ]
+        response = app.app.test_client().post(
+            "/generate-docx",
+            json={"data": data, "bullet_levels": levels},
+            headers={"Origin": "http://127.0.0.1:5000"},
+        )
+        self.assertEqual(response.status_code, 200)
+        with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
+            document_xml = archive.read("word/document.xml").decode("utf-8")
+        # Matched nested bullets step to their source level; the rest stay at 0.
+        self.assertEqual(self._ilvl_by_text(document_xml, "Manchester united"), "1")
+        self.assertEqual(self._ilvl_by_text(document_xml, "Wonderful world"), "2")
+        self.assertEqual(self._ilvl_by_text(document_xml, "Operating systems overview"), "0")
+
+    def test_missing_bullet_levels_keeps_flat_output(self):
+        # No map -> every bullet stays at level 0 (byte-compatible with before).
+        data = {
+            "candidate": {"name": "Test Candidate"},
+            "work_experiences": [{
+                "company": "Acme",
+                "date_range": "2020 to 2021",
+                "roles": [{"title": "Engineer", "bullets": ["Did a thing", "Did another thing"]}],
+            }],
+        }
+        response = app.app.test_client().post(
+            "/generate-docx",
+            json={"data": data},
+            headers={"Origin": "http://127.0.0.1:5000"},
+        )
+        self.assertEqual(response.status_code, 200)
+        with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
+            document_xml = archive.read("word/document.xml").decode("utf-8")
+        self.assertEqual(self._ilvl_by_text(document_xml, "Did a thing"), "0")
+        self.assertEqual(self._ilvl_by_text(document_xml, "Did another thing"), "0")
+
     def test_prompt_forbids_inferred_titles_and_serialized_groups(self):
         self.assertIn("Never invent, infer, imply, annotate, or explain a title", app.SYSTEM_PROMPT)
         self.assertIn("never as JSON serialized inside a string", app.SYSTEM_PROMPT)

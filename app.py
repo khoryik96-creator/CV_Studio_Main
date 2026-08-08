@@ -11286,6 +11286,13 @@ def generate_docx():
         cv_data = _normalize_cv_structured_content(cv_data)
         cv_data = _normalize_cv_data_for_output(cv_data)
         cv_data["_document_alignment"] = _normalize_cv_text_alignment(body.get("alignment"))
+        # Nested-list indent map (from extraction) so the renderer can restore
+        # multi-level bullets deterministically. Accepted as a sibling field or
+        # embedded in data; unmatched bullets stay at level 0.
+        _levels = body.get("bullet_levels")
+        if not isinstance(_levels, list):
+            _levels = cv_data.get("_bullet_levels")
+        cv_data["_bullet_levels"] = _levels if isinstance(_levels, list) else []
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(cv_data, f)
@@ -11332,6 +11339,70 @@ def generate_docx():
                 pass
             except Exception:
                 pass
+
+
+_BULLET_MATCH_STRIP_RE = re.compile(
+    r"^(?:[•●▪◦‣⁃∙·‧*‐‑‒–—―-]|\(?[0-9a-z]{1,4}[.)\-])\s+",
+    re.I,
+)
+
+
+def _cv_bullet_match_key(text):
+    """Normalize a bullet for source<->parsed matching, mirrored in generate.js.
+
+    Strips a leading list glyph or manual outline label ("(a)", "1-", "iii.")
+    and lowercases, so a parsed bullet can be matched back to its source
+    paragraph regardless of the marker the author typed. Used only for matching,
+    never for display.
+    """
+    value = re.sub(r"\s+", " ", str(text or "")).strip()
+    while True:
+        stripped = _BULLET_MATCH_STRIP_RE.sub("", value).strip()
+        if stripped == value:
+            break
+        value = stripped
+    return value.lower()
+
+
+def _extract_docx_bullet_levels(file_bytes):
+    """Map nested (w:ilvl >= 1) list paragraphs to their indent level.
+
+    Word stores list nesting in w:numPr/w:ilvl, which the plain-text extraction
+    discards -- so a "double/triple bullet indent" in the source collapses to a
+    single level in the output. This side-channel lets the renderer restore the
+    indent deterministically (no AI involved) by matching parsed bullet text
+    back to its source level. Only levels >= 1 are recorded; every unmatched
+    bullet renders at level 0 exactly as before, so non-nested CVs are unchanged.
+    """
+    import io as _io
+    import docx as _docx
+    from docx.oxml.ns import qn
+    out = []
+    seen = set()
+    try:
+        doc = _docx.Document(_io.BytesIO(file_bytes))
+    except Exception:
+        return out
+    for p in doc.element.body.iter(qn("w:p")):
+        ilvl_vals = p.xpath("./w:pPr/w:numPr/w:ilvl/@w:val")
+        if not ilvl_vals:
+            continue
+        try:
+            level = int(ilvl_vals[0])
+        except (TypeError, ValueError):
+            continue
+        if level < 1:
+            continue
+        text = "".join(node.text or "" for node in p.iter(qn("w:t"))).strip()
+        key = _cv_bullet_match_key(text)
+        if not key:
+            continue
+        dedup = (key, level)
+        if dedup in seen:
+            continue
+        seen.add(dedup)
+        out.append({"text": key, "level": level})
+    return out
 
 
 def _extract_docx_text_preserve_tables(file_bytes):
@@ -11872,6 +11943,7 @@ def extract_text():
             filename = "verified-upload.docx"
 
         text = ""
+        bullet_levels = []
 
         if filename.endswith('.pdf'):
             import pdfplumber
@@ -11998,6 +12070,11 @@ def extract_text():
                         paragraphs.append(row_text)
 
             text = "\n".join(paragraphs)
+            # Side-channel: capture nested-list indent levels the plain text drops.
+            try:
+                bullet_levels = _extract_docx_bullet_levels(file_bytes)
+            except Exception:
+                bullet_levels = []
 
         elif filename.endswith('.doc'):
             # Legacy .doc — try multiple strategies. Important: python-docx only reads .docx, not genuine OLE .doc.
@@ -12275,7 +12352,7 @@ def extract_text():
 
         # Clean PDF/font/OCR artefacts without deleting ligature fragments.
         text = _normalize_extracted_text_artifacts(text)
-        return jsonify({"ok": True, "text": text})
+        return jsonify({"ok": True, "text": text, "bullet_levels": bullet_levels})
 
     except AntiwordDependencyError as e:
         return _antiword_dependency_response(e)

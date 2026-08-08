@@ -14,6 +14,30 @@ const DOCUMENT_ALIGNMENT = String(cv._document_alignment || 'left').toLowerCase(
 const LEFT_ALIGNMENT_XML = '<w:jc w:val="left"/>';
 const BODY_ALIGNMENT_XML = `<w:jc w:val="${DOCUMENT_ALIGNMENT}"/>`;
 
+// ── Nested-list indent recovery ───────────────────────────────────────────────
+// The plain-text extraction drops Word's w:ilvl, so multi-level bullets collapse
+// to one level. The extraction side-channel (cv._bullet_levels) maps a nested
+// source bullet's normalized text to its indent level; here we match each parsed
+// bullet back to that level. Unmatched bullets stay at level 0 (unchanged).
+// bulletMatchKey MUST mirror app.py _cv_bullet_match_key exactly.
+const BULLET_MATCH_STRIP_RE = /^(?:[•●▪◦‣⁃∙·‧*‐‑‒–—―-]|\(?[0-9a-z]{1,4}[.)\-])\s+/i;
+function bulletMatchKey(text) {
+  let s = String(text == null ? '' : text).replace(/\s+/g, ' ').trim();
+  for (;;) {
+    const stripped = s.replace(BULLET_MATCH_STRIP_RE, '').trim();
+    if (stripped === s) break;
+    s = stripped;
+  }
+  return s.toLowerCase();
+}
+const BULLET_LEVEL_MAP = new Map();
+(Array.isArray(cv._bullet_levels) ? cv._bullet_levels : []).forEach((e) => {
+  if (e && e.text != null) BULLET_LEVEL_MAP.set(String(e.text), Math.min(Math.max(Number(e.level) || 0, 0), 8));
+});
+function bulletLevelFor(text) {
+  return BULLET_LEVEL_MAP.get(bulletMatchKey(text)) || 0;
+}
+
 const TEMPLATE = path.join(__dirname, 'template.docx');
 if (!fs.existsSync(TEMPLATE)) {
   console.error('template.docx not found');
@@ -310,7 +334,13 @@ function bulletPara(text, alignmentXml = BODY_ALIGNMENT_XML) {
       children += run(p, { color: '000000', size: 24 });
     }
   }
-  const pPr = `<w:pStyle w:val="ListParagraph"/><w:keepLines/><w:numPr><w:ilvl w:val="0"/><w:numId w:val="47"/></w:numPr><w:ind w:left="720" w:hanging="360"/><w:spacing w:before="0" w:after="0"/>${alignmentXml}`;
+  // Restore nested-list indent: match this bullet back to its source level.
+  // Level 0 keeps the exact prior pPr (left=720), so non-nested output is
+  // byte-identical; deeper levels step the indent to match the template's
+  // numbering (left = 720 * (level + 1)).
+  const level = bulletLevelFor(t);
+  const leftIndent = 720 * (level + 1);
+  const pPr = `<w:pStyle w:val="ListParagraph"/><w:keepLines/><w:numPr><w:ilvl w:val="${level}"/><w:numId w:val="47"/></w:numPr><w:ind w:left="${leftIndent}" w:hanging="360"/><w:spacing w:before="0" w:after="0"/>${alignmentXml}`;
   return para(children, pPr);
 }
 

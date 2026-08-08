@@ -13083,7 +13083,7 @@ async function startFormat(blind) {
       if (_fake3 < 92) { _fake3 += (92 - _fake3) * 0.05; document.getElementById('progressFill').style.width = _fake3 + '%'; }
     }, 200);
 
-    var res2 = await fetchWithTimeout('/generate-docx', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({data: _parsedData, alignment: getCvTextAlignment()}) }, 60000);
+    var res2 = await fetchWithTimeout('/generate-docx', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({data: _parsedData, alignment: getCvTextAlignment(), bullet_levels: _extractedBulletLevels}) }, 60000);
     if (!res2.ok) {
       var errText2 = await res2.text();
       var errObj; try { errObj = JSON.parse(errText2); } catch(e2) { throw new Error(errText2.slice(0,400)); }
@@ -13451,6 +13451,7 @@ function clearInput() {
   document.getElementById('charCount').textContent = '0 characters';
   // Clear uploaded file
   _extractedText = '';
+  _extractedBulletLevels = null;
   _parsedData = null;
   _cname = '';
   window._docxBlob = null;
@@ -19163,6 +19164,9 @@ window.addEventListener('load', async function() {
 // ── Input tab switching ───────────────────────────────────────────────────────
 var _activeInputTab = 'paste';
 var _extractedText = '';
+// Nested-list indent map from the last /extract-text (docx only); passed to
+// /generate-docx so multi-level bullets keep their indent. Null when none.
+var _extractedBulletLevels = null;
 
 function switchInputTab(tab) {
   _activeInputTab = tab;
@@ -19210,6 +19214,7 @@ function handleFileSelect(file) {
   document.getElementById('extracting').style.display = 'flex';
   document.getElementById('fileCharCount').style.display = 'none';
   _extractedText = '';
+  _extractedBulletLevels = null;
 
   // Upload to server for text extraction
   var _tabRun = markTabRunning('format');
@@ -19228,6 +19233,7 @@ function handleFileSelect(file) {
         return;
       }
       _extractedText = data.text;
+      _extractedBulletLevels = Array.isArray(data.bullet_levels) ? data.bullet_levels : null;
       dz.classList.add('has-file');
       document.getElementById('dzFileName').textContent = '✓ ' + file.name + ' (' + data.text.length.toLocaleString() + ' chars extracted)';
       document.getElementById('dzClear').style.display = 'block';
@@ -19249,6 +19255,7 @@ function clearFile(e) {
   e.stopPropagation();
   clearTabRunState('format');
   _extractedText = '';
+  _extractedBulletLevels = null;
   var dz = document.getElementById('dropZone');
   dz.classList.remove('has-file', 'error');
   document.getElementById('dzFileName').textContent = '';
