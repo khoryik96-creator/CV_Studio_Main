@@ -1643,6 +1643,10 @@ from cvstudio_cv_reconcile import (
     _score_authoritative_row_match,
     _reconcile_work_experience_with_authoritative_table,
 )
+from cvstudio_cv_fidelity import (
+    evaluate_cv_fidelity,
+    summarize_fidelity_warning,
+)
 
 
 
@@ -9174,6 +9178,16 @@ def parse_cv():
         parsed = _normalize_cv_data_for_output(parsed, cv_text)
         out = {"ok": True, "data": parsed, "usage": usage, "model": model, "provider": llm_provider}
         out.update(_llm_response_cost_fields(model, usage, llm_provider))
+        # ── Fidelity audit — observational, never mutates `parsed`. Attaches a
+        # report always; only escalates to the degraded/warning fields when the
+        # parse was not already flagged as truncated (so a truncation warning is
+        # never overwritten by a fidelity one). ──
+        fidelity = evaluate_cv_fidelity(parsed, cv_text)
+        out["fidelity"] = fidelity
+        if not fidelity.get("ok") and not parse_degraded:
+            out["degraded"] = True
+            out["degraded_reason"] = "fidelity_check"
+            out["warning"] = summarize_fidelity_warning(fidelity)
         # The parse still succeeded and the full repaired CV is returned; this
         # only tells the caller the AI response was truncated and salvaged, so
         # some later roles or bullet points may be missing and should be checked.
