@@ -177,7 +177,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 ## 8. Open / deferred work
 
 - **Legacy `.doc` conversion fallback — STAGED ON BRANCH, NOT MERGED.** Branch
-  `chatgpt/v24.6.276-legacy-doc-fallback` is stamped v24.6.279, keeps verified
+  `chatgpt/v24.6.276-legacy-doc-fallback` is stamped v24.6.280, keeps verified
   Antiword mandatory and first, then accepts a validated temporary DOCX
   conversion only after that exact document is rejected. It prefers installed
   Microsoft Word on Windows and otherwise uses LibreOffice when available. The
@@ -205,6 +205,11 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   source-free export boundary, accepts sentence punctuation after grounded
   source URLs, removes inline retrieval metadata after an item separator, and
   renders recovered multi-item sections as bullets in both preview and Word.
+  The CV Summary tab also has an explicit **Format Resume** action: it carries
+  the already-generated, source-bound summary bullets into the normal Format CV
+  parse and renders them in preview/DOCX with inline bold preserved. Editing the
+  raw CV invalidates the handoff, no extra summary call is made, and Blind CV
+  remains unchanged.
 - **AI Crawler ".doc: flag, don't decode"**: skip decoding an undecodable legacy
   `.doc` while still surfacing the candidate. Deferred pending measurement of
   whether `.doc` decode vs. PDF OCR is the real bottleneck; a naive attempt

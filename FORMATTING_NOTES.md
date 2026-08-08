@@ -37,6 +37,21 @@ DeepSeek for AI. Current version is tracked in the repo-root `VERSION` file.
    `adm-zip`) which fills `template.docx`. `generate.js`'s `smartTokenCase` does
    company/title casing.
 
+### Standalone CV Summary to formatted resume
+
+The CV Summary tab can hand its already-generated bullets directly to a normal
+Format CV run. The browser keeps the raw CV as the structural source of truth,
+runs the existing `/parse` flow once, and then adds the exact generated bullets
+as `summary_bullets` before preview and `/generate-docx`. This does **not** make
+a second summary-generation call.
+
+The handoff is intentionally source-bound: editing or clearing the raw CV
+unlinks the bullets, and a summary generated for different text cannot be
+applied. `summary_bullets` remain empty in `SYSTEM_PROMPT`; they are populated
+only by this explicit user action. Blind CV does not apply the linked unblinded
+summary. `generate.js` renders the linked bullets in a dedicated Summary section
+and preserves the standalone module's `**inline bold**` emphasis.
+
 ## The one root-cause pattern behind almost every formatting bug
 
 **Source documents (especially DOCX / plain text) bake a list marker or label
@@ -122,8 +137,10 @@ Formatting is deterministic, so you rarely need the browser or a live parse:
 - **Reproduce a bug directly** against a pure function, e.g.
   `_normalize_cv_bullet_items(["(i)Received", "- 2001"])`, and assert on the
   result.
-- **Tests:** `tests/test_phase7b_cv_normalize_characterization.py` (unit) and
-  `tests/test_long_cv_output_corrective.py` (end-to-end DOCX). Run:
+- **Tests:** `tests/test_phase7b_cv_normalize_characterization.py` (unit),
+  `tests/test_long_cv_output_corrective.py` (end-to-end DOCX), and
+  `tests/test_long_cv_output_corrective.js` for the source-bound Summary handoff.
+  Run:
   `SALARY_COMPARISON_DATA_DIR=/tmp/sal/data .venv_test/bin/python -m pytest tests/ -q`
   — expect all pass except one known env-only `antiword` failure (a Windows
   binary that isn't functional on Linux).

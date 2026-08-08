@@ -44,12 +44,69 @@ const context = {
 vm.createContext(context);
 [
   'cvParseIsLong','cvParseTimeoutMs','cvStripInferredTitle','cvCanonicalSectionHeading',
-  'cvNormalizeBulletItems','cvNormalizeStructuredData','cvNormDateRange','versionedUnlockKey','readVersionedUnlock',
+  'cvNormalizeBulletItems','cvNormalizeStructuredData','cvNormDateRange','summaryBulletLines',
+  'formatSummaryBulletsFor','applyFormatSummaryBullets','versionedUnlockKey','readVersionedUnlock',
   'writeVersionedUnlock','cvScoringIsUnlocked','cvScoringSetUnlocked','updateCvScoringLockUI',
   'requestCvScoringUnlock','aiCrawlerIsUnlocked','updateAiCrawlerLockUI','requestAiCrawlerUnlock',
   'requireAiCrawlerUnlocked','aiCrawlerLockPayload','cvSkillPreviewHtml'
 ].forEach(name => vm.runInContext(fn(name), context));
 vm.runInContext(fnFrom(generate, 'normalizeDateRange'), context);
+
+assert.deepStrictEqual(
+  JSON.parse(JSON.stringify(context.summaryBulletLines('```markdown\n- **Cloud platforms** leader\n* Built delivery teams\n```'))),
+  ['**Cloud platforms** leader', 'Built delivery teams']
+);
+context.window._formatSummaryDraft = {
+  cv_text: 'RAW CV',
+  bullets: ['**Cloud platforms** leader', 'Built delivery teams']
+};
+assert.deepStrictEqual(
+  JSON.parse(JSON.stringify(context.formatSummaryBulletsFor('RAW CV', false))),
+  ['**Cloud platforms** leader', 'Built delivery teams']
+);
+assert.deepStrictEqual(JSON.parse(JSON.stringify(context.formatSummaryBulletsFor('DIFFERENT CV', false))), []);
+assert.deepStrictEqual(JSON.parse(JSON.stringify(context.formatSummaryBulletsFor('RAW CV', true))), []);
+const formatted = context.applyFormatSummaryBullets({candidate:{name:'Summary Fixture'}}, 'RAW CV', false);
+assert.deepStrictEqual(
+  JSON.parse(JSON.stringify(formatted.summary_bullets)),
+  ['**Cloud platforms** leader', 'Built delivery teams']
+);
+const blinded = context.applyFormatSummaryBullets({candidate:{name:'Summary Fixture'}}, 'RAW CV', true);
+assert.strictEqual(blinded.summary_bullets, undefined);
+assert.ok(html.includes('id="btnSummaryFormat"'));
+assert.ok(html.includes('onclick="formatSummaryResume()"'));
+
+const transferElements = {
+  summaryCvText: {value: 'RAW CV'},
+  cvInput: {value: ''},
+  charCount: {textContent: ''}
+};
+const transferCalls = {inputTab: '', pageTab: '', blind: null};
+const transferContext = {
+  window: {
+    _summaryGeneratedSource: 'RAW CV',
+    _summaryGeneratedBullets: ['**Cloud platforms** leader', 'Built delivery teams'],
+    _formatSummaryDraft: null
+  },
+  document: {getElementById(id){ return transferElements[id] || null; }},
+  requireSummaryUnlocked(){ return true; },
+  showToast(){},
+  switchInputTab(tabName){ transferCalls.inputTab = tabName; },
+  updateFormatSummaryNote(){},
+  switchTab(tabName){ transferCalls.pageTab = tabName; },
+  startFormat(blind){ transferCalls.blind = blind; return Promise.resolve(); }
+};
+vm.createContext(transferContext);
+vm.runInContext(fn('formatSummaryResume'), transferContext);
+transferContext.formatSummaryResume();
+assert.strictEqual(transferElements.cvInput.value, 'RAW CV');
+assert.strictEqual(transferCalls.inputTab, 'paste');
+assert.strictEqual(transferCalls.pageTab, 'format');
+assert.strictEqual(transferCalls.blind, false);
+assert.deepStrictEqual(
+  JSON.parse(JSON.stringify(transferContext.window._formatSummaryDraft.bullets)),
+  ['**Cloud platforms** leader', 'Built delivery teams']
+);
 
 assert.strictEqual(context.cvNormDateRange('to 2001'), '2001');
 assert.strictEqual(context.cvNormDateRange(''), '');

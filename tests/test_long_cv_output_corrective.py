@@ -274,6 +274,43 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertIn("Undated University", document_xml)
         self.assertNotIn("| Undated University", document_xml)
 
+    def test_docx_renders_linked_cv_summary_bullets_with_inline_bold(self):
+        data = {
+            "candidate": {"name": "Summary Fixture"},
+            "summary_bullets": [
+                "**Cloud platforms** leader across regional delivery.",
+                "Built engineering teams & delivery standards.",
+            ],
+            "work_experiences": [
+                {
+                    "company": "Example Sdn Bhd",
+                    "date_range": "Jan 2020 to Present",
+                    "roles": [{"title": "Director", "bullets": []}],
+                }
+            ],
+            "education": [],
+            "certifications": [],
+            "skills": [],
+        }
+
+        response = app.app.test_client().post(
+            "/generate-docx",
+            json={"data": data},
+            headers={"Origin": "http://127.0.0.1:5000"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
+            document_xml = archive.read("word/document.xml").decode("utf-8")
+        self.assertIn("S U M M A R Y", document_xml)
+        self.assertIn("Cloud platforms", document_xml)
+        self.assertIn("Built engineering teams &amp; delivery standards.", document_xml)
+        self.assertLess(document_xml.index("S U M M A R Y"), document_xml.index("W O R K   E X P E R I E N C E S"))
+        self.assertRegex(
+            document_xml,
+            r"<w:r><w:rPr><w:b/><w:bCs/>.*?<w:t>Cloud platforms</w:t></w:r>",
+        )
+
     def test_docx_restores_source_project_training_and_omits_untrusted_metadata(self):
         source = """Other Information
 [PROJECT INVOLVEMENT HISTORY]:
