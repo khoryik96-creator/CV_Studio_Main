@@ -189,6 +189,12 @@ def _normalize_cv_date_range(value):
     text = str(value or "").strip()
     if not text:
         return ""
+    # Drop a leading dash/bullet the source baked in front of the date (e.g.
+    # "- 2001" from a DOCX list). A date never starts with a minus sign, so this
+    # is safe; internal range separators like "2020 - 2023" are left untouched.
+    text = re.sub(r"^[\s]*[-‐-―−•·▪◦*]+[\s]*", "", text)
+    if not text:
+        return ""
     text = text.replace("–", "-").replace("—", "-").replace("−", "-")
     text = re.sub(r"\b(till\s*date|till\s*now|to\s*date|current|presently|now)\b", "Present", text, flags=re.I)
     text = re.sub(r"\bpresent\b", "Present", text, flags=re.I)
@@ -501,8 +507,11 @@ def _canonical_cv_section_heading(value):
 _CV_LEADING_BULLET_MARKER_RE = re.compile(
     r"^\s*(?:"
     r"[•●▪◦‣∙·▶►➤⁃∙»›]"  # glyph bullets: always markers
+    r"|\((?:[ivxlcdm]{1,7}|[a-z]|\d{1,3})\)"  # parenthesised enumerator: (i) (a) (12)
+    r"|\d{1,3}[.)](?=\s|[^\W\d_])"  # numeric enumerator "1." / "1)" (lookahead protects "3.5")
     r"|[*‐-―-](?=\s|[^\W\d_])"  # dash/asterisk: only before whitespace or a letter (protects "-5%")
-    r")\s*"
+    r")\s*",
+    re.I,
 )
 
 
