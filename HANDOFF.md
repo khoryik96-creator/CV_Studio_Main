@@ -1,10 +1,19 @@
 # CV Studio — Collaboration / Handoff Notes
 
-Read this before making changes. CV Studio is a Flask **modular monolith**
-(single `app.py`, ~13k lines, currently **v24.6.270**). The owner runs a **local
-source build** at `localhost:5000` and uses **DeepSeek** for all AI providers.
-Several conventions below are non-obvious traps that the code alone won't warn
-you about.
+**Read this first, before making any change — this file is the front door for
+every contributor (human or AI).** CV Studio is a Flask **modular monolith**
+(single `app.py`, ~13k lines; current release is in the repo-root `VERSION`
+file). The owner runs a **local source build** at `localhost:5000` and uses
+**DeepSeek** for all AI providers. Several conventions below are non-obvious
+traps that the code alone won't warn you about.
+
+**Reading order:**
+1. **This file (`HANDOFF.md`)** — the durable rules: the sealed route contract,
+   the version-bump trap, the local test recipe, and the work-split (who owns
+   what). Everyone reads it first, every time.
+2. **Your domain's deep-dive** — for CV formatting work, `FORMATTING_NOTES.md`.
+3. **GitHub issue #35** (🤝 Multi-Agent Coordination Log) — the *live* log of
+   who is touching what *right now*. Post your claim there before editing code.
 
 ## 1. Sealed route contract — the most important invariant
 
@@ -68,7 +77,11 @@ install and open a `.docx`. Two loops:
 
 ## 4. Git workflow
 
-- Develop on your designated branch; commit and push there.
+- **Branch naming: `<party>/v<version>`** — encode who owns it and the version
+  it targets, e.g. `einstein/v24.6.275`, `chatgpt/v24.6.276`, `king/v24.6.277`.
+  Einstein's branches say `einstein`, ChatGPT's say `chatgpt`, king's say `king`,
+  each with the version. A short suffix is fine (`einstein/v24.6.275-ja-activity`).
+- Develop on your own branch; commit and push there. One party per branch.
 - **Only open a pull request when the owner explicitly asks.**
 - End commit messages with the `Co-Authored-By: Claude ...` and
   `Claude-Session:` trailers.
@@ -183,23 +196,53 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   `waitress==3.0.2` is in `requirements.txt`; it is a pip dep, not a repo source
   file, so it is not in the `build_protected.py` `required` tuple.
 
-## Coordinating two accounts
+## Coordinating the work — slicing + formatting (three parties)
 
-- Only one account should hold a given feature branch at a time — agree who owns
-  which branch before starting, and always `git fetch` + rebase onto the latest
-  `origin/master` before new work so you don't diverge.
-- Keep this file current: when a deferred item is finished or a new trap is
-  found, update section 7/8.
-- **Live status log:** this file is the durable playbook; GitHub issue #35
-  ("🤝 Multi-Agent Coordination Log") is the append-only log of who is doing
-  what *right now*. Post there when starting, pausing, or finishing notable work
-  so the other account can see in-flight state without reading commits.
+Two kinds of work run in parallel, and the split is drawn **by file/function, not
+just by theme**, because both touch `app.py`:
 
-### Current work split (two concurrent accounts)
+- **CV formatting** — owned by **ChatGPT** (relayed by the owner; ChatGPT can't
+  push). Files: `cvstudio_cv_normalize.py`, `cvstudio_cv_reconcile.py`,
+  `generate.js`, `template.docx`, and **inside `app.py`**: `parse_cv`,
+  `/generate-docx`, `SYSTEM_PROMPT`, and the CV post-processing chain. Tests:
+  `test_long_cv_output_corrective.py`, `test_phase7b_cv_normalize_characterization.py`.
+  See `FORMATTING_NOTES.md`.
+- **Slicing (modularization)** — owned by the **Einstein** and **Claude/kingg**
+  accounts: pulling *other* clusters out of `app.py` into `cvstudio_*.py`
+  modules.
+
+**The rule that keeps them from colliding: slicing must NOT touch the CV
+formatting files or functions above — leave them in `app.py` for ChatGPT to keep
+editing.** There is plenty else to slice. Likewise ChatGPT's formatting fixes
+must never add or remove a route (that would move the route-contract SHA); flag
+any such need to a slicing account.
+
+- Only one account holds a given feature branch at a time — agree who owns which
+  branch, and always `git fetch` + rebase onto the latest `origin/master` before
+  new work.
+- **Version:** every code change bumps the version via `python bump_version.py
+  X.Y.Z` (§5). Whoever merges second rebases and re-bumps — a one-command,
+  conflict-free fix thanks to the single-source `VERSION` file.
+- Keep this file current: when a deferred item lands or a new trap is found,
+  update section 7/8 and the table below.
+- **Live status log:** GitHub issue #35 ("🤝 Multi-Agent Coordination Log") is
+  the append-only record of who is doing what *right now*. Post there when
+  starting, pausing, or finishing so others see in-flight state without reading
+  commits.
+
+### Current work split
 
 Every modularization extraction touches `app.py`, `cvstudio_architecture.py`,
-and `tests/test_phase7a_modular_monolith_foundation.py`, so the two accounts
+and `tests/test_phase7a_modular_monolith_foundation.py`, so the slicing accounts
 take domains in **non-overlapping `app.py` regions** and never share a branch.
+
+| Party | Domain | New module | app.py region | Branch name |
+|---------|--------|-----------|---------------|---------------|
+| **ChatGPT** | CV **formatting** (bullets/markers/dates/casing/reconcile). Files listed above; see `FORMATTING_NOTES.md`. Changes relayed by the owner. | edits `cvstudio_cv_normalize.py` / `cvstudio_cv_reconcile.py` / `generate.js` — no new modules, no new routes | `parse_cv` / `/generate-docx` / `SYSTEM_PROMPT` / CV post-processing | `chatgpt/v<version>` |
+| **Einstein** *(slicing)* | Continue the JobAdder `_ja_*` service clusters — remaining `_ja_activity` / `_ja_candidate` / `_ja_spa` (network/`_JOBADDER_CLIENT`/LLM via injection). Salary AI/cache already done (`cvstudio_ja_salary_ai.py`). | `cvstudio_ja_*` | `_ja_*` cluster | `einstein/v<version>` |
+| **king** *(slicing, suggested — confirm in #35)* | Remaining **Lead Finder** `_lead_*` helpers (pure closures; self-contained, good re-onboarding domain). Keeps a clean `_lead_*` vs `_ja_*` region split from Einstein. | `cvstudio_lead_*` | `_lead_*` cluster | `king/v<version>` |
+
+_Historical rows (completed domains) below for context:_
 
 | Account | Domain | New module | app.py region | Branch prefix |
 |---------|--------|-----------|---------------|---------------|
