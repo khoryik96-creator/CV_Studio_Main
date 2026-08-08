@@ -291,6 +291,14 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
                 return match.group(1) if match else None
         return "MISSING"
 
+    def _leftchars_by_text(self, document_xml, target):
+        for paragraph in re.findall(r"<w:p\b.*?</w:p>", document_xml, re.S):
+            text = "".join(re.findall(r"<w:t[^>]*>(.*?)</w:t>", paragraph))
+            if target in text:
+                match = re.search(r'w:leftChars="(\d+)"', paragraph)
+                return match.group(1) if match else None
+        return "MISSING"
+
     def test_pdf_bullet_levels_from_x_positions(self):
         # Base column (204) is level 0; deeper columns step to levels 1 and 2.
         # The last row has a ~6pt jitter but must still resolve to level 2.
@@ -349,6 +357,12 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertEqual(self._ilvl_by_text(document_xml, "Manchester united"), "1")
         self.assertEqual(self._ilvl_by_text(document_xml, "Wonderful world"), "2")
         self.assertEqual(self._ilvl_by_text(document_xml, "Operating systems overview"), "0")
+        # Nested levels also carry an explicit per-level w:leftChars so Word steps
+        # the horizontal indent (the ListParagraph style's char-unit indent would
+        # otherwise flatten every level). Level 0 keeps the style default (none).
+        self.assertEqual(self._leftchars_by_text(document_xml, "Manchester united"), "500")
+        self.assertEqual(self._leftchars_by_text(document_xml, "Wonderful world"), "800")
+        self.assertIsNone(self._leftchars_by_text(document_xml, "Operating systems overview"))
 
     def test_missing_bullet_levels_keeps_flat_output(self):
         # No map -> every bullet stays at level 0 (byte-compatible with before).

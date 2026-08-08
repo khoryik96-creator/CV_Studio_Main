@@ -335,12 +335,18 @@ function bulletPara(text, alignmentXml = BODY_ALIGNMENT_XML) {
     }
   }
   // Restore nested-list indent: match this bullet back to its source level.
-  // Level 0 keeps the exact prior pPr (left=720), so non-nested output is
-  // byte-identical; deeper levels step the indent to match the template's
-  // numbering (left = 720 * (level + 1)).
   const level = bulletLevelFor(t);
   const leftIndent = 720 * (level + 1);
-  const pPr = `<w:pStyle w:val="ListParagraph"/><w:keepLines/><w:numPr><w:ilvl w:val="${level}"/><w:numId w:val="47"/></w:numPr><w:ind w:left="${leftIndent}" w:hanging="360"/><w:spacing w:before="0" w:after="0"/>${alignmentXml}`;
+  // The ListParagraph style carries a character-unit indent (w:leftChars="200")
+  // that Word applies IN PREFERENCE to the twip-based w:left -- so w:left alone
+  // leaves every nested level at the same indent (only the glyph changes). For
+  // deeper levels, pin an explicit per-level w:leftChars (base 200 + 300/level,
+  // ~0.5" steps) so they actually step to the right. Level 0 is left exactly as
+  // before, so non-nested output stays byte-identical.
+  const indent = level > 0
+    ? `w:leftChars="${200 + level * 300}" w:left="${leftIndent}" w:hanging="360"`
+    : `w:left="${leftIndent}" w:hanging="360"`;
+  const pPr = `<w:pStyle w:val="ListParagraph"/><w:keepLines/><w:numPr><w:ilvl w:val="${level}"/><w:numId w:val="47"/></w:numPr><w:ind ${indent}/><w:spacing w:before="0" w:after="0"/>${alignmentXml}`;
   return para(children, pPr);
 }
 
