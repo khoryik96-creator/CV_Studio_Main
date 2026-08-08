@@ -49,14 +49,17 @@
   convert that document to a temporary macro-free DOCX through locally
   installed Microsoft Word on Windows, or LibreOffice where available. The
   resulting OOXML package is safety-validated and parsed through the existing
-  DOCX table/list path before it can satisfy extraction. Timed-out converters
-  terminate the wrapper process tree and the separately recorded Word process.
+  DOCX table/list path before it can satisfy extraction. Word disables automatic
+  link updates before opening the untrusted input. Failed and timed-out
+  converters terminate the wrapper process tree and separately recorded Word
+  process.
 - Genuine Windows testing used the owner-supplied Antiword-incompatible DOC:
   Microsoft Word conversion produced a valid DOCX and the real `/extract-text`
   route returned 19,247 characters with status 200. The private
   source document and converted output are not committed.
 - Education placeholders such as `No Degree`, `Not specified` and `N/A` are
-  omitted deterministically. Real qualification wording, including
+  omitted deterministically, including after stripping a `No Degree:` prefix.
+  Real qualification wording, including
   `Non-Degree Certificate`, remains unchanged.
 - The owner-marked Isaac comparison is now deterministic rather than
   provider-dependent: adjacent continuous Dec 2015-Mar 2021 Unilever roles and

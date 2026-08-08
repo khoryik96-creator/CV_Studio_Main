@@ -758,9 +758,11 @@ def _normalize_cv_data_for_output(parsed, source_text=""):
         degree = str(edu.get("degree") or "").strip()
         no_degree_prefix = _CV_NO_DEGREE_PREFIX_RE.fullmatch(degree)
         if no_degree_prefix:
-            edu["degree"] = no_degree_prefix.group(1).strip()
-        elif _CV_EMPTY_EDUCATION_DEGREE_RE.fullmatch(degree):
+            degree = no_degree_prefix.group(1).strip()
+        if _CV_EMPTY_EDUCATION_DEGREE_RE.fullmatch(degree):
             edu["degree"] = ""
+        elif no_degree_prefix:
+            edu["degree"] = degree
     return parsed
 
 

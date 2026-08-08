@@ -1243,6 +1243,46 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
 
         terminate.assert_called_once_with(process, extra_pids=[5678])
 
+    def test_converter_nonzero_exit_terminates_recorded_native_process(self):
+        process = mock.Mock(pid=1234, returncode=1)
+        process.communicate.return_value = (b"", b"conversion failed")
+        process.poll.return_value = 1
+        with tempfile.TemporaryDirectory() as td:
+            process_id_path = Path(td) / "native-process-id.txt"
+            process_id_path.write_text("5678", encoding="ascii")
+            with (
+                mock.patch("subprocess.Popen", return_value=process),
+                mock.patch.object(
+                    app,
+                    "_converter_process_creation_options",
+                    return_value={},
+                ),
+                mock.patch.object(
+                    app,
+                    "_terminate_converter_process_tree",
+                ) as terminate,
+            ):
+                result = app._run_converter_subprocess(
+                    ["converter"],
+                    timeout=1,
+                    extra_pid_path=str(process_id_path),
+                )
+
+        self.assertEqual(result.returncode, 1)
+        terminate.assert_called_once_with(process, extra_pids=[5678])
+
+    def test_word_converter_disables_external_link_updates_before_open(self):
+        source = Path(app.__file__).read_text(encoding="utf-8")
+
+        disable_links = source.index(
+            "$word.Options.UpdateLinksAtOpen = $false"
+        )
+        open_document = source.index(
+            "$document = $word.Documents.Open($InputPath"
+        )
+
+        self.assertLess(disable_links, open_document)
+
     def test_legacy_doc_converter_prefers_word_and_validates_libreoffice_fallback(self):
         from docx import Document
 

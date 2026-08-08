@@ -325,6 +325,12 @@ class EducationPlaceholderTests(unittest.TestCase):
                     "institution": "University E",
                     "degree": "Bachelor of Computer Science",
                 },
+                {"institution": "School F", "degree": "No Degree: N/A"},
+                {
+                    "institution": "School G",
+                    "degree": "No Degree - Not specified",
+                },
+                {"institution": "School H", "degree": "No Degree: Unknown"},
             ]
         }
 
@@ -346,6 +352,9 @@ class EducationPlaceholderTests(unittest.TestCase):
             normalized["education"][6]["degree"],
             "Bachelor of Computer Science",
         )
+        self.assertEqual(normalized["education"][7]["degree"], "")
+        self.assertEqual(normalized["education"][8]["degree"], "")
+        self.assertEqual(normalized["education"][9]["degree"], "")
 
 
 class ContinuousEmployerGroupingTests(unittest.TestCase):

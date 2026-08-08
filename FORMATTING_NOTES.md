@@ -15,7 +15,8 @@ DeepSeek for AI. Current version is tracked in the repo-root `VERSION` file.
    (Windows) or LibreOffice converter may create a temporary macro-free DOCX;
    CV Studio validates it and reuses the normal DOCX table/list extractor. A
    converter never bypasses a missing or untrusted Antiword runtime, including
-   an execution-time trust failure, and timed-out converter process trees are
+   an execution-time trust failure. Word link updates are disabled before the
+   untrusted input opens, and failed/timed-out converter process trees are
    terminated. OCR
    (`pytesseract` + poppler) remains the scanned-file fallback.
 2. **`/parse`** (`parse_cv` in `app.py`) — an AI call (DeepSeek/Claude via
@@ -51,7 +52,7 @@ this:
 | lone `• Key responsibilities` above its duties | a sub-heading emitted as a flat bullet | `_absorb_orphan_section_labels` |
 | `to 2001` for a graduation year | leading `- 2001` in a DOCX list | `_normalize_cv_date_range` (leading-dash strip) |
 | lone `-` / `--` bullets | marker-only residue | drop in `_normalize_cv_bullet_items` |
-| `No Degree` under a school | provider placeholder for a missing qualification | `_normalize_cv_data_for_output` clears only known empty-degree placeholders |
+| `No Degree` under a school | provider placeholder for a missing qualification | `_normalize_cv_data_for_output` clears known empty-degree placeholders both alone and after a `No Degree:` prefix |
 | `• a.`, `• 1-`, or `• a-` in the output | a bare source enumerator survived beside Word's own marker | `_CV_LEADING_BULLET_MARKER_RE` strips lower-case dot/hyphen and numeric-hyphen enumerators while preserving `3.5`, `5-star`, `-5%`, `i.e.`, capitalised initials and date ranges |
 | one continuous employer shown as several company blocks | provider split each promotion into a separate experience | `_merge_adjacent_continuous_company_stints` groups only neighbouring same-employer ranges that touch; gapped and non-adjacent returns remain separate, and merged roles are sorted newest-first |
 | an older employer appears before a newer employer | provider emitted inconsistent work-history order | `_sort_work_experiences_reverse_chronological` sorts dated employer blocks newest-first after safe grouping |

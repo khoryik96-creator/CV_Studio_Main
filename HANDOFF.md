@@ -182,11 +182,13 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   exact document is rejected. It prefers installed Microsoft Word on Windows
   and otherwise uses LibreOffice when available. The resulting DOCX reuses the
   existing table and nested-list extraction. Execution-time Antiword trust
-  failures remain fatal, and timed-out converters terminate their wrapper and
-  recorded native process trees. The owner-supplied incompatible
+  failures remain fatal, Word disables automatic link updates before opening
+  the untrusted input, and failed/timed-out converters terminate their wrapper
+  and recorded native process trees. The owner-supplied incompatible
   DOC passed a genuine Windows `/extract-text` test through Microsoft Word.
   The same branch removes `No Degree`/`Not specified`/`N/A` education
-  placeholders while protecting real `Non-Degree Certificate` wording. It also
+  placeholders, including placeholder suffixes after `No Degree:`, while
+  protecting real `Non-Degree Certificate` wording. It also
   covers the owner's exact Isaac/Faizal formatting regressions: continuous
   Unilever/DKSH promotion paths are grouped without merging gapped returns,
   employer blocks and their dated roles are sorted newest-first, source

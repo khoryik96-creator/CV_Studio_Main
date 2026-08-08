@@ -11838,18 +11838,23 @@ def _converter_process_creation_options():
 
 
 def _terminate_converter_process_tree(process, *, extra_pids=()):
-    """Best-effort termination for a timed-out converter and its children."""
+    """Best-effort termination for a failed converter and its children."""
     import signal as _signal
     import shutil as _shutil
     import subprocess as _subprocess
 
+    try:
+        process_running = process.poll() is None
+    except Exception:
+        process_running = True
     if os.name == "nt":
         system_root = os.environ.get("SystemRoot") or r"C:\Windows"
         taskkill = os.path.join(system_root, "System32", "taskkill.exe")
         if not os.path.isfile(taskkill):
             taskkill = _shutil.which("taskkill.exe") or ""
         pids = []
-        for value in list(extra_pids or ()) + [getattr(process, "pid", None)]:
+        process_pids = [getattr(process, "pid", None)] if process_running else []
+        for value in list(extra_pids or ()) + process_pids:
             try:
                 pid = int(value)
             except (TypeError, ValueError):
@@ -11879,16 +11884,29 @@ def _terminate_converter_process_tree(process, *, extra_pids=()):
         except Exception:
             # cleanup-only: fall back to killing the direct process below.
             pass
+    if process_running:
+        try:
+            process.kill()
+        except Exception:
+            # cleanup-only: the process may already have exited.
+            pass
+        try:
+            process.communicate(timeout=5)
+        except Exception:
+            # cleanup-only: termination is already best-effort and bounded.
+            pass
+
+
+def _recorded_converter_process_ids(extra_pid_path):
+    """Return the positive native PID recorded by a converter wrapper."""
+    if not extra_pid_path:
+        return []
     try:
-        process.kill()
+        with open(extra_pid_path, "r", encoding="ascii") as handle:
+            pid = int(handle.read().strip())
+        return [pid] if pid > 0 else []
     except Exception:
-        # cleanup-only: the process may already have exited.
-        pass
-    try:
-        process.communicate(timeout=5)
-    except Exception:
-        # cleanup-only: termination is already best-effort and bounded.
-        pass
+        return []
 
 
 def _run_converter_subprocess(command, *, timeout, extra_pid_path=""):
@@ -11905,16 +11923,18 @@ def _run_converter_subprocess(command, *, timeout, extra_pid_path=""):
     try:
         stdout, stderr = process.communicate(timeout=max(1.0, float(timeout)))
     except Exception:
-        extra_pids = []
-        if extra_pid_path:
-            try:
-                with open(extra_pid_path, "r", encoding="ascii") as handle:
-                    extra_pids.append(int(handle.read().strip()))
-            except Exception:
-                # cleanup-only: no recorded native PID is available.
-                pass
-        _terminate_converter_process_tree(process, extra_pids=extra_pids)
+        _terminate_converter_process_tree(
+            process,
+            extra_pids=_recorded_converter_process_ids(extra_pid_path),
+        )
         raise
+    if process.returncode:
+        recorded_pids = _recorded_converter_process_ids(extra_pid_path)
+        if recorded_pids:
+            _terminate_converter_process_tree(
+                process,
+                extra_pids=recorded_pids,
+            )
     return _subprocess.CompletedProcess(
         command,
         process.returncode,
@@ -11946,7 +11966,8 @@ try {
     $word = New-Object -ComObject Word.Application
     $word.Visible = $false
     $word.DisplayAlerts = 0
-    try { $word.AutomationSecurity = 3 } catch {}
+    $word.AutomationSecurity = 3
+    $word.Options.UpdateLinksAtOpen = $false
     try {
         Add-Type @"
 using System;
