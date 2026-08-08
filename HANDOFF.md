@@ -155,6 +155,19 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   broke a ~900-line characterization test and was reverted.
 - **Phase 7B modularization** can continue: extract pure clusters, keep it
   behavior-preserving, hold the route SHA constant.
+- **Waitress server swap (backburner #4) — STAGED ON BRANCH, NOT MERGED.**
+  `app._run_cvstudio_server()` prefers Waitress and falls back to Werkzeug
+  `app.run` if Waitress is unavailable or `CVSTUDIO_SERVER=werkzeug` is set, so
+  it degrades safely. Loopback-only bind; `threads=16`; and critically
+  `channel_timeout` is *derived* from `_cv_parse_backend_timeout_seconds`
+  (300s ceiling × 3 chained parse attempts + 120s = 1020s) so a long/truncated
+  `/parse` connection is never cut mid-flight — do not hardcode this or the
+  timeout bug returns. Covered by `tests/test_server_runtime.py`; route SHA and
+  version surfaces unchanged. **Gate before merging:** run the actual protected
+  Windows/macOS build and confirm Waitress is frozen in (else the fallback
+  quietly serves on the dev server) and that a real long AI parse completes.
+  `waitress==3.0.2` is in `requirements.txt`; it is a pip dep, not a repo source
+  file, so it is not in the `build_protected.py` `required` tuple.
 
 ## Coordinating two accounts
 

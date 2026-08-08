@@ -12839,6 +12839,60 @@ _CVSTUDIO_ARCHITECTURE = _finalize_modular_monolith_app(
 )
 
 
+def _cvstudio_http_channel_timeout():
+    """Waitress ``channel_timeout`` that safely covers the worst-case /parse hold.
+
+    ``channel_timeout`` is an *inactivity* timeout: while a request is blocked
+    waiting on an upstream AI call, no bytes flow to the browser, so the channel
+    looks idle for the whole duration. A single ``/parse`` can chain up to three
+    sequential DeepSeek calls (initial parse + retry Strategy 2 re-send +
+    Strategy 3 continue), each capped by ``_cv_parse_backend_timeout_seconds``
+    (currently 300s for long CVs), plus deterministic post-processing. The
+    ceiling is derived from that function so the two can never drift -- if the
+    per-call parse budget is raised, this follows it automatically.
+    """
+    per_call_ceiling = _cv_parse_backend_timeout_seconds("x" * 20000)  # long-CV branch
+    max_sequential_calls = 3  # initial + Strategy 2 re-send + Strategy 3 continue
+    post_processing_margin_seconds = 120
+    return per_call_ceiling * max_sequential_calls + post_processing_margin_seconds
+
+
+def _run_cvstudio_server():
+    """Serve the app, preferring Waitress with the built-in Werkzeug server as a
+    fallback.
+
+    Waitress is a real, cross-platform, pure-Python WSGI server that freezes
+    cleanly into the protected build; Werkzeug's ``app.run`` is the development
+    server. Waitress is used when it is importable and not explicitly disabled;
+    if the import fails (or ``CVSTUDIO_SERVER`` selects the legacy server), the
+    behaviour is exactly the previous ``app.run`` call, so nothing regresses.
+
+    Loopback only -- never bind a non-local interface; the ``_reject_non_local_
+    host_header`` request guard and the whole security posture assume 127.0.0.1.
+    Set ``CVSTUDIO_SERVER=werkzeug`` to force the legacy server.
+    """
+    prefer = str(os.environ.get("CVSTUDIO_SERVER") or "").strip().lower()
+    if prefer not in ("werkzeug", "flask", "dev"):
+        try:
+            from waitress import serve as _waitress_serve
+        except Exception:
+            _waitress_serve = None
+        if _waitress_serve is not None:
+            _waitress_serve(
+                app,
+                host="127.0.0.1",
+                port=_CVSTUDIO_PORT,
+                # Requests routinely block for minutes (AI parse, OCR, legacy
+                # .doc extraction); a generous fixed pool keeps the single-user
+                # UI responsive while a long parse is in flight.
+                threads=16,
+                channel_timeout=_cvstudio_http_channel_timeout(),
+                ident="CV Studio",
+            )
+            return
+    app.run(port=_CVSTUDIO_PORT, debug=False, threaded=True)
+
+
 if __name__ == "__main__":
     try:
         _boot_elapsed = _boot_time.time() - _BOOT_T0
@@ -12862,4 +12916,4 @@ if __name__ == "__main__":
             print("👉  Open this in your browser: {}\n".format(_CVSTUDIO_BASE_URL))
     except Exception:
         pass
-    app.run(port=_CVSTUDIO_PORT, debug=False, threaded=True)
+    _run_cvstudio_server()
