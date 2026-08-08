@@ -498,6 +498,25 @@ def _canonical_cv_section_heading(value):
     return "Key achievements" if match.group(1).lower().startswith("achievement") else "Key responsibilities"
 
 
+_LEADING_BULLET_MARKER_RE = re.compile(
+    r"^(?:[•●▪◦‣⁃∙·‧*‐‑‒–—―-]\s+)+"
+)
+
+
+def _strip_leading_bullet_marker(text):
+    """Strip a redundant leading list glyph the author typed inside a bullet.
+
+    Some source CVs prefix an already-bulleted line with ``* `` or ``- ``, which
+    renders as a doubled bullet -- "* Mail Server" under a real bullet becomes
+    "• * Mail Server". Remove one or more leading markers that are followed by
+    whitespace. Content such as ``*args`` or ``**bold**`` (no space after the
+    marker) is left untouched.
+    """
+    if not isinstance(text, str):
+        return text
+    return _LEADING_BULLET_MARKER_RE.sub("", text)
+
+
 def _normalize_cv_bullet_items(items, allow_standalone_sections=True):
     """Repair valid JSON-looking bullet strings without changing plain prose."""
     source = items if isinstance(items, list) else ([] if items in (None, "") else [items])
@@ -505,7 +524,9 @@ def _normalize_cv_bullet_items(items, allow_standalone_sections=True):
 
     def add(item):
         if isinstance(item, str):
-            candidate = item.strip()
+            trimmed = item.strip()
+            candidate = _strip_leading_bullet_marker(trimmed)
+            marker_removed = candidate != trimmed
             section_heading = _canonical_cv_section_heading(candidate)
             if allow_standalone_sections and candidate and _CV_SECTION_HEADING_RE.fullmatch(candidate):
                 normalized.append({"heading": section_heading, "bullets": [], "kind": "section"})
@@ -522,7 +543,7 @@ def _normalize_cv_bullet_items(items, allow_standalone_sections=True):
                         normalized.append(item)
                     return
             if candidate:
-                normalized.append(item)
+                normalized.append(candidate if marker_removed else item)
             return
         if isinstance(item, list):
             for child in item:

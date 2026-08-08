@@ -227,6 +227,28 @@ class BulletAndStructuredContentTests(unittest.TestCase):
             "Delivered result",
         ])
 
+    def test_leading_bullet_marker_stripped_from_bullet_text(self):
+        # Source CVs that prefix an already-bulleted line with "* " render as a
+        # doubled bullet ("• * Mail Server"); the redundant marker is removed.
+        out = cn._normalize_cv_bullet_items([
+            "Maintaining all server in the office such",
+            "* Mail Server",
+            "* VPN server",
+            "- Networking",
+        ])
+        self.assertEqual(out, [
+            "Maintaining all server in the office such",
+            "Mail Server",
+            "VPN server",
+            "Networking",
+        ])
+
+    def test_leading_marker_strip_preserves_real_content(self):
+        # A marker must be followed by whitespace to be stripped, so code-like
+        # and math-like prose is untouched.
+        for text in ["*args and kwargs", "**bold text**", "5 * 3 = 15", "-5 degrees C"]:
+            self.assertEqual(cn._strip_leading_bullet_marker(text), text)
+
     def test_structured_content_smoke(self):
         parsed = {"experience": [{"title": "engineer", "bullets": ["Did a thing"]}]}
         out = cn._normalize_cv_structured_content(parsed)

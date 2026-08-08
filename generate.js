@@ -156,12 +156,24 @@ function canonicalCvSectionHeading(value) {
   return /^achievement/i.test(match[1]) ? 'Key achievements' : 'Key responsibilities';
 }
 
+// Strip a redundant leading list glyph the author typed inside a bullet.
+// Some source CVs prefix an already-bulleted line with "* " or "- ", which
+// renders as a doubled bullet ("• * Mail Server"). Remove one or more leading
+// markers followed by whitespace; "*args" / "**bold**" (no space) are left as-is.
+const LEADING_BULLET_MARKER_RE = /^(?:[•●▪◦‣⁃∙·‧*‐‑‒–—―-]\s+)+/;
+function stripLeadingBulletMarker(text) {
+  if (typeof text !== 'string') return text;
+  return text.replace(LEADING_BULLET_MARKER_RE, '');
+}
+
 function normalizeCvBulletItems(items, allowStandaloneSections = true) {
   const source = Array.isArray(items) ? items : ((items == null || items === '') ? [] : [items]);
   const out = [];
   const add = (item) => {
     if (typeof item === 'string') {
-      const candidate = item.trim();
+      const trimmed = item.trim();
+      const candidate = stripLeadingBulletMarker(trimmed);
+      const markerRemoved = candidate !== trimmed;
       if (allowStandaloneSections && /^(?:key\s+)?(?:responsibilit(?:y|ies)|achievements?)\s*:?$/i.test(candidate)) {
         out.push({ heading: canonicalCvSectionHeading(candidate), bullets: [], kind: 'section' });
         return;
@@ -177,7 +189,7 @@ function normalizeCvBulletItems(items, allowStandaloneSections = true) {
           }
         } catch (_) {}
       }
-      if (candidate) out.push(item);
+      if (candidate) out.push(markerRemoved ? candidate : item);
       return;
     }
     if (Array.isArray(item)) { item.forEach(add); return; }

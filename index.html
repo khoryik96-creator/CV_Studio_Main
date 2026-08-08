@@ -13251,13 +13251,23 @@ function cvCanonicalSectionHeading(value) {
   return /^achievement/i.test(match[1]) ? 'Key achievements' : 'Key responsibilities';
 }
 
+// Strip a redundant leading list glyph the author typed inside a bullet, so an
+// already-bulleted "* Mail Server" does not render as a doubled "• * Mail Server".
+// Content like "*args" / "**bold**" (no space after the marker) is left as-is.
+function cvStripLeadingBulletMarker(text) {
+  if (typeof text !== 'string') return text;
+  return text.replace(/^(?:[•●▪◦‣⁃∙·‧*‐‑‒–—―-]\s+)+/, '');
+}
+
 function cvNormalizeBulletItems(items, allowStandaloneSections) {
   allowStandaloneSections = allowStandaloneSections !== false;
   var source = Array.isArray(items) ? items : ((items == null || items === '') ? [] : [items]);
   var out = [];
   function add(item) {
     if (typeof item === 'string') {
-      var candidate = item.trim();
+      var trimmed = item.trim();
+      var candidate = cvStripLeadingBulletMarker(trimmed);
+      var markerRemoved = candidate !== trimmed;
       if (allowStandaloneSections && /^(?:key\s+)?(?:responsibilit(?:y|ies)|achievements?)\s*:?$/i.test(candidate)) {
         out.push({ heading: cvCanonicalSectionHeading(candidate), bullets: [], kind: 'section' });
         return;
@@ -13273,7 +13283,7 @@ function cvNormalizeBulletItems(items, allowStandaloneSections) {
           }
         } catch(e) {}
       }
-      if (candidate) out.push(item);
+      if (candidate) out.push(markerRemoved ? candidate : item);
       return;
     }
     if (Array.isArray(item)) { item.forEach(add); return; }

@@ -41,6 +41,7 @@ const context = {
 vm.createContext(context);
 [
   'cvParseIsLong','cvParseTimeoutMs','cvStripInferredTitle','cvCanonicalSectionHeading',
+  'cvStripLeadingBulletMarker',
   'cvNormalizeBulletItems','cvNormalizeStructuredData','versionedUnlockKey','readVersionedUnlock',
   'writeVersionedUnlock','cvScoringIsUnlocked','cvScoringSetUnlocked','updateCvScoringLockUI',
   'requestCvScoringUnlock','aiCrawlerIsUnlocked','updateAiCrawlerLockUI','requestAiCrawlerUnlock',
@@ -67,6 +68,18 @@ assert.deepStrictEqual(
   JSON.parse(JSON.stringify(context.cvNormalizeBulletItems(['Key responsibilities', 'Delivered result']))),
   [{heading:'Key responsibilities', bullets:[], kind:'section'}, 'Delivered result']
 );
+// A redundant leading "* " / "- " marker inside an already-bulleted line is
+// stripped so it does not render as a doubled bullet ("• * Mail Server").
+assert.deepStrictEqual(
+  JSON.parse(JSON.stringify(context.cvNormalizeBulletItems([
+    'Maintaining all server in the office such', '* Mail Server', '- Networking',
+  ]))),
+  ['Maintaining all server in the office such', 'Mail Server', 'Networking']
+);
+// A marker must be followed by whitespace, so code/math-like prose is untouched.
+['*args', '**bold**', '5 * 3'].forEach(t => assert.deepStrictEqual(
+  JSON.parse(JSON.stringify(context.cvNormalizeBulletItems([t]))), [t]
+));
 [
   'Advisor (assumed from duties)',
   'Advisor (guessed from context)',
