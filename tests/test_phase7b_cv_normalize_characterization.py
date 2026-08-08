@@ -237,6 +237,24 @@ class BulletAndStructuredContentTests(unittest.TestCase):
         nested = [{"heading": "Key responsibilities", "bullets": ["a", "b"], "kind": "section"}, "c"]
         self.assertEqual(cn._normalize_cv_bullet_items(nested), nested)
 
+    def test_leading_source_bullet_markers_are_stripped(self):
+        # DOCX/plain-text bullets that carry their own marker must not render as
+        # "- Received…" once the formatter adds its own bullet.
+        out = cn._normalize_cv_bullet_items([
+            "-Received customer complaint",
+            "• Provide technical support",
+            "– Ensure closing all incoming calls",
+        ])
+        self.assertEqual(out, [
+            "Received customer complaint",
+            "Provide technical support",
+            "Ensure closing all incoming calls",
+        ])
+
+    def test_leading_marker_strip_preserves_figures_and_internal_dashes(self):
+        out = cn._normalize_cv_bullet_items(["-5% cost variance recorded", "5-star client rating"])
+        self.assertEqual(out, ["-5% cost variance recorded", "5-star client rating"])
+
     def test_structured_content_smoke(self):
         parsed = {"experience": [{"title": "engineer", "bullets": ["Did a thing"]}]}
         out = cn._normalize_cv_structured_content(parsed)

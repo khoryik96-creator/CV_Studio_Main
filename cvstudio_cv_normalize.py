@@ -498,6 +498,33 @@ def _canonical_cv_section_heading(value):
     return "Key achievements" if match.group(1).lower().startswith("achievement") else "Key responsibilities"
 
 
+_CV_LEADING_BULLET_MARKER_RE = re.compile(
+    r"^\s*(?:"
+    r"[•●▪◦‣∙·▶►➤⁃∙»›]"  # glyph bullets: always markers
+    r"|[*‐-―-](?=\s|[^\W\d_])"  # dash/asterisk: only before whitespace or a letter (protects "-5%")
+    r")\s*"
+)
+
+
+def _strip_leading_bullet_marker(text):
+    """Drop a list marker the source bullet carried in its own text.
+
+    DOCX/plain-text CVs sometimes deliver bullets with the visible marker baked
+    into the string (e.g. ``-Received calls`` or ``• Provide support``). The
+    formatter renders its own bullet, so the literal marker must be removed or it
+    shows up as ``- Received calls`` in the output. Glyph bullets are always
+    markers; a leading dash/asterisk is stripped only when followed by whitespace
+    or a letter, so figures like ``-5% variance`` are left intact.
+    """
+    value = str(text or "")
+    for _ in range(5):  # tolerate a short run like "• - "
+        stripped = _CV_LEADING_BULLET_MARKER_RE.sub("", value, count=1)
+        if stripped == value:
+            break
+        value = stripped
+    return value
+
+
 def _absorb_orphan_section_labels(items):
     """Attach loose bullets to an empty section label that introduces them.
 
@@ -543,7 +570,7 @@ def _normalize_cv_bullet_items(items, allow_standalone_sections=True):
 
     def add(item):
         if isinstance(item, str):
-            candidate = item.strip()
+            candidate = _strip_leading_bullet_marker(item).strip()
             section_heading = _canonical_cv_section_heading(candidate)
             if allow_standalone_sections and candidate and _CV_SECTION_HEADING_RE.fullmatch(candidate):
                 normalized.append({"heading": section_heading, "bullets": [], "kind": "section"})
@@ -560,7 +587,7 @@ def _normalize_cv_bullet_items(items, allow_standalone_sections=True):
                         normalized.append(item)
                     return
             if candidate:
-                normalized.append(item)
+                normalized.append(candidate)
             return
         if isinstance(item, list):
             for child in item:
