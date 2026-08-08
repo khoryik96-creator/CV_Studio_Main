@@ -60,7 +60,7 @@ this:
 | Core Expertise alternates between bullets and one paragraph | provider returned `items` as an array, newline list, or comma-separated string in different runs | `_normalize_cv_structured_content` deterministically converts Core Expertise items into real Word bullets |
 | `GitHub: https://github.com/unknown` appears without a source link | provider invented a placeholder portfolio URL | `_remove_ungrounded_cv_github_links` always removes the known placeholder, including source-free export; with source text it retains only matching GitHub paths and ignores terminal sentence periods |
 | `Position: Retrieved Resumes (SiVA folder: ...); Date Applied: ...` appears in Additional Information | JobStreet/SiVA application-routing metadata was mistaken for CV content | `_strip_cv_recruitment_tracking_metadata` removes the metadata at a line start or after a `|` item separator wherever the provider placed it |
-| Project Involvement History or Participated Training Programme is missing | provider truncated or skipped bracketed sections near the bottom of a long CV | `_recover_cv_source_additional_sections` restores every allowlisted source item, stops at recognized ordinary CV headings, and removes training duplicates from certifications |
+| Project Involvement History or Participated Training Programme is missing | provider truncated or skipped bracketed sections near the bottom of a long CV | `_recover_cv_source_additional_sections` restores every allowlisted source item, stops at recognized simple or combined CV headings, and removes training duplicates from certifications |
 | recovered Project/Training items are comma-separated in preview but bulleted in Word | browser preview flattened structured item arrays | `cvSkillPreviewHtml` uses the same multiple-items-as-bullets rule as `generate.js` |
 
 ### Key files/functions (`cvstudio_cv_normalize.py`)
@@ -87,7 +87,8 @@ this:
 - **`_recover_cv_source_additional_sections`** — source-aware recovery for the
   explicitly bracketed Project Involvement History and Participated Training
   Programme lists. Exact source wording and order are retained, and recognized
-  ordinary CV headings terminate recovery so later sections are not absorbed.
+  ordinary CV headings, including combined headings such as Education &
+  Certification, terminate recovery so later sections are not absorbed.
 - **`_remove_ungrounded_cv_github_links`** — always removes the known placeholder;
   when source text is available, removes any other provider-emitted GitHub path
   that cannot be matched to the extracted source CV.

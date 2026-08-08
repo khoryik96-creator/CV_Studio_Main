@@ -211,6 +211,9 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   `AGENTS.md`. The separate Summary-format experiment is not part of either
   change and must remain unpushed and unmerged unless the owner later approves
   it explicitly.
+  The v24.6.281 follow-up also recognizes common combined boundaries such as
+  Education & Certification, Professional Qualifications, Courses & Training,
+  and Professional Affiliations.
 - **AI Crawler ".doc: flag, don't decode"**: skip decoding an undecodable legacy
   `.doc` while still surfacing the candidate. Deferred pending measurement of
   whether `.doc` decode vs. PDF OCR is the real bottleneck; a naive attempt

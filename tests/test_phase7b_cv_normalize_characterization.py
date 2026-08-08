@@ -694,6 +694,30 @@ Available upon request
             },
         )
 
+    def test_recovery_stops_at_common_combined_cv_section_headings(self):
+        headings = (
+            "EDUCATION & CERTIFICATION",
+            "PROFESSIONAL QUALIFICATIONS",
+            "COURSES & TRAINING",
+            "PROFESSIONAL AFFILIATIONS",
+        )
+
+        for heading in headings:
+            with self.subTest(heading=heading):
+                source = (
+                    "[PROJECT INVOLVEMENT HISTORY]:\n"
+                    "* Project Alpha\n"
+                    f"{heading}\n"
+                    "* Later section content\n"
+                )
+
+                recovered = cn._extract_recoverable_cv_source_sections(source)
+
+                self.assertEqual(
+                    recovered,
+                    {"Project Involvement History": ["Project Alpha"]},
+                )
+
     def test_removes_siva_metadata_and_only_keeps_source_grounded_github(self):
         parsed = {
             "skills": [
