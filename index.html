@@ -1597,7 +1597,7 @@
 <div class="app">
   <div class="header" style="position:relative;">
     <div>
-      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.274 (Offline) by The 郭 Lab</span></h1>
+      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.275 (Offline) by The 郭 Lab</span></h1>
 
     </div>
     <div class="header-tools">
@@ -6749,7 +6749,7 @@ var _cvStudioPhase2bSettingsStartupPromise=cvStudioHydrateBrowserSettings();
 function exportCvStudioLocalData(){
   var settings=cvStudioLocalDataSettingsSnapshot(false);
   var records={onenote_transfer_records:(typeof oneNoteRecordsLoad==='function'?oneNoteRecordsLoad():[]),onenote_saved_links:(typeof oneNoteReadSavedLinks==='function'?oneNoteReadSavedLinks():[])};
-  var payload={product:'CV Studio local data',version:'v24.6.274',schema:1,exportedAt:new Date().toISOString(),includes:['PPC metadata and preferences','saved OneNote links and parser preferences','OneNote transfer record history (private application data)','invoice recipient/settings and draft links','CV alignment and navigation preferences','AI routing/provider selections without API keys'],settings:settings,records:records};
+  var payload={product:'CV Studio local data',version:'v24.6.275',schema:1,exportedAt:new Date().toISOString(),includes:['PPC metadata and preferences','saved OneNote links and parser preferences','OneNote transfer record history (private application data)','invoice recipient/settings and draft links','CV alignment and navigation preferences','AI routing/provider selections without API keys'],settings:settings,records:records};
   var blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='cv_studio_local_data_'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(url);a.remove();},0);showToast('Non-secret local data exported.','ok');
 }
 function cvStudioPersistImportedLocalData(payload){
@@ -6909,7 +6909,7 @@ function cvLockedTabLabel() {
 // Unlocks persist across normal browser/app restarts for the same installed build,
 // but deliberately reset after a new CV Studio version is installed. This keeps the
 // lock in place after upgrades while avoiding repeated prompts during daily use.
-var LOCK_UNLOCK_VERSION = 'v24.6.274';
+var LOCK_UNLOCK_VERSION = 'v24.6.275';
 function versionedUnlockKey(base) {
   return base + '_' + String(LOCK_UNLOCK_VERSION || '').replace(/[^0-9A-Za-z]+/g, '_');
 }
@@ -13028,6 +13028,7 @@ async function startFormat(blind) {
     }
     clearInterval(_fakeInterval);
     _parsedData = data.data;
+    _labelBulletLevels = Array.isArray(data.bullet_levels) ? data.bullet_levels : null;
     if (!_parsedData) {
       recordPaidAiFailure('Single CV parse returned no data', data, route.model, route.provider);
       throw new Error('No data in response');
@@ -13083,7 +13084,7 @@ async function startFormat(blind) {
       if (_fake3 < 92) { _fake3 += (92 - _fake3) * 0.05; document.getElementById('progressFill').style.width = _fake3 + '%'; }
     }, 200);
 
-    var res2 = await fetchWithTimeout('/generate-docx', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({data: _parsedData, alignment: getCvTextAlignment()}) }, 60000);
+    var res2 = await fetchWithTimeout('/generate-docx', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({data: _parsedData, alignment: getCvTextAlignment(), bullet_levels: cvMergeLevelLists(_extractedBulletLevels, _labelBulletLevels)}) }, 60000);
     if (!res2.ok) {
       var errText2 = await res2.text();
       var errObj; try { errObj = JSON.parse(errText2); } catch(e2) { throw new Error(errText2.slice(0,400)); }
@@ -13352,9 +13353,9 @@ function renderPreview(d) {
       for (var b of (role.bullets || [])) {
         if (typeof b === 'object' && b.heading) {
           html += '<div class="preview-role" style="margin-top:4px">' + esc(b.heading) + '</div>';
-          for (var sb of (b.bullets || [])) html += '<div class="preview-bullet">' + esc(sb) + '</div>';
+          for (var sb of (b.bullets || [])) html += cvBulletPreviewHtml(sb);
         } else {
-          html += '<div class="preview-bullet">' + esc(b) + '</div>';
+          html += cvBulletPreviewHtml(b);
         }
       }
     }
@@ -18860,6 +18861,7 @@ async function runBatch() {
       var exData = await exRes.json();
       if (exData.error) throw new Error('Extraction: ' + exData.error);
       var rawText = exData.text;
+      var batchExtractLevels = Array.isArray(exData.bullet_levels) ? exData.bullet_levels : null;
       bf.charCount = rawText.length;
 
       // ── Step 1: Parse CV ─────────────────────────────────────────────────
@@ -18871,6 +18873,7 @@ async function runBatch() {
         throw new Error('Parse: ' + normalizeAiProviderError(pData.error || ('API error ' + pRes.status), route));
       }
       var cvData = pData.data;
+      var batchLabelLevels = Array.isArray(pData.bullet_levels) ? pData.bullet_levels : null;
       if (pData.warning) showToast(bf.file.name + ': ' + pData.warning, 'info');
       bf.cost += responseCost(pData, route.model, route.provider);
       bf.usage = mergeUsageClient(bf.usage, pData.usage || {});
@@ -18899,7 +18902,7 @@ async function runBatch() {
       // ── Step 3: Generate DOCX ─────────────────────────────────────────────
       var docxStepIdx = isBlind ? 3 : 2;
       batchSetProgress(bf, pcts[docxStepIdx], 'Generating DOCX…', makeSteps(docxStepIdx));
-      var dRes = await fetchWithTimeout('/generate-docx', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data: cvData, alignment: batchDocumentAlignment }) }, 60000);
+      var dRes = await fetchWithTimeout('/generate-docx', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data: cvData, alignment: batchDocumentAlignment, bullet_levels: cvMergeLevelLists(batchExtractLevels, batchLabelLevels) }) }, 60000);
       if (!dRes.ok) { var err2 = await dRes.json(); throw new Error('DOCX: ' + (err2.error||'Failed')); }
       var blob = await dRes.blob();
 
@@ -19153,6 +19156,44 @@ window.addEventListener('load', async function() {
 // ── Input tab switching ───────────────────────────────────────────────────────
 var _activeInputTab = 'paste';
 var _extractedText = '';
+// Nested-list indent maps carried to /generate-docx: source-derived (docx
+// w:ilvl / pdf geometry, from /extract-text) and outline-label (from /parse).
+var _extractedBulletLevels = null;
+var _labelBulletLevels = null;
+// Merge {text, level} lists by key, keeping the deepest level (>= 1 only).
+function cvMergeLevelLists(a, b) {
+  var map = {};
+  [a, b].forEach(function(list) {
+    if (!Array.isArray(list)) return;
+    list.forEach(function(e) {
+      if (e && e.text != null) {
+        var key = String(e.text);
+        var v = Math.min(Math.max(Number(e.level) || 0, 0), 8);
+        if (!(key in map) || v > map[key]) map[key] = v;
+      }
+    });
+  });
+  var out = [];
+  Object.keys(map).forEach(function(key) { if (map[key] >= 1) out.push({ text: key, level: map[key] }); });
+  return out;
+}
+function cvBulletLevelFor(text) {
+  var key = String(text == null ? '' : text).replace(/\s+/g, ' ').trim().toLowerCase();
+  var lists = [_extractedBulletLevels, _labelBulletLevels], best = 0;
+  for (var i = 0; i < lists.length; i++) {
+    if (!Array.isArray(lists[i])) continue;
+    for (var j = 0; j < lists[i].length; j++) {
+      var e = lists[i][j];
+      if (e && String(e.text) === key) { var v = Math.min(Math.max(Number(e.level) || 0, 0), 8); if (v > best) best = v; }
+    }
+  }
+  return best;
+}
+function cvBulletPreviewHtml(text) {
+  var lvl = cvBulletLevelFor(text);
+  var style = lvl > 0 ? ' style="margin-left:' + (lvl * 22) + 'px"' : '';
+  return '<div class="preview-bullet"' + style + '>' + esc(text) + '</div>';
+}
 
 function switchInputTab(tab) {
   _activeInputTab = tab;
@@ -19218,6 +19259,7 @@ function handleFileSelect(file) {
         return;
       }
       _extractedText = data.text;
+      _extractedBulletLevels = Array.isArray(data.bullet_levels) ? data.bullet_levels : null;
       dz.classList.add('has-file');
       document.getElementById('dzFileName').textContent = '✓ ' + file.name + ' (' + data.text.length.toLocaleString() + ' chars extracted)';
       document.getElementById('dzClear').style.display = 'block';
