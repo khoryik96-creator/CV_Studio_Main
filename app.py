@@ -9179,9 +9179,13 @@ def parse_cv():
         parsed = _collapse_incomplete_earlier_career(parsed)
         parsed = _clean_candidate_languages_from_redaction(parsed, cv_text)
         parsed = _normalize_candidate_languages(parsed, cv_text)
+        # Outline-label nesting must be read from the raw bullet text, so infer it
+        # BEFORE _normalize_cv_structured_content strips the labels, and return it
+        # to the client to carry to /generate-docx.
+        bullet_levels = _infer_label_bullet_levels(parsed)
         parsed = _normalize_cv_structured_content(parsed)
         parsed = _normalize_cv_data_for_output(parsed, cv_text)
-        out = {"ok": True, "data": parsed, "usage": usage, "model": model, "provider": llm_provider}
+        out = {"ok": True, "data": parsed, "usage": usage, "model": model, "provider": llm_provider, "bullet_levels": bullet_levels}
         out.update(_llm_response_cost_fields(model, usage, llm_provider))
         # ── Fidelity audit — observational, never mutates `parsed`. Attaches a
         # report always; only escalates to the degraded/warning fields when the

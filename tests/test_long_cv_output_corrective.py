@@ -457,6 +457,39 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(captured["payload"].get("temperature"), 0)
 
+    def test_parse_returns_outline_label_levels_before_stripping(self):
+        # /parse strips outline labels, so it must infer nesting first and return
+        # it, or the client can never recover the levels.
+        parsed_json = {
+            "candidate": {"name": "T"},
+            "work_experiences": [{"company": "Co", "date_range": "2020 to 2021", "roles": [{
+                "title": "Eng", "bullets": [
+                    "Responsible for all IP services:",
+                    "(a) Operating System", "(b) Physical Server", "Ensure OLAs are met",
+                ]}]}],
+        }
+
+        def fake_call_llm(provider, api_key, payload):
+            return {"content": [{"text": json.dumps(parsed_json)}], "usage": {}}
+
+        client = app.app.test_client()
+        client.set_cookie(app._AI_SPEND_SESSION_COOKIE, app._AI_SPEND_SESSION_TOKEN)
+        with mock.patch.object(app, "call_llm", side_effect=fake_call_llm):
+            response = client.post(
+                "/parse",
+                json={"api_key": "sk-test", "cv_text": "x", "model": "m", "provider": "anthropic"},
+                headers={"Origin": "http://127.0.0.1:5000"},
+            )
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        levels = {e["text"]: e["level"] for e in payload.get("bullet_levels", [])}
+        self.assertEqual(levels.get("operating system"), 1)
+        self.assertEqual(levels.get("physical server"), 1)
+        # The returned data itself has the labels stripped.
+        bullets = payload["data"]["work_experiences"][0]["roles"][0]["bullets"]
+        self.assertIn("Operating System", bullets)
+        self.assertNotIn("(a) Operating System", bullets)
+
     def test_prompt_forbids_inferred_titles_and_serialized_groups(self):
         self.assertIn("Never invent, infer, imply, annotate, or explain a title", app.SYSTEM_PROMPT)
         self.assertIn("never as JSON serialized inside a string", app.SYSTEM_PROMPT)

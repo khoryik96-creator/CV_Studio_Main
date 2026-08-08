@@ -13071,9 +13071,9 @@ async function startFormat(blind) {
       document.getElementById('blindBadge').style.display = 'inline-flex';
     }
 
-    // Infer outline-label nesting from the raw bullets BEFORE renderPreview
-    // strips the labels; used by both the preview and the generated DOCX.
-    _labelBulletLevels = cvInferLabelLevels(_parsedData);
+    // Outline-label nesting: /parse infers it server-side (before it strips the
+    // labels) and returns it; fall back to client inference for older servers.
+    _labelBulletLevels = Array.isArray(data.bullet_levels) ? data.bullet_levels : cvInferLabelLevels(_parsedData);
     renderPreview(_parsedData);
     showToast(blind ? 'Blinded! Generating DOCX…' : 'Parsed! Generating DOCX…', 'ok');
 
@@ -18998,7 +18998,8 @@ async function runBatch() {
         throw new Error('Parse: ' + normalizeAiProviderError(pData.error || ('API error ' + pRes.status), route));
       }
       var cvData = pData.data;
-      var batchLabelLevels = cvInferLabelLevels(cvData);  // before normalize strips labels
+      // /parse returns outline-label nesting (inferred before it strips labels).
+      var batchLabelLevels = Array.isArray(pData.bullet_levels) ? pData.bullet_levels : cvInferLabelLevels(cvData);
       if (pData.warning) showToast(bf.file.name + ': ' + pData.warning, 'info');
       bf.cost += responseCost(pData, route.model, route.provider);
       bf.usage = mergeUsageClient(bf.usage, pData.usage || {});
