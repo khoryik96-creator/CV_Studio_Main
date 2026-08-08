@@ -49,6 +49,14 @@ class DateAndMonthTests(unittest.TestCase):
     def test_date_range_already_normal_preserved(self):
         self.assertEqual(cn._normalize_cv_date_range("2019 to 2021"), "2019 to 2021")
 
+    def test_leading_dash_on_single_year_is_not_turned_into_to(self):
+        # A DOCX list can prefix a graduation year with a dash ("- 2001"); it must
+        # not become "to 2001", while a real range separator is still converted.
+        self.assertEqual(cn._normalize_cv_date_range("- 2001"), "2001")
+        self.assertEqual(cn._normalize_cv_date_range("-2001"), "2001")
+        self.assertEqual(cn._normalize_cv_date_range("– 1996"), "1996")
+        self.assertEqual(cn._normalize_cv_date_range("2020 - 2023"), "2020 to 2023")
+
     def test_date_range_numeric_month_year_to_house_style(self):
         # A parse run that emits "06/2024" must normalise to the same "Mon YYYY"
         # form as a run that emits "Jun 2024", so re-formatting is consistent.
@@ -254,6 +262,38 @@ class BulletAndStructuredContentTests(unittest.TestCase):
     def test_leading_marker_strip_preserves_figures_and_internal_dashes(self):
         out = cn._normalize_cv_bullet_items(["-5% cost variance recorded", "5-star client rating"])
         self.assertEqual(out, ["-5% cost variance recorded", "5-star client rating"])
+
+    def test_marker_only_noise_bullets_are_dropped_but_non_latin_kept(self):
+        # A residue like "-"/"--" left after stripping carries no content and must
+        # not render as a lone dash; non-Latin bullets (no A-Za-z0-9) are content
+        # and must survive (isalnum is Unicode-aware).
+        out = cn._normalize_cv_bullet_items(["-", "--", "•", "维护服务器", "Real bullet"])
+        self.assertEqual(out, ["维护服务器", "Real bullet"])
+
+    def test_leading_enumerators_are_stripped(self):
+        # Source enumeration markers ("(i)", "1.", "1)") must not survive as
+        # "(i)Receives…" once the formatter adds its own bullet.
+        out = cn._normalize_cv_bullet_items([
+            "(i)Receives calls", "(ii) Talks with user", "(iv)To do backup",
+            "1. Achieved target", "1)Delivered project",
+        ])
+        self.assertEqual(out, [
+            "Receives calls", "Talks with user", "To do backup",
+            "Achieved target", "Delivered project",
+        ])
+
+    def test_enumerator_strip_does_not_eat_real_content(self):
+        # Decimals, long parentheticals, and "i.e." are not enumerators.
+        out = cn._normalize_cv_bullet_items([
+            "3.5 GPA maintained",
+            "(Vendors: Toyota, Honda) engaged",
+            "(i.e. cross-functional) collaboration",
+        ])
+        self.assertEqual(out, [
+            "3.5 GPA maintained",
+            "(Vendors: Toyota, Honda) engaged",
+            "(i.e. cross-functional) collaboration",
+        ])
 
     def test_structured_content_smoke(self):
         parsed = {"experience": [{"title": "engineer", "bullets": ["Did a thing"]}]}
