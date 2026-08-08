@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.281"
+_INSTALL_RECEIPT_VERSION = "v24.6.282"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -318,7 +318,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.281"
+_CVSTUDIO_VERSION = "v24.6.282"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -3858,7 +3858,7 @@ def _ja_spa_browser_bridge(candidate_id, fields, note_text="", email="", salary_
     payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
     compact_payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     script = """(async () => {
-  const helperVersion = 'v24.6.281';
+  const helperVersion = 'v24.6.282';
   const candidateId = %s;
   const payload = %s;
   const profilePath = %s;
@@ -11278,11 +11278,210 @@ def _normalize_cv_text_alignment(value):
     return "justify" if str(value or "").strip().lower() == "justify" else "left"
 
 
+def _summary_docx_bullets(value):
+    """Return bounded, non-empty Summary bullets for DOCX insertion."""
+    if not isinstance(value, list):
+        return []
+    bullets = []
+    for item in value:
+        text = re.sub(r"\s+", " ", str(item or "")).strip()
+        if text:
+            bullets.append(text[:2000])
+        if len(bullets) >= 20:
+            break
+    return bullets
+
+
+def _xml_element_span(xml_text, tag, start=0):
+    """Find one possibly nested OOXML element without reserializing the part."""
+    opening = re.compile(r"<{}\b[^>]*>".format(re.escape(tag)))
+    closing = "</{}>".format(tag)
+    match = opening.search(xml_text, start)
+    if not match:
+        return None
+    depth = 1
+    cursor = match.end()
+    while depth:
+        next_open = opening.search(xml_text, cursor)
+        next_close = xml_text.find(closing, cursor)
+        if next_close < 0:
+            return None
+        if next_open and next_open.start() < next_close:
+            depth += 1
+            cursor = next_open.end()
+        else:
+            depth -= 1
+            cursor = next_close + len(closing)
+    return match.start(), cursor
+
+
+def _summary_docx_run(text, bold=False, color="000000", size=24):
+    escaped = html.escape(str(text or ""), quote=False)
+    bold_xml = "<w:b/><w:bCs/>" if bold else ""
+    return (
+        "<w:r><w:rPr>{}<w:color w:val=\"{}\"/>"
+        "<w:sz w:val=\"{}\"/><w:szCs w:val=\"{}\"/></w:rPr>"
+        "<w:t xml:space=\"preserve\">{}</w:t></w:r>"
+    ).format(bold_xml, color, size, size, escaped)
+
+
+def _summary_docx_paragraph_runs(text):
+    runs = []
+    for part in re.split(r"(\*\*[^*]+\*\*)", str(text or "")):
+        if not part:
+            continue
+        if part.startswith("**") and part.endswith("**"):
+            runs.append(_summary_docx_run(part[2:-2], bold=True))
+        else:
+            runs.append(_summary_docx_run(part))
+    return "".join(runs)
+
+
+def _insert_summary_into_docx_bytes(file_bytes, summary_bullets):
+    """Insert/replace a source-bound Summary row in the first DOCX table.
+
+    Only ``word/document.xml`` is changed. Every other package part is copied
+    byte-for-byte with its original ZipInfo metadata.
+    """
+    bullets = _summary_docx_bullets(summary_bullets)
+    if not bullets:
+        raise ValueError("No CV Summary bullets provided")
+
+    try:
+        _validate_zip_payload(file_bytes, "DOCX document")
+    except ValueError as exc:
+        if "not a valid ZIP-based document" in str(exc):
+            raise ValueError("The uploaded file is not a valid DOCX document") from exc
+        raise
+
+    source = io.BytesIO(file_bytes)
+    output = io.BytesIO()
+    try:
+        with zipfile.ZipFile(source, "r") as archive:
+            names = set(archive.namelist())
+            if "[Content_Types].xml" not in names or "word/document.xml" not in names:
+                raise ValueError("The uploaded file is not a valid DOCX document")
+            document_bytes = archive.read("word/document.xml")
+            try:
+                document_xml = document_bytes.decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise ValueError("The DOCX document XML is not valid UTF-8") from exc
+            if "<w:document" not in document_xml or "<w:body" not in document_xml:
+                raise ValueError("The uploaded file is not a valid Word DOCX")
+
+            table_span = _xml_element_span(document_xml, "w:tbl")
+            if not table_span:
+                raise ValueError("The DOCX does not contain a candidate details table")
+            table_start, table_end = table_span
+            table_xml = document_xml[table_start:table_end]
+
+            # Re-running the action replaces CV Studio's prior row instead of
+            # accumulating duplicate Summary blocks.
+            marker = table_xml.find('_CVStudioSummary')
+            if marker >= 0:
+                row_start = table_xml.rfind("<w:tr", 0, marker)
+                row_end = table_xml.find("</w:tr>", marker)
+                if row_start >= 0 and row_end >= 0:
+                    table_xml = table_xml[:row_start] + table_xml[row_end + len("</w:tr>"):]
+
+            grid_match = re.search(r"<w:tblGrid>(.*?)</w:tblGrid>", table_xml, re.S)
+            grid_widths = []
+            if grid_match:
+                grid_widths = [
+                    int(value)
+                    for value in re.findall(r"<w:gridCol\b[^>]*\bw:w=\"(\d+)\"", grid_match.group(1))
+                ]
+            span = max(1, len(grid_widths))
+            width = sum(grid_widths) if grid_widths else 9020
+            fill_match = re.search(r"<w:shd\b[^>]*\bw:fill=\"([^\"]+)\"", table_xml)
+            fill = fill_match.group(1) if fill_match else "DEEBF6"
+            if not re.fullmatch(r"(?:[0-9A-Fa-f]{6}|auto)", fill):
+                fill = "DEEBF6"
+
+            bookmark_ids = [int(value) for value in re.findall(r"<w:bookmarkStart\b[^>]*\bw:id=\"(\d+)\"", document_xml)]
+            bookmark_id = min((max(bookmark_ids) + 1) if bookmark_ids else 1, 2_147_483_647)
+            label = (
+                '<w:p><w:pPr><w:keepNext/><w:spacing w:before="0" w:after="80"/></w:pPr>'
+                '<w:bookmarkStart w:id="{}" w:name="_CVStudioSummary"/>{}'
+                '<w:bookmarkEnd w:id="{}"/></w:p>'
+            ).format(bookmark_id, _summary_docx_run("CV SUMMARY:", bold=True, color="004990", size=22), bookmark_id)
+
+            num_match = re.search(
+                r"<w:p\b[^>]*>.*?<w:pStyle\b[^>]*w:val=\"ListParagraph\"[^>]*/>"
+                r".*?<w:numId\b[^>]*w:val=\"(\d+)\"[^>]*/>.*?</w:p>",
+                document_xml,
+                re.S,
+            )
+            bullet_xml = []
+            for bullet in bullets:
+                if num_match:
+                    ppr = (
+                        '<w:pPr><w:pStyle w:val="ListParagraph"/><w:keepLines/>'
+                        '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="{}"/></w:numPr>'
+                        '<w:ind w:left="720" w:hanging="360"/><w:spacing w:before="0" w:after="0"/>'
+                        '</w:pPr>'
+                    ).format(num_match.group(1))
+                    prefix = ""
+                else:
+                    ppr = '<w:pPr><w:spacing w:before="0" w:after="0"/></w:pPr>'
+                    prefix = _summary_docx_run("• ")
+                bullet_xml.append("<w:p>{}{}{}</w:p>".format(ppr, prefix, _summary_docx_paragraph_runs(bullet)))
+
+            cell_properties = (
+                '<w:tcPr><w:tcW w:w="{}" w:type="dxa"/><w:gridSpan w:val="{}"/>'
+                '<w:tcBorders><w:top w:val="dotted" w:sz="4" w:space="0" w:color="000000"/></w:tcBorders>'
+                '<w:shd w:val="clear" w:color="auto" w:fill="{}"/>'
+                '<w:tcMar><w:top w:w="100" w:type="dxa"/><w:left w:w="120" w:type="dxa"/>'
+                '<w:bottom w:w="100" w:type="dxa"/><w:right w:w="120" w:type="dxa"/></w:tcMar></w:tcPr>'
+            ).format(width, span, html.escape(fill, quote=True))
+            summary_row = "<w:tr><w:tc>{}{}{}</w:tc></w:tr>".format(
+                cell_properties,
+                label,
+                "".join(bullet_xml),
+            )
+            close_index = table_xml.rfind("</w:tbl>")
+            if close_index < 0:
+                raise ValueError("The candidate details table is malformed")
+            table_xml = table_xml[:close_index] + summary_row + table_xml[close_index:]
+            patched_xml = document_xml[:table_start] + table_xml + document_xml[table_end:]
+
+            with zipfile.ZipFile(output, "w") as patched:
+                for info in archive.infolist():
+                    payload = patched_xml.encode("utf-8") if info.filename == "word/document.xml" else archive.read(info.filename)
+                    patched.writestr(info, payload)
+    except zipfile.BadZipFile as exc:
+        raise ValueError("The uploaded file is not a valid DOCX document") from exc
+
+    return output.getvalue()
+
+
 @app.route("/generate-docx", methods=["POST"])
 def generate_docx():
     data_path = None
     out_path = None
     try:
+        if request.mimetype == "multipart/form-data":
+            source_docx = request.files.get("source_docx")
+            if source_docx is None or not source_docx.filename:
+                return jsonify({"error": "Upload a DOCX file first"}), 400
+            if not source_docx.filename.lower().endswith(".docx"):
+                return jsonify({"error": "Summary insertion supports DOCX files only"}), 400
+            try:
+                summary_bullets = json.loads(request.form.get("summary_bullets") or "[]")
+            except (TypeError, ValueError):
+                return jsonify({"error": "Invalid CV Summary bullets"}), 400
+            try:
+                document_bytes = _insert_summary_into_docx_bytes(source_docx.read(), summary_bullets)
+            except ValueError as exc:
+                return jsonify({"error": str(exc)}), _document_validation_status(exc)
+            stem = re.sub(r"(?i)\.docx$", "", os.path.basename(source_docx.filename)).strip() or "Hyppies CV"
+            return send_file(
+                io.BytesIO(document_bytes),
+                as_attachment=True,
+                download_name=stem + " - Summary.docx",
+                mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+
         body = request.get_json(force=True, silent=True)
         if not body:
             return jsonify({"error": "Invalid JSON body"}), 400

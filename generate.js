@@ -334,7 +334,7 @@ function bulletPara(text, alignmentXml = BODY_ALIGNMENT_XML) {
 }
 
 // ── About Him table ───────────────────────────────────────────────────────────
-function makeAboutTable(c, cv) {
+function makeAboutTable(c, cv, summaryBullets) {
   const fill = 'DEEBF6';
   function tc(width, content, borders = '', span = null) {
     const spanXml = span ? `<w:gridSpan w:val="${span}"/>` : '';
@@ -372,6 +372,22 @@ function makeAboutTable(c, cv) {
     ${tc(9020, para(run('LANGUAGES: ' + normalizeLanguages(c.languages || ''), { bold: true })) + emptyPara(), dTop, 3)}
   </w:tr>`;
 
+  // Optional row 4: generated CV Summary, spanning the same full-width table
+  // used by the owner-supplied Hyppies candidate-detail documents.
+  const summaries = (Array.isArray(summaryBullets) ? summaryBullets : [])
+    .map(value => String(value == null ? '' : value).trim())
+    .filter(Boolean)
+    .slice(0, 20);
+  let row4 = '';
+  if (summaries.length) {
+    let summaryContent = para(
+      run('CV SUMMARY:', { bold: true, color: '004990', size: 22 }),
+      `${LEFT_ALIGNMENT_XML}<w:keepNext/><w:spacing w:before="0" w:after="80"/>`
+    );
+    for (const bullet of summaries) summaryContent += bulletPara(bullet);
+    row4 = `<w:tr>${tc(9020, summaryContent, dTop, 3)}</w:tr>`;
+  }
+
   return `<w:tbl>
     <w:tblPr>
       <w:tblStyle w:val="a0"/>
@@ -382,7 +398,7 @@ function makeAboutTable(c, cv) {
       <w:tblLook w:val="0400"/>
     </w:tblPr>
     <w:tblGrid><w:gridCol w:w="4820"/><w:gridCol w:w="1201"/><w:gridCol w:w="2999"/></w:tblGrid>
-    ${row1}${row2}${row3}
+    ${row1}${row2}${row3}${row4}
   </w:tbl>`;
 }
 
@@ -585,7 +601,7 @@ const sectPr = sectPrMatch ? sectPrMatch[0] : '';
 const c = cv.candidate || {};
 const newBodyContent =
   drawingPara +
-  makeAboutTable(c, cv) +
+  makeAboutTable(c, cv, cv.summary_bullets || []) +
   emptyPara() + emptyPara() +
   makeWorkSection(cv.work_experiences || []) +
   makeEducationSection(cv.education || []) +

@@ -37,6 +37,39 @@
   focused review. Stop before release, merge, further extractions or unrelated
   work.
 
+## v24.6.282 CV Summary table candidate
+
+- Separate branch `chatgpt/v24.6.282-summary-table-options` starts from current
+  v24.6.281 master and reapplies only the owner-approved Summary workflow. It is
+  not merged and no pull request has been opened.
+- Generated Summary bullets render as a full-width fourth row in the Hyppies
+  candidate-details table, after Languages, in both browser preview and DOCX.
+  Inline `**bold**` emphasis remains bold Word runs; an empty/off Summary omits
+  the row.
+- Normal single and batch formatting expose an off-by-default **Generate CV
+  Summary** toggle. Enabling it adds one source-grounded call through the saved
+  CV Summary AI route per CV after structural parsing. Linked standalone
+  Summary bullets are reused without another call. Blind CV and Blind All do
+  not generate or apply the unblinded Summary.
+- A standalone Summary generated from an unchanged `.docx` upload can be added
+  back to that source document. The existing `/generate-docx` route accepts the
+  multipart DOCX mode, inserts or replaces one marked Summary row in the first
+  table, and copies every other OOXML package part byte-for-byte. Non-DOCX,
+  malformed package, empty Summary and edited-source cases fail visibly.
+- Both owner-supplied Hyppies DOCX references passed a real-package structural
+  trial: Summary appeared once in the first table and every other package part
+  remained byte-identical. LibreOffice was unavailable and installed Word hung
+  on headless PDF export, so this environment could not complete rendered-page
+  visual QA; focused DOCX/frontend tests cover the structure and source binding.
+- Validation passed for all 11 JavaScript fixtures, 38 focused Python tests,
+  repository consistency, tracked Python syntax, changed PowerShell/Bash
+  syntax, and 737 Python tests with four established platform/environment
+  exclusions plus the locally locked Antiword junction self-test excluded. The
+  latter was repeated twice and failed only because Windows kept the temporary
+  `antiword.exe` open; it does not touch this feature's files or execution path.
+- The Flask route inventory remains 116 with no schema, credential, JobAdder,
+  Lead Finder, extraction, or Blind CV contract change.
+
 ## v24.6.279 legacy-DOC and CV-formatting corrective
 
 - PR #98 was squash-merged to `master` as `a18cda4` at v24.6.279.

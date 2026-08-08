@@ -274,6 +274,142 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertIn("Undated University", document_xml)
         self.assertNotIn("| Undated University", document_xml)
 
+    def test_docx_renders_linked_cv_summary_bullets_with_inline_bold(self):
+        data = {
+            "candidate": {"name": "Summary Fixture"},
+            "summary_bullets": [
+                "**Cloud platforms** leader across regional delivery.",
+                "Built engineering teams & delivery standards.",
+            ],
+            "work_experiences": [
+                {
+                    "company": "Example Sdn Bhd",
+                    "date_range": "Jan 2020 to Present",
+                    "roles": [{"title": "Director", "bullets": []}],
+                }
+            ],
+            "education": [],
+            "certifications": [],
+            "skills": [],
+        }
+
+        response = app.app.test_client().post(
+            "/generate-docx",
+            json={"data": data},
+            headers={"Origin": "http://127.0.0.1:5000"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
+            document_xml = archive.read("word/document.xml").decode("utf-8")
+        self.assertIn("CV SUMMARY:", document_xml)
+        self.assertIn("Cloud platforms", document_xml)
+        self.assertIn("Built engineering teams &amp; delivery standards.", document_xml)
+        first_table = re.search(r"<w:tbl\b.*?</w:tbl>", document_xml, re.S)
+        self.assertIsNotNone(first_table)
+        self.assertIn("CV SUMMARY:", first_table.group(0))
+        self.assertIn('<w:gridSpan w:val="3"/>', first_table.group(0))
+        self.assertLess(document_xml.index("CV SUMMARY:"), document_xml.index("W O R K   E X P E R I E N C E S"))
+        self.assertRegex(
+            document_xml,
+            r"<w:r><w:rPr><w:b/><w:bCs/>.*?<w:t>Cloud platforms</w:t></w:r>",
+        )
+
+    def test_generate_docx_multipart_adds_and_replaces_summary_in_uploaded_docx_table(self):
+        source_response = app.app.test_client().post(
+            "/generate-docx",
+            json={
+                "data": {
+                    "candidate": {"name": "Uploaded DOCX Fixture", "languages": "English"},
+                    "work_experiences": [],
+                    "education": [],
+                    "certifications": [],
+                    "skills": [],
+                }
+            },
+            headers={"Origin": "http://127.0.0.1:5000"},
+        )
+        self.assertEqual(source_response.status_code, 200)
+
+        bullets = [
+            "**Cloud platforms** leader across regional delivery.",
+            "Built engineering teams & delivery standards.",
+        ]
+        patched_response = app.app.test_client().post(
+            "/generate-docx",
+            data={
+                "source_docx": (io.BytesIO(source_response.data), "Hyppies CV - Fixture.docx"),
+                "summary_bullets": json.dumps(bullets),
+            },
+            content_type="multipart/form-data",
+            headers={"Origin": "http://127.0.0.1:5000"},
+        )
+        self.assertEqual(patched_response.status_code, 200)
+        self.assertIn("Hyppies CV - Fixture - Summary.docx", patched_response.headers.get("Content-Disposition", ""))
+
+        with (
+            zipfile.ZipFile(io.BytesIO(source_response.data)) as source_archive,
+            zipfile.ZipFile(io.BytesIO(patched_response.data)) as patched_archive,
+        ):
+            self.assertEqual(source_archive.namelist(), patched_archive.namelist())
+            for name in source_archive.namelist():
+                if name != "word/document.xml":
+                    self.assertEqual(source_archive.read(name), patched_archive.read(name), name)
+            document_xml = patched_archive.read("word/document.xml").decode("utf-8")
+
+        self.assertEqual(document_xml.count('_CVStudioSummary'), 1)
+        first_table = re.search(r"<w:tbl\b.*?</w:tbl>", document_xml, re.S)
+        self.assertIsNotNone(first_table)
+        self.assertIn("CV SUMMARY:", first_table.group(0))
+        self.assertIn("Cloud platforms", first_table.group(0))
+        self.assertIn("Built engineering teams &amp; delivery standards.", first_table.group(0))
+        self.assertRegex(
+            first_table.group(0),
+            r"<w:r><w:rPr><w:b/><w:bCs/>.*?<w:t xml:space=\"preserve\">Cloud platforms</w:t>",
+        )
+
+        replacement_response = app.app.test_client().post(
+            "/generate-docx",
+            data={
+                "source_docx": (io.BytesIO(patched_response.data), "Hyppies CV - Fixture - Summary.docx"),
+                "summary_bullets": json.dumps(["Replacement summary only."]),
+            },
+            content_type="multipart/form-data",
+            headers={"Origin": "http://127.0.0.1:5000"},
+        )
+        self.assertEqual(replacement_response.status_code, 200)
+        with zipfile.ZipFile(io.BytesIO(replacement_response.data)) as replacement_archive:
+            replacement_xml = replacement_archive.read("word/document.xml").decode("utf-8")
+        self.assertEqual(replacement_xml.count('_CVStudioSummary'), 1)
+        self.assertIn("Replacement summary only.", replacement_xml)
+        self.assertNotIn("Cloud platforms", replacement_xml)
+
+    def test_generate_docx_multipart_rejects_non_docx_and_invalid_packages(self):
+        client = app.app.test_client()
+        non_docx = client.post(
+            "/generate-docx",
+            data={
+                "source_docx": (io.BytesIO(b"not a docx"), "candidate.pdf"),
+                "summary_bullets": json.dumps(["Summary"]),
+            },
+            content_type="multipart/form-data",
+            headers={"Origin": "http://127.0.0.1:5000"},
+        )
+        self.assertEqual(non_docx.status_code, 400)
+        self.assertIn("DOCX files only", non_docx.get_json()["error"])
+
+        invalid_docx = client.post(
+            "/generate-docx",
+            data={
+                "source_docx": (io.BytesIO(b"not a zip package"), "candidate.docx"),
+                "summary_bullets": json.dumps(["Summary"]),
+            },
+            content_type="multipart/form-data",
+            headers={"Origin": "http://127.0.0.1:5000"},
+        )
+        self.assertEqual(invalid_docx.status_code, 400)
+        self.assertIn("valid DOCX", invalid_docx.get_json()["error"])
+
     def test_docx_restores_source_project_training_and_omits_untrusted_metadata(self):
         source = """Other Information
 [PROJECT INVOLVEMENT HISTORY]:

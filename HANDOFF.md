@@ -208,12 +208,19 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   The v24.6.280 post-merge corrective stops Project/Training source recovery at
   recognized ordinary CV headings so it cannot absorb later sections, and
   records the owner-authorized Antiword-rejection conversion exception in
-  `AGENTS.md`. The separate Summary-format experiment is not part of either
-  change and must remain unpushed and unmerged unless the owner later approves
-  it explicitly.
+  `AGENTS.md`. The owner later published the Summary-format experiment on the
+  separate `chatgpt/v24.6.280-summary-to-formatted-resume` branch; it remains
+  absent from master.
   The v24.6.281 follow-up also recognizes common combined boundaries such as
   Education & Certification, Professional Qualifications, Courses & Training,
   and Professional Affiliations.
+- **CV Summary table workflow — STAGED ON A SEPARATE BRANCH, NOT MERGED.** The
+  v24.6.282 candidate starts from current v24.6.281 master and carries the
+  source-bound Summary into a full-width row of the Hyppies candidate-details
+  table. Normal single and batch formatting have opt-in Summary generation;
+  Blind remains unchanged. Standalone Summary can also insert or replace that
+  row in the originally uploaded `.docx` through the existing `/generate-docx`
+  route; non-DOCX files are rejected and all other package parts are preserved.
 - **AI Crawler ".doc: flag, don't decode"**: skip decoding an undecodable legacy
   `.doc` while still surfacing the candidate. Deferred pending measurement of
   whether `.doc` decode vs. PDF OCR is the real bottleneck; a naive attempt

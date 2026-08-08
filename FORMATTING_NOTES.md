@@ -37,6 +37,36 @@ DeepSeek for AI. Current version is tracked in the repo-root `VERSION` file.
    `adm-zip`) which fills `template.docx`. `generate.js`'s `smartTokenCase` does
    company/title casing.
 
+### Standalone CV Summary to formatted resume
+
+The CV Summary tab can hand its already-generated bullets directly to a normal
+Format CV run. The browser keeps the raw CV as the structural source of truth,
+runs the existing `/parse` flow once, and then adds the exact generated bullets
+as `summary_bullets` before preview and `/generate-docx`. This explicit handoff
+does **not** make a second summary-generation call.
+
+The handoff is intentionally source-bound: editing or clearing the raw CV
+unlinks the bullets, and a summary generated for different text cannot be
+applied. `summary_bullets` remain empty in `SYSTEM_PROMPT`; they are populated
+only by an explicit user action. Blind CV does not apply an unblinded summary.
+`generate.js` renders Summary bullets as a full-width fourth row in the same
+Hyppies candidate-details table as name, notice period, position/company and
+languages. The browser preview mirrors that placement and `**inline bold**`
+remains bold in Word.
+
+Normal single and batch formatting also expose an opt-in **Generate CV
+Summary** toggle. When enabled, the structural `/parse` call still runs once,
+then the saved CV Summary AI route makes one additional source-grounded Summary
+call per CV before `/generate-docx`. The toggle is off by default, unavailable
+for Blind CV/Blind All, and its extra cost is included in the run total.
+
+For a standalone Summary whose source was uploaded as `.docx`, **Add to Uploaded
+DOCX** posts the original file plus the source-bound bullets through the
+existing `/generate-docx` route. The server inserts or replaces one marked,
+full-width Summary row in the first candidate-details table while copying every
+other OOXML package part byte-for-byte. Other file types never enable this
+action, and editing extracted text clears the DOCX association until re-upload.
+
 ## The one root-cause pattern behind almost every formatting bug
 
 **Source documents (especially DOCX / plain text) bake a list marker or label
@@ -124,8 +154,10 @@ Formatting is deterministic, so you rarely need the browser or a live parse:
 - **Reproduce a bug directly** against a pure function, e.g.
   `_normalize_cv_bullet_items(["(i)Received", "- 2001"])`, and assert on the
   result.
-- **Tests:** `tests/test_phase7b_cv_normalize_characterization.py` (unit) and
-  `tests/test_long_cv_output_corrective.py` (end-to-end DOCX). Run:
+- **Tests:** `tests/test_phase7b_cv_normalize_characterization.py` (unit),
+  `tests/test_long_cv_output_corrective.py` (end-to-end DOCX), and
+  `tests/test_long_cv_output_corrective.js` for the source-bound Summary handoff.
+  Run:
   `SALARY_COMPARISON_DATA_DIR=/tmp/sal/data .venv_test/bin/python -m pytest tests/ -q`
   — expect all pass except one known env-only `antiword` failure (a Windows
   binary that isn't functional on Linux).
