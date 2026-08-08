@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.277"
+_INSTALL_RECEIPT_VERSION = "v24.6.278"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -318,7 +318,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.277"
+_CVSTUDIO_VERSION = "v24.6.278"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -1240,6 +1240,7 @@ SECTION MAPPING RULES — very important:
 - If a skills section has sub-headings with bullet points (e.g. "Oracle:" followed by bullets, "PostgreSQL:" followed by bullets), map EACH sub-heading as its own skill category, and join its bullet points into the "items" field separated by newline characters (\n). Preserve the full detail of every bullet point exactly.
 - Any section labelled Certifications, Certificates, Licenses, Accreditations, Professional Certifications → map into "certifications" array
 - Any section labelled Training, Trainings, Professional Development, Courses, Short Courses, Workshops → map each training/course as an item in "certifications" array (they appear together under Additional Information)
+- Preserve every item under explicitly labelled source sections such as "Project Involvement History" and "Participated Training Programme". Never truncate these later sections because they appear near the bottom of a long CV.
 - CERTIFICATION/TRAINING DATES — KEEP THEM: when a certification or training states a date or year (e.g. "12/2023", "2019", "Nov 2019"), preserve it in the certification item exactly as given. Do not drop the date. Keep the issuing body/institution too.
 - Any section labelled Languages → map to candidate.languages field ONLY when it clearly belongs to the candidate. Extract EVERY language listed — capture all of them, not just the first (a two-column CV may interleave the Languages sidebar with other sections, e.g. "Chinese (Professional Working)", "Malay (Professional Working)", "English (Professional Working)" separated by other lines; include all three). Extract language names ONLY — strip all proficiency levels, fluency descriptions, written/spoken qualifiers. Standardize language names: English; Bahasa Malaysia for Malay/Bahasa Melayu/BM; Chinese for Mandarin/Cantonese/Hokkien/Hakka/other Chinese dialects. Only include languages explicitly stated in the CV.
 - REDACTED LANGUAGE GUARD: If a Languages section or candidate.languages value is explicitly redacted/masked/withheld (e.g. "[redacted]", "redacted", "confidential", "masked", "hidden", "***", "xxx", "████"), do not infer or invent languages from it. Leave candidate.languages as an empty string in that case. Do not use broad template/filler assumptions to remove languages; only ignore explicit redaction/masking.
@@ -1253,8 +1254,9 @@ SECTION MAPPING RULES — very important:
 OMISSION & EXTRA SECTIONS RULES:
 - Do NOT place phone numbers, email addresses, physical addresses, LinkedIn URLs, or location/relocation info into the formatted CV body (skills, summary, work experience bullets, education, additional information). HOWEVER, still extract these into candidate.email, candidate.phone, candidate.linkedin, and candidate.address in the JSON — the app uses them for JobAdder matching and upload.
 - SALARY / REMUNERATION — OMIT ENTIRELY: Never include any salary, remuneration, or compensation detail anywhere in the formatted CV body or JSON. This covers current/present salary, expected/asking/desired/target salary, base pay, monthly or annual salary figures, bonus, commission, incentives, allowances (transport/housing/meal/etc.), EPF/KWSP/benefits amounts, and total package/CTC figures — whether written inline or under a section labelled Current Remuneration, Remuneration, Compensation, Salary, Expected Salary, Current Salary, Salary Expectation, Package, or similar. Drop the whole section and every such figure; do NOT map it to a skills category, Additional Information, or any other field. This overrides the catch-all mapping rule below. (Notice period is NOT salary — keep mapping it to candidate.notice_period per the rule below.)
+- RECRUITMENT-SYSTEM METADATA — OMIT ENTIRELY: Never include source-routing/application metadata such as "Position: Retrieved Resumes (SiVA folder: ...); Date Applied: ...", JobStreet/SiVA folder labels, retrieval status, or application dates anywhere in the JSON or formatted CV.
 - KEEP & map to Additional Information skills categories:
-  - GitHub links, personal websites, portfolio URLs, Behance, Dribbble → { "category": "Portfolio & Links", "items": "GitHub: https://... | Website: https://..." }
+  - GitHub links, personal websites, portfolio URLs, Behance, Dribbble → { "category": "Portfolio & Links", "items": "GitHub: https://... | Website: https://..." }, but ONLY when the exact link is explicitly present in the source CV. Never invent, infer, complete, or emit a placeholder URL such as `https://github.com/unknown`; if no source link exists, omit the category.
   - Patents section → { "category": "Patents", "items": "Patent title (Patent number, Year)\nPatent title (Patent number, Year)" } — preserve each patent as a separate line with full detail
   - Publications, Research Papers → { "category": "Publications", "items": "Title (Journal, Year)\nTitle (Journal, Year)" }
   - Any other section that does not fit work_experiences, education, certifications, or skills (e.g. Interests, References, Projects, Open Source, Speaking Engagements, Conference Talks) → add as its own skills category with a sensible category name, preserve all content. EXCEPTION: never apply this catch-all to salary/remuneration/compensation content — that is omitted entirely per the SALARY / REMUNERATION rule above.
@@ -3856,7 +3858,7 @@ def _ja_spa_browser_bridge(candidate_id, fields, note_text="", email="", salary_
     payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
     compact_payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     script = """(async () => {
-  const helperVersion = 'v24.6.277';
+  const helperVersion = 'v24.6.278';
   const candidateId = %s;
   const payload = %s;
   const profilePath = %s;

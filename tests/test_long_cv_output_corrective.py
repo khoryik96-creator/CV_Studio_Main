@@ -274,6 +274,54 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertIn("Undated University", document_xml)
         self.assertNotIn("| Undated University", document_xml)
 
+    def test_docx_restores_source_project_training_and_omits_untrusted_metadata(self):
+        source = """Other Information
+[PROJECT INVOLVEMENT HISTORY]:
+* Firewalls Configuring & VPN Services
+* Network Infrastructure Enhancement & Redesign
+[PARTICIPATED TRAINING PROGRAMME]:
+* Enhancing Performance Through Teamwork
+* Professional Trainer Programme (Train The Trainer)
+[SOFT SKILLS]:
+* Vendor Management & Negotiation Skills
+"""
+        parsed = {
+            "candidate": {"name": "Kwong Yew Leong"},
+            "work_experiences": [],
+            "education": [],
+            "certifications": [],
+            "skills": [
+                {
+                    "category": "Summary",
+                    "items": (
+                        "Position: Retrieved Resumes (SiVA folder: Prescreened); "
+                        "Date Applied: 30 Mar 2022"
+                    ),
+                },
+                {
+                    "category": "Portfolio & Links",
+                    "items": "GitHub: https://github.com/unknown",
+                },
+            ],
+        }
+        normalized = app._normalize_cv_data_for_output(parsed, source)
+
+        response = app.app.test_client().post(
+            "/generate-docx",
+            json={"data": normalized},
+            headers={"Origin": "http://127.0.0.1:5000"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
+            document_xml = archive.read("word/document.xml").decode("utf-8")
+        self.assertIn("Project Involvement History:", document_xml)
+        self.assertIn("Network Infrastructure Enhancement &amp; Redesign", document_xml)
+        self.assertIn("Participated Training Programme:", document_xml)
+        self.assertIn("Professional Trainer Programme (Train The Trainer)", document_xml)
+        self.assertNotIn("Retrieved Resumes", document_xml)
+        self.assertNotIn("github.com/unknown", document_xml)
+
     def test_prompt_forbids_inferred_titles_and_serialized_groups(self):
         self.assertIn("Never invent, infer, imply, annotate, or explain a title", app.SYSTEM_PROMPT)
         self.assertIn("never as JSON serialized inside a string", app.SYSTEM_PROMPT)
@@ -286,6 +334,12 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertIn("CERTIFICATION/TRAINING DATES — KEEP THEM", app.SYSTEM_PROMPT)
         # #2 distinct stints at the same employer stay separate entries.
         self.assertIn("SEPARATE STINTS AT THE SAME EMPLOYER", app.SYSTEM_PROMPT)
+
+    def test_prompt_omits_recruitment_metadata_and_forbids_invented_links(self):
+        self.assertIn("RECRUITMENT-SYSTEM METADATA — OMIT ENTIRELY", app.SYSTEM_PROMPT)
+        self.assertIn("https://github.com/unknown", app.SYSTEM_PROMPT)
+        self.assertIn("Project Involvement History", app.SYSTEM_PROMPT)
+        self.assertIn("Participated Training Programme", app.SYSTEM_PROMPT)
 
     def test_prompt_omits_salary_and_remuneration_details(self):
         # Candidates sometimes include current/expected salary or a remuneration

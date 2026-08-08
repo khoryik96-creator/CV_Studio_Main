@@ -197,7 +197,10 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   a provider-leading `to` is removed from a lone education year (`to 2001`
   becomes `2001`) while an absent date remains absent,
   Core Expertise is a real bullet list, and bare `a.`/`i.`/`1-`/`a-`
-  source labels are removed before Word supplies the visible list marker.
+  source labels are removed before Word supplies the visible list marker. The
+  Kwong regression follow-up removes JobStreet/SiVA retrieval metadata, rejects
+  GitHub URLs not grounded in the source, and deterministically restores the
+  source Project Involvement History and Participated Training Programme lists.
 - **AI Crawler ".doc: flag, don't decode"**: skip decoding an undecodable legacy
   `.doc` while still surfacing the candidate. Deferred pending measurement of
   whether `.doc` decode vs. PDF OCR is the real bottleneck; a naive attempt

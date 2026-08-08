@@ -624,6 +624,109 @@ class EducationAndSkillsConsistencyTests(unittest.TestCase):
                 self.assertEqual(normalized["skills"][0]["items"], expected)
 
 
+class SourceAdditionalSectionRecoveryTests(unittest.TestCase):
+    SOURCE = """Other Information
+[PROJECT INVOLVEMENT HISTORY]:
+* Firewalls Configuring & VPN Services
+* Network Infrastructure Enhancement & Redesign
+[PARTICIPATED TRAINING PROGRAMME]:
+* Enhancing Performance Through Teamwork
+* Microsoft Certified System Engineer (MCSE)
+[SOFT SKILLS]:
+* Vendor Management & Negotiation Skills
+"""
+
+    def test_recovers_project_and_training_sections_without_duplicate_certs(self):
+        parsed = {
+            "certifications": [
+                "Microsoft Certified System Engineer (MCSE)",
+                "Unrelated Certification",
+            ],
+            "skills": [
+                {
+                    "category": "Project Involvement History",
+                    "items": "Firewalls Configuring & VPN Services",
+                }
+            ],
+        }
+
+        normalized = cn._normalize_cv_data_for_output(parsed, self.SOURCE)
+        sections = {
+            skill["category"]: skill["items"] for skill in normalized["skills"]
+        }
+
+        self.assertEqual(
+            sections["Project Involvement History"],
+            [
+                "Firewalls Configuring & VPN Services",
+                "Network Infrastructure Enhancement & Redesign",
+            ],
+        )
+        self.assertEqual(
+            sections["Participated Training Programme"],
+            [
+                "Enhancing Performance Through Teamwork",
+                "Microsoft Certified System Engineer (MCSE)",
+            ],
+        )
+        self.assertEqual(normalized["certifications"], ["Unrelated Certification"])
+
+    def test_removes_siva_metadata_and_only_keeps_source_grounded_github(self):
+        parsed = {
+            "skills": [
+                {
+                    "category": "Summary",
+                    "items": (
+                        "Position: Retrieved Resumes (SiVA folder: Prescreened); "
+                        "Date Applied: 30 Mar 2022"
+                    ),
+                },
+                {
+                    "category": "Portfolio & Links",
+                    "items": (
+                        "GitHub: https://github.com/unknown | "
+                        "GitHub: https://github.com/source-user"
+                    ),
+                },
+                {
+                    "category": "Technologies",
+                    "items": "Python | Java",
+                },
+            ]
+        }
+        source = self.SOURCE + "\nGitHub: https://github.com/source-user\n"
+
+        normalized = cn._normalize_cv_data_for_output(parsed, source)
+
+        self.assertEqual(
+            normalized["skills"],
+            [
+                {
+                    "category": "Portfolio & Links",
+                    "items": "GitHub: https://github.com/source-user",
+                },
+                {
+                    "category": "Technologies",
+                    "items": "Python | Java",
+                },
+                {
+                    "category": "Project Involvement History",
+                    "items": [
+                        "Firewalls Configuring & VPN Services",
+                        "Network Infrastructure Enhancement & Redesign",
+                    ],
+                },
+                {
+                    "category": "Participated Training Programme",
+                    "items": [
+                        "Enhancing Performance Through Teamwork",
+                        "Microsoft Certified System Engineer (MCSE)",
+                    ],
+                },
+            ],
+        )
+
+
 class ModuleHygieneTests(unittest.TestCase):
     def test_module_does_not_import_app(self):
         import sys

@@ -37,10 +37,10 @@
   focused review. Stop before release, merge, further extractions or unrelated
   work.
 
-## v24.6.277 legacy-DOC and CV-formatting corrective candidate
+## v24.6.278 legacy-DOC and CV-formatting corrective candidate
 
 - Branch `chatgpt/v24.6.276-legacy-doc-fallback` starts from clean v24.6.275
-  master and is now stamped v24.6.277. It is not merged and has no pull request.
+  master and is now stamped v24.6.278. It is not merged and has no pull request.
 - `/extract-text` still requires and runs the exact verified Antiword runtime
   first for every genuine legacy Word OLE payload. A missing, untrusted or
   non-functional runtime retains the structured 424/install-repair contract,
@@ -82,6 +82,14 @@
 - No route, guard, schema, JobAdder or Lead Finder contract changes. CV wording
   remains source-preserving; only grouping, ordering, date precision and visible
   source-marker structure are normalized.
+- The owner-supplied Kwong legacy DOC contains no GitHub text or URL, but the
+  provider emitted `https://github.com/unknown`; source-aware normalization now
+  removes any ungrounded GitHub path. The JobStreet/SiVA `Retrieved Resumes` /
+  `Date Applied` routing line is removed recursively wherever it is mapped.
+- The same source contains 13 Project Involvement History items and 16
+  Participated Training Programme items. Both bracketed lists are recovered
+  deterministically in exact source order, and training entries already placed
+  in certifications are de-duplicated before output.
 
 ## Phase 7B-8 JobAdder typo-correction extraction
 

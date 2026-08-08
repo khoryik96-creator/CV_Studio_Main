@@ -117,6 +117,35 @@ _CV_NO_DEGREE_PREFIX_RE = re.compile(
 )
 
 
+_CV_RECRUITMENT_TRACKING_METADATA_RE = re.compile(
+    r"(?im)^[ \t]*position\s*:\s*retrieved\s+resumes\s*"
+    r"\(\s*siva\s+folder\s*:[^)\r\n]*\)\s*;\s*"
+    r"date\s+applied\s*:[^\r\n]*(?:\r?\n|$)",
+)
+
+
+_CV_BRACKETED_SOURCE_SECTION_RE = re.compile(
+    r"^\s*\[\s*([^\]]{2,100})\s*\]\s*:?\s*$",
+    re.I,
+)
+
+
+_CV_RECOVERABLE_SOURCE_SECTIONS = {
+    "project involvement history": "Project Involvement History",
+    "participated training programme": "Participated Training Programme",
+    "participated training program": "Participated Training Programme",
+    "participation training programme": "Participated Training Programme",
+    "participation in training programme": "Participated Training Programme",
+}
+
+
+_CV_GITHUB_LINK_RE = re.compile(
+    r"(?:\bgithub\b\s*:?\s*)?(?:https?://)?(?:www\.)?github\.com/"
+    r"([A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*)/?",
+    re.I,
+)
+
+
 def _smart_word_case(token, *, company=False, title=False):
     if token is None:
         return ""
@@ -595,6 +624,142 @@ def _absorb_orphan_section_labels(items):
     return result
 
 
+def _strip_cv_recruitment_tracking_metadata(value):
+    """Remove JobStreet/SiVA application-routing metadata from parsed CV data."""
+    if isinstance(value, dict):
+        for key in list(value):
+            value[key] = _strip_cv_recruitment_tracking_metadata(value[key])
+        return value
+    if isinstance(value, list):
+        cleaned = [_strip_cv_recruitment_tracking_metadata(item) for item in value]
+        return [item for item in cleaned if not isinstance(item, str) or item.strip()]
+    if not isinstance(value, str):
+        return value
+    cleaned = _CV_RECRUITMENT_TRACKING_METADATA_RE.sub("", value)
+    if cleaned == value:
+        return value
+    return cleaned.strip(" \t\r\n|;")
+
+
+def _cv_source_section_key(value):
+    return re.sub(r"[^a-z]+", " ", str(value or "").lower()).strip()
+
+
+def _cv_source_item_key(value):
+    return re.sub(r"[^a-z0-9]+", " ", str(value or "").lower()).strip()
+
+
+def _extract_recoverable_cv_source_sections(source_text):
+    """Extract allowlisted bracketed sections that providers commonly omit."""
+    recovered = {
+        display: [] for display in set(_CV_RECOVERABLE_SOURCE_SECTIONS.values())
+    }
+    current = ""
+    for raw_line in str(source_text or "").splitlines():
+        line = str(raw_line or "").strip()
+        heading = _CV_BRACKETED_SOURCE_SECTION_RE.fullmatch(line)
+        if heading:
+            current = _CV_RECOVERABLE_SOURCE_SECTIONS.get(
+                _cv_source_section_key(heading.group(1)),
+                "",
+            )
+            continue
+        if not current or not line:
+            continue
+        item = _strip_leading_bullet_marker(line).strip()
+        if item and item not in recovered[current]:
+            recovered[current].append(item)
+    return {category: items for category, items in recovered.items() if items}
+
+
+def _recover_cv_source_additional_sections(parsed, source_text):
+    """Restore exact project/training lists and remove duplicated training certs."""
+    recovered = _extract_recoverable_cv_source_sections(source_text)
+    if not recovered:
+        return parsed
+    recovered_keys = {
+        _cv_source_section_key(category) for category in recovered
+    }
+    skills = []
+    for skill in parsed.get("skills") or []:
+        if not isinstance(skill, dict):
+            continue
+        if _cv_source_section_key(skill.get("category")) in recovered_keys:
+            continue
+        skills.append(skill)
+    for category in (
+        "Project Involvement History",
+        "Participated Training Programme",
+    ):
+        if category in recovered:
+            skills.append({"category": category, "items": recovered[category]})
+    parsed["skills"] = skills
+
+    training_keys = {
+        _cv_source_item_key(item)
+        for item in recovered.get("Participated Training Programme", [])
+    }
+    if training_keys:
+        parsed["certifications"] = [
+            item for item in parsed.get("certifications") or []
+            if _cv_source_item_key(item) not in training_keys
+        ]
+    return parsed
+
+
+def _remove_ungrounded_cv_github_links(parsed, source_text):
+    """Drop model-created GitHub URLs that do not occur in the source CV."""
+    if not str(source_text or "").strip():
+        return parsed
+    source_paths = {
+        match.group(1).lower().rstrip("/")
+        for match in _CV_GITHUB_LINK_RE.finditer(str(source_text))
+    }
+    cleaned_skills = []
+    for skill in parsed.get("skills") or []:
+        if not isinstance(skill, dict):
+            continue
+        cleaned_skill = dict(skill)
+        raw_items = cleaned_skill.get("items") or ""
+        was_list = isinstance(raw_items, list)
+        category_key = _cv_source_section_key(cleaned_skill.get("category"))
+        raw_values = raw_items if was_list else [raw_items]
+        if not any(_CV_GITHUB_LINK_RE.search(str(value or "")) for value in raw_values):
+            if raw_items or category_key not in {
+                "github",
+                "portfolio links",
+                "summary",
+            }:
+                cleaned_skills.append(cleaned_skill)
+            continue
+        values = raw_items if was_list else re.split(
+            r"(?:\r?\n)+|\s+\|\s+",
+            str(raw_items),
+        )
+        cleaned_values = []
+        for value in values:
+            text = str(value or "").strip()
+            if not text:
+                continue
+
+            def replace_link(match):
+                path = match.group(1).lower().rstrip("/")
+                return match.group(0) if path in source_paths else ""
+
+            text = _CV_GITHUB_LINK_RE.sub(replace_link, text).strip(" \t|,;-")
+            if text:
+                cleaned_values.append(text)
+        cleaned_skill["items"] = cleaned_values if was_list else "\n".join(cleaned_values)
+        if cleaned_values or category_key not in {
+            "github",
+            "portfolio links",
+            "summary",
+        }:
+            cleaned_skills.append(cleaned_skill)
+    parsed["skills"] = cleaned_skills
+    return parsed
+
+
 def _normalize_cv_bullet_items(items, allow_standalone_sections=True):
     """Repair valid JSON-looking bullet strings without changing plain prose."""
     source = items if isinstance(items, list) else ([] if items in (None, "") else [items])
@@ -664,6 +829,7 @@ def _normalize_cv_structured_content(parsed):
     """Idempotently repair role bullets, inferred-title annotations and blanks."""
     if not isinstance(parsed, dict):
         return parsed
+    parsed = _strip_cv_recruitment_tracking_metadata(parsed)
     candidate = parsed.get("candidate")
     if isinstance(candidate, dict):
         candidate["current_position"] = _strip_cv_inferred_title(candidate.get("current_position"))
@@ -719,6 +885,8 @@ def _normalize_cv_data_for_output(parsed, source_text=""):
     if not isinstance(parsed, dict):
         return parsed
     parsed = _normalize_cv_structured_content(parsed)
+    parsed = _recover_cv_source_additional_sections(parsed, source_text)
+    parsed = _remove_ungrounded_cv_github_links(parsed, source_text)
     cand = parsed.get("candidate") or {}
     if isinstance(cand, dict):
         if cand.get("current_company"):
