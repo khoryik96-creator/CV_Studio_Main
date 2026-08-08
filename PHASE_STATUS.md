@@ -63,8 +63,8 @@
   newest-first, so Jun 2014-Nov 2015 Nestle precedes Sep 2013-May 2014 Unilever.
 - Education month precision is restored from nearby source evidence only when
   its years match the parsed entry (`06/2004-05/2008` becomes
-  `Jun 2004 to May 2008`). Core Expertise arrays/newline lists normalize to one
-  comma-separated paragraph.
+  `Jun 2004 to May 2008`). Core Expertise arrays, newline lists and
+  comma-separated strings normalize to real Word bullets.
 - The owner-supplied Faizal outputs exposed literal bare enumerators beside
   Word's own list marker. Lower-case `a.`/`i.`/`ii.`/`a-` and numeric `1-`
   markers are now stripped while `3.5`, `5-star`, `-5%`, `i.e.`, capitalised

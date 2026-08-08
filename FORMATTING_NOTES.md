@@ -54,7 +54,7 @@ this:
 | one continuous employer shown as several company blocks | provider split each promotion into a separate experience | `_merge_adjacent_continuous_company_stints` groups only neighbouring same-employer ranges that touch; gapped and non-adjacent returns remain separate |
 | an older employer appears before a newer employer | provider emitted inconsistent work-history order | `_sort_work_experiences_reverse_chronological` sorts dated employer blocks newest-first after safe grouping |
 | education shows years even though the source includes months | provider dropped month precision | `_recover_education_date_range` restores only a nearby source range whose start/end years match the parsed education entry |
-| Core Expertise alternates between bullets and one paragraph | provider returned `items` as an array/newline list in some runs | `_normalize_cv_structured_content` deterministically joins Core Expertise items with commas |
+| Core Expertise alternates between bullets and one paragraph | provider returned `items` as an array, newline list, or comma-separated string in different runs | `_normalize_cv_structured_content` deterministically converts Core Expertise items into real Word bullets |
 
 ### Key files/functions (`cvstudio_cv_normalize.py`)
 

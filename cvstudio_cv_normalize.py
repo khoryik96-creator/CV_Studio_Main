@@ -692,18 +692,15 @@ def _normalize_cv_structured_content(parsed):
         ).strip()
         if category_key == "core expertise":
             raw_items = skill.get("items") or ""
-            if isinstance(raw_items, list):
-                item_lines = [
-                    str(item).strip() for item in raw_items if str(item).strip()
-                ]
-            else:
-                item_lines = [
-                    line.strip()
-                    for line in str(raw_items).splitlines()
-                    if line.strip()
-                ]
-            if len(item_lines) > 1:
-                skill["items"] = ", ".join(item_lines)
+            raw_item_values = raw_items if isinstance(raw_items, list) else [raw_items]
+            item_lines = [
+                item.strip()
+                for raw_item in raw_item_values
+                for item in re.split(r"(?:\r?\n)+|,\s*", str(raw_item))
+                if item.strip()
+            ]
+            if item_lines:
+                skill["items"] = item_lines
         normalized_skills.append(skill)
     parsed["skills"] = normalized_skills
     return parsed

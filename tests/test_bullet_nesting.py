@@ -186,7 +186,7 @@ class GenerateDocxNestingTests(unittest.TestCase):
         self.assertIn("5-star client rating", xml)
         self.assertIn("-5% cost variance", xml)
 
-    def test_core_expertise_array_renders_as_one_plain_paragraph(self):
+    def test_core_expertise_renders_as_real_word_bullets(self):
         data = {
             "candidate": {"name": "T"},
             "skills": [
@@ -203,8 +203,10 @@ class GenerateDocxNestingTests(unittest.TestCase):
 
         xml = self._generate(data)
 
-        self.assertEqual(self._ilvl(xml, "Key Account Management"), None)
-        self.assertIn(
+        self.assertEqual(self._ilvl(xml, "P&amp;L Leadership"), "0")
+        self.assertEqual(self._ilvl(xml, "Key Account Management"), "0")
+        self.assertEqual(self._ilvl(xml, "Sales Force Effectiveness"), "0")
+        self.assertNotIn(
             "P&amp;L Leadership, Key Account Management, Sales Force Effectiveness",
             xml,
         )

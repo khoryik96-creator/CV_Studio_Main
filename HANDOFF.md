@@ -188,7 +188,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   covers the owner's exact Isaac/Faizal formatting regressions: continuous
   Unilever/DKSH promotion paths are grouped without merging gapped returns,
   employer blocks are sorted newest-first, source education months are restored,
-  Core Expertise is one comma-separated paragraph, and bare `a.`/`i.`/`1-`/`a-`
+  Core Expertise is a real bullet list, and bare `a.`/`i.`/`1-`/`a-`
   source labels are removed before Word supplies the visible list marker.
 - **AI Crawler ".doc: flag, don't decode"**: skip decoding an undecodable legacy
   `.doc` while still surfacing the candidate. Deferred pending measurement of

@@ -510,26 +510,28 @@ class EducationAndSkillsConsistencyTests(unittest.TestCase):
             "Jun 2004 to May 2008",
         )
 
-    def test_core_expertise_always_renders_as_one_comma_separated_paragraph(self):
-        parsed = {
-            "skills": [
-                {
-                    "category": "Core Expertise",
-                    "items": [
-                        "P&L Leadership",
-                        "Key Account Management",
-                        "Distributor & Route to Market Management",
-                    ],
+    def test_core_expertise_always_normalizes_to_bullet_items(self):
+        expected = [
+            "P&L Leadership",
+            "Key Account Management",
+            "Distributor & Route to Market Management",
+        ]
+        inputs = [expected, ", ".join(expected), "\n".join(expected)]
+
+        for items in inputs:
+            with self.subTest(items=items):
+                parsed = {
+                    "skills": [
+                        {
+                            "category": "Core Expertise",
+                            "items": items,
+                        }
+                    ]
                 }
-            ]
-        }
 
-        normalized = cn._normalize_cv_data_for_output(parsed)
+                normalized = cn._normalize_cv_data_for_output(parsed)
 
-        self.assertEqual(
-            normalized["skills"][0]["items"],
-            "P&L Leadership, Key Account Management, Distributor & Route to Market Management",
-        )
+                self.assertEqual(normalized["skills"][0]["items"], expected)
 
 
 class ModuleHygieneTests(unittest.TestCase):
