@@ -586,7 +586,10 @@ def _normalize_cv_bullet_items(items, allow_standalone_sections=True):
                     if len(normalized) == before:
                         normalized.append(item)
                     return
-            if candidate:
+            # Keep only bullets that carry real content. After marker stripping a
+            # residue like "-" or "--" would otherwise render as a lone dash;
+            # ``isalnum`` is Unicode-aware, so non-Latin bullets are preserved.
+            if candidate and any(ch.isalnum() for ch in candidate):
                 normalized.append(candidate)
             return
         if isinstance(item, list):

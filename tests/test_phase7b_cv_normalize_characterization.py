@@ -255,6 +255,13 @@ class BulletAndStructuredContentTests(unittest.TestCase):
         out = cn._normalize_cv_bullet_items(["-5% cost variance recorded", "5-star client rating"])
         self.assertEqual(out, ["-5% cost variance recorded", "5-star client rating"])
 
+    def test_marker_only_noise_bullets_are_dropped_but_non_latin_kept(self):
+        # A residue like "-"/"--" left after stripping carries no content and must
+        # not render as a lone dash; non-Latin bullets (no A-Za-z0-9) are content
+        # and must survive (isalnum is Unicode-aware).
+        out = cn._normalize_cv_bullet_items(["-", "--", "•", "维护服务器", "Real bullet"])
+        self.assertEqual(out, ["维护服务器", "Real bullet"])
+
     def test_structured_content_smoke(self):
         parsed = {"experience": [{"title": "engineer", "bullets": ["Did a thing"]}]}
         out = cn._normalize_cv_structured_content(parsed)
