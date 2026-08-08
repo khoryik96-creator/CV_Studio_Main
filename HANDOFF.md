@@ -176,8 +176,8 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Legacy `.doc` conversion fallback — STAGED ON BRANCH, NOT MERGED.** Branch
-  `chatgpt/v24.6.276-legacy-doc-fallback` is stamped v24.6.279, keeps verified
+- **Legacy `.doc` conversion fallback and CV formatting — MERGED.** PR #98 was
+  squash-merged to `master` as `a18cda4` at v24.6.279. It keeps verified
   Antiword mandatory and first, then accepts a validated temporary DOCX
   conversion only after that exact document is rejected. It prefers installed
   Microsoft Word on Windows and otherwise uses LibreOffice when available. The
@@ -205,6 +205,12 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   source-free export boundary, accepts sentence punctuation after grounded
   source URLs, removes inline retrieval metadata after an item separator, and
   renders recovered multi-item sections as bullets in both preview and Word.
+  The v24.6.280 post-merge corrective stops Project/Training source recovery at
+  recognized ordinary CV headings so it cannot absorb later sections, and
+  records the owner-authorized Antiword-rejection conversion exception in
+  `AGENTS.md`. The separate Summary-format experiment is not part of either
+  change and must remain unpushed and unmerged unless the owner later approves
+  it explicitly.
 - **AI Crawler ".doc: flag, don't decode"**: skip decoding an undecodable legacy
   `.doc` while still surfacing the candidate. Deferred pending measurement of
   whether `.doc` decode vs. PDF OCR is the real bottleneck; a naive attempt

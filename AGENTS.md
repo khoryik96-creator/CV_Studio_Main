@@ -218,9 +218,16 @@ arbitrary executable locations cannot satisfy trust.
 
 Installation and runtime acceptance require the pinned manifest and executable
 hashes, exact file set, expected native architecture/trust state and a bounded
-functional extraction of the controlled fixture. The native OLE parser and
-LibreOffice stay defense-in-depth only and cannot satisfy a verified `.doc`
-success.
+functional extraction of the controlled fixture. The native OLE parser cannot
+satisfy a verified `.doc` success.
+
+Beginning with v24.6.279, the owner explicitly authorized one bounded
+document-specific conversion fallback. Verified Antiword remains mandatory and
+runs first. Only after that verified invocation completes and rejects the exact
+document may an installed Microsoft Word or LibreOffice convert it to a
+validated, macro-free temporary DOCX. Missing, untrusted, non-functional or
+execution-time Antiword failures remain fatal. This supersedes the earlier
+no-converter-success rule only for rejection of the exact input document.
 
 Windows x64 has genuine local functional and security verification. Deferred
 macOS URLs, hashes and inspection notes remain documented future work only;
