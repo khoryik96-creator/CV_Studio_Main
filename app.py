@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.274"
+_INSTALL_RECEIPT_VERSION = "v24.6.275"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -318,7 +318,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.274"
+_CVSTUDIO_VERSION = "v24.6.275"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -1581,6 +1581,7 @@ def call_llm(provider, api_key, payload_dict):
 # These small deterministic cleanup helpers are intentionally conservative and
 # apply to header/date/company/title fields only — bullets are preserved verbatim.
 from cvstudio_cv_normalize import (
+    _CV_LEADING_BULLET_MARKER_RE,
     _CV_LANGUAGE_ALIASES,
     _CV_LANGUAGE_ALIAS_TO_STANDARD,
     _CV_MONTH_NUMBER,
@@ -1642,6 +1643,10 @@ from cvstudio_cv_reconcile import (
     _flatten_parsed_work_roles,
     _score_authoritative_row_match,
     _reconcile_work_experience_with_authoritative_table,
+)
+from cvstudio_cv_fidelity import (
+    evaluate_cv_fidelity,
+    summarize_fidelity_warning,
 )
 
 
@@ -3850,7 +3855,7 @@ def _ja_spa_browser_bridge(candidate_id, fields, note_text="", email="", salary_
     payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
     compact_payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     script = """(async () => {
-  const helperVersion = 'v24.6.274';
+  const helperVersion = 'v24.6.275';
   const candidateId = %s;
   const payload = %s;
   const profilePath = %s;
@@ -9170,10 +9175,23 @@ def parse_cv():
         parsed = _collapse_incomplete_earlier_career(parsed)
         parsed = _clean_candidate_languages_from_redaction(parsed, cv_text)
         parsed = _normalize_candidate_languages(parsed, cv_text)
+        # Outline-label nesting must be read from the raw bullet text, so infer it
+        # BEFORE _normalize_cv_structured_content strips the labels, and return it
+        # to the client to carry to /generate-docx.
+        bullet_levels = _infer_label_bullet_levels(parsed)
         parsed = _normalize_cv_structured_content(parsed)
         parsed = _normalize_cv_data_for_output(parsed, cv_text)
-        out = {"ok": True, "data": parsed, "usage": usage, "model": model, "provider": llm_provider}
+        out = {"ok": True, "data": parsed, "usage": usage, "model": model, "provider": llm_provider, "bullet_levels": bullet_levels}
         out.update(_llm_response_cost_fields(model, usage, llm_provider))
+        # ── Fidelity audit — observational, never mutates `parsed`. Attaches a
+        # report always; only escalates to the degraded/warning fields when the
+        # parse was not already flagged as truncated. ──
+        fidelity = evaluate_cv_fidelity(parsed, cv_text)
+        out["fidelity"] = fidelity
+        if not fidelity.get("ok") and not parse_degraded:
+            out["degraded"] = True
+            out["degraded_reason"] = "fidelity_check"
+            out["warning"] = summarize_fidelity_warning(fidelity)
         # The parse still succeeded and the full repaired CV is returned; this
         # only tells the caller the AI response was truncated and salvaged, so
         # some later roles or bullet points may be missing and should be checked.
@@ -11269,9 +11287,22 @@ def generate_docx():
         cv_data = body.get("data")
         if not cv_data:
             return jsonify({"error": "No CV data provided"}), 400
+        # Outline-label nesting is inferred from the raw bullet text, so compute
+        # it BEFORE _normalize_cv_structured_content strips the labels.
+        _label_levels = _infer_label_bullet_levels(cv_data)
         cv_data = _normalize_cv_structured_content(cv_data)
         cv_data = _normalize_cv_data_for_output(cv_data)
         cv_data["_document_alignment"] = _normalize_cv_text_alignment(body.get("alignment"))
+        # Nested-list indent map: the source-derived map (docx w:ilvl / pdf
+        # geometry, sent by the browser) merged with the outline-label inference,
+        # deepest level wins. Unmatched bullets stay at level 0.
+        _levels = body.get("bullet_levels")
+        if not isinstance(_levels, list):
+            _levels = cv_data.get("_bullet_levels")
+        cv_data["_bullet_levels"] = _merge_bullet_level_lists(
+            _levels if isinstance(_levels, list) else [],
+            _label_levels,
+        )
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(cv_data, f)
@@ -11318,6 +11349,241 @@ def generate_docx():
                 pass
             except Exception:
                 pass
+
+
+def _cv_bullet_match_key(text):
+    """Normalize a bullet for source<->parsed matching, mirrored in generate.js.
+
+    Strips the same leading marker/enumerator the formatter strips for display
+    (_CV_LEADING_BULLET_MARKER_RE) and lowercases, so a level looked up from the
+    raw source bullet matches the rendered (already-stripped) bullet text.
+    """
+    value = re.sub(r"\s+", " ", str(text or "")).strip()
+    for _ in range(5):
+        stripped = _CV_LEADING_BULLET_MARKER_RE.sub("", value, count=1).strip()
+        if stripped == value:
+            break
+        value = stripped
+    return value.lower()
+
+
+_ROMAN_RE = re.compile(r"^[ivxlcdm]+$", re.I)
+_LABEL_PAREN_RE = re.compile(r"^\((?P<body>[ivxlcdm]{1,7}|[a-z]|\d{1,3})\)", re.I)
+_LABEL_NUM_RE = re.compile(r"^(?P<body>\d{1,3})[.)](?=\s|[^\W\d_])")
+
+
+def _label_body_kind(body):
+    if body.isdigit():
+        return "digit"
+    if len(body) > 1 and _ROMAN_RE.match(body):
+        return "roman"
+    return "alpha"
+
+
+def _bullet_label_style(text):
+    """Classify a leading outline label into a style key, or None.
+
+    Restricted to the label forms the formatter actually strips
+    (_CV_LEADING_BULLET_MARKER_RE): parenthesised enumerators "(a)"/"(vi)"/"(12)"
+    and numeric enumerators "1."/"1)". Keeping classification and stripping in
+    lockstep means a nested item's label is both removed AND counted -- never one
+    without the other. A plain glyph or unlabeled line returns None (base level).
+    """
+    s = str(text or "").lstrip()
+    m = _LABEL_PAREN_RE.match(s)
+    if m:
+        return ("paren", _label_body_kind(m.group("body")))
+    m = _LABEL_NUM_RE.match(s)
+    if m:
+        return ("num", "digit")
+    return None
+
+
+def _infer_outline_levels(texts):
+    """Infer a nesting level per bullet from the sequence of outline labels.
+
+    Appearance-order stack: an unlabeled line is level 0 and resets the outline;
+    the first labelled style below it is level 1; a new deeper style nests one
+    level further; returning to a seen style pops back to that level. Mirrors
+    cvInferLevelsForSequence in index.html.
+    """
+    levels = []
+    stack = []
+    for text in texts:
+        style = _bullet_label_style(text)
+        if style is None:
+            stack = []
+            levels.append(0)
+        elif style in stack:
+            idx = stack.index(style)
+            del stack[idx + 1:]
+            levels.append(idx + 1)
+        else:
+            stack.append(style)
+            levels.append(len(stack))
+    return levels
+
+
+def _infer_label_bullet_levels(cv_data):
+    """Outline-label nesting levels for a parsed CV's role bullets.
+
+    Runs _infer_outline_levels over each role's bullet sequence (raw text, before
+    labels are stripped) and returns [{text: match_key, level}] for levels >= 1.
+    """
+    out = []
+    for exp in (cv_data or {}).get("work_experiences") or []:
+        if not isinstance(exp, dict):
+            continue
+        for role in exp.get("roles") or []:
+            if not isinstance(role, dict):
+                continue
+            texts = []
+            for item in role.get("bullets") or []:
+                if isinstance(item, str):
+                    texts.append(item)
+                elif isinstance(item, dict):
+                    for sub in item.get("bullets") or []:
+                        if isinstance(sub, str):
+                            texts.append(sub)
+            for text, level in zip(texts, _infer_outline_levels(texts)):
+                if level >= 1:
+                    key = _cv_bullet_match_key(text)
+                    if key:
+                        out.append({"text": key, "level": min(level, 8)})
+    return out
+
+
+def _merge_bullet_level_lists(*lists):
+    """Merge {text, level} lists by key, keeping the deepest level (>= 1)."""
+    best = {}
+    for entries in lists:
+        for entry in entries or []:
+            if not isinstance(entry, dict):
+                continue
+            key = str(entry.get("text") or "")
+            if not key:
+                continue
+            try:
+                level = int(entry.get("level") or 0)
+            except (TypeError, ValueError):
+                continue
+            level = max(0, min(level, 8))
+            if key not in best or level > best[key]:
+                best[key] = level
+    return [{"text": k, "level": v} for k, v in best.items() if v >= 1]
+
+
+def _extract_docx_bullet_levels(file_bytes):
+    """Map nested (w:ilvl >= 1) list paragraphs to their indent level.
+
+    Word stores list nesting in w:numPr/w:ilvl, which the plain-text extraction
+    discards. This side-channel lets the renderer restore the indent
+    deterministically by matching parsed bullet text back to its source level.
+    Only levels >= 1 are recorded; every unmatched bullet renders at level 0.
+    """
+    import io as _io
+    import docx as _docx
+    from docx.oxml.ns import qn
+    out = []
+    seen = set()
+    try:
+        doc = _docx.Document(_io.BytesIO(file_bytes))
+    except Exception:
+        return out
+    for p in doc.element.body.iter(qn("w:p")):
+        ilvl_vals = p.xpath("./w:pPr/w:numPr/w:ilvl/@w:val")
+        if not ilvl_vals:
+            continue
+        try:
+            level = int(ilvl_vals[0])
+        except (TypeError, ValueError):
+            continue
+        if level < 1:
+            continue
+        text = "".join(node.text or "" for node in p.iter(qn("w:t"))).strip()
+        key = _cv_bullet_match_key(text)
+        if not key:
+            continue
+        dedup = (key, level)
+        if dedup in seen:
+            continue
+        seen.add(dedup)
+        out.append({"text": key, "level": min(level, 8)})
+    return out
+
+
+_PDF_BULLET_LEADIN_RE = re.compile(
+    r"^(?:[•●▪◦‣⁃∙·‧*]|[-–—]\s|\(?[0-9]{1,3}[.)\-]\s|\(?[a-z]{1,3}[.)\-]\s)",
+    re.I,
+)
+
+
+def _pdf_bullet_levels_from_lines(lines):
+    """Assign indent levels to marker-led lines from their x-positions.
+
+    ``lines`` is ``[(x0, text)]`` in document order. The dominant left column of
+    marker-led lines is level 0; deeper columns become levels by their indent
+    step. Conservative: needs >= 4 marker-led lines and a clear indent step,
+    otherwise returns [] (everything flat). Pure -- unit-testable without a PDF.
+    """
+    from collections import Counter
+    threshold = 14
+    tol = 6
+    min_step = 12
+    bullet_lines = [(x0, t) for x0, t in lines if _PDF_BULLET_LEADIN_RE.match(str(t or ""))]
+    if len(bullet_lines) < 4:
+        return []
+
+    def bucket(x):
+        return round(x / tol) * tol
+
+    counts = Counter(bucket(x0) for x0, _ in bullet_lines)
+    top_count = max(counts.values())
+    base = min(b for b, c in counts.items() if c == top_count)
+    offsets = sorted({bucket(x0) - base for x0, _ in bullet_lines if bucket(x0) > base + threshold})
+    if not offsets or offsets[0] < min_step:
+        return []
+    step = offsets[0]
+    out = []
+    seen = set()
+    for x0, t in bullet_lines:
+        off = bucket(x0) - base
+        if off <= threshold:
+            continue
+        level = min(max(1, round(off / step)), 8)
+        key = _cv_bullet_match_key(t)
+        if not key:
+            continue
+        dedup = (key, level)
+        if dedup in seen:
+            continue
+        seen.add(dedup)
+        out.append({"text": key, "level": level})
+    return out
+
+
+def _extract_pdf_bullet_levels(file_bytes):
+    """Recover nested-list indent from a PDF using text x-positions."""
+    import io as _io
+    try:
+        import pdfplumber
+    except Exception:
+        return []
+    lines = []
+    try:
+        with pdfplumber.open(_io.BytesIO(file_bytes)) as pdf:
+            for page in pdf.pages:
+                by_top = {}
+                for word in page.extract_words(use_text_flow=False):
+                    by_top.setdefault(round(word["top"] / 3.0), []).append(word)
+                for key in sorted(by_top):
+                    row = sorted(by_top[key], key=lambda w: w["x0"])
+                    text = " ".join(w["text"] for w in row).strip()
+                    if text:
+                        lines.append((row[0]["x0"], text))
+    except Exception:
+        return []
+    return _pdf_bullet_levels_from_lines(lines)
 
 
 def _extract_docx_text_preserve_tables(file_bytes):
@@ -11858,6 +12124,7 @@ def extract_text():
             filename = "verified-upload.docx"
 
         text = ""
+        bullet_levels = []
 
         if filename.endswith('.pdf'):
             import pdfplumber
@@ -11869,6 +12136,12 @@ def extract_text():
                     if t:
                         pages.append(t)
                 text = "\n\n".join(pages)
+
+            if text.strip():
+                try:
+                    bullet_levels = _extract_pdf_bullet_levels(file_bytes)
+                except Exception:
+                    bullet_levels = []
 
             # Fallback: if pdfplumber got nothing, try OCR via pytesseract
             if not text.strip():
@@ -11984,6 +12257,10 @@ def extract_text():
                         paragraphs.append(row_text)
 
             text = "\n".join(paragraphs)
+            try:
+                bullet_levels = _extract_docx_bullet_levels(file_bytes)
+            except Exception:
+                bullet_levels = []
 
         elif filename.endswith('.doc'):
             # Legacy .doc — try multiple strategies. Important: python-docx only reads .docx, not genuine OLE .doc.
@@ -12261,7 +12538,7 @@ def extract_text():
 
         # Clean PDF/font/OCR artefacts without deleting ligature fragments.
         text = _normalize_extracted_text_artifacts(text)
-        return jsonify({"ok": True, "text": text})
+        return jsonify({"ok": True, "text": text, "bullet_levels": bullet_levels})
 
     except AntiwordDependencyError as e:
         return _antiword_dependency_response(e)

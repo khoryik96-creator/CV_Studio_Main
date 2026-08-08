@@ -20,6 +20,23 @@ if (!fs.existsSync(TEMPLATE)) {
   process.exit(1);
 }
 
+// ── Nested-list indent recovery ───────────────────────────────────────────────
+// cv._bullet_levels maps a nested source bullet's normalized text to its indent
+// level (from docx w:ilvl / pdf geometry / outline-label inference, computed
+// server-side). Bullet text reaches generate.js already stripped by Python, so
+// the match key is just lowercase + whitespace-collapse -- it aligns with the
+// server's _cv_bullet_match_key, which strips then lowercases the raw source.
+function bulletMatchKey(text) {
+  return String(text == null ? '' : text).replace(/\s+/g, ' ').trim().toLowerCase();
+}
+const BULLET_LEVEL_MAP = new Map();
+(Array.isArray(cv._bullet_levels) ? cv._bullet_levels : []).forEach((e) => {
+  if (e && e.text != null) BULLET_LEVEL_MAP.set(String(e.text), Math.min(Math.max(Number(e.level) || 0, 0), 8));
+});
+function bulletLevelFor(text) {
+  return BULLET_LEVEL_MAP.get(bulletMatchKey(text)) || 0;
+}
+
 // ── Escaping ──────────────────────────────────────────────────────────────────
 function esc(s) {
   return (String(s == null ? '' : (typeof s === 'object' ? JSON.stringify(s) : s)))
@@ -298,7 +315,18 @@ function bulletPara(text, alignmentXml = BODY_ALIGNMENT_XML) {
       children += run(p, { color: '000000', size: 24 });
     }
   }
-  const pPr = `<w:pStyle w:val="ListParagraph"/><w:keepLines/><w:numPr><w:ilvl w:val="0"/><w:numId w:val="47"/></w:numPr><w:ind w:left="720" w:hanging="360"/><w:spacing w:before="0" w:after="0"/>${alignmentXml}`;
+  // Restore nested-list indent for matched bullets. Level 0 keeps the exact
+  // prior pPr, so non-nested output is byte-identical. Deeper levels step the
+  // glyph (w:ilvl) AND the horizontal indent -- the ListParagraph style carries
+  // a character-unit indent (w:leftChars) that Word applies in preference to
+  // w:left, so an explicit per-level w:leftChars is required or every level
+  // would collapse to the same indent.
+  const level = bulletLevelFor(t);
+  const leftIndent = 720 * (level + 1);
+  const indent = level > 0
+    ? `w:leftChars="${200 + level * 300}" w:left="${leftIndent}" w:hanging="360"`
+    : `w:left="720" w:hanging="360"`;
+  const pPr = `<w:pStyle w:val="ListParagraph"/><w:keepLines/><w:numPr><w:ilvl w:val="${level}"/><w:numId w:val="47"/></w:numPr><w:ind ${indent}/><w:spacing w:before="0" w:after="0"/>${alignmentXml}`;
   return para(children, pPr);
 }
 
