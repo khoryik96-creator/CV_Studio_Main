@@ -671,6 +671,29 @@ class SourceAdditionalSectionRecoveryTests(unittest.TestCase):
         )
         self.assertEqual(normalized["certifications"], ["Unrelated Certification"])
 
+    def test_recovery_stops_at_unbracketed_cv_section_headings(self):
+        source = """[PROJECT INVOLVEMENT HISTORY]:
+Unmarked project title
+EDUCATION
+Bachelor of Computer Science
+[PARTICIPATED TRAINING PROGRAMME]:
+* Enhancing Performance Through Teamwork
+REFERENCES:
+Available upon request
+"""
+
+        recovered = cn._extract_recoverable_cv_source_sections(source)
+
+        self.assertEqual(
+            recovered,
+            {
+                "Project Involvement History": ["Unmarked project title"],
+                "Participated Training Programme": [
+                    "Enhancing Performance Through Teamwork"
+                ],
+            },
+        )
+
     def test_removes_siva_metadata_and_only_keeps_source_grounded_github(self):
         parsed = {
             "skills": [

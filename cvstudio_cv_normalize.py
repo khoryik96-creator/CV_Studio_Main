@@ -139,6 +139,49 @@ _CV_RECOVERABLE_SOURCE_SECTIONS = {
 }
 
 
+_CV_SOURCE_SECTION_BOUNDARY_KEYS = {
+    "profile",
+    "personal profile",
+    "professional profile",
+    "summary",
+    "professional summary",
+    "career summary",
+    "career objective",
+    "objective",
+    "work experience",
+    "working experience",
+    "professional experience",
+    "employment history",
+    "career history",
+    "education",
+    "education background",
+    "academic background",
+    "qualifications",
+    "certification",
+    "certifications",
+    "licenses",
+    "training",
+    "skills",
+    "technical skills",
+    "soft skills",
+    "core expertise",
+    "competencies",
+    "languages",
+    "language proficiency",
+    "achievements",
+    "awards",
+    "publications",
+    "references",
+    "referees",
+    "personal details",
+    "personal particulars",
+    "additional information",
+    "other information",
+    "hobbies",
+    "interests",
+}
+
+
 _CV_GITHUB_LINK_RE = re.compile(
     r"(?:\bgithub\b\s*:?\s*)?(?:https?://)?(?:www\.)?github\.com/"
     r"([A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*)/?",
@@ -671,6 +714,9 @@ def _extract_recoverable_cv_source_sections(source_text):
                 _cv_source_section_key(heading.group(1)),
                 "",
             )
+            continue
+        if current and _cv_source_section_key(line) in _CV_SOURCE_SECTION_BOUNDARY_KEYS:
+            current = ""
             continue
         if not current or not line:
             continue
