@@ -56,7 +56,23 @@
 - Education placeholders such as `No Degree`, `Not specified` and `N/A` are
   omitted deterministically. Real qualification wording, including
   `Non-Degree Certificate`, remains unchanged.
-- No route, guard, schema, JobAdder, Lead Finder or CV wording contract changes.
+- The owner-marked Isaac comparison is now deterministic rather than
+  provider-dependent: adjacent continuous Dec 2015-Mar 2021 Unilever roles and
+  May 2008-Oct 2011 DKSH roles share one employer block, while the separate
+  Johor/earlier Unilever entries remain separate. Employer blocks are sorted
+  newest-first, so Jun 2014-Nov 2015 Nestle precedes Sep 2013-May 2014 Unilever.
+- Education month precision is restored from nearby source evidence only when
+  its years match the parsed entry (`06/2004-05/2008` becomes
+  `Jun 2004 to May 2008`). Core Expertise arrays/newline lists normalize to one
+  comma-separated paragraph.
+- The owner-supplied Faizal outputs exposed literal bare enumerators beside
+  Word's own list marker. Lower-case `a.`/`i.`/`ii.`/`a-` and numeric `1-`
+  markers are now stripped while `3.5`, `5-star`, `-5%`, `i.e.`, capitalised
+  initials and real year ranges remain protected. Source-derived nesting levels
+  still render at their intended Word indents.
+- No route, guard, schema, JobAdder or Lead Finder contract changes. CV wording
+  remains source-preserving; only grouping, ordering, date precision and visible
+  source-marker structure are normalized.
 
 ## Phase 7B-8 JobAdder typo-correction extraction
 

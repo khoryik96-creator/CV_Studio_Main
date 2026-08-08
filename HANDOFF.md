@@ -184,7 +184,12 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   existing table and nested-list extraction. The owner-supplied incompatible
   DOC passed a genuine Windows `/extract-text` test through Microsoft Word.
   The same branch removes `No Degree`/`Not specified`/`N/A` education
-  placeholders while protecting real `Non-Degree Certificate` wording.
+  placeholders while protecting real `Non-Degree Certificate` wording. It also
+  covers the owner's exact Isaac/Faizal formatting regressions: continuous
+  Unilever/DKSH promotion paths are grouped without merging gapped returns,
+  employer blocks are sorted newest-first, source education months are restored,
+  Core Expertise is one comma-separated paragraph, and bare `a.`/`i.`/`1-`/`a-`
+  source labels are removed before Word supplies the visible list marker.
 - **AI Crawler ".doc: flag, don't decode"**: skip decoding an undecodable legacy
   `.doc` while still surfacing the candidate. Deferred pending measurement of
   whether `.doc` decode vs. PDF OCR is the real bottleneck; a naive attempt

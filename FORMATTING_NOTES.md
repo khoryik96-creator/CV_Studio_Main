@@ -50,6 +50,11 @@ this:
 | `to 2001` for a graduation year | leading `- 2001` in a DOCX list | `_normalize_cv_date_range` (leading-dash strip) |
 | lone `-` / `--` bullets | marker-only residue | drop in `_normalize_cv_bullet_items` |
 | `No Degree` under a school | provider placeholder for a missing qualification | `_normalize_cv_data_for_output` clears only known empty-degree placeholders |
+| `• a.`, `• 1-`, or `• a-` in the output | a bare source enumerator survived beside Word's own marker | `_CV_LEADING_BULLET_MARKER_RE` strips lower-case dot/hyphen and numeric-hyphen enumerators while preserving `3.5`, `5-star`, `-5%`, `i.e.`, capitalised initials and date ranges |
+| one continuous employer shown as several company blocks | provider split each promotion into a separate experience | `_merge_adjacent_continuous_company_stints` groups only neighbouring same-employer ranges that touch; gapped and non-adjacent returns remain separate |
+| an older employer appears before a newer employer | provider emitted inconsistent work-history order | `_sort_work_experiences_reverse_chronological` sorts dated employer blocks newest-first after safe grouping |
+| education shows years even though the source includes months | provider dropped month precision | `_recover_education_date_range` restores only a nearby source range whose start/end years match the parsed education entry |
+| Core Expertise alternates between bullets and one paragraph | provider returned `items` as an array/newline list in some runs | `_normalize_cv_structured_content` deterministically joins Core Expertise items with commas |
 
 ### Key files/functions (`cvstudio_cv_normalize.py`)
 

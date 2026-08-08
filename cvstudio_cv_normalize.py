@@ -521,7 +521,9 @@ _CV_LEADING_BULLET_MARKER_RE = re.compile(
     r"^\s*(?:"
     r"[•●▪◦‣∙·▶►➤⁃∙»›]"  # glyph bullets: always markers
     r"|\((?:[ivxlcdm]{1,7}|[a-z]|\d{1,3})\)"  # parenthesised enumerator: (i) (a) (12)
-    r"|\d{1,3}[.)](?=\s|[^\W\d_])"  # numeric enumerator "1." / "1)" (lookahead protects "3.5")
+    r"|\d{1,3}[.)](?=\s|[^\W\d_])"  # numeric enumerator "1." / "1)" (protects "3.5")
+    r"|\d{1,3}-(?=\s)"  # source enumerator "1- " (protects "5-star")
+    r"|(?-i:(?:[a-z]|[ivxlcdm]{2,7})[.)-])(?=\s)"  # bare lower-case a. / ii. / a-
     r"|[*‐-―-](?=\s|[^\W\d_])"  # dash/asterisk: only before whitespace or a letter (protects "-5%")
     r")\s*",
     re.I,
@@ -675,11 +677,35 @@ def _normalize_cv_structured_content(parsed):
     skills = parsed.get("skills") or []
     if not isinstance(skills, list):
         skills = []
-    parsed["skills"] = [
-        value for value in skills
-        if isinstance(value, dict)
-        and (str(value.get("category") or "").strip() or str(value.get("items") or "").strip())
-    ]
+    normalized_skills = []
+    for value in skills:
+        if not isinstance(value, dict):
+            continue
+        if not (
+            str(value.get("category") or "").strip()
+            or str(value.get("items") or "").strip()
+        ):
+            continue
+        skill = dict(value)
+        category_key = re.sub(
+            r"[^a-z]+", " ", str(skill.get("category") or "").lower()
+        ).strip()
+        if category_key == "core expertise":
+            raw_items = skill.get("items") or ""
+            if isinstance(raw_items, list):
+                item_lines = [
+                    str(item).strip() for item in raw_items if str(item).strip()
+                ]
+            else:
+                item_lines = [
+                    line.strip()
+                    for line in str(raw_items).splitlines()
+                    if line.strip()
+                ]
+            if len(item_lines) > 1:
+                skill["items"] = ", ".join(item_lines)
+        normalized_skills.append(skill)
+    parsed["skills"] = normalized_skills
     return parsed
 
 
@@ -713,10 +739,18 @@ def _normalize_cv_data_for_output(parsed, source_text=""):
                     role["date_range"] = _normalize_cv_date_range(role.get("date_range"))
                 if role.get("title"):
                     role["title"] = _smart_title_text(role.get("title"), title=True)
+    parsed["work_experiences"] = _sort_work_experiences_reverse_chronological(
+        _merge_adjacent_continuous_company_stints(
+            parsed.get("work_experiences") or []
+        )
+    )
     for edu in parsed.get("education") or []:
         if not isinstance(edu, dict):
             continue
-        if edu.get("date_range"):
+        recovered_date = _recover_education_date_range(edu, source_text)
+        if recovered_date:
+            edu["date_range"] = recovered_date
+        elif edu.get("date_range"):
             edu["date_range"] = _normalize_cv_date_range(edu.get("date_range"))
         degree = str(edu.get("degree") or "").strip()
         no_degree_prefix = _CV_NO_DEGREE_PREFIX_RE.fullmatch(degree)
@@ -862,6 +896,198 @@ def _cv_date_sort_point(value, end=False):
     month_text = (match.group(1) or "").lower().rstrip(".")
     month = _CV_MONTH_NUMBER.get(month_text, 12 if end else 1)
     return (int(match.group(2)), month)
+
+
+def _cv_company_base_key(value):
+    """Return a conservative base key for a location-suffixed employer name."""
+    text = re.sub(r"\s+", " ", str(value or "").strip())
+    parts = re.split(r"\s+(?:[-\u2013\u2014]|\|)\s+", text, maxsplit=1)
+    if len(parts) != 2:
+        return _cv_match_key(text)
+    base, suffix = parts
+    # A broad one-part country suffix is a harmless spelling variant. Preserve
+    # a more specific city/state suffix (normally comma-delimited), because it
+    # may identify a genuinely separate assignment in the marked-correct CV.
+    if "," in suffix or len(re.findall(r"[A-Za-z0-9]+", suffix)) > 2:
+        return _cv_match_key(text)
+    return _cv_match_key(base)
+
+
+def _cv_company_names_groupable(left, right):
+    """Match exact names or a neighbouring base/location spelling variant."""
+    left_key = _cv_match_key(left)
+    right_key = _cv_match_key(right)
+    if not left_key or not right_key:
+        return False
+    if left_key == right_key:
+        return True
+    return (
+        _cv_company_base_key(left) == right_key
+        or _cv_company_base_key(right) == left_key
+    )
+
+
+def _cv_experience_interval(exp):
+    if not isinstance(exp, dict):
+        return None
+    date_range = _normalize_cv_date_range(exp.get("date_range") or "")
+    if not date_range:
+        date_range = _cv_company_span_from_roles(exp.get("roles") or [])
+    start_text, end_text = _cv_date_parts(date_range)
+    start = _cv_date_sort_point(start_text or date_range, end=False)
+    end = _cv_date_sort_point(end_text or start_text or date_range, end=True)
+    if start is None or end is None:
+        return None
+    start_serial = (start[0] * 12) + start[1]
+    end_serial = (end[0] * 12) + end[1]
+    if end_serial < start_serial:
+        start_serial, end_serial = end_serial, start_serial
+    return start_serial, end_serial
+
+
+def _cv_experience_intervals_touch(left, right):
+    left_interval = _cv_experience_interval(left)
+    right_interval = _cv_experience_interval(right)
+    if left_interval is None or right_interval is None:
+        return False
+    later_start = max(left_interval[0], right_interval[0])
+    earlier_end = min(left_interval[1], right_interval[1])
+    return later_start <= earlier_end + 1
+
+
+def _cv_roles_with_effective_dates(exp):
+    roles = [
+        dict(role)
+        for role in (exp.get("roles") or [])
+        if isinstance(role, dict)
+    ]
+    if len(roles) == 1 and not str(roles[0].get("date_range") or "").strip():
+        roles[0]["date_range"] = _normalize_cv_date_range(
+            exp.get("date_range") or ""
+        )
+    return roles
+
+
+def _merge_adjacent_continuous_company_stints(experiences):
+    """Group only neighbouring same-employer entries whose dates touch.
+
+    AI output sometimes splits a promotion path into one company block per role,
+    especially when one source row appends a location (``Unilever - Malaysia``).
+    This restores the template's multi-role employer format without combining a
+    later return to the same employer or two stints separated by a real gap.
+    """
+    merged = []
+    for source_exp in experiences or []:
+        if not isinstance(source_exp, dict):
+            continue
+        exp = dict(source_exp)
+        exp["roles"] = [
+            dict(role)
+            for role in (source_exp.get("roles") or [])
+            if isinstance(role, dict)
+        ]
+        previous = merged[-1] if merged else None
+        if not (
+            previous
+            and previous.get("roles")
+            and exp.get("roles")
+            and _cv_company_names_groupable(
+                previous.get("company"), exp.get("company")
+            )
+            and _cv_experience_intervals_touch(previous, exp)
+        ):
+            merged.append(exp)
+            continue
+
+        previous["roles"] = (
+            _cv_roles_with_effective_dates(previous)
+            + _cv_roles_with_effective_dates(exp)
+        )
+        previous_company = str(previous.get("company") or "").strip()
+        incoming_company = str(exp.get("company") or "").strip()
+        if incoming_company and len(incoming_company) < len(previous_company):
+            previous["company"] = incoming_company
+        combined_span = _cv_company_span_from_roles(previous["roles"])
+        if combined_span:
+            previous["date_range"] = combined_span
+    return merged
+
+
+def _sort_work_experiences_reverse_chronological(experiences):
+    """Sort dated employers newest-first while keeping unknown dates stable."""
+    indexed = list(enumerate(experiences or []))
+
+    def sort_key(item):
+        index, exp = item
+        interval = _cv_experience_interval(exp)
+        if interval is None:
+            return (1, 0, 0, index)
+        start, end = interval
+        return (0, -end, -start, index)
+
+    return [exp for _, exp in sorted(indexed, key=sort_key)]
+
+
+def _recover_education_date_range(education, source_text):
+    """Restore source month precision when the provider returned years only."""
+    if not isinstance(education, dict) or not str(source_text or "").strip():
+        return ""
+    current = _normalize_cv_date_range(education.get("date_range") or "")
+    if not current or re.search(
+        r"\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|"
+        r"Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|"
+        r"Dec(?:ember)?)\b|\b\d{1,2}/\d{4}\b",
+        current,
+        re.I,
+    ):
+        return ""
+
+    endpoint = (
+        r"(?:\d{1,2}/\d{4}|"
+        r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|"
+        r"Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|"
+        r"Dec(?:ember)?)\.?\s+\d{4}|\d{4})"
+    )
+    range_re = re.compile(
+        r"(?P<range>" + endpoint + r"\s*(?:to|[-\u2013\u2014])\s*" + endpoint + r")",
+        re.I,
+    )
+    source = str(source_text)
+    source_lower = source.lower()
+    anchors = []
+    for field in (education.get("institution"), education.get("degree")):
+        needle = re.sub(r"\s+", " ", str(field or "").strip()).lower()
+        if not needle:
+            continue
+        for match in re.finditer(re.escape(needle), source_lower):
+            anchors.append(match.start())
+    if not anchors:
+        return ""
+
+    current_years = re.findall(r"\b\d{4}\b", current)
+    best = None
+    for match in range_re.finditer(source):
+        distance = min(abs(match.start() - anchor) for anchor in anchors)
+        if distance > 500:
+            continue
+        candidate = _normalize_cv_date_range(match.group("range"))
+        candidate_years = re.findall(r"\b\d{4}\b", candidate)
+        if (
+            len(current_years) >= 2
+            and len(candidate_years) >= 2
+            and (current_years[0], current_years[-1])
+            != (candidate_years[0], candidate_years[-1])
+        ):
+            continue
+        if not re.search(
+            r"\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b",
+            candidate,
+            re.I,
+        ):
+            continue
+        if best is None or distance < best[0]:
+            best = (distance, candidate)
+    return best[1] if best else ""
 
 
 def _cv_plain_bullet_texts(items):

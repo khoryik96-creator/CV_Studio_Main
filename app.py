@@ -11370,7 +11370,12 @@ def _cv_bullet_match_key(text):
 
 _ROMAN_RE = re.compile(r"^[ivxlcdm]+$", re.I)
 _LABEL_PAREN_RE = re.compile(r"^\((?P<body>[ivxlcdm]{1,7}|[a-z]|\d{1,3})\)", re.I)
-_LABEL_NUM_RE = re.compile(r"^(?P<body>\d{1,3})[.)](?=\s|[^\W\d_])")
+_LABEL_NUM_RE = re.compile(
+    r"^(?P<body>\d{1,3})(?:[.)](?=\s|[^\W\d_])|-(?=\s))"
+)
+_LABEL_BARE_RE = re.compile(
+    r"^(?P<body>(?:[a-z]|[ivxlcdm]{2,7}))(?P<punct>[.)-])(?=\s)"
+)
 
 
 def _label_body_kind(body):
@@ -11385,8 +11390,7 @@ def _bullet_label_style(text):
     """Classify a leading outline label into a style key, or None.
 
     Restricted to the label forms the formatter actually strips
-    (_CV_LEADING_BULLET_MARKER_RE): parenthesised enumerators "(a)"/"(vi)"/"(12)"
-    and numeric enumerators "1."/"1)". Keeping classification and stripping in
+    (_CV_LEADING_BULLET_MARKER_RE). Keeping classification and stripping in
     lockstep means a nested item's label is both removed AND counted -- never one
     without the other. A plain glyph or unlabeled line returns None (base level).
     """
@@ -11397,6 +11401,9 @@ def _bullet_label_style(text):
     m = _LABEL_NUM_RE.match(s)
     if m:
         return ("num", "digit")
+    m = _LABEL_BARE_RE.match(s)
+    if m:
+        return ("bare", _label_body_kind(m.group("body")))
     return None
 
 

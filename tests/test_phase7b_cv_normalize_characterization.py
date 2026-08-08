@@ -348,6 +348,190 @@ class EducationPlaceholderTests(unittest.TestCase):
         )
 
 
+class ContinuousEmployerGroupingTests(unittest.TestCase):
+    def test_adjacent_continuous_roles_are_grouped_like_the_marked_correct_unilever_output(self):
+        parsed = {
+            "work_experiences": [
+                {
+                    "company": "Unilever - Malaysia",
+                    "date_range": "Jan 2020 to Mar 2021",
+                    "roles": [{"title": "Head of Trade Marketing", "date_range": "", "bullets": ["A"]}],
+                },
+                {
+                    "company": "Unilever",
+                    "date_range": "Apr 2018 to Dec 2019",
+                    "roles": [{"title": "Head of Sales Operation & Effectiveness", "date_range": "", "bullets": ["B"]}],
+                },
+                {
+                    "company": "Unilever",
+                    "date_range": "Dec 2015 to Mar 2018",
+                    "roles": [{"title": "National Sales Manager", "date_range": "", "bullets": ["C"]}],
+                },
+                {
+                    "company": "Unilever - Johor, Malaysia",
+                    "date_range": "Sep 2013 to May 2014",
+                    "roles": [{"title": "Regional Sales Manager", "date_range": "", "bullets": []}],
+                },
+                {
+                    "company": "Nestle",
+                    "date_range": "Jun 2014 to Nov 2015",
+                    "roles": [{"title": "Trade Marketing Manager", "date_range": "", "bullets": []}],
+                },
+                {
+                    "company": "Unilever",
+                    "date_range": "Sep 2012 to Aug 2013",
+                    "roles": [{"title": "Trade Marketing Manager", "date_range": "", "bullets": []}],
+                },
+                {
+                    "company": "DKSH Consumer Goods",
+                    "date_range": "May 2009 to Oct 2011",
+                    "roles": [{"title": "Product Manager", "date_range": "", "bullets": []}],
+                },
+                {
+                    "company": "DKSH Consumer Goods",
+                    "date_range": "May 2008 to Apr 2009",
+                    "roles": [{"title": "Supply Chain Management Trainee", "date_range": "", "bullets": []}],
+                },
+            ]
+        }
+
+        normalized = cn._normalize_cv_data_for_output(parsed)
+        work = normalized["work_experiences"]
+
+        self.assertEqual(len(work), 5)
+        self.assertEqual(work[0]["company"], "Unilever")
+        self.assertEqual(work[0]["date_range"], "Dec 2015 to Mar 2021")
+        self.assertEqual(
+            [role["title"] for role in work[0]["roles"]],
+            [
+                "Head of Trade Marketing",
+                "Head of Sales Operation & Effectiveness",
+                "National Sales Manager",
+            ],
+        )
+        self.assertEqual(
+            [role["date_range"] for role in work[0]["roles"]],
+            [
+                "Jan 2020 to Mar 2021",
+                "Apr 2018 to Dec 2019",
+                "Dec 2015 to Mar 2018",
+            ],
+        )
+        self.assertEqual(work[1]["company"], "Nestle")
+        self.assertEqual(work[2]["company"], "Unilever - Johor, Malaysia")
+        self.assertEqual(work[3]["company"], "Unilever")
+        self.assertEqual(work[4]["date_range"], "May 2008 to Oct 2011")
+        self.assertEqual(len(work[4]["roles"]), 2)
+
+    def test_adjacent_same_employer_with_a_real_gap_stays_separate(self):
+        parsed = {
+            "work_experiences": [
+                {
+                    "company": "Example Co",
+                    "date_range": "Jan 2020 to Mar 2021",
+                    "roles": [{"title": "New Role", "date_range": "", "bullets": []}],
+                },
+                {
+                    "company": "Example Co",
+                    "date_range": "Jan 2018 to Dec 2018",
+                    "roles": [{"title": "Old Role", "date_range": "", "bullets": []}],
+                },
+            ]
+        }
+
+        normalized = cn._normalize_cv_data_for_output(parsed)
+
+        self.assertEqual(len(normalized["work_experiences"]), 2)
+
+
+class SourceEnumeratorCleanupTests(unittest.TestCase):
+    def test_bare_source_enumerators_are_removed_without_touching_false_positives(self):
+        bullets = cn._normalize_cv_bullet_items(
+            [
+                "a. Manchester united",
+                "b. Manchester city",
+                "i. Wonderful world",
+                "ii. Wonderful creature",
+                "1- Responsible for cross-domain support",
+                "a- Administrating VMware",
+                "3.5 years of experience",
+                "-5% variance",
+                "i.e. keep this abbreviation",
+                "A. Smith led the programme",
+                "2020-2023 migration programme",
+            ]
+        )
+
+        self.assertEqual(
+            bullets[:6],
+            [
+                "Manchester united",
+                "Manchester city",
+                "Wonderful world",
+                "Wonderful creature",
+                "Responsible for cross-domain support",
+                "Administrating VMware",
+            ],
+        )
+        self.assertEqual(
+            bullets[6:],
+            [
+                "3.5 years of experience",
+                "-5% variance",
+                "i.e. keep this abbreviation",
+                "A. Smith led the programme",
+                "2020-2023 migration programme",
+            ],
+        )
+
+
+class EducationAndSkillsConsistencyTests(unittest.TestCase):
+    def test_education_recovers_source_months_when_provider_returns_years_only(self):
+        parsed = {
+            "education": [
+                {
+                    "institution": "Multimedia University",
+                    "degree": "Bachelor of Business Administration",
+                    "date_range": "2004 to 2008",
+                }
+            ]
+        }
+        source = (
+            "EDUCATION & CERTIFICATION\n"
+            "Bachelor of Business Administration (Honor): Management with Multimedia,\n"
+            "06/2004 - 05/2008\n"
+            "Multimedia University\n"
+        )
+
+        normalized = cn._normalize_cv_data_for_output(parsed, source)
+
+        self.assertEqual(
+            normalized["education"][0]["date_range"],
+            "Jun 2004 to May 2008",
+        )
+
+    def test_core_expertise_always_renders_as_one_comma_separated_paragraph(self):
+        parsed = {
+            "skills": [
+                {
+                    "category": "Core Expertise",
+                    "items": [
+                        "P&L Leadership",
+                        "Key Account Management",
+                        "Distributor & Route to Market Management",
+                    ],
+                }
+            ]
+        }
+
+        normalized = cn._normalize_cv_data_for_output(parsed)
+
+        self.assertEqual(
+            normalized["skills"][0]["items"],
+            "P&L Leadership, Key Account Management, Distributor & Route to Market Management",
+        )
+
+
 class ModuleHygieneTests(unittest.TestCase):
     def test_module_does_not_import_app(self):
         import sys
