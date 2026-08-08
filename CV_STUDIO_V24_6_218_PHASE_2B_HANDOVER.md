@@ -1,3 +1,5 @@
+> **Historical — do not use as the current release reference.** This document is a point-in-time record. The authoritative current version is the repository-root `VERSION` file; see `HANDOFF.md` for current state.
+
 # CV Studio v24.6.218 → Phase 2B Handover
 
 **Current private owner/source release:** v24.6.218  

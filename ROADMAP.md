@@ -1,3 +1,5 @@
+> **Version source of truth.** The current release is whatever the repository-root [`VERSION`](VERSION) file says — it is generated into every code surface by `bump_version.py` and enforced by `tests/test_version_single_source.py`. Any version number written *below* is historical context from when this document was authored; do **not** treat it as the current baseline. See `HANDOFF.md` for live project state.
+
 # CV Studio Stability Roadmap
 
 ## Release state

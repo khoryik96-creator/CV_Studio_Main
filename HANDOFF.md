@@ -63,15 +63,38 @@ stage files explicitly and never `git add .`.
 - The squash-merge commit shows as "Unverified" because GitHub authors it. That
   is normal — never amend or rebase merged `master` history to "fix" it.
 
-## 5. Install-receipt version trap
+## 5. Install-receipt version trap — bump via `VERSION`, never by hand
 
-`app.py` enforces an install receipt at import
-(`_enforce_install_receipt_or_exit`). If you bump the version, it must change
-**consistently** across `app.py`, `INSTALL_CORE.ps1`, `INSTALL_RECEIPT.ps1`,
-`install.sh` / `start.sh`, and the on-disk receipt — otherwise the app
-`SystemExit`s at startup. A past bump was reverted for exactly this. Windows
-batch/VBS files are CRLF-only with no BOM (the build validates this); write them
-in binary mode preserving CRLF.
+**The repository-root `VERSION` file is the single source of truth** for the
+current release (bare `M.N.P`, e.g. `24.6.270`). To change the version, run:
+
+```bash
+python bump_version.py 24.6.271   # writes VERSION and stamps every code surface
+python bump_version.py            # re-stamp current VERSION (idempotent; repairs drift)
+```
+
+`bump_version.py` regenerates every version surface from `VERSION` using explicit
+*anchors* (never a blanket find/replace — `app.py` and `index.html` also contain
+*historical* version mentions in comments that must survive). It edits bytes so
+the CRLF/BOM of the Windows `*.ps1`/`*.vbs`/`*.bat` files is preserved (the build
+validates this). `tests/test_version_single_source.py` fails the suite if any
+surface drifts from `VERSION`, sharing the one anchor table with the generator.
+
+Why this matters: `app.py` enforces an install receipt at import
+(`_enforce_install_receipt_or_exit`). The version must match **consistently**
+across `app.py`, `index.html`, `INSTALL_CORE.ps1`, `INSTALL_RECEIPT.ps1`,
+`START_HIDDEN.vbs`, `WATCHDOG.vbs`, `install.sh` / `start.sh`,
+`owner_build_tools/BUILD_PROTECTED_WINDOWS.bat`, `build_protected.py` (its
+`VERSION` **and** the underscore `VERSION_SLUG` used in shipped artifact names),
+and `tests/test_phase2a_app_cache_integration.py`, or the app `SystemExit`s at
+startup / ships a mislabeled build. A past hand-bump was reverted for exactly
+this, and the slug silently drifted once (`v24_6_268` vs app `v24.6.270`); the
+`VERSION`-file workflow exists to make that impossible.
+
+Historical handover / QA-report docs (filename `..._v24_6_NNN_...`) carry a
+"Historical — do not use as the current release reference" banner; the living
+process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
+`VERSION`. Do not resurrect a hard-coded "current version: vX" line in any doc.
 
 ## 6. AI specifics
 

@@ -1,3 +1,5 @@
+> **Historical — do not use as the current release reference.** This document is a point-in-time record. The authoritative current version is the repository-root `VERSION` file; see `HANDOFF.md` for current state.
+
 # CV Studio v24.6.242 JobAdder account-management and settings QA report
 
 ## Release decision
