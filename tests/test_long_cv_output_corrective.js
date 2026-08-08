@@ -77,9 +77,16 @@ assert.deepStrictEqual(
   ['Maintaining all server in the office such', 'Mail Server', 'Networking']
 );
 // A marker must be followed by whitespace, so code/math-like prose is untouched.
-['*args', '**bold**', '5 * 3'].forEach(t => assert.deepStrictEqual(
+['*args', '**bold**', '5 * 3', 'No. 5 priority', 'e.g. do it', '24/7 support'].forEach(t => assert.deepStrictEqual(
   JSON.parse(JSON.stringify(context.cvNormalizeBulletItems([t]))), [t]
 ));
+// Manual outline labels (a., (b), (vi) glued, 1-, i.) are stripped deterministically.
+assert.deepStrictEqual(
+  JSON.parse(JSON.stringify(context.cvNormalizeBulletItems([
+    'a. Manchester united', '(b) Physical Server', '(vi)ensure closing calls', '1- Responsible', 'i. Wonderful world',
+  ]))),
+  ['Manchester united', 'Physical Server', 'ensure closing calls', 'Responsible', 'Wonderful world']
+);
 [
   'Advisor (assumed from duties)',
   'Advisor (guessed from context)',
