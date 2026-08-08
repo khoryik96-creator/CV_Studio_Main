@@ -243,10 +243,28 @@ class BulletAndStructuredContentTests(unittest.TestCase):
             "Networking",
         ])
 
+    def test_leading_outline_labels_are_stripped(self):
+        # Manual outline labels (kept or dropped inconsistently by the parser)
+        # are removed so output is deterministic; nesting is conveyed by indent.
+        cases = {
+            "a. Manchester united": "Manchester united",
+            "(b) Physical Server": "Physical Server",
+            "(vi)ensure closing calls": "ensure closing calls",  # glued paren
+            "1- Responsible for X": "Responsible for X",
+            "a- Administrating things": "Administrating things",
+            "i. Wonderful world": "Wonderful world",
+            "2. Increased sales": "Increased sales",
+        }
+        for raw, expected in cases.items():
+            self.assertEqual(cn._strip_leading_bullet_marker(raw), expected)
+
     def test_leading_marker_strip_preserves_real_content(self):
-        # A marker must be followed by whitespace to be stripped, so code-like
-        # and math-like prose is untouched.
-        for text in ["*args and kwargs", "**bold text**", "5 * 3 = 15", "-5 degrees C"]:
+        # A marker must be followed by whitespace (except the unambiguous
+        # parenthesized enumerator), so code/math/abbreviation prose is untouched.
+        for text in [
+            "*args and kwargs", "**bold text**", "5 * 3 = 15", "-5 degrees C",
+            "No. 5 priority", "e.g. do the thing", "C-3PO droid", "24/7 support",
+        ]:
             self.assertEqual(cn._strip_leading_bullet_marker(text), text)
 
     def test_structured_content_smoke(self):

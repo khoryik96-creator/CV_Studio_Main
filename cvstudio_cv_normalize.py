@@ -499,18 +499,25 @@ def _canonical_cv_section_heading(value):
 
 
 _LEADING_BULLET_MARKER_RE = re.compile(
-    r"^(?:[•●▪◦‣⁃∙·‧*‐‑‒–—―-]\s+)+"
+    r"^(?:[•●▪◦‣⁃∙·‧*‐‑‒–—―-]\s+"
+    r"|\((?:[0-9]{1,3}|[a-z]|[ivxlcdm]{1,4})\)\s*"
+    r"|\(?(?:[0-9]{1,3}|[a-z]|[ivxlcdm]{1,4})[.)\-]\s+)+",
+    re.I,
 )
 
 
 def _strip_leading_bullet_marker(text):
-    """Strip a redundant leading list glyph the author typed inside a bullet.
+    """Strip a redundant leading list glyph or outline label from a bullet.
 
-    Some source CVs prefix an already-bulleted line with ``* `` or ``- ``, which
-    renders as a doubled bullet -- "* Mail Server" under a real bullet becomes
-    "• * Mail Server". Remove one or more leading markers that are followed by
-    whitespace. Content such as ``*args`` or ``**bold**`` (no space after the
-    marker) is left untouched.
+    Source CVs prefix an already-bulleted line with a glyph (``* ``/``- ``) or a
+    manual outline label (``a.``, ``(b)``, ``1-``, ``(vi)``). Under the
+    formatter's own bullet glyph these render as a doubled/enumerated bullet and,
+    worse, the AI keeps or drops them inconsistently run-to-run. Now that indent
+    level is recovered separately, the label is redundant -- strip it so output
+    is clean and deterministic. Only number / single-letter / roman-numeral
+    enumerators are stripped, and (except for the unambiguous parenthesized form)
+    a trailing space is required, so content like ``*args``, ``**bold**``,
+    ``5 * 3``, ``-5 degrees``, ``No. 5`` or ``e.g. x`` is left untouched.
     """
     if not isinstance(text, str):
         return text

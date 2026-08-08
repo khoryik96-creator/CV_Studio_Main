@@ -371,6 +371,27 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertEqual(self._ilvl_by_text(document_xml, "Did a thing"), "0")
         self.assertEqual(self._ilvl_by_text(document_xml, "Did another thing"), "0")
 
+    def test_parse_call_uses_temperature_zero(self):
+        # Deterministic extraction: the /parse call must pin temperature 0 so the
+        # same CV parses consistently run-to-run.
+        captured = {}
+
+        def fake_call_llm(provider, api_key, payload):
+            captured["payload"] = payload
+            return {"content": [{"text": '{"candidate": {"name": "Test"}, "work_experiences": []}'}], "usage": {}}
+
+        client = app.app.test_client()
+        client.set_cookie(app._AI_SPEND_SESSION_COOKIE, app._AI_SPEND_SESSION_TOKEN)
+        with mock.patch.object(app, "call_llm", side_effect=fake_call_llm):
+            response = client.post(
+                "/parse",
+                json={"api_key": "sk-test", "cv_text": "Some CV text here",
+                      "model": "claude-sonnet-4-6", "provider": "anthropic"},
+                headers={"Origin": "http://127.0.0.1:5000"},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(captured["payload"].get("temperature"), 0)
+
     def test_prompt_forbids_inferred_titles_and_serialized_groups(self):
         self.assertIn("Never invent, infer, imply, annotate, or explain a title", app.SYSTEM_PROMPT)
         self.assertIn("never as JSON serialized inside a string", app.SYSTEM_PROMPT)

@@ -20,7 +20,7 @@ const BODY_ALIGNMENT_XML = `<w:jc w:val="${DOCUMENT_ALIGNMENT}"/>`;
 // source bullet's normalized text to its indent level; here we match each parsed
 // bullet back to that level. Unmatched bullets stay at level 0 (unchanged).
 // bulletMatchKey MUST mirror app.py _cv_bullet_match_key exactly.
-const BULLET_MATCH_STRIP_RE = /^(?:[•●▪◦‣⁃∙·‧*‐‑‒–—―-]|\(?[0-9a-z]{1,4}[.)\-])\s+/i;
+const BULLET_MATCH_STRIP_RE = /^(?:[•●▪◦‣⁃∙·‧*‐‑‒–—―-]\s+|\((?:[0-9]{1,3}|[a-z]|[ivxlcdm]{1,4})\)\s*|\(?(?:[0-9]{1,3}|[a-z]|[ivxlcdm]{1,4})[.)\-]\s+)/i;
 function bulletMatchKey(text) {
   let s = String(text == null ? '' : text).replace(/\s+/g, ' ').trim();
   for (;;) {
@@ -184,7 +184,7 @@ function canonicalCvSectionHeading(value) {
 // Some source CVs prefix an already-bulleted line with "* " or "- ", which
 // renders as a doubled bullet ("• * Mail Server"). Remove one or more leading
 // markers followed by whitespace; "*args" / "**bold**" (no space) are left as-is.
-const LEADING_BULLET_MARKER_RE = /^(?:[•●▪◦‣⁃∙·‧*‐‑‒–—―-]\s+)+/;
+const LEADING_BULLET_MARKER_RE = /^(?:[•●▪◦‣⁃∙·‧*‐‑‒–—―-]\s+|\((?:[0-9]{1,3}|[a-z]|[ivxlcdm]{1,4})\)\s*|\(?(?:[0-9]{1,3}|[a-z]|[ivxlcdm]{1,4})[.)\-]\s+)+/i;
 function stripLeadingBulletMarker(text) {
   if (typeof text !== 'string') return text;
   return text.replace(LEADING_BULLET_MARKER_RE, '');

@@ -8956,6 +8956,9 @@ def parse_cv():
         data = call_llm(llm_provider, api_key, {
             "model": model,
             "max_tokens": 64000,
+            # Deterministic extraction: temperature 0 so the same CV parses the
+            # same way run-to-run (bullet splitting, label handling, inclusion).
+            "temperature": 0,
             "_timeout_seconds": parse_timeout_seconds,
             "system": SYSTEM_PROMPT,
             "messages": [{"role": "user", "content": f"Parse this raw CV into the JSON schema:\n\n{cv_text}"}]
@@ -9082,6 +9085,7 @@ def parse_cv():
                     s2_data = call_llm(llm_provider, api_key, {
                         "model": model,
                         "max_tokens": 64000,
+                        "temperature": 0,
                         "_timeout_seconds": parse_timeout_seconds,
                         "system": SYSTEM_PROMPT,
                         "messages": [{"role": "user", "content": brevity_prompt}]
@@ -9109,6 +9113,7 @@ def parse_cv():
                         s3_data = call_llm(llm_provider, api_key, {
                             "model": model,
                             "max_tokens": 64000,
+                            "temperature": 0,
                             "_timeout_seconds": parse_timeout_seconds,
                             "messages": [
                                 {"role": "user",  "content": f"Parse this CV into the JSON schema:\n\n{cv_text}"},
@@ -11342,7 +11347,9 @@ def generate_docx():
 
 
 _BULLET_MATCH_STRIP_RE = re.compile(
-    r"^(?:[•●▪◦‣⁃∙·‧*‐‑‒–—―-]|\(?[0-9a-z]{1,4}[.)\-])\s+",
+    r"^(?:[•●▪◦‣⁃∙·‧*‐‑‒–—―-]\s+"
+    r"|\((?:[0-9]{1,3}|[a-z]|[ivxlcdm]{1,4})\)\s*"
+    r"|\(?(?:[0-9]{1,3}|[a-z]|[ivxlcdm]{1,4})[.)\-]\s+)",
     re.I,
 )
 
