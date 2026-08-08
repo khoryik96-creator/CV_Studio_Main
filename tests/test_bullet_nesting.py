@@ -44,19 +44,24 @@ class OutlineLabelInferenceTests(unittest.TestCase):
         self.assertEqual(app._infer_outline_levels(["- one", "- two", "* three"]), [0, 0, 0])
 
     def test_label_style_only_covers_stripped_forms(self):
-        # Classification is restricted to what _CV_LEADING_BULLET_MARKER_RE strips
-        # (parenthesised + numeric), so a label is never counted without being
-        # stripped. Bare "a." is not a recognised style here.
+        # Classification is restricted to what _CV_LEADING_BULLET_MARKER_RE strips,
+        # so a label is never counted without being stripped.
         self.assertIsNotNone(app._bullet_label_style("(a) x"))
         self.assertIsNotNone(app._bullet_label_style("1. x"))
+        self.assertIsNotNone(app._bullet_label_style("1- x"))
+        self.assertIsNotNone(app._bullet_label_style("a. x"))
+        self.assertIsNotNone(app._bullet_label_style("ii. x"))
         self.assertNotEqual(app._bullet_label_style("(a) x"), app._bullet_label_style("(vi) x"))
-        self.assertIsNone(app._bullet_label_style("a. x"))
+        self.assertIsNone(app._bullet_label_style("A. Smith"))
+        self.assertIsNone(app._bullet_label_style("i.e. example"))
         self.assertIsNone(app._bullet_label_style("plain text"))
 
     def test_match_key_aligns_with_display_strip(self):
         # The map key from the raw label must equal the lowercased rendered text.
         self.assertEqual(app._cv_bullet_match_key("(a) Operating System"), "operating system")
         self.assertEqual(app._cv_bullet_match_key("1. Increased sales"), "increased sales")
+        self.assertEqual(app._cv_bullet_match_key("a. Manchester united"), "manchester united")
+        self.assertEqual(app._cv_bullet_match_key("1- Increased sales"), "increased sales")
 
 
 class PdfGeometryLevelTests(unittest.TestCase):
@@ -132,6 +137,79 @@ class GenerateDocxNestingTests(unittest.TestCase):
         self.assertEqual(self._ilvl(xml, "Manchester united"), "1")
         self.assertEqual(self._ilvl(xml, "Wonderful world"), "2")
         self.assertEqual(self._leftchars(xml, "Wonderful world"), "800")
+
+    def test_faizal_source_labels_are_removed_before_nested_word_markers_render(self):
+        data = {
+            "candidate": {"name": "T"},
+            "work_experiences": [
+                {
+                    "company": "Co",
+                    "date_range": "2020 to 2021",
+                    "roles": [
+                        {
+                            "title": "Eng",
+                            "bullets": [
+                                {
+                                    "heading": "Operating System",
+                                    "bullets": [
+                                        "a. Manchester united",
+                                        "b. Manchester city",
+                                        "i. Wonderful world",
+                                        "ii. Wonderful creature",
+                                    ],
+                                },
+                                "1- Responsible for cross-domain support",
+                                "a- Administrating VMware",
+                                "5-star client rating",
+                                "-5% cost variance",
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+        levels = [
+            {"text": "manchester united", "level": 1},
+            {"text": "manchester city", "level": 1},
+            {"text": "wonderful world", "level": 2},
+            {"text": "wonderful creature", "level": 2},
+        ]
+
+        xml = self._generate(data, bullet_levels=levels)
+
+        self.assertEqual(self._ilvl(xml, "Manchester united"), "1")
+        self.assertEqual(self._ilvl(xml, "Wonderful world"), "2")
+        self.assertNotIn("a. Manchester united", xml)
+        self.assertNotIn("i. Wonderful world", xml)
+        self.assertNotIn("1- Responsible", xml)
+        self.assertNotIn("a- Administrating", xml)
+        self.assertIn("5-star client rating", xml)
+        self.assertIn("-5% cost variance", xml)
+
+    def test_core_expertise_renders_as_real_word_bullets(self):
+        data = {
+            "candidate": {"name": "T"},
+            "skills": [
+                {
+                    "category": "Core Expertise",
+                    "items": [
+                        "P&L Leadership",
+                        "Key Account Management",
+                        "Sales Force Effectiveness",
+                    ],
+                }
+            ],
+        }
+
+        xml = self._generate(data)
+
+        self.assertEqual(self._ilvl(xml, "P&amp;L Leadership"), "0")
+        self.assertEqual(self._ilvl(xml, "Key Account Management"), "0")
+        self.assertEqual(self._ilvl(xml, "Sales Force Effectiveness"), "0")
+        self.assertNotIn(
+            "P&amp;L Leadership, Key Account Management, Sales Force Effectiveness",
+            xml,
+        )
 
 
 class ParseReturnsLevelsTests(unittest.TestCase):

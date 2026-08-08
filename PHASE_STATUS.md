@@ -37,6 +37,66 @@
   focused review. Stop before release, merge, further extractions or unrelated
   work.
 
+## v24.6.279 legacy-DOC and CV-formatting corrective candidate
+
+- Branch `chatgpt/v24.6.276-legacy-doc-fallback` starts from clean v24.6.275
+  master and is now stamped v24.6.279. It is not merged and has no pull request.
+- `/extract-text` still requires and runs the exact verified Antiword runtime
+  first for every genuine legacy Word OLE payload. A missing, untrusted or
+  non-functional runtime retains the structured 424/install-repair contract,
+  including when execution-time verification fails after preflight.
+- When verified Antiword rejects only the supplied document, CV Studio can now
+  convert that document to a temporary macro-free DOCX through locally
+  installed Microsoft Word on Windows, or LibreOffice where available. The
+  resulting OOXML package is safety-validated and parsed through the existing
+  DOCX table/list path before it can satisfy extraction. Word disables automatic
+  link updates before opening the untrusted input. Failed and timed-out
+  converters terminate the wrapper process tree and separately recorded Word
+  process.
+- Genuine Windows testing used the owner-supplied Antiword-incompatible DOC:
+  Microsoft Word conversion produced a valid DOCX and the real `/extract-text`
+  route returned 19,247 characters with status 200. The private
+  source document and converted output are not committed.
+- Education placeholders such as `No Degree`, `Not specified` and `N/A` are
+  omitted deterministically, including after stripping a `No Degree:` prefix.
+  Real qualification wording, including
+  `Non-Degree Certificate`, remains unchanged.
+- The owner-marked Isaac comparison is now deterministic rather than
+  provider-dependent: adjacent continuous Dec 2015-Mar 2021 Unilever roles and
+  May 2008-Oct 2011 DKSH roles share one employer block, while the separate
+  Johor/earlier Unilever entries remain separate. Employer blocks and their
+  dated roles are sorted newest-first, so Jun 2014-Nov 2015 Nestle precedes
+  Sep 2013-May 2014 Unilever even if provider order is inconsistent.
+- Education month precision is restored from nearby source evidence only when
+  both endpoint years match the parsed entry; a single graduation year is not
+  expanded (`06/2004-05/2008` becomes
+  `Jun 2004 to May 2008`). A provider-leading `to` before a lone graduation
+  year is removed (`to 2001` becomes `2001`), while a missing date remains empty
+  so the institution renders without a date separator. Core Expertise arrays,
+  newline lists and comma-separated strings normalize to real Word bullets.
+- The owner-supplied Faizal outputs exposed literal bare enumerators beside
+  Word's own list marker. Lower-case `a.`/`i.`/`ii.`/`a-` and numeric `1-`
+  markers are now stripped while `3.5`, `5-star`, `-5%`, `i.e.`, capitalised
+  initials and real year ranges remain protected. Source-derived nesting levels
+  still render at their intended Word indents.
+- No route, guard, schema, JobAdder or Lead Finder contract changes. CV wording
+  remains source-preserving; only grouping, ordering, date precision and visible
+  source-marker structure are normalized.
+- The owner-supplied Kwong legacy DOC contains no GitHub text or URL, but the
+  provider emitted `https://github.com/unknown`; source-aware normalization now
+  removes any ungrounded GitHub path. The JobStreet/SiVA `Retrieved Resumes` /
+  `Date Applied` routing line is removed recursively wherever it is mapped.
+- The same source contains 13 Project Involvement History items and 16
+  Participated Training Programme items. Both bracketed lists are recovered
+  deterministically in exact source order, and training entries already placed
+  in certifications are de-duplicated before output.
+- The v24.6.279 review corrective rejects the known `github.com/unknown`
+  placeholder even when `/generate-docx` has no source text, while retaining
+  other source-free links and accepting terminal sentence punctuation when a
+  real source GitHub path is available. Inline JobStreet/SiVA metadata after a
+  `|` item separator is removed, and recovered multi-item skill sections render
+  as bullets in the browser preview as well as the Word document.
+
 ## Phase 7B-8 JobAdder typo-correction extraction
 
 - `cvstudio_ja_typos.py` is a new pure-helper module holding seven JobAdder

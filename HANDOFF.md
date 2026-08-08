@@ -176,6 +176,35 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
+- **Legacy `.doc` conversion fallback — STAGED ON BRANCH, NOT MERGED.** Branch
+  `chatgpt/v24.6.276-legacy-doc-fallback` is stamped v24.6.279, keeps verified
+  Antiword mandatory and first, then accepts a validated temporary DOCX
+  conversion only after that exact document is rejected. It prefers installed
+  Microsoft Word on Windows and otherwise uses LibreOffice when available. The
+  resulting DOCX reuses the existing table and nested-list extraction.
+  Execution-time Antiword trust
+  failures remain fatal, Word disables automatic link updates before opening
+  the untrusted input, and failed/timed-out converters terminate their wrapper
+  and recorded native process trees. The owner-supplied incompatible
+  DOC passed a genuine Windows `/extract-text` test through Microsoft Word.
+  The same branch removes `No Degree`/`Not specified`/`N/A` education
+  placeholders, including placeholder suffixes after `No Degree:`, while
+  protecting real `Non-Degree Certificate` wording. It also
+  covers the owner's exact Isaac/Faizal formatting regressions: continuous
+  Unilever/DKSH promotion paths are grouped without merging gapped returns,
+  employer blocks and their dated roles are sorted newest-first, source
+  education months are restored only for matching two-endpoint year ranges,
+  a provider-leading `to` is removed from a lone education year (`to 2001`
+  becomes `2001`) while an absent date remains absent,
+  Core Expertise is a real bullet list, and bare `a.`/`i.`/`1-`/`a-`
+  source labels are removed before Word supplies the visible list marker. The
+  Kwong regression follow-up removes JobStreet/SiVA retrieval metadata, rejects
+  GitHub URLs not grounded in the source, and deterministically restores the
+  source Project Involvement History and Participated Training Programme lists.
+  Its review corrective also removes the known GitHub placeholder at the
+  source-free export boundary, accepts sentence punctuation after grounded
+  source URLs, removes inline retrieval metadata after an item separator, and
+  renders recovered multi-item sections as bullets in both preview and Word.
 - **AI Crawler ".doc: flag, don't decode"**: skip decoding an undecodable legacy
   `.doc` while still surfacing the candidate. Deferred pending measurement of
   whether `.doc` decode vs. PDF OCR is the real bottleneck; a naive attempt

@@ -10,8 +10,15 @@ DeepSeek for AI. Current version is tracked in the repo-root `VERSION` file.
 ## The pipeline (source doc → formatted DOCX)
 
 1. **`/extract-text`** (`app.py`) — pulls raw text from the upload: `pdfplumber`
-   for PDF, `antiword` for legacy `.doc`, OCR (`pytesseract` + poppler) fallback
-   for scanned / undecodable files.
+   for PDF and verified `antiword` first for legacy `.doc`. If the verified
+   runtime rejects only that document, an optional installed Microsoft Word
+   (Windows) or LibreOffice converter may create a temporary macro-free DOCX;
+   CV Studio validates it and reuses the normal DOCX table/list extractor. A
+   converter never bypasses a missing or untrusted Antiword runtime, including
+   an execution-time trust failure. Word link updates are disabled before the
+   untrusted input opens, and failed/timed-out converter process trees are
+   terminated. OCR
+   (`pytesseract` + poppler) remains the scanned-file fallback.
 2. **`/parse`** (`parse_cv` in `app.py`) — an AI call (DeepSeek/Claude via
    `call_llm`, using `SYSTEM_PROMPT`) turns raw text into structured JSON:
    `{candidate, work_experiences[roles[bullets]], education, certifications,
@@ -43,8 +50,18 @@ this:
 | `• -Received calls` | leading dash bullet marker | `_strip_leading_bullet_marker` |
 | `• (i)Receives calls` | `(i)` / `(ii)` / `1.` / `1)` enumerators | `_CV_LEADING_BULLET_MARKER_RE` |
 | lone `• Key responsibilities` above its duties | a sub-heading emitted as a flat bullet | `_absorb_orphan_section_labels` |
-| `to 2001` for a graduation year | leading `- 2001` in a DOCX list | `_normalize_cv_date_range` (leading-dash strip) |
+| `to 2001` for a graduation year | a leading `- 2001` source marker was converted to `to 2001`, or the provider returned only a range end | `_normalize_cv_date_range`, `normalizeDateRange`, and `cvNormDateRange` remove the dangling separator and keep `2001`; an absent date stays empty |
 | lone `-` / `--` bullets | marker-only residue | drop in `_normalize_cv_bullet_items` |
+| `No Degree` under a school | provider placeholder for a missing qualification | `_normalize_cv_data_for_output` clears known empty-degree placeholders both alone and after a `No Degree:` prefix |
+| `• a.`, `• 1-`, or `• a-` in the output | a bare source enumerator survived beside Word's own marker | `_CV_LEADING_BULLET_MARKER_RE` strips lower-case dot/hyphen and numeric-hyphen enumerators while preserving `3.5`, `5-star`, `-5%`, `i.e.`, capitalised initials and date ranges |
+| one continuous employer shown as several company blocks | provider split each promotion into a separate experience | `_merge_adjacent_continuous_company_stints` groups only neighbouring same-employer ranges that touch; gapped and non-adjacent returns remain separate, and merged roles are sorted newest-first |
+| an older employer appears before a newer employer | provider emitted inconsistent work-history order | `_sort_work_experiences_reverse_chronological` sorts dated employer blocks newest-first after safe grouping |
+| education shows years even though the source includes months | provider dropped month precision | `_recover_education_date_range` restores only a nearby source range whose start/end years match the parsed education entry |
+| Core Expertise alternates between bullets and one paragraph | provider returned `items` as an array, newline list, or comma-separated string in different runs | `_normalize_cv_structured_content` deterministically converts Core Expertise items into real Word bullets |
+| `GitHub: https://github.com/unknown` appears without a source link | provider invented a placeholder portfolio URL | `_remove_ungrounded_cv_github_links` always removes the known placeholder, including source-free export; with source text it retains only matching GitHub paths and ignores terminal sentence periods |
+| `Position: Retrieved Resumes (SiVA folder: ...); Date Applied: ...` appears in Additional Information | JobStreet/SiVA application-routing metadata was mistaken for CV content | `_strip_cv_recruitment_tracking_metadata` removes the metadata at a line start or after a `|` item separator wherever the provider placed it |
+| Project Involvement History or Participated Training Programme is missing | provider truncated or skipped bracketed sections near the bottom of a long CV | `_recover_cv_source_additional_sections` restores every allowlisted source item and removes training duplicates from certifications |
+| recovered Project/Training items are comma-separated in preview but bulleted in Word | browser preview flattened structured item arrays | `cvSkillPreviewHtml` uses the same multiple-items-as-bullets rule as `generate.js` |
 
 ### Key files/functions (`cvstudio_cv_normalize.py`)
 
@@ -61,8 +78,18 @@ this:
   arrives as a flat bullet with the duties as loose siblings, re-attaches the
   following plain bullets to it (drops a bare label with nothing after it).
 - **`_normalize_cv_date_range`** — date normalisation; strips a **leading** dash
-  (a date never starts with a minus) but preserves internal range separators
-  (`2020 - 2023` → `2020 to 2023`).
+  (a date never starts with a minus) and a dangling leading `to` before one
+  four-digit year, but preserves internal range separators (`2020 - 2023` →
+  `2020 to 2023`). Keep the matching browser and generator functions in sync.
+- **`_strip_cv_recruitment_tracking_metadata`** — removes JobStreet/SiVA
+  retrieval/application metadata recursively before it can render in any body
+  section.
+- **`_recover_cv_source_additional_sections`** — source-aware recovery for the
+  explicitly bracketed Project Involvement History and Participated Training
+  Programme lists. Exact source wording and order are retained.
+- **`_remove_ungrounded_cv_github_links`** — always removes the known placeholder;
+  when source text is available, removes any other provider-emitted GitHub path
+  that cannot be matched to the extracted source CV.
 - **`_CV_SECTION_HEADING_RE`** — detects "Key responsibilities" / "Key
   achievements" labels.
 

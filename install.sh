@@ -1,12 +1,12 @@
 #!/bin/bash
-# The 郭 Lab CV Studio — macOS installer v24.6.275
+# The 郭 Lab CV Studio — macOS installer v24.6.279
 set -u
 printf '%s\n' '============================================' '  The 郭 Lab CV Studio — Mac Setup' '============================================' ''
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 STATE_DIR="$HOME/.guo_lab_cv_studio"
 VENV_DIR="$STATE_DIR/venv"
 RECEIPT_PATH="$STATE_DIR/install_receipt.json"
-VERSION="v24.6.275"
+VERSION="v24.6.279"
 TOTP_MASK_HEX="9339245374f57a39a5a2b0a8f932cc802daee838"
 TOTP_MASKED_HEX="3110f491137b761b47abb4b1787aff446496760a"
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"

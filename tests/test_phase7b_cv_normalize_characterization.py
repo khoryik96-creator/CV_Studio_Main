@@ -55,6 +55,9 @@ class DateAndMonthTests(unittest.TestCase):
         self.assertEqual(cn._normalize_cv_date_range("- 2001"), "2001")
         self.assertEqual(cn._normalize_cv_date_range("-2001"), "2001")
         self.assertEqual(cn._normalize_cv_date_range("– 1996"), "1996")
+        self.assertEqual(cn._normalize_cv_date_range("to 2001"), "2001")
+        self.assertEqual(cn._normalize_cv_date_range("TO 1996"), "1996")
+        self.assertEqual(cn._normalize_cv_date_range("to"), "")
         self.assertEqual(cn._normalize_cv_date_range("2020 - 2023"), "2020 to 2023")
 
     def test_date_range_numeric_month_year_to_house_style(self):
@@ -303,6 +306,522 @@ class BulletAndStructuredContentTests(unittest.TestCase):
     def test_data_for_output_smoke(self):
         out = cn._normalize_cv_data_for_output({"name": "Jane"}, source_text="Jane")
         self.assertIsInstance(out, dict)
+
+
+class EducationPlaceholderTests(unittest.TestCase):
+    def test_no_degree_placeholders_are_omitted_without_touching_real_qualifications(self):
+        parsed = {
+            "education": [
+                {"institution": "School A", "degree": "No Degree"},
+                {"institution": "School B", "degree": "Degree not specified"},
+                {"institution": "School C", "degree": "N/A"},
+                {"institution": "School C2", "degree": "No Degree: SPM"},
+                {
+                    "institution": "School C3",
+                    "degree": "No Degree: Computer System Operation And Management",
+                },
+                {
+                    "institution": "School D",
+                    "degree": "Non-Degree Certificate in Leadership",
+                },
+                {
+                    "institution": "University E",
+                    "degree": "Bachelor of Computer Science",
+                },
+                {"institution": "School F", "degree": "No Degree: N/A"},
+                {
+                    "institution": "School G",
+                    "degree": "No Degree - Not specified",
+                },
+                {"institution": "School H", "degree": "No Degree: Unknown"},
+            ]
+        }
+
+        normalized = cn._normalize_cv_data_for_output(parsed)
+
+        self.assertEqual(normalized["education"][0]["degree"], "")
+        self.assertEqual(normalized["education"][1]["degree"], "")
+        self.assertEqual(normalized["education"][2]["degree"], "")
+        self.assertEqual(normalized["education"][3]["degree"], "SPM")
+        self.assertEqual(
+            normalized["education"][4]["degree"],
+            "Computer System Operation And Management",
+        )
+        self.assertEqual(
+            normalized["education"][5]["degree"],
+            "Non-Degree Certificate in Leadership",
+        )
+        self.assertEqual(
+            normalized["education"][6]["degree"],
+            "Bachelor of Computer Science",
+        )
+        self.assertEqual(normalized["education"][7]["degree"], "")
+        self.assertEqual(normalized["education"][8]["degree"], "")
+        self.assertEqual(normalized["education"][9]["degree"], "")
+
+
+class ContinuousEmployerGroupingTests(unittest.TestCase):
+    def test_adjacent_continuous_roles_are_grouped_like_the_marked_correct_unilever_output(self):
+        parsed = {
+            "work_experiences": [
+                {
+                    "company": "Unilever - Malaysia",
+                    "date_range": "Jan 2020 to Mar 2021",
+                    "roles": [{"title": "Head of Trade Marketing", "date_range": "", "bullets": ["A"]}],
+                },
+                {
+                    "company": "Unilever",
+                    "date_range": "Apr 2018 to Dec 2019",
+                    "roles": [{"title": "Head of Sales Operation & Effectiveness", "date_range": "", "bullets": ["B"]}],
+                },
+                {
+                    "company": "Unilever",
+                    "date_range": "Dec 2015 to Mar 2018",
+                    "roles": [{"title": "National Sales Manager", "date_range": "", "bullets": ["C"]}],
+                },
+                {
+                    "company": "Unilever - Johor, Malaysia",
+                    "date_range": "Sep 2013 to May 2014",
+                    "roles": [{"title": "Regional Sales Manager", "date_range": "", "bullets": []}],
+                },
+                {
+                    "company": "Nestle",
+                    "date_range": "Jun 2014 to Nov 2015",
+                    "roles": [{"title": "Trade Marketing Manager", "date_range": "", "bullets": []}],
+                },
+                {
+                    "company": "Unilever",
+                    "date_range": "Sep 2012 to Aug 2013",
+                    "roles": [{"title": "Trade Marketing Manager", "date_range": "", "bullets": []}],
+                },
+                {
+                    "company": "DKSH Consumer Goods",
+                    "date_range": "May 2009 to Oct 2011",
+                    "roles": [{"title": "Product Manager", "date_range": "", "bullets": []}],
+                },
+                {
+                    "company": "DKSH Consumer Goods",
+                    "date_range": "May 2008 to Apr 2009",
+                    "roles": [{"title": "Supply Chain Management Trainee", "date_range": "", "bullets": []}],
+                },
+            ]
+        }
+
+        normalized = cn._normalize_cv_data_for_output(parsed)
+        work = normalized["work_experiences"]
+
+        self.assertEqual(len(work), 5)
+        self.assertEqual(work[0]["company"], "Unilever")
+        self.assertEqual(work[0]["date_range"], "Dec 2015 to Mar 2021")
+        self.assertEqual(
+            [role["title"] for role in work[0]["roles"]],
+            [
+                "Head of Trade Marketing",
+                "Head of Sales Operation & Effectiveness",
+                "National Sales Manager",
+            ],
+        )
+        self.assertEqual(
+            [role["date_range"] for role in work[0]["roles"]],
+            [
+                "Jan 2020 to Mar 2021",
+                "Apr 2018 to Dec 2019",
+                "Dec 2015 to Mar 2018",
+            ],
+        )
+        self.assertEqual(work[1]["company"], "Nestle")
+        self.assertEqual(work[2]["company"], "Unilever - Johor, Malaysia")
+        self.assertEqual(work[3]["company"], "Unilever")
+        self.assertEqual(work[4]["date_range"], "May 2008 to Oct 2011")
+        self.assertEqual(len(work[4]["roles"]), 2)
+
+    def test_adjacent_same_employer_with_a_real_gap_stays_separate(self):
+        parsed = {
+            "work_experiences": [
+                {
+                    "company": "Example Co",
+                    "date_range": "Jan 2020 to Mar 2021",
+                    "roles": [{"title": "New Role", "date_range": "", "bullets": []}],
+                },
+                {
+                    "company": "Example Co",
+                    "date_range": "Jan 2018 to Dec 2018",
+                    "roles": [{"title": "Old Role", "date_range": "", "bullets": []}],
+                },
+            ]
+        }
+
+        normalized = cn._normalize_cv_data_for_output(parsed)
+
+        self.assertEqual(len(normalized["work_experiences"]), 2)
+
+    def test_merged_roles_are_sorted_newest_first_even_when_provider_order_is_oldest_first(self):
+        parsed = {
+            "work_experiences": [
+                {
+                    "company": "Example Co",
+                    "date_range": "Jan 2018 to Dec 2019",
+                    "roles": [
+                        {"title": "Analyst", "date_range": "", "bullets": []}
+                    ],
+                },
+                {
+                    "company": "Example Co",
+                    "date_range": "Jan 2020 to Mar 2021",
+                    "roles": [
+                        {"title": "Manager", "date_range": "", "bullets": []}
+                    ],
+                },
+            ]
+        }
+
+        normalized = cn._normalize_cv_data_for_output(parsed)
+
+        self.assertEqual(len(normalized["work_experiences"]), 1)
+        self.assertEqual(
+            [
+                role["title"]
+                for role in normalized["work_experiences"][0]["roles"]
+            ],
+            ["Manager", "Analyst"],
+        )
+
+
+class SourceEnumeratorCleanupTests(unittest.TestCase):
+    def test_bare_source_enumerators_are_removed_without_touching_false_positives(self):
+        bullets = cn._normalize_cv_bullet_items(
+            [
+                "a. Manchester united",
+                "b. Manchester city",
+                "i. Wonderful world",
+                "ii. Wonderful creature",
+                "1- Responsible for cross-domain support",
+                "a- Administrating VMware",
+                "3.5 years of experience",
+                "-5% variance",
+                "i.e. keep this abbreviation",
+                "A. Smith led the programme",
+                "2020-2023 migration programme",
+            ]
+        )
+
+        self.assertEqual(
+            bullets[:6],
+            [
+                "Manchester united",
+                "Manchester city",
+                "Wonderful world",
+                "Wonderful creature",
+                "Responsible for cross-domain support",
+                "Administrating VMware",
+            ],
+        )
+        self.assertEqual(
+            bullets[6:],
+            [
+                "3.5 years of experience",
+                "-5% variance",
+                "i.e. keep this abbreviation",
+                "A. Smith led the programme",
+                "2020-2023 migration programme",
+            ],
+        )
+
+
+class EducationAndSkillsConsistencyTests(unittest.TestCase):
+    def test_education_recovers_source_months_when_provider_returns_years_only(self):
+        parsed = {
+            "education": [
+                {
+                    "institution": "Multimedia University",
+                    "degree": "Bachelor of Business Administration",
+                    "date_range": "2004 to 2008",
+                }
+            ]
+        }
+        source = (
+            "EDUCATION & CERTIFICATION\n"
+            "Bachelor of Business Administration (Honor): Management with Multimedia,\n"
+            "06/2004 - 05/2008\n"
+            "Multimedia University\n"
+        )
+
+        normalized = cn._normalize_cv_data_for_output(parsed, source)
+
+        self.assertEqual(
+            normalized["education"][0]["date_range"],
+            "Jun 2004 to May 2008",
+        )
+
+    def test_education_does_not_expand_a_single_graduation_year(self):
+        parsed = {
+            "education": [
+                {
+                    "institution": "Multimedia University",
+                    "degree": "Bachelor of Business Administration",
+                    "date_range": "2008",
+                }
+            ]
+        }
+        source = (
+            "Bachelor of Business Administration\n"
+            "06/2004 - 05/2008\n"
+            "Multimedia University\n"
+        )
+
+        normalized = cn._normalize_cv_data_for_output(parsed, source)
+
+        self.assertEqual(normalized["education"][0]["date_range"], "2008")
+
+    def test_education_removes_dangling_to_and_keeps_missing_date_empty(self):
+        parsed = {
+            "education": [
+                {
+                    "institution": "University of Tenaga Nasional",
+                    "degree": "Bachelor's Degree in Computer Science",
+                    "date_range": "to 2001",
+                },
+                {
+                    "institution": "Primary/Secondary School",
+                    "degree": "Malaysian Certificate of Education (SPM Grade 1)",
+                    "date_range": "to 1996",
+                },
+                {
+                    "institution": "Undated University",
+                    "degree": "Certificate",
+                    "date_range": "",
+                },
+            ]
+        }
+
+        normalized = cn._normalize_cv_data_for_output(parsed, "Education")
+
+        self.assertEqual(normalized["education"][0]["date_range"], "2001")
+        self.assertEqual(normalized["education"][1]["date_range"], "1996")
+        self.assertEqual(normalized["education"][2]["date_range"], "")
+
+    def test_core_expertise_always_normalizes_to_bullet_items(self):
+        expected = [
+            "P&L Leadership",
+            "Key Account Management",
+            "Distributor & Route to Market Management",
+        ]
+        inputs = [expected, ", ".join(expected), "\n".join(expected)]
+
+        for items in inputs:
+            with self.subTest(items=items):
+                parsed = {
+                    "skills": [
+                        {
+                            "category": "Core Expertise",
+                            "items": items,
+                        }
+                    ]
+                }
+
+                normalized = cn._normalize_cv_data_for_output(parsed)
+
+                self.assertEqual(normalized["skills"][0]["items"], expected)
+
+
+class SourceAdditionalSectionRecoveryTests(unittest.TestCase):
+    SOURCE = """Other Information
+[PROJECT INVOLVEMENT HISTORY]:
+* Firewalls Configuring & VPN Services
+* Network Infrastructure Enhancement & Redesign
+[PARTICIPATED TRAINING PROGRAMME]:
+* Enhancing Performance Through Teamwork
+* Microsoft Certified System Engineer (MCSE)
+[SOFT SKILLS]:
+* Vendor Management & Negotiation Skills
+"""
+
+    def test_recovers_project_and_training_sections_without_duplicate_certs(self):
+        parsed = {
+            "certifications": [
+                "Microsoft Certified System Engineer (MCSE)",
+                "Unrelated Certification",
+            ],
+            "skills": [
+                {
+                    "category": "Project Involvement History",
+                    "items": "Firewalls Configuring & VPN Services",
+                }
+            ],
+        }
+
+        normalized = cn._normalize_cv_data_for_output(parsed, self.SOURCE)
+        sections = {
+            skill["category"]: skill["items"] for skill in normalized["skills"]
+        }
+
+        self.assertEqual(
+            sections["Project Involvement History"],
+            [
+                "Firewalls Configuring & VPN Services",
+                "Network Infrastructure Enhancement & Redesign",
+            ],
+        )
+        self.assertEqual(
+            sections["Participated Training Programme"],
+            [
+                "Enhancing Performance Through Teamwork",
+                "Microsoft Certified System Engineer (MCSE)",
+            ],
+        )
+        self.assertEqual(normalized["certifications"], ["Unrelated Certification"])
+
+    def test_removes_siva_metadata_and_only_keeps_source_grounded_github(self):
+        parsed = {
+            "skills": [
+                {
+                    "category": "Summary",
+                    "items": (
+                        "Position: Retrieved Resumes (SiVA folder: Prescreened); "
+                        "Date Applied: 30 Mar 2022"
+                    ),
+                },
+                {
+                    "category": "Portfolio & Links",
+                    "items": (
+                        "GitHub: https://github.com/unknown | "
+                        "GitHub: https://github.com/source-user"
+                    ),
+                },
+                {
+                    "category": "Technologies",
+                    "items": "Python | Java",
+                },
+            ]
+        }
+        source = self.SOURCE + "\nGitHub: https://github.com/source-user\n"
+
+        normalized = cn._normalize_cv_data_for_output(parsed, source)
+
+        self.assertEqual(
+            normalized["skills"],
+            [
+                {
+                    "category": "Portfolio & Links",
+                    "items": "GitHub: https://github.com/source-user",
+                },
+                {
+                    "category": "Technologies",
+                    "items": "Python | Java",
+                },
+                {
+                    "category": "Project Involvement History",
+                    "items": [
+                        "Firewalls Configuring & VPN Services",
+                        "Network Infrastructure Enhancement & Redesign",
+                    ],
+                },
+                {
+                    "category": "Participated Training Programme",
+                    "items": [
+                        "Enhancing Performance Through Teamwork",
+                        "Microsoft Certified System Engineer (MCSE)",
+                    ],
+                },
+            ],
+        )
+
+    def test_removes_inline_siva_metadata_after_a_skill_item_delimiter(self):
+        parsed = {
+            "skills": [
+                {
+                    "category": "Summary",
+                    "items": (
+                        "Infrastructure leader | Position: Retrieved Resumes "
+                        "(SiVA folder: Prescreened); Date Applied: 30 Mar 2022\n"
+                        "Delivery governance"
+                    ),
+                }
+            ]
+        }
+
+        normalized = cn._normalize_cv_data_for_output(parsed, "Infrastructure leader")
+
+        self.assertEqual(
+            normalized["skills"],
+            [
+                {
+                    "category": "Summary",
+                    "items": "Infrastructure leader\nDelivery governance",
+                }
+            ],
+        )
+
+    def test_source_free_output_drops_placeholder_but_keeps_other_github_links(self):
+        parsed = {
+            "skills": [
+                {
+                    "category": "Portfolio & Links",
+                    "items": (
+                        "GitHub: https://github.com/unknown | "
+                        "GitHub: https://github.com/source-user"
+                    ),
+                }
+            ]
+        }
+
+        normalized = cn._normalize_cv_data_for_output(parsed)
+
+        self.assertEqual(
+            normalized["skills"],
+            [
+                {
+                    "category": "Portfolio & Links",
+                    "items": "GitHub: https://github.com/source-user",
+                }
+            ],
+        )
+
+        source_free_real_link = {
+            "skills": [
+                {
+                    "category": "Portfolio & Links",
+                    "items": "GitHub: https://github.com/source-user | Website: example.com",
+                }
+            ]
+        }
+        self.assertEqual(
+            cn._normalize_cv_data_for_output(source_free_real_link)["skills"],
+            [
+                {
+                    "category": "Portfolio & Links",
+                    "items": (
+                        "GitHub: https://github.com/source-user | "
+                        "Website: example.com"
+                    ),
+                }
+            ],
+        )
+
+    def test_source_grounding_ignores_terminal_sentence_period(self):
+        parsed = {
+            "skills": [
+                {
+                    "category": "Portfolio & Links",
+                    "items": "GitHub: https://github.com/source-user",
+                }
+            ]
+        }
+
+        normalized = cn._normalize_cv_data_for_output(
+            parsed,
+            "GitHub: https://github.com/source-user.",
+        )
+
+        self.assertEqual(
+            normalized["skills"],
+            [
+                {
+                    "category": "Portfolio & Links",
+                    "items": "GitHub: https://github.com/source-user",
+                }
+            ],
+        )
 
 
 class ModuleHygieneTests(unittest.TestCase):

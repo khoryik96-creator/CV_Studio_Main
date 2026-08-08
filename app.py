@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.275"
+_INSTALL_RECEIPT_VERSION = "v24.6.279"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -318,7 +318,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.275"
+_CVSTUDIO_VERSION = "v24.6.279"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -1193,6 +1193,7 @@ RULES:
 - For project-based CVs, preserve every explicit project/client heading instead of flattening all project bullets into one anonymous list. Put the role title first, then each project heading, then that project's bullets. Never place a project heading before the role title.
 - Represent each project group inside the relevant role as {"heading": "Project Name – Client", "bullets": ["project bullet", "project bullet"]}. Assign projects to the employment role covering the project start date; if a project spans several promotions or is ongoing across the full employer period, place it under the newest/current applicable role. Preserve the project wording and bullet content.
 - Within each role, order dated project groups chronologically from the role's earliest project to its latest project. Put broad ongoing/ad-hoc support or business-proposal groups last.
+- If an education entry has no stated degree or qualification, leave `degree` empty. Never output placeholder labels such as "No Degree", "Not specified", or "N/A". If the source states a non-degree qualification such as SPM, PMR, UPSR, a certificate, or a training programme, return the qualification name directly without a "No Degree:" prefix.
 - For a company with multiple roles, the top-level date_range MUST span from the earliest role start date to the latest role end date (e.g. if roles are "Sep 2024 to Nov 2025" and "Nov 2025 to Present", the company date_range is "Sep 2024 to Present"). The company date_range must never end before it starts.
 - SEPARATE STINTS AT THE SAME EMPLOYER: only group roles under one work-experience entry when they are ONE continuous, back-to-back tenure (a promotion path with adjoining dates). If the candidate worked at the same employer across DISTINCT, non-adjacent periods (a gap between them, or a later return), emit each period as its OWN separate work-experience entry in reverse-chronological position — do not merge them into a single entry. It is correct for the same company name to appear more than once in work_experiences.
 - candidate.email: extract the candidate's email address (look for patterns like name@domain.com anywhere in the CV, including in header lines mixed with phone/location/linkedin separated by | or spaces). Return exactly as written, or empty string if not found
@@ -1239,6 +1240,7 @@ SECTION MAPPING RULES — very important:
 - If a skills section has sub-headings with bullet points (e.g. "Oracle:" followed by bullets, "PostgreSQL:" followed by bullets), map EACH sub-heading as its own skill category, and join its bullet points into the "items" field separated by newline characters (\n). Preserve the full detail of every bullet point exactly.
 - Any section labelled Certifications, Certificates, Licenses, Accreditations, Professional Certifications → map into "certifications" array
 - Any section labelled Training, Trainings, Professional Development, Courses, Short Courses, Workshops → map each training/course as an item in "certifications" array (they appear together under Additional Information)
+- Preserve every item under explicitly labelled source sections such as "Project Involvement History" and "Participated Training Programme". Never truncate these later sections because they appear near the bottom of a long CV.
 - CERTIFICATION/TRAINING DATES — KEEP THEM: when a certification or training states a date or year (e.g. "12/2023", "2019", "Nov 2019"), preserve it in the certification item exactly as given. Do not drop the date. Keep the issuing body/institution too.
 - Any section labelled Languages → map to candidate.languages field ONLY when it clearly belongs to the candidate. Extract EVERY language listed — capture all of them, not just the first (a two-column CV may interleave the Languages sidebar with other sections, e.g. "Chinese (Professional Working)", "Malay (Professional Working)", "English (Professional Working)" separated by other lines; include all three). Extract language names ONLY — strip all proficiency levels, fluency descriptions, written/spoken qualifiers. Standardize language names: English; Bahasa Malaysia for Malay/Bahasa Melayu/BM; Chinese for Mandarin/Cantonese/Hokkien/Hakka/other Chinese dialects. Only include languages explicitly stated in the CV.
 - REDACTED LANGUAGE GUARD: If a Languages section or candidate.languages value is explicitly redacted/masked/withheld (e.g. "[redacted]", "redacted", "confidential", "masked", "hidden", "***", "xxx", "████"), do not infer or invent languages from it. Leave candidate.languages as an empty string in that case. Do not use broad template/filler assumptions to remove languages; only ignore explicit redaction/masking.
@@ -1252,8 +1254,9 @@ SECTION MAPPING RULES — very important:
 OMISSION & EXTRA SECTIONS RULES:
 - Do NOT place phone numbers, email addresses, physical addresses, LinkedIn URLs, or location/relocation info into the formatted CV body (skills, summary, work experience bullets, education, additional information). HOWEVER, still extract these into candidate.email, candidate.phone, candidate.linkedin, and candidate.address in the JSON — the app uses them for JobAdder matching and upload.
 - SALARY / REMUNERATION — OMIT ENTIRELY: Never include any salary, remuneration, or compensation detail anywhere in the formatted CV body or JSON. This covers current/present salary, expected/asking/desired/target salary, base pay, monthly or annual salary figures, bonus, commission, incentives, allowances (transport/housing/meal/etc.), EPF/KWSP/benefits amounts, and total package/CTC figures — whether written inline or under a section labelled Current Remuneration, Remuneration, Compensation, Salary, Expected Salary, Current Salary, Salary Expectation, Package, or similar. Drop the whole section and every such figure; do NOT map it to a skills category, Additional Information, or any other field. This overrides the catch-all mapping rule below. (Notice period is NOT salary — keep mapping it to candidate.notice_period per the rule below.)
+- RECRUITMENT-SYSTEM METADATA — OMIT ENTIRELY: Never include source-routing/application metadata such as "Position: Retrieved Resumes (SiVA folder: ...); Date Applied: ...", JobStreet/SiVA folder labels, retrieval status, or application dates anywhere in the JSON or formatted CV.
 - KEEP & map to Additional Information skills categories:
-  - GitHub links, personal websites, portfolio URLs, Behance, Dribbble → { "category": "Portfolio & Links", "items": "GitHub: https://... | Website: https://..." }
+  - GitHub links, personal websites, portfolio URLs, Behance, Dribbble → { "category": "Portfolio & Links", "items": "GitHub: https://... | Website: https://..." }, but ONLY when the exact link is explicitly present in the source CV. Never invent, infer, complete, or emit a placeholder URL such as `https://github.com/unknown`; if no source link exists, omit the category.
   - Patents section → { "category": "Patents", "items": "Patent title (Patent number, Year)\nPatent title (Patent number, Year)" } — preserve each patent as a separate line with full detail
   - Publications, Research Papers → { "category": "Publications", "items": "Title (Journal, Year)\nTitle (Journal, Year)" }
   - Any other section that does not fit work_experiences, education, certifications, or skills (e.g. Interests, References, Projects, Open Source, Speaking Engagements, Conference Talks) → add as its own skills category with a sensible category name, preserve all content. EXCEPTION: never apply this catch-all to salary/remuneration/compensation content — that is omitted entirely per the SALARY / REMUNERATION rule above.
@@ -3855,7 +3858,7 @@ def _ja_spa_browser_bridge(candidate_id, fields, note_text="", email="", salary_
     payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
     compact_payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     script = """(async () => {
-  const helperVersion = 'v24.6.275';
+  const helperVersion = 'v24.6.279';
   const candidateId = %s;
   const payload = %s;
   const profilePath = %s;
@@ -11369,7 +11372,12 @@ def _cv_bullet_match_key(text):
 
 _ROMAN_RE = re.compile(r"^[ivxlcdm]+$", re.I)
 _LABEL_PAREN_RE = re.compile(r"^\((?P<body>[ivxlcdm]{1,7}|[a-z]|\d{1,3})\)", re.I)
-_LABEL_NUM_RE = re.compile(r"^(?P<body>\d{1,3})[.)](?=\s|[^\W\d_])")
+_LABEL_NUM_RE = re.compile(
+    r"^(?P<body>\d{1,3})(?:[.)](?=\s|[^\W\d_])|-(?=\s))"
+)
+_LABEL_BARE_RE = re.compile(
+    r"^(?P<body>(?:[a-z]|[ivxlcdm]{2,7}))(?P<punct>[.)-])(?=\s)"
+)
 
 
 def _label_body_kind(body):
@@ -11384,8 +11392,7 @@ def _bullet_label_style(text):
     """Classify a leading outline label into a style key, or None.
 
     Restricted to the label forms the formatter actually strips
-    (_CV_LEADING_BULLET_MARKER_RE): parenthesised enumerators "(a)"/"(vi)"/"(12)"
-    and numeric enumerators "1."/"1)". Keeping classification and stripping in
+    (_CV_LEADING_BULLET_MARKER_RE). Keeping classification and stripping in
     lockstep means a nested item's label is both removed AND counted -- never one
     without the other. A plain glyph or unlabeled line returns None (base level).
     """
@@ -11396,6 +11403,9 @@ def _bullet_label_style(text):
     m = _LABEL_NUM_RE.match(s)
     if m:
         return ("num", "digit")
+    m = _LABEL_BARE_RE.match(s)
+    if m:
+        return ("bare", _label_body_kind(m.group("body")))
     return None
 
 
@@ -11776,6 +11786,355 @@ def _find_soffice_binary():
     return None
 
 
+def _legacy_doc_word_powershell_candidates():
+    """Return Windows PowerShell hosts that may match installed Word's bitness."""
+    if os.name != "nt":
+        return []
+    import shutil as _shutil
+
+    system_root = os.environ.get("SystemRoot") or r"C:\Windows"
+    candidates = [
+        os.path.join(
+            system_root,
+            "SysWOW64",
+            "WindowsPowerShell",
+            "v1.0",
+            "powershell.exe",
+        ),
+        os.path.join(
+            system_root,
+            "System32",
+            "WindowsPowerShell",
+            "v1.0",
+            "powershell.exe",
+        ),
+        _shutil.which("powershell.exe"),
+        _shutil.which("pwsh.exe"),
+    ]
+    found = []
+    seen = set()
+    for candidate in candidates:
+        if not candidate or not os.path.isfile(candidate):
+            continue
+        normalized = os.path.normcase(os.path.realpath(candidate))
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        found.append(candidate)
+    return found
+
+
+def _converter_process_creation_options():
+    """Return process-group options used by optional document converters."""
+    import subprocess as _subprocess
+
+    if os.name == "nt":
+        return {
+            "creationflags": int(
+                getattr(_subprocess, "CREATE_NO_WINDOW", 0) or 0
+            ) | int(
+                getattr(_subprocess, "CREATE_NEW_PROCESS_GROUP", 0) or 0
+            )
+        }
+    return {"start_new_session": True}
+
+
+def _terminate_converter_process_tree(process, *, extra_pids=()):
+    """Best-effort termination for a failed converter and its children."""
+    import signal as _signal
+    import shutil as _shutil
+    import subprocess as _subprocess
+
+    try:
+        process_running = process.poll() is None
+    except Exception:
+        process_running = True
+    if os.name == "nt":
+        system_root = os.environ.get("SystemRoot") or r"C:\Windows"
+        taskkill = os.path.join(system_root, "System32", "taskkill.exe")
+        if not os.path.isfile(taskkill):
+            taskkill = _shutil.which("taskkill.exe") or ""
+        pids = []
+        process_pids = [getattr(process, "pid", None)] if process_running else []
+        for value in list(extra_pids or ()) + process_pids:
+            try:
+                pid = int(value)
+            except (TypeError, ValueError):
+                continue
+            if pid > 0 and pid not in pids:
+                pids.append(pid)
+        if taskkill:
+            for pid in pids:
+                try:
+                    _subprocess.run(
+                        [taskkill, "/PID", str(pid), "/T", "/F"],
+                        stdin=_subprocess.DEVNULL,
+                        stdout=_subprocess.DEVNULL,
+                        stderr=_subprocess.DEVNULL,
+                        timeout=5,
+                        check=False,
+                        creationflags=int(
+                            getattr(_subprocess, "CREATE_NO_WINDOW", 0) or 0
+                        ),
+                    )
+                except Exception:
+                    # cleanup-only: the direct process kill below remains.
+                    pass
+    else:
+        try:
+            os.killpg(int(process.pid), _signal.SIGKILL)
+        except Exception:
+            # cleanup-only: fall back to killing the direct process below.
+            pass
+    if process_running:
+        try:
+            process.kill()
+        except Exception:
+            # cleanup-only: the process may already have exited.
+            pass
+        try:
+            process.communicate(timeout=5)
+        except Exception:
+            # cleanup-only: termination is already best-effort and bounded.
+            pass
+
+
+def _recorded_converter_process_ids(extra_pid_path):
+    """Return the positive native PID recorded by a converter wrapper."""
+    if not extra_pid_path:
+        return []
+    try:
+        with open(extra_pid_path, "r", encoding="ascii") as handle:
+            pid = int(handle.read().strip())
+        return [pid] if pid > 0 else []
+    except Exception:
+        return []
+
+
+def _run_converter_subprocess(command, *, timeout, extra_pid_path=""):
+    """Run one converter and tear down its process tree on failure/timeout."""
+    import subprocess as _subprocess
+
+    process = _subprocess.Popen(
+        command,
+        stdin=_subprocess.DEVNULL,
+        stdout=_subprocess.PIPE,
+        stderr=_subprocess.PIPE,
+        **_converter_process_creation_options(),
+    )
+    try:
+        stdout, stderr = process.communicate(timeout=max(1.0, float(timeout)))
+    except Exception:
+        _terminate_converter_process_tree(
+            process,
+            extra_pids=_recorded_converter_process_ids(extra_pid_path),
+        )
+        raise
+    if process.returncode:
+        recorded_pids = _recorded_converter_process_ids(extra_pid_path)
+        if recorded_pids:
+            _terminate_converter_process_tree(
+                process,
+                extra_pids=recorded_pids,
+            )
+    return _subprocess.CompletedProcess(
+        command,
+        process.returncode,
+        stdout,
+        stderr,
+    )
+
+
+def _convert_legacy_doc_with_microsoft_word(file_bytes, *, timeout=45):
+    """Convert one legacy DOC to macro-free DOCX through installed Word.
+
+    Word is an optional local desktop dependency, not part of the protected
+    package. Both 32-bit and 64-bit PowerShell hosts are tried because COM
+    registration follows the installed Office bitness.
+    """
+    if os.name != "nt" or not file_bytes:
+        return b""
+    import tempfile as _tempfile
+
+    script = r'''param([string]$InputPath, [string]$OutputPath, [string]$ProcessIdPath)
+$ErrorActionPreference = 'Stop'
+$word = $null
+$document = $null
+$existingWordProcessIds = @(
+    Get-Process -Name WINWORD -ErrorAction SilentlyContinue |
+        ForEach-Object { [uint32]$_.Id }
+)
+try {
+    $word = New-Object -ComObject Word.Application
+    $word.Visible = $false
+    $word.DisplayAlerts = 0
+    $word.AutomationSecurity = 3
+    $word.Options.UpdateLinksAtOpen = $false
+    try {
+        Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public static class CVStudioWordNativeMethods {
+    [DllImport("user32.dll")]
+    public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+}
+"@
+        [uint32]$wordProcessId = 0
+        [void][CVStudioWordNativeMethods]::GetWindowThreadProcessId(
+            [IntPtr]$word.Hwnd,
+            [ref]$wordProcessId
+        )
+        if (
+            $wordProcessId -gt 0 -and
+            $existingWordProcessIds -notcontains $wordProcessId
+        ) {
+            [IO.File]::WriteAllText($ProcessIdPath, [string]$wordProcessId)
+        }
+    } catch {}
+    $document = $word.Documents.Open($InputPath, $false, $true, $false)
+    $document.SaveAs2($OutputPath, 16)
+    if (-not (Test-Path -LiteralPath $OutputPath)) {
+        throw 'Word did not create the converted document.'
+    }
+}
+finally {
+    if ($null -ne $document) {
+        $document.Close(0)
+        [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($document)
+    }
+    if ($null -ne $word) {
+        $word.Quit()
+        [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($word)
+    }
+    [GC]::Collect()
+    [GC]::WaitForPendingFinalizers()
+}
+'''
+    deadline = time.monotonic() + max(1.0, float(timeout))
+    for powershell in _legacy_doc_word_powershell_candidates():
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        try:
+            with _tempfile.TemporaryDirectory(
+                prefix="cvstudio-legacy-doc-word-"
+            ) as td:
+                input_path = os.path.join(td, "input.doc")
+                output_path = os.path.join(td, "input.docx")
+                script_path = os.path.join(td, "convert.ps1")
+                process_id_path = os.path.join(td, "word-process-id.txt")
+                with open(input_path, "wb") as handle:
+                    handle.write(file_bytes)
+                with open(script_path, "w", encoding="utf-8", newline="\n") as handle:
+                    handle.write(script)
+                result = _run_converter_subprocess(
+                    [
+                        powershell,
+                        "-NoLogo",
+                        "-NoProfile",
+                        "-NonInteractive",
+                        "-ExecutionPolicy",
+                        "Bypass",
+                        "-File",
+                        script_path,
+                        "-InputPath",
+                        input_path,
+                        "-OutputPath",
+                        output_path,
+                        "-ProcessIdPath",
+                        process_id_path,
+                    ],
+                    timeout=max(1.0, remaining),
+                    extra_pid_path=process_id_path,
+                )
+                if result.returncode == 0 and os.path.isfile(output_path):
+                    with open(output_path, "rb") as handle:
+                        return handle.read()
+        except Exception:
+            continue
+    return b""
+
+
+def _convert_legacy_doc_with_libreoffice(file_bytes, *, timeout=45):
+    """Convert one legacy DOC to DOCX through an optional LibreOffice install."""
+    if not file_bytes:
+        return b""
+    import pathlib as _pathlib
+    import tempfile as _tempfile
+
+    soffice = _find_soffice_binary()
+    if not soffice:
+        return b""
+    try:
+        with _tempfile.TemporaryDirectory(
+            prefix="cvstudio-legacy-doc-libreoffice-"
+        ) as td:
+            input_path = os.path.join(td, "input.doc")
+            output_path = os.path.join(td, "input.docx")
+            profile_path = _pathlib.Path(td, "profile")
+            profile_path.mkdir()
+            with open(input_path, "wb") as handle:
+                handle.write(file_bytes)
+            result = _run_converter_subprocess(
+                [
+                    soffice,
+                    "--headless",
+                    "--nologo",
+                    "--nodefault",
+                    "--nolockcheck",
+                    "--nofirststartwizard",
+                    "-env:UserInstallation=" + profile_path.resolve().as_uri(),
+                    "--convert-to",
+                    "docx:Office Open XML Text",
+                    "--outdir",
+                    td,
+                    input_path,
+                ],
+                timeout=max(1.0, float(timeout)),
+            )
+            if result.returncode == 0 and os.path.isfile(output_path):
+                with open(output_path, "rb") as handle:
+                    return handle.read()
+    except Exception:  # best-effort optional converter; caller retains the 424 path
+        pass
+    return b""
+
+
+def _convert_legacy_doc_to_docx_bytes(file_bytes):
+    """Return a validated temporary DOCX conversion and its converter label.
+
+    This helper is called only after the mandatory verified Antiword runtime
+    has run and rejected the exact document. Conversion cannot make a missing
+    or untrusted Antiword installation pass the legacy-DOC gate.
+    """
+    if not (
+        file_bytes
+        and file_bytes.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1")
+    ):
+        return b"", ""
+    converters = (
+        ("microsoft-word", _convert_legacy_doc_with_microsoft_word),
+        ("libreoffice", _convert_legacy_doc_with_libreoffice),
+    )
+    deadline = time.monotonic() + 35.0
+    for label, converter in converters:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        try:
+            converted = converter(file_bytes, timeout=remaining) or b""
+            if not converted.startswith(b"PK"):
+                continue
+            _validate_zip_payload(converted, "DOCX")
+            from docx import Document as _ConvertedDocument
+
+            _ConvertedDocument(io.BytesIO(converted))
+            return converted, label
+        except Exception:
+            continue
+    return b"", ""
+
+
 def _iter_antiword_binaries():
     """Yield only the exact hash- and function-verified managed runtime."""
     candidate = _verified_antiword_finder(
@@ -12125,6 +12484,7 @@ def extract_text():
 
         text = ""
         bullet_levels = []
+        legacy_doc_converter = ""
 
         if filename.endswith('.pdf'):
             import pdfplumber
@@ -12272,6 +12632,7 @@ def extract_text():
                 return jsonify({"error": _legacy_doc_error}), 400
             text = ""
             _verified_antiword_text = False
+            _antiword_run_completed = False
             _require_verified_antiword()
 
             def _clean_legacy_doc_text(_raw_text):
@@ -12312,6 +12673,7 @@ def extract_text():
                         (_doc_aw,),
                         timeout=20,
                     )
+                    _antiword_run_completed = True
                     if r2.returncode == 0:
                         _aw_text = r2.stdout.decode('utf-8', errors='ignore').strip()
                         if not _aw_text:
@@ -12319,10 +12681,37 @@ def extract_text():
                         if _looks_like_good_doc_text(_aw_text):
                             text = _aw_text
                             _verified_antiword_text = True
+            except AntiwordDependencyError:
+                raise
             except Exception:
                 pass
 
-            # Strategy 2: LibreOffice/soffice conversion to txt (if installed). Often the cleanest .doc path.
+            # Strategy 2: after the verified runtime has rejected this exact
+            # document, convert it to a validated macro-free DOCX. Microsoft
+            # Word is preferred on Windows for fidelity; LibreOffice is the
+            # cross-platform optional fallback. Neither converter may bypass a
+            # missing or untrusted Antiword runtime because the mandatory gate
+            # above runs first.
+            if _antiword_run_completed and not _verified_antiword_text:
+                try:
+                    _converted_docx, _converter = (
+                        _convert_legacy_doc_to_docx_bytes(file_bytes)
+                    )
+                    if _converted_docx:
+                        _converted_text = _extract_docx_text_preserve_tables(
+                            _converted_docx
+                        )
+                        if _looks_like_good_doc_text(_converted_text):
+                            text = _converted_text
+                            legacy_doc_converter = _converter
+                            bullet_levels = _extract_docx_bullet_levels(
+                                _converted_docx
+                            )
+                except Exception:  # best-effort converter; diagnostic probes remain available
+                    pass
+
+            # Strategy 3: LibreOffice/soffice conversion to txt (if installed).
+            # This remains a diagnostic-only probe when DOCX conversion failed.
             if not text:
                 try:
                     import subprocess as _sp_lo, tempfile as _tmp_lo, os as _os_lo, shutil as _sh_lo
@@ -12438,7 +12827,7 @@ def extract_text():
                     break
                 return _clean_piece_text(''.join(_out))
 
-            # Strategy 3: native OLE/WordDocument piece-table extraction.
+            # Strategy 4: native OLE/WordDocument piece-table extraction.
             # This is a defense-in-depth probe and cannot satisfy success.
             if not text:
                 try:
@@ -12448,7 +12837,7 @@ def extract_text():
                 except Exception:
                     pass
 
-            # Strategy 4: last-resort raw scans, but only accept them if they look like real text.
+            # Strategy 5: last-resort raw scans, but only accept them if they look like real text.
             if not text:
                 try:
                     _raw_try = _clean_legacy_doc_text(file_bytes.decode('utf-16-le', errors='ignore'))
@@ -12457,7 +12846,7 @@ def extract_text():
                 except Exception:
                     pass
 
-            # Strategy 5: python-docx (works only if .doc is actually .docx renamed)
+            # Strategy 6: python-docx (works only if .doc is actually .docx renamed)
             if not text:
                 try:
                     from docx import Document as _Doc
@@ -12467,7 +12856,7 @@ def extract_text():
                         text = _docx_renamed_text
                 except Exception:
                     pass
-            if not _verified_antiword_text:
+            if not (_verified_antiword_text or legacy_doc_converter):
                 raise AntiwordDependencyError(
                     "document-extraction-failed",
                     "Verified Antiword could not decode this legacy .doc. "
@@ -12538,7 +12927,14 @@ def extract_text():
 
         # Clean PDF/font/OCR artefacts without deleting ligature fragments.
         text = _normalize_extracted_text_artifacts(text)
-        return jsonify({"ok": True, "text": text, "bullet_levels": bullet_levels})
+        response_payload = {
+            "ok": True,
+            "text": text,
+            "bullet_levels": bullet_levels,
+        }
+        if legacy_doc_converter:
+            response_payload["legacy_doc_converter"] = legacy_doc_converter
+        return jsonify(response_payload)
 
     except AntiwordDependencyError as e:
         return _antiword_dependency_response(e)

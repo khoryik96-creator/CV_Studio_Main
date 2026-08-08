@@ -833,13 +833,18 @@ class AntiwordMandatoryDependencyTests(unittest.TestCase):
         self.assertIn("blocked replacement", result.stdout)
         self.assertIn("released timeout/failure locks", result.stdout)
 
-    def test_native_parser_is_retained_but_cannot_satisfy_success(self):
+    def test_native_parser_alone_cannot_satisfy_success_but_validated_docx_conversion_can(self):
         source = (ROOT / "app.py").read_text(encoding="utf-8")
         self.assertIn("def _extract_word_binary_piece_table", source)
         self.assertIn(
-            "if not _verified_antiword_text:\n"
+            "if not (_verified_antiword_text or legacy_doc_converter):\n"
             "                raise AntiwordDependencyError(",
             source,
+        )
+        route_start = source.index("elif filename.endswith('.doc')")
+        self.assertLess(
+            source.index("_require_verified_antiword()", route_start),
+            source.index("_convert_legacy_doc_to_docx_bytes(file_bytes)", route_start),
         )
         self.assertEqual(source.count("_run_verified_antiword("), 3)
         self.assertNotIn("_sp.run([antiword, doc_path]", source)
