@@ -240,6 +240,40 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertNotIn("E D U C A T I O N S  &amp;  T R A I N I N G", document_xml)
         self.assertNotIn("<w:t>Example Sdn Bhd</w:t></w:r></w:p></w:tc>\n    <w:tc", document_xml)
 
+    def test_docx_education_renders_single_year_and_omits_missing_date_separator(self):
+        data = {
+            "candidate": {"name": "Education Fixture"},
+            "work_experiences": [],
+            "education": [
+                {
+                    "institution": "University of Tenaga Nasional",
+                    "degree": "Bachelor's Degree in Computer Science",
+                    "date_range": "to 2001",
+                },
+                {
+                    "institution": "Undated University",
+                    "degree": "Certificate",
+                    "date_range": "",
+                },
+            ],
+            "certifications": [],
+            "skills": [],
+        }
+
+        response = app.app.test_client().post(
+            "/generate-docx",
+            json={"data": data},
+            headers={"Origin": "http://127.0.0.1:5000"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
+            document_xml = archive.read("word/document.xml").decode("utf-8")
+        self.assertIn("2001 | University of Tenaga Nasional", document_xml)
+        self.assertNotIn("to 2001", document_xml)
+        self.assertIn("Undated University", document_xml)
+        self.assertNotIn("| Undated University", document_xml)
+
     def test_prompt_forbids_inferred_titles_and_serialized_groups(self):
         self.assertIn("Never invent, infer, imply, annotate, or explain a title", app.SYSTEM_PROMPT)
         self.assertIn("never as JSON serialized inside a string", app.SYSTEM_PROMPT)

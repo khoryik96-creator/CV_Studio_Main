@@ -208,6 +208,14 @@ def _normalize_cv_date_range(value):
     text = re.sub(r"^[\s]*[-‐-―−•·▪◦*]+[\s]*", "", text)
     if not text:
         return ""
+    # Some provider runs preserve only the end of a source range and emit a
+    # dangling separator (for example "to 2001"). A lone graduation year is
+    # not a range, so keep only the year. A separator with no date is empty.
+    lone_end_year = re.fullmatch(r"to\s+(\d{4})", text, flags=re.I)
+    if lone_end_year:
+        text = lone_end_year.group(1)
+    elif re.fullmatch(r"to", text, flags=re.I):
+        return ""
     text = text.replace("–", "-").replace("—", "-").replace("−", "-")
     text = re.sub(r"\b(till\s*date|till\s*now|to\s*date|current|presently|now)\b", "Present", text, flags=re.I)
     text = re.sub(r"\bpresent\b", "Present", text, flags=re.I)

@@ -50,7 +50,7 @@ this:
 | `• -Received calls` | leading dash bullet marker | `_strip_leading_bullet_marker` |
 | `• (i)Receives calls` | `(i)` / `(ii)` / `1.` / `1)` enumerators | `_CV_LEADING_BULLET_MARKER_RE` |
 | lone `• Key responsibilities` above its duties | a sub-heading emitted as a flat bullet | `_absorb_orphan_section_labels` |
-| `to 2001` for a graduation year | leading `- 2001` in a DOCX list | `_normalize_cv_date_range` (leading-dash strip) |
+| `to 2001` for a graduation year | a leading `- 2001` source marker was converted to `to 2001`, or the provider returned only a range end | `_normalize_cv_date_range`, `normalizeDateRange`, and `cvNormDateRange` remove the dangling separator and keep `2001`; an absent date stays empty |
 | lone `-` / `--` bullets | marker-only residue | drop in `_normalize_cv_bullet_items` |
 | `No Degree` under a school | provider placeholder for a missing qualification | `_normalize_cv_data_for_output` clears known empty-degree placeholders both alone and after a `No Degree:` prefix |
 | `• a.`, `• 1-`, or `• a-` in the output | a bare source enumerator survived beside Word's own marker | `_CV_LEADING_BULLET_MARKER_RE` strips lower-case dot/hyphen and numeric-hyphen enumerators while preserving `3.5`, `5-star`, `-5%`, `i.e.`, capitalised initials and date ranges |
@@ -74,8 +74,9 @@ this:
   arrives as a flat bullet with the duties as loose siblings, re-attaches the
   following plain bullets to it (drops a bare label with nothing after it).
 - **`_normalize_cv_date_range`** — date normalisation; strips a **leading** dash
-  (a date never starts with a minus) but preserves internal range separators
-  (`2020 - 2023` → `2020 to 2023`).
+  (a date never starts with a minus) and a dangling leading `to` before one
+  four-digit year, but preserves internal range separators (`2020 - 2023` →
+  `2020 to 2023`). Keep the matching browser and generator functions in sync.
 - **`_CV_SECTION_HEADING_RE`** — detects "Key responsibilities" / "Key
   achievements" labels.
 

@@ -5,13 +5,14 @@ const fs = require('fs');
 const vm = require('vm');
 
 const html = fs.readFileSync('index.html', 'utf8');
+const generate = fs.readFileSync('generate.js', 'utf8');
 
-function fn(name) {
-  const start = html.indexOf('function ' + name + '(');
+function fnFrom(source, name) {
+  const start = source.indexOf('function ' + name + '(');
   assert.ok(start >= 0, 'missing function: ' + name);
-  let brace = html.indexOf('{', start), depth = 0, quote = '', escaped = false;
-  for (let i = brace; i < html.length; i += 1) {
-    const ch = html[i];
+  let brace = source.indexOf('{', start), depth = 0, quote = '', escaped = false;
+  for (let i = brace; i < source.length; i += 1) {
+    const ch = source[i];
     if (quote) {
       if (escaped) escaped = false;
       else if (ch === '\\') escaped = true;
@@ -20,10 +21,12 @@ function fn(name) {
     }
     if (ch === '"' || ch === "'" || ch.charCodeAt(0) === 96) { quote = ch; continue; }
     if (ch === '{') depth += 1;
-    else if (ch === '}' && --depth === 0) return html.slice(start, i + 1);
+    else if (ch === '}' && --depth === 0) return source.slice(start, i + 1);
   }
   throw new Error('unterminated function: ' + name);
 }
+
+function fn(name) { return fnFrom(html, name); }
 
 const tab = {innerHTML: '', classList: {add(){}, remove(){}}, title: '', setAttribute(){}};
 const storage = new Map();
@@ -41,11 +44,17 @@ const context = {
 vm.createContext(context);
 [
   'cvParseIsLong','cvParseTimeoutMs','cvStripInferredTitle','cvCanonicalSectionHeading',
-  'cvNormalizeBulletItems','cvNormalizeStructuredData','versionedUnlockKey','readVersionedUnlock',
+  'cvNormalizeBulletItems','cvNormalizeStructuredData','cvNormDateRange','versionedUnlockKey','readVersionedUnlock',
   'writeVersionedUnlock','cvScoringIsUnlocked','cvScoringSetUnlocked','updateCvScoringLockUI',
   'requestCvScoringUnlock','aiCrawlerIsUnlocked','updateAiCrawlerLockUI','requestAiCrawlerUnlock',
   'requireAiCrawlerUnlocked','aiCrawlerLockPayload'
 ].forEach(name => vm.runInContext(fn(name), context));
+vm.runInContext(fnFrom(generate, 'normalizeDateRange'), context);
+
+assert.strictEqual(context.cvNormDateRange('to 2001'), '2001');
+assert.strictEqual(context.cvNormDateRange(''), '');
+assert.strictEqual(context.normalizeDateRange('to 1996'), '1996');
+assert.strictEqual(context.normalizeDateRange('to'), '');
 
 assert.strictEqual(context.cvParseTimeoutMs('x'.repeat(7999)), 210000);
 assert.strictEqual(context.cvParseTimeoutMs('x'.repeat(8000)), 330000);

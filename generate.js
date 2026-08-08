@@ -139,6 +139,9 @@ function smartTitleText(value, opts = {}) {
 function normalizeDateRange(value) {
   let text = String(value == null ? '' : value).trim();
   if (!text) return '';
+  const loneEndYear = text.match(/^to\s+(\d{4})$/i);
+  if (loneEndYear) text = loneEndYear[1];
+  else if (/^to$/i.test(text)) return '';
   text = text.replace(/[–—−]/g, '-');
   text = text.replace(/\b(till\s*date|till\s*now|to\s*date|current|presently|now)\b/gi, 'Present');
   text = text.replace(/\bpresent\b/gi, 'Present');

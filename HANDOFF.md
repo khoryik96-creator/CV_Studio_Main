@@ -177,11 +177,12 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 ## 8. Open / deferred work
 
 - **Legacy `.doc` conversion fallback — STAGED ON BRANCH, NOT MERGED.** Branch
-  `chatgpt/v24.6.276-legacy-doc-fallback` keeps verified Antiword mandatory and
-  first, then accepts a validated temporary DOCX conversion only after that
-  exact document is rejected. It prefers installed Microsoft Word on Windows
-  and otherwise uses LibreOffice when available. The resulting DOCX reuses the
-  existing table and nested-list extraction. Execution-time Antiword trust
+  `chatgpt/v24.6.276-legacy-doc-fallback` is stamped v24.6.277, keeps verified
+  Antiword mandatory and first, then accepts a validated temporary DOCX
+  conversion only after that exact document is rejected. It prefers installed
+  Microsoft Word on Windows and otherwise uses LibreOffice when available. The
+  resulting DOCX reuses the existing table and nested-list extraction.
+  Execution-time Antiword trust
   failures remain fatal, Word disables automatic link updates before opening
   the untrusted input, and failed/timed-out converters terminate their wrapper
   and recorded native process trees. The owner-supplied incompatible
@@ -193,6 +194,8 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   Unilever/DKSH promotion paths are grouped without merging gapped returns,
   employer blocks and their dated roles are sorted newest-first, source
   education months are restored only for matching two-endpoint year ranges,
+  a provider-leading `to` is removed from a lone education year (`to 2001`
+  becomes `2001`) while an absent date remains absent,
   Core Expertise is a real bullet list, and bare `a.`/`i.`/`1-`/`a-`
   source labels are removed before Word supplies the visible list marker.
 - **AI Crawler ".doc: flag, don't decode"**: skip decoding an undecodable legacy

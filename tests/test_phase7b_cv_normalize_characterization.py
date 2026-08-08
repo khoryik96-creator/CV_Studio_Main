@@ -55,6 +55,9 @@ class DateAndMonthTests(unittest.TestCase):
         self.assertEqual(cn._normalize_cv_date_range("- 2001"), "2001")
         self.assertEqual(cn._normalize_cv_date_range("-2001"), "2001")
         self.assertEqual(cn._normalize_cv_date_range("– 1996"), "1996")
+        self.assertEqual(cn._normalize_cv_date_range("to 2001"), "2001")
+        self.assertEqual(cn._normalize_cv_date_range("TO 1996"), "1996")
+        self.assertEqual(cn._normalize_cv_date_range("to"), "")
         self.assertEqual(cn._normalize_cv_date_range("2020 - 2023"), "2020 to 2023")
 
     def test_date_range_numeric_month_year_to_house_style(self):
@@ -569,6 +572,33 @@ class EducationAndSkillsConsistencyTests(unittest.TestCase):
         normalized = cn._normalize_cv_data_for_output(parsed, source)
 
         self.assertEqual(normalized["education"][0]["date_range"], "2008")
+
+    def test_education_removes_dangling_to_and_keeps_missing_date_empty(self):
+        parsed = {
+            "education": [
+                {
+                    "institution": "University of Tenaga Nasional",
+                    "degree": "Bachelor's Degree in Computer Science",
+                    "date_range": "to 2001",
+                },
+                {
+                    "institution": "Primary/Secondary School",
+                    "degree": "Malaysian Certificate of Education (SPM Grade 1)",
+                    "date_range": "to 1996",
+                },
+                {
+                    "institution": "Undated University",
+                    "degree": "Certificate",
+                    "date_range": "",
+                },
+            ]
+        }
+
+        normalized = cn._normalize_cv_data_for_output(parsed, "Education")
+
+        self.assertEqual(normalized["education"][0]["date_range"], "2001")
+        self.assertEqual(normalized["education"][1]["date_range"], "1996")
+        self.assertEqual(normalized["education"][2]["date_range"], "")
 
     def test_core_expertise_always_normalizes_to_bullet_items(self):
         expected = [

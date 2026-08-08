@@ -37,10 +37,10 @@
   focused review. Stop before release, merge, further extractions or unrelated
   work.
 
-## v24.6.276 legacy-DOC compatibility and education-placeholder candidate
+## v24.6.277 legacy-DOC and CV-formatting corrective candidate
 
 - Branch `chatgpt/v24.6.276-legacy-doc-fallback` starts from clean v24.6.275
-  master. It is not merged and has no pull request.
+  master and is now stamped v24.6.277. It is not merged and has no pull request.
 - `/extract-text` still requires and runs the exact verified Antiword runtime
   first for every genuine legacy Word OLE payload. A missing, untrusted or
   non-functional runtime retains the structured 424/install-repair contract,
@@ -70,8 +70,10 @@
 - Education month precision is restored from nearby source evidence only when
   both endpoint years match the parsed entry; a single graduation year is not
   expanded (`06/2004-05/2008` becomes
-  `Jun 2004 to May 2008`). Core Expertise arrays, newline lists and
-  comma-separated strings normalize to real Word bullets.
+  `Jun 2004 to May 2008`). A provider-leading `to` before a lone graduation
+  year is removed (`to 2001` becomes `2001`), while a missing date remains empty
+  so the institution renders without a date separator. Core Expertise arrays,
+  newline lists and comma-separated strings normalize to real Word bullets.
 - The owner-supplied Faizal outputs exposed literal bare enumerators beside
   Word's own list marker. Lower-case `a.`/`i.`/`ii.`/`a-` and numeric `1-`
   markers are now stripped while `3.5`, `5-star`, `-5%`, `i.e.`, capitalised
