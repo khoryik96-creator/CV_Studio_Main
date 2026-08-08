@@ -101,6 +101,10 @@
   `AGENTS.md` with the owner-authorized, Antiword-rejection-only Word/LibreOffice
   fallback. The separate Summary-format experiment remains local and is not
   included.
+- The v24.6.281 follow-up adds common combined section-heading boundaries,
+  including Education & Certification, Professional Qualifications, Courses &
+  Training, and Professional Affiliations, so their later content cannot be
+  absorbed into a recovered Project/Training list.
 
 ## Phase 7B-8 JobAdder typo-correction extraction
 
