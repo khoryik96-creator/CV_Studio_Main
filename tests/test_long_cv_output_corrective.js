@@ -47,7 +47,7 @@ vm.createContext(context);
   'cvNormalizeBulletItems','cvNormalizeStructuredData','cvNormDateRange','versionedUnlockKey','readVersionedUnlock',
   'writeVersionedUnlock','cvScoringIsUnlocked','cvScoringSetUnlocked','updateCvScoringLockUI',
   'requestCvScoringUnlock','aiCrawlerIsUnlocked','updateAiCrawlerLockUI','requestAiCrawlerUnlock',
-  'requireAiCrawlerUnlocked','aiCrawlerLockPayload'
+  'requireAiCrawlerUnlocked','aiCrawlerLockPayload','cvSkillPreviewHtml'
 ].forEach(name => vm.runInContext(fn(name), context));
 vm.runInContext(fnFrom(generate, 'normalizeDateRange'), context);
 
@@ -83,6 +83,15 @@ assert.deepStrictEqual(
 ].forEach(title => assert.strictEqual(context.cvStripInferredTitle(title), ''));
 assert.strictEqual(context.cvStripInferredTitle('Advisor'), 'Advisor');
 assert.strictEqual(context.cvStripInferredTitle('Advisor (likely to succeed)'), 'Advisor (likely to succeed)');
+
+const recoveredSkillPreview = context.cvSkillPreviewHtml({
+  category: 'Project Involvement History',
+  items: ['Firewall Upgrade', 'Network Redesign'],
+});
+assert.ok(recoveredSkillPreview.includes('<strong>Project Involvement History:</strong>'));
+assert.strictEqual((recoveredSkillPreview.match(/class="preview-bullet"/g) || []).length, 2);
+assert.ok(!recoveredSkillPreview.includes('Firewall Upgrade, Network Redesign'));
+assert.ok(recoveredSkillPreview.indexOf('Firewall Upgrade') < recoveredSkillPreview.indexOf('Network Redesign'));
 
 context.updateCvScoringLockUI();
 assert.strictEqual(tab.innerHTML, 'Locked');

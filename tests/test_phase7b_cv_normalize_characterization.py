@@ -726,6 +726,103 @@ class SourceAdditionalSectionRecoveryTests(unittest.TestCase):
             ],
         )
 
+    def test_removes_inline_siva_metadata_after_a_skill_item_delimiter(self):
+        parsed = {
+            "skills": [
+                {
+                    "category": "Summary",
+                    "items": (
+                        "Infrastructure leader | Position: Retrieved Resumes "
+                        "(SiVA folder: Prescreened); Date Applied: 30 Mar 2022\n"
+                        "Delivery governance"
+                    ),
+                }
+            ]
+        }
+
+        normalized = cn._normalize_cv_data_for_output(parsed, "Infrastructure leader")
+
+        self.assertEqual(
+            normalized["skills"],
+            [
+                {
+                    "category": "Summary",
+                    "items": "Infrastructure leader\nDelivery governance",
+                }
+            ],
+        )
+
+    def test_source_free_output_drops_placeholder_but_keeps_other_github_links(self):
+        parsed = {
+            "skills": [
+                {
+                    "category": "Portfolio & Links",
+                    "items": (
+                        "GitHub: https://github.com/unknown | "
+                        "GitHub: https://github.com/source-user"
+                    ),
+                }
+            ]
+        }
+
+        normalized = cn._normalize_cv_data_for_output(parsed)
+
+        self.assertEqual(
+            normalized["skills"],
+            [
+                {
+                    "category": "Portfolio & Links",
+                    "items": "GitHub: https://github.com/source-user",
+                }
+            ],
+        )
+
+        source_free_real_link = {
+            "skills": [
+                {
+                    "category": "Portfolio & Links",
+                    "items": "GitHub: https://github.com/source-user | Website: example.com",
+                }
+            ]
+        }
+        self.assertEqual(
+            cn._normalize_cv_data_for_output(source_free_real_link)["skills"],
+            [
+                {
+                    "category": "Portfolio & Links",
+                    "items": (
+                        "GitHub: https://github.com/source-user | "
+                        "Website: example.com"
+                    ),
+                }
+            ],
+        )
+
+    def test_source_grounding_ignores_terminal_sentence_period(self):
+        parsed = {
+            "skills": [
+                {
+                    "category": "Portfolio & Links",
+                    "items": "GitHub: https://github.com/source-user",
+                }
+            ]
+        }
+
+        normalized = cn._normalize_cv_data_for_output(
+            parsed,
+            "GitHub: https://github.com/source-user.",
+        )
+
+        self.assertEqual(
+            normalized["skills"],
+            [
+                {
+                    "category": "Portfolio & Links",
+                    "items": "GitHub: https://github.com/source-user",
+                }
+            ],
+        )
+
 
 class ModuleHygieneTests(unittest.TestCase):
     def test_module_does_not_import_app(self):

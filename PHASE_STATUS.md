@@ -37,10 +37,10 @@
   focused review. Stop before release, merge, further extractions or unrelated
   work.
 
-## v24.6.278 legacy-DOC and CV-formatting corrective candidate
+## v24.6.279 legacy-DOC and CV-formatting corrective candidate
 
 - Branch `chatgpt/v24.6.276-legacy-doc-fallback` starts from clean v24.6.275
-  master and is now stamped v24.6.278. It is not merged and has no pull request.
+  master and is now stamped v24.6.279. It is not merged and has no pull request.
 - `/extract-text` still requires and runs the exact verified Antiword runtime
   first for every genuine legacy Word OLE payload. A missing, untrusted or
   non-functional runtime retains the structured 424/install-repair contract,
@@ -90,6 +90,12 @@
   Participated Training Programme items. Both bracketed lists are recovered
   deterministically in exact source order, and training entries already placed
   in certifications are de-duplicated before output.
+- The v24.6.279 review corrective rejects the known `github.com/unknown`
+  placeholder even when `/generate-docx` has no source text, while retaining
+  other source-free links and accepting terminal sentence punctuation when a
+  real source GitHub path is available. Inline JobStreet/SiVA metadata after a
+  `|` item separator is removed, and recovered multi-item skill sections render
+  as bullets in the browser preview as well as the Word document.
 
 ## Phase 7B-8 JobAdder typo-correction extraction
 

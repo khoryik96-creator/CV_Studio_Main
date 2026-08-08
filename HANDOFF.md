@@ -177,7 +177,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 ## 8. Open / deferred work
 
 - **Legacy `.doc` conversion fallback — STAGED ON BRANCH, NOT MERGED.** Branch
-  `chatgpt/v24.6.276-legacy-doc-fallback` is stamped v24.6.277, keeps verified
+  `chatgpt/v24.6.276-legacy-doc-fallback` is stamped v24.6.279, keeps verified
   Antiword mandatory and first, then accepts a validated temporary DOCX
   conversion only after that exact document is rejected. It prefers installed
   Microsoft Word on Windows and otherwise uses LibreOffice when available. The
@@ -201,6 +201,10 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   Kwong regression follow-up removes JobStreet/SiVA retrieval metadata, rejects
   GitHub URLs not grounded in the source, and deterministically restores the
   source Project Involvement History and Participated Training Programme lists.
+  Its review corrective also removes the known GitHub placeholder at the
+  source-free export boundary, accepts sentence punctuation after grounded
+  source URLs, removes inline retrieval metadata after an item separator, and
+  renders recovered multi-item sections as bullets in both preview and Word.
 - **AI Crawler ".doc: flag, don't decode"**: skip decoding an undecodable legacy
   `.doc` while still surfacing the candidate. Deferred pending measurement of
   whether `.doc` decode vs. PDF OCR is the real bottleneck; a naive attempt

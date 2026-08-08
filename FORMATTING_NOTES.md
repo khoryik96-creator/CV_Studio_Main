@@ -58,9 +58,10 @@ this:
 | an older employer appears before a newer employer | provider emitted inconsistent work-history order | `_sort_work_experiences_reverse_chronological` sorts dated employer blocks newest-first after safe grouping |
 | education shows years even though the source includes months | provider dropped month precision | `_recover_education_date_range` restores only a nearby source range whose start/end years match the parsed education entry |
 | Core Expertise alternates between bullets and one paragraph | provider returned `items` as an array, newline list, or comma-separated string in different runs | `_normalize_cv_structured_content` deterministically converts Core Expertise items into real Word bullets |
-| `GitHub: https://github.com/unknown` appears without a source link | provider invented a placeholder portfolio URL | `_remove_ungrounded_cv_github_links` retains only GitHub paths found in the extracted source text; the prompt forbids invented/placeholder URLs |
-| `Position: Retrieved Resumes (SiVA folder: ...); Date Applied: ...` appears in Additional Information | JobStreet/SiVA application-routing metadata was mistaken for CV content | `_strip_cv_recruitment_tracking_metadata` removes the metadata wherever the provider placed it |
+| `GitHub: https://github.com/unknown` appears without a source link | provider invented a placeholder portfolio URL | `_remove_ungrounded_cv_github_links` always removes the known placeholder, including source-free export; with source text it retains only matching GitHub paths and ignores terminal sentence periods |
+| `Position: Retrieved Resumes (SiVA folder: ...); Date Applied: ...` appears in Additional Information | JobStreet/SiVA application-routing metadata was mistaken for CV content | `_strip_cv_recruitment_tracking_metadata` removes the metadata at a line start or after a `|` item separator wherever the provider placed it |
 | Project Involvement History or Participated Training Programme is missing | provider truncated or skipped bracketed sections near the bottom of a long CV | `_recover_cv_source_additional_sections` restores every allowlisted source item and removes training duplicates from certifications |
+| recovered Project/Training items are comma-separated in preview but bulleted in Word | browser preview flattened structured item arrays | `cvSkillPreviewHtml` uses the same multiple-items-as-bullets rule as `generate.js` |
 
 ### Key files/functions (`cvstudio_cv_normalize.py`)
 
@@ -86,8 +87,9 @@ this:
 - **`_recover_cv_source_additional_sections`** — source-aware recovery for the
   explicitly bracketed Project Involvement History and Participated Training
   Programme lists. Exact source wording and order are retained.
-- **`_remove_ungrounded_cv_github_links`** — removes any provider-emitted GitHub
-  path that cannot be matched to the extracted source CV.
+- **`_remove_ungrounded_cv_github_links`** — always removes the known placeholder;
+  when source text is available, removes any other provider-emitted GitHub path
+  that cannot be matched to the extracted source CV.
 - **`_CV_SECTION_HEADING_RE`** — detects "Key responsibilities" / "Key
   achievements" labels.
 

@@ -1597,7 +1597,7 @@
 <div class="app">
   <div class="header" style="position:relative;">
     <div>
-      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.278 (Offline) by The 郭 Lab</span></h1>
+      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.279 (Offline) by The 郭 Lab</span></h1>
 
     </div>
     <div class="header-tools">
@@ -6749,7 +6749,7 @@ var _cvStudioPhase2bSettingsStartupPromise=cvStudioHydrateBrowserSettings();
 function exportCvStudioLocalData(){
   var settings=cvStudioLocalDataSettingsSnapshot(false);
   var records={onenote_transfer_records:(typeof oneNoteRecordsLoad==='function'?oneNoteRecordsLoad():[]),onenote_saved_links:(typeof oneNoteReadSavedLinks==='function'?oneNoteReadSavedLinks():[])};
-  var payload={product:'CV Studio local data',version:'v24.6.278',schema:1,exportedAt:new Date().toISOString(),includes:['PPC metadata and preferences','saved OneNote links and parser preferences','OneNote transfer record history (private application data)','invoice recipient/settings and draft links','CV alignment and navigation preferences','AI routing/provider selections without API keys'],settings:settings,records:records};
+  var payload={product:'CV Studio local data',version:'v24.6.279',schema:1,exportedAt:new Date().toISOString(),includes:['PPC metadata and preferences','saved OneNote links and parser preferences','OneNote transfer record history (private application data)','invoice recipient/settings and draft links','CV alignment and navigation preferences','AI routing/provider selections without API keys'],settings:settings,records:records};
   var blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='cv_studio_local_data_'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(url);a.remove();},0);showToast('Non-secret local data exported.','ok');
 }
 function cvStudioPersistImportedLocalData(payload){
@@ -6909,7 +6909,7 @@ function cvLockedTabLabel() {
 // Unlocks persist across normal browser/app restarts for the same installed build,
 // but deliberately reset after a new CV Studio version is installed. This keeps the
 // lock in place after upgrades while avoiding repeated prompts during daily use.
-var LOCK_UNLOCK_VERSION = 'v24.6.278';
+var LOCK_UNLOCK_VERSION = 'v24.6.279';
 function versionedUnlockKey(base) {
   return base + '_' + String(LOCK_UNLOCK_VERSION || '').replace(/[^0-9A-Za-z]+/g, '_');
 }
@@ -13322,6 +13322,31 @@ function cvNormalizeStructuredData(data) {
   return data;
 }
 
+function cvSkillPreviewHtml(skill) {
+  skill = skill && typeof skill === 'object' ? skill : {};
+  var category = String(skill.category || '').trim();
+  var rawItems = skill.items || '';
+  var lines = Array.isArray(rawItems)
+    ? rawItems.map(function(value){ return String(value || '').trim(); }).filter(Boolean)
+    : String(rawItems).split(/\r?\n/).map(function(value){ return value.trim(); }).filter(Boolean);
+  if (!category && !lines.length) return '';
+
+  var showCategory = category && !/^skills?$/i.test(category);
+  if (lines.length > 1) {
+    var listHtml = showCategory
+      ? '<div class="preview-skill-cat"><strong>' + esc(category) + ':</strong></div>'
+      : '';
+    lines.forEach(function(line){
+      listHtml += '<div class="preview-bullet">' + esc(line) + '</div>';
+    });
+    return listHtml;
+  }
+
+  var item = lines.length ? lines[0] : '';
+  if (!showCategory) return '<div class="preview-skill-cat">' + esc(item) + '</div>';
+  return '<div class="preview-skill-cat"><strong>' + esc(category) + ':</strong>' + (item ? ' ' + esc(item) : '') + '</div>';
+}
+
 function renderPreview(d) {
   d = cvNormalizeStructuredData(d);
   var c = d.candidate || {};
@@ -13396,11 +13421,7 @@ function renderPreview(d) {
   if ((d.skills || []).length > 0) {
     html += '<div class="preview-section">SKILLS</div>';
     for (var s of d.skills) {
-      var skillCategory = String(s.category || '').trim();
-      var skillItems = Array.isArray(s.items) ? s.items.filter(function(v){ return String(v || '').trim(); }).join(', ') : String(s.items || '').trim();
-      if (!skillCategory && !skillItems) continue;
-      if (!skillCategory || /^skills?$/i.test(skillCategory)) html += '<div class="preview-skill-cat">' + esc(skillItems) + '</div>';
-      else html += '<div class="preview-skill-cat"><strong>' + esc(skillCategory) + ':</strong> ' + esc(skillItems) + '</div>';
+      html += cvSkillPreviewHtml(s);
     }
   }
 

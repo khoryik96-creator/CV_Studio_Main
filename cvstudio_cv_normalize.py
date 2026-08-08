@@ -118,9 +118,9 @@ _CV_NO_DEGREE_PREFIX_RE = re.compile(
 
 
 _CV_RECRUITMENT_TRACKING_METADATA_RE = re.compile(
-    r"(?im)^[ \t]*position\s*:\s*retrieved\s+resumes\s*"
+    r"(?im)(?:^[ \t]*|[ \t]*\|[ \t]*)position\s*:\s*retrieved\s+resumes\s*"
     r"\(\s*siva\s+folder\s*:[^)\r\n]*\)\s*;\s*"
-    r"date\s+applied\s*:[^\r\n]*(?:\r?\n|$)",
+    r"date\s+applied\s*:[^\r\n]*(?=\r?\n|$)",
 )
 
 
@@ -144,6 +144,9 @@ _CV_GITHUB_LINK_RE = re.compile(
     r"([A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*)/?",
     re.I,
 )
+
+
+_CV_GITHUB_PLACEHOLDER_PATHS = {"unknown"}
 
 
 def _smart_word_case(token, *, company=False, title=False):
@@ -649,6 +652,11 @@ def _cv_source_item_key(value):
     return re.sub(r"[^a-z0-9]+", " ", str(value or "").lower()).strip()
 
 
+def _cv_github_path_key(value):
+    """Normalize a captured GitHub path without swallowing sentence punctuation."""
+    return str(value or "").lower().rstrip("/.")
+
+
 def _extract_recoverable_cv_source_sections(source_text):
     """Extract allowlisted bracketed sections that providers commonly omit."""
     recovered = {
@@ -708,11 +716,10 @@ def _recover_cv_source_additional_sections(parsed, source_text):
 
 
 def _remove_ungrounded_cv_github_links(parsed, source_text):
-    """Drop model-created GitHub URLs that do not occur in the source CV."""
-    if not str(source_text or "").strip():
-        return parsed
+    """Drop placeholder or source-contradicted GitHub URLs from parsed CV data."""
+    has_source = bool(str(source_text or "").strip())
     source_paths = {
-        match.group(1).lower().rstrip("/")
+        _cv_github_path_key(match.group(1))
         for match in _CV_GITHUB_LINK_RE.finditer(str(source_text))
     }
     cleaned_skills = []
@@ -724,13 +731,24 @@ def _remove_ungrounded_cv_github_links(parsed, source_text):
         was_list = isinstance(raw_items, list)
         category_key = _cv_source_section_key(cleaned_skill.get("category"))
         raw_values = raw_items if was_list else [raw_items]
-        if not any(_CV_GITHUB_LINK_RE.search(str(value or "")) for value in raw_values):
+        github_matches = [
+            match
+            for value in raw_values
+            for match in _CV_GITHUB_LINK_RE.finditer(str(value or ""))
+        ]
+        if not github_matches:
             if raw_items or category_key not in {
                 "github",
                 "portfolio links",
                 "summary",
             }:
                 cleaned_skills.append(cleaned_skill)
+            continue
+        if not has_source and not any(
+            _cv_github_path_key(match.group(1)) in _CV_GITHUB_PLACEHOLDER_PATHS
+            for match in github_matches
+        ):
+            cleaned_skills.append(cleaned_skill)
             continue
         values = raw_items if was_list else re.split(
             r"(?:\r?\n)+|\s+\|\s+",
@@ -743,8 +761,12 @@ def _remove_ungrounded_cv_github_links(parsed, source_text):
                 continue
 
             def replace_link(match):
-                path = match.group(1).lower().rstrip("/")
-                return match.group(0) if path in source_paths else ""
+                path = _cv_github_path_key(match.group(1))
+                if path in _CV_GITHUB_PLACEHOLDER_PATHS:
+                    return ""
+                if not has_source or path in source_paths:
+                    return match.group(0)
+                return ""
 
             text = _CV_GITHUB_LINK_RE.sub(replace_link, text).strip(" \t|,;-")
             if text:

@@ -322,6 +322,32 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertNotIn("Retrieved Resumes", document_xml)
         self.assertNotIn("github.com/unknown", document_xml)
 
+    def test_docx_route_omits_placeholder_github_without_source_context(self):
+        response = app.app.test_client().post(
+            "/generate-docx",
+            json={
+                "data": {
+                    "candidate": {"name": "Source-Free Export"},
+                    "work_experiences": [],
+                    "education": [],
+                    "certifications": [],
+                    "skills": [
+                        {
+                            "category": "Portfolio & Links",
+                            "items": "GitHub: https://github.com/unknown",
+                        }
+                    ],
+                }
+            },
+            headers={"Origin": "http://127.0.0.1:5000"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
+            document_xml = archive.read("word/document.xml").decode("utf-8")
+        self.assertNotIn("github.com/unknown", document_xml)
+        self.assertNotIn("Portfolio &amp; Links", document_xml)
+
     def test_prompt_forbids_inferred_titles_and_serialized_groups(self):
         self.assertIn("Never invent, infer, imply, annotate, or explain a title", app.SYSTEM_PROMPT)
         self.assertIn("never as JSON serialized inside a string", app.SYSTEM_PROMPT)
