@@ -41,7 +41,7 @@ const context = {
 vm.createContext(context);
 [
   'cvParseIsLong','cvParseTimeoutMs','cvStripInferredTitle','cvCanonicalSectionHeading',
-  'cvStripLeadingBulletMarker',
+  'cvStripLeadingBulletMarker','cvLabelKind','cvBulletLabelStyle','cvInferLevelsForSequence',
   'cvNormalizeBulletItems','cvNormalizeStructuredData','versionedUnlockKey','readVersionedUnlock',
   'writeVersionedUnlock','cvScoringIsUnlocked','cvScoringSetUnlocked','updateCvScoringLockUI',
   'requestCvScoringUnlock','aiCrawlerIsUnlocked','updateAiCrawlerLockUI','requestAiCrawlerUnlock',
@@ -88,6 +88,17 @@ assert.deepStrictEqual(
   ]))),
   ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten']
 );
+// Outline-label nesting inference (must mirror app.py _infer_outline_levels).
+const seqLevels = (arr) => JSON.parse(JSON.stringify(context.cvInferLevelsForSequence(arr)));
+assert.deepStrictEqual(
+  seqLevels(['Responsible for all IP services:', '(a) Operating System', '(b) Physical Server', '(c) Virtual Machines', 'Ensure OLAs are met']),
+  [0, 1, 1, 1, 0]
+);
+assert.deepStrictEqual(
+  seqLevels(['Intro:', 'a. First', 'b. Second', 'iii. deep', 'iv. deep2', 'c. Third', 'Outro']),
+  [0, 1, 1, 2, 2, 1, 0]
+);
+assert.deepStrictEqual(seqLevels(['- one', '- two', '* three']), [0, 0, 0]);
 [
   'Advisor (assumed from duties)',
   'Advisor (guessed from context)',

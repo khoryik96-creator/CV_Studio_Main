@@ -328,6 +328,57 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         nudged = [(204, "- a"), (204, "- b"), (204, "- c"), (212, "- d")]
         self.assertEqual(app._pdf_bullet_levels_from_lines(nudged), [])
 
+    def test_infer_outline_levels_from_label_sequence(self):
+        # (a)-(e) sit one level under an unlabeled parent; unlabeled resets to 0.
+        seq = ["Responsible for all IP services:", "(a) Operating System", "(b) Physical Server",
+               "(c) Virtual Machines", "(d) Active Directory", "(e) Backup", "Ensure OLAs are met"]
+        self.assertEqual(app._infer_outline_levels(seq), [0, 1, 1, 1, 1, 1, 0])
+        # A ladder: a./b. at level 1, roman iii./iv. nest to level 2, back to 1, then 0.
+        ladder = ["Intro:", "a. First", "b. Second", "iii. deep", "iv. deep2", "c. Third", "Outro"]
+        self.assertEqual(app._infer_outline_levels(ladder), [0, 1, 1, 2, 2, 1, 0])
+        # Bare glyphs are not outline labels -> everything stays at level 0.
+        self.assertEqual(app._infer_outline_levels(["- one", "- two", "* three"]), [0, 0, 0])
+
+    def test_bullet_label_style_classification(self):
+        self.assertIsNone(app._bullet_label_style("- plain dash"))
+        self.assertIsNone(app._bullet_label_style("plain text"))
+        # (a) and (vi) share wrapper but differ in kind (alpha vs roman).
+        self.assertNotEqual(app._bullet_label_style("(a) x"), app._bullet_label_style("(vi) x"))
+        # "a." and "1." differ in kind; "a." and "a)" differ in punctuation.
+        self.assertNotEqual(app._bullet_label_style("a. x"), app._bullet_label_style("1. x"))
+        self.assertNotEqual(app._bullet_label_style("a. x"), app._bullet_label_style("a) x"))
+
+    def test_generate_docx_infers_nesting_from_outline_labels(self):
+        # No bullet_levels map supplied: the server must infer nesting from the
+        # (a)-(e) labels alone and step the deeper items' indent.
+        data = {
+            "candidate": {"name": "Test"},
+            "work_experiences": [{
+                "company": "Acme", "date_range": "2020 to 2021",
+                "roles": [{"title": "Engineer", "bullets": [
+                    "Responsible for all IP services:",
+                    "(a) Operating System", "(b) Physical Server", "(c) Virtual Machines",
+                    "Ensure OLAs are met",
+                ]}],
+            }],
+        }
+        response = app.app.test_client().post(
+            "/generate-docx",
+            json={"data": data},
+            headers={"Origin": "http://127.0.0.1:5000"},
+        )
+        self.assertEqual(response.status_code, 200)
+        with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
+            document_xml = archive.read("word/document.xml").decode("utf-8")
+        self.assertEqual(self._ilvl_by_text(document_xml, "Operating System"), "1")
+        self.assertEqual(self._ilvl_by_text(document_xml, "Physical Server"), "1")
+        self.assertEqual(self._leftchars_by_text(document_xml, "Physical Server"), "500")
+        self.assertEqual(self._ilvl_by_text(document_xml, "Responsible for all IP services"), "0")
+        self.assertEqual(self._ilvl_by_text(document_xml, "Ensure OLAs are met"), "0")
+        # The (a)/(b) labels are stripped from the rendered text.
+        self.assertNotIn("(a) Operating", document_xml)
+        self.assertNotIn("(b) Physical", document_xml)
+
     def test_nested_bullet_levels_restored_in_generated_docx(self):
         data = {
             "candidate": {"name": "Test Candidate"},

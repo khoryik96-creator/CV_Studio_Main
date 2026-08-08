@@ -11288,16 +11288,23 @@ def generate_docx():
         cv_data = body.get("data")
         if not cv_data:
             return jsonify({"error": "No CV data provided"}), 400
+        # Outline-label nesting is inferred from the raw bullet text, so compute
+        # it BEFORE _normalize_cv_structured_content strips the labels.
+        _label_levels = _infer_label_bullet_levels(cv_data)
         cv_data = _normalize_cv_structured_content(cv_data)
         cv_data = _normalize_cv_data_for_output(cv_data)
         cv_data["_document_alignment"] = _normalize_cv_text_alignment(body.get("alignment"))
-        # Nested-list indent map (from extraction) so the renderer can restore
-        # multi-level bullets deterministically. Accepted as a sibling field or
-        # embedded in data; unmatched bullets stay at level 0.
+        # Nested-list indent map so the renderer can restore multi-level bullets
+        # deterministically: the source-derived map (docx w:ilvl / pdf geometry,
+        # sent by the browser) merged with the outline-label inference, deepest
+        # level wins. Unmatched bullets stay at level 0.
         _levels = body.get("bullet_levels")
         if not isinstance(_levels, list):
             _levels = cv_data.get("_bullet_levels")
-        cv_data["_bullet_levels"] = _levels if isinstance(_levels, list) else []
+        cv_data["_bullet_levels"] = _merge_bullet_level_lists(
+            _levels if isinstance(_levels, list) else [],
+            _label_levels,
+        )
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(cv_data, f)
@@ -11370,6 +11377,119 @@ def _cv_bullet_match_key(text):
             break
         value = stripped
     return value.lower()
+
+
+_LABEL_DASH_RE = re.compile(r"^[-–—]([0-9]{1,3}|[a-z]|[ivxlcdm]{1,4})([.)\-]*)\s", re.I)
+_LABEL_PAREN_RE = re.compile(r"^\(([0-9]{1,3}|[a-z]|[ivxlcdm]{1,4})\)([.)]*)", re.I)
+_LABEL_BARE_RE = re.compile(r"^([0-9]{1,3}|[a-z]|[ivxlcdm]{1,4})([.)\-]+)\s", re.I)
+_ROMAN_RE = re.compile(r"^[ivxlcdm]+$", re.I)
+
+
+def _label_body_kind(body):
+    if body.isdigit():
+        return "digit"
+    if len(body) > 1 and _ROMAN_RE.match(body):
+        return "roman"
+    return "alpha"
+
+
+def _bullet_label_style(text):
+    """Classify the leading outline label into a style key, or None.
+
+    The style key (wrapper, kind, punctuation) identifies an outline label's
+    "shape" -- e.g. "(a)" and "(vi)" share a wrapper but differ in kind, "a." and
+    "1." differ in kind, "a." and "a)" differ in punctuation. A plain bullet
+    glyph or unlabeled line returns None (base level). Used only for inferring
+    nesting depth from the label ladder; never for display.
+    """
+    s = str(text or "").lstrip()
+    m = _LABEL_DASH_RE.match(s)
+    if m:
+        return ("dash", _label_body_kind(m.group(1)), m.group(2))
+    m = _LABEL_PAREN_RE.match(s)
+    if m:
+        return ("paren", _label_body_kind(m.group(1)), ")" + m.group(2))
+    m = _LABEL_BARE_RE.match(s)
+    if m:
+        return ("bare", _label_body_kind(m.group(1)), m.group(2))
+    return None
+
+
+def _infer_outline_levels(texts):
+    """Infer a nesting level per bullet from the sequence of outline labels.
+
+    Appearance-order stack: an unlabeled line is level 0 and resets the outline;
+    the first labelled style below it is level 1; a new deeper style nests one
+    level further; returning to a seen style pops back to that level. This
+    reconstructs a "1. -> a. -> i." / "(1) -> (a) -> (i)" hierarchy without a
+    predefined ordering, and mirrors cvInferLevelsForSequence in index.html.
+    """
+    levels = []
+    stack = []
+    for text in texts:
+        style = _bullet_label_style(text)
+        if style is None:
+            stack = []
+            levels.append(0)
+        elif style in stack:
+            idx = stack.index(style)
+            del stack[idx + 1:]
+            levels.append(idx + 1)
+        else:
+            stack.append(style)
+            levels.append(len(stack))
+    return levels
+
+
+def _infer_label_bullet_levels(cv_data):
+    """Outline-label nesting levels for a parsed CV's role bullets.
+
+    Runs _infer_outline_levels over each role's bullet sequence (raw text, before
+    any label stripping) and returns [{text: match_key, level}] for levels >= 1.
+    Mirrors cvInferLabelLevels in index.html. The browser normally sends this
+    already merged, but computing it here too covers direct API callers.
+    """
+    out = []
+    for exp in (cv_data or {}).get("work_experiences") or []:
+        if not isinstance(exp, dict):
+            continue
+        for role in exp.get("roles") or []:
+            if not isinstance(role, dict):
+                continue
+            texts = []
+            for item in role.get("bullets") or []:
+                if isinstance(item, str):
+                    texts.append(item)
+                elif isinstance(item, dict):
+                    for sub in item.get("bullets") or []:
+                        if isinstance(sub, str):
+                            texts.append(sub)
+            for text, level in zip(texts, _infer_outline_levels(texts)):
+                if level >= 1:
+                    key = _cv_bullet_match_key(text)
+                    if key:
+                        out.append({"text": key, "level": min(level, 8)})
+    return out
+
+
+def _merge_bullet_level_lists(*lists):
+    """Merge {text, level} lists by key, keeping the deepest level (>= 1)."""
+    best = {}
+    for entries in lists:
+        for entry in entries or []:
+            if not isinstance(entry, dict):
+                continue
+            key = str(entry.get("text") or "")
+            if not key:
+                continue
+            try:
+                level = int(entry.get("level") or 0)
+            except (TypeError, ValueError):
+                continue
+            level = max(0, min(level, 8))
+            if key not in best or level > best[key]:
+                best[key] = level
+    return [{"text": k, "level": v} for k, v in best.items() if v >= 1]
 
 
 def _extract_docx_bullet_levels(file_bytes):

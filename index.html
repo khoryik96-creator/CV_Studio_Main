@@ -13071,6 +13071,9 @@ async function startFormat(blind) {
       document.getElementById('blindBadge').style.display = 'inline-flex';
     }
 
+    // Infer outline-label nesting from the raw bullets BEFORE renderPreview
+    // strips the labels; used by both the preview and the generated DOCX.
+    _labelBulletLevels = cvInferLabelLevels(_parsedData);
     renderPreview(_parsedData);
     showToast(blind ? 'Blinded! Generating DOCX…' : 'Parsed! Generating DOCX…', 'ok');
 
@@ -13083,7 +13086,7 @@ async function startFormat(blind) {
       if (_fake3 < 92) { _fake3 += (92 - _fake3) * 0.05; document.getElementById('progressFill').style.width = _fake3 + '%'; }
     }, 200);
 
-    var res2 = await fetchWithTimeout('/generate-docx', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({data: _parsedData, alignment: getCvTextAlignment(), bullet_levels: _extractedBulletLevels}) }, 60000);
+    var res2 = await fetchWithTimeout('/generate-docx', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({data: _parsedData, alignment: getCvTextAlignment(), bullet_levels: cvMergeLevelLists(_extractedBulletLevels, _labelBulletLevels)}) }, 60000);
     if (!res2.ok) {
       var errText2 = await res2.text();
       var errObj; try { errObj = JSON.parse(errText2); } catch(e2) { throw new Error(errText2.slice(0,400)); }
@@ -13341,14 +13344,98 @@ function cvBulletMatchKey(text) {
   }
   return s.toLowerCase();
 }
-function cvBulletLevelFor(text) {
-  if (!Array.isArray(_extractedBulletLevels)) return 0;
-  var key = cvBulletMatchKey(text);
-  for (var i = 0; i < _extractedBulletLevels.length; i++) {
-    var e = _extractedBulletLevels[i];
-    if (e && String(e.text) === key) return Math.min(Math.max(Number(e.level) || 0, 0), 8);
+function cvLevelInList(list, key) {
+  if (!Array.isArray(list)) return 0;
+  var best = 0;
+  for (var i = 0; i < list.length; i++) {
+    var e = list[i];
+    if (e && String(e.text) === key) {
+      var v = Math.min(Math.max(Number(e.level) || 0, 0), 8);
+      if (v > best) best = v;
+    }
   }
-  return 0;
+  return best;
+}
+function cvBulletLevelFor(text) {
+  var key = cvBulletMatchKey(text);
+  // Level comes from the source-derived map (docx w:ilvl / pdf geometry) OR the
+  // outline label inferred from the bullet text itself; take the deeper of the two.
+  return Math.max(cvLevelInList(_extractedBulletLevels, key), cvLevelInList(_labelBulletLevels, key));
+}
+
+// Classify a leading outline label into a style key (mirror of app.py
+// _bullet_label_style); null for a plain glyph or unlabeled line.
+function cvLabelKind(body) {
+  if (/^[0-9]+$/.test(body)) return 'digit';
+  if (body.length > 1 && /^[ivxlcdm]+$/i.test(body)) return 'roman';
+  return 'alpha';
+}
+function cvBulletLabelStyle(text) {
+  var s = String(text == null ? '' : text).replace(/^\s+/, '');
+  var m = s.match(/^[-–—]([0-9]{1,3}|[a-z]|[ivxlcdm]{1,4})([.)\-]*)\s/i);
+  if (m) return 'dash|' + cvLabelKind(m[1]) + '|' + m[2];
+  m = s.match(/^\(([0-9]{1,3}|[a-z]|[ivxlcdm]{1,4})\)([.)]*)/i);
+  if (m) return 'paren|' + cvLabelKind(m[1]) + '|)' + m[2];
+  m = s.match(/^([0-9]{1,3}|[a-z]|[ivxlcdm]{1,4})([.)\-]+)\s/i);
+  if (m) return 'bare|' + cvLabelKind(m[1]) + '|' + m[2];
+  return null;
+}
+// Appearance-order stack -> nesting level per bullet (mirror of app.py
+// _infer_outline_levels). Must run on raw bullet text BEFORE labels are stripped.
+function cvInferLevelsForSequence(texts) {
+  var levels = [], stack = [];
+  for (var i = 0; i < texts.length; i++) {
+    var style = cvBulletLabelStyle(texts[i]);
+    if (style === null) { stack = []; levels.push(0); }
+    else {
+      var idx = stack.indexOf(style);
+      if (idx >= 0) { stack.length = idx + 1; levels.push(idx + 1); }
+      else { stack.push(style); levels.push(stack.length); }
+    }
+  }
+  return levels;
+}
+function cvInferLabelLevels(parsedData) {
+  var out = [];
+  var exps = (parsedData && parsedData.work_experiences) || [];
+  for (var e = 0; e < exps.length; e++) {
+    var roles = (exps[e] && exps[e].roles) || [];
+    for (var r = 0; r < roles.length; r++) {
+      var bl = (roles[r] && roles[r].bullets) || [];
+      var texts = [];
+      for (var b = 0; b < bl.length; b++) {
+        var item = bl[b];
+        if (typeof item === 'string') texts.push(item);
+        else if (item && Array.isArray(item.bullets)) {
+          for (var s = 0; s < item.bullets.length; s++) {
+            if (typeof item.bullets[s] === 'string') texts.push(item.bullets[s]);
+          }
+        }
+      }
+      var lv = cvInferLevelsForSequence(texts);
+      for (var k = 0; k < texts.length; k++) {
+        if (lv[k] >= 1) out.push({ text: cvBulletMatchKey(texts[k]), level: Math.min(lv[k], 8) });
+      }
+    }
+  }
+  return out;
+}
+// Merge level lists by match key, taking the deepest level (>=1 only).
+function cvMergeLevelLists(a, b) {
+  var map = {};
+  [a, b].forEach(function(list) {
+    if (!Array.isArray(list)) return;
+    list.forEach(function(e) {
+      if (e && e.text != null) {
+        var key = String(e.text);
+        var v = Math.min(Math.max(Number(e.level) || 0, 0), 8);
+        if (!(key in map) || v > map[key]) map[key] = v;
+      }
+    });
+  });
+  var out = [];
+  Object.keys(map).forEach(function(key) { if (map[key] >= 1) out.push({ text: key, level: map[key] }); });
+  return out;
 }
 function cvBulletPreviewHtml(text) {
   var lvl = cvBulletLevelFor(text);
@@ -18911,6 +18998,7 @@ async function runBatch() {
         throw new Error('Parse: ' + normalizeAiProviderError(pData.error || ('API error ' + pRes.status), route));
       }
       var cvData = pData.data;
+      var batchLabelLevels = cvInferLabelLevels(cvData);  // before normalize strips labels
       if (pData.warning) showToast(bf.file.name + ': ' + pData.warning, 'info');
       bf.cost += responseCost(pData, route.model, route.provider);
       bf.usage = mergeUsageClient(bf.usage, pData.usage || {});
@@ -18939,7 +19027,7 @@ async function runBatch() {
       // ── Step 3: Generate DOCX ─────────────────────────────────────────────
       var docxStepIdx = isBlind ? 3 : 2;
       batchSetProgress(bf, pcts[docxStepIdx], 'Generating DOCX…', makeSteps(docxStepIdx));
-      var dRes = await fetchWithTimeout('/generate-docx', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data: cvData, alignment: batchDocumentAlignment, bullet_levels: batchBulletLevels }) }, 60000);
+      var dRes = await fetchWithTimeout('/generate-docx', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data: cvData, alignment: batchDocumentAlignment, bullet_levels: cvMergeLevelLists(batchBulletLevels, batchLabelLevels) }) }, 60000);
       if (!dRes.ok) { var err2 = await dRes.json(); throw new Error('DOCX: ' + (err2.error||'Failed')); }
       var blob = await dRes.blob();
 
@@ -19196,6 +19284,10 @@ var _extractedText = '';
 // Nested-list indent map from the last /extract-text (docx only); passed to
 // /generate-docx so multi-level bullets keep their indent. Null when none.
 var _extractedBulletLevels = null;
+// Nesting levels inferred from outline labels in the parsed bullets themselves
+// (computed at parse time, before labels are stripped). Merged with the source
+// map for both the preview and the generated DOCX.
+var _labelBulletLevels = null;
 
 function switchInputTab(tab) {
   _activeInputTab = tab;
