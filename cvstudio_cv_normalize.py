@@ -498,6 +498,44 @@ def _canonical_cv_section_heading(value):
     return "Key achievements" if match.group(1).lower().startswith("achievement") else "Key responsibilities"
 
 
+def _absorb_orphan_section_labels(items):
+    """Attach loose bullets to an empty section label that introduces them.
+
+    When a provider emits a sub-section label such as ``Key responsibilities``
+    as a flat bullet string instead of nesting the duties under it, the label
+    becomes an empty ``{"heading": ..., "bullets": [], "kind": "section"}`` group
+    followed by the real bullets as loose siblings -- which renders as a lone
+    label with nothing beneath it. Re-attach the following plain bullets to the
+    label so it introduces its duties as intended, and drop the label outright
+    when nothing follows it (a bare label carries no information).
+    """
+    result = []
+    index = 0
+    count = len(items)
+    while index < count:
+        item = items[index]
+        if (
+            isinstance(item, dict)
+            and item.get("kind") == "section"
+            and not item.get("bullets")
+            and str(item.get("heading") or "").strip()
+        ):
+            collected = []
+            nxt = index + 1
+            while nxt < count and isinstance(items[nxt], str):
+                collected.append(items[nxt])
+                nxt += 1
+            if collected:
+                merged = dict(item)
+                merged["bullets"] = collected
+                result.append(merged)
+            index = nxt
+            continue
+        result.append(item)
+        index += 1
+    return result
+
+
 def _normalize_cv_bullet_items(items, allow_standalone_sections=True):
     """Repair valid JSON-looking bullet strings without changing plain prose."""
     source = items if isinstance(items, list) else ([] if items in (None, "") else [items])
@@ -552,6 +590,11 @@ def _normalize_cv_bullet_items(items, allow_standalone_sections=True):
 
     for value in source:
         add(value)
+    # Standalone section labels ("Key responsibilities" etc.) are only created at
+    # the level where they are allowed; re-attach the loose bullets that follow
+    # such an orphaned label so it does not render as an empty heading.
+    if allow_standalone_sections:
+        normalized = _absorb_orphan_section_labels(normalized)
     return normalized
 
 

@@ -182,26 +182,26 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         role = normalized["work_experiences"][0]["roles"][0]
         self.assertEqual(normalized["candidate"]["current_position"], "")
         self.assertEqual(role["title"], "")
+        # The orphan "Key responsibilities" label (no bullets of its own,
+        # immediately followed by another section) is dropped; the real
+        # "Key responsibilities" section with its bullet survives as the first.
         self.assertEqual(role["bullets"][0], {
-            "heading": "Key responsibilities",
-            "bullets": [],
-            "kind": "section",
-        })
-        self.assertEqual(role["bullets"][1], {
             "heading": "Key responsibilities",
             "bullets": ["Achievement"],
             "kind": "section",
         })
-        self.assertEqual(role["bullets"][2]["heading"], "Business Set up")
-        self.assertEqual(role["bullets"][4], '{"heading":"malformed","bullets":[}')
+        self.assertEqual(role["bullets"][1]["heading"], "Business Set up")
+        self.assertEqual(role["bullets"][2]["heading"], "Manpower")
+        self.assertEqual(role["bullets"][3], '{"heading":"malformed","bullets":[}')
         self.assertEqual(normalized["certifications"], [])
         self.assertEqual(normalized["skills"], [{"category": "Skills", "items": "Leadership"}])
         self.assertEqual(app._normalize_cv_structured_content(copy.deepcopy(normalized)), normalized)
 
     def test_standalone_sections_and_bounded_inference_variants_are_normalized(self):
+        # A standalone label followed by loose bullets absorbs them (rather than
+        # rendering as a bare label above orphaned siblings).
         self.assertEqual(app._normalize_cv_bullet_items(["Key achievement", "Delivered result"]), [
-            {"heading": "Key achievements", "bullets": [], "kind": "section"},
-            "Delivered result",
+            {"heading": "Key achievements", "bullets": ["Delivered result"], "kind": "section"},
         ])
         for title in (
             "Advisor (inferred from duties)",
