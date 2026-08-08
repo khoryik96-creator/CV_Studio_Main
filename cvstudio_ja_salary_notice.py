@@ -386,7 +386,14 @@ def _ja_calc_fixed_salary_detailed(raw, currency=None):
         base_hint = bool(_JA_SALARY_BASE_HINT_RE.search(part))
         allowance_only = bool(_JA_SALARY_ALLOWANCE_COMPONENT_RE.search(part)) and not re.search(r"\b(?:base|basic|current|last\s+drawn)\b", part, re.I)
         salary_sized = bool(token["isK"] or token["value"] >= 1000)
-        if (salary_sized or (base_hint and not allowance_only)) and not (token["value"] < 1000 and _JA_SALARY_EXCLUDED_COMPONENT_RE.search(part)):
+        explicit_base = base_hint and not allowance_only
+        # Bonus/commission/EPF/claims/etc. must never become the base salary,
+        # no matter how large the number is -- only an explicit base/current/
+        # basic/last-drawn label on the same component can override the
+        # exclusion (e.g. "current salary RM8000 (excludes bonus)").
+        if _JA_SALARY_EXCLUDED_COMPONENT_RE.search(part) and not explicit_base:
+            continue
+        if salary_sized or explicit_base:
             eligible.append(item)
     if not eligible:
         return {}

@@ -1,7 +1,7 @@
 # CV Studio — Collaboration / Handoff Notes
 
 Read this before making changes. CV Studio is a Flask **modular monolith**
-(single `app.py`, ~13k lines, currently **v24.6.269**). The owner runs a **local
+(single `app.py`, ~13k lines, currently **v24.6.270**). The owner runs a **local
 source build** at `localhost:5000` and uses **DeepSeek** for all AI providers.
 Several conventions below are non-obvious traps that the code alone won't warn
 you about.
@@ -94,8 +94,16 @@ in binary mode preserving CRLF.
   `_extract_authoritative_work_rows` — before it ever reached the
   already-fixed JS formatter. Mirrored the JS condition in Python; added
   regression coverage in `test_phase7b_cv_normalize_characterization.py`.
-  v24.6.269. Full audit of the `_ja_*`/salary modules run in parallel; see
-  below for any further findings once verified.
+  Also fixed a **high-severity salary bug** in
+  `cvstudio_ja_salary_notice._ja_calc_fixed_salary_detailed`: the exclusion
+  filter (`token["value"] < 1000 and _JA_SALARY_EXCLUDED_COMPONENT_RE...`)
+  only rejected excluded components (bonus/commission/EPF/claims/RSU/...)
+  **under** 1000, so a large excluded figure like `RM8000 commission` could
+  be chosen as the base salary and PUT to JobAdder as the candidate's current
+  salary. Now excluded components are rejected regardless of size unless the
+  same component carries an explicit base/current/basic/last-drawn label.
+  Regression tests in `test_phase7b_ja_salary_notice_characterization.py`.
+  v24.6.270.
 
 - **JobAdder `_ja_*` extractions (Einstein, took over from Claude):**
   `cvstudio_salary_parse.py` — pure salary currency/amount parse + format + LLM

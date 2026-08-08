@@ -41,6 +41,26 @@ class JaSalaryNoticeCharacterizationTests(unittest.TestCase):
         self.assertEqual(app._ja_existing_current_salary(cand), app._ja_round_currency(5000))
         self.assertIsNone(app._ja_existing_current_salary({}))
 
+    def test_excluded_component_never_becomes_base_even_when_large(self):
+        # Regression: a bonus/commission/EPF/etc. component >= 1000 used to sail
+        # past the eligibility filter (the exclusion only fired for values < 1000)
+        # and could be picked as the base salary, so the wrong figure was PUT to
+        # JobAdder as the candidate's current salary. The real base must win.
+        result = app._ja_calc_fixed_salary_detailed("RM8000 commission + RM5000")
+        self.assertEqual(result.get("base"), 5000)
+        self.assertIn("RM8000 commission", result.get("excluded") or [])
+
+    def test_explicit_base_label_overrides_exclusion_keyword(self):
+        # An explicit base/current/basic/last-drawn label on the same component
+        # still overrides an exclusion keyword in a caveat clause.
+        result = app._ja_calc_fixed_salary_detailed("current salary RM8000 (excludes bonus)")
+        self.assertEqual(result.get("base"), 8000)
+
+    def test_labelled_allowance_still_added_not_taken_as_base(self):
+        result = app._ja_calc_fixed_salary_detailed("RM5000 basic + RM500 transport allowance")
+        self.assertEqual(result.get("base"), 5000)
+        self.assertEqual(result.get("allowances"), 500)
+
     def test_module_never_imports_app(self):
         import inspect
 
