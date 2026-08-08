@@ -1597,7 +1597,7 @@
 <div class="app">
   <div class="header" style="position:relative;">
     <div>
-      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.268 (Offline) by The 郭 Lab</span></h1>
+      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.270 (Offline) by The 郭 Lab</span></h1>
 
     </div>
     <div class="header-tools">
@@ -4325,6 +4325,7 @@ async function runJACreateAll() {
         recordPaidAiFailure('JobAdder Create Profile parse failed', parsed, jaRoute.model, jaRoute.provider);
         throw new Error(normalizeAiProviderError(parsed.error || ('Parse failed: ' + parseRes.status), jaRoute));
       }
+      if (parsed.warning) showToast(parsed.warning, 'info');
       var cand = (parsed && parsed.data && parsed.data.candidate) ? parsed.data.candidate : {};
       cand = applyJACreateContactFallback(cand, cvText);
       // A CV launched from an unmatched OneNote note must create/search using
@@ -6748,7 +6749,7 @@ var _cvStudioPhase2bSettingsStartupPromise=cvStudioHydrateBrowserSettings();
 function exportCvStudioLocalData(){
   var settings=cvStudioLocalDataSettingsSnapshot(false);
   var records={onenote_transfer_records:(typeof oneNoteRecordsLoad==='function'?oneNoteRecordsLoad():[]),onenote_saved_links:(typeof oneNoteReadSavedLinks==='function'?oneNoteReadSavedLinks():[])};
-  var payload={product:'CV Studio local data',version:'v24.6.268',schema:1,exportedAt:new Date().toISOString(),includes:['PPC metadata and preferences','saved OneNote links and parser preferences','OneNote transfer record history (private application data)','invoice recipient/settings and draft links','CV alignment and navigation preferences','AI routing/provider selections without API keys'],settings:settings,records:records};
+  var payload={product:'CV Studio local data',version:'v24.6.270',schema:1,exportedAt:new Date().toISOString(),includes:['PPC metadata and preferences','saved OneNote links and parser preferences','OneNote transfer record history (private application data)','invoice recipient/settings and draft links','CV alignment and navigation preferences','AI routing/provider selections without API keys'],settings:settings,records:records};
   var blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='cv_studio_local_data_'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(url);a.remove();},0);showToast('Non-secret local data exported.','ok');
 }
 function cvStudioPersistImportedLocalData(payload){
@@ -6908,7 +6909,7 @@ function cvLockedTabLabel() {
 // Unlocks persist across normal browser/app restarts for the same installed build,
 // but deliberately reset after a new CV Studio version is installed. This keeps the
 // lock in place after upgrades while avoiding repeated prompts during daily use.
-var LOCK_UNLOCK_VERSION = 'v24.6.268';
+var LOCK_UNLOCK_VERSION = 'v24.6.270';
 function versionedUnlockKey(base) {
   return base + '_' + String(LOCK_UNLOCK_VERSION || '').replace(/[^0-9A-Za-z]+/g, '_');
 }
@@ -13031,6 +13032,7 @@ async function startFormat(blind) {
       recordPaidAiFailure('Single CV parse returned no data', data, route.model, route.provider);
       throw new Error('No data in response');
     }
+    if (data.warning) showToast(data.warning, 'info');
     _runCost += responseCost(data, route.model, route.provider);
     _runUsage = mergeUsageClient(_runUsage, data.usage || {});
     // Save real name before blinding overwrites it
@@ -18869,6 +18871,7 @@ async function runBatch() {
         throw new Error('Parse: ' + normalizeAiProviderError(pData.error || ('API error ' + pRes.status), route));
       }
       var cvData = pData.data;
+      if (pData.warning) showToast(bf.file.name + ': ' + pData.warning, 'info');
       bf.cost += responseCost(pData, route.model, route.provider);
       bf.usage = mergeUsageClient(bf.usage, pData.usage || {});
 

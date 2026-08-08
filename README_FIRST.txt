@@ -1,3 +1,11 @@
+=====================================================================
+VERSION SOURCE OF TRUTH: the current release is whatever the
+repository-root VERSION file says (generated into all code surfaces by
+bump_version.py, enforced by tests/test_version_single_source.py).
+Any version number below is historical context from when this file was
+written -- do NOT treat it as the current baseline. See HANDOFF.md.
+=====================================================================
+
 CV STUDIO CODEX STARTER PACK — v24.6.239
 
 PURPOSE

@@ -1,13 +1,14 @@
+> **Version source of truth.** The current release is whatever the repository-root [`VERSION`](VERSION) file says — it is generated into every code surface by `bump_version.py` and enforced by `tests/test_version_single_source.py`. Any version number written *below* is historical context from when this document was authored; do **not** treat it as the current baseline. See `HANDOFF.md` for live project state.
+
 # Current Phase Status
 
 ## Release state
 
 - Approved baseline: v24.6.217
-- Current source baseline: v24.6.252 (Phase 7B-5a coverage net + 7B-5b read-only
-  JobAdder proxies merged)
-- Active architecture candidate: v24.6.253 (Phase 7B-5c JobAdder candidate JSON
-  writes)
-- Completed release: v24.6.243 (Windows x64 only)
+- Current source baseline: see the repository-root `VERSION` file (single source
+  of truth). The specific numbers that used to be pinned here — e.g. "v24.6.252",
+  "v24.6.253", "completed release v24.6.243" — went stale and have been removed
+  so nothing contradicts `VERSION`.
 - Phase 2B source baseline: v24.6.219
 - Phase 2B baseline Git commit: `a43dbb84dcc44c773527f49d0332b2eb15a37cc1`
 - Phase 3 source baseline: v24.6.222

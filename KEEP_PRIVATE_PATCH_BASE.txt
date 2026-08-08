@@ -1,3 +1,11 @@
+=====================================================================
+VERSION SOURCE OF TRUTH: the current release is whatever the
+repository-root VERSION file says (generated into all code surfaces by
+bump_version.py, enforced by tests/test_version_single_source.py).
+Any version number below is historical context from when this file was
+written -- do NOT treat it as the current baseline. See HANDOFF.md.
+=====================================================================
+
 CV Studio private source patch base
 Version: v24.6.239
 Keep this ZIP for future patches. Do not distribute this source package to colleagues.

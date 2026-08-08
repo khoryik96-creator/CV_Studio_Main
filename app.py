@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.268"
+_INSTALL_RECEIPT_VERSION = "v24.6.270"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -318,7 +318,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.268"
+_CVSTUDIO_VERSION = "v24.6.270"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -3850,7 +3850,7 @@ def _ja_spa_browser_bridge(candidate_id, fields, note_text="", email="", salary_
     payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
     compact_payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     script = """(async () => {
-  const helperVersion = 'v24.6.268';
+  const helperVersion = 'v24.6.270';
   const candidateId = %s;
   const payload = %s;
   const profilePath = %s;
@@ -4465,7 +4465,7 @@ def jobadder_onenote_activity_diagnostic():
     generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Candidate Activity Read Test",
-        "cv_studio_version": "v24.6.268",
+        "cv_studio_version": _CVSTUDIO_VERSION,
         "generated_utc": generated,
         "safety": {
             "read_only": True,
@@ -4637,7 +4637,7 @@ def jobadder_onenote_activity_create_diagnostic():
     if confirmation != "CREATE ONE MAX LOW TEST":
         return jsonify({"error": "Type CREATE ONE MAX LOW TEST exactly before running the controlled POST."}), 400
 
-    guard_key = ("v24.6.268", candidate_id)
+    guard_key = (_CVSTUDIO_VERSION, candidate_id)
     if guard_key in _JA_ACTIVITY_CREATE_DIAG_USED:
         return jsonify({"error": "The one-shot controlled POST has already been run in this CV Studio session. Restarting is intentionally required before any repeat test."}), 409
     # Mark before the network call so a timeout/double-click cannot emit a second POST.
@@ -4666,7 +4666,7 @@ def jobadder_onenote_activity_create_diagnostic():
     generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Official AddCandidateActivity Create Test",
-        "cv_studio_version": "v24.6.268",
+        "cv_studio_version": _CVSTUDIO_VERSION,
         "generated_utc": generated,
         "candidate_fixture": {
             "name": "Max Low",
@@ -8970,6 +8970,15 @@ def parse_cv():
             raw_text = raw_text[:-3]  # Remove closing ```
         raw_text = raw_text.strip()
 
+        # Completeness marker. A first-try clean parse, a clean Strategy-2
+        # re-send, and a clean Strategy-3 stitched continuation are all lossless.
+        # Only the bracket-closing salvage (try_close_json) truncates the JSON at
+        # the last valid point and can silently drop trailing roles/bullets, so it
+        # is flagged as degraded -- the CV is still fully repaired and returned,
+        # but the caller is told completeness is not guaranteed.
+        parse_degraded = False
+        parse_degraded_reason = ""
+
         try:
             parsed = json.loads(raw_text)
         except json.JSONDecodeError:
@@ -9047,6 +9056,8 @@ def parse_cv():
             repaired = try_close_json(raw_text)
             if repaired:
                 parsed = repaired
+                parse_degraded = True
+                parse_degraded_reason = "truncated_response_bracket_salvage"
             else:
                 # ── Strategy 2: Re-send the full CV asking for compact, COMPLETE JSON ──
                 # A CV formatter must never silently shorten the candidate's content, so
@@ -9080,6 +9091,9 @@ def parse_cv():
                     # Try Strategy 1 on the strategy-2 output too
                     try:
                         strategy2_parsed = try_close_json(s2_raw)
+                        if strategy2_parsed:
+                            parse_degraded = True
+                            parse_degraded_reason = "truncated_retry_bracket_salvage"
                     except Exception:
                         strategy2_parsed = None
 
@@ -9115,6 +9129,8 @@ def parse_cv():
                             parsed = try_close_json(combined)
                             if not parsed:
                                 raise ValueError("All three repair strategies failed.")
+                            parse_degraded = True
+                            parse_degraded_reason = "truncated_continuation_bracket_salvage"
                     except Exception as repair_err:
                         out = {"error": (
                             f"Could not parse CV after 3 repair attempts. "
@@ -9158,6 +9174,18 @@ def parse_cv():
         parsed = _normalize_cv_data_for_output(parsed, cv_text)
         out = {"ok": True, "data": parsed, "usage": usage, "model": model, "provider": llm_provider}
         out.update(_llm_response_cost_fields(model, usage, llm_provider))
+        # The parse still succeeded and the full repaired CV is returned; this
+        # only tells the caller the AI response was truncated and salvaged, so
+        # some later roles or bullet points may be missing and should be checked.
+        if parse_degraded:
+            out["degraded"] = True
+            out["degraded_reason"] = parse_degraded_reason
+            out["warning"] = (
+                "This CV was long and the AI response was cut off. It was "
+                "automatically repaired and the profile can still be created, but "
+                "some later roles or bullet points may be missing — please "
+                "check the parsed result against the original CV before continuing."
+            )
         return jsonify(out)
 
     except urllib.error.HTTPError as e:
@@ -12839,6 +12867,60 @@ _CVSTUDIO_ARCHITECTURE = _finalize_modular_monolith_app(
 )
 
 
+def _cvstudio_http_channel_timeout():
+    """Waitress ``channel_timeout`` that safely covers the worst-case /parse hold.
+
+    ``channel_timeout`` is an *inactivity* timeout: while a request is blocked
+    waiting on an upstream AI call, no bytes flow to the browser, so the channel
+    looks idle for the whole duration. A single ``/parse`` can chain up to three
+    sequential DeepSeek calls (initial parse + retry Strategy 2 re-send +
+    Strategy 3 continue), each capped by ``_cv_parse_backend_timeout_seconds``
+    (currently 300s for long CVs), plus deterministic post-processing. The
+    ceiling is derived from that function so the two can never drift -- if the
+    per-call parse budget is raised, this follows it automatically.
+    """
+    per_call_ceiling = _cv_parse_backend_timeout_seconds("x" * 20000)  # long-CV branch
+    max_sequential_calls = 3  # initial + Strategy 2 re-send + Strategy 3 continue
+    post_processing_margin_seconds = 120
+    return per_call_ceiling * max_sequential_calls + post_processing_margin_seconds
+
+
+def _run_cvstudio_server():
+    """Serve the app, preferring Waitress with the built-in Werkzeug server as a
+    fallback.
+
+    Waitress is a real, cross-platform, pure-Python WSGI server that freezes
+    cleanly into the protected build; Werkzeug's ``app.run`` is the development
+    server. Waitress is used when it is importable and not explicitly disabled;
+    if the import fails (or ``CVSTUDIO_SERVER`` selects the legacy server), the
+    behaviour is exactly the previous ``app.run`` call, so nothing regresses.
+
+    Loopback only -- never bind a non-local interface; the ``_reject_non_local_
+    host_header`` request guard and the whole security posture assume 127.0.0.1.
+    Set ``CVSTUDIO_SERVER=werkzeug`` to force the legacy server.
+    """
+    prefer = str(os.environ.get("CVSTUDIO_SERVER") or "").strip().lower()
+    if prefer not in ("werkzeug", "flask", "dev"):
+        try:
+            from waitress import serve as _waitress_serve
+        except Exception:
+            _waitress_serve = None
+        if _waitress_serve is not None:
+            _waitress_serve(
+                app,
+                host="127.0.0.1",
+                port=_CVSTUDIO_PORT,
+                # Requests routinely block for minutes (AI parse, OCR, legacy
+                # .doc extraction); a generous fixed pool keeps the single-user
+                # UI responsive while a long parse is in flight.
+                threads=16,
+                channel_timeout=_cvstudio_http_channel_timeout(),
+                ident="CV Studio",
+            )
+            return
+    app.run(port=_CVSTUDIO_PORT, debug=False, threaded=True)
+
+
 if __name__ == "__main__":
     try:
         _boot_elapsed = _boot_time.time() - _BOOT_T0
@@ -12862,4 +12944,4 @@ if __name__ == "__main__":
             print("👉  Open this in your browser: {}\n".format(_CVSTUDIO_BASE_URL))
     except Exception:
         pass
-    app.run(port=_CVSTUDIO_PORT, debug=False, threaded=True)
+    _run_cvstudio_server()

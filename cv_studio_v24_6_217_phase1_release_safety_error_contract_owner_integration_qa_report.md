@@ -1,3 +1,5 @@
+> **Historical — do not use as the current release reference.** This document is a point-in-time record. The authoritative current version is the repository-root `VERSION` file; see `HANDOFF.md` for current state.
+
 # CV Studio v24.6.217 — Phase 1 Release Safety, Error Contract and Owner Integration QA Report
 
 **Build type:** Private owner/source patch base  

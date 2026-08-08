@@ -1,7 +1,7 @@
 # CV Studio — Collaboration / Handoff Notes
 
 Read this before making changes. CV Studio is a Flask **modular monolith**
-(single `app.py`, ~13k lines, currently **v24.6.268**). The owner runs a **local
+(single `app.py`, ~13k lines, currently **v24.6.270**). The owner runs a **local
 source build** at `localhost:5000` and uses **DeepSeek** for all AI providers.
 Several conventions below are non-obvious traps that the code alone won't warn
 you about.
@@ -63,15 +63,38 @@ stage files explicitly and never `git add .`.
 - The squash-merge commit shows as "Unverified" because GitHub authors it. That
   is normal — never amend or rebase merged `master` history to "fix" it.
 
-## 5. Install-receipt version trap
+## 5. Install-receipt version trap — bump via `VERSION`, never by hand
 
-`app.py` enforces an install receipt at import
-(`_enforce_install_receipt_or_exit`). If you bump the version, it must change
-**consistently** across `app.py`, `INSTALL_CORE.ps1`, `INSTALL_RECEIPT.ps1`,
-`install.sh` / `start.sh`, and the on-disk receipt — otherwise the app
-`SystemExit`s at startup. A past bump was reverted for exactly this. Windows
-batch/VBS files are CRLF-only with no BOM (the build validates this); write them
-in binary mode preserving CRLF.
+**The repository-root `VERSION` file is the single source of truth** for the
+current release (bare `M.N.P`, e.g. `24.6.270`). To change the version, run:
+
+```bash
+python bump_version.py 24.6.271   # writes VERSION and stamps every code surface
+python bump_version.py            # re-stamp current VERSION (idempotent; repairs drift)
+```
+
+`bump_version.py` regenerates every version surface from `VERSION` using explicit
+*anchors* (never a blanket find/replace — `app.py` and `index.html` also contain
+*historical* version mentions in comments that must survive). It edits bytes so
+the CRLF/BOM of the Windows `*.ps1`/`*.vbs`/`*.bat` files is preserved (the build
+validates this). `tests/test_version_single_source.py` fails the suite if any
+surface drifts from `VERSION`, sharing the one anchor table with the generator.
+
+Why this matters: `app.py` enforces an install receipt at import
+(`_enforce_install_receipt_or_exit`). The version must match **consistently**
+across `app.py`, `index.html`, `INSTALL_CORE.ps1`, `INSTALL_RECEIPT.ps1`,
+`START_HIDDEN.vbs`, `WATCHDOG.vbs`, `install.sh` / `start.sh`,
+`owner_build_tools/BUILD_PROTECTED_WINDOWS.bat`, `build_protected.py` (its
+`VERSION` **and** the underscore `VERSION_SLUG` used in shipped artifact names),
+and `tests/test_phase2a_app_cache_integration.py`, or the app `SystemExit`s at
+startup / ships a mislabeled build. A past hand-bump was reverted for exactly
+this, and the slug silently drifted once (`v24_6_268` vs app `v24.6.270`); the
+`VERSION`-file workflow exists to make that impossible.
+
+Historical handover / QA-report docs (filename `..._v24_6_NNN_...`) carry a
+"Historical — do not use as the current release reference" banner; the living
+process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
+`VERSION`. Do not resurrect a hard-coded "current version: vX" line in any doc.
 
 ## 6. AI specifics
 
@@ -84,6 +107,26 @@ in binary mode preserving CRLF.
   AI-spend browser-session token.
 
 ## 7. Recently completed (already on `master`)
+
+- **Deeper audit pass (Einstein, 2026-08-08):** found and fixed a real bug
+  left over from the "Company – Title | dates" formatting fix (#87):
+  `cvstudio_cv_normalize._smart_word_case` never got the vowelless-acronym
+  fallback that was added to `generate.js`'s `smartTokenCase`, so a bare
+  all-caps brand token not in the explicit keep-list (e.g. `TDCX`) still got
+  corrupted to `Tdcx` at the **Python** normalization layer used by
+  `_extract_authoritative_work_rows` — before it ever reached the
+  already-fixed JS formatter. Mirrored the JS condition in Python; added
+  regression coverage in `test_phase7b_cv_normalize_characterization.py`.
+  Also fixed a **high-severity salary bug** in
+  `cvstudio_ja_salary_notice._ja_calc_fixed_salary_detailed`: the exclusion
+  filter (`token["value"] < 1000 and _JA_SALARY_EXCLUDED_COMPONENT_RE...`)
+  only rejected excluded components (bonus/commission/EPF/claims/RSU/...)
+  **under** 1000, so a large excluded figure like `RM8000 commission` could
+  be chosen as the base salary and PUT to JobAdder as the candidate's current
+  salary. Now excluded components are rejected regardless of size unless the
+  same component carries an explicit base/current/basic/last-drawn label.
+  Regression tests in `test_phase7b_ja_salary_notice_characterization.py`.
+  v24.6.270.
 
 - **JobAdder `_ja_*` extractions (Einstein, took over from Claude):**
   `cvstudio_salary_parse.py` — pure salary currency/amount parse + format + LLM
@@ -112,6 +155,19 @@ in binary mode preserving CRLF.
   broke a ~900-line characterization test and was reverted.
 - **Phase 7B modularization** can continue: extract pure clusters, keep it
   behavior-preserving, hold the route SHA constant.
+- **Waitress server swap (backburner #4) — STAGED ON BRANCH, NOT MERGED.**
+  `app._run_cvstudio_server()` prefers Waitress and falls back to Werkzeug
+  `app.run` if Waitress is unavailable or `CVSTUDIO_SERVER=werkzeug` is set, so
+  it degrades safely. Loopback-only bind; `threads=16`; and critically
+  `channel_timeout` is *derived* from `_cv_parse_backend_timeout_seconds`
+  (300s ceiling × 3 chained parse attempts + 120s = 1020s) so a long/truncated
+  `/parse` connection is never cut mid-flight — do not hardcode this or the
+  timeout bug returns. Covered by `tests/test_server_runtime.py`; route SHA and
+  version surfaces unchanged. **Gate before merging:** run the actual protected
+  Windows/macOS build and confirm Waitress is frozen in (else the fallback
+  quietly serves on the dev server) and that a real long AI parse completes.
+  `waitress==3.0.2` is in `requirements.txt`; it is a pip dep, not a repo source
+  file, so it is not in the `build_protected.py` `required` tuple.
 
 ## Coordinating two accounts
 

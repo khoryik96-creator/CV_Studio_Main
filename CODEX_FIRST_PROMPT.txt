@@ -1,3 +1,11 @@
+=====================================================================
+VERSION SOURCE OF TRUTH: the current release is whatever the
+repository-root VERSION file says (generated into all code surfaces by
+bump_version.py, enforced by tests/test_version_single_source.py).
+Any version number below is historical context from when this file was
+written -- do NOT treat it as the current baseline. See HANDOFF.md.
+=====================================================================
+
 You are continuing development of CV Studio from the completed private v24.6.239 Blind JD PDF metadata-overflow corrective owner/source release.
 
 Work locally in this opened cv_formatter folder.

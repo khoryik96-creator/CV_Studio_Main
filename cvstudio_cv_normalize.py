@@ -124,7 +124,9 @@ def _smart_word_case(token, *, company=False, title=False):
         replacement = _COMPANY_TOKEN_MAP[upper]
     elif title and upper in _TITLE_TOKEN_MAP:
         replacement = _TITLE_TOKEN_MAP[upper]
-    elif upper in _ACRONYM_KEEP or (len(upper) <= 3 and upper == stripped and stripped.isalpha()):
+    elif upper in _ACRONYM_KEEP or (len(upper) <= 3 and upper == stripped and stripped.isalpha()) or (
+        upper == stripped and stripped.isalpha() and len(stripped) >= 2 and not any(ch in "AEIOU" for ch in upper)
+    ):
         replacement = upper
     else:
         # Preserve internal separators by title-casing alphabetic chunks only.
