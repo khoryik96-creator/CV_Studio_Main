@@ -291,6 +291,35 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
                 return match.group(1) if match else None
         return "MISSING"
 
+    def test_pdf_bullet_levels_from_x_positions(self):
+        # Base column (204) is level 0; deeper columns step to levels 1 and 2.
+        # The last row has a ~6pt jitter but must still resolve to level 2.
+        lines = [
+            (204, "(a) Operating System"),
+            (204, "1- VMware"),
+            (204, "a- Administrating things"),
+            (204, "b- Monitoring things"),
+            (240, "a. Manchester united"),
+            (240, "b. Manchester city"),
+            (276, "i. Wonderful world"),
+            (282, "ii. Wonderful creature"),
+        ]
+        self.assertEqual(app._pdf_bullet_levels_from_lines(lines), [
+            {"text": "manchester united", "level": 1},
+            {"text": "manchester city", "level": 1},
+            {"text": "wonderful world", "level": 2},
+            {"text": "wonderful creature", "level": 2},
+        ])
+
+    def test_pdf_bullet_levels_flat_and_guards(self):
+        flat = [(204, "- one"), (204, "- two"), (204, "- three"), (204, "- four")]
+        self.assertEqual(app._pdf_bullet_levels_from_lines(flat), [])
+        # Fewer than four marker-led lines -> not enough signal.
+        self.assertEqual(app._pdf_bullet_levels_from_lines([(204, "- a"), (240, "b. deep")]), [])
+        # A sub-step (~8pt) drift is jitter, not a real indent -> stays flat.
+        nudged = [(204, "- a"), (204, "- b"), (204, "- c"), (212, "- d")]
+        self.assertEqual(app._pdf_bullet_levels_from_lines(nudged), [])
+
     def test_nested_bullet_levels_restored_in_generated_docx(self):
         data = {
             "candidate": {"name": "Test Candidate"},

@@ -11405,6 +11405,86 @@ def _extract_docx_bullet_levels(file_bytes):
     return out
 
 
+_PDF_BULLET_LEADIN_RE = re.compile(
+    r"^(?:[•●▪◦‣⁃∙·‧*]|[-–—]\s|\(?[0-9]{1,3}[.)\-]\s|\(?[a-z]{1,3}[.)\-]\s)",
+    re.I,
+)
+
+
+def _pdf_bullet_levels_from_lines(lines):
+    """Assign indent levels to marker-led lines from their x-positions.
+
+    ``lines`` is ``[(x0, text)]`` in document order. The dominant left column of
+    marker-led lines is level 0; deeper columns become levels by their indent
+    step. Conservative: needs >= 4 marker-led lines and a clear indent step,
+    otherwise returns [] (everything flat). Pure -- unit-testable without a PDF.
+    """
+    from collections import Counter
+    threshold = 14   # pt; ignore sub-step jitter around the base column
+    tol = 6          # pt; column bucket width
+    min_step = 12    # pt; smaller "indents" are treated as noise -> flat
+    bullet_lines = [(x0, t) for x0, t in lines if _PDF_BULLET_LEADIN_RE.match(str(t or ""))]
+    if len(bullet_lines) < 4:
+        return []
+
+    def bucket(x):
+        return round(x / tol) * tol
+
+    counts = Counter(bucket(x0) for x0, _ in bullet_lines)
+    top_count = max(counts.values())
+    base = min(b for b, c in counts.items() if c == top_count)
+    offsets = sorted({bucket(x0) - base for x0, _ in bullet_lines if bucket(x0) > base + threshold})
+    if not offsets or offsets[0] < min_step:
+        return []
+    step = offsets[0]
+    out = []
+    seen = set()
+    for x0, t in bullet_lines:
+        off = bucket(x0) - base
+        if off <= threshold:
+            continue
+        level = min(max(1, round(off / step)), 8)
+        key = _cv_bullet_match_key(t)
+        if not key:
+            continue
+        dedup = (key, level)
+        if dedup in seen:
+            continue
+        seen.add(dedup)
+        out.append({"text": key, "level": level})
+    return out
+
+
+def _extract_pdf_bullet_levels(file_bytes):
+    """Recover nested-list indent from a PDF using text x-positions.
+
+    PDFs carry no list metadata, but nested items sit further right on the page.
+    Extracts per-line left x-positions via pdfplumber and defers the leveling to
+    _pdf_bullet_levels_from_lines. Heuristic (unlike the deterministic DOCX
+    path); same map shape ({text: match_key, level}).
+    """
+    import io as _io
+    try:
+        import pdfplumber
+    except Exception:
+        return []
+    lines = []
+    try:
+        with pdfplumber.open(_io.BytesIO(file_bytes)) as pdf:
+            for page in pdf.pages:
+                by_top = {}
+                for word in page.extract_words(use_text_flow=False):
+                    by_top.setdefault(round(word["top"] / 3.0), []).append(word)
+                for key in sorted(by_top):
+                    row = sorted(by_top[key], key=lambda w: w["x0"])
+                    text = " ".join(w["text"] for w in row).strip()
+                    if text:
+                        lines.append((row[0]["x0"], text))
+    except Exception:
+        return []
+    return _pdf_bullet_levels_from_lines(lines)
+
+
 def _extract_docx_text_preserve_tables(file_bytes):
     _validate_zip_payload(file_bytes, "DOCX")
     """Extract DOCX text, preserving table-cell paragraph/bullet boundaries.
@@ -11955,6 +12035,14 @@ def extract_text():
                     if t:
                         pages.append(t)
                 text = "\n\n".join(pages)
+
+            # Recover nested-list indent from x-positions while the text layer
+            # is present (skip for scanned PDFs that fall through to OCR below).
+            if text.strip():
+                try:
+                    bullet_levels = _extract_pdf_bullet_levels(file_bytes)
+                except Exception:
+                    bullet_levels = []
 
             # Fallback: if pdfplumber got nothing, try OCR via pytesseract
             if not text.strip():
