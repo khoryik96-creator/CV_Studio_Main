@@ -48,6 +48,23 @@ _SOURCE_BULLET_RE = re.compile(
     r"^\s*(?:[•●▪◦‣⁃∙·‧]|[-*])\s+\S"
 )
 
+# Experience-section delimiters, mirrored from cvstudio_cv_reconcile so the two
+# stages agree on where the work history begins and ends. Bullet counting is
+# confined to this span: parsed bullets only come from work experience, so a
+# whole-document bullet count would be inflated by bulleted skills / profile /
+# education sections and fire false shortfall warnings.
+_EXPERIENCE_HEADING_RE = re.compile(
+    r"^(?:EMPLOYMENT|WORK|CAREER|PROFESSIONAL)\s+(?:HISTORY|EXPERIENCES?)\b"
+    r"|^(?:HISTORY|EXPERIENCES?)\s*:?\s*$",
+    re.I,
+)
+_SECTION_STOP_HEADING_RE = re.compile(
+    r"^(?:EDUCATION|ACADEMIC|CERTIFICATION|CERTIFICATIONS|REFERENCE|REFERENCES|"
+    r"SKILLS|TECHNICAL SKILLS|ADDITIONAL INFORMATION|LANGUAGES?|PROJECTS?|"
+    r"INTERESTS?|HOBBIES|PROFILE|SUMMARY|AWARDS?)\b",
+    re.I,
+)
+
 
 def _source_employers(cv_text, parsed=None):
     """Distinct high-confidence employers extracted from the source text."""
@@ -98,10 +115,38 @@ def _count_parsed_bullets(parsed):
     return total
 
 
+def _experience_section_text(cv_text):
+    """Text between the experience heading and the next section, or None.
+
+    None means no experience heading was found and the section could not be
+    scoped -- the caller then skips the bullet check rather than risk a false
+    positive from bullets elsewhere in the document.
+    """
+    lines = str(cv_text or "").splitlines()
+    start = None
+    for i, line in enumerate(lines):
+        if _EXPERIENCE_HEADING_RE.match(line.strip()):
+            start = i + 1
+            break
+    if start is None:
+        return None
+    end = len(lines)
+    for j in range(start, len(lines)):
+        if _SECTION_STOP_HEADING_RE.match(lines[j].strip()):
+            end = j
+            break
+    return "\n".join(lines[start:end])
+
+
 def _count_source_bullets(cv_text):
-    return sum(
-        1 for line in str(cv_text or "").splitlines() if _SOURCE_BULLET_RE.match(line)
-    )
+    """Count source bullet lines within the experience section.
+
+    Returns None when the section can't be located (bullet check disabled).
+    """
+    section = _experience_section_text(cv_text)
+    if section is None:
+        return None
+    return sum(1 for line in section.splitlines() if _SOURCE_BULLET_RE.match(line))
 
 
 def evaluate_cv_fidelity(parsed, cv_text):
@@ -116,8 +161,10 @@ def evaluate_cv_fidelity(parsed, cv_text):
 
     source_bullets = _count_source_bullets(cv_text)
     parsed_bullets = _count_parsed_bullets(parsed)
+    bullet_scoped = source_bullets is not None
     bullet_shortfall = (
-        source_bullets >= _BULLET_MIN_SOURCE
+        bullet_scoped
+        and source_bullets >= _BULLET_MIN_SOURCE
         and parsed_bullets < source_bullets * _BULLET_SHORTFALL_RATIO
     )
 
@@ -146,6 +193,7 @@ def evaluate_cv_fidelity(parsed, cv_text):
             "source_estimate": source_bullets,
             "parsed": parsed_bullets,
             "shortfall": bullet_shortfall,
+            "scoped": bullet_scoped,
         },
         "warnings": warnings,
     }

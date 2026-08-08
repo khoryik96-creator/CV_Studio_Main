@@ -106,6 +106,34 @@ class BulletFidelityTests(unittest.TestCase):
         report = fid.evaluate_cv_fidelity(parsed, cv_text)
         self.assertFalse(report["bullets"]["shortfall"])
 
+    def test_bulleted_skills_section_does_not_inflate_source_count(self):
+        # Bullets in SKILLS / EDUCATION sit outside the experience section and
+        # must not count against work-history bullets, or a normal CV with a
+        # bulleted skills list would falsely warn.
+        cv_text = (
+            "SKILLS\n"
+            + "\n".join(f"- Skill {i}" for i in range(8))
+            + "\n\nEMPLOYMENT HISTORY\n"
+            + "Jan 2020 - Dec 2021 | Acme | Software Engineer\n"
+            + "- Built the thing\n- Shipped the thing\n\n"
+            + "EDUCATION\n- BSc, Somewhere\n- MSc, Elsewhere\n"
+        )
+        parsed = _parsed_from([("Acme", "Software Engineer")], bullets_per_role=2)
+        report = fid.evaluate_cv_fidelity(parsed, cv_text)
+        self.assertEqual(report["bullets"]["source_estimate"], 2)
+        self.assertFalse(report["bullets"]["shortfall"])
+        self.assertTrue(report["ok"])
+
+    def test_no_experience_heading_disables_bullet_check(self):
+        # Without a locatable experience section, the bullet check backs off
+        # (source_estimate None, never flags) rather than risk a false positive.
+        cv_text = "Some narrative CV.\n- a\n- b\n- c\n- d\n- e\n- f\n- g\n"
+        parsed = _parsed_from([("Acme", "Engineer")], bullets_per_role=0)
+        report = fid.evaluate_cv_fidelity(parsed, cv_text)
+        self.assertIsNone(report["bullets"]["source_estimate"])
+        self.assertFalse(report["bullets"]["scoped"])
+        self.assertFalse(report["bullets"]["shortfall"])
+
 
 class SafetyContractTests(unittest.TestCase):
     def test_evaluate_never_mutates_parsed(self):
