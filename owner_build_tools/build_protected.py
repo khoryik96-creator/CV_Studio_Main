@@ -28,7 +28,7 @@ import zipfile
 import zlib
 from pathlib import Path
 
-VERSION = "v24.6.268"
+VERSION = "v24.6.269"
 VERSION_SLUG = "v24_6_268"
 PRODUCT = "TheGuoLab-CVStudio"
 RECEIPT_SCHEMA = 2

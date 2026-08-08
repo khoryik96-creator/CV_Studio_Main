@@ -26,6 +26,18 @@ class SmartCasingTests(unittest.TestCase):
         # Only all-caps / uniform-case input is re-cased; ordinary text is kept.
         self.assertEqual(cn._smart_title_text("vp of sales"), "vp of sales")
 
+    def test_bare_vowelless_acronym_company_token_is_preserved(self):
+        # Matches generate.js's smartTokenCase acronym fallback: an all-caps,
+        # vowelless brand token not in the explicit keep-list (e.g. TDCX) must
+        # not be title-cased down to "Tdcx" -- otherwise the Python-side
+        # normalization used by authoritative work-row extraction corrupts the
+        # casing before it ever reaches the (already-fixed) JS formatter.
+        self.assertEqual(cn._smart_title_text("TDCX", company=True), "TDCX")
+
+    def test_normal_all_caps_company_word_still_title_cases(self):
+        # Vowel-bearing all-caps words are unaffected by the vowelless fallback.
+        self.assertEqual(cn._smart_title_text("COGNIZANT", company=True), "Cognizant")
+
 
 class DateAndMonthTests(unittest.TestCase):
     def test_month_token_title_cases(self):
