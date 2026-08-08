@@ -13328,6 +13328,34 @@ function cvNormalizeStructuredData(data) {
   return data;
 }
 
+// Nested-list level lookup for the preview, mirroring generate.js/app.py so the
+// on-screen preview shows the same indent the generated DOCX will use. Reads the
+// side-channel map captured at upload (_extractedBulletLevels). cvBulletMatchKey
+// MUST stay in lockstep with app.py _cv_bullet_match_key.
+function cvBulletMatchKey(text) {
+  var s = String(text == null ? '' : text).replace(/\s+/g, ' ').trim();
+  for (;;) {
+    var stripped = s.replace(/^(?:[•●▪◦‣⁃∙·‧*‐‑‒–—―-]|\(?[0-9a-z]{1,4}[.)\-])\s+/i, '').trim();
+    if (stripped === s) break;
+    s = stripped;
+  }
+  return s.toLowerCase();
+}
+function cvBulletLevelFor(text) {
+  if (!Array.isArray(_extractedBulletLevels)) return 0;
+  var key = cvBulletMatchKey(text);
+  for (var i = 0; i < _extractedBulletLevels.length; i++) {
+    var e = _extractedBulletLevels[i];
+    if (e && String(e.text) === key) return Math.min(Math.max(Number(e.level) || 0, 0), 8);
+  }
+  return 0;
+}
+function cvBulletPreviewHtml(text) {
+  var lvl = cvBulletLevelFor(text);
+  var style = lvl > 0 ? ' style="margin-left:' + (lvl * 22) + 'px"' : '';
+  return '<div class="preview-bullet"' + style + '>' + esc(text) + '</div>';
+}
+
 function renderPreview(d) {
   d = cvNormalizeStructuredData(d);
   var c = d.candidate || {};
@@ -13362,9 +13390,9 @@ function renderPreview(d) {
       for (var b of (role.bullets || [])) {
         if (typeof b === 'object' && b.heading) {
           html += '<div class="preview-role" style="margin-top:4px">' + esc(b.heading) + '</div>';
-          for (var sb of (b.bullets || [])) html += '<div class="preview-bullet">' + esc(sb) + '</div>';
+          for (var sb of (b.bullets || [])) html += cvBulletPreviewHtml(sb);
         } else {
-          html += '<div class="preview-bullet">' + esc(b) + '</div>';
+          html += cvBulletPreviewHtml(b);
         }
       }
     }
@@ -18871,6 +18899,7 @@ async function runBatch() {
       var exData = await exRes.json();
       if (exData.error) throw new Error('Extraction: ' + exData.error);
       var rawText = exData.text;
+      var batchBulletLevels = Array.isArray(exData.bullet_levels) ? exData.bullet_levels : null;
       bf.charCount = rawText.length;
 
       // ── Step 1: Parse CV ─────────────────────────────────────────────────
@@ -18910,7 +18939,7 @@ async function runBatch() {
       // ── Step 3: Generate DOCX ─────────────────────────────────────────────
       var docxStepIdx = isBlind ? 3 : 2;
       batchSetProgress(bf, pcts[docxStepIdx], 'Generating DOCX…', makeSteps(docxStepIdx));
-      var dRes = await fetchWithTimeout('/generate-docx', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data: cvData, alignment: batchDocumentAlignment }) }, 60000);
+      var dRes = await fetchWithTimeout('/generate-docx', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data: cvData, alignment: batchDocumentAlignment, bullet_levels: batchBulletLevels }) }, 60000);
       if (!dRes.ok) { var err2 = await dRes.json(); throw new Error('DOCX: ' + (err2.error||'Failed')); }
       var blob = await dRes.blob();
 
