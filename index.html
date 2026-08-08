@@ -4325,6 +4325,7 @@ async function runJACreateAll() {
         recordPaidAiFailure('JobAdder Create Profile parse failed', parsed, jaRoute.model, jaRoute.provider);
         throw new Error(normalizeAiProviderError(parsed.error || ('Parse failed: ' + parseRes.status), jaRoute));
       }
+      if (parsed.warning) showToast(parsed.warning, 'info');
       var cand = (parsed && parsed.data && parsed.data.candidate) ? parsed.data.candidate : {};
       cand = applyJACreateContactFallback(cand, cvText);
       // A CV launched from an unmatched OneNote note must create/search using
@@ -13031,6 +13032,7 @@ async function startFormat(blind) {
       recordPaidAiFailure('Single CV parse returned no data', data, route.model, route.provider);
       throw new Error('No data in response');
     }
+    if (data.warning) showToast(data.warning, 'info');
     _runCost += responseCost(data, route.model, route.provider);
     _runUsage = mergeUsageClient(_runUsage, data.usage || {});
     // Save real name before blinding overwrites it
@@ -18869,6 +18871,7 @@ async function runBatch() {
         throw new Error('Parse: ' + normalizeAiProviderError(pData.error || ('API error ' + pRes.status), route));
       }
       var cvData = pData.data;
+      if (pData.warning) showToast(bf.file.name + ': ' + pData.warning, 'info');
       bf.cost += responseCost(pData, route.model, route.provider);
       bf.usage = mergeUsageClient(bf.usage, pData.usage || {});
 

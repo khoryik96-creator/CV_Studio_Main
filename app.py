@@ -8970,6 +8970,15 @@ def parse_cv():
             raw_text = raw_text[:-3]  # Remove closing ```
         raw_text = raw_text.strip()
 
+        # Completeness marker. A first-try clean parse, a clean Strategy-2
+        # re-send, and a clean Strategy-3 stitched continuation are all lossless.
+        # Only the bracket-closing salvage (try_close_json) truncates the JSON at
+        # the last valid point and can silently drop trailing roles/bullets, so it
+        # is flagged as degraded -- the CV is still fully repaired and returned,
+        # but the caller is told completeness is not guaranteed.
+        parse_degraded = False
+        parse_degraded_reason = ""
+
         try:
             parsed = json.loads(raw_text)
         except json.JSONDecodeError:
@@ -9047,6 +9056,8 @@ def parse_cv():
             repaired = try_close_json(raw_text)
             if repaired:
                 parsed = repaired
+                parse_degraded = True
+                parse_degraded_reason = "truncated_response_bracket_salvage"
             else:
                 # ── Strategy 2: Re-send the full CV asking for compact, COMPLETE JSON ──
                 # A CV formatter must never silently shorten the candidate's content, so
@@ -9080,6 +9091,9 @@ def parse_cv():
                     # Try Strategy 1 on the strategy-2 output too
                     try:
                         strategy2_parsed = try_close_json(s2_raw)
+                        if strategy2_parsed:
+                            parse_degraded = True
+                            parse_degraded_reason = "truncated_retry_bracket_salvage"
                     except Exception:
                         strategy2_parsed = None
 
@@ -9115,6 +9129,8 @@ def parse_cv():
                             parsed = try_close_json(combined)
                             if not parsed:
                                 raise ValueError("All three repair strategies failed.")
+                            parse_degraded = True
+                            parse_degraded_reason = "truncated_continuation_bracket_salvage"
                     except Exception as repair_err:
                         out = {"error": (
                             f"Could not parse CV after 3 repair attempts. "
@@ -9158,6 +9174,18 @@ def parse_cv():
         parsed = _normalize_cv_data_for_output(parsed, cv_text)
         out = {"ok": True, "data": parsed, "usage": usage, "model": model, "provider": llm_provider}
         out.update(_llm_response_cost_fields(model, usage, llm_provider))
+        # The parse still succeeded and the full repaired CV is returned; this
+        # only tells the caller the AI response was truncated and salvaged, so
+        # some later roles or bullet points may be missing and should be checked.
+        if parse_degraded:
+            out["degraded"] = True
+            out["degraded_reason"] = parse_degraded_reason
+            out["warning"] = (
+                "This CV was long and the AI response was cut off. It was "
+                "automatically repaired and the profile can still be created, but "
+                "some later roles or bullet points may be missing — please "
+                "check the parsed result against the original CV before continuing."
+            )
         return jsonify(out)
 
     except urllib.error.HTTPError as e:

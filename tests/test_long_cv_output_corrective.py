@@ -113,6 +113,70 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertNotIn("keep output short", retry_prompt)
         self.assertIn("Preserve EVERY", retry_prompt)
 
+    def test_truncated_parse_is_salvaged_and_flagged_degraded(self):
+        # A truncated AI response that json.loads cannot read but the bracket
+        # salvage (try_close_json) can. The CV must STILL be repaired and
+        # returned, and the response must carry a degraded flag + warning so the
+        # caller knows completeness is not guaranteed. Flagging never blocks the
+        # repair.
+        truncated = (
+            '{"candidate": {"name": "Jane Doe", "current_company": "Acme"}, '
+            '"work_experiences": [{"company": "Acme", "date_range": "2020 to Present", '
+            '"roles": [{"title": "Engineer", "date_range": "", "reason_for_leaving": "", '
+            '"bullets": ["Built systems", "Led a team'
+        )
+        calls = []
+
+        def fake_call_llm(provider, api_key, payload):
+            calls.append(payload)
+            return {"content": [{"type": "text", "text": truncated}], "usage": {}}
+
+        with (
+            mock.patch.object(app, "call_llm", side_effect=fake_call_llm),
+            mock.patch.object(app, "_ai_spend_session_allowed", return_value=True),
+        ):
+            response = app.app.test_client().post(
+                "/parse",
+                json={"api_key": "fixture-key", "cv_text": "Jane Doe\nWork Experience\n"},
+                headers={"Origin": "http://127.0.0.1:5000", "X-CV-Studio-Request": "1"},
+            )
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()
+        # Salvaged in one shot -- no wasteful Strategy 2/3 re-send.
+        self.assertEqual(len(calls), 1)
+        # Repair still happened: the readable content is returned.
+        self.assertEqual(body["data"]["candidate"]["name"], "Jane Doe")
+        # And it is flagged so an incomplete parse is not reported as clean.
+        self.assertTrue(body.get("degraded"))
+        self.assertEqual(body.get("degraded_reason"), "truncated_response_bracket_salvage")
+        self.assertTrue(str(body.get("warning") or "").strip())
+
+    def test_clean_parse_is_not_flagged_degraded(self):
+        # A first-try valid parse is lossless and must NOT carry the degraded
+        # flag or a warning -- the happy-path response shape is unchanged.
+        valid = json.dumps({
+            "candidate": {"name": "John Smith"}, "work_experiences": [],
+            "education": [], "certifications": [], "skills": [],
+        })
+
+        def fake_call_llm(provider, api_key, payload):
+            return {"content": [{"type": "text", "text": valid}], "usage": {}}
+
+        with (
+            mock.patch.object(app, "call_llm", side_effect=fake_call_llm),
+            mock.patch.object(app, "_ai_spend_session_allowed", return_value=True),
+        ):
+            response = app.app.test_client().post(
+                "/parse",
+                json={"api_key": "fixture-key", "cv_text": "John Smith\nWork Experience\n"},
+                headers={"Origin": "http://127.0.0.1:5000", "X-CV-Studio-Request": "1"},
+            )
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()
+        self.assertEqual(body["data"]["candidate"]["name"], "John Smith")
+        self.assertNotIn("degraded", body)
+        self.assertNotIn("warning", body)
+
     def test_structured_normalization_is_idempotent_and_factual(self):
         normalized = app._normalize_cv_structured_content(self.fixture())
         role = normalized["work_experiences"][0]["roles"][0]
