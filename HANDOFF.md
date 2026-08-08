@@ -1,7 +1,7 @@
 # CV Studio — Collaboration / Handoff Notes
 
 Read this before making changes. CV Studio is a Flask **modular monolith**
-(single `app.py`, ~13k lines, currently **v24.6.268**). The owner runs a **local
+(single `app.py`, ~13k lines, currently **v24.6.269**). The owner runs a **local
 source build** at `localhost:5000` and uses **DeepSeek** for all AI providers.
 Several conventions below are non-obvious traps that the code alone won't warn
 you about.
@@ -84,6 +84,18 @@ in binary mode preserving CRLF.
   AI-spend browser-session token.
 
 ## 7. Recently completed (already on `master`)
+
+- **Deeper audit pass (Einstein, 2026-08-08):** found and fixed a real bug
+  left over from the "Company – Title | dates" formatting fix (#87):
+  `cvstudio_cv_normalize._smart_word_case` never got the vowelless-acronym
+  fallback that was added to `generate.js`'s `smartTokenCase`, so a bare
+  all-caps brand token not in the explicit keep-list (e.g. `TDCX`) still got
+  corrupted to `Tdcx` at the **Python** normalization layer used by
+  `_extract_authoritative_work_rows` — before it ever reached the
+  already-fixed JS formatter. Mirrored the JS condition in Python; added
+  regression coverage in `test_phase7b_cv_normalize_characterization.py`.
+  v24.6.269. Full audit of the `_ja_*`/salary modules run in parallel; see
+  below for any further findings once verified.
 
 - **JobAdder `_ja_*` extractions (Einstein, took over from Claude):**
   `cvstudio_salary_parse.py` — pure salary currency/amount parse + format + LLM
