@@ -49,6 +49,7 @@ FRONTEND_MODULES = (
     "appearance.js",
     "cv-scoring.js",
     "the-owl.js",
+    "ai-crawler.js",
 )
 FRONTEND_STATIC_ASSETS = (
     "app.css",
