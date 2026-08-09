@@ -42,6 +42,7 @@ FRONTEND_MODULES = (
     "api-transport.js",
     "page-nav.js",
     "server-heartbeat.js",
+    "candidate-summary.js",
 )
 FRONTEND_STATIC_ASSETS = (
     "app.css",
