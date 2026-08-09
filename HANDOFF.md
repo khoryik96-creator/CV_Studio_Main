@@ -295,7 +295,7 @@ take domains in **non-overlapping `app.py` regions** and never share a branch.
 |---------|--------|-----------|---------------|---------------|
 | **ChatGPT** | CV **formatting** (bullets/markers/dates/casing/reconcile). Files listed above; see `FORMATTING_NOTES.md`. Changes relayed by the owner. | edits `cvstudio_cv_normalize.py` / `cvstudio_cv_reconcile.py` / `generate.js` — no new modules, no new routes | `parse_cv` / `/generate-docx` / `SYSTEM_PROMPT` / CV post-processing | `chatgpt/v<version>` |
 | **Einstein** *(slicing)* | Continue the JobAdder `_ja_*` service clusters — remaining `_ja_activity` / `_ja_candidate` / `_ja_spa` (network/`_JOBADDER_CLIENT`/LLM via injection). Salary AI/cache already done (`cvstudio_ja_salary_ai.py`). | `cvstudio_ja_*` | `_ja_*` cluster | `einstein/v<version>` |
-| **king** *(slicing, suggested — confirm in #35)* | Remaining **Lead Finder** `_lead_*` helpers (pure closures; self-contained, good re-onboarding domain). Keeps a clean `_lead_*` vs `_ja_*` region split from Einstein. | `cvstudio_lead_*` | `_lead_*` cluster | `king/v<version>` |
+| **Kingg** *(slicing)* | Spider / AI Crawler pure closures done (`cvstudio_spider_summary`, `cvstudio_spider_score`, `cvstudio_ja_typos`, `cvstudio_lead_enrich`). Lead Finder remaining `_lead_*` **reassigned to Einstein** (2026-08-09, owner confirmed). Available for next unclaimed backlog item. | `cvstudio_spider_summary.py`, `cvstudio_spider_score.py`, `cvstudio_ja_typos.py`, `cvstudio_lead_enrich.py` | done | `claude/*` |
 
 _Historical rows (completed domains) below for context:_
 
