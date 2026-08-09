@@ -4,6 +4,7 @@ import json
 import math
 import threading
 from copy import deepcopy
+from datetime import datetime, timezone
 from decimal import Decimal
 from io import BytesIO
 from pathlib import Path
@@ -17,6 +18,7 @@ from salary_comparison.ai_rule_updater import (
     _call_claude,
     _call_deepseek,
     _extract_json,
+    fetch_official_source,
     _public_source_url,
     _response_bytes,
     preview_rule_update,
@@ -208,12 +210,16 @@ def test_corrupt_fx_cache_recovers_and_preserves_backup(tmp_path, monkeypatch):
     assert list(tmp_path.glob("fx.json.corrupt-*"))
 
 
-def test_fx_uses_reciprocal_cached_pair(tmp_path):
+def test_fx_uses_reciprocal_cached_pair(tmp_path, monkeypatch):
     cache = tmp_path / "fx.json"
     cache.write_text(json.dumps({"rates": {"MYR/SGD": {
         "base": "MYR", "quote": "SGD", "rate": 0.3125,
-        "refreshed_at": "2999-01-01T00:00:00+00:00", "source": "cache"
+        "refreshed_at": datetime.now(timezone.utc).isoformat(), "source": "cache"
     }}}), encoding="utf-8")
+    monkeypatch.setattr(
+        "salary_comparison.fx_service.requests.get",
+        lambda *args, **kwargs: pytest.fail("fresh reciprocal cache must not use the network"),
+    )
     result = FxService(cache).get_rate("SGD", "MYR")
     assert result["rate"] == 3.2
     assert result["derived"] is True
@@ -234,6 +240,34 @@ def test_private_source_urls_rejected(monkeypatch):
         _public_source_url("http://127.0.0.1/admin")
     with pytest.raises(AiRuleUpdateError, match="private"):
         _public_source_url("http://localhost/admin")
+
+
+def test_source_redirect_is_validated_before_private_destination_is_contacted(monkeypatch):
+    calls = []
+
+    def resolve_public(host, port):
+        assert host == "public.example"
+        return [(None, None, None, None, ("93.184.216.34", port))]
+
+    class RedirectResponse:
+        status_code = 302
+        headers = {"location": "http://127.0.0.1/admin"}
+
+        def close(self):
+            pass
+
+    def fake_get(url, **kwargs):
+        calls.append((url, kwargs))
+        return RedirectResponse()
+
+    monkeypatch.setattr("salary_comparison.ai_rule_updater.socket.getaddrinfo", resolve_public)
+    monkeypatch.setattr("salary_comparison.ai_rule_updater.requests.get", fake_get)
+
+    with pytest.raises(AiRuleUpdateError, match="private"):
+        fetch_official_source("https://public.example/start")
+
+    assert [url for url, _ in calls] == ["https://public.example/start"]
+    assert calls[0][1]["allow_redirects"] is False
 
 
 def test_source_size_limit_rejected():

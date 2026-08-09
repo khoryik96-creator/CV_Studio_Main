@@ -738,10 +738,24 @@ def _extract_recoverable_cv_source_sections(source_text):
             continue
         item = _strip_leading_bullet_marker(line).strip()
         has_explicit_item_marker = item != line
+        boundary_key = _cv_source_boundary_key(item)
+        marker_is_numbered = bool(re.match(r"^\s*(?:\(\d{1,3}\)|\d{1,3}[.)])\s*", line))
+        letters = [char for char in item if char.isalpha()]
+        marker_is_emphasized = bool(
+            has_explicit_item_marker
+            and (
+                (letters and all(char.isupper() for char in letters))
+                or line.rstrip().endswith(":")
+            )
+        )
         if (
             current
-            and not has_explicit_item_marker
-            and _cv_source_boundary_key(line) in _CV_SOURCE_SECTION_BOUNDARY_KEYS
+            and boundary_key in _CV_SOURCE_SECTION_BOUNDARY_KEYS
+            and (
+                not has_explicit_item_marker
+                or marker_is_numbered
+                or marker_is_emphasized
+            )
         ):
             current = ""
             continue
@@ -962,13 +976,28 @@ def _normalize_cv_structured_content(parsed):
             raw_items = skill.get("items") or ""
             structured_items = isinstance(raw_items, list)
             raw_item_values = raw_items if structured_items else [raw_items]
-            item_separator = r"(?:\r?\n)+" if structured_items else r"(?:\r?\n)+|,\s*"
-            item_lines = [
-                item.strip()
-                for raw_item in raw_item_values
-                for item in re.split(item_separator, str(raw_item))
-                if item.strip()
-            ]
+            item_lines = []
+            for raw_item in raw_item_values:
+                lines = [
+                    item.strip()
+                    for item in re.split(r"(?:\r?\n)+", str(raw_item))
+                    if item.strip()
+                ]
+                # Providers occasionally wrap an entire comma-separated expertise
+                # paragraph in a one-element list. Three or more comma-delimited
+                # values are strong list evidence; a single comma remains intact
+                # to protect phrases such as "Mergers, Acquisitions & Integration".
+                split_commas = (
+                    not structured_items
+                    or (
+                        len(raw_item_values) == 1
+                        and len(lines) == 1
+                        and lines[0].count(",") >= 2
+                    )
+                )
+                for line in lines:
+                    values = re.split(r",\s*", line) if split_commas else [line]
+                    item_lines.extend(value.strip() for value in values if value.strip())
             if item_lines:
                 skill["items"] = item_lines
         normalized_skills.append(skill)
@@ -1242,13 +1271,21 @@ def _cv_experience_interval(exp):
 
 
 def _cv_experience_has_month_precision(exp):
-    """Return whether an employer/role span carries explicit month precision."""
+    """Return whether every bounded endpoint has explicit month precision."""
     if not isinstance(exp, dict):
         return False
     date_range = _normalize_cv_date_range(exp.get("date_range") or "")
     if not date_range:
         date_range = _cv_company_span_from_roles(exp.get("roles") or [])
-    return bool(_CV_MONTH_PRECISION_RE.search(date_range))
+    start_text, end_text = _cv_date_parts(date_range)
+    if not start_text or not _CV_MONTH_PRECISION_RE.search(start_text):
+        return False
+    if not end_text:
+        return True
+    return bool(
+        _CV_MONTH_PRECISION_RE.search(end_text)
+        or re.search(r"\b(?:present|current|now|till\s*date|to\s*date)\b", end_text, re.I)
+    )
 
 
 def _cv_experience_intervals_touch(left, right):

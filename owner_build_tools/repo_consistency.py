@@ -2,7 +2,7 @@
 """Repair/verify the private repository's deterministic protected-build state.
 
 This owner-only helper prevents these known drift classes:
-1. stale package-lock/npm-ci state overriding adm-zip@0.5.17;
+1. stale package-lock/npm-ci state overriding adm-zip@0.6.0;
 2. Git line-ending conversion changing owner-vetted dependency bytes;
 3. LF-only or BOM-bearing Windows batch files breaking cmd.exe;
 4. BOM-bearing or CRLF macOS command scripts invalidating their shebangs;
@@ -17,7 +17,7 @@ import json
 import re
 from pathlib import Path
 
-ADM_ZIP_VERSION = "0.5.17"
+ADM_ZIP_VERSION = "0.6.0"
 BASE_INSTALL = "npm install --ignore-scripts --no-audit --no-fund --package-lock=false"
 OBFUSCATOR_INSTALL = "npm install --no-save --ignore-scripts --no-audit --no-fund --package-lock=false javascript-obfuscator@4.1.1"
 GIT_CONFIG_COMMAND = "git config --global core.autocrlf false"
@@ -154,7 +154,7 @@ def repair(root: Path) -> list[str]:
     if deps.get("adm-zip") != ADM_ZIP_VERSION:
         deps["adm-zip"] = ADM_ZIP_VERSION
         _write_text_if_changed(package_path, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
-        changes.append("pinned package.json adm-zip to 0.5.17")
+        changes.append("pinned package.json adm-zip to 0.6.0")
 
     gitignore = root / ".gitignore"
     original_gitignore = gitignore.read_text(encoding="utf-8-sig") if gitignore.exists() else ""
@@ -380,7 +380,7 @@ def main() -> int:
         for error in result["errors"]:
             print("ERROR:", error)
         return 1
-    print("Private repository is byte-stable and consistent: adm-zip 0.5.17, Antiword 1.3.5 Windows/macOS runtimes and source, mandatory Tesseract verifier, no lock file, exact Git bytes, no-BOM CRLF batch files, BOM-free CRLF .vbs launchers, no-BOM LF POSIX scripts, BOM-free INSTANCE_PORT.ps1/STOP_CORE.ps1/RESTORE_PREVIOUS.ps1.")
+    print("Private repository is byte-stable and consistent: adm-zip 0.6.0, Antiword 1.3.5 Windows/macOS runtimes and source, mandatory Tesseract verifier, no lock file, exact Git bytes, no-BOM CRLF batch files, BOM-free CRLF .vbs launchers, no-BOM LF POSIX scripts, BOM-free INSTANCE_PORT.ps1/STOP_CORE.ps1/RESTORE_PREVIOUS.ps1.")
     return 0
 
 

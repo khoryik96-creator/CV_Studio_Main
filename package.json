@@ -3,6 +3,6 @@
   "version": "1.0.0",
   "description": "Hyppies CV Formatter",
   "dependencies": {
-    "adm-zip": "0.5.17"
+    "adm-zip": "0.6.0"
   }
 }

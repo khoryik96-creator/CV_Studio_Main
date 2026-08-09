@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Continue'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 if (-not $Root.EndsWith('\')) { $Root += '\' }
 $Log = Join-Path $Root 'install_log.txt'
-$InstallVersion = 'v24.6.283'
+$InstallVersion = 'v24.6.284'
 $AntiwordVersion = '1.3.5'
 $AntiwordRuntimeFileCount = 37
 $AntiwordManifestSha256 = '7d365a89f268a2fc34f815b369474124bc6a1aac02e9b0b57e6dfd5eb5368da0'
@@ -654,7 +654,7 @@ function Install-PythonPackages {
     }
     $stampDir = Join-Path $env:APPDATA 'GUOLabCVStudio'
     New-Item -ItemType Directory -Path $stampDir -Force | Out-Null
-    Set-Content -LiteralPath (Join-Path $stampDir '.deps_ok') -Value 'v24.6.283-bundled-pdfium-ocr-antiword' -Encoding ASCII
+    Set-Content -LiteralPath (Join-Path $stampDir '.deps_ok') -Value 'v24.6.284-bundled-pdfium-ocr-antiword' -Encoding ASCII
     Write-Step '    Python packages ready.'
     return $true
 }
@@ -1067,15 +1067,43 @@ function Assert-AntiwordPathProtected {
 
 function Assert-AntiwordPathReleased {
     param([string]$Target)
-    $stream = [IO.File]::Open(
-        $Target,
-        [IO.FileMode]::Open,
-        [IO.FileAccess]::ReadWrite,
-        [IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete
-    )
-    $stream.Dispose()
+    # Windows can briefly retain the executable image after Process.Dispose(),
+    # especially while antivirus scanning is active. Retry only this release
+    # assertion for a short bounded interval; a persistent lock still fails.
+    $deadline = [DateTime]::UtcNow.AddSeconds(5)
+    while ($true) {
+        $stream = $null
+        try {
+            $stream = [IO.File]::Open(
+                $Target,
+                [IO.FileMode]::Open,
+                [IO.FileAccess]::ReadWrite,
+                [IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete
+            )
+            break
+        } catch [IO.IOException] {
+            if ([DateTime]::UtcNow -ge $deadline) { throw }
+            Start-Sleep -Milliseconds 50
+        } catch [UnauthorizedAccessException] {
+            if ([DateTime]::UtcNow -ge $deadline) { throw }
+            Start-Sleep -Milliseconds 50
+        } finally {
+            if ($stream) { $stream.Dispose() }
+        }
+    }
     $moved = $Target + '.release-check'
-    [IO.File]::Move($Target, $moved)
+    while ($true) {
+        try {
+            [IO.File]::Move($Target, $moved)
+            break
+        } catch [IO.IOException] {
+            if ([DateTime]::UtcNow -ge $deadline) { throw }
+            Start-Sleep -Milliseconds 50
+        } catch [UnauthorizedAccessException] {
+            if ([DateTime]::UtcNow -ge $deadline) { throw }
+            Start-Sleep -Milliseconds 50
+        }
+    }
     [IO.File]::Move($moved, $Target)
 }
 

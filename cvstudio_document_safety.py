@@ -15,6 +15,7 @@ MAX_ZIP_ENTRIES = 2000
 MAX_ZIP_EXPANDED_BYTES = 160 * 1024 * 1024
 MAX_ZIP_SINGLE_ENTRY_BYTES = 64 * 1024 * 1024
 OCR_TOTAL_DEADLINE_SECONDS = 180
+ALLOWED_IMAGE_FORMATS = frozenset({"BMP", "JPEG", "PNG", "TIFF", "WEBP"})
 
 
 def document_validation_status(exc: BaseException) -> int:
@@ -83,6 +84,12 @@ def safe_image_open(
 
     Image.MAX_IMAGE_PIXELS = max_image_pixels
     image = Image.open(io.BytesIO(file_bytes))
+    image_format = str(image.format or "").upper()
+    if image_format not in ALLOWED_IMAGE_FORMATS:
+        image.close()
+        raise ValueError(
+            "Unsupported image format. Supported formats: BMP, JPEG, PNG, TIFF, WEBP."
+        )
     width, height = image.size
     if width <= 0 or height <= 0 or width * height > max_image_pixels:
         image.close()

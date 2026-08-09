@@ -35,10 +35,12 @@ def request_json(base, path, *, method="GET", payload=None, request_id="phase2a-
     request = urllib.request.Request(base + path, data=data, headers=headers, method=method)
     try:
         with urllib.request.urlopen(request, timeout=60) as response:
-            return response.status, dict(response.headers), json.loads(response.read())
+            headers = {str(key).lower(): value for key, value in response.headers.items()}
+            return response.status, headers, json.loads(response.read())
     except urllib.error.HTTPError as error:
         with error:
-            return error.code, dict(error.headers), json.loads(error.read())
+            headers = {str(key).lower(): value for key, value in error.headers.items()}
+            return error.code, headers, json.loads(error.read())
 
 
 def main():
@@ -106,7 +108,7 @@ def main():
             status_code, headers, status = request_json(base, "/status")
             check(status_code == 200 and status["healthy"], "status route")
             check(status["version"] == VERSION, "version surface")
-            check(bool(headers.get("X-CV-Studio-Request-ID")), "response request ID")
+            check(bool(headers.get("x-cv-studio-request-id")), "response request ID")
 
             status_code, _, instance = request_json(base, "/instance")
             check(status_code == 200 and instance["version"] == VERSION, "instance identity")

@@ -13,7 +13,7 @@ current value on every call, not a value captured at construction.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class LeadCacheService:
@@ -103,7 +103,7 @@ class LeadCacheService:
             "family": family,
             "evidence": sorted(evidence),
             "titles": titles,
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             "hits": 0,
         })
         if len(entries) > self._title_max_entries:
@@ -207,7 +207,7 @@ class LeadCacheService:
             "email_confidence": email_data.get("email_confidence", ""),
             "email_source": email_data.get("email_source", ""),
             "verification_status": email_data.get("verification_status", ""),
-            "cached_at": datetime.utcnow().isoformat(),
+            "cached_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             "hits": int(existing.get("hits") or 0),
         }
         if len(entries) > self._contact_max_entries:
