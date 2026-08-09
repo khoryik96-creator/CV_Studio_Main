@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.290"
+_INSTALL_RECEIPT_VERSION = "v24.6.291"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -333,7 +333,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.290"
+_CVSTUDIO_VERSION = "v24.6.291"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -1823,7 +1823,16 @@ def _ja_exchange_token(params):
 
 
 def _ja_apply_token(token, client_id=None, client_secret=None, clear_spider_cache=False):
-    expires_in = int(token.get("expires_in") or 3300)
+    # ``expires_in`` is optional, so a missing value has always used the
+    # conservative 55-minute default. Treat malformed upstream metadata the
+    # same way: the access token can still be valid, and token application must
+    # not escape from OAuth polling/refresh routes as an avoidable HTTP 500.
+    # Calculate the complete timestamp inside the guard so non-finite or
+    # unreasonably large numeric values cannot overflow the float addition.
+    try:
+        expires_at = int(time.time() + max(60, int(token.get("expires_in") or 3300)))
+    except (TypeError, ValueError, OverflowError):
+        expires_at = int(time.time() + 3300)
     with _ja_store_lock:
         previous = dict(_ja_creds_store)
         try:
@@ -1845,7 +1854,7 @@ def _ja_apply_token(token, client_id=None, client_secret=None, clear_spider_cach
                 "access_token": str(token.get("access_token") or ""),
                 "refresh_token": str(token.get("refresh_token") or _ja_creds_store.get("refresh_token") or ""),
                 "api_url": next_api_url,
-                "expires_at": int(time.time() + max(60, expires_in)),
+                "expires_at": expires_at,
                 "cache_namespace": cache_namespace,
                 "_needs_reconnect": False,
             })
@@ -7600,6 +7609,10 @@ def parse_cv():
         data = call_llm(llm_provider, api_key, {
             "model": model,
             "max_tokens": 64000,
+            # CV parsing is extraction, not creative generation. Pin every
+            # attempt so identical source text does not vary in bullet splitting,
+            # label retention, or section inclusion from one run to the next.
+            "temperature": 0,
             "_timeout_seconds": parse_timeout_seconds,
             "system": SYSTEM_PROMPT,
             "messages": [{"role": "user", "content": f"Parse this raw CV into the JSON schema:\n\n{cv_text}"}]
@@ -7726,6 +7739,7 @@ def parse_cv():
                     s2_data = call_llm(llm_provider, api_key, {
                         "model": model,
                         "max_tokens": 64000,
+                        "temperature": 0,
                         "_timeout_seconds": parse_timeout_seconds,
                         "system": SYSTEM_PROMPT,
                         "messages": [{"role": "user", "content": brevity_prompt}]
@@ -7753,6 +7767,7 @@ def parse_cv():
                         s3_data = call_llm(llm_provider, api_key, {
                             "model": model,
                             "max_tokens": 64000,
+                            "temperature": 0,
                             "_timeout_seconds": parse_timeout_seconds,
                             "messages": [
                                 {"role": "user",  "content": f"Parse this CV into the JSON schema:\n\n{cv_text}"},

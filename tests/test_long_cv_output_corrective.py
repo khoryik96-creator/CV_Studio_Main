@@ -113,6 +113,36 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertNotIn("keep output short", retry_prompt)
         self.assertIn("Preserve EVERY", retry_prompt)
 
+    def test_every_parse_attempt_uses_deterministic_temperature(self):
+        calls = []
+
+        def fake_call_llm(provider, api_key, payload):
+            calls.append(payload)
+            return {
+                "content": [{"type": "text", "text": "not valid json"}],
+                "usage": {},
+            }
+
+        with (
+            mock.patch.object(app, "call_llm", side_effect=fake_call_llm),
+            mock.patch.object(app, "_ai_spend_session_allowed", return_value=True),
+        ):
+            response = app.app.test_client().post(
+                "/parse",
+                json={
+                    "api_key": "fixture-key",
+                    "cv_text": "Deterministic Candidate\nWork Experience\n",
+                },
+                headers={
+                    "Origin": "http://127.0.0.1:5000",
+                    "X-CV-Studio-Request": "1",
+                },
+            )
+
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(len(calls), 3)
+        self.assertTrue(all(call.get("temperature") == 0 for call in calls))
+
     def test_truncated_parse_is_salvaged_and_flagged_degraded(self):
         # A truncated AI response that json.loads cannot read but the bracket
         # salvage (try_close_json) can. The CV must STILL be repaired and

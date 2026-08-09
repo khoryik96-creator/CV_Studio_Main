@@ -136,6 +136,48 @@ class Phase7AModularMonolithFoundationTests(unittest.TestCase):
                 )
             )
 
+    def test_legacy_web_shell_declares_every_registered_direct_import(self):
+        """Keep the architecture manifest aligned with app.py's real imports."""
+        registry = ModuleRegistry(DEFAULT_MODULES)
+        import_owner = {}
+        for module in registry.modules:
+            for source_file in module.source_files:
+                path = Path(source_file)
+                if len(path.parts) == 1 and path.suffix == ".py":
+                    import_owner[path.stem] = module.name
+                elif len(path.parts) > 1:
+                    import_owner[path.parts[0]] = module.name
+
+        tree = ast.parse(
+            (ROOT / "app.py").read_text(encoding="utf-8-sig"),
+            filename="app.py",
+        )
+        imported_roots = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imported_roots.update(
+                    alias.name.split(".", 1)[0] for alias in node.names
+                )
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imported_roots.add(node.module.split(".", 1)[0])
+
+        direct_dependencies = {
+            import_owner[name]
+            for name in imported_roots
+            if name in import_owner
+            and import_owner[name] != "legacy_web_shell"
+        }
+        legacy = next(
+            module
+            for module in registry.modules
+            if module.name == "legacy_web_shell"
+        )
+        self.assertEqual(
+            direct_dependencies - set(legacy.dependencies),
+            set(),
+            "legacy_web_shell is missing direct registered dependencies",
+        )
+
     def test_composition_root_constructs_an_independent_flask_application(self):
         isolated = create_modular_monolith_app(
             "phase7a-fixture",

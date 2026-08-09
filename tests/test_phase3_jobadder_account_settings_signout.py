@@ -648,6 +648,81 @@ class JobAdderAccountSettingsSignOutTests(unittest.TestCase):
         )
         self.assertEqual(len(app._SPIDER_RESUME_TEXT_CACHE), 0)
 
+    def test_malformed_oauth_expiry_never_escapes_as_http_500(self):
+        malformed_values = (
+            "3300abc",
+            {"seconds": 3300},
+            [3300],
+            float("nan"),
+            float("inf"),
+            10 ** 400,
+        )
+        for value in malformed_values:
+            with self.subTest(expires_in=repr(value)), mock.patch.object(
+                app, "_cv_secure_save", return_value="fixture-protected-store"
+            ):
+                started = int(app.time.time())
+                app._ja_apply_token({
+                    "access_token": "fixture-access",
+                    "refresh_token": "fixture-refresh",
+                    "expires_in": value,
+                })
+                self.assertGreaterEqual(
+                    app._ja_creds_store["expires_at"], started + 3299
+                )
+                self.assertLessEqual(
+                    app._ja_creds_store["expires_at"], started + 3301
+                )
+
+        app._ja_creds_store.clear()
+        app._ja_creds_store.update({
+            "access_token": "fixture-old-access",
+            "refresh_token": "fixture-refresh",
+            "client_id": "fixture-client-id",
+            "client_secret": "fixture-client-secret",
+            "expires_at": 0,
+        })
+        refreshed = {
+            "access_token": "fixture-new-access",
+            "refresh_token": "fixture-new-refresh",
+            "expires_in": "3300abc",
+        }
+        with mock.patch.object(
+            app, "_ja_exchange_token", return_value=refreshed
+        ), mock.patch.object(
+            app, "_cv_secure_save", return_value="fixture-protected-store"
+        ):
+            self.assertEqual(
+                app._ja_refresh_access_token(force=True),
+                "fixture-new-access",
+            )
+        self.assertFalse(app._ja_creds_store.get("_needs_reconnect"))
+
+        session_id = "fixture-malformed-expiry-session"
+        app._ja_oauth_sessions[session_id] = {
+            "status": "complete",
+            "token": dict(refreshed, expires_in={"seconds": 3300}),
+            "activated": False,
+            "client_id": "fixture-client-id",
+            "client_secret": "fixture-client-secret",
+            "expires_at": app.time.time() + 300,
+        }
+        with mock.patch.object(
+            app, "_cv_secure_save", return_value="fixture-protected-store"
+        ), mock.patch.object(
+            app, "_spider_preview_cancel_persistent_work", return_value=0
+        ):
+            response = self.client.post(
+                "/jobadder/poll_token",
+                json={"login_session_id": session_id},
+                headers=self._headers("jobadder-malformed-expiry"),
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["status"], "complete")
+        self.assertEqual(
+            app._ja_creds_store["access_token"], "fixture-new-access"
+        )
+
     def test_disconnect_and_forget_response_and_state_remain_compatible(self):
         app._ja_creds_store.update(
             {
