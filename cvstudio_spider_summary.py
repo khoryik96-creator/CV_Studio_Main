@@ -3,18 +3,26 @@
 Behaviour-preserving extraction of the pure candidate-record shaping logic from
 the legacy web shell (Phase 7B): numeric coercion, salary and notice-period
 snapshots, JobAdder custom-field lookup, candidate-card projection, record
-identity keys, and the summary/detail deep-merge that fills missing list-result
-fields from the full candidate representation.
+identity keys, summary/detail deep-merge, candidate preview name/text,
+download content identity, attachment fingerprinting, Content-Disposition
+filename extraction, and resume-attachment identification.
 
 Pure functions of their inputs - no Flask, no globals, no network, no JobAdder
 or provider access. Depends only on the stateless field helpers already
 extracted into ``cvstudio_spider_boolean``. This module never imports ``app``.
 """
 
+import hashlib
+import json
 import re
+import urllib.parse
 from datetime import date, datetime
 
-from cvstudio_spider_boolean import _spider_flatten, _spider_normalized_record_label
+from cvstudio_spider_boolean import (
+    _spider_candidate_blob,
+    _spider_flatten,
+    _spider_normalized_record_label,
+)
 
 
 def _spider_number(value):
@@ -256,3 +264,149 @@ def _spider_merge_candidate_summary_and_detail(summary, detail):
     # Retain a private scoring copy only.  Response construction removes it.
     merged["_spiderDetail"] = detail
     return merged
+
+
+# ---------------------------------------------------------------------------
+# Candidate preview name and text
+# ---------------------------------------------------------------------------
+
+def _spider_preview_name(candidate_id, detail=None):
+    if isinstance(detail, dict):
+        for key in ["name", "fullName", "displayName"]:
+            if detail.get(key):
+                return str(detail.get(key))[:160]
+        first = str(detail.get("firstName") or "").strip()
+        last = str(detail.get("lastName") or "").strip()
+        if first or last:
+            return (first + " " + last).strip()[:160]
+    return "Candidate " + str(candidate_id or "")[:40]
+
+
+def _spider_preview_text_from_detail(detail):
+    """Build a readable side preview from a JobAdder candidate record if no raw resume is available."""
+    if not isinstance(detail, dict):
+        return ""
+    sections = []
+    name = _spider_preview_name("", detail)
+    title = detail.get("currentPosition") or detail.get("position") or detail.get("jobTitle") or ""
+    company = detail.get("currentCompany") or detail.get("employer") or ""
+    location = detail.get("location") or detail.get("city") or detail.get("country") or ""
+    header = []
+    if name and name != "Candidate ":
+        header.append("Name: " + str(name))
+    if title or company:
+        header.append("Current: " + " @ ".join([str(x) for x in [title, company] if x]))
+    if location:
+        header.append("Location: " + str(location))
+    if header:
+        sections.append("\n".join(header))
+
+    preferred = [
+        ("Summary", ["summary", "profile", "candidateSummary", "objective"]),
+        ("Skills", ["skills", "skill", "itSkills", "technologySkills"]),
+        ("Qualifications", ["qualifications", "qualification", "certifications", "certification"]),
+        ("Employment", ["employment", "workExperience", "experience", "positions", "history"]),
+        ("Education", ["education", "educations"]),
+        ("Resume / CV", ["resume", "cv", "curriculumVitae"]),
+        ("Notes", ["notes", "comments"]),
+    ]
+
+    def compact(v):
+        if v is None or v == "" or v == [] or v == {}:
+            return ""
+        if isinstance(v, str):
+            out = v
+        else:
+            try:
+                out = json.dumps(v, ensure_ascii=False, indent=2)
+            except Exception:
+                out = str(v)
+        out = re.sub(r"\n{3,}", "\n\n", out)
+        return out.strip()[:5000]
+
+    used = set()
+    lower_map = {str(k).lower(): k for k in detail.keys()}
+    for title_label, keys in preferred:
+        vals = []
+        for key in keys:
+            for lk, real in lower_map.items():
+                if key.lower() in lk and real not in used:
+                    txt = compact(detail.get(real))
+                    if txt:
+                        vals.append(txt)
+                        used.add(real)
+        if vals:
+            sections.append(title_label + "\n" + "\n\n".join(vals)[:6500])
+    if not sections:
+        blob = _spider_candidate_blob(detail)
+        return blob[:9000]
+    return "\n\n".join(sections)[:12000]
+
+
+# ---------------------------------------------------------------------------
+# Download content identity and attachment fingerprinting
+# ---------------------------------------------------------------------------
+
+def _spider_download_content_identity(raw):
+    if not isinstance(raw, (bytes, bytearray)) or not raw:
+        return ""
+    return hashlib.sha256(bytes(raw)).hexdigest()
+
+
+def _spider_attachment_fingerprint(records):
+    """Stable validator for the current JobAdder resume attachment set."""
+    canonical = []
+    for record in records or []:
+        if not isinstance(record, dict):
+            continue
+        canonical.append({
+            "id": str(record.get("attachmentId") or record.get("id") or ""),
+            "type": str(record.get("type") or ""),
+            "file": str(record.get("fileName") or record.get("filename") or ""),
+            "created": str(record.get("createdAt") or ""),
+            "updated": str(record.get("updatedAt") or record.get("modifiedAt") or ""),
+            "size": str(record.get("size") or record.get("fileSize") or record.get("sizeBytes") or ""),
+        })
+    canonical.sort(key=lambda item: (item["type"], item["id"], item["updated"], item["created"], item["file"]))
+    raw = json.dumps(canonical, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8", errors="ignore")).hexdigest()
+
+
+def _spider_filename_from_disposition(content_disposition, fallback=""):
+    """Extract a filename-ish value from Content-Disposition or an attachment name."""
+    txt = str(content_disposition or "")
+    # RFC 5987 filename*=UTF-8''file.pdf or plain filename="file.pdf".
+    m = re.search(r"filename\*\s*=\s*(?:UTF-8''|)([^;]+)", txt, re.I)
+    if not m:
+        m = re.search(r"filename\s*=\s*\"?([^\";]+)\"?", txt, re.I)
+    if m:
+        try:
+            return urllib.parse.unquote(m.group(1).strip().strip('"'))[:180]
+        except Exception:
+            return m.group(1).strip().strip('"')[:180]
+    return str(fallback or "")[:180]
+
+
+def _spider_attachment_candidates(payload):
+    """Return likely resume attachment ids from a JobAdder attachments/documents payload."""
+    out = []
+    def walk(x, depth=0):
+        if depth > 5 or x is None:
+            return
+        if isinstance(x, list):
+            for item in x[:80]:
+                walk(item, depth + 1)
+        elif isinstance(x, dict):
+            flat = " ".join(str(v) for v in _spider_flatten(x)[:80]).lower()
+            looks_resume = any(t in flat for t in ["resume", "cv", "curriculum", "formattedresume", "formatted resume"])
+            if looks_resume:
+                ids = []
+                for key in ["id", "attachmentId", "attachmentID", "documentId", "documentID", "fileId", "fileID", "entityId"]:
+                    if x.get(key):
+                        ids.append(str(x.get(key)))
+                name = str(x.get("fileName") or x.get("filename") or x.get("name") or x.get("title") or "")
+                out.append({"ids": ids, "name": name})
+            for v in x.values():
+                walk(v, depth + 1)
+    walk(payload)
+    return out[:8]

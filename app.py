@@ -4774,6 +4774,7 @@ from cvstudio_spider_boolean import (
     _spider_boolean_tokens,
     _spider_candidate_blob,
     _spider_candidate_id,
+    _spider_candidate_search_key,
     _spider_clean_doc_text_for_preview,
     _spider_country_aliases,
     _spider_country_match,
@@ -4783,9 +4784,11 @@ from cvstudio_spider_boolean import (
     _spider_has_any,
     _spider_hit_terms,
     _spider_location_identity,
+    _spider_mark_plain_keyword_candidates,
     _spider_max_years_value,
     _spider_min_years_value,
     _spider_normalized_record_label,
+    _spider_parse_candidate_items,
     _spider_parse_employment_month,
     _spider_pick_field_text,
     _spider_residential_classes,
@@ -4803,14 +4806,20 @@ from cvstudio_spider_boolean import (
 )
 
 from cvstudio_spider_summary import (
+    _spider_attachment_candidates,
+    _spider_attachment_fingerprint,
     _spider_card_fields,
     _spider_custom_field_value,
     _spider_custom_record_key,
+    _spider_download_content_identity,
+    _spider_filename_from_disposition,
     _spider_merge_candidate_summary_and_detail,
     _spider_merge_missing_json,
     _spider_merge_record_lists,
     _spider_notice_snapshot,
     _spider_number,
+    _spider_preview_name,
+    _spider_preview_text_from_detail,
     _spider_salary_snapshot,
     _spider_work_record_key,
 )
@@ -5008,12 +5017,6 @@ def _spider_resume_text_cache_clear():
         _SPIDER_PREVIEW_PAYLOAD_CACHE_BYTES = 0
 
 
-def _spider_download_content_identity(raw):
-    if not isinstance(raw, (bytes, bytearray)) or not raw:
-        return ""
-    return hashlib.sha256(bytes(raw)).hexdigest()
-
-
 def _spider_resume_text_cache_get(token, candidate_id, content_sha256=""):
     key = _spider_resume_cache_key(token, candidate_id)
     expected_content = str(content_sha256 or "").strip().lower()
@@ -5068,25 +5071,6 @@ def _spider_resume_text_cache_put(
             "antiword_verified": bool(antiword_verified),
             "saved_at": time.time(),
         }
-
-
-def _spider_attachment_fingerprint(records):
-    """Stable validator for the current JobAdder resume attachment set."""
-    canonical = []
-    for record in records or []:
-        if not isinstance(record, dict):
-            continue
-        canonical.append({
-            "id": str(record.get("attachmentId") or record.get("id") or ""),
-            "type": str(record.get("type") or ""),
-            "file": str(record.get("fileName") or record.get("filename") or ""),
-            "created": str(record.get("createdAt") or ""),
-            "updated": str(record.get("updatedAt") or record.get("modifiedAt") or ""),
-            "size": str(record.get("size") or record.get("fileSize") or record.get("sizeBytes") or ""),
-        })
-    canonical.sort(key=lambda item: (item["type"], item["id"], item["updated"], item["created"], item["file"]))
-    raw = json.dumps(canonical, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(raw.encode("utf-8", errors="ignore")).hexdigest()
 
 
 def _spider_preview_payload_cache_key(token, candidate_id, content_sha256, variant="full"):
@@ -5890,81 +5874,6 @@ def jobadder_spider_options():
     return jsonify({"items": fallback, "fallback": True, "tried": candidate_lists, "errors": errors[:6]})
 
 
-
-def _spider_preview_name(candidate_id, detail=None):
-    if isinstance(detail, dict):
-        for key in ["name", "fullName", "displayName"]:
-            if detail.get(key):
-                return str(detail.get(key))[:160]
-        first = str(detail.get("firstName") or "").strip()
-        last = str(detail.get("lastName") or "").strip()
-        if first or last:
-            return (first + " " + last).strip()[:160]
-    return "Candidate " + str(candidate_id or "")[:40]
-
-
-def _spider_preview_text_from_detail(detail):
-    """Build a readable side preview from a JobAdder candidate record if no raw resume is available."""
-    if not isinstance(detail, dict):
-        return ""
-    sections = []
-    name = _spider_preview_name("", detail)
-    title = detail.get("currentPosition") or detail.get("position") or detail.get("jobTitle") or ""
-    company = detail.get("currentCompany") or detail.get("employer") or ""
-    location = detail.get("location") or detail.get("city") or detail.get("country") or ""
-    header = []
-    if name and name != "Candidate ":
-        header.append("Name: " + str(name))
-    if title or company:
-        header.append("Current: " + " @ ".join([str(x) for x in [title, company] if x]))
-    if location:
-        header.append("Location: " + str(location))
-    if header:
-        sections.append("\n".join(header))
-
-    preferred = [
-        ("Summary", ["summary", "profile", "candidateSummary", "objective"]),
-        ("Skills", ["skills", "skill", "itSkills", "technologySkills"]),
-        ("Qualifications", ["qualifications", "qualification", "certifications", "certification"]),
-        ("Employment", ["employment", "workExperience", "experience", "positions", "history"]),
-        ("Education", ["education", "educations"]),
-        ("Resume / CV", ["resume", "cv", "curriculumVitae"]),
-        ("Notes", ["notes", "comments"]),
-    ]
-
-    def compact(v):
-        if v is None or v == "" or v == [] or v == {}:
-            return ""
-        if isinstance(v, str):
-            out = v
-        else:
-            try:
-                out = json.dumps(v, ensure_ascii=False, indent=2)
-            except Exception:
-                out = str(v)
-        out = re.sub(r"\n{3,}", "\n\n", out)
-        return out.strip()[:5000]
-
-    used = set()
-    lower_map = {str(k).lower(): k for k in detail.keys()}
-    for title_label, keys in preferred:
-        vals = []
-        for key in keys:
-            for lk, real in lower_map.items():
-                if key.lower() in lk and real not in used:
-                    txt = compact(detail.get(real))
-                    if txt:
-                        vals.append(txt)
-                        used.add(real)
-        if vals:
-            sections.append(title_label + "\n" + "\n\n".join(vals)[:6500])
-    if not sections:
-        blob = _spider_candidate_blob(detail)
-        return blob[:9000]
-    return "\n\n".join(sections)[:12000]
-
-
-
 def _spider_is_legacy_word_doc_bytes(raw):
     """Detect legacy binary Word .doc downloads even when JobAdder labels them octet-stream.
 
@@ -6612,21 +6521,6 @@ def _spider_extract_text_from_download(raw, content_type="", filename="", ocr_pa
 
 
 
-def _spider_filename_from_disposition(content_disposition, fallback=""):
-    """Extract a filename-ish value from Content-Disposition or an attachment name."""
-    txt = str(content_disposition or "")
-    # RFC 5987 filename*=UTF-8''file.pdf or plain filename="file.pdf".
-    m = re.search(r"filename\*\s*=\s*(?:UTF-8''|)([^;]+)", txt, re.I)
-    if not m:
-        m = re.search(r"filename\s*=\s*\"?([^\";]+)\"?", txt, re.I)
-    if m:
-        try:
-            return urllib.parse.unquote(m.group(1).strip().strip('"'))[:180]
-        except Exception:
-            return m.group(1).strip().strip('"')[:180]
-    return str(fallback or "")[:180]
-
-
 def _spider_pdf_text_layer_from_pdfium(textpage, page_width, page_height, max_items=2200):
     """Build a compact selectable text layer using normalized PDF coordinates.
 
@@ -7077,31 +6971,6 @@ def _spider_get_ja_raw(token, path, timeout=10, *, accept_json=False):
                 pass
             raise _SpiderJobAdderReconnectRequired("JobAdder rejected the refreshed OAuth token")
         raise
-
-
-def _spider_attachment_candidates(payload):
-    """Return likely resume attachment ids from a JobAdder attachments/documents payload."""
-    out = []
-    def walk(x, depth=0):
-        if depth > 5 or x is None:
-            return
-        if isinstance(x, list):
-            for item in x[:80]:
-                walk(item, depth + 1)
-        elif isinstance(x, dict):
-            flat = " ".join(str(v) for v in _spider_flatten(x)[:80]).lower()
-            looks_resume = any(t in flat for t in ["resume", "cv", "curriculum", "formattedresume", "formatted resume"])
-            if looks_resume:
-                ids = []
-                for key in ["id", "attachmentId", "attachmentID", "documentId", "documentID", "fileId", "fileID", "entityId"]:
-                    if x.get(key):
-                        ids.append(str(x.get(key)))
-                name = str(x.get("fileName") or x.get("filename") or x.get("name") or x.get("title") or "")
-                out.append({"ids": ids, "name": name})
-            for v in x.values():
-                walk(v, depth + 1)
-    walk(payload)
-    return out[:8]
 
 
 @app.route("/jobadder/spider_preview_cancel_prefetch", methods=["POST"])
@@ -7716,47 +7585,6 @@ def jobadder_spider_candidate_preview():
     }, 404, cacheable=False)
 
 
-def _spider_candidate_search_key(candidate):
-    """Stable key for set algebra and de-duplication across JobAdder keyword probes."""
-    cid = _spider_candidate_id(candidate)
-    if cid:
-        return "id:" + str(cid)
-    if isinstance(candidate, dict):
-        email = str(candidate.get("email") or candidate.get("emailAddress") or "").strip().lower()
-        if email:
-            return "email:" + email
-        name = str(candidate.get("name") or candidate.get("fullName") or "").strip().lower()
-        if name:
-            return "name:" + name
-    return "raw:" + hashlib.sha1(json.dumps(candidate, sort_keys=True, default=str).encode("utf-8", errors="ignore")).hexdigest()
-
-
-def _spider_parse_candidate_items(payload):
-    if isinstance(payload, dict):
-        data_obj = payload.get("data")
-        items = payload.get("items") or payload.get("candidates") or (data_obj.get("items") if isinstance(data_obj, dict) else None) or []
-        total = None
-        # Preserve an explicit totalCount=0 instead of losing it through truthiness.
-        for key in ("totalCount", "total", "count"):
-            if key in payload and payload.get(key) is not None:
-                total = payload.get(key)
-                break
-        if total is None and isinstance(data_obj, dict):
-            for key in ("totalCount", "total", "count"):
-                if key in data_obj and data_obj.get(key) is not None:
-                    total = data_obj.get(key)
-                    break
-    elif isinstance(payload, list):
-        items, total = payload, len(payload)
-    else:
-        items, total = [], 0
-    return (items if isinstance(items, list) else []), total
-
-
-
-
-
-
 def _spider_jobadder_keyword_items(token, keyword, max_items=3000, page_size=1000, location="", embed=True):
     """Search JobAdder latest resumes with complete, defensive pagination.
 
@@ -7835,21 +7663,6 @@ def _spider_jobadder_keyword_items(token, keyword, max_items=3000, page_size=100
         "embed_applied": bool(embed and not state["embed_rejected"]),
         "embed_rejected": bool(state["embed_rejected"]),
     }
-
-
-def _spider_mark_plain_keyword_candidates(items, query_text, fallback_rule="", fallback_negative_terms=None):
-    query_terms = _spider_terms_for_fit(query_text, 24)
-    negative_terms = list(fallback_negative_terms or [])
-    marked = []
-    for item in items or []:
-        out = dict(item) if isinstance(item, dict) else {"value": item}
-        out["_spiderSearchTerms"] = list(query_terms)
-        if fallback_rule:
-            out["_spiderBooleanFallback"] = True
-            out["_spiderOriginalBooleanRule"] = str(fallback_rule)[:1500]
-            out["_spiderBooleanNegativeTerms"] = negative_terms[:24]
-        marked.append(out)
-    return marked, query_terms
 
 
 def _spider_plain_keyword_jobadder_candidates(token, query_text, result_pool_limit=1200, location="", fallback_rule="", fallback_negative_terms=None):
