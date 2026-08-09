@@ -52,14 +52,19 @@ locally:
 ```bash
 python -m venv .venv_test
 .venv_test/bin/pip install flask pytest python-docx olefile reportlab beautifulsoup4 pypdf requests openpyxl
+npm install   # generate.js needs adm-zip; without node_modules the /generate-docx
+              # DOCX-render tests (test_bullet_nesting, test_long_cv_output_corrective,
+              # the phase2a support-bundle regression) all 500 and look like breakage.
 SALARY_COMPARISON_DATA_DIR=/tmp/sal/data .venv_test/bin/python -m pytest tests/ -q
 ```
 
 Expected result: **1 known failure** —
 `test_legacy_doc_requires_and_uses_verified_antiword` (the Antiword binary is
-not functional on Linux; it is a Windows-only runtime). Everything else must
-pass (~388 tests). **Do not commit `.venv_test/`** — it is not gitignored, so
-stage files explicitly and never `git add .`.
+not functional on Linux; it is a Windows-only runtime — the app correctly
+returns 424 rather than trusting an unverified extraction). Everything else must
+pass (currently ~800 tests, ~9 skipped). **Do not commit `.venv_test/`** (or
+`node_modules/`) — neither is gitignored, so stage files explicitly and never
+`git add .`.
 
 **Previewing CV formatting without a browser/Word.** Most formatting work is
 deterministic (reconcile + normalize + `generate.js`), so you rarely need to
