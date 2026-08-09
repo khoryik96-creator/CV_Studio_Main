@@ -43,6 +43,9 @@ FRONTEND_MODULES = (
     "page-nav.js",
     "server-heartbeat.js",
 )
+FRONTEND_STATIC_ASSETS = (
+    "app.css",
+)
 
 
 class Phase6AFrontendModularizationTests(unittest.TestCase):
@@ -74,6 +77,21 @@ class Phase6AFrontendModularizationTests(unittest.TestCase):
                 self.assertIn(b"function", response.data, filename)
             finally:
                 response.close()
+
+        # Non-JS static vendor assets (app.css) must serve as their own type and
+        # be referenced by index.html (the main stylesheet was extracted here).
+        for filename in FRONTEND_STATIC_ASSETS:
+            if not (module_root / filename).is_file():
+                continue
+            response = client.get("/vendor/cvstudio/" + filename)
+            try:
+                self.assertEqual(response.status_code, 200, filename)
+                self.assertIn("text/css", response.headers.get("Content-Type", ""), filename)
+            finally:
+                response.close()
+        index_html = (ROOT / "index.html").read_text(encoding="utf-8")
+        self.assertIn('href="/vendor/cvstudio/app.css', index_html)
+
         rejected = client.get("/vendor/../app.py")
         try:
             self.assertEqual(rejected.status_code, 404)
@@ -86,6 +104,7 @@ class Phase6AFrontendModularizationTests(unittest.TestCase):
             return
 
         self.assertEqual(build_protected.FRONTEND_MODULES, FRONTEND_MODULES)
+        self.assertEqual(build_protected.FRONTEND_STATIC_ASSETS, FRONTEND_STATIC_ASSETS)
         build_protected.validate_source(ROOT)
         with tempfile.TemporaryDirectory(prefix="cvstudio-phase6a-protection-") as temporary:
             result = build_protected.protect_javascript(
@@ -97,7 +116,7 @@ class Phase6AFrontendModularizationTests(unittest.TestCase):
             self.assertTrue(protected_generate.is_file())
             self.assertEqual(
                 sorted(path.name for path in protected_modules.iterdir()),
-                sorted(FRONTEND_MODULES),
+                sorted(FRONTEND_MODULES + FRONTEND_STATIC_ASSETS),
             )
             self.assertEqual(
                 sorted(report["frontend_modules"]["source_sha256"]),
@@ -106,6 +125,10 @@ class Phase6AFrontendModularizationTests(unittest.TestCase):
             self.assertEqual(
                 sorted(report["frontend_modules"]["protected_sha256"]),
                 sorted(FRONTEND_MODULES),
+            )
+            self.assertEqual(
+                sorted(report["frontend_static_assets"]["protected_sha256"]),
+                sorted(FRONTEND_STATIC_ASSETS),
             )
 
         build_package_source = inspect.getsource(build_protected.build_package)
