@@ -85,6 +85,12 @@ ANCHORS: dict[str, list[bytes]] = {
     ],
     "index.html": [
         _D + rb" \(Offline\) by",
+        # Cache-bust query on every extracted vendor asset (JS + CSS). One
+        # generic anchor covers them all, so newly extracted modules are stamped
+        # automatically — no per-slice hand-editing of the ?v= tag. The token
+        # carries the dotted vM.N.P shape (e.g. ?v=v24.6.294) so the standard
+        # _D machinery applies with no bare-version special case.
+        rb"/vendor/cvstudio/[A-Za-z0-9._-]+\?v=" + _D,
     ],
     "vendor/cvstudio/appearance.js": [
         # Version literals extracted from index.html into the appearance
