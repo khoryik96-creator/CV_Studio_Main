@@ -85,6 +85,12 @@ ANCHORS: dict[str, list[bytes]] = {
     ],
     "index.html": [
         _D + rb" \(Offline\) by",
+    ],
+    "vendor/cvstudio/appearance.js": [
+        # Version literals extracted from index.html into the appearance
+        # controller: the local-data export payload stamp and the wallpaper
+        # lock/unlock schema version. Both are served as JS string/object
+        # literals, so keep them stamped from VERSION like every other surface.
         rb"version:'" + _D + rb"',schema:1",
         rb"LOCK_UNLOCK_VERSION = '" + _D + rb"'",
     ],
