@@ -100,7 +100,7 @@ The Windows binary is compiled with no-console mode. Normal launch uses `CV Stud
 ## v24.6.193 protected release requirements
 
 - The builder seals the two largest proprietary prompt constants in a temporary native compile source. The readable owner source remains the future patch base.
-- The exact adm-zip 0.5.17 runtime folder is bundled and checked against a pinned aggregate SHA-256 tree hash. Native smoke tests deliberately remove `NODE_PATH` so they cannot borrow owner dependencies.
+- The exact adm-zip 0.6.0 runtime folder is bundled and checked against a pinned aggregate SHA-256 tree hash. Native smoke tests deliberately remove `NODE_PATH` so they cannot borrow owner dependencies.
 - Platform artifacts contain only their own platform launchers. The owner-only title-cache merge utility is not included in colleague packages.
 - Launch and smoke validation require the exact version, package root and instance identity, not only a healthy `/ping` response.
 - Colleague packages keep JobAdder, OneNote, Outlook and AI credentials in native/backend protected storage rather than browser localStorage.
@@ -131,7 +131,7 @@ enter the colleague artifact.
 
 ## v24.6.193 private GitHub repository consistency
 
-The protected build deliberately uses no npm lock file. The authoritative dependency controls are the exact `adm-zip` 0.5.17 pin plus the immutable vetted tree and pinned aggregate hash.
+The protected build deliberately uses no npm lock file. The authoritative dependency controls are the exact `adm-zip` 0.6.0 pin plus the immutable vetted tree and pinned aggregate hash.
 
 Before running private GitHub Actions, update the private repository with the complete current owner kit. On Windows you may run:
 

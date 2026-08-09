@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.283"
+_INSTALL_RECEIPT_VERSION = "v24.6.284"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -318,7 +318,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.283"
+_CVSTUDIO_VERSION = "v24.6.284"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -615,7 +615,7 @@ _write_runtime_pid_file()
 atexit.register(_remove_runtime_pid_file)
 
 import xml.etree.ElementTree as ET
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from collections import OrderedDict
 import calendar
@@ -3858,7 +3858,7 @@ def _ja_spa_browser_bridge(candidate_id, fields, note_text="", email="", salary_
     payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
     compact_payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     script = """(async () => {
-  const helperVersion = 'v24.6.283';
+  const helperVersion = 'v24.6.284';
   const candidateId = %s;
   const payload = %s;
   const profilePath = %s;
@@ -4368,7 +4368,7 @@ def _ja_activity_diagnostic_get(path, timeout=25):
     if not token:
         raise PermissionError("Not authenticated")
     url = _ja_api(path)
-    started = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+    started = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     try:
         response = _JOBADDER_CLIENT.request_raw(
             path,
@@ -4470,7 +4470,7 @@ def jobadder_onenote_activity_diagnostic():
         "candidates/{}/activities/{}".format(cid_q, aid_q),
     ]
     results = [_ja_activity_diagnostic_get(path, timeout=25) for path in paths]
-    generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+    generated = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Candidate Activity Read Test",
         "cv_studio_version": _CVSTUDIO_VERSION,
@@ -4509,7 +4509,7 @@ def _ja_activity_diagnostic_post(path, payload, timeout=25):
         raise PermissionError("JobAdder is not connected")
     url = _ja_api(path)
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    started = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+    started = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     base = {
         "method": "POST",
         "path": path,
@@ -4671,7 +4671,7 @@ def jobadder_onenote_activity_create_diagnostic():
             timeout=25,
         )
 
-    generated = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+    generated = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     report = {
         "diagnostic": "CV Studio JobAdder OAuth Official AddCandidateActivity Create Test",
         "cv_studio_version": _CVSTUDIO_VERSION,
@@ -12581,8 +12581,8 @@ def extract_text():
                         for para in hdr.paragraphs:
                             if para.text.strip():
                                 paragraphs.append(para.text)
-                    except:
-                        pass
+                    except Exception as exc:
+                        app.logger.warning("DOCX header extraction skipped: %s", exc)
 
             # Also extract headers from raw XML (catches edge cases)
             try:
@@ -12601,8 +12601,8 @@ def extract_text():
                         txbx_text = ' '.join(txbx_text.split()).strip()
                         if txbx_text and txbx_text not in paragraphs:
                             paragraphs.append(txbx_text)
-            except:
-                pass
+            except Exception as exc:
+                app.logger.warning("DOCX raw XML fallback extraction skipped: %s", exc)
 
             # Extract body paragraphs
             for para in doc.paragraphs:
@@ -13470,7 +13470,7 @@ def jobadder_ppc_placements():
         "detail_failures": detail_failures,
         "type_diagnostics": type_diagnostics,
         "warning": "; ".join(warning_parts),
-        "fetched_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
         "filters": {"start_date": start_date, "end_date": end_date, "approved_only": approved_only},
         "source": "JobAdder /v2/placements (type-complete pagination)",
         "read_only": True,

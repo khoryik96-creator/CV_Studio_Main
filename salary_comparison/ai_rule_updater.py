@@ -7,7 +7,7 @@ import re
 import socket
 from datetime import datetime, timezone
 from typing import Any, Callable, Optional
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -18,6 +18,8 @@ from .validators import RuleValidationError, validate_rule
 DEEPSEEK_URL = "https://api.deepseek.com/chat/completions"
 ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 MAX_SOURCE_BYTES = 10 * 1024 * 1024
+MAX_SOURCE_REDIRECTS = 5
+SOURCE_REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
 
 
 class AiRuleUpdateError(RuntimeError):
@@ -90,20 +92,33 @@ def _response_bytes(response: Any, max_bytes: int = MAX_SOURCE_BYTES) -> bytes:
 
 def fetch_official_source(url: str, max_chars: int = 60000) -> str:
     url = _public_source_url(url)
+    current_url = url
+    response = None
     try:
-        response = requests.get(
-            url,
-            headers={"User-Agent": "CVStudio-SalaryComparison/1.4", "Accept": "text/html,application/pdf,*/*"},
-            timeout=45,
-            stream=True,
-            allow_redirects=True,
-        )
+        for redirect_count in range(MAX_SOURCE_REDIRECTS + 1):
+            current_url = _public_source_url(current_url)
+            response = requests.get(
+                current_url,
+                headers={"User-Agent": "CVStudio-SalaryComparison/1.4", "Accept": "text/html,application/pdf,*/*"},
+                timeout=45,
+                stream=True,
+                allow_redirects=False,
+            )
+            if response.status_code not in SOURCE_REDIRECT_STATUSES:
+                break
+            location = str(response.headers.get("location") or "").strip()
+            response.close()
+            if not location:
+                raise AiRuleUpdateError("Official source returned a redirect without a destination.")
+            if redirect_count >= MAX_SOURCE_REDIRECTS:
+                raise AiRuleUpdateError("Official source redirected too many times.")
+            current_url = _public_source_url(urljoin(current_url, location))
+        if response is None:  # pragma: no cover - defensive loop invariant
+            raise AiRuleUpdateError("Unable to retrieve official source.")
         response.raise_for_status()
-        final_url = str(getattr(response, "url", url) or url)
-        _public_source_url(final_url)
         content = _response_bytes(response)
         content_type = response.headers.get("content-type", "").lower()
-        if "pdf" in content_type or url.lower().split("?", 1)[0].endswith(".pdf"):
+        if "pdf" in content_type or current_url.lower().split("?", 1)[0].endswith(".pdf"):
             reader = PdfReader(io.BytesIO(content))
             text = "\n".join(page.extract_text() or "" for page in reader.pages)
         else:
@@ -119,6 +134,9 @@ def fetch_official_source(url: str, max_chars: int = 60000) -> str:
         raise AiRuleUpdateError(f"Unable to retrieve official source {url}: {exc}") from exc
     except Exception as exc:
         raise AiRuleUpdateError(f"Unable to read official source {url}: {exc}") from exc
+    finally:
+        if response is not None:
+            response.close()
 
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r"\n{3,}", "\n\n", text).strip()

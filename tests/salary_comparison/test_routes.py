@@ -118,10 +118,12 @@ def test_unwritable_data_dir_returns_clean_handled_error(tmp_path):
     from flask import Flask
     import salary_comparison
 
+    blocked_parent = tmp_path / "not-a-directory"
+    blocked_parent.write_text("fixture", encoding="utf-8")
     application = Flask(__name__)
     application.config.update(
         TESTING=True,
-        SALARY_COMPARISON_DATA_DIR="/proc/nonexistent/cannot_create_here",
+        SALARY_COMPARISON_DATA_DIR=str(blocked_parent / "cannot-create-here"),
     )
     salary_comparison.init_app(application, url_prefix="/salary-comparison")
     response = application.test_client().get("/salary-comparison/api/config")

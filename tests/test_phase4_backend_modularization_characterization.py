@@ -443,6 +443,19 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "not a valid ZIP-based document"):
             app._validate_zip_payload(b"not-a-zip", "DOCX")
 
+        from PIL import Image
+
+        supported_image = io.BytesIO()
+        Image.new("RGB", (1, 1), "white").save(supported_image, format="PNG")
+        opened_image = app._safe_image_open(supported_image.getvalue())
+        self.assertEqual(opened_image.format, "PNG")
+        opened_image.close()
+
+        disguised_image = io.BytesIO()
+        Image.new("RGB", (1, 1), "white").save(disguised_image, format="GIF")
+        with self.assertRaisesRegex(ValueError, "Unsupported image format"):
+            app._safe_image_open(disguised_image.getvalue())
+
         headers = self._headers("phase4-document-characterization")
         expected_errors = {
             "/ocr": "No file provided. Send multipart form-data field named 'file'.",

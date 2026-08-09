@@ -172,7 +172,8 @@ class OutlookServiceStorageTests(unittest.TestCase):
         info = reopened.public_info()
         self.assertTrue(info["connected"])
         self.assertEqual(info["account"]["email"], "ada@example.invalid")
-        self.assertEqual(info["storage"], "machine_bound_file")
+        expected_storage = "windows_dpapi" if os.name == "nt" else "machine_bound_file"
+        self.assertEqual(info["storage"], expected_storage)
 
     def test_disconnect_clears_store_and_reports_disconnected(self):
         svc = _make_service(self._tmp)

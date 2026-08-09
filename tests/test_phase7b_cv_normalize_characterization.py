@@ -529,6 +529,26 @@ class ContinuousEmployerGroupingTests(unittest.TestCase):
 
         self.assertEqual(len(normalized["work_experiences"]), 2)
 
+    def test_partially_month_precise_same_employer_entries_are_not_assumed_continuous(self):
+        parsed = {
+            "work_experiences": [
+                {
+                    "company": "Example Co",
+                    "date_range": "2020 to Jan 2021",
+                    "roles": [{"title": "Manager", "date_range": "", "bullets": []}],
+                },
+                {
+                    "company": "Example Co",
+                    "date_range": "Feb 2019 to 2020",
+                    "roles": [{"title": "Analyst", "date_range": "", "bullets": []}],
+                },
+            ]
+        }
+
+        normalized = cn._normalize_cv_data_for_output(parsed)
+
+        self.assertEqual(len(normalized["work_experiences"]), 2)
+
     def test_undated_current_employer_and_role_keep_their_source_positions(self):
         experiences = [
             {"company": "Current Co", "date_range": ""},
@@ -707,6 +727,23 @@ class EducationAndSkillsConsistencyTests(unittest.TestCase):
             ["Mergers, Acquisitions & Integration", "P&L Leadership"],
         )
 
+    def test_core_expertise_splits_a_comma_paragraph_wrapped_in_one_list_item(self):
+        parsed = {
+            "skills": [
+                {
+                    "category": "Core Expertise",
+                    "items": ["Leadership, Strategy, Sales"],
+                }
+            ]
+        }
+
+        normalized = cn._normalize_cv_data_for_output(parsed)
+
+        self.assertEqual(
+            normalized["skills"][0]["items"],
+            ["Leadership", "Strategy", "Sales"],
+        )
+
 
 class SourceAdditionalSectionRecoveryTests(unittest.TestCase):
     SOURCE = """Other Information
@@ -824,6 +861,25 @@ Bachelor of Computer Science
                 ]
             },
         )
+
+    def test_recovery_stops_at_numbered_or_emphasized_marked_section_headings(self):
+        headings = ("1. EDUCATION", "* EDUCATION", "* Education:")
+
+        for heading in headings:
+            with self.subTest(heading=heading):
+                source = (
+                    "[PROJECT INVOLVEMENT HISTORY]:\n"
+                    "* Project Alpha\n"
+                    f"{heading}\n"
+                    "Bachelor of Computer Science\n"
+                )
+
+                recovered = cn._extract_recoverable_cv_source_sections(source)
+
+                self.assertEqual(
+                    recovered,
+                    {"Project Involvement History": ["Project Alpha"]},
+                )
 
     def test_removes_siva_metadata_and_only_keeps_source_grounded_github(self):
         parsed = {

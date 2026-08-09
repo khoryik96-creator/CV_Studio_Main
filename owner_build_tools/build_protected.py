@@ -28,16 +28,16 @@ import zipfile
 import zlib
 from pathlib import Path
 
-VERSION = "v24.6.283"
-VERSION_SLUG = "v24_6_283"
+VERSION = "v24.6.284"
+VERSION_SLUG = "v24_6_284"
 PRODUCT = "TheGuoLab-CVStudio"
 RECEIPT_SCHEMA = 2
 TOTP_MASK = bytes([147,57,36,83,116,245,122,57,165,162,176,168,249,50,204,128,45,174,232,56])
 TOTP_MASKED = bytes([49,16,244,145,19,123,118,27,71,171,180,177,120,122,255,68,100,150,118,10])
-ADM_ZIP_VERSION = "0.5.17"
-# Aggregate hash of the vetted unpacked adm-zip 0.5.17 file tree. This catches
-# a replaced/repacked dependency even when package.json still claims 0.5.17.
-ADM_ZIP_TREE_SHA256 = "a2919d0a2172129642be0d128b2725cfaf9c7ab3652f51cc85964cb34d618dea"
+ADM_ZIP_VERSION = "0.6.0"
+# Aggregate hash of the vetted unpacked adm-zip 0.6.0 file tree. This catches
+# a replaced/repacked dependency even when package.json still claims 0.6.0.
+ADM_ZIP_TREE_SHA256 = "8f58883815becd3cf6e02bb67d8c8edff5787ec6a5477521411ad4666d480bce"
 RELEASE_TARGETS = ("windows-x64", "macos-intel", "macos-arm64")
 
 RUNTIME_ASSETS = ("index.html","generate.js","template.docx","cv_studio_logo.png","cv_studio.ico","vendor")

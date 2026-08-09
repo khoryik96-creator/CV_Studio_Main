@@ -8,7 +8,7 @@ tests rebind ``_CVSTUDIO_SALARY_REPOSITORY`` / ``_SALARY_AI_CACHE_PATH`` and the
 code must observe the rebind. This module never imports ``app``.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class SalaryAiCacheService:
@@ -76,7 +76,7 @@ class SalaryAiCacheService:
             "components": components,
             "provider": provider,
             "model": model,
-            "savedAt": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+            "savedAt": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
         }
         with self._lock:
             try:
@@ -787,4 +787,3 @@ def _ja_update_candidate_salary_notice(candidate_id, fields, ai_components=None,
     except Exception as e:
         result.update({"ok": False, "skipped": False, "error": str(e)[:1000]})
         return result
-

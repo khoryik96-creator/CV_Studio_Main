@@ -222,6 +222,15 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   year-only dates and business-unit suffixes remain separate. Existing Core
   Expertise list items also keep internal commas while still rendering as
   bullets.
+  The v24.6.284 audit corrective closes the remaining marked-boundary and
+  partial-date gaps: numbered or emphasized marked headings terminate
+  Project/Training recovery, and same-employer grouping requires month precision
+  at every bounded endpoint. A three-or-more-item expertise paragraph wrapped in
+  a one-element provider list is restored to bullets while genuine comma-bearing
+  expertise phrases stay intact. The same release upgrades Pillow and adm-zip,
+  validates real image formats and every salary-source redirect before contact,
+  makes CI run the full pytest/JavaScript matrix, and removes the known Windows
+  platform-test, live-smoke header-case and Antiword release-lock flakes.
 - **AI Crawler ".doc: flag, don't decode"**: skip decoding an undecodable legacy
   `.doc` while still surfacing the candidate. Deferred pending measurement of
   whether `.doc` decode vs. PDF OCR is the real bottleneck; a naive attempt
