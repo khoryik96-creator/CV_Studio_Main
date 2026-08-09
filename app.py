@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.285"
+_INSTALL_RECEIPT_VERSION = "v24.6.286"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -318,7 +318,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.285"
+_CVSTUDIO_VERSION = "v24.6.286"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -3232,6 +3232,7 @@ from cvstudio_ja_answers import (
 )
 
 from cvstudio_ja_activity import (
+    JaActivityDiagnosticService,
     _ja_activity_diagnostic_network_error,
     _ja_activity_diagnostic_response_headers,
     _ja_activity_diagnostic_summary,
@@ -3368,7 +3369,7 @@ def _ja_spa_browser_bridge(candidate_id, fields, note_text="", email="", salary_
     payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
     compact_payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     script = """(async () => {
-  const helperVersion = 'v24.6.285';
+  const helperVersion = 'v24.6.286';
   const candidateId = %s;
   const payload = %s;
   const profilePath = %s;
@@ -3850,80 +3851,16 @@ def jobadder_onenote_log_screening():
     })
 
 
-def _ja_activity_diagnostic_get(path, timeout=25):
-    """Perform one exact read-only JobAdder OAuth GET and preserve the raw response.
+_JA_ACTIVITY_DIAGNOSTIC = JaActivityDiagnosticService(
+    access_token_provider=lambda: str(_ja_creds_store.get("access_token") or "").strip(),
+    refresh_access_token=lambda force=False: _ja_refresh_access_token(force=force),
+    api_url=_ja_api,
+    request_raw=lambda *a, **k: _JOBADDER_CLIENT.request_raw(*a, **k),
+)
 
-    The returned report deliberately excludes the OAuth token and request
-    Authorization header. Response bodies are not shortened so the user can
-    provide the complete model-binding evidence for review.
-    """
-    token = str(_ja_creds_store.get("access_token") or "").strip()
-    if not token:
-        raise PermissionError("Not authenticated")
-    url = _ja_api(path)
-    started = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-    try:
-        response = _JOBADDER_CLIENT.request_raw(
-            path,
-            method="GET",
-            token=token,
-            timeout=timeout,
-            headers={"Accept": "application/json, text/plain, */*"},
-        )
-        raw_text = response.body.decode("utf-8", errors="replace")
-        headers = _ja_activity_diagnostic_response_headers(response.headers)
-        parsed = None
-        if raw_text.strip():
-            try:
-                parsed = json.loads(raw_text)
-            except Exception:
-                parsed = None
-        return {
-            "method": "GET",
-            "path": path,
-            "url": url,
-            "started_utc": started,
-            "ok": True,
-            "status": int(response.status or 200),
-            "response_headers": headers,
-            "response_body": raw_text,
-            "response_json": parsed,
-        }
-    except urllib.error.HTTPError as e:
-        raw_bytes = e.read()
-        raw_text = raw_bytes.decode("utf-8", errors="replace")
-        headers = _ja_activity_diagnostic_response_headers(e.headers)
-        parsed = None
-        if raw_text.strip():
-            try:
-                parsed = json.loads(raw_text)
-            except Exception:
-                parsed = None
-        return {
-            "method": "GET",
-            "path": path,
-            "url": url,
-            "started_utc": started,
-            "ok": False,
-            "status": int(e.code),
-            "reason": str(getattr(e, "reason", "") or ""),
-            "response_headers": headers,
-            "response_body": raw_text,
-            "response_json": parsed,
-        }
-    except (urllib.error.URLError, ExternalServiceError) as e:
-        return {
-            "method": "GET",
-            "path": path,
-            "url": url,
-            "started_utc": started,
-            "ok": False,
-            "status": None,
-            "network_error": _ja_activity_diagnostic_network_error(e),
-            "response_headers": {},
-            "response_body": "",
-            "response_json": None,
-        }
+
+def _ja_activity_diagnostic_get(path, timeout=25):
+    return _JA_ACTIVITY_DIAGNOSTIC.get(path, timeout=timeout)
 
 
 @app.route("/jobadder/onenote_activity_diagnostic", methods=["POST"])
@@ -3980,80 +3917,7 @@ _JA_ACTIVITY_CREATE_DIAG_USED = set()
 
 
 def _ja_activity_diagnostic_post(path, payload, timeout=25):
-    """Send one OAuth POST and preserve the complete response for diagnostics.
-
-    Authentication/cookie headers are never copied into the returned report.
-    """
-    token = _ja_refresh_access_token(force=False)
-    if not token:
-        raise PermissionError("JobAdder is not connected")
-    url = _ja_api(path)
-    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    started = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-    base = {
-        "method": "POST",
-        "path": path,
-        "url": url,
-        "started_utc": started,
-        "request_payload": payload,
-    }
-    try:
-        response = _JOBADDER_CLIENT.request_raw(
-            path,
-            method="POST",
-            body=body,
-            token=token,
-            timeout=timeout,
-            headers={
-                "Accept": "application/json, text/plain, */*",
-                "Content-Type": "application/json; charset=utf-8",
-            },
-            safe_to_retry=False,
-            retries=0,
-        )
-        raw_text = response.body.decode("utf-8", errors="replace")
-        parsed = None
-        if raw_text.strip():
-            try:
-                parsed = json.loads(raw_text)
-            except Exception:
-                parsed = None
-        base.update({
-            "ok": True,
-            "status": int(response.status or 200),
-            "response_headers": _ja_activity_diagnostic_response_headers(response.headers),
-            "response_body": raw_text,
-            "response_json": parsed,
-        })
-        return base
-    except urllib.error.HTTPError as e:
-        raw_bytes = e.read()
-        raw_text = raw_bytes.decode("utf-8", errors="replace")
-        parsed = None
-        if raw_text.strip():
-            try:
-                parsed = json.loads(raw_text)
-            except Exception:
-                parsed = None
-        base.update({
-            "ok": False,
-            "status": int(e.code),
-            "reason": str(getattr(e, "reason", "") or ""),
-            "response_headers": _ja_activity_diagnostic_response_headers(e.headers),
-            "response_body": raw_text,
-            "response_json": parsed,
-        })
-        return base
-    except (urllib.error.URLError, ExternalServiceError) as e:
-        base.update({
-            "ok": False,
-            "status": None,
-            "network_error": _ja_activity_diagnostic_network_error(e),
-            "response_headers": {},
-            "response_body": "",
-            "response_json": None,
-        })
-        return base
+    return _JA_ACTIVITY_DIAGNOSTIC.post(path, payload, timeout=timeout)
 
 
 @app.route("/jobadder/onenote_activity_create_diagnostic", methods=["POST"])
