@@ -208,12 +208,20 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   The v24.6.280 post-merge corrective stops Project/Training source recovery at
   recognized ordinary CV headings so it cannot absorb later sections, and
   records the owner-authorized Antiword-rejection conversion exception in
-  `AGENTS.md`. The separate Summary-format experiment is not part of either
-  change and must remain unpushed and unmerged unless the owner later approves
-  it explicitly.
+  `AGENTS.md`. The separate Summary-format work is published only on
+  `chatgpt/v24.6.282-summary-table-options`; it is not part of these changes and
+  must remain unmerged unless the owner later approves it explicitly.
   The v24.6.281 follow-up also recognizes common combined boundaries such as
   Education & Certification, Professional Qualifications, Courses & Training,
   and Professional Affiliations.
+  The v24.6.283 review corrective preserves explicitly marked project/training
+  items even when their wording resembles a section heading, treats literal
+  `AND` like `&` in combined headings, and keeps undated current employers and
+  roles in their source positions. Continuous-employer grouping now requires
+  month-precise touching dates and only strips known broad location suffixes;
+  year-only dates and business-unit suffixes remain separate. Existing Core
+  Expertise list items also keep internal commas while still rendering as
+  bullets.
 - **AI Crawler ".doc: flag, don't decode"**: skip decoding an undecodable legacy
   `.doc` while still surfacing the candidate. Deferred pending measurement of
   whether `.doc` decode vs. PDF OCR is the real bottleneck; a naive attempt

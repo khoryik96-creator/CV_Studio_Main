@@ -54,13 +54,13 @@ this:
 | lone `-` / `--` bullets | marker-only residue | drop in `_normalize_cv_bullet_items` |
 | `No Degree` under a school | provider placeholder for a missing qualification | `_normalize_cv_data_for_output` clears known empty-degree placeholders both alone and after a `No Degree:` prefix |
 | `• a.`, `• 1-`, or `• a-` in the output | a bare source enumerator survived beside Word's own marker | `_CV_LEADING_BULLET_MARKER_RE` strips lower-case dot/hyphen and numeric-hyphen enumerators while preserving `3.5`, `5-star`, `-5%`, `i.e.`, capitalised initials and date ranges |
-| one continuous employer shown as several company blocks | provider split each promotion into a separate experience | `_merge_adjacent_continuous_company_stints` groups only neighbouring same-employer ranges that touch; gapped and non-adjacent returns remain separate, and merged roles are sorted newest-first |
-| an older employer appears before a newer employer | provider emitted inconsistent work-history order | `_sort_work_experiences_reverse_chronological` sorts dated employer blocks newest-first after safe grouping |
+| one continuous employer shown as several company blocks | provider split each promotion into a separate experience | `_merge_adjacent_continuous_company_stints` groups only neighbouring same-employer ranges with month-precise dates that touch; year-only dates, gapped/non-adjacent returns and business-unit suffixes remain separate, while known broad location suffixes can still group |
+| an older employer appears before a newer employer | provider emitted inconsistent work-history order | `_sort_work_experiences_reverse_chronological` sorts dated employer blocks newest-first after safe grouping without moving undated source entries out of position |
 | education shows years even though the source includes months | provider dropped month precision | `_recover_education_date_range` restores only a nearby source range whose start/end years match the parsed education entry |
-| Core Expertise alternates between bullets and one paragraph | provider returned `items` as an array, newline list, or comma-separated string in different runs | `_normalize_cv_structured_content` deterministically converts Core Expertise items into real Word bullets |
+| Core Expertise alternates between bullets and one paragraph | provider returned `items` as an array, newline list, or comma-separated string in different runs | `_normalize_cv_structured_content` deterministically converts Core Expertise items into real Word bullets; commas inside an already-structured list item remain part of that bullet |
 | `GitHub: https://github.com/unknown` appears without a source link | provider invented a placeholder portfolio URL | `_remove_ungrounded_cv_github_links` always removes the known placeholder, including source-free export; with source text it retains only matching GitHub paths and ignores terminal sentence periods |
 | `Position: Retrieved Resumes (SiVA folder: ...); Date Applied: ...` appears in Additional Information | JobStreet/SiVA application-routing metadata was mistaken for CV content | `_strip_cv_recruitment_tracking_metadata` removes the metadata at a line start or after a `|` item separator wherever the provider placed it |
-| Project Involvement History or Participated Training Programme is missing | provider truncated or skipped bracketed sections near the bottom of a long CV | `_recover_cv_source_additional_sections` restores every allowlisted source item, stops at recognized simple or combined CV headings, and removes training duplicates from certifications |
+| Project Involvement History or Participated Training Programme is missing | provider truncated or skipped bracketed sections near the bottom of a long CV | `_recover_cv_source_additional_sections` restores every allowlisted source item, stops at recognized simple or combined CV headings (`&` and literal `AND` are equivalent), preserves explicitly bulleted items even when their text resembles a heading, and removes training duplicates from certifications |
 | recovered Project/Training items are comma-separated in preview but bulleted in Word | browser preview flattened structured item arrays | `cvSkillPreviewHtml` uses the same multiple-items-as-bullets rule as `generate.js` |
 
 ### Key files/functions (`cvstudio_cv_normalize.py`)
@@ -88,7 +88,9 @@ this:
   explicitly bracketed Project Involvement History and Participated Training
   Programme lists. Exact source wording and order are retained, and recognized
   ordinary CV headings, including combined headings such as Education &
-  Certification, terminate recovery so later sections are not absorbed.
+  Certification or Education AND Certification, terminate recovery so later
+  sections are not absorbed. An explicitly marked bullet remains an item even
+  when its wording also appears in the heading allowlist.
 - **`_remove_ungrounded_cv_github_links`** — always removes the known placeholder;
   when source text is available, removes any other provider-emitted GitHub path
   that cannot be matched to the extracted source CV.
