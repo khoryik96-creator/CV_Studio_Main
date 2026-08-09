@@ -33,10 +33,11 @@ _APPROVED_MARKERS = ("best-effort", "broad-except-ok", "cleanup-only")
 # Frozen baseline of UNMARKED pass-only broad handlers per file. Numbers may only
 # go DOWN. Any increase — or a new file appearing here — fails the ratchet.
 _BASELINE = {
-    "app.py": 82,
+    "app.py": 79,
     "cvstudio_salary_parse.py": 1,
     "cvstudio_ja_salary_notice.py": 1,
     "cvstudio_ja_salary_ai.py": 2,
+    "cvstudio_ja_activity.py": 3,
     "cvstudio_msgraph.py": 17,
     "cvstudio_clients.py": 6,
     "cvstudio_lead_cache.py": 6,

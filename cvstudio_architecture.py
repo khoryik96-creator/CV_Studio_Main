@@ -187,6 +187,12 @@ DEFAULT_MODULES = (
         ("spider_boolean",),
     ),
     ModuleDefinition(
+        "spider_documents",
+        "domain",
+        ("cvstudio_spider_documents.py",),
+        ("spider_boolean", "spider_summary"),
+    ),
+    ModuleDefinition(
         "ja_typos",
         "domain",
         ("cvstudio_ja_typos.py",),
@@ -201,6 +207,18 @@ DEFAULT_MODULES = (
         "ja_answers",
         "domain",
         ("cvstudio_ja_answers.py",),
+    ),
+    ModuleDefinition(
+        "ja_activity",
+        "domain",
+        ("cvstudio_ja_activity.py",),
+        ("external_clients",),
+    ),
+    ModuleDefinition(
+        "ja_screening",
+        "domain",
+        ("cvstudio_ja_screening.py",),
+        ("ja_answers",),
     ),
     ModuleDefinition(
         "ja_salary_notice",

@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.284"
+_INSTALL_RECEIPT_VERSION = "v24.6.285"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -318,7 +318,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.284"
+_CVSTUDIO_VERSION = "v24.6.285"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -3230,418 +3230,28 @@ from cvstudio_ja_answers import (
     _ja_answer_model_bundle,
     _ja_split_text_rating_answers,
 )
-_ONENOTE_JA_SCREENING_QUESTIONS_BASE = [
-    (41172, "Brief Overview of Experience", "brief_overview"),
-    (41173, "Reason For Leaving", "reason_leaving"),
-    (41174, "Looking For", "looking_for"),
-    (41175, "Current Salary Breakdown", "current_salary_breakdown"),
-    (41176, "Expected Salary", "expected_salary"),
-    (41177, "Notice Period", "notice_period"),
-    (35900, "Leads - Follow format: Active (Client - Role, Stage, Y/N)  Y denotes agency representation", "leads"),
-    (41178, "Remarks and things to take note", "remarks"),
-]
 
+from cvstudio_ja_activity import (
+    _ja_activity_diagnostic_network_error,
+    _ja_activity_diagnostic_response_headers,
+    _ja_activity_diagnostic_summary,
+    _ja_activity_id_from_post_result,
+    _ja_activity_ids_from_list_result,
+)
 
-def _onenote_screening_remarks_value(fields, note_text=""):
-    remarks = _onenote_clean_field_value(
-        (fields or {}).get("remarks")
-        or (fields or {}).get("red_flags")
-        or (fields or {}).get("next_steps")
-        or (fields or {}).get("raw_presentability")
-        or ""
-    )
-    if remarks:
-        return remarks
-    # Keep remarks blank unless the note explicitly has a remarks-ish field.
-    # Full raw note is not copied here to avoid dumping excessive text into a
-    # tenant-specific field that is often meant for brief recruiter reminders.
-    return ""
-
-
-def _onenote_presentability_rating_int(fields):
-    """Return a strict Presentability rating from 1 to 4, or ``None``.
-
-    Accept the normal one-digit value, an explicit ``3/4`` / ``3 out of 4``
-    score, or a labelled ``rating 3`` form.  Do not pull a stray 1-4 digit from
-    values such as ``14``, ``40``, ``10/4`` or ``4 years``.
-    """
-    text = str((fields or {}).get("presentability_rating") or "").strip()
-    if not text:
-        return None
-    m = re.fullmatch(
-        r"(?:presentability|rating|score)?\s*[:=\-–—]?\s*([1-4])"
-        r"(?:\s*(?:/\s*4|out\s+of\s+4))?"
-        r"(?:\s*[-–—:]\s*[^\d].*)?",
-        text,
-        re.I,
-    )
-    if not m:
-        m = re.fullmatch(r"\s*[^\d]{0,60}([1-4])\s*(?:/\s*4|out\s+of\s+4)\s*", text, re.I)
-    return int(m.group(1)) if m else None
-
-
-
-
-def _ja_screening_call_answers(fields, note_text="", presentability_question_id=None, presentability_mode="numeric"):
-    fields = fields or {}
-    rating = _onenote_presentability_rating_int(fields)
-    values = {
-        "brief_overview": _onenote_clean_field_value(fields.get("brief_overview", ""), max_len=8000),
-        "reason_leaving": _onenote_clean_field_value(fields.get("reason_leaving", "")),
-        "looking_for": _onenote_clean_field_value(fields.get("looking_for", "")),
-        "current_salary_breakdown": _onenote_clean_field_value(fields.get("current_salary_breakdown", "")),
-        "expected_salary": _onenote_clean_field_value(fields.get("expected_salary", "")),
-        "notice_period": _onenote_clean_field_value(fields.get("notice_period", "")),
-        "leads": _onenote_clean_field_value(fields.get("leads", "")),
-        "remarks": _onenote_screening_remarks_value(fields, note_text),
-    }
-    answers = []
-    for qid, qtext, key in _ONENOTE_JA_SCREENING_QUESTIONS_BASE:
-        answers.append({
-            "questionID": qid,
-            "questionText": qtext,
-            "textValue": values.get(key, ""),
-            "startDateValue": None,
-            "endDateValue": None,
-            "numberValue": None,
-            "numericValue": None,
-            "decimalValue": None,
-            "booleanValue": None,
-            "singleSelectValue": None,
-            "multiSelectValue": [],
-        })
-    answers.append(_ja_presentability_answer(
-        presentability_question_id or _ONENOTE_JA_PRESENTABILITY_QUESTION_IDS[0],
-        "Presentability (Confidence, Comms, Business Awareness)",
-        rating or "",
-        mode=presentability_mode,
-    ))
-    return answers
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-def _ja_browser_activity_answer_list_payload_variants(candidate_id, fields, note_text, reference):
-    """Build browser-observed answer-list payloads for JobAdder API.
-
-    v24.6.116: the user's successful JobAdder SPA save shows the tenant stores
-    Screening Call fields as a flat answers array. The public candidate activity
-    API rejects answers as a raw array, but its .NET error reveals that inside
-    ActivityAnswerListModel, textAnswers must be an IList[ActivityTextAnswerModel]
-    rather than a questionID map. Try object-wrapping the exact browser answer
-    models as answers.textAnswers = [ ... ], including Presentability 62988 with
-    numericValue + textValue.
-    """
-    raw_answers = _ja_screening_call_answers(
-        fields,
-        note_text,
-        presentability_question_id=_ONENOTE_JA_PRESENTABILITY_QUESTION_IDS[0],
-        presentability_mode="number",
-    )
-    rating_int = _onenote_presentability_rating_int(fields)
-    answer_list = []
-    text_list = []
-    rating_list = []
-    for a in raw_answers:
-        qid = a.get("questionID") or a.get("questionId")
-        if not qid:
-            continue
-        qid_int = _ja_maybe_int(qid)
-        is_rating = _ja_answer_is_presentability(a)
-        model = {
-            "questionID": qid_int,
-            "questionText": a.get("questionText") or ("Presentability (Confidence, Comms, Business Awareness)" if is_rating else ""),
-            "textValue": str(rating_int) if is_rating else (a.get("textValue") or ""),
-            "numericValue": rating_int if is_rating else None,
-            "startDateValue": None,
-            "endDateValue": None,
-        }
-        answer_list.append(dict(model))
-        if is_rating:
-            rating_list.append(dict(model))
-        else:
-            text_list.append(dict(model))
-
-    answers_payloads = [
-        {"textAnswers": answer_list},
-        {"textAnswers": text_list, "ratingAnswers": rating_list},
-        {"activityTextAnswers": answer_list},
-        {"activityAnswers": answer_list},
-        {"questionAnswers": answer_list},
-        {"items": answer_list},
-        {"answers": answer_list},
-        {"values": answer_list},
-        {"TextAnswers": answer_list},
-        {"TextAnswers": text_list, "RatingAnswers": rating_list},
-        {"ActivityAnswers": answer_list},
-        {"Items": answer_list},
-    ]
-    variants = []
-    for answers_payload in answers_payloads:
-        payload = _ja_candidate_screening_call_base_payload(candidate_id, reference=reference)
-        payload["answers"] = answers_payload
-        variants.append(payload)
-    return variants
-
-
-def _ja_precise_qid_activity_payload_variants(candidate_id, fields, note_text, reference):
-    """Build precise v105 JobAdder answer-map attempts before older guesses."""
-    answers = _ja_screening_call_answers(
-        fields,
-        note_text,
-        presentability_question_id=_ONENOTE_JA_PRESENTABILITY_QUESTION_IDS[0],
-        presentability_mode="number",
-    )
-    rating = _onenote_presentability_rating_int(fields)
-    variants = []
-    for answers_payload in _ja_answer_model_qid_list_payloads_v105(answers, rating):
-        payload = _ja_candidate_screening_call_base_payload(candidate_id, reference=reference)
-        payload["answers"] = answers_payload
-        variants.append(payload)
-    return variants
-
-def _ja_candidate_screening_call_payload(candidate_id, fields, note_text, reference=None, activity_id=None, answers_shape="items", presentability_question_id=None, presentability_mode="numeric"):
-    cid_value = _ja_maybe_int(candidate_id)
-    answers = _ja_screening_call_answers(fields, note_text, presentability_question_id=presentability_question_id, presentability_mode=presentability_mode)
-    rating_required_validation = None
-    if answers_shape.startswith("top_rating_"):
-        rating = _onenote_presentability_rating_int(fields)
-        text_answers, rating_answers, rating_by_qid = _ja_split_text_rating_answers(answers, rating)
-        if answers_shape == "top_rating_items":
-            answers_payload = {"items": text_answers}
-        elif answers_shape == "top_rating_text_answers":
-            answers_payload = {"textAnswers": text_answers, "items": text_answers}
-        elif answers_shape == "top_rating_map":
-            answers_payload = {str(a.get("questionID")): {"questionID": a.get("questionID"), "textValue": a.get("textValue") or ""} for a in text_answers}
-        elif answers_shape == "top_rating_questions":
-            answers_payload = {"questions": text_answers, "values": text_answers}
-        else:
-            answers_payload = {"items": text_answers}
-        rating_required_validation = {"rating_answers": rating_answers, "rating_by_qid": rating_by_qid}
-    elif answers_shape == "array":
-        answers_payload = answers
-    elif answers_shape == "map_full":
-        answers_payload = {str(a.get("questionID")): dict(a) for a in answers}
-    elif answers_shape == "map_text":
-        answers_payload = {str(a.get("questionID")): (a.get("textValue") or "") for a in answers}
-    elif answers_shape == "map_value":
-        answers_payload = {}
-        for a in answers:
-            qid = str(a.get("questionID"))
-            val = a.get("textValue")
-            if not val and (a.get("ratingValue") is not None or a.get("numericValue") is not None or a.get("numberValue") is not None):
-                val = a.get("ratingValue") if a.get("ratingValue") is not None else (a.get("numericValue") if a.get("numericValue") is not None else a.get("numberValue"))
-            answers_payload[qid] = val if val is not None else ""
-    elif answers_shape == "map_compact":
-        answers_payload = {}
-        for a in answers:
-            qid = str(a.get("questionID"))
-            if a.get("ratingValue") is not None or a.get("numericValue") is not None or a.get("numberValue") is not None:
-                answers_payload[qid] = {
-                    "questionID": a.get("questionID"),
-                    "questionId": a.get("questionID"),
-                    "ratingValue": a.get("ratingValue") if a.get("ratingValue") is not None else a.get("numericValue"),
-                    "rating": a.get("rating") if a.get("rating") is not None else a.get("numericValue"),
-                    "value": a.get("value") if a.get("value") is not None else a.get("numericValue"),
-                    "numericValue": a.get("numericValue"),
-                    "numberValue": a.get("numberValue"),
-                    "textValue": a.get("textValue") or str(a.get("numericValue") or a.get("numberValue") or ""),
-                }
-            else:
-                answers_payload[qid] = {
-                    "questionID": a.get("questionID"),
-                    "questionId": a.get("questionID"),
-                    "textValue": a.get("textValue") or "",
-                }
-    elif answers_shape.startswith("rating_map_"):
-        rating = _onenote_presentability_rating_int(fields)
-        payloads = _ja_rating_map_answer_payloads(answers, rating)
-        try:
-            idx = int(answers_shape.rsplit("_", 1)[-1])
-        except Exception:
-            idx = 0
-        answers_payload = payloads[idx] if 0 <= idx < len(payloads) else payloads[0]
-    elif answers_shape in ("answer_bundle", "answer_bundle_object", "answer_bundle_pascal", "answer_bundle_maps", "answer_bundle_values"):
-        rating = _onenote_presentability_rating_int(fields)
-        bundle_mode = {
-            "answer_bundle": "camel",
-            "answer_bundle_object": "camel_object",
-            "answer_bundle_pascal": "pascal",
-            "answer_bundle_maps": "maps",
-            "answer_bundle_values": "dollar_values",
-        }.get(answers_shape, "camel")
-        answers_payload = _ja_answer_model_bundle(answers, rating, bundle_mode=bundle_mode)
-    else:
-        wrappers = {
-            "items": {"items": answers},
-            "answers": {"answers": answers},
-            "activityAnswers": {"activityAnswers": answers},
-            "values": {"values": answers},
-            "questions": {"questions": answers},
-        }
-        answers_payload = wrappers.get(answers_shape) or {"items": answers}
-    payload = {
-        "activitySettingID": _ONENOTE_JA_SCREENING_SETTING_ID,
-        "actionName": "Candidate Screening Call",
-        "activityType": "Screening",
-        "answers": answers_payload,
-        "attachments": [],
-        "entity": {"entityID": cid_value},
-        "entityID": cid_value,
-        "mentionedUserIDs": [],
-        "status": None,
-        "task": None,
-    }
-    if rating_required_validation:
-        rating_answers = rating_required_validation.get("rating_answers") or []
-        rating_by_qid = rating_required_validation.get("rating_by_qid") or {}
-        payload.update({
-            "ratingAnswers": rating_answers,
-            "ratings": rating_answers,
-            "ratingQuestionAnswers": rating_answers,
-            "activityRatingAnswers": rating_answers,
-            "ratingValues": rating_answers,
-            "ratingsByQuestionID": rating_by_qid,
-            "ratingAnswersByQuestionID": rating_by_qid,
-        })
-    if reference:
-        payload["reference"] = reference
-    # Optional only: if a future diagnostic captures a required draft activityID,
-    # the UI/backend can pass it without hard-coding the user's sample ID.
-    if activity_id:
-        payload["activityID"] = _ja_maybe_int(activity_id)
-    return payload
-
-
-def _ja_activity_payload_variants(candidate_id, activity_type, subject, note_text, fields, reference, now_utc):
-    """Build JobAdder candidate activity payload variants.
-
-    v24.6.97: Live diagnostics show candidates/{id}/activities is the
-    reachable endpoint, but it rejects answers[] and expects an answers object
-    (ActivityAnswerListModel). Therefore the first variants use exact tenant
-    IDs with answers wrapped as objects. Browser-like answers[] remains last
-    only for diagnostics.
-    """
-    cid = str(candidate_id or "")
-    exact_variants = []
-    # v24.6.116: Presentability is a mandatory 1-4 button/rating in JobAdder,
-    # not a free-text field.  Try rating/numeric/select payloads before the
-    # older text-style fallback.  Keep the attempt list short enough to avoid
-    # slow transfers/timeouts.
-    # Keep attempts limited: the user's captured browser payload confirms
-    # Presentability questionID 62988, while 52988 is only a historical fallback.
-    primary_presentability_qid = _ONENOTE_JA_PRESENTABILITY_QUESTION_IDS[0]
-    # v24.6.116: the successful JobAdder SPA payload is a flat answers array.
-    # The API rejects answers as a raw array, but its model binder says
-    # answers.textAnswers must be an IList. Try answers.textAnswers = [models]
-    # first, including Presentability 62988 as numericValue/textValue.
-    exact_variants.extend(_ja_browser_activity_answer_list_payload_variants(cid, fields, note_text, reference))
-    # v24.6.106 fallback: qid-map/list variants retained for diagnostics.
-    exact_variants.extend(_ja_precise_qid_activity_payload_variants(cid, fields, note_text, reference))
-    # v24.6.116: try top-level rating collections before answer-object
-    # variants, because live JobAdder says the mandatory rating question is
-    # still missing even though the endpoint and activity setting are valid.
-    # First try answer-object shapes that explicitly expose rating values by
-    # question ID. This targets JobAdder's ActivityAnswerListModel binding where
-    # normal answers are object-wrapped but rating controls require a separate
-    # rating map/typed answer.
-    for p_mode in ("rating_full", "rating_value", "number", "single_int"):
-        for shape in ("rating_map_0", "rating_map_1", "rating_map_2", "rating_map_3", "rating_map_4", "rating_map_5", "rating_map_6"):
-            exact_variants.append(_ja_candidate_screening_call_payload(
-                cid, fields, note_text, reference=reference,
-                answers_shape=shape, presentability_question_id=primary_presentability_qid,
-                presentability_mode=p_mode,
-            ))
-    for p_mode in ("rating_full", "rating_value", "number", "single_int"):
-        for shape in ("top_rating_items", "top_rating_text_answers", "top_rating_map", "top_rating_questions"):
-            exact_variants.append(_ja_candidate_screening_call_payload(
-                cid, fields, note_text, reference=reference,
-                answers_shape=shape, presentability_question_id=primary_presentability_qid,
-                presentability_mode=p_mode,
-            ))
-    # v24.6.116: diagnostics still say the mandatory rating question is not
-    # bound. Try richer ActivityAnswerListModel-style objects before older maps.
-    for p_mode in ("rating_full", "rating_value", "number", "single_int"):
-        for shape in ("answer_bundle", "answer_bundle_object", "answer_bundle_pascal", "answer_bundle_maps", "answer_bundle_values", "map_full", "map_compact", "map_value", "items"):
-            exact_variants.append(_ja_candidate_screening_call_payload(
-                cid, fields, note_text, reference=reference,
-                answers_shape=shape, presentability_question_id=primary_presentability_qid,
-                presentability_mode=p_mode,
-            ))
-    # Fallbacks only if the tenant still expects a different legacy ID/shape.
-    for presentability_qid in _ONENOTE_JA_PRESENTABILITY_QUESTION_IDS[1:]:
-        for shape in ("map_full", "map_compact", "items"):
-            exact_variants.append(_ja_candidate_screening_call_payload(
-                cid, fields, note_text, reference=reference,
-                answers_shape=shape, presentability_question_id=presentability_qid,
-                presentability_mode="rating_full",
-            ))
-    # Late diagnostics only: retained for tenants that unexpectedly accept the
-    # original browser-like array or text maps.
-    for shape in ("answers", "map_text", "array"):
-        exact_variants.append(_ja_candidate_screening_call_payload(
-            cid, fields, note_text, reference=reference,
-            answers_shape=shape, presentability_question_id=primary_presentability_qid,
-            presentability_mode="text",
-        ))
-
-    base = {
-        "type": activity_type,
-        "activityType": activity_type,
-        "activityTypeName": activity_type,
-        "subject": subject,
-        "title": subject,
-        "description": note_text,
-        "text": note_text,
-        "comments": note_text,
-        "comment": note_text,
-        "note": note_text,
-        "completed": True,
-        "completedAt": now_utc,
-        "date": now_utc,
-        "reference": reference,
-        "fields": fields,
-        "answers": {"items": _ja_screening_call_answers(fields, note_text)},
-    }
-    with_candidate = dict(base)
-    with_candidate.update({
-        "entityType": "candidate",
-        "candidateId": cid,
-        "candidate_id": cid,
-        "entityId": cid,
-        "entityID": _ja_maybe_int(cid),
-        "entity": {"entityID": _ja_maybe_int(cid)},
-        "candidate": {"candidateId": cid, "id": cid},
-    })
-    setting_named = dict(base)
-    setting_named.update({
-        "candidateId": cid,
-        "activitySettingID": _ONENOTE_JA_SCREENING_SETTING_ID,
-        "activitySetting": {"name": "Candidate Screening Call", "id": _ONENOTE_JA_SCREENING_SETTING_ID},
-        "activitySettingName": "Candidate Screening Call",
-        "actionName": "Candidate Screening Call",
-        "activityType": "Screening",
-        "isCompleted": True,
-    })
-    return exact_variants + [setting_named, with_candidate, base]
-
+from cvstudio_ja_screening import (
+    _ONENOTE_JA_SCREENING_QUESTIONS_BASE,
+    _ja_activity_payload_variants,
+    _ja_browser_activity_answer_list_payload_variants,
+    _ja_candidate_screening_call_payload,
+    _ja_precise_qid_activity_payload_variants,
+    _ja_screening_call_answers,
+    _ja_spa_screening_call_answers,
+    _ja_spa_screening_call_payload,
+    _onenote_clean_field_value,
+    _onenote_presentability_rating_int,
+    _onenote_screening_remarks_value,
+)
 
 
 def _onenote_clean_note_text(value, max_len=25000):
@@ -3659,15 +3269,6 @@ def _onenote_clean_note_text(value, max_len=25000):
 _ONENOTE_SCREENING_REQUIRED_FIELDS = [
     ("presentability_rating", "Presentability rating 1-4"),
 ]
-
-def _onenote_clean_field_value(value, max_len=4000):
-    text = re.sub(r"\r\n?", "\n", str(value or ""))
-    text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", " ", text)
-    text = re.sub(r"[ \t]+", " ", text)
-    text = re.sub(r"\n{3,}", "\n\n", text).strip()
-    if len(text) > max_len:
-        text = text[:max_len].rstrip() + "…"
-    return text
 
 def _onenote_normalize_screening_fields(value):
     if not isinstance(value, dict):
@@ -3712,97 +3313,6 @@ def _jobadder_web_base():
         region = m.group(1) or ((m.group(2) or "") + ".jobadder.com")
         return "https://" + region
     return "https://app.jobadder.com"
-
-
-def _ja_spa_screening_call_answers(fields, note_text="", include_extended=False):
-    """Return the flat answer array observed from JobAdder's SPA UI.
-
-    v24.6.116: the user captured a successful *new* Candidate Screening Call
-    create request. The SPA create route posts to
-    /spa/api/candidates/{id}/activities/standardactivity and includes only the
-    standard six text questions plus Presentability. Older edit requests can
-    include additional Leads/Remarks questions, but sending them during create
-    is less safe, so the browser-create helper defaults to the captured create
-    shape.
-    """
-    fields = fields or {}
-    rating = _onenote_presentability_rating_int(fields)
-    rating = int(rating) if str(rating or "").strip().isdigit() else None
-    values = {
-        "brief_overview": _onenote_clean_field_value(fields.get("brief_overview", ""), max_len=8000),
-        "reason_leaving": _onenote_clean_field_value(fields.get("reason_leaving", "")),
-        "looking_for": _onenote_clean_field_value(fields.get("looking_for", "")),
-        "current_salary_breakdown": _onenote_clean_field_value(fields.get("current_salary_breakdown", "")),
-        "expected_salary": _onenote_clean_field_value(fields.get("expected_salary", "")),
-        "notice_period": _onenote_clean_field_value(fields.get("notice_period", "")),
-        "leads": _onenote_clean_field_value(fields.get("leads", "")),
-        "remarks": _onenote_screening_remarks_value(fields, note_text),
-    }
-    question_rows = [
-        (41172, "Brief Overview of Experience", "brief_overview"),
-        (41173, "Reason For Leaving", "reason_leaving"),
-        (41174, "Looking For?", "looking_for"),
-        (41175, "Current Salary Breakdown", "current_salary_breakdown"),
-        (41176, "Expected Salary", "expected_salary"),
-        (41177, "Notice Period", "notice_period"),
-    ]
-    if include_extended:
-        question_rows.extend([
-            (35900, "Leads - Follow format: Active (Client - Role, Stage, Y/N)  Y denotes agency representation", "leads"),
-            (41178, "Remarks and things to take note", "remarks"),
-        ])
-    answers = []
-    # v24.6.116: user clarified that if Brief Overview / Summary is empty,
-    # leave Brief Overview blank instead of stuffing the raw OneNote note there.
-    # Other standard create fields still use N/A when absent to avoid vague
-    # JobAdder 500s on empty required text fields.
-    for qid, qtext, key in question_rows:
-        text_value = values.get(key, "")
-        if not text_value and key != "brief_overview":
-            text_value = "N/A"
-        answers.append({
-            "questionID": qid,
-            "questionText": qtext,
-            "textValue": text_value,
-            "startDateValue": None,
-            "endDateValue": None,
-            "numericValue": None,
-        })
-    answers.append({
-        "questionID": _ONENOTE_JA_PRESENTABILITY_QUESTION_IDS[0],
-        "questionText": "Presentability (Confidence, Comms, Business Awareness)",
-        "textValue": str(rating or ""),
-        "startDateValue": None,
-        "endDateValue": None,
-        "numericValue": rating,
-    })
-    return answers
-
-
-def _ja_spa_screening_call_payload(candidate_id, fields, note_text="", activity_id=None, include_extended=False):
-    """Build the JobAdder browser-SPA payload captured from manual Network requests.
-
-    This payload is not sent by the Flask backend. It is used to generate a
-    console helper script that the user runs inside their already-authenticated
-    JobAdder browser tab, so cookies/tokens never need to be copied into CV Studio.
-    """
-    cid_value = _ja_maybe_int(candidate_id)
-    payload = {
-        "activityID": _ja_maybe_int(activity_id) if activity_id else 0,
-        "activitySettingID": _ONENOTE_JA_SCREENING_SETTING_ID,
-        "actionName": "Candidate Screening Call",
-        "activityType": "Screening",
-        "answers": _ja_spa_screening_call_answers(fields, note_text, include_extended=include_extended),
-        "attachments": None,
-        "entity": {"entityID": cid_value},
-        "entityID": cid_value,
-        "mentionedUserIDs": None,
-        "status": None,
-        "task": "",
-    }
-    return payload
-
-
 
 
 from cvstudio_ja_salary_notice import (
@@ -3858,7 +3368,7 @@ def _ja_spa_browser_bridge(candidate_id, fields, note_text="", email="", salary_
     payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
     compact_payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     script = """(async () => {
-  const helperVersion = 'v24.6.284';
+  const helperVersion = 'v24.6.285';
   const candidateId = %s;
   const payload = %s;
   const profilePath = %s;
@@ -4340,23 +3850,6 @@ def jobadder_onenote_log_screening():
     })
 
 
-
-def _ja_activity_diagnostic_response_headers(headers):
-    """Keep useful response metadata while excluding cookie/authentication headers."""
-    blocked = {"set-cookie", "set-cookie2", "authorization", "proxy-authorization"}
-    try:
-        return {str(k): str(v) for k, v in headers.items() if str(k).lower() not in blocked}
-    except Exception:
-        return {}
-
-
-def _ja_activity_diagnostic_network_error(error):
-    """Preserve the legacy diagnostic field with shared-client redaction."""
-    if isinstance(error, ExternalServiceError):
-        return str(getattr(error, "safe_detail", "") or error)
-    return str(getattr(error, "reason", error))
-
-
 def _ja_activity_diagnostic_get(path, timeout=25):
     """Perform one exact read-only JobAdder OAuth GET and preserve the raw response.
 
@@ -4431,19 +3924,6 @@ def _ja_activity_diagnostic_get(path, timeout=25):
             "response_body": "",
             "response_json": None,
         }
-
-
-def _ja_activity_diagnostic_summary(request_results):
-    """Return a conservative summary without guessing undocumented API behavior."""
-    statuses = [r.get("status") for r in (request_results or [])]
-    numeric_statuses = [s for s in statuses if isinstance(s, int)]
-    if any(200 <= s < 300 for s in numeric_statuses):
-        return "At least one OAuth activity GET succeeded. Review the complete response body for the saved Screening Call and Presentability answer model."
-    if len(numeric_statuses) == 2 and all(s in (404, 405) for s in numeric_statuses):
-        return "Both OAuth activity GET routes returned 404/405. This is evidence that these read routes are unavailable, but the exact POST response must still be reviewed separately before making a final endpoint conclusion."
-    if any(s in (401, 403) for s in numeric_statuses):
-        return "JobAdder rejected at least one read request as unauthorised. Reconnect JobAdder OAuth before interpreting endpoint availability."
-    return "The read requests did not expose a successful activity model. Review each full status and response body before deciding the next controlled test."
 
 
 @app.route("/jobadder/onenote_activity_diagnostic", methods=["POST"])
@@ -4574,56 +4054,6 @@ def _ja_activity_diagnostic_post(path, payload, timeout=25):
             "response_json": None,
         })
         return base
-
-
-def _ja_activity_ids_from_list_result(result):
-    parsed = (result or {}).get("response_json")
-    if not isinstance(parsed, dict):
-        return []
-    items = parsed.get("items")
-    if not isinstance(items, list):
-        return []
-    out = []
-    for item in items:
-        if not isinstance(item, dict):
-            continue
-        value = item.get("activityId")
-        if value is None:
-            value = item.get("activityID")
-        try:
-            out.append(int(value))
-        except Exception:
-            pass
-    return out
-
-
-def _ja_activity_id_from_post_result(result):
-    parsed = (result or {}).get("response_json")
-    if isinstance(parsed, dict):
-        for key in ("activityId", "activityID"):
-            value = parsed.get(key)
-            try:
-                return int(value)
-            except Exception:
-                pass
-        for container_key in ("activity", "item", "result", "data"):
-            child = parsed.get(container_key)
-            if isinstance(child, dict):
-                for key in ("activityId", "activityID"):
-                    value = child.get(key)
-                    try:
-                        return int(value)
-                    except Exception:
-                        pass
-    headers = (result or {}).get("response_headers") or {}
-    for key, value in headers.items():
-        if str(key).lower() == "location":
-            m = re.search(r"/activities/(\d+)(?:$|[/?#])", str(value))
-            if m:
-                return int(m.group(1))
-    return None
-
-
 
 
 @app.route("/jobadder/onenote_activity_create_diagnostic", methods=["POST"])
@@ -4774,6 +4204,7 @@ from cvstudio_spider_boolean import (
     _spider_boolean_tokens,
     _spider_candidate_blob,
     _spider_candidate_id,
+    _spider_candidate_search_key,
     _spider_clean_doc_text_for_preview,
     _spider_country_aliases,
     _spider_country_match,
@@ -4783,9 +4214,11 @@ from cvstudio_spider_boolean import (
     _spider_has_any,
     _spider_hit_terms,
     _spider_location_identity,
+    _spider_mark_plain_keyword_candidates,
     _spider_max_years_value,
     _spider_min_years_value,
     _spider_normalized_record_label,
+    _spider_parse_candidate_items,
     _spider_parse_employment_month,
     _spider_pick_field_text,
     _spider_residential_classes,
@@ -4803,14 +4236,20 @@ from cvstudio_spider_boolean import (
 )
 
 from cvstudio_spider_summary import (
+    _spider_attachment_candidates,
+    _spider_attachment_fingerprint,
     _spider_card_fields,
     _spider_custom_field_value,
     _spider_custom_record_key,
+    _spider_download_content_identity,
+    _spider_filename_from_disposition,
     _spider_merge_candidate_summary_and_detail,
     _spider_merge_missing_json,
     _spider_merge_record_lists,
     _spider_notice_snapshot,
     _spider_number,
+    _spider_preview_name,
+    _spider_preview_text_from_detail,
     _spider_salary_snapshot,
     _spider_work_record_key,
 )
@@ -4829,6 +4268,18 @@ from cvstudio_spider_score import (
     _spider_strip_context_fit_term,
     _spider_strip_jd_heading_prefix,
     _spider_weighted_coverage,
+)
+
+from cvstudio_spider_documents import (
+    _document_content_kind,
+    _document_image_extension,
+    _document_is_legacy_doc,
+    _spider_apply_visual_search_state,
+    _spider_doc_text_quality_ok,
+    _spider_is_image_download,
+    _spider_is_legacy_word_doc_bytes,
+    _spider_prefetch_should_defer_ocr,
+    _spider_search_text_from_visual_payload,
 )
 
 from cvstudio_ja_typos import (
@@ -5008,12 +4459,6 @@ def _spider_resume_text_cache_clear():
         _SPIDER_PREVIEW_PAYLOAD_CACHE_BYTES = 0
 
 
-def _spider_download_content_identity(raw):
-    if not isinstance(raw, (bytes, bytearray)) or not raw:
-        return ""
-    return hashlib.sha256(bytes(raw)).hexdigest()
-
-
 def _spider_resume_text_cache_get(token, candidate_id, content_sha256=""):
     key = _spider_resume_cache_key(token, candidate_id)
     expected_content = str(content_sha256 or "").strip().lower()
@@ -5068,25 +4513,6 @@ def _spider_resume_text_cache_put(
             "antiword_verified": bool(antiword_verified),
             "saved_at": time.time(),
         }
-
-
-def _spider_attachment_fingerprint(records):
-    """Stable validator for the current JobAdder resume attachment set."""
-    canonical = []
-    for record in records or []:
-        if not isinstance(record, dict):
-            continue
-        canonical.append({
-            "id": str(record.get("attachmentId") or record.get("id") or ""),
-            "type": str(record.get("type") or ""),
-            "file": str(record.get("fileName") or record.get("filename") or ""),
-            "created": str(record.get("createdAt") or ""),
-            "updated": str(record.get("updatedAt") or record.get("modifiedAt") or ""),
-            "size": str(record.get("size") or record.get("fileSize") or record.get("sizeBytes") or ""),
-        })
-    canonical.sort(key=lambda item: (item["type"], item["id"], item["updated"], item["created"], item["file"]))
-    raw = json.dumps(canonical, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(raw.encode("utf-8", errors="ignore")).hexdigest()
 
 
 def _spider_preview_payload_cache_key(token, candidate_id, content_sha256, variant="full"):
@@ -5890,163 +5316,6 @@ def jobadder_spider_options():
     return jsonify({"items": fallback, "fallback": True, "tried": candidate_lists, "errors": errors[:6]})
 
 
-
-def _spider_preview_name(candidate_id, detail=None):
-    if isinstance(detail, dict):
-        for key in ["name", "fullName", "displayName"]:
-            if detail.get(key):
-                return str(detail.get(key))[:160]
-        first = str(detail.get("firstName") or "").strip()
-        last = str(detail.get("lastName") or "").strip()
-        if first or last:
-            return (first + " " + last).strip()[:160]
-    return "Candidate " + str(candidate_id or "")[:40]
-
-
-def _spider_preview_text_from_detail(detail):
-    """Build a readable side preview from a JobAdder candidate record if no raw resume is available."""
-    if not isinstance(detail, dict):
-        return ""
-    sections = []
-    name = _spider_preview_name("", detail)
-    title = detail.get("currentPosition") or detail.get("position") or detail.get("jobTitle") or ""
-    company = detail.get("currentCompany") or detail.get("employer") or ""
-    location = detail.get("location") or detail.get("city") or detail.get("country") or ""
-    header = []
-    if name and name != "Candidate ":
-        header.append("Name: " + str(name))
-    if title or company:
-        header.append("Current: " + " @ ".join([str(x) for x in [title, company] if x]))
-    if location:
-        header.append("Location: " + str(location))
-    if header:
-        sections.append("\n".join(header))
-
-    preferred = [
-        ("Summary", ["summary", "profile", "candidateSummary", "objective"]),
-        ("Skills", ["skills", "skill", "itSkills", "technologySkills"]),
-        ("Qualifications", ["qualifications", "qualification", "certifications", "certification"]),
-        ("Employment", ["employment", "workExperience", "experience", "positions", "history"]),
-        ("Education", ["education", "educations"]),
-        ("Resume / CV", ["resume", "cv", "curriculumVitae"]),
-        ("Notes", ["notes", "comments"]),
-    ]
-
-    def compact(v):
-        if v is None or v == "" or v == [] or v == {}:
-            return ""
-        if isinstance(v, str):
-            out = v
-        else:
-            try:
-                out = json.dumps(v, ensure_ascii=False, indent=2)
-            except Exception:
-                out = str(v)
-        out = re.sub(r"\n{3,}", "\n\n", out)
-        return out.strip()[:5000]
-
-    used = set()
-    lower_map = {str(k).lower(): k for k in detail.keys()}
-    for title_label, keys in preferred:
-        vals = []
-        for key in keys:
-            for lk, real in lower_map.items():
-                if key.lower() in lk and real not in used:
-                    txt = compact(detail.get(real))
-                    if txt:
-                        vals.append(txt)
-                        used.add(real)
-        if vals:
-            sections.append(title_label + "\n" + "\n\n".join(vals)[:6500])
-    if not sections:
-        blob = _spider_candidate_blob(detail)
-        return blob[:9000]
-    return "\n\n".join(sections)[:12000]
-
-
-
-def _spider_is_legacy_word_doc_bytes(raw):
-    """Detect legacy binary Word .doc downloads even when JobAdder labels them octet-stream.
-
-    Browser preview cannot embed .doc directly, so Spider must first recognise old
-    OLE Word files, then convert or fall back to extracted text.
-    """
-    raw = raw or b""
-    if not raw.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"):
-        return False
-    try:
-        import olefile as _olefile
-        ole = _olefile.OleFileIO(io.BytesIO(raw))
-        try:
-            return ole.exists('WordDocument')
-        finally:
-            ole.close()
-    except Exception:
-        # Still let the verified Antiword path inspect it; JobAdder often serves
-        # legacy .doc as generic application/octet-stream without a usable name.
-        return True
-
-
-def _document_content_kind(raw):
-    """Return a strong byte-signature classification before metadata fallback."""
-    raw = raw or b""
-    if _spider_is_legacy_word_doc_bytes(raw):
-        return "legacy_doc"
-    if raw.startswith(b"%PDF"):
-        return "pdf"
-    if raw[:2] == b"PK":
-        return "zip"
-    if (
-        raw.startswith(b"\x89PNG\r\n\x1a\n")
-        or raw.startswith(b"\xff\xd8\xff")
-        or raw.startswith((b"II*\x00", b"MM\x00*", b"BM", b"RIFF"))
-    ):
-        return "image"
-    return ""
-
-
-def _document_is_legacy_doc(raw, content_type="", filename=""):
-    """Apply strong byte identity before legacy-DOC metadata fallback."""
-
-    content_kind = _document_content_kind(raw)
-    if content_kind:
-        return content_kind == "legacy_doc"
-    ctype = str(content_type or "").lower()
-    name = _spider_filename_from_disposition(
-        filename,
-        filename,
-    ).lower()
-    return "msword" in ctype or name.endswith(".doc")
-
-
-def _document_image_extension(raw):
-    raw = raw or b""
-    if raw.startswith(b"\x89PNG\r\n\x1a\n"):
-        return ".png"
-    if raw.startswith(b"\xff\xd8\xff"):
-        return ".jpg"
-    if raw.startswith((b"II*\x00", b"MM\x00*")):
-        return ".tif"
-    if raw.startswith(b"BM"):
-        return ".bmp"
-    if raw.startswith(b"RIFF"):
-        return ".webp"
-    return ".img"
-
-
-
-
-def _spider_doc_text_quality_ok(text):
-    text = _spider_clean_doc_text_for_preview(text)
-    if len(text) < 80:
-        return False
-    sample = text[:6000]
-    visible = sum(1 for c in sample if not c.isspace()) or 1
-    bad = sum(1 for c in sample if (ord(c) > 0xFFFF) or (ord(c) >= 0x3000 and not ('\u4e00' <= c <= '\u9fff')))
-    signals = len(re.findall(r'(?i)\b(name|email|e-mail|phone|mobile|experience|education|skills|work|project|position|summary|profile)\b|@', sample))
-    return (bad / visible) < 0.25 and signals >= 1
-
-
 def _spider_extract_legacy_doc_text_for_preview(raw):
     """Verified Antiword text extraction for legacy .doc Spider previews.
 
@@ -6379,18 +5648,6 @@ def _spider_poppler_path():
     return None
 
 
-def _spider_is_image_download(raw, content_type="", filename=""):
-    ctype = str(content_type or "").lower()
-    name = str(filename or "").lower()
-    return bool(
-        ctype.startswith("image/")
-        or name.endswith((".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp"))
-        or raw.startswith(b"\x89PNG\r\n\x1a\n")
-        or raw.startswith(b"\xff\xd8\xff")
-        or raw.startswith((b"II*\x00", b"MM\x00*", b"BM", b"RIFF"))
-    )
-
-
 def _spider_ocr_image_download(raw, timeout=25):
     try:
         import pytesseract
@@ -6610,21 +5867,6 @@ def _spider_extract_text_from_download(raw, content_type="", filename="", ocr_pa
         pass
     return "", "downloaded file is visual/binary and not text-searchable"
 
-
-
-def _spider_filename_from_disposition(content_disposition, fallback=""):
-    """Extract a filename-ish value from Content-Disposition or an attachment name."""
-    txt = str(content_disposition or "")
-    # RFC 5987 filename*=UTF-8''file.pdf or plain filename="file.pdf".
-    m = re.search(r"filename\*\s*=\s*(?:UTF-8''|)([^;]+)", txt, re.I)
-    if not m:
-        m = re.search(r"filename\s*=\s*\"?([^\";]+)\"?", txt, re.I)
-    if m:
-        try:
-            return urllib.parse.unquote(m.group(1).strip().strip('"'))[:180]
-        except Exception:
-            return m.group(1).strip().strip('"')[:180]
-    return str(fallback or "")[:180]
 
 
 def _spider_pdf_text_layer_from_pdfium(textpage, page_width, page_height, max_items=2200):
@@ -6996,52 +6238,6 @@ def _spider_visual_preview_payload(raw, content_type="", filename="", max_pages=
                 return None
     return None
 
-def _spider_search_text_from_visual_payload(visual):
-    """Reuse PDFium text and avoid a second PDF parser pass."""
-    if isinstance(visual, dict):
-        full_text = _spider_clean_doc_text_for_preview(str(visual.get("visual_search_text") or ""))[:30000]
-        if full_text:
-            return full_text, "PDFium visual/search text layer"
-    layers = (visual or {}).get("visual_text_layers") if isinstance(visual, dict) else None
-    if not isinstance(layers, list):
-        return "", ""
-    parts = []
-    for layer in layers:
-        if not isinstance(layer, dict):
-            continue
-        text = str(layer.get("text") or "").strip()
-        if text:
-            parts.append(text)
-        if sum(len(part) for part in parts) >= 30000:
-            break
-    text = _spider_clean_doc_text_for_preview("\n".join(parts))[:30000]
-    if text:
-        return text, "PDFium visual text layer"
-    return "", ""
-
-
-def _spider_prefetch_should_defer_ocr(raw, content_type="", filename=""):
-    """Defer only strongly identified PDF/image bytes or metadata fallbacks."""
-    content_kind = _document_content_kind(raw)
-    if content_kind:
-        return content_kind in {"pdf", "image"}
-    ctype = str(content_type or "").lower()
-    name = str(filename or "").lower()
-    return bool(
-        "pdf" in ctype
-        or "image/" in ctype
-        or name.endswith((".pdf", ".png", ".jpg", ".jpeg"))
-    )
-
-
-def _spider_apply_visual_search_state(visual, search_text, search_source):
-    payload = dict(visual or {})
-    payload.pop("visual_search_text", None)
-    payload["search_text"] = str(search_text or "")[:30000]
-    if not payload["search_text"]:
-        payload["search_note"] = str(search_source or "Visual CV loaded, but no searchable text could be extracted.")[:200]
-    return payload
-
 
 class _SpiderJobAdderReconnectRequired(RuntimeError):
     pass
@@ -7077,31 +6273,6 @@ def _spider_get_ja_raw(token, path, timeout=10, *, accept_json=False):
                 pass
             raise _SpiderJobAdderReconnectRequired("JobAdder rejected the refreshed OAuth token")
         raise
-
-
-def _spider_attachment_candidates(payload):
-    """Return likely resume attachment ids from a JobAdder attachments/documents payload."""
-    out = []
-    def walk(x, depth=0):
-        if depth > 5 or x is None:
-            return
-        if isinstance(x, list):
-            for item in x[:80]:
-                walk(item, depth + 1)
-        elif isinstance(x, dict):
-            flat = " ".join(str(v) for v in _spider_flatten(x)[:80]).lower()
-            looks_resume = any(t in flat for t in ["resume", "cv", "curriculum", "formattedresume", "formatted resume"])
-            if looks_resume:
-                ids = []
-                for key in ["id", "attachmentId", "attachmentID", "documentId", "documentID", "fileId", "fileID", "entityId"]:
-                    if x.get(key):
-                        ids.append(str(x.get(key)))
-                name = str(x.get("fileName") or x.get("filename") or x.get("name") or x.get("title") or "")
-                out.append({"ids": ids, "name": name})
-            for v in x.values():
-                walk(v, depth + 1)
-    walk(payload)
-    return out[:8]
 
 
 @app.route("/jobadder/spider_preview_cancel_prefetch", methods=["POST"])
@@ -7716,47 +6887,6 @@ def jobadder_spider_candidate_preview():
     }, 404, cacheable=False)
 
 
-def _spider_candidate_search_key(candidate):
-    """Stable key for set algebra and de-duplication across JobAdder keyword probes."""
-    cid = _spider_candidate_id(candidate)
-    if cid:
-        return "id:" + str(cid)
-    if isinstance(candidate, dict):
-        email = str(candidate.get("email") or candidate.get("emailAddress") or "").strip().lower()
-        if email:
-            return "email:" + email
-        name = str(candidate.get("name") or candidate.get("fullName") or "").strip().lower()
-        if name:
-            return "name:" + name
-    return "raw:" + hashlib.sha1(json.dumps(candidate, sort_keys=True, default=str).encode("utf-8", errors="ignore")).hexdigest()
-
-
-def _spider_parse_candidate_items(payload):
-    if isinstance(payload, dict):
-        data_obj = payload.get("data")
-        items = payload.get("items") or payload.get("candidates") or (data_obj.get("items") if isinstance(data_obj, dict) else None) or []
-        total = None
-        # Preserve an explicit totalCount=0 instead of losing it through truthiness.
-        for key in ("totalCount", "total", "count"):
-            if key in payload and payload.get(key) is not None:
-                total = payload.get(key)
-                break
-        if total is None and isinstance(data_obj, dict):
-            for key in ("totalCount", "total", "count"):
-                if key in data_obj and data_obj.get(key) is not None:
-                    total = data_obj.get(key)
-                    break
-    elif isinstance(payload, list):
-        items, total = payload, len(payload)
-    else:
-        items, total = [], 0
-    return (items if isinstance(items, list) else []), total
-
-
-
-
-
-
 def _spider_jobadder_keyword_items(token, keyword, max_items=3000, page_size=1000, location="", embed=True):
     """Search JobAdder latest resumes with complete, defensive pagination.
 
@@ -7835,21 +6965,6 @@ def _spider_jobadder_keyword_items(token, keyword, max_items=3000, page_size=100
         "embed_applied": bool(embed and not state["embed_rejected"]),
         "embed_rejected": bool(state["embed_rejected"]),
     }
-
-
-def _spider_mark_plain_keyword_candidates(items, query_text, fallback_rule="", fallback_negative_terms=None):
-    query_terms = _spider_terms_for_fit(query_text, 24)
-    negative_terms = list(fallback_negative_terms or [])
-    marked = []
-    for item in items or []:
-        out = dict(item) if isinstance(item, dict) else {"value": item}
-        out["_spiderSearchTerms"] = list(query_terms)
-        if fallback_rule:
-            out["_spiderBooleanFallback"] = True
-            out["_spiderOriginalBooleanRule"] = str(fallback_rule)[:1500]
-            out["_spiderBooleanNegativeTerms"] = negative_terms[:24]
-        marked.append(out)
-    return marked, query_terms
 
 
 def _spider_plain_keyword_jobadder_candidates(token, query_text, result_pool_limit=1200, location="", fallback_rule="", fallback_negative_terms=None):

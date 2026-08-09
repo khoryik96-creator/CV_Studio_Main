@@ -5,12 +5,16 @@ the legacy web shell: boolean rule tokenisation, positive/negative term
 extraction, boolean expression evaluation, discovery-keyword and term-coverage
 matching, preview text cleaning, and (Phase 7B) candidate field parsing —
 experience-years bounds, employment-month parsing, residency/status and
-work-setup alias resolution, and candidate text/id extraction.
+work-setup alias resolution, candidate text/id extraction, candidate search-key
+deduplication, candidate-items payload parsing, and plain-keyword candidate
+marking.
 
 Pure functions of their inputs - no Flask, no globals, no network, no JobAdder
 or provider access. This module never imports ``app``.
 """
 
+import hashlib
+import json
 import re
 import time
 from datetime import date
@@ -964,3 +968,59 @@ def _spider_country_match(candidate, country):
         if _spider_has_any(location_text, definition.get("places")):
             return "mismatch", location_text[:120]
     return "unknown", (explicit_country or location_text)[:120]
+
+
+# ---------------------------------------------------------------------------
+# Candidate search key, payload parsing, and keyword marking
+# ---------------------------------------------------------------------------
+
+def _spider_candidate_search_key(candidate):
+    """Stable key for set algebra and de-duplication across JobAdder keyword probes."""
+    cid = _spider_candidate_id(candidate)
+    if cid:
+        return "id:" + str(cid)
+    if isinstance(candidate, dict):
+        email = str(candidate.get("email") or candidate.get("emailAddress") or "").strip().lower()
+        if email:
+            return "email:" + email
+        name = str(candidate.get("name") or candidate.get("fullName") or "").strip().lower()
+        if name:
+            return "name:" + name
+    return "raw:" + hashlib.sha1(json.dumps(candidate, sort_keys=True, default=str).encode("utf-8", errors="ignore")).hexdigest()
+
+
+def _spider_parse_candidate_items(payload):
+    if isinstance(payload, dict):
+        data_obj = payload.get("data")
+        items = payload.get("items") or payload.get("candidates") or (data_obj.get("items") if isinstance(data_obj, dict) else None) or []
+        total = None
+        # Preserve an explicit totalCount=0 instead of losing it through truthiness.
+        for key in ("totalCount", "total", "count"):
+            if key in payload and payload.get(key) is not None:
+                total = payload.get(key)
+                break
+        if total is None and isinstance(data_obj, dict):
+            for key in ("totalCount", "total", "count"):
+                if key in data_obj and data_obj.get(key) is not None:
+                    total = data_obj.get(key)
+                    break
+    elif isinstance(payload, list):
+        items, total = payload, len(payload)
+    else:
+        items, total = [], 0
+    return (items if isinstance(items, list) else []), total
+
+
+def _spider_mark_plain_keyword_candidates(items, query_text, fallback_rule="", fallback_negative_terms=None):
+    query_terms = _spider_terms_for_fit(query_text, 24)
+    negative_terms = list(fallback_negative_terms or [])
+    marked = []
+    for item in items or []:
+        out = dict(item) if isinstance(item, dict) else {"value": item}
+        out["_spiderSearchTerms"] = list(query_terms)
+        if fallback_rule:
+            out["_spiderBooleanFallback"] = True
+            out["_spiderOriginalBooleanRule"] = str(fallback_rule)[:1500]
+            out["_spiderBooleanNegativeTerms"] = negative_terms[:24]
+        marked.append(out)
+    return marked, query_terms
