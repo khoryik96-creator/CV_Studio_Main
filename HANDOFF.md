@@ -216,6 +216,12 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   `AGENTS.md`. The separate Summary-format work is published only on
   `chatgpt/v24.6.282-summary-table-options`; it is not part of these changes and
   must remain unmerged unless the owner later approves it explicitly.
+  The owner subsequently clarified that the Summary belongs in the dedicated
+  formatted-resume `SUMMARY` placeholder rather than the top candidate-details
+  table. The corrected v24.6.291 candidate is isolated on
+  `chatgpt/v24.6.291-summary-placeholder`; it replaces or fills that placeholder,
+  retains the opt-in single/batch and standalone DOCX controls, and remains
+  separate from master.
   The v24.6.281 follow-up also recognizes common combined boundaries such as
   Education & Certification, Professional Qualifications, Courses & Training,
   and Professional Affiliations.

@@ -37,6 +37,33 @@
   focused review. Stop before release, merge, further extractions or unrelated
   work.
 
+## v24.6.291 CV Summary placeholder corrective candidate
+
+- Separate branch `chatgpt/v24.6.291-summary-placeholder` starts from current
+  v24.6.290 master. It replaces the earlier v24.6.282 experiment, which placed
+  Summary in the wrong top candidate-details table and remains unmerged.
+- Normal single/batch formatting now has an off-by-default Summary toggle that
+  fills the existing dedicated `SUMMARY` placeholder before Work Experience.
+  Standalone Summary bullets can be reused without an extra AI call; Blind
+  formatting remains unchanged.
+- Standalone **Add to Uploaded DOCX** is source-bound and DOCX-only. It replaces
+  an existing `Summary:` or spaced `SUMMARY` placeholder and old placeholder
+  text, or inserts that dedicated section immediately after the first details
+  table when no Summary slot exists. Repeating the action replaces one marked
+  block rather than duplicating it.
+- Both owner-supplied Hyppies DOCX files passed package-level trials: the
+  generated bullets are outside the top table in the intended Summary slot,
+  and every package part except `word/document.xml` remains byte-identical.
+  LibreOffice is unavailable, so rendered-page PNG QA could not be completed in
+  this environment; structural paragraph/order/list checks passed.
+- Validation passed with 811 Python tests, four skips and 87 subtests; all 11
+  JavaScript fixtures; 38 focused version/architecture/Summary tests; and
+  repository consistency. No live AI, paid provider, credentialed service or
+  external write was used.
+- The existing `/generate-docx` route gains a multipart mode without changing
+  the sealed 116-route inventory, schemas, credentials, JobAdder, Lead Finder,
+  extraction, or Blind CV contracts.
+
 ## v24.6.279 legacy-DOC and CV-formatting corrective
 
 - PR #98 was squash-merged to `master` as `a18cda4` at v24.6.279.

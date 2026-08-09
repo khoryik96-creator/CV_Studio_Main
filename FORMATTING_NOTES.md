@@ -37,6 +37,25 @@ DeepSeek for AI. Current version is tracked in the repo-root `VERSION` file.
    `adm-zip`) which fills `template.docx`. `generate.js`'s `smartTokenCase` does
    company/title casing.
 
+### Optional CV Summary placeholder
+
+Normal single and batch formatting have an off-by-default **Generate CV
+Summary** toggle. When enabled, the saved CV Summary AI route makes one extra
+source-grounded call per CV after structural parsing. The returned bullets fill
+the dedicated `SUMMARY` placeholder between the candidate-details table and
+Work Experience; they are not added to the top name/notice/position table.
+Blind CV and Blind All never generate or carry the unblinded Summary.
+
+The standalone CV Summary module can send its already-generated bullets into
+that same formatted-resume placeholder without another Summary call. For an
+unchanged `.docx` source, **Add to Uploaded DOCX** replaces an existing
+`Summary:` or spaced `SUMMARY` placeholder and its old placeholder text. When
+the DOCX has no Summary slot, CV Studio inserts the dedicated section
+immediately after its first candidate-details table. The source must remain
+unchanged, non-DOCX files are rejected, reruns replace the marked Summary
+instead of duplicating it, and every OOXML part other than `word/document.xml`
+is copied byte-for-byte.
+
 ## The one root-cause pattern behind almost every formatting bug
 
 **Source documents (especially DOCX / plain text) bake a list marker or label

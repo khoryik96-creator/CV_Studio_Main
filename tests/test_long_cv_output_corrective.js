@@ -44,12 +44,120 @@ const context = {
 vm.createContext(context);
 [
   'cvParseIsLong','cvParseTimeoutMs','cvStripInferredTitle','cvCanonicalSectionHeading',
-  'cvNormalizeBulletItems','cvNormalizeStructuredData','cvNormDateRange','versionedUnlockKey','readVersionedUnlock',
+  'cvNormalizeBulletItems','cvNormalizeStructuredData','cvNormDateRange','summaryBulletLines',
+  'formatSummaryBulletsFor','applyFormatSummaryBullets','cvSummaryPrompt','versionedUnlockKey','readVersionedUnlock',
   'writeVersionedUnlock','cvScoringIsUnlocked','cvScoringSetUnlocked','updateCvScoringLockUI',
   'requestCvScoringUnlock','aiCrawlerIsUnlocked','updateAiCrawlerLockUI','requestAiCrawlerUnlock',
   'requireAiCrawlerUnlocked','aiCrawlerLockPayload','cvSkillPreviewHtml'
 ].forEach(name => vm.runInContext(fn(name), context));
 vm.runInContext(fnFrom(generate, 'normalizeDateRange'), context);
+
+assert.deepStrictEqual(
+  JSON.parse(JSON.stringify(context.summaryBulletLines('```markdown\n- **Cloud platforms** leader\n* Built delivery teams\n```'))),
+  ['**Cloud platforms** leader', 'Built delivery teams']
+);
+context.window._formatSummaryDraft = {
+  cv_text: 'RAW CV',
+  bullets: ['**Cloud platforms** leader', 'Built delivery teams'],
+};
+assert.deepStrictEqual(
+  JSON.parse(JSON.stringify(context.formatSummaryBulletsFor('RAW CV', false))),
+  ['**Cloud platforms** leader', 'Built delivery teams']
+);
+assert.deepStrictEqual(JSON.parse(JSON.stringify(context.formatSummaryBulletsFor('DIFFERENT CV', false))), []);
+assert.deepStrictEqual(JSON.parse(JSON.stringify(context.formatSummaryBulletsFor('RAW CV', true))), []);
+const formatted = context.applyFormatSummaryBullets({candidate:{name:'Summary Fixture'}}, 'RAW CV', false);
+assert.deepStrictEqual(
+  JSON.parse(JSON.stringify(formatted.summary_bullets)),
+  ['**Cloud platforms** leader', 'Built delivery teams']
+);
+const blinded = context.applyFormatSummaryBullets({candidate:{name:'Summary Fixture'}}, 'RAW CV', true);
+assert.strictEqual(blinded.summary_bullets, undefined);
+assert.ok(html.includes('id="btnSummaryFormat"'));
+assert.ok(html.includes('onclick="formatSummaryResume()"'));
+assert.ok(html.includes('id="btnSummaryApplyDocx"'));
+assert.ok(html.includes('onclick="applySummaryToUploadedDocx()"'));
+assert.ok(html.includes('id="singleSummaryToggle"'));
+assert.ok(html.includes('id="batchSummaryToggle"'));
+assert.ok(html.includes("requestFormattingSummary(raw, automaticSummaryRoute)"));
+assert.ok(html.includes("requestFormattingSummary(rawText, batchSummaryRoute)"));
+assert.ok(generate.includes("makeSummarySection(cv.summary_bullets || [])"));
+assert.ok(generate.includes("sectionHeader('S U M M A R Y"));
+assert.ok(!generate.includes('makeAboutTable(c, cv, cv.summary_bullets'));
+const aboutTableSource = fnFrom(generate, 'makeAboutTable');
+assert.ok(!aboutTableSource.includes('summaryBullets'));
+
+const summaryPrompt = context.cvSummaryPrompt('SOURCE CV', 'normal', 'Emphasise leadership.');
+assert.ok(summaryPrompt.includes('Use 6-7 bullet points.'));
+assert.ok(summaryPrompt.includes('Emphasise leadership.'));
+assert.ok(summaryPrompt.includes('SOURCE CV'));
+
+const applyDocxElements = {
+  btnSummaryApplyDocx: {disabled: true},
+  summaryCvText: {value: 'RAW CV'},
+};
+const applyDocxContext = {
+  String, Array,
+  window: {
+    _summarySourceDocxFile: {name: 'candidate.docx'},
+    _summarySourceDocxText: 'RAW CV',
+    _summaryGeneratedSource: 'RAW CV',
+    _summaryGeneratedBullets: ['Summary bullet'],
+  },
+  document: {getElementById(id){ return applyDocxElements[id] || null; }},
+};
+vm.createContext(applyDocxContext);
+vm.runInContext(fn('updateSummaryApplyDocxButton'), applyDocxContext);
+applyDocxContext.updateSummaryApplyDocxButton();
+assert.strictEqual(applyDocxElements.btnSummaryApplyDocx.disabled, false);
+applyDocxContext.window._summarySourceDocxFile = {name: 'candidate.pdf'};
+applyDocxContext.updateSummaryApplyDocxButton();
+assert.strictEqual(applyDocxElements.btnSummaryApplyDocx.disabled, true);
+applyDocxContext.window._summarySourceDocxFile = {name: 'candidate.docx'};
+applyDocxContext.window._summaryGeneratedSource = 'DIFFERENT CV';
+applyDocxContext.updateSummaryApplyDocxButton();
+assert.strictEqual(applyDocxElements.btnSummaryApplyDocx.disabled, true);
+
+const batchModeElements = {
+  batchTabFormat: {className: ''},
+  batchTabBlind: {className: ''},
+  batchSummaryToggle: {disabled: false, title: ''},
+};
+const batchModeContext = {
+  document: {getElementById(id){ return batchModeElements[id] || null; }},
+};
+vm.createContext(batchModeContext);
+vm.runInContext(fn('setBatchMode'), batchModeContext);
+batchModeContext.setBatchMode('blind');
+assert.strictEqual(batchModeElements.batchSummaryToggle.disabled, true);
+batchModeContext.setBatchMode('format');
+assert.strictEqual(batchModeElements.batchSummaryToggle.disabled, false);
+
+const transferElements = {
+  summaryCvText: {value: 'RAW CV'},
+  cvInput: {value: ''},
+  charCount: {textContent: ''},
+};
+const transferContext = {
+  String, Array,
+  window: {
+    _summaryGeneratedSource: 'RAW CV',
+    _summaryGeneratedBullets: ['**Cloud platforms** leader', 'Built delivery teams'],
+    _formatSummaryDraft: null,
+  },
+  document: {getElementById(id){ return transferElements[id] || null; }},
+  requireSummaryUnlocked(){ return true; },
+  showToast(){}, switchInputTab(){}, switchTab(){}, updateFormatSummaryNote(){},
+  startFormat(){ return 'started'; },
+};
+vm.createContext(transferContext);
+vm.runInContext(fn('formatSummaryResume'), transferContext);
+transferContext.formatSummaryResume();
+assert.strictEqual(transferElements.cvInput.value, 'RAW CV');
+assert.deepStrictEqual(
+  JSON.parse(JSON.stringify(transferContext.window._formatSummaryDraft.bullets)),
+  ['**Cloud platforms** leader', 'Built delivery teams']
+);
 
 assert.strictEqual(context.cvNormDateRange('to 2001'), '2001');
 assert.strictEqual(context.cvNormDateRange(''), '');
