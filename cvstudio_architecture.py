@@ -215,6 +215,12 @@ DEFAULT_MODULES = (
         ("external_clients",),
     ),
     ModuleDefinition(
+        "ja_screening",
+        "domain",
+        ("cvstudio_ja_screening.py",),
+        ("ja_answers",),
+    ),
+    ModuleDefinition(
         "ja_salary_notice",
         "domain",
         ("cvstudio_ja_salary_notice.py",),
