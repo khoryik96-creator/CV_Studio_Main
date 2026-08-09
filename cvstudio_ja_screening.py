@@ -523,3 +523,38 @@ def _ja_activity_payload_variants(candidate_id, activity_type, subject, note_tex
         "isCompleted": True,
     })
     return exact_variants + [setting_named, with_candidate, base]
+
+
+def _ja_official_screening_activity_payload(fields, note_text=""):
+    fields = fields or {}
+    rating = _onenote_presentability_rating_int(fields)
+    if rating not in (1, 2, 3, 4):
+        raise ValueError("Presentability rating must be 1-4")
+    values = {
+        "brief_overview": _onenote_clean_field_value(fields.get("brief_overview", ""), max_len=8000),
+        "reason_leaving": _onenote_clean_field_value(fields.get("reason_leaving", "")),
+        "looking_for": _onenote_clean_field_value(fields.get("looking_for", "")),
+        "current_salary_breakdown": _onenote_clean_field_value(fields.get("current_salary_breakdown", "")),
+        "expected_salary": _onenote_clean_field_value(fields.get("expected_salary", "")),
+        "notice_period": _onenote_clean_field_value(fields.get("notice_period", "")),
+        "leads": _onenote_clean_field_value(fields.get("leads", "")),
+        "remarks": _onenote_screening_remarks_value(fields, note_text),
+    }
+    text_answers = []
+    for question_id, _question_text, key in _ONENOTE_JA_SCREENING_QUESTIONS_BASE:
+        value = values.get(key, "")
+        # Normal Screening Call text fields are optional in this tenant. Omit
+        # unanswered questions rather than inserting artificial N/A text.
+        if value:
+            text_answers.append({"questionId": int(question_id), "text": value})
+    return {
+        "activitySettingId": _ONENOTE_JA_SCREENING_SETTING_ID,
+        "answers": {
+            "textAnswers": text_answers,
+            "listValueAnswers": [],
+            "dateRangeValueAnswers": [],
+            "ratingValueAnswers": [
+                {"questionId": _ONENOTE_JA_PRESENTABILITY_QUESTION_IDS[0], "rating": int(rating)}
+            ],
+        },
+    }
