@@ -168,5 +168,30 @@ class ActivityPayloadVariantsTests(unittest.TestCase):
         self.assertIn("items", base["answers"])
 
 
+class OfficialScreeningActivityPayloadTests(unittest.TestCase):
+    def test_official_v2_payload_shape_and_rating(self):
+        payload = screening._ja_official_screening_activity_payload(_FIELDS, "note")
+        self.assertEqual(payload["activitySettingId"], 8225)
+        answers = payload["answers"]
+        self.assertEqual(answers["listValueAnswers"], [])
+        self.assertEqual(answers["dateRangeValueAnswers"], [])
+        self.assertEqual(answers["ratingValueAnswers"], [{"questionId": 62988, "rating": 3}])
+        # Optional text fields: blank ones (looking_for/remarks) are omitted, not N/A-filled.
+        keys = {a["questionId"] for a in answers["textAnswers"]}
+        self.assertIn(41172, keys)          # brief_overview present
+        self.assertNotIn(41174, keys)       # looking_for is blank -> omitted
+
+    def test_minimal_fields_keeps_only_rating(self):
+        payload = screening._ja_official_screening_activity_payload({"presentability_rating": "4"}, "")
+        self.assertEqual(payload["answers"]["textAnswers"], [])
+        self.assertEqual(payload["answers"]["ratingValueAnswers"], [{"questionId": 62988, "rating": 4}])
+
+    def test_rating_out_of_range_raises(self):
+        with self.assertRaises(ValueError):
+            screening._ja_official_screening_activity_payload({"presentability_rating": "9"}, "")
+        with self.assertRaises(ValueError):
+            screening._ja_official_screening_activity_payload({}, "")
+
+
 if __name__ == "__main__":
     unittest.main()

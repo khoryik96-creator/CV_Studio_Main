@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.286"
+_INSTALL_RECEIPT_VERSION = "v24.6.287"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -318,7 +318,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.286"
+_CVSTUDIO_VERSION = "v24.6.287"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -3245,6 +3245,7 @@ from cvstudio_ja_screening import (
     _ja_activity_payload_variants,
     _ja_browser_activity_answer_list_payload_variants,
     _ja_candidate_screening_call_payload,
+    _ja_official_screening_activity_payload,
     _ja_precise_qid_activity_payload_variants,
     _ja_screening_call_answers,
     _ja_spa_screening_call_answers,
@@ -3369,7 +3370,7 @@ def _ja_spa_browser_bridge(candidate_id, fields, note_text="", email="", salary_
     payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
     compact_payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     script = """(async () => {
-  const helperVersion = 'v24.6.286';
+  const helperVersion = 'v24.6.287';
   const candidateId = %s;
   const payload = %s;
   const profilePath = %s;
@@ -3502,39 +3503,6 @@ def _jobadder_candidate_activity_url(candidate_id):
 #   textAnswers [{questionId, text}]
 #   ratingValueAnswers [{questionId, rating}]
 # GET/read model is intentionally different and must not be reused for writes.
-def _ja_official_screening_activity_payload(fields, note_text=""):
-    fields = fields or {}
-    rating = _onenote_presentability_rating_int(fields)
-    if rating not in (1, 2, 3, 4):
-        raise ValueError("Presentability rating must be 1-4")
-    values = {
-        "brief_overview": _onenote_clean_field_value(fields.get("brief_overview", ""), max_len=8000),
-        "reason_leaving": _onenote_clean_field_value(fields.get("reason_leaving", "")),
-        "looking_for": _onenote_clean_field_value(fields.get("looking_for", "")),
-        "current_salary_breakdown": _onenote_clean_field_value(fields.get("current_salary_breakdown", "")),
-        "expected_salary": _onenote_clean_field_value(fields.get("expected_salary", "")),
-        "notice_period": _onenote_clean_field_value(fields.get("notice_period", "")),
-        "leads": _onenote_clean_field_value(fields.get("leads", "")),
-        "remarks": _onenote_screening_remarks_value(fields, note_text),
-    }
-    text_answers = []
-    for question_id, _question_text, key in _ONENOTE_JA_SCREENING_QUESTIONS_BASE:
-        value = values.get(key, "")
-        # Normal Screening Call text fields are optional in this tenant. Omit
-        # unanswered questions rather than inserting artificial N/A text.
-        if value:
-            text_answers.append({"questionId": int(question_id), "text": value})
-    return {
-        "activitySettingId": _ONENOTE_JA_SCREENING_SETTING_ID,
-        "answers": {
-            "textAnswers": text_answers,
-            "listValueAnswers": [],
-            "dateRangeValueAnswers": [],
-            "ratingValueAnswers": [
-                {"questionId": _ONENOTE_JA_PRESENTABILITY_QUESTION_IDS[0], "rating": int(rating)}
-            ],
-        },
-    }
 
 
 
