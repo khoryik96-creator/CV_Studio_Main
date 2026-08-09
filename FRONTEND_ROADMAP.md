@@ -141,16 +141,21 @@ No pytest for the browser, so the safety net is:
   original inline text — the move must be verbatim (only the IIFE wrapper + `window.`
   exports are added).
 
-## 7. Cross-cutting: fix cache-busting first
+## 7. Cross-cutting: fix cache-busting first — DONE (option a)
 
-The existing vendor tags are pinned at `?v=24.6.268` while `VERSION` is well past that
-— the `?v=` is **not** a `bump_version.py` anchor, so it has silently drifted. Before
-adding more modules, pick one and apply it consistently:
-- **(a)** Add each `vendor/cvstudio/*.js?v=…` to the `bump_version.py` `ANCHORS` table
-  (like the backend surfaces), so cache-bust tracks `VERSION`; or
-- **(b)** Switch to a content-hash query (`?v=<sha8>`) generated at build time.
-  Option (a) is the smaller, in-convention change and matches how every other surface
-  is managed.
+**Resolved.** Chose option (a): the `?v=` cache-bust tags are now stamped from
+`VERSION`. A single generic anchor in `bump_version.py`
+(`/vendor/cvstudio/[A-Za-z0-9._-]+\?v=` + the dotted `vM.N.P` token) covers
+**every** extracted vendor asset (JS + CSS), so newly extracted modules are
+stamped automatically with no per-slice hand-editing of the tag. The tags carry
+the dotted `?v=v24.6.294` shape so the standard `_D` machinery applies with no
+bare-version special case, and `test_version_single_source.py` now guards them
+against drift like every other surface.
+
+_Original decision record:_ the vendor tags had drifted (F0 modules pinned at
+`?v=24.6.268` while `VERSION` moved on) because `?v=` was not an anchor.
+Option (a) — anchor the tags — was chosen over (b) a build-time content hash as
+the smaller, in-convention change that matches how every other surface is managed.
 
 ## 8. Coordination
 
