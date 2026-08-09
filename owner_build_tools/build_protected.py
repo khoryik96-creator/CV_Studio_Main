@@ -28,8 +28,8 @@ import zipfile
 import zlib
 from pathlib import Path
 
-VERSION = "v24.6.291"
-VERSION_SLUG = "v24_6_291"
+VERSION = "v24.6.292"
+VERSION_SLUG = "v24_6_292"
 PRODUCT = "TheGuoLab-CVStudio"
 RECEIPT_SCHEMA = 2
 TOTP_MASK = bytes([147,57,36,83,116,245,122,57,165,162,176,168,249,50,204,128,45,174,232,56])
@@ -46,6 +46,11 @@ FRONTEND_MODULES = (
     "api-transport.js",
     "page-nav.js",
     "server-heartbeat.js",
+)
+# Non-JS vendor assets served from /vendor/cvstudio/. Copied verbatim into the
+# protected build - never node --check'd or obfuscated (they carry no logic).
+FRONTEND_STATIC_ASSETS = (
+    "app.css",
 )
 SALARY_COMPARISON_MODULES = (
     "salary_comparison/__init__.py",
@@ -192,6 +197,8 @@ def validate_repository_dependency_state(root: Path) -> None:
 def validate_source(root: Path) -> None:
     required=("app.py","cvstudio_architecture.py","cvstudio_ai_costs.py","cvstudio_ai_providers.py","cvstudio_antiword.py","cvstudio_tesseract.py","cvstudio_clients.py","cvstudio_storage.py","cvstudio_storage_bridge.py","cvstudio_diagnostics.py","cvstudio_document_safety.py","cvstudio_jobs.py","cvstudio_startup.py","cvstudio_runtime.py","cvstudio_web_assets.py","cvstudio_secrets.py","cvstudio_jobadder_request.py","cvstudio_jobadder_read.py","cvstudio_jobadder_write.py","cvstudio_onenote_text.py","cvstudio_outlook_crypto.py","cvstudio_cv_normalize.py","cvstudio_cv_reconcile.py","cvstudio_cv_fidelity.py","cvstudio_lead_match.py","cvstudio_lead_enrich.py","cvstudio_lead_cache.py","cvstudio_lead_search.py","cvstudio_spider_boolean.py","cvstudio_spider_summary.py","cvstudio_spider_score.py","cvstudio_spider_documents.py","cvstudio_ja_typos.py","cvstudio_salary_parse.py","cvstudio_ja_answers.py","cvstudio_ja_activity.py","cvstudio_ja_screening.py","cvstudio_ja_salary_notice.py","cvstudio_ja_salary_ai.py","cvstudio_blind_mask.py","cvstudio_ppc.py","cvstudio_msgraph.py","cvstudio_onenote_desktop.py","index.html","generate.js","template.docx","package.json","requirements.txt","merge_title_cache.py") + tuple(
         "vendor/cvstudio/" + filename for filename in FRONTEND_MODULES
+    ) + tuple(
+        "vendor/cvstudio/" + filename for filename in FRONTEND_STATIC_ASSETS
     ) + SALARY_COMPARISON_MODULES
     missing=[x for x in required if not (root/x).exists()]
     if missing: raise RuntimeError("Missing source files: "+", ".join(missing))
@@ -430,6 +437,13 @@ def protect_javascript(root: Path, work: Path, skip: bool) -> tuple[Path,Path,Pa
             )
         report.update(mode="javascript-obfuscator-conservative",inline_blocks=block)
         report["frontend_modules"]["mode"]="javascript-obfuscator-conservative"
+    # Non-JS vendor assets (e.g. app.css) are copied verbatim regardless of the
+    # obfuscation mode; they carry no logic so they are never node --check'd.
+    report["frontend_static_assets"]={"mode":"copy","source_sha256":{},"protected_sha256":{}}
+    for filename in FRONTEND_STATIC_ASSETS:
+        shutil.copy2(source_modules/filename,out_modules/filename)
+        report["frontend_static_assets"]["source_sha256"][filename]=sha256_file(source_modules/filename)
+        report["frontend_static_assets"]["protected_sha256"][filename]=sha256_file(out_modules/filename)
     run(["node","--check",str(out_generate)])
     for filename in FRONTEND_MODULES:
         run(["node","--check",str(out_modules/filename)])
