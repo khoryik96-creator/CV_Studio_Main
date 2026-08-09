@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.287"
+_INSTALL_RECEIPT_VERSION = "v24.6.288"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -318,7 +318,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.287"
+_CVSTUDIO_VERSION = "v24.6.288"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -3240,6 +3240,7 @@ from cvstudio_ja_activity import (
     _ja_activity_ids_from_list_result,
 )
 
+import cvstudio_ja_screening as _cvstudio_screening_module
 from cvstudio_ja_screening import (
     _ONENOTE_JA_SCREENING_QUESTIONS_BASE,
     _ja_activity_payload_variants,
@@ -3248,11 +3249,15 @@ from cvstudio_ja_screening import (
     _ja_official_screening_activity_payload,
     _ja_precise_qid_activity_payload_variants,
     _ja_screening_call_answers,
+    _ja_spa_browser_bridge,
     _ja_spa_screening_call_answers,
     _ja_spa_screening_call_payload,
     _onenote_clean_field_value,
     _onenote_presentability_rating_int,
     _onenote_screening_remarks_value,
+)
+_cvstudio_screening_module.bind_screening_dependencies(
+    jobadder_candidate_activity_url=lambda cid: _jobadder_candidate_activity_url(cid),
 )
 
 
@@ -3345,149 +3350,6 @@ from cvstudio_ja_salary_notice import (
     _ja_expected_from_ai_components,
 )
 
-def _ja_spa_browser_bridge(candidate_id, fields, note_text="", email="", salary_canonical=None, spelling_correction=True):
-    """Return a safe copy/paste browser helper for the JobAdder SPA endpoint.
-
-    v24.6.116: create-only. The user clarified OneNote transfer must always
-    create a new Screening Call and must not update an existing Screening Call.
-    The helper therefore tries likely JobAdder SPA create routes only. If all
-    create routes fail, it prints a concise diagnostic and asks the user to
-    capture the Network request from manually creating a brand-new Screening
-    Call (not editing an existing one).
-    """
-    cid = str(candidate_id or "").strip()
-    cid_q = urllib.parse.quote(cid, safe="")
-    endpoint = "/spa/api/candidates/{}/activities/standardactivity".format(cid_q)
-    profile_path = "/candidates/{}?tab=2&activityView=Activity".format(cid_q)
-    # v24.6.116: captured successful create request uses standardactivity,
-    # activityID: 0, attachments/mentionedUserIDs as null, task as empty string.
-    # Add an in-browser sanitizer too, because older row.browser_bridge objects can
-    # linger in the UI and because JobAdder returns only a vague HTTP 500 when a
-    # required standard text field is blank.
-    payload = _ja_spa_screening_call_payload(cid, fields, note_text, include_extended=False)
-    if salary_canonical is None:
-        salary_canonical = _ja_build_salary_notice_canonical(fields, {}, spelling_correction=spelling_correction)
-    payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
-    compact_payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
-    script = """(async () => {
-  const helperVersion = 'v24.6.287';
-  const candidateId = %s;
-  const payload = %s;
-  const profilePath = %s;
-  const headers = {
-    'Accept': 'application/json, text/plain, */*',
-    'Content-Type': 'application/json',
-    'x-jobadder-spa': '1'
-  };
-  function cleanText(value, fallback) {
-    const s = String(value == null ? '' : value).replace(/\\s+/g, ' ').trim();
-    return s || fallback || 'N/A';
-  }
-  function answerByQuestion(qid) {
-    return (Array.isArray(payload.answers) ? payload.answers : []).find(a => Number(a && a.questionID) === Number(qid)) || {};
-  }
-  function textAnswer(qid, qtext) {
-    const a = answerByQuestion(qid);
-    const fallback = Number(qid) === 41172 ? '' : 'N/A';
-    return {
-      questionID: qid,
-      questionText: qtext,
-      textValue: cleanText(a.textValue, fallback),
-      startDateValue: null,
-      endDateValue: null,
-      numericValue: null
-    };
-  }
-  function ratingAnswer() {
-    const a = answerByQuestion(62988);
-    let rating = Number(a.numericValue || a.textValue || 0);
-    if (![1, 2, 3, 4].includes(rating)) {
-      throw new Error('Presentability must be 1, 2, 3 or 4 before creating the Screening Call.');
-    }
-    return {
-      questionID: 62988,
-      questionText: 'Presentability (Confidence, Comms, Business Awareness)',
-      textValue: String(rating),
-      startDateValue: null,
-      endDateValue: null,
-      numericValue: rating
-    };
-  }
-  // Match the successful manual-create shape exactly: six text answers + rating.
-  const createPayload = {
-    activityID: 0,
-    activitySettingID: 8225,
-    actionName: 'Candidate Screening Call',
-    activityType: 'Screening',
-    answers: [
-      textAnswer(41172, 'Brief Overview of Experience'),
-      textAnswer(41173, 'Reason For Leaving'),
-      textAnswer(41174, 'Looking For?'),
-      textAnswer(41175, 'Current Salary Breakdown'),
-      textAnswer(41176, 'Expected Salary'),
-      textAnswer(41177, 'Notice Period'),
-      ratingAnswer()
-    ],
-    attachments: null,
-    entity: {entityID: Number(candidateId) || candidateId},
-    entityID: Number(candidateId) || candidateId,
-    mentionedUserIDs: null,
-    status: null,
-    task: ''
-  };
-  async function readText(res) {
-    try { return await res.text(); } catch (e) { return String(e || ''); }
-  }
-%s
-  console.log('CV Studio OneNote → CREATE-ONLY helper', helperVersion);
-  console.log('CV Studio OneNote → sanitized JobAdder CREATE payload', createPayload);
-  const url = '/spa/api/candidates/' + encodeURIComponent(candidateId) + '/activities/standardactivity';
-  const res = await fetch(url, {
-    method: 'POST',
-    credentials: 'same-origin',
-    headers,
-    body: JSON.stringify(createPayload)
-  });
-  const text = await readText(res);
-  console.log('CV Studio OneNote → create-only response', res.status, text);
-  if (res.ok) {
-    let salaryResult = null;
-    try {
-      salaryResult = await cvStudioOneNoteSalaryUpdate();
-      console.log('CV Studio OneNote → salary/notice update result', salaryResult);
-    } catch (salaryErr) {
-      salaryResult = { ok: false, reason: String(salaryErr && salaryErr.message || salaryErr) };
-      console.warn('CV Studio OneNote → salary/notice update failed after Screening Call create', salaryResult);
-    }
-    const salaryMsg = salaryResult && salaryResult.ok
-      ? 'Salary/notice update also completed.'
-      : 'Screening Call created, but salary/notice update needs review in console.';
-    alert('CV Studio Screening Call created as a NEW activity. ' + salaryMsg + ' Refresh the Activity tab if you do not see it immediately.');
-    if (location.pathname !== profilePath.split('?')[0]) location.href = profilePath;
-    return;
-  }
-  console.error('CV Studio OneNote → CREATE-ONLY failed. No existing Screening Call was updated.', {status: res.status, response: text, payload: createPayload});
-  alert([
-    'CV Studio could not create a NEW Candidate Screening Call via JobAdder standardactivity.',
-    'No existing Screening Call was updated.',
-    '',
-    'Please copy the failed Network request Payload and Preview/Response only.'
-  ].join(String.fromCharCode(10)));
-  throw new Error('Create-only JobAdder SPA attempt failed: HTTP ' + res.status);
-})();""" % (json.dumps(cid), compact_payload_json, json.dumps(profile_path), _ja_spa_salary_update_helper_js(salary_canonical))
-    return {
-        "method": "CREATE-ONLY browser SPA helper using /standardactivity; never updates existing Screening Calls",
-        "endpoint": endpoint,
-        "fallback": "No update fallback. Uses the captured JobAdder SPA create route /activities/standardactivity. If it fails, capture the successful Network request from manually creating a brand-new Candidate Screening Call.",
-        "profile_url": _jobadder_candidate_activity_url(cid),
-        "payload": payload,
-        "payload_json": payload_json,
-        "script": script,
-        "warning": "Run this only in the JobAdder candidate page DevTools Console while logged into JobAdder. It uses your browser session automatically and does not expose cookies to CV Studio. This script never updates an existing Screening Call; it posts only to /activities/standardactivity to create a new one. Blank standard text fields are filled with N/A for create compatibility.",
-        "email": email,
-        "candidate_id": cid,
-        "salary_canonical": salary_canonical,
-    }
 
 def _jobadder_candidate_activity_url(candidate_id):
     cid = urllib.parse.quote(str(candidate_id or ""), safe="")

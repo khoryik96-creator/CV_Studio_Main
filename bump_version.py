@@ -76,6 +76,8 @@ ANCHORS: dict[str, list[bytes]] = {
     "app.py": [
         rb'_INSTALL_RECEIPT_VERSION = "' + _D + rb'"',
         rb'_CVSTUDIO_VERSION = "' + _D + rb'"',
+    ],
+    "cvstudio_ja_screening.py": [
         # Version literal embedded in the OneNote CREATE-ONLY browser helper JS
         # (served as a string, so it cannot reference _CVSTUDIO_VERSION at
         # runtime); keep it stamped from VERSION like every other surface.
