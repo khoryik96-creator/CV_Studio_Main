@@ -3,8 +3,9 @@
 Behaviour-preserving extraction of the pure, stateless document helpers from the
 legacy web shell: magic-byte content-kind classification (legacy .doc / PDF /
 zip / image), legacy-.doc identification with a metadata fallback, image-format
-extension detection, the recovered-text quality gate, and the visual-preview
-search-text/state shaping used by the AI Crawler side panel.
+extension detection, image-download detection, the recovered-text quality gate,
+and the visual-preview search-text/state shaping used by the AI Crawler side
+panel.
 
 These are classification and shaping helpers only — none of the actual
 document *decode* logic (Antiword, native OLE piece-table recovery, OCR, PDFium
@@ -95,6 +96,18 @@ def _document_image_extension(raw):
     if raw.startswith(b"RIFF"):
         return ".webp"
     return ".img"
+
+
+def _spider_is_image_download(raw, content_type="", filename=""):
+    ctype = str(content_type or "").lower()
+    name = str(filename or "").lower()
+    return bool(
+        ctype.startswith("image/")
+        or name.endswith((".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp"))
+        or raw.startswith(b"\x89PNG\r\n\x1a\n")
+        or raw.startswith(b"\xff\xd8\xff")
+        or raw.startswith((b"II*\x00", b"MM\x00*", b"BM", b"RIFF"))
+    )
 
 
 # ---------------------------------------------------------------------------

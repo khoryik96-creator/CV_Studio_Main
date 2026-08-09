@@ -4846,6 +4846,7 @@ from cvstudio_spider_documents import (
     _document_is_legacy_doc,
     _spider_apply_visual_search_state,
     _spider_doc_text_quality_ok,
+    _spider_is_image_download,
     _spider_is_legacy_word_doc_bytes,
     _spider_prefetch_should_defer_ocr,
     _spider_search_text_from_visual_payload,
@@ -6215,18 +6216,6 @@ def _spider_poppler_path():
         ):
             return candidate
     return None
-
-
-def _spider_is_image_download(raw, content_type="", filename=""):
-    ctype = str(content_type or "").lower()
-    name = str(filename or "").lower()
-    return bool(
-        ctype.startswith("image/")
-        or name.endswith((".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp"))
-        or raw.startswith(b"\x89PNG\r\n\x1a\n")
-        or raw.startswith(b"\xff\xd8\xff")
-        or raw.startswith((b"II*\x00", b"MM\x00*", b"BM", b"RIFF"))
-    )
 
 
 def _spider_ocr_image_download(raw, timeout=25):
