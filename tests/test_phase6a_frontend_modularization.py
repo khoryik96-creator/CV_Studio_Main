@@ -50,6 +50,7 @@ FRONTEND_MODULES = (
     "cv-scoring.js",
     "the-owl.js",
     "ai-crawler.js",
+    "ai-proxy.js",
 )
 FRONTEND_STATIC_ASSETS = (
     "app.css",
