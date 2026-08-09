@@ -60,6 +60,7 @@ class Phase7AModularMonolithFoundationTests(unittest.TestCase):
                 "storage",
                 "background_jobs",
                 "ai_costs",
+                "ai_providers",
                 "external_clients",
                 "documents",
                 "diagnostics",

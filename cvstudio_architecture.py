@@ -71,6 +71,11 @@ DEFAULT_MODULES = (
         ("cvstudio_ai_costs.py",),
     ),
     ModuleDefinition(
+        "ai_providers",
+        "domain",
+        ("cvstudio_ai_providers.py",),
+    ),
+    ModuleDefinition(
         "external_clients",
         "domain",
         ("cvstudio_clients.py",),
