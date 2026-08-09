@@ -187,6 +187,12 @@ DEFAULT_MODULES = (
         ("spider_boolean",),
     ),
     ModuleDefinition(
+        "spider_documents",
+        "domain",
+        ("cvstudio_spider_documents.py",),
+        ("spider_boolean", "spider_summary"),
+    ),
+    ModuleDefinition(
         "ja_typos",
         "domain",
         ("cvstudio_ja_typos.py",),

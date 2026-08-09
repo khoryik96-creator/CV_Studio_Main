@@ -81,6 +81,7 @@ class Phase7AModularMonolithFoundationTests(unittest.TestCase):
                 "spider_boolean",
                 "spider_summary",
                 "spider_score",
+                "spider_documents",
                 "ja_typos",
                 "salary_parse",
                 "ja_answers",
