@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.289"
+_INSTALL_RECEIPT_VERSION = "v24.6.290"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -270,6 +270,13 @@ from cvstudio_ai_providers import (
     _provider_error_message,
     _provider_short_label,
 )
+import cvstudio_jobadder_request as _cvstudio_jobadder_request_module
+from cvstudio_jobadder_request import (
+    _ja_get_json,
+    _ja_normalize_api_base,
+    _ja_post_json,
+    _ja_put_json,
+)
 from cvstudio_storage_bridge import (
     StorageBridge,
     phase2a_ppc_metadata as _phase4_phase2a_ppc_metadata,
@@ -326,7 +333,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.289"
+_CVSTUDIO_VERSION = "v24.6.290"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -2124,29 +2131,6 @@ def jobadder_poll_token():
     return jsonify(result)
 
 
-def _ja_normalize_api_base(value):
-    """Return a safe JobAdder API base without guessing a tenant region.
-
-    OAuth token responses normally provide the tenant-specific API URL. Keep
-    that exact JobAdder-owned HTTPS host when present; otherwise use JobAdder's
-    generic documented endpoint. Never silently force AU3, which breaks EU/US
-    tenants, and never allow a migrated browser value to redirect bearer tokens
-    to a non-JobAdder host.
-    """
-    raw = str(value or "").strip().rstrip("/") or "https://api.jobadder.com/v2"
-    try:
-        parsed = urllib.parse.urlsplit(raw)
-        host = str(parsed.hostname or "").lower().rstrip(".")
-        if parsed.scheme.lower() != "https" or not (host == "jobadder.com" or host.endswith(".jobadder.com")):
-            return "https://api.jobadder.com/v2"
-        path = (parsed.path or "").rstrip("/")
-        if not path:
-            path = "/v2"
-        return "https://{}{}".format(host, path)
-    except Exception:
-        return "https://api.jobadder.com/v2"
-
-
 def _ja_api(path):
     """Build JobAdder API URL using the token-provided regional base."""
     base = _ja_normalize_api_base(_ja_creds_store.get("api_url"))
@@ -2157,6 +2141,9 @@ _JOBADDER_CLIENT = JobAdderClient(
     api_base_provider=lambda: _ja_api(""),
     token_provider=lambda force=False: _ja_refresh_access_token(force=force),
     reconnect_handler=lambda: _ja_mark_reconnect_required(),
+)
+_cvstudio_jobadder_request_module.bind_jobadder_request_client(
+    lambda *a, **k: _JOBADDER_CLIENT.request_json(*a, **k),
 )
 
 _CVSTUDIO_JOBADDER_READ_SERVICE = JobAdderReadService(
@@ -3020,50 +3007,6 @@ def onenote_import_recent():
 
 
 # ── OneNote → JobAdder Screening Call Notes ─────────────────────────
-def _ja_post_json(path, payload, timeout=15):
-    """POST JSON to a JobAdder API path using the current server-side token."""
-    return _JOBADDER_CLIENT.request_json(
-        path,
-        method="POST",
-        body=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        },
-        timeout=timeout,
-        raw_fallback=True,
-        safe_to_retry=False,
-        retries=0,
-    )
-
-def _ja_get_json(path, timeout=15):
-    """GET JSON from a JobAdder API path using the current server-side token."""
-    return _JOBADDER_CLIENT.request_json(
-        path,
-        method="GET",
-        headers={"Accept": "application/json"},
-        timeout=timeout,
-        raw_fallback=True,
-    )
-
-
-def _ja_put_json(path, payload, timeout=20):
-    """PUT JSON to a JobAdder API path using the current server-side token."""
-    return _JOBADDER_CLIENT.request_json(
-        path,
-        method="PUT",
-        body=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        },
-        timeout=timeout,
-        raw_fallback=True,
-        safe_to_retry=False,
-        retries=0,
-    )
-
-
 import cvstudio_ja_salary_ai as _cvstudio_salary_ai_module
 from cvstudio_ja_salary_ai import (
     _ONENOTE_JA_PERMANENT_WORKTYPE_ID,

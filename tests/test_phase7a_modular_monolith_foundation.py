@@ -68,6 +68,7 @@ class Phase7AModularMonolithFoundationTests(unittest.TestCase):
                 "runtime",
                 "web_assets",
                 "secrets",
+                "jobadder_request",
                 "jobadder_read",
                 "jobadder_write",
                 "onenote_text",

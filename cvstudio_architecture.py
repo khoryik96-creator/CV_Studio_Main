@@ -113,6 +113,11 @@ DEFAULT_MODULES = (
         ("cvstudio_secrets.py",),
     ),
     ModuleDefinition(
+        "jobadder_request",
+        "domain",
+        ("cvstudio_jobadder_request.py",),
+    ),
+    ModuleDefinition(
         "jobadder_read",
         "domain",
         ("cvstudio_jobadder_read.py",),
