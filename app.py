@@ -3230,6 +3230,14 @@ from cvstudio_ja_answers import (
     _ja_answer_model_bundle,
     _ja_split_text_rating_answers,
 )
+
+from cvstudio_ja_activity import (
+    _ja_activity_diagnostic_network_error,
+    _ja_activity_diagnostic_response_headers,
+    _ja_activity_diagnostic_summary,
+    _ja_activity_id_from_post_result,
+    _ja_activity_ids_from_list_result,
+)
 _ONENOTE_JA_SCREENING_QUESTIONS_BASE = [
     (41172, "Brief Overview of Experience", "brief_overview"),
     (41173, "Reason For Leaving", "reason_leaving"),
@@ -4340,23 +4348,6 @@ def jobadder_onenote_log_screening():
     })
 
 
-
-def _ja_activity_diagnostic_response_headers(headers):
-    """Keep useful response metadata while excluding cookie/authentication headers."""
-    blocked = {"set-cookie", "set-cookie2", "authorization", "proxy-authorization"}
-    try:
-        return {str(k): str(v) for k, v in headers.items() if str(k).lower() not in blocked}
-    except Exception:
-        return {}
-
-
-def _ja_activity_diagnostic_network_error(error):
-    """Preserve the legacy diagnostic field with shared-client redaction."""
-    if isinstance(error, ExternalServiceError):
-        return str(getattr(error, "safe_detail", "") or error)
-    return str(getattr(error, "reason", error))
-
-
 def _ja_activity_diagnostic_get(path, timeout=25):
     """Perform one exact read-only JobAdder OAuth GET and preserve the raw response.
 
@@ -4431,19 +4422,6 @@ def _ja_activity_diagnostic_get(path, timeout=25):
             "response_body": "",
             "response_json": None,
         }
-
-
-def _ja_activity_diagnostic_summary(request_results):
-    """Return a conservative summary without guessing undocumented API behavior."""
-    statuses = [r.get("status") for r in (request_results or [])]
-    numeric_statuses = [s for s in statuses if isinstance(s, int)]
-    if any(200 <= s < 300 for s in numeric_statuses):
-        return "At least one OAuth activity GET succeeded. Review the complete response body for the saved Screening Call and Presentability answer model."
-    if len(numeric_statuses) == 2 and all(s in (404, 405) for s in numeric_statuses):
-        return "Both OAuth activity GET routes returned 404/405. This is evidence that these read routes are unavailable, but the exact POST response must still be reviewed separately before making a final endpoint conclusion."
-    if any(s in (401, 403) for s in numeric_statuses):
-        return "JobAdder rejected at least one read request as unauthorised. Reconnect JobAdder OAuth before interpreting endpoint availability."
-    return "The read requests did not expose a successful activity model. Review each full status and response body before deciding the next controlled test."
 
 
 @app.route("/jobadder/onenote_activity_diagnostic", methods=["POST"])
@@ -4574,56 +4552,6 @@ def _ja_activity_diagnostic_post(path, payload, timeout=25):
             "response_json": None,
         })
         return base
-
-
-def _ja_activity_ids_from_list_result(result):
-    parsed = (result or {}).get("response_json")
-    if not isinstance(parsed, dict):
-        return []
-    items = parsed.get("items")
-    if not isinstance(items, list):
-        return []
-    out = []
-    for item in items:
-        if not isinstance(item, dict):
-            continue
-        value = item.get("activityId")
-        if value is None:
-            value = item.get("activityID")
-        try:
-            out.append(int(value))
-        except Exception:
-            pass
-    return out
-
-
-def _ja_activity_id_from_post_result(result):
-    parsed = (result or {}).get("response_json")
-    if isinstance(parsed, dict):
-        for key in ("activityId", "activityID"):
-            value = parsed.get(key)
-            try:
-                return int(value)
-            except Exception:
-                pass
-        for container_key in ("activity", "item", "result", "data"):
-            child = parsed.get(container_key)
-            if isinstance(child, dict):
-                for key in ("activityId", "activityID"):
-                    value = child.get(key)
-                    try:
-                        return int(value)
-                    except Exception:
-                        pass
-    headers = (result or {}).get("response_headers") or {}
-    for key, value in headers.items():
-        if str(key).lower() == "location":
-            m = re.search(r"/activities/(\d+)(?:$|[/?#])", str(value))
-            if m:
-                return int(m.group(1))
-    return None
-
-
 
 
 @app.route("/jobadder/onenote_activity_create_diagnostic", methods=["POST"])

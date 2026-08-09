@@ -85,6 +85,7 @@ class Phase7AModularMonolithFoundationTests(unittest.TestCase):
                 "ja_typos",
                 "salary_parse",
                 "ja_answers",
+                "ja_activity",
                 "ja_salary_notice",
                 "ja_salary_ai",
                 "blind_mask",
