@@ -706,6 +706,12 @@ def _cv_source_section_key(value):
     return re.sub(r"[^a-z]+", " ", str(value or "").lower()).strip()
 
 
+def _cv_source_boundary_key(value):
+    """Normalize equivalent combined headings such as ``A & B`` / ``A AND B``."""
+    key = re.sub(r"\band\b", " ", _cv_source_section_key(value))
+    return re.sub(r"\s+", " ", key).strip()
+
+
 def _cv_source_item_key(value):
     return re.sub(r"[^a-z0-9]+", " ", str(value or "").lower()).strip()
 
@@ -730,12 +736,17 @@ def _extract_recoverable_cv_source_sections(source_text):
                 "",
             )
             continue
-        if current and _cv_source_section_key(line) in _CV_SOURCE_SECTION_BOUNDARY_KEYS:
+        item = _strip_leading_bullet_marker(line).strip()
+        has_explicit_item_marker = item != line
+        if (
+            current
+            and not has_explicit_item_marker
+            and _cv_source_boundary_key(line) in _CV_SOURCE_SECTION_BOUNDARY_KEYS
+        ):
             current = ""
             continue
         if not current or not line:
             continue
-        item = _strip_leading_bullet_marker(line).strip()
         if item and item not in recovered[current]:
             recovered[current].append(item)
     return {category: items for category, items in recovered.items() if items}
@@ -949,11 +960,13 @@ def _normalize_cv_structured_content(parsed):
         ).strip()
         if category_key == "core expertise":
             raw_items = skill.get("items") or ""
-            raw_item_values = raw_items if isinstance(raw_items, list) else [raw_items]
+            structured_items = isinstance(raw_items, list)
+            raw_item_values = raw_items if structured_items else [raw_items]
+            item_separator = r"(?:\r?\n)+" if structured_items else r"(?:\r?\n)+|,\s*"
             item_lines = [
                 item.strip()
                 for raw_item in raw_item_values
-                for item in re.split(r"(?:\r?\n)+|,\s*", str(raw_item))
+                for item in re.split(item_separator, str(raw_item))
                 if item.strip()
             ]
             if item_lines:
@@ -1138,6 +1151,14 @@ _CV_MONTH_NUMBER = {
 }
 
 
+_CV_MONTH_PRECISION_RE = re.compile(
+    r"\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|"
+    r"Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|"
+    r"Dec(?:ember)?)\b",
+    re.I,
+)
+
+
 def _cv_date_sort_point(value, end=False):
     """Return a sortable (year, month) point from a CV date/range fragment."""
     text = str(value or "").strip()
@@ -1162,6 +1183,18 @@ def _cv_date_sort_point(value, end=False):
     return (int(match.group(2)), month)
 
 
+_CV_BROAD_LOCATION_SUFFIX_KEYS = {
+    _cv_match_key(value)
+    for value in (
+        "APAC", "Asia", "Australia", "China", "Europe", "Global",
+        "Hong Kong", "India", "Indonesia", "Japan", "Malaysia",
+        "New Zealand", "Philippines", "Singapore", "South Korea",
+        "Taiwan", "Thailand", "UAE", "UK", "United Arab Emirates",
+        "United Kingdom", "US", "USA", "United States", "Vietnam",
+    )
+}
+
+
 def _cv_company_base_key(value):
     """Return a conservative base key for a location-suffixed employer name."""
     text = re.sub(r"\s+", " ", str(value or "").strip())
@@ -1169,10 +1202,9 @@ def _cv_company_base_key(value):
     if len(parts) != 2:
         return _cv_match_key(text)
     base, suffix = parts
-    # A broad one-part country suffix is a harmless spelling variant. Preserve
-    # a more specific city/state suffix (normally comma-delimited), because it
-    # may identify a genuinely separate assignment in the marked-correct CV.
-    if "," in suffix or len(re.findall(r"[A-Za-z0-9]+", suffix)) > 2:
+    # Only a known broad geographic suffix is a harmless spelling variant.
+    # Short business-unit names such as "Consulting" remain part of the company.
+    if _cv_match_key(suffix) not in _CV_BROAD_LOCATION_SUFFIX_KEYS:
         return _cv_match_key(text)
     return _cv_match_key(base)
 
@@ -1209,7 +1241,22 @@ def _cv_experience_interval(exp):
     return start_serial, end_serial
 
 
+def _cv_experience_has_month_precision(exp):
+    """Return whether an employer/role span carries explicit month precision."""
+    if not isinstance(exp, dict):
+        return False
+    date_range = _normalize_cv_date_range(exp.get("date_range") or "")
+    if not date_range:
+        date_range = _cv_company_span_from_roles(exp.get("roles") or [])
+    return bool(_CV_MONTH_PRECISION_RE.search(date_range))
+
+
 def _cv_experience_intervals_touch(left, right):
+    if not (
+        _cv_experience_has_month_precision(left)
+        and _cv_experience_has_month_precision(right)
+    ):
+        return False
     left_interval = _cv_experience_interval(left)
     right_interval = _cv_experience_interval(right)
     if left_interval is None or right_interval is None:
@@ -1277,34 +1324,29 @@ def _merge_adjacent_continuous_company_stints(experiences):
     return merged
 
 
+def _sort_cv_dated_items_in_place(items):
+    """Sort dated items into dated slots without moving undated source entries."""
+    decorated = [
+        (index, item, _cv_experience_interval(item))
+        for index, item in enumerate(items or [])
+    ]
+    dated_items = [row for row in decorated if row[2] is not None]
+    dated_items.sort(key=lambda row: (-row[2][1], -row[2][0], row[0]))
+    dated_iterator = iter(row[1] for row in dated_items)
+    return [
+        next(dated_iterator) if interval is not None else item
+        for _, item, interval in decorated
+    ]
+
+
 def _sort_work_experiences_reverse_chronological(experiences):
-    """Sort dated employers newest-first while keeping unknown dates stable."""
-    indexed = list(enumerate(experiences or []))
-
-    def sort_key(item):
-        index, exp = item
-        interval = _cv_experience_interval(exp)
-        if interval is None:
-            return (1, 0, 0, index)
-        start, end = interval
-        return (0, -end, -start, index)
-
-    return [exp for _, exp in sorted(indexed, key=sort_key)]
+    """Sort dated employers newest-first without moving undated employers."""
+    return _sort_cv_dated_items_in_place(experiences)
 
 
 def _sort_cv_roles_reverse_chronological(roles):
-    """Sort dated roles newest-first while keeping unknown dates stable."""
-    indexed = list(enumerate(roles or []))
-
-    def sort_key(item):
-        index, role = item
-        interval = _cv_experience_interval(role)
-        if interval is None:
-            return (1, 0, 0, index)
-        start, end = interval
-        return (0, -end, -start, index)
-
-    return [role for _, role in sorted(indexed, key=sort_key)]
+    """Sort dated roles newest-first without moving undated roles."""
+    return _sort_cv_dated_items_in_place(roles)
 
 
 def _recover_education_date_range(education, source_text):

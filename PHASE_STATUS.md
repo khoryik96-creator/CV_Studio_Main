@@ -105,6 +105,13 @@
   including Education & Certification, Professional Qualifications, Courses &
   Training, and Professional Affiliations, so their later content cannot be
   absorbed into a recovered Project/Training list.
+- The v24.6.283 review corrective treats literal `AND` and `&` the same in
+  combined source headings while preserving explicitly marked project/training
+  items whose wording resembles a heading. Undated current employers and roles
+  keep their source positions; only month-precise touching stints with exact or
+  known broad-location employer names can merge, so year-only dates and short
+  business-unit suffixes stay separate. Core Expertise remains bulleted without
+  splitting commas inside an already-structured item.
 
 ## Phase 7B-8 JobAdder typo-correction extraction
 

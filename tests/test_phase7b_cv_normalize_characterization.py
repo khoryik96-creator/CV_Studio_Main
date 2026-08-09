@@ -486,6 +486,70 @@ class ContinuousEmployerGroupingTests(unittest.TestCase):
             ["Manager", "Analyst"],
         )
 
+    def test_short_business_unit_suffix_is_not_treated_as_a_location(self):
+        parsed = {
+            "work_experiences": [
+                {
+                    "company": "Acme - Consulting",
+                    "date_range": "Jan 2020 to Dec 2020",
+                    "roles": [{"title": "Consultant", "date_range": "", "bullets": []}],
+                },
+                {
+                    "company": "Acme",
+                    "date_range": "Jan 2019 to Dec 2019",
+                    "roles": [{"title": "Analyst", "date_range": "", "bullets": []}],
+                },
+            ]
+        }
+
+        normalized = cn._normalize_cv_data_for_output(parsed)
+
+        self.assertEqual(
+            [item["company"] for item in normalized["work_experiences"]],
+            ["Acme - Consulting", "Acme"],
+        )
+
+    def test_year_only_same_employer_entries_are_not_assumed_continuous(self):
+        parsed = {
+            "work_experiences": [
+                {
+                    "company": "Example Co",
+                    "date_range": "2020",
+                    "roles": [{"title": "Manager", "date_range": "", "bullets": []}],
+                },
+                {
+                    "company": "Example Co",
+                    "date_range": "2019",
+                    "roles": [{"title": "Analyst", "date_range": "", "bullets": []}],
+                },
+            ]
+        }
+
+        normalized = cn._normalize_cv_data_for_output(parsed)
+
+        self.assertEqual(len(normalized["work_experiences"]), 2)
+
+    def test_undated_current_employer_and_role_keep_their_source_positions(self):
+        experiences = [
+            {"company": "Current Co", "date_range": ""},
+            {"company": "Old Co", "date_range": "2019"},
+            {"company": "Newer Co", "date_range": "2021"},
+        ]
+        roles = [
+            {"title": "Current Role", "date_range": ""},
+            {"title": "Old Role", "date_range": "2019"},
+            {"title": "Newer Role", "date_range": "2021"},
+        ]
+
+        self.assertEqual(
+            [item["company"] for item in cn._sort_work_experiences_reverse_chronological(experiences)],
+            ["Current Co", "Newer Co", "Old Co"],
+        )
+        self.assertEqual(
+            [item["title"] for item in cn._sort_cv_roles_reverse_chronological(roles)],
+            ["Current Role", "Newer Role", "Old Role"],
+        )
+
 
 class SourceEnumeratorCleanupTests(unittest.TestCase):
     def test_bare_source_enumerators_are_removed_without_touching_false_positives(self):
@@ -623,6 +687,26 @@ class EducationAndSkillsConsistencyTests(unittest.TestCase):
 
                 self.assertEqual(normalized["skills"][0]["items"], expected)
 
+    def test_core_expertise_keeps_commas_inside_existing_bullet_items(self):
+        parsed = {
+            "skills": [
+                {
+                    "category": "Core Expertise",
+                    "items": [
+                        "Mergers, Acquisitions & Integration",
+                        "P&L Leadership",
+                    ],
+                }
+            ]
+        }
+
+        normalized = cn._normalize_cv_data_for_output(parsed)
+
+        self.assertEqual(
+            normalized["skills"][0]["items"],
+            ["Mergers, Acquisitions & Integration", "P&L Leadership"],
+        )
+
 
 class SourceAdditionalSectionRecoveryTests(unittest.TestCase):
     SOURCE = """Other Information
@@ -697,6 +781,7 @@ Available upon request
     def test_recovery_stops_at_common_combined_cv_section_headings(self):
         headings = (
             "EDUCATION & CERTIFICATION",
+            "EDUCATION AND CERTIFICATION",
             "PROFESSIONAL QUALIFICATIONS",
             "COURSES & TRAINING",
             "PROFESSIONAL AFFILIATIONS",
@@ -717,6 +802,28 @@ Available upon request
                     recovered,
                     {"Project Involvement History": ["Project Alpha"]},
                 )
+
+    def test_heading_like_text_with_an_explicit_bullet_remains_a_project_item(self):
+        source = """[PROJECT INVOLVEMENT HISTORY]:
+* Project Alpha
+* Professional Development
+* Project Omega
+EDUCATION
+Bachelor of Computer Science
+"""
+
+        recovered = cn._extract_recoverable_cv_source_sections(source)
+
+        self.assertEqual(
+            recovered,
+            {
+                "Project Involvement History": [
+                    "Project Alpha",
+                    "Professional Development",
+                    "Project Omega",
+                ]
+            },
+        )
 
     def test_removes_siva_metadata_and_only_keeps_source_grounded_github(self):
         parsed = {
