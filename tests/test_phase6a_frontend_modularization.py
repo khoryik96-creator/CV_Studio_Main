@@ -48,6 +48,7 @@ FRONTEND_MODULES = (
     "fcv-upload.js",
     "appearance.js",
     "cv-scoring.js",
+    "the-owl.js",
 )
 FRONTEND_STATIC_ASSETS = (
     "app.css",
