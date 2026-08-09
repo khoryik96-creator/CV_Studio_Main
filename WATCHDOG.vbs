@@ -1,5 +1,5 @@
 Option Explicit
-Const EXPECTED_VERSION = "v24.6.293"
+Const EXPECTED_VERSION = "v24.6.294"
 Const HTTP_TIMEOUT_MS = 2500
 Dim objShell,objFSO,scriptDir,identityURL,missed
 Set objShell=CreateObject("WScript.Shell")

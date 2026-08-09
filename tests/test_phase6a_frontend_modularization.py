@@ -43,6 +43,11 @@ FRONTEND_MODULES = (
     "page-nav.js",
     "server-heartbeat.js",
     "candidate-summary.js",
+    "blind-jd.js",
+    "company-profile.js",
+    "fcv-upload.js",
+    "appearance.js",
+    "cv-scoring.js",
 )
 FRONTEND_STATIC_ASSETS = (
     "app.css",
