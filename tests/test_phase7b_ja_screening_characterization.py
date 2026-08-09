@@ -193,5 +193,45 @@ class OfficialScreeningActivityPayloadTests(unittest.TestCase):
             screening._ja_official_screening_activity_payload({}, "")
 
 
+class SpaBrowserBridgeTests(unittest.TestCase):
+    """The create-only SPA browser helper depends on one injected app-state helper
+    (the JobAdder candidate Activity URL builder); everything else is in-module or
+    imported. Bind a fake URL builder and pass an explicit salary_canonical so the
+    generator runs without app or bound salary-AI dependencies."""
+
+    def setUp(self):
+        self._saved = screening._jobadder_candidate_activity_url
+        screening.bind_screening_dependencies(
+            jobadder_candidate_activity_url=lambda cid: "https://app.jobadder.com/candidates/{}?tab=2&activityView=Activity".format(cid),
+        )
+
+    def tearDown(self):
+        screening._jobadder_candidate_activity_url = self._saved
+
+    def test_bridge_report_shape_and_embedded_version(self):
+        report = screening._ja_spa_browser_bridge(
+            "41262878", _FIELDS, "the note", email="x@y.com",
+            salary_canonical={"current": {"display": "RM 10,000"}}, spelling_correction=True,
+        )
+        self.assertEqual(report["candidate_id"], "41262878")
+        self.assertEqual(report["email"], "x@y.com")
+        self.assertEqual(report["profile_url"], "https://app.jobadder.com/candidates/41262878?tab=2&activityView=Activity")
+        self.assertIn("/standardactivity", report["endpoint"])
+        # create-only: the generated helper posts to standardactivity and never edits
+        self.assertIn("activities/standardactivity", report["script"])
+        self.assertIn("CREATE-ONLY", report["method"])
+        # the embedded helper version literal is the managed one (bump_version anchor)
+        import bump_version
+        self.assertIn(
+            "const helperVersion = '{}'".format(bump_version.dotted(bump_version.read_version())),
+            report["script"],
+        )
+
+    def test_bridge_requires_binding(self):
+        screening._jobadder_candidate_activity_url = None
+        with self.assertRaises(TypeError):
+            screening._ja_spa_browser_bridge("1", _FIELDS, "n", salary_canonical={})
+
+
 if __name__ == "__main__":
     unittest.main()

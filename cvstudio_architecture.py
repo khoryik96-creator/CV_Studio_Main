@@ -218,7 +218,7 @@ DEFAULT_MODULES = (
         "ja_screening",
         "domain",
         ("cvstudio_ja_screening.py",),
-        ("ja_answers",),
+        ("ja_answers", "ja_salary_ai", "ja_salary_notice"),
     ),
     ModuleDefinition(
         "ja_salary_notice",
