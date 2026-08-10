@@ -52,6 +52,7 @@ FRONTEND_MODULES = (
     "ai-crawler.js",
     "ai-proxy.js",
     "ai-routing.js",
+    "runtime-core.js",
 )
 FRONTEND_STATIC_ASSETS = (
     "app.css",
