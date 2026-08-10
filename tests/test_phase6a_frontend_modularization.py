@@ -57,6 +57,7 @@ FRONTEND_MODULES = (
     "cv-format.js",
     "ai-keys.js",
     "tab-status.js",
+    "lead-finder.js",
 )
 FRONTEND_STATIC_ASSETS = (
     "app.css",
