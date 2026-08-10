@@ -59,6 +59,7 @@ FRONTEND_MODULES = (
     "tab-status.js",
     "lead-finder.js",
     "ppc.js",
+    "batch-format.js",
 )
 FRONTEND_STATIC_ASSETS = (
     "app.css",
