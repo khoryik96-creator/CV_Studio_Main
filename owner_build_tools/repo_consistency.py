@@ -254,6 +254,37 @@ def verify(root: Path) -> dict:
         except Exception as exc:
             errors.append(f"package.json is unreadable: {exc}")
 
+    # The Windows installer's step 7/7 "Verifying Node DOCX runtime" check pins an
+    # exact adm-zip version in a node one-liner (p.version!=='X'). Nothing else
+    # cross-checked it against package.json/ADM_ZIP_VERSION, so it silently drifted
+    # to 0.5.17 while the dependency moved to 0.6.0 -- every fresh install (source
+    # AND protected) then failed step 7 because npm fetched the correct 0.6.0 that
+    # the stale check rejected. Guard both the version-check one-liners and the
+    # user-facing "adm-zip <ver>" messages so this class of drift cannot recur.
+    installer_path = root / "INSTALL_CORE.ps1"
+    if not installer_path.is_file():
+        errors.append("INSTALL_CORE.ps1 is missing")
+    else:
+        installer_text = installer_path.read_text(encoding="utf-8-sig")
+        pinned = re.findall(r"p\.version!=='([^']*)'", installer_text)
+        if not pinned:
+            errors.append(
+                "INSTALL_CORE.ps1 no longer contains the adm-zip Node DOCX runtime "
+                "version check (p.version!=='<ver>'); it may have been renamed or removed"
+            )
+        for found in pinned:
+            if found != ADM_ZIP_VERSION:
+                errors.append(
+                    f"INSTALL_CORE.ps1 Node DOCX runtime check pins adm-zip {found} "
+                    f"but must match package.json/ADM_ZIP_VERSION ({ADM_ZIP_VERSION})"
+                )
+        for found in re.findall(r"adm-zip (\d+\.\d+\.\d+)", installer_text):
+            if found != ADM_ZIP_VERSION:
+                errors.append(
+                    f"INSTALL_CORE.ps1 references adm-zip {found} in a status message "
+                    f"but must match ADM_ZIP_VERSION ({ADM_ZIP_VERSION})"
+                )
+
     for name in LOCK_FILES:
         if (root / name).exists():
             errors.append(f"{name} must not exist in the deliberate no-lock private source")
