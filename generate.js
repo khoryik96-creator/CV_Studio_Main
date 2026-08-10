@@ -452,6 +452,20 @@ function makeWorkSection(experiences) {
   return xml;
 }
 
+// ── Candidate summary ────────────────────────────────────────────────────────
+function makeSummarySection(summaryBullets) {
+  const bullets = (Array.isArray(summaryBullets) ? summaryBullets : [])
+    .map(value => String(value == null ? '' : value).trim())
+    .filter(Boolean)
+    .slice(0, 20);
+  if (!bullets.length) return '';
+  let xml = sectionHeader('S U M M A R Y                     __________________________________________________________');
+  xml += emptyPara();
+  for (const bullet of bullets) xml += bulletPara(bullet);
+  xml += emptyPara();
+  return xml;
+}
+
 // ── Education ─────────────────────────────────────────────────────────────────
 function makeEducationSection(education) {
   education = (education || []).filter(edu => edu && typeof edu === 'object' && (String(edu.institution || '').trim() || String(edu.degree || '').trim() || String(edu.description || '').trim()));
@@ -587,6 +601,7 @@ const newBodyContent =
   drawingPara +
   makeAboutTable(c, cv) +
   emptyPara() + emptyPara() +
+  makeSummarySection(cv.summary_bullets || []) +
   makeWorkSection(cv.work_experiences || []) +
   makeEducationSection(cv.education || []) +
   makeAdditionalSection(cv.certifications || [], cv.skills || []) +
