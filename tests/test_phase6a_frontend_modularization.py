@@ -60,6 +60,7 @@ FRONTEND_MODULES = (
     "lead-finder.js",
     "ppc.js",
     "batch-format.js",
+    "screening-notes.js",
 )
 FRONTEND_STATIC_ASSETS = (
     "app.css",
