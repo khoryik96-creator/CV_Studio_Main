@@ -3,7 +3,7 @@ setlocal
 chcp 65001 >nul
 cd /d "%~dp0\.."
 echo ============================================
-echo   CV Studio v24.6.314 Protected Windows Build
+echo   CV Studio v24.6.315 Protected Windows Build
 echo ============================================
 echo.
 echo Owner-only builder. Do not send this file or the private source to colleagues.

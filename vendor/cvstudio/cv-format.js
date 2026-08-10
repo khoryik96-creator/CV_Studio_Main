@@ -8,9 +8,14 @@ async function startFormat(blind) {
     raw = document.getElementById('cvInput').value.trim();
     if (!raw) { showToast('Paste a CV first', 'err'); return; }
   }
+  var linkedSummaryBullets = formatSummaryBulletsFor(raw, blind);
+  var summaryToggle = document.getElementById('singleSummaryToggle');
+  var withAutomaticSummary = !blind && !linkedSummaryBullets.length && !!(summaryToggle && summaryToggle.checked);
   var route = aiRoutePayload('cv_single');
   var key = route.api_key;
   if (!key) { showToast('Save an API key for Single CV Formatting route', 'err'); document.getElementById('keyInput').focus(); return; }
+  var automaticSummaryRoute = withAutomaticSummary ? aiRoutePayload('summary') : null;
+  if (withAutomaticSummary && !automaticSummaryRoute.api_key) { showToast('Save an API key for the CV Summary route or turn off Generate CV Summary', 'err'); return; }
 
   var _tabRun = markTabRunning('format');
   document.getElementById('btnFormat').disabled = true;
@@ -31,9 +36,12 @@ async function startFormat(blind) {
   document.getElementById('costPill').className = 'cost-pill';
 
   // Configure steps for blind vs normal
-  var totalSteps = blind ? 4 : 3;
+  var totalSteps = blind || withAutomaticSummary ? 4 : 3;
   if (blind) {
     document.getElementById('pstep2label').textContent = 'Blinding CV';
+    document.getElementById('pstep3label').textContent = 'Generating DOCX';
+  } else if (withAutomaticSummary) {
+    document.getElementById('pstep2label').textContent = 'Generating Summary';
     document.getElementById('pstep3label').textContent = 'Generating DOCX';
   } else {
     document.getElementById('pstep2label').textContent = 'Generating DOCX';
@@ -64,7 +72,7 @@ async function startFormat(blind) {
       throw new Error(normalizeAiProviderError(data.error || 'Server error: ' + res.status, route));
     }
     clearInterval(_fakeInterval);
-    _parsedData = data.data;
+    _parsedData = applyFormatSummaryBullets(data.data, raw, blind);
     _labelBulletLevels = Array.isArray(data.bullet_levels) ? data.bullet_levels : null;
     if (!_parsedData) {
       recordPaidAiFailure('Single CV parse returned no data', data, route.model, route.provider);
@@ -73,6 +81,14 @@ async function startFormat(blind) {
     if (data.warning) showToast(data.warning, 'info');
     _runCost += responseCost(data, route.model, route.provider);
     _runUsage = mergeUsageClient(_runUsage, data.usage || {});
+    if (withAutomaticSummary) {
+      setProgress(44, 'Step 2 — Filling the Summary placeholder with ' + automaticSummaryRoute.provider_label + '…', 2, totalSteps);
+      setOutput('<div style="color:var(--text3);font-style:italic;padding:20px;">Generating source-grounded CV Summary…</div>');
+      var summaryResult = await requestFormattingSummary(raw, automaticSummaryRoute);
+      _parsedData.summary_bullets = summaryResult.bullets.slice();
+      _runCost += summaryResult.cost;
+      _runUsage = mergeUsageClient(_runUsage, summaryResult.usage);
+    }
     // Save real name before blinding overwrites it
     // If parsed name is "Candidate" (already-blinded file), fall back to filename guess
     var parsedName = (_parsedData && _parsedData.candidate && _parsedData.candidate.name) || '';
@@ -113,10 +129,10 @@ async function startFormat(blind) {
     showToast(blind ? 'Blinded! Generating DOCX…' : 'Parsed! Generating DOCX…', 'ok');
 
     // ── Step 2/3: Generate DOCX ───────────────────────────────────────────────
-    var docxStep = blind ? 3 : 2;
-    setProgress(blind ? 72 : 55, `Step ${docxStep} — Generating DOCX…`, docxStep, totalSteps);
+    var docxStep = blind ? 3 : (withAutomaticSummary ? 3 : 2);
+    setProgress(blind || withAutomaticSummary ? 72 : 55, `Step ${docxStep} — Generating DOCX…`, docxStep, totalSteps);
 
-    var _fake3 = blind ? 72 : 55;
+    var _fake3 = blind || withAutomaticSummary ? 72 : 55;
     var _fakeInterval3 = setInterval(function() {
       if (_fake3 < 92) { _fake3 += (92 - _fake3) * 0.05; document.getElementById('progressFill').style.width = _fake3 + '%'; }
     }, 200);
@@ -400,9 +416,14 @@ function renderPreview(d) {
   html += '<tr><td colspan="2"><span class="preview-label">LANGUAGES</span>' + esc(cvNormalizeLanguages(c.languages)) + '</td></tr>';
   html += '</table>';
 
-  // Summary (blank)
+  // Summary placeholder (filled only when explicitly requested)
   html += '<div class="preview-section">SUMMARY</div>';
-  html += '<div style="color:var(--text3);font-style:italic;font-size:11px;">(left blank)</div>';
+  var summaryBullets = Array.isArray(d.summary_bullets) ? d.summary_bullets.map(function(value){ return String(value || '').trim(); }).filter(Boolean) : [];
+  if (summaryBullets.length) {
+    summaryBullets.forEach(function(value){ html += '<div class="preview-bullet">' + boldSafeSummary(value) + '</div>'; });
+  } else {
+    html += '<div style="color:var(--text3);font-style:italic;font-size:11px;">(left blank)</div>';
+  }
 
   // Work experience
   html += '<div class="preview-section">W O R K &nbsp; E X P E R I E N C E S</div>';
@@ -498,6 +519,7 @@ function downloadDocx() {
 
 function clearInput() {
   clearTabRunState('format');
+  clearFormatSummaryDraft();
   // Clear text input
   document.getElementById('cvInput').value = '';
   document.getElementById('charCount').textContent = '0 characters';
@@ -529,6 +551,7 @@ function clearInput() {
 }
 
 document.getElementById('cvInput').addEventListener('input', function() {
+  clearFormatSummaryDraft();
   document.getElementById('charCount').textContent = this.value.length.toLocaleString() + ' characters';
 });
 document.getElementById('cvInput').addEventListener('paste', function() {

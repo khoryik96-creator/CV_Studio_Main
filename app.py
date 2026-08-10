@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.314"
+_INSTALL_RECEIPT_VERSION = "v24.6.315"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -333,7 +333,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.314"
+_CVSTUDIO_VERSION = "v24.6.315"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -9933,11 +9933,258 @@ def _normalize_cv_text_alignment(value):
     return "justify" if str(value or "").strip().lower() == "justify" else "left"
 
 
+def _summary_docx_bullets(value):
+    """Return bounded, non-empty Summary bullets for DOCX insertion."""
+    if not isinstance(value, list):
+        return []
+    bullets = []
+    for item in value:
+        text = re.sub(r"\s+", " ", str(item or "")).strip()
+        if text:
+            bullets.append(text[:2000])
+        if len(bullets) >= 20:
+            break
+    return bullets
+
+
+def _xml_element_span(xml_text, tag, start=0):
+    """Find one possibly nested OOXML element without reserializing the part."""
+    opening = re.compile(r"<{}\b[^>]*>".format(re.escape(tag)))
+    closing = "</{}>".format(tag)
+    match = opening.search(xml_text, start)
+    if not match:
+        return None
+    depth = 1
+    cursor = match.end()
+    while depth:
+        next_open = opening.search(xml_text, cursor)
+        next_close = xml_text.find(closing, cursor)
+        if next_close < 0:
+            return None
+        if next_open and next_open.start() < next_close:
+            depth += 1
+            cursor = next_open.end()
+        else:
+            depth -= 1
+            cursor = next_close + len(closing)
+    return match.start(), cursor
+
+
+def _summary_docx_run(text, bold=False, color="000000", size=24):
+    escaped = html.escape(str(text or ""), quote=False)
+    bold_xml = "<w:b/><w:bCs/>" if bold else ""
+    return (
+        "<w:r><w:rPr>{}<w:color w:val=\"{}\"/>"
+        "<w:sz w:val=\"{}\"/><w:szCs w:val=\"{}\"/></w:rPr>"
+        "<w:t xml:space=\"preserve\">{}</w:t></w:r>"
+    ).format(bold_xml, color, size, size, escaped)
+
+
+def _summary_docx_paragraph_runs(text):
+    runs = []
+    for part in re.split(r"(\*\*[^*]+\*\*)", str(text or "")):
+        if not part:
+            continue
+        if part.startswith("**") and part.endswith("**"):
+            runs.append(_summary_docx_run(part[2:-2], bold=True))
+        else:
+            runs.append(_summary_docx_run(part))
+    return "".join(runs)
+
+
+def _summary_docx_visible_text(paragraph_xml):
+    values = re.findall(r"<w:t\b[^>]*>(.*?)</w:t>", paragraph_xml, re.S)
+    return re.sub(
+        r"\s+",
+        " ",
+        "".join(html.unescape(value) for value in values),
+    ).strip()
+
+
+def _summary_docx_numbering_id(archive, document_xml):
+    match = re.search(
+        r"<w:p\b[^>]*>.*?<w:pStyle\b[^>]*w:val=\"ListParagraph\"[^>]*/>"
+        r".*?<w:numId\b[^>]*w:val=\"(\d+)\"[^>]*/>.*?</w:p>",
+        document_xml,
+        re.S,
+    )
+    if match:
+        return match.group(1)
+    if "word/numbering.xml" in archive.namelist():
+        numbering_xml = archive.read("word/numbering.xml").decode("utf-8", errors="strict")
+        match = re.search(r"<w:num\b[^>]*w:numId=\"(\d+)\"", numbering_xml)
+        if match:
+            return match.group(1)
+    raise ValueError("The DOCX does not contain reusable bullet formatting")
+
+
+def _summary_docx_existing_block_span(document_xml):
+    marker = re.search(
+        r"<w:bookmarkStart\b[^>]*w:id=\"(\d+)\"[^>]*w:name=\"_CVStudioSummary\"[^>]*/>",
+        document_xml,
+    )
+    if not marker:
+        return None
+    paragraph_start = document_xml.rfind("<w:p", 0, marker.start())
+    bookmark_end = re.search(
+        r"<w:bookmarkEnd\b[^>]*w:id=\"{}\"[^>]*/>".format(re.escape(marker.group(1))),
+        document_xml[marker.end():],
+    )
+    if paragraph_start < 0 or not bookmark_end:
+        raise ValueError("The existing CV Studio Summary marker is malformed")
+    absolute_end = marker.end() + bookmark_end.end()
+    paragraph_end = document_xml.find("</w:p>", absolute_end)
+    if paragraph_end < 0:
+        raise ValueError("The existing CV Studio Summary block is malformed")
+    return paragraph_start, paragraph_end + len("</w:p>")
+
+
+def _summary_docx_placeholder_span(document_xml, search_start):
+    boundary = re.compile(
+        r"^(?:this introduction shall be deemed confidential information|"
+        r"private\s*&\s*confidential|w\s+o\s+r\s+k\b|e\s+d\s+u\s+c\s+a\s+t\b|"
+        r"a\s+d\s+d\s+i\s+t\s+i\s+o\s+n\s+a\s+l\b|certifications?\s*:|skills?\s*:)",
+        re.I,
+    )
+    paragraphs = list(re.finditer(r"<w:p\b[^>]*>.*?</w:p>", document_xml[search_start:], re.S))
+    for index, paragraph in enumerate(paragraphs):
+        text = _summary_docx_visible_text(paragraph.group(0))
+        collapsed = re.sub(r"[\s_]+", "", text).rstrip(":").lower()
+        if collapsed != "summary":
+            continue
+        start = search_start + paragraph.start()
+        end = search_start + paragraph.end()
+        prior_end = paragraph.end()
+        for following in paragraphs[index + 1:]:
+            gap = document_xml[search_start + prior_end:search_start + following.start()]
+            if re.search(r"</w:(?:tc|tr|tbl)>", gap):
+                break
+            following_text = _summary_docx_visible_text(following.group(0))
+            if following_text and boundary.match(following_text):
+                break
+            end = search_start + following.end()
+            prior_end = following.end()
+        compact_label = bool(re.fullmatch(r"summary\s*:?\s*", text, re.I))
+        return start, end, compact_label
+    return None
+
+
+def _summary_docx_block(bullets, bookmark_id, numbering_id, compact_label=False):
+    label_text = "Summary:" if compact_label else (
+        "S U M M A R Y                     "
+        "__________________________________________________________"
+    )
+    label_size = 24 if compact_label else 22
+    label = (
+        '<w:p><w:pPr><w:keepNext/><w:spacing w:before="0" w:after="80"/></w:pPr>'
+        '<w:bookmarkStart w:id="{}" w:name="_CVStudioSummary"/>{}</w:p>'
+    ).format(bookmark_id, _summary_docx_run(label_text, bold=True, size=label_size))
+    paragraphs = []
+    for index, bullet in enumerate(bullets):
+        ppr = (
+            '<w:pPr><w:pStyle w:val="ListParagraph"/><w:keepLines/>'
+            '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="{}"/></w:numPr>'
+            '<w:ind w:left="720" w:hanging="360"/><w:spacing w:before="0" w:after="0"/>'
+            '</w:pPr>'
+        ).format(numbering_id)
+        end = '<w:bookmarkEnd w:id="{}"/>'.format(bookmark_id) if index == len(bullets) - 1 else ""
+        paragraphs.append(
+            "<w:p>{}{}{}</w:p>".format(
+                ppr,
+                _summary_docx_paragraph_runs(bullet),
+                end,
+            )
+        )
+    return label + "".join(paragraphs)
+
+
+def _insert_summary_into_docx_bytes(file_bytes, summary_bullets):
+    """Fill/insert the dedicated Summary placeholder in an uploaded DOCX."""
+    bullets = _summary_docx_bullets(summary_bullets)
+    if not bullets:
+        raise ValueError("No CV Summary bullets provided")
+    try:
+        _validate_zip_payload(file_bytes, "DOCX document")
+    except ValueError as exc:
+        if "not a valid ZIP-based document" in str(exc):
+            raise ValueError("The uploaded file is not a valid DOCX document") from exc
+        raise
+
+    source = io.BytesIO(file_bytes)
+    output = io.BytesIO()
+    try:
+        with zipfile.ZipFile(source, "r") as archive:
+            names = set(archive.namelist())
+            if "[Content_Types].xml" not in names or "word/document.xml" not in names:
+                raise ValueError("The uploaded file is not a valid DOCX document")
+            document_xml = archive.read("word/document.xml").decode("utf-8", errors="strict")
+            if "<w:document" not in document_xml or "<w:body" not in document_xml:
+                raise ValueError("The uploaded file is not a valid Word DOCX")
+
+            table_span = _xml_element_span(document_xml, "w:tbl")
+            if not table_span:
+                raise ValueError("The DOCX does not contain a candidate details table")
+            numbering_id = _summary_docx_numbering_id(archive, document_xml)
+            used_ids = {
+                int(value)
+                for value in re.findall(r"<w:bookmarkStart\b[^>]*w:id=\"(\d+)\"", document_xml)
+            }
+            bookmark_id = next((value for value in range(1, 100000) if value not in used_ids), None)
+            if bookmark_id is None:
+                raise ValueError("The DOCX contains too many bookmarks")
+
+            existing = _summary_docx_existing_block_span(document_xml)
+            compact_label = False
+            if not existing:
+                placeholder = _summary_docx_placeholder_span(document_xml, table_span[1])
+                if placeholder:
+                    existing = placeholder[:2]
+                    compact_label = placeholder[2]
+            block = _summary_docx_block(bullets, bookmark_id, numbering_id, compact_label)
+            if existing:
+                patched_xml = document_xml[:existing[0]] + block + document_xml[existing[1]:]
+            else:
+                insertion = table_span[1]
+                patched_xml = document_xml[:insertion] + block + document_xml[insertion:]
+
+            with zipfile.ZipFile(output, "w") as patched:
+                for info in archive.infolist():
+                    payload = patched_xml.encode("utf-8") if info.filename == "word/document.xml" else archive.read(info.filename)
+                    patched.writestr(info, payload)
+    except zipfile.BadZipFile as exc:
+        raise ValueError("The uploaded file is not a valid DOCX document") from exc
+    except UnicodeDecodeError as exc:
+        raise ValueError("The DOCX XML is not valid UTF-8") from exc
+    return output.getvalue()
+
+
 @app.route("/generate-docx", methods=["POST"])
 def generate_docx():
     data_path = None
     out_path = None
     try:
+        if request.mimetype == "multipart/form-data":
+            source_docx = request.files.get("source_docx")
+            if source_docx is None or not source_docx.filename:
+                return jsonify({"error": "Upload a DOCX file first"}), 400
+            if not source_docx.filename.lower().endswith(".docx"):
+                return jsonify({"error": "Summary insertion supports DOCX files only"}), 400
+            try:
+                summary_bullets = json.loads(request.form.get("summary_bullets") or "[]")
+            except (TypeError, ValueError):
+                return jsonify({"error": "Invalid CV Summary bullets"}), 400
+            try:
+                document_bytes = _insert_summary_into_docx_bytes(source_docx.read(), summary_bullets)
+            except ValueError as exc:
+                return jsonify({"error": str(exc)}), _document_validation_status(exc)
+            stem = re.sub(r"(?i)\.docx$", "", os.path.basename(source_docx.filename)).strip() or "Hyppies CV"
+            return send_file(
+                io.BytesIO(document_bytes),
+                as_attachment=True,
+                download_name=stem + " - Summary.docx",
+                mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+
         body = request.get_json(force=True, silent=True)
         if not body:
             return jsonify({"error": "Invalid JSON body"}), 400

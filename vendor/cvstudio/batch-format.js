@@ -50,6 +50,11 @@ function setBatchMode(mode) {
   _batchMode = mode;
   document.getElementById('batchTabFormat').className = 'batch-mode-tab' + (mode==='format' ? ' active' : '');
   document.getElementById('batchTabBlind').className  = 'batch-mode-tab' + (mode==='blind'  ? ' active' : '');
+  var summaryToggle = document.getElementById('batchSummaryToggle');
+  if (summaryToggle) {
+    summaryToggle.disabled = mode === 'blind';
+    summaryToggle.title = mode === 'blind' ? 'CV Summary generation is available for Format All only' : '';
+  }
 }
 
 function handleBatchFileSelect(files) {
@@ -241,6 +246,11 @@ async function runBatch() {
   var route = aiRoutePayload('cv_batch');
   var key = route.api_key;
   if (!key) { showToast('Save an API key for Batch Format route', 'err'); return; }
+  var batchIsBlind = _batchMode === 'blind';
+  var batchSummaryToggle = document.getElementById('batchSummaryToggle');
+  var withBatchSummary = !batchIsBlind && !!(batchSummaryToggle && batchSummaryToggle.checked);
+  var batchSummaryRoute = withBatchSummary ? aiRoutePayload('summary') : null;
+  if (withBatchSummary && !batchSummaryRoute.api_key) { showToast('Save an API key for the CV Summary route or turn off Generate CV Summary', 'err'); return; }
 
   // Only process pending files
   var pending = _batchFiles.filter(function(bf){ return bf.status === 'pending'; });
@@ -279,7 +289,7 @@ async function runBatch() {
     if (_batchTimerEl) _batchTimerEl.textContent = elapsed + 's';
   }, 100);
 
-  var isBlind = _batchMode === 'blind';
+  var isBlind = batchIsBlind;
   // Snapshot the preference once so changing Settings during a running batch
   // cannot produce a ZIP containing mixed Left and Justify documents.
   var batchDocumentAlignment = getCvTextAlignment();
@@ -288,7 +298,7 @@ async function runBatch() {
   function makeSteps(activeIdx) {
     var defs = isBlind
       ? ['Extract', 'Parse', 'Blind', 'Generate DOCX']
-      : ['Extract', 'Parse', 'Generate DOCX'];
+      : (withBatchSummary ? ['Extract', 'Parse', 'Summary', 'Generate DOCX'] : ['Extract', 'Parse', 'Generate DOCX']);
     return defs.map(function(label, i) {
       return {
         label: label,
@@ -298,7 +308,7 @@ async function runBatch() {
     });
   }
 
-  var pcts = isBlind ? [5, 25, 55, 80] : [5, 35, 75];
+  var pcts = isBlind || withBatchSummary ? [5, 25, 55, 80] : [5, 35, 75];
   var donePct = 100;
 
   for (var i = 0; i < _batchFiles.length; i++) {
@@ -350,6 +360,14 @@ async function runBatch() {
       bf.cost += responseCost(pData, route.model, route.provider);
       bf.usage = mergeUsageClient(bf.usage, pData.usage || {});
 
+      if (withBatchSummary) {
+        batchSetProgress(bf, pcts[2], 'Filling Summary placeholder with ' + batchSummaryRoute.provider_label + '…', makeSteps(2));
+        var batchSummaryResult = await requestFormattingSummary(rawText, batchSummaryRoute);
+        cvData.summary_bullets = batchSummaryResult.bullets.slice();
+        bf.cost += batchSummaryResult.cost;
+        bf.usage = mergeUsageClient(bf.usage, batchSummaryResult.usage);
+      }
+
       // Save real name NOW before blind call can overwrite it with "Candidate"
       var parsedCandidateName = (cvData.candidate && cvData.candidate.name) || '';
       var filenameFallback = extractNameFromFilename(bf.file.name);
@@ -372,7 +390,7 @@ async function runBatch() {
       }
 
       // ── Step 3: Generate DOCX ─────────────────────────────────────────────
-      var docxStepIdx = isBlind ? 3 : 2;
+      var docxStepIdx = isBlind || withBatchSummary ? 3 : 2;
       batchSetProgress(bf, pcts[docxStepIdx], 'Generating DOCX…', makeSteps(docxStepIdx));
       var dRes = await fetchWithTimeout('/generate-docx', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data: cvData, alignment: batchDocumentAlignment, bullet_levels: cvMergeLevelLists(batchExtractLevels, batchLabelLevels) }) }, 60000);
       if (!dRes.ok) { var err2 = await dRes.json(); throw new Error('DOCX: ' + (err2.error||'Failed')); }
