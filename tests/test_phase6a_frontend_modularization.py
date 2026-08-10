@@ -51,6 +51,7 @@ FRONTEND_MODULES = (
     "the-owl.js",
     "ai-crawler.js",
     "ai-proxy.js",
+    "ai-routing.js",
 )
 FRONTEND_STATIC_ASSETS = (
     "app.css",
