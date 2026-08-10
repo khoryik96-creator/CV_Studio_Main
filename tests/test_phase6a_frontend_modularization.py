@@ -63,6 +63,7 @@ FRONTEND_MODULES = (
     "screening-notes.js",
     "create-profile.js",
     "page-tabs.js",
+    "stats.js",
 )
 FRONTEND_STATIC_ASSETS = (
     "app.css",
