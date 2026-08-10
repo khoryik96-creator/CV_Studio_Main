@@ -83,6 +83,18 @@ Mirrors the backend extraction recipe:
 
 ## 5. Phased plan (ordered by decoupling risk)
 
+> **STATUS — F1–F4 COMPLETE (v24.6.314).** The extraction is done: `index.html`
+> went from ~18,241 lines to **2,196** (a thin shell of markup + a small
+> inline head/init/orchestration script), with 30 JS modules + `app.css` under
+> `vendor/cvstudio/`. Every slice held the global-function surface constant
+> (1995 → 1995, zero drift) via the Section-6 diff, with runtime checks on the
+> sensitive ones. **F5 is deliberately deferred — see the F5 note below.** The
+> module list below records the actual result; a few names/splits differ from
+> the original plan (notably `net.js` landed as `runtime-core.js`, and several
+> extra sections — `tab-status`, `ai-keys`, `cv-format`, `lead-finder`, `ppc`,
+> `batch-format`, `screening-notes`, `create-profile`, `page-tabs`, `stats`,
+> `locks`, `input-file`, `hyppies-export` — were drained too).
+
 **Phase F0 — foundation (DONE).** `lazy-loader`, `api-transport`, `page-nav`,
 `server-heartbeat`; Salary via iframe.
 
@@ -117,11 +129,30 @@ modules and the global surface is well-understood:
 - `settings.js` — settings tabs/panel, locked-tab version-scoped persistence,
   integrations diagnostics + local backup, sidebar tab run-status indicators
 
-**Phase F5 — hardening (optional, after the block is drained).**
-- Split the HTML body (1594–3546) into server-rendered partials/templates.
-- Migrate inline `onclick=`/`onchange=` to `addEventListener` (delegated), then set a
-  strict `script-src` CSP that forbids inline scripts/handlers — a real security win
-  the extraction unlocks.
+**Phase F5 — hardening (optional). DEFERRED by decision (v24.6.314).**
+- Split the HTML body into server-rendered partials/templates.
+- Migrate inline `onclick=`/`onchange=` to delegated `addEventListener`, then set a
+  strict `script-src` CSP that forbids inline scripts/handlers.
+
+Why deferred — F5 is a **different risk class** from F1–F4 and was intentionally
+left out:
+- It is a **rewrite, not a byte-move**, so the Section-6 surface diff (which
+  proved F1–F4 safe) does **not** protect it: a mis-wired handler leaves its
+  global function defined, so the diff stays green while the control is dead.
+- Scope at completion: **376** static inline `on*=` handlers in `index.html`,
+  **56** more generated *dynamically* inside module `innerHTML` strings (9
+  files), and **3** remaining inline `<script>` blocks. A strict `script-src`
+  would break the 56 dynamic handlers at runtime (in rows/tables that only
+  appear after user actions — invisible to a load-time smoke test) and block
+  the inline scripts. (Good news: **0** `eval`/`new Function`/`javascript:`.)
+- ROI is modest: CV Studio runs single-user on `localhost`, where strict CSP's
+  payoff is far smaller than for a public multi-user site.
+
+If ever revisited, do it staged, not swept: (1) build a behavioural harness that
+fires every `on*=` target and asserts it works — the missing safety net; (2)
+migrate handlers to delegated listeners in small batches (delegation also
+handles the dynamic ones); (3) ship the CSP in `Content-Security-Policy-Report-Only`
+first to observe real-usage violations, and only enforce once reports are clean.
 
 ## 6. Verification strategy (the frontend "golden diff")
 
@@ -170,15 +201,16 @@ the smaller, in-convention change that matches how every other surface is manage
 
 ## 9. Sequencing summary
 
-| Phase | Slices | ~Lines drained | Risk |
-|-------|--------|----------------|------|
-| F0 | foundation (done) + Salary iframe | — | — |
-| F1 | `app.css` | ~1,411 | very low |
-| F2 | 6 leaf tab controllers | ~2,550 | low |
-| F3 | The Owl, AI Crawler | ~3,485 | medium |
-| F4 | 5 shared-service modules | ~4,500+ | medium-high (extract last) |
-| F5 | HTML partials + strict CSP | — | opt-in hardening |
+| Phase | Slices | ~Lines drained | Risk | Status |
+|-------|--------|----------------|------|--------|
+| F0 | foundation + Salary iframe | — | — | ✅ done |
+| F1 | `app.css` | ~1,411 | very low | ✅ done |
+| F2 | 6 leaf tab controllers | ~2,550 | low | ✅ done |
+| F3 | The Owl, AI Crawler | ~3,485 | medium | ✅ done |
+| F4 | shared services + remaining feature/utility sections | ~9,000+ | medium-high | ✅ done |
+| F5 | HTML partials + strict CSP | — | opt-in hardening | ⏸ deferred (see F5 note) |
 
-Draining F1–F4 takes `index.html` from ~19,800 lines to a thin shell of markup +
-`<script src>` tags — the same outcome the backend achieved, reached the same way:
-one bounded, behaviour-preserving, independently-verified slice at a time.
+F1–F4 took `index.html` from ~18,241 lines to **2,196** — a thin shell of markup +
+a small inline head/init/orchestration script + `<script src>` tags — reached the
+same way as the backend: one bounded, behaviour-preserving, independently-verified
+slice at a time. F5 is deferred (Section 5).
