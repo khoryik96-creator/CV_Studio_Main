@@ -64,6 +64,10 @@ FRONTEND_MODULES = (
     "create-profile.js",
     "page-tabs.js",
     "stats.js",
+    "hyppies-export.js",
+    "settings.js",
+    "locks.js",
+    "input-file.js",
 )
 FRONTEND_STATIC_ASSETS = (
     "app.css",
