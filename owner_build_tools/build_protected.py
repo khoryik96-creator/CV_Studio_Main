@@ -28,8 +28,8 @@ import zipfile
 import zlib
 from pathlib import Path
 
-VERSION = "v24.6.298"
-VERSION_SLUG = "v24_6_298"
+VERSION = "v24.6.299"
+VERSION_SLUG = "v24_6_299"
 PRODUCT = "TheGuoLab-CVStudio"
 RECEIPT_SCHEMA = 2
 TOTP_MASK = bytes([147,57,36,83,116,245,122,57,165,162,176,168,249,50,204,128,45,174,232,56])
@@ -55,6 +55,7 @@ FRONTEND_MODULES = (
     "the-owl.js",
     "ai-crawler.js",
     "ai-proxy.js",
+    "ai-routing.js",
 )
 # Non-JS vendor assets served from /vendor/cvstudio/. Copied verbatim into the
 # protected build - never node --check'd or obfuscated (they carry no logic).
