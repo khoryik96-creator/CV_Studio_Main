@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Continue'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 if (-not $Root.EndsWith('\')) { $Root += '\' }
 $Log = Join-Path $Root 'install_log.txt'
-$InstallVersion = 'v24.6.304'
+$InstallVersion = 'v24.6.305'
 $AntiwordVersion = '1.3.5'
 $AntiwordRuntimeFileCount = 37
 $AntiwordManifestSha256 = '7d365a89f268a2fc34f815b369474124bc6a1aac02e9b0b57e6dfd5eb5368da0'
@@ -654,7 +654,7 @@ function Install-PythonPackages {
     }
     $stampDir = Join-Path $env:APPDATA 'GUOLabCVStudio'
     New-Item -ItemType Directory -Path $stampDir -Force | Out-Null
-    Set-Content -LiteralPath (Join-Path $stampDir '.deps_ok') -Value 'v24.6.304-bundled-pdfium-ocr-antiword' -Encoding ASCII
+    Set-Content -LiteralPath (Join-Path $stampDir '.deps_ok') -Value 'v24.6.305-bundled-pdfium-ocr-antiword' -Encoding ASCII
     Write-Step '    Python packages ready.'
     return $true
 }
@@ -1331,9 +1331,9 @@ function Check-PdfOcrRenderer {
 function Install-NodePackages {
     Write-Blank
     Write-Step '[7/7] Verifying Node DOCX runtime...'
-    $verifyRc = Run-Logged -FilePath 'node' -Arguments @('-e', "const p=require('adm-zip/package.json');if(p.version!=='0.5.17')process.exit(2);require('adm-zip')") -WorkingDirectory $Root
+    $verifyRc = Run-Logged -FilePath 'node' -Arguments @('-e', "const p=require('adm-zip/package.json');if(p.version!=='0.6.0')process.exit(2);require('adm-zip')") -WorkingDirectory $Root
     if ($verifyRc -eq 0) {
-        Write-Step '    Required Node package adm-zip 0.5.17 is installed and loadable.'
+        Write-Step '    Required Node package adm-zip 0.6.0 is installed and loadable.'
         return $true
     }
     if ($script:IsProtectedPackage) {
@@ -1344,8 +1344,8 @@ function Install-NodePackages {
     Write-Step '    Owner/source build dependency is missing. Running pinned npm install...'
     $rc = Run-Logged -FilePath 'npm' -Arguments @('install','--ignore-scripts','--no-audit','--no-fund','--save-exact') -WorkingDirectory $Root
     if ($rc -ne 0) { Write-Step '    ERROR: npm install failed.'; return $false }
-    $verifyRc = Run-Logged -FilePath 'node' -Arguments @('-e', "const p=require('adm-zip/package.json');if(p.version!=='0.5.17')process.exit(2);require('adm-zip')") -WorkingDirectory $Root
-    if ($verifyRc -ne 0) { Write-Step '    ERROR: adm-zip 0.5.17 could not be loaded after npm install.'; return $false }
+    $verifyRc = Run-Logged -FilePath 'node' -Arguments @('-e', "const p=require('adm-zip/package.json');if(p.version!=='0.6.0')process.exit(2);require('adm-zip')") -WorkingDirectory $Root
+    if ($verifyRc -ne 0) { Write-Step '    ERROR: adm-zip 0.6.0 could not be loaded after npm install.'; return $false }
     Write-Step '    Node packages ready and verified.'
     return $true
 }
