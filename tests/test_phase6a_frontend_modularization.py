@@ -61,6 +61,7 @@ FRONTEND_MODULES = (
     "ppc.js",
     "batch-format.js",
     "screening-notes.js",
+    "create-profile.js",
 )
 FRONTEND_STATIC_ASSETS = (
     "app.css",
