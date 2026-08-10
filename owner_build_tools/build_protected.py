@@ -28,8 +28,8 @@ import zipfile
 import zlib
 from pathlib import Path
 
-VERSION = "v24.6.311"
-VERSION_SLUG = "v24_6_311"
+VERSION = "v24.6.312"
+VERSION_SLUG = "v24_6_312"
 PRODUCT = "TheGuoLab-CVStudio"
 RECEIPT_SCHEMA = 2
 TOTP_MASK = bytes([147,57,36,83,116,245,122,57,165,162,176,168,249,50,204,128,45,174,232,56])
@@ -66,6 +66,7 @@ FRONTEND_MODULES = (
     "batch-format.js",
     "screening-notes.js",
     "create-profile.js",
+    "page-tabs.js",
 )
 # Non-JS vendor assets served from /vendor/cvstudio/. Copied verbatim into the
 # protected build - never node --check'd or obfuscated (they carry no logic).
