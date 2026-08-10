@@ -56,6 +56,7 @@ FRONTEND_MODULES = (
     "jobadder-upload.js",
     "cv-format.js",
     "ai-keys.js",
+    "tab-status.js",
 )
 FRONTEND_STATIC_ASSETS = (
     "app.css",
