@@ -100,9 +100,18 @@ function wordExportOmitsOnlyTopExperienceSummary() {
         return clickedAnchor;
       },
     },
+    setTimeout(fn) { fn(); },
     showToast() {},
   });
-  vm.runInContext(functions(['_escDoc', '_wordDocShell', '_safeFileStem', 'exportAnonJDDoc']), context);
+  vm.runInContext(functions([
+    '_escDoc',
+    '_wordDocShell',
+    '_safeFileStem',
+    'wordExportFormat',
+    '_downloadExportBlob',
+    'exportWordDocument',
+    'exportAnonJDDoc',
+  ]), context);
   context.exportAnonJDDoc();
 
   assert.ok(capturedBlob, 'Word export should create a blob');

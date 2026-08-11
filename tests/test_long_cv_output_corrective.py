@@ -535,6 +535,43 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertIn("Delivered regional platform migrations.", out_xml)
         self.assertIn("Python, Go, Kubernetes", out_xml)       # skills kept
 
+    def test_generate_docx_summary_uses_complete_heading_not_sentence_prefix(self):
+        # Regression (HIGH): prefix matching treated "Experience leading ..." as
+        # the next section, leaving the old Summary in place. At the same time,
+        # an unrecognised "Career Highlights" section was consumed as Summary.
+        import xml.etree.ElementTree as ET
+
+        def para(text, bold=False):
+            rpr = "<w:rPr><w:b/></w:rPr>" if bold else ""
+            return "<w:p><w:r>{}<w:t>{}</w:t></w:r></w:p>".format(rpr, text)
+
+        source = self._summary_source_docx(
+            para("Summary", bold=True)
+            + para("Experience leading regional delivery teams.")
+            + para("Old second summary sentence.")
+            + para("Career Highlights")
+            + para("Major achievement that must remain.")
+            + para("Skills", bold=True)
+            + para("Python, Go, Kubernetes")
+        )
+        _, out_xml = self._apply_summary(source, ["New summary bullet."])
+        ET.fromstring(out_xml)
+        self.assertIn("New summary bullet.", out_xml)
+        self.assertNotIn("Experience leading regional delivery teams.", out_xml)
+        self.assertNotIn("Old second summary sentence.", out_xml)
+        self.assertIn("Career Highlights", out_xml)
+        self.assertIn("Major achievement that must remain.", out_xml)
+        self.assertIn("Python, Go, Kubernetes", out_xml)
+
+    def test_summary_boundary_accepts_decorated_and_letter_spaced_headings(self):
+        self.assertTrue(app._summary_docx_is_section_boundary(
+            "W O R K   E X P E R I E N C E S __________________"
+        ))
+        self.assertTrue(app._summary_docx_is_section_boundary("2. Core Expertise:"))
+        self.assertFalse(app._summary_docx_is_section_boundary(
+            "Skills spanning Python, Go, and Kubernetes."
+        ))
+
     def test_docx_restores_source_project_training_and_omits_untrusted_metadata(self):
         source = """Other Information
 [PROJECT INVOLVEMENT HISTORY]:
