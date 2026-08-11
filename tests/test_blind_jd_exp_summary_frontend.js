@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const html = fs.readFileSync(path.resolve(__dirname, '..', 'index.html'), 'utf8');
+const html = require('./frontend_sources').frontendSource();
 
 function functionRange(source, name) {
   const marker = 'function ' + name + '(';

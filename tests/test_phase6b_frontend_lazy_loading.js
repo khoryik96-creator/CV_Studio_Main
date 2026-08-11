@@ -6,7 +6,7 @@ const path = require('path');
 const vm = require('vm');
 
 const root = path.resolve(__dirname, '..');
-const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+const html = require('./frontend_sources').frontendSource();
 const loaderSource = fs.readFileSync(path.join(root, 'vendor', 'cvstudio', 'lazy-loader.js'), 'utf8');
 
 function sourceContract() {

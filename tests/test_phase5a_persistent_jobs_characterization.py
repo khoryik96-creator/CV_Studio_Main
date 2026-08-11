@@ -1,6 +1,9 @@
 import inspect
 import os
 from pathlib import Path
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parent))
+from frontend_sources import frontend_source
 import tempfile
 import threading
 import unittest
@@ -327,9 +330,9 @@ class Phase5APersistentJobsCharacterizationTests(unittest.TestCase):
             app._OUTLOOK_SERVICE._draft_cache.update(original)
 
     def test_frontend_background_orchestration_state_is_page_process_local(self):
-        source = (
-            Path(app.__file__).resolve().parent / "index.html"
-        ).read_text(encoding="utf-8-sig")
+        # Frontend JS now lives in vendor/cvstudio/*.js modules; search the
+        # combined source (index.html + modules) so moved markers are found.
+        source = frontend_source()
         markers = [
             "window._theSpiderPreviewPrefetchQueue = [];",
             "window._theSpiderPreviewPrefetchRunning = false;",

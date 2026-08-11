@@ -104,6 +104,14 @@ at a glance. The other account keeps its own existing branch naming.
   routes/schemas/gates. Do not add Phase 7B, a language rewrite, a release or
   unrelated scope.
 
+> **STATUS UPDATE (v24.6.315).** The Phase 7A backend composition-root work below
+> is long complete, and a separate **frontend modularization is now also done**:
+> `index.html` was sliced from ~18,241 lines into a 2,196-line thin shell plus 30
+> `vendor/cvstudio/*.js` modules + `app.css` (phases F1–F4, PRs #112–#134), each
+> behaviour-preserving and verified by a global-surface diff. F5 (delegated
+> handlers + strict CSP) is deliberately deferred — see `FRONTEND_ROADMAP.md §5`.
+> The scope description below is retained as historical context.
+
 ## Active scope: Phase 7A modular-monolith foundation
 
 Phase 7A starts from exact clean master

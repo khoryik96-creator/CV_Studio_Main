@@ -6,7 +6,7 @@ const path = require('path');
 const vm = require('vm');
 
 const indexPath = path.resolve(__dirname, '..', 'index.html');
-const html = fs.readFileSync(indexPath, 'utf8');
+const html = require('./frontend_sources').frontendSource();
 
 function inlineScripts(source) {
   const scripts = [];
