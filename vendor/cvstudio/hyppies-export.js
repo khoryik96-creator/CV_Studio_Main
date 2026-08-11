@@ -47,3 +47,35 @@ function _wordDocShell(title, subtitle, bodyHtml) {
 function _safeFileStem(s) {
   return String(s||'export').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'') || 'export';
 }
+
+// ── Word export format (Settings toggle) ─────────────────────────────────────
+// 'doc'  = legacy HTML-as-.doc (Word renders the CSS richly, but warns the file
+//          format/extension don't match).
+// 'docx' = a genuine OOXML .docx built in-browser (docx-export.js) — clean,
+//          warning-free, editable, but plainer styling.
+function wordExportFormat() {
+  try { return localStorage.getItem('cvstudio_word_export_format') === 'docx' ? 'docx' : 'doc'; }
+  catch (e) { return 'doc'; }
+}
+function setWordExportFormat(fmt) {
+  try { localStorage.setItem('cvstudio_word_export_format', fmt === 'docx' ? 'docx' : 'doc'); }
+  catch (e) {}
+}
+function _downloadExportBlob(blob, filename) {
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); }, 0);
+}
+// Export a Word document from the export-shell HTML, honouring the toggle.
+// `stem` excludes the trailing date + extension. Returns 'doc' | 'docx'.
+function exportWordDocument(fullHtml, stem) {
+  var name = String(stem || 'export') + '-' + new Date().toISOString().slice(0, 10);
+  if (wordExportFormat() === 'docx' && typeof htmlToDocxBlob === 'function') {
+    _downloadExportBlob(htmlToDocxBlob(fullHtml), name + '.docx');
+    return 'docx';
+  }
+  _downloadExportBlob(new Blob([fullHtml], { type: 'application/msword' }), name + '.doc');
+  return 'doc';
+}

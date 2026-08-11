@@ -163,6 +163,32 @@ function setCvTextAlignment(value, silent) {
 })();
 document.addEventListener('DOMContentLoaded', renderCvTextAlignmentSetting);
 
+// ── Word export format (.doc / .docx) ────────────────────────────
+// Storage getter/setter (wordExportFormat / setWordExportFormat) live in
+// hyppies-export.js; this only drives the Settings segmented toggle.
+function renderWordExportFormatSetting() {
+  var value = (typeof wordExportFormat === 'function') ? wordExportFormat() : 'doc';
+  var doc = document.getElementById('wordFormatDoc');
+  var docx = document.getElementById('wordFormatDocx');
+  [doc, docx].forEach(function(btn){
+    if (!btn) return;
+    var active = (btn === doc && value === 'doc') || (btn === docx && value === 'docx');
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    btn.style.background = active ? 'var(--blue)' : 'var(--surface)';
+    btn.style.borderColor = active ? 'var(--blue)' : 'var(--border)';
+    btn.style.color = active ? '#ffffff' : 'var(--text2)';
+    btn.style.boxShadow = active ? '0 3px 9px rgba(37,99,235,.16)' : 'none';
+  });
+}
+function setWordExportFormatUI(value) {
+  value = value === 'docx' ? 'docx' : 'doc';
+  if (typeof setWordExportFormat === 'function') setWordExportFormat(value);
+  renderWordExportFormatSetting();
+  showToast(value === 'docx' ? 'Word exports will download as clean .docx files.' : 'Word exports will download as richly-styled .doc files.', 'ok');
+  return value;
+}
+document.addEventListener('DOMContentLoaded', renderWordExportFormatSetting);
+
 // ── Auto-upload toggle ────────────────────────────────────────────
 window._jaAutoUpload = true; // default on
 (function() {

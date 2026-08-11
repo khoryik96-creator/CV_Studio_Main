@@ -761,8 +761,7 @@ function exportTheOwlWord() {
   var meta = window._theOwlMeta || getMarketMeta();
   var bodyHtml = '<p class="market-meta-line"><strong>Target location:</strong> ' + _escDoc(meta.location) + '<br><strong>Priority industries:</strong> ' + _escDoc(meta.industries) + '</p>' + marketTextToDocHtml(text);
   var html = theOwlWordShell('The Owl Talent Map', 'Hyppies · ' + meta.location + ' · ' + meta.industries, bodyHtml);
-  var blob = new Blob([html], {type:'application/msword'});
-  var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'the-owl-talent-map-' + _safeFileStem(meta.location) + '-' + new Date().toISOString().slice(0,10) + '.doc'; a.click(); URL.revokeObjectURL(a.href);
+  exportWordDocument(html, 'the-owl-talent-map-' + _safeFileStem(meta.location));
   showToast('The Owl Word report exported', 'ok');
 }
 function exportTheOwlPDF() {

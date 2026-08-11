@@ -780,12 +780,8 @@ function exportAnonJDDoc() {
     body += '<h2>Alternative Job Titles</h2><p>' + arr(j.alt_titles).map(function(t){ return '<span class="chip">' + _escDoc(String(t).trim()) + '</span>'; }).join(' ') + '</p>';
   }
   var html = _wordDocShell(j.job_title || 'Role Brief', 'Hyppies', body);
-  var blob = new Blob([html], {type:'application/msword'});
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'blind-jd-' + _safeFileStem(j.job_title) + '-' + new Date().toISOString().slice(0,10) + '.doc';
-  a.click(); URL.revokeObjectURL(a.href);
-  showToast('Word doc exported!', 'ok');
+  var fmt = exportWordDocument(html, 'blind-jd-' + _safeFileStem(j.job_title));
+  showToast('Word .' + fmt + ' exported!', 'ok');
 }
 
 function exportAnonJDPDF() {
