@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.319"
+_INSTALL_RECEIPT_VERSION = "v24.6.320"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -333,7 +333,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.319"
+_CVSTUDIO_VERSION = "v24.6.320"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -10001,6 +10001,103 @@ def _summary_docx_visible_text(paragraph_xml):
     ).strip()
 
 
+_SUMMARY_DOCX_SECTION_HEADING_KEYS = frozenset({
+    "experience",
+    "professionalexperience",
+    "professionalexperiences",
+    "workexperience",
+    "workexperiences",
+    "workingexperience",
+    "relevantexperience",
+    "industryexperience",
+    "employment",
+    "employmentexperience",
+    "employmenthistory",
+    "careerhistory",
+    "careerbackground",
+    "workhistory",
+    "education",
+    "educationqualifications",
+    "academicbackground",
+    "academicqualifications",
+    "qualifications",
+    "skills",
+    "keyskills",
+    "technicalskills",
+    "professionalskills",
+    "coreskills",
+    "itskills",
+    "coreexpertise",
+    "expertise",
+    "competencies",
+    "corecompetencies",
+    "certification",
+    "certifications",
+    "license",
+    "licenses",
+    "licence",
+    "licences",
+    "accreditation",
+    "accreditations",
+    "project",
+    "projects",
+    "projecthistory",
+    "projectinvolvementhistory",
+    "achievement",
+    "achievements",
+    "careerhighlights",
+    "professionalhighlights",
+    "selectedaccomplishments",
+    "accomplishments",
+    "award",
+    "awards",
+    "honour",
+    "honours",
+    "honor",
+    "honors",
+    "reference",
+    "references",
+    "language",
+    "languages",
+    "publication",
+    "publications",
+    "interest",
+    "interests",
+    "membership",
+    "memberships",
+    "professionaldevelopment",
+    "training",
+    "trainingprogramme",
+    "participatedtrainingprogramme",
+    "volunteerexperience",
+    "volunteering",
+    "personaldetails",
+    "additionalinformation",
+})
+
+
+def _summary_docx_is_section_boundary(text):
+    """Return True only for a complete, standalone CV section heading.
+
+    Prefix matching is unsafe here: ordinary summary sentences often begin with
+    words such as "Experience" or "Skills". Treating those sentences as headings
+    leaves the old Summary behind. Conversely, failing to recognise a real heading
+    lets replacement consume the following section. Comparing a decoration-free
+    *whole* heading handles normal and letter-spaced headings without either risk.
+    """
+    value = str(text or "").strip()
+    if re.match(
+        r"^(?:this introduction shall be deemed confidential information|"
+        r"private\s*&\s*confidential)\b",
+        value,
+        re.I,
+    ):
+        return True
+    value = re.sub(r"^\s*(?:\d+(?:\.\d+)*|[A-Za-z])[.)]\s+", "", value)
+    key = re.sub(r"[^a-z0-9]+", "", value.lower())
+    return key in _SUMMARY_DOCX_SECTION_HEADING_KEYS
+
+
 def _summary_docx_numbering_id(archive, document_xml):
     match = re.search(
         r"<w:p\b[^>]*>.*?<w:pStyle\b[^>]*w:val=\"ListParagraph\"[^>]*/>"
@@ -10049,32 +10146,6 @@ def _summary_docx_existing_block_span(document_xml):
 
 
 def _summary_docx_placeholder_span(document_xml, search_start):
-    # A following paragraph starts a NEW section (and thus ends the Summary span)
-    # if its visible text begins with a section heading. This must include common
-    # real-world CV headings -- especially the experience/employment ones -- or the
-    # span runs past them and the replacement deletes the job content. (Matching a
-    # heading prefix, like the existing letter-spaced CV Studio headings, is
-    # intentional so decorated headings such as "EXPERIENCE ____" still match.)
-    boundary = re.compile(
-        r"^(?:"
-        r"this introduction shall be deemed confidential information|"
-        r"private\s*&\s*confidential|"
-        # letter-spaced CV Studio headings
-        r"w\s+o\s+r\s+k\b|e\s+d\s+u\s+c\s+a\s+t\b|a\s+d\s+d\s+i\s+t\s+i\s+o\s+n\s+a\s+l\b|"
-        # experience / employment (the critical ones to catch)
-        r"(?:career|professional|work(?:ing)?|employment|relevant|industry)\s+"
-        r"(?:experience|history|background)\b|"
-        r"experience\b|employment\b|"
-        # other standard sections
-        r"education\b|academic\b|qualifications?\b|"
-        r"(?:key|technical|professional|core|it)\s+skills\b|skills?\b|competenc|"
-        r"certifications?\b|licen[cs]es?\b|accreditations?\b|"
-        r"projects?\b|achievements?\b|awards?\b|honou?rs?\b|"
-        r"references?\b|languages?\b|publications?\b|interests?\b|memberships?\b|"
-        r"professional\s+development\b|training\b|volunteer"
-        r")",
-        re.I,
-    )
     paragraphs = list(re.finditer(r"<w:p\b[^>]*>.*?</w:p>", document_xml[search_start:], re.S))
     for index, paragraph in enumerate(paragraphs):
         text = _summary_docx_visible_text(paragraph.group(0))
@@ -10089,7 +10160,7 @@ def _summary_docx_placeholder_span(document_xml, search_start):
             if re.search(r"</w:(?:tc|tr|tbl)>", gap):
                 break
             following_text = _summary_docx_visible_text(following.group(0))
-            if following_text and boundary.match(following_text):
+            if following_text and _summary_docx_is_section_boundary(following_text):
                 break
             end = search_start + following.end()
             prior_end = following.end()

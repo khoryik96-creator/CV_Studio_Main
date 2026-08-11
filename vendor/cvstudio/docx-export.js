@@ -78,6 +78,7 @@ function _docxInlineRuns(node, bold, italic, out) {
       var t = child.tagName;
       if (t === 'BR') { out.push({ text: '\n', bold: false, italic: false }); }
       else if (t === 'IMG') { /* skip images */ }
+      else if (t === 'UL' || t === 'OL') { /* nested lists are separate blocks */ }
       else if (t === 'STRONG' || t === 'B') _docxInlineRuns(child, true, italic, out);
       else if (t === 'EM' || t === 'I') _docxInlineRuns(child, bold, true, out);
       else _docxInlineRuns(child, bold, italic, out); // span and others: inline
@@ -103,6 +104,15 @@ function _docxWalk(node, blocks, listDepth, ordered) {
     } else if (tag === 'P') {
       var pr = _docxTrimRuns(_docxInlineRuns(el, false, false, []));
       if (pr.length) blocks.push({ type: 'paragraph', runs: pr });
+    } else if (tag === 'PRE') {
+      // CV Scoring's raw-report fallback is a <pre> containing direct text.
+      // Preserve its line breaks instead of treating it as a transparent
+      // container (whose text nodes _docxWalk intentionally ignores).
+      var preText = String(el.textContent || '').replace(/\r\n?/g, '\n');
+      preText = preText.replace(/^\n+|\n+$/g, '');
+      if (preText.trim()) {
+        blocks.push({ type: 'paragraph', runs: [{ text: preText, bold: false, italic: false }] });
+      }
     } else if (tag === 'UL' || tag === 'OL') {
       _docxWalk(el, blocks, listDepth + 1, tag === 'OL');
     } else if (tag === 'LI') {

@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>CV Studio</title>
 <link rel="icon" type="image/png" href="cv_studio_logo.png?v=24.6.79-ui"/>
-<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.319">
-<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.319"></script>
+<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.320">
+<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.320"></script>
 <script>
 /* CV Studio Doctor — built-in diagnostic recorder.
  * Records JS errors, unhandled rejections, failed/slow network calls and
@@ -90,10 +90,32 @@
   // browser-cached) once and record their referenced ids so missingElements()
   // covers them too — otherwise Doctor reports a false "0 missing".
   var _externalScriptIds = null;
+  var _externalDefinedIds = null;
+  // These are deliberate compatibility probes; absence is valid and should not
+  // make a clean installation look broken in the Doctor report.
+  var _optionalScriptIds = {
+    jaSettingsPanel: true,
+    ppcInvoicePreviewCreateBtn: true,
+    oneNoteActivityDiagnosticStatus: true,
+    oneNoteActivityDiagnosticCandidateId: true,
+    oneNoteActivityDiagnosticActivityId: true,
+    oneNoteActivityDiagnosticOutput: true,
+    oneNoteActivityDiagnosticRunBtn: true,
+    oneNoteActivityCreateDiagnosticStatus: true,
+    oneNoteActivityCreateCandidateId: true,
+    oneNoteActivityCreateConfirm: true,
+    oneNoteActivityCreateDiagnosticOutput: true,
+    oneNoteActivityCreateDiagnosticRunBtn: true
+  };
   function scanExternalScripts() {
     try {
-      var sc = document.getElementsByTagName("script"), acc = {}, pending = 0, done = false;
-      function finish() { if (done) return; done = true; _externalScriptIds = acc; }
+      var sc = document.getElementsByTagName("script"), acc = {}, defined = {}, pending = 0, done = false;
+      function finish() {
+        if (done) return;
+        done = true;
+        _externalScriptIds = acc;
+        _externalDefinedIds = defined;
+      }
       for (var i = 0; i < sc.length; i++) {
         var url = sc[i].src; if (!url) continue;
         try { if (new URL(url, location.href).origin !== location.origin) continue; } catch (e) { continue; }
@@ -102,11 +124,22 @@
           .then(function (txt) {
             var rx = /getElementById\(\s*['"]([A-Za-z0-9_\-]+)['"]\s*\)/g, mm;
             while ((mm = rx.exec(txt))) acc[mm[1]] = true;
+            // IDs inside generated HTML and direct element.id assignments are
+            // dynamic definitions, not elements required in the initial page.
+            var markupIdRx = /<[^>]*\bid\s*=\s*['"]([A-Za-z0-9_\-]+)['"]/g;
+            var propertyIdRx = /\.\s*id\s*=\s*['"]([A-Za-z0-9_\-]+)['"]/g;
+            var attributeIdRx = /setAttribute\(\s*['"]id['"]\s*,\s*['"]([A-Za-z0-9_\-]+)['"]\s*\)/g;
+            while ((mm = markupIdRx.exec(txt))) defined[mm[1]] = true;
+            while ((mm = propertyIdRx.exec(txt))) defined[mm[1]] = true;
+            while ((mm = attributeIdRx.exec(txt))) defined[mm[1]] = true;
             if (--pending === 0) finish();
           });
       }
       if (pending === 0) finish();
-    } catch (e) { if (!_externalScriptIds) _externalScriptIds = {}; }
+    } catch (e) {
+      if (!_externalScriptIds) _externalScriptIds = {};
+      if (!_externalDefinedIds) _externalDefinedIds = {};
+    }
   }
   function missingElements() {
     var ids = {}, missing = [];
@@ -115,7 +148,11 @@
       for (var i = 0; i < sc.length; i++) { var src = sc[i].textContent || ""; while ((mm = re.exec(src))) ids[mm[1]] = true; }
     } catch (e) {}
     if (_externalScriptIds) { Object.keys(_externalScriptIds).forEach(function (k) { ids[k] = true; }); }
-    Object.keys(ids).forEach(function (id) { try { if (!document.getElementById(id)) missing.push(id); } catch (e) {} });
+    Object.keys(ids).forEach(function (id) {
+      try {
+        if (!_optionalScriptIds[id] && !(_externalDefinedIds && _externalDefinedIds[id]) && !document.getElementById(id)) missing.push(id);
+      } catch (e) {}
+    });
     return missing;
   }
   function buildReport() {
@@ -217,7 +254,7 @@
 <div class="app">
   <div class="header" style="position:relative;">
     <div>
-      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.319 (Offline) by The 郭 Lab</span></h1>
+      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.320 (Offline) by The 郭 Lab</span></h1>
 
     </div>
     <div class="header-tools">
@@ -2186,33 +2223,33 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
-<script src="/vendor/cvstudio/api-transport.js?v=v24.6.319"></script>
-<script src="/vendor/cvstudio/page-nav.js?v=v24.6.319"></script>
-<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.319"></script>
-<script src="/vendor/cvstudio/create-profile.js?v=v24.6.319"></script>
-<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.319"></script>
-<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.319"></script>
-<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.319"></script>
-<script src="/vendor/cvstudio/company-profile.js?v=v24.6.319"></script>
-<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.319"></script>
-<script src="/vendor/cvstudio/appearance.js?v=v24.6.319"></script>
-<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.319"></script>
-<script src="/vendor/cvstudio/docx-export.js?v=v24.6.319"></script>
-<script src="/vendor/cvstudio/the-owl.js?v=v24.6.319"></script>
-<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.319"></script>
-<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.319"></script>
-<script src="/vendor/cvstudio/settings.js?v=v24.6.319"></script>
-<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.319"></script>
-<script src="/vendor/cvstudio/tab-status.js?v=v24.6.319"></script>
-<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.319"></script>
-<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.319"></script>
-<script src="/vendor/cvstudio/cv-format.js?v=v24.6.319"></script>
-<script src="/vendor/cvstudio/locks.js?v=v24.6.319"></script>
-<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.319"></script>
-<script src="/vendor/cvstudio/ppc.js?v=v24.6.319"></script>
-<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.319"></script>
-<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.319"></script>
-<script src="/vendor/cvstudio/batch-format.js?v=v24.6.319"></script>
+<script src="/vendor/cvstudio/api-transport.js?v=v24.6.320"></script>
+<script src="/vendor/cvstudio/page-nav.js?v=v24.6.320"></script>
+<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.320"></script>
+<script src="/vendor/cvstudio/create-profile.js?v=v24.6.320"></script>
+<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.320"></script>
+<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.320"></script>
+<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.320"></script>
+<script src="/vendor/cvstudio/company-profile.js?v=v24.6.320"></script>
+<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.320"></script>
+<script src="/vendor/cvstudio/appearance.js?v=v24.6.320"></script>
+<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.320"></script>
+<script src="/vendor/cvstudio/docx-export.js?v=v24.6.320"></script>
+<script src="/vendor/cvstudio/the-owl.js?v=v24.6.320"></script>
+<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.320"></script>
+<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.320"></script>
+<script src="/vendor/cvstudio/settings.js?v=v24.6.320"></script>
+<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.320"></script>
+<script src="/vendor/cvstudio/tab-status.js?v=v24.6.320"></script>
+<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.320"></script>
+<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.320"></script>
+<script src="/vendor/cvstudio/cv-format.js?v=v24.6.320"></script>
+<script src="/vendor/cvstudio/locks.js?v=v24.6.320"></script>
+<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.320"></script>
+<script src="/vendor/cvstudio/ppc.js?v=v24.6.320"></script>
+<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.320"></script>
+<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.320"></script>
+<script src="/vendor/cvstudio/batch-format.js?v=v24.6.320"></script>
 <script>
 
 document.addEventListener('DOMContentLoaded', initPageNavPin);
@@ -2230,9 +2267,9 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 
 </script>
-<script src="/vendor/cvstudio/input-file.js?v=v24.6.319"></script>
-<script src="/vendor/cvstudio/stats.js?v=v24.6.319"></script>
-<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.319"></script>
+<script src="/vendor/cvstudio/input-file.js?v=v24.6.320"></script>
+<script src="/vendor/cvstudio/stats.js?v=v24.6.320"></script>
+<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.320"></script>
 <script>
 try { updateSummaryLockUI(); } catch(e) {}
 try { updateCvScoringLockUI(); } catch(e) {}
