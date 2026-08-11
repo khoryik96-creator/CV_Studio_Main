@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.317"
+_INSTALL_RECEIPT_VERSION = "v24.6.318"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -333,7 +333,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.317"
+_CVSTUDIO_VERSION = "v24.6.318"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -10025,7 +10025,16 @@ def _summary_docx_existing_block_span(document_xml):
     )
     if not marker:
         return None
-    paragraph_start = document_xml.rfind("<w:p", 0, marker.start())
+    # Find the enclosing <w:p> paragraph start, NOT a "<w:p"-prefixed child such
+    # as <w:pPr>/<w:pStyle>. The bookmark sits after the paragraph's <w:pPr>, so a
+    # plain rfind("<w:p") lands on <w:pPr>; the replacement then removes from mid
+    # paragraph and leaves the original <w:p> open tag dangling, corrupting the
+    # DOCX (Word repair prompt) on the second insertion/replacement.
+    paragraph_starts = [
+        match.start()
+        for match in re.finditer(r"<w:p(?=[ />])", document_xml[: marker.start()])
+    ]
+    paragraph_start = paragraph_starts[-1] if paragraph_starts else -1
     bookmark_end = re.search(
         r"<w:bookmarkEnd\b[^>]*w:id=\"{}\"[^>]*/>".format(re.escape(marker.group(1))),
         document_xml[marker.end():],
@@ -10040,10 +10049,30 @@ def _summary_docx_existing_block_span(document_xml):
 
 
 def _summary_docx_placeholder_span(document_xml, search_start):
+    # A following paragraph starts a NEW section (and thus ends the Summary span)
+    # if its visible text begins with a section heading. This must include common
+    # real-world CV headings -- especially the experience/employment ones -- or the
+    # span runs past them and the replacement deletes the job content. (Matching a
+    # heading prefix, like the existing letter-spaced CV Studio headings, is
+    # intentional so decorated headings such as "EXPERIENCE ____" still match.)
     boundary = re.compile(
-        r"^(?:this introduction shall be deemed confidential information|"
-        r"private\s*&\s*confidential|w\s+o\s+r\s+k\b|e\s+d\s+u\s+c\s+a\s+t\b|"
-        r"a\s+d\s+d\s+i\s+t\s+i\s+o\s+n\s+a\s+l\b|certifications?\s*:|skills?\s*:)",
+        r"^(?:"
+        r"this introduction shall be deemed confidential information|"
+        r"private\s*&\s*confidential|"
+        # letter-spaced CV Studio headings
+        r"w\s+o\s+r\s+k\b|e\s+d\s+u\s+c\s+a\s+t\b|a\s+d\s+d\s+i\s+t\s+i\s+o\s+n\s+a\s+l\b|"
+        # experience / employment (the critical ones to catch)
+        r"(?:career|professional|work(?:ing)?|employment|relevant|industry)\s+"
+        r"(?:experience|history|background)\b|"
+        r"experience\b|employment\b|"
+        # other standard sections
+        r"education\b|academic\b|qualifications?\b|"
+        r"(?:key|technical|professional|core|it)\s+skills\b|skills?\b|competenc|"
+        r"certifications?\b|licen[cs]es?\b|accreditations?\b|"
+        r"projects?\b|achievements?\b|awards?\b|honou?rs?\b|"
+        r"references?\b|languages?\b|publications?\b|interests?\b|memberships?\b|"
+        r"professional\s+development\b|training\b|volunteer"
+        r")",
         re.I,
     )
     paragraphs = list(re.finditer(r"<w:p\b[^>]*>.*?</w:p>", document_xml[search_start:], re.S))

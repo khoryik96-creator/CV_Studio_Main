@@ -446,6 +446,95 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertEqual(invalid_docx.status_code, 400)
         self.assertIn("valid DOCX", invalid_docx.get_json()["error"])
 
+    def _summary_source_docx(self, extra_body_xml):
+        """A minimal generated CV DOCX with extra paragraphs after the table."""
+        client = app.app.test_client()
+        base = client.post(
+            "/generate-docx",
+            json={"data": {
+                "candidate": {"name": "Summary Regression Fixture"},
+                "work_experiences": [], "education": [],
+                "certifications": [], "skills": [],
+            }},
+            headers={"Origin": "http://127.0.0.1:5000"},
+        )
+        self.assertEqual(base.status_code, 200)
+        out = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(base.data)) as src:
+            document_xml = src.read("word/document.xml").decode("utf-8")
+            table_end = document_xml.index("</w:tbl>") + len("</w:tbl>")
+            document_xml = document_xml[:table_end] + extra_body_xml + document_xml[table_end:]
+            with zipfile.ZipFile(out, "w") as patched:
+                for info in src.infolist():
+                    payload = (document_xml.encode("utf-8")
+                               if info.filename == "word/document.xml"
+                               else src.read(info.filename))
+                    patched.writestr(info, payload)
+        return out.getvalue()
+
+    def _apply_summary(self, source_bytes, bullets, name="CV.docx"):
+        resp = app.app.test_client().post(
+            "/generate-docx",
+            data={
+                "source_docx": (io.BytesIO(source_bytes), name),
+                "summary_bullets": json.dumps(bullets),
+            },
+            content_type="multipart/form-data",
+            headers={"Origin": "http://127.0.0.1:5000"},
+        )
+        self.assertEqual(resp.status_code, 200)
+        with zipfile.ZipFile(io.BytesIO(resp.data)) as archive:
+            xml = archive.read("word/document.xml").decode("utf-8")
+        return resp.data, xml
+
+    def test_generate_docx_summary_replace_keeps_wellformed_word_xml(self):
+        # Regression (HIGH): replacing an already-inserted Summary block must yield
+        # well-formed OOXML. The block start was located with rfind("<w:p"), which
+        # matches <w:pPr>; the replacement then left the paragraph's <w:p> open tag
+        # dangling and Word flagged the 2nd-run file as corrupt. The existing
+        # idempotency test only checked content/count, not XML validity.
+        import xml.etree.ElementTree as ET
+        source = self._summary_source_docx(
+            "<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Summary:</w:t></w:r></w:p>"
+        )
+        first_bytes, _ = self._apply_summary(source, ["First summary bullet."])
+        replaced_bytes, replaced_xml = self._apply_summary(
+            first_bytes, ["Replacement bullet one.", "Replacement bullet two."],
+            name="CV - Summary.docx",
+        )
+        ET.fromstring(replaced_xml)  # raises ParseError on unbalanced <w:p> tags
+        self.assertEqual(replaced_xml.count("_CVStudioSummary"), 1)
+        self.assertIn("Replacement bullet one.", replaced_xml)
+        self.assertNotIn("First summary bullet.", replaced_xml)
+
+    def test_generate_docx_summary_preserves_following_employment_section(self):
+        # Regression (HIGH): the boundary detector must recognise a real-world
+        # "Professional Experience" heading; otherwise the Summary span runs past
+        # it and the replacement deletes the employment section and job details.
+        import xml.etree.ElementTree as ET
+
+        def para(text, bold=False):
+            rpr = "<w:rPr><w:b/></w:rPr>" if bold else ""
+            return "<w:p><w:r>{}<w:t>{}</w:t></w:r></w:p>".format(rpr, text)
+
+        source = self._summary_source_docx(
+            para("Summary", bold=True)
+            + para("Old summary line that should be replaced.")
+            + para("Professional Experience", bold=True)
+            + para("Acme Corp — Senior Engineer (2019-2024)")
+            + para("Delivered regional platform migrations.")
+            + para("Skills", bold=True)
+            + para("Python, Go, Kubernetes")
+        )
+        _, out_xml = self._apply_summary(source, ["New summary bullet."])
+        ET.fromstring(out_xml)
+        self.assertIn("New summary bullet.", out_xml)
+        self.assertNotIn("Old summary line", out_xml)         # old summary replaced
+        self.assertIn("Professional Experience", out_xml)      # employment heading kept
+        self.assertIn("Acme Corp", out_xml)                    # job details kept
+        self.assertIn("Delivered regional platform migrations.", out_xml)
+        self.assertIn("Python, Go, Kubernetes", out_xml)       # skills kept
+
     def test_docx_restores_source_project_training_and_omits_untrusted_metadata(self):
         source = """Other Information
 [PROJECT INVOLVEMENT HISTORY]:
