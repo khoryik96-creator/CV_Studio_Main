@@ -31,12 +31,8 @@ function exportCompanyDoc() {
     + (arr(p.tech_stack).length ? '<h2>Tech Stack</h2><p>'+arr(p.tech_stack).map(function(t){return '<span class="chip">'+_escDoc(t)+'</span>';}).join(' ')+'</p>' : '')
     + (arr(p.why_join).length ? '<div class="callout"><h2 style="margin-top:0;border-bottom:0;padding-bottom:0">Why Join</h2><ul>'+arr(p.why_join).map(function(b){return '<li>'+_escDoc(b)+'</li>';}).join('')+'</ul></div>' : '');
   var html = _wordDocShell(p.company_name||'Company Profile', meta||'Hyppies', body);
-  var blob = new Blob([html],{type:'application/msword'});
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'company-profile-'+_safeFileStem(p.company_name)+'-'+new Date().toISOString().slice(0,10)+'.doc';
-  a.click(); URL.revokeObjectURL(a.href);
-  showToast('Word doc exported!', 'ok');
+  var fmt = exportWordDocument(html, 'company-profile-'+_safeFileStem(p.company_name));
+  showToast('Word .' + fmt + ' exported!', 'ok');
 }
 
 function exportCompanyPDF() {

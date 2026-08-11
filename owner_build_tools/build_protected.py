@@ -28,8 +28,8 @@ import zipfile
 import zlib
 from pathlib import Path
 
-VERSION = "v24.6.318"
-VERSION_SLUG = "v24_6_318"
+VERSION = "v24.6.319"
+VERSION_SLUG = "v24_6_319"
 PRODUCT = "TheGuoLab-CVStudio"
 RECEIPT_SCHEMA = 2
 TOTP_MASK = bytes([147,57,36,83,116,245,122,57,165,162,176,168,249,50,204,128,45,174,232,56])
@@ -52,6 +52,7 @@ FRONTEND_MODULES = (
     "fcv-upload.js",
     "appearance.js",
     "cv-scoring.js",
+    "docx-export.js",
     "the-owl.js",
     "ai-crawler.js",
     "ai-proxy.js",

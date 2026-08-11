@@ -48,6 +48,7 @@ FRONTEND_MODULES = (
     "fcv-upload.js",
     "appearance.js",
     "cv-scoring.js",
+    "docx-export.js",
     "the-owl.js",
     "ai-crawler.js",
     "ai-proxy.js",

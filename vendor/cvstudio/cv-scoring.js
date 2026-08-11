@@ -395,18 +395,13 @@ function exportAppraiserWord() {
   if (!_appraiserResult && _appraiserRawReport) {
     var rawHtml = '<pre style="white-space:pre-wrap;font-family:Calibri,Arial,sans-serif;font-size:11pt;line-height:1.55;">' + _escDoc(_appraiserRawReport) + '</pre>';
     var rawDoc = _wordDocShell('CV Scoring Report', 'Review formatting', rawHtml);
-    var rawBlob = new Blob([rawDoc], {type:'application/msword'});
-    var rawA = document.createElement('a'); rawA.href = URL.createObjectURL(rawBlob); rawA.download = 'cv-scoring-report-review-formatting-' + new Date().toISOString().slice(0,10) + '.doc'; rawA.click(); URL.revokeObjectURL(rawA.href);
+    exportWordDocument(rawDoc, 'cv-scoring-report-review-formatting');
     showToast('CV Scoring Word report exported', 'ok');
     return;
   }
   var r = normalizeAppraiserResult(_appraiserResult);
   var html = _wordDocShell('CV Scoring Report', 'JD vs CV Compatibility · Score ' + r.overall_score + '/100 · ' + r.recommendation, buildAppraiserWordBody(r));
-  var blob = new Blob([html], {type:'application/msword'});
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'cv-scoring-report-' + new Date().toISOString().slice(0,10) + '.doc';
-  a.click(); URL.revokeObjectURL(a.href);
+  exportWordDocument(html, 'cv-scoring-report');
   showToast('CV Scoring Word report exported', 'ok');
 }
 function exportAppraiserPDF() {
