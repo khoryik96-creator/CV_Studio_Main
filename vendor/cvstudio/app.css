@@ -751,7 +751,7 @@
     width: 40px;
     height: 40px;
     display: inline-block;
-    background: url('cv_studio_logo.png?v=24.6.79-ui') center/contain no-repeat;
+    background: url('/cv_studio_logo.png?v=24.6.79-ui') center/contain no-repeat;
     filter: drop-shadow(0 8px 18px rgba(20,99,243,.18));
   }
   .header h1 span { color: #6c7890 !important; font-size: 14px !important; }

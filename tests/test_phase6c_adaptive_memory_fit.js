@@ -1,6 +1,6 @@
 'use strict';
 const assert=require('assert');const fs=require('fs');const vm=require('vm');
-const html=fs.readFileSync('index.html','utf8');
+const html=require('./frontend_sources').frontendSource();
 function fn(name){const start=html.indexOf('function '+name+'(');assert.ok(start>=0,name);let brace=html.indexOf('{',start),depth=0;for(let i=brace;i<html.length;i++){if(html[i]==='{')depth++;else if(html[i]==='}'&&--depth===0)return html.slice(start,i+1);}throw new Error(name);}
 const names=['storedTheSpiderPreviewMemoryMode','trustedTheSpiderPreviewMemoryDiagnostic','resolvedTheSpiderPreviewMemoryDecision','resolvedTheSpiderPreviewMemoryMode','currentTheSpiderPreviewMemoryProfile','ensureTheSpiderPreviewCaches','currentTheSpiderPreviewReadyKeys','theSpiderPreviewBrowserCacheStats','trimTheSpiderPreviewCachesToLimits','applyTheSpiderPreviewMemoryMode','scheduleTheSpiderPreviewMemoryFreshnessDeadline','renderSpiderFitBreakdown'];
 const profiles=html.match(/var THE_SPIDER_PREVIEW_MEMORY_PROFILES = \{[\s\S]*?\n\};/)[0];

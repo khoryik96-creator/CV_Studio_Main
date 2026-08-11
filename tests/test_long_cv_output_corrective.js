@@ -4,7 +4,7 @@ const assert = require('assert');
 const fs = require('fs');
 const vm = require('vm');
 
-const html = fs.readFileSync('index.html', 'utf8');
+const html = require('./frontend_sources').frontendSource();
 const generate = fs.readFileSync('generate.js', 'utf8');
 
 function fnFrom(source, name) {

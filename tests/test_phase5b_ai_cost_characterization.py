@@ -4,6 +4,9 @@ import inspect
 import json
 import os
 from pathlib import Path
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parent))
+from frontend_sources import frontend_source
 import tempfile
 import unittest
 from unittest import mock
@@ -763,9 +766,9 @@ class Phase5BAICostCharacterizationTests(unittest.TestCase):
         self.assertNotIn("external_billing", payload)
 
     def test_deepseek_history_cutoff_and_non_secret_storage_boundary_are_explicit(self):
-        frontend = Path(app.__file__).with_name("index.html").read_text(
-            encoding="utf-8-sig"
-        )
+        # Frontend JS now lives in vendor/cvstudio/*.js modules; search the
+        # combined source (index.html + modules) so moved code is found.
+        frontend = frontend_source()
         self.assertIn(
             "Created before v24.6.215; historical cost is preserved but "
             "token/call/cache details cannot be reconstructed.",

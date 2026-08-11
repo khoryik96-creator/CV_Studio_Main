@@ -293,6 +293,14 @@ any such need to a slicing account.
 
 ### Current work split
 
+> **STATUS (v24.6.315).** A separate **frontend modularization is complete**:
+> `index.html` was sliced into a 2,196-line thin shell + 30 `vendor/cvstudio/*.js`
+> modules + `app.css` (F1–F4, PRs #112–#134), including the Lead Finder **frontend**
+> (`lead-finder.js`). This is distinct from the backend `_lead_*` app.py-region
+> slicing in the table below — treat the frontend as done and see
+> `FRONTEND_ROADMAP.md`. The backend split table below is unchanged; confirm
+> current backend claims in issue #35 before starting.
+
 Every modularization extraction touches `app.py`, `cvstudio_architecture.py`,
 and `tests/test_phase7a_modular_monolith_foundation.py`, so the slicing accounts
 take domains in **non-overlapping `app.py` regions** and never share a branch.
