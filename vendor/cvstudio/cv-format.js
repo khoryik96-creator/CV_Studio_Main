@@ -16,6 +16,7 @@ async function startFormat(blind) {
   if (!key) { showToast('Save an API key for Single CV Formatting route', 'err'); document.getElementById('keyInput').focus(); return; }
   var automaticSummaryRoute = withAutomaticSummary ? aiRoutePayload('summary') : null;
   if (withAutomaticSummary && !automaticSummaryRoute.api_key) { showToast('Save an API key for the CV Summary route or turn off Generate CV Summary', 'err'); return; }
+  var singleSummaryDetail = withAutomaticSummary ? getCvSummaryDetailPreference('single') : 'concise';
 
   var _tabRun = markTabRunning('format');
   document.getElementById('btnFormat').disabled = true;
@@ -84,7 +85,7 @@ async function startFormat(blind) {
     if (withAutomaticSummary) {
       setProgress(44, 'Step 2 — Filling the Summary placeholder with ' + automaticSummaryRoute.provider_label + '…', 2, totalSteps);
       setOutput('<div style="color:var(--text3);font-style:italic;padding:20px;">Generating source-grounded CV Summary…</div>');
-      var summaryResult = await requestFormattingSummary(raw, automaticSummaryRoute);
+      var summaryResult = await requestFormattingSummary(raw, automaticSummaryRoute, singleSummaryDetail);
       _parsedData.summary_bullets = summaryResult.bullets.slice();
       _runCost += summaryResult.cost;
       _runUsage = mergeUsageClient(_runUsage, summaryResult.usage);

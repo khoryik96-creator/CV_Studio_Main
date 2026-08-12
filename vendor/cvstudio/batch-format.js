@@ -251,6 +251,7 @@ async function runBatch() {
   var withBatchSummary = !batchIsBlind && !!(batchSummaryToggle && batchSummaryToggle.checked);
   var batchSummaryRoute = withBatchSummary ? aiRoutePayload('summary') : null;
   if (withBatchSummary && !batchSummaryRoute.api_key) { showToast('Save an API key for the CV Summary route or turn off Generate CV Summary', 'err'); return; }
+  var batchSummaryDetail = withBatchSummary ? getCvSummaryDetailPreference('batch') : 'concise';
 
   // Only process pending files
   var pending = _batchFiles.filter(function(bf){ return bf.status === 'pending'; });
@@ -362,7 +363,7 @@ async function runBatch() {
 
       if (withBatchSummary) {
         batchSetProgress(bf, pcts[2], 'Filling Summary placeholder with ' + batchSummaryRoute.provider_label + '…', makeSteps(2));
-        var batchSummaryResult = await requestFormattingSummary(rawText, batchSummaryRoute);
+        var batchSummaryResult = await requestFormattingSummary(rawText, batchSummaryRoute, batchSummaryDetail);
         cvData.summary_bullets = batchSummaryResult.bullets.slice();
         bf.cost += batchSummaryResult.cost;
         bf.usage = mergeUsageClient(bf.usage, batchSummaryResult.usage);
