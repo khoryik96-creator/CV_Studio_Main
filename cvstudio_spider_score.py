@@ -916,10 +916,73 @@ def _spider_item_score(candidate, filters, enriched=False):
         return False, fit_percent, fit_evidence, unknown[:8], ["match fit below 10%"], hard_passed[:8], discovery_hits[:10], fit_breakdown
     return True, fit_percent, fit_evidence[:10], unknown[:8], excluded, hard_passed[:8], discovery_hits[:10], fit_breakdown
 
+# Canonical JobAdder industry taxonomy. These are the exact option strings the
+# CV formatter classifies into (app.SYSTEM_PROMPT) and the JobAdder uploader
+# writes to candidate custom fields #1 (Industry) and #2 (Industry Sub-Category)
+# (vendor/cvstudio/jobadder-upload.js). The AI Crawler's Industry suggestions
+# must match these verbatim, or a picked value never tallies against how
+# candidates are actually tagged in JobAdder. Kept in sync with SYSTEM_PROMPT by
+# tests/test_phase7b_spider_score_characterization.py.
+SPIDER_INDUSTRY_CATEGORIES = (
+    "Digital & E-Commerce",
+    "Financial Services",
+    "FMCG",
+    "Industrial/Manufacturing",
+    "Information Technology & Services",
+    "Life Science/Medical",
+    "Property & Construction",
+    "Professional Services",
+    "Education",
+    "Government Sector",
+)
+SPIDER_INDUSTRY_SUBCATEGORIES = (
+    "FSI - Asset Management", "FSI – Banking", "FSI - Hedge/Mutual Funds",
+    "FSI - Investment Bank", "FSI - Insurance", "FSI - Private Equity/Venture Capital",
+    "FMCG – Consumer Durables", "FMCG – Consumer Electronics", "FMCG – Food & Beverage",
+    "FMCG – Fashion & Apparel/Accessories", "FMCG – Luxury Goods", "FMCG – MLM",
+    "FMCG – Personal Care/Cosmetics", "FMCG – Retail", "FMCG – Sporting Goods",
+    "Industrial/Manufacturing - Aerospace", "Agriculture – Agriculture Supply",
+    "Agriculture – Crop/Plantation", "Agriculture – Livestock/Feed Mill",
+    "Industrial/Manufacturing - Automation", "Industrial/Manufacturing - Automotive",
+    "Chemicals – Food/Health/Additives", "Chemicals – Paint/Coat/Adhesive",
+    "Chemicals – Plastic/Package/Print", "Chemicals – Textiles", "Distributions & Logistics",
+    "Industrial/Manufacturing - Diversified Manufacturing",
+    "Industrial/Manufacturing - Electronic Components/EMS/CMS",
+    "Energy/Power/Utilities – EPC", "Energy/Power/Utilities – Mining", "Oil & Gas – Upstream",
+    "Oil & Gas – DownStream", "Energy/Power/Utilities - Renewable/Power",
+    "Industrial/Manufacturing - Heavy Industry/Equipment",
+    "Industrial/Manufacturing - Marine & Shipping", "Industrial/Manufacturing - Metalwork",
+    "Industrial/Manufacturing - Railway & Transportation",
+    "Industrial/Manufacturing - Semiconductor",
+    "Life Science/Medical - Biotechnology", "Life Science/Medical - Hospitals/Nursing",
+    "Life Science/Medical - Labs/CROs", "Life Science/Medical - Medical devices/Equipment",
+    "Life Science/Medical - OTC/Healthcare", "Life Science/Medical - Pharmaceutical",
+    "Life Science/Medical - Veterinary",
+    "P&C – Architecture", "P&C – Building Materials", "P&C – Construction",
+    "P&C – General Practice", "P&C – Hospitality & Tourism", "P&C – Interior Design",
+    "P&C – Property Development", "P&C – Real Estate Consultancy", "P&C – REITS",
+    "Tech - Call Centre/BPO", "Tech - Gaming", "Tech – ERP/CRM/HCM/Application",
+    "Tech - Hardware", "Tech - Networks", "Tech - Security", "Tech – Software/Software House",
+    "Tech - Cloud/SaaS", "Tech - Sys Integrator/Svc Provider", "Tech – Telecommunications",
+    "Tech - Blockchain",
+    "Digital – FinTech/Payment Getaway/E-Wallet", "Digital – MarTech", "Digital – EduTech",
+    "Digital - InsurTech", "Digital - HealthTech/MedTech", "Digital - LogTech",
+    "E-Commerce – Marketplace/Digital Platform", "E-Commerce – Fulfillment/Enabler",
+    "E-Commerce – Food & Grocery Delivery",
+    "Professional Services - Accounting Outsourcing",
+    "Professional Services- Advertising & Marketing",
+    "Professional Services - Corporate Secretary", "Professional Services - Financial Advisory",
+    "Professional Services - IT Outsourcing", "Professional Services - Recruitment & Staffing",
+    "Professional Services - Consulting",
+)
+
+
 def _spider_option_fallbacks(name):
     key = str(name or "").strip().lower()
     if key in {"industry", "industries"}:
-        return ["Banking", "Financial Services", "Fintech", "Shared Services", "Technology", "Telecommunications", "Manufacturing", "FMCG", "Healthcare", "Retail", "E-commerce", "Consulting"]
+        # Offer the broad categories first (custom field #1), then the granular
+        # sub-categories (custom field #2) so the recruiter can pick at either level.
+        return list(SPIDER_INDUSTRY_CATEGORIES) + list(SPIDER_INDUSTRY_SUBCATEGORIES)
     if key in {"it_skills", "it skills", "skill", "skills", "technical_skills"}:
         return ["SAP", "SAP ABAP", "SAP FICO", "SAP BW", "SAP BPC", "Oracle", "NetSuite", "Salesforce", "Python", "Java", "AWS", "Azure", "GCP", "Kubernetes", "Docker", "SQL", "Power BI", "Tableau"]
     if key in {"qualifications", "qualification", "certifications"}:

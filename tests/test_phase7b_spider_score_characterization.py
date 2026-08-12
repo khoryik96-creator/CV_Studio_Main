@@ -88,6 +88,47 @@ class ScoringTests(unittest.TestCase):
         self.assertIn("python", result[6])
 
 
+class IndustryTaxonomyTests(unittest.TestCase):
+    """The AI Crawler's Industry suggestions must stay identical to the canonical
+    JobAdder taxonomy the CV formatter (SYSTEM_PROMPT) classifies into and the
+    uploader writes to candidate custom fields #1/#2. If either side is edited
+    without the other, a picked Industry silently stops matching JobAdder tags.
+    """
+
+    def test_industry_fallback_is_the_canonical_taxonomy(self):
+        options = score._spider_option_fallbacks("industry")
+        # Broad categories first, then the granular sub-categories.
+        self.assertEqual(
+            options,
+            list(score.SPIDER_INDUSTRY_CATEGORIES)
+            + list(score.SPIDER_INDUSTRY_SUBCATEGORIES),
+        )
+        self.assertEqual(score._spider_option_fallbacks("industries"), options)
+        self.assertEqual(len(score.SPIDER_INDUSTRY_CATEGORIES), 10)
+        self.assertEqual(len(score.SPIDER_INDUSTRY_SUBCATEGORIES), 81)
+
+    def test_every_industry_option_is_verbatim_in_system_prompt(self):
+        import app  # noqa: PLC0415 - importing the shell is the point of this check
+
+        prompt = app.SYSTEM_PROMPT
+        for value in score.SPIDER_INDUSTRY_CATEGORIES + score.SPIDER_INDUSTRY_SUBCATEGORIES:
+            self.assertIn(value, prompt, value)
+
+    def test_top_level_categories_match_the_prompt_classification_line(self):
+        import re  # noqa: PLC0415
+        import app  # noqa: PLC0415
+
+        match = re.search(
+            r'"industry":\s*"one of:\s*(.+?)\s*[—-]\s*pick the single best match',
+            app.SYSTEM_PROMPT,
+        )
+        self.assertIsNotNone(match)
+        parsed = tuple(part.strip() for part in match.group(1).split(","))
+        # Exact both-directions match keeps the crawler in lockstep with any
+        # future add/remove of a top-level industry in the formatter prompt.
+        self.assertEqual(parsed, score.SPIDER_INDUSTRY_CATEGORIES)
+
+
 class ReExportTests(unittest.TestCase):
     def test_app_reexports_are_the_module_objects(self):
         import app  # noqa: PLC0415 - importing the shell is the point of this check

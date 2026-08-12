@@ -181,7 +181,10 @@ function normaliseTheSpiderOptionPayload(d) {
 async function loadTheSpiderJobAdderOptions() {
   if (!aiCrawlerIsUnlocked()) return;
   var fallbacks = {
-    industry: ['Banking','Financial Services','Fintech','Shared Services','Technology','Telecommunications','Manufacturing','FMCG','Healthcare','Retail','E-commerce'],
+    // Canonical JobAdder industry categories (custom field #1). The backend
+    // /jobadder/spider_options adds the granular sub-categories; this pre-fetch
+    // fallback carries the broad set so the no-network case still tallies.
+    industry: ['Digital & E-Commerce','Financial Services','FMCG','Industrial/Manufacturing','Information Technology & Services','Life Science/Medical','Property & Construction','Professional Services','Education','Government Sector'],
     it_skills: ['SAP','SAP ABAP','SAP FICO','SAP BW','SAP BPC','Oracle','NetSuite','Salesforce','Python','Java','AWS','Azure','GCP','Kubernetes','Docker','SQL','Power BI'],
     qualifications: ['ACCA','CPA','CIMA','MIA','ICAEW','CFA','CIA','PMP','PRINCE2','ITIL','CKA','AWS Certified','Azure Certified','SAP Certified']
   };
