@@ -180,7 +180,7 @@ function setCvSummaryBoxAutoFit(enabled, silent) {
   window._cvSummaryBoxAutoFit = enabled !== false;
   try { cvStudioDurableSettingSet(CV_SUMMARY_BOX_AUTO_FIT_STORE, getCvSummaryBoxAutoFit() ? 'true' : 'false'); } catch(e) {}
   renderCvSummaryBoxAutoFitSetting();
-  if (!silent) showToast(getCvSummaryBoxAutoFit() ? 'Summary boxes will resize automatically, with a first-page safety limit.' : 'Summary boxes will keep the template size.', 'ok');
+  if (!silent) showToast(getCvSummaryBoxAutoFit() ? 'Summary boxes will resize when safe; oversized summaries will keep the fixed first-page box.' : 'Summary boxes will keep the template size.', 'ok');
   return getCvSummaryBoxAutoFit();
 }
 (function restoreCvSummaryBoxAutoFit(){

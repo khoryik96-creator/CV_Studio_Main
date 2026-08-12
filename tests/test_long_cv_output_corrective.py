@@ -394,7 +394,7 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertIn("Bad Name 😀", document_xml)
         self.assertIn("Built safe output &amp; kept Unicode 😀.", document_xml)
 
-    def test_summary_box_autofit_resizes_caps_long_text_and_can_be_disabled(self):
+    def test_summary_box_autofit_resizes_safe_text_keeps_long_text_fixed_and_can_be_disabled(self):
         def render(summary_bullets, setting_marker=None):
             body = {"data": {
                 "candidate": {"name": "Auto-fit Fixture"},
@@ -445,8 +445,12 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertNotIn("mso-fit-text-to-shape", vml_summary_opening(fixed))
 
         very_long = render(["Long summary text " * 12 for _ in range(10)], True)
-        self.assertIn("<a:normAutofit/>", modern_summary_shape(very_long))
-        self.assertIn("mso-fit-text-to-shape:t", vml_summary_opening(very_long))
+        long_shape = modern_summary_shape(very_long)
+        self.assertIn("<a:noAutofit/>", long_shape)
+        self.assertNotIn("<a:normAutofit/>", long_shape)
+        self.assertIn('<w:sz w:val="22"/>', long_shape)
+        self.assertIn("Long summary text", long_shape)
+        self.assertNotIn("mso-fit-text-to-shape", vml_summary_opening(very_long))
         self.assertNotIn("mso-fit-shape-to-text:t", vml_summary_opening(very_long))
 
     def test_generated_docx_validator_rejects_invalid_word_xml(self):

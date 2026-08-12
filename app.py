@@ -9974,7 +9974,8 @@ _SUMMARY_DOCX_INVALID_XML_CHAR_RE = re.compile(
     r"[\x00-\x08\x0B\x0C\x0E-\x1F\uD800-\uDFFF\uFFFE\uFFFF]"
 )
 # Keep the uploaded-DOCX path aligned with generate.js: ordinary summaries can
-# grow the first-page shape, while unusually long summaries shrink in place.
+# grow the first-page shape, while unusually long summaries remain unchanged
+# for manual adjustment.
 _SUMMARY_BOX_FIRST_PAGE_LINE_LIMIT = 18
 
 
@@ -10271,14 +10272,13 @@ def _summary_docx_autofit_mode(bullets, enabled):
     return (
         "resize"
         if estimated_lines <= _SUMMARY_BOX_FIRST_PAGE_LINE_LIMIT
-        else "shrink"
+        else "fixed"
     )
 
 
 def _summary_docx_patch_vml_autofit(document_xml, mode):
     fit_property = {
         "resize": "mso-fit-shape-to-text:t",
-        "shrink": "mso-fit-text-to-shape:t",
     }.get(mode, "")
     xml = str(document_xml or "")
     cursor = 0
@@ -10325,7 +10325,6 @@ def _summary_docx_apply_box_autofit(document_xml, bullets, enabled):
     mode = _summary_docx_autofit_mode(bullets, enabled)
     fit_xml = {
         "resize": "<a:spAutoFit/>",
-        "shrink": "<a:normAutofit/>",
         "fixed": "<a:noAutofit/>",
     }[mode]
 

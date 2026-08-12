@@ -81,6 +81,7 @@ assert.ok(html.includes('id="singleSummaryToggle"'));
 assert.ok(html.includes('id="batchSummaryToggle"'));
 assert.ok(html.includes('id="cvSummaryBoxAutoFitToggle"'));
 assert.ok(html.includes('onchange="setCvSummaryBoxAutoFit(this.checked)"'));
+assert.ok(html.includes('Very long summaries keep the original first-page box and text size'));
 assert.ok(html.includes("window._cvSummaryBoxAutoFit = stored !== 'false'"));
 assert.strictEqual((html.match(/summary_box_autofit: getCvSummaryBoxAutoFit\(\)/g) || []).length, 2);
 assert.ok(html.includes("fd.append('summary_box_autofit', getCvSummaryBoxAutoFit() ? 'true' : 'false')"));

@@ -14,7 +14,7 @@ const DOCUMENT_ALIGNMENT = String(cv._document_alignment || 'left').toLowerCase(
 const LEFT_ALIGNMENT_XML = '<w:jc w:val="left"/>';
 const BODY_ALIGNMENT_XML = `<w:jc w:val="${DOCUMENT_ALIGNMENT}"/>`;
 // Calibrated to the template's first-page rectangle. Above this estimate the
-// box stays fixed and Word shrinks its text instead of growing off page one.
+// box and its original text size stay fixed for manual adjustment.
 const SUMMARY_BOX_FIRST_PAGE_LINE_LIMIT = 18;
 
 const TEMPLATE = path.join(__dirname, 'template.docx');
@@ -558,7 +558,7 @@ function summaryBoxAutoFitMode(summaryBullets, enabled) {
     const text = String(value == null ? '' : value).replace(/\*\*/g, '').replace(/\s+/g, ' ').trim();
     return total + (text ? Math.max(1, Math.ceil(text.length / 64)) : 0);
   }, 0);
-  return lines <= SUMMARY_BOX_FIRST_PAGE_LINE_LIMIT ? 'resize' : 'shrink';
+  return lines <= SUMMARY_BOX_FIRST_PAGE_LINE_LIMIT ? 'resize' : 'fixed';
 }
 
 function patchVmlSummaryBoxAutoFit(documentXml, mode) {
@@ -581,9 +581,7 @@ function patchVmlSummaryBoxAutoFit(documentXml, mode) {
         .replace(/;?mso-fit-shape-to-text:[^;"]*/gi, '')
         .replace(/;?mso-fit-text-to-shape:[^;"]*/gi, '')
         .replace(/;+$/g, '');
-      const fit = mode === 'resize'
-        ? 'mso-fit-shape-to-text:t'
-        : (mode === 'shrink' ? 'mso-fit-text-to-shape:t' : '');
+      const fit = mode === 'resize' ? 'mso-fit-shape-to-text:t' : '';
       return `style="${clean}${fit ? ';' + fit : ''}"`;
     });
     xml = xml.slice(0, rectStart) + patchedOpening + xml.slice(openingEnd + 1);
@@ -594,9 +592,7 @@ function patchVmlSummaryBoxAutoFit(documentXml, mode) {
 
 function applySummaryBoxAutoFit(drawingXml, summaryBullets, enabled) {
   const mode = summaryBoxAutoFitMode(summaryBullets, enabled);
-  const fitXml = mode === 'resize'
-    ? '<a:spAutoFit/>'
-    : (mode === 'shrink' ? '<a:normAutofit/>' : '<a:noAutofit/>');
+  const fitXml = mode === 'resize' ? '<a:spAutoFit/>' : '<a:noAutofit/>';
   let xml = String(drawingXml || '').replace(/<wps:wsp>[\s\S]*?<\/wps:wsp>/g, function(shape) {
     if (!shape.includes('_CVStudioSummaryBox')) return shape;
     return shape.replace(
