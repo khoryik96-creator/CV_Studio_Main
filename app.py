@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.324"
+_INSTALL_RECEIPT_VERSION = "v24.6.325"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -333,7 +333,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.324"
+_CVSTUDIO_VERSION = "v24.6.325"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -10332,9 +10332,7 @@ def _summary_docx_patch_max_geometry(document_xml):
         flags=re.S,
     )
 
-    def replace_group_opening(match):
-        opening = match.group(0)
-
+    def patch_group_opening(opening):
         def replace_style(style_match):
             style = style_match.group(1)
             for property_name, value in (
@@ -10356,11 +10354,35 @@ def _summary_docx_patch_max_geometry(document_xml):
             flags=re.I,
         )
 
-    return re.sub(
-        r'<v:group\b(?=[^>]*\bid="Group 28")[^>]*>',
-        replace_group_opening,
-        xml,
-    )
+    # The legacy VML fallback can coexist with unrelated custom shapes that
+    # reuse Word's generic "Group 28" identifier.  Patch only a group whose
+    # complete element contains our summary marker; a document-wide id match
+    # can otherwise resize an unrelated shape.
+    group_tokens = re.compile(r"<(/?)v:group\b[^>]*>", flags=re.I)
+    group_stack = []
+    summary_group_openings = []
+    for token in group_tokens.finditer(xml):
+        if token.group(1):
+            if not group_stack:
+                continue
+            opening = group_stack.pop()
+            group_xml = xml[opening.start():token.end()]
+            if (
+                re.search(r'\bid=(["\'])Group 28\1', opening.group(0), flags=re.I)
+                and marker_text in group_xml
+            ):
+                summary_group_openings.append((opening.start(), opening.end()))
+        elif not token.group(0).rstrip().endswith("/>"):
+            group_stack.append(token)
+
+    for opening_start, opening_end in sorted(summary_group_openings, reverse=True):
+        opening = xml[opening_start:opening_end]
+        xml = (
+            xml[:opening_start]
+            + patch_group_opening(opening)
+            + xml[opening_end:]
+        )
+    return xml
 
 
 def _summary_docx_patch_vml_autofit(document_xml, mode):

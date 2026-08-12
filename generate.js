@@ -585,6 +585,28 @@ function summaryBoxAutoFitMode(summaryBullets, enabled) {
   return estimatedLines <= SUMMARY_BOX_FIRST_PAGE_LINE_LIMIT ? 'resize' : 'max';
 }
 
+function summaryVmlGroupOpeningSpans(documentXml, marker) {
+  const xml = String(documentXml || '');
+  const groupTokens = /<\/?v:group\b[^>]*>/gi;
+  const groupStack = [];
+  const summaryGroupOpenings = [];
+  let token;
+  while ((token = groupTokens.exec(xml)) !== null) {
+    const opening = token[0];
+    if (/^<\//.test(opening)) {
+      const group = groupStack.pop();
+      if (!group) continue;
+      const groupXml = xml.slice(group.start, groupTokens.lastIndex);
+      if (group.opening.toLowerCase().includes('id="group 28"') && groupXml.includes(marker)) {
+        summaryGroupOpenings.push(group);
+      }
+    } else if (!/\/>$/.test(opening)) {
+      groupStack.push({start: token.index, openingEnd: groupTokens.lastIndex, opening});
+    }
+  }
+  return summaryGroupOpenings;
+}
+
 function patchSummaryBoxMaxGeometry(documentXml) {
   const marker = '_CVStudioSummaryBox';
   let xml = String(documentXml || '');
@@ -604,7 +626,7 @@ function patchSummaryBoxMaxGeometry(documentXml) {
       function(_match, before, after) { return before + SUMMARY_BOX_MAX_HEIGHT_EMU + after; }
     );
   });
-  return xml.replace(/<v:group\b(?=[^>]*\bid="Group 28")[^>]*>/g, function(opening) {
+  function patchGroupOpening(opening) {
     return opening.replace(/style="([^"]*)"/i, function(_match, style) {
       const properties = {
         'margin-top': SUMMARY_BOX_VML_MAX_MARGIN_TOP_PT,
@@ -618,7 +640,17 @@ function patchSummaryBoxMaxGeometry(documentXml) {
       });
       return `style="${style}"`;
     });
+  }
+
+  // Word can reuse the "Group 28" id in arbitrary uploaded documents. Walk
+  // the nested VML groups and resize only one that actually contains our
+  // summary marker, leaving unrelated custom shapes untouched.
+  const summaryGroupOpenings = summaryVmlGroupOpeningSpans(xml, marker);
+  summaryGroupOpenings.sort(function(left, right) { return right.start - left.start; });
+  summaryGroupOpenings.forEach(function(group) {
+    xml = xml.slice(0, group.start) + patchGroupOpening(group.opening) + xml.slice(group.openingEnd);
   });
+  return xml;
 }
 
 function patchVmlSummaryBoxAutoFit(documentXml, mode) {

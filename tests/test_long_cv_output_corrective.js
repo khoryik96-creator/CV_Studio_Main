@@ -115,6 +115,28 @@ assert.ok(!generate.includes('makeAboutTable(c, cv, cv.summary_bullets'));
 const aboutTableSource = fnFrom(generate, 'makeAboutTable');
 assert.ok(!aboutTableSource.includes('summaryBullets'));
 
+const geometryContext = {
+  String,
+  SUMMARY_BOX_MAX_POSITION_Y_EMU: 194310,
+  SUMMARY_BOX_MAX_HEIGHT_EMU: 6229350,
+  SUMMARY_BOX_VML_MAX_MARGIN_TOP_PT: '15.3pt',
+  SUMMARY_BOX_VML_MAX_HEIGHT_PT: '490.5pt',
+};
+vm.createContext(geometryContext);
+vm.runInContext(
+  generate.slice(
+    generate.indexOf('function summaryVmlGroupOpeningSpans('),
+    generate.indexOf('\nfunction patchVmlSummaryBoxAutoFit(')
+  ),
+  geometryContext
+);
+const unrelatedVmlGroup = '<v:group id="Group 28" style="margin-top:99pt;height:88pt"><v:rect id="Unrelated shape"/></v:group>';
+const summaryVmlGroup = '<v:group id="Group 28" style="margin-top:174.7pt;height:243.25pt"><v:group id="Nested group"><v:rect><w:bookmarkStart w:id="1" w:name="_CVStudioSummaryBox1"/></v:rect></v:group></v:group>';
+const scopedGeometry = geometryContext.patchSummaryBoxMaxGeometry(unrelatedVmlGroup + summaryVmlGroup);
+assert.ok(scopedGeometry.includes(unrelatedVmlGroup));
+assert.ok(scopedGeometry.includes('id="Group 28" style="margin-top:15.3pt;height:490.5pt"'));
+assert.strictEqual((scopedGeometry.match(/margin-top:15\.3pt/g) || []).length, 1);
+
 const autoFitElements = {
   cvSummaryBoxAutoFitToggle: {checked: true},
   cvSummaryBoxAutoFitLabel: {textContent: ''},

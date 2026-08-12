@@ -560,6 +560,27 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertIn("margin-top:15.3pt", long_group)
         self.assertIn("height:490.5pt", long_group)
 
+    def test_summary_max_geometry_does_not_resize_an_unrelated_vml_group(self):
+        unrelated = (
+            '<v:group id="Group 28" style="margin-top:99pt;height:88pt">'
+            '<v:rect id="Unrelated shape"/></v:group>'
+        )
+        summary = (
+            '<v:group id="Group 28" style="margin-top:174.7pt;height:243.25pt">'
+            '<v:group id="Nested group"><v:rect>'
+            '<w:bookmarkStart w:id="1" w:name="_CVStudioSummaryBox1"/>'
+            '</v:rect></v:group></v:group>'
+        )
+
+        patched = app._summary_docx_patch_max_geometry(unrelated + summary)
+
+        self.assertIn(unrelated, patched)
+        self.assertIn(
+            'id="Group 28" style="margin-top:15.3pt;height:490.5pt"',
+            patched,
+        )
+        self.assertEqual(patched.count("margin-top:15.3pt"), 1)
+
     def test_generated_docx_validator_rejects_invalid_word_xml(self):
         invalid = io.BytesIO()
         with zipfile.ZipFile(invalid, "w") as archive:
