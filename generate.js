@@ -829,7 +829,12 @@ const mcEnd = bodyContent.indexOf('</mc:AlternateContent>') + '</mc:AlternateCon
 const outerParaEnd = bodyContent.indexOf('</w:p>', mcEnd) + '</w:p>'.length;
 const drawingPara = bodyContent.slice(0, outerParaEnd);
 const summaryBox = fillSummaryBox(drawingPara, cv.summary_bullets || [], docXml);
+let summaryBoxMode = 'fixed';
 if (summaryBox.filled) {
+  summaryBoxMode = summaryBoxAutoFitMode(
+    cv.summary_bullets || [],
+    cv._summary_box_autofit !== false
+  );
   summaryBox.xml = applySummaryBoxAutoFit(
     summaryBox.xml,
     cv.summary_bullets || [],
@@ -843,9 +848,16 @@ const sectPr = sectPrMatch ? sectPrMatch[0] : '';
 
 // Build new body content
 const c = cv.candidate || {};
+const aboutTable = makeAboutTable(c, cv);
+// A max-height summary begins near the top of its anchor paragraph and uses
+// top-and-bottom wrapping. Keep the details table before that anchor, matching
+// the manually corrected Amir reference; otherwise Word moves the entire
+// Name/Notice/Position/Company/Languages table below the 490.5 pt box.
+const firstPageHeader = summaryBoxMode === 'max'
+  ? emptyPara() + aboutTable + summaryBox.xml
+  : summaryBox.xml + aboutTable;
 const newBodyContent =
-  summaryBox.xml +
-  makeAboutTable(c, cv) +
+  firstPageHeader +
   emptyPara() + emptyPara() +
   (summaryBox.filled ? '' : makeSummarySection(cv.summary_bullets || [])) +
   makeWorkSection(cv.work_experiences || []) +
