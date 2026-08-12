@@ -392,7 +392,7 @@ async function runBatch() {
       // ── Step 3: Generate DOCX ─────────────────────────────────────────────
       var docxStepIdx = isBlind || withBatchSummary ? 3 : 2;
       batchSetProgress(bf, pcts[docxStepIdx], 'Generating DOCX…', makeSteps(docxStepIdx));
-      var dRes = await fetchWithTimeout('/generate-docx', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data: cvData, alignment: batchDocumentAlignment, bullet_levels: cvMergeLevelLists(batchExtractLevels, batchLabelLevels) }) }, 60000);
+      var dRes = await fetchWithTimeout('/generate-docx', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data: cvData, alignment: batchDocumentAlignment, summary_box_autofit: getCvSummaryBoxAutoFit(), bullet_levels: cvMergeLevelLists(batchExtractLevels, batchLabelLevels) }) }, 60000);
       if (!dRes.ok) { var err2 = await dRes.json(); throw new Error('DOCX: ' + (err2.error||'Failed')); }
       var blob = await dRes.blob();
 

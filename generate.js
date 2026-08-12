@@ -13,6 +13,9 @@ const cv = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
 const DOCUMENT_ALIGNMENT = String(cv._document_alignment || 'left').toLowerCase() === 'justify' ? 'both' : 'left';
 const LEFT_ALIGNMENT_XML = '<w:jc w:val="left"/>';
 const BODY_ALIGNMENT_XML = `<w:jc w:val="${DOCUMENT_ALIGNMENT}"/>`;
+// Calibrated to the template's first-page rectangle. Above this estimate the
+// box and its original text size stay fixed for manual adjustment.
+const SUMMARY_BOX_FIRST_PAGE_LINE_LIMIT = 18;
 
 const TEMPLATE = path.join(__dirname, 'template.docx');
 if (!fs.existsSync(TEMPLATE)) {
@@ -38,8 +41,12 @@ function bulletLevelFor(text) {
 }
 
 // ── Escaping ──────────────────────────────────────────────────────────────────
+function xmlSafeText(value) {
+  return String(value == null ? '' : (typeof value === 'object' ? JSON.stringify(value) : value))
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uD800-\uDFFF\uFFFE\uFFFF]/gu, ' ');
+}
 function esc(s) {
-  return (String(s == null ? '' : (typeof s === 'object' ? JSON.stringify(s) : s)))
+  return xmlSafeText(s)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -545,6 +552,65 @@ function fillSummaryBox(drawingXml, summaryBullets, documentXml) {
   return { xml, filled };
 }
 
+function summaryBoxAutoFitMode(summaryBullets, enabled) {
+  if (!enabled) return 'fixed';
+  const lines = (Array.isArray(summaryBullets) ? summaryBullets : []).reduce((total, value) => {
+    const text = String(value == null ? '' : value).replace(/\*\*/g, '').replace(/\s+/g, ' ').trim();
+    return total + (text ? Math.max(1, Math.ceil(text.length / 64)) : 0);
+  }, 0);
+  return lines <= SUMMARY_BOX_FIRST_PAGE_LINE_LIMIT ? 'resize' : 'fixed';
+}
+
+function patchVmlSummaryBoxAutoFit(documentXml, mode) {
+  let xml = String(documentXml || '');
+  let cursor = 0;
+  while (true) {
+    const marker = xml.indexOf('_CVStudioSummaryBox', cursor);
+    if (marker < 0) break;
+    const rectStart = xml.lastIndexOf('<v:rect', marker);
+    const rectClose = xml.lastIndexOf('</v:rect>', marker);
+    if (rectStart < 0 || rectStart < rectClose) {
+      cursor = marker + '_CVStudioSummaryBox'.length;
+      continue;
+    }
+    const openingEnd = xml.indexOf('>', rectStart);
+    if (openingEnd < 0 || openingEnd > marker) break;
+    const opening = xml.slice(rectStart, openingEnd + 1);
+    const patchedOpening = opening.replace(/style="([^"]*)"/i, function(_match, style) {
+      const clean = style
+        .replace(/;?mso-fit-shape-to-text:[^;"]*/gi, '')
+        .replace(/;?mso-fit-text-to-shape:[^;"]*/gi, '')
+        .replace(/;+$/g, '');
+      const fit = mode === 'resize' ? 'mso-fit-shape-to-text:t' : '';
+      return `style="${clean}${fit ? ';' + fit : ''}"`;
+    });
+    xml = xml.slice(0, rectStart) + patchedOpening + xml.slice(openingEnd + 1);
+    cursor = marker + (patchedOpening.length - opening.length) + '_CVStudioSummaryBox'.length;
+  }
+  return xml;
+}
+
+function applySummaryBoxAutoFit(drawingXml, summaryBullets, enabled) {
+  const mode = summaryBoxAutoFitMode(summaryBullets, enabled);
+  const fitXml = mode === 'resize' ? '<a:spAutoFit/>' : '<a:noAutofit/>';
+  let xml = String(drawingXml || '').replace(/<wps:wsp>[\s\S]*?<\/wps:wsp>/g, function(shape) {
+    if (!shape.includes('_CVStudioSummaryBox')) return shape;
+    return shape.replace(
+      /(<wps:bodyPr\b[^>]*>)([\s\S]*?)(<\/wps:bodyPr>)/,
+      function(_match, opening, content, closing) {
+        let replaced = false;
+        const patched = content.replace(/<a:(?:noAutofit|normAutofit|spAutoFit)\b[^>]*\/>/g, function() {
+          if (replaced) return '';
+          replaced = true;
+          return fitXml;
+        });
+        return opening + patched + (replaced ? '' : fitXml) + closing;
+      }
+    );
+  });
+  return patchVmlSummaryBoxAutoFit(xml, mode);
+}
+
 // ── Education ─────────────────────────────────────────────────────────────────
 function makeEducationSection(education) {
   education = (education || []).filter(edu => edu && typeof edu === 'object' && (String(edu.institution || '').trim() || String(edu.degree || '').trim() || String(edu.description || '').trim()));
@@ -670,6 +736,13 @@ const mcEnd = bodyContent.indexOf('</mc:AlternateContent>') + '</mc:AlternateCon
 const outerParaEnd = bodyContent.indexOf('</w:p>', mcEnd) + '</w:p>'.length;
 const drawingPara = bodyContent.slice(0, outerParaEnd);
 const summaryBox = fillSummaryBox(drawingPara, cv.summary_bullets || [], docXml);
+if (summaryBox.filled) {
+  summaryBox.xml = applySummaryBoxAutoFit(
+    summaryBox.xml,
+    cv.summary_bullets || [],
+    cv._summary_box_autofit !== false
+  );
+}
 
 // Extract sectPr
 const sectPrMatch = docXml.match(/<w:sectPr[\s\S]*?<\/w:sectPr>/);

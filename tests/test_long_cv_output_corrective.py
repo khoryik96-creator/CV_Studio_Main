@@ -367,6 +367,103 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
             2,
         )
 
+    def test_docx_replaces_xml_invalid_controls_without_damaging_unicode(self):
+        import xml.etree.ElementTree as ET
+
+        response = app.app.test_client().post(
+            "/generate-docx",
+            json={"data": {
+                "candidate": {"name": "Bad\x00Name\x0b😀"},
+                "summary_bullets": ["Built\x01safe\x0c output & kept Unicode 😀."],
+                "work_experiences": [],
+                "education": [],
+                "certifications": [],
+                "skills": [],
+            }},
+            headers={"Origin": "http://127.0.0.1:5000"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
+            document_xml = archive.read("word/document.xml").decode("utf-8")
+        ET.fromstring(document_xml)
+        self.assertNotRegex(
+            document_xml,
+            r"[\x00-\x08\x0B\x0C\x0E-\x1F\uD800-\uDFFF\uFFFE\uFFFF]",
+        )
+        self.assertIn("Bad Name 😀", document_xml)
+        self.assertIn("Built safe output &amp; kept Unicode 😀.", document_xml)
+
+    def test_summary_box_autofit_resizes_safe_text_keeps_long_text_fixed_and_can_be_disabled(self):
+        def render(summary_bullets, setting_marker=None):
+            body = {"data": {
+                "candidate": {"name": "Auto-fit Fixture"},
+                "summary_bullets": summary_bullets,
+                "work_experiences": [],
+                "education": [],
+                "certifications": [],
+                "skills": [],
+            }}
+            if setting_marker is not None:
+                body["summary_box_autofit"] = setting_marker
+            response = app.app.test_client().post(
+                "/generate-docx",
+                json=body,
+                headers={"Origin": "http://127.0.0.1:5000"},
+            )
+            self.assertEqual(response.status_code, 200)
+            with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
+                return archive.read("word/document.xml").decode("utf-8")
+
+        def modern_summary_shape(document_xml):
+            shapes = [
+                match.group(0)
+                for match in re.finditer(
+                    r"<wps:wsp>.*?</wps:wsp>", document_xml, re.S
+                )
+                if "_CVStudioSummaryBox" in match.group(0)
+            ]
+            self.assertEqual(len(shapes), 1)
+            return shapes[0]
+
+        def vml_summary_opening(document_xml):
+            for marker in re.finditer("_CVStudioSummaryBox", document_xml):
+                rect_start = document_xml.rfind("<v:rect", 0, marker.start())
+                rect_close = document_xml.rfind("</v:rect>", 0, marker.start())
+                if rect_start > rect_close:
+                    opening_end = document_xml.index(">", rect_start)
+                    return document_xml[rect_start:opening_end + 1]
+            self.fail("VML summary rectangle was not found")
+
+        resized = render(["A concise summary bullet.", "A second concise bullet."])
+        self.assertIn("<a:spAutoFit/>", modern_summary_shape(resized))
+        self.assertIn("mso-fit-shape-to-text:t", vml_summary_opening(resized))
+
+        fixed = render(["A concise summary bullet."], False)
+        self.assertIn("<a:noAutofit/>", modern_summary_shape(fixed))
+        self.assertNotIn("mso-fit-shape-to-text", vml_summary_opening(fixed))
+        self.assertNotIn("mso-fit-text-to-shape", vml_summary_opening(fixed))
+
+        very_long = render(["Long summary text " * 12 for _ in range(10)], True)
+        long_shape = modern_summary_shape(very_long)
+        self.assertIn("<a:noAutofit/>", long_shape)
+        self.assertNotIn("<a:normAutofit/>", long_shape)
+        self.assertIn('<w:sz w:val="22"/>', long_shape)
+        self.assertIn("Long summary text", long_shape)
+        self.assertNotIn("mso-fit-text-to-shape", vml_summary_opening(very_long))
+        self.assertNotIn("mso-fit-shape-to-text:t", vml_summary_opening(very_long))
+
+    def test_generated_docx_validator_rejects_invalid_word_xml(self):
+        invalid = io.BytesIO()
+        with zipfile.ZipFile(invalid, "w") as archive:
+            archive.writestr("[Content_Types].xml", "<Types/>")
+            archive.writestr(
+                "word/document.xml",
+                b'<w:document xmlns:w="urn:fixture"><w:body>bad\x0b</w:body></w:document>',
+            )
+        with self.assertRaisesRegex(RuntimeError, "invalid Word XML"):
+            app._validate_generated_docx_bytes(invalid.getvalue())
+
     def test_generate_docx_multipart_updates_summary_textbox_idempotently(self):
         client = app.app.test_client()
         source_response = client.post(
@@ -388,15 +485,20 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertEqual(first_xml.count("Cloud platforms"), 2)
         self.assertNotIn("*Summary*", first_xml)
         self.assertNotIn("S U M M A R Y", first_xml)
+        self.assertEqual(first_xml.count("<a:spAutoFit/>"), 1)
+        self.assertEqual(first_xml.count("mso-fit-shape-to-text:t"), 1)
 
         _, replacement_xml = self._apply_summary(
             first_bytes,
             ["Replacement summary only."],
             name="CV - Summary.docx",
+            autofit=False,
         )
         self.assertEqual(replacement_xml.count("_CVStudioSummaryBox"), 2)
         self.assertEqual(replacement_xml.count("Replacement summary only."), 2)
         self.assertNotIn("Cloud platforms", replacement_xml)
+        self.assertNotIn("<a:spAutoFit/>", replacement_xml)
+        self.assertNotIn("mso-fit-shape-to-text", replacement_xml)
 
     def test_generate_docx_multipart_replaces_summary_placeholder_and_is_idempotent(self):
         source_response = app.app.test_client().post(
@@ -533,13 +635,16 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
                     patched.writestr(info, payload)
         return out.getvalue()
 
-    def _apply_summary(self, source_bytes, bullets, name="CV.docx"):
+    def _apply_summary(self, source_bytes, bullets, name="CV.docx", autofit=None):
+        form = {
+            "source_docx": (io.BytesIO(source_bytes), name),
+            "summary_bullets": json.dumps(bullets),
+        }
+        if autofit is not None:
+            form["summary_box_autofit"] = "true" if autofit else "false"
         resp = app.app.test_client().post(
             "/generate-docx",
-            data={
-                "source_docx": (io.BytesIO(source_bytes), name),
-                "summary_bullets": json.dumps(bullets),
-            },
+            data=form,
             content_type="multipart/form-data",
             headers={"Origin": "http://127.0.0.1:5000"},
         )

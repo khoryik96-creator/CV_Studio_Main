@@ -163,6 +163,34 @@ function setCvTextAlignment(value, silent) {
 })();
 document.addEventListener('DOMContentLoaded', renderCvTextAlignmentSetting);
 
+var CV_SUMMARY_BOX_AUTO_FIT_STORE = 'cvstudio_summary_box_autofit_v1';
+window._cvSummaryBoxAutoFit = true;
+
+function getCvSummaryBoxAutoFit() {
+  return window._cvSummaryBoxAutoFit !== false;
+}
+function renderCvSummaryBoxAutoFitSetting() {
+  var enabled = getCvSummaryBoxAutoFit();
+  var checkbox = document.getElementById('cvSummaryBoxAutoFitToggle');
+  var label = document.getElementById('cvSummaryBoxAutoFitLabel');
+  if (checkbox) checkbox.checked = enabled;
+  if (label) label.textContent = enabled ? 'On' : 'Off';
+}
+function setCvSummaryBoxAutoFit(enabled, silent) {
+  window._cvSummaryBoxAutoFit = enabled !== false;
+  try { cvStudioDurableSettingSet(CV_SUMMARY_BOX_AUTO_FIT_STORE, getCvSummaryBoxAutoFit() ? 'true' : 'false'); } catch(e) {}
+  renderCvSummaryBoxAutoFitSetting();
+  if (!silent) showToast(getCvSummaryBoxAutoFit() ? 'Summary boxes will resize when safe; oversized summaries will keep the fixed first-page box.' : 'Summary boxes will keep the template size.', 'ok');
+  return getCvSummaryBoxAutoFit();
+}
+(function restoreCvSummaryBoxAutoFit(){
+  var stored = null;
+  try { stored = localStorage.getItem(CV_SUMMARY_BOX_AUTO_FIT_STORE); } catch(e) {}
+  window._cvSummaryBoxAutoFit = stored !== 'false';
+  setTimeout(renderCvSummaryBoxAutoFitSetting, 0);
+})();
+document.addEventListener('DOMContentLoaded', renderCvSummaryBoxAutoFitSetting);
+
 // ── Word export format (.doc / .docx) ────────────────────────────
 // Storage getter/setter (wordExportFormat / setWordExportFormat) live in
 // hyppies-export.js; this only drives the Settings segmented toggle.

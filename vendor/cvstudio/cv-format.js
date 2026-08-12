@@ -137,7 +137,7 @@ async function startFormat(blind) {
       if (_fake3 < 92) { _fake3 += (92 - _fake3) * 0.05; document.getElementById('progressFill').style.width = _fake3 + '%'; }
     }, 200);
 
-    var res2 = await fetchWithTimeout('/generate-docx', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({data: _parsedData, alignment: getCvTextAlignment(), bullet_levels: cvMergeLevelLists(_extractedBulletLevels, _labelBulletLevels)}) }, 60000);
+    var res2 = await fetchWithTimeout('/generate-docx', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({data: _parsedData, alignment: getCvTextAlignment(), summary_box_autofit: getCvSummaryBoxAutoFit(), bullet_levels: cvMergeLevelLists(_extractedBulletLevels, _labelBulletLevels)}) }, 60000);
     if (!res2.ok) {
       var errText2 = await res2.text();
       var errObj; try { errObj = JSON.parse(errText2); } catch(e2) { throw new Error(errText2.slice(0,400)); }

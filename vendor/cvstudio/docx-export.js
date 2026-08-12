@@ -63,7 +63,9 @@ function _docxZip(files) {
 
 // ── HTML → OOXML ────────────────────────────────────────────────────────────
 function _docxEsc(s) {
-  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return String(s == null ? '' : s)
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uD800-\uDFFF\uFFFE\uFFFF]/gu, ' ')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 var _DOCX_HEADINGS = { H1: 1, H2: 2, H3: 3, H4: 4 };

@@ -240,6 +240,10 @@ class Phase2BRepositoryTests(unittest.TestCase):
         self.assertEqual([row["id"] for row in repository.list()], ["link-a"])
 
     def test_browser_settings_are_allowlisted_filtered_and_tombstoned(self):
+        self.assertIn(
+            "cvstudio_summary_box_autofit_v1",
+            storage_module.BROWSER_SETTING_KEYS,
+        )
         repository = BrowserSettingsRepository(self.storage)
         legacy = {
             "hy_provider": "openai",

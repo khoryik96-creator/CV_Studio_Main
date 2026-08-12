@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.321"
+_INSTALL_RECEIPT_VERSION = "v24.6.322"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -333,7 +333,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.321"
+_CVSTUDIO_VERSION = "v24.6.322"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -9970,8 +9970,34 @@ def _xml_element_span(xml_text, tag, start=0):
     return match.start(), cursor
 
 
+_SUMMARY_DOCX_INVALID_XML_CHAR_RE = re.compile(
+    r"[\x00-\x08\x0B\x0C\x0E-\x1F\uD800-\uDFFF\uFFFE\uFFFF]"
+)
+# Keep the uploaded-DOCX path aligned with generate.js: ordinary summaries can
+# grow the first-page shape, while unusually long summaries remain unchanged
+# for manual adjustment.
+_SUMMARY_BOX_FIRST_PAGE_LINE_LIMIT = 18
+
+
+def _summary_docx_safe_text(text):
+    return _SUMMARY_DOCX_INVALID_XML_CHAR_RE.sub(
+        " ",
+        "" if text is None else str(text),
+    )
+
+
+def _summary_box_autofit_enabled(value):
+    if value is None:
+        return True
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    return str(value).strip().lower() not in {"0", "false", "no", "off"}
+
+
 def _summary_docx_run(text, bold=False, color="000000", size=24):
-    escaped = html.escape(str(text or ""), quote=False)
+    escaped = html.escape(_summary_docx_safe_text(text), quote=False)
     bold_xml = "<w:b/><w:bCs/>" if bold else ""
     return (
         "<w:r><w:rPr>{}<w:color w:val=\"{}\"/>"
@@ -10235,6 +10261,117 @@ def _summary_docx_fill_boxes(document_xml, bullets, used_ids, numbering_id):
     return patched_xml, filled
 
 
+def _summary_docx_autofit_mode(bullets, enabled):
+    if not enabled:
+        return "fixed"
+    estimated_lines = 0
+    for value in (bullets if isinstance(bullets, list) else []):
+        text = re.sub(r"\s+", " ", str(value or "").replace("**", "")).strip()
+        if text:
+            estimated_lines += max(1, (len(text) + 63) // 64)
+    return (
+        "resize"
+        if estimated_lines <= _SUMMARY_BOX_FIRST_PAGE_LINE_LIMIT
+        else "fixed"
+    )
+
+
+def _summary_docx_patch_vml_autofit(document_xml, mode):
+    fit_property = {
+        "resize": "mso-fit-shape-to-text:t",
+    }.get(mode, "")
+    xml = str(document_xml or "")
+    cursor = 0
+    marker_text = "_CVStudioSummaryBox"
+    while True:
+        marker = xml.find(marker_text, cursor)
+        if marker < 0:
+            break
+        rect_start = xml.rfind("<v:rect", 0, marker)
+        rect_close = xml.rfind("</v:rect>", 0, marker)
+        if rect_start < 0 or rect_start < rect_close:
+            cursor = marker + len(marker_text)
+            continue
+        opening_end = xml.find(">", rect_start)
+        if opening_end < 0 or opening_end > marker:
+            break
+        opening = xml[rect_start:opening_end + 1]
+
+        def replace_style(match):
+            style = re.sub(
+                r";?mso-fit-(?:shape-to-text|text-to-shape):[^;\"]*",
+                "",
+                match.group(1),
+                flags=re.I,
+            ).rstrip(";")
+            return 'style="{}{}"'.format(
+                style,
+                ";" + fit_property if fit_property else "",
+            )
+
+        patched_opening = re.sub(
+            r'style="([^"]*)"',
+            replace_style,
+            opening,
+            count=1,
+            flags=re.I,
+        )
+        xml = xml[:rect_start] + patched_opening + xml[opening_end + 1:]
+        cursor = marker + len(patched_opening) - len(opening) + len(marker_text)
+    return xml
+
+
+def _summary_docx_apply_box_autofit(document_xml, bullets, enabled):
+    mode = _summary_docx_autofit_mode(bullets, enabled)
+    fit_xml = {
+        "resize": "<a:spAutoFit/>",
+        "fixed": "<a:noAutofit/>",
+    }[mode]
+
+    def replace_shape(match):
+        shape = match.group(0)
+        if "_CVStudioSummaryBox" not in shape:
+            return shape
+
+        def replace_body_properties(body_match):
+            replaced = False
+
+            def replace_fit(_fit_match):
+                nonlocal replaced
+                if replaced:
+                    return ""
+                replaced = True
+                return fit_xml
+
+            content = re.sub(
+                r"<a:(?:noAutofit|normAutofit|spAutoFit)\b[^>]*/>",
+                replace_fit,
+                body_match.group(2),
+            )
+            return (
+                body_match.group(1)
+                + content
+                + ("" if replaced else fit_xml)
+                + body_match.group(3)
+            )
+
+        return re.sub(
+            r"(<wps:bodyPr\b[^>]*>)(.*?)(</wps:bodyPr>)",
+            replace_body_properties,
+            shape,
+            count=1,
+            flags=re.S,
+        )
+
+    patched_xml = re.sub(
+        r"<wps:wsp>.*?</wps:wsp>",
+        replace_shape,
+        document_xml,
+        flags=re.S,
+    )
+    return _summary_docx_patch_vml_autofit(patched_xml, mode)
+
+
 def _summary_docx_existing_block_span(document_xml):
     marker = re.search(
         r"<w:bookmarkStart\b[^>]*w:id=\"(\d+)\"[^>]*w:name=\"_CVStudioSummary\"[^>]*/>",
@@ -10318,7 +10455,11 @@ def _summary_docx_block(bullets, bookmark_id, numbering_id, compact_label=False)
     return label + "".join(paragraphs)
 
 
-def _insert_summary_into_docx_bytes(file_bytes, summary_bullets):
+def _insert_summary_into_docx_bytes(
+    file_bytes,
+    summary_bullets,
+    summary_box_autofit=True,
+):
     """Fill/insert the dedicated Summary placeholder in an uploaded DOCX."""
     bullets = _summary_docx_bullets(summary_bullets)
     if not bullets:
@@ -10358,6 +10499,11 @@ def _insert_summary_into_docx_bytes(file_bytes, summary_bullets):
             )
 
             if filled_boxes:
+                patched_xml = _summary_docx_apply_box_autofit(
+                    patched_xml,
+                    bullets,
+                    _summary_box_autofit_enabled(summary_box_autofit),
+                )
                 # Older generated files can contain both the untouched template
                 # textbox and a separate decorated Summary section. Once the box
                 # is filled, remove only that known generated body block. Preserve
@@ -10394,6 +10540,11 @@ def _insert_summary_into_docx_bytes(file_bytes, summary_bullets):
                     insertion = table_span[1]
                     patched_xml = document_xml[:insertion] + block + document_xml[insertion:]
 
+            try:
+                ET.fromstring(patched_xml)
+            except ET.ParseError as exc:
+                raise ValueError("The DOCX contains invalid Word XML") from exc
+
             with zipfile.ZipFile(output, "w") as patched:
                 for info in archive.infolist():
                     payload = patched_xml.encode("utf-8") if info.filename == "word/document.xml" else archive.read(info.filename)
@@ -10403,6 +10554,23 @@ def _insert_summary_into_docx_bytes(file_bytes, summary_bullets):
     except UnicodeDecodeError as exc:
         raise ValueError("The DOCX XML is not valid UTF-8") from exc
     return output.getvalue()
+
+
+def _validate_generated_docx_bytes(document_bytes):
+    try:
+        _validate_zip_payload(document_bytes, "generated DOCX")
+        with zipfile.ZipFile(io.BytesIO(document_bytes), "r") as archive:
+            if "word/document.xml" not in archive.namelist():
+                raise RuntimeError("DOCX generation did not produce a Word document")
+            document_xml = archive.read("word/document.xml").decode(
+                "utf-8", errors="strict"
+            )
+        ET.fromstring(document_xml)
+    except RuntimeError:
+        raise
+    except (ValueError, zipfile.BadZipFile, UnicodeDecodeError, ET.ParseError) as exc:
+        raise RuntimeError("DOCX generation produced invalid Word XML") from exc
+    return document_bytes
 
 
 @app.route("/generate-docx", methods=["POST"])
@@ -10421,7 +10589,11 @@ def generate_docx():
             except (TypeError, ValueError):
                 return jsonify({"error": "Invalid CV Summary bullets"}), 400
             try:
-                document_bytes = _insert_summary_into_docx_bytes(source_docx.read(), summary_bullets)
+                document_bytes = _insert_summary_into_docx_bytes(
+                    source_docx.read(),
+                    summary_bullets,
+                    request.form.get("summary_box_autofit"),
+                )
             except ValueError as exc:
                 return jsonify({"error": str(exc)}), _document_validation_status(exc)
             stem = re.sub(r"(?i)\.docx$", "", os.path.basename(source_docx.filename)).strip() or "Hyppies CV"
@@ -10445,6 +10617,9 @@ def generate_docx():
         cv_data = _normalize_cv_structured_content(cv_data)
         cv_data = _normalize_cv_data_for_output(cv_data)
         cv_data["_document_alignment"] = _normalize_cv_text_alignment(body.get("alignment"))
+        cv_data["_summary_box_autofit"] = _summary_box_autofit_enabled(
+            body.get("summary_box_autofit")
+        )
         # Nested-list indent map: the source-derived map (docx w:ilvl / pdf
         # geometry, sent by the browser) merged with the outline-label inference,
         # deepest level wins. Unmatched bullets stay at level 0.
@@ -10479,6 +10654,7 @@ def generate_docx():
         # download response.
         with open(out_path, "rb") as handle:
             document_bytes = handle.read()
+        _validate_generated_docx_bytes(document_bytes)
 
         return send_file(
             io.BytesIO(document_bytes),

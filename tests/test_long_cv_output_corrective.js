@@ -79,6 +79,12 @@ assert.ok(html.includes('id="btnSummaryApplyDocx"'));
 assert.ok(html.includes('onclick="applySummaryToUploadedDocx()"'));
 assert.ok(html.includes('id="singleSummaryToggle"'));
 assert.ok(html.includes('id="batchSummaryToggle"'));
+assert.ok(html.includes('id="cvSummaryBoxAutoFitToggle"'));
+assert.ok(html.includes('onchange="setCvSummaryBoxAutoFit(this.checked)"'));
+assert.ok(html.includes('Very long summaries keep the original first-page box and text size'));
+assert.ok(html.includes("window._cvSummaryBoxAutoFit = stored !== 'false'"));
+assert.strictEqual((html.match(/summary_box_autofit: getCvSummaryBoxAutoFit\(\)/g) || []).length, 2);
+assert.ok(html.includes("fd.append('summary_box_autofit', getCvSummaryBoxAutoFit() ? 'true' : 'false')"));
 assert.ok(html.includes("requestFormattingSummary(raw, automaticSummaryRoute)"));
 assert.ok(html.includes("requestFormattingSummary(rawText, batchSummaryRoute)"));
 assert.ok(generate.includes("fillSummaryBox(drawingPara, cv.summary_bullets || [], docXml)"));
@@ -87,6 +93,28 @@ assert.ok(generate.includes("sectionHeader('S U M M A R Y"));
 assert.ok(!generate.includes('makeAboutTable(c, cv, cv.summary_bullets'));
 const aboutTableSource = fnFrom(generate, 'makeAboutTable');
 assert.ok(!aboutTableSource.includes('summaryBullets'));
+
+const autoFitElements = {
+  cvSummaryBoxAutoFitToggle: {checked: true},
+  cvSummaryBoxAutoFitLabel: {textContent: ''},
+};
+const autoFitWrites = [];
+const autoFitContext = {
+  window: {_cvSummaryBoxAutoFit: true},
+  document: {getElementById(id){ return autoFitElements[id] || null; }},
+  CV_SUMMARY_BOX_AUTO_FIT_STORE: 'cvstudio_summary_box_autofit_v1',
+  cvStudioDurableSettingSet(key, value){ autoFitWrites.push([key, value]); },
+  showToast(){},
+};
+vm.createContext(autoFitContext);
+['getCvSummaryBoxAutoFit', 'renderCvSummaryBoxAutoFitSetting', 'setCvSummaryBoxAutoFit']
+  .forEach(name => vm.runInContext(fn(name), autoFitContext));
+assert.strictEqual(autoFitContext.getCvSummaryBoxAutoFit(), true);
+autoFitContext.setCvSummaryBoxAutoFit(false, true);
+assert.strictEqual(autoFitContext.getCvSummaryBoxAutoFit(), false);
+assert.strictEqual(autoFitElements.cvSummaryBoxAutoFitToggle.checked, false);
+assert.strictEqual(autoFitElements.cvSummaryBoxAutoFitLabel.textContent, 'Off');
+assert.deepStrictEqual(autoFitWrites[0], ['cvstudio_summary_box_autofit_v1', 'false']);
 
 const summaryPrompt = context.cvSummaryPrompt('SOURCE CV', 'normal', 'Emphasise leadership.');
 assert.ok(summaryPrompt.includes('Use 6-7 bullet points.'));
