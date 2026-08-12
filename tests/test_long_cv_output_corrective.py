@@ -423,6 +423,7 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
             self.assertIn("Built engineering teams &amp; delivery standards.", summary_box)
             self.assertIn('<w:numId w:val="2"/>', summary_box)
             self.assertIn('<w:textDirection w:val="btLr"/>', summary_box)
+            self.assertEqual(summary_box.count('<w:spacing w:after="160"/>'), 1)
             self.assertNotIn("*Summary*", summary_box)
             self.assertNotIn("*Tech Stack*", summary_box)
             self.assertNotIn("*Key Things to Highlight*", summary_box)
@@ -466,7 +467,7 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertIn("Bad Name 😀", document_xml)
         self.assertIn("Built safe output &amp; kept Unicode 😀.", document_xml)
 
-    def test_summary_box_autofit_resizes_safe_text_keeps_long_text_fixed_and_can_be_disabled(self):
+    def test_summary_box_autofit_resizes_safe_text_caps_long_text_on_page_one_and_can_be_disabled(self):
         def render(summary_bullets, setting_marker=None):
             body = {"data": {
                 "candidate": {"name": "Auto-fit Fixture"},
@@ -498,6 +499,17 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
             self.assertEqual(len(shapes), 1)
             return shapes[0]
 
+        def modern_summary_anchor(document_xml):
+            anchors = [
+                match.group(0)
+                for match in re.finditer(
+                    r"<wp:anchor\b[^>]*>.*?</wp:anchor>", document_xml, re.S
+                )
+                if "_CVStudioSummaryBox" in match.group(0)
+            ]
+            self.assertEqual(len(anchors), 1)
+            return anchors[0]
+
         def vml_summary_opening(document_xml):
             for marker in re.finditer("_CVStudioSummaryBox", document_xml):
                 rect_start = document_xml.rfind("<v:rect", 0, marker.start())
@@ -507,14 +519,27 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
                     return document_xml[rect_start:opening_end + 1]
             self.fail("VML summary rectangle was not found")
 
+        def vml_summary_group_opening(document_xml):
+            groups = re.findall(
+                r'<v:group\b(?=[^>]*\bid="Group 28")[^>]*>',
+                document_xml,
+            )
+            self.assertEqual(len(groups), 1)
+            return groups[0]
+
         resized = render(["A concise summary bullet.", "A second concise bullet."])
         self.assertIn("<a:spAutoFit/>", modern_summary_shape(resized))
         self.assertIn("mso-fit-shape-to-text:t", vml_summary_opening(resized))
+        self.assertIn("<wp:posOffset>2218690</wp:posOffset>", modern_summary_anchor(resized))
+        self.assertIn('cy="3089275"', modern_summary_anchor(resized))
 
         fixed = render(["A concise summary bullet."], False)
         self.assertIn("<a:noAutofit/>", modern_summary_shape(fixed))
         self.assertNotIn("mso-fit-shape-to-text", vml_summary_opening(fixed))
         self.assertNotIn("mso-fit-text-to-shape", vml_summary_opening(fixed))
+        self.assertIn("<wp:posOffset>2218690</wp:posOffset>", modern_summary_anchor(fixed))
+        self.assertIn("margin-top:174.7pt", vml_summary_group_opening(fixed))
+        self.assertIn("height:243.25pt", vml_summary_group_opening(fixed))
 
         very_long = render(["Long summary text " * 12 for _ in range(10)], True)
         long_shape = modern_summary_shape(very_long)
@@ -524,6 +549,16 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertIn("Long summary text", long_shape)
         self.assertNotIn("mso-fit-text-to-shape", vml_summary_opening(very_long))
         self.assertNotIn("mso-fit-shape-to-text:t", vml_summary_opening(very_long))
+        long_anchor = modern_summary_anchor(very_long)
+        self.assertIn("<wp:posOffset>194310</wp:posOffset>", long_anchor)
+        self.assertIn('<wp:extent cx="5730875" cy="6229350"/>', long_anchor)
+        self.assertRegex(
+            long_anchor,
+            r'<wpg:grpSpPr>\s*<a:xfrm>.*?<a:ext cx="5730875" cy="6229350"/>',
+        )
+        long_group = vml_summary_group_opening(very_long)
+        self.assertIn("margin-top:15.3pt", long_group)
+        self.assertIn("height:490.5pt", long_group)
 
     def test_generated_docx_validator_rejects_invalid_word_xml(self):
         invalid = io.BytesIO()
@@ -559,6 +594,16 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertNotIn("S U M M A R Y", first_xml)
         self.assertEqual(first_xml.count("<a:spAutoFit/>"), 1)
         self.assertEqual(first_xml.count("mso-fit-shape-to-text:t"), 1)
+        self.assertEqual(first_xml.count('<w:spacing w:after="160"/>'), 2)
+
+        _, max_xml = self._apply_summary(
+            source_response.data,
+            ["Long summary text " * 12 for _ in range(10)],
+        )
+        self.assertIn("<wp:posOffset>194310</wp:posOffset>", max_xml)
+        self.assertIn('<wp:extent cx="5730875" cy="6229350"/>', max_xml)
+        self.assertIn("margin-top:15.3pt", max_xml)
+        self.assertIn("height:490.5pt", max_xml)
 
         _, replacement_xml = self._apply_summary(
             first_bytes,

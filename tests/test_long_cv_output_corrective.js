@@ -46,7 +46,7 @@ vm.createContext(context);
   'cvParseIsLong','cvParseTimeoutMs','cvStripInferredTitle','cvCanonicalSectionHeading',
   'cvStripLeadingBulletMarker','cvStripAdditionalBulletMarkers',
   'cvNormalizeBulletItems','cvNormalizeStructuredData','cvNormDateRange','summaryBulletLines',
-  'formatSummaryBulletsFor','applyFormatSummaryBullets','cvSummaryPrompt','versionedUnlockKey','readVersionedUnlock',
+  'formatSummaryBulletsFor','applyFormatSummaryBullets','cvSummaryPrompt','cvSummaryModifierForPreference','versionedUnlockKey','readVersionedUnlock',
   'writeVersionedUnlock','cvScoringIsUnlocked','cvScoringSetUnlocked','updateCvScoringLockUI',
   'requestCvScoringUnlock','aiCrawlerIsUnlocked','updateAiCrawlerLockUI','requestAiCrawlerUnlock',
   'requireAiCrawlerUnlocked','aiCrawlerLockPayload','cvSkillPreviewHtml'
@@ -96,12 +96,18 @@ assert.ok(html.includes('id="singleSummaryToggle"'));
 assert.ok(html.includes('id="batchSummaryToggle"'));
 assert.ok(html.includes('id="cvSummaryBoxAutoFitToggle"'));
 assert.ok(html.includes('onchange="setCvSummaryBoxAutoFit(this.checked)"'));
-assert.ok(html.includes('Very long summaries keep the original first-page box and text size'));
+assert.ok(html.includes('Long summaries use the largest safe page-one box'));
+assert.ok(html.includes('id="cvSingleSummaryDetailToggle"'));
+assert.ok(html.includes('id="cvBatchSummaryDetailToggle"'));
+assert.ok(html.includes("setCvSummaryDetailPreference('single','concise')"));
+assert.ok(html.includes("setCvSummaryDetailPreference('single','detailed')"));
+assert.ok(html.includes("setCvSummaryDetailPreference('batch','concise')"));
+assert.ok(html.includes("setCvSummaryDetailPreference('batch','detailed')"));
 assert.ok(html.includes("window._cvSummaryBoxAutoFit = stored !== 'false'"));
 assert.strictEqual((html.match(/summary_box_autofit: getCvSummaryBoxAutoFit\(\)/g) || []).length, 2);
 assert.ok(html.includes("fd.append('summary_box_autofit', getCvSummaryBoxAutoFit() ? 'true' : 'false')"));
-assert.ok(html.includes("requestFormattingSummary(raw, automaticSummaryRoute)"));
-assert.ok(html.includes("requestFormattingSummary(rawText, batchSummaryRoute)"));
+assert.ok(html.includes("requestFormattingSummary(raw, automaticSummaryRoute, singleSummaryDetail)"));
+assert.ok(html.includes("requestFormattingSummary(rawText, batchSummaryRoute, batchSummaryDetail)"));
 assert.ok(generate.includes("fillSummaryBox(drawingPara, cv.summary_bullets || [], docXml)"));
 assert.ok(generate.includes("summaryBox.filled ? '' : makeSummarySection(cv.summary_bullets || [])"));
 assert.ok(generate.includes("sectionHeader('S U M M A R Y"));
@@ -131,10 +137,43 @@ assert.strictEqual(autoFitElements.cvSummaryBoxAutoFitToggle.checked, false);
 assert.strictEqual(autoFitElements.cvSummaryBoxAutoFitLabel.textContent, 'Off');
 assert.deepStrictEqual(autoFitWrites[0], ['cvstudio_summary_box_autofit_v1', 'false']);
 
+const detailElements = {
+  cvSingleSummaryConcise: {style:{}, setAttribute(name, value){ this[name] = value; }},
+  cvSingleSummaryDetailed: {style:{}, setAttribute(name, value){ this[name] = value; }},
+  cvBatchSummaryConcise: {style:{}, setAttribute(name, value){ this[name] = value; }},
+  cvBatchSummaryDetailed: {style:{}, setAttribute(name, value){ this[name] = value; }},
+};
+const detailWrites = [];
+const detailContext = {
+  String, Array,
+  window: {_cvSingleSummaryDetail: 'concise', _cvBatchSummaryDetail: 'concise'},
+  document: {getElementById(id){ return detailElements[id] || null; }},
+  CV_SINGLE_SUMMARY_DETAIL_STORE: 'cvstudio_single_summary_detail_v1',
+  CV_BATCH_SUMMARY_DETAIL_STORE: 'cvstudio_batch_summary_detail_v1',
+  cvStudioDurableSettingSet(key, value){ detailWrites.push([key, value]); },
+  showToast(){},
+};
+vm.createContext(detailContext);
+[
+  'normalizeCvSummaryDetailPreference','cvSummaryDetailStore','getCvSummaryDetailPreference',
+  'renderCvSummaryDetailSettings','setCvSummaryDetailPreference'
+].forEach(name => vm.runInContext(fn(name), detailContext));
+assert.strictEqual(detailContext.getCvSummaryDetailPreference('single'), 'concise');
+assert.strictEqual(detailContext.setCvSummaryDetailPreference('single', 'detailed', true), 'detailed');
+assert.strictEqual(detailContext.setCvSummaryDetailPreference('batch', 'detailed', true), 'detailed');
+assert.deepStrictEqual(detailWrites, [
+  ['cvstudio_single_summary_detail_v1', 'detailed'],
+  ['cvstudio_batch_summary_detail_v1', 'detailed'],
+]);
+assert.strictEqual(detailElements.cvSingleSummaryDetailed['aria-pressed'], 'true');
+assert.strictEqual(detailElements.cvBatchSummaryDetailed['aria-pressed'], 'true');
+
 const summaryPrompt = context.cvSummaryPrompt('SOURCE CV', 'normal', 'Emphasise leadership.');
 assert.ok(summaryPrompt.includes('Use 6-7 bullet points.'));
 assert.ok(summaryPrompt.includes('Emphasise leadership.'));
 assert.ok(summaryPrompt.includes('SOURCE CV'));
+assert.strictEqual(context.cvSummaryModifierForPreference('concise'), 'normal');
+assert.strictEqual(context.cvSummaryModifierForPreference('detailed'), 'longer');
 
 const applyDocxElements = {
   btnSummaryApplyDocx: {disabled: true},

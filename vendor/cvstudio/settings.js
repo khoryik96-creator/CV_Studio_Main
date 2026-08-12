@@ -180,7 +180,7 @@ function setCvSummaryBoxAutoFit(enabled, silent) {
   window._cvSummaryBoxAutoFit = enabled !== false;
   try { cvStudioDurableSettingSet(CV_SUMMARY_BOX_AUTO_FIT_STORE, getCvSummaryBoxAutoFit() ? 'true' : 'false'); } catch(e) {}
   renderCvSummaryBoxAutoFitSetting();
-  if (!silent) showToast(getCvSummaryBoxAutoFit() ? 'Summary boxes will resize when safe; oversized summaries will keep the fixed first-page box.' : 'Summary boxes will keep the template size.', 'ok');
+  if (!silent) showToast(getCvSummaryBoxAutoFit() ? 'Summary boxes will grow up to the safe page-one maximum.' : 'Summary boxes will keep the template size.', 'ok');
   return getCvSummaryBoxAutoFit();
 }
 (function restoreCvSummaryBoxAutoFit(){
@@ -190,6 +190,60 @@ function setCvSummaryBoxAutoFit(enabled, silent) {
   setTimeout(renderCvSummaryBoxAutoFitSetting, 0);
 })();
 document.addEventListener('DOMContentLoaded', renderCvSummaryBoxAutoFitSetting);
+
+var CV_SINGLE_SUMMARY_DETAIL_STORE = 'cvstudio_single_summary_detail_v1';
+var CV_BATCH_SUMMARY_DETAIL_STORE = 'cvstudio_batch_summary_detail_v1';
+window._cvSingleSummaryDetail = 'concise';
+window._cvBatchSummaryDetail = 'concise';
+
+function normalizeCvSummaryDetailPreference(value) {
+  return String(value || '').toLowerCase() === 'detailed' ? 'detailed' : 'concise';
+}
+function cvSummaryDetailStore(scope) {
+  return scope === 'batch' ? CV_BATCH_SUMMARY_DETAIL_STORE : CV_SINGLE_SUMMARY_DETAIL_STORE;
+}
+function getCvSummaryDetailPreference(scope) {
+  return normalizeCvSummaryDetailPreference(
+    scope === 'batch' ? window._cvBatchSummaryDetail : window._cvSingleSummaryDetail
+  );
+}
+function renderCvSummaryDetailSettings() {
+  ['single', 'batch'].forEach(function(scope) {
+    var value = getCvSummaryDetailPreference(scope);
+    ['concise', 'detailed'].forEach(function(choice) {
+      var id = 'cv' + (scope === 'batch' ? 'Batch' : 'Single') + 'Summary' + (choice === 'detailed' ? 'Detailed' : 'Concise');
+      var button = document.getElementById(id);
+      if (!button) return;
+      var active = value === choice;
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+      button.style.background = active ? 'var(--blue)' : 'var(--surface)';
+      button.style.borderColor = active ? 'var(--blue)' : 'var(--border)';
+      button.style.color = active ? '#ffffff' : 'var(--text2)';
+      button.style.boxShadow = active ? '0 3px 9px rgba(37,99,235,.16)' : 'none';
+    });
+  });
+}
+function setCvSummaryDetailPreference(scope, value, silent) {
+  scope = scope === 'batch' ? 'batch' : 'single';
+  value = normalizeCvSummaryDetailPreference(value);
+  if (scope === 'batch') window._cvBatchSummaryDetail = value;
+  else window._cvSingleSummaryDetail = value;
+  try { cvStudioDurableSettingSet(cvSummaryDetailStore(scope), value); } catch(e) {}
+  renderCvSummaryDetailSettings();
+  if (!silent) showToast((scope === 'batch' ? 'Batch' : 'Single CV') + ' summaries will be ' + value + '.', 'ok');
+  return value;
+}
+(function restoreCvSummaryDetailPreferences(){
+  var single = 'concise', batch = 'concise';
+  try {
+    single = localStorage.getItem(CV_SINGLE_SUMMARY_DETAIL_STORE) || 'concise';
+    batch = localStorage.getItem(CV_BATCH_SUMMARY_DETAIL_STORE) || 'concise';
+  } catch(e) {}
+  window._cvSingleSummaryDetail = normalizeCvSummaryDetailPreference(single);
+  window._cvBatchSummaryDetail = normalizeCvSummaryDetailPreference(batch);
+  setTimeout(renderCvSummaryDetailSettings, 0);
+})();
+document.addEventListener('DOMContentLoaded', renderCvSummaryDetailSettings);
 
 // ── Word export format (.doc / .docx) ────────────────────────────
 // Storage getter/setter (wordExportFormat / setWordExportFormat) live in

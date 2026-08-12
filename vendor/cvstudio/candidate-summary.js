@@ -198,7 +198,10 @@ function cvSummaryPrompt(cv, modifier, focusNote) {
   var modNote = modifier === 'shorter' ? 'Use exactly 4-5 bullet points.' : modifier === 'longer' ? 'Use 8-10 detailed bullet points with useful metrics where available.' : 'Use 6-7 bullet points.';
   return 'You are a senior recruitment consultant. Produce a professional candidate summary.\n\nRULES:\n- Output ONLY bullet points, no intro, no headers.\n- Every bullet starts with "- ".\n- Bold the most important keyword or phrase per bullet using **double asterisks**.\n- Third-person, professional, concise.\n- Do not invent employers, dates, certifications, industries, metrics, or achievements that are not supported by the CV.\n- Keep the candidate marketable but accurate.\n- ' + modNote + '\n' + (focusNote ? ('- ' + focusNote + '\n') : '') + '\nCV:\n---\n' + cv + '\n---';
 }
-async function requestFormattingSummary(raw, route) {
+function cvSummaryModifierForPreference(preference) {
+  return String(preference || '').toLowerCase() === 'detailed' ? 'longer' : 'normal';
+}
+async function requestFormattingSummary(raw, route, detailPreference) {
   var response = await fetchWithTimeout('/generate-ai', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
@@ -207,7 +210,7 @@ async function requestFormattingSummary(raw, route) {
       api_key_slot:route.api_key_slot,
       provider:route.provider,
       model:route.model,
-      prompt:cvSummaryPrompt(raw, 'normal', ''),
+      prompt:cvSummaryPrompt(raw, cvSummaryModifierForPreference(detailPreference), ''),
       max_tokens:1000,
       use_tools:false
     })

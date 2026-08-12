@@ -13,9 +13,14 @@ const cv = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
 const DOCUMENT_ALIGNMENT = String(cv._document_alignment || 'left').toLowerCase() === 'justify' ? 'both' : 'left';
 const LEFT_ALIGNMENT_XML = '<w:jc w:val="left"/>';
 const BODY_ALIGNMENT_XML = `<w:jc w:val="${DOCUMENT_ALIGNMENT}"/>`;
-// Calibrated to the template's first-page rectangle. Above this estimate the
-// box and its original text size stay fixed for manual adjustment.
+// Short summaries may grow naturally. Longer summaries use the largest
+// page-one geometry verified against the manually corrected Amir CV.
 const SUMMARY_BOX_FIRST_PAGE_LINE_LIMIT = 18;
+const SUMMARY_BOX_BULLET_SPACING_AFTER_TWIPS = 160;
+const SUMMARY_BOX_MAX_POSITION_Y_EMU = 194310;
+const SUMMARY_BOX_MAX_HEIGHT_EMU = 6229350;
+const SUMMARY_BOX_VML_MAX_MARGIN_TOP_PT = '15.3pt';
+const SUMMARY_BOX_VML_MAX_HEIGHT_PT = '490.5pt';
 
 const CV_LEADING_BULLET_MARKER_RE = /^\s*(?:[•●▪◦‣∙·▶►➤⁃»›]|\((?:[ivxlcdmIVXLCDM]{1,7}|[a-zA-Z]|\d{1,3})\)|\d{1,3}[.)](?=\s|[^\W\d_])|\d{1,3}-(?=\s)|(?:[a-z]|[ivxlcdm]{2,7})[.)-](?=\s)|[*‐-―-](?=\s|[^\W\d_]))\s*/;
 
@@ -504,6 +509,7 @@ function summaryBoxParagraph(text, bookmarkId, bookmarkName, isFirst, isLast) {
     : '';
   const markerEnd = isLast ? `<w:bookmarkEnd w:id="${bookmarkId}"/>` : '';
   const pPr = '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="2"/></w:numPr>' +
+    (isLast ? '' : `<w:spacing w:after="${SUMMARY_BOX_BULLET_SPACING_AFTER_TWIPS}"/>`) +
     '<w:textDirection w:val="btLr"/>' +
     '<w:rPr><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr>';
   return para(markerStart + children + markerEnd, pPr);
@@ -568,11 +574,51 @@ function fillSummaryBox(drawingXml, summaryBullets, documentXml) {
 
 function summaryBoxAutoFitMode(summaryBullets, enabled) {
   if (!enabled) return 'fixed';
+  let visibleBullets = 0;
   const lines = (Array.isArray(summaryBullets) ? summaryBullets : []).reduce((total, value) => {
     const text = String(value == null ? '' : value).replace(/\*\*/g, '').replace(/\s+/g, ' ').trim();
-    return total + (text ? Math.max(1, Math.ceil(text.length / 64)) : 0);
+    if (!text) return total;
+    visibleBullets += 1;
+    return total + Math.max(1, Math.ceil(text.length / 64));
   }, 0);
-  return lines <= SUMMARY_BOX_FIRST_PAGE_LINE_LIMIT ? 'resize' : 'fixed';
+  const estimatedLines = lines + Math.max(0, visibleBullets - 1);
+  return estimatedLines <= SUMMARY_BOX_FIRST_PAGE_LINE_LIMIT ? 'resize' : 'max';
+}
+
+function patchSummaryBoxMaxGeometry(documentXml) {
+  const marker = '_CVStudioSummaryBox';
+  let xml = String(documentXml || '');
+  if (!xml.includes(marker)) return xml;
+  xml = xml.replace(/<wp:anchor\b[^>]*>[\s\S]*?<\/wp:anchor>/g, function(anchor) {
+    if (!anchor.includes(marker) || !anchor.includes('name="Group 28"')) return anchor;
+    anchor = anchor.replace(
+      /(<wp:positionV\b[^>]*>[\s\S]*?<wp:posOffset>)-?\d+(<\/wp:posOffset>[\s\S]*?<\/wp:positionV>)/,
+      function(_match, before, after) { return before + SUMMARY_BOX_MAX_POSITION_Y_EMU + after; }
+    );
+    anchor = anchor.replace(
+      /(<wp:extent\b[^>]*\bcy=")\d+(")/,
+      function(_match, before, after) { return before + SUMMARY_BOX_MAX_HEIGHT_EMU + after; }
+    );
+    return anchor.replace(
+      /(<wpg:grpSpPr>\s*<a:xfrm>[\s\S]*?<a:ext\b[^>]*\bcy=")\d+(")/,
+      function(_match, before, after) { return before + SUMMARY_BOX_MAX_HEIGHT_EMU + after; }
+    );
+  });
+  return xml.replace(/<v:group\b(?=[^>]*\bid="Group 28")[^>]*>/g, function(opening) {
+    return opening.replace(/style="([^"]*)"/i, function(_match, style) {
+      const properties = {
+        'margin-top': SUMMARY_BOX_VML_MAX_MARGIN_TOP_PT,
+        height: SUMMARY_BOX_VML_MAX_HEIGHT_PT,
+      };
+      Object.keys(properties).forEach(function(name) {
+        const pattern = new RegExp('(' + name + ':)[^;\\"]*', 'i');
+        style = pattern.test(style)
+          ? style.replace(pattern, function(_match, prefix) { return prefix + properties[name]; })
+          : style.replace(/;+$/, '') + ';' + name + ':' + properties[name];
+      });
+      return `style="${style}"`;
+    });
+  });
 }
 
 function patchVmlSummaryBoxAutoFit(documentXml, mode) {
@@ -622,7 +668,8 @@ function applySummaryBoxAutoFit(drawingXml, summaryBullets, enabled) {
       }
     );
   });
-  return patchVmlSummaryBoxAutoFit(xml, mode);
+  xml = patchVmlSummaryBoxAutoFit(xml, mode);
+  return mode === 'max' ? patchSummaryBoxMaxGeometry(xml) : xml;
 }
 
 // ── Education ─────────────────────────────────────────────────────────────────

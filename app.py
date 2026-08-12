@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.323"
+_INSTALL_RECEIPT_VERSION = "v24.6.324"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -333,7 +333,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.323"
+_CVSTUDIO_VERSION = "v24.6.324"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -9973,10 +9973,15 @@ def _xml_element_span(xml_text, tag, start=0):
 _SUMMARY_DOCX_INVALID_XML_CHAR_RE = re.compile(
     r"[\x00-\x08\x0B\x0C\x0E-\x1F\uD800-\uDFFF\uFFFE\uFFFF]"
 )
-# Keep the uploaded-DOCX path aligned with generate.js: ordinary summaries can
-# grow the first-page shape, while unusually long summaries remain unchanged
-# for manual adjustment.
+# Keep the uploaded-DOCX path aligned with generate.js. Short summaries may
+# grow naturally; longer summaries use the largest page-one geometry verified
+# against the manually corrected Amir CV and never grow beyond that boundary.
 _SUMMARY_BOX_FIRST_PAGE_LINE_LIMIT = 18
+_SUMMARY_BOX_BULLET_SPACING_AFTER_TWIPS = 160
+_SUMMARY_BOX_MAX_POSITION_Y_EMU = 194310
+_SUMMARY_BOX_MAX_HEIGHT_EMU = 6229350
+_SUMMARY_BOX_VML_MAX_MARGIN_TOP_PT = "15.3pt"
+_SUMMARY_BOX_VML_MAX_HEIGHT_PT = "490.5pt"
 
 
 def _summary_docx_safe_text(text):
@@ -10153,11 +10158,17 @@ def _summary_docx_box_numbering_id(archive, fallback_numbering_id):
 def _summary_docx_box_block(bullets, bookmark_id, bookmark_name, numbering_id):
     paragraphs = []
     for index, bullet in enumerate(bullets):
+        spacing = (
+            '<w:spacing w:after="{}"/>'.format(
+                _SUMMARY_BOX_BULLET_SPACING_AFTER_TWIPS
+            )
+            if index < len(bullets) - 1 else ""
+        )
         ppr = (
             '<w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="{}"/>'
-            '</w:numPr><w:textDirection w:val="btLr"/>'
+            '</w:numPr>{}<w:textDirection w:val="btLr"/>'
             '<w:rPr><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr></w:pPr>'
-        ).format(numbering_id)
+        ).format(numbering_id, spacing)
         start = (
             '<w:bookmarkStart w:id="{}" w:name="{}"/>'.format(bookmark_id, bookmark_name)
             if index == 0 else ""
@@ -10265,14 +10276,90 @@ def _summary_docx_autofit_mode(bullets, enabled):
     if not enabled:
         return "fixed"
     estimated_lines = 0
+    visible_bullets = 0
     for value in (bullets if isinstance(bullets, list) else []):
         text = re.sub(r"\s+", " ", str(value or "").replace("**", "")).strip()
         if text:
+            visible_bullets += 1
             estimated_lines += max(1, (len(text) + 63) // 64)
+    # Bullet spacing occupies part of a line. Counting one conservative line
+    # per gap prevents Word's grow-to-fit mode from crossing the first page.
+    estimated_lines += max(0, visible_bullets - 1)
     return (
         "resize"
         if estimated_lines <= _SUMMARY_BOX_FIRST_PAGE_LINE_LIMIT
-        else "fixed"
+        else "max"
+    )
+
+
+def _summary_docx_patch_max_geometry(document_xml):
+    """Apply the verified page-one maximum only to CV Studio's summary group."""
+    xml = str(document_xml or "")
+    marker_text = "_CVStudioSummaryBox"
+    if marker_text not in xml:
+        return xml
+
+    def replace_anchor(match):
+        anchor = match.group(0)
+        if marker_text not in anchor or 'name="Group 28"' not in anchor:
+            return anchor
+        anchor = re.sub(
+            r'(<wp:positionV\b[^>]*>.*?<wp:posOffset>)-?\d+(</wp:posOffset>.*?</wp:positionV>)',
+            r"\g<1>{}\g<2>".format(_SUMMARY_BOX_MAX_POSITION_Y_EMU),
+            anchor,
+            count=1,
+            flags=re.S,
+        )
+        anchor = re.sub(
+            r'(<wp:extent\b[^>]*\bcy=")\d+(")',
+            r"\g<1>{}\g<2>".format(_SUMMARY_BOX_MAX_HEIGHT_EMU),
+            anchor,
+            count=1,
+        )
+        anchor = re.sub(
+            r'(<wpg:grpSpPr>\s*<a:xfrm>.*?<a:ext\b[^>]*\bcy=")\d+(")',
+            r"\g<1>{}\g<2>".format(_SUMMARY_BOX_MAX_HEIGHT_EMU),
+            anchor,
+            count=1,
+            flags=re.S,
+        )
+        return anchor
+
+    xml = re.sub(
+        r"<wp:anchor\b[^>]*>.*?</wp:anchor>",
+        replace_anchor,
+        xml,
+        flags=re.S,
+    )
+
+    def replace_group_opening(match):
+        opening = match.group(0)
+
+        def replace_style(style_match):
+            style = style_match.group(1)
+            for property_name, value in (
+                ("margin-top", _SUMMARY_BOX_VML_MAX_MARGIN_TOP_PT),
+                ("height", _SUMMARY_BOX_VML_MAX_HEIGHT_PT),
+            ):
+                pattern = r"({}:)[^;\"]*".format(re.escape(property_name))
+                if re.search(pattern, style, flags=re.I):
+                    style = re.sub(pattern, r"\g<1>" + value, style, count=1, flags=re.I)
+                else:
+                    style = style.rstrip(";") + ";{}:{}".format(property_name, value)
+            return 'style="{}"'.format(style)
+
+        return re.sub(
+            r'style="([^"]*)"',
+            replace_style,
+            opening,
+            count=1,
+            flags=re.I,
+        )
+
+    return re.sub(
+        r'<v:group\b(?=[^>]*\bid="Group 28")[^>]*>',
+        replace_group_opening,
+        xml,
     )
 
 
@@ -10325,6 +10412,7 @@ def _summary_docx_apply_box_autofit(document_xml, bullets, enabled):
     mode = _summary_docx_autofit_mode(bullets, enabled)
     fit_xml = {
         "resize": "<a:spAutoFit/>",
+        "max": "<a:noAutofit/>",
         "fixed": "<a:noAutofit/>",
     }[mode]
 
@@ -10369,7 +10457,8 @@ def _summary_docx_apply_box_autofit(document_xml, bullets, enabled):
         document_xml,
         flags=re.S,
     )
-    return _summary_docx_patch_vml_autofit(patched_xml, mode)
+    patched_xml = _summary_docx_patch_vml_autofit(patched_xml, mode)
+    return _summary_docx_patch_max_geometry(patched_xml) if mode == "max" else patched_xml
 
 
 def _summary_docx_existing_block_span(document_xml):
