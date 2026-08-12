@@ -89,6 +89,7 @@ async function testSettingsBridgeAndAllowlist() {
   assert.strictEqual(context.cvStudioSafeLocalDataKey('hy_model_openai'), true);
   assert.strictEqual(context.cvStudioSafeLocalDataKey('hy_model_unknown'), false);
   assert.strictEqual(context.cvStudioSafeLocalDataKey('hy_ai_route_summary'), true);
+  assert.strictEqual(context.cvStudioSafeLocalDataKey('cvstudio_summary_box_autofit_v1'), true);
   assert.strictEqual(context.cvStudioSafeLocalDataKey('hy_ai_route_unapproved'), false);
   assert.strictEqual(context.cvStudioSafeLocalDataKey('hy_key_openai'), false);
 

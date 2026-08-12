@@ -70,6 +70,12 @@ function nestedListTextIsNotDuplicatedInParent() {
   );
 }
 
+function xmlInvalidControlCharactersAreReplaced() {
+  assert.strictEqual(context._docxEsc('A\u0000B\u000bC & <D>'), 'A B C &amp; &lt;D&gt;');
+  assert.strictEqual(context._docxEsc('Astral 😀 text'), 'Astral 😀 text');
+}
+
 preformattedRawReportSurvives();
 nestedListTextIsNotDuplicatedInParent();
+xmlInvalidControlCharactersAreReplaced();
 console.log('DOCX export frontend regression tests passed.');

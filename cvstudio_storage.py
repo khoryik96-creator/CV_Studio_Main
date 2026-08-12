@@ -885,6 +885,7 @@ BROWSER_SETTING_KEYS = frozenset(
         "onenote_ms_client_id",
         "onenote_ms_tenant",
         "cvstudio_cv_text_alignment_v1",
+        "cvstudio_summary_box_autofit_v1",
         "cvstudio_page_nav_pinned_v1",
         "cvstudio_spider_preview_memory_mode_v1",
         "ja_auto_upload",

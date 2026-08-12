@@ -134,6 +134,7 @@ async function applySummaryToUploadedDocx() {
     var fd = new FormData();
     fd.append('source_docx', file, file.name);
     fd.append('summary_bullets', JSON.stringify(bullets));
+    fd.append('summary_box_autofit', getCvSummaryBoxAutoFit() ? 'true' : 'false');
     var response = await fetchWithTimeout('/generate-docx', { method:'POST', body:fd }, 60000);
     if (!response.ok) {
       var errorPayload = await response.json().catch(function(){ return {}; });
