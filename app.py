@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.325"
+_INSTALL_RECEIPT_VERSION = "v24.6.326"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -333,7 +333,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.325"
+_CVSTUDIO_VERSION = "v24.6.326"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -10430,6 +10430,59 @@ def _summary_docx_patch_vml_autofit(document_xml, mode):
     return xml
 
 
+def _summary_docx_relocate_max_box_after_details_table(document_xml):
+    """Keep a max-height floating Summary from pushing the details table down."""
+    xml = str(document_xml or "")
+    marker_text = "_CVStudioSummaryBox"
+    marker = xml.find(marker_text)
+    body_open = xml.find("<w:body")
+    body_start = xml.find(">", body_open) + 1 if body_open >= 0 else -1
+    table_span = _xml_element_span(xml, "w:tbl", body_start) if body_start > 0 else None
+    if marker < 0 or not table_span or marker > table_span[1]:
+        return xml
+
+    # Find the outer body paragraph. The Summary marker also appears in nested
+    # textbox paragraphs, so a plain rfind("<w:p") would select the wrong one.
+    paragraph_span = None
+    cursor = body_start
+    while cursor < table_span[0]:
+        candidate = _xml_element_span(xml, "w:p", cursor)
+        if not candidate or candidate[0] >= table_span[0]:
+            break
+        if marker_text in xml[candidate[0]:candidate[1]]:
+            paragraph_span = candidate
+            break
+        cursor = candidate[1]
+    if not paragraph_span:
+        return xml
+
+    paragraph_start, paragraph_end = paragraph_span
+    paragraph_xml = xml[paragraph_start:paragraph_end]
+    opening_end = paragraph_xml.find(">") + 1
+    if opening_end <= 0:
+        return xml
+
+    # Moving an anchored shape in Word leaves its original empty anchor
+    # paragraph behind. Preserve the paragraph properties to match that stable
+    # layout and the manually corrected Amir reference.
+    paragraph_properties = ""
+    properties_span = _xml_element_span(paragraph_xml, "w:pPr", opening_end)
+    if (
+        properties_span
+        and not paragraph_xml[opening_end:properties_span[0]].strip()
+    ):
+        paragraph_properties = paragraph_xml[properties_span[0]:properties_span[1]]
+    empty_anchor = paragraph_xml[:opening_end] + paragraph_properties + "</w:p>"
+
+    return (
+        xml[:paragraph_start]
+        + empty_anchor
+        + xml[paragraph_end:table_span[1]]
+        + paragraph_xml
+        + xml[table_span[1]:]
+    )
+
+
 def _summary_docx_apply_box_autofit(document_xml, bullets, enabled):
     mode = _summary_docx_autofit_mode(bullets, enabled)
     fit_xml = {
@@ -10480,7 +10533,10 @@ def _summary_docx_apply_box_autofit(document_xml, bullets, enabled):
         flags=re.S,
     )
     patched_xml = _summary_docx_patch_vml_autofit(patched_xml, mode)
-    return _summary_docx_patch_max_geometry(patched_xml) if mode == "max" else patched_xml
+    if mode == "max":
+        patched_xml = _summary_docx_patch_max_geometry(patched_xml)
+        patched_xml = _summary_docx_relocate_max_box_after_details_table(patched_xml)
+    return patched_xml
 
 
 def _summary_docx_existing_block_span(document_xml):

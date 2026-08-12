@@ -528,6 +528,10 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
             return groups[0]
 
         resized = render(["A concise summary bullet.", "A second concise bullet."])
+        self.assertLess(
+            resized.index("_CVStudioSummaryBox"),
+            resized.index("<w:tbl>"),
+        )
         self.assertIn("<a:spAutoFit/>", modern_summary_shape(resized))
         self.assertIn("mso-fit-shape-to-text:t", vml_summary_opening(resized))
         self.assertIn("<wp:posOffset>2218690</wp:posOffset>", modern_summary_anchor(resized))
@@ -542,6 +546,12 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertIn("height:243.25pt", vml_summary_group_opening(fixed))
 
         very_long = render(["Long summary text " * 12 for _ in range(10)], True)
+        self.assertLess(
+            very_long.index("<w:tbl>"),
+            very_long.index("_CVStudioSummaryBox"),
+        )
+        self.assertEqual(very_long.count("<w:tbl>"), 1)
+        self.assertEqual(very_long.count("_CVStudioSummaryBox"), 2)
         long_shape = modern_summary_shape(very_long)
         self.assertIn("<a:noAutofit/>", long_shape)
         self.assertNotIn("<a:normAutofit/>", long_shape)
@@ -580,6 +590,48 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
             patched,
         )
         self.assertEqual(patched.count("margin-top:15.3pt"), 1)
+
+    def test_uploaded_docx_moves_only_a_max_summary_after_the_details_table(self):
+        base = app.app.test_client().post(
+            "/generate-docx",
+            json={"data": {
+                "candidate": {"name": "Summary Anchor Fixture"},
+                "work_experiences": [],
+                "education": [],
+                "certifications": [],
+                "skills": [],
+            }},
+            headers={"Origin": "http://127.0.0.1:5000"},
+        )
+        self.assertEqual(base.status_code, 200)
+
+        _, short_xml = self._apply_summary(
+            base.data,
+            ["A concise summary bullet.", "A second concise bullet."],
+            autofit=True,
+        )
+        self.assertLess(
+            short_xml.index("_CVStudioSummaryBox"),
+            short_xml.index("<w:tbl>"),
+        )
+
+        _, long_xml = self._apply_summary(
+            base.data,
+            ["Long summary text " * 12 for _ in range(10)],
+            autofit=True,
+        )
+        self.assertLess(
+            long_xml.index("<w:tbl>"),
+            long_xml.index("_CVStudioSummaryBox"),
+        )
+        self.assertIn("<wp:posOffset>194310</wp:posOffset>", long_xml)
+        self.assertIn("margin-top:15.3pt", long_xml)
+        self.assertEqual(long_xml.count("<w:tbl>"), 1)
+        self.assertEqual(long_xml.count("_CVStudioSummaryBox"), 2)
+        self.assertEqual(
+            app._summary_docx_relocate_max_box_after_details_table(long_xml),
+            long_xml,
+        )
 
     def test_generated_docx_validator_rejects_invalid_word_xml(self):
         invalid = io.BytesIO()
