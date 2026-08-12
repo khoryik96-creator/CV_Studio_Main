@@ -466,6 +466,85 @@ function makeSummarySection(summaryBullets) {
   return xml;
 }
 
+function summaryBoxParagraph(text, bookmarkId, bookmarkName, isFirst, isLast) {
+  const value = String(text == null ? '' : text);
+  const parts = value.split(/(\*\*[^*]+\*\*)/g);
+  let children = '';
+  for (const part of parts) {
+    if (!part) continue;
+    if (part.startsWith('**') && part.endsWith('**')) {
+      children += run(part.slice(2, -2), { bold: true, color: '000000', size: 22 });
+    } else {
+      children += run(part, { color: '000000', size: 22 });
+    }
+  }
+  const markerStart = isFirst
+    ? `<w:bookmarkStart w:id="${bookmarkId}" w:name="${bookmarkName}"/>`
+    : '';
+  const markerEnd = isLast ? `<w:bookmarkEnd w:id="${bookmarkId}"/>` : '';
+  const pPr = '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="2"/></w:numPr>' +
+    '<w:textDirection w:val="btLr"/>' +
+    '<w:rPr><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr>';
+  return para(markerStart + children + markerEnd, pPr);
+}
+
+function summaryBoxVisibleText(paragraphXml) {
+  return Array.from(paragraphXml.matchAll(/<w:t\b[^>]*>([\s\S]*?)<\/w:t>/g))
+    .map(match => match[1]
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'"))
+    .join('')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function fillSummaryBox(drawingXml, summaryBullets, documentXml) {
+  const bullets = (Array.isArray(summaryBullets) ? summaryBullets : [])
+    .map(value => String(value == null ? '' : value).replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .slice(0, 20);
+  if (!bullets.length) return { xml: drawingXml, filled: 0 };
+
+  const usedBookmarkIds = new Set(
+    Array.from(String(documentXml || '').matchAll(/<w:bookmarkStart\b[^>]*w:id="(\d+)"/g))
+      .map(match => Number(match[1]))
+  );
+  function nextBookmarkId() {
+    let value = 1;
+    while (usedBookmarkIds.has(value)) value += 1;
+    usedBookmarkIds.add(value);
+    return value;
+  }
+
+  let filled = 0;
+  const xml = drawingXml.replace(
+    /(<w:txbxContent\b[^>]*>)([\s\S]*?)(<\/w:txbxContent>)/g,
+    function(_match, opening, content, closing) {
+      const paragraphs = Array.from(content.matchAll(/<w:p(?=[ />])[^>]*>[\s\S]*?<\/w:p>/g));
+      const summaryIndex = paragraphs.findIndex(item => summaryBoxVisibleText(item[0]) === '*Summary*');
+      if (summaryIndex < 0) return _match;
+
+      const bookmarkId = nextBookmarkId();
+      const bookmarkName = `_CVStudioSummaryBox${filled + 1}`;
+      const replacement = bullets.map((bullet, index) => summaryBoxParagraph(
+        bullet,
+        bookmarkId,
+        bookmarkName,
+        index === 0,
+        index === bullets.length - 1
+      )).join('');
+      const start = paragraphs[summaryIndex].index;
+      const end = paragraphs[paragraphs.length - 1].index + paragraphs[paragraphs.length - 1][0].length;
+      filled += 1;
+      return opening + content.slice(0, start) + replacement + content.slice(end) + closing;
+    }
+  );
+  return { xml, filled };
+}
+
 // ── Education ─────────────────────────────────────────────────────────────────
 function makeEducationSection(education) {
   education = (education || []).filter(edu => edu && typeof edu === 'object' && (String(edu.institution || '').trim() || String(edu.degree || '').trim() || String(edu.description || '').trim()));
@@ -590,6 +669,7 @@ const bodyContent = docXml.slice(bodyStart, bodyEnd);
 const mcEnd = bodyContent.indexOf('</mc:AlternateContent>') + '</mc:AlternateContent>'.length;
 const outerParaEnd = bodyContent.indexOf('</w:p>', mcEnd) + '</w:p>'.length;
 const drawingPara = bodyContent.slice(0, outerParaEnd);
+const summaryBox = fillSummaryBox(drawingPara, cv.summary_bullets || [], docXml);
 
 // Extract sectPr
 const sectPrMatch = docXml.match(/<w:sectPr[\s\S]*?<\/w:sectPr>/);
@@ -598,10 +678,10 @@ const sectPr = sectPrMatch ? sectPrMatch[0] : '';
 // Build new body content
 const c = cv.candidate || {};
 const newBodyContent =
-  drawingPara +
+  summaryBox.xml +
   makeAboutTable(c, cv) +
   emptyPara() + emptyPara() +
-  makeSummarySection(cv.summary_bullets || []) +
+  (summaryBox.filled ? '' : makeSummarySection(cv.summary_bullets || [])) +
   makeWorkSection(cv.work_experiences || []) +
   makeEducationSection(cv.education || []) +
   makeAdditionalSection(cv.certifications || [], cv.skills || []) +

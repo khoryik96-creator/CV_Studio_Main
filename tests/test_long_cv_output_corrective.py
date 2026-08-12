@@ -304,7 +304,9 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertIn("Undated University", document_xml)
         self.assertNotIn("| Undated University", document_xml)
 
-    def test_docx_fills_dedicated_summary_placeholder_outside_details_table(self):
+    def test_docx_fills_summary_textbox_in_both_word_compatibility_layers(self):
+        import xml.etree.ElementTree as ET
+
         response = app.app.test_client().post(
             "/generate-docx",
             json={
@@ -330,16 +332,71 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
             document_xml = archive.read("word/document.xml").decode("utf-8")
+        ET.fromstring(document_xml)
         first_table = re.search(r"<w:tbl\b.*?</w:tbl>", document_xml, re.S)
         self.assertIsNotNone(first_table)
-        self.assertNotIn("S U M M A R Y", first_table.group(0))
         self.assertNotIn("Cloud platforms", first_table.group(0))
-        self.assertLess(document_xml.index("S U M M A R Y"), document_xml.index("W O R K   E X P E R I E N C E S"))
+        summary_boxes = [
+            match.group(0)
+            for match in re.finditer(
+                r"<w:txbxContent\b[^>]*>.*?</w:txbxContent>",
+                document_xml,
+                re.S,
+            )
+            if "_CVStudioSummaryBox" in match.group(0)
+        ]
+        self.assertEqual(len(summary_boxes), 2)
+        for summary_box in summary_boxes:
+            self.assertIn("Cloud platforms", summary_box)
+            self.assertIn("Built engineering teams &amp; delivery standards.", summary_box)
+            self.assertIn('<w:numId w:val="2"/>', summary_box)
+            self.assertIn('<w:textDirection w:val="btLr"/>', summary_box)
+            self.assertNotIn("*Summary*", summary_box)
+            self.assertNotIn("*Tech Stack*", summary_box)
+            self.assertNotIn("*Key Things to Highlight*", summary_box)
+            self.assertNotIn("*Certifications", summary_box)
+        self.assertEqual(document_xml.count("_CVStudioSummaryBox"), 2)
+        self.assertEqual(document_xml.count("ABOUT HIM / HER"), 2)
+        self.assertNotIn("S U M M A R Y", document_xml)
         self.assertRegex(
             document_xml,
             r"<w:r><w:rPr><w:b/><w:bCs/>.*?<w:t>Cloud platforms</w:t></w:r>",
         )
-        self.assertIn("Built engineering teams &amp; delivery standards.", document_xml)
+        self.assertEqual(
+            document_xml.count("Built engineering teams &amp; delivery standards."),
+            2,
+        )
+
+    def test_generate_docx_multipart_updates_summary_textbox_idempotently(self):
+        client = app.app.test_client()
+        source_response = client.post(
+            "/generate-docx",
+            json={"data": {
+                "candidate": {"name": "Summary Box Fixture"},
+                "work_experiences": [], "education": [],
+                "certifications": [], "skills": [],
+            }},
+            headers={"Origin": "http://127.0.0.1:5000"},
+        )
+        self.assertEqual(source_response.status_code, 200)
+
+        first_bytes, first_xml = self._apply_summary(
+            source_response.data,
+            ["**Cloud platforms** leader.", "Built regional teams."],
+        )
+        self.assertEqual(first_xml.count("_CVStudioSummaryBox"), 2)
+        self.assertEqual(first_xml.count("Cloud platforms"), 2)
+        self.assertNotIn("*Summary*", first_xml)
+        self.assertNotIn("S U M M A R Y", first_xml)
+
+        _, replacement_xml = self._apply_summary(
+            first_bytes,
+            ["Replacement summary only."],
+            name="CV - Summary.docx",
+        )
+        self.assertEqual(replacement_xml.count("_CVStudioSummaryBox"), 2)
+        self.assertEqual(replacement_xml.count("Replacement summary only."), 2)
+        self.assertNotIn("Cloud platforms", replacement_xml)
 
     def test_generate_docx_multipart_replaces_summary_placeholder_and_is_idempotent(self):
         source_response = app.app.test_client().post(
@@ -360,6 +417,7 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         placeholder_source = io.BytesIO()
         with zipfile.ZipFile(io.BytesIO(source_response.data)) as source_archive:
             document_xml = source_archive.read("word/document.xml").decode("utf-8")
+            document_xml = document_xml.replace("*Summary*", "*Overview*")
             table_end = document_xml.index("</w:tbl>") + len("</w:tbl>")
             placeholder = (
                 "<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Summary:</w:t></w:r></w:p>"
@@ -462,6 +520,9 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         out = io.BytesIO()
         with zipfile.ZipFile(io.BytesIO(base.data)) as src:
             document_xml = src.read("word/document.xml").decode("utf-8")
+            # These cases exercise the legacy/body fallback, so neutralise the
+            # modern template's textbox placeholder before adding body fixtures.
+            document_xml = document_xml.replace("*Summary*", "*Overview*")
             table_end = document_xml.index("</w:tbl>") + len("</w:tbl>")
             document_xml = document_xml[:table_end] + extra_body_xml + document_xml[table_end:]
             with zipfile.ZipFile(out, "w") as patched:
