@@ -244,6 +244,78 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertEqual(app._strip_cv_inferred_title("Advisor"), "Advisor")
         self.assertEqual(app._strip_cv_inferred_title("Advisor (likely to succeed)"), "Advisor (likely to succeed)")
 
+    def test_additional_information_strips_baked_markers_without_false_positives(self):
+        data = {
+            "candidate": {"name": "Joel Ezra Joe"},
+            "work_experiences": [],
+            "education": [],
+            "certifications": ["• Professional Scrum Master", "-5% variance"],
+            "skills": [
+                {
+                    "category": "Projects",
+                    "items": [
+                        "CryptoRadar",
+                        "• Production TypeScript app",
+                        "• Implemented response caching",
+                    ],
+                },
+                {
+                    "category": "Volunteer & Community",
+                    "items": "VideoClaw Hackerhouse\n• Won Best Product Design",
+                },
+                {
+                    "category": "Protected values",
+                    "items": ["-5% variance", "3.5 years", "(Vendors: AWS, Azure)"],
+                },
+            ],
+        }
+        normalized = app._normalize_cv_structured_content(copy.deepcopy(data))
+        self.assertEqual(
+            normalized["certifications"],
+            ["Professional Scrum Master", "-5% variance"],
+        )
+        self.assertEqual(
+            normalized["skills"][0]["items"],
+            ["CryptoRadar", "Production TypeScript app", "Implemented response caching"],
+        )
+        self.assertEqual(
+            normalized["skills"][1]["items"],
+            "VideoClaw Hackerhouse\nWon Best Product Design",
+        )
+        self.assertEqual(
+            normalized["skills"][2]["items"],
+            ["-5% variance", "3.5 years", "(Vendors: AWS, Azure)"],
+        )
+        self.assertEqual(
+            app._normalize_cv_structured_content(copy.deepcopy(normalized)),
+            normalized,
+        )
+
+        response = app.app.test_client().post(
+            "/generate-docx",
+            json={"data": data},
+            headers={"Origin": "http://127.0.0.1:5000"},
+        )
+        self.assertEqual(response.status_code, 200)
+        with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
+            document_xml = archive.read("word/document.xml").decode("utf-8")
+        import xml.etree.ElementTree as ET
+        root = ET.fromstring(document_xml)
+        ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+        numbered_text = []
+        for paragraph in root.findall(".//w:body//w:p", ns):
+            if paragraph.find("w:pPr/w:numPr/w:numId", ns) is None:
+                continue
+            numbered_text.append("".join(
+                node.text or "" for node in paragraph.findall(".//w:t", ns)
+            ))
+        self.assertIn("Production TypeScript app", numbered_text)
+        self.assertIn("Won Best Product Design", numbered_text)
+        self.assertFalse(any(text.startswith("•") for text in numbered_text))
+        self.assertIn("-5% variance", numbered_text)
+        self.assertIn("3.5 years", numbered_text)
+        self.assertIn("(Vendors: AWS, Azure)", numbered_text)
+
     def test_docx_xml_never_serializes_structured_bullets_or_inferred_title(self):
         response = app.app.test_client().post(
             "/generate-docx",

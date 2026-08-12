@@ -17,6 +17,18 @@ const BODY_ALIGNMENT_XML = `<w:jc w:val="${DOCUMENT_ALIGNMENT}"/>`;
 // box and its original text size stay fixed for manual adjustment.
 const SUMMARY_BOX_FIRST_PAGE_LINE_LIMIT = 18;
 
+const CV_LEADING_BULLET_MARKER_RE = /^\s*(?:[•●▪◦‣∙·▶►➤⁃»›]|\((?:[ivxlcdmIVXLCDM]{1,7}|[a-zA-Z]|\d{1,3})\)|\d{1,3}[.)](?=\s|[^\W\d_])|\d{1,3}-(?=\s)|(?:[a-z]|[ivxlcdm]{2,7})[.)-](?=\s)|[*‐-―-](?=\s|[^\W\d_]))\s*/;
+
+function stripLeadingBulletMarker(text) {
+  let value = String(text == null ? '' : text);
+  for (let index = 0; index < 5; index += 1) {
+    const stripped = value.replace(CV_LEADING_BULLET_MARKER_RE, '');
+    if (stripped === value) break;
+    value = stripped;
+  }
+  return value;
+}
+
 const TEMPLATE = path.join(__dirname, 'template.docx');
 if (!fs.existsSync(TEMPLATE)) {
   console.error('template.docx not found');
@@ -314,7 +326,9 @@ function boldBlackPara(text, size = 24) {
 
 // ── Bullet paragraph (uses ListParagraph style, indent, 24pt size) ────────────
 function bulletPara(text, alignmentXml = BODY_ALIGNMENT_XML) {
-  const t = String(text == null ? '' : (typeof text === 'object' ? (text.text || text.heading || '') : text));
+  const t = stripLeadingBulletMarker(
+    String(text == null ? '' : (typeof text === 'object' ? (text.text || text.heading || '') : text))
+  ).trim();
   // Parse **bold** inline
   const parts = t.split(/(\*\*[^*]+\*\*)/g);
   let children = '';

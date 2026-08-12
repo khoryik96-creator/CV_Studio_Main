@@ -44,6 +44,7 @@ const context = {
 vm.createContext(context);
 [
   'cvParseIsLong','cvParseTimeoutMs','cvStripInferredTitle','cvCanonicalSectionHeading',
+  'cvStripLeadingBulletMarker','cvStripAdditionalBulletMarkers',
   'cvNormalizeBulletItems','cvNormalizeStructuredData','cvNormDateRange','summaryBulletLines',
   'formatSummaryBulletsFor','applyFormatSummaryBullets','cvSummaryPrompt','versionedUnlockKey','readVersionedUnlock',
   'writeVersionedUnlock','cvScoringIsUnlocked','cvScoringSetUnlocked','updateCvScoringLockUI',
@@ -51,6 +52,20 @@ vm.createContext(context);
   'requireAiCrawlerUnlocked','aiCrawlerLockPayload','cvSkillPreviewHtml'
 ].forEach(name => vm.runInContext(fn(name), context));
 vm.runInContext(fnFrom(generate, 'normalizeDateRange'), context);
+
+const generateMarkerContext = {};
+vm.createContext(generateMarkerContext);
+vm.runInContext(
+  generate.slice(
+    generate.indexOf('const CV_LEADING_BULLET_MARKER_RE'),
+    generate.indexOf('\n\nconst TEMPLATE')
+  ),
+  generateMarkerContext
+);
+assert.strictEqual(vm.runInContext("stripLeadingBulletMarker('• • Built agent')", generateMarkerContext), 'Built agent');
+assert.strictEqual(vm.runInContext("stripLeadingBulletMarker('-5% variance')", generateMarkerContext), '-5% variance');
+assert.strictEqual(vm.runInContext("stripLeadingBulletMarker('3.5 years')", generateMarkerContext), '3.5 years');
+assert.strictEqual(vm.runInContext("stripLeadingBulletMarker('(Vendors: AWS)')", generateMarkerContext), '(Vendors: AWS)');
 
 assert.deepStrictEqual(
   JSON.parse(JSON.stringify(context.summaryBulletLines('```markdown\n- **Cloud platforms** leader\n* Built delivery teams\n```'))),
@@ -209,6 +224,28 @@ assert.strictEqual(data.candidate.current_position, '');
 assert.strictEqual(data.work_experiences[0].roles[0].title, '');
 assert.strictEqual(data.work_experiences[0].roles[0].bullets[0].heading, 'Key achievements');
 assert.strictEqual(data.work_experiences[0].roles[0].bullets[0].kind, 'section');
+
+const doubleBulletData = {
+  candidate: {}, work_experiences: [], education: [],
+  certifications: ['• Professional Scrum Master', '-5% variance'],
+  skills: [
+    {category:'Projects', items:['CryptoRadar', '• Production TypeScript app']},
+    {category:'Protected values', items:['-5% variance', '3.5 years', '(Vendors: AWS, Azure)']},
+  ],
+};
+context.cvNormalizeStructuredData(doubleBulletData);
+assert.deepStrictEqual(
+  JSON.parse(JSON.stringify(doubleBulletData.certifications)),
+  ['Professional Scrum Master', '-5% variance']
+);
+assert.deepStrictEqual(
+  JSON.parse(JSON.stringify(doubleBulletData.skills[0].items)),
+  ['CryptoRadar', 'Production TypeScript app']
+);
+assert.deepStrictEqual(
+  JSON.parse(JSON.stringify(doubleBulletData.skills[1].items)),
+  ['-5% variance', '3.5 years', '(Vendors: AWS, Azure)']
+);
 assert.deepStrictEqual(
   JSON.parse(JSON.stringify(context.cvNormalizeBulletItems(['Key responsibilities', 'Delivered result']))),
   [{heading:'Key responsibilities', bullets:[], kind:'section'}, 'Delivered result']
