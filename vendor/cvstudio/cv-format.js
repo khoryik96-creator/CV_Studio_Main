@@ -308,13 +308,35 @@ function cvCanonicalSectionHeading(value) {
   return /^achievement/i.test(match[1]) ? 'Key achievements' : 'Key responsibilities';
 }
 
+function cvStripLeadingBulletMarker(value) {
+  var marker = /^\s*(?:[•●▪◦‣∙·▶►➤⁃»›]|\((?:[ivxlcdmIVXLCDM]{1,7}|[a-zA-Z]|\d{1,3})\)|\d{1,3}[.)](?=\s|[^\W\d_])|\d{1,3}-(?=\s)|(?:[a-z]|[ivxlcdm]{2,7})[.)-](?=\s)|[*‐-―-](?=\s|[^\W\d_]))\s*/;
+  var text = String(value == null ? '' : value);
+  for (var i = 0; i < 5; i++) {
+    var stripped = text.replace(marker, '');
+    if (stripped === text) break;
+    text = stripped;
+  }
+  return text;
+}
+
+function cvStripAdditionalBulletMarkers(items, alwaysBulleted) {
+  var structured = Array.isArray(items);
+  var values = structured ? items : String(items || '').split(/(?:\r?\n)+/);
+  var nonempty = values.filter(function(value){ return String(value || '').trim(); });
+  if (!alwaysBulleted && nonempty.length <= 1) return items;
+  var cleaned = nonempty.map(function(value){
+    return cvStripLeadingBulletMarker(value).trim();
+  }).filter(Boolean);
+  return structured ? cleaned : cleaned.join('\n');
+}
+
 function cvNormalizeBulletItems(items, allowStandaloneSections) {
   allowStandaloneSections = allowStandaloneSections !== false;
   var source = Array.isArray(items) ? items : ((items == null || items === '') ? [] : [items]);
   var out = [];
   function add(item) {
     if (typeof item === 'string') {
-      var candidate = item.trim();
+      var candidate = cvStripLeadingBulletMarker(item).trim();
       if (allowStandaloneSections && /^(?:key\s+)?(?:responsibilit(?:y|ies)|achievements?)\s*:?$/i.test(candidate)) {
         out.push({ heading: cvCanonicalSectionHeading(candidate), bullets: [], kind: 'section' });
         return;
@@ -330,7 +352,7 @@ function cvNormalizeBulletItems(items, allowStandaloneSections) {
           }
         } catch(e) {}
       }
-      if (candidate) out.push(item);
+      if (candidate) out.push(candidate);
       return;
     }
     if (Array.isArray(item)) { item.forEach(add); return; }
@@ -367,10 +389,13 @@ function cvNormalizeStructuredData(data) {
     });
   });
   var certifications = Array.isArray(data.certifications) ? data.certifications : (data.certifications ? [data.certifications] : []);
-  data.certifications = certifications.filter(function(value){ return String(value || '').trim(); });
+  data.certifications = cvStripAdditionalBulletMarkers(certifications, true);
   var skills = Array.isArray(data.skills) ? data.skills : [];
   data.skills = skills.filter(function(value){
     return value && typeof value === 'object' && (String(value.category || '').trim() || String(value.items || '').trim());
+  }).map(function(value){
+    value.items = cvStripAdditionalBulletMarkers(value.items || '', false);
+    return value;
   });
   return data;
 }
@@ -382,6 +407,9 @@ function cvSkillPreviewHtml(skill) {
   var lines = Array.isArray(rawItems)
     ? rawItems.map(function(value){ return String(value || '').trim(); }).filter(Boolean)
     : String(rawItems).split(/\r?\n/).map(function(value){ return value.trim(); }).filter(Boolean);
+  if (lines.length > 1) {
+    lines = lines.map(function(value){ return cvStripLeadingBulletMarker(value).trim(); }).filter(Boolean);
+  }
   if (!category && !lines.length) return '';
 
   var showCategory = category && !/^skills?$/i.test(category);

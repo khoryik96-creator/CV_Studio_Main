@@ -647,6 +647,28 @@ def _strip_leading_bullet_marker(text):
     return value
 
 
+def _strip_cv_additional_bullet_markers(items, always_bulleted=False):
+    """Remove baked markers only where Additional Info renders real bullets.
+
+    Certifications always render as list paragraphs. Skill collections render
+    as list paragraphs only when they contain multiple items; a single scalar
+    item remains ordinary prose and therefore keeps any visible source marker.
+    """
+    structured = isinstance(items, list)
+    values = items if structured else re.split(r"(?:\r?\n)+", str(items or ""))
+    nonempty = [value for value in values if str(value or "").strip()]
+    if not always_bulleted and len(nonempty) <= 1:
+        return items
+
+    cleaned = []
+    for value in nonempty:
+        text = str(value or "").strip()
+        text = _strip_leading_bullet_marker(text).strip()
+        if text:
+            cleaned.append(text)
+    return cleaned if structured else "\n".join(cleaned)
+
+
 def _absorb_orphan_section_labels(items):
     """Attach loose bullets to an empty section label that introduces them.
 
@@ -952,10 +974,10 @@ def _normalize_cv_structured_content(parsed):
     certifications = parsed.get("certifications") or []
     if not isinstance(certifications, list):
         certifications = [certifications]
-    parsed["certifications"] = [
-        value for value in certifications
-        if str(value or "").strip()
-    ]
+    parsed["certifications"] = _strip_cv_additional_bullet_markers(
+        certifications,
+        always_bulleted=True,
+    )
     skills = parsed.get("skills") or []
     if not isinstance(skills, list):
         skills = []
@@ -1000,6 +1022,9 @@ def _normalize_cv_structured_content(parsed):
                     item_lines.extend(value.strip() for value in values if value.strip())
             if item_lines:
                 skill["items"] = item_lines
+        skill["items"] = _strip_cv_additional_bullet_markers(
+            skill.get("items") or ""
+        )
         normalized_skills.append(skill)
     parsed["skills"] = normalized_skills
     return parsed
