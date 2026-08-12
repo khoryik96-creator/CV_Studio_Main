@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.320"
+_INSTALL_RECEIPT_VERSION = "v24.6.321"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -333,7 +333,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.320"
+_CVSTUDIO_VERSION = "v24.6.321"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -9980,15 +9980,15 @@ def _summary_docx_run(text, bold=False, color="000000", size=24):
     ).format(bold_xml, color, size, size, escaped)
 
 
-def _summary_docx_paragraph_runs(text):
+def _summary_docx_paragraph_runs(text, size=24):
     runs = []
     for part in re.split(r"(\*\*[^*]+\*\*)", str(text or "")):
         if not part:
             continue
         if part.startswith("**") and part.endswith("**"):
-            runs.append(_summary_docx_run(part[2:-2], bold=True))
+            runs.append(_summary_docx_run(part[2:-2], bold=True, size=size))
         else:
-            runs.append(_summary_docx_run(part))
+            runs.append(_summary_docx_run(part, size=size))
     return "".join(runs)
 
 
@@ -10115,6 +10115,126 @@ def _summary_docx_numbering_id(archive, document_xml):
     raise ValueError("The DOCX does not contain reusable bullet formatting")
 
 
+def _summary_docx_box_numbering_id(archive, fallback_numbering_id):
+    """Use the template's compact summary-box bullet style when available."""
+    if "word/numbering.xml" in archive.namelist():
+        numbering_xml = archive.read("word/numbering.xml").decode("utf-8", errors="strict")
+        if re.search(r'<w:num\b[^>]*w:numId="2"', numbering_xml):
+            return "2"
+    return fallback_numbering_id
+
+
+def _summary_docx_box_block(bullets, bookmark_id, bookmark_name, numbering_id):
+    paragraphs = []
+    for index, bullet in enumerate(bullets):
+        ppr = (
+            '<w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="{}"/>'
+            '</w:numPr><w:textDirection w:val="btLr"/>'
+            '<w:rPr><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr></w:pPr>'
+        ).format(numbering_id)
+        start = (
+            '<w:bookmarkStart w:id="{}" w:name="{}"/>'.format(bookmark_id, bookmark_name)
+            if index == 0 else ""
+        )
+        end = (
+            '<w:bookmarkEnd w:id="{}"/>'.format(bookmark_id)
+            if index == len(bullets) - 1 else ""
+        )
+        paragraphs.append(
+            "<w:p>{}{}{}{}</w:p>".format(
+                ppr,
+                start,
+                _summary_docx_paragraph_runs(bullet, size=22),
+                end,
+            )
+        )
+    return "".join(paragraphs)
+
+
+def _summary_docx_box_content_span(content_xml):
+    marker = re.search(
+        r'<w:bookmarkStart\b(?=[^>]*w:id="(\d+)")'
+        r'(?=[^>]*w:name="(_CVStudioSummaryBox\d+)")[^>]*/>',
+        content_xml,
+    )
+    if marker:
+        paragraph_starts = [
+            match.start()
+            for match in re.finditer(r"<w:p(?=[ />])", content_xml[:marker.start()])
+        ]
+        if not paragraph_starts:
+            raise ValueError("The existing CV Studio summary-box marker is malformed")
+        bookmark_end = re.search(
+            r'<w:bookmarkEnd\b[^>]*w:id="{}"[^>]*/>'.format(re.escape(marker.group(1))),
+            content_xml[marker.end():],
+        )
+        if not bookmark_end:
+            raise ValueError("The existing CV Studio summary-box marker is malformed")
+        absolute_end = marker.end() + bookmark_end.end()
+        paragraph_end = content_xml.find("</w:p>", absolute_end)
+        if paragraph_end < 0:
+            raise ValueError("The existing CV Studio summary-box block is malformed")
+        return (
+            paragraph_starts[-1],
+            paragraph_end + len("</w:p>"),
+            int(marker.group(1)),
+            marker.group(2),
+        )
+
+    paragraphs = list(re.finditer(r"<w:p(?=[ />])[^>]*>.*?</w:p>", content_xml, re.S))
+    summary_index = next((
+        index for index, paragraph in enumerate(paragraphs)
+        if _summary_docx_visible_text(paragraph.group(0)) == "*Summary*"
+    ), None)
+    if summary_index is None:
+        return None
+    return (
+        paragraphs[summary_index].start(),
+        paragraphs[-1].end(),
+        None,
+        None,
+    )
+
+
+def _summary_docx_fill_boxes(document_xml, bullets, used_ids, numbering_id):
+    """Fill both DrawingML and VML copies of the template summary textbox."""
+    filled = 0
+
+    def next_bookmark_id():
+        bookmark_id = next((value for value in range(1, 100000) if value not in used_ids), None)
+        if bookmark_id is None:
+            raise ValueError("The DOCX contains too many bookmarks")
+        used_ids.add(bookmark_id)
+        return bookmark_id
+
+    def replace_box(match):
+        nonlocal filled
+        content_xml = match.group(2)
+        span = _summary_docx_box_content_span(content_xml)
+        if not span:
+            return match.group(0)
+        start, end, bookmark_id, bookmark_name = span
+        if bookmark_id is None:
+            bookmark_id = next_bookmark_id()
+            bookmark_name = "_CVStudioSummaryBox{}".format(filled + 1)
+        block = _summary_docx_box_block(
+            bullets,
+            bookmark_id,
+            bookmark_name,
+            numbering_id,
+        )
+        filled += 1
+        return match.group(1) + content_xml[:start] + block + content_xml[end:] + match.group(3)
+
+    patched_xml = re.sub(
+        r"(<w:txbxContent\b[^>]*>)(.*?)(</w:txbxContent>)",
+        replace_box,
+        document_xml,
+        flags=re.S,
+    )
+    return patched_xml, filled
+
+
 def _summary_docx_existing_block_span(document_xml):
     marker = re.search(
         r"<w:bookmarkStart\b[^>]*w:id=\"(\d+)\"[^>]*w:name=\"_CVStudioSummary\"[^>]*/>",
@@ -10229,23 +10349,50 @@ def _insert_summary_into_docx_bytes(file_bytes, summary_bullets):
                 int(value)
                 for value in re.findall(r"<w:bookmarkStart\b[^>]*w:id=\"(\d+)\"", document_xml)
             }
-            bookmark_id = next((value for value in range(1, 100000) if value not in used_ids), None)
-            if bookmark_id is None:
-                raise ValueError("The DOCX contains too many bookmarks")
+            box_numbering_id = _summary_docx_box_numbering_id(archive, numbering_id)
+            patched_xml, filled_boxes = _summary_docx_fill_boxes(
+                document_xml,
+                bullets,
+                used_ids,
+                box_numbering_id,
+            )
 
-            existing = _summary_docx_existing_block_span(document_xml)
-            compact_label = False
-            if not existing:
-                placeholder = _summary_docx_placeholder_span(document_xml, table_span[1])
-                if placeholder:
-                    existing = placeholder[:2]
-                    compact_label = placeholder[2]
-            block = _summary_docx_block(bullets, bookmark_id, numbering_id, compact_label)
-            if existing:
-                patched_xml = document_xml[:existing[0]] + block + document_xml[existing[1]:]
+            if filled_boxes:
+                # Older generated files can contain both the untouched template
+                # textbox and a separate decorated Summary section. Once the box
+                # is filled, remove only that known generated body block. Preserve
+                # compact source-CV headings such as "Summary:" elsewhere.
+                existing = _summary_docx_existing_block_span(patched_xml)
+                if existing:
+                    patched_xml = patched_xml[:existing[0]] + patched_xml[existing[1]:]
+                else:
+                    patched_table = _xml_element_span(patched_xml, "w:tbl")
+                    placeholder = (
+                        _summary_docx_placeholder_span(patched_xml, patched_table[1])
+                        if patched_table else None
+                    )
+                    if placeholder and not placeholder[2]:
+                        patched_xml = patched_xml[:placeholder[0]] + patched_xml[placeholder[1]:]
             else:
-                insertion = table_span[1]
-                patched_xml = document_xml[:insertion] + block + document_xml[insertion:]
+                bookmark_id = next(
+                    (value for value in range(1, 100000) if value not in used_ids),
+                    None,
+                )
+                if bookmark_id is None:
+                    raise ValueError("The DOCX contains too many bookmarks")
+                existing = _summary_docx_existing_block_span(document_xml)
+                compact_label = False
+                if not existing:
+                    placeholder = _summary_docx_placeholder_span(document_xml, table_span[1])
+                    if placeholder:
+                        existing = placeholder[:2]
+                        compact_label = placeholder[2]
+                block = _summary_docx_block(bullets, bookmark_id, numbering_id, compact_label)
+                if existing:
+                    patched_xml = document_xml[:existing[0]] + block + document_xml[existing[1]:]
+                else:
+                    insertion = table_span[1]
+                    patched_xml = document_xml[:insertion] + block + document_xml[insertion:]
 
             with zipfile.ZipFile(output, "w") as patched:
                 for info in archive.infolist():
