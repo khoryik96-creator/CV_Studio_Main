@@ -134,6 +134,38 @@ class PdfTextSparsityTests(unittest.TestCase):
         text = "".join("(cid:%d)" % (i % 30 + 1) for i in range(300))
         self.assertTrue(app._pdf_text_is_too_sparse(text, 1))
 
+    def test_text_cv_padded_with_image_pages_is_not_sparse(self):
+        # A usable text layer must never be sent to OCR just because the document
+        # carries many image pages (a portfolio, a design deck, scanned
+        # certificates). Scaling the floor with the total page count would judge
+        # this 15-page file against 1500 letters and misroute it; the ceiling
+        # keeps the bar at a page's worth of real text.
+        one_page_cv = (
+            "Regional Delivery Manager with twelve years leading infrastructure "
+            "programmes across South East Asia, covering virtualization, storage "
+            "and service management for enterprise clients. "
+        ) * 4
+        self.assertGreater(sum(c.isalpha() for c in one_page_cv), 400)
+        self.assertFalse(app._pdf_text_is_too_sparse(one_page_cv, 15))
+        self.assertFalse(app._pdf_text_is_too_sparse(one_page_cv, 40))
+
+    def test_sparse_layer_still_routes_to_ocr_at_high_page_counts(self):
+        # The ceiling must not let a genuinely unextractable layer through: a
+        # name-only layer is sparse whatever the page count.
+        self.assertTrue(app._pdf_text_is_too_sparse("Mohd Faizal Ab Aziz", 4))
+        self.assertTrue(app._pdf_text_is_too_sparse("Mohd Faizal Ab Aziz", 40))
+
+    def test_sparsity_floor_is_capped(self):
+        # The floor rises with page count only up to the ceiling.
+        self.assertEqual(app._PDF_SPARSE_LETTER_CEILING, 400)
+        just_over = "a" * (app._PDF_SPARSE_LETTER_CEILING + 1)
+        just_under = "a" * (app._PDF_SPARSE_LETTER_CEILING - 1)
+        self.assertFalse(app._pdf_text_is_too_sparse(just_over, 99))
+        self.assertTrue(app._pdf_text_is_too_sparse(just_under, 99))
+        # A single page keeps the original, stricter per-page floor.
+        self.assertTrue(app._pdf_text_is_too_sparse("a" * 99, 1))
+        self.assertFalse(app._pdf_text_is_too_sparse("a" * 101, 1))
+
 
 def tearDownModule():
     if _MODULE_TEMPORARY is not None:

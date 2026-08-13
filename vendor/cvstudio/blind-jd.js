@@ -259,7 +259,7 @@ async function handleAnonFile(file) {
     var visualPromise = loadAnonVisualPreview(file);
     if (visualPromise && typeof visualPromise.catch === 'function') visualPromise.catch(function(){});
     var fd = new FormData(); fd.append('file', file);
-    var r  = await fetchWithTimeout('/extract-text', { method: 'POST', body: fd }, 60000);
+    var r  = await fetchWithTimeout('/extract-text', { method: 'POST', body: fd }, CV_EXTRACT_TEXT_TIMEOUT_MS);
     var d  = await r.json();
     if (d.error) throw new Error(d.error);
     var text = anonNormalizeExtractedTextArtifacts(d.text || '').trim();

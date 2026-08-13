@@ -340,7 +340,7 @@ async function runBatch() {
       // ── Step 0: Extract text ─────────────────────────────────────────────
       var formData = new FormData();
       formData.append('file', bf.file);
-      var exRes = await fetchWithTimeout('/extract-text', { method: 'POST', body: formData }, 60000);
+      var exRes = await fetchWithTimeout('/extract-text', { method: 'POST', body: formData }, CV_EXTRACT_TEXT_TIMEOUT_MS);
       var exData = await exRes.json();
       if (exData.error) throw new Error('Extraction: ' + exData.error);
       var rawText = exData.text;

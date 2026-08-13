@@ -308,7 +308,7 @@ class Phase2AAppCacheIntegrationTests(unittest.TestCase):
         payload = response.get_json()
         self.assertEqual(response.status_code, 200)
         self.assertTrue(payload["healthy"])
-        self.assertEqual(payload["version"], "v24.6.329")
+        self.assertEqual(payload["version"], "v24.6.330")
         self.assertEqual(response.headers["X-CV-Studio-Request-ID"], request_id)
 
         response = client.get("/missing-phase1-fixture", headers={"X-CV-Studio-Request-ID": request_id})

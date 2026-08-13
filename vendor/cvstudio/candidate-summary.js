@@ -176,7 +176,7 @@ async function handleSummaryFile(file) {
   if (status) status.textContent = 'Extracting ' + file.name + '…';
   try {
     var fd = new FormData(); fd.append('file', file);
-    var r = await fetchWithTimeout('/extract-text', { method:'POST', body:fd }, 70000);
+    var r = await fetchWithTimeout('/extract-text', { method:'POST', body:fd }, CV_EXTRACT_TEXT_TIMEOUT_MS);
     var d = await r.json();
     if (!r.ok || d.error) throw new Error(d.error || 'Extraction failed');
     if (ta) ta.value = d.text || '';
