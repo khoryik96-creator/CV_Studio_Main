@@ -58,11 +58,12 @@ npm install   # generate.js needs adm-zip; without node_modules the /generate-do
 SALARY_COMPARISON_DATA_DIR=/tmp/sal/data .venv_test/bin/python -m pytest tests/ -q
 ```
 
-Expected result: **1 known failure** —
+Expected Linux result: **1 known failure** —
 `test_legacy_doc_requires_and_uses_verified_antiword` (the Antiword binary is
 not functional on Linux; it is a Windows-only runtime — the app correctly
-returns 424 rather than trusting an unverified extraction). Everything else must
-pass (currently ~800 tests, ~9 skipped). **Do not commit `.venv_test/`** (or
+returns 424 rather than trusting an unverified extraction). A verified Windows
+x64 environment currently passes **856 tests, 4 skipped, 93 subtests**.
+**Do not commit `.venv_test/`** (or
 `node_modules/`). Both paths are gitignored, but keep generated dependency
 trees out of commits and continue staging source files explicitly rather than
 using `git add .`.
@@ -179,9 +180,25 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 - **AI Crawler** fixes (#30–#32): DeepSeek thinking-mode latency, undecodable
   legacy `.doc` per-candidate skip, per-query timeout raised to 420s.
 - **Phase 7B** modularization stack (#23–#28).
+- **Install authorization and PDF fallback (v24.6.327–v24.6.330, PRs
+  #148–#151):** an existing signed receipt remains valid across in-place
+  version updates while staying bound to the machine and extracted folder.
+  `/extract-text` recognizes `(cid:N)`/control-code layers and visually sparse
+  image/vector PDFs, and every timed browser caller shares one OCR-aware request
+  budget. These releases introduced aggregate/document-wide OCR decisions; the
+  page-aware corrective below supersedes those details once merged.
 
 ## 8. Open / deferred work
 
+- **Page-aware PDF/OCR + receipt hardening — STAGED ON
+  `chatgpt/v24.6.331-pdf-ocr-receipt-hardening`, NOT MERGED.** The corrective
+  preserves usable text and bullet geometry page-by-page, OCRs only pages with
+  unmapped glyphs or corroborating image/vector evidence, protects exact short
+  contact/skills PDFs, and keeps mixed-language pages in source order. Selected
+  OCR pages share one semaphore/deadline; the browser budget covers the 180s
+  ceiling plus the maximum 45s render and 35s Tesseract operation already in
+  flight. Receipt schema coercion now fails closed, and receipt tests use an
+  isolated temporary path rather than the user's real authorization file.
 - **Legacy `.doc` conversion fallback and CV formatting — MERGED.** PR #98 was
   squash-merged to `master` as `a18cda4` at v24.6.279. It keeps verified
   Antiword mandatory and first, then accepts a validated temporary DOCX

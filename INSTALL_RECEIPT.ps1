@@ -5,7 +5,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $Schema = 2
-$Version = 'v24.6.330'
+$Version = 'v24.6.331'
 $Product = 'TheGuoLab-CVStudio'
 
 function Get-TotpSecret {
@@ -124,7 +124,8 @@ function Test-Receipt {
     $path = Get-ReceiptPath
     if (-not (Test-Path -LiteralPath $path)) { return $false }
     try { $data = Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json } catch { return $false }
-    if ([int]$data.schema -ne $Schema -or [string]$data.product -ne $Product) { return $false }
+    try { $receiptSchema = [int]$data.schema } catch { return $false }
+    if ($receiptSchema -ne $Schema -or [string]$data.product -ne $Product) { return $false }
     $machine = Get-MachineHash
     if ([string]$data.machine -ne $machine) { return $false }
     # Authorization is per machine + folder, not per version: once authorized on

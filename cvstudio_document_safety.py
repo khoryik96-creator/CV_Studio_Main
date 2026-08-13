@@ -15,6 +15,8 @@ MAX_ZIP_ENTRIES = 2000
 MAX_ZIP_EXPANDED_BYTES = 160 * 1024 * 1024
 MAX_ZIP_SINGLE_ENTRY_BYTES = 64 * 1024 * 1024
 OCR_TOTAL_DEADLINE_SECONDS = 180
+OCR_PAGE_RENDER_TIMEOUT_SECONDS = 45
+OCR_PAGE_TEXT_TIMEOUT_SECONDS = 35
 ALLOWED_IMAGE_FORMATS = frozenset({"BMP", "JPEG", "PNG", "TIFF", "WEBP"})
 
 
@@ -207,6 +209,96 @@ def render_pdf_page_images(
         raise
 
 
+def ocr_pdf_pages_pagewise(
+    file_bytes: bytes,
+    pytesseract: Any,
+    poppler_path: str | None = None,
+    dpi: int = 220,
+    *,
+    page_numbers: list[int] | tuple[int, ...] | None = None,
+    pdf_page_count: Callable[[bytes], int],
+    render_pdf_page_images: Callable[..., list[Any]],
+    ocr_semaphore: Any,
+    max_ocr_pages: int,
+    max_image_pixels: int,
+    deadline_seconds: int,
+    monotonic: Callable[[], float] = time.monotonic,
+) -> dict[int, str]:
+    """OCR selected PDF pages under one semaphore and a bounded deadline.
+
+    Results retain their original one-based page numbers so callers can merge
+    OCR with usable text-layer pages without changing document order.
+    """
+    count = pdf_page_count(file_bytes)
+    if page_numbers is None:
+        selected_pages = list(range(1, count + 1))
+    else:
+        try:
+            selected_pages = sorted({int(page) for page in page_numbers})
+        except (TypeError, ValueError):
+            raise ValueError("OCR page selection is invalid") from None
+        if any(page < 1 or page > count for page in selected_pages):
+            raise ValueError("OCR page selection is outside the PDF page range")
+    if len(selected_pages) > max_ocr_pages:
+        raise ValueError(
+            "PDF requires OCR on {} pages; OCR safe limit is {}".format(
+                len(selected_pages), max_ocr_pages
+            )
+        )
+    if not selected_pages:
+        return {}
+
+    if not ocr_semaphore.acquire(timeout=2):
+        raise RuntimeError(
+            "OCR is already processing another document. "
+            "Wait for it to finish and try again."
+        )
+    started = monotonic()
+    results: dict[int, str] = {}
+
+    def remaining_timeout(limit: int) -> int:
+        remaining = float(deadline_seconds) - (monotonic() - started)
+        if remaining <= 0:
+            raise TimeoutError("OCR exceeded the safe processing time limit")
+        return max(1, min(int(limit), int(remaining)))
+
+    try:
+        for page_number in selected_pages:
+            render_timeout = remaining_timeout(OCR_PAGE_RENDER_TIMEOUT_SECONDS)
+            images = render_pdf_page_images(
+                file_bytes,
+                dpi=min(240, max(120, int(dpi or 220))),
+                poppler_path=poppler_path,
+                first_page=page_number,
+                last_page=page_number,
+                timeout=render_timeout,
+            )
+            if not images:
+                continue
+            image = images[0]
+            try:
+                ocr_timeout = remaining_timeout(OCR_PAGE_TEXT_TIMEOUT_SECONDS)
+                width, height = image.size
+                if width * height > max_image_pixels:
+                    raise ValueError(
+                        "PDF page dimensions exceed the safe OCR limit"
+                    )
+                results[page_number] = pytesseract.image_to_string(
+                    image, lang="eng", timeout=ocr_timeout
+                )
+                if monotonic() - started > deadline_seconds:
+                    raise TimeoutError("OCR exceeded the safe processing time limit")
+            finally:
+                for rendered_image in images:
+                    try:
+                        rendered_image.close()
+                    except Exception:
+                        pass
+        return results
+    finally:
+        ocr_semaphore.release()
+
+
 def ocr_pdf_pagewise(
     file_bytes: bytes,
     pytesseract: Any,
@@ -221,52 +313,19 @@ def ocr_pdf_pagewise(
     deadline_seconds: int,
     monotonic: Callable[[], float] = time.monotonic,
 ) -> str:
-    """OCR a bounded PDF one page at a time under a total deadline."""
-    count = pdf_page_count(file_bytes)
-    if count > max_ocr_pages:
-        raise ValueError(
-            "Scanned PDF has {} pages; OCR safe limit is {}".format(
-                count, max_ocr_pages
-            )
-        )
-    if not ocr_semaphore.acquire(timeout=2):
-        raise RuntimeError(
-            "OCR is already processing another document. "
-            "Wait for it to finish and try again."
-        )
-    started = monotonic()
-    parts = []
-    try:
-        for page_number in range(1, count + 1):
-            if monotonic() - started > deadline_seconds:
-                raise TimeoutError("OCR exceeded the safe processing time limit")
-            images = render_pdf_page_images(
-                file_bytes,
-                dpi=min(240, max(120, int(dpi or 220))),
-                poppler_path=poppler_path,
-                first_page=page_number,
-                last_page=page_number,
-                timeout=45,
-            )
-            if not images:
-                continue
-            image = images[0]
-            try:
-                width, height = image.size
-                if width * height > max_image_pixels:
-                    raise ValueError(
-                        "PDF page dimensions exceed the safe OCR limit"
-                    )
-                parts.append(
-                    pytesseract.image_to_string(
-                        image, lang="eng", timeout=35
-                    )
-                )
-            finally:
-                try:
-                    image.close()
-                except Exception:
-                    pass
-        return "\n".join(parts)
-    finally:
-        ocr_semaphore.release()
+    """OCR every page of a bounded PDF, preserving the legacy string API."""
+    pages = ocr_pdf_pages_pagewise(
+        file_bytes,
+        pytesseract,
+        poppler_path=poppler_path,
+        dpi=dpi,
+        page_numbers=None,
+        pdf_page_count=pdf_page_count,
+        render_pdf_page_images=render_pdf_page_images,
+        ocr_semaphore=ocr_semaphore,
+        max_ocr_pages=max_ocr_pages,
+        max_image_pixels=max_image_pixels,
+        deadline_seconds=deadline_seconds,
+        monotonic=monotonic,
+    )
+    return "\n".join(pages[page] for page in sorted(pages))

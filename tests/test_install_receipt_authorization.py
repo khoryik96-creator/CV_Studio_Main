@@ -5,9 +5,9 @@ re-trigger the "not fully installed or authorized" prompt. These tests lock that
 in: a correctly-signed receipt authorizes regardless of the version it names,
 while machine, folder, or signature tampering is still rejected.
 
-The install receipt lives at a single per-user path, so this module snapshots
-whatever receipt is present and restores it after every test — leaving the shared
-authorized state exactly as it found it for other test modules in the process.
+The install receipt normally lives at a single per-user path. This module
+redirects that path to an isolated temporary directory before importing the app,
+so the user's real authorization file is never read, overwritten, or restored.
 """
 
 import hashlib
@@ -15,25 +15,36 @@ import hmac
 import json
 import os
 from pathlib import Path
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 from owner_build_tools import build_protected
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
-_MODULE_TEMPORARY = None
+_MODULE_TEMPORARY = tempfile.TemporaryDirectory(prefix="cvstudio-receipt-auth-")
+_temporary_root = Path(_MODULE_TEMPORARY.name)
+_isolated_receipt = (
+    _temporary_root / "local-state" / "TheGuoLab" / "CVStudio" / "install_receipt.json"
+)
 if "app" not in sys.modules:
-    _MODULE_TEMPORARY = tempfile.TemporaryDirectory(prefix="cvstudio-receipt-auth-")
-    _temporary_root = Path(_MODULE_TEMPORARY.name)
     _original_database_override = os.environ.get("CVSTUDIO_DB_PATH")
+    _original_local_app_data = os.environ.get("LOCALAPPDATA")
+    os.environ["LOCALAPPDATA"] = str(_temporary_root / "local-state")
     os.environ["CVSTUDIO_DB_PATH"] = str(_temporary_root / "state" / "cv_studio.sqlite3")
     build_protected.write_test_receipt(ROOT)
     try:
         import app
     finally:
+        if _original_local_app_data is None:
+            os.environ.pop("LOCALAPPDATA", None)
+        else:
+            os.environ["LOCALAPPDATA"] = _original_local_app_data
         if _original_database_override is None:
             os.environ.pop("CVSTUDIO_DB_PATH", None)
         else:
@@ -68,16 +79,16 @@ def _write_receipt(version, *, machine=None, root_hash=None, break_signature=Fal
 
 class InstallReceiptAuthorizationTests(unittest.TestCase):
     def setUp(self):
-        # Snapshot the shared receipt so tamper cases never leak past this module.
-        self._path = Path(app._install_receipt_path())
-        self._prior = self._path.read_bytes() if self._path.exists() else None
+        # Never touch the real per-user receipt. Patching the path also keeps this
+        # module isolated when another test imported app first.
+        self._receipt_path_patch = mock.patch.object(
+            app, "_install_receipt_path", return_value=str(_isolated_receipt)
+        )
+        self._receipt_path_patch.start()
+        self._path = _isolated_receipt
 
     def tearDown(self):
-        if self._prior is None:
-            if self._path.exists():
-                self._path.unlink()
-        else:
-            self._path.write_bytes(self._prior)
+        self._receipt_path_patch.stop()
 
     def test_receipt_from_an_older_version_still_authorizes(self):
         _write_receipt("v0.0.1")
@@ -114,10 +125,44 @@ class InstallReceiptAuthorizationTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("signature", reason)
 
+    def test_malformed_schema_is_rejected_without_an_exception(self):
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        self._path.write_text('{"schema":"not-a-number"}', encoding="utf-8")
+        ok, reason, _ = app._install_receipt_status()
+        self.assertFalse(ok)
+        self.assertIn("invalid format", reason.lower())
+
+    @unittest.skipUnless(os.name == "nt" and shutil.which("powershell"), "Windows PowerShell only")
+    def test_powershell_verifier_rejects_malformed_schema_cleanly(self):
+        local_state = _temporary_root / "powershell-state"
+        receipt = local_state / "TheGuoLab" / "CVStudio" / "install_receipt.json"
+        receipt.parent.mkdir(parents=True, exist_ok=True)
+        receipt.write_text('{"schema":"not-a-number"}', encoding="utf-8")
+        environment = os.environ.copy()
+        environment["LOCALAPPDATA"] = str(local_state)
+        result = subprocess.run(
+            [
+                shutil.which("powershell"),
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(ROOT / "INSTALL_RECEIPT.ps1"),
+                "-Mode",
+                "Verify",
+            ],
+            cwd=str(ROOT),
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 13, result.stdout + result.stderr)
+
 
 def tearDownModule():
-    if _MODULE_TEMPORARY is not None:
-        _MODULE_TEMPORARY.cleanup()
+    _MODULE_TEMPORARY.cleanup()
 
 
 if __name__ == "__main__":
