@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.327"
+_INSTALL_RECEIPT_VERSION = "v24.6.328"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -336,7 +336,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.327"
+_CVSTUDIO_VERSION = "v24.6.328"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -921,6 +921,38 @@ def _pdf_page_count(file_bytes):
         file_bytes,
         max_pdf_pages=_MAX_PDF_PAGES,
     )
+
+
+def _pdf_text_looks_unextractable(text):
+    """True when a PDF text layer extracted to unmapped-glyph noise, not real text.
+
+    Some PDFs embed subset fonts with no ToUnicode map and no standard encoding
+    (LibreOffice -> Ghostscript exports are the classic offender). They render
+    perfectly, but the text is effectively stored as shapes: pdfplumber/pdfminer
+    emit "(cid:N)" tokens for every glyph, and other extractors emit raw
+    control-code glyph indices. The layer is non-empty yet meaningless, so a
+    plain "did we get any text?" check passes and OCR is wrongly skipped. Detect
+    that here so the caller can fall back to OCR.
+
+    Deliberately script-agnostic — genuine English or non-Latin text (CJK,
+    Arabic, Tamil, ...) contains none of these artifacts, so a valid non-English
+    CV is never misrouted into (English) OCR.
+    """
+    if not text:
+        return False
+    sample = text[:8000]
+    total = len(sample)
+    if not sample.strip() or total < 40:
+        return False
+    cid_matches = re.findall(r"\(cid:\d+\)", sample)
+    if len(cid_matches) >= 8 and sum(len(m) for m in cid_matches) > total * 0.30:
+        return True
+    control = sum(1 for c in sample if ord(c) < 0x20 and c not in "\t\n\r\f")
+    if control > total * 0.10:
+        return True
+    if sample.count("�") > total * 0.10:
+        return True
+    return False
 
 
 def _ocr_image_text(pytesseract, image, lang="eng", timeout=35):
@@ -11992,14 +12024,20 @@ def extract_text():
                         pages.append(t)
                 text = "\n\n".join(pages)
 
-            if text.strip():
+            # A non-empty layer is not automatically a usable one: some PDFs
+            # extract to unmapped-glyph noise ("(cid:N)" tokens or control codes)
+            # that passes a bare emptiness check but carries no readable text.
+            pdf_text_unusable = _pdf_text_looks_unextractable(text)
+            if text.strip() and not pdf_text_unusable:
                 try:
                     bullet_levels = _extract_pdf_bullet_levels(file_bytes)
                 except Exception:
                     bullet_levels = []
 
-            # Fallback: if pdfplumber got nothing, try OCR via pytesseract
-            if not text.strip():
+            # Fallback: if pdfplumber got nothing -- or only unmapped-glyph noise
+            # (e.g. LibreOffice -> Ghostscript subset fonts with no ToUnicode) --
+            # render and OCR the pages instead of trusting the garbled layer.
+            if not text.strip() or pdf_text_unusable:
                 try:
                     import shutil
 
