@@ -5,7 +5,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $Schema = 2
-$Version = 'v24.6.326'
+$Version = 'v24.6.327'
 $Product = 'TheGuoLab-CVStudio'
 
 function Get-TotpSecret {
@@ -127,10 +127,16 @@ function Test-Receipt {
     if ([int]$data.schema -ne $Schema -or [string]$data.product -ne $Product) { return $false }
     $machine = Get-MachineHash
     if ([string]$data.machine -ne $machine) { return $false }
-    if ([string]$data.version -ne $Version) { return $false }
+    # Authorization is per machine + folder, not per version: once authorized on
+    # this computer, routine version updates must not re-trigger the prompt. The
+    # receipt's own version still participates in the signature check below (so it
+    # cannot be forged or edited), but it need not equal this build's version.
     $rootHash = Get-PackageRootHash
     if ([string]$data.rootHash -ne $rootHash) { return $false }
-    $expected = Get-Signature -ReceiptSchema $Schema -ReceiptProduct $Product -Machine $machine -ReceiptVersion $Version -RootHash $rootHash -IssuedAt ([string]$data.issuedAt)
+    # Verify the signature against the version the receipt actually names (not this
+    # build's $Version): the signed message covers the receipt's own version, so a
+    # receipt minted by an earlier build still validates on a newer one.
+    $expected = Get-Signature -ReceiptSchema $Schema -ReceiptProduct $Product -Machine $machine -ReceiptVersion ([string]$data.version) -RootHash $rootHash -IssuedAt ([string]$data.issuedAt)
     [byte[]]$actualBytes = [Text.Encoding]::ASCII.GetBytes(([string]$data.signature).ToLowerInvariant())
     [byte[]]$expectedBytes = [Text.Encoding]::ASCII.GetBytes($expected)
     if ($actualBytes.Length -ne $expectedBytes.Length) { return $false }
