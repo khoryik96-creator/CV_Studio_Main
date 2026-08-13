@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.326"
+_INSTALL_RECEIPT_VERSION = "v24.6.327"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -145,8 +145,11 @@ def _install_receipt_status():
         return False, "Installation receipt belongs to another product", path
     if not _receipt_hmac.compare_digest(str(data.get("machine") or ""), _install_receipt_machine_hash()):
         return False, "Installation receipt belongs to another computer", path
-    if str(data.get("version") or "") != _INSTALL_RECEIPT_VERSION:
-        return False, "Installation receipt belongs to another CV Studio version", path
+    # Authorization is intentionally per machine + folder, not per version: once a
+    # user has authorized CV Studio on this computer, routine version updates must
+    # not re-trigger the "not authorized" prompt. The receipt's own version still
+    # participates in the signature below (so a receipt cannot be forged or edited),
+    # but it is no longer required to equal the running build's version.
     if not _receipt_hmac.compare_digest(str(data.get("rootHash") or ""), _install_package_root_hash()):
         return False, "Installation receipt belongs to another extracted folder", path
     signature = str(data.get("signature") or "").lower()
@@ -333,7 +336,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.326"
+_CVSTUDIO_VERSION = "v24.6.327"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
