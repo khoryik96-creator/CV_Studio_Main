@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.328"
+_INSTALL_RECEIPT_VERSION = "v24.6.329"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -336,7 +336,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.328"
+_CVSTUDIO_VERSION = "v24.6.329"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -953,6 +953,27 @@ def _pdf_text_looks_unextractable(text):
     if sample.count("�") > total * 0.10:
         return True
     return False
+
+
+def _pdf_text_is_too_sparse(text, page_count):
+    """True when a PDF's extracted text is far too little for its page count.
+
+    Some PDFs render a full CV but expose almost none of it as text: a
+    "Microsoft Print to PDF" whose body glyphs carry no usable Unicode mapping,
+    or pages drawn as images / outlined vectors, yield only a name and a scatter
+    of bullet glyphs. That is non-empty (so an emptiness check passes) yet has
+    essentially no formattable words, so the caller should OCR the rendered pages
+    — which reproduce the visible text faithfully.
+
+    Counts Unicode letters only, so it is script-agnostic (CJK/Arabic/Tamil/...
+    all count) and ignores digits, punctuation, and private-use bullet/symbol
+    glyphs. The per-page floor keeps a genuine text CV — which carries hundreds
+    to thousands of letters per page — well clear of the threshold.
+    """
+    pages = max(1, int(page_count or 1))
+    cleaned = re.sub(r"\(cid:\d+\)", "", text or "")
+    letters = sum(1 for character in cleaned if character.isalpha())
+    return letters < 100 * pages
 
 
 def _ocr_image_text(pytesseract, image, lang="eng", timeout=35):
@@ -12016,7 +12037,9 @@ def extract_text():
         if filename.endswith('.pdf'):
             import pdfplumber
             _pdf_page_count(file_bytes)
+            pdf_page_total = 0
             with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+                pdf_page_total = len(pdf.pages)
                 pages = []
                 for page in pdf.pages:
                     t = page.extract_text()
@@ -12024,10 +12047,15 @@ def extract_text():
                         pages.append(t)
                 text = "\n\n".join(pages)
 
-            # A non-empty layer is not automatically a usable one: some PDFs
-            # extract to unmapped-glyph noise ("(cid:N)" tokens or control codes)
-            # that passes a bare emptiness check but carries no readable text.
-            pdf_text_unusable = _pdf_text_looks_unextractable(text)
+            # A non-empty layer is not automatically a usable one. Two distinct
+            # failure modes pass a bare emptiness check yet carry no formattable
+            # text: unmapped-glyph noise ("(cid:N)" tokens or control codes), and
+            # a near-empty layer over image/outlined-vector pages (only a name and
+            # bullet glyphs extract). Both must fall back to OCR.
+            pdf_text_unusable = (
+                _pdf_text_looks_unextractable(text)
+                or _pdf_text_is_too_sparse(text, pdf_page_total)
+            )
             if text.strip() and not pdf_text_unusable:
                 try:
                     bullet_levels = _extract_pdf_bullet_levels(file_bytes)
@@ -12035,8 +12063,10 @@ def extract_text():
                     bullet_levels = []
 
             # Fallback: if pdfplumber got nothing -- or only unmapped-glyph noise
-            # (e.g. LibreOffice -> Ghostscript subset fonts with no ToUnicode) --
-            # render and OCR the pages instead of trusting the garbled layer.
+            # (e.g. LibreOffice -> Ghostscript subset fonts with no ToUnicode), or
+            # a near-empty layer over image/outlined-vector pages (e.g. some
+            # "Microsoft Print to PDF" CVs) -- render and OCR the pages instead of
+            # trusting the unusable layer.
             if not text.strip() or pdf_text_unusable:
                 try:
                     import shutil
