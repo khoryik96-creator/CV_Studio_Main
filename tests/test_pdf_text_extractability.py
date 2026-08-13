@@ -82,6 +82,59 @@ class PdfTextExtractabilityTests(unittest.TestCase):
         self.assertFalse(app._pdf_text_looks_unextractable("Mohd Fazli"))
 
 
+class PdfTextSparsityTests(unittest.TestCase):
+    """A near-empty text layer over image/outlined-vector pages (only a name and
+    bullet glyphs extract) is non-empty but not formattable, and must route to
+    OCR — while a genuine text CV, in any script, never trips the floor.
+    """
+
+    def test_name_and_bullets_only_over_several_pages_is_too_sparse(self):
+        # Mirrors the reported "Microsoft Print to PDF" CV: a name plus a scatter
+        # of private-use bullet glyphs across four pages, nothing else.
+        text = "LOKMAN HAKIM BIN SUHAIMI\n" + (" \n" * 60)
+        self.assertTrue(app._pdf_text_is_too_sparse(text, 4))
+
+    def test_empty_layer_is_too_sparse(self):
+        self.assertTrue(app._pdf_text_is_too_sparse("", 3))
+        self.assertTrue(app._pdf_text_is_too_sparse(" \n \n", 2))
+
+    def test_full_english_cv_is_not_sparse(self):
+        page = (
+            "Senior System Engineer at KPJ Healthcare Berhad, administered and "
+            "supported enterprise infrastructure across on-premises and private "
+            "cloud, covering virtualization, storage, backup, and operating "
+            "systems, ensuring high availability and SLA compliance. "
+        )
+        self.assertFalse(app._pdf_text_is_too_sparse(page * 4, 4))
+
+    def test_short_single_page_cv_is_not_sparse(self):
+        text = (
+            "John Smith. Software Engineer with ten years of experience in cloud "
+            "infrastructure, networking, Linux administration, Python automation, "
+            "and cross-functional team leadership. Email john@example.com. "
+            "Education: BSc Computer Science, UTM. Skills: AWS, Cisco, Docker."
+        )
+        self.assertFalse(app._pdf_text_is_too_sparse(text, 1))
+
+    def test_real_length_cjk_page_is_not_sparse(self):
+        # A genuine one-page Chinese CV carries hundreds of hanzi (all counted as
+        # letters), well above the per-page floor — never misrouted into OCR.
+        text = (
+            "资深系统工程师，负责企业基础设施的运维与管理，涵盖虚拟化、存储、"
+            "备份和操作系统，确保高可用性和服务水平协议合规。管理多种虚拟化平台，"
+            "包括威睿、纽塔尼克斯和微软超威平台，确保高可用性和性能。支持存储区域网络"
+            "和网络附加存储解决方案，维护存储性能、容量和可靠性。负责备份平台的运维，"
+            "确保数据保护、恢复就绪和策略合规。为视窗和林纳克斯系统提供管理和支持。"
+            "教育背景：计算机科学学士。技能：网络管理、系统架构、项目交付、团队管理。"
+        )
+        self.assertFalse(app._pdf_text_is_too_sparse(text, 1))
+
+    def test_sparsity_ignores_cid_tokens(self):
+        # "(cid:N)" tokens are not real letters; a page full of them is still sparse.
+        text = "".join("(cid:%d)" % (i % 30 + 1) for i in range(300))
+        self.assertTrue(app._pdf_text_is_too_sparse(text, 1))
+
+
 def tearDownModule():
     if _MODULE_TEMPORARY is not None:
         _MODULE_TEMPORARY.cleanup()
