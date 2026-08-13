@@ -90,7 +90,7 @@ async function handleLeadFileInput(files) {
   try {
     var fd = new FormData();
     fd.append('file', file);
-    var r = await fetchWithTimeout('/extract-text', { method:'POST', body: fd }, 70000);
+    var r = await fetchWithTimeout('/extract-text', { method:'POST', body: fd }, CV_EXTRACT_TEXT_TIMEOUT_MS);
     var d = await r.json();
     if (!r.ok || d.error || d.ok === false) throw new Error(d.error || 'Text extraction failed');
     _leadExtractedText = (d.text || '').trim();

@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.329"
+_INSTALL_RECEIPT_VERSION = "v24.6.330"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -336,7 +336,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.329"
+_CVSTUDIO_VERSION = "v24.6.330"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -955,6 +955,13 @@ def _pdf_text_looks_unextractable(text):
     return False
 
 
+# Upper bound on the "too sparse" letter floor, in Unicode letters. Well under
+# one CV page of real text (a typical page carries 1500-3000), so a genuinely
+# unextractable layer still trips it, while a text-bearing document padded with
+# image pages does not.
+_PDF_SPARSE_LETTER_CEILING = 400
+
+
 def _pdf_text_is_too_sparse(text, page_count):
     """True when a PDF's extracted text is far too little for its page count.
 
@@ -973,7 +980,14 @@ def _pdf_text_is_too_sparse(text, page_count):
     pages = max(1, int(page_count or 1))
     cleaned = re.sub(r"\(cid:\d+\)", "", text or "")
     letters = sum(1 for character in cleaned if character.isalpha())
-    return letters < 100 * pages
+    # Cap the floor rather than scaling it with the page count without limit. A
+    # CV's text legitimately lives on a few pages, so a document padded with
+    # image pages (a portfolio, a design deck, scanned certificates) would
+    # otherwise be judged against an ever-growing threshold and sent to OCR even
+    # though its text layer is perfectly usable -- an expensive, serialized
+    # detour. Any document carrying at least a page's worth of real text is
+    # formattable, so stop raising the bar past that.
+    return letters < min(100 * pages, _PDF_SPARSE_LETTER_CEILING)
 
 
 def _ocr_image_text(pytesseract, image, lang="eng", timeout=35):

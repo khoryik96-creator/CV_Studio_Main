@@ -218,7 +218,7 @@ async function runJACreateAll() {
       // Step 1: Extract text from CV via Flask
       var fd = new FormData();
       fd.append('file', item.file);
-      var extRes = await fetchWithTimeout('/extract-text', { method: 'POST', body: fd }, 60000);
+      var extRes = await fetchWithTimeout('/extract-text', { method: 'POST', body: fd }, CV_EXTRACT_TEXT_TIMEOUT_MS);
       var extData = await extRes.json().catch(function(){ return {}; });
       if (!extRes.ok) throw new Error(extData.error || 'Text extraction failed');
       var cvText = extData.text || '';
