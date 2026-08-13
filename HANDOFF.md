@@ -190,8 +190,8 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Page-aware PDF/OCR + receipt hardening — STAGED ON
-  `chatgpt/v24.6.331-pdf-ocr-receipt-hardening`, NOT MERGED.** The corrective
+- **Page-aware PDF/OCR + receipt hardening — MERGED.** PR #152 was
+  squash-merged to `master` as `f1934b7` at v24.6.331. The corrective
   preserves usable text and bullet geometry page-by-page, OCRs only pages with
   unmapped glyphs or corroborating image/vector evidence, protects exact short
   contact/skills PDFs, and keeps mixed-language pages in source order. Selected
