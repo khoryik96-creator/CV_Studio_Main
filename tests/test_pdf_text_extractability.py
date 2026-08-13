@@ -9,11 +9,13 @@ the detector that routes such layers to OCR, while never misrouting genuine text
 (including non-Latin scripts) into it.
 """
 
+import io
 import os
 from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 from owner_build_tools import build_protected
 
@@ -82,89 +84,171 @@ class PdfTextExtractabilityTests(unittest.TestCase):
         self.assertFalse(app._pdf_text_looks_unextractable("Mohd Fazli"))
 
 
-class PdfTextSparsityTests(unittest.TestCase):
-    """A near-empty text layer over image/outlined-vector pages (only a name and
-    bullet glyphs extract) is non-empty but not formattable, and must route to
-    OCR — while a genuine text CV, in any script, never trips the floor.
-    """
+class _FakePdfPage:
+    width = 600
+    height = 800
 
-    def test_name_and_bullets_only_over_several_pages_is_too_sparse(self):
-        # Mirrors the reported "Microsoft Print to PDF" CV: a name plus a scatter
-        # of private-use bullet glyphs across four pages, nothing else.
-        text = "LOKMAN HAKIM BIN SUHAIMI\n" + (" \n" * 60)
-        self.assertTrue(app._pdf_text_is_too_sparse(text, 4))
+    def __init__(self, text="", *, images=None, curves=None, rects=None, chars=None):
+        self._text = text
+        self.images = list(images or [])
+        self.curves = list(curves or [])
+        self.rects = list(rects or [])
+        self.chars = list(chars or [])
 
-    def test_empty_layer_is_too_sparse(self):
-        self.assertTrue(app._pdf_text_is_too_sparse("", 3))
-        self.assertTrue(app._pdf_text_is_too_sparse(" \n \n", 2))
+    def extract_text(self):
+        return self._text
 
-    def test_full_english_cv_is_not_sparse(self):
-        page = (
-            "Senior System Engineer at KPJ Healthcare Berhad, administered and "
-            "supported enterprise infrastructure across on-premises and private "
-            "cloud, covering virtualization, storage, backup, and operating "
-            "systems, ensuring high availability and SLA compliance. "
+
+def _outlined_shapes(count=400, bands=6):
+    shapes = []
+    for index in range(count):
+        band = index % bands
+        top = 40 + band * 100
+        shapes.append({"top": top, "bottom": top + 8, "x0": 40, "x1": 500})
+    return shapes
+
+
+class PdfPageRoutingTests(unittest.TestCase):
+    """OCR decisions are page-aware and require visible-content evidence."""
+
+    def test_short_exact_text_without_missing_content_is_preserved(self):
+        page = _FakePdfPage(chars=[{"text": c} for c in "Jane Doe"])
+        text = "Jane Doe | jane@example.com | +60 12-345 6789 | C++ | C#"
+        self.assertEqual(app._pdf_page_ocr_reason(page, text), "")
+
+    def test_large_scanned_image_with_no_text_routes_only_that_page_to_ocr(self):
+        page = _FakePdfPage(
+            images=[{"x0": 0, "x1": 600, "top": 0, "bottom": 800}]
         )
-        self.assertFalse(app._pdf_text_is_too_sparse(page * 4, 4))
+        self.assertEqual(app._pdf_page_ocr_reason(page, ""), "sparse-visual")
 
-    def test_short_single_page_cv_is_not_sparse(self):
-        text = (
-            "John Smith. Software Engineer with ten years of experience in cloud "
-            "infrastructure, networking, Linux administration, Python automation, "
-            "and cross-functional team leadership. Email john@example.com. "
-            "Education: BSc Computer Science, UTM. Skills: AWS, Cisco, Docker."
+    def test_readable_header_over_scanned_body_still_routes_that_page(self):
+        page = _FakePdfPage(
+            images=[{"x0": 0, "x1": 600, "top": 160, "bottom": 800}]
         )
-        self.assertFalse(app._pdf_text_is_too_sparse(text, 1))
+        header = "Candidate profile and contact information " * 4
+        self.assertLess(sum(c.isalpha() for c in header), 400)
+        self.assertEqual(app._pdf_page_ocr_reason(page, header), "sparse-visual")
 
-    def test_real_length_cjk_page_is_not_sparse(self):
-        # A genuine one-page Chinese CV carries hundreds of hanzi (all counted as
-        # letters), well above the per-page floor — never misrouted into OCR.
-        text = (
-            "资深系统工程师，负责企业基础设施的运维与管理，涵盖虚拟化、存储、"
-            "备份和操作系统，确保高可用性和服务水平协议合规。管理多种虚拟化平台，"
-            "包括威睿、纽塔尼克斯和微软超威平台，确保高可用性和性能。支持存储区域网络"
-            "和网络附加存储解决方案，维护存储性能、容量和可靠性。负责备份平台的运维，"
-            "确保数据保护、恢复就绪和策略合规。为视窗和林纳克斯系统提供管理和支持。"
-            "教育背景：计算机科学学士。技能：网络管理、系统架构、项目交付、团队管理。"
+    def test_outlined_vector_page_routes_to_ocr(self):
+        page = _FakePdfPage(
+            curves=_outlined_shapes(),
+            chars=[{"text": ""}] * 40,
         )
-        self.assertFalse(app._pdf_text_is_too_sparse(text, 1))
+        text = "LOKMAN HAKIM BIN SUHAIMI\n" + ("\n" * 40)
+        self.assertEqual(app._pdf_page_ocr_reason(page, text), "sparse-visual")
 
-    def test_sparsity_ignores_cid_tokens(self):
-        # "(cid:N)" tokens are not real letters; a page full of them is still sparse.
-        text = "".join("(cid:%d)" % (i % 30 + 1) for i in range(300))
-        self.assertTrue(app._pdf_text_is_too_sparse(text, 1))
+    def test_blank_page_does_not_trigger_ocr(self):
+        self.assertEqual(app._pdf_page_ocr_reason(_FakePdfPage(), ""), "")
 
-    def test_text_cv_padded_with_image_pages_is_not_sparse(self):
-        # A usable text layer must never be sent to OCR just because the document
-        # carries many image pages (a portfolio, a design deck, scanned
-        # certificates). Scaling the floor with the total page count would judge
-        # this 15-page file against 1500 letters and misroute it; the ceiling
-        # keeps the bar at a page's worth of real text.
-        one_page_cv = (
-            "Regional Delivery Manager with twelve years leading infrastructure "
-            "programmes across South East Asia, covering virtualization, storage "
-            "and service management for enterprise clients. "
-        ) * 4
-        self.assertGreater(sum(c.isalpha() for c in one_page_cv), 400)
-        self.assertFalse(app._pdf_text_is_too_sparse(one_page_cv, 15))
-        self.assertFalse(app._pdf_text_is_too_sparse(one_page_cv, 40))
+    def test_cid_page_routes_to_ocr_but_valid_non_latin_page_does_not(self):
+        cid = "".join("(cid:%d)" % (i % 30 + 1) for i in range(300))
+        cjk = "资深系统工程师负责企业基础设施运维管理项目交付团队管理" * 10
+        self.assertEqual(
+            app._pdf_page_ocr_reason(_FakePdfPage(), cid), "unextractable"
+        )
+        self.assertEqual(app._pdf_page_ocr_reason(_FakePdfPage(), cjk), "")
 
-    def test_sparse_layer_still_routes_to_ocr_at_high_page_counts(self):
-        # The ceiling must not let a genuinely unextractable layer through: a
-        # name-only layer is sparse whatever the page count.
-        self.assertTrue(app._pdf_text_is_too_sparse("Mohd Faizal Ab Aziz", 4))
-        self.assertTrue(app._pdf_text_is_too_sparse("Mohd Faizal Ab Aziz", 40))
+    def test_mixed_pages_preserve_good_text_and_original_order(self):
+        pages = [
+            {"text": "Readable English first page", "ocr_reason": ""},
+            {"text": "(cid:1)(cid:2)" * 50, "ocr_reason": "unextractable"},
+            {"text": "可读取的中文页面", "ocr_reason": ""},
+            {"text": "Candidate Name", "ocr_reason": "sparse-visual"},
+        ]
+        merged = app._merge_pdf_page_texts(
+            pages,
+            {2: "Recovered second page", 4: "Candidate Name\nRecovered history"},
+        )
+        self.assertEqual(
+            merged.split("\n\n"),
+            [
+                "Readable English first page",
+                "Recovered second page",
+                "可读取的中文页面",
+                "Candidate Name\nRecovered history",
+            ],
+        )
 
-    def test_sparsity_floor_is_capped(self):
-        # The floor rises with page count only up to the ceiling.
-        self.assertEqual(app._PDF_SPARSE_LETTER_CEILING, 400)
-        just_over = "a" * (app._PDF_SPARSE_LETTER_CEILING + 1)
-        just_under = "a" * (app._PDF_SPARSE_LETTER_CEILING - 1)
-        self.assertFalse(app._pdf_text_is_too_sparse(just_over, 99))
-        self.assertTrue(app._pdf_text_is_too_sparse(just_under, 99))
-        # A single page keeps the original, stricter per-page floor.
-        self.assertTrue(app._pdf_text_is_too_sparse("a" * 99, 1))
-        self.assertFalse(app._pdf_text_is_too_sparse("a" * 101, 1))
+    def test_sparse_visual_ocr_must_add_content_before_replacing_exact_text(self):
+        pages = [{"text": "Jane Doe jane@example.com C++ C#", "ocr_reason": "sparse-visual"}]
+        self.assertEqual(
+            app._merge_pdf_page_texts(pages, {1: "Jane Doe jane@example.com C+ C"}),
+            pages[0]["text"],
+        )
+
+    def test_extract_route_ocrs_only_broken_pages_and_preserves_order(self):
+        cid = "".join("(cid:%d)" % (i % 30 + 1) for i in range(300))
+        pages = [
+            _FakePdfPage("Readable English first page with exact jane@example.com C++"),
+            _FakePdfPage(cid),
+            _FakePdfPage("可读取的中文页面保持原样" * 10),
+            _FakePdfPage(
+                "Candidate Name",
+                curves=_outlined_shapes(),
+                chars=[{"text": ""}] * 40,
+            ),
+        ]
+        opened = mock.MagicMock()
+        opened.__enter__.return_value.pages = pages
+        ocr_pages = {
+            2: "Recovered second page",
+            4: "Candidate Name\nRecovered history and certifications",
+        }
+        headers = {"X-CV-Studio-Request": "1", "Host": "localhost:5000"}
+
+        with (
+            mock.patch("pdfplumber.open", return_value=opened),
+            mock.patch.object(app, "_pdf_page_count", return_value=4),
+            mock.patch.object(app, "_find_mandatory_tesseract", return_value="tesseract"),
+            mock.patch.object(
+                app, "_ocr_pdf_pages_pagewise", return_value=ocr_pages
+            ) as ocr,
+            mock.patch.object(app, "_extract_pdf_bullet_levels", return_value=[]),
+        ):
+            response = app.app.test_client().post(
+                "/extract-text",
+                data={"file": (io.BytesIO(b"%PDF-1.4\nfixture"), "mixed.pdf")},
+                headers=headers,
+                content_type="multipart/form-data",
+            )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        text = response.get_json()["text"]
+        expected = [
+            "Readable English first page with exact jane@example.com C++",
+            "Recovered second page",
+            "可读取的中文页面保持原样" * 10,
+            "Candidate Name\nRecovered history and certifications",
+        ]
+        positions = [text.index(value) for value in expected]
+        self.assertEqual(positions, sorted(positions))
+        ocr.assert_called_once()
+        self.assertEqual(ocr.call_args.args[2], [2, 4])
+
+    def test_extract_route_does_not_ocr_valid_short_exact_text(self):
+        exact = "Jane Doe | jane@example.com | +60 12-345 6789 | C++ | C#"
+        opened = mock.MagicMock()
+        opened.__enter__.return_value.pages = [_FakePdfPage(exact)]
+        headers = {"X-CV-Studio-Request": "1", "Host": "localhost:5000"}
+
+        with (
+            mock.patch("pdfplumber.open", return_value=opened),
+            mock.patch.object(app, "_pdf_page_count", return_value=1),
+            mock.patch.object(app, "_ocr_pdf_pages_pagewise") as ocr,
+            mock.patch.object(app, "_extract_pdf_bullet_levels", return_value=[]),
+        ):
+            response = app.app.test_client().post(
+                "/extract-text",
+                data={"file": (io.BytesIO(b"%PDF-1.4\nfixture"), "short.pdf")},
+                headers=headers,
+                content_type="multipart/form-data",
+            )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertIn("jane@example.com", response.get_json()["text"])
+        self.assertIn("C++", response.get_json()["text"])
+        ocr.assert_not_called()
 
 
 def tearDownModule():

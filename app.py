@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.330"
+_INSTALL_RECEIPT_VERSION = "v24.6.331"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -139,7 +139,11 @@ def _install_receipt_status():
         return False, "Installation receipt could not be read: {}".format(str(exc)[:160]), path
     if not isinstance(data, dict):
         return False, "Installation receipt has an invalid format", path
-    if int(data.get("schema") or 0) != _INSTALL_RECEIPT_SCHEMA:
+    try:
+        receipt_schema = int(data.get("schema") or 0)
+    except (TypeError, ValueError):
+        return False, "Installation receipt has an invalid format", path
+    if receipt_schema != _INSTALL_RECEIPT_SCHEMA:
         return False, "Installation receipt schema is unsupported", path
     if str(data.get("product") or "") != _INSTALL_RECEIPT_PRODUCT:
         return False, "Installation receipt belongs to another product", path
@@ -307,6 +311,7 @@ from cvstudio_document_safety import (
     OCR_TOTAL_DEADLINE_SECONDS as _PHASE4_OCR_TOTAL_DEADLINE_SECONDS,
     document_validation_status as _phase4_document_validation_status,
     ocr_image_text as _phase4_ocr_image_text,
+    ocr_pdf_pages_pagewise as _phase4_ocr_pdf_pages_pagewise,
     ocr_pdf_pagewise as _phase4_ocr_pdf_pagewise,
     pdf_page_count as _phase4_pdf_page_count,
     render_pdf_page_images as _phase4_render_pdf_page_images,
@@ -336,7 +341,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.330"
+_CVSTUDIO_VERSION = "v24.6.331"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -955,39 +960,115 @@ def _pdf_text_looks_unextractable(text):
     return False
 
 
-# Upper bound on the "too sparse" letter floor, in Unicode letters. Well under
-# one CV page of real text (a typical page carries 1500-3000), so a genuinely
-# unextractable layer still trips it, while a text-bearing document padded with
-# image pages does not.
-_PDF_SPARSE_LETTER_CEILING = 400
+_PDF_PAGE_VISUAL_LETTER_CEILING = 400
+_PDF_PAGE_IMAGE_COVERAGE_FLOOR = 0.20
+_PDF_PAGE_VECTOR_OBJECT_FLOOR = 300
+_PDF_PAGE_VECTOR_BAND_FLOOR = 3
 
 
-def _pdf_text_is_too_sparse(text, page_count):
-    """True when a PDF's extracted text is far too little for its page count.
+def _pdf_page_image_coverage(page):
+    """Approximate how much of one page is covered by embedded images."""
+    try:
+        page_width = float(page.width)
+        page_height = float(page.height)
+        page_area = page_width * page_height
+    except (AttributeError, TypeError, ValueError):
+        return 0.0
+    if page_area <= 0:
+        return 0.0
+    covered = 0.0
+    for image in list(getattr(page, "images", None) or []):
+        try:
+            width = abs(float(image.get("x1")) - float(image.get("x0")))
+            if image.get("top") is not None and image.get("bottom") is not None:
+                height = abs(float(image.get("bottom")) - float(image.get("top")))
+            else:
+                height = abs(float(image.get("y1")) - float(image.get("y0")))
+            covered += width * height
+        except (AttributeError, TypeError, ValueError):
+            continue
+    return min(1.0, covered / page_area)
 
-    Some PDFs render a full CV but expose almost none of it as text: a
-    "Microsoft Print to PDF" whose body glyphs carry no usable Unicode mapping,
-    or pages drawn as images / outlined vectors, yield only a name and a scatter
-    of bullet glyphs. That is non-empty (so an emptiness check passes) yet has
-    essentially no formattable words, so the caller should OCR the rendered pages
-    — which reproduce the visible text faithfully.
 
-    Counts Unicode letters only, so it is script-agnostic (CJK/Arabic/Tamil/...
-    all count) and ignores digits, punctuation, and private-use bullet/symbol
-    glyphs. The per-page floor keeps a genuine text CV — which carries hundreds
-    to thousands of letters per page — well clear of the threshold.
+def _pdf_page_vector_text_evidence(page):
+    """True when dense vector outlines span enough of a page to resemble text."""
+    shapes = list(getattr(page, "curves", None) or []) + list(
+        getattr(page, "rects", None) or []
+    )
+    if len(shapes) < _PDF_PAGE_VECTOR_OBJECT_FLOOR:
+        return False
+    try:
+        page_height = float(page.height)
+    except (AttributeError, TypeError, ValueError):
+        return False
+    if page_height <= 0:
+        return False
+    bands = set()
+    for shape in shapes:
+        try:
+            top = shape.get("top")
+            bottom = shape.get("bottom")
+            if top is None or bottom is None:
+                y0 = float(shape.get("y0"))
+                y1 = float(shape.get("y1"))
+                top = page_height - max(y0, y1)
+                bottom = page_height - min(y0, y1)
+            first = max(0, min(11, int(float(top) / page_height * 12)))
+            last = max(0, min(11, int(float(bottom) / page_height * 12)))
+            bands.update(range(min(first, last), max(first, last) + 1))
+        except (AttributeError, TypeError, ValueError):
+            continue
+    return len(bands) >= _PDF_PAGE_VECTOR_BAND_FLOOR
+
+
+def _pdf_page_ocr_reason(page, text):
+    """Return why one page needs OCR, or an empty string when text is usable.
+
+    Sparse text alone is never enough: short contact/skills profiles are valid
+    and contain punctuation that OCR can damage. A sparse page is routed only
+    when its visible objects also show a large scan or text-like vector outlines.
     """
-    pages = max(1, int(page_count or 1))
+    if _pdf_text_looks_unextractable(text):
+        return "unextractable"
     cleaned = re.sub(r"\(cid:\d+\)", "", text or "")
     letters = sum(1 for character in cleaned if character.isalpha())
-    # Cap the floor rather than scaling it with the page count without limit. A
-    # CV's text legitimately lives on a few pages, so a document padded with
-    # image pages (a portfolio, a design deck, scanned certificates) would
-    # otherwise be judged against an ever-growing threshold and sent to OCR even
-    # though its text layer is perfectly usable -- an expensive, serialized
-    # detour. Any document carrying at least a page's worth of real text is
-    # formattable, so stop raising the bar past that.
-    return letters < min(100 * pages, _PDF_SPARSE_LETTER_CEILING)
+    # A substantial text layer already carries enough page content to format.
+    # Below that ceiling, visual evidence can reveal a scan/outlined body even
+    # when a readable header or name also extracted from the same page.
+    if letters >= _PDF_PAGE_VISUAL_LETTER_CEILING:
+        return ""
+    if _pdf_page_image_coverage(page) >= _PDF_PAGE_IMAGE_COVERAGE_FLOOR:
+        return "sparse-visual"
+    if _pdf_page_vector_text_evidence(page):
+        return "sparse-visual"
+    return ""
+
+
+def _merge_pdf_page_texts(page_records, ocr_page_texts):
+    """Merge selected OCR pages with exact usable text in original page order."""
+    merged = []
+    for page_number, record in enumerate(page_records, 1):
+        extracted = str(record.get("text") or "").strip()
+        reason = str(record.get("ocr_reason") or "")
+        if not reason:
+            chosen = extracted
+        else:
+            ocr_text = str(ocr_page_texts.get(page_number) or "").strip()
+            if reason == "unextractable":
+                chosen = ocr_text
+            elif not extracted:
+                chosen = ocr_text
+            else:
+                extracted_letters = sum(c.isalpha() for c in extracted)
+                ocr_letters = sum(c.isalpha() for c in ocr_text)
+                required_letters = max(
+                    extracted_letters + 10,
+                    int(extracted_letters * 1.5),
+                )
+                chosen = ocr_text if ocr_letters >= required_letters else extracted
+        if chosen:
+            merged.append(chosen)
+    return "\n\n".join(merged)
 
 
 def _ocr_image_text(pytesseract, image, lang="eng", timeout=35):
@@ -1024,6 +1105,27 @@ def _ocr_pdf_pagewise(file_bytes, pytesseract, poppler_path=None, dpi=220):
         pytesseract,
         poppler_path=poppler_path,
         dpi=dpi,
+        pdf_page_count=lambda payload: _pdf_page_count(payload),
+        render_pdf_page_images=lambda *args, **kwargs: _render_pdf_page_images(
+            *args, **kwargs
+        ),
+        ocr_semaphore=_OCR_SEMAPHORE,
+        max_ocr_pages=_MAX_OCR_PAGES,
+        max_image_pixels=_MAX_IMAGE_PIXELS,
+        deadline_seconds=_OCR_TOTAL_DEADLINE_SECONDS,
+        monotonic=lambda: time.monotonic(),
+    )
+
+
+def _ocr_pdf_pages_pagewise(
+    file_bytes, pytesseract, page_numbers, poppler_path=None, dpi=220
+):
+    return _phase4_ocr_pdf_pages_pagewise(
+        file_bytes,
+        pytesseract,
+        poppler_path=poppler_path,
+        dpi=dpi,
+        page_numbers=page_numbers,
         pdf_page_count=lambda payload: _pdf_page_count(payload),
         render_pdf_page_images=lambda *args, **kwargs: _render_pdf_page_images(
             *args, **kwargs
@@ -11134,7 +11236,7 @@ def _pdf_bullet_levels_from_lines(lines):
     return out
 
 
-def _extract_pdf_bullet_levels(file_bytes):
+def _extract_pdf_bullet_levels(file_bytes, page_numbers=None):
     """Recover nested-list indent from a PDF using text x-positions."""
     import io as _io
     try:
@@ -11142,9 +11244,17 @@ def _extract_pdf_bullet_levels(file_bytes):
     except Exception:
         return []
     lines = []
+    allowed_pages = None
+    if page_numbers is not None:
+        try:
+            allowed_pages = {int(page) for page in page_numbers}
+        except (TypeError, ValueError):
+            return []
     try:
         with pdfplumber.open(_io.BytesIO(file_bytes)) as pdf:
-            for page in pdf.pages:
+            for page_number, page in enumerate(pdf.pages, 1):
+                if allowed_pages is not None and page_number not in allowed_pages:
+                    continue
                 by_top = {}
                 for word in page.extract_words(use_text_flow=False):
                     by_top.setdefault(round(word["top"] / 3.0), []).append(word)
@@ -12051,37 +12161,41 @@ def extract_text():
         if filename.endswith('.pdf'):
             import pdfplumber
             _pdf_page_count(file_bytes)
-            pdf_page_total = 0
+            page_records = []
             with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
-                pdf_page_total = len(pdf.pages)
-                pages = []
                 for page in pdf.pages:
-                    t = page.extract_text()
-                    if t:
-                        pages.append(t)
-                text = "\n\n".join(pages)
+                    page_text = page.extract_text() or ""
+                    page_records.append({
+                        "text": page_text,
+                        "ocr_reason": _pdf_page_ocr_reason(page, page_text),
+                    })
 
-            # A non-empty layer is not automatically a usable one. Two distinct
-            # failure modes pass a bare emptiness check yet carry no formattable
-            # text: unmapped-glyph noise ("(cid:N)" tokens or control codes), and
-            # a near-empty layer over image/outlined-vector pages (only a name and
-            # bullet glyphs extract). Both must fall back to OCR.
-            pdf_text_unusable = (
-                _pdf_text_looks_unextractable(text)
-                or _pdf_text_is_too_sparse(text, pdf_page_total)
-            )
-            if text.strip() and not pdf_text_unusable:
+            ocr_page_numbers = [
+                page_number
+                for page_number, record in enumerate(page_records, 1)
+                if record["ocr_reason"]
+            ]
+            # Preserve the old empty-document fallback for unusual renderable
+            # PDFs that expose no pdfplumber objects at all. In mixed documents,
+            # genuinely blank pages remain blank instead of wasting OCR work.
+            if page_records and not any(record["text"].strip() for record in page_records):
+                ocr_page_numbers = list(range(1, len(page_records) + 1))
+                for record in page_records:
+                    if not record["ocr_reason"]:
+                        record["ocr_reason"] = "empty-document"
+
+            if not ocr_page_numbers:
+                text = _merge_pdf_page_texts(page_records, {})
                 try:
                     bullet_levels = _extract_pdf_bullet_levels(file_bytes)
                 except Exception:
                     bullet_levels = []
 
-            # Fallback: if pdfplumber got nothing -- or only unmapped-glyph noise
-            # (e.g. LibreOffice -> Ghostscript subset fonts with no ToUnicode), or
-            # a near-empty layer over image/outlined-vector pages (e.g. some
-            # "Microsoft Print to PDF" CVs) -- render and OCR the pages instead of
-            # trusting the unusable layer.
-            if not text.strip() or pdf_text_unusable:
+            # OCR only pages whose layer is demonstrably unusable or visually
+            # incomplete. Usable pages stay byte-for-byte extracted, preserving
+            # non-English scripts, email addresses, phone numbers, C++/C#, and
+            # document order in mixed text/scanned PDFs.
+            if ocr_page_numbers:
                 try:
                     import shutil
 
@@ -12130,15 +12244,30 @@ def extract_text():
                     if poppler_path is None and (shutil.which('pdfinfo') or shutil.which('pdftoppm')):
                         poppler_path = None  # available through PATH for fallback
 
-                    # Convert and OCR one bounded page at a time. PDFium is the
-                    # packaged renderer; Poppler is only an optional fallback.
-                    # many-page PDF as a giant in-memory image list.
-                    text = _ocr_pdf_pagewise(
+                    # Convert and OCR only the selected pages under one bounded
+                    # semaphore. PDFium is packaged; Poppler is an optional
+                    # fallback. Never render a many-page PDF as one image list.
+                    ocr_page_texts = _ocr_pdf_pages_pagewise(
                         file_bytes,
                         pytesseract,
+                        ocr_page_numbers,
                         poppler_path=poppler_path if 'poppler_path' in dir() else None,
                         dpi=220,
                     )
+                    text = _merge_pdf_page_texts(page_records, ocr_page_texts)
+                    usable_page_numbers = [
+                        page_number
+                        for page_number, record in enumerate(page_records, 1)
+                        if not record["ocr_reason"]
+                    ]
+                    if usable_page_numbers:
+                        try:
+                            bullet_levels = _extract_pdf_bullet_levels(
+                                file_bytes,
+                                page_numbers=usable_page_numbers,
+                            )
+                        except Exception:
+                            bullet_levels = []
 
                 except Exception as ocr_err:
                     traceback.print_exc()

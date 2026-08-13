@@ -1,13 +1,13 @@
 // ── /extract-text client budget ───────────────────────────────────────
 // MUST stay above the server's OCR ceiling (OCR_TOTAL_DEADLINE_SECONDS = 180s
-// in cvstudio_document_safety, plus page-render overhead). A scanned upload can
-// legitimately occupy the server for that long, and aborting the request does
+// plus the maximum 45s render + 35s OCR operation already in flight). A scanned
+// upload can legitimately occupy the server for that long, and aborting it does
 // NOT stop the work: the server keeps OCRing and holds the single OCR
 // semaphore, so a client that gives up early both loses a good extraction and
 // makes the NEXT upload fail with "OCR is already processing another
 // document". Every /extract-text call site uses this one budget so the two
 // sides cannot drift apart again.
-var CV_EXTRACT_TEXT_TIMEOUT_MS = 210000;
+var CV_EXTRACT_TEXT_TIMEOUT_MS = 300000;
 
 // ── Global fetch helper — available to ALL functions ─────────────────
 async function fetchWithTimeout(url, options, timeoutMs) {
