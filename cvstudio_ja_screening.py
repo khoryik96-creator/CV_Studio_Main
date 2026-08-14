@@ -605,7 +605,7 @@ def _ja_spa_browser_bridge(candidate_id, fields, note_text="", email="", salary_
     payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
     compact_payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     script = """(async () => {
-  const helperVersion = 'v24.6.331';
+  const helperVersion = 'v24.6.332';
   const candidateId = %s;
   const payload = %s;
   const profilePath = %s;
