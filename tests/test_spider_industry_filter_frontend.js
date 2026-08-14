@@ -9,6 +9,7 @@ const source = fs.readFileSync(
   path.resolve(__dirname, '..', 'vendor', 'cvstudio', 'ai-crawler.js'),
   'utf8'
 );
+const indexSource = fs.readFileSync(path.resolve(__dirname, '..', 'index.html'), 'utf8');
 
 function functionBlock(name, nextMarker) {
   const marker = 'function ' + name + '(';
@@ -32,8 +33,10 @@ assert.ok(
   'IT Skills must never be inserted into latest-resume keyword queries'
 );
 assert.ok(
-  searchBody.includes('if (spiderInputs.industry || spiderInputs.it_skills)'),
-  'custom-field searches must use one discovery query before exact backend filtering'
+  searchBody.includes('spiderInputs.qualifications') &&
+    searchBody.includes('spiderInputs.residential') &&
+    searchBody.includes('spiderInputs.salary_min'),
+  'all profile eligibility filters must use one discovery query before exact backend filtering'
 );
 assert.ok(
   searchBody.includes('filters:spiderFilters'),
@@ -56,30 +59,39 @@ const context = {
 };
 vm.runInNewContext(fallbackBody + '\n' + discoveryBody, context);
 
-const roleQueries = context.buildTheSpiderFallbackQueries({
-  role: 'Software Engineer',
+const filterQueries = context.buildTheSpiderFallbackQueries({
   industry: 'Financial Services',
-  must: '', nice: '', it_skills: '', qualifications: '', adjacent: false,
+  must: 'Software Engineer', it_skills: 'Python', qualifications: 'PMP',
   use_owl: false, jd: ''
 });
-assert.ok(roleQueries.includes('"Software Engineer"'));
-assert.ok(roleQueries.every((query) => !query.includes('Financial Services')));
-
-const itSkillQueries = context.buildTheSpiderFallbackQueries({
-  role: 'Software Engineer',
-  industry: '',
-  must: '', nice: '', it_skills: 'Python', qualifications: '', adjacent: false,
-  use_owl: false, jd: ''
-});
-assert.ok(itSkillQueries.includes('"Software Engineer"'));
-assert.ok(itSkillQueries.every((query) => !query.includes('Python')));
+assert.ok(filterQueries.includes('"Software Engineer"'));
+assert.ok(filterQueries.every((query) => !query.includes('Financial Services')));
+assert.ok(filterQueries.every((query) => !query.includes('Python')));
+assert.ok(filterQueries.every((query) => !query.includes('PMP')));
 
 const booleanQueries = context.buildTheSpiderDiscoveryQueries({
-  role: 'Software Engineer',
   industry: 'Financial Services',
-  must: 'Python AND AWS',
+  must: 'Python AND AWS NOT internship',
   strict: true
 });
-assert.deepStrictEqual(Array.from(booleanQueries), ['Python AND AWS']);
+assert.deepStrictEqual(Array.from(booleanQueries), ['Python AND AWS NOT internship']);
 
-console.log('spider industry frontend corrective tests passed');
+const jdOnlyQueries = context.buildTheSpiderFallbackQueries({
+  must: '', use_owl: false, jd: 'Job Description\nSenior Accountant'
+});
+assert.deepStrictEqual(Array.from(jdOnlyQueries), ['"Senior Accountant"']);
+
+for (const removedId of [
+  'theSpiderRole', 'theSpiderNice', 'theSpiderExclude',
+  'theSpiderTargets', 'theSpiderIncludeAdjacent', 'theSpiderSalary'
+]) {
+  assert.ok(!indexSource.includes('id="' + removedId + '"'), removedId + ' must be removed');
+}
+for (const requiredId of [
+  'theSpiderSalaryMin', 'theSpiderSalaryMax', 'theSpiderIncludeMissingSalary'
+]) {
+  assert.ok(indexSource.includes('id="' + requiredId + '"'), requiredId + ' must be present');
+}
+assert.ok(indexSource.includes('Use NOT here to exclude terms.'));
+
+console.log('spider JobAdder eligibility frontend corrective tests passed');

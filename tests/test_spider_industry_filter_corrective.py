@@ -158,6 +158,72 @@ class ItSkillsMatchingTests(unittest.TestCase):
         )
 
 
+class AdditionalEligibilityMatchingTests(unittest.TestCase):
+    def test_professional_qualifications_use_exact_field_seven_values(self):
+        candidate = {
+            "custom": [
+                {"fieldId": 7, "name": "Professional Qualifications", "value": ["PMP", "ITIL"]}
+            ]
+        }
+        self.assertEqual(
+            score._spider_qualifications_match(candidate, "PMP"),
+            ("match", "PMP"),
+        )
+        self.assertEqual(
+            score._spider_qualifications_match(candidate, "PMP, ACCA", require_all=True),
+            ("mismatch", "PMP, ITIL"),
+        )
+
+    def test_residential_status_uses_field_five_and_fallback_aliases(self):
+        candidate = {
+            "custom": [
+                {"fieldId": 5, "name": "Residential Status", "value": ["Malaysian Citizen"]}
+            ]
+        }
+        self.assertEqual(
+            score._spider_residential_match(candidate, "Malaysian Citizen"),
+            ("match", "Malaysian Citizen"),
+        )
+        self.assertEqual(
+            score._spider_residential_match(candidate, "Local Citizen"),
+            ("match", "Malaysian Citizen"),
+        )
+        self.assertEqual(
+            score._spider_residential_match(candidate, "Permanent Resident"),
+            ("mismatch", "Malaysian Citizen"),
+        )
+
+    def test_expected_monthly_salary_range_and_missing_option(self):
+        candidate = {
+            "employment": {
+                "ideal": {
+                    "salary": {"currency": "MYR", "ratePer": "Month", "rateLow": 8000}
+                }
+            }
+        }
+        self.assertEqual(score._spider_salary_match(candidate, 7000, 9000)[0], "match")
+        self.assertEqual(score._spider_salary_match(candidate, 9000, 12000)[0], "mismatch")
+        range_candidate = {
+            "employment": {
+                "ideal": {
+                    "salary": {
+                        "currency": "MYR",
+                        "ratePer": "Month",
+                        "rateLow": 8000,
+                        "rateHigh": 10000,
+                    }
+                }
+            }
+        }
+        self.assertEqual(score._spider_salary_match(range_candidate, 9000, 12000)[0], "match")
+        self.assertEqual(score._spider_salary_match(range_candidate, 11000, 12000)[0], "mismatch")
+        self.assertEqual(score._spider_salary_match({}, 7000, 9000)[0], "unknown")
+        self.assertEqual(
+            score._spider_salary_match({}, 7000, 9000, include_missing=True),
+            ("match_missing", "not provided (included)"),
+        )
+
+
 class IndustryRouteTests(unittest.TestCase):
     @staticmethod
     def _request_headers():
@@ -243,6 +309,62 @@ class IndustryRouteTests(unittest.TestCase):
         payload = response.get_json()
         self.assertTrue(payload["fallback"])
         self.assertIn("field 3 is not IT Skills", payload["errors"])
+
+    def test_residential_and_qualification_options_use_tenant_custom_fields(self):
+        definitions = {
+            "candidates/fields/custom/5": {
+                "fieldId": 5,
+                "name": "Residential Status",
+                "values": ["Malaysian Citizen", "Permanent Resident"],
+            },
+            "candidates/fields/custom/7": {
+                "fieldId": 7,
+                "name": "Professional Qualifications",
+                "values": ["PMP", "ITIL"],
+            },
+        }
+
+        def request_json(endpoint, **_kwargs):
+            return 200, definitions[endpoint]
+
+        with mock.patch.object(
+            app, "_ja_refresh_access_token", return_value="fixture-token"
+        ), mock.patch.object(
+            app._JOBADDER_CLIENT, "request_json", side_effect=request_json
+        ):
+            residential = app.app.test_client().get(
+                "/jobadder/spider_options?name=residential"
+            ).get_json()
+            qualifications = app.app.test_client().get(
+                "/jobadder/spider_options?name=qualifications"
+            ).get_json()
+        self.assertEqual(residential["items"], ["Malaysian Citizen", "Permanent Resident"])
+        self.assertEqual(residential["field_id"], 5)
+        self.assertEqual(qualifications["items"], ["PMP", "ITIL"])
+        self.assertEqual(qualifications["field_id"], 7)
+
+    def test_country_options_come_from_authoritative_jobadder_endpoint(self):
+        with mock.patch.object(
+            app, "_ja_refresh_access_token", return_value="fixture-token"
+        ), mock.patch.object(
+            app._JOBADDER_CLIENT,
+            "request_json",
+            return_value=(
+                200,
+                {"items": [{"code": "MY", "name": "Malaysia"}, {"code": "SG", "name": "Singapore"}]},
+            ),
+        ) as request_json:
+            response = app.app.test_client().get("/jobadder/spider_options?name=country")
+        payload = response.get_json()
+        self.assertEqual(payload["items"], ["Malaysia", "Singapore"])
+        self.assertEqual(payload["source"], "jobadder_countries")
+        self.assertTrue(payload["canonical"])
+        request_json.assert_called_once_with(
+            "countries",
+            token="fixture-token",
+            timeout=8,
+            fallback={"items": []},
+        )
 
     def test_candidate_search_requests_supported_embedded_self_representation(self):
         payload = {
@@ -443,6 +565,135 @@ class IndustryRouteTests(unittest.TestCase):
         self.assertEqual(summary["excluded_count"], 1)
         fetch_detail.assert_not_called()
 
+    def test_country_residential_qualifications_and_salary_filter_before_ranking(self):
+        summaries = [self._summary(1), self._summary(2)]
+        for item in summaries:
+            passing = item["candidateId"] == 2
+            item["address"] = {"country": "Malaysia" if passing else "Singapore"}
+            item["custom"] = [
+                {
+                    "fieldId": 5,
+                    "name": "Residential Status",
+                    "value": ["Malaysian Citizen" if passing else "Permanent Resident"],
+                },
+                {
+                    "fieldId": 7,
+                    "name": "Professional Qualifications",
+                    "value": ["PMP" if passing else "ACCA"],
+                },
+            ]
+            item["employment"] = {
+                "ideal": {
+                    "salary": {
+                        "currency": "MYR",
+                        "ratePer": "Month",
+                        "rateLow": 8000 if passing else 15000,
+                    }
+                }
+            }
+        metadata = {
+            "mode": "plain",
+            "query": "Python",
+            "returned": 2,
+            "search": {"reported_total": 2, "warnings": [], "pages": 1},
+        }
+        with mock.patch.object(
+            app, "_ja_refresh_access_token", return_value="fixture-token"
+        ), mock.patch.object(
+            app,
+            "_spider_plain_keyword_jobadder_candidates",
+            return_value=(summaries, metadata),
+        ) as discover, mock.patch.object(
+            app, "_spider_fetch_candidate_detail"
+        ) as fetch_detail, mock.patch.object(
+            app, "_spider_fetch_candidate_resume_text", return_value=("", "")
+        ):
+            response = app.app.test_client().post(
+                "/jobadder/spider_search",
+                json={
+                    "query": "Python",
+                    "limit": 1,
+                    "filters": {
+                        "must": "Python",
+                        "country": "Malaysia",
+                        "residential": "Malaysian Citizen",
+                        "qualifications": "PMP",
+                        "salary_min": 7000,
+                        "salary_max": 9000,
+                        "include_missing_salary": False,
+                    },
+                },
+                headers=self._request_headers(),
+            )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()
+        self.assertEqual([item["candidateId"] for item in payload["items"]], [2])
+        summary = payload["filter_summary"]
+        self.assertEqual(summary["country_filter_matched"], 1)
+        self.assertEqual(summary["residential_filter_matched"], 1)
+        self.assertEqual(summary["qualifications_filter_matched"], 1)
+        self.assertEqual(summary["salary_filter_matched"], 1)
+        self.assertEqual(summary["excluded_count"], 1)
+        self.assertTrue(discover.call_args.kwargs["include_self"])
+        fetch_detail.assert_not_called()
+
+    def test_salary_bounds_are_validated(self):
+        with mock.patch.object(app, "_ja_refresh_access_token", return_value="fixture-token"):
+            response = app.app.test_client().post(
+                "/jobadder/spider_search",
+                json={
+                    "query": "Python",
+                    "filters": {"salary_min": 10000, "salary_max": 5000},
+                },
+                headers=self._request_headers(),
+            )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("cannot exceed", response.get_json()["error"])
+
+    def test_include_missing_salary_keeps_candidate_after_detail_check(self):
+        summaries = [self._summary(1)]
+        metadata = {
+            "mode": "plain",
+            "query": "Python",
+            "returned": 1,
+            "search": {"reported_total": 1, "warnings": [], "pages": 1},
+        }
+        detail = {
+            "candidateId": 1,
+            "summary": "Senior Python AWS software engineer",
+        }
+        with mock.patch.object(
+            app, "_ja_refresh_access_token", return_value="fixture-token"
+        ), mock.patch.object(
+            app,
+            "_spider_plain_keyword_jobadder_candidates",
+            return_value=(summaries, metadata),
+        ), mock.patch.object(
+            app, "_spider_fetch_candidate_detail", return_value=detail
+        ) as fetch_detail, mock.patch.object(
+            app, "_spider_fetch_candidate_resume_text", return_value=("", "")
+        ):
+            response = app.app.test_client().post(
+                "/jobadder/spider_search",
+                json={
+                    "query": "Python",
+                    "limit": 1,
+                    "filters": {
+                        "must": "Python",
+                        "salary_min": 7000,
+                        "salary_max": 9000,
+                        "include_missing_salary": True,
+                    },
+                },
+                headers=self._request_headers(),
+            )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()
+        self.assertEqual([item["candidateId"] for item in payload["items"]], [1])
+        self.assertEqual(payload["filter_summary"]["salary_filter_matched"], 1)
+        self.assertTrue(payload["filter_summary"]["salary_include_missing"])
+        fetch_detail.assert_called_once_with("fixture-token", "1")
+
     def test_unknown_industry_value_is_rejected(self):
         with mock.patch.object(app, "_ja_refresh_access_token", return_value="fixture-token"):
             response = app.app.test_client().post(
@@ -463,6 +714,9 @@ class IndustryReExportTests(unittest.TestCase):
             "_spider_industry_filter_spec",
             "_spider_industry_match",
             "_spider_it_skills_match",
+            "_spider_qualifications_match",
+            "_spider_residential_match",
+            "_spider_salary_match",
         ):
             self.assertIs(getattr(app, name), getattr(score, name), name)
 

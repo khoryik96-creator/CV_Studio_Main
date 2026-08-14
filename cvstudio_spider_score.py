@@ -21,13 +21,13 @@ from cvstudio_spider_boolean import (
     _spider_discovery_keyword_match,
     _spider_hit_terms,
     _spider_residential_classes,
-    _spider_residential_status_text,
     _spider_status_target,
     _spider_term_coverage,
     _spider_terms,
     _spider_visible_years,
     _spider_years_bounds,
 )
+from cvstudio_spider_summary import _spider_card_fields
 
 
 _SPIDER_JD_HEADING_PREFIX_RE = re.compile(
@@ -818,14 +818,6 @@ def _spider_item_score(candidate, filters, enriched=False):
         else:
             unknown.append("IT Skills require JobAdder candidate detail")
 
-    # Only the separate Exclude/Avoid field is rechecked locally.
-    # Native JobAdder Boolean rules (including NOT) are trusted as returned and are
-    # never re-evaluated against the incomplete candidate-detail JSON.
-    exclude_terms = _spider_terms(filters.get("exclude") or filters.get("avoid"), 24)
-    hit_excludes = _spider_hit_terms(blob_low, exclude_terms)
-    if hit_excludes:
-        return False, 0, [], unknown, ["exclude: " + ", ".join(hit_excludes[:5])], hard_passed, []
-
     # A Boolean fallback searches positive atoms only. If a NOT operand is visibly
     # present in the available profile data, exclude it conservatively; absence is
     # kept as unknown because JobAdder detail JSON may omit resume text.
@@ -837,27 +829,21 @@ def _spider_item_score(candidate, filters, enriched=False):
         if fallback_negative_terms:
             unknown.append("Boolean NOT terms not fully visible in available profile data")
 
-    def hard_filter_terms(label, value, max_terms=24, require_all=False):
-        terms = _spider_terms(value, max_terms)
-        if not terms:
-            return []
-        hits = _spider_hit_terms(blob_low, terms)
-        missing = [t for t in terms if t not in hits]
-        if require_all and missing:
-            raise ValueError("missing hard filter {}: {}".format(label, ", ".join(missing[:5])))
-        if not hits:
-            if not enriched and not bool(filters.get("strict")):
-                unknown.append("{} not visible in list result".format(label))
-                return []
-            raise ValueError("missing hard filter {}".format(label))
-        hard_passed.append(label + ": " + ", ".join(hits[:5]))
-        return hits
-
-    # Existing explicit hard filters remain eligibility gates, not fit-score points.
-    try:
-        hard_filter_terms("qualifications", filters.get("qualifications"), 18, False)
-    except ValueError as e:
-        return False, 0, [], unknown, [str(e)], hard_passed, []
+    qualifications = str(filters.get("qualifications") or "").strip()
+    if qualifications:
+        qualification_status, qualification_evidence = _spider_qualifications_match(
+            candidate,
+            qualifications,
+            require_all=bool(filters.get("strict")),
+        )
+        if qualification_status == "match":
+            hard_passed.append("qualifications: " + qualification_evidence)
+        elif qualification_status == "mismatch":
+            return False, 0, [], unknown, ["qualifications mismatch: " + qualification_evidence[:160]], hard_passed, []
+        elif enriched:
+            return False, 0, [], unknown, ["Professional Qualifications not visible in JobAdder custom field"], hard_passed, []
+        else:
+            unknown.append("Professional Qualifications require JobAdder candidate detail")
 
     country = str(filters.get("country") or "").strip()
     if country and country.lower() != "any":
@@ -873,17 +859,32 @@ def _spider_item_score(candidate, filters, enriched=False):
 
     residential = str(filters.get("residential") or "Any").strip()
     if residential and residential.lower() != "any":
-        res_text = _spider_residential_status_text(candidate)
-        target_status = _spider_status_target(residential)
-        visible_statuses = _spider_residential_classes(res_text)
-        if target_status and target_status in visible_statuses:
-            hard_passed.append("residential: " + residential)
-        elif visible_statuses:
-            return False, 0, [], unknown, ["residential mismatch: " + res_text[:100]], hard_passed, []
-        elif not enriched and not bool(filters.get("strict")):
-            unknown.append("residential status not visible in list result")
+        residential_status, residential_evidence = _spider_residential_match(
+            candidate, residential
+        )
+        if residential_status == "match":
+            hard_passed.append("residential: " + residential_evidence)
+        elif residential_status == "mismatch":
+            return False, 0, [], unknown, ["residential mismatch: " + residential_evidence[:100]], hard_passed, []
+        elif not enriched:
+            unknown.append("Residential Status requires JobAdder candidate detail")
         else:
-            return False, 0, [], unknown, ["residential status not visible"], hard_passed, []
+            return False, 0, [], unknown, ["Residential Status not visible in JobAdder custom field"], hard_passed, []
+
+    salary_status, salary_evidence = _spider_salary_match(
+        candidate,
+        filters.get("salary_min"),
+        filters.get("salary_max"),
+        include_missing=bool(filters.get("include_missing_salary")),
+    )
+    if salary_status in {"match", "match_missing"}:
+        hard_passed.append("expected salary: " + salary_evidence)
+    elif salary_status == "mismatch":
+        return False, 0, [], unknown, ["expected salary mismatch: " + salary_evidence[:120]], hard_passed, []
+    elif salary_status == "unknown" and not enriched:
+        unknown.append("expected salary requires JobAdder candidate detail")
+    elif salary_status == "unknown":
+        return False, 0, [], unknown, ["expected salary not visible"], hard_passed, []
 
     min_years, max_years = _spider_years_bounds(filters)
     if min_years > 0 or max_years is not None:
@@ -934,11 +935,6 @@ def _spider_item_score(candidate, filters, enriched=False):
 
     fit_percent, fit_evidence, fit_unknown, fit_breakdown = _spider_match_fit_percent(candidate, filters, blob_low, discovery_hits)
     unknown.extend(fit_unknown)
-    if filters.get("salary"):
-        unknown.append("salary not used in fit score")
-    if filters.get("targets"):
-        unknown.append("target companies not used in fit score")
-
     if fit_percent < 10:
         return False, fit_percent, fit_evidence, unknown[:8], ["match fit below 10%"], hard_passed[:8], discovery_hits[:10], fit_breakdown
     return True, fit_percent, fit_evidence[:10], unknown[:8], excluded, hard_passed[:8], discovery_hits[:10], fit_breakdown
@@ -1129,6 +1125,8 @@ def _spider_industry_match(candidate, selected):
 # This repository's JobAdder tenant defines its searchable IT Skills list as
 # candidate custom field #3 (between Industry fields #1/#2 and Currency #4).
 SPIDER_IT_SKILLS_FIELD_ID = 3
+SPIDER_RESIDENTIAL_STATUS_FIELD_ID = 5
+SPIDER_QUALIFICATIONS_FIELD_ID = 7
 
 
 def _spider_it_skills_match(candidate, selected, require_all=False):
@@ -1156,6 +1154,151 @@ def _spider_it_skills_match(candidate, selected, require_all=False):
     return "mismatch", ", ".join(values[:8])
 
 
+def _spider_qualifications_match(candidate, selected, require_all=False):
+    """Match exact values from JobAdder Professional Qualifications field #7."""
+    selected_terms = _spider_terms(selected, 24)
+    if not selected_terms:
+        return "inactive", ""
+    values = _spider_industry_custom_values(
+        candidate,
+        SPIDER_QUALIFICATIONS_FIELD_ID,
+        expected_labels=("Professional Qualifications", "Qualifications"),
+    )
+    if not values:
+        return "unknown", ", ".join(selected_terms)
+    value_lookup = {
+        re.sub(r"\s+", " ", value).strip().casefold(): value for value in values
+    }
+    matched = [
+        value_lookup.get(re.sub(r"\s+", " ", term).strip().casefold())
+        for term in selected_terms
+    ]
+    matched = [value for value in matched if value]
+    if (require_all and len(matched) == len(selected_terms)) or (not require_all and matched):
+        return "match", ", ".join(matched[:8])
+    return "mismatch", ", ".join(values[:8])
+
+
+def _spider_residential_match(candidate, selected):
+    """Match JobAdder Residential Status field #5, retaining safe fallback aliases."""
+    selected = re.sub(r"\s+", " ", str(selected or "")).strip()
+    if not selected or selected.casefold() == "any":
+        return "inactive", ""
+    values = _spider_industry_custom_values(
+        candidate,
+        SPIDER_RESIDENTIAL_STATUS_FIELD_ID,
+        expected_labels=("Residential Status",),
+    )
+    selected_key = selected.casefold()
+    for value in values:
+        if re.sub(r"\s+", " ", value).strip().casefold() == selected_key:
+            return "match", value
+    # The offline fallback uses broad recruiter labels such as Local Citizen;
+    # map those only when the exact live option is unavailable.
+    target_status = _spider_status_target(selected)
+    visible_statuses = _spider_residential_classes(" | ".join(values))
+    if target_status and target_status in visible_statuses:
+        return "match", ", ".join(values[:4])
+    if values:
+        return "mismatch", ", ".join(values[:4])
+    return "unknown", selected
+
+
+def _spider_salary_bound(value):
+    """Return a non-negative numeric monthly salary bound or ``None``."""
+    if value in (None, ""):
+        return None
+    text = re.sub(r"[^0-9.\-]", "", str(value).replace(",", ""))
+    try:
+        number = float(text)
+    except (TypeError, ValueError):
+        return None
+    return number if number >= 0 else None
+
+
+def _spider_expected_salary_range(candidate):
+    """Return expected monthly low/high values and display text when available."""
+    if not isinstance(candidate, dict):
+        return None, None, ""
+    sources = [candidate, candidate.get("_spiderDetail")]
+    for key in ("self", "candidate"):
+        if isinstance(candidate.get(key), dict):
+            sources.append(candidate.get(key))
+    for container_key in ("_embedded", "embedded"):
+        container = candidate.get(container_key)
+        if isinstance(container, dict):
+            for key in ("self", "candidate"):
+                if isinstance(container.get(key), dict):
+                    sources.append(container.get(key))
+    for source in sources:
+        if not isinstance(source, dict):
+            continue
+        employment = source.get("employment")
+        ideal = employment.get("ideal") if isinstance(employment, dict) else None
+        if not isinstance(ideal, dict):
+            continue
+        salary_candidates = [ideal.get("salary")]
+        salary_candidates.extend(
+            other.get("salary")
+            for other in (ideal.get("other") or [])
+            if isinstance(other, dict)
+        )
+        for salary in salary_candidates:
+            if not isinstance(salary, dict):
+                continue
+            low = _spider_salary_bound(
+                salary.get("rateLow")
+                if salary.get("rateLow") not in (None, "")
+                else salary.get("rate") or salary.get("amount") or salary.get("value")
+            )
+            high = _spider_salary_bound(salary.get("rateHigh"))
+            if low is None and high is None:
+                continue
+            if low is None:
+                low = high
+            if high is None:
+                high = low
+            rate_per = str(salary.get("ratePer") or salary.get("period") or "").strip().lower()
+            factor = {
+                "hour": 173.333,
+                "day": 21.666,
+                "week": 4.333,
+                "month": 1.0,
+                "year": 1.0 / 12.0,
+            }.get(rate_per, 1.0)
+            snapshot = (_spider_card_fields(source) or {}).get("expectedSalary") or {}
+            return (
+                min(low, high) * factor,
+                max(low, high) * factor,
+                str(snapshot.get("display") or "").strip(),
+            )
+    expected = (_spider_card_fields(candidate) or {}).get("expectedSalary")
+    value = expected.get("sort") if isinstance(expected, dict) else None
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        value = None
+    return value, value, str((expected or {}).get("display") or "").strip()
+
+
+def _spider_salary_match(candidate, minimum=None, maximum=None, include_missing=False):
+    """Match the candidate's expected monthly salary against a selected range."""
+    lower = _spider_salary_bound(minimum)
+    upper = _spider_salary_bound(maximum)
+    if lower is None and upper is None:
+        return "inactive", ""
+    candidate_low, candidate_high, display = _spider_expected_salary_range(candidate)
+    if candidate_low is None or candidate_high is None:
+        if include_missing:
+            return "match_missing", "not provided (included)"
+        return "unknown", "not provided"
+    if lower is not None and candidate_high < lower:
+        return "mismatch", "{} below minimum {}".format(candidate_high, lower)
+    if upper is not None and candidate_low > upper:
+        return "mismatch", "{} above maximum {}".format(candidate_low, upper)
+    return "match", display or "{} to {} monthly".format(candidate_low, candidate_high)
+
+
 def _spider_option_fallbacks(name):
     key = str(name or "").strip().lower()
     if key in {"industry", "industries"}:
@@ -1166,6 +1309,10 @@ def _spider_option_fallbacks(name):
         return ["SAP", "SAP ABAP", "SAP FICO", "SAP BW", "SAP BPC", "Oracle", "NetSuite", "Salesforce", "Python", "Java", "AWS", "Azure", "GCP", "Kubernetes", "Docker", "SQL", "Power BI", "Tableau"]
     if key in {"qualifications", "qualification", "certifications"}:
         return ["ACCA", "CPA", "CIMA", "MIA", "ICAEW", "CFA", "CIA", "PMP", "PRINCE2", "ITIL", "CKA", "AWS Certified", "Azure Certified", "SAP Certified"]
+    if key in {"residential", "residential_status", "residency"}:
+        return ["Local Citizen", "Permanent Resident", "Expat - No Visa Required", "Expat - Work Visa Required"]
+    if key in {"country", "countries"}:
+        return [name.title() for name in _SPIDER_COUNTRY_DEFINITIONS]
     return []
 
 

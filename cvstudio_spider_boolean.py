@@ -951,6 +951,11 @@ def _spider_country_match(candidate, country):
             continue
         if _spider_has_any(explicit_country, definition.get("names")):
             return "mismatch", explicit_country[:120]
+    if explicit_country:
+        # The authoritative /countries endpoint can return countries beyond the
+        # regional alias table above. A populated native country field that does
+        # not contain the selected country is still an explicit mismatch.
+        return "mismatch", explicit_country[:120]
 
     if _spider_has_any(location_text, target.get("names")):
         return "match", location_text[:120]
