@@ -6606,7 +6606,7 @@ def jobadder_spider_candidate_preview():
     }, 404, cacheable=False)
 
 
-def _spider_jobadder_keyword_items(token, keyword, max_items=3000, page_size=1000, location="", embed=True):
+def _spider_jobadder_keyword_items(token, keyword, max_items=3000, page_size=1000, location="", embed=True, include_self=False):
     """Search JobAdder latest resumes with complete, defensive pagination.
 
     ``Location`` is city/state in JobAdder. Country is deliberately never sent
@@ -6625,6 +6625,12 @@ def _spider_jobadder_keyword_items(token, keyword, max_items=3000, page_size=100
     if city_state and city_state.lower() != "any":
         base_params.append(("Location", city_state))
     if state["embed_active"]:
+        if include_self:
+            # JobAdder's supported public API uses Embed=self to return full
+            # candidate records (including custom fields) in Find Candidates.
+            # This is the OAuth integration equivalent of the richer search
+            # available in JobAdder's own candidate-search screen.
+            base_params.append(("Embed", "self"))
         base_params.extend([("Embed", "skills"), ("Embed", "notes")])
 
     def fetch_page(page_params):
@@ -6672,7 +6678,7 @@ def _spider_jobadder_keyword_items(token, keyword, max_items=3000, page_size=100
         "cap_reached": "Candidate search reached the {}-candidate safety cap".format(max_items),
     }
     warnings = [warning_map[code] for code in page_state.get("codes") or [] if code in warning_map]
-    return out, {
+    metadata = {
         "keyword": keyword,
         "location": city_state,
         "scanned": len(out),
@@ -6684,9 +6690,12 @@ def _spider_jobadder_keyword_items(token, keyword, max_items=3000, page_size=100
         "embed_applied": bool(embed and not state["embed_rejected"]),
         "embed_rejected": bool(state["embed_rejected"]),
     }
+    if include_self:
+        metadata["embed_self_applied"] = bool(embed and not state["embed_rejected"])
+    return out, metadata
 
 
-def _spider_plain_keyword_jobadder_candidates(token, query_text, result_pool_limit=1200, location="", fallback_rule="", fallback_negative_terms=None):
+def _spider_plain_keyword_jobadder_candidates(token, query_text, result_pool_limit=1200, location="", fallback_rule="", fallback_negative_terms=None, include_self=False):
     query_text = re.sub(r"[\x00-\x1f\x7f]", " ", str(query_text or ""))
     query_text = re.sub(r"\s+", " ", query_text).strip()[:1500]
     max_items = max(100, min(3000, int(result_pool_limit or 1200)))
@@ -6696,6 +6705,7 @@ def _spider_plain_keyword_jobadder_candidates(token, query_text, result_pool_lim
         max_items=max_items,
         page_size=min(1000, max_items),
         location=location,
+        include_self=include_self,
     )
     marked, query_terms = _spider_mark_plain_keyword_candidates(
         items,
@@ -6721,7 +6731,7 @@ def _spider_plain_keyword_jobadder_candidates(token, query_text, result_pool_lim
     return marked, meta
 
 
-def _spider_native_boolean_jobadder_candidates(token, rule_text, result_pool_limit=1200, location=""):
+def _spider_native_boolean_jobadder_candidates(token, rule_text, result_pool_limit=1200, location="", include_self=False):
     """Attempt the recruiter's complete Boolean expression once in Keywords.
 
     JobAdder's public specification describes latest-resume keyword search but
@@ -6739,6 +6749,7 @@ def _spider_native_boolean_jobadder_candidates(token, rule_text, result_pool_lim
         max_items=max_items,
         page_size=min(1000, max_items),
         location=location,
+        include_self=include_self,
     )
     marked = []
     for item in items:
@@ -6827,6 +6838,7 @@ def jobadder_spider_search():
                 rule_for_search,
                 result_pool_limit=max(1200, limit * 5),
                 location=city_state,
+                include_self=bool(canonical_industry),
             )
             if not raw_items:
                 fallback_terms, fallback_negative_terms = _spider_boolean_fallback_atoms(rule_for_search, 8, 24)
@@ -6839,6 +6851,7 @@ def jobadder_spider_search():
                         location=city_state,
                         fallback_rule=rule_for_search,
                         fallback_negative_terms=fallback_negative_terms,
+                        include_self=bool(canonical_industry),
                     )
                     fallback_meta["native_attempt"] = boolean_meta
                     boolean_meta = fallback_meta
@@ -6862,6 +6875,7 @@ def jobadder_spider_search():
                 query,
                 result_pool_limit=max(1200, limit * 5),
                 location=city_state,
+                include_self=bool(canonical_industry),
             )
             search_mode = "plain"
             parsed = {"items": raw_items}
@@ -6874,18 +6888,33 @@ def jobadder_spider_search():
         industry_filter_excluded = 0
         industry_filter_unavailable = 0
         industry_detail_requests = 0
+        industry_embedded_records = 0
 
-        # JobAdder's candidate list endpoint exposes no custom fields and has no
-        # custom-field query parameter. When Industry is selected, load detail
-        # for the complete bounded discovery pool and apply custom field #1/#2
-        # before resume scoring, fit ranking, or return truncation. The retained
-        # detail map is reused by Stage 3, so matching candidates are not fetched
-        # twice.
+        # JobAdder's supported public API accepts Embed=self on Find Candidates,
+        # which normally supplies the custom fields needed for exact Industry
+        # matching in the search rows themselves. If a tenant or response omits
+        # that embedded data, fetch detail only for those unknown rows. Apply the
+        # field #1/#2 gate before resume scoring, ranking, or return truncation,
+        # and reuse any fallback detail in Stage 3.
         if canonical_industry:
             detail_ids = []
+            detail_id_seen = set()
             for item in raw_items:
+                industry_status, _industry_evidence = _spider_industry_match(
+                    item, canonical_industry
+                )
+                if industry_status in {"match", "mismatch"}:
+                    industry_embedded_records += 1
+                    if industry_status == "match":
+                        cid = _spider_candidate_id(item)
+                        if cid:
+                            # Embed=self is already the full candidate detail;
+                            # retain it so Stage 3 does not read the same profile.
+                            industry_detail_map[cid] = item
+                    continue
                 cid = _spider_candidate_id(item)
-                if cid and cid not in detail_ids:
+                if cid and cid not in detail_id_seen:
+                    detail_id_seen.add(cid)
                     detail_ids.append(cid)
             industry_detail_requests = len(detail_ids)
             if detail_ids:
@@ -6925,7 +6954,7 @@ def jobadder_spider_search():
                 detail = industry_detail_map.get(cid) if cid else None
                 candidate = (
                     _spider_merge_candidate_summary_and_detail(item, detail)
-                    if isinstance(detail, dict) and detail
+                    if isinstance(detail, dict) and detail and detail is not item
                     else item
                 )
                 industry_status, _industry_evidence = _spider_industry_match(
@@ -7231,12 +7260,13 @@ def jobadder_spider_search():
             "industry_filter_matched": len(raw_items) if canonical_industry else 0,
             "industry_filter_excluded": industry_filter_excluded,
             "industry_filter_unavailable": industry_filter_unavailable,
+            "industry_embedded_records": industry_embedded_records,
             "industry_detail_requests": industry_detail_requests,
             "filters_applied": safe_filters,
             "minimum_fit_percent": 10,
             "fit_scoring": "JD + recruiter Boolean/must-haves + role + nice-to-haves; latest resume text where available",
             "workflow": "JobAdder latest-resume keyword discovery, exact local Industry eligibility when selected, then local eligibility and 0-100 job-scope fit",
-            "note": "Country is filtered locally and is never sent as JobAdder Location. Industry is never treated as a resume keyword: a selected broad category is matched exactly against JobAdder candidate custom field #1 and a selected sub-category against custom field #2, before ranking or truncation. The complete recruiter Boolean is attempted once; when it returns zero rows, CV Studio labels and runs a positive-term plain-keyword fallback. NOT operands are never used for discovery and visible NOT matches are excluded conservatively. Fallback membership is not treated as proof that the complete Boolean matched. Resume scoring is request-bounded (one latest attachment per selected candidate) and selected across the full discovery pool using merit plus first-to-last spread, rather than the old first-page cutoff. Full detail is then loaded for the competitive return pool so salary and notice fields can populate the cards; when a maximum experience bound is active, CV Studio scans deeper in batches until the requested eligible shortlist is filled or the discovery pool is exhausted. Missing hard-filter fields on non-enriched candidates remain visible as unknown unless Strict is enabled; explicit mismatches still exclude.",
+            "note": "Country is filtered locally and is never sent as JobAdder Location. Industry is never treated as a resume keyword: CV Studio requests JobAdder's supported Embed=self candidate representation, then matches a selected broad category exactly against candidate custom field #1 or a selected sub-category against custom field #2 before ranking or truncation. Individual candidate detail is fetched only when an embedded search row omits those custom fields. The complete recruiter Boolean is attempted once; when it returns zero rows, CV Studio labels and runs a positive-term plain-keyword fallback. NOT operands are never used for discovery and visible NOT matches are excluded conservatively. Fallback membership is not treated as proof that the complete Boolean matched. Resume scoring is request-bounded (one latest attachment per selected candidate) and selected across the full discovery pool using merit plus first-to-last spread, rather than the old first-page cutoff. Full detail is then loaded for the competitive return pool so salary and notice fields can populate the cards; when a maximum experience bound is active, CV Studio scans deeper in batches until the requested eligible shortlist is filled or the discovery pool is exhausted. Missing hard-filter fields on non-enriched candidates remain visible as unknown unless Strict is enabled; explicit mismatches still exclude.",
             "pagination_incomplete": bool(search_meta.get("incomplete")),
             "pagination_warnings": list(search_meta.get("warnings") or [])[:5],
             "pages": search_meta.get("pages"),

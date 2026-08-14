@@ -1037,8 +1037,19 @@ def _spider_industry_custom_values(candidate, field_id):
             return out
         return [str(value)]
 
+    sources = [candidate, candidate.get("_spiderDetail")]
+    for key in ("self", "candidate"):
+        if isinstance(candidate.get(key), dict):
+            sources.append(candidate.get(key))
+    for container_key in ("_embedded", "embedded"):
+        container = candidate.get(container_key)
+        if isinstance(container, dict):
+            for key in ("self", "candidate"):
+                if isinstance(container.get(key), dict):
+                    sources.append(container.get(key))
+
     collections = []
-    for source in (candidate, candidate.get("_spiderDetail")):
+    for source in sources:
         if not isinstance(source, dict):
             continue
         for key in ("custom", "customFields"):

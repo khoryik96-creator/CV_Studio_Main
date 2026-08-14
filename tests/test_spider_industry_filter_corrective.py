@@ -1,10 +1,12 @@
 """Regression coverage for PR #142's canonical JobAdder Industry filter."""
 
+import json
 import os
 from pathlib import Path
 import tempfile
 import unittest
 from unittest import mock
+import urllib.parse
 
 from owner_build_tools.build_protected import write_test_receipt
 
@@ -55,6 +57,20 @@ class IndustryMatchingTests(unittest.TestCase):
         self.assertEqual(
             score._spider_industry_match(candidate, "Life Science/Medical"),
             ("mismatch", "Financial Services"),
+        )
+
+    def test_match_accepts_nested_embedded_self_candidate_shape(self):
+        candidate = {
+            "candidateId": 1,
+            "_embedded": {
+                "self": {
+                    "custom": [{"fieldId": 2, "value": ["FSI - Insurance"]}]
+                }
+            },
+        }
+        self.assertEqual(
+            score._spider_industry_match(candidate, "FSI - Insurance"),
+            ("match", "FSI - Insurance"),
         )
 
     def test_item_score_rejects_mismatch_even_when_resume_keywords_fit(self):
@@ -136,8 +152,41 @@ class IndustryRouteTests(unittest.TestCase):
         refresh.assert_not_called()
         request_json.assert_not_called()
 
-    def _run_search(self, *, native_boolean):
+    def test_candidate_search_requests_supported_embedded_self_representation(self):
+        payload = {
+            "items": [{
+                "candidateId": 2,
+                "custom": [{"fieldId": 1, "value": ["Financial Services"]}],
+            }],
+            "totalCount": 1,
+        }
+        with mock.patch.object(
+            app,
+            "_spider_get_ja_raw",
+            return_value=(json.dumps(payload).encode("utf-8"), "application/json", ""),
+        ) as request_raw:
+            items, metadata = app._spider_jobadder_keyword_items(
+                "fixture-token",
+                "Software Engineer",
+                max_items=1,
+                page_size=1,
+                embed=True,
+                include_self=True,
+            )
+        query = urllib.parse.parse_qs(
+            urllib.parse.urlsplit(request_raw.call_args.args[1]).query
+        )
+        self.assertEqual(query["Embed"], ["self", "skills", "notes"])
+        self.assertEqual(items, payload["items"])
+        self.assertTrue(metadata["embed_self_applied"])
+
+    def _run_search(self, *, native_boolean, embedded=False):
         summaries = [self._summary(1), self._summary(2)]
+        if embedded:
+            for item in summaries:
+                item["custom"] = self._detail(
+                    "fixture-token", item["candidateId"]
+                )["custom"]
         metadata = {
             "mode": "native_boolean" if native_boolean else "plain",
             "query": "Python AND AWS" if native_boolean else "Software Engineer",
@@ -189,6 +238,18 @@ class IndustryRouteTests(unittest.TestCase):
         self.assertEqual(summary["industry_filter_excluded"], 1)
         self.assertEqual(summary["industry_filter_unavailable"], 0)
         self.assertEqual(fetch_detail.call_count, 2)
+
+    def test_embedded_custom_fields_avoid_per_candidate_detail_reads(self):
+        response, fetch_detail = self._run_search(
+            native_boolean=False, embedded=True
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()
+        self.assertEqual([item["candidateId"] for item in payload["items"]], [2])
+        summary = payload["filter_summary"]
+        self.assertEqual(summary["industry_embedded_records"], 2)
+        self.assertEqual(summary["industry_detail_requests"], 0)
+        fetch_detail.assert_not_called()
 
     def test_native_boolean_search_still_applies_industry_filter(self):
         response, fetch_detail = self._run_search(native_boolean=True)
