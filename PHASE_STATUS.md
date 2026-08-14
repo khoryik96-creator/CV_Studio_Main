@@ -25,17 +25,38 @@
   `54298b9b6a822e1f36c9c101f1ff4edc9c7e835f`
 - Phase 7B-4 source baseline Git commit (merged Phase 7B-3):
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
-- Working branch candidate: `claude/phase-7b4-secrets-service`
-- Active work: behavior-preserving extraction of the AI secret-store domain
-  behind the Phase 7A composition seam
+- Working branch candidate:
+  `chatgpt/pr154-v24.6.339-doc-preview-highlights`
+- Active work: legacy-DOC visual preview parity and bounded direct Boolean
+  highlighting for converted Office and coordinate-less scanned PDF previews.
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
-- Status: Phase 7A (v24.6.247) and the Phase 7B-1/7B-2/7B-3 extractions
-  (startup, runtime liveness, static web assets) are merged. Phase 7B-4 extracts
-  the AI secret-store management domain; installed source identity remains
-  v24.6.246 during this architecture-only candidate.
-- Current stop: after Phase 7B-4 implementation, regression validation and
-  focused review. Stop before release, merge, further extractions or unrelated
-  work.
+- Status: master v24.6.338 is the branch baseline. The v24.6.339 corrective
+  below is implemented and under validation on its own branch; it is not
+  merged.
+- Current stop: after v24.6.339 regression/protected-build validation and PR
+  publication. Do not merge without the owner's separate instruction.
+
+## v24.6.339 legacy-DOC preview and highlight corrective candidate
+
+- Verified Antiword remains mandatory and always runs first. Only a completed
+  rejection of the exact document can use the existing Microsoft Word or
+  LibreOffice conversion exception; dependency and execution-time trust
+  failures remain fatal.
+- AI Crawler and `/preview-file` reuse the validated converted DOCX for visual
+  HTML fallback when LibreOffice PDF rendering is unavailable, rather than
+  dropping the recruiter into unverified text-only recovery.
+- Converted Office HTML previews receive direct Boolean highlights. Literal
+  matching also tolerates NBSP spacing, Unicode ligatures, soft hyphens and
+  line-wrap hyphenation while preserving original-text highlight offsets.
+- Foreground scanned/coordinate-less PDF pages can reuse the mandatory
+  Tesseract installation for a bounded three-page, 28-second visual word-box
+  layer. Background prefetch remains OCR-free.
+- No route, schema, security gate, dependency requirement or protected-build
+  package boundary changes.
+- Validation: 899 passed, 4 skipped, 1 unrelated Windows receipt-isolation
+  test deselected, 93 subtests; all 15 JavaScript fixtures; route/version and
+  protected Windows source gates; repository consistency; 24-assertion live
+  smoke; genuine Yan Yen Fen and Kwong legacy-DOC preview checks.
 
 ## v24.6.279 legacy-DOC and CV-formatting corrective
 
