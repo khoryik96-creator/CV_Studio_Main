@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.336"
+_INSTALL_RECEIPT_VERSION = "v24.6.337"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -341,7 +341,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.336"
+_CVSTUDIO_VERSION = "v24.6.337"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -6909,12 +6909,14 @@ def jobadder_spider_search():
         "country": str(filters.get("country") or "")[:80],
         "city_state": str(filters.get("city_state") or filters.get("location") or "")[:120],
         "residential": str(filters.get("residential") or "Any")[:80],
-        "industry": str(filters.get("industry") or "")[:300],
-        "it_skills": str(filters.get("it_skills") or filters.get("skills") or "")[:1500],
-        "qualifications": str(filters.get("qualifications") or "")[:1200],
+        "industry": _spider_terms(filters.get("industry"), max_terms=24),
+        "industry_mode": "all" if str(filters.get("industry_mode") or "").casefold() == "all" else "any",
+        "it_skills": _spider_terms(filters.get("it_skills") or filters.get("skills"), max_terms=24),
+        "it_skills_mode": "all" if str(filters.get("it_skills_mode") or "").casefold() == "all" else "any",
+        "qualifications": _spider_terms(filters.get("qualifications"), max_terms=24),
+        "qualifications_mode": "all" if str(filters.get("qualifications_mode") or "").casefold() == "all" else "any",
         "salary_min": _spider_salary_bound(salary_min_raw),
         "salary_max": _spider_salary_bound(salary_max_raw),
-        "salary_currency": str(filters.get("salary_currency") or "").strip().upper()[:8],
         "include_missing_salary": bool(filters.get("include_missing_salary")),
         "years": _spider_min_years_value(filters.get("years_min") if filters.get("years_min") is not None else (filters.get("years") or filters.get("experience_years"))),
         "years_min": _spider_min_years_value(filters.get("years_min") if filters.get("years_min") is not None else (filters.get("years") or filters.get("experience_years"))),
@@ -6937,16 +6939,26 @@ def jobadder_spider_search():
         and safe_filters["salary_min"] > safe_filters["salary_max"]
     ):
         return jsonify({"error": "Minimum salary cannot exceed maximum salary."}), 400
-    industry_field_id, canonical_industry = _spider_industry_filter_spec(safe_filters.get("industry"))
-    if safe_filters.get("industry") and industry_field_id is None:
-        return jsonify({
-            "error": "Industry must be selected from the canonical CV Studio list.",
-            "code": "INVALID_SPIDER_INDUSTRY",
-        }), 400
-    if canonical_industry:
-        safe_filters["industry"] = canonical_industry
-    it_skills_filter = str(safe_filters.get("it_skills") or "").strip()
-    qualifications_filter = str(safe_filters.get("qualifications") or "").strip()
+    industry_field_ids = []
+    canonical_industries = []
+    for selected_industry in safe_filters.get("industry") or []:
+        field_id, canonical_industry = _spider_industry_filter_spec(selected_industry)
+        if field_id is None:
+            return jsonify({
+                "error": "Every Industry must be selected from the canonical CV Studio list.",
+                "code": "INVALID_SPIDER_INDUSTRY",
+            }), 400
+        industry_field_ids.append(field_id)
+        canonical_industries.append(canonical_industry)
+    safe_filters["industry"] = canonical_industries
+    industry_field_ids = list(dict.fromkeys(industry_field_ids))
+    industry_field_id = (
+        industry_field_ids[0]
+        if len(industry_field_ids) == 1
+        else (industry_field_ids if industry_field_ids else None)
+    )
+    it_skills_filter = list(safe_filters.get("it_skills") or [])
+    qualifications_filter = list(safe_filters.get("qualifications") or [])
     residential_filter = str(safe_filters.get("residential") or "Any").strip()
     if residential_filter.casefold() == "any":
         residential_filter = ""
@@ -6957,14 +6969,8 @@ def jobadder_spider_search():
         safe_filters.get("salary_min") is not None
         or safe_filters.get("salary_max") is not None
     )
-    if salary_filter_active and not re.fullmatch(
-        r"[A-Z]{3}", safe_filters.get("salary_currency") or ""
-    ):
-        return jsonify({
-            "error": "Select a three-letter salary currency before applying salary bounds."
-        }), 400
     eligibility_filters_active = bool(
-        canonical_industry
+        canonical_industries
         or it_skills_filter
         or qualifications_filter
         or residential_filter
@@ -7049,7 +7055,7 @@ def jobadder_spider_search():
         active_filter_names = [
             name
             for name, active in (
-                ("industry", bool(canonical_industry)),
+                ("industry", bool(canonical_industries)),
                 ("it_skills", bool(it_skills_filter)),
                 ("qualifications", bool(qualifications_filter)),
                 ("residential", bool(residential_filter)),
@@ -7073,21 +7079,23 @@ def jobadder_spider_search():
         if eligibility_filters_active:
             def eligibility_filter_states(candidate):
                 states = {}
-                if canonical_industry:
+                if canonical_industries:
                     states["industry"], _industry_evidence = _spider_industry_match(
-                        candidate, canonical_industry
+                        candidate,
+                        canonical_industries,
+                        require_all=safe_filters.get("industry_mode") == "all",
                     )
                 if it_skills_filter:
                     states["it_skills"], _skills_evidence = _spider_it_skills_match(
                         candidate,
                         it_skills_filter,
-                        require_all=bool(safe_filters.get("strict")),
+                        require_all=safe_filters.get("it_skills_mode") == "all",
                     )
                 if qualifications_filter:
                     states["qualifications"], _qualification_evidence = _spider_qualifications_match(
                         candidate,
                         qualifications_filter,
-                        require_all=bool(safe_filters.get("strict")),
+                        require_all=safe_filters.get("qualifications_mode") == "all",
                     )
                 if residential_filter:
                     states["residential"], _residential_evidence = _spider_residential_match(
@@ -7103,7 +7111,6 @@ def jobadder_spider_search():
                         safe_filters.get("salary_min"),
                         safe_filters.get("salary_max"),
                         include_missing=bool(safe_filters.get("include_missing_salary")),
-                        currency=safe_filters.get("salary_currency"),
                     )
                 return states
 
@@ -7481,16 +7488,18 @@ def jobadder_spider_search():
             "detail_only_excluded": detail_excluded_count,
             "ranking_pool": len(preliminary),
             "estimated_candidate_api_request_ceiling": (resume_budget * 2) + detail_budget + custom_field_detail_requests,
-            "industry_filter_active": bool(canonical_industry),
+            "industry_filter_active": bool(canonical_industries),
             "industry_filter_field_id": industry_field_id,
-            "industry_filter_scanned": discovered_count if canonical_industry else 0,
+            "industry_filter_mode": safe_filters.get("industry_mode"),
+            "industry_filter_scanned": discovered_count if canonical_industries else 0,
             "industry_filter_matched": (filter_stats.get("industry") or {}).get("matched", 0),
             "industry_filter_excluded": (filter_stats.get("industry") or {}).get("excluded", 0),
             "industry_filter_unavailable": (filter_stats.get("industry") or {}).get("unavailable", 0),
             "industry_embedded_records": (filter_stats.get("industry") or {}).get("embedded", 0),
-            "industry_detail_requests": custom_field_detail_requests if canonical_industry else 0,
+            "industry_detail_requests": custom_field_detail_requests if canonical_industries else 0,
             "it_skills_filter_active": bool(it_skills_filter),
             "it_skills_filter_field_id": SPIDER_IT_SKILLS_FIELD_ID,
+            "it_skills_filter_mode": safe_filters.get("it_skills_mode"),
             "it_skills_filter_scanned": discovered_count if it_skills_filter else 0,
             "it_skills_filter_matched": (filter_stats.get("it_skills") or {}).get("matched", 0),
             "it_skills_filter_excluded": (filter_stats.get("it_skills") or {}).get("excluded", 0),
@@ -7499,6 +7508,7 @@ def jobadder_spider_search():
             "it_skills_detail_requests": custom_field_detail_requests if it_skills_filter else 0,
             "qualifications_filter_active": bool(qualifications_filter),
             "qualifications_filter_field_id": SPIDER_QUALIFICATIONS_FIELD_ID,
+            "qualifications_filter_mode": safe_filters.get("qualifications_mode"),
             "qualifications_filter_matched": (filter_stats.get("qualifications") or {}).get("matched", 0),
             "qualifications_filter_excluded": (filter_stats.get("qualifications") or {}).get("excluded", 0),
             "residential_filter_active": bool(residential_filter),
@@ -7509,7 +7519,6 @@ def jobadder_spider_search():
             "country_filter_matched": (filter_stats.get("country") or {}).get("matched", 0),
             "country_filter_excluded": (filter_stats.get("country") or {}).get("excluded", 0),
             "salary_filter_active": salary_filter_active,
-            "salary_filter_currency": safe_filters.get("salary_currency") if salary_filter_active else "",
             "salary_filter_matched": (filter_stats.get("salary") or {}).get("matched", 0),
             "salary_filter_excluded": (filter_stats.get("salary") or {}).get("excluded", 0),
             "salary_include_missing": bool(safe_filters.get("include_missing_salary")),
@@ -7519,7 +7528,7 @@ def jobadder_spider_search():
             "minimum_fit_percent": 10,
             "fit_scoring": "JD + recruiter Boolean/must-haves; latest resume text where available",
             "workflow": "JobAdder latest-resume keyword discovery, exact selected eligibility filters, then 0-100 job-scope fit",
-            "note": "City/State alone is sent as JobAdder Location. Country is matched locally against the candidate's JobAdder country/location data. Industry, IT Skills, Residential Status and Professional Qualifications are matched against tenant custom fields #1/#2, #3, #5 and #7. Expected monthly salary is matched against the selected minimum/maximum range; candidates without salary are retained only when Include candidates without salary details is selected. CV Studio requests JobAdder's supported Embed=self candidate representation and fetches individual detail only when a required value is absent. Recruiter Boolean is attempted as written, including NOT. If JobAdder returns zero rows, CV Studio labels a positive-term fallback and excludes visible NOT matches conservatively; negative-only searches have no unsafe fallback. Eligibility filters run before resume scoring, ranking and truncation.",
+            "note": "City/State alone is sent as JobAdder Location. Country is matched locally against the candidate's JobAdder country/location data. Industry, IT Skills, Residential Status and Professional Qualifications are matched against tenant custom fields #1/#2, #3, #5 and #7. Each multi-select category applies its own Any/All rule. Expected monthly salary is matched numerically against the selected minimum/maximum range without using Currency as a hard filter; candidates without salary are retained only when Include candidates without salary details is selected. CV Studio requests JobAdder's supported Embed=self candidate representation and fetches individual detail only when a required value is absent. Recruiter Boolean is attempted as written, including NOT. If JobAdder returns zero rows, CV Studio labels a positive-term fallback and excludes visible NOT matches conservatively; negative-only searches have no unsafe fallback. Eligibility filters run before resume scoring, ranking and truncation.",
             "pagination_incomplete": bool(search_meta.get("incomplete")),
             "pagination_warnings": list(search_meta.get("warnings") or [])[:5],
             "pages": search_meta.get("pages"),

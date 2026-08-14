@@ -223,7 +223,7 @@ class AdditionalEligibilityMatchingTests(unittest.TestCase):
             ("match_missing", "not provided (included)"),
         )
 
-    def test_expected_salary_requires_matching_currency(self):
+    def test_expected_salary_does_not_require_matching_or_present_currency(self):
         candidate = {
             "employment": {
                 "ideal": {
@@ -234,10 +234,37 @@ class AdditionalEligibilityMatchingTests(unittest.TestCase):
         status, evidence = score._spider_salary_match(
             candidate, 7000, 9000, currency="MYR"
         )
-        self.assertEqual(status, "mismatch")
-        self.assertIn("SGD does not match MYR", evidence)
+        self.assertEqual(status, "match")
+        self.assertIn("SGD", evidence)
         self.assertEqual(
-            score._spider_salary_match(candidate, 7000, 9000, currency="SGD")[0],
+            score._spider_salary_match(candidate, 7000, 9000, currency="")[0],
+            "match",
+        )
+        candidate["employment"]["ideal"]["salary"].pop("currency")
+        self.assertEqual(
+            score._spider_salary_match(candidate, 7000, 9000)[0],
+            "match",
+        )
+
+    def test_industry_multi_select_supports_independent_any_and_all_modes(self):
+        candidate = {
+            "custom": [
+                {"fieldId": 1, "name": "Industry", "value": ["Financial Services"]},
+                {"fieldId": 2, "name": "Industry Sub-Category", "value": ["FSI - Insurance"]},
+            ]
+        }
+        selected = ["Financial Services", "Life Science/Medical"]
+        self.assertEqual(score._spider_industry_match(candidate, selected)[0], "match")
+        self.assertEqual(
+            score._spider_industry_match(candidate, selected, require_all=True)[0],
+            "mismatch",
+        )
+        self.assertEqual(
+            score._spider_industry_match(
+                candidate,
+                ["Financial Services", "FSI - Insurance"],
+                require_all=True,
+            )[0],
             "match",
         )
 
@@ -588,6 +615,67 @@ class IndustryRouteTests(unittest.TestCase):
         self.assertEqual(summary["excluded_count"], 1)
         fetch_detail.assert_not_called()
 
+    def test_multi_select_any_and_all_modes_are_applied_per_category(self):
+        summaries = [self._summary(1), self._summary(2)]
+        summaries[0]["custom"] = [
+            {"fieldId": 1, "name": "Industry", "value": ["Financial Services"]},
+            {"fieldId": 3, "name": "IT Skills", "value": ["Python"]},
+            {"fieldId": 7, "name": "Professional Qualifications", "value": ["PMP"]},
+        ]
+        summaries[1]["custom"] = [
+            {"fieldId": 2, "name": "Industry Sub-Category", "value": ["FSI - Insurance"]},
+            {"fieldId": 3, "name": "IT Skills", "value": ["Python", "AWS"]},
+            {"fieldId": 7, "name": "Professional Qualifications", "value": ["PMP", "CFA"]},
+        ]
+        metadata = {
+            "mode": "plain",
+            "query": "Python",
+            "returned": 2,
+            "search": {
+                "reported_total": 2,
+                "warnings": [],
+                "pages": 1,
+                "embed_self_applied": True,
+            },
+        }
+        with mock.patch.object(
+            app, "_ja_refresh_access_token", return_value="fixture-token"
+        ), mock.patch.object(
+            app,
+            "_spider_plain_keyword_jobadder_candidates",
+            return_value=(summaries, metadata),
+        ), mock.patch.object(
+            app, "_spider_fetch_candidate_detail"
+        ) as fetch_detail, mock.patch.object(
+            app, "_spider_fetch_candidate_resume_text", return_value=("", "")
+        ):
+            response = app.app.test_client().post(
+                "/jobadder/spider_search",
+                json={
+                    "query": "Python",
+                    "limit": 2,
+                    "filters": {
+                        "must": "Python",
+                        "industry": ["Financial Services", "FSI - Insurance"],
+                        "industry_mode": "any",
+                        "it_skills": ["Python", "AWS"],
+                        "it_skills_mode": "all",
+                        "qualifications": ["PMP", "CFA"],
+                        "qualifications_mode": "all",
+                    },
+                },
+                headers=self._request_headers(),
+            )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()
+        self.assertEqual([item["candidateId"] for item in payload["items"]], [2])
+        summary = payload["filter_summary"]
+        self.assertEqual(summary["industry_filter_mode"], "any")
+        self.assertEqual(summary["it_skills_filter_mode"], "all")
+        self.assertEqual(summary["qualifications_filter_mode"], "all")
+        self.assertEqual(summary["industry_filter_field_id"], [1, 2])
+        fetch_detail.assert_not_called()
+
     def test_country_residential_qualifications_and_salary_filter_before_ranking(self):
         summaries = [self._summary(1), self._summary(2)]
         for item in summaries:
@@ -608,7 +696,6 @@ class IndustryRouteTests(unittest.TestCase):
             item["employment"] = {
                 "ideal": {
                     "salary": {
-                        "currency": "MYR",
                         "ratePer": "Month",
                         "rateLow": 8000 if passing else 15000,
                     }
@@ -643,7 +730,6 @@ class IndustryRouteTests(unittest.TestCase):
                         "qualifications": "PMP",
                         "salary_min": 7000,
                         "salary_max": 9000,
-                        "salary_currency": "MYR",
                         "include_missing_salary": False,
                     },
                 },
@@ -678,24 +764,17 @@ class IndustryRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("cannot exceed", response.get_json()["error"])
 
-    def test_salary_currency_and_numeric_text_are_validated(self):
+    def test_salary_numeric_text_is_validated_without_currency(self):
         client = app.app.test_client()
         with mock.patch.object(app, "_ja_refresh_access_token", return_value="fixture-token"):
-            missing_currency = client.post(
-                "/jobadder/spider_search",
-                json={"query": "Python", "filters": {"salary_min": 7000}},
-                headers=self._request_headers(),
-            )
             malformed_number = client.post(
                 "/jobadder/spider_search",
                 json={
                     "query": "Python",
-                    "filters": {"salary_min": "1e4", "salary_currency": "MYR"},
+                    "filters": {"salary_min": "1e4"},
                 },
                 headers=self._request_headers(),
             )
-        self.assertEqual(missing_currency.status_code, 400)
-        self.assertIn("salary currency", missing_currency.get_json()["error"])
         self.assertEqual(malformed_number.status_code, 400)
         self.assertIn("non-negative number", malformed_number.get_json()["error"])
 
@@ -736,7 +815,6 @@ class IndustryRouteTests(unittest.TestCase):
                         "must": "Python",
                         "salary_min": 7000,
                         "salary_max": 9000,
-                        "salary_currency": "MYR",
                         "include_missing_salary": True,
                     },
                 },

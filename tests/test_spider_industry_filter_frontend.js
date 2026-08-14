@@ -10,6 +10,10 @@ const source = fs.readFileSync(
   'utf8'
 );
 const indexSource = fs.readFileSync(path.resolve(__dirname, '..', 'index.html'), 'utf8');
+const cssSource = fs.readFileSync(
+  path.resolve(__dirname, '..', 'vendor', 'cvstudio', 'app.css'),
+  'utf8'
+);
 
 function functionBlock(name, nextMarker) {
   const marker = 'function ' + name + '(';
@@ -93,11 +97,25 @@ for (const removedId of [
   assert.ok(!indexSource.includes('id="' + removedId + '"'), removedId + ' must be removed');
 }
 for (const requiredId of [
-  'theSpiderSalaryCurrency', 'theSpiderSalaryMin',
-  'theSpiderSalaryMax', 'theSpiderIncludeMissingSalary'
+  'theSpiderSalaryMin', 'theSpiderSalaryMax', 'theSpiderIncludeMissingSalary',
+  'theSpiderIndustryChips', 'theSpiderIndustryMode',
+  'theSpiderItSkillsChips', 'theSpiderItSkillsMode',
+  'theSpiderQualificationsChips', 'theSpiderQualificationsMode'
 ]) {
   assert.ok(indexSource.includes('id="' + requiredId + '"'), requiredId + ' must be present');
 }
+assert.ok(!indexSource.includes('id="theSpiderSalaryCurrency"'), 'salary Currency must not be a crawler filter');
+assert.ok(source.includes("industry: getTheSpiderMultiValues('industry')"));
+assert.ok(source.includes("it_skills: getTheSpiderMultiValues('it_skills')"));
+assert.ok(source.includes("qualifications: getTheSpiderMultiValues('qualifications')"));
+assert.ok(source.includes("industry_mode: getTheSpiderMatchMode('industry')"));
+assert.ok(source.includes("it_skills_mode: getTheSpiderMatchMode('it_skills')"));
+assert.ok(source.includes("qualifications_mode: getTheSpiderMatchMode('qualifications')"));
+assert.ok(indexSource.includes('All means the candidate must meet every selected industry.'));
+assert.ok(indexSource.includes('Any means the candidate may meet either one of the selected IT skills.'));
+assert.ok(indexSource.includes('Any means the candidate may meet either one of the selected qualifications.'));
+assert.ok(cssSource.includes('.spider-multi-field.expanded{grid-column:1/-1;}'));
+assert.ok(cssSource.includes('.spider-salary-field{grid-column:1/-1;}'));
 assert.ok(indexSource.includes('Use NOT here to exclude terms.'));
 
 console.log('spider JobAdder eligibility frontend corrective tests passed');

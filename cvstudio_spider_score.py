@@ -789,9 +789,13 @@ def _spider_item_score(candidate, filters, enriched=False):
     blob_low = blob.lower()
     unknown, excluded, hard_passed = [], [], []
 
-    industry = str(filters.get("industry") or "").strip()
+    industry = _spider_terms(filters.get("industry"), 24)
     if industry:
-        industry_status, industry_evidence = _spider_industry_match(candidate, industry)
+        industry_status, industry_evidence = _spider_industry_match(
+            candidate,
+            industry,
+            require_all=str(filters.get("industry_mode") or "any").casefold() == "all",
+        )
         if industry_status == "match":
             hard_passed.append("industry: " + industry_evidence)
         elif industry_status == "invalid":
@@ -805,10 +809,12 @@ def _spider_item_score(candidate, filters, enriched=False):
             # detail before ranking only when an embedded row omits the field.
             unknown.append("industry requires JobAdder candidate detail")
 
-    it_skills = str(filters.get("it_skills") or filters.get("skills") or "").strip()
+    it_skills = _spider_terms(filters.get("it_skills") or filters.get("skills"), 24)
     if it_skills:
         skills_status, skills_evidence = _spider_it_skills_match(
-            candidate, it_skills, require_all=bool(filters.get("strict"))
+            candidate,
+            it_skills,
+            require_all=str(filters.get("it_skills_mode") or "any").casefold() == "all",
         )
         if skills_status == "match":
             hard_passed.append("IT skills: " + skills_evidence)
@@ -830,12 +836,12 @@ def _spider_item_score(candidate, filters, enriched=False):
         if fallback_negative_terms:
             unknown.append("Boolean NOT terms not fully visible in available profile data")
 
-    qualifications = str(filters.get("qualifications") or "").strip()
+    qualifications = _spider_terms(filters.get("qualifications"), 24)
     if qualifications:
         qualification_status, qualification_evidence = _spider_qualifications_match(
             candidate,
             qualifications,
-            require_all=bool(filters.get("strict")),
+            require_all=str(filters.get("qualifications_mode") or "any").casefold() == "all",
         )
         if qualification_status == "match":
             hard_passed.append("qualifications: " + qualification_evidence)
@@ -877,7 +883,6 @@ def _spider_item_score(candidate, filters, enriched=False):
         filters.get("salary_min"),
         filters.get("salary_max"),
         include_missing=bool(filters.get("include_missing_salary")),
-        currency=filters.get("salary_currency"),
     )
     if salary_status in {"match", "match_missing"}:
         hard_passed.append("expected salary: " + salary_evidence)
@@ -1110,20 +1115,54 @@ def _spider_industry_custom_values(candidate, field_id, expected_labels=None):
     return values
 
 
-def _spider_industry_match(candidate, selected):
-    """Return exact JobAdder Industry eligibility state and safe evidence."""
-    field_id, canonical = _spider_industry_filter_spec(selected)
-    if not str(selected or "").strip():
+def _spider_industry_match(candidate, selected, require_all=False):
+    """Match one or more exact JobAdder Industry values.
+
+    A selection can contain both broad Industry values (custom field #1) and
+    Industry Sub-Category values (custom field #2). ``require_all=False``
+    accepts a candidate matching any selected value; ``True`` requires every
+    selected value. Unknown values stay unknown when a detail fetch could still
+    prove a match.
+    """
+    selected_terms = _spider_terms(selected, 24)
+    if not selected_terms:
         return "inactive", ""
-    if field_id is None:
-        return "invalid", str(selected or "").strip()
-    values = _spider_industry_custom_values(candidate, field_id)
-    canonical_key = re.sub(r"\s+", " ", canonical).strip().casefold()
-    if any(re.sub(r"\s+", " ", value).strip().casefold() == canonical_key for value in values):
-        return "match", canonical
-    if values:
-        return "mismatch", ", ".join(values[:4])
-    return "unknown", canonical
+
+    states = []
+    evidence = []
+    for term in selected_terms:
+        field_id, canonical = _spider_industry_filter_spec(term)
+        if field_id is None:
+            return "invalid", str(term or "").strip()
+        values = _spider_industry_custom_values(candidate, field_id)
+        canonical_key = re.sub(r"\s+", " ", canonical).strip().casefold()
+        if any(
+            re.sub(r"\s+", " ", value).strip().casefold() == canonical_key
+            for value in values
+        ):
+            states.append("match")
+            evidence.append(canonical)
+        elif values:
+            states.append("mismatch")
+            evidence.extend(values[:4])
+        else:
+            states.append("unknown")
+            evidence.append(canonical)
+
+    if require_all:
+        if "mismatch" in states:
+            state = "mismatch"
+        elif "unknown" in states:
+            state = "unknown"
+        else:
+            state = "match"
+    elif "match" in states:
+        state = "match"
+    elif "unknown" in states:
+        state = "unknown"
+    else:
+        state = "mismatch"
+    return state, ", ".join(dict.fromkeys(evidence))[:500]
 
 
 # This repository's JobAdder tenant defines its searchable IT Skills list as
@@ -1338,40 +1377,37 @@ def _spider_salary_match(
     include_missing=False,
     currency="",
 ):
-    """Match the candidate's expected monthly salary against a selected range."""
+    """Match expected monthly salary numerically, without a currency hard gate.
+
+    JobAdder profiles frequently omit the Currency custom field. The crawler's
+    salary range therefore compares the available monthly number and never
+    rejects or hides an otherwise usable salary solely because its currency is
+    absent or differs. ``currency`` remains accepted for older callers but is
+    deliberately ignored.
+    """
     lower = _spider_salary_bound(minimum)
     upper = _spider_salary_bound(maximum)
     if lower is None and upper is None:
         return "inactive", ""
-    selected_currency = _spider_salary_currency(currency)
-    if not selected_currency:
-        return "invalid", "salary currency is required"
     candidate_low, candidate_high, display, candidate_currency = _spider_expected_salary_range(candidate)
     if candidate_low is None or candidate_high is None:
         if include_missing:
             return "match_missing", "not provided (included)"
         return "unknown", "not provided"
-    if not candidate_currency:
-        return "unknown", "currency not provided"
-    if candidate_currency != selected_currency:
-        return "mismatch", "{} does not match {}".format(
-            candidate_currency,
-            selected_currency,
-        )
     if lower is not None and candidate_high < lower:
-        return "mismatch", "{} {} below minimum {}".format(
-            candidate_currency,
+        return "mismatch", "{}{} below minimum {}".format(
+            (candidate_currency + " ") if candidate_currency else "",
             candidate_high,
             lower,
         )
     if upper is not None and candidate_low > upper:
-        return "mismatch", "{} {} above maximum {}".format(
-            candidate_currency,
+        return "mismatch", "{}{} above maximum {}".format(
+            (candidate_currency + " ") if candidate_currency else "",
             candidate_low,
             upper,
         )
-    return "match", display or "{} {} to {} monthly".format(
-        candidate_currency,
+    return "match", display or "{}{} to {} monthly".format(
+        (candidate_currency + " ") if candidate_currency else "",
         candidate_low,
         candidate_high,
     )

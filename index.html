@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>CV Studio</title>
 <link rel="icon" type="image/png" href="cv_studio_logo.png?v=24.6.79-ui"/>
-<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.336">
-<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.336"></script>
+<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.337">
+<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.337"></script>
 <script>
 /* CV Studio Doctor — built-in diagnostic recorder.
  * Records JS errors, unhandled rejections, failed/slow network calls and
@@ -254,7 +254,7 @@
 <div class="app">
   <div class="header" style="position:relative;">
     <div>
-      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.336 (Offline) by The 郭 Lab</span></h1>
+      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.337 (Offline) by The 郭 Lab</span></h1>
 
     </div>
     <div class="header-tools">
@@ -971,10 +971,10 @@
               <div><div class="spider-label">Country</div><select id="theSpiderCountry" class="spider-select"><option>Malaysia</option><option>Singapore</option><option>Indonesia</option><option>Philippines</option><option>Brunei</option><option>India</option><option>Thailand</option><option>Vietnam</option><option>Cambodia</option><option>Laos</option><option>Myanmar</option><option>China</option><option>Hong Kong</option><option>Taiwan</option><option>Japan</option><option>South Korea</option><option>Australia</option><option>New Zealand</option><option>United Arab Emirates</option><option>United Kingdom</option><option>United States</option></select></div>
               <div><div class="spider-label">City / State <span style="font-weight:400;color:var(--text3);">(optional)</span></div><input id="theSpiderCityState" class="spider-input" placeholder="Example: Kuala Lumpur"></div>
               <div><div class="spider-label">Residential Status</div><select id="theSpiderResidential" class="spider-select"><option value="Any">Any</option><option>Local Citizen</option><option>Permanent Resident</option><option>Expat – No Visa Required</option><option>Expat – Work Visa Required</option></select></div>
-              <div><div class="spider-label">Industry</div><input id="theSpiderIndustry" class="spider-input" list="theSpiderIndustryOptions" placeholder=""><datalist id="theSpiderIndustryOptions"></datalist></div>
-              <div><div class="spider-label">IT Skills</div><input id="theSpiderItSkills" class="spider-input" list="theSpiderItSkillOptions" placeholder=""><datalist id="theSpiderItSkillOptions"></datalist></div>
-              <div><div class="spider-label">Qualifications</div><input id="theSpiderQualifications" class="spider-input" list="theSpiderQualificationOptions" placeholder=""><datalist id="theSpiderQualificationOptions"></datalist></div>
-              <div><div class="spider-label">Expected Monthly Salary</div><div style="display:grid;grid-template-columns:88px 1fr 1fr;gap:8px;"><select id="theSpiderSalaryCurrency" class="spider-select" aria-label="Salary currency"><option selected>MYR</option><option>SGD</option><option>USD</option><option>AUD</option><option>EUR</option><option>GBP</option><option>BND</option><option>KHR</option><option>IDR</option><option>LAK</option><option>MMK</option><option>PHP</option><option>THB</option><option>VND</option><option>CNY</option><option>HKD</option><option>TWD</option><option>JPY</option><option>KRW</option><option>INR</option><option>NZD</option><option>AED</option></select><input id="theSpiderSalaryMin" class="spider-input" type="number" min="0" step="100" placeholder="Minimum"><input id="theSpiderSalaryMax" class="spider-input" type="number" min="0" step="100" placeholder="Maximum"></div><label style="display:flex;align-items:center;gap:7px;margin-top:8px;font-size:11px;color:var(--text2);"><input id="theSpiderIncludeMissingSalary" type="checkbox" checked> Include candidates without salary details</label></div>
+              <div class="spider-multi-field" data-spider-multi-field="industry"><div class="spider-label-row"><div class="spider-label">Industry</div><button type="button" id="theSpiderIndustryMode" class="spider-match-mode" data-mode="any" aria-pressed="false" data-tooltip="All means the candidate must meet every selected industry. Any means the candidate may meet either one of the selected industries." title="All means the candidate must meet every selected industry. Any means the candidate may meet either one of the selected industries." onclick="toggleTheSpiderMatchMode('industry')">Any</button></div><div class="spider-multi-control"><div id="theSpiderIndustryChips" class="spider-multi-chips"></div><input id="theSpiderIndustry" class="spider-multi-input" list="theSpiderIndustryOptions" placeholder="Select industries" autocomplete="off" oninput="maybeAddTheSpiderMultiSelection('industry')" onkeydown="handleTheSpiderMultiKey(event,'industry')" aria-label="Add Industry"></div><datalist id="theSpiderIndustryOptions"></datalist></div>
+              <div class="spider-multi-field" data-spider-multi-field="it_skills"><div class="spider-label-row"><div class="spider-label">IT Skills</div><button type="button" id="theSpiderItSkillsMode" class="spider-match-mode" data-mode="any" aria-pressed="false" data-tooltip="All means the candidate must meet every selected IT skill. Any means the candidate may meet either one of the selected IT skills." title="All means the candidate must meet every selected IT skill. Any means the candidate may meet either one of the selected IT skills." onclick="toggleTheSpiderMatchMode('it_skills')">Any</button></div><div class="spider-multi-control"><div id="theSpiderItSkillsChips" class="spider-multi-chips"></div><input id="theSpiderItSkills" class="spider-multi-input" list="theSpiderItSkillOptions" placeholder="Select IT skills" autocomplete="off" oninput="maybeAddTheSpiderMultiSelection('it_skills')" onkeydown="handleTheSpiderMultiKey(event,'it_skills')" aria-label="Add IT Skill"></div><datalist id="theSpiderItSkillOptions"></datalist></div>
+              <div class="spider-multi-field" data-spider-multi-field="qualifications"><div class="spider-label-row"><div class="spider-label">Qualifications</div><button type="button" id="theSpiderQualificationsMode" class="spider-match-mode" data-mode="any" aria-pressed="false" data-tooltip="All means the candidate must meet every selected qualification. Any means the candidate may meet either one of the selected qualifications." title="All means the candidate must meet every selected qualification. Any means the candidate may meet either one of the selected qualifications." onclick="toggleTheSpiderMatchMode('qualifications')">Any</button></div><div class="spider-multi-control"><div id="theSpiderQualificationsChips" class="spider-multi-chips"></div><input id="theSpiderQualifications" class="spider-multi-input" list="theSpiderQualificationOptions" placeholder="Select qualifications" autocomplete="off" oninput="maybeAddTheSpiderMultiSelection('qualifications')" onkeydown="handleTheSpiderMultiKey(event,'qualifications')" aria-label="Add Qualification"></div><datalist id="theSpiderQualificationOptions"></datalist></div>
+              <div class="spider-salary-field"><div class="spider-label">Expected Monthly Salary</div><div class="spider-salary-range"><input id="theSpiderSalaryMin" class="spider-input" type="number" min="0" step="100" placeholder="Minimum" aria-label="Minimum expected monthly salary"><input id="theSpiderSalaryMax" class="spider-input" type="number" min="0" step="100" placeholder="Maximum" aria-label="Maximum expected monthly salary"></div><label style="display:flex;align-items:center;gap:7px;margin-top:8px;font-size:11px;color:var(--text2);"><input id="theSpiderIncludeMissingSalary" type="checkbox" checked> Include candidates without salary details</label></div>
               <div><div class="spider-label">Years of Experience</div><div class="spider-years-range" aria-label="Years of experience range"><div class="spider-years-track"><span id="theSpiderYearsFill" class="spider-years-fill"></span></div><input id="theSpiderYearsMin" type="range" min="0" max="40" value="0" aria-label="Minimum years of experience" oninput="updateTheSpiderYearsRange('min')"><input id="theSpiderYearsMax" type="range" min="0" max="40" value="40" aria-label="Maximum years of experience" oninput="updateTheSpiderYearsRange('max')"></div><div class="spider-range-meta"><span id="theSpiderYearsLabel">Any years</span><span>0–40+</span></div></div>
             </div>
             <div><div class="spider-label">Boolean Rules / Keywords</div><textarea id="theSpiderMust" class="spider-ta" style="min-height:66px" placeholder='Example: SAP AND (BW OR BPC) NOT internship' oninput="refreshTheSpiderBooleanHighlights()"></textarea><div class="spider-mini-help">JD is optional. Use NOT here to exclude terms. AI Crawler sends the complete Boolean expression to JobAdder's latest-resume keyword search; JobAdder's website may also scan older documents, notes and skill fields, so it can show more.</div></div>
@@ -2252,33 +2252,33 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
-<script src="/vendor/cvstudio/api-transport.js?v=v24.6.336"></script>
-<script src="/vendor/cvstudio/page-nav.js?v=v24.6.336"></script>
-<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.336"></script>
-<script src="/vendor/cvstudio/create-profile.js?v=v24.6.336"></script>
-<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.336"></script>
-<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.336"></script>
-<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.336"></script>
-<script src="/vendor/cvstudio/company-profile.js?v=v24.6.336"></script>
-<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.336"></script>
-<script src="/vendor/cvstudio/appearance.js?v=v24.6.336"></script>
-<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.336"></script>
-<script src="/vendor/cvstudio/docx-export.js?v=v24.6.336"></script>
-<script src="/vendor/cvstudio/the-owl.js?v=v24.6.336"></script>
-<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.336"></script>
-<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.336"></script>
-<script src="/vendor/cvstudio/settings.js?v=v24.6.336"></script>
-<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.336"></script>
-<script src="/vendor/cvstudio/tab-status.js?v=v24.6.336"></script>
-<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.336"></script>
-<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.336"></script>
-<script src="/vendor/cvstudio/cv-format.js?v=v24.6.336"></script>
-<script src="/vendor/cvstudio/locks.js?v=v24.6.336"></script>
-<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.336"></script>
-<script src="/vendor/cvstudio/ppc.js?v=v24.6.336"></script>
-<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.336"></script>
-<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.336"></script>
-<script src="/vendor/cvstudio/batch-format.js?v=v24.6.336"></script>
+<script src="/vendor/cvstudio/api-transport.js?v=v24.6.337"></script>
+<script src="/vendor/cvstudio/page-nav.js?v=v24.6.337"></script>
+<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.337"></script>
+<script src="/vendor/cvstudio/create-profile.js?v=v24.6.337"></script>
+<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.337"></script>
+<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.337"></script>
+<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.337"></script>
+<script src="/vendor/cvstudio/company-profile.js?v=v24.6.337"></script>
+<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.337"></script>
+<script src="/vendor/cvstudio/appearance.js?v=v24.6.337"></script>
+<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.337"></script>
+<script src="/vendor/cvstudio/docx-export.js?v=v24.6.337"></script>
+<script src="/vendor/cvstudio/the-owl.js?v=v24.6.337"></script>
+<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.337"></script>
+<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.337"></script>
+<script src="/vendor/cvstudio/settings.js?v=v24.6.337"></script>
+<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.337"></script>
+<script src="/vendor/cvstudio/tab-status.js?v=v24.6.337"></script>
+<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.337"></script>
+<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.337"></script>
+<script src="/vendor/cvstudio/cv-format.js?v=v24.6.337"></script>
+<script src="/vendor/cvstudio/locks.js?v=v24.6.337"></script>
+<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.337"></script>
+<script src="/vendor/cvstudio/ppc.js?v=v24.6.337"></script>
+<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.337"></script>
+<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.337"></script>
+<script src="/vendor/cvstudio/batch-format.js?v=v24.6.337"></script>
 <script>
 
 document.addEventListener('DOMContentLoaded', initPageNavPin);
@@ -2296,9 +2296,9 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 
 </script>
-<script src="/vendor/cvstudio/input-file.js?v=v24.6.336"></script>
-<script src="/vendor/cvstudio/stats.js?v=v24.6.336"></script>
-<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.336"></script>
+<script src="/vendor/cvstudio/input-file.js?v=v24.6.337"></script>
+<script src="/vendor/cvstudio/stats.js?v=v24.6.337"></script>
+<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.337"></script>
 <script>
 try { updateSummaryLockUI(); } catch(e) {}
 try { updateCvScoringLockUI(); } catch(e) {}
