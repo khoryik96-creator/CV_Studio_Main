@@ -120,6 +120,7 @@ function getTheSpiderInputs() {
     industry: val('theSpiderIndustry'),
     it_skills: val('theSpiderItSkills'),
     qualifications: val('theSpiderQualifications'),
+    salary_currency: val('theSpiderSalaryCurrency') || 'MYR',
     salary_min: val('theSpiderSalaryMin'),
     salary_max: val('theSpiderSalaryMax'),
     include_missing_salary: !!(document.getElementById('theSpiderIncludeMissingSalary') || {}).checked,
@@ -141,6 +142,7 @@ function buildTheSpiderSearchFilters(inp) {
     industry: inp.industry || '',
     it_skills: inp.it_skills || '',
     qualifications: inp.qualifications || '',
+    salary_currency: inp.salary_currency || 'MYR',
     salary_min: inp.salary_min || '',
     salary_max: inp.salary_max || '',
     include_missing_salary: !!inp.include_missing_salary,
@@ -339,7 +341,7 @@ function cleanTheSpiderPrompt(prompt, inp) {
     .replace('\nTarget/source companies:\n' + inp.targets, '')
     .replace(
       '\nSalary/budget: ' + inp.salary,
-      '\nExpected monthly salary: ' + (inp.salary_min || 'No minimum') + ' to ' + (inp.salary_max || 'No maximum') + '; include missing salary: ' + (inp.include_missing_salary ? 'Yes' : 'No')
+      '\nExpected monthly salary: ' + (inp.salary_currency || 'MYR') + ' ' + (inp.salary_min || 'No minimum') + ' to ' + (inp.salary_max || 'No maximum') + '; include missing salary: ' + (inp.include_missing_salary ? 'Yes' : 'No')
     )
     .replace(
       '- Industry, salary/budget and target/source companies can guide searches and notes, but do not treat them as fit-score criteria.',
@@ -2294,7 +2296,9 @@ async function runTheSpiderJobAdderSearch(opts) {
     if (authoredBoolean) {
       queries = buildTheSpiderDiscoveryQueries(spiderInputs).slice(0,1);
     } else {
-      queries = buildTheSpiderFallbackQueries(spiderInputs).slice(0,1);
+      // Keep the first AI-generated JobAdder query. Rebuilding here from the
+      // raw JD can accidentally use a company/header line instead of the role.
+      queries = queries.slice(0,1);
     }
   }
   if (!queries.length) { markTabFailed('thespider', tabRunToken, {forceBrowser:true}); showToast('Add a JD or Boolean Rules / Keywords first', 'err'); return; }
@@ -2392,6 +2396,7 @@ function clearTheSpider() {
   var yearsMin=document.getElementById('theSpiderYearsMin'); if(yearsMin) yearsMin.value='0'; var yearsMax=document.getElementById('theSpiderYearsMax'); if(yearsMax) yearsMax.value='40'; updateTheSpiderYearsRange();
   var country=document.getElementById('theSpiderCountry'); if(country) country.value='Malaysia';
   var residential=document.getElementById('theSpiderResidential'); if(residential) residential.value='Any';
+  var salaryCurrency=document.getElementById('theSpiderSalaryCurrency'); if(salaryCurrency) salaryCurrency.value='MYR';
   var includeMissingSalary=document.getElementById('theSpiderIncludeMissingSalary'); if(includeMissingSalary) includeMissingSalary.checked=true;
   ['theSpiderOutput','theSpiderSearchOutput'].forEach(function(id){ var el=document.getElementById(id); if(el) el.classList.remove('show'); });
   ['theSpiderBody','theSpiderSearchBody'].forEach(function(id){ var el=document.getElementById(id); if(el) el.innerHTML=''; });

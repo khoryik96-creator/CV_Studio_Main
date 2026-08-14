@@ -11,6 +11,7 @@ or provider access. Depends only on the stateless field helpers already
 extracted into ``cvstudio_spider_boolean``. This module never imports ``app``.
 """
 
+import math
 import re
 
 from cvstudio_spider_boolean import (
@@ -876,9 +877,12 @@ def _spider_item_score(candidate, filters, enriched=False):
         filters.get("salary_min"),
         filters.get("salary_max"),
         include_missing=bool(filters.get("include_missing_salary")),
+        currency=filters.get("salary_currency"),
     )
     if salary_status in {"match", "match_missing"}:
         hard_passed.append("expected salary: " + salary_evidence)
+    elif salary_status == "invalid":
+        return False, 0, [], unknown, [salary_evidence], hard_passed, []
     elif salary_status == "mismatch":
         return False, 0, [], unknown, ["expected salary mismatch: " + salary_evidence[:120]], hard_passed, []
     elif salary_status == "unknown" and not enriched:
@@ -1208,18 +1212,54 @@ def _spider_salary_bound(value):
     """Return a non-negative numeric monthly salary bound or ``None``."""
     if value in (None, ""):
         return None
-    text = re.sub(r"[^0-9.\-]", "", str(value).replace(",", ""))
+    if isinstance(value, bool):
+        return None
+    text = str(value).strip()
+    if not re.fullmatch(
+        r"(?:\d{1,3}(?:,\d{3})+(?:\.\d*)?|\d+(?:\.\d*)?|\.\d+)",
+        text,
+    ):
+        return None
     try:
-        number = float(text)
+        number = float(text.replace(",", ""))
     except (TypeError, ValueError):
         return None
-    return number if number >= 0 else None
+    return number if math.isfinite(number) and number >= 0 else None
+
+
+def _spider_salary_currency(value):
+    """Return an uppercase ISO-style currency code when one is visible."""
+    if isinstance(value, dict):
+        for key in ("code", "value", "name", "label"):
+            code = _spider_salary_currency(value.get(key))
+            if code:
+                return code
+        return ""
+    text = re.sub(r"\s+", " ", str(value or "")).strip().upper()
+    if re.fullmatch(r"[A-Z]{3}", text):
+        return text
+    match = re.search(r"\(([A-Z]{3})\)\s*$", text)
+    return match.group(1) if match else ""
+
+
+def _spider_candidate_salary_currency(candidate):
+    """Read the tenant Currency field when the salary object omits its code."""
+    values = _spider_industry_custom_values(
+        candidate,
+        4,
+        expected_labels=("Currency",),
+    )
+    for value in values:
+        code = _spider_salary_currency(value)
+        if code:
+            return code
+    return ""
 
 
 def _spider_expected_salary_range(candidate):
-    """Return expected monthly low/high values and display text when available."""
+    """Return expected monthly low/high values, display text, and currency."""
     if not isinstance(candidate, dict):
-        return None, None, ""
+        return None, None, "", ""
     sources = [candidate, candidate.get("_spiderDetail")]
     for key in ("self", "candidate"):
         if isinstance(candidate.get(key), dict):
@@ -1267,10 +1307,16 @@ def _spider_expected_salary_range(candidate):
                 "year": 1.0 / 12.0,
             }.get(rate_per, 1.0)
             snapshot = (_spider_card_fields(source) or {}).get("expectedSalary") or {}
+            currency = (
+                _spider_salary_currency(salary.get("currency") or salary.get("currencyCode"))
+                or _spider_salary_currency(snapshot.get("currency"))
+                or _spider_candidate_salary_currency(candidate)
+            )
             return (
                 min(low, high) * factor,
                 max(low, high) * factor,
                 str(snapshot.get("display") or "").strip(),
+                currency,
             )
     expected = (_spider_card_fields(candidate) or {}).get("expectedSalary")
     value = expected.get("sort") if isinstance(expected, dict) else None
@@ -1278,25 +1324,57 @@ def _spider_expected_salary_range(candidate):
         value = float(value)
     except (TypeError, ValueError):
         value = None
-    return value, value, str((expected or {}).get("display") or "").strip()
+    currency = (
+        _spider_salary_currency((expected or {}).get("currency"))
+        or _spider_candidate_salary_currency(candidate)
+    )
+    return value, value, str((expected or {}).get("display") or "").strip(), currency
 
 
-def _spider_salary_match(candidate, minimum=None, maximum=None, include_missing=False):
+def _spider_salary_match(
+    candidate,
+    minimum=None,
+    maximum=None,
+    include_missing=False,
+    currency="",
+):
     """Match the candidate's expected monthly salary against a selected range."""
     lower = _spider_salary_bound(minimum)
     upper = _spider_salary_bound(maximum)
     if lower is None and upper is None:
         return "inactive", ""
-    candidate_low, candidate_high, display = _spider_expected_salary_range(candidate)
+    selected_currency = _spider_salary_currency(currency)
+    if not selected_currency:
+        return "invalid", "salary currency is required"
+    candidate_low, candidate_high, display, candidate_currency = _spider_expected_salary_range(candidate)
     if candidate_low is None or candidate_high is None:
         if include_missing:
             return "match_missing", "not provided (included)"
         return "unknown", "not provided"
+    if not candidate_currency:
+        return "unknown", "currency not provided"
+    if candidate_currency != selected_currency:
+        return "mismatch", "{} does not match {}".format(
+            candidate_currency,
+            selected_currency,
+        )
     if lower is not None and candidate_high < lower:
-        return "mismatch", "{} below minimum {}".format(candidate_high, lower)
+        return "mismatch", "{} {} below minimum {}".format(
+            candidate_currency,
+            candidate_high,
+            lower,
+        )
     if upper is not None and candidate_low > upper:
-        return "mismatch", "{} above maximum {}".format(candidate_low, upper)
-    return "match", display or "{} to {} monthly".format(candidate_low, candidate_high)
+        return "mismatch", "{} {} above maximum {}".format(
+            candidate_currency,
+            candidate_low,
+            upper,
+        )
+    return "match", display or "{} {} to {} monthly".format(
+        candidate_currency,
+        candidate_low,
+        candidate_high,
+    )
 
 
 def _spider_option_fallbacks(name):

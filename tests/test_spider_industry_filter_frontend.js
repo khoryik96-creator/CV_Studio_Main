@@ -42,6 +42,11 @@ assert.ok(
   searchBody.includes('filters:spiderFilters'),
   'the selected Industry must still be sent to the backend filter contract'
 );
+assert.ok(
+  searchBody.includes('queries = queries.slice(0,1)') &&
+    !searchBody.includes('else {\n      queries = buildTheSpiderFallbackQueries(spiderInputs).slice(0,1);'),
+  'exact filters must limit, not replace, the AI-generated JobAdder query'
+);
 
 const context = {
   window: {},
@@ -88,7 +93,8 @@ for (const removedId of [
   assert.ok(!indexSource.includes('id="' + removedId + '"'), removedId + ' must be removed');
 }
 for (const requiredId of [
-  'theSpiderSalaryMin', 'theSpiderSalaryMax', 'theSpiderIncludeMissingSalary'
+  'theSpiderSalaryCurrency', 'theSpiderSalaryMin',
+  'theSpiderSalaryMax', 'theSpiderIncludeMissingSalary'
 ]) {
   assert.ok(indexSource.includes('id="' + requiredId + '"'), requiredId + ' must be present');
 }

@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.334"
+_INSTALL_RECEIPT_VERSION = "v24.6.335"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -341,7 +341,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.334"
+_CVSTUDIO_VERSION = "v24.6.335"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -6914,6 +6914,7 @@ def jobadder_spider_search():
         "qualifications": str(filters.get("qualifications") or "")[:1200],
         "salary_min": _spider_salary_bound(salary_min_raw),
         "salary_max": _spider_salary_bound(salary_max_raw),
+        "salary_currency": str(filters.get("salary_currency") or "").strip().upper()[:8],
         "include_missing_salary": bool(filters.get("include_missing_salary")),
         "years": _spider_min_years_value(filters.get("years_min") if filters.get("years_min") is not None else (filters.get("years") or filters.get("experience_years"))),
         "years_min": _spider_min_years_value(filters.get("years_min") if filters.get("years_min") is not None else (filters.get("years") or filters.get("experience_years"))),
@@ -6956,6 +6957,12 @@ def jobadder_spider_search():
         safe_filters.get("salary_min") is not None
         or safe_filters.get("salary_max") is not None
     )
+    if salary_filter_active and not re.fullmatch(
+        r"[A-Z]{3}", safe_filters.get("salary_currency") or ""
+    ):
+        return jsonify({
+            "error": "Select a three-letter salary currency before applying salary bounds."
+        }), 400
     eligibility_filters_active = bool(
         canonical_industry
         or it_skills_filter
@@ -7030,6 +7037,12 @@ def jobadder_spider_search():
             raw_items = []
 
         discovered_count = len(raw_items)
+        eligibility_search_meta = (
+            boolean_meta.get("search", {}) if isinstance(boolean_meta, dict) else {}
+        )
+        embedded_self_complete = bool(
+            eligibility_search_meta.get("embed_self_applied")
+        )
         custom_filter_detail_map = {}
         custom_filter_excluded_count = 0
         custom_field_detail_requests = 0
@@ -7090,6 +7103,7 @@ def jobadder_spider_search():
                         safe_filters.get("salary_min"),
                         safe_filters.get("salary_max"),
                         include_missing=bool(safe_filters.get("include_missing_salary")),
+                        currency=safe_filters.get("salary_currency"),
                     )
                 return states
 
@@ -7098,11 +7112,14 @@ def jobadder_spider_search():
             for item in raw_items:
                 states = eligibility_filter_states(item)
                 for name, status in states.items():
-                    if status in {"match", "mismatch"}:
+                    if status in {"match", "match_missing", "mismatch"}:
                         filter_stats[name]["embedded"] += 1
                 active_states = list(states.values())
                 cid = _spider_candidate_id(item)
-                if active_states and all(status == "match" for status in active_states):
+                terminal_matches = {"match"}
+                if embedded_self_complete:
+                    terminal_matches.add("match_missing")
+                if active_states and all(status in terminal_matches for status in active_states):
                     if cid:
                         # Embed=self is already the full candidate detail; retain
                         # it so Stage 3 does not read the same profile.
@@ -7111,6 +7128,11 @@ def jobadder_spider_search():
                 if "mismatch" in active_states:
                     # A visible mismatch cannot become eligible by fetching a
                     # second representation of the same candidate.
+                    continue
+                if embedded_self_complete:
+                    # Embed=self is the complete candidate representation. An
+                    # absent required value is genuinely unavailable, so a
+                    # second request for the same candidate cannot add it.
                     continue
                 if cid and cid not in detail_id_seen:
                     detail_id_seen.add(cid)
@@ -7487,6 +7509,7 @@ def jobadder_spider_search():
             "country_filter_matched": (filter_stats.get("country") or {}).get("matched", 0),
             "country_filter_excluded": (filter_stats.get("country") or {}).get("excluded", 0),
             "salary_filter_active": salary_filter_active,
+            "salary_filter_currency": safe_filters.get("salary_currency") if salary_filter_active else "",
             "salary_filter_matched": (filter_stats.get("salary") or {}).get("matched", 0),
             "salary_filter_excluded": (filter_stats.get("salary") or {}).get("excluded", 0),
             "salary_include_missing": bool(safe_filters.get("include_missing_salary")),

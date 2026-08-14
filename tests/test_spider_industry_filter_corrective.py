@@ -201,8 +201,8 @@ class AdditionalEligibilityMatchingTests(unittest.TestCase):
                 }
             }
         }
-        self.assertEqual(score._spider_salary_match(candidate, 7000, 9000)[0], "match")
-        self.assertEqual(score._spider_salary_match(candidate, 9000, 12000)[0], "mismatch")
+        self.assertEqual(score._spider_salary_match(candidate, 7000, 9000, currency="MYR")[0], "match")
+        self.assertEqual(score._spider_salary_match(candidate, 9000, 12000, currency="MYR")[0], "mismatch")
         range_candidate = {
             "employment": {
                 "ideal": {
@@ -215,13 +215,36 @@ class AdditionalEligibilityMatchingTests(unittest.TestCase):
                 }
             }
         }
-        self.assertEqual(score._spider_salary_match(range_candidate, 9000, 12000)[0], "match")
-        self.assertEqual(score._spider_salary_match(range_candidate, 11000, 12000)[0], "mismatch")
-        self.assertEqual(score._spider_salary_match({}, 7000, 9000)[0], "unknown")
+        self.assertEqual(score._spider_salary_match(range_candidate, 9000, 12000, currency="MYR")[0], "match")
+        self.assertEqual(score._spider_salary_match(range_candidate, 11000, 12000, currency="MYR")[0], "mismatch")
+        self.assertEqual(score._spider_salary_match({}, 7000, 9000, currency="MYR")[0], "unknown")
         self.assertEqual(
-            score._spider_salary_match({}, 7000, 9000, include_missing=True),
+            score._spider_salary_match({}, 7000, 9000, include_missing=True, currency="MYR"),
             ("match_missing", "not provided (included)"),
         )
+
+    def test_expected_salary_requires_matching_currency(self):
+        candidate = {
+            "employment": {
+                "ideal": {
+                    "salary": {"currency": "SGD", "ratePer": "Month", "rateLow": 8000}
+                }
+            }
+        }
+        status, evidence = score._spider_salary_match(
+            candidate, 7000, 9000, currency="MYR"
+        )
+        self.assertEqual(status, "mismatch")
+        self.assertIn("SGD does not match MYR", evidence)
+        self.assertEqual(
+            score._spider_salary_match(candidate, 7000, 9000, currency="SGD")[0],
+            "match",
+        )
+
+    def test_salary_bounds_reject_text_that_would_change_numeric_meaning(self):
+        self.assertEqual(score._spider_salary_bound("10,000"), 10000.0)
+        self.assertIsNone(score._spider_salary_bound("1e4"))
+        self.assertIsNone(score._spider_salary_bound("abc100"))
 
 
 class IndustryRouteTests(unittest.TestCase):
@@ -620,6 +643,7 @@ class IndustryRouteTests(unittest.TestCase):
                         "qualifications": "PMP",
                         "salary_min": 7000,
                         "salary_max": 9000,
+                        "salary_currency": "MYR",
                         "include_missing_salary": False,
                     },
                 },
@@ -643,20 +667,50 @@ class IndustryRouteTests(unittest.TestCase):
                 "/jobadder/spider_search",
                 json={
                     "query": "Python",
-                    "filters": {"salary_min": 10000, "salary_max": 5000},
+                    "filters": {
+                        "salary_min": 10000,
+                        "salary_max": 5000,
+                        "salary_currency": "MYR",
+                    },
                 },
                 headers=self._request_headers(),
             )
         self.assertEqual(response.status_code, 400)
         self.assertIn("cannot exceed", response.get_json()["error"])
 
-    def test_include_missing_salary_keeps_candidate_after_detail_check(self):
+    def test_salary_currency_and_numeric_text_are_validated(self):
+        client = app.app.test_client()
+        with mock.patch.object(app, "_ja_refresh_access_token", return_value="fixture-token"):
+            missing_currency = client.post(
+                "/jobadder/spider_search",
+                json={"query": "Python", "filters": {"salary_min": 7000}},
+                headers=self._request_headers(),
+            )
+            malformed_number = client.post(
+                "/jobadder/spider_search",
+                json={
+                    "query": "Python",
+                    "filters": {"salary_min": "1e4", "salary_currency": "MYR"},
+                },
+                headers=self._request_headers(),
+            )
+        self.assertEqual(missing_currency.status_code, 400)
+        self.assertIn("salary currency", missing_currency.get_json()["error"])
+        self.assertEqual(malformed_number.status_code, 400)
+        self.assertIn("non-negative number", malformed_number.get_json()["error"])
+
+    def test_include_missing_salary_reuses_complete_embedded_candidate(self):
         summaries = [self._summary(1)]
         metadata = {
             "mode": "plain",
             "query": "Python",
             "returned": 1,
-            "search": {"reported_total": 1, "warnings": [], "pages": 1},
+            "search": {
+                "reported_total": 1,
+                "warnings": [],
+                "pages": 1,
+                "embed_self_applied": True,
+            },
         }
         detail = {
             "candidateId": 1,
@@ -682,6 +736,7 @@ class IndustryRouteTests(unittest.TestCase):
                         "must": "Python",
                         "salary_min": 7000,
                         "salary_max": 9000,
+                        "salary_currency": "MYR",
                         "include_missing_salary": True,
                     },
                 },
@@ -692,7 +747,7 @@ class IndustryRouteTests(unittest.TestCase):
         self.assertEqual([item["candidateId"] for item in payload["items"]], [1])
         self.assertEqual(payload["filter_summary"]["salary_filter_matched"], 1)
         self.assertTrue(payload["filter_summary"]["salary_include_missing"])
-        fetch_detail.assert_called_once_with("fixture-token", "1")
+        fetch_detail.assert_not_called()
 
     def test_unknown_industry_value_is_rejected(self):
         with mock.patch.object(app, "_ja_refresh_access_token", return_value="fixture-token"):
