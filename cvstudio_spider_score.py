@@ -800,10 +800,23 @@ def _spider_item_score(candidate, filters, enriched=False):
         elif enriched:
             return False, 0, [], unknown, ["industry not visible in JobAdder custom field"], hard_passed, []
         else:
-            # Candidate list rows do not contain custom fields. The route loads
-            # full detail for every discovered row before ranking when Industry
-            # is selected, then calls this helper again with enriched=True.
+            # Embed=self normally carries custom fields. The route loads full
+            # detail before ranking only when an embedded row omits the field.
             unknown.append("industry requires JobAdder candidate detail")
+
+    it_skills = str(filters.get("it_skills") or filters.get("skills") or "").strip()
+    if it_skills:
+        skills_status, skills_evidence = _spider_it_skills_match(
+            candidate, it_skills, require_all=bool(filters.get("strict"))
+        )
+        if skills_status == "match":
+            hard_passed.append("IT skills: " + skills_evidence)
+        elif skills_status == "mismatch":
+            return False, 0, [], unknown, ["IT skills mismatch: " + skills_evidence[:160]], hard_passed, []
+        elif enriched:
+            return False, 0, [], unknown, ["IT Skills not visible in JobAdder custom field"], hard_passed, []
+        else:
+            unknown.append("IT Skills require JobAdder candidate detail")
 
     # Only the separate Exclude/Avoid field is rechecked locally.
     # Native JobAdder Boolean rules (including NOT) are trusted as returned and are
@@ -842,7 +855,6 @@ def _spider_item_score(candidate, filters, enriched=False):
 
     # Existing explicit hard filters remain eligibility gates, not fit-score points.
     try:
-        hard_filter_terms("IT skills", filters.get("it_skills") or filters.get("skills"), 24, bool(filters.get("strict")))
         hard_filter_terms("qualifications", filters.get("qualifications"), 18, False)
     except ValueError as e:
         return False, 0, [], unknown, [str(e)], hard_passed, []
@@ -1012,10 +1024,15 @@ def _spider_industry_filter_spec(value):
     return None, ""
 
 
-def _spider_industry_custom_values(candidate, field_id):
+def _spider_industry_custom_values(candidate, field_id, expected_labels=None):
     """Read the selected JobAdder custom field values from candidate detail."""
     if not isinstance(candidate, dict):
         return []
+    expected_label_keys = {
+        re.sub(r"[^a-z0-9]", "", str(label or "").casefold())
+        for label in (expected_labels or [])
+        if str(label or "").strip()
+    }
 
     def flatten_values(value, depth=0):
         if value is None or depth > 5:
@@ -1074,6 +1091,16 @@ def _spider_industry_custom_values(candidate, field_id):
                 continue
             if item_field_id != int(field_id):
                 continue
+            item_label = str(
+                item.get("name") or item.get("label") or item.get("fieldName") or ""
+            ).strip()
+            if (
+                expected_label_keys
+                and item_label
+                and re.sub(r"[^a-z0-9]", "", item_label.casefold())
+                not in expected_label_keys
+            ):
+                continue
             for raw_value in flatten_values(item.get("value")):
                 text = re.sub(r"\s+", " ", str(raw_value or "")).strip()
                 key = text.casefold()
@@ -1097,6 +1124,36 @@ def _spider_industry_match(candidate, selected):
     if values:
         return "mismatch", ", ".join(values[:4])
     return "unknown", canonical
+
+
+# This repository's JobAdder tenant defines its searchable IT Skills list as
+# candidate custom field #3 (between Industry fields #1/#2 and Currency #4).
+SPIDER_IT_SKILLS_FIELD_ID = 3
+
+
+def _spider_it_skills_match(candidate, selected, require_all=False):
+    """Match selected dropdown values against JobAdder IT Skills field #3."""
+    selected_terms = _spider_terms(selected, 24)
+    if not selected_terms:
+        return "inactive", ""
+    values = _spider_industry_custom_values(
+        candidate,
+        SPIDER_IT_SKILLS_FIELD_ID,
+        expected_labels=("IT Skills",),
+    )
+    if not values:
+        return "unknown", ", ".join(selected_terms)
+    value_lookup = {
+        re.sub(r"\s+", " ", value).strip().casefold(): value for value in values
+    }
+    matched = [
+        value_lookup.get(re.sub(r"\s+", " ", term).strip().casefold())
+        for term in selected_terms
+    ]
+    matched = [value for value in matched if value]
+    if (require_all and len(matched) == len(selected_terms)) or (not require_all and matched):
+        return "match", ", ".join(matched[:8])
+    return "mismatch", ", ".join(values[:8])
 
 
 def _spider_option_fallbacks(name):

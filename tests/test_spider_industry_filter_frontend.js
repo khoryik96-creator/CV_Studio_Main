@@ -28,8 +28,12 @@ assert.ok(
   'Industry must never be inserted into latest-resume keyword queries'
 );
 assert.ok(
-  searchBody.includes('if (spiderInputs.industry)'),
-  'Industry searches must use one discovery query before exact backend filtering'
+  !fallbackBody.includes('terms(inp.it_skills)') && !discoveryBody.includes('inp.it_skills'),
+  'IT Skills must never be inserted into latest-resume keyword queries'
+);
+assert.ok(
+  searchBody.includes('if (spiderInputs.industry || spiderInputs.it_skills)'),
+  'custom-field searches must use one discovery query before exact backend filtering'
 );
 assert.ok(
   searchBody.includes('filters:spiderFilters'),
@@ -60,6 +64,15 @@ const roleQueries = context.buildTheSpiderFallbackQueries({
 });
 assert.ok(roleQueries.includes('"Software Engineer"'));
 assert.ok(roleQueries.every((query) => !query.includes('Financial Services')));
+
+const itSkillQueries = context.buildTheSpiderFallbackQueries({
+  role: 'Software Engineer',
+  industry: '',
+  must: '', nice: '', it_skills: 'Python', qualifications: '', adjacent: false,
+  use_owl: false, jd: ''
+});
+assert.ok(itSkillQueries.includes('"Software Engineer"'));
+assert.ok(itSkillQueries.every((query) => !query.includes('Python')));
 
 const booleanQueries = context.buildTheSpiderDiscoveryQueries({
   role: 'Software Engineer',

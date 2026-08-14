@@ -267,13 +267,15 @@ function buildTheSpiderFallbackQueries(inp) {
   function terms(v){ return splitTheSpiderKeywordTerms(v); }
   function quote(x){ x=String(x||'').trim(); return /\s/.test(x) && !/^".*"$/.test(x) ? '"' + x + '"' : x; }
   var mustRaw = normaliseTheSpiderBooleanRule(inp.must);
-  var must = terms(inp.must), nice = terms(inp.nice), itSkills = terms(inp.it_skills), quals = terms(inp.qualifications);
+  var must = terms(inp.must), nice = terms(inp.nice), quals = terms(inp.qualifications);
   var role = inp.role ? '"' + inp.role + '"' : '';
   if (mustRaw && hasTheSpiderBooleanSyntax(mustRaw)) {
     if (role) add(role + ' AND (' + mustRaw + ')');
     add(mustRaw);
   }
-  var hard = (hasTheSpiderBooleanSyntax(mustRaw) ? [] : must).concat(itSkills).concat(quals);
+  // Industry and IT Skills are exact JobAdder custom-field filters. They must
+  // not narrow latest-resume keyword discovery before the backend checks them.
+  var hard = (hasTheSpiderBooleanSyntax(mustRaw) ? [] : must).concat(quals);
   if (role && hard.length) add([role].concat(hard.slice(0,5).map(quote)).join(' AND '));
   if (role) add(role);
   if (hard.length) add(hard.slice(0,7).map(quote).join(' AND '));
@@ -2241,10 +2243,11 @@ async function runTheSpiderJobAdderSearch(opts) {
     ? [authoredBoolean]
     : ((window._theSpiderQueries && window._theSpiderQueries.length) ? window._theSpiderQueries.slice(0,4) : buildTheSpiderFallbackQueries(spiderInputs).slice(0,4));
   if (!queries.length) { queries = buildTheSpiderFallbackQueries(spiderInputs).slice(0,4); }
-  if (spiderInputs.industry) {
-    // Industry is an exact backend eligibility check against JobAdder custom
-    // field #1/#2, never a latest-resume keyword. Use one independent discovery
-    // query so the same bounded candidate pool is not detail-scanned repeatedly.
+  if (spiderInputs.industry || spiderInputs.it_skills) {
+    // Industry and IT Skills are exact backend eligibility checks against
+    // JobAdder custom fields #1/#2/#3, never latest-resume keywords. Use one
+    // independent discovery query so the same bounded candidate pool is not
+    // custom-field-scanned repeatedly.
     if (authoredBoolean) {
       queries = buildTheSpiderDiscoveryQueries(spiderInputs).slice(0,1);
     } else if (spiderInputs.role) {
