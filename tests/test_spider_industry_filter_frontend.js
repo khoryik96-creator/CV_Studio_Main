@@ -1,0 +1,161 @@
+'use strict';
+
+const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+
+const source = fs.readFileSync(
+  path.resolve(__dirname, '..', 'vendor', 'cvstudio', 'ai-crawler.js'),
+  'utf8'
+);
+const indexSource = fs.readFileSync(path.resolve(__dirname, '..', 'index.html'), 'utf8');
+const cssSource = fs.readFileSync(
+  path.resolve(__dirname, '..', 'vendor', 'cvstudio', 'app.css'),
+  'utf8'
+);
+
+function functionBlock(name, nextMarker) {
+  const marker = 'function ' + name + '(';
+  const start = source.indexOf(marker);
+  assert.ok(start >= 0, name + ' must remain present');
+  const next = source.indexOf(nextMarker, start + marker.length);
+  assert.ok(next >= 0, name + ' end marker must remain present');
+  return source.slice(start, next >= 0 ? next : source.length);
+}
+
+const fallbackBody = functionBlock('buildTheSpiderFallbackQueries', 'function buildTheSpiderDiscoveryQueries(');
+const discoveryBody = functionBlock('buildTheSpiderDiscoveryQueries', 'async function generateTheSpider(');
+const searchBody = functionBlock('runTheSpiderJobAdderSearch', 'function copyTheSpiderReport(');
+const eligibilityGuardBody = functionBlock('normaliseTheSpiderEligibilityText', 'function getTheSpiderInputs(');
+const summaryBody = functionBlock('renderTheSpiderFilterSummary', 'function getTheSpiderOwlContext(');
+
+assert.ok(
+  !fallbackBody.includes('inp.industry') && !discoveryBody.includes('inp.industry'),
+  'Industry must never be inserted into latest-resume keyword queries'
+);
+assert.ok(
+  !fallbackBody.includes('terms(inp.it_skills)') && !discoveryBody.includes('inp.it_skills'),
+  'IT Skills must never be inserted into latest-resume keyword queries'
+);
+assert.ok(
+  searchBody.includes('spiderInputs.qualifications') &&
+    searchBody.includes('spiderInputs.residential') &&
+    searchBody.includes('spiderInputs.salary_min'),
+  'all profile eligibility filters must use one discovery query before exact backend filtering'
+);
+assert.ok(
+  searchBody.includes('filters:spiderFilters'),
+  'the selected Industry must still be sent to the backend filter contract'
+);
+assert.ok(
+  searchBody.includes('queries = queries.slice(0,1)') &&
+    !searchBody.includes('else {\n      queries = buildTheSpiderFallbackQueries(spiderInputs).slice(0,1);'),
+  'exact filters must limit, not replace, the AI-generated JobAdder query'
+);
+
+const context = {
+  window: {},
+  normaliseTheSpiderBooleanRule(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim();
+  },
+  splitTheSpiderKeywordTerms(value) {
+    return String(value || '').split(/[,;\n]+/).map((item) => item.trim()).filter(Boolean);
+  },
+  hasTheSpiderBooleanSyntax(value) {
+    return /\b(?:AND|OR|NOT)\b|[()"']/i.test(String(value || ''));
+  },
+  parseTheSpiderQueries() { return []; },
+  getTheSpiderInputs() { return {}; }
+};
+vm.runInNewContext(fallbackBody + '\n' + discoveryBody, context);
+
+const eligibilityContext = {};
+vm.runInNewContext(eligibilityGuardBody, eligibilityContext);
+const safeGeneratedQueries = eligibilityContext.filterTheSpiderGeneratedQueries([
+  'Finance Manager AND "Financial Services"',
+  'Finance Manager AND ACCA',
+  'Finance Manager AND 4100',
+  'Finance Manager AND reporting'
+], {
+  country: 'Malaysia', residential: 'Any',
+  industry: ['Financial Services'], it_skills: [], qualifications: ['ACCA'],
+  salary_min: '4100', salary_max: ''
+});
+assert.deepStrictEqual(Array.from(safeGeneratedQueries), ['Finance Manager AND reporting']);
+assert.ok(
+  source.includes('Never add those selected eligibility values to JobAdder keyword search strings'),
+  'the AI prompt must describe exact eligibility filters as separate from keyword discovery'
+);
+
+const summaryContext = {
+  esc(value) { return String(value == null ? '' : value); }
+};
+vm.runInNewContext(summaryBody, summaryContext);
+const renderedSummary = summaryContext.renderTheSpiderFilterSummary({
+  reported_total: 100, scanned: 100, excluded_count: 99, kept: 1,
+  mode: 'plain', pagination_warnings: [],
+  industry_filter_active: true, industry_filter_mode: 'any',
+  industry_filter_matched: 20, industry_filter_excluded: 80,
+  qualifications_filter_active: true, qualifications_filter_mode: 'all',
+  qualifications_filter_matched: 1, qualifications_filter_excluded: 19,
+  qualifications_filter_unavailable: 80
+});
+assert.ok(renderedSummary.includes('Exact filter breakdown'));
+assert.ok(renderedSummary.includes('Industry · ANY'));
+assert.ok(renderedSummary.includes('matched 20 · excluded 80'));
+assert.ok(renderedSummary.includes('Qualifications · ALL'));
+assert.ok(renderedSummary.includes('unavailable 80'));
+
+const filterQueries = context.buildTheSpiderFallbackQueries({
+  industry: 'Financial Services',
+  must: 'Software Engineer', it_skills: 'Python', qualifications: 'PMP',
+  use_owl: false, jd: ''
+});
+assert.ok(filterQueries.includes('"Software Engineer"'));
+assert.ok(filterQueries.every((query) => !query.includes('Financial Services')));
+assert.ok(filterQueries.every((query) => !query.includes('Python')));
+assert.ok(filterQueries.every((query) => !query.includes('PMP')));
+
+const booleanQueries = context.buildTheSpiderDiscoveryQueries({
+  industry: 'Financial Services',
+  must: 'Python AND AWS NOT internship',
+  strict: true
+});
+assert.deepStrictEqual(Array.from(booleanQueries), ['Python AND AWS NOT internship']);
+
+const jdOnlyQueries = context.buildTheSpiderFallbackQueries({
+  must: '', use_owl: false, jd: 'Job Description\nSenior Accountant'
+});
+assert.deepStrictEqual(Array.from(jdOnlyQueries), ['"Senior Accountant"']);
+
+for (const removedId of [
+  'theSpiderRole', 'theSpiderNice', 'theSpiderExclude',
+  'theSpiderTargets', 'theSpiderIncludeAdjacent', 'theSpiderSalary'
+]) {
+  assert.ok(!indexSource.includes('id="' + removedId + '"'), removedId + ' must be removed');
+}
+for (const requiredId of [
+  'theSpiderSalaryMin', 'theSpiderSalaryMax', 'theSpiderIncludeMissingSalary',
+  'theSpiderIndustryChips', 'theSpiderIndustryMode',
+  'theSpiderItSkillsChips', 'theSpiderItSkillsMode',
+  'theSpiderQualificationsChips', 'theSpiderQualificationsMode'
+]) {
+  assert.ok(indexSource.includes('id="' + requiredId + '"'), requiredId + ' must be present');
+}
+assert.ok(!indexSource.includes('id="theSpiderSalaryCurrency"'), 'salary Currency must not be a crawler filter');
+assert.ok(source.includes("industry: getTheSpiderMultiValues('industry')"));
+assert.ok(source.includes("it_skills: getTheSpiderMultiValues('it_skills')"));
+assert.ok(source.includes("qualifications: getTheSpiderMultiValues('qualifications')"));
+assert.ok(source.includes("industry_mode: getTheSpiderMatchMode('industry')"));
+assert.ok(source.includes("it_skills_mode: getTheSpiderMatchMode('it_skills')"));
+assert.ok(source.includes("qualifications_mode: getTheSpiderMatchMode('qualifications')"));
+assert.ok(indexSource.includes('All means the candidate must meet every selected industry.'));
+assert.ok(indexSource.includes('Any means the candidate may meet either one of the selected IT skills.'));
+assert.ok(indexSource.includes('Any means the candidate may meet either one of the selected qualifications.'));
+assert.ok(cssSource.includes('.spider-multi-field.expanded{grid-column:1/-1;}'));
+assert.ok(cssSource.includes('.spider-salary-field{grid-column:1/-1;}'));
+assert.ok(cssSource.includes('.spider-filter-breakdown-row{'));
+assert.ok(indexSource.includes('Use NOT here to exclude terms.'));
+
+console.log('spider JobAdder eligibility frontend corrective tests passed');

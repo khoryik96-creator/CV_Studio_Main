@@ -110,51 +110,208 @@ function setTheSpiderOutputTab(which) {
 function showTheSpiderPanel(which) {
   setTheSpiderOutputTab(which || 'notes');
 }
+var THE_SPIDER_MULTI_CONFIG = {
+  industry: {input:'theSpiderIndustry', chips:'theSpiderIndustryChips', options:'theSpiderIndustryOptions', mode:'theSpiderIndustryMode', placeholder:'Select industries'},
+  it_skills: {input:'theSpiderItSkills', chips:'theSpiderItSkillsChips', options:'theSpiderItSkillOptions', mode:'theSpiderItSkillsMode', placeholder:'Select IT skills'},
+  qualifications: {input:'theSpiderQualifications', chips:'theSpiderQualificationsChips', options:'theSpiderQualificationOptions', mode:'theSpiderQualificationsMode', placeholder:'Select qualifications'}
+};
+function getTheSpiderMultiStore() {
+  if (!window._theSpiderMultiSelections || typeof window._theSpiderMultiSelections !== 'object') {
+    window._theSpiderMultiSelections = {industry:[], it_skills:[], qualifications:[]};
+  }
+  return window._theSpiderMultiSelections;
+}
+function getTheSpiderMultiValues(key) {
+  var values = getTheSpiderMultiStore()[key];
+  return Array.isArray(values) ? values.slice(0,24) : [];
+}
+function getTheSpiderMatchMode(key) {
+  var cfg = THE_SPIDER_MULTI_CONFIG[key] || {};
+  var button = document.getElementById(cfg.mode || '');
+  return button && button.dataset.mode === 'all' ? 'all' : 'any';
+}
+function renderTheSpiderMultiSelection(key) {
+  var cfg = THE_SPIDER_MULTI_CONFIG[key];
+  if (!cfg) return;
+  var values = getTheSpiderMultiValues(key);
+  var chips = document.getElementById(cfg.chips);
+  var input = document.getElementById(cfg.input);
+  if (chips) {
+    chips.innerHTML = '';
+    values.forEach(function(value, index){
+      var chip = document.createElement('span');
+      chip.className = 'spider-multi-chip';
+      var label = document.createElement('span');
+      label.textContent = value;
+      var remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'spider-multi-remove';
+      remove.textContent = '\u00d7';
+      remove.setAttribute('aria-label', 'Remove ' + value);
+      remove.addEventListener('click', function(){ removeTheSpiderMultiSelection(key, index); });
+      chip.appendChild(label);
+      chip.appendChild(remove);
+      chips.appendChild(chip);
+    });
+  }
+  if (input) input.placeholder = values.length ? 'Add another' : cfg.placeholder;
+  var field = input && input.closest ? input.closest('.spider-multi-field') : null;
+  if (field) field.classList.toggle('expanded', values.length >= 3);
+}
+function addTheSpiderMultiSelection(key, showInvalid) {
+  var cfg = THE_SPIDER_MULTI_CONFIG[key];
+  if (!cfg) return false;
+  var input = document.getElementById(cfg.input);
+  var list = document.getElementById(cfg.options);
+  var typed = String((input || {}).value || '').trim();
+  if (!typed) return false;
+  var canonical = '';
+  Array.prototype.forEach.call((list && list.options) || [], function(option){
+    var value = String(option.value || '').trim();
+    if (!canonical && value.toLowerCase() === typed.toLowerCase()) canonical = value;
+  });
+  if (!canonical) {
+    if (showInvalid && typeof showToast === 'function') showToast('Choose a value from the available list.', 'err');
+    return false;
+  }
+  var store = getTheSpiderMultiStore();
+  var values = getTheSpiderMultiValues(key);
+  if (!values.some(function(value){ return value.toLowerCase() === canonical.toLowerCase(); })) {
+    if (values.length >= 24) {
+      if (typeof showToast === 'function') showToast('You can select up to 24 values in each filter.', 'err');
+      return false;
+    }
+    values.push(canonical);
+    store[key] = values;
+  }
+  if (input) input.value = '';
+  renderTheSpiderMultiSelection(key);
+  return true;
+}
+function maybeAddTheSpiderMultiSelection(key) {
+  addTheSpiderMultiSelection(key, false);
+}
+function handleTheSpiderMultiKey(event, key) {
+  if (!event) return;
+  var cfg = THE_SPIDER_MULTI_CONFIG[key] || {};
+  var input = document.getElementById(cfg.input || '');
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    addTheSpiderMultiSelection(key, true);
+  } else if (event.key === 'Backspace' && input && !input.value) {
+    var values = getTheSpiderMultiValues(key);
+    if (values.length) removeTheSpiderMultiSelection(key, values.length - 1);
+  }
+}
+function removeTheSpiderMultiSelection(key, index) {
+  var store = getTheSpiderMultiStore();
+  var values = getTheSpiderMultiValues(key);
+  if (index >= 0 && index < values.length) values.splice(index, 1);
+  store[key] = values;
+  renderTheSpiderMultiSelection(key);
+}
+function toggleTheSpiderMatchMode(key) {
+  var cfg = THE_SPIDER_MULTI_CONFIG[key] || {};
+  var button = document.getElementById(cfg.mode || '');
+  if (!button) return;
+  var mode = button.dataset.mode === 'all' ? 'any' : 'all';
+  button.dataset.mode = mode;
+  button.textContent = mode === 'all' ? 'All' : 'Any';
+  button.setAttribute('aria-pressed', mode === 'all' ? 'true' : 'false');
+}
+function clearTheSpiderMultiSelections() {
+  window._theSpiderMultiSelections = {industry:[], it_skills:[], qualifications:[]};
+  Object.keys(THE_SPIDER_MULTI_CONFIG).forEach(function(key){
+    var cfg = THE_SPIDER_MULTI_CONFIG[key];
+    var input = document.getElementById(cfg.input);
+    var button = document.getElementById(cfg.mode);
+    if (input) input.value = '';
+    if (button) { button.dataset.mode = 'any'; button.textContent = 'Any'; button.setAttribute('aria-pressed', 'false'); }
+    renderTheSpiderMultiSelection(key);
+  });
+}
+function theSpiderSelectionText(value) {
+  return Array.isArray(value) ? value.join(', ') : String(value || '');
+}
+function normaliseTheSpiderEligibilityText(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function theSpiderQueryUsesEligibilityValue(query, inp) {
+  inp = inp || {};
+  var haystack = ' ' + normaliseTheSpiderEligibilityText(query) + ' ';
+  var selected = [];
+  [inp.industry, inp.it_skills, inp.qualifications].forEach(function(values){
+    if (Array.isArray(values)) selected = selected.concat(values);
+  });
+  [inp.country, inp.residential].forEach(function(value){
+    value = String(value || '').trim();
+    if (value && value.toLowerCase() !== 'any') selected.push(value);
+  });
+  if (selected.some(function(value){
+    var needle = normaliseTheSpiderEligibilityText(value);
+    return needle && haystack.indexOf(' ' + needle + ' ') >= 0;
+  })) return true;
+  var numericTokens = String(query || '').replace(/,/g, '').match(/\b\d+(?:\.\d+)?\b/g) || [];
+  return [inp.salary_min, inp.salary_max].some(function(value){
+    var number = String(value || '').replace(/,/g, '').trim();
+    return number && numericTokens.indexOf(number) >= 0;
+  });
+}
+function filterTheSpiderGeneratedQueries(queries, inp) {
+  return (Array.isArray(queries) ? queries : []).filter(function(query){
+    return !theSpiderQueryUsesEligibilityValue(query, inp);
+  });
+}
 function getTheSpiderInputs() {
   function val(id){ var el=document.getElementById(id); return el ? String(el.value || '').trim() : ''; }
   return {
     jd: val('theSpiderJdText'),
-    role: val('theSpiderRole'),
     country: val('theSpiderCountry') || 'Malaysia',
     city_state: val('theSpiderCityState'),
     residential: val('theSpiderResidential') || 'Any',
-    industry: val('theSpiderIndustry'),
-    it_skills: val('theSpiderItSkills'),
-    qualifications: val('theSpiderQualifications'),
-    salary: val('theSpiderSalary'),
+    industry: getTheSpiderMultiValues('industry'),
+    industry_mode: getTheSpiderMatchMode('industry'),
+    it_skills: getTheSpiderMultiValues('it_skills'),
+    it_skills_mode: getTheSpiderMatchMode('it_skills'),
+    qualifications: getTheSpiderMultiValues('qualifications'),
+    qualifications_mode: getTheSpiderMatchMode('qualifications'),
+    salary_min: val('theSpiderSalaryMin'),
+    salary_max: val('theSpiderSalaryMax'),
+    include_missing_salary: !!(document.getElementById('theSpiderIncludeMissingSalary') || {}).checked,
     years: val('theSpiderYearsMin'),
     years_min: val('theSpiderYearsMin'),
     years_max: val('theSpiderYearsMax'),
     must: val('theSpiderMust'),
-    nice: val('theSpiderNice'),
-    exclude: val('theSpiderExclude'),
-    targets: val('theSpiderTargets'),
     strict: !!((document.getElementById('theSpiderStrict') || {}).classList || {contains:function(){return false;}}).contains('active'),
-    adjacent: !!((document.getElementById('theSpiderIncludeAdjacent') || {}).classList || {contains:function(){return false;}}).contains('active'),
     use_owl: !!((document.getElementById('theSpiderUseOwl') || {}).classList || {contains:function(){return false;}}).contains('active')
   };
 }
 function buildTheSpiderSearchFilters(inp) {
   inp = inp || getTheSpiderInputs();
   return {
-    role: inp.role || '',
+    role: '',
     country: inp.country || 'Malaysia',
     city_state: inp.city_state || '',
     residential: inp.residential || 'Any',
-    industry: inp.industry || '',
-    it_skills: inp.it_skills || '',
-    qualifications: inp.qualifications || '',
-    salary: inp.salary || '',
+    industry: Array.isArray(inp.industry) ? inp.industry : [],
+    industry_mode: inp.industry_mode === 'all' ? 'all' : 'any',
+    it_skills: Array.isArray(inp.it_skills) ? inp.it_skills : [],
+    it_skills_mode: inp.it_skills_mode === 'all' ? 'all' : 'any',
+    qualifications: Array.isArray(inp.qualifications) ? inp.qualifications : [],
+    qualifications_mode: inp.qualifications_mode === 'all' ? 'all' : 'any',
+    salary_min: inp.salary_min || '',
+    salary_max: inp.salary_max || '',
+    include_missing_salary: !!inp.include_missing_salary,
     years: inp.years_min || inp.years || '0',
     years_min: inp.years_min || inp.years || '0',
     years_max: inp.years_max || '40',
     must: inp.must || '',
-    nice: inp.nice || '',
-    exclude: inp.exclude || '',
-    targets: inp.targets || '',
+    nice: '',
+    exclude: '',
+    targets: '',
     jd: inp.jd || '',
     strict: !!inp.strict,
-    adjacent: !!inp.adjacent
+    adjacent: false
   };
 }
 function fillTheSpiderDatalist(id, values) {
@@ -167,6 +324,20 @@ function fillTheSpiderDatalist(id, values) {
     seen[v.toLowerCase()] = 1;
     return '<option value="' + escAttr(v) + '"></option>';
   }).join('');
+}
+function fillTheSpiderSelect(id, values, includeAny) {
+  var select = document.getElementById(id);
+  if (!select || !Array.isArray(values)) return;
+  var current = String(select.value || 'Any');
+  var seen = {};
+  var options = includeAny ? ['Any'] : [];
+  values.forEach(function(v){
+    v = String(v && (v.name || v.label || v.value || v.title || v) || '').trim();
+    if (!v || seen[v.toLowerCase()] || (includeAny && v.toLowerCase() === 'any')) return;
+    seen[v.toLowerCase()] = 1; options.push(v);
+  });
+  select.innerHTML = options.map(function(v){ return '<option value="' + escAttr(v) + '">' + esc(v) + '</option>'; }).join('');
+  select.value = options.indexOf(current) >= 0 ? current : (includeAny ? 'Any' : (options[0] || ''));
 }
 function normaliseTheSpiderOptionPayload(d) {
   if (!d) return [];
@@ -181,17 +352,24 @@ function normaliseTheSpiderOptionPayload(d) {
 async function loadTheSpiderJobAdderOptions() {
   if (!aiCrawlerIsUnlocked()) return;
   var fallbacks = {
-    industry: ['Banking','Financial Services','Fintech','Shared Services','Technology','Telecommunications','Manufacturing','FMCG','Healthcare','Retail','E-commerce'],
+    // Canonical JobAdder industry categories (custom field #1). The backend
+    // /jobadder/spider_options adds the granular sub-categories; this pre-fetch
+    // fallback carries the broad set so the no-network case still tallies.
+    industry: ['Digital & E-Commerce','Financial Services','FMCG','Industrial/Manufacturing','Information Technology & Services','Life Science/Medical','Property & Construction','Professional Services','Education','Government Sector'],
     it_skills: ['SAP','SAP ABAP','SAP FICO','SAP BW','SAP BPC','Oracle','NetSuite','Salesforce','Python','Java','AWS','Azure','GCP','Kubernetes','Docker','SQL','Power BI'],
-    qualifications: ['ACCA','CPA','CIMA','MIA','ICAEW','CFA','CIA','PMP','PRINCE2','ITIL','CKA','AWS Certified','Azure Certified','SAP Certified']
+    qualifications: ['ACCA','CPA','CIMA','MIA','ICAEW','CFA','CIA','PMP','PRINCE2','ITIL','CKA','AWS Certified','Azure Certified','SAP Certified'],
+    residential: ['Local Citizen','Permanent Resident','Expat - No Visa Required','Expat - Work Visa Required']
   };
   fillTheSpiderDatalist('theSpiderIndustryOptions', fallbacks.industry);
   fillTheSpiderDatalist('theSpiderItSkillOptions', fallbacks.it_skills);
   fillTheSpiderDatalist('theSpiderQualificationOptions', fallbacks.qualifications);
+  fillTheSpiderSelect('theSpiderResidential', fallbacks.residential, true);
   var maps = [
     ['industry','theSpiderIndustryOptions'],
     ['it_skills','theSpiderItSkillOptions'],
-    ['qualifications','theSpiderQualificationOptions']
+    ['qualifications','theSpiderQualificationOptions'],
+    ['residential','theSpiderResidential','select',true],
+    ['country','theSpiderCountry','select',false]
   ];
   await Promise.all(maps.map(async function(pair){
     try {
@@ -199,7 +377,10 @@ async function loadTheSpiderJobAdderOptions() {
       var d = await r.json().catch(function(){ return {}; });
       if (r.ok && !d.error) {
         var vals = normaliseTheSpiderOptionPayload(d);
-        if (vals.length) fillTheSpiderDatalist(pair[1], vals);
+        if (vals.length) {
+          if (pair[2] === 'select') fillTheSpiderSelect(pair[1], vals, pair[3] !== false);
+          else fillTheSpiderDatalist(pair[1], vals);
+        }
       }
     } catch(e) {}
   }));
@@ -217,6 +398,21 @@ function renderTheSpiderFilterSummary(summary) {
   var modeLabel = mode === 'native_boolean' ? 'native Boolean' : (mode === 'native_boolean→fallback' ? 'Boolean → positive-keyword fallback' : (mode === 'native_boolean_no_fallback' ? 'native Boolean · no safe fallback' : 'plain keywords'));
   var line = 'JobAdder matched ' + matched + ' · scanned ' + scanned + ' · enriched ' + enriched + (resumeScored ? (' · resume scored ' + resumeScored) : '') + ' · excluded ' + excluded + ' · showing ' + kept + ' (' + modeLabel + ')';
   var html = '<div class="spider-badge" style="display:inline-flex;margin:4px 0 8px;">' + esc(line) + '</div>';
+  var filterRows = [
+    ['industry', 'Industry', summary.industry_filter_mode],
+    ['it_skills', 'IT Skills', summary.it_skills_filter_mode],
+    ['qualifications', 'Qualifications', summary.qualifications_filter_mode],
+    ['residential', 'Residential Status', ''],
+    ['country', 'Country', ''],
+    ['salary', 'Salary', '']
+  ].filter(function(row){ return !!summary[row[0] + '_filter_active']; }).map(function(row){
+    var key = row[0], modeText = row[2] ? (' · ' + String(row[2]).toUpperCase()) : '';
+    var filterMatched = num(summary[key + '_filter_matched'], 0);
+    var filterExcluded = num(summary[key + '_filter_excluded'], 0);
+    var unavailable = num(summary[key + '_filter_unavailable'], 0);
+    return '<div class="spider-filter-breakdown-row"><strong>' + esc(row[1] + modeText) + '</strong><span>matched ' + esc(String(filterMatched)) + ' · excluded ' + esc(String(filterExcluded)) + (unavailable ? (' · unavailable ' + esc(String(unavailable))) : '') + '</span></div>';
+  });
+  if (filterRows.length) html += '<div class="spider-filter-breakdown"><div class="spider-filter-breakdown-title">Exact filter breakdown</div>' + filterRows.join('') + '</div>';
   var bs = summary.boolean_search || {};
   if (bs.fallback === 'plain_keywords') {
     var terms = Array.isArray(bs.fallback_terms) ? bs.fallback_terms.join(' ') : String(bs.query || '');
@@ -264,24 +460,27 @@ function buildTheSpiderFallbackQueries(inp) {
   function terms(v){ return splitTheSpiderKeywordTerms(v); }
   function quote(x){ x=String(x||'').trim(); return /\s/.test(x) && !/^".*"$/.test(x) ? '"' + x + '"' : x; }
   var mustRaw = normaliseTheSpiderBooleanRule(inp.must);
-  var must = terms(inp.must), nice = terms(inp.nice), itSkills = terms(inp.it_skills), quals = terms(inp.qualifications);
-  var role = inp.role ? '"' + inp.role + '"' : '';
+  var must = terms(inp.must);
   if (mustRaw && hasTheSpiderBooleanSyntax(mustRaw)) {
-    if (role) add(role + ' AND (' + mustRaw + ')');
     add(mustRaw);
   }
-  var hard = (hasTheSpiderBooleanSyntax(mustRaw) ? [] : must).concat(itSkills).concat(quals);
-  if (role && hard.length) add([role].concat(hard.slice(0,5).map(quote)).join(' AND '));
-  if (role) add(role);
+  // JobAdder dropdown/profile filters never narrow resume-keyword discovery.
+  var hard = hasTheSpiderBooleanSyntax(mustRaw) ? [] : must;
   if (hard.length) add(hard.slice(0,7).map(quote).join(' AND '));
   if (!queries.length && mustRaw) add(mustRaw);
-  if (inp.industry && role) add(role + ' AND "' + inp.industry + '"');
-  if (inp.adjacent && role && nice.length) add([role].concat(nice.slice(0,3).map(quote)).join(' AND '));
   if (inp.use_owl && window._theOwlPlainText) parseTheSpiderQueries(window._theOwlPlainText).slice(0,3).forEach(add);
   if (!queries.length && inp.jd) {
     var jdForQuery = String(inp.jd || '').split(/\n/).filter(function(line){ return !/\b(language|languages|fluent|spoken|written|mandarin|chinese|cantonese|hokkien|hakka|teochew|malay|bahasa|english|degree|diploma|bachelor|master|phd|education|university|college)\b/i.test(line); }).join(' ');
-    var words = jdForQuery.match(/\b(?:SAP|Oracle|NetSuite|Salesforce|AR|Collections|Reconciliation|ABAP|FICO|BPC|SOM|Python|Java|AWS|Azure|Manager|Analyst|Specialist|Engineer|Consultant|Developer|ACCA|CPA|CIMA|PMP|ITIL)\b/gi) || [];
+    var words = jdForQuery.match(/\b(?:SAP|Oracle|NetSuite|Salesforce|AR|Collections|Reconciliation|ABAP|FICO|BPC|SOM|Python|Java|AWS|Azure|Manager|Analyst|Specialist|Engineer|Consultant|Developer)\b/gi) || [];
     add(words.slice(0,7).join(' AND '));
+    if (!queries.length) {
+      var jdTitle = String(inp.jd || '').split(/\r?\n/).map(function(line){
+        return line.replace(/^\s*(?:job\s+title|position|role)\s*[:\-]\s*/i, '').replace(/\s+/g, ' ').trim();
+      }).filter(function(line){
+        return line.length >= 3 && line.length <= 100 && !/^(?:job description|about the role|overview|responsibilities|requirements)$/i.test(line);
+      })[0] || '';
+      if (jdTitle) add(quote(jdTitle));
+    }
   }
   return queries.slice(0,6);
 }
@@ -303,18 +502,44 @@ function buildTheSpiderDiscoveryQueries(inp) {
   return queries.slice(0,6);
 }
 
+function cleanTheSpiderPrompt(prompt, inp) {
+  inp = inp || {};
+  return String(prompt || '')
+    .replace('\nTarget role: ' + inp.role, '')
+    .replace('\nInclude adjacent titles: ' + (inp.adjacent ? 'Yes' : 'No'), '')
+    .replace('\nNice-to-have / adjacent skills:\n' + inp.nice, '')
+    .replace('\nExclude / avoid:\n' + inp.exclude, '')
+    .replace('\nTarget/source companies:\n' + inp.targets, '')
+    .replace(
+      '\nSalary/budget: ' + inp.salary,
+      '\nExpected monthly salary: ' + (inp.salary_min || 'No minimum') + ' to ' + (inp.salary_max || 'No maximum') + '; currency is not a hard filter; include missing salary: ' + (inp.include_missing_salary ? 'Yes' : 'No')
+    )
+    .replace(
+      '- Industry, salary/budget and target/source companies can guide searches and notes, but do not treat them as fit-score criteria.',
+      '- Industry and expected salary are exact eligibility filters; do not treat them as fit-score criteria.'
+    )
+    .replace(
+      '- Industry and salary can guide searches and notes, but do not treat them as fit-score criteria.',
+      '- Industry and expected salary are exact eligibility filters applied after keyword discovery. Never add selected eligibility values to JobAdder keyword search strings; do not treat them as fit-score criteria.'
+    )
+    .replace(
+      '- Use Owl context only to improve adjacent titles, target-company/source-company angles, and profile patterns.',
+      '- Use Owl context only to improve role and profile patterns derived from the JD.'
+    );
+}
+
 async function generateTheSpider(opts) {
   if (!requireAiCrawlerUnlocked()) return;
   opts = opts || {};
   var inp = getTheSpiderInputs();
-  if (!inp.jd && !inp.role && !inp.must && !inp.nice && !inp.it_skills && !inp.qualifications) { showToast('Add a JD, role, or keywords first', 'err'); return; }
+  if (!inp.jd && !inp.must) { showToast('Add a JD or Boolean Rules / Keywords first', 'err'); return; }
   var route = aiRoutePayload('the_spider');
   var btn = document.getElementById('theSpiderBtn'), body=document.getElementById('theSpiderBody'), out=document.getElementById('theSpiderOutput'), costEl=document.getElementById('theSpiderCost'), status=document.getElementById('theSpiderStatus');
   clearTabRunState('thespider');
   ackBrowserActivityForTab('thespider');
   ackBrowserActivityFailedForTab('thespider');
   var phaseRun = markTabRunning('thespider');
-  var keywordOnly = !inp.jd && !!(inp.must || inp.role || inp.nice || inp.it_skills || inp.qualifications);
+  var keywordOnly = !inp.jd && !!inp.must;
   if (keywordOnly) {
     if (btn && opts.autoSearch) { btn.disabled = true; btn.textContent = 'Sourcing…'; }
     window._theSpiderQueries = buildTheSpiderDiscoveryQueries(inp);
@@ -328,7 +553,7 @@ async function generateTheSpider(opts) {
       (window._theSpiderQueries.length ? window._theSpiderQueries.map(function(q){ return '- ' + q; }).join('\n') : '- Add Boolean Rules / Keywords'),
       '',
       '## Sourcing Notes',
-      '- Separate multiple nice-to-have or avoid terms with commas or new lines.',
+      '- Use NOT inside Boolean Rules / Keywords when you need to exclude a term.',
       '- The complete Boolean expression is sent directly to JobAdder candidate Keywords search and JobAdder decides the native Boolean match.'
     ].join('\n');
     window._theSpiderHTML = theSpiderMarkdownToHtml(window._theSpiderPlainText);
@@ -348,7 +573,7 @@ async function generateTheSpider(opts) {
     window._theSpiderQueries = buildTheSpiderDiscoveryQueries(inp);
     window._theSpiderPlainText = [
       '## JobAdder Search Strings',
-      (window._theSpiderQueries.length ? window._theSpiderQueries.map(function(q){ return '- ' + q; }).join('\n') : '- Add role or Boolean Rules / Keywords'),
+      (window._theSpiderQueries.length ? window._theSpiderQueries.map(function(q){ return '- ' + q; }).join('\n') : '- Add a JD or Boolean Rules / Keywords'),
       '',
       '## Screening Scorecard',
       '- Add an AI key for the AI Crawler route to generate a detailed scorecard.',
@@ -383,9 +608,9 @@ async function generateTheSpider(opts) {
   spiderMinYears = Math.max(0, Math.min(40, spiderMinYears));
   spiderMaxYears = Math.max(spiderMinYears, Math.min(40, spiderMaxYears));
   var spiderRangeLabel = (spiderMinYears <= 0 && spiderMaxYears >= 40) ? 'Any' : (spiderMaxYears >= 40 ? (spiderMinYears + '+ years') : (spiderMinYears === spiderMaxYears ? (spiderMinYears + ' years') : (spiderMinYears + '-' + spiderMaxYears + ' years')));
-  var prompt = 'You are AI Crawler, a recruiter sourcing agent inside CV Studio. Your task is to prepare a JobAdder candidate sourcing pack from a JD and recruiter filters, then the app will run actual JobAdder candidate search.\n\nOUTPUT RULES:\n- Use concise Markdown.\n- Do not invent candidate names; actual candidates come only from JobAdder search results.\n- Create practical JobAdder candidate searches, not public web lead searches.\n- Country, residential status, IT skills and qualifications are hard filters.\n- Candidate discovery must use Boolean Rules / Keywords first when supplied. CV Studio will send the complete recruiter-authored Boolean expression directly to JobAdder candidate Keywords search and trust JobAdder\'s native Boolean results. Do not use JD similarity to reject candidates during discovery.\n- After keyword discovery, describe a separate 0-100% match-fit assessment based on the JD job scope and requirements.\n- Language and education/degree requirements must never contribute to match fit, even if they appear elsewhere in the inputs.\n- Industry, salary/budget and target/source companies can guide searches and notes, but do not treat them as fit-score criteria.\n- Use Owl context only to improve adjacent titles, target-company/source-company angles, and profile patterns.\n- Include exact copyable search strings.\n\nReturn sections exactly:\n## Must-Match Profile\n## JobAdder Search Strings\n## Resume Keywords To Prioritise\n## Candidates To Exclude\n## Screening Scorecard\n## Sourcing Notes\n\nScreening Scorecard rules:\n- Prefer a Markdown table with columns: Criteria | Weight | Must-Ask Question.\n- High-weight rows should focus on JD job scope, functional/technical responsibilities, domain/tool experience, nice-to-haves, IT skills/ERP, and one red-flag line.\n- Do not include language or education as scorecard criteria.\n\nSourcing Notes rules:\n- Give tactical notes like where to find the talent in JobAdder, source-company angles, equivalent tools/platforms, proprietary-tool proxies, documentation/process probes, and first-message pre-screen friction points.\n\nInputs:\nTarget role: ' + inp.role + '\nCountry: ' + inp.country + '\nResidential status: ' + inp.residential + '\nIndustry: ' + inp.industry + '\nIT Skills hard filter: ' + inp.it_skills + '\nQualifications hard filter: ' + inp.qualifications + '\nSalary/budget: ' + inp.salary + '\nMinimum years of experience: ' + (spiderMinYears > 0 ? (spiderMinYears + ' years') : 'Any') + '\nMaximum years of experience: ' + (spiderMaxYears >= 40 ? 'No maximum' : (spiderMaxYears + ' years')) + '\nSelected experience range: ' + spiderRangeLabel + '\nStrict Boolean rules: ' + (inp.strict ? 'Yes' : 'No') + '\nInclude adjacent titles: ' + (inp.adjacent ? 'Yes' : 'No') + '\nBoolean Rules / Keywords:\n' + inp.must + '\nNice-to-have / adjacent skills:\n' + inp.nice + '\nExclude / avoid:\n' + inp.exclude + '\nTarget/source companies:\n' + inp.targets + '\n\nJD:\n---\n' + inp.jd.slice(0, 18000) + '\n---\n\n' + owlCtx;
+  var prompt = 'You are AI Crawler, a recruiter sourcing agent inside CV Studio. Your task is to prepare a JobAdder candidate sourcing pack from a JD and recruiter filters, then the app will run actual JobAdder candidate search.\n\nOUTPUT RULES:\n- Use concise Markdown.\n- Do not invent candidate names; actual candidates come only from JobAdder search results.\n- Create practical JobAdder candidate searches, not public web lead searches.\n- Country, residential status, Industry, IT Skills, Qualifications and expected salary are exact eligibility filters applied after keyword discovery. Never add those selected eligibility values to JobAdder keyword search strings unless the recruiter explicitly typed the value into Boolean Rules / Keywords.\n- Candidate discovery must use Boolean Rules / Keywords first when supplied. CV Studio will send the complete recruiter-authored Boolean expression directly to JobAdder candidate Keywords search and trust JobAdder\'s native Boolean results. Do not use JD similarity to reject candidates during discovery.\n- After keyword discovery, describe a separate 0-100% match-fit assessment based on the JD job scope and requirements.\n- Language and education/degree requirements must never contribute to match fit, even if they appear elsewhere in the inputs.\n- Do not treat eligibility filters as fit-score criteria.\n- Use Owl context only to improve role and profile patterns derived from the JD.\n- Include exact copyable search strings.\n\nReturn sections exactly:\n## Must-Match Profile\n## JobAdder Search Strings\n## Resume Keywords To Prioritise\n## Candidates To Exclude\n## Screening Scorecard\n## Sourcing Notes\n\nScreening Scorecard rules:\n- Prefer a Markdown table with columns: Criteria | Weight | Must-Ask Question.\n- High-weight rows should focus on JD job scope, functional/technical responsibilities, domain/tool experience, nice-to-haves, IT skills/ERP, and one red-flag line.\n- Do not include language or education as scorecard criteria.\n\nSourcing Notes rules:\n- Give tactical notes like where to find the talent in JobAdder, equivalent tools/platforms, proprietary-tool proxies, documentation/process probes, and first-message pre-screen friction points.\n\nInputs:\nCountry: ' + inp.country + '\nResidential status: ' + inp.residential + '\nIndustries (' + inp.industry_mode + '): ' + theSpiderSelectionText(inp.industry) + '\nIT Skills hard filter (' + inp.it_skills_mode + '): ' + theSpiderSelectionText(inp.it_skills) + '\nQualifications hard filter (' + inp.qualifications_mode + '): ' + theSpiderSelectionText(inp.qualifications) + '\nSalary/budget: ' + (inp.salary_min || 'No minimum') + ' to ' + (inp.salary_max || 'No maximum') + '; currency is not a hard filter; include missing salary: ' + (inp.include_missing_salary ? 'Yes' : 'No') + '\nMinimum years of experience: ' + (spiderMinYears > 0 ? (spiderMinYears + ' years') : 'Any') + '\nMaximum years of experience: ' + (spiderMaxYears >= 40 ? 'No maximum' : (spiderMaxYears + ' years')) + '\nSelected experience range: ' + spiderRangeLabel + '\nStrict Boolean rules: ' + (inp.strict ? 'Yes' : 'No') + '\nBoolean Rules / Keywords:\n' + inp.must + '\n\nJD:\n---\n' + inp.jd.slice(0, 18000) + '\n---\n\n' + owlCtx;
   try {
-    var d = await callAIProxy(prompt, 2600, false, 0, 'the_spider');
+    var d = await callAIProxy(cleanTheSpiderPrompt(prompt, inp), 2600, false, 0, 'the_spider');
     var raw = aiText(d).trim();
     if (!raw) {
       recordPaidAiFailure('AI Crawler sourcing plan returned empty output', d, route.model, route.provider);
@@ -393,7 +618,9 @@ async function generateTheSpider(opts) {
     }
     window._theSpiderPlainText = raw;
     window._theSpiderHTML = theSpiderMarkdownToHtml(raw);
-    window._theSpiderQueries = inp.must ? buildTheSpiderDiscoveryQueries(inp) : parseTheSpiderQueries(raw);
+    window._theSpiderQueries = inp.must
+      ? buildTheSpiderDiscoveryQueries(inp)
+      : filterTheSpiderGeneratedQueries(parseTheSpiderQueries(raw), inp);
     if (!window._theSpiderQueries.length) window._theSpiderQueries = buildTheSpiderFallbackQueries(inp);
     if (body) body.innerHTML = window._theSpiderHTML + (window._theSpiderQueries.length ? ('<h4>Detected JobAdder Queries</h4><div>' + window._theSpiderQueries.map(function(q){ return '<span class="spider-query-chip">' + esc(q) + '</span>'; }).join('') + '</div>') : '');
     showTheSpiderPanel(opts.autoSearch ? 'results' : 'notes');
@@ -2239,7 +2466,19 @@ async function runTheSpiderJobAdderSearch(opts) {
     ? [authoredBoolean]
     : ((window._theSpiderQueries && window._theSpiderQueries.length) ? window._theSpiderQueries.slice(0,4) : buildTheSpiderFallbackQueries(spiderInputs).slice(0,4));
   if (!queries.length) { queries = buildTheSpiderFallbackQueries(spiderInputs).slice(0,4); }
-  if (!queries.length) { markTabFailed('thespider', tabRunToken, {forceBrowser:true}); showToast('Add JD, role, or must-have keywords first', 'err'); return; }
+  if (spiderInputs.country || spiderInputs.residential !== 'Any' || spiderInputs.industry || spiderInputs.it_skills || spiderInputs.qualifications || spiderInputs.salary_min || spiderInputs.salary_max) {
+    // All dropdown/profile values are exact backend eligibility checks, never
+    // latest-resume keywords. Use one independent discovery query so the same
+    // bounded candidate pool is not eligibility-scanned repeatedly.
+    if (authoredBoolean) {
+      queries = buildTheSpiderDiscoveryQueries(spiderInputs).slice(0,1);
+    } else {
+      // Keep the first AI-generated JobAdder query. Rebuilding here from the
+      // raw JD can accidentally use a company/header line instead of the role.
+      queries = queries.slice(0,1);
+    }
+  }
+  if (!queries.length) { markTabFailed('thespider', tabRunToken, {forceBrowser:true}); showToast('Add a JD or Boolean Rules / Keywords first', 'err'); return; }
   var out=document.getElementById('theSpiderSearchOutput'), body=document.getElementById('theSpiderSearchBody'), badge=document.getElementById('theSpiderSearchBadge');
   if (out) out.classList.add('show');
   var phaseStatus=document.getElementById('theSpiderStatus'); if (phaseStatus) phaseStatus.textContent='Sourcing JobAdder…';
@@ -2282,7 +2521,7 @@ async function runTheSpiderJobAdderSearch(opts) {
   var summaryHtml = filterSummaries.map(renderTheSpiderFilterSummary).join('');
   var totalReported = filterSummaries.reduce(function(sum,s){ var n=Number(s && s.reported_total); return sum + (Number.isFinite(n) ? n : 0); }, 0);
   var emptyMessage = totalReported > 0
-    ? ('JobAdder matched ' + totalReported + ' candidate(s), but local filters removed all. Loosen Country, Residential Status, IT Skills, Qualifications, Years, Exclude, or Strict filters.')
+    ? ('JobAdder matched ' + totalReported + ' candidate(s), but selected filters removed all. Loosen Country, Residential Status, Industry, IT Skills, Qualifications, Salary, Years, or Strict filters.')
     : 'No candidates returned for this query. Try broader strings or fewer must-haves.';
   var sortEl=document.getElementById('theSpiderSort');
   var sortMode=(sortEl && sortEl.value) || 'fit_desc';
@@ -2330,10 +2569,12 @@ function clearTheSpider() {
   clearTabRunState('thespider');
   ackBrowserActivityForTab('thespider');
   ackBrowserActivityFailedForTab('thespider');
-  ['theSpiderJdText','theSpiderRole','theSpiderCityState','theSpiderIndustry','theSpiderItSkills','theSpiderQualifications','theSpiderMust','theSpiderNice','theSpiderExclude','theSpiderTargets','theSpiderSalary'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+  ['theSpiderJdText','theSpiderCityState','theSpiderMust','theSpiderSalaryMin','theSpiderSalaryMax'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+  clearTheSpiderMultiSelections();
   var yearsMin=document.getElementById('theSpiderYearsMin'); if(yearsMin) yearsMin.value='0'; var yearsMax=document.getElementById('theSpiderYearsMax'); if(yearsMax) yearsMax.value='40'; updateTheSpiderYearsRange();
   var country=document.getElementById('theSpiderCountry'); if(country) country.value='Malaysia';
   var residential=document.getElementById('theSpiderResidential'); if(residential) residential.value='Any';
+  var includeMissingSalary=document.getElementById('theSpiderIncludeMissingSalary'); if(includeMissingSalary) includeMissingSalary.checked=true;
   ['theSpiderOutput','theSpiderSearchOutput'].forEach(function(id){ var el=document.getElementById(id); if(el) el.classList.remove('show'); });
   ['theSpiderBody','theSpiderSearchBody'].forEach(function(id){ var el=document.getElementById(id); if(el) el.innerHTML=''; });
   var copyBtn=document.getElementById('theSpiderCopyBtn'); if(copyBtn) copyBtn.style.display='none';
@@ -2352,4 +2593,3 @@ function initTheSpiderTabUI() {
   updateTheSpiderYearsLabel();
   if (aiCrawlerIsUnlocked()) loadTheSpiderJobAdderOptions();
 }
-
