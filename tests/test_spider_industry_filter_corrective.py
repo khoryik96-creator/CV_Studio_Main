@@ -193,6 +193,33 @@ class AdditionalEligibilityMatchingTests(unittest.TestCase):
             ("mismatch", "Malaysian Citizen"),
         )
 
+    def test_country_names_from_full_jobadder_list_compare_exactly(self):
+        self.assertEqual(
+            app._spider_country_match(
+                {"address": {"country": "Papua New Guinea"}}, "Guinea"
+            )[0],
+            "mismatch",
+        )
+        self.assertEqual(
+            app._spider_country_match(
+                {"address": {"country": "Congo D.R."}}, "Congo"
+            )[0],
+            "mismatch",
+        )
+        self.assertEqual(
+            app._spider_country_match(
+                {"address": {"country": "United States Minor Outlying Islands"}},
+                "United States",
+            )[0],
+            "mismatch",
+        )
+        self.assertEqual(
+            app._spider_country_match(
+                {"address": {"country": "France"}}, "France"
+            )[0],
+            "match",
+        )
+
     def test_expected_monthly_salary_range_and_missing_option(self):
         candidate = {
             "employment": {
@@ -826,6 +853,57 @@ class IndustryRouteTests(unittest.TestCase):
         self.assertEqual(payload["filter_summary"]["salary_filter_matched"], 1)
         self.assertTrue(payload["filter_summary"]["salary_include_missing"])
         fetch_detail.assert_not_called()
+
+    def test_embed_rejection_detail_fallback_is_bounded_and_reported(self):
+        summaries = [self._summary(candidate_id) for candidate_id in range(1, 62)]
+        metadata = {
+            "mode": "plain",
+            "query": "Python",
+            "returned": len(summaries),
+            "search": {
+                "reported_total": len(summaries),
+                "warnings": [],
+                "pages": 1,
+                "embed_self_applied": False,
+                "embed_rejected": True,
+            },
+        }
+        with mock.patch.object(
+            app, "_ja_refresh_access_token", return_value="fixture-token"
+        ), mock.patch.object(
+            app,
+            "_spider_plain_keyword_jobadder_candidates",
+            return_value=(summaries, metadata),
+        ), mock.patch.object(
+            app, "_spider_fetch_candidate_detail", return_value={}
+        ) as fetch_detail, mock.patch.object(
+            app, "_spider_fetch_candidate_resume_text", return_value=("", "")
+        ):
+            response = app.app.test_client().post(
+                "/jobadder/spider_search",
+                json={
+                    "query": "Python",
+                    "limit": 1,
+                    "filters": {
+                        "must": "Python",
+                        "industry": "Financial Services",
+                    },
+                },
+                headers=self._request_headers(),
+            )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()
+        summary = payload["filter_summary"]
+        self.assertEqual(fetch_detail.call_count, 60)
+        self.assertIn("61", {call.args[1] for call in fetch_detail.call_args_list})
+        self.assertEqual(summary["eligibility_detail_candidates"], 61)
+        self.assertEqual(summary["eligibility_detail_requests"], 60)
+        self.assertEqual(summary["eligibility_detail_request_limit"], 60)
+        self.assertTrue(summary["eligibility_detail_fallback_truncated"])
+        self.assertTrue(summary["pagination_incomplete"])
+        self.assertTrue(
+            any("inspected 60 of 61" in warning for warning in summary["pagination_warnings"])
+        )
 
     def test_unknown_industry_value_is_rejected(self):
         with mock.patch.object(app, "_ja_refresh_access_token", return_value="fixture-token"):

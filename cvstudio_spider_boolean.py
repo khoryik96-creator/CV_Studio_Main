@@ -877,8 +877,15 @@ def _spider_country_profile(country):
             "names": list(data.get("names") or [canonical]),
             "codes": {str(x).upper() for x in data.get("codes", [])},
             "places": list(data.get("places") or []),
+            "known": True,
         }
-    return {"canonical": low, "names": [raw], "codes": set(), "places": []}
+    return {
+        "canonical": low,
+        "names": [raw],
+        "codes": set(),
+        "places": [],
+        "known": False,
+    }
 
 
 def _spider_country_aliases(country):
@@ -927,7 +934,11 @@ def _spider_location_identity(candidate):
                 walk(value, depth + 1)
 
     walk(candidate)
-    return codes, re.sub(r"\s+", " ", " ".join(country_values)).strip()[:3000], re.sub(r"\s+", " ", " ".join(location_values)).strip()[:6000]
+    return codes, " | ".join(
+        re.sub(r"\s+", " ", value).strip()
+        for value in country_values
+        if re.sub(r"\s+", " ", value).strip()
+    )[:3000], re.sub(r"\s+", " ", " ".join(location_values)).strip()[:6000]
 
 
 def _spider_country_match(candidate, country):
@@ -943,8 +954,22 @@ def _spider_country_match(candidate, country):
     if recognized_code_countries and target.get("canonical") not in recognized_code_countries:
         return "mismatch", "country code " + ", ".join(sorted(codes))
 
-    # Explicit country names outrank city/state inference.
-    if _spider_has_any(explicit_country, target.get("names")):
+    # Explicit country names outrank city/state inference. Values returned by
+    # JobAdder's complete /countries list that are outside the regional alias
+    # table must compare exactly: substring matching would make Guinea match
+    # Papua New Guinea, Congo match Congo D.R., and United States match the
+    # United States Minor Outlying Islands.
+    target_names = {
+        re.sub(r"\s+", " ", str(name or "")).strip().casefold()
+        for name in target.get("names") or []
+        if str(name or "").strip()
+    }
+    explicit_match = any(
+        re.sub(r"\s+", " ", part).strip().casefold() in target_names
+        for part in explicit_country.split("|")
+        if part.strip()
+    )
+    if explicit_match:
         return "match", explicit_country[:120]
     for canonical, definition in _SPIDER_COUNTRY_DEFINITIONS.items():
         if canonical == target.get("canonical"):
@@ -957,7 +982,7 @@ def _spider_country_match(candidate, country):
         # not contain the selected country is still an explicit mismatch.
         return "mismatch", explicit_country[:120]
 
-    if _spider_has_any(location_text, target.get("names")):
+    if target.get("known") and _spider_has_any(location_text, target.get("names")):
         return "match", location_text[:120]
     for canonical, definition in _SPIDER_COUNTRY_DEFINITIONS.items():
         if canonical == target.get("canonical"):

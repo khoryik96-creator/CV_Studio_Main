@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.337"
+_INSTALL_RECEIPT_VERSION = "v24.6.338"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -341,7 +341,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.337"
+_CVSTUDIO_VERSION = "v24.6.338"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -7068,6 +7068,9 @@ def jobadder_spider_search():
             name: {"matched": 0, "excluded": 0, "unavailable": 0, "embedded": 0}
             for name in active_filter_names
         }
+        eligibility_detail_candidates = 0
+        eligibility_detail_request_limit = 0
+        eligibility_detail_fallback_truncated = False
 
         # JobAdder's supported public API accepts Embed=self on Find Candidates,
         # which normally supplies native Country/salary data and custom fields
@@ -7144,6 +7147,29 @@ def jobadder_spider_search():
                 if cid and cid not in detail_id_seen:
                     detail_id_seen.add(cid)
                     detail_ids.append(cid)
+            eligibility_detail_candidates = len(detail_ids)
+            # Embed=self is the normal zero-extra-read path. If a tenant rejects
+            # that representation, do not turn one crawler search into as many
+            # as 1,200 individual candidate requests. Inspect a bounded sample:
+            # retain the leading JobAdder order, then spread the remaining reads
+            # across the rest of the discovered pool to limit position bias.
+            eligibility_detail_request_limit = max(60, min(180, limit))
+            if len(detail_ids) > eligibility_detail_request_limit:
+                leading_count = max(1, eligibility_detail_request_limit // 2)
+                selected_detail_ids = list(detail_ids[:leading_count])
+                remaining_slots = eligibility_detail_request_limit - len(selected_detail_ids)
+                remaining_pool = detail_ids[leading_count:]
+                if remaining_slots > 0 and remaining_pool:
+                    if remaining_slots == 1:
+                        positions = [len(remaining_pool) - 1]
+                    else:
+                        positions = [
+                            round(index * (len(remaining_pool) - 1) / float(remaining_slots - 1))
+                            for index in range(remaining_slots)
+                        ]
+                    selected_detail_ids.extend(remaining_pool[position] for position in positions)
+                detail_ids = list(dict.fromkeys(selected_detail_ids))[:eligibility_detail_request_limit]
+                eligibility_detail_fallback_truncated = True
             custom_field_detail_requests = len(detail_ids)
             if detail_ids:
                 try:
@@ -7462,6 +7488,14 @@ def jobadder_spider_search():
             reported_total = int(search_meta.get("reported_total"))
         except Exception:
             reported_total = len(raw_items)
+        pagination_warnings = list(search_meta.get("warnings") or [])[:5]
+        if eligibility_detail_fallback_truncated:
+            pagination_warnings.append(
+                "Eligibility fallback inspected {} of {} candidates after JobAdder omitted embedded profile fields".format(
+                    custom_field_detail_requests,
+                    eligibility_detail_candidates,
+                )
+            )
         summary = {
             "query": query,
             "reported_total": reported_total,
@@ -7511,26 +7545,33 @@ def jobadder_spider_search():
             "qualifications_filter_mode": safe_filters.get("qualifications_mode"),
             "qualifications_filter_matched": (filter_stats.get("qualifications") or {}).get("matched", 0),
             "qualifications_filter_excluded": (filter_stats.get("qualifications") or {}).get("excluded", 0),
+            "qualifications_filter_unavailable": (filter_stats.get("qualifications") or {}).get("unavailable", 0),
             "residential_filter_active": bool(residential_filter),
             "residential_filter_field_id": SPIDER_RESIDENTIAL_STATUS_FIELD_ID,
             "residential_filter_matched": (filter_stats.get("residential") or {}).get("matched", 0),
             "residential_filter_excluded": (filter_stats.get("residential") or {}).get("excluded", 0),
+            "residential_filter_unavailable": (filter_stats.get("residential") or {}).get("unavailable", 0),
             "country_filter_active": bool(country_filter),
             "country_filter_matched": (filter_stats.get("country") or {}).get("matched", 0),
             "country_filter_excluded": (filter_stats.get("country") or {}).get("excluded", 0),
+            "country_filter_unavailable": (filter_stats.get("country") or {}).get("unavailable", 0),
             "salary_filter_active": salary_filter_active,
             "salary_filter_matched": (filter_stats.get("salary") or {}).get("matched", 0),
             "salary_filter_excluded": (filter_stats.get("salary") or {}).get("excluded", 0),
+            "salary_filter_unavailable": (filter_stats.get("salary") or {}).get("unavailable", 0),
             "salary_include_missing": bool(safe_filters.get("include_missing_salary")),
             "eligibility_detail_requests": custom_field_detail_requests,
+            "eligibility_detail_candidates": eligibility_detail_candidates,
+            "eligibility_detail_request_limit": eligibility_detail_request_limit,
+            "eligibility_detail_fallback_truncated": eligibility_detail_fallback_truncated,
             "custom_field_detail_requests": custom_field_detail_requests,
             "filters_applied": safe_filters,
             "minimum_fit_percent": 10,
             "fit_scoring": "JD + recruiter Boolean/must-haves; latest resume text where available",
             "workflow": "JobAdder latest-resume keyword discovery, exact selected eligibility filters, then 0-100 job-scope fit",
             "note": "City/State alone is sent as JobAdder Location. Country is matched locally against the candidate's JobAdder country/location data. Industry, IT Skills, Residential Status and Professional Qualifications are matched against tenant custom fields #1/#2, #3, #5 and #7. Each multi-select category applies its own Any/All rule. Expected monthly salary is matched numerically against the selected minimum/maximum range without using Currency as a hard filter; candidates without salary are retained only when Include candidates without salary details is selected. CV Studio requests JobAdder's supported Embed=self candidate representation and fetches individual detail only when a required value is absent. Recruiter Boolean is attempted as written, including NOT. If JobAdder returns zero rows, CV Studio labels a positive-term fallback and excludes visible NOT matches conservatively; negative-only searches have no unsafe fallback. Eligibility filters run before resume scoring, ranking and truncation.",
-            "pagination_incomplete": bool(search_meta.get("incomplete")),
-            "pagination_warnings": list(search_meta.get("warnings") or [])[:5],
+            "pagination_incomplete": bool(search_meta.get("incomplete")) or eligibility_detail_fallback_truncated,
+            "pagination_warnings": pagination_warnings[:6],
             "pages": search_meta.get("pages"),
         }
 

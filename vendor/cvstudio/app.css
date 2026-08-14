@@ -1263,6 +1263,10 @@
 .spider-multi-input{flex:1 1 125px;min-width:92px;border:0;outline:0;background:transparent;color:var(--text1);padding:3px 2px;font-size:12px;line-height:1.45;}
 .spider-salary-field{grid-column:1/-1;}
 .spider-salary-range{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;}
+.spider-filter-breakdown{margin:0 0 8px;border:1px solid var(--border);border-radius:9px;background:var(--surface);padding:8px 10px;display:flex;flex-direction:column;gap:5px;font-size:10.5px;color:var(--text2);}
+.spider-filter-breakdown-title{font-size:10px;font-weight:900;letter-spacing:.04em;text-transform:uppercase;color:var(--text1);}
+.spider-filter-breakdown-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+.spider-filter-breakdown-row strong{color:var(--text1);}
 .spider-ta{min-height:120px;resize:vertical;}
 .spider-range{width:100%;accent-color:var(--blue);margin:5px 0 2px;}
 .spider-years-range{position:relative;height:30px;margin:4px 0 0;}

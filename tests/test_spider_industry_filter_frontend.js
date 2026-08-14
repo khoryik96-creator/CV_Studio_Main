@@ -27,6 +27,8 @@ function functionBlock(name, nextMarker) {
 const fallbackBody = functionBlock('buildTheSpiderFallbackQueries', 'function buildTheSpiderDiscoveryQueries(');
 const discoveryBody = functionBlock('buildTheSpiderDiscoveryQueries', 'async function generateTheSpider(');
 const searchBody = functionBlock('runTheSpiderJobAdderSearch', 'function copyTheSpiderReport(');
+const eligibilityGuardBody = functionBlock('normaliseTheSpiderEligibilityText', 'function getTheSpiderInputs(');
+const summaryBody = functionBlock('renderTheSpiderFilterSummary', 'function getTheSpiderOwlContext(');
 
 assert.ok(
   !fallbackBody.includes('inp.industry') && !discoveryBody.includes('inp.industry'),
@@ -67,6 +69,43 @@ const context = {
   getTheSpiderInputs() { return {}; }
 };
 vm.runInNewContext(fallbackBody + '\n' + discoveryBody, context);
+
+const eligibilityContext = {};
+vm.runInNewContext(eligibilityGuardBody, eligibilityContext);
+const safeGeneratedQueries = eligibilityContext.filterTheSpiderGeneratedQueries([
+  'Finance Manager AND "Financial Services"',
+  'Finance Manager AND ACCA',
+  'Finance Manager AND 4100',
+  'Finance Manager AND reporting'
+], {
+  country: 'Malaysia', residential: 'Any',
+  industry: ['Financial Services'], it_skills: [], qualifications: ['ACCA'],
+  salary_min: '4100', salary_max: ''
+});
+assert.deepStrictEqual(Array.from(safeGeneratedQueries), ['Finance Manager AND reporting']);
+assert.ok(
+  source.includes('Never add those selected eligibility values to JobAdder keyword search strings'),
+  'the AI prompt must describe exact eligibility filters as separate from keyword discovery'
+);
+
+const summaryContext = {
+  esc(value) { return String(value == null ? '' : value); }
+};
+vm.runInNewContext(summaryBody, summaryContext);
+const renderedSummary = summaryContext.renderTheSpiderFilterSummary({
+  reported_total: 100, scanned: 100, excluded_count: 99, kept: 1,
+  mode: 'plain', pagination_warnings: [],
+  industry_filter_active: true, industry_filter_mode: 'any',
+  industry_filter_matched: 20, industry_filter_excluded: 80,
+  qualifications_filter_active: true, qualifications_filter_mode: 'all',
+  qualifications_filter_matched: 1, qualifications_filter_excluded: 19,
+  qualifications_filter_unavailable: 80
+});
+assert.ok(renderedSummary.includes('Exact filter breakdown'));
+assert.ok(renderedSummary.includes('Industry · ANY'));
+assert.ok(renderedSummary.includes('matched 20 · excluded 80'));
+assert.ok(renderedSummary.includes('Qualifications · ALL'));
+assert.ok(renderedSummary.includes('unavailable 80'));
 
 const filterQueries = context.buildTheSpiderFallbackQueries({
   industry: 'Financial Services',
@@ -116,6 +155,7 @@ assert.ok(indexSource.includes('Any means the candidate may meet either one of t
 assert.ok(indexSource.includes('Any means the candidate may meet either one of the selected qualifications.'));
 assert.ok(cssSource.includes('.spider-multi-field.expanded{grid-column:1/-1;}'));
 assert.ok(cssSource.includes('.spider-salary-field{grid-column:1/-1;}'));
+assert.ok(cssSource.includes('.spider-filter-breakdown-row{'));
 assert.ok(indexSource.includes('Use NOT here to exclude terms.'));
 
 console.log('spider JobAdder eligibility frontend corrective tests passed');

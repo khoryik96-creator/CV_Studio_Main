@@ -233,6 +233,35 @@ function clearTheSpiderMultiSelections() {
 function theSpiderSelectionText(value) {
   return Array.isArray(value) ? value.join(', ') : String(value || '');
 }
+function normaliseTheSpiderEligibilityText(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function theSpiderQueryUsesEligibilityValue(query, inp) {
+  inp = inp || {};
+  var haystack = ' ' + normaliseTheSpiderEligibilityText(query) + ' ';
+  var selected = [];
+  [inp.industry, inp.it_skills, inp.qualifications].forEach(function(values){
+    if (Array.isArray(values)) selected = selected.concat(values);
+  });
+  [inp.country, inp.residential].forEach(function(value){
+    value = String(value || '').trim();
+    if (value && value.toLowerCase() !== 'any') selected.push(value);
+  });
+  if (selected.some(function(value){
+    var needle = normaliseTheSpiderEligibilityText(value);
+    return needle && haystack.indexOf(' ' + needle + ' ') >= 0;
+  })) return true;
+  var numericTokens = String(query || '').replace(/,/g, '').match(/\b\d+(?:\.\d+)?\b/g) || [];
+  return [inp.salary_min, inp.salary_max].some(function(value){
+    var number = String(value || '').replace(/,/g, '').trim();
+    return number && numericTokens.indexOf(number) >= 0;
+  });
+}
+function filterTheSpiderGeneratedQueries(queries, inp) {
+  return (Array.isArray(queries) ? queries : []).filter(function(query){
+    return !theSpiderQueryUsesEligibilityValue(query, inp);
+  });
+}
 function getTheSpiderInputs() {
   function val(id){ var el=document.getElementById(id); return el ? String(el.value || '').trim() : ''; }
   return {
@@ -369,6 +398,21 @@ function renderTheSpiderFilterSummary(summary) {
   var modeLabel = mode === 'native_boolean' ? 'native Boolean' : (mode === 'native_boolean→fallback' ? 'Boolean → positive-keyword fallback' : (mode === 'native_boolean_no_fallback' ? 'native Boolean · no safe fallback' : 'plain keywords'));
   var line = 'JobAdder matched ' + matched + ' · scanned ' + scanned + ' · enriched ' + enriched + (resumeScored ? (' · resume scored ' + resumeScored) : '') + ' · excluded ' + excluded + ' · showing ' + kept + ' (' + modeLabel + ')';
   var html = '<div class="spider-badge" style="display:inline-flex;margin:4px 0 8px;">' + esc(line) + '</div>';
+  var filterRows = [
+    ['industry', 'Industry', summary.industry_filter_mode],
+    ['it_skills', 'IT Skills', summary.it_skills_filter_mode],
+    ['qualifications', 'Qualifications', summary.qualifications_filter_mode],
+    ['residential', 'Residential Status', ''],
+    ['country', 'Country', ''],
+    ['salary', 'Salary', '']
+  ].filter(function(row){ return !!summary[row[0] + '_filter_active']; }).map(function(row){
+    var key = row[0], modeText = row[2] ? (' · ' + String(row[2]).toUpperCase()) : '';
+    var filterMatched = num(summary[key + '_filter_matched'], 0);
+    var filterExcluded = num(summary[key + '_filter_excluded'], 0);
+    var unavailable = num(summary[key + '_filter_unavailable'], 0);
+    return '<div class="spider-filter-breakdown-row"><strong>' + esc(row[1] + modeText) + '</strong><span>matched ' + esc(String(filterMatched)) + ' · excluded ' + esc(String(filterExcluded)) + (unavailable ? (' · unavailable ' + esc(String(unavailable))) : '') + '</span></div>';
+  });
+  if (filterRows.length) html += '<div class="spider-filter-breakdown"><div class="spider-filter-breakdown-title">Exact filter breakdown</div>' + filterRows.join('') + '</div>';
   var bs = summary.boolean_search || {};
   if (bs.fallback === 'plain_keywords') {
     var terms = Array.isArray(bs.fallback_terms) ? bs.fallback_terms.join(' ') : String(bs.query || '');
@@ -475,6 +519,10 @@ function cleanTheSpiderPrompt(prompt, inp) {
       '- Industry and expected salary are exact eligibility filters; do not treat them as fit-score criteria.'
     )
     .replace(
+      '- Industry and salary can guide searches and notes, but do not treat them as fit-score criteria.',
+      '- Industry and expected salary are exact eligibility filters applied after keyword discovery. Never add selected eligibility values to JobAdder keyword search strings; do not treat them as fit-score criteria.'
+    )
+    .replace(
       '- Use Owl context only to improve adjacent titles, target-company/source-company angles, and profile patterns.',
       '- Use Owl context only to improve role and profile patterns derived from the JD.'
     );
@@ -560,7 +608,7 @@ async function generateTheSpider(opts) {
   spiderMinYears = Math.max(0, Math.min(40, spiderMinYears));
   spiderMaxYears = Math.max(spiderMinYears, Math.min(40, spiderMaxYears));
   var spiderRangeLabel = (spiderMinYears <= 0 && spiderMaxYears >= 40) ? 'Any' : (spiderMaxYears >= 40 ? (spiderMinYears + '+ years') : (spiderMinYears === spiderMaxYears ? (spiderMinYears + ' years') : (spiderMinYears + '-' + spiderMaxYears + ' years')));
-  var prompt = 'You are AI Crawler, a recruiter sourcing agent inside CV Studio. Your task is to prepare a JobAdder candidate sourcing pack from a JD and recruiter filters, then the app will run actual JobAdder candidate search.\n\nOUTPUT RULES:\n- Use concise Markdown.\n- Do not invent candidate names; actual candidates come only from JobAdder search results.\n- Create practical JobAdder candidate searches, not public web lead searches.\n- Country, residential status, IT skills and qualifications are hard filters.\n- Candidate discovery must use Boolean Rules / Keywords first when supplied. CV Studio will send the complete recruiter-authored Boolean expression directly to JobAdder candidate Keywords search and trust JobAdder\'s native Boolean results. Do not use JD similarity to reject candidates during discovery.\n- After keyword discovery, describe a separate 0-100% match-fit assessment based on the JD job scope and requirements.\n- Language and education/degree requirements must never contribute to match fit, even if they appear elsewhere in the inputs.\n- Industry and salary can guide searches and notes, but do not treat them as fit-score criteria.\n- Use Owl context only to improve role and profile patterns derived from the JD.\n- Include exact copyable search strings.\n\nReturn sections exactly:\n## Must-Match Profile\n## JobAdder Search Strings\n## Resume Keywords To Prioritise\n## Candidates To Exclude\n## Screening Scorecard\n## Sourcing Notes\n\nScreening Scorecard rules:\n- Prefer a Markdown table with columns: Criteria | Weight | Must-Ask Question.\n- High-weight rows should focus on JD job scope, functional/technical responsibilities, domain/tool experience, nice-to-haves, IT skills/ERP, and one red-flag line.\n- Do not include language or education as scorecard criteria.\n\nSourcing Notes rules:\n- Give tactical notes like where to find the talent in JobAdder, equivalent tools/platforms, proprietary-tool proxies, documentation/process probes, and first-message pre-screen friction points.\n\nInputs:\nCountry: ' + inp.country + '\nResidential status: ' + inp.residential + '\nIndustries (' + inp.industry_mode + '): ' + theSpiderSelectionText(inp.industry) + '\nIT Skills hard filter (' + inp.it_skills_mode + '): ' + theSpiderSelectionText(inp.it_skills) + '\nQualifications hard filter (' + inp.qualifications_mode + '): ' + theSpiderSelectionText(inp.qualifications) + '\nSalary/budget: ' + (inp.salary_min || 'No minimum') + ' to ' + (inp.salary_max || 'No maximum') + '; currency is not a hard filter; include missing salary: ' + (inp.include_missing_salary ? 'Yes' : 'No') + '\nMinimum years of experience: ' + (spiderMinYears > 0 ? (spiderMinYears + ' years') : 'Any') + '\nMaximum years of experience: ' + (spiderMaxYears >= 40 ? 'No maximum' : (spiderMaxYears + ' years')) + '\nSelected experience range: ' + spiderRangeLabel + '\nStrict Boolean rules: ' + (inp.strict ? 'Yes' : 'No') + '\nBoolean Rules / Keywords:\n' + inp.must + '\n\nJD:\n---\n' + inp.jd.slice(0, 18000) + '\n---\n\n' + owlCtx;
+  var prompt = 'You are AI Crawler, a recruiter sourcing agent inside CV Studio. Your task is to prepare a JobAdder candidate sourcing pack from a JD and recruiter filters, then the app will run actual JobAdder candidate search.\n\nOUTPUT RULES:\n- Use concise Markdown.\n- Do not invent candidate names; actual candidates come only from JobAdder search results.\n- Create practical JobAdder candidate searches, not public web lead searches.\n- Country, residential status, Industry, IT Skills, Qualifications and expected salary are exact eligibility filters applied after keyword discovery. Never add those selected eligibility values to JobAdder keyword search strings unless the recruiter explicitly typed the value into Boolean Rules / Keywords.\n- Candidate discovery must use Boolean Rules / Keywords first when supplied. CV Studio will send the complete recruiter-authored Boolean expression directly to JobAdder candidate Keywords search and trust JobAdder\'s native Boolean results. Do not use JD similarity to reject candidates during discovery.\n- After keyword discovery, describe a separate 0-100% match-fit assessment based on the JD job scope and requirements.\n- Language and education/degree requirements must never contribute to match fit, even if they appear elsewhere in the inputs.\n- Do not treat eligibility filters as fit-score criteria.\n- Use Owl context only to improve role and profile patterns derived from the JD.\n- Include exact copyable search strings.\n\nReturn sections exactly:\n## Must-Match Profile\n## JobAdder Search Strings\n## Resume Keywords To Prioritise\n## Candidates To Exclude\n## Screening Scorecard\n## Sourcing Notes\n\nScreening Scorecard rules:\n- Prefer a Markdown table with columns: Criteria | Weight | Must-Ask Question.\n- High-weight rows should focus on JD job scope, functional/technical responsibilities, domain/tool experience, nice-to-haves, IT skills/ERP, and one red-flag line.\n- Do not include language or education as scorecard criteria.\n\nSourcing Notes rules:\n- Give tactical notes like where to find the talent in JobAdder, equivalent tools/platforms, proprietary-tool proxies, documentation/process probes, and first-message pre-screen friction points.\n\nInputs:\nCountry: ' + inp.country + '\nResidential status: ' + inp.residential + '\nIndustries (' + inp.industry_mode + '): ' + theSpiderSelectionText(inp.industry) + '\nIT Skills hard filter (' + inp.it_skills_mode + '): ' + theSpiderSelectionText(inp.it_skills) + '\nQualifications hard filter (' + inp.qualifications_mode + '): ' + theSpiderSelectionText(inp.qualifications) + '\nSalary/budget: ' + (inp.salary_min || 'No minimum') + ' to ' + (inp.salary_max || 'No maximum') + '; currency is not a hard filter; include missing salary: ' + (inp.include_missing_salary ? 'Yes' : 'No') + '\nMinimum years of experience: ' + (spiderMinYears > 0 ? (spiderMinYears + ' years') : 'Any') + '\nMaximum years of experience: ' + (spiderMaxYears >= 40 ? 'No maximum' : (spiderMaxYears + ' years')) + '\nSelected experience range: ' + spiderRangeLabel + '\nStrict Boolean rules: ' + (inp.strict ? 'Yes' : 'No') + '\nBoolean Rules / Keywords:\n' + inp.must + '\n\nJD:\n---\n' + inp.jd.slice(0, 18000) + '\n---\n\n' + owlCtx;
   try {
     var d = await callAIProxy(cleanTheSpiderPrompt(prompt, inp), 2600, false, 0, 'the_spider');
     var raw = aiText(d).trim();
@@ -570,7 +618,9 @@ async function generateTheSpider(opts) {
     }
     window._theSpiderPlainText = raw;
     window._theSpiderHTML = theSpiderMarkdownToHtml(raw);
-    window._theSpiderQueries = inp.must ? buildTheSpiderDiscoveryQueries(inp) : parseTheSpiderQueries(raw);
+    window._theSpiderQueries = inp.must
+      ? buildTheSpiderDiscoveryQueries(inp)
+      : filterTheSpiderGeneratedQueries(parseTheSpiderQueries(raw), inp);
     if (!window._theSpiderQueries.length) window._theSpiderQueries = buildTheSpiderFallbackQueries(inp);
     if (body) body.innerHTML = window._theSpiderHTML + (window._theSpiderQueries.length ? ('<h4>Detected JobAdder Queries</h4><div>' + window._theSpiderQueries.map(function(q){ return '<span class="spider-query-chip">' + esc(q) + '</span>'; }).join('') + '</div>') : '');
     showTheSpiderPanel(opts.autoSearch ? 'results' : 'notes');
