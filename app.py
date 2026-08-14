@@ -3965,6 +3965,8 @@ from cvstudio_spider_score import (
     _spider_context_only_fit_term,
     _spider_extract_option_values,
     _spider_ignored_fit_term,
+    _spider_industry_filter_spec,
+    _spider_industry_match,
     _spider_item_score,
     _spider_jd_heading_section,
     _spider_jd_relevance_terms,
@@ -4992,6 +4994,17 @@ def jobadder_spider_options():
         return _ai_crawler_locked_response()
     name = str(request.args.get("name") or "").strip().lower()
     fallback = _spider_option_fallbacks(name)
+    if name in {"industry", "industries"}:
+        # Industry is a CV Studio-owned canonical taxonomy mapped to JobAdder
+        # candidate custom fields #1/#2. It is not a JobAdder ``lists``
+        # resource, so return it directly instead of waiting on four known
+        # unsupported network probes before reaching the same values.
+        return jsonify({
+            "items": fallback,
+            "source": "cvstudio_canonical_industry_taxonomy",
+            "canonical": True,
+            "fallback": False,
+        })
     token = _ja_refresh_access_token(force=False)
     if not token:
         return jsonify({"items": fallback, "fallback": True})
@@ -6786,6 +6799,14 @@ def jobadder_spider_search():
         "strict": bool(filters.get("strict")),
         "adjacent": bool(filters.get("adjacent")),
     }
+    industry_field_id, canonical_industry = _spider_industry_filter_spec(safe_filters.get("industry"))
+    if safe_filters.get("industry") and industry_field_id is None:
+        return jsonify({
+            "error": "Industry must be selected from the canonical CV Studio list.",
+            "code": "INVALID_SPIDER_INDUSTRY",
+        }), 400
+    if canonical_industry:
+        safe_filters["industry"] = canonical_industry
     query = re.sub(r"[\x00-\x1f\x7f]", " ", query)
     query = re.sub(r"\s+", " ", query).strip()[:260]
     # Prefer the recruiter-authored rule. Generated plain-keyword OR/AND queries are
@@ -6847,6 +6868,76 @@ def jobadder_spider_search():
 
         if not isinstance(raw_items, list):
             raw_items = []
+
+        discovered_count = len(raw_items)
+        industry_detail_map = {}
+        industry_filter_excluded = 0
+        industry_filter_unavailable = 0
+        industry_detail_requests = 0
+
+        # JobAdder's candidate list endpoint exposes no custom fields and has no
+        # custom-field query parameter. When Industry is selected, load detail
+        # for the complete bounded discovery pool and apply custom field #1/#2
+        # before resume scoring, fit ranking, or return truncation. The retained
+        # detail map is reused by Stage 3, so matching candidates are not fetched
+        # twice.
+        if canonical_industry:
+            detail_ids = []
+            for item in raw_items:
+                cid = _spider_candidate_id(item)
+                if cid and cid not in detail_ids:
+                    detail_ids.append(cid)
+            industry_detail_requests = len(detail_ids)
+            if detail_ids:
+                try:
+                    from concurrent.futures import ThreadPoolExecutor, as_completed
+                    with ThreadPoolExecutor(max_workers=min(6, len(detail_ids))) as pool:
+                        future_map = {
+                            pool.submit(_spider_fetch_candidate_detail, token, cid): cid
+                            for cid in detail_ids
+                        }
+                        for future in as_completed(future_map):
+                            cid = future_map[future]
+                            try:
+                                detail = future.result()
+                                industry_detail_map[cid] = detail if isinstance(detail, dict) else None
+                            except _SpiderJobAdderReconnectRequired:
+                                raise
+                            except Exception:
+                                industry_detail_map[cid] = None
+                except _SpiderJobAdderReconnectRequired:
+                    raise
+                except Exception:
+                    for cid in detail_ids:
+                        if cid in industry_detail_map:
+                            continue
+                        try:
+                            detail = _spider_fetch_candidate_detail(token, cid)
+                            industry_detail_map[cid] = detail if isinstance(detail, dict) else None
+                        except _SpiderJobAdderReconnectRequired:
+                            raise
+                        except Exception:
+                            industry_detail_map[cid] = None
+
+            industry_matched_items = []
+            for item in raw_items:
+                cid = _spider_candidate_id(item)
+                detail = industry_detail_map.get(cid) if cid else None
+                candidate = (
+                    _spider_merge_candidate_summary_and_detail(item, detail)
+                    if isinstance(detail, dict) and detail
+                    else item
+                )
+                industry_status, _industry_evidence = _spider_industry_match(
+                    candidate, canonical_industry
+                )
+                if industry_status == "match":
+                    industry_matched_items.append(candidate)
+                elif industry_status == "unknown":
+                    industry_filter_unavailable += 1
+                else:
+                    industry_filter_excluded += 1
+            raw_items = industry_matched_items
 
         excluded_count = 0
         detail_excluded_count = 0
@@ -7026,7 +7117,7 @@ def jobadder_spider_search():
         fixed_detail_ceiling = min(len(stage_two), desired_eligible)
         detail_scan_ceiling = len(stage_two) if experience_upper_active else fixed_detail_ceiling
         detail_batch_size = 40 if experience_upper_active else max(1, fixed_detail_ceiling)
-        detail_map = {}
+        detail_map = dict(industry_detail_map)
         filtered = []
         detail_attempted = 0
         detail_batches = 0
@@ -7102,7 +7193,7 @@ def jobadder_spider_search():
         filtered = filtered[:limit]
         for item in filtered:
             item.pop("_spiderDiscoveryIndex", None)
-        excluded_count += detail_excluded_count
+        excluded_count += detail_excluded_count + industry_filter_excluded + industry_filter_unavailable
         search_meta = boolean_meta.get("search", {}) if isinstance(boolean_meta, dict) else {}
         try:
             reported_total = int(search_meta.get("reported_total"))
@@ -7111,14 +7202,14 @@ def jobadder_spider_search():
         summary = {
             "query": query,
             "reported_total": reported_total,
-            "scanned": len(raw_items),
+            "scanned": discovered_count,
             "enriched_count": enriched_count,
             "excluded_count": excluded_count,
             "kept": len(filtered),
             "eligible_before_limit": total_kept_before_limit,
             "mode": search_mode,
             # Backward-compatible fields retained for existing renderers/exports.
-            "returned_before_filter": len(raw_items),
+            "returned_before_filter": discovered_count,
             "returned_after_filter": len(filtered),
             "total_kept_before_limit": total_kept_before_limit,
             "result_limit": limit,
@@ -7133,12 +7224,19 @@ def jobadder_spider_search():
             "experience_range_backfill_exhausted": experience_backfill_exhausted,
             "detail_only_excluded": detail_excluded_count,
             "ranking_pool": len(preliminary),
-            "estimated_candidate_api_request_ceiling": (resume_budget * 2) + detail_budget,
+            "estimated_candidate_api_request_ceiling": (resume_budget * 2) + detail_budget + industry_detail_requests,
+            "industry_filter_active": bool(canonical_industry),
+            "industry_filter_field_id": industry_field_id,
+            "industry_filter_scanned": discovered_count if canonical_industry else 0,
+            "industry_filter_matched": len(raw_items) if canonical_industry else 0,
+            "industry_filter_excluded": industry_filter_excluded,
+            "industry_filter_unavailable": industry_filter_unavailable,
+            "industry_detail_requests": industry_detail_requests,
             "filters_applied": safe_filters,
             "minimum_fit_percent": 10,
             "fit_scoring": "JD + recruiter Boolean/must-haves + role + nice-to-haves; latest resume text where available",
-            "workflow": "JobAdder latest-resume keyword discovery, then local eligibility and 0-100 job-scope fit",
-            "note": "Country is filtered locally and is never sent as JobAdder Location. The complete recruiter Boolean is attempted once; when it returns zero rows, CV Studio labels and runs a positive-term plain-keyword fallback. NOT operands are never used for discovery and visible NOT matches are excluded conservatively. Fallback membership is not treated as proof that the complete Boolean matched. Resume scoring is request-bounded (one latest attachment per selected candidate) and selected across the full discovery pool using merit plus first-to-last spread, rather than the old first-page cutoff. Full detail is then loaded for the competitive return pool so salary and notice fields can populate the cards; when a maximum experience bound is active, CV Studio scans deeper in batches until the requested eligible shortlist is filled or the discovery pool is exhausted. Missing hard-filter fields on non-enriched candidates remain visible as unknown unless Strict is enabled; explicit mismatches still exclude.",
+            "workflow": "JobAdder latest-resume keyword discovery, exact local Industry eligibility when selected, then local eligibility and 0-100 job-scope fit",
+            "note": "Country is filtered locally and is never sent as JobAdder Location. Industry is never treated as a resume keyword: a selected broad category is matched exactly against JobAdder candidate custom field #1 and a selected sub-category against custom field #2, before ranking or truncation. The complete recruiter Boolean is attempted once; when it returns zero rows, CV Studio labels and runs a positive-term plain-keyword fallback. NOT operands are never used for discovery and visible NOT matches are excluded conservatively. Fallback membership is not treated as proof that the complete Boolean matched. Resume scoring is request-bounded (one latest attachment per selected candidate) and selected across the full discovery pool using merit plus first-to-last spread, rather than the old first-page cutoff. Full detail is then loaded for the competitive return pool so salary and notice fields can populate the cards; when a maximum experience bound is active, CV Studio scans deeper in batches until the requested eligible shortlist is filled or the discovery pool is exhausted. Missing hard-filter fields on non-enriched candidates remain visible as unknown unless Strict is enabled; explicit mismatches still exclude.",
             "pagination_incomplete": bool(search_meta.get("incomplete")),
             "pagination_warnings": list(search_meta.get("warnings") or [])[:5],
             "pages": search_meta.get("pages"),

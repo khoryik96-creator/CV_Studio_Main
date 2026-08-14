@@ -278,7 +278,6 @@ function buildTheSpiderFallbackQueries(inp) {
   if (role) add(role);
   if (hard.length) add(hard.slice(0,7).map(quote).join(' AND '));
   if (!queries.length && mustRaw) add(mustRaw);
-  if (inp.industry && role) add(role + ' AND "' + inp.industry + '"');
   if (inp.adjacent && role && nice.length) add([role].concat(nice.slice(0,3).map(quote)).join(' AND '));
   if (inp.use_owl && window._theOwlPlainText) parseTheSpiderQueries(window._theOwlPlainText).slice(0,3).forEach(add);
   if (!queries.length && inp.jd) {
@@ -2242,6 +2241,19 @@ async function runTheSpiderJobAdderSearch(opts) {
     ? [authoredBoolean]
     : ((window._theSpiderQueries && window._theSpiderQueries.length) ? window._theSpiderQueries.slice(0,4) : buildTheSpiderFallbackQueries(spiderInputs).slice(0,4));
   if (!queries.length) { queries = buildTheSpiderFallbackQueries(spiderInputs).slice(0,4); }
+  if (spiderInputs.industry) {
+    // Industry is an exact backend eligibility check against JobAdder custom
+    // field #1/#2, never a latest-resume keyword. Use one independent discovery
+    // query so the same bounded candidate pool is not detail-scanned repeatedly.
+    if (authoredBoolean) {
+      queries = buildTheSpiderDiscoveryQueries(spiderInputs).slice(0,1);
+    } else if (spiderInputs.role) {
+      var industryRole = String(spiderInputs.role || '').replace(/"/g, '').trim();
+      queries = industryRole ? ['"' + industryRole + '"'] : queries.slice(0,1);
+    } else {
+      queries = buildTheSpiderFallbackQueries(spiderInputs).slice(0,1);
+    }
+  }
   if (!queries.length) { markTabFailed('thespider', tabRunToken, {forceBrowser:true}); showToast('Add JD, role, or must-have keywords first', 'err'); return; }
   var out=document.getElementById('theSpiderSearchOutput'), body=document.getElementById('theSpiderSearchBody'), badge=document.getElementById('theSpiderSearchBadge');
   if (out) out.classList.add('show');
@@ -2285,7 +2297,7 @@ async function runTheSpiderJobAdderSearch(opts) {
   var summaryHtml = filterSummaries.map(renderTheSpiderFilterSummary).join('');
   var totalReported = filterSummaries.reduce(function(sum,s){ var n=Number(s && s.reported_total); return sum + (Number.isFinite(n) ? n : 0); }, 0);
   var emptyMessage = totalReported > 0
-    ? ('JobAdder matched ' + totalReported + ' candidate(s), but local filters removed all. Loosen Country, Residential Status, IT Skills, Qualifications, Years, Exclude, or Strict filters.')
+    ? ('JobAdder matched ' + totalReported + ' candidate(s), but local filters removed all. Loosen Industry, Country, Residential Status, IT Skills, Qualifications, Years, Exclude, or Strict filters.')
     : 'No candidates returned for this query. Try broader strings or fewer must-haves.';
   var sortEl=document.getElementById('theSpiderSort');
   var sortMode=(sortEl && sortEl.value) || 'fit_desc';
@@ -2355,4 +2367,3 @@ function initTheSpiderTabUI() {
   updateTheSpiderYearsLabel();
   if (aiCrawlerIsUnlocked()) loadTheSpiderJobAdderOptions();
 }
-

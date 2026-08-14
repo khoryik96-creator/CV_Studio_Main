@@ -788,6 +788,23 @@ def _spider_item_score(candidate, filters, enriched=False):
     blob_low = blob.lower()
     unknown, excluded, hard_passed = [], [], []
 
+    industry = str(filters.get("industry") or "").strip()
+    if industry:
+        industry_status, industry_evidence = _spider_industry_match(candidate, industry)
+        if industry_status == "match":
+            hard_passed.append("industry: " + industry_evidence)
+        elif industry_status == "invalid":
+            return False, 0, [], unknown, ["invalid industry filter"], hard_passed, []
+        elif industry_status == "mismatch":
+            return False, 0, [], unknown, ["industry mismatch: " + industry_evidence[:160]], hard_passed, []
+        elif enriched:
+            return False, 0, [], unknown, ["industry not visible in JobAdder custom field"], hard_passed, []
+        else:
+            # Candidate list rows do not contain custom fields. The route loads
+            # full detail for every discovered row before ranking when Industry
+            # is selected, then calls this helper again with enriched=True.
+            unknown.append("industry requires JobAdder candidate detail")
+
     # Only the separate Exclude/Avoid field is rechecked locally.
     # Native JobAdder Boolean rules (including NOT) are trusted as returned and are
     # never re-evaluated against the incomplete candidate-detail JSON.
@@ -907,8 +924,6 @@ def _spider_item_score(candidate, filters, enriched=False):
     unknown.extend(fit_unknown)
     if filters.get("salary"):
         unknown.append("salary not used in fit score")
-    if filters.get("industry"):
-        unknown.append("industry not used in fit score")
     if filters.get("targets"):
         unknown.append("target companies not used in fit score")
 
@@ -975,6 +990,102 @@ SPIDER_INDUSTRY_SUBCATEGORIES = (
     "Professional Services - IT Outsourcing", "Professional Services - Recruitment & Staffing",
     "Professional Services - Consulting",
 )
+
+
+def _spider_industry_filter_spec(value):
+    """Return ``(custom field id, canonical value)`` for a selected Industry.
+
+    CV Studio writes broad categories to JobAdder candidate custom field #1 and
+    sub-categories to custom field #2. Matching is case-insensitive for a typed
+    datalist value, while the returned value always retains canonical spelling.
+    """
+    selected = re.sub(r"\s+", " ", str(value or "")).strip().casefold()
+    if not selected:
+        return None, ""
+    for field_id, options in (
+        (1, SPIDER_INDUSTRY_CATEGORIES),
+        (2, SPIDER_INDUSTRY_SUBCATEGORIES),
+    ):
+        for option in options:
+            if re.sub(r"\s+", " ", option).strip().casefold() == selected:
+                return field_id, option
+    return None, ""
+
+
+def _spider_industry_custom_values(candidate, field_id):
+    """Read the selected JobAdder custom field values from candidate detail."""
+    if not isinstance(candidate, dict):
+        return []
+
+    def flatten_values(value, depth=0):
+        if value is None or depth > 5:
+            return []
+        if isinstance(value, str):
+            return [value]
+        if isinstance(value, (int, float, bool)):
+            return [str(value)]
+        if isinstance(value, (list, tuple, set)):
+            out = []
+            for item in list(value)[:80]:
+                out.extend(flatten_values(item, depth + 1))
+            return out
+        if isinstance(value, dict):
+            out = []
+            for key in ("value", "name", "label", "text", "displayName"):
+                if key in value:
+                    out.extend(flatten_values(value.get(key), depth + 1))
+            return out
+        return [str(value)]
+
+    collections = []
+    for source in (candidate, candidate.get("_spiderDetail")):
+        if not isinstance(source, dict):
+            continue
+        for key in ("custom", "customFields"):
+            value = source.get(key)
+            if isinstance(value, list):
+                collections.append(value)
+
+    values = []
+    seen = set()
+    for collection in collections:
+        for item in collection:
+            if not isinstance(item, dict):
+                continue
+            raw_id = None
+            for key in ("fieldId", "fieldID", "customFieldId", "customFieldID", "id"):
+                if item.get(key) not in (None, ""):
+                    raw_id = item.get(key)
+                    break
+            try:
+                item_field_id = int(raw_id)
+            except (TypeError, ValueError):
+                continue
+            if item_field_id != int(field_id):
+                continue
+            for raw_value in flatten_values(item.get("value")):
+                text = re.sub(r"\s+", " ", str(raw_value or "")).strip()
+                key = text.casefold()
+                if text and key not in seen:
+                    seen.add(key)
+                    values.append(text)
+    return values
+
+
+def _spider_industry_match(candidate, selected):
+    """Return exact JobAdder Industry eligibility state and safe evidence."""
+    field_id, canonical = _spider_industry_filter_spec(selected)
+    if not str(selected or "").strip():
+        return "inactive", ""
+    if field_id is None:
+        return "invalid", str(selected or "").strip()
+    values = _spider_industry_custom_values(candidate, field_id)
+    canonical_key = re.sub(r"\s+", " ", canonical).strip().casefold()
+    if any(re.sub(r"\s+", " ", value).strip().casefold() == canonical_key for value in values):
+        return "match", canonical
+    if values:
+        return "mismatch", ", ".join(values[:4])
+    return "unknown", canonical
 
 
 def _spider_option_fallbacks(name):
