@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Continue'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 if (-not $Root.EndsWith('\')) { $Root += '\' }
 $Log = Join-Path $Root 'install_log.txt'
-$InstallVersion = 'v24.6.335'
+$InstallVersion = 'v24.6.336'
 $AntiwordVersion = '1.3.5'
 $AntiwordRuntimeFileCount = 37
 $AntiwordManifestSha256 = '7d365a89f268a2fc34f815b369474124bc6a1aac02e9b0b57e6dfd5eb5368da0'
@@ -654,7 +654,7 @@ function Install-PythonPackages {
     }
     $stampDir = Join-Path $env:APPDATA 'GUOLabCVStudio'
     New-Item -ItemType Directory -Path $stampDir -Force | Out-Null
-    Set-Content -LiteralPath (Join-Path $stampDir '.deps_ok') -Value 'v24.6.335-bundled-pdfium-ocr-antiword' -Encoding ASCII
+    Set-Content -LiteralPath (Join-Path $stampDir '.deps_ok') -Value 'v24.6.336-bundled-pdfium-ocr-antiword' -Encoding ASCII
     Write-Step '    Python packages ready.'
     return $true
 }
@@ -1331,10 +1331,20 @@ function Check-PdfOcrRenderer {
 function Install-NodePackages {
     Write-Blank
     Write-Step '[7/7] Verifying Node DOCX runtime...'
-    $verifyRc = Run-Logged -FilePath 'node' -Arguments @('-e', "const p=require('adm-zip/package.json');if(p.version!=='0.6.0')process.exit(2);require('adm-zip')") -WorkingDirectory $Root
-    if ($verifyRc -eq 0) {
-        Write-Step '    Required Node package adm-zip 0.6.0 is installed and loadable.'
-        return $true
+    # A fresh owner/source ZIP deliberately does not contain node_modules. Do not
+    # run Node's require() probe until the package exists: its expected
+    # MODULE_NOT_FOUND stack trace looks like an installation failure even though
+    # the fallback npm install below succeeds. Protected packages are validated at
+    # startup and always bundle this exact file, so a failed protected probe still
+    # remains a visible, fail-closed packaging error.
+    if (Test-Path -LiteralPath $script:ProtectedAdmZipPackage -PathType Leaf) {
+        $verifyRc = Run-Logged -FilePath 'node' -Arguments @('-e', "const p=require('adm-zip/package.json');if(p.version!=='0.6.0')process.exit(2);require('adm-zip')") -WorkingDirectory $Root
+        if ($verifyRc -eq 0) {
+            Write-Step '    Required Node package adm-zip 0.6.0 is installed and loadable.'
+            return $true
+        }
+    } else {
+        $verifyRc = 1
     }
     if ($script:IsProtectedPackage) {
         Write-Step '    ERROR: The protected package bundled adm-zip runtime failed verification.'
