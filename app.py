@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.338"
+_INSTALL_RECEIPT_VERSION = "v24.6.339"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -341,7 +341,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.338"
+_CVSTUDIO_VERSION = "v24.6.339"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -5147,12 +5147,15 @@ def jobadder_spider_options():
     return jsonify({"items": fallback, "fallback": True, "tried": candidate_lists, "errors": errors[:6]})
 
 
-def _spider_extract_legacy_doc_text_for_preview(raw):
-    """Verified Antiword text extraction for legacy .doc Spider previews.
+def _spider_extract_legacy_doc_for_preview(raw):
+    """Return trusted preview material for one legacy ``.doc`` document.
 
-    LibreOffice and native parsing remain defense-in-depth probes after a
-    document-specific Antiword failure, but their text is never returned as a
-    verified legacy-.doc result.
+    The pinned Antiword runtime always runs first.  If it completes but rejects
+    this exact document, the owner-authorized conversion exception may turn the
+    bytes into a validated, macro-free DOCX with Microsoft Word or LibreOffice.
+    A missing/untrusted runtime or an execution-time failure never reaches the
+    converter.  The returned dictionary keeps the extraction provenance and,
+    when conversion was necessary, the validated DOCX bytes for visual reuse.
     """
     raw = raw or b''
     if not raw:
@@ -5162,7 +5165,7 @@ def _spider_extract_legacy_doc_text_for_preview(raw):
             "PDF and retry.",
         )
 
-    # 1) The only accepted success path is the pinned, function-verified runtime.
+    # 1) Prefer text from the pinned, function-verified runtime.
     _require_verified_antiword()
     try:
         import tempfile as _tmp, os as _os
@@ -5175,11 +5178,49 @@ def _spider_extract_legacy_doc_text_for_preview(raw):
                 for enc in ('utf-8', 'cp1252', 'latin-1'):
                     txt = _spider_clean_doc_text_for_preview(res.stdout.decode(enc, errors='ignore'))
                     if _spider_doc_text_quality_ok(txt):
-                        return txt[:12000]
-    except Exception:
-        pass
+                        return {
+                            "text": txt[:30000],
+                            "source": "downloaded legacy DOC resume",
+                            "converter": "",
+                            "docx_bytes": b"",
+                        }
+    except AntiwordDependencyError:
+        raise
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise AntiwordDependencyError(
+            "functional-execution-failed",
+            "Verified Antiword could not run safely for this legacy .doc. "
+            "Run the CV Studio installer again, then retry.",
+        ) from exc
+    except Exception as exc:
+        raise AntiwordDependencyError(
+            "functional-execution-failed",
+            "Verified Antiword could not run safely for this legacy .doc. "
+            "Run the CV Studio installer again, then retry.",
+        ) from exc
 
-    # 2) LibreOffice remains a bounded defense-in-depth probe only.
+    # 2) Antiword completed and rejected this exact input.  Reuse the bounded
+    # conversion exception already used by /extract-text.  A converted DOCX is
+    # structurally validated by _convert_legacy_doc_to_docx_bytes before this
+    # code can extract or render it.
+    converted_docx, converter = _convert_legacy_doc_to_docx_bytes(raw)
+    if converted_docx:
+        try:
+            converted_text = _spider_clean_doc_text_for_preview(
+                _extract_docx_text_preserve_tables(converted_docx)
+            )
+            if _spider_doc_text_quality_ok(converted_text):
+                return {
+                    "text": converted_text[:30000],
+                    "source": "legacy DOC converted via {}".format(converter),
+                    "converter": converter,
+                    "docx_bytes": converted_docx,
+                }
+        except Exception:
+            pass
+
+    # 3) LibreOffice remains a bounded defense-in-depth probe only.  It cannot
+    # satisfy success here because the validated DOCX conversion above failed.
     try:
         import tempfile as _tmp, subprocess as _sp, os as _os
         soffice = _find_soffice_binary()
@@ -5205,7 +5246,7 @@ def _spider_extract_legacy_doc_text_for_preview(raw):
     except Exception:
         pass
 
-    # 3) Native OLE parsing remains defense-in-depth and cannot satisfy success.
+    # 4) Native OLE parsing remains defense-in-depth and cannot satisfy success.
     try:
         import struct as _struct
         import olefile as _olefile
@@ -5272,7 +5313,7 @@ def _spider_extract_legacy_doc_text_for_preview(raw):
     except Exception:
         pass
 
-    # 4) Raw scans are also diagnostic-only and never become accepted output.
+    # 5) Raw scans are also diagnostic-only and never become accepted output.
     for enc in ('utf-16-le', 'cp1252', 'latin-1'):
         try:
             txt = _spider_clean_doc_text_for_preview(raw[:300000].decode(enc, errors='ignore'))
@@ -5291,6 +5332,11 @@ def _spider_extract_legacy_doc_text_for_preview(raw):
         "Verified Antiword could not decode this legacy .doc. Convert it to "
         "DOCX or PDF and retry.",
     )
+
+
+def _spider_extract_legacy_doc_text_for_preview(raw):
+    """Compatibility wrapper returning trusted legacy-DOC preview text."""
+    return _spider_extract_legacy_doc_for_preview(raw).get("text", "")
 
 
 def _spider_scan_doc_text_runs(buf, min_run=6):
@@ -5433,11 +5479,10 @@ def _spider_unverified_doc_recovery_text(raw, ctype, filename, allow_unverified)
 
     Shared by every AntiwordDependencyError handler in the AI Crawler preview
     flow so the recruiter's explicit ``allow_unverified`` opt-in is honoured no
-    matter where the verified-Antiword gate raised. In particular the *visual*
-    render path (`_office_bytes_to_pdf_preview`) runs the verified-Antiword gate
-    before extraction, so for a legacy .doc it raises before `extract_text` — the
-    place the opt-in recovery used to live — is ever called. Centralising the
-    decision here closes that gap.
+    matter where the verified-Antiword gate raised. The normal visual path now
+    reuses the trusted Antiword-first DOCX conversion exception; this helper is
+    retained for a genuine dependency/runtime failure or a document that both
+    Antiword and the installed converters cannot handle.
 
     The result is never Antiword-verified: callers must label it and must never
     cache it. Recovery requires the explicit opt-in and a real legacy .doc, and
@@ -5582,11 +5627,15 @@ def _spider_extract_text_from_download(raw, content_type="", filename="", ocr_pa
     if is_legacy_doc:
         if callable(cancel_check):
             cancel_check()
-        text = _spider_extract_legacy_doc_text_for_preview(raw)
+        legacy_preview = _spider_extract_legacy_doc_for_preview(raw)
+        text = str(legacy_preview.get("text") or "")
         if callable(cancel_check):
             cancel_check()
         if text:
-            return text[:30000], "downloaded legacy DOC resume"
+            return text[:30000], str(
+                legacy_preview.get("source")
+                or "downloaded legacy DOC resume"
+            )[:200]
         return "", "legacy DOC resume found but preview extraction failed"
 
     parsed = None
@@ -5767,7 +5816,121 @@ def _spider_pdf_text_layer_from_pdfium(textpage, page_width, page_height, max_it
     return {"text": text, "items": items, "truncated": len(items) >= max_items}
 
 
-def _spider_pdfium_preview_pages(raw, first_page=1, last_page=None, dpi=118, cancel_check=None):
+def _spider_ocr_text_layer_from_image(
+    image,
+    *,
+    max_items=2200,
+    timeout=18,
+    pytesseract_module=None,
+):
+    """Build bounded visual word boxes from Tesseract OCR output.
+
+    This is used only for foreground preview pages that have no usable PDF
+    coordinate layer.  Coordinates are normalized against the already-rendered
+    image, so the browser can reuse the same overlay renderer as native PDF text.
+    """
+    if image is None:
+        return None
+    width, height = tuple(getattr(image, "size", ()) or (0, 0))
+    if width <= 0 or height <= 0 or width * height > _MAX_IMAGE_PIXELS:
+        return None
+    try:
+        pytesseract = pytesseract_module
+        if pytesseract is None:
+            import pytesseract as _pytesseract
+
+            pytesseract = _pytesseract
+            tess = _spider_tesseract_path()
+            if not tess:
+                return None
+            pytesseract.pytesseract.tesseract_cmd = tess
+        output_type = getattr(getattr(pytesseract, "Output", None), "DICT", "dict")
+        data = pytesseract.image_to_data(
+            image,
+            lang="eng",
+            output_type=output_type,
+            timeout=max(5, min(25, int(timeout or 18))),
+        )
+    except Exception:
+        return None
+    if not isinstance(data, dict):
+        return None
+    words = list(data.get("text") or [])
+    coordinate_lengths = [
+        len(list(data.get(key) or []))
+        for key in ("left", "top", "width", "height")
+    ]
+    count = min([len(words)] + coordinate_lengths) if words else 0
+    if count <= 0:
+        return None
+
+    def value_at(key, index, default=""):
+        values = data.get(key) or []
+        return values[index] if index < len(values) else default
+
+    text = ""
+    items = []
+    previous_line = None
+    for index in range(count):
+        token = str(words[index] or "").strip()
+        if not token:
+            continue
+        try:
+            confidence = float(value_at("conf", index, 0))
+        except Exception:
+            confidence = 0.0
+        if confidence < 10.0:
+            continue
+        try:
+            left = max(0.0, float(data["left"][index]))
+            top = max(0.0, float(data["top"][index]))
+            box_width = max(0.0, float(data["width"][index]))
+            box_height = max(0.0, float(data["height"][index]))
+        except Exception:
+            continue
+        if box_width <= 0 or box_height <= 0 or left >= width or top >= height:
+            continue
+        line_key = tuple(
+            str(value_at(key, index, ""))
+            for key in ("page_num", "block_num", "par_num", "line_num")
+        )
+        separator = "" if not text else ("\n" if previous_line is not None and line_key != previous_line else " ")
+        start = len(text) + len(separator)
+        text += separator + token
+        end = len(text)
+        items.append({
+            "t": token[:160],
+            "s": start,
+            "e": end,
+            "x": round(min(1.0, left / float(width)), 6),
+            "y": round(min(1.0, top / float(height)), 6),
+            "w": round(max(0.0001, min(1.0 - (left / float(width)), box_width / float(width))), 6),
+            "h": round(max(0.0025, min(1.0 - (top / float(height)), box_height / float(height))), 6),
+        })
+        previous_line = line_key
+        if len(items) >= max(1, int(max_items or 2200)) or len(text) >= 50000:
+            break
+    if not items or not _spider_clean_doc_text_for_preview(text):
+        return None
+    return {
+        "text": text[:50000],
+        "items": items,
+        "truncated": len(items) >= max(1, int(max_items or 2200)),
+        "ocr": True,
+    }
+
+
+def _spider_pdfium_preview_pages(
+    raw,
+    first_page=1,
+    last_page=None,
+    dpi=118,
+    cancel_check=None,
+    *,
+    ocr_missing_text_layers=False,
+    ocr_page_limit=3,
+    ocr_deadline_seconds=28,
+):
     """Render PDF pages and their selectable coordinate text layers in one pass."""
     import pypdfium2 as pdfium
     document = pdfium.PdfDocument(raw)
@@ -5785,6 +5948,8 @@ def _spider_pdfium_preview_pages(raw, first_page=1, last_page=None, dpi=118, can
         last_page = min(page_count, max(first_page, int(last_page)))
         scale = max(1.0, min(2.2, float(dpi or 118) / 72.0))
         remaining_text_items = 16000
+        ocr_started = time.monotonic()
+        ocr_pages = 0
         for page_index in range(first_page - 1, last_page):
             if callable(cancel_check):
                 cancel_check()
@@ -5803,11 +5968,10 @@ def _spider_pdfium_preview_pages(raw, first_page=1, last_page=None, dpi=118, can
                 # Extract page text once for all-page Ctrl+F coverage. Rotated
                 # pages keep searchable text but intentionally omit coordinate
                 # overlays because producer-specific rotations can misalign boxes.
+                page_text = ""
                 try:
                     textpage = page.get_textpage()
                     page_text = str(textpage.get_text_range() or "")[:50000]
-                    if page_text:
-                        document_text_parts.append(page_text)
                     if rotation % 360 == 0 and remaining_text_items > 0:
                         text_layer = _spider_pdf_text_layer_from_pdfium(
                             textpage,
@@ -5819,6 +5983,32 @@ def _spider_pdfium_preview_pages(raw, first_page=1, last_page=None, dpi=118, can
                             remaining_text_items -= len(text_layer.get("items") or [])
                 except Exception:
                     text_layer = None
+                if (
+                    ocr_missing_text_layers
+                    and not (text_layer and text_layer.get("items"))
+                    and ocr_pages < max(0, int(ocr_page_limit or 0))
+                    and time.monotonic() - ocr_started < float(ocr_deadline_seconds or 28)
+                    and remaining_text_items > 0
+                ):
+                    remaining = float(ocr_deadline_seconds or 28) - (
+                        time.monotonic() - ocr_started
+                    )
+                    if remaining > 3 and _OCR_SEMAPHORE.acquire(timeout=1):
+                        try:
+                            text_layer = _spider_ocr_text_layer_from_image(
+                                image,
+                                max_items=min(2200, remaining_text_items),
+                                timeout=min(18, int(remaining)),
+                            )
+                        finally:
+                            _OCR_SEMAPHORE.release()
+                        ocr_pages += 1
+                        if text_layer:
+                            remaining_text_items -= len(text_layer.get("items") or [])
+                            if not page_text.strip():
+                                page_text = str(text_layer.get("text") or "")
+                if page_text:
+                    document_text_parts.append(page_text)
                 pages.append({"image": image, "text_layer": text_layer, "rotation": rotation})
             finally:
                 try:
@@ -5871,7 +6061,16 @@ def _spider_pdfium_preview_pages(raw, first_page=1, last_page=None, dpi=118, can
             pass
 
 
-def _spider_pdf_pages_preview_payload(raw, source, note="", max_pages=12, dpi=118, cancel_check=None):
+def _spider_pdf_pages_preview_payload(
+    raw,
+    source,
+    note="",
+    max_pages=12,
+    dpi=118,
+    cancel_check=None,
+    *,
+    ocr_missing_text_layers=False,
+):
     """Render PDF pages into fast preview images plus a selectable visual text layer.
 
     The original PDF bytes are never sent to the browser, so native PDF download
@@ -5892,6 +6091,7 @@ def _spider_pdf_pages_preview_payload(raw, source, note="", max_pages=12, dpi=11
             last_page=max(1, int(max_pages or 12)),
             dpi=max(96, min(150, int(dpi or 118))),
             cancel_check=cancel_check,
+            ocr_missing_text_layers=ocr_missing_text_layers,
         )
     except _SpiderPreviewCancelled:
         raise
@@ -5913,6 +6113,31 @@ def _spider_pdf_pages_preview_payload(raw, source, note="", max_pages=12, dpi=11
             return None
     if not rendered:
         return None
+
+    # The PDFium fallback renderer has no native coordinate API.  Preserve the
+    # same foreground-only OCR overlay behavior when that fallback is active.
+    if ocr_missing_text_layers and not any(
+        page.get("text_layer") for page in rendered
+    ):
+        ocr_parts = []
+        ocr_started = time.monotonic()
+        for page_data in rendered[:3]:
+            if time.monotonic() - ocr_started >= 28:
+                break
+            if not _OCR_SEMAPHORE.acquire(timeout=1):
+                break
+            try:
+                layer = _spider_ocr_text_layer_from_image(
+                    page_data.get("image"),
+                    timeout=max(5, min(18, int(28 - (time.monotonic() - ocr_started)))),
+                )
+            finally:
+                _OCR_SEMAPHORE.release()
+            if layer:
+                page_data["text_layer"] = layer
+                ocr_parts.append(str(layer.get("text") or ""))
+        if ocr_parts and not str(visual_search_text or "").strip():
+            visual_search_text = "\n".join(ocr_parts)[:30000]
 
     page_images = []
     visual_text_layers = []
@@ -5972,7 +6197,10 @@ def _spider_pdf_pages_preview_payload(raw, source, note="", max_pages=12, dpi=11
     if page_count > len(page_images):
         notes.append("Showing the first {} of {} pages in protected preview mode.".format(len(page_images), page_count))
     if any(layer and layer.get("items") for layer in visual_text_layers):
-        notes.append("Visual text selection and keyword overlays are available.")
+        if any(layer and layer.get("ocr") for layer in visual_text_layers):
+            notes.append("Visual text selection and keyword overlays are available through OCR.")
+        else:
+            notes.append("Visual text selection and keyword overlays are available.")
     else:
         notes.append("This file has no coordinate text layer; use Select text for extracted/OCR text.")
     notes.append("Preview download controls are disabled.")
@@ -6019,7 +6247,14 @@ def _spider_visual_preview_payload(raw, content_type="", filename="", max_pages=
     if content_kind == "pdf" or (
         not content_kind and ("pdf" in ctype or ext == ".pdf")
     ):
-        return _spider_pdf_pages_preview_payload(raw, "actual JobAdder PDF resume", max_pages=max_pages, dpi=dpi, cancel_check=cancel_check)
+        return _spider_pdf_pages_preview_payload(
+            raw,
+            "actual JobAdder PDF resume",
+            max_pages=max_pages,
+            dpi=dpi,
+            cancel_check=cancel_check,
+            ocr_missing_text_layers=cancel_check is None,
+        )
     if content_kind == "image" or (
         not content_kind
         and ("image/" in ctype or ext in (".png", ".jpg", ".jpeg"))
@@ -6039,15 +6274,32 @@ def _spider_visual_preview_payload(raw, content_type="", filename="", max_pages=
         )
     )
     if looks_office:
+        office_raw = raw
+        legacy_preview = None
         if is_legacy_doc:
             conv_ext = ".doc"
+            legacy_preview = _spider_extract_legacy_doc_for_preview(raw)
+            converted_docx = legacy_preview.get("docx_bytes") or b""
+            if converted_docx:
+                office_raw = converted_docx
+                conv_ext = ".docx"
         elif content_kind == "zip":
             conv_ext = ".docx"
         else:
             conv_ext = ext or (".doc" if "msword" in ctype else ".docx")
         try:
-            pdf_bytes, note = _office_bytes_to_pdf_preview(raw, conv_ext, cancel_check=cancel_check)
+            pdf_bytes, note = _office_bytes_to_pdf_preview(
+                office_raw,
+                conv_ext,
+                cancel_check=cancel_check,
+                legacy_doc_gate_complete=bool(is_legacy_doc),
+            )
             if pdf_bytes:
+                if legacy_preview and legacy_preview.get("converter"):
+                    note = "{} Legacy DOC was safely converted via {} after Antiword rejected this document.".format(
+                        note,
+                        legacy_preview.get("converter"),
+                    ).strip()
                 return _spider_pdf_pages_preview_payload(
                     pdf_bytes,
                     "actual JobAdder resume converted to PDF",
@@ -6055,6 +6307,7 @@ def _spider_visual_preview_payload(raw, content_type="", filename="", max_pages=
                     max_pages=max_pages,
                     dpi=dpi,
                     cancel_check=cancel_check,
+                    ocr_missing_text_layers=cancel_check is None,
                 )
         except _SpiderPreviewCancelled:
             raise
@@ -6062,9 +6315,33 @@ def _spider_visual_preview_payload(raw, content_type="", filename="", max_pages=
             raise
         except Exception:
             pass
-        if conv_ext == ".docx" or raw[:2] == b"PK":
+        if conv_ext == ".docx" or office_raw[:2] == b"PK":
             try:
-                return {"visual_mode": "html", "html": _docx_bytes_to_preview_html(raw), "source": "actual JobAdder DOCX resume layout preview", "note": "LibreOffice visual conversion unavailable; showing DOCX layout fallback. Preview download controls are disabled.", "download_disabled": True}
+                source = "actual JobAdder DOCX resume layout preview"
+                note = "LibreOffice visual conversion unavailable; showing DOCX layout fallback. Preview download controls are disabled."
+                search_text = ""
+                if legacy_preview:
+                    search_text = str(legacy_preview.get("text") or "")[:30000]
+                    source = "actual JobAdder legacy DOC converted via {}".format(
+                        legacy_preview.get("converter") or "verified Antiword"
+                    )
+                    note = (
+                        "Antiword was verified and ran first. The document was "
+                        "converted to a validated DOCX via {} for this visual "
+                        "preview. Preview download controls are disabled."
+                    ).format(legacy_preview.get("converter") or "the installed Office converter")
+                if not search_text:
+                    search_text = _spider_clean_doc_text_for_preview(
+                        _extract_docx_text_preserve_tables(office_raw)
+                    )[:30000]
+                return {
+                    "visual_mode": "html",
+                    "html": _docx_bytes_to_preview_html(office_raw),
+                    "visual_search_text": search_text,
+                    "source": source,
+                    "note": note,
+                    "download_disabled": True,
+                }
             except Exception:
                 return None
     return None
@@ -12315,7 +12592,13 @@ def _antiword_dependency_payload(error):
     }
 
 
-def _office_bytes_to_pdf_preview(file_bytes, ext, cancel_check=None):
+def _office_bytes_to_pdf_preview(
+    file_bytes,
+    ext,
+    cancel_check=None,
+    *,
+    legacy_doc_gate_complete=False,
+):
     """Best-effort Office/ODT/RTF visual preview through LibreOffice PDF conversion.
 
     Optional cancellation is used only by AI Crawler background prefetch. A
@@ -12331,7 +12614,7 @@ def _office_bytes_to_pdf_preview(file_bytes, ext, cancel_check=None):
     )
     if is_legacy_doc:
         ext = ".doc"
-    if is_legacy_doc:
+    if is_legacy_doc and not legacy_doc_gate_complete:
         # A verified installation alone is insufficient: Antiword must also
         # decode this exact document before LibreOffice may render its layout.
         # The rendered PDF is visual-only and is never treated as extracted
@@ -12539,14 +12822,32 @@ def preview_file():
         if ext in ('.docx', '.doc', '.rtf', '.odt'):
             if ext in ('.docx', '.odt'):
                 _validate_zip_payload(file_bytes, ext[1:].upper())
-            pdf_bytes, note = _office_bytes_to_pdf_preview(file_bytes, ext)
+            preview_bytes = file_bytes
+            preview_ext = ext
+            legacy_preview = None
+            if ext == '.doc':
+                legacy_preview = _spider_extract_legacy_doc_for_preview(file_bytes)
+                converted_docx = legacy_preview.get("docx_bytes") or b""
+                if converted_docx:
+                    preview_bytes = converted_docx
+                    preview_ext = '.docx'
+            pdf_bytes, note = _office_bytes_to_pdf_preview(
+                preview_bytes,
+                preview_ext,
+                legacy_doc_gate_complete=bool(legacy_preview),
+            )
             if pdf_bytes:
                 _pdf_page_count(pdf_bytes)
                 data = _base64.b64encode(pdf_bytes).decode('ascii')
                 return jsonify({"ok": True, "mode": "pdf", "mime": "application/pdf", "data_url": "data:application/pdf;base64," + data, "note": note})
-            if ext == '.docx':
+            if preview_ext == '.docx':
                 try:
-                    html_preview = _docx_bytes_to_preview_html(file_bytes)
+                    html_preview = _docx_bytes_to_preview_html(preview_bytes)
+                    if legacy_preview:
+                        note = (
+                            "Antiword was verified and ran first. This document "
+                            "was converted to validated DOCX via {} for preview."
+                        ).format(legacy_preview.get("converter") or "the installed Office converter")
                     return jsonify({"ok": True, "mode": "html", "html": html_preview, "note": note or "Approximate DOCX layout preview; Text mode is used for anonymising."})
                 except Exception:
                     pass

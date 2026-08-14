@@ -190,6 +190,24 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
+- **Legacy-DOC visual preview and Boolean-highlight corrective — PR #154
+  CANDIDATE.** Branch `chatgpt/pr154-v24.6.339-doc-preview-highlights` makes
+  AI Crawler and `/preview-file` honor the existing verified-Antiword-first
+  conversion exception. If Antiword safely completes and rejects only that
+  document, the validated Microsoft Word/LibreOffice DOCX conversion is reused
+  for a visual HTML fallback and searchable text; runtime/trust failures still
+  never reach a converter. Converted Office HTML is highlighted directly,
+  and literal Boolean matching tolerates NBSP, ligatures, soft hyphens and
+  line-wrap hyphenation. Foreground scanned PDFs can build bounded word boxes
+  with the already-mandatory Tesseract dependency (three pages / 28 seconds);
+  background prefetch does not OCR. The owner-observed Yan Yen Fen JobAdder
+  `.doc` returns HTTP 200 as a Microsoft-Word-converted visual HTML preview in
+  genuine local testing. No new dependency, route, schema or trust exception
+  is introduced. Validation: 899 Python tests passed, 4 skipped, 1 unrelated
+  Windows receipt-isolation test deselected, and 93 subtests passed; all 15
+  JavaScript fixtures, route/version gates, Windows protected-source preflight,
+  repository consistency and the 24-assertion live smoke passed. This candidate
+  is not merged.
 - **Page-aware PDF/OCR + receipt hardening — MERGED.** PR #152 was
   squash-merged to `master` as `f1934b7` at v24.6.331. The corrective
   preserves usable text and bullet geometry page-by-page, OCRs only pages with

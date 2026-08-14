@@ -1477,6 +1477,69 @@ function clearTheSpiderVisualHighlightClasses(kind) {
       word.removeAttribute('data-spider-visual-term');
     }
   });
+  clearTheSpiderHtmlHighlightMarks(kind);
+}
+function hasTheSpiderHtmlVisualPreview() {
+  return !!document.querySelector('#theSpiderPreviewVisualPane .spider-cv-doc-html');
+}
+function hasTheSpiderDirectVisualHighlightSurface() {
+  return hasTheSpiderVisualTextLayer() || hasTheSpiderHtmlVisualPreview();
+}
+function clearTheSpiderHtmlHighlightMarks(kind) {
+  var selector = '.spider-cv-doc-html mark[data-spider-html-highlight]';
+  document.querySelectorAll(selector).forEach(function(mark){
+    var markKind = String(mark.getAttribute('data-spider-html-highlight') || '');
+    if (kind && markKind !== kind) return;
+    var parent = mark.parentNode;
+    if (!parent) return;
+    parent.replaceChild(document.createTextNode(mark.textContent || ''), mark);
+    try { parent.normalize(); } catch(e) {}
+  });
+}
+function theSpiderHtmlPreviewTextNodes(root) {
+  var nodes = [], total = 0;
+  function visit(node) {
+    if (!node || nodes.length >= 8000 || total >= 60000) return;
+    if (node.nodeType === 3) {
+      var value = String(node.nodeValue || '');
+      if (value.trim()) { nodes.push(node); total += value.length; }
+      return;
+    }
+    if (node.nodeType !== 1 || /^(SCRIPT|STYLE|MARK)$/i.test(String(node.tagName || ''))) return;
+    Array.prototype.slice.call(node.childNodes || []).forEach(visit);
+  }
+  visit(root);
+  return nodes;
+}
+function applyTheSpiderHtmlBooleanHighlights(terms) {
+  clearTheSpiderHtmlHighlightMarks('boolean');
+  var root = document.querySelector('#theSpiderPreviewVisualPane .spider-cv-doc-html');
+  if (!root || !terms || !terms.length) return {matches:[],matchedTerms:{}};
+  var matches = [], matchedTerms = {};
+  theSpiderHtmlPreviewTextNodes(root).forEach(function(textNode){
+    if (matches.length >= 1500 || !textNode.parentNode) return;
+    var value = String(textNode.nodeValue || '');
+    var result = collectTheSpiderBooleanHighlightMatches(value, terms);
+    if (!result.matches.length) return;
+    var fragment = document.createDocumentFragment(), cursor = 0;
+    result.matches.forEach(function(hit){
+      if (matches.length >= 1500 || hit.start < cursor || hit.end <= hit.start) return;
+      fragment.appendChild(document.createTextNode(value.slice(cursor, hit.start)));
+      var mark = document.createElement('mark');
+      mark.className = hit.kind === 'negative' ? 'boolean-negative' : (hit.kind === 'mixed' ? 'boolean-mixed' : 'boolean-positive');
+      mark.setAttribute('data-spider-html-highlight', 'boolean');
+      mark.setAttribute('data-spider-boolean-term', hit.term || '');
+      mark.title = (hit.kind === 'negative' ? 'Excluded Boolean term: ' : 'Included Boolean term: ') + (hit.term || '');
+      mark.textContent = value.slice(hit.start, hit.end);
+      fragment.appendChild(mark);
+      cursor = hit.end;
+      matches.push(hit);
+      matchedTerms[hit.termIndex] = true;
+    });
+    fragment.appendChild(document.createTextNode(value.slice(cursor)));
+    textNode.parentNode.replaceChild(fragment, textNode);
+  });
+  return {matches:matches,matchedTerms:matchedTerms};
 }
 function theSpiderVisualLayerWords(pageIndex) {
   return Array.prototype.slice.call(document.querySelectorAll('.spider-visual-text-word[data-spider-visual-page="' + pageIndex + '"]'));
@@ -1668,39 +1731,83 @@ function extractTheSpiderBooleanHighlightTerms(raw) {
 function escapeTheSpiderRegex(value) {
   return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
+function normaliseTheSpiderHighlightText(value) {
+  var input = String(value || ''), chars = [], starts = [], ends = [];
+  function push(value, start, end) {
+    String(value || '').split('').forEach(function(char){
+      chars.push(char); starts.push(start); ends.push(end);
+    });
+  }
+  for (var index = 0; index < input.length; index++) {
+    var char = input.charAt(index);
+    if (char === '\u00ad') continue;
+    if (/[-\u2010\u2011]/.test(char) && index > 0 && /[A-Za-z0-9]/.test(input.charAt(index - 1))) {
+      var next = index + 1, sawLineBreak = false;
+      while (next < input.length && /\s/.test(input.charAt(next))) {
+        if (/[\r\n]/.test(input.charAt(next))) sawLineBreak = true;
+        next++;
+      }
+      if (sawLineBreak && next < input.length && /[A-Za-z0-9]/.test(input.charAt(next))) {
+        index = next - 1;
+        continue;
+      }
+    }
+    if (/\s/.test(char)) {
+      var whitespaceEnd = index + 1;
+      while (whitespaceEnd < input.length && /\s/.test(input.charAt(whitespaceEnd))) whitespaceEnd++;
+      if (!chars.length || chars[chars.length - 1] !== ' ') push(' ', index, whitespaceEnd);
+      index = whitespaceEnd - 1;
+      continue;
+    }
+    var folded = char;
+    try { folded = char.normalize('NFKC'); } catch(e) {}
+    push(folded, index, index + 1);
+  }
+  return {text:chars.join(''),starts:starts,ends:ends};
+}
 function findTheSpiderBooleanTermHits(text, term) {
   text = String(text || '');
   term = String(term || '');
   if (!text || !term) return [];
+  var normalizedText = normaliseTheSpiderHighlightText(text);
+  var normalizedTerm = normaliseTheSpiderHighlightText(term).text;
+  if (!normalizedText.text || !normalizedTerm) return [];
+  var matchText = normalizedText.text, matchTerm = normalizedTerm;
   var wildcard = /[?*]/.test(term), hits = [], maxPerTerm = 300;
-  var firstCore = term.replace(/^[?*]+/, '').charAt(0);
-  var lastCoreText = term.replace(/[?*]+$/, '');
+  var firstCore = matchTerm.replace(/^[?*]+/, '').charAt(0);
+  var lastCoreText = matchTerm.replace(/[?*]+$/, '');
   var lastCore = lastCoreText.charAt(lastCoreText.length - 1);
   var requireLeft = /[A-Za-z0-9]/.test(firstCore);
   var requireRight = /[A-Za-z0-9]/.test(lastCore) || /[?*]$/.test(term);
   function boundaryOk(start, end) {
-    var before = start > 0 ? text.charAt(start - 1) : '';
-    var after = end < text.length ? text.charAt(end) : '';
+    var before = start > 0 ? matchText.charAt(start - 1) : '';
+    var after = end < matchText.length ? matchText.charAt(end) : '';
     if (requireLeft && /[A-Za-z0-9]/.test(before)) return false;
     if (requireRight && /[A-Za-z0-9]/.test(after)) return false;
     return true;
   }
+  function originalHit(start, end) {
+    if (end <= start || start < 0 || end > normalizedText.starts.length) return null;
+    return {start:normalizedText.starts[start], end:normalizedText.ends[end - 1]};
+  }
   if (!wildcard) {
-    var lowText = text.toLowerCase(), lowTerm = term.toLowerCase(), pos = 0;
+    var lowText = matchText.toLowerCase(), lowTerm = matchTerm.toLowerCase(), pos = 0;
     while (hits.length < maxPerTerm && (pos = lowText.indexOf(lowTerm, pos)) >= 0) {
-      var end = pos + term.length;
-      if (boundaryOk(pos, end)) hits.push({start:pos, end:end});
-      pos += Math.max(1, term.length);
+      var end = pos + matchTerm.length;
+      var mapped = boundaryOk(pos, end) ? originalHit(pos, end) : null;
+      if (mapped) hits.push(mapped);
+      pos += Math.max(1, matchTerm.length);
     }
     return hits;
   }
-  var pattern = escapeTheSpiderRegex(term).replace(/\\\*/g, '[A-Za-z0-9_+.#/-]*').replace(/\\\?/g, '[A-Za-z0-9_+.#/-]');
+  var pattern = escapeTheSpiderRegex(matchTerm).replace(/\\\*/g, '[A-Za-z0-9_+.#/-]*').replace(/\\\?/g, '[A-Za-z0-9_+.#/-]');
   var rx;
   try { rx = new RegExp(pattern, 'gi'); } catch(e) { return []; }
   var match;
-  while (hits.length < maxPerTerm && (match = rx.exec(text))) {
+  while (hits.length < maxPerTerm && (match = rx.exec(matchText))) {
     var start = match.index, end = start + String(match[0] || '').length;
-    if (end > start && boundaryOk(start, end)) hits.push({start:start, end:end});
+    var mapped = end > start && boundaryOk(start, end) ? originalHit(start, end) : null;
+    if (mapped) hits.push(mapped);
     if (!match[0]) rx.lastIndex += 1;
   }
   return hits;
@@ -1759,6 +1866,7 @@ function applyTheSpiderBooleanHighlights(forceText) {
   var terms = extractTheSpiderBooleanHighlightTerms((document.getElementById('theSpiderMust') || {}).value || '');
   var result = collectTheSpiderBooleanHighlightMatches(text, terms);
   var visualResult = applyTheSpiderVisualBooleanHighlights(terms);
+  var htmlResult = applyTheSpiderHtmlBooleanHighlights(terms);
   window._theSpiderBooleanHighlightTerms = terms;
   window._theSpiderBooleanHighlightMatches = result.matches;
   var count = document.getElementById('theSpiderPreviewFindCount');
@@ -1766,20 +1874,24 @@ function applyTheSpiderBooleanHighlights(forceText) {
   var matchedKeys = {};
   Object.keys(result.matchedTerms || {}).forEach(function(k){ matchedKeys[k] = true; });
   Object.keys((visualResult && visualResult.matchedTerms) || {}).forEach(function(k){ matchedKeys[k] = true; });
+  Object.keys((htmlResult && htmlResult.matchedTerms) || {}).forEach(function(k){ matchedKeys[k] = true; });
   var matchedCount = Object.keys(matchedKeys).length;
-  var visibleMatchCount = hasTheSpiderVisualTextLayer() ? ((visualResult && visualResult.matches.length) || 0) : result.matches.length;
+  var directVisual = hasTheSpiderDirectVisualHighlightSurface();
+  var visibleMatchCount = directVisual
+    ? (((visualResult && visualResult.matches.length) || 0) + ((htmlResult && htmlResult.matches.length) || 0))
+    : result.matches.length;
   if (count) count.textContent = visibleMatchCount ? (visibleMatchCount + ' hits') : '0 hits';
   if (box) {
     box.style.display = 'block';
     if (!terms.length) box.innerHTML = '<div class="spider-find-hint">Add terms in Boolean Rules / Keywords to use automatic highlighting.</div>';
     else box.innerHTML = '<div class="spider-find-hint"><strong>Boolean highlights:</strong> ' + matchedCount + '/' + terms.length + ' terms found · ' + visibleMatchCount + ' visible matches.'
-      + (hasTheSpiderVisualTextLayer() ? ' Highlighted directly on the visual CV.' : ' This file has no coordinate text layer; highlights are available in Select text.')
+      + (directVisual ? ' Highlighted directly on the visual CV.' : ' This file has no coordinate or document-text layer; highlights are available in Select text.')
       + '<span class="spider-boolean-legend"><span><i class="spider-boolean-swatch positive"></i>included</span>'
       + (terms.some(function(t){ return t.kind === 'negative' || t.kind === 'mixed'; }) ? '<span><i class="spider-boolean-swatch negative"></i>NOT / excluded</span>' : '')
       + '</span></div>';
   }
   renderTheSpiderBooleanHighlights(terms, result.matches);
-  if (forceText === true && !hasTheSpiderVisualTextLayer()) setTheSpiderPreviewMode('text', true);
+  if (forceText === true && !directVisual) setTheSpiderPreviewMode('text', true);
   return true;
 }
 function refreshTheSpiderBooleanHighlights() {
