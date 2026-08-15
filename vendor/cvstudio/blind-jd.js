@@ -262,13 +262,14 @@ async function handleAnonFile(file) {
     var r  = await fetchWithTimeout('/extract-text', { method: 'POST', body: fd }, CV_EXTRACT_TEXT_TIMEOUT_MS);
     var d  = await r.json();
     if (d.error) throw new Error(d.error);
+    var extractionWarning = cvShowExtractionWarning(d);
     var text = anonNormalizeExtractedTextArtifacts(d.text || '').trim();
     document.getElementById('anonRawText').value = text;
     document.getElementById('anonCharCount').textContent = text.length.toLocaleString() + ' chars';
     updateAnonOriginalPreview();
     // Do not block text extraction completion on visual preview conversion.
     // Office visual conversion can be slower/unavailable; it updates the left preview asynchronously.
-    nameEl.textContent = '✓ ' + file.name + ' (' + text.length.toLocaleString() + ' chars)';
+    nameEl.textContent = (extractionWarning ? '⚠ ' : '✓ ') + file.name + ' (' + text.length.toLocaleString() + ' chars)' + (extractionWarning ? ' — partial extraction; review text' : '');
     markTabDone('jdanon', _tabRun);
   } catch(e) {
     nameEl.textContent = '✕ Failed: ' + e.message;
@@ -868,4 +869,3 @@ function exportAnonJDPDF() {
   doc.save('blind-jd-'+_safeFileStem(j.job_title)+'-'+new Date().toISOString().slice(0,10)+'.pdf');
   showToast('PDF exported!', 'ok');
 }
-

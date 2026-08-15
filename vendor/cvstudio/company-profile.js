@@ -188,9 +188,10 @@ async function handleCompanyFile(file) {
     var r  = await fetchWithTimeout('/extract-text', { method: 'POST', body: fd }, CV_EXTRACT_TEXT_TIMEOUT_MS);
     var d  = await r.json();
     if (d.error) throw new Error(d.error);
+    var extractionWarning = cvShowExtractionWarning(d);
     var text = anonNormalizeExtractedTextArtifacts(d.text || '').trim();
     document.getElementById('companyText').value = text;
-    nameEl.textContent = '✓ ' + file.name + ' (' + text.length.toLocaleString() + ' chars)';
+    nameEl.textContent = (extractionWarning ? '⚠ ' : '✓ ') + file.name + ' (' + text.length.toLocaleString() + ' chars)' + (extractionWarning ? ' — partial extraction; review text' : '');
     markTabDone('company', _tabRun);
   } catch(e) {
     nameEl.textContent = '✕ Failed: ' + e.message;
@@ -503,4 +504,3 @@ function renderCompanyCard(p) {
     + '<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border);font-size:11px;color:var(--text3);">© Hyppies · Confidential · For candidate use only</div>'
     + '</div>';
 }
-

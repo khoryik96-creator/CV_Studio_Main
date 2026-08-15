@@ -26,6 +26,24 @@ async function fetchWithTimeout(url, options, timeoutMs) {
   }
 }
 
+function cvExtractionWarningText(payload) {
+  if (!payload || payload.partial_extraction !== true) return '';
+  return String(payload.warning || 'OCR could not read every page. The extracted text may be incomplete.').trim();
+}
+
+function cvShowExtractionWarning(payload) {
+  var warning = cvExtractionWarningText(payload);
+  if (warning) showToast(warning, 'warn');
+  return warning;
+}
+
+function cvRequireCompleteExtraction(payload, workflowLabel) {
+  var warning = cvExtractionWarningText(payload);
+  if (!warning) return;
+  var prefix = String(workflowLabel || '').trim();
+  throw new Error((prefix ? prefix + ' stopped. ' : '') + warning);
+}
+
 function cvParseIsLong(cvText) {
   var text = String(cvText || '');
   var markers = text.match(/^\s*(?:[ivxlcdm]+[.)]\s*)?(?:key\s+)?(?:responsibilit(?:y|ies)|achievements?)\s*:?\s*$/gim) || [];

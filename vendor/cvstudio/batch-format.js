@@ -343,6 +343,7 @@ async function runBatch() {
       var exRes = await fetchWithTimeout('/extract-text', { method: 'POST', body: formData }, CV_EXTRACT_TEXT_TIMEOUT_MS);
       var exData = await exRes.json();
       if (exData.error) throw new Error('Extraction: ' + exData.error);
+      cvRequireCompleteExtraction(exData, 'Batch formatting');
       var rawText = exData.text;
       var batchExtractLevels = Array.isArray(exData.bullet_levels) ? exData.bullet_levels : null;
       bf.charCount = rawText.length;

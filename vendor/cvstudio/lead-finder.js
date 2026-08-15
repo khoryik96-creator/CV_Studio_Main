@@ -93,12 +93,13 @@ async function handleLeadFileInput(files) {
     var r = await fetchWithTimeout('/extract-text', { method:'POST', body: fd }, CV_EXTRACT_TEXT_TIMEOUT_MS);
     var d = await r.json();
     if (!r.ok || d.error || d.ok === false) throw new Error(d.error || 'Text extraction failed');
+    var extractionWarning = cvShowExtractionWarning(d);
     _leadExtractedText = (d.text || '').trim();
-    nameEl.textContent = file.name;
+    nameEl.textContent = (extractionWarning ? '⚠ ' : '') + file.name + (extractionWarning ? ' — partial extraction; review text' : '');
     countEl.textContent = (_leadExtractedText.length || 0).toLocaleString() + ' characters extracted';
     if (_leadExtractedText) document.getElementById('leadCvText').value = _leadExtractedText;
     leadUpdateCvCount();
-    showToast('CV extracted for Lead Finder', 'ok');
+    if (!extractionWarning) showToast('CV extracted for Lead Finder', 'ok');
   } catch(e) {
     dz.classList.add('error');
     nameEl.textContent = file.name;

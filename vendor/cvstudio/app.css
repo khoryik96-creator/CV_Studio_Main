@@ -111,6 +111,7 @@
   .toast.ok   { background: var(--green-light); color: var(--green); border: 1px solid #97C459; }
   .toast.err  { background: var(--red-light);   color: var(--red);   border: 1px solid #F09595; }
   .toast.info { background: var(--blue-light);  color: var(--blue);  border: 1px solid #85B7EB; }
+  .toast.warn { background: #FFF7D6; color: #7A5200; border: 1px solid #E4B84F; }
 
 
   /* Floating Ask The Owl chat */

@@ -55,6 +55,17 @@ def _extract_text_call_lines():
     return lines
 
 
+def _extract_text_call_contexts():
+    contexts = []
+    for path in sorted(_VENDOR.glob("*.js")):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for index, line in enumerate(lines):
+            if "'/extract-text'" not in line:
+                continue
+            contexts.append((path.name, index + 1, "\n".join(lines[index:index + 32])))
+    return contexts
+
+
 class OcrBudgetAlignmentTests(unittest.TestCase):
     def test_client_budget_exceeds_server_ocr_deadline(self):
         client_ms = _client_extract_budget_ms()
@@ -91,6 +102,32 @@ class OcrBudgetAlignmentTests(unittest.TestCase):
         # Guards the test itself: if the call sites move or are renamed, the
         # check above would silently pass over an empty set.
         self.assertGreaterEqual(len(_extract_text_call_lines()), 5)
+
+    def test_every_extract_text_consumer_handles_partial_ocr_success(self):
+        offenders = []
+        for name, number, context in _extract_text_call_contexts():
+            if not re.search(
+                r"cv(?:ShowExtractionWarning|RequireCompleteExtraction)\s*\(",
+                context,
+            ):
+                offenders.append("{}:{}".format(name, number))
+        self.assertEqual(
+            offenders,
+            [],
+            "These /extract-text consumers can silently treat a partial OCR "
+            "response as complete: {}".format(", ".join(offenders)),
+        )
+
+    def test_automated_mutating_workflows_reject_partial_extraction(self):
+        contexts = {
+            name: context for name, _number, context in _extract_text_call_contexts()
+        }
+        for name in ("batch-format.js", "create-profile.js"):
+            self.assertIn(
+                "cvRequireCompleteExtraction(",
+                contexts[name],
+                "{} must not generate/upload from an incomplete CV".format(name),
+            )
 
 
 class OcrDeadlineBehaviorTests(unittest.TestCase):

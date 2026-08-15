@@ -24,17 +24,28 @@ _MODULE_TEMPORARY = None
 if "app" not in sys.modules:
     _MODULE_TEMPORARY = tempfile.TemporaryDirectory(prefix="cvstudio-pdf-extract-")
     _original_database_override = os.environ.get("CVSTUDIO_DB_PATH")
+    _receipt_environment_key = "LOCALAPPDATA" if os.name == "nt" else "HOME"
+    _original_receipt_environment = os.environ.get(_receipt_environment_key)
     os.environ["CVSTUDIO_DB_PATH"] = str(
         Path(_MODULE_TEMPORARY.name) / "state" / "cv_studio.sqlite3"
     )
-    build_protected.write_test_receipt(Path(__file__).resolve().parents[1])
+    os.environ[_receipt_environment_key] = str(
+        Path(_MODULE_TEMPORARY.name) / "receipt-state"
+    )
     try:
+        build_protected.write_test_receipt(
+            Path(__file__).resolve().parents[1], os.environ.copy()
+        )
         import app
     finally:
         if _original_database_override is None:
             os.environ.pop("CVSTUDIO_DB_PATH", None)
         else:
             os.environ["CVSTUDIO_DB_PATH"] = _original_database_override
+        if _original_receipt_environment is None:
+            os.environ.pop(_receipt_environment_key, None)
+        else:
+            os.environ[_receipt_environment_key] = _original_receipt_environment
 else:
     import app
 
@@ -303,11 +314,33 @@ class PdfOcrOutageFallbackTests(unittest.TestCase):
         response = self._post(pages, "mixed.pdf")
 
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
-        text = response.get_json()["text"]
+        payload = response.get_json()
+        text = payload["text"]
         # The good pages survive, and the OCR-routed page keeps its exact text
         # rather than being replaced by nothing.
         self.assertIn("Senior Engineer at Acme", text)
         self.assertIn("jane@example.com", text)
+        self.assertTrue(payload["partial_extraction"])
+        self.assertEqual(payload["ocr_unavailable_pages"], [1])
+        self.assertIn("may be incomplete", payload["warning"])
+
+    def test_name_fragment_cannot_make_a_scanned_cv_look_complete(self):
+        pages = [
+            _FakePdfPage(
+                "Jane Doe",
+                images=[{"x0": 0, "x1": 600, "top": 0, "bottom": 300}],
+            ),
+            _FakePdfPage(
+                "", images=[{"x0": 0, "x1": 600, "top": 0, "bottom": 800}]
+            ),
+            _FakePdfPage(
+                "", images=[{"x0": 0, "x1": 600, "top": 0, "bottom": 800}]
+            ),
+        ]
+        response = self._post(pages, "mostly-scanned.pdf")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("OCR failed", response.get_json()["error"])
 
     def test_ocr_outage_on_a_fully_unusable_document_still_reports_failure(self):
         # Nothing was recoverable, so the actionable OCR error must still surface.

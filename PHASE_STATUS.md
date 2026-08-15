@@ -25,14 +25,33 @@
   `54298b9b6a822e1f36c9c101f1ff4edc9c7e835f`
 - Phase 7B-4 source baseline Git commit (merged Phase 7B-3):
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
-- Working branch candidate: none after the owner-authorized v24.6.340 merge.
+- Working branch candidate: none after the owner-authorized v24.6.341 merge.
 - Active work: none recorded; start the next task from current `master`.
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
-- Status: PR #154 merged the v24.6.339 legacy-DOC preview corrective as
-  `5e4da48`. The owner separately authorized the v24.6.340 review corrective
-  and its merge through PR #155.
-- Current stop: after v24.6.340 validation and owner-authorized PR #155 merge.
+- Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
+  The owner separately authorized the v24.6.341 OCR partial-failure corrective
+  and its merge through PR #156.
+- Current stop: after v24.6.341 validation and owner-authorized PR #156 merge.
   Do not infer any follow-on feature or extraction scope.
+
+## v24.6.341 OCR partial-failure corrective
+
+- When OCR is unavailable for selected pages in a mixed PDF, `/extract-text`
+  keeps independently readable pages and marks the HTTP 200 response as a
+  partial extraction with a visible warning and the affected page numbers.
+- A name/contact fragment on an OCR-routed cover page cannot make an otherwise
+  scanned CV look successful. At least one independently readable page must
+  survive, otherwise the established OCR failure remains visible.
+- Every interactive `/extract-text` browser workflow shows a persistent partial
+  warning. Batch formatting and JobAdder profile creation stop before generating
+  or uploading from incomplete text.
+- The focused PDF test uses an isolated temporary installation receipt and is
+  verified not to change the user's real authorization file.
+- No route, schema, dependency, document-trust or package boundary changes.
+- Validation: 903 passed, 4 skipped, 2 known unrelated Windows tests
+  deselected, 93 subtests; all 16 JavaScript fixtures; protected Windows
+  source/dependency preflight; repository consistency; and the 24-assertion
+  live source smoke.
 
 ## v24.6.340 HTML Boolean-highlight review corrective
 

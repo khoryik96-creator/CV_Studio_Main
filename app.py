@@ -12889,6 +12889,8 @@ def extract_text():
         text = ""
         bullet_levels = []
         legacy_doc_converter = ""
+        extraction_warning = ""
+        partial_ocr_pages = []
 
         if filename.endswith('.pdf'):
             import pdfplumber
@@ -13010,29 +13012,37 @@ def extract_text():
                     # page to OCR; before page-aware routing such a document
                     # never reached OCR at all, so failing the whole request
                     # here would lose text the extractor already had.
-                    # Fall back to the exact per-page text (OCR pages simply
-                    # contribute nothing) and only fail when nothing is usable.
+                    # Fall back to exact per-page text, but only report partial
+                    # success when at least one page was independently usable.
+                    # A name/contact fragment on an OCR-routed cover page is not
+                    # enough evidence that the scanned CV body was recovered.
                     text = _merge_pdf_page_texts(page_records, {})
-                    if text.strip():
+                    usable_page_numbers = [
+                        page_number
+                        for page_number, record in enumerate(page_records, 1)
+                        if not record["ocr_reason"] and record["text"].strip()
+                    ]
+                    if text.strip() and usable_page_numbers:
+                        partial_ocr_pages = list(ocr_page_numbers)
+                        page_label = "page" if len(partial_ocr_pages) == 1 else "pages"
+                        extraction_warning = (
+                            "OCR was unavailable for {} {}. Text from readable pages "
+                            "was recovered, but this document may be incomplete. Review "
+                            "the extracted text before continuing or repair OCR and retry."
+                        ).format(len(partial_ocr_pages), page_label)
                         app.logger.warning(
                             "PDF OCR unavailable for %d page(s); returning "
                             "extracted text for the remaining pages: %s",
                             len(ocr_page_numbers),
                             str(ocr_err)[:200],
                         )
-                        usable_page_numbers = [
-                            page_number
-                            for page_number, record in enumerate(page_records, 1)
-                            if not record["ocr_reason"]
-                        ]
-                        if usable_page_numbers:
-                            try:
-                                bullet_levels = _extract_pdf_bullet_levels(
-                                    file_bytes,
-                                    page_numbers=usable_page_numbers,
-                                )
-                            except Exception:
-                                bullet_levels = []
+                        try:
+                            bullet_levels = _extract_pdf_bullet_levels(
+                                file_bytes,
+                                page_numbers=usable_page_numbers,
+                            )
+                        except Exception:
+                            bullet_levels = []
                     else:
                         return jsonify({"error": f"OCR failed: {str(ocr_err)}"}), 400
 
@@ -13403,6 +13413,10 @@ def extract_text():
         }
         if legacy_doc_converter:
             response_payload["legacy_doc_converter"] = legacy_doc_converter
+        if extraction_warning:
+            response_payload["partial_extraction"] = True
+            response_payload["warning"] = extraction_warning
+            response_payload["ocr_unavailable_pages"] = partial_ocr_pages
         return jsonify(response_payload)
 
     except AntiwordDependencyError as e:
