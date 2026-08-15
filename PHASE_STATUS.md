@@ -25,18 +25,36 @@
   `54298b9b6a822e1f36c9c101f1ff4edc9c7e835f`
 - Phase 7B-4 source baseline Git commit (merged Phase 7B-3):
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
-- Working branch candidate:
-  `chatgpt/pr154-v24.6.339-doc-preview-highlights`
-- Active work: legacy-DOC visual preview parity and bounded direct Boolean
-  highlighting for converted Office and coordinate-less scanned PDF previews.
+- Working branch candidate: none after the owner-authorized v24.6.340 merge.
+- Active work: none recorded; start the next task from current `master`.
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
-- Status: master v24.6.338 is the branch baseline. The v24.6.339 corrective
-  below is implemented and under validation on its own branch; it is not
-  merged.
-- Current stop: after v24.6.339 regression/protected-build validation and PR
-  publication. Do not merge without the owner's separate instruction.
+- Status: PR #154 merged the v24.6.339 legacy-DOC preview corrective as
+  `5e4da48`. The owner separately authorized the v24.6.340 review corrective
+  and its merge through PR #155.
+- Current stop: after v24.6.340 validation and owner-authorized PR #155 merge.
+  Do not infer any follow-on feature or extraction scope.
 
-## v24.6.339 legacy-DOC preview and highlight corrective candidate
+## v24.6.340 HTML Boolean-highlight review corrective
+
+- Converted-DOC/DOCX HTML preview phrases are matched per visual paragraph or
+  table cell, so bold, italic and other Word run boundaries no longer hide a
+  multi-word Boolean phrase.
+- The browser maps each logical match back to its contributing DOM text nodes
+  and highlights every visual fragment without changing the source wording.
+- The 60,000-character / 8,000-node scan boundary is enforced before accepting
+  each node; one oversized Word run can no longer bypass the total character
+  budget and multiply browser work across up to 150 Boolean terms.
+- Focused coverage uses a phrase split across three DOM text nodes and a single
+  70,000-character run. No route, schema, backend document-trust boundary,
+  dependency or package boundary changes.
+- Validation: 899 passed, 4 skipped, 1 known unrelated Windows
+  receipt-isolation test deselected, 93 subtests; all 15 JavaScript fixtures;
+  protected Windows source/dependency preflight; repository consistency; and
+  the 24-assertion live source smoke.
+
+## v24.6.339 legacy-DOC preview and highlight corrective
+
+- PR #154 was merged to `master` as `5e4da48` at v24.6.339.
 
 - Verified Antiword remains mandatory and always runs first. Only a completed
   rejection of the exact document can use the existing Microsoft Word or

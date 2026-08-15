@@ -190,8 +190,21 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
+- **HTML Boolean-highlight review corrective — v24.6.340.** The owner
+  authorized PR #155 and its merge after validation. Converted-DOC/DOCX HTML
+  matching now groups text by visual paragraph or table cell and maps matches
+  back across bold, italic and other Word run nodes. A multi-word phrase is
+  therefore highlighted even when formatting changes mid-phrase. The existing
+  60,000-character / 8,000-node browser budget is enforced before accepting
+  each text node, so one oversized Word run cannot bypass the total limit.
+  Focused coverage includes both the cross-run phrase and a 70,000-character
+  single run. No route, schema, backend document-trust boundary, dependency or
+  package boundary changes. Validation: 899 passed, 4 skipped, 1 known
+  unrelated Windows receipt-isolation test deselected, 93 subtests; all 15
+  JavaScript fixtures; protected Windows source/dependency preflight;
+  repository consistency; and the 24-assertion live source smoke.
 - **Legacy-DOC visual preview and Boolean-highlight corrective — PR #154
-  CANDIDATE.** Branch `chatgpt/pr154-v24.6.339-doc-preview-highlights` makes
+  MERGED.** PR #154 was merged to `master` as `5e4da48` at v24.6.339. It makes
   AI Crawler and `/preview-file` honor the existing verified-Antiword-first
   conversion exception. If Antiword safely completes and rejects only that
   document, the validated Microsoft Word/LibreOffice DOCX conversion is reused
@@ -206,8 +219,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   is introduced. Validation: 899 Python tests passed, 4 skipped, 1 unrelated
   Windows receipt-isolation test deselected, and 93 subtests passed; all 15
   JavaScript fixtures, route/version gates, Windows protected-source preflight,
-  repository consistency and the 24-assertion live smoke passed. This candidate
-  is not merged.
+  repository consistency and the 24-assertion live smoke passed.
 - **Page-aware PDF/OCR + receipt hardening — MERGED.** PR #152 was
   squash-merged to `master` as `f1934b7` at v24.6.331. The corrective
   preserves usable text and bullet geometry page-by-page, OCRs only pages with
