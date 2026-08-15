@@ -204,14 +204,15 @@ function handleFileSelect(file) {
         markTabFailed('format', _tabRun);
         return;
       }
+      var extractionWarning = cvShowExtractionWarning(data);
       _extractedText = data.text;
       _extractedBulletLevels = Array.isArray(data.bullet_levels) ? data.bullet_levels : null;
       dz.classList.add('has-file');
-      document.getElementById('dzFileName').textContent = '✓ ' + file.name + ' (' + data.text.length.toLocaleString() + ' chars extracted)';
+      document.getElementById('dzFileName').textContent = (extractionWarning ? '⚠ ' : '✓ ') + file.name + ' (' + data.text.length.toLocaleString() + ' chars extracted)' + (extractionWarning ? ' — partial extraction; review text' : '');
       document.getElementById('dzClear').style.display = 'block';
       document.getElementById('fileCharCount').style.display = 'block';
       document.getElementById('fileCharCount').textContent = data.text.length.toLocaleString() + ' characters extracted';
-      showToast('File ready — click Format CV', 'ok');
+      if (!extractionWarning) showToast('File ready — click Format CV', 'ok');
       markTabDone('format', _tabRun);
     })
     .catch(function(e) {

@@ -179,15 +179,16 @@ async function handleSummaryFile(file) {
     var r = await fetchWithTimeout('/extract-text', { method:'POST', body:fd }, CV_EXTRACT_TEXT_TIMEOUT_MS);
     var d = await r.json();
     if (!r.ok || d.error) throw new Error(d.error || 'Extraction failed');
+    var extractionWarning = cvShowExtractionWarning(d);
     if (ta) ta.value = d.text || '';
     if (ext === 'docx') {
       window._summarySourceDocxFile = file;
       window._summarySourceDocxText = String(d.text || '').trim();
     }
     updateSummaryCharCount();
-    if (status) status.textContent = '✓ ' + file.name + ' (' + (d.text || '').length.toLocaleString() + ' chars extracted)' + (ext === 'docx' ? ' — generated Summary can fill this DOCX placeholder' : '');
+    if (status) status.textContent = (extractionWarning ? '⚠ ' : '✓ ') + file.name + ' (' + (d.text || '').length.toLocaleString() + ' chars extracted)' + (extractionWarning ? ' — partial extraction; review text' : (ext === 'docx' ? ' — generated Summary can fill this DOCX placeholder' : ''));
     updateSummaryApplyDocxButton();
-    markTabDone('summary', run); showToast('CV ready for summary', 'ok');
+    markTabDone('summary', run); if (!extractionWarning) showToast('CV ready for summary', 'ok');
   } catch(e) {
     if (status) status.textContent = '✗ ' + (e.message || 'Extraction failed');
     markTabFailed('summary', run); showToast('CV Summary extraction failed: ' + (e.message || 'Unknown error'), 'err');

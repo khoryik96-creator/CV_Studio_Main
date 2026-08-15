@@ -190,6 +190,21 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
+- **OCR partial-failure corrective — v24.6.341 / PR #156.** The owner
+  authorized the corrective and its merge after validation. If OCR is
+  unavailable for selected pages in a mixed PDF, `/extract-text` preserves
+  independently readable pages but returns an explicit partial-extraction
+  warning and affected page numbers. A name/contact fragment on an OCR-routed
+  cover cannot make a mostly scanned CV look complete: at least one
+  independently usable page must survive. All interactive browser consumers
+  surface the warning, while Batch Format and JobAdder Create Profile stop
+  before generating or uploading incomplete data. The focused PDF test now
+  isolates its installation receipt instead of overwriting the user's real
+  authorization. Validation: 903 passed, 4 skipped, 2 known unrelated Windows
+  tests deselected, 93 subtests; all 16 JavaScript fixtures; protected Windows
+  source/dependency preflight; repository consistency; and the 24-assertion
+  live source smoke. No route, schema, dependency, document-trust or package
+  boundary changes.
 - **HTML Boolean-highlight review corrective — v24.6.340.** The owner
   authorized PR #155 and its merge after validation. Converted-DOC/DOCX HTML
   matching now groups text by visual paragraph or table cell and maps matches

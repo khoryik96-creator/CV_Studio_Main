@@ -44,12 +44,13 @@ async function selectTheOwlFile(file) {
     var r = await fetchWithTimeout('/extract-text', { method:'POST', body:fd }, CV_EXTRACT_TEXT_TIMEOUT_MS);
     var d = await r.json().catch(function(){ return {}; });
     if (!r.ok || d.error) throw new Error(d.error || 'Extraction failed');
+    var extractionWarning = cvShowExtractionWarning(d);
     var text = String(d.text || '').trim();
     if (target) target.value = text;
     updateTheOwlCounts();
-    if (status) status.textContent = '✓ ' + file.name + ' (' + text.length.toLocaleString() + ' chars extracted)';
+    if (status) status.textContent = (extractionWarning ? '⚠ ' : '✓ ') + file.name + ' (' + text.length.toLocaleString() + ' chars extracted)' + (extractionWarning ? ' — partial extraction; review text' : '');
     markTabDone('theowl', run);
-    showToast('JD extracted for The Owl', 'ok');
+    if (!extractionWarning) showToast('JD extracted for The Owl', 'ok');
   } catch(e) {
     if (status) status.textContent = '✗ ' + (e.message || 'Extraction failed');
     markTabFailed('theowl', run);

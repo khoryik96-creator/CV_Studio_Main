@@ -60,12 +60,13 @@ async function handleAppraiserFile(file, targetTextId, statusId, kind) {
     var r = await fetchWithTimeout('/extract-text', { method:'POST', body:fd }, CV_EXTRACT_TEXT_TIMEOUT_MS);
     var d = await r.json().catch(function(){ return {}; });
     if (!r.ok || d.error) throw new Error(d.error || 'Extraction failed');
+    var extractionWarning = cvShowExtractionWarning(d);
     var cleaned = appraiserCleanExtractedText(d.text || '');
     if (target) target.value = cleaned;
-    if (status) status.textContent = '✓ ' + file.name + ' (' + (cleaned || '').length.toLocaleString() + ' chars extracted)';
+    if (status) status.textContent = (extractionWarning ? '⚠ ' : '✓ ') + file.name + ' (' + (cleaned || '').length.toLocaleString() + ' chars extracted)' + (extractionWarning ? ' — partial extraction; review text' : '');
     updateAppraiserCounts();
     markTabDone('appraiser', run);
-    showToast((kind === 'cv' ? 'CV' : 'JD') + ' extracted for CV Scoring', 'ok');
+    if (!extractionWarning) showToast((kind === 'cv' ? 'CV' : 'JD') + ' extracted for CV Scoring', 'ok');
   } catch(e) {
     if (status) status.textContent = '✗ ' + (e.message || 'Extraction failed');
     markTabFailed('appraiser', run);
@@ -482,5 +483,4 @@ function initAppraiserTabUI() {
   updateAppraiserRouteBadge();
   updateAppraiserCounts();
 }
-
 

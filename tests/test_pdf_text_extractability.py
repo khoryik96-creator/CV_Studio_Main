@@ -24,17 +24,28 @@ _MODULE_TEMPORARY = None
 if "app" not in sys.modules:
     _MODULE_TEMPORARY = tempfile.TemporaryDirectory(prefix="cvstudio-pdf-extract-")
     _original_database_override = os.environ.get("CVSTUDIO_DB_PATH")
+    _receipt_environment_key = "LOCALAPPDATA" if os.name == "nt" else "HOME"
+    _original_receipt_environment = os.environ.get(_receipt_environment_key)
     os.environ["CVSTUDIO_DB_PATH"] = str(
         Path(_MODULE_TEMPORARY.name) / "state" / "cv_studio.sqlite3"
     )
-    build_protected.write_test_receipt(Path(__file__).resolve().parents[1])
+    os.environ[_receipt_environment_key] = str(
+        Path(_MODULE_TEMPORARY.name) / "receipt-state"
+    )
     try:
+        build_protected.write_test_receipt(
+            Path(__file__).resolve().parents[1], os.environ.copy()
+        )
         import app
     finally:
         if _original_database_override is None:
             os.environ.pop("CVSTUDIO_DB_PATH", None)
         else:
             os.environ["CVSTUDIO_DB_PATH"] = _original_database_override
+        if _original_receipt_environment is None:
+            os.environ.pop(_receipt_environment_key, None)
+        else:
+            os.environ[_receipt_environment_key] = _original_receipt_environment
 else:
     import app
 
@@ -199,6 +210,10 @@ class PdfPageRoutingTests(unittest.TestCase):
 
         with (
             mock.patch("pdfplumber.open", return_value=opened),
+            # pytesseract is an optional runtime import inside the route. Stub the
+            # module so this test exercises the routing/merge logic itself instead
+            # of silently depending on whether OCR happens to be installed here.
+            mock.patch.dict(sys.modules, {"pytesseract": mock.MagicMock()}),
             mock.patch.object(app, "_pdf_page_count", return_value=4),
             mock.patch.object(app, "_find_mandatory_tesseract", return_value="tesseract"),
             mock.patch.object(
@@ -249,6 +264,93 @@ class PdfPageRoutingTests(unittest.TestCase):
         self.assertIn("jane@example.com", response.get_json()["text"])
         self.assertIn("C++", response.get_json()["text"])
         ocr.assert_not_called()
+
+
+class PdfOcrOutageFallbackTests(unittest.TestCase):
+    """An OCR outage must not discard pages that extracted perfectly.
+
+    Page-aware routing sends a document to OCR when ANY single page looks
+    scanned or outlined — a CV whose first page carries a banner/photo above a
+    short contact block qualifies. Before page-aware routing such a document
+    never reached OCR at all, so failing the whole request when OCR is
+    unavailable would lose text the extractor already had.
+    """
+
+    _HEADERS = {"X-CV-Studio-Request": "1", "Host": "localhost:5000"}
+
+    def _post(self, pages, filename):
+        opened = mock.MagicMock()
+        opened.__enter__.return_value.pages = pages
+        with (
+            mock.patch("pdfplumber.open", return_value=opened),
+            mock.patch.object(app, "_pdf_page_count", return_value=len(pages)),
+            mock.patch.object(
+                app,
+                "_ocr_pdf_pages_pagewise",
+                side_effect=RuntimeError("Tesseract is not installed."),
+            ),
+            mock.patch.object(app, "_find_mandatory_tesseract", return_value="tesseract"),
+            mock.patch.dict(sys.modules, {"pytesseract": mock.MagicMock()}),
+            mock.patch.object(app, "_extract_pdf_bullet_levels", return_value=[]),
+        ):
+            return app.app.test_client().post(
+                "/extract-text",
+                data={"file": (io.BytesIO(b"%PDF-1.4\nfixture"), filename)},
+                headers=self._HEADERS,
+                content_type="multipart/form-data",
+            )
+
+    def test_ocr_outage_still_returns_the_pages_that_extracted(self):
+        body = "Senior Engineer at Acme delivering cloud infrastructure. " * 12
+        pages = [
+            # Banner/photo header above a short contact block -> routed to OCR.
+            _FakePdfPage(
+                "Jane Doe\njane@example.com\n+60 12-345 6789",
+                images=[{"x0": 0, "x1": 600, "top": 0, "bottom": 300}],
+            ),
+            _FakePdfPage(body),
+            _FakePdfPage(body),
+        ]
+        response = self._post(pages, "mixed.pdf")
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()
+        text = payload["text"]
+        # The good pages survive, and the OCR-routed page keeps its exact text
+        # rather than being replaced by nothing.
+        self.assertIn("Senior Engineer at Acme", text)
+        self.assertIn("jane@example.com", text)
+        self.assertTrue(payload["partial_extraction"])
+        self.assertEqual(payload["ocr_unavailable_pages"], [1])
+        self.assertIn("may be incomplete", payload["warning"])
+
+    def test_name_fragment_cannot_make_a_scanned_cv_look_complete(self):
+        pages = [
+            _FakePdfPage(
+                "Jane Doe",
+                images=[{"x0": 0, "x1": 600, "top": 0, "bottom": 300}],
+            ),
+            _FakePdfPage(
+                "", images=[{"x0": 0, "x1": 600, "top": 0, "bottom": 800}]
+            ),
+            _FakePdfPage(
+                "", images=[{"x0": 0, "x1": 600, "top": 0, "bottom": 800}]
+            ),
+        ]
+        response = self._post(pages, "mostly-scanned.pdf")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("OCR failed", response.get_json()["error"])
+
+    def test_ocr_outage_on_a_fully_unusable_document_still_reports_failure(self):
+        # Nothing was recoverable, so the actionable OCR error must still surface.
+        pages = [
+            _FakePdfPage("", images=[{"x0": 0, "x1": 600, "top": 0, "bottom": 800}])
+        ]
+        response = self._post(pages, "scan.pdf")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("OCR failed", response.get_json()["error"])
 
 
 def tearDownModule():

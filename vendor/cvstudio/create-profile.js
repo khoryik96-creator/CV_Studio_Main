@@ -221,6 +221,7 @@ async function runJACreateAll() {
       var extRes = await fetchWithTimeout('/extract-text', { method: 'POST', body: fd }, CV_EXTRACT_TEXT_TIMEOUT_MS);
       var extData = await extRes.json().catch(function(){ return {}; });
       if (!extRes.ok) throw new Error(extData.error || 'Text extraction failed');
+      cvRequireCompleteExtraction(extData, 'JobAdder profile creation');
       var cvText = extData.text || '';
       if (!cvText.trim()) throw new Error('No text extracted from CV');
 

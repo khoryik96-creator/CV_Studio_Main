@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.340"
+_INSTALL_RECEIPT_VERSION = "v24.6.341"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -341,7 +341,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.340"
+_CVSTUDIO_VERSION = "v24.6.341"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -12889,6 +12889,8 @@ def extract_text():
         text = ""
         bullet_levels = []
         legacy_doc_converter = ""
+        extraction_warning = ""
+        partial_ocr_pages = []
 
         if filename.endswith('.pdf'):
             import pdfplumber
@@ -13003,7 +13005,46 @@ def extract_text():
 
                 except Exception as ocr_err:
                     traceback.print_exc()
-                    return jsonify({"error": f"OCR failed: {str(ocr_err)}"}), 400
+                    # Page-aware OCR runs whenever ANY single page looks scanned
+                    # or outlined, so an OCR outage must not discard the pages
+                    # that extracted perfectly. A CV whose first page carries a
+                    # banner/photo above a short contact block routes that one
+                    # page to OCR; before page-aware routing such a document
+                    # never reached OCR at all, so failing the whole request
+                    # here would lose text the extractor already had.
+                    # Fall back to exact per-page text, but only report partial
+                    # success when at least one page was independently usable.
+                    # A name/contact fragment on an OCR-routed cover page is not
+                    # enough evidence that the scanned CV body was recovered.
+                    text = _merge_pdf_page_texts(page_records, {})
+                    usable_page_numbers = [
+                        page_number
+                        for page_number, record in enumerate(page_records, 1)
+                        if not record["ocr_reason"] and record["text"].strip()
+                    ]
+                    if text.strip() and usable_page_numbers:
+                        partial_ocr_pages = list(ocr_page_numbers)
+                        page_label = "page" if len(partial_ocr_pages) == 1 else "pages"
+                        extraction_warning = (
+                            "OCR was unavailable for {} {}. Text from readable pages "
+                            "was recovered, but this document may be incomplete. Review "
+                            "the extracted text before continuing or repair OCR and retry."
+                        ).format(len(partial_ocr_pages), page_label)
+                        app.logger.warning(
+                            "PDF OCR unavailable for %d page(s); returning "
+                            "extracted text for the remaining pages: %s",
+                            len(ocr_page_numbers),
+                            str(ocr_err)[:200],
+                        )
+                        try:
+                            bullet_levels = _extract_pdf_bullet_levels(
+                                file_bytes,
+                                page_numbers=usable_page_numbers,
+                            )
+                        except Exception:
+                            bullet_levels = []
+                    else:
+                        return jsonify({"error": f"OCR failed: {str(ocr_err)}"}), 400
 
         elif filename.endswith('.docx'):
             _validate_zip_payload(file_bytes, 'DOCX')
@@ -13372,6 +13413,10 @@ def extract_text():
         }
         if legacy_doc_converter:
             response_payload["legacy_doc_converter"] = legacy_doc_converter
+        if extraction_warning:
+            response_payload["partial_extraction"] = True
+            response_payload["warning"] = extraction_warning
+            response_payload["ocr_unavailable_pages"] = partial_ocr_pages
         return jsonify(response_payload)
 
     except AntiwordDependencyError as e:

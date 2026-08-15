@@ -83,10 +83,11 @@ async function selectTheSpiderFile(file) {
     var r = await fetchWithTimeout('/extract-text', { method:'POST', body:fd }, CV_EXTRACT_TEXT_TIMEOUT_MS);
     var d = await r.json().catch(function(){ return {}; });
     if (!r.ok || d.error) throw new Error(d.error || 'Extraction failed');
+    var extractionWarning = cvShowExtractionWarning(d);
     if (target) target.value = d.text || '';
     updateTheSpiderCounts();
-    if (status) status.textContent = '✓ ' + file.name + ' (' + (d.text || '').length.toLocaleString() + ' chars extracted)';
-    markTabDone('thespider', run); showToast('JD ready for AI Crawler', 'ok');
+    if (status) status.textContent = (extractionWarning ? '⚠ ' : '✓ ') + file.name + ' (' + (d.text || '').length.toLocaleString() + ' chars extracted)' + (extractionWarning ? ' — partial extraction; review text' : '');
+    markTabDone('thespider', run); if (!extractionWarning) showToast('JD ready for AI Crawler', 'ok');
   } catch(e) {
     if (status) status.textContent = '✗ ' + (e.message || 'Extraction failed');
     markTabFailed('thespider', run); showToast('AI Crawler extraction failed: ' + (e.message || 'Unknown error'), 'err');
