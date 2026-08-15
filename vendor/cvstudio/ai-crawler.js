@@ -1496,50 +1496,110 @@ function clearTheSpiderHtmlHighlightMarks(kind) {
     try { parent.normalize(); } catch(e) {}
   });
 }
-function theSpiderHtmlPreviewTextNodes(root) {
-  var nodes = [], total = 0;
+function theSpiderHtmlPreviewBlockForNode(node, root) {
+  var element = node && node.parentElement;
+  while (element && element !== root) {
+    if (/^(P|DIV|H[1-6]|LI|TD|TH)$/i.test(String(element.tagName || ''))) return element;
+    element = element.parentElement;
+  }
+  return root;
+}
+function theSpiderHtmlPreviewTextGroups(root) {
+  var groups = [], groupsByBlock = new Map(), nodeCount = 0, total = 0;
+  var maxNodes = 8000, maxCharacters = 60000;
+  function groupFor(block) {
+    var group = groupsByBlock.get(block);
+    if (group) return group;
+    group = {block:block,text:'',nodes:[]};
+    groupsByBlock.set(block, group);
+    groups.push(group);
+    return group;
+  }
   function visit(node) {
-    if (!node || nodes.length >= 8000 || total >= 60000) return;
+    if (!node || nodeCount >= maxNodes || total >= maxCharacters) return;
     if (node.nodeType === 3) {
       var value = String(node.nodeValue || '');
-      if (value.trim()) { nodes.push(node); total += value.length; }
+      if (!value) return;
+      var accepted = value.slice(0, Math.max(0, maxCharacters - total));
+      if (!accepted) return;
+      var group = groupFor(theSpiderHtmlPreviewBlockForNode(node, root));
+      var start = group.text.length;
+      group.text += accepted;
+      group.nodes.push({node:node,start:start,end:start + accepted.length});
+      nodeCount += 1;
+      total += accepted.length;
       return;
     }
     if (node.nodeType !== 1 || /^(SCRIPT|STYLE|MARK)$/i.test(String(node.tagName || ''))) return;
     Array.prototype.slice.call(node.childNodes || []).forEach(visit);
   }
   visit(root);
-  return nodes;
+  return groups;
+}
+function buildTheSpiderHtmlBooleanHighlightPlan(groups, terms, maxMatches) {
+  var matches = [], segments = [], matchedTerms = {};
+  maxMatches = Math.max(1, Number(maxMatches) || 1500);
+  (groups || []).some(function(group, groupIndex){
+    if (matches.length >= maxMatches) return true;
+    var result = collectTheSpiderBooleanHighlightMatches(String((group && group.text) || ''), terms || []);
+    result.matches.slice(0, maxMatches - matches.length).forEach(function(hit){
+      var matchIndex = matches.length;
+      matches.push(hit);
+      matchedTerms[hit.termIndex] = true;
+      (group.nodes || []).forEach(function(part, nodeIndex){
+        var start = Math.max(hit.start, Number(part.start) || 0);
+        var end = Math.min(hit.end, Number(part.end) || 0);
+        if (end <= start) return;
+        segments.push({
+          node:part.node,
+          nodeOrder:(groupIndex * 10000) + nodeIndex,
+          start:start - part.start,
+          end:end - part.start,
+          hit:hit,
+          matchIndex:matchIndex
+        });
+      });
+    });
+    return matches.length >= maxMatches;
+  });
+  return {matches:matches,segments:segments,matchedTerms:matchedTerms};
+}
+function wrapTheSpiderHtmlHighlightSegment(segment) {
+  var node = segment && segment.node;
+  if (!node || !node.parentNode || typeof node.splitText !== 'function') return false;
+  var value = String(node.nodeValue || '');
+  var start = Math.max(0, Number(segment.start) || 0);
+  var end = Math.min(value.length, Math.max(start, Number(segment.end) || start));
+  if (end <= start) return false;
+  var after = node.splitText(end);
+  var matched = node.splitText(start);
+  var hit = segment.hit || {};
+  var mark = document.createElement('mark');
+  mark.className = hit.kind === 'negative' ? 'boolean-negative' : (hit.kind === 'mixed' ? 'boolean-mixed' : 'boolean-positive');
+  mark.setAttribute('data-spider-html-highlight', 'boolean');
+  mark.setAttribute('data-spider-boolean-term', hit.term || '');
+  mark.setAttribute('data-spider-html-match', String(segment.matchIndex));
+  mark.title = (hit.kind === 'negative' ? 'Excluded Boolean term: ' : (hit.kind === 'mixed' ? 'Included and excluded Boolean term: ' : 'Included Boolean term: ')) + (hit.term || '');
+  matched.parentNode.replaceChild(mark, matched);
+  mark.appendChild(matched);
+  return !!after;
 }
 function applyTheSpiderHtmlBooleanHighlights(terms) {
   clearTheSpiderHtmlHighlightMarks('boolean');
   var root = document.querySelector('#theSpiderPreviewVisualPane .spider-cv-doc-html');
   if (!root || !terms || !terms.length) return {matches:[],matchedTerms:{}};
-  var matches = [], matchedTerms = {};
-  theSpiderHtmlPreviewTextNodes(root).forEach(function(textNode){
-    if (matches.length >= 1500 || !textNode.parentNode) return;
-    var value = String(textNode.nodeValue || '');
-    var result = collectTheSpiderBooleanHighlightMatches(value, terms);
-    if (!result.matches.length) return;
-    var fragment = document.createDocumentFragment(), cursor = 0;
-    result.matches.forEach(function(hit){
-      if (matches.length >= 1500 || hit.start < cursor || hit.end <= hit.start) return;
-      fragment.appendChild(document.createTextNode(value.slice(cursor, hit.start)));
-      var mark = document.createElement('mark');
-      mark.className = hit.kind === 'negative' ? 'boolean-negative' : (hit.kind === 'mixed' ? 'boolean-mixed' : 'boolean-positive');
-      mark.setAttribute('data-spider-html-highlight', 'boolean');
-      mark.setAttribute('data-spider-boolean-term', hit.term || '');
-      mark.title = (hit.kind === 'negative' ? 'Excluded Boolean term: ' : 'Included Boolean term: ') + (hit.term || '');
-      mark.textContent = value.slice(hit.start, hit.end);
-      fragment.appendChild(mark);
-      cursor = hit.end;
-      matches.push(hit);
-      matchedTerms[hit.termIndex] = true;
-    });
-    fragment.appendChild(document.createTextNode(value.slice(cursor)));
-    textNode.parentNode.replaceChild(fragment, textNode);
+  var plan = buildTheSpiderHtmlBooleanHighlightPlan(
+    theSpiderHtmlPreviewTextGroups(root),
+    terms,
+    1500
+  );
+  plan.segments.sort(function(a,b){
+    if (a.nodeOrder !== b.nodeOrder) return b.nodeOrder - a.nodeOrder;
+    return b.start - a.start;
+  }).forEach(function(segment){
+    wrapTheSpiderHtmlHighlightSegment(segment);
   });
-  return {matches:matches,matchedTerms:matchedTerms};
+  return {matches:plan.matches,matchedTerms:plan.matchedTerms};
 }
 function theSpiderVisualLayerWords(pageIndex) {
   return Array.prototype.slice.call(document.querySelectorAll('.spider-visual-text-word[data-spider-visual-page="' + pageIndex + '"]'));
