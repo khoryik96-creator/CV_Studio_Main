@@ -188,6 +188,29 @@ class PdfPageRoutingTests(unittest.TestCase):
             pages[0]["text"],
         )
 
+    def test_unread_pages_reports_only_pages_that_contributed_nothing(self):
+        pages = [
+            {"text": "Readable first page", "ocr_reason": ""},
+            {"text": "", "ocr_reason": "sparse-visual"},
+            {"text": "Candidate Name", "ocr_reason": "sparse-visual"},
+        ]
+        # Page 2's OCR text is empty (unreadable scan); page 3's OCR recovered
+        # real content on top of a weak "Candidate Name" fragment.
+        ocr_texts = {2: "", 3: "Candidate Name\nRecovered work history"}
+        self.assertEqual(
+            app._pdf_ocr_pages_without_usable_text(pages, ocr_texts, [2, 3]),
+            [2],
+        )
+
+    def test_unread_pages_is_empty_when_every_routed_page_recovers(self):
+        pages = [{"text": "", "ocr_reason": "unextractable"}]
+        self.assertEqual(
+            app._pdf_ocr_pages_without_usable_text(
+                pages, {1: "Recovered content"}, [1]
+            ),
+            [],
+        )
+
     def test_extract_route_ocrs_only_broken_pages_and_preserves_order(self):
         cid = "".join("(cid:%d)" % (i % 30 + 1) for i in range(300))
         pages = [
@@ -351,6 +374,87 @@ class PdfOcrOutageFallbackTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("OCR failed", response.get_json()["error"])
+
+
+class PdfOcrEmptyPageResultTests(unittest.TestCase):
+    """A page routed to OCR that OCR itself returns nothing usable for is a
+    silent failure mode distinct from an OCR outage: no exception is raised,
+    Tesseract runs, and simply cannot read a blurry, skewed, rotated, or blank
+    page. _merge_pdf_page_texts drops that page without a trace, so the route
+    must detect it from the actual per-page OCR outcome, not only from
+    whether the OCR call itself raised.
+    """
+
+    _HEADERS = {"X-CV-Studio-Request": "1", "Host": "localhost:5000"}
+
+    def _post(self, pages, ocr_results, filename):
+        opened = mock.MagicMock()
+        opened.__enter__.return_value.pages = pages
+        with (
+            mock.patch("pdfplumber.open", return_value=opened),
+            mock.patch.object(app, "_pdf_page_count", return_value=len(pages)),
+            mock.patch.object(
+                app, "_ocr_pdf_pages_pagewise", return_value=ocr_results
+            ),
+            mock.patch.object(app, "_find_mandatory_tesseract", return_value="tesseract"),
+            mock.patch.dict(sys.modules, {"pytesseract": mock.MagicMock()}),
+            mock.patch.object(app, "_extract_pdf_bullet_levels", return_value=[]),
+        ):
+            return app.app.test_client().post(
+                "/extract-text",
+                data={"file": (io.BytesIO(b"%PDF-1.4\nfixture"), filename)},
+                headers=self._HEADERS,
+                content_type="multipart/form-data",
+            )
+
+    def test_ocr_that_returns_empty_text_for_one_page_is_flagged_partial(self):
+        body = "Senior Engineer at Acme delivering cloud infrastructure. " * 12
+        pages = [
+            _FakePdfPage(body),
+            # Routed to OCR (large scanned image, no text layer); Tesseract
+            # runs without error but the scan is unreadable -> empty string.
+            _FakePdfPage(
+                "", images=[{"x0": 0, "x1": 600, "top": 0, "bottom": 800}]
+            ),
+        ]
+        response = self._post(pages, {2: ""}, "half-blurry.pdf")
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()
+        self.assertIn("Senior Engineer at Acme", payload["text"])
+        self.assertTrue(payload["partial_extraction"])
+        self.assertEqual(payload["ocr_unavailable_pages"], [2])
+        self.assertIn("could not read", payload["warning"])
+
+    def test_ocr_success_with_real_content_is_not_flagged(self):
+        body = "Senior Engineer at Acme delivering cloud infrastructure. " * 12
+        pages = [
+            _FakePdfPage(body),
+            _FakePdfPage(
+                "", images=[{"x0": 0, "x1": 600, "top": 0, "bottom": 800}]
+            ),
+        ]
+        recovered = "Recovered scanned page content with real words here. " * 5
+        response = self._post(pages, {2: recovered}, "recovered.pdf")
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()
+        self.assertIsNone(payload.get("partial_extraction"))
+        self.assertIn("Recovered scanned page content", payload["text"])
+
+    def test_ocr_returning_empty_for_every_routed_page_fails_instead_of_200_empty(self):
+        # Before this fix, a fully unreadable document that OCR "successfully"
+        # ran against (no exception, just empty results) returned HTTP 200
+        # with empty text and no warning -- worse than an outright error.
+        pages = [
+            _FakePdfPage(
+                "", images=[{"x0": 0, "x1": 600, "top": 0, "bottom": 800}]
+            )
+        ]
+        response = self._post(pages, {1: ""}, "fully-unreadable.pdf")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("OCR could not read", response.get_json()["error"])
 
 
 def tearDownModule():
