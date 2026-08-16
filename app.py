@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.341"
+_INSTALL_RECEIPT_VERSION = "v24.6.342"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -341,7 +341,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.341"
+_CVSTUDIO_VERSION = "v24.6.342"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -1044,31 +1044,55 @@ def _pdf_page_ocr_reason(page, text):
     return ""
 
 
+def _pdf_page_merge_choice(record, ocr_page_texts, page_number):
+    """Return the winning text for one page: exact layer, OCR, or whichever
+    carries more content when both a weak exact layer and OCR exist.
+
+    Shared by _merge_pdf_page_texts (assembles the document) and
+    _pdf_ocr_pages_without_usable_text (finds pages OCR could not recover) so
+    the two can never disagree about which pages actually contributed text.
+    """
+    extracted = str(record.get("text") or "").strip()
+    reason = str(record.get("ocr_reason") or "")
+    if not reason:
+        return extracted
+    ocr_text = str(ocr_page_texts.get(page_number) or "").strip()
+    if reason == "unextractable":
+        return ocr_text
+    if not extracted:
+        return ocr_text
+    extracted_letters = sum(c.isalpha() for c in extracted)
+    ocr_letters = sum(c.isalpha() for c in ocr_text)
+    required_letters = max(extracted_letters + 10, int(extracted_letters * 1.5))
+    return ocr_text if ocr_letters >= required_letters else extracted
+
+
 def _merge_pdf_page_texts(page_records, ocr_page_texts):
     """Merge selected OCR pages with exact usable text in original page order."""
-    merged = []
-    for page_number, record in enumerate(page_records, 1):
-        extracted = str(record.get("text") or "").strip()
-        reason = str(record.get("ocr_reason") or "")
-        if not reason:
-            chosen = extracted
-        else:
-            ocr_text = str(ocr_page_texts.get(page_number) or "").strip()
-            if reason == "unextractable":
-                chosen = ocr_text
-            elif not extracted:
-                chosen = ocr_text
-            else:
-                extracted_letters = sum(c.isalpha() for c in extracted)
-                ocr_letters = sum(c.isalpha() for c in ocr_text)
-                required_letters = max(
-                    extracted_letters + 10,
-                    int(extracted_letters * 1.5),
-                )
-                chosen = ocr_text if ocr_letters >= required_letters else extracted
-        if chosen:
-            merged.append(chosen)
-    return "\n\n".join(merged)
+    merged = [
+        _pdf_page_merge_choice(record, ocr_page_texts, page_number)
+        for page_number, record in enumerate(page_records, 1)
+    ]
+    return "\n\n".join(chosen for chosen in merged if chosen)
+
+
+def _pdf_ocr_pages_without_usable_text(page_records, ocr_page_texts, ocr_page_numbers):
+    """Pages routed to OCR that still contributed nothing to the merged text.
+
+    OCR can return without raising (no dependency/timeout error) yet still fail
+    a specific page: a blurry or heavily skewed scan, a rotated page, or a
+    genuinely blank page all yield empty or near-empty text from Tesseract.
+    _merge_pdf_page_texts silently drops such a page from the document, so the
+    caller must check this to know the extraction may be incomplete even when
+    OCR itself never threw an error.
+    """
+    return [
+        page_number
+        for page_number in ocr_page_numbers
+        if not _pdf_page_merge_choice(
+            page_records[page_number - 1], ocr_page_texts, page_number
+        )
+    ]
 
 
 def _ocr_image_text(pytesseract, image, lang="eng", timeout=35):
@@ -13002,6 +13026,42 @@ def extract_text():
                             )
                         except Exception:
                             bullet_levels = []
+
+                    # OCR can return without raising yet still fail a specific
+                    # page -- a blurry or skewed scan, a rotated page, or a
+                    # genuinely blank page all yield empty text from Tesseract.
+                    # _merge_pdf_page_texts silently drops such a page, so a
+                    # dependency outage is not the only way this document can
+                    # end up incomplete; check the actual per-page outcome too.
+                    unread_pages = _pdf_ocr_pages_without_usable_text(
+                        page_records, ocr_page_texts, ocr_page_numbers
+                    )
+                    if unread_pages:
+                        if not text.strip():
+                            return jsonify({
+                                "error": (
+                                    "OCR could not read this document. The pages "
+                                    "may be blank, too low-quality to scan, or "
+                                    "rotated. Try a clearer copy or a text-based "
+                                    "PDF/DOCX."
+                                )
+                            }), 400
+                        page_label = "page" if len(unread_pages) == 1 else "pages"
+                        partial_ocr_pages = unread_pages
+                        extraction_warning = (
+                            "OCR could not read {} {} (page {}). Text from "
+                            "readable pages was recovered, but this document may "
+                            "be incomplete. Review the extracted text before "
+                            "continuing, or try a clearer scan."
+                        ).format(
+                            len(unread_pages),
+                            page_label,
+                            ", ".join(str(page) for page in unread_pages),
+                        )
+                        app.logger.warning(
+                            "PDF OCR returned no usable text for page(s) %s",
+                            unread_pages,
+                        )
 
                 except Exception as ocr_err:
                     traceback.print_exc()
