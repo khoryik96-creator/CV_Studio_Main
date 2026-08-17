@@ -197,7 +197,15 @@ async function handleSummaryFile(file) {
 function cvSummaryPrompt(cv, modifier, focusNote) {
   modifier = modifier || 'normal';
   var modNote = modifier === 'shorter' ? 'Use exactly 4-5 bullet points.' : modifier === 'longer' ? 'Use 8-10 detailed bullet points with useful metrics where available.' : 'Use 6-7 bullet points.';
-  return 'You are a senior recruitment consultant. Produce a professional candidate summary.\n\nRULES:\n- Output ONLY bullet points, no intro, no headers.\n- Every bullet starts with "- ".\n- Bold the most important keyword or phrase per bullet using **double asterisks**.\n- Third-person, professional, concise.\n- Do not invent employers, dates, certifications, industries, metrics, or achievements that are not supported by the CV.\n- Keep the candidate marketable but accurate.\n- ' + modNote + '\n' + (focusNote ? ('- ' + focusNote + '\n') : '') + '\nCV:\n---\n' + cv + '\n---';
+  // When the Gender-neutral summary toggle is on, ask the model to write
+  // neutrally from the start. A deterministic pass in cv-format.js /
+  // batch-format.js still guarantees no gendered pronoun survives, but a clean
+  // draft reads better than one that was rewritten token-by-token.
+  var genderNeutral = (typeof getCvGenderNeutralSummary === 'function') && getCvGenderNeutralSummary();
+  var neutralNote = genderNeutral
+    ? '- Do NOT use gendered pronouns (he, she, him, her, his, hers) and do NOT use they/them. Refer to the person only as "the candidate" or "the candidate\'s".\n'
+    : '';
+  return 'You are a senior recruitment consultant. Produce a professional candidate summary.\n\nRULES:\n- Output ONLY bullet points, no intro, no headers.\n- Every bullet starts with "- ".\n- Bold the most important keyword or phrase per bullet using **double asterisks**.\n- Third-person, professional, concise.\n' + neutralNote + '- Do not invent employers, dates, certifications, industries, metrics, or achievements that are not supported by the CV.\n- Keep the candidate marketable but accurate.\n- ' + modNote + '\n' + (focusNote ? ('- ' + focusNote + '\n') : '') + '\nCV:\n---\n' + cv + '\n---';
 }
 function cvSummaryModifierForPreference(preference) {
   return String(preference || '').toLowerCase() === 'detailed' ? 'longer' : 'normal';

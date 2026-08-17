@@ -108,4 +108,34 @@ assert.ok(
   'batch Format CV must neutralise its summary bullets'
 );
 
+// The summary PROMPT gains a gender-neutral instruction only when the toggle is
+// on, so the model writes neutrally from the start (belt-and-suspenders with the
+// deterministic pass).
+const summarySource = fs.readFileSync(
+  path.resolve(__dirname, '..', 'vendor', 'cvstudio', 'candidate-summary.js'),
+  'utf8',
+);
+function extractFrom(src, name) {
+  const start = src.indexOf('function ' + name + '(');
+  assert.notStrictEqual(start, -1, 'function ' + name + ' not found');
+  const open = src.indexOf('{', start);
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    if (src[i] === '{') depth++;
+    else if (src[i] === '}') { depth--; if (depth === 0) return src.slice(start, i + 1); }
+  }
+  throw new Error('unbalanced braces extracting ' + name);
+}
+const promptFactory = new Function(
+  'getCvGenderNeutralSummary',
+  extractFrom(summarySource, 'cvSummaryPrompt') + '\nreturn cvSummaryPrompt;'
+);
+const neutralInstruction = 'Do NOT use gendered pronouns';
+const promptOff = promptFactory(function(){ return false; })('CV TEXT', 'normal', '');
+assert.ok(!promptOff.includes(neutralInstruction), 'toggle off must not add the neutral instruction');
+const promptOn = promptFactory(function(){ return true; })('CV TEXT', 'normal', '');
+assert.ok(promptOn.includes(neutralInstruction), 'toggle on must add the neutral instruction');
+assert.ok(promptOn.includes('the candidate'), 'neutral instruction names "the candidate"');
+assert.ok(promptOn.includes('do NOT use they/them') || promptOn.includes('they/them'), 'neutral instruction forbids they/them');
+
 console.log('Gender-neutral summary frontend tests passed.');
