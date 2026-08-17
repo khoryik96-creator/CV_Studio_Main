@@ -365,7 +365,7 @@ async function runBatch() {
       if (withBatchSummary) {
         batchSetProgress(bf, pcts[2], 'Filling Summary placeholder with ' + batchSummaryRoute.provider_label + '…', makeSteps(2));
         var batchSummaryResult = await requestFormattingSummary(rawText, batchSummaryRoute, batchSummaryDetail);
-        cvData.summary_bullets = batchSummaryResult.bullets.slice();
+        cvData.summary_bullets = cvNeutralizeSummaryBullets(batchSummaryResult.bullets.slice());
         bf.cost += batchSummaryResult.cost;
         bf.usage = mergeUsageClient(bf.usage, batchSummaryResult.usage);
       }
