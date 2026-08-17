@@ -86,7 +86,7 @@ async function startFormat(blind) {
       setProgress(44, 'Step 2 — Filling the Summary placeholder with ' + automaticSummaryRoute.provider_label + '…', 2, totalSteps);
       setOutput('<div style="color:var(--text3);font-style:italic;padding:20px;">Generating source-grounded CV Summary…</div>');
       var summaryResult = await requestFormattingSummary(raw, automaticSummaryRoute, singleSummaryDetail);
-      _parsedData.summary_bullets = summaryResult.bullets.slice();
+      _parsedData.summary_bullets = cvNeutralizeSummaryBullets(summaryResult.bullets.slice());
       _runCost += summaryResult.cost;
       _runUsage = mergeUsageClient(_runUsage, summaryResult.usage);
     }

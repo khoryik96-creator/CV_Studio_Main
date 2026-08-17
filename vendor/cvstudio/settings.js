@@ -191,6 +191,82 @@ function setCvSummaryBoxAutoFit(enabled, silent) {
 })();
 document.addEventListener('DOMContentLoaded', renderCvSummaryBoxAutoFitSetting);
 
+// ── Gender-neutral summary language ──────────────────────────────────────────
+// When enabled, the auto-generated CV Summary (the "ABOUT HIM / HER" section)
+// refers to the person as "the candidate" instead of he/she/him/her/his/hers,
+// for both single and batch Format CV. Deliberately NOT "they/them". The
+// "ABOUT HIM / HER" heading is template text (never part of summary_bullets), so
+// it is left untouched. This is a deterministic pass over the summary bullets.
+var CV_GENDER_NEUTRAL_STORE = 'cvstudio_gender_neutral_summary_v1';
+window._cvGenderNeutralSummary = false;
+
+function getCvGenderNeutralSummary() {
+  return window._cvGenderNeutralSummary === true;
+}
+// Preserve the original pronoun's leading capitalisation on the replacement so
+// a sentence-initial "He" becomes "The candidate", not "the candidate".
+function cvMatchLeadingCase(replacement, original) {
+  return /^[A-Z]/.test(String(original || ''))
+    ? replacement.charAt(0).toUpperCase() + replacement.slice(1)
+    : replacement;
+}
+function cvNeutralizeCandidatePronouns(text) {
+  var s = String(text == null ? '' : text);
+  if (!s) return s;
+  // "her" is both possessive ("her role") and object ("assisted her"). Treat a
+  // "her" directly followed by another word as possessive -> "the candidate's";
+  // a "her" at a clause end / before punctuation is the object -> "the candidate".
+  s = s.replace(/\bher\b(?=\s+[A-Za-z])/gi, function(m){ return cvMatchLeadingCase("the candidate's", m); });
+  s = s.replace(/\bher\b/gi, function(m){ return cvMatchLeadingCase('the candidate', m); });
+  var map = {
+    himself: 'the candidate',
+    herself: 'the candidate',
+    hers: "the candidate's",
+    his: "the candidate's",
+    him: 'the candidate',
+    she: 'the candidate',
+    he: 'the candidate'
+  };
+  // Longest-first so "herself"/"himself" win before "he"/"his" prefixes. The
+  // \b anchors already prevent matching inside "the"/"This"/"ashen" etc.
+  s = s.replace(/\b(himself|herself|hers|his|him|she|he)\b/gi, function(m){
+    var repl = map[m.toLowerCase()];
+    return repl ? cvMatchLeadingCase(repl, m) : m;
+  });
+  return s;
+}
+// Apply the neutraliser to a list of summary bullets only when the toggle is on.
+// Returns a new array; the input is never mutated.
+function cvNeutralizeSummaryBullets(bullets) {
+  if (!getCvGenderNeutralSummary()) return bullets;
+  return (Array.isArray(bullets) ? bullets : []).map(function(value){
+    return cvNeutralizeCandidatePronouns(value);
+  });
+}
+function renderCvGenderNeutralSetting() {
+  var enabled = getCvGenderNeutralSummary();
+  var checkbox = document.getElementById('cvGenderNeutralToggle');
+  var label = document.getElementById('cvGenderNeutralLabel');
+  if (checkbox) checkbox.checked = enabled;
+  if (label) label.textContent = enabled ? 'On' : 'Off';
+}
+function setCvGenderNeutralSummary(enabled, silent) {
+  window._cvGenderNeutralSummary = enabled === true;
+  try { cvStudioDurableSettingSet(CV_GENDER_NEUTRAL_STORE, getCvGenderNeutralSummary() ? 'true' : 'false'); } catch(e) {}
+  renderCvGenderNeutralSetting();
+  if (!silent) showToast(getCvGenderNeutralSummary()
+    ? 'Summaries will refer to "the candidate" instead of he/she/him/her.'
+    : 'Summaries will use the candidate\'s original pronouns.', 'ok');
+  return getCvGenderNeutralSummary();
+}
+(function restoreCvGenderNeutralSummary(){
+  var stored = null;
+  try { stored = localStorage.getItem(CV_GENDER_NEUTRAL_STORE); } catch(e) {}
+  window._cvGenderNeutralSummary = stored === 'true';
+  setTimeout(renderCvGenderNeutralSetting, 0);
+})();
+document.addEventListener('DOMContentLoaded', renderCvGenderNeutralSetting);
+
 var CV_SINGLE_SUMMARY_DETAIL_STORE = 'cvstudio_single_summary_detail_v1';
 var CV_BATCH_SUMMARY_DETAIL_STORE = 'cvstudio_batch_summary_detail_v1';
 window._cvSingleSummaryDetail = 'concise';
