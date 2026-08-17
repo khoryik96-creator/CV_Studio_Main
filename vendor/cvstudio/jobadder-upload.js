@@ -43,6 +43,14 @@ function applyJAPublicInfo(info, options) {
   window._jaClientSecretConfigured = !!info.client_secret_configured;
   window._jaConfiguredClientId = String(info.client_id || '');
   window._jaAccountCacheNamespace = nextAccountCacheNamespace;
+  // Identity of the JobAdder user this install is connected as. Screening Calls
+  // are always recorded under this user, so the browser can show whose name a
+  // note will carry and warn before logging under the wrong person.
+  window._jaAccountUser = info.connected ? {
+    id: String(info.account_user_id || ''),
+    name: String(info.account_user_name || ''),
+    email: String(info.account_user_email || '')
+  } : {};
   if (!options.skipAccountStateInvalidation && previousAccountCacheNamespace
       && previousAccountCacheNamespace !== nextAccountCacheNamespace) {
     if (typeof clearTheSpiderJobAdderAccountState === 'function') clearTheSpiderJobAdderAccountState();
@@ -94,9 +102,11 @@ function renderJAConnectionState(info) {
   var batchStatus = document.getElementById('batchJAStatus');
   if (batchStatus) batchStatus.style.display = connected ? 'inline' : 'none';
 
+  var acctUser = window._jaAccountUser || {};
+  var acctLabel = String(acctUser.name || acctUser.email || '').trim();
   var oneNote = document.getElementById('oneNoteConnBadge');
   if (oneNote) {
-    oneNote.textContent = connected ? 'JobAdder Connected' : (reconnect ? 'Reconnect JobAdder' : 'Connect JobAdder first');
+    oneNote.textContent = connected ? ('JobAdder Connected' + (acctLabel ? ' · ' + acctLabel : '')) : (reconnect ? 'Reconnect JobAdder' : 'Connect JobAdder first');
     oneNote.style.background = connected ? 'rgba(34,197,94,.14)' : 'rgba(245,158,11,.14)';
   }
   ppcSetConnected(connected);
@@ -111,7 +121,15 @@ function renderJAConnectionState(info) {
   var secretStatus = document.getElementById('settingsJobAdderSecretStatus');
   var tenant = jaSafeTenantLabel(info);
   if (settingsBadge) settingsBadge.textContent = reconnect ? 'Reconnect required' : (connected ? 'Connected' : 'Not connected');
-  if (settingsDetail) settingsDetail.textContent = (reconnect ? 'JobAdder OAuth must be reconnected.' : (connected ? 'JobAdder OAuth connection is available.' : 'JobAdder is signed out in CV Studio.')) + (tenant && connected ? ' Tenant API: ' + tenant + '.' : '');
+  if (settingsDetail) {
+    var acctSentence = '';
+    if (connected && acctLabel) {
+      acctSentence = ' Notes will be recorded in JobAdder under: ' + acctLabel + (acctUser.email && acctUser.name ? ' (' + acctUser.email + ')' : '') + '.';
+    } else if (connected) {
+      acctSentence = ' Connected JobAdder user could not be resolved yet.';
+    }
+    settingsDetail.textContent = (reconnect ? 'JobAdder OAuth must be reconnected.' : (connected ? 'JobAdder OAuth connection is available.' : 'JobAdder is signed out in CV Studio.')) + (tenant && connected ? ' Tenant API: ' + tenant + '.' : '') + acctSentence;
+  }
   if (secretStatus) secretStatus.textContent = info.client_secret_configured ? 'Secure Client Secret: configured' : 'Secure Client Secret: not configured';
   var connectBtn = document.getElementById('settingsJobAdderConnectBtn');
   var reconnectBtn = document.getElementById('settingsJobAdderReconnectBtn');

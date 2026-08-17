@@ -217,9 +217,15 @@ class Phase7BJobAdderCoverageTests(unittest.TestCase):
                 "client_secret_configured",
                 "account_cache_namespace",
                 "storage",
+                "account_user_id",
+                "account_user_name",
+                "account_user_email",
             },
         )
         self.assertFalse(payload["connected"])
+        # Identity fields are blank until a JobAdder account is connected.
+        self.assertEqual(payload["account_user_name"], "")
+        self.assertEqual(payload["account_user_email"], "")
 
     def test_write_routes_reject_unauthenticated_without_touching_transport(self):
         self._unauthenticate()

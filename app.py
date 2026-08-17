@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.342"
+_INSTALL_RECEIPT_VERSION = "v24.6.343"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -341,7 +341,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.342"
+_CVSTUDIO_VERSION = "v24.6.343"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -1999,13 +1999,20 @@ def _ja_public_info():
             # cross-account reuse without exposing the protected namespace.
             "account_cache_namespace": browser_cache_namespace,
             "storage": str(_ja_creds_store.get("_storage") or "backend_secure_store"),
+            # Identity of the JobAdder user the connected token belongs to. A
+            # Screening Call is always recorded under this user, so the browser
+            # can show whose name a note will carry before it is logged.
+            "account_user_id": str(_ja_creds_store.get("account_user_id") or "") if connected else "",
+            "account_user_name": str(_ja_creds_store.get("account_user_name") or "") if connected else "",
+            "account_user_email": str(_ja_creds_store.get("account_user_email") or "") if connected else "",
         }
 
 
 def _ja_save_store():
     with _ja_store_lock:
         record = {k: _ja_creds_store.get(k) for k in (
-            "client_id", "client_secret", "access_token", "refresh_token", "api_url", "expires_at", "cache_namespace"
+            "client_id", "client_secret", "access_token", "refresh_token", "api_url", "expires_at", "cache_namespace",
+            "account_user_id", "account_user_name", "account_user_email"
         ) if _ja_creds_store.get(k) not in (None, "")}
         if record:
             kind = _cv_secure_save("jobadder", record)
@@ -2046,6 +2053,11 @@ def _ja_apply_token(token, client_id=None, client_secret=None, clear_spider_cach
                 account_changed = True
             if account_changed or not cache_namespace:
                 cache_namespace = secrets.token_hex(24)
+            if account_changed or clear_spider_cache:
+                # A new/changed JobAdder account invalidates the cached identity.
+                # Drop it so the next lookup re-resolves whose name notes carry.
+                for identity_key in ("account_user_id", "account_user_name", "account_user_email"):
+                    _ja_creds_store.pop(identity_key, None)
             _ja_creds_store.update({
                 "access_token": str(token.get("access_token") or ""),
                 "refresh_token": str(token.get("refresh_token") or _ja_creds_store.get("refresh_token") or ""),
@@ -2119,6 +2131,90 @@ def _ja_refresh_access_token(force=False):
             _ja_mark_reconnect_required()
             return ""
         return str(_ja_creds_store.get("access_token") or "")
+
+
+# A JobAdder Candidate Screening Call is attributed to the user who owns the
+# OAuth token that created it -- there is no author/onBehalfOf field on the
+# activity write. So CV Studio must be able to show *whose* name a note will be
+# logged under, and refuse to log one under the wrong person. These helpers
+# resolve the connected JobAdder user's identity best-effort; identity is
+# advisory, so a failed lookup never breaks the connection.
+_JA_IDENTITY_ENDPOINTS = ("users/current", "users/me")
+_JA_IDENTITY_RETRY_COOLDOWN = 300.0
+_ja_identity_last_attempt = 0.0
+
+
+def _ja_identity_from_payload(payload):
+    if not isinstance(payload, dict):
+        return None
+    user_id = str(payload.get("userId") or payload.get("userID") or payload.get("id") or "").strip()
+    first = str(payload.get("firstName") or "").strip()
+    last = str(payload.get("lastName") or "").strip()
+    email = str(payload.get("email") or "").strip()
+    name = (first + " " + last).strip() or str(payload.get("name") or "").strip()
+    if not (user_id or email or name):
+        return None
+    return {"user_id": user_id, "name": name, "email": email}
+
+
+def _ja_current_identity():
+    with _ja_store_lock:
+        return {
+            "user_id": str(_ja_creds_store.get("account_user_id") or "").strip(),
+            "name": str(_ja_creds_store.get("account_user_name") or "").strip(),
+            "email": str(_ja_creds_store.get("account_user_email") or "").strip(),
+        }
+
+
+def _ja_ensure_account_identity(force=False):
+    """Populate the connected JobAdder user's identity, best-effort.
+
+    Cooldown-gated so a wrong endpoint or an offline JobAdder cannot turn the
+    frequent connection-status poll into a retry storm. Never raises.
+    """
+    global _ja_identity_last_attempt
+    with _ja_store_lock:
+        token = str(_ja_creds_store.get("access_token") or "").strip()
+        refresh = str(_ja_creds_store.get("refresh_token") or "").strip()
+        have_identity = bool(
+            str(_ja_creds_store.get("account_user_email") or "").strip()
+            or str(_ja_creds_store.get("account_user_id") or "").strip()
+        )
+    if not token and not refresh:
+        return
+    if have_identity and not force:
+        return
+    now = time.time()
+    if not force and (now - _ja_identity_last_attempt) < _JA_IDENTITY_RETRY_COOLDOWN:
+        return
+    _ja_identity_last_attempt = now
+    active = _ja_refresh_access_token(force=False)
+    if not active:
+        return
+    identity = None
+    for path in _JA_IDENTITY_ENDPOINTS:
+        try:
+            _status, payload = _ja_get_json(path, timeout=12)
+        except Exception:
+            continue
+        identity = _ja_identity_from_payload(payload)
+        if identity:
+            break
+    if not identity:
+        return
+    with _ja_store_lock:
+        # A concurrent account switch invalidates this lookup.
+        if str(_ja_creds_store.get("access_token") or "").strip() != active:
+            return
+        _ja_creds_store["account_user_id"] = identity["user_id"]
+        _ja_creds_store["account_user_name"] = identity["name"]
+        _ja_creds_store["account_user_email"] = identity["email"]
+        try:
+            _ja_save_store()
+        except Exception:
+            # best-effort: identity is advisory; an unpersisted lookup is
+            # simply re-resolved on the next status poll.
+            pass
 
 
 @app.route("/jobadder/store_creds", methods=["POST"])
@@ -2325,6 +2421,12 @@ def jobadder_poll_token():
             if not token.get("access_token"):
                 return jsonify({"status": "error", "error": "JobAdder login result is incomplete"}), 500
             _ja_apply_token(token, session.get("client_id"), session.get("client_secret"), clear_spider_cache=True)
+            # Resolve whose name Screening Calls will carry as soon as the token
+            # is live, so the connected identity is available immediately.
+            try:
+                _ja_ensure_account_identity(force=True)
+            except Exception:
+                pass  # best-effort: connection succeeds even if identity lookup does not
             session["activated"] = True
             session["activated_at"] = time.time()
             session.pop("token", None)
@@ -2484,6 +2586,12 @@ def jobadder_sign_out():
 
 @app.route("/jobadder/api_info", methods=["GET"])
 def jobadder_api_info():
+    # Best-effort so an install connected before this build (identity not yet
+    # cached) still surfaces whose name notes carry on the next status poll.
+    try:
+        _ja_ensure_account_identity(force=False)
+    except Exception:
+        pass  # best-effort: identity resolution never blocks the status read
     return _CVSTUDIO_JOBADDER_READ_SERVICE.api_info()
 
 @app.route("/jobadder/search_candidate", methods=["GET"])
@@ -3611,6 +3719,34 @@ def jobadder_onenote_log_screening():
     if not token:
         return jsonify({"error": "Not authenticated"}), 401
     data = request.get_json(silent=True) or {}
+    # JobAdder records the activity under the connected token's user. Resolve
+    # that identity and refuse to log if it is not who the recruiter expects,
+    # so a Screening Call is never silently filed under the wrong consultant.
+    try:
+        _ja_ensure_account_identity(force=False)
+    except Exception:
+        pass  # best-effort: a failed identity refresh falls back to the cached value
+    logged_as = _ja_current_identity()
+    expected_user_id = str(data.get("expected_user_id") or "").strip()
+    expected_user_email = str(data.get("expected_user_email") or "").strip()
+    mismatch = False
+    if expected_user_id and logged_as["user_id"] and expected_user_id != logged_as["user_id"]:
+        mismatch = True
+    elif (
+        expected_user_email
+        and logged_as["email"]
+        and expected_user_email.lower() != logged_as["email"].lower()
+    ):
+        mismatch = True
+    if mismatch:
+        who = logged_as["name"] or logged_as["email"] or "another JobAdder user"
+        return jsonify({
+            "error": "JobAdder account mismatch",
+            "code": "JOBADDER_ACCOUNT_MISMATCH",
+            "why": "This CV Studio is connected to JobAdder as {}. The Screening Call would be recorded under that name, not yours.".format(who),
+            "next_step": "Open Settings → JobAdder, Sign Out, then Connect your own JobAdder account before logging.",
+            "logged_as": logged_as,
+        }), 409
     candidate_id = str(data.get("candidate_id") or data.get("candidateId") or "").strip()
     email = str(data.get("email") or "").strip()
     if not candidate_id:
@@ -3713,6 +3849,7 @@ def jobadder_onenote_log_screening():
         "profile_update": profile_update,
         "salary_canonical": profile_update.get("salary_canonical"),
         "warning": warning or None,
+        "logged_as": logged_as,
         "official_reference": "https://api.jobadder.com/v2/docs#operation/AddCandidateActivity",
     })
 

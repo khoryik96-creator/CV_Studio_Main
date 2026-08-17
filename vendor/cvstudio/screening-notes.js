@@ -2148,6 +2148,19 @@ async function oneNoteImportRecentPages() {
   if ((d.combined_text || '').trim()) await oneNoteParseAndMatch();
   return true;
 }
+async function oneNoteResolveJAAccount() {
+  // Return the connected JobAdder user, fetching fresh identity if it has not
+  // been resolved yet. Never throws: on failure the caller falls back to the
+  // generic "currently connected account" wording.
+  var acct = window._jaAccountUser || {};
+  if (acct && (acct.name || acct.email || acct.id)) return acct;
+  try {
+    var r = await fetch('/jobadder/api_info', {cache:'no-store'});
+    var d = await r.json().catch(function(){ return {}; });
+    if (typeof applyJAPublicInfo === 'function') applyJAPublicInfo(d || {});
+  } catch(e) {}
+  return window._jaAccountUser || {};
+}
 function updateOneNoteConnStatus() {
   oneNoteMsLoadSettings();
   oneNoteRefreshCost();
@@ -2428,14 +2441,30 @@ async function oneNoteTransferSelected() {
   if (incomplete.length) { showToast(incomplete.length + ' selected row(s) missing Presentability rating', 'err'); oneNoteRenderRows(); return false; }
   var targets = _oneNoteRows.filter(function(r){ return r.selected && r.candidate_id && !oneNoteMissingFields(r.fields).length; });
   if (!targets.length) { showToast('No matched candidates with Presentability selected to transfer', 'err'); return false; }
-  if (!window.confirm('Transfer ' + targets.length + ' selected Screening Call activity/activities to JobAdder?\n\nThese should log under Activities for the currently connected JobAdder account.')) return false;
+  // JobAdder records each Screening Call under the connected token's user, so
+  // make whose name the notes will carry visible and require confirmation
+  // before filing them -- and warn loudly if the connected account changed.
+  var jaAcct = await oneNoteResolveJAAccount();
+  var jaAcctLabel = String((jaAcct.name || jaAcct.email || '')).trim();
+  var jaAcctKey = String((jaAcct.email || jaAcct.id || jaAcctLabel || '')).trim().toLowerCase();
+  var jaWho = jaAcctLabel ? (jaAcctLabel + (jaAcct.email && jaAcct.name ? ' (' + jaAcct.email + ')' : '')) : 'the currently connected JobAdder account';
+  var jaConfirmed = '';
+  try { jaConfirmed = localStorage.getItem('cvstudio_ja_confirmed_user') || ''; } catch(e) {}
+  var jaMsg;
+  if (jaConfirmed && jaAcctKey && jaConfirmed !== jaAcctKey) {
+    jaMsg = '⚠ This CV Studio is now connected to JobAdder as ' + jaWho + ', which is DIFFERENT from the account used here before.\n\nThese ' + targets.length + ' Screening Call(s) will be recorded under ' + jaWho + '. Continue only if that is your own JobAdder account.';
+  } else {
+    jaMsg = 'Transfer ' + targets.length + ' selected Screening Call activity/activities to JobAdder?\n\nThey will be recorded in JobAdder under: ' + jaWho + '.';
+  }
+  if (!window.confirm(jaMsg)) return false;
+  try { if (jaAcctKey) localStorage.setItem('cvstudio_ja_confirmed_user', jaAcctKey); } catch(e) {}
   var ok = 0, fail = 0, profileWarnings = 0;
   for (var i=0;i<_oneNoteRows.length;i++) {
     var row = _oneNoteRows[i];
     if (!row.selected || !row.candidate_id || oneNoteMissingFields(row.fields).length) continue;
     row.status = 'pending'; row.statusText = 'Transferring…'; row.transfer_error = ''; row.transfer_error_detail = ''; row.transfer_warning = ''; row.browser_bridge = null; oneNoteRenderRows();
     try {
-      var payload = { candidate_id: row.candidate_id, email: row.email, note_type: noteType, fields: row.fields, note_text: oneNoteBuildStructuredNote(row), create_as: 'activity', salary_ai: oneNoteSalaryAiConfig(), spelling_correction: oneNoteSpellingCorrectionEnabled() };
+      var payload = { candidate_id: row.candidate_id, email: row.email, note_type: noteType, fields: row.fields, note_text: oneNoteBuildStructuredNote(row), create_as: 'activity', salary_ai: oneNoteSalaryAiConfig(), spelling_correction: oneNoteSpellingCorrectionEnabled(), expected_user_id: String(jaAcct.id || ''), expected_user_email: String(jaAcct.email || '') };
       var r = await fetchWithTimeout('/jobadder/onenote_log_screening', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)}, 90000);
       var d = await r.json().catch(function(){ return {}; });
       if (!r.ok || !d.ok) {
@@ -2458,7 +2487,7 @@ async function oneNoteTransferSelected() {
     }
     oneNoteRenderRows();
   }
-  if (ok) { var lastCanon=((_oneNoteRows.filter(function(x){return x.salary_canonical;}).slice(-1)[0]||{}).salary_canonical||{}); var lastProc=lastCanon.processing||{}; var cs=lastCanon.currencySelection||{}; var aiMsg=lastProc.aiUsed ? (' Salary components/currency extracted by '+providerLabel(lastProc.provider,lastProc.model)+(lastProc.cacheHit?' from cache':'')+'; deterministic code calculated final values. AI cost $'+Number(lastProc.costUsd||0).toFixed(4)+'.') : ' Salary calculation/currency detection used the local deterministic fallback; AI cost $0.0000.'; var currencyMsg=cs.jobAdderOption ? (' JobAdder Currency set to '+cs.jobAdderOption+(cs.selectionRule==='expected_salary_currency_wins'?' using Expected Salary priority.':'.')) : ''; oneNoteShowSuccess('Transferred successfully: ' + ok + ' Screening Call activit' + (ok === 1 ? 'y' : 'ies') + ' to JobAdder.' + (profileWarnings ? (' ' + profileWarnings + ' candidate profile update(s) need review.') : ' Salary/notice profile updates completed or were safely skipped when blank.') + aiMsg + currencyMsg); oneNoteSwitchMiniTab('record'); }
+  if (ok) { var lastCanon=((_oneNoteRows.filter(function(x){return x.salary_canonical;}).slice(-1)[0]||{}).salary_canonical||{}); var lastProc=lastCanon.processing||{}; var cs=lastCanon.currencySelection||{}; var aiMsg=lastProc.aiUsed ? (' Salary components/currency extracted by '+providerLabel(lastProc.provider,lastProc.model)+(lastProc.cacheHit?' from cache':'')+'; deterministic code calculated final values. AI cost $'+Number(lastProc.costUsd||0).toFixed(4)+'.') : ' Salary calculation/currency detection used the local deterministic fallback; AI cost $0.0000.'; var currencyMsg=cs.jobAdderOption ? (' JobAdder Currency set to '+cs.jobAdderOption+(cs.selectionRule==='expected_salary_currency_wins'?' using Expected Salary priority.':'.')) : ''; oneNoteShowSuccess('Transferred successfully: ' + ok + ' Screening Call activit' + (ok === 1 ? 'y' : 'ies') + ' to JobAdder' + (jaAcctLabel ? ', recorded under ' + jaWho : '') + '.' + (profileWarnings ? (' ' + profileWarnings + ' candidate profile update(s) need review.') : ' Salary/notice profile updates completed or were safely skipped when blank.') + aiMsg + currencyMsg); oneNoteSwitchMiniTab('record'); }
   showToast('OneNote transfer done: ' + ok + ' ok' + (profileWarnings ? ', ' + profileWarnings + ' profile warning' + (profileWarnings === 1 ? '' : 's') : '') + (fail ? ', ' + fail + ' failed' : ''), fail ? 'err' : (profileWarnings ? 'info' : 'ok'));
   return fail ? false : true;
 }
