@@ -2194,9 +2194,14 @@ def _ja_ensure_account_identity(force=False):
     identity = None
     for path in _JA_IDENTITY_ENDPOINTS:
         try:
-            _status, payload = _ja_get_json(path, timeout=12)
-        except Exception:
+            _status, payload = _ja_get_json(path, timeout=8)
+        except urllib.error.HTTPError:
+            # Wrong endpoint name for this tenant -- try the documented alternate.
             continue
+        except Exception:
+            # A network-level failure (timeout/URLError) would just repeat on the
+            # alternate endpoint; stop so one status poll cannot chain two waits.
+            break
         identity = _ja_identity_from_payload(payload)
         if identity:
             break

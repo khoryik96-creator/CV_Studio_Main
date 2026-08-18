@@ -213,6 +213,13 @@ function cvMatchLeadingCase(replacement, original) {
 function cvNeutralizeCandidatePronouns(text) {
   var s = String(text == null ? '' : text);
   if (!s) return s;
+  // Expand he/she contractions first so a rewritten pronoun does not leave a
+  // dangling suffix ("He'll" -> "The candidate'll"). Straight and curly quotes
+  // both count. 's/'d take their most common recruiting-summary sense (is/had);
+  // the "has"/"would" senses are rarer and read acceptably either way.
+  s = s.replace(/\b(?:he|she)['’]ll\b/gi, function(m){ return cvMatchLeadingCase('the candidate will', m); });
+  s = s.replace(/\b(?:he|she)['’]d\b/gi, function(m){ return cvMatchLeadingCase('the candidate had', m); });
+  s = s.replace(/\b(?:he|she)['’]s\b/gi, function(m){ return cvMatchLeadingCase('the candidate is', m); });
   // "her" is both possessive ("her role") and object ("assisted her"). Treat a
   // "her" directly followed by another word as possessive -> "the candidate's";
   // a "her" at a clause end / before punctuation is the object -> "the candidate".

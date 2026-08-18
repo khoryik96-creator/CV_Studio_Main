@@ -74,6 +74,12 @@ async function startFormat(blind) {
     }
     clearInterval(_fakeInterval);
     _parsedData = applyFormatSummaryBullets(data.data, raw, blind);
+    // A manually-linked CV Summary is applied here (the auto path below is skipped
+    // when one is linked), so neutralise it too when the toggle is on -- otherwise
+    // a linked summary could keep gendered pronouns the auto path would have removed.
+    if (_parsedData && Array.isArray(_parsedData.summary_bullets)) {
+      _parsedData.summary_bullets = cvNeutralizeSummaryBullets(_parsedData.summary_bullets);
+    }
     _labelBulletLevels = Array.isArray(data.bullet_levels) ? data.bullet_levels : null;
     if (!_parsedData) {
       recordPaidAiFailure('Single CV parse returned no data', data, route.model, route.provider);

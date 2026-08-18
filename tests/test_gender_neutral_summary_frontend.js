@@ -76,6 +76,23 @@ eq(
 eq('This theatre here shelters them.', 'This theatre here shelters them.');
 eq('The cashier assessed the mishap.', 'The cashier assessed the mishap.');
 
+// Contractions expand instead of leaving a dangling suffix ("The candidate'll").
+eq("He's a strong engineer.", 'The candidate is a strong engineer.');
+eq("He'll lead the team.", 'The candidate will lead the team.');
+eq("She'd delivered results.", 'The candidate had delivered results.');
+eq('He’s proven and she’ll grow.', 'The candidate is proven and the candidate will grow.'); // curly quotes
+
+// Sweep: no gendered pronoun may survive, and the transform is idempotent.
+[
+  "He's proven; his record and her drive impressed them.",
+  'She led her team and mentored him herself.',
+  'HE MANAGED HIS TEAM.',
+].forEach(function(input){
+  var once = neutralize(input);
+  assert.strictEqual(/\b(he|she|him|his|her|hers|himself|herself)\b/i.test(once), false, 'gendered pronoun survived: ' + once);
+  assert.strictEqual(neutralize(once), once, 'not idempotent: ' + once);
+});
+
 // The replacement must never introduce "they/them/their".
 const neutral = neutralize('He gave his report to her. She thanked him for his work.');
 assert.strictEqual(/\b(they|them|their|theirs)\b/i.test(neutral), false, 'must not use they/them: ' + neutral);
@@ -97,10 +114,14 @@ assert.deepStrictEqual(bullets, ['He is a Docker engineer.', "Proven in his cont
 
 // The "ABOUT HIM / HER" heading is never passed through summary_bullets, so it
 // is left intact; confirm the neutraliser is only ever applied to bullet data.
+const cvFormatSrc = fs.readFileSync(path.resolve(__dirname, '..', 'vendor', 'cvstudio', 'cv-format.js'), 'utf8');
 assert.ok(
-  fs.readFileSync(path.resolve(__dirname, '..', 'vendor', 'cvstudio', 'cv-format.js'), 'utf8')
-    .includes('cvNeutralizeSummaryBullets(summaryResult.bullets'),
-  'single Format CV must neutralise its summary bullets'
+  cvFormatSrc.includes('cvNeutralizeSummaryBullets(summaryResult.bullets'),
+  'single Format CV must neutralise its auto-generated summary bullets'
+);
+assert.ok(
+  cvFormatSrc.includes('cvNeutralizeSummaryBullets(_parsedData.summary_bullets'),
+  'single Format CV must also neutralise a manually-linked summary'
 );
 assert.ok(
   fs.readFileSync(path.resolve(__dirname, '..', 'vendor', 'cvstudio', 'batch-format.js'), 'utf8')

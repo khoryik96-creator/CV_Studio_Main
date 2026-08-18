@@ -107,6 +107,63 @@ class JobAdderIdentityResolutionTests(unittest.TestCase):
             app._ja_creds_store.update(original)
             app._ja_identity_last_attempt = original_attempt
 
+    def _connected_store_without_identity(self):
+        app._ja_creds_store.clear()
+        app._ja_creds_store.update({
+            "access_token": "tok", "refresh_token": "ref", "client_id": "cid",
+            "client_secret": "sec", "expires_at": 9999999999,
+            "api_url": "https://api.jobadder.com/v2", "cache_namespace": "n",
+        })
+        app._ja_identity_last_attempt = 0.0
+
+    def test_identity_fetch_falls_through_to_alternate_on_http_error(self):
+        import urllib.error
+        original = dict(app._ja_creds_store)
+        original_attempt = app._ja_identity_last_attempt
+        try:
+            self._connected_store_without_identity()
+            payload = {"userId": 9, "firstName": "Amy", "lastName": "Lee", "email": "amy@x.io"}
+            calls = []
+
+            def fake_get(path, timeout=8):
+                calls.append(path)
+                if path == "users/current":
+                    raise urllib.error.HTTPError(path, 404, "Not Found", {}, None)
+                return (200, payload)
+
+            with mock.patch.object(app, "_ja_refresh_access_token", return_value="tok"), \
+                    mock.patch.object(app, "_ja_get_json", side_effect=fake_get), \
+                    mock.patch.object(app, "_ja_save_store"):
+                app._ja_ensure_account_identity(force=True)
+            self.assertEqual(calls, ["users/current", "users/me"])
+            self.assertEqual(app._ja_current_identity()["email"], "amy@x.io")
+        finally:
+            app._ja_creds_store.clear(); app._ja_creds_store.update(original)
+            app._ja_identity_last_attempt = original_attempt
+
+    def test_identity_fetch_stops_after_network_error_without_chaining(self):
+        import urllib.error
+        original = dict(app._ja_creds_store)
+        original_attempt = app._ja_identity_last_attempt
+        try:
+            self._connected_store_without_identity()
+            calls = []
+
+            def fake_get(path, timeout=8):
+                calls.append(path)
+                raise urllib.error.URLError("timed out")
+
+            with mock.patch.object(app, "_ja_refresh_access_token", return_value="tok"), \
+                    mock.patch.object(app, "_ja_get_json", side_effect=fake_get), \
+                    mock.patch.object(app, "_ja_save_store"):
+                app._ja_ensure_account_identity(force=True)
+            # A network timeout must not chain a second endpoint attempt.
+            self.assertEqual(calls, ["users/current"])
+            self.assertEqual(app._ja_current_identity()["email"], "")
+        finally:
+            app._ja_creds_store.clear(); app._ja_creds_store.update(original)
+            app._ja_identity_last_attempt = original_attempt
+
     def test_disconnected_public_info_hides_identity(self):
         original = dict(app._ja_creds_store)
         try:
