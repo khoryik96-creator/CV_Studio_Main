@@ -381,6 +381,50 @@ async function uploadToJobAdder() {
 }
 
 // ── JobAdder via Flask proxy (avoids CORS, handles token server-side) ──
+
+// JobAdder throttles bursts of writes with HTTP 429 ("Try again shortly").
+// A 429 means JobAdder rejected the request BEFORE processing it, so nothing
+// was created or attached and retrying the exact same call is safe (it cannot
+// duplicate a candidate or a CV attachment). Only an explicit 429 response is
+// retried here — a timeout or network error is never retried, because there
+// the request may actually have been processed server-side.
+function jaRetrySleep(ms) {
+  return new Promise(function(resolve) { setTimeout(resolve, ms); });
+}
+
+function jaRateLimitDelayMs(response) {
+  // Honour JobAdder's Retry-After when present, otherwise wait 30s (matching
+  // the manual "try again shortly" guidance); clamp so a stray header value
+  // can neither hammer the API nor hang the upload indefinitely.
+  var seconds = 0;
+  try { seconds = parseInt(response.headers.get('Retry-After'), 10); } catch (e) { seconds = 0; }
+  if (!isFinite(seconds) || seconds <= 0) seconds = 30;
+  if (seconds < 5) seconds = 5;
+  if (seconds > 60) seconds = 60;
+  return seconds * 1000;
+}
+
+// Wraps a single JobAdder write POST/PUT so an HTTP 429 auto-retries after a
+// short wait instead of failing straight to the user. Returns the final
+// Response (ok, or the last error) so callers keep their existing handling.
+function jaPostWithRetry(url, options, timeoutMs, label) {
+  var maxRetries = 2;
+  function attempt(n) {
+    return fetchWithTimeout(url, options, timeoutMs).then(function(r) {
+      if (r.status !== 429 || n >= maxRetries) return r;
+      var waitMs = jaRateLimitDelayMs(r);
+      try {
+        if (typeof showToast === 'function') {
+          showToast('JobAdder is busy — auto-retrying ' + (label || 'the upload') +
+            ' in ' + Math.round(waitMs / 1000) + 's (attempt ' + (n + 1) + ' of ' + maxRetries + ')…', 'warn');
+        }
+      } catch (e) {}
+      return jaRetrySleep(waitMs).then(function() { return attempt(n + 1); });
+    });
+  }
+  return attempt(0);
+}
+
 async function jaSearchCandidate(email) {
   var r = await fetchWithTimeout('/jobadder/search_candidate?email=' + encodeURIComponent(email), {}, 15000);
   if (!r.ok) { var e = await r.json(); throw new Error(e.error || 'Search failed'); }
@@ -389,10 +433,10 @@ async function jaSearchCandidate(email) {
 async function jaCreateCandidate(firstName, lastName, email, originalBlob, originalFname, extraFields) {
   var payload = { firstName: firstName, lastName: lastName, email: email };
   if (extraFields) Object.assign(payload, extraFields);
-  var r = await fetchWithTimeout('/jobadder/create_candidate', {
+  var r = await jaPostWithRetry('/jobadder/create_candidate', {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify(payload)
-  }, 15000);
+  }, 15000, 'profile creation');
   if (!r.ok) { var e = await r.json(); throw new Error(e.error || 'Create failed: ' + (e.detail||'')); }
   var newCand = await r.json();
   // Upload original CV to Resume slot if provided
@@ -418,10 +462,10 @@ function buildIndustryCustomFields(cand) {
 }
 
 async function jaUpdateCandidate(candidateId, fields) {
-  var r = await fetchWithTimeout('/jobadder/update_candidate', {
+  var r = await jaPostWithRetry('/jobadder/update_candidate', {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(Object.assign({ candidateId: candidateId }, fields))
-  }, 15000);
+  }, 15000, 'candidate update');
   if (!r.ok) { var e = await r.json(); throw new Error(e.error || 'Update failed'); }
   return r.json();
 }
@@ -430,7 +474,7 @@ async function jaUploadOriginalCV(candidateId, blob, fname) {
   var fd = new FormData();
   fd.append('candidate_id', candidateId);
   fd.append('file', blob, fname);
-  var r = await fetchWithTimeout('/jobadder/upload_original_cv', { method: 'POST', body: fd }, 30000);
+  var r = await jaPostWithRetry('/jobadder/upload_original_cv', { method: 'POST', body: fd }, 30000, 'original CV upload');
   if (!r.ok) {
     var e = await r.json();
     var msg = e.error || 'Original CV upload failed';
@@ -444,7 +488,7 @@ async function jaUploadCV(candidateId, blob, fname) {
   var fd = new FormData();
   fd.append('candidate_id', candidateId);
   fd.append('file', blob, fname);
-  var r = await fetchWithTimeout('/jobadder/upload_cv', { method: 'POST', body: fd }, 30000);
+  var r = await jaPostWithRetry('/jobadder/upload_cv', { method: 'POST', body: fd }, 30000, 'CV upload');
   if (!r.ok) {
     var e = await r.json();
     // Show full detail from JobAdder for debugging
