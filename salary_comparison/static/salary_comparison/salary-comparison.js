@@ -11,6 +11,7 @@
   const exportExcelButton = document.getElementById("exportExcelButton");
   const rulesModal = document.getElementById("rulesModal");
   const previewRuleButton = document.getElementById("previewRuleButton");
+  const autoDraftRuleButton = document.getElementById("autoDraftRuleButton");
   const publishRuleButton = document.getElementById("publishRuleButton");
   const ruleNotice = document.getElementById("ruleNotice");
   const proposal = document.getElementById("ruleProposal");
@@ -97,6 +98,49 @@
     el(`${prefix}_local_currency`).textContent = currency || "No mapping";
   }
 
+  function matchingRule(prefix) {
+    const country = el(`${prefix}_country`).value;
+    const taxYear = Number(el(`${prefix}_tax_year`).value);
+    const residency = el(`${prefix}_residency`).value;
+    return config.rules.find((rule) => rule.country === country
+      && Number(rule.tax_year) === taxYear && rule.residency === residency) || null;
+  }
+
+  function updateRuleDependentControls(prefix, preferredProfile) {
+    const rule = matchingRule(prefix);
+    const profileSelect = el(`${prefix}_contribution_profile`);
+    const profiles = rule?.contribution_profiles || [];
+    const selected = preferredProfile ?? profileSelect.value ?? rule?.default_contribution_profile;
+    if (profiles.length) {
+      const validSelected = profiles.some((profile) => profile.id === selected)
+        ? selected : rule.default_contribution_profile;
+      setOptions(profileSelect, profiles.map((profile) => ({
+        value: profile.id,
+        label: profile.label,
+      })), validSelected);
+      profileSelect.disabled = false;
+    } else {
+      setOptions(profileSelect, [{ value: "", label: "Standard contribution rule" }], "");
+      profileSelect.disabled = true;
+    }
+
+    const reliefInput = el(`${prefix}_personal_tax_reliefs`);
+    const reliefsAllowed = rule?.personal_reliefs_allowed !== false;
+    if (!reliefsAllowed) {
+      if (!reliefInput.disabled) reliefInput.dataset.previousRelief = reliefInput.value;
+      reliefInput.value = "0";
+      reliefInput.disabled = true;
+      reliefInput.title = "Malaysia non-residents cannot claim personal tax reliefs.";
+    } else {
+      reliefInput.disabled = false;
+      reliefInput.title = "";
+      if (reliefInput.dataset.previousRelief !== undefined) {
+        reliefInput.value = reliefInput.dataset.previousRelief;
+        delete reliefInput.dataset.previousRelief;
+      }
+    }
+  }
+
   function initializeSelectors() {
     const countryNames = config.countries.map((item) => item.country);
     const currencies = [...new Set(config.countries.map((item) => item.currency))].sort();
@@ -106,6 +150,7 @@
       setOptions(el(`${prefix}_reporting_currency`), currencies, "MYR");
       populateYear(prefix, 2025);
       updateLocalCurrency(prefix);
+      updateRuleDependentControls(prefix);
     }
     setOptions(el("rule_country"), countryNames, "Malaysia");
     setOptions(el("viewCurrency"), currencies, "MYR");
@@ -125,6 +170,7 @@
       country: el(`${prefix}_country`).value,
       tax_year: Number(el(`${prefix}_tax_year`).value),
       residency: el(`${prefix}_residency`).value,
+      contribution_profile: el(`${prefix}_contribution_profile`).value,
       monthly_base: numberValue(`${prefix}_monthly_base`) ?? 0,
       monthly_fixed_allowance: numberValue(`${prefix}_monthly_fixed_allowance`) ?? 0,
       guaranteed_bonus_months: numberValue(`${prefix}_guaranteed_bonus_months`) ?? 0,
@@ -376,6 +422,12 @@
       if (node.id.endsWith("_country") || node.id.endsWith("_tax_year")) continue;
       if (has(node.id)) node.value = data[node.id];
     }
+    for (const prefix of ["a", "b"]) {
+      updateRuleDependentControls(
+        prefix,
+        has(`${prefix}_contribution_profile`) ? data[`${prefix}_contribution_profile`] : undefined,
+      );
+    }
     updateVariableBonusControl("a");
     updateVariableBonusControl("b");
     return true;
@@ -414,8 +466,11 @@
     el(`${prefix}_country`).addEventListener("change", () => {
       updateLocalCurrency(prefix);
       populateYear(prefix);
+      updateRuleDependentControls(prefix);
       scheduleCalculation();
     });
+    el(`${prefix}_tax_year`).addEventListener("change", () => updateRuleDependentControls(prefix));
+    el(`${prefix}_residency`).addEventListener("change", () => updateRuleDependentControls(prefix));
     el(`${prefix}_reporting_currency`).addEventListener("change", () => {
       const other = prefix === "a" ? "b" : "a";
       const chosen = el(`${prefix}_reporting_currency`).value;
@@ -442,6 +497,7 @@
       el(`${prefix}_country`).value = values.country;
       populateYear(prefix, 2025);
       el(`${prefix}_residency`).value = "Resident";
+      updateRuleDependentControls(prefix);
       el(`${prefix}_monthly_base`).value = values.base;
       el(`${prefix}_monthly_fixed_allowance`).value = values.allowance;
       el(`${prefix}_guaranteed_bonus_months`).value = 1;
@@ -490,11 +546,12 @@
     }
   }
 
-  async function previewRule() {
+  async function previewRule(autoSources = false) {
     setRuleNotice("");
     pendingRule = null;
     publishRuleButton.disabled = true;
     previewRuleButton.disabled = true;
+    autoDraftRuleButton.disabled = true;
     previewRuleButton.textContent = "Reading official sources…";
     try {
       const data = await requestJson("api/rules/preview", {
@@ -509,6 +566,7 @@
           residency: el("rule_residency").value,
           tax_url: el("rule_tax_url").value.trim(),
           contribution_url: el("rule_contribution_url").value.trim(),
+          auto_sources: autoSources,
         }),
       });
       pendingRule = data.rule;
@@ -521,9 +579,25 @@
       setRuleNotice(error.message);
     } finally {
       previewRuleButton.disabled = false;
+      autoDraftRuleButton.disabled = false;
       previewRuleButton.textContent = "Preview update";
       el("rule_api_key").value = "";
     }
+  }
+
+  async function draftNextYear() {
+    const country = el("rule_country").value;
+    const knownYears = config.years_by_country[country] || [];
+    const nextYear = (knownYears.length ? Math.max(...knownYears) : new Date().getFullYear()) + 1;
+    const sources = config.official_rule_sources?.[country.toLowerCase()];
+    if (!sources) {
+      setRuleNotice(`No official one-click source set is registered for ${country}. Enter the URLs manually.`);
+      return;
+    }
+    el("rule_tax_year").value = String(nextYear);
+    el("rule_tax_url").value = sources.tax_url;
+    el("rule_contribution_url").value = sources.contribution_url;
+    await previewRule(true);
   }
 
   async function publishRule() {
@@ -537,7 +611,10 @@
       });
       setRuleNotice("Rule published. Reloading available tax years…", "success");
       config = await requestJson("api/config");
-      for (const prefix of ["a", "b"]) populateYear(prefix, el(`${prefix}_tax_year`).value);
+      for (const prefix of ["a", "b"]) {
+        populateYear(prefix, el(`${prefix}_tax_year`).value);
+        updateRuleDependentControls(prefix);
+      }
       pendingRule = null;
       publishRuleButton.disabled = true;
       setTimeout(() => rulesModal.close(), 800);
@@ -574,7 +651,8 @@
       exportExcelButton.addEventListener("click", () => exportReport("excel"));
       rulesButton.addEventListener("click", () => { applyHostAiRoute(); rulesModal.showModal(); });
       applyHostAiRoute();
-      previewRuleButton.addEventListener("click", previewRule);
+      previewRuleButton.addEventListener("click", () => previewRule(false));
+      autoDraftRuleButton.addEventListener("click", draftNextYear);
       publishRuleButton.addEventListener("click", publishRule);
       calculate();
     } catch (error) {

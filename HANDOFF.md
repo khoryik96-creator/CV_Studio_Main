@@ -62,7 +62,7 @@ Expected Linux result: **1 known failure** —
 `test_legacy_doc_requires_and_uses_verified_antiword` (the Antiword binary is
 not functional on Linux; it is a Windows-only runtime — the app correctly
 returns 424 rather than trusting an unverified extraction). A verified Windows
-x64 environment currently passes **856 tests, 4 skipped, 93 subtests**.
+x64 environment currently passes **922 tests, 4 skipped, 93 subtests**.
 **Do not commit `.venv_test/`** (or
 `node_modules/`). Both paths are gitignored, but keep generated dependency
 trees out of commits and continue staging source files explicitly rather than
@@ -189,6 +189,23 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   page-aware corrective below supersedes those details once merged.
 
 ## 8. Open / deferred work
+
+- **Crawler/JobAdder/Malaysia tax reliability corrective — v24.6.344,
+  local branch only.** Branch
+  `chatgpt/pr159-v24.6.344-reliability-tax-update` is complete and validated
+  locally but must not be committed, pushed or opened as a PR until the owner
+  explicitly authorizes those GitHub actions. AI Crawler now stops optional
+  enrichment at a 330-second internal deadline and returns safe partial results
+  rather than reaching the 420-second browser timeout. JobAdder refreshes near
+  expiry, preserves the connection on transient failures and requires reconnect
+  only for permanent refresh rejection. Malaysia YA2025 includes a separate
+  30% non-resident tax rule and independent EPF/pass profiles for citizen, PR,
+  EP, RP-T and spousal/long-term-visit pass. The updater can draft the next year
+  from registered official sources in one click, refuses unsupported years and
+  never bypasses human approval. Windows receipt/Antiword installer checks were
+  also hardened against mismatched local-state roots and user-controlled HOME
+  module loading. Validation: 922 passed, 4 skipped, 93 subtests; all JavaScript
+  fixtures; protected Windows source/dependency preflight; route/version gates.
 
 - **OCR partial-failure corrective — v24.6.341 / PR #156.** The owner
   authorized the corrective and its merge after validation. If OCR is

@@ -894,15 +894,64 @@ class IndustryRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         payload = response.get_json()
         summary = payload["filter_summary"]
-        self.assertEqual(fetch_detail.call_count, 60)
+        self.assertEqual(fetch_detail.call_count, 40)
         self.assertIn("61", {call.args[1] for call in fetch_detail.call_args_list})
         self.assertEqual(summary["eligibility_detail_candidates"], 61)
-        self.assertEqual(summary["eligibility_detail_requests"], 60)
-        self.assertEqual(summary["eligibility_detail_request_limit"], 60)
+        self.assertEqual(summary["eligibility_detail_requests"], 40)
+        self.assertEqual(summary["eligibility_detail_request_limit"], 40)
         self.assertTrue(summary["eligibility_detail_fallback_truncated"])
         self.assertTrue(summary["pagination_incomplete"])
         self.assertTrue(
-            any("inspected 60 of 61" in warning for warning in summary["pagination_warnings"])
+            any("inspected 40 of 61" in warning for warning in summary["pagination_warnings"])
+        )
+
+    def test_processing_deadline_returns_ranked_partial_results(self):
+        import time as _time
+
+        summaries = [self._summary(1), self._summary(2)]
+        metadata = {
+            "mode": "plain",
+            "query": "Python",
+            "returned": 2,
+            "search": {"reported_total": 2, "warnings": [], "pages": 1},
+        }
+
+        def slow_resume(_token, _candidate_id):
+            _time.sleep(0.12)
+            return "Python engineer", "fixture resume"
+
+        with mock.patch.object(
+            app, "_SPIDER_SEARCH_PROCESSING_DEADLINE_SECONDS", 0.03
+        ), mock.patch.object(
+            app, "_ja_refresh_access_token", return_value="fixture-token"
+        ), mock.patch.object(
+            app,
+            "_spider_plain_keyword_jobadder_candidates",
+            return_value=(summaries, metadata),
+        ), mock.patch.object(
+            app, "_spider_fetch_candidate_resume_text", side_effect=slow_resume
+        ), mock.patch.object(
+            app, "_spider_fetch_candidate_detail", return_value={}
+        ):
+            response = app.app.test_client().post(
+                "/jobadder/spider_search",
+                json={
+                    "query": "Python",
+                    "limit": 2,
+                    "filters": {"must": "Python"},
+                },
+                headers=self._request_headers(),
+            )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()
+        self.assertTrue(payload["items"], "safe list-row results should survive enrichment timeout")
+        summary = payload["filter_summary"]
+        self.assertTrue(summary["processing_deadline_reached"])
+        self.assertTrue(summary["partial_results"])
+        self.assertTrue(summary["pagination_incomplete"])
+        self.assertTrue(
+            any("safe partial results" in warning for warning in summary["pagination_warnings"])
         )
 
     def test_unknown_industry_value_is_rejected(self):

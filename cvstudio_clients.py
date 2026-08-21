@@ -499,8 +499,13 @@ class JobAdderClient:
                 raise
             try:
                 refreshed = self._token(True)
-            except Exception:
-                self._mark_reconnect()
+            except Exception as refresh_error:
+                # A temporary token-endpoint/network failure is not evidence
+                # that OAuth was revoked. Keep the protected connection so a
+                # later safe read can retry; permanent refresh rejection is
+                # translated by the token provider into an empty token/state.
+                if not bool(getattr(refresh_error, "retryable", False)):
+                    self._mark_reconnect()
                 raise
             if not refreshed:
                 self._mark_reconnect()

@@ -36,7 +36,26 @@ def test_repository_get_and_replace(data_dir, malaysia_rule):
     repo.publish(updated)
     fetched = repo.get_rule("Malaysia", 2025, "Resident")
     assert fetched["notes"] == ["replacement"]
-    assert len([r for r in repo.list_rules() if r["country"] == "Malaysia" and r["tax_year"] == 2025]) == 1
+    assert len([
+        r for r in repo.list_rules()
+        if r["country"] == "Malaysia" and r["tax_year"] == 2025 and r["residency"] == "Resident"
+    ]) == 1
+
+
+def test_rule_validation_normalizes_contribution_profiles(malaysia_rule):
+    normalized = validate_rule(malaysia_rule)
+    assert normalized["default_contribution_profile"] == "malaysian_citizen"
+    assert {profile["id"] for profile in normalized["contribution_profiles"]} >= {
+        "permanent_resident", "employment_pass", "residence_pass_talent", "spousal_visa",
+    }
+
+
+def test_rule_validation_rejects_gapped_profile_periods(malaysia_rule):
+    broken = deepcopy(malaysia_rule)
+    profile = next(item for item in broken["contribution_profiles"] if item["id"] == "employment_pass")
+    profile["periods"][1]["start_month"] = 11
+    with pytest.raises(RuleValidationError, match="without gaps"):
+        validate_rule(broken)
 
 
 def test_repository_missing_rule(data_dir):

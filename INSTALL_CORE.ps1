@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Continue'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 if (-not $Root.EndsWith('\')) { $Root += '\' }
 $Log = Join-Path $Root 'install_log.txt'
-$InstallVersion = 'v24.6.343'
+$InstallVersion = 'v24.6.344'
 $AntiwordVersion = '1.3.5'
 $AntiwordRuntimeFileCount = 37
 $AntiwordManifestSha256 = '7d365a89f268a2fc34f815b369474124bc6a1aac02e9b0b57e6dfd5eb5368da0'
@@ -58,6 +58,27 @@ function Write-Step {
 }
 
 function Write-Blank { Write-Host ''; Add-Content -LiteralPath $Log -Value '' -Encoding UTF8 }
+
+function Get-InstallerFileSha256 {
+    param([string]$Path)
+    $stream = [IO.File]::OpenRead([IO.Path]::GetFullPath($Path))
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+        return ([BitConverter]::ToString($sha.ComputeHash($stream))).Replace('-','').ToLowerInvariant()
+    } finally {
+        $sha.Dispose()
+        $stream.Dispose()
+    }
+}
+
+function Get-InstallerAuthenticodeSignature {
+    param([string]$Path)
+    # Resolve the built-in module from PSHOME. An untrusted HOME environment can
+    # break normal module auto-loading and must not disable installer checks.
+    $securityModule = Join-Path $PSHOME 'Modules\Microsoft.PowerShell.Security\Microsoft.PowerShell.Security.psd1'
+    Import-Module -Name $securityModule -ErrorAction Stop
+    return Microsoft.PowerShell.Security\Get-AuthenticodeSignature -LiteralPath $Path
+}
 
 
 function Get-InstallerTotpSecret {
@@ -540,7 +561,7 @@ function Invoke-VerifiedNodeDownload {
                 Start-Sleep -Seconds (2 * $attempt)
             }
         }
-        $actual = (Get-FileHash -LiteralPath $OutFile -Algorithm SHA256).Hash.ToLowerInvariant()
+        $actual = Get-InstallerFileSha256 -Path $OutFile
         if ($actual -ne $expected) { throw "Node download SHA-256 mismatch for $FileName" }
         return $true
     } catch {
@@ -654,7 +675,7 @@ function Install-PythonPackages {
     }
     $stampDir = Join-Path $env:APPDATA 'GUOLabCVStudio'
     New-Item -ItemType Directory -Path $stampDir -Force | Out-Null
-    Set-Content -LiteralPath (Join-Path $stampDir '.deps_ok') -Value 'v24.6.343-bundled-pdfium-ocr-antiword' -Encoding ASCII
+    Set-Content -LiteralPath (Join-Path $stampDir '.deps_ok') -Value 'v24.6.344-bundled-pdfium-ocr-antiword' -Encoding ASCII
     Write-Step '    Python packages ready.'
     return $true
 }
@@ -817,7 +838,7 @@ function Test-AntiwordRuntime {
         if (((Get-Item -LiteralPath $manifest -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
             throw 'manifest-link-rejected'
         }
-        if ((Get-FileHash -LiteralPath $manifest -Algorithm SHA256).Hash.ToLowerInvariant() -ne $AntiwordManifestSha256) {
+        if ((Get-InstallerFileSha256 -Path $manifest) -ne $AntiwordManifestSha256) {
             throw 'manifest-integrity-failed'
         }
         if (-not (Test-Path -LiteralPath $FixturePath -PathType Leaf)) { throw 'functional-fixture-missing' }
@@ -852,7 +873,7 @@ function Test-AntiwordRuntime {
         if (((Get-Item -LiteralPath $FixturePath -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
             throw 'functional-fixture-link-rejected'
         }
-        if ((Get-FileHash -LiteralPath $FixturePath -Algorithm SHA256).Hash.ToLowerInvariant() -ne $AntiwordFixtureSha256) {
+        if ((Get-InstallerFileSha256 -Path $FixturePath) -ne $AntiwordFixtureSha256) {
             throw 'functional-fixture-integrity-failed'
         }
         foreach ($relative in @($expected.Keys | Sort-Object)) {
@@ -893,13 +914,13 @@ function Test-AntiwordRuntime {
         foreach ($relative in $expected.Keys) {
             if (-not $actual.ContainsKey($relative)) { throw 'runtime-file-set-invalid' }
             $path = Join-Path $RuntimeRoot ($relative.Replace('/','\'))
-            $actualHash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+            $actualHash = Get-InstallerFileSha256 -Path $path
             if ($actualHash -ne $expected[$relative]) { throw 'runtime-integrity-failed' }
         }
-        if ((Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne $AntiwordExecutableSha256) {
+        if ((Get-InstallerFileSha256 -Path $exe) -ne $AntiwordExecutableSha256) {
             throw 'executable-integrity-failed'
         }
-        $signature = Get-AuthenticodeSignature -LiteralPath $exe
+        $signature = Get-InstallerAuthenticodeSignature -Path $exe
         if ([string]$signature.Status -ne 'NotSigned') { throw 'unexpected-authenticode-state' }
 
         if ($ProtectedIntervalProbe) {
@@ -914,6 +935,9 @@ function Test-AntiwordRuntime {
         return $true
     } catch {
         $failure = [string]$_.Exception.Message
+        if ($AntiwordSelfTestOnly) {
+            Write-Host ('Antiword runtime verification detail: ' + $failure)
+        }
         if ($failure -match '^(runtime|manifest|functional|executable|unexpected-authenticode)-[a-z0-9-]+$') {
             $script:AntiwordFailure = $failure
         } else {
@@ -1144,11 +1168,11 @@ function Invoke-AntiwordInstallerSelfTest {
         }
         $managed = Join-Path $stateFull 'TheGuoLab\CVStudio\dependencies\antiword\1.3.5\windows-x64'
         $fixture = Join-Path $managed 'fixtures\UDHR-english.doc'
-        $firstHash = (Get-FileHash -LiteralPath (Join-Path $managed 'bin\antiword.exe') -Algorithm SHA256).Hash
+        $firstHash = Get-InstallerFileSha256 -Path (Join-Path $managed 'bin\antiword.exe')
         if (-not (Install-VerifiedAntiwordRuntime)) {
             throw ('idempotent-install-' + $script:AntiwordFailure)
         }
-        $secondHash = (Get-FileHash -LiteralPath (Join-Path $managed 'bin\antiword.exe') -Algorithm SHA256).Hash
+        $secondHash = Get-InstallerFileSha256 -Path (Join-Path $managed 'bin\antiword.exe')
         if ($firstHash -ne $secondHash) { throw 'idempotent-install-changed-executable' }
         $managedExe = Join-Path $managed 'bin\antiword.exe'
         $managedResource = Join-Path $managed 'share\antiword\UTF-8.txt'

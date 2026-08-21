@@ -5,7 +5,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $Schema = 2
-$Version = 'v24.6.343'
+$Version = 'v24.6.344'
 $Product = 'TheGuoLab-CVStudio'
 
 function Get-TotpSecret {
@@ -72,7 +72,13 @@ function Get-MachineHash {
 }
 
 function Get-ReceiptPath {
-    $base = [Environment]::GetFolderPath('LocalApplicationData')
+    # Match the Python verifier and honor the child process's isolated/local
+    # application-data root. GetFolderPath reads the registry and can otherwise
+    # make a verifier inspect a different user's valid receipt.
+    $base = [string]$env:LOCALAPPDATA
+    if ([string]::IsNullOrWhiteSpace($base)) {
+        $base = [Environment]::GetFolderPath('LocalApplicationData')
+    }
     if ([string]::IsNullOrWhiteSpace($base)) { $base = Join-Path $HOME 'AppData\Local' }
     return Join-Path $base 'TheGuoLab\CVStudio\install_receipt.json'
 }

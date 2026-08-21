@@ -65,6 +65,72 @@
         "include_bonus": true,
         "employee_contribution_tax_deductible": false
       },
+      "default_contribution_profile": "malaysian_citizen",
+      "contribution_profiles": [
+        {
+          "id": "malaysian_citizen",
+          "label": "Malaysian citizen",
+          "scheme": "EPF simplified citizen rate",
+          "employee_rate": 0.11,
+          "employer_rate": 0.12,
+          "annual_cap": null,
+          "include_bonus": true,
+          "employee_contribution_tax_deductible": false
+        },
+        {
+          "id": "permanent_resident",
+          "label": "Permanent Resident (PR)",
+          "scheme": "EPF simplified permanent-resident rate",
+          "employee_rate": 0.11,
+          "employer_rate": 0.12,
+          "annual_cap": null,
+          "include_bonus": true,
+          "employee_contribution_tax_deductible": false
+        },
+        {
+          "id": "employment_pass",
+          "label": "Employment Pass (EP)",
+          "scheme": "EPF non-Malaysian post-1998 member rate",
+          "employee_rate": 0.0,
+          "employer_rate": 0.0,
+          "annual_cap": null,
+          "include_bonus": true,
+          "employee_contribution_tax_deductible": false,
+          "periods": [
+            {"start_month": 1, "end_month": 9, "employee_rate": 0.0, "employer_rate": 0.0},
+            {"start_month": 10, "end_month": 12, "employee_rate": 0.02, "employer_rate": 0.02}
+          ]
+        },
+        {
+          "id": "residence_pass_talent",
+          "label": "Residence Pass-Talent (RP-T)",
+          "scheme": "EPF non-Malaysian post-1998 member rate",
+          "employee_rate": 0.0,
+          "employer_rate": 0.0,
+          "annual_cap": null,
+          "include_bonus": true,
+          "employee_contribution_tax_deductible": false,
+          "periods": [
+            {"start_month": 1, "end_month": 9, "employee_rate": 0.0, "employer_rate": 0.0},
+            {"start_month": 10, "end_month": 12, "employee_rate": 0.02, "employer_rate": 0.02}
+          ]
+        },
+        {
+          "id": "spousal_visa",
+          "label": "Spousal Visa / Long-Term Social Visit Pass",
+          "scheme": "EPF non-Malaysian post-1998 member rate",
+          "employee_rate": 0.0,
+          "employer_rate": 0.0,
+          "annual_cap": null,
+          "include_bonus": true,
+          "employee_contribution_tax_deductible": false,
+          "periods": [
+            {"start_month": 1, "end_month": 9, "employee_rate": 0.0, "employer_rate": 0.0},
+            {"start_month": 10, "end_month": 12, "employee_rate": 0.02, "employer_rate": 0.02}
+          ]
+        }
+      ],
+      "personal_reliefs_allowed": true,
       "source_urls": [
         "https://www.hasil.gov.my/en/individual/individual-life-cycle/income-declaration/tax-rate/",
         "https://www.kwsp.gov.my/en/employer/responsibilities/mandatory-contribution"
@@ -82,6 +148,109 @@
       "tax_brackets_verified": true,
       "contribution_rule_verified": false,
       "tax_schedule_title": "LHDN Tax Schedule for Resident Individuals - Year of Assessment 2025"
+    },
+    {
+      "country": "Malaysia",
+      "tax_year": 2025,
+      "residency": "Non-Resident",
+      "currency": "MYR",
+      "tax_brackets": [
+        {
+          "lower": 0,
+          "upper": null,
+          "rate": 0.3
+        }
+      ],
+      "contribution_rule": {
+        "scheme": "EPF simplified comparison rate",
+        "employee_rate": 0.11,
+        "employer_rate": 0.12,
+        "annual_cap": null,
+        "include_bonus": true,
+        "employee_contribution_tax_deductible": false
+      },
+      "default_contribution_profile": "employment_pass",
+      "contribution_profiles": [
+        {
+          "id": "malaysian_citizen",
+          "label": "Malaysian citizen",
+          "scheme": "EPF simplified citizen rate",
+          "employee_rate": 0.11,
+          "employer_rate": 0.12,
+          "annual_cap": null,
+          "include_bonus": true,
+          "employee_contribution_tax_deductible": false
+        },
+        {
+          "id": "permanent_resident",
+          "label": "Permanent Resident (PR)",
+          "scheme": "EPF simplified permanent-resident rate",
+          "employee_rate": 0.11,
+          "employer_rate": 0.12,
+          "annual_cap": null,
+          "include_bonus": true,
+          "employee_contribution_tax_deductible": false
+        },
+        {
+          "id": "employment_pass",
+          "label": "Employment Pass (EP)",
+          "scheme": "EPF non-Malaysian post-1998 member rate",
+          "employee_rate": 0.0,
+          "employer_rate": 0.0,
+          "annual_cap": null,
+          "include_bonus": true,
+          "employee_contribution_tax_deductible": false,
+          "periods": [
+            {"start_month": 1, "end_month": 9, "employee_rate": 0.0, "employer_rate": 0.0},
+            {"start_month": 10, "end_month": 12, "employee_rate": 0.02, "employer_rate": 0.02}
+          ]
+        },
+        {
+          "id": "residence_pass_talent",
+          "label": "Residence Pass-Talent (RP-T)",
+          "scheme": "EPF non-Malaysian post-1998 member rate",
+          "employee_rate": 0.0,
+          "employer_rate": 0.0,
+          "annual_cap": null,
+          "include_bonus": true,
+          "employee_contribution_tax_deductible": false,
+          "periods": [
+            {"start_month": 1, "end_month": 9, "employee_rate": 0.0, "employer_rate": 0.0},
+            {"start_month": 10, "end_month": 12, "employee_rate": 0.02, "employer_rate": 0.02}
+          ]
+        },
+        {
+          "id": "spousal_visa",
+          "label": "Spousal Visa / Long-Term Social Visit Pass",
+          "scheme": "EPF non-Malaysian post-1998 member rate",
+          "employee_rate": 0.0,
+          "employer_rate": 0.0,
+          "annual_cap": null,
+          "include_bonus": true,
+          "employee_contribution_tax_deductible": false,
+          "periods": [
+            {"start_month": 1, "end_month": 9, "employee_rate": 0.0, "employer_rate": 0.0},
+            {"start_month": 10, "end_month": 12, "employee_rate": 0.02, "employer_rate": 0.02}
+          ]
+        }
+      ],
+      "personal_reliefs_allowed": false,
+      "source_urls": [
+        "https://www.hasil.gov.my/wp-content/uploads/pr-2-2026-tax-treatment-of-foreign-nationals-exercising-employment-in-malaysia.pdf",
+        "https://www.kwsp.gov.my/en/employer/responsibilities/non-malaysian-citizen-employees"
+      ],
+      "notes": [
+        "Malaysia tax residence is based on the statutory residence tests and physical presence, not nationality or pass type.",
+        "Non-resident individuals are taxed at 30% and cannot claim personal reliefs or rebates.",
+        "EP, RP-T and spousal-visa profiles use the mandatory 2% employee and 2% employer EPF rate from October 2025; the annual comparison applies a 3/12 weighted rate.",
+        "Permanent residents remain on citizen EPF rates. Employer rates can vary by wage band, age and statutory schedule.",
+        "Non-Malaysian members who elected EPF before 1 August 1998 are an exception; use the manual contribution override if applicable."
+      ],
+      "verified": false,
+      "last_updated": "2026-08-20",
+      "tax_brackets_verified": true,
+      "contribution_rule_verified": false,
+      "tax_schedule_title": "LHDN Tax Treatment for Non-Resident Individuals - Year of Assessment 2025"
     },
     {
       "country": "Singapore",

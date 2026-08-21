@@ -63,6 +63,7 @@
           <label class="field"><span>Country</span><select id="a_country"></select></label>
           <label class="field"><span>Tax year</span><select id="a_tax_year"></select></label>
           <label class="field"><span>Residency</span><select id="a_residency"></select></label>
+          <label class="field"><span>Contribution / pass profile</span><select id="a_contribution_profile"></select><small class="field-help">Tax residency and immigration pass are separate. This choice controls EPF only.</small></label>
           <label class="field readonly"><span>Local currency</span><output id="a_local_currency">—</output></label>
         </div>
 
@@ -124,6 +125,7 @@
           <label class="field"><span>Country</span><select id="b_country"></select></label>
           <label class="field"><span>Tax year</span><select id="b_tax_year"></select></label>
           <label class="field"><span>Residency</span><select id="b_residency"></select></label>
+          <label class="field"><span>Contribution / pass profile</span><select id="b_contribution_profile"></select><small class="field-help">Tax residency and immigration pass are separate. This choice controls EPF only.</small></label>
           <label class="field readonly"><span>Local currency</span><output id="b_local_currency">—</output></label>
         </div>
 
@@ -211,6 +213,7 @@
         <pre id="ruleProposalJson"></pre>
       </div>
       <div class="modal-actions">
+        <button class="button secondary" type="button" id="autoDraftRuleButton">Draft next year from official sources</button>
         <button class="button ghost" type="button" id="previewRuleButton">Preview update</button>
         <button class="button primary" type="button" id="publishRuleButton" disabled>Approve and publish</button>
       </div>
