@@ -2,19 +2,20 @@ from __future__ import annotations
 
 import hmac
 import json
+from copy import deepcopy
 from io import BytesIO
 from pathlib import Path
 from typing import Any
 
 from flask import Blueprint, current_app, jsonify, render_template, request, send_file
 
-from .ai_rule_updater import AiRuleUpdateError, preview_rule_update
+from .ai_rule_updater import AiRuleUpdateError, official_rule_sources, preview_rule_update
 from .bootstrap import ensure_data_dir
 from .calculator import CalculationError, calculate_scenario, compare_results
 from .exporter import build_pdf_report, build_xlsx_report, safe_filename
 from .fx_service import FxService, FxServiceError
 from .repository import JsonRuleRepository, RuleNotFoundError, RuleRepositoryError
-from .validators import RuleValidationError
+from .validators import RuleValidationError, validate_rule
 
 bp = Blueprint(
     "salary_comparison",
@@ -132,7 +133,11 @@ def config_api():
     return jsonify({
         "countries": _country_map(),
         "years_by_country": years_by_country,
-        "residency_profiles": ["Resident", "Non-Resident"],
+        "residency_profiles": sorted(
+            {str(rule["residency"]) for rule in rules},
+            key=lambda value: (value != "Resident", value.casefold()),
+        ),
+        "official_rule_sources": official_rule_sources(),
         "rules": [
             {
                 "country": rule["country"],
@@ -143,6 +148,12 @@ def config_api():
                 "tax_brackets_verified": rule.get("tax_brackets_verified", False),
                 "contribution_rule_verified": rule.get("contribution_rule_verified", False),
                 "last_updated": rule.get("last_updated"),
+                "personal_reliefs_allowed": rule.get("personal_reliefs_allowed", True),
+                "default_contribution_profile": rule.get("default_contribution_profile"),
+                "contribution_profiles": [
+                    {"id": profile["id"], "label": profile["label"]}
+                    for profile in rule.get("contribution_profiles", [])
+                ],
             }
             for rule in rules
         ],
@@ -272,7 +283,31 @@ def rules_preview_api():
     resolver = current_app.config.get("SALARY_COMPARISON_KEY_RESOLVER")
     if resolver is not None and not callable(resolver):
         resolver = None
-    return jsonify(preview_rule_update(_json_object(), key_resolver=resolver))
+    payload = _json_object()
+    result = preview_rule_update(payload, key_resolver=resolver)
+    if payload.get("auto_sources") is True and not result["rule"].get("contribution_profiles"):
+        country = str(result["rule"].get("country") or "").casefold()
+        residency = str(result["rule"].get("residency") or "").casefold()
+        target_year = int(result["rule"]["tax_year"])
+        prior_rules = [
+            rule for rule in _repo().list_rules()
+            if str(rule.get("country") or "").casefold() == country
+            and str(rule.get("residency") or "").casefold() == residency
+            and int(rule.get("tax_year")) < target_year
+            and rule.get("contribution_profiles")
+        ]
+        if prior_rules:
+            source_rule = max(prior_rules, key=lambda rule: int(rule["tax_year"]))
+            result["rule"]["contribution_profiles"] = deepcopy(source_rule["contribution_profiles"])
+            result["rule"]["default_contribution_profile"] = source_rule.get(
+                "default_contribution_profile"
+            )
+            result["rule"].setdefault("notes", []).append(
+                f"Contribution/pass profiles were copied from {source_rule['tax_year']} for continuity; "
+                "review every rate and effective date before publishing."
+            )
+            result["rule"] = validate_rule(result["rule"])
+    return jsonify(result)
 
 
 @bp.post("/api/rules/publish")

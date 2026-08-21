@@ -20,10 +20,25 @@ ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 MAX_SOURCE_BYTES = 10 * 1024 * 1024
 MAX_SOURCE_REDIRECTS = 5
 SOURCE_REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
+OFFICIAL_RULE_SOURCES = {
+    "malaysia": {
+        "tax_url": "https://www.hasil.gov.my/en/individual/individual-life-cycle/income-declaration/tax-rate/",
+        "contribution_url": "https://www.kwsp.gov.my/en/epf-act-1991-third-schedule",
+    },
+    "singapore": {
+        "tax_url": "https://www.iras.gov.sg/taxes/individual-income-tax/basics-of-individual-income-tax/tax-residency-and-tax-rates/individual-income-tax-rates",
+        "contribution_url": "https://www.cpf.gov.sg/employer/employer-obligations/how-much-cpf-contributions-to-pay",
+    },
+}
 
 
 class AiRuleUpdateError(RuntimeError):
     pass
+
+
+def official_rule_sources() -> dict[str, dict[str, str]]:
+    """Return safe official defaults used by the one-click draft workflow."""
+    return {country: dict(urls) for country, urls in OFFICIAL_RULE_SOURCES.items()}
 
 
 def _public_source_url(url: str) -> str:
@@ -146,7 +161,12 @@ def fetch_official_source(url: str, max_chars: int = 60000) -> str:
 
 
 def _prompt(country: str, tax_year: int, residency: str, tax_url: str, contribution_url: str,
-            tax_text: str, contribution_text: str) -> str:
+            tax_text: str, contribution_text: str, *, automatic: bool = False) -> str:
+    automatic_instruction = ""
+    if automatic:
+        automatic_instruction = f"""
+- This is an automated next-year draft. Add \"source_year_supported\": true only when the supplied text explicitly supports tax year {tax_year}. Otherwise set it to false and do not infer or roll forward old rates.
+"""
     return f"""
 Extract salary-comparison rules from the supplied official sources.
 
@@ -185,6 +205,7 @@ Requirements:
 - Do not invent values that are absent or ambiguous.
 - When contributions vary by age, citizenship, permanent-resident year or wage band, choose a clearly stated standard full-rate employee profile and explain the assumption in notes.
 - Keep all source URLs in the response.
+{automatic_instruction}
 
 OFFICIAL TAX SOURCE:
 {tax_text}
@@ -328,6 +349,7 @@ def preview_rule_update(
     residency = str(payload.get("residency") or "Resident").strip()
     tax_url = str(payload.get("tax_url") or "").strip()
     contribution_url = str(payload.get("contribution_url") or "").strip()
+    automatic = payload.get("auto_sources") is True
     try:
         tax_year = int(payload.get("tax_year"))
     except (TypeError, ValueError) as exc:
@@ -359,17 +381,32 @@ def preview_rule_update(
     if not 1900 <= tax_year <= 2200:
         raise AiRuleUpdateError("Tax year is outside the supported range.")
 
+    if automatic:
+        sources = OFFICIAL_RULE_SOURCES.get(country.casefold())
+        if not sources:
+            raise AiRuleUpdateError(
+                f"No official one-click source set is registered for {country}. Enter the official URLs manually."
+            )
+        tax_url = sources["tax_url"]
+        contribution_url = sources["contribution_url"]
     tax_url = _public_source_url(tax_url)
     contribution_url = _public_source_url(contribution_url)
     tax_text = fetch_official_source(tax_url)
     contribution_text = fetch_official_source(contribution_url)
-    prompt = _prompt(country, tax_year, residency, tax_url, contribution_url, tax_text, contribution_text)
+    prompt = _prompt(
+        country, tax_year, residency, tax_url, contribution_url, tax_text, contribution_text,
+        automatic=automatic,
+    )
     if provider == "deepseek":
         raw_rule, usage = _call_deepseek(api_key, model, prompt)
     else:
         raw_rule, usage = _call_claude(api_key, model, prompt)
 
     _requested_identity(raw_rule, country, tax_year, residency)
+    if automatic and raw_rule.pop("source_year_supported", None) is not True:
+        raise AiRuleUpdateError(
+            f"The official pages do not explicitly support {tax_year} yet. No rule was drafted or published."
+        )
     # Never trust the provider to mark its own extraction as verified or to choose source URLs.
     raw_rule["country"] = country
     raw_rule["tax_year"] = tax_year

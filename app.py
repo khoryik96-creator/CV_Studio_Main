@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.343"
+_INSTALL_RECEIPT_VERSION = "v24.6.344"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -341,7 +341,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.343"
+_CVSTUDIO_VERSION = "v24.6.344"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -2112,12 +2112,34 @@ def _ja_refresh_access_token(force=False):
                 "client_secret": client_secret,
             })
             _ja_apply_token(response, client_id, client_secret)
-        except (urllib.error.HTTPError, urllib.error.URLError, RuntimeError, TimeoutError, OSError):
-            # invalid_grant, revoked/expired refresh tokens, network-level token
-            # failures, malformed token responses and token-application failures
-            # must never escape from route entry points as generic HTTP 500s.
-            _ja_mark_reconnect_required()
-            return ""
+        except (ExternalServiceHTTPError, urllib.error.HTTPError) as exc:
+            # Only a confirmed authentication rejection means the user must
+            # complete OAuth again. Rate limits, upstream outages and other
+            # transient failures must retain the protected token state so one
+            # short network problem cannot turn into a needless reconnect.
+            status = int(getattr(exc, "code", 0) or 0)
+            try:
+                exc.close()
+            except Exception:
+                # cleanup-only: a response close failure must not hide the token error.
+                pass
+            if status in (400, 401, 403):
+                _ja_mark_reconnect_required()
+                return ""
+            raise
+        except ExternalServiceError:
+            # Keep the last protected access/refresh tokens. Callers receive a
+            # retryable external-service error and can try again near expiry.
+            raise
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            raise ExternalServiceError(
+                "jobadder",
+                "JobAdder token refresh is temporarily unavailable",
+                status=503,
+                retryable=True,
+                action="retry",
+                detail=str(exc),
+            ) from exc
         return str(_ja_creds_store.get("access_token") or "")
 
 
@@ -2406,15 +2428,15 @@ def jobadder_restore_token():
 
 @app.route("/jobadder/refresh_token", methods=["POST"])
 def jobadder_refresh_token():
-    try:
-        token = _ja_refresh_access_token(force=True)
-        info = _ja_public_info()
-        if not token and info.get("needs_reconnect"):
-            info["error"] = "JobAdder connection expired. Reconnect JobAdder in Settings."
-            return jsonify(info), 401
-        return jsonify(info)
-    except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
+    # Browser tabs schedule this shortly before ``expires_at``. ``force=False``
+    # also makes simultaneous tabs harmless: after the first tab refreshes,
+    # later callers observe the new expiry and reuse the fresh token.
+    token = _ja_refresh_access_token(force=False)
+    info = _ja_public_info()
+    if not token and info.get("needs_reconnect"):
+        info["error"] = "JobAdder connection expired. Reconnect JobAdder in Settings."
+        return jsonify(info), 401
+    return jsonify(info)
 
 
 @app.route("/jobadder/disconnect", methods=["POST"])
@@ -7179,9 +7201,62 @@ def _spider_native_boolean_jobadder_candidates(token, rule_text, result_pool_lim
     }
 
 
+_SPIDER_SEARCH_PROCESSING_DEADLINE_SECONDS = 330.0
+_SPIDER_SEARCH_ELIGIBILITY_DETAIL_MAX = 80
+_SPIDER_SEARCH_RESUME_MAX = 20
+_SPIDER_SEARCH_PROFILE_DETAIL_MAX = 100
+
+
+def _spider_bounded_parallel(keys, worker, *, max_workers, deadline):
+    """Run bounded Spider reads without holding the route past ``deadline``.
+
+    Pending work is cancelled. Already-running urllib/document reads retain
+    their own short timeouts and finish in the background; the route keeps a
+    90-second safety margin before the browser's 420-second request budget.
+    Results may contain Exception instances for per-candidate failures.
+    """
+    items = list(dict.fromkeys(str(key or "").strip() for key in (keys or []) if str(key or "").strip()))
+    if not items or time.monotonic() >= deadline:
+        return {}, bool(items)
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError, as_completed
+    executor = ThreadPoolExecutor(max_workers=max(1, min(int(max_workers or 1), len(items))))
+    future_map = {executor.submit(worker, key): key for key in items}
+    results = {}
+    timed_out = False
+    try:
+        remaining = max(0.001, deadline - time.monotonic())
+        for future in as_completed(future_map, timeout=remaining):
+            key = future_map[future]
+            try:
+                results[key] = future.result()
+            except _SpiderJobAdderReconnectRequired:
+                raise
+            except Exception as exc:
+                results[key] = exc
+    except FuturesTimeoutError:
+        timed_out = True
+    finally:
+        for future in future_map:
+            if not future.done():
+                future.cancel()
+        executor.shutdown(wait=False, cancel_futures=True)
+    return results, timed_out
+
+
 @app.route("/jobadder/spider_search", methods=["POST"])
 def jobadder_spider_search():
     """JobAdder candidate discovery followed by local eligibility and fit scoring."""
+    processing_started = time.monotonic()
+    processing_deadline = processing_started + _SPIDER_SEARCH_PROCESSING_DEADLINE_SECONDS
+    processing_deadline_reached = False
+    processing_deadline_stage = ""
+
+    def mark_processing_deadline(stage):
+        nonlocal processing_deadline_reached, processing_deadline_stage
+        processing_deadline_reached = True
+        if not processing_deadline_stage:
+            processing_deadline_stage = str(stage or "candidate enrichment")
+
     data = request.get_json(silent=True) or {}
     if not _ai_crawler_lock_allowed(data):
         return _ai_crawler_locked_response()
@@ -7454,7 +7529,9 @@ def jobadder_spider_search():
             # as 1,200 individual candidate requests. Inspect a bounded sample:
             # retain the leading JobAdder order, then spread the remaining reads
             # across the rest of the discovered pool to limit position bias.
-            eligibility_detail_request_limit = max(60, min(180, limit))
+            eligibility_detail_request_limit = max(
+                40, min(_SPIDER_SEARCH_ELIGIBILITY_DETAIL_MAX, limit)
+            )
             if len(detail_ids) > eligibility_detail_request_limit:
                 leading_count = max(1, eligibility_detail_request_limit // 2)
                 selected_detail_ids = list(detail_ids[:leading_count])
@@ -7473,35 +7550,17 @@ def jobadder_spider_search():
                 eligibility_detail_fallback_truncated = True
             custom_field_detail_requests = len(detail_ids)
             if detail_ids:
-                try:
-                    from concurrent.futures import ThreadPoolExecutor, as_completed
-                    with ThreadPoolExecutor(max_workers=min(6, len(detail_ids))) as pool:
-                        future_map = {
-                            pool.submit(_spider_fetch_candidate_detail, token, cid): cid
-                            for cid in detail_ids
-                        }
-                        for future in as_completed(future_map):
-                            cid = future_map[future]
-                            try:
-                                detail = future.result()
-                                custom_filter_detail_map[cid] = detail if isinstance(detail, dict) else None
-                            except _SpiderJobAdderReconnectRequired:
-                                raise
-                            except Exception:
-                                custom_filter_detail_map[cid] = None
-                except _SpiderJobAdderReconnectRequired:
-                    raise
-                except Exception:
-                    for cid in detail_ids:
-                        if cid in custom_filter_detail_map:
-                            continue
-                        try:
-                            detail = _spider_fetch_candidate_detail(token, cid)
-                            custom_filter_detail_map[cid] = detail if isinstance(detail, dict) else None
-                        except _SpiderJobAdderReconnectRequired:
-                            raise
-                        except Exception:
-                            custom_filter_detail_map[cid] = None
+                detail_results, detail_timed_out = _spider_bounded_parallel(
+                    detail_ids,
+                    lambda cid: _spider_fetch_candidate_detail(token, cid),
+                    max_workers=6,
+                    deadline=processing_deadline,
+                )
+                for cid, detail in detail_results.items():
+                    custom_filter_detail_map[cid] = detail if isinstance(detail, dict) else None
+                if detail_timed_out:
+                    mark_processing_deadline("eligibility profile checks")
+                    eligibility_detail_fallback_truncated = True
 
             eligibility_matched_items = []
             for item in raw_items:
@@ -7606,7 +7665,10 @@ def jobadder_spider_search():
         # from the whole discovery pool, not merely the first JobAdder page. Half
         # is merit-ranked; half is evenly spread from first to last so later rows
         # can compete when list data is sparse or tied.
-        resume_budget = min(len(preliminary), max(20, min(40, max(20, limit // 5))))
+        resume_budget = min(
+            len(preliminary),
+            max(12, min(_SPIDER_SEARCH_RESUME_MAX, max(12, limit // 10))),
+        )
         ranked_preliminary = sorted(
             preliminary,
             key=lambda row: (-int(row.get("score") or 0), int(row.get("index") or 0)),
@@ -7637,40 +7699,22 @@ def jobadder_spider_search():
 
         resume_map = {}
         if resume_ids:
-            try:
-                from concurrent.futures import ThreadPoolExecutor, as_completed
-                with ThreadPoolExecutor(max_workers=min(5, len(resume_ids))) as pool:
-                    future_map = {
-                        pool.submit(_spider_fetch_candidate_resume_text, token, cid): cid
-                        for cid in resume_ids
-                    }
-                    for future in as_completed(future_map):
-                        cid = future_map[future]
-                        try:
-                            text, source = future.result()
-                            resume_map[cid] = {"text": str(text or ""), "source": str(source or "")}
-                        except _SpiderJobAdderReconnectRequired:
-                            raise
-                        except AntiwordDependencyError:
-                            # One candidate's legacy .doc that verified Antiword
-                            # cannot decode must not abort the whole sourcing run.
-                            # Skip that resume and keep scoring them on profile data.
-                            resume_map[cid] = {"text": "", "source": "legacy .doc could not be decoded (convert to DOCX/PDF)"}
-                        except Exception:
-                            resume_map[cid] = {"text": "", "source": "resume text unavailable"}
-            except _SpiderJobAdderReconnectRequired:
-                raise
-            except Exception:
-                for cid in resume_ids:
-                    try:
-                        text, source = _spider_fetch_candidate_resume_text(token, cid)
-                        resume_map[cid] = {"text": str(text or ""), "source": str(source or "")}
-                    except _SpiderJobAdderReconnectRequired:
-                        raise
-                    except AntiwordDependencyError:
-                        resume_map[cid] = {"text": "", "source": "legacy .doc could not be decoded (convert to DOCX/PDF)"}
-                    except Exception:
-                        resume_map[cid] = {"text": "", "source": "resume text unavailable"}
+            resume_results, resume_timed_out = _spider_bounded_parallel(
+                resume_ids,
+                lambda cid: _spider_fetch_candidate_resume_text(token, cid),
+                max_workers=5,
+                deadline=processing_deadline,
+            )
+            for cid, result in resume_results.items():
+                if isinstance(result, AntiwordDependencyError):
+                    resume_map[cid] = {"text": "", "source": "legacy .doc could not be decoded (convert to DOCX/PDF)"}
+                elif isinstance(result, Exception):
+                    resume_map[cid] = {"text": "", "source": "resume text unavailable"}
+                else:
+                    text, source = result
+                    resume_map[cid] = {"text": str(text or ""), "source": str(source or "")}
+            if resume_timed_out:
+                mark_processing_deadline("resume scoring")
 
         stage_two = []
         for row in preliminary:
@@ -7705,12 +7749,20 @@ def jobadder_spider_search():
         ranking_buffer = min(24, max(0, len(stage_two) - limit))
         desired_eligible = min(len(stage_two), limit + ranking_buffer)
         fixed_detail_ceiling = min(len(stage_two), desired_eligible)
-        detail_scan_ceiling = len(stage_two) if experience_upper_active else fixed_detail_ceiling
+        requested_detail_scan_ceiling = len(stage_two) if experience_upper_active else fixed_detail_ceiling
+        detail_scan_ceiling = min(
+            requested_detail_scan_ceiling,
+            max(fixed_detail_ceiling, _SPIDER_SEARCH_PROFILE_DETAIL_MAX),
+        )
         detail_batch_size = 40 if experience_upper_active else max(1, fixed_detail_ceiling)
         detail_map = dict(custom_filter_detail_map)
         filtered = []
         detail_attempted = 0
         detail_batches = 0
+        detail_enrichment_truncated = detail_scan_ceiling < requested_detail_scan_ceiling
+        remaining_profile_detail_budget = max(
+            0, _SPIDER_SEARCH_PROFILE_DETAIL_MAX - custom_field_detail_requests
+        )
         cursor = 0
 
         while cursor < detail_scan_ceiling:
@@ -7718,37 +7770,31 @@ def jobadder_spider_search():
             detail_targets = stage_two[cursor:batch_end]
             cursor = batch_end
             detail_batches += 1
-            detail_attempted += len(detail_targets)
 
             detail_ids = []
             for row in detail_targets:
                 cid = str(row.get("id") or "").strip()
                 if cid and cid not in detail_ids and cid not in detail_map:
                     detail_ids.append(cid)
+            if len(detail_ids) > remaining_profile_detail_budget:
+                detail_ids = detail_ids[:remaining_profile_detail_budget]
+                detail_enrichment_truncated = True
             if detail_ids:
-                try:
-                    from concurrent.futures import ThreadPoolExecutor, as_completed
-                    with ThreadPoolExecutor(max_workers=min(6, len(detail_ids))) as pool:
-                        future_map = {pool.submit(_spider_fetch_candidate_detail, token, cid): cid for cid in detail_ids}
-                        for future in as_completed(future_map):
-                            cid = future_map[future]
-                            try:
-                                detail = future.result()
-                                detail_map[cid] = detail if isinstance(detail, dict) else None
-                            except _SpiderJobAdderReconnectRequired:
-                                raise
-                            except Exception:
-                                detail_map[cid] = None
-                except _SpiderJobAdderReconnectRequired:
-                    raise
-                except Exception:
-                    for cid in detail_ids:
-                        try:
-                            detail_map[cid] = _spider_fetch_candidate_detail(token, cid)
-                        except _SpiderJobAdderReconnectRequired:
-                            raise
-                        except Exception:
-                            detail_map[cid] = None
+                detail_results, detail_timed_out = _spider_bounded_parallel(
+                    detail_ids,
+                    lambda cid: _spider_fetch_candidate_detail(token, cid),
+                    max_workers=6,
+                    deadline=processing_deadline,
+                )
+                detail_attempted += len(detail_ids)
+                remaining_profile_detail_budget = max(
+                    0, remaining_profile_detail_budget - len(detail_ids)
+                )
+                for cid, detail in detail_results.items():
+                    detail_map[cid] = detail if isinstance(detail, dict) else None
+                if detail_timed_out:
+                    mark_processing_deadline("candidate detail enrichment")
+                    detail_enrichment_truncated = True
 
             for row in detail_targets:
                 detail = detail_map.get(row.get("id"))
@@ -7770,6 +7816,10 @@ def jobadder_spider_search():
                 filtered.append(final_item)
 
             if len(filtered) >= desired_eligible:
+                break
+            if processing_deadline_reached or remaining_profile_detail_budget <= 0:
+                if cursor < detail_scan_ceiling:
+                    detail_enrichment_truncated = True
                 break
             if not experience_upper_active:
                 break
@@ -7797,6 +7847,17 @@ def jobadder_spider_search():
                     eligibility_detail_candidates,
                 )
             )
+        if processing_deadline_reached:
+            pagination_warnings.append(
+                "CV Studio returned safe partial results after the {}-second processing deadline during {}".format(
+                    int(_SPIDER_SEARCH_PROCESSING_DEADLINE_SECONDS),
+                    processing_deadline_stage or "candidate enrichment",
+                )
+            )
+        elif detail_enrichment_truncated:
+            pagination_warnings.append(
+                "Candidate detail enrichment reached its bounded request budget; available candidates are shown"
+            )
         summary = {
             "query": query,
             "reported_total": reported_total,
@@ -7818,6 +7879,7 @@ def jobadder_spider_search():
             "resume_scoring_budget": resume_budget,
             "detail_enrichment_budget": detail_budget,
             "detail_enrichment_batches": detail_batches,
+            "detail_enrichment_truncated": detail_enrichment_truncated,
             "experience_upper_bound_active": experience_upper_active,
             "experience_range_backfill_exhausted": experience_backfill_exhausted,
             "detail_only_excluded": detail_excluded_count,
@@ -7866,12 +7928,25 @@ def jobadder_spider_search():
             "eligibility_detail_request_limit": eligibility_detail_request_limit,
             "eligibility_detail_fallback_truncated": eligibility_detail_fallback_truncated,
             "custom_field_detail_requests": custom_field_detail_requests,
+            "processing_deadline_seconds": int(_SPIDER_SEARCH_PROCESSING_DEADLINE_SECONDS),
+            "processing_deadline_reached": processing_deadline_reached,
+            "processing_deadline_stage": processing_deadline_stage,
+            "partial_results": bool(
+                processing_deadline_reached
+                or eligibility_detail_fallback_truncated
+                or detail_enrichment_truncated
+            ),
             "filters_applied": safe_filters,
             "minimum_fit_percent": 10,
             "fit_scoring": "JD + recruiter Boolean/must-haves; latest resume text where available",
             "workflow": "JobAdder latest-resume keyword discovery, exact selected eligibility filters, then 0-100 job-scope fit",
             "note": "City/State alone is sent as JobAdder Location. Country is matched locally against the candidate's JobAdder country/location data. Industry, IT Skills, Residential Status and Professional Qualifications are matched against tenant custom fields #1/#2, #3, #5 and #7. Each multi-select category applies its own Any/All rule. Expected monthly salary is matched numerically against the selected minimum/maximum range without using Currency as a hard filter; candidates without salary are retained only when Include candidates without salary details is selected. CV Studio requests JobAdder's supported Embed=self candidate representation and fetches individual detail only when a required value is absent. Recruiter Boolean is attempted as written, including NOT. If JobAdder returns zero rows, CV Studio labels a positive-term fallback and excludes visible NOT matches conservatively; negative-only searches have no unsafe fallback. Eligibility filters run before resume scoring, ranking and truncation.",
-            "pagination_incomplete": bool(search_meta.get("incomplete")) or eligibility_detail_fallback_truncated,
+            "pagination_incomplete": bool(
+                search_meta.get("incomplete")
+                or eligibility_detail_fallback_truncated
+                or processing_deadline_reached
+                or detail_enrichment_truncated
+            ),
             "pagination_warnings": pagination_warnings[:6],
             "pages": search_meta.get("pages"),
         }

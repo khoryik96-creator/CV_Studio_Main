@@ -335,6 +335,50 @@ def test_ai_preview_forces_unverified_and_requested_sources(monkeypatch, malaysi
     assert rule["source_urls"] == ["https://example.com/tax", "https://example.com/contribution"]
 
 
+def test_one_click_preview_uses_registered_official_sources(monkeypatch, malaysia_rule):
+    seen_urls = []
+    monkeypatch.setattr("salary_comparison.ai_rule_updater._public_source_url", lambda value: value)
+    monkeypatch.setattr(
+        "salary_comparison.ai_rule_updater.fetch_official_source",
+        lambda value: seen_urls.append(value) or "official text explicitly supporting 2026",
+    )
+    returned = deepcopy(malaysia_rule)
+    returned["tax_year"] = 2026
+    returned["source_year_supported"] = True
+    monkeypatch.setattr(
+        "salary_comparison.ai_rule_updater._call_deepseek",
+        lambda *a: (returned, {"input_tokens": 1, "output_tokens": 1}),
+    )
+    result = preview_rule_update({
+        "provider": "deepseek", "api_key": "key", "model": "model",
+        "country": "Malaysia", "tax_year": 2026, "residency": "Resident",
+        "tax_url": "https://evil.example/tax",
+        "contribution_url": "https://evil.example/contribution",
+        "auto_sources": True,
+    })
+    assert seen_urls[0].startswith("https://www.hasil.gov.my/")
+    assert seen_urls[1].startswith("https://www.kwsp.gov.my/")
+    assert result["rule"]["source_urls"] == seen_urls
+
+
+def test_one_click_preview_refuses_unsupported_year(monkeypatch, malaysia_rule):
+    monkeypatch.setattr("salary_comparison.ai_rule_updater._public_source_url", lambda value: value)
+    monkeypatch.setattr("salary_comparison.ai_rule_updater.fetch_official_source", lambda value: "official text")
+    returned = deepcopy(malaysia_rule)
+    returned["tax_year"] = 2099
+    returned["source_year_supported"] = False
+    monkeypatch.setattr(
+        "salary_comparison.ai_rule_updater._call_deepseek",
+        lambda *a: (returned, {"input_tokens": 1, "output_tokens": 1}),
+    )
+    with pytest.raises(AiRuleUpdateError, match="do not explicitly support 2099"):
+        preview_rule_update({
+            "provider": "deepseek", "api_key": "key", "model": "model",
+            "country": "Malaysia", "tax_year": 2099, "residency": "Resident",
+            "auto_sources": True,
+        })
+
+
 def test_ai_preview_uses_host_key_resolver_and_ignores_browser_key(monkeypatch, malaysia_rule):
     monkeypatch.setattr("salary_comparison.ai_rule_updater._public_source_url", lambda value: value)
     monkeypatch.setattr("salary_comparison.ai_rule_updater.fetch_official_source", lambda value: "official text")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import re
 from typing import Any, Mapping
 from urllib.parse import urlparse
 
@@ -87,6 +88,93 @@ def _normalize_notes(values: Any) -> list[str]:
     return notes
 
 
+def _normalize_contribution_rule(value: Any, field_name: str) -> dict[str, Any]:
+    if not isinstance(value, Mapping):
+        raise RuleValidationError(f"{field_name} must be a JSON object.")
+    contribution = dict(value)
+    for key in ("employee_rate", "employer_rate"):
+        rate = _finite_number(contribution.get(key, 0), f"{field_name}.{key}")
+        if not 0 <= rate <= 1:
+            raise RuleValidationError(f"{field_name}.{key} must be between 0 and 1.")
+        contribution[key] = rate
+
+    cap = contribution.get("annual_cap")
+    if cap not in (None, ""):
+        cap = _finite_number(cap, f"{field_name}.annual_cap")
+        if cap < 0:
+            raise RuleValidationError(f"{field_name}.annual_cap cannot be negative.")
+        contribution["annual_cap"] = cap
+    else:
+        contribution["annual_cap"] = None
+
+    contribution["include_bonus"] = _strict_bool(
+        contribution.get("include_bonus"), f"{field_name}.include_bonus", True
+    )
+    contribution["employee_contribution_tax_deductible"] = _strict_bool(
+        contribution.get("employee_contribution_tax_deductible"),
+        f"{field_name}.employee_contribution_tax_deductible",
+        False,
+    )
+    scheme = str(contribution.get("scheme") or "Statutory contribution").strip()
+    if len(scheme) > 200:
+        raise RuleValidationError("Contribution scheme name is too long.")
+    contribution["scheme"] = scheme or "Statutory contribution"
+    return contribution
+
+
+def _normalize_contribution_profiles(values: Any) -> list[dict[str, Any]]:
+    if values in (None, ""):
+        return []
+    if not isinstance(values, (list, tuple)) or len(values) > 20:
+        raise RuleValidationError("contribution_profiles must be a list of at most 20 profiles.")
+    profiles: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for index, raw in enumerate(values):
+        if not isinstance(raw, Mapping):
+            raise RuleValidationError(f"Contribution profile {index + 1} must be a JSON object.")
+        profile_id = _clean_text(raw.get("id"), f"Contribution profile {index + 1} id", max_length=80)
+        if not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", profile_id):
+            raise RuleValidationError(f"Contribution profile {index + 1} id is invalid.")
+        if profile_id in seen:
+            raise RuleValidationError(f"Duplicate contribution profile id: {profile_id}.")
+        seen.add(profile_id)
+        label = _clean_text(raw.get("label"), f"Contribution profile {index + 1} label", max_length=160)
+        normalized = dict(raw)
+        normalized["id"] = profile_id
+        normalized["label"] = label
+        normalized.update(_normalize_contribution_rule(raw, f"contribution_profiles[{index}]"))
+
+        periods_raw = raw.get("periods")
+        if periods_raw not in (None, ""):
+            if not isinstance(periods_raw, (list, tuple)) or not periods_raw or len(periods_raw) > 12:
+                raise RuleValidationError(f"Contribution profile {label} periods must be a non-empty list.")
+            periods: list[dict[str, Any]] = []
+            expected_start = 1
+            for period_index, period_raw in enumerate(periods_raw):
+                if not isinstance(period_raw, Mapping):
+                    raise RuleValidationError(f"Contribution profile {label} period {period_index + 1} is invalid.")
+                try:
+                    start_month = int(period_raw.get("start_month"))
+                    end_month = int(period_raw.get("end_month"))
+                except (TypeError, ValueError) as exc:
+                    raise RuleValidationError(f"Contribution profile {label} period months must be whole numbers.") from exc
+                if start_month != expected_start or not start_month <= end_month <= 12:
+                    raise RuleValidationError(f"Contribution profile {label} periods must cover months 1 to 12 without gaps.")
+                period = _normalize_contribution_rule(
+                    {**normalized, **dict(period_raw)},
+                    f"contribution_profiles[{index}].periods[{period_index}]",
+                )
+                period["start_month"] = start_month
+                period["end_month"] = end_month
+                periods.append(period)
+                expected_start = end_month + 1
+            if expected_start != 13:
+                raise RuleValidationError(f"Contribution profile {label} periods must end at month 12.")
+            normalized["periods"] = periods
+        profiles.append(normalized)
+    return profiles
+
+
 def validate_rule(rule: Mapping[str, Any]) -> dict[str, Any]:
     if not isinstance(rule, Mapping):
         raise RuleValidationError("Rule must be a JSON object.")
@@ -152,37 +240,17 @@ def validate_rule(rule: Mapping[str, Any]) -> dict[str, Any]:
     if not open_ended_seen:
         raise RuleValidationError("The final tax bracket must be open-ended.")
 
-    contribution_raw = rule["contribution_rule"]
-    if not isinstance(contribution_raw, Mapping):
-        raise RuleValidationError("contribution_rule must be a JSON object.")
-    contribution = dict(contribution_raw)
-    for key in ("employee_rate", "employer_rate"):
-        value = _finite_number(contribution.get(key, 0), key)
-        if not 0 <= value <= 1:
-            raise RuleValidationError(f"{key} must be between 0 and 1.")
-        contribution[key] = value
-
-    cap = contribution.get("annual_cap")
-    if cap not in (None, ""):
-        cap = _finite_number(cap, "annual_cap")
-        if cap < 0:
-            raise RuleValidationError("annual_cap cannot be negative.")
-        contribution["annual_cap"] = cap
-    else:
-        contribution["annual_cap"] = None
-
-    contribution["include_bonus"] = _strict_bool(
-        contribution.get("include_bonus"), "include_bonus", True
-    )
-    contribution["employee_contribution_tax_deductible"] = _strict_bool(
-        contribution.get("employee_contribution_tax_deductible"),
-        "employee_contribution_tax_deductible",
-        False,
-    )
-    scheme = str(contribution.get("scheme") or "Statutory contribution").strip()
-    if len(scheme) > 200:
-        raise RuleValidationError("Contribution scheme name is too long.")
-    contribution["scheme"] = scheme or "Statutory contribution"
+    contribution = _normalize_contribution_rule(rule["contribution_rule"], "contribution_rule")
+    contribution_profiles = _normalize_contribution_profiles(rule.get("contribution_profiles"))
+    default_profile = str(rule.get("default_contribution_profile") or "").strip()
+    if contribution_profiles:
+        profile_ids = {profile["id"] for profile in contribution_profiles}
+        if not default_profile:
+            default_profile = contribution_profiles[0]["id"]
+        if default_profile not in profile_ids:
+            raise RuleValidationError("default_contribution_profile does not match a contribution profile.")
+    elif default_profile:
+        raise RuleValidationError("default_contribution_profile requires contribution_profiles.")
 
     normalized = dict(rule)
     normalized["country"] = country
@@ -191,6 +259,14 @@ def validate_rule(rule: Mapping[str, Any]) -> dict[str, Any]:
     normalized["tax_year"] = tax_year
     normalized["tax_brackets"] = normalized_brackets
     normalized["contribution_rule"] = contribution
+    normalized["contribution_profiles"] = contribution_profiles
+    if default_profile:
+        normalized["default_contribution_profile"] = default_profile
+    else:
+        normalized.pop("default_contribution_profile", None)
+    normalized["personal_reliefs_allowed"] = _strict_bool(
+        rule.get("personal_reliefs_allowed"), "personal_reliefs_allowed", True
+    )
     normalized["verified"] = _strict_bool(rule.get("verified"), "verified", False)
     normalized["tax_brackets_verified"] = _strict_bool(
         rule.get("tax_brackets_verified"),

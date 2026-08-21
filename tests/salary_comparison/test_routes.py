@@ -48,6 +48,16 @@ def test_config_lists_countries_and_rules(client):
     assert response.status_code == 200
     assert any(item["country"] == "Malaysia" for item in data["countries"])
     assert 2025 in data["years_by_country"]["Malaysia"]
+    assert "Non-Resident" in data["residency_profiles"]
+    malaysia_nonresident = next(
+        rule for rule in data["rules"]
+        if rule["country"] == "Malaysia" and rule["residency"] == "Non-Resident"
+    )
+    assert malaysia_nonresident["personal_reliefs_allowed"] is False
+    assert {profile["id"] for profile in malaysia_nonresident["contribution_profiles"]} >= {
+        "employment_pass", "residence_pass_talent", "permanent_resident", "spousal_visa",
+    }
+    assert data["official_rule_sources"]["malaysia"]["tax_url"].startswith("https://www.hasil.gov.my/")
 
 
 def test_compare_endpoint(client):

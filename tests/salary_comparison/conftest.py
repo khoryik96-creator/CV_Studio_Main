@@ -30,7 +30,19 @@ def data_dir(tmp_path: Path) -> Path:
 @pytest.fixture()
 def malaysia_rule(data_dir: Path):
     data = json.loads((data_dir / "tax_rules.json").read_text(encoding="utf-8"))
-    return next(rule for rule in data["rules"] if rule["country"] == "Malaysia")
+    return next(
+        rule for rule in data["rules"]
+        if rule["country"] == "Malaysia" and rule["residency"] == "Resident"
+    )
+
+
+@pytest.fixture()
+def malaysia_nonresident_rule(data_dir: Path):
+    data = json.loads((data_dir / "tax_rules.json").read_text(encoding="utf-8"))
+    return next(
+        rule for rule in data["rules"]
+        if rule["country"] == "Malaysia" and rule["residency"] == "Non-Resident"
+    )
 
 
 @pytest.fixture()

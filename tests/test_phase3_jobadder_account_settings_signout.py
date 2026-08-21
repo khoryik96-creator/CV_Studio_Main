@@ -1,4 +1,5 @@
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -6,6 +7,7 @@ import sys
 import tempfile
 import threading
 import unittest
+import urllib.error
 from unittest import mock
 
 
@@ -722,6 +724,111 @@ class JobAdderAccountSettingsSignOutTests(unittest.TestCase):
         self.assertEqual(
             app._ja_creds_store["access_token"], "fixture-new-access"
         )
+
+    def test_transient_refresh_failure_preserves_protected_connection(self):
+        app._ja_creds_store.clear()
+        app._ja_creds_store.update({
+            "access_token": "fixture-still-protected-access",
+            "refresh_token": "fixture-refresh",
+            "client_id": "fixture-client-id",
+            "client_secret": "fixture-client-secret",
+            "expires_at": 0,
+        })
+        transient = app.ExternalServiceError(
+            "jobadder",
+            "JobAdder token service is temporarily unavailable",
+            status=503,
+            retryable=True,
+            action="retry",
+        )
+        with mock.patch.object(app, "_ja_exchange_token", side_effect=transient):
+            with self.assertRaises(app.ExternalServiceError):
+                app._ja_refresh_access_token(force=True)
+        self.assertEqual(
+            app._ja_creds_store["access_token"],
+            "fixture-still-protected-access",
+        )
+        self.assertFalse(app._ja_creds_store.get("_needs_reconnect"))
+
+    def test_confirmed_refresh_rejection_requires_reconnect(self):
+        app._ja_creds_store.clear()
+        app._ja_creds_store.update({
+            "access_token": "fixture-rejected-access",
+            "refresh_token": "fixture-rejected-refresh",
+            "client_id": "fixture-client-id",
+            "client_secret": "fixture-client-secret",
+            "expires_at": 0,
+        })
+        rejected = urllib.error.HTTPError(
+            "https://id.jobadder.com/connect/token",
+            400,
+            "invalid_grant",
+            {},
+            io.BytesIO(b'{"error":"invalid_grant"}'),
+        )
+        with mock.patch.object(app, "_ja_exchange_token", side_effect=rejected), mock.patch.object(
+            app, "_cv_secure_save", return_value="fixture-protected-store"
+        ):
+            self.assertEqual(app._ja_refresh_access_token(force=True), "")
+        self.assertEqual(app._ja_creds_store.get("access_token"), "")
+        self.assertTrue(app._ja_creds_store.get("_needs_reconnect"))
+
+    def test_browser_refresh_route_is_expiry_aware_not_forced(self):
+        app._ja_creds_store.clear()
+        app._ja_creds_store.update({
+            "access_token": "fixture-valid-access",
+            "expires_at": int(app.time.time()) + 3000,
+        })
+        forces = []
+
+        def refresh(force=False):
+            forces.append(force)
+            return "fixture-valid-access"
+
+        with mock.patch.object(app, "_ja_refresh_access_token", side_effect=refresh):
+            response = self.client.post(
+                "/jobadder/refresh_token",
+                json={},
+                headers=self._headers("jobadder-expiry-aware-refresh"),
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(forces, [False])
+        self.assertTrue(response.get_json()["connected"])
+
+    def test_jobadder_client_does_not_mark_reconnect_on_transient_refresh(self):
+        reconnects = []
+        calls = []
+        transient = app.ExternalServiceError(
+            "jobadder",
+            "temporary token transport failure",
+            status=503,
+            retryable=True,
+            action="retry",
+        )
+
+        def token_provider(force=False):
+            if force:
+                raise transient
+            return "fixture-expired-access"
+
+        class Transport:
+            def request(self, *args, **kwargs):
+                calls.append(kwargs.get("headers", {}).get("Authorization"))
+                raise app.ExternalServiceHTTPError(
+                    "jobadder", "https://api.jobadder.com/v2/candidates", 401,
+                    "Unauthorized", {}, b"rejected"
+                )
+
+        client = app.JobAdderClient(
+            api_base_provider=lambda: "https://api.jobadder.com/v2",
+            token_provider=token_provider,
+            reconnect_handler=lambda: reconnects.append(True),
+            transport=Transport(),
+        )
+        with self.assertRaises(app.ExternalServiceError):
+            client.request_raw("candidates", method="GET")
+        self.assertEqual(calls, ["Bearer fixture-expired-access"])
+        self.assertEqual(reconnects, [])
 
     def test_disconnect_and_forget_response_and_state_remain_compatible(self):
         app._ja_creds_store.update(

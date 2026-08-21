@@ -183,6 +183,50 @@ def _tax_year(rule: Mapping[str, Any], scenario: Mapping[str, Any]) -> int:
     return year
 
 
+def _selected_contribution_rule(
+    rule: Mapping[str, Any], scenario: Mapping[str, Any]
+) -> tuple[Mapping[str, Any], str, str]:
+    fallback = rule.get("contribution_rule") or {}
+    if not isinstance(fallback, Mapping):
+        raise CalculationError("Contribution rule is invalid.")
+    profiles = rule.get("contribution_profiles") or []
+    if not profiles:
+        return fallback, "", str(fallback.get("scheme") or "Standard contribution profile")
+    if not isinstance(profiles, list):
+        raise CalculationError("Contribution profiles are invalid.")
+    selected = str(
+        scenario.get("contribution_profile") or rule.get("default_contribution_profile") or ""
+    ).strip()
+    for profile in profiles:
+        if isinstance(profile, Mapping) and str(profile.get("id") or "") == selected:
+            return profile, selected, str(profile.get("label") or selected)
+    raise CalculationError("Select a valid contribution or pass profile for this tax rule.")
+
+
+def _effective_contribution_rate(contribution_rule: Mapping[str, Any], key: str) -> Decimal:
+    periods = contribution_rule.get("periods") or []
+    if not periods:
+        return _bounded_rate(contribution_rule.get(key, 0), key.replace("_", " ").title())
+    weighted = Decimal("0")
+    months_seen = 0
+    for period in periods:
+        if not isinstance(period, Mapping):
+            raise CalculationError("Contribution profile period is invalid.")
+        try:
+            start = int(period.get("start_month"))
+            end = int(period.get("end_month"))
+        except (TypeError, ValueError) as exc:
+            raise CalculationError("Contribution profile period months are invalid.") from exc
+        month_count = end - start + 1
+        if month_count <= 0:
+            raise CalculationError("Contribution profile period is invalid.")
+        weighted += _bounded_rate(period.get(key, 0), key.replace("_", " ").title()) * month_count
+        months_seen += month_count
+    if months_seen != 12:
+        raise CalculationError("Contribution profile periods must cover all 12 months.")
+    return weighted / Decimal("12")
+
+
 def calculate_scenario(
     scenario: Mapping[str, Any],
     rule: Mapping[str, Any],
@@ -213,7 +257,8 @@ def calculate_scenario(
         if variable_bonus_months < 0:
             raise CalculationError("Variable bonus months cannot be negative.")
     other_taxable_income = _d(scenario.get("other_taxable_income"))
-    personal_reliefs = _d(scenario.get("personal_tax_reliefs"))
+    personal_reliefs_allowed = _as_bool(rule.get("personal_reliefs_allowed"), True)
+    personal_reliefs = _d(scenario.get("personal_tax_reliefs")) if personal_reliefs_allowed else Decimal("0")
     other_after_tax_deductions = _d(scenario.get("other_after_tax_deductions"))
 
     for field_name, value in {
@@ -228,19 +273,21 @@ def calculate_scenario(
         if value < 0:
             raise CalculationError(f"{field_name} cannot be negative.")
 
-    contribution_rule = rule.get("contribution_rule") or {}
-    if not isinstance(contribution_rule, Mapping):
-        raise CalculationError("Contribution rule is invalid.")
+    contribution_rule, contribution_profile, contribution_profile_label = _selected_contribution_rule(
+        rule, scenario
+    )
     employee_override = scenario.get("employee_contribution_rate_override")
     employer_override = scenario.get("employer_contribution_rate_override")
     cap_override = scenario.get("contribution_cap_override")
 
     employee_rate = _bounded_rate(
-        contribution_rule.get("employee_rate", 0) if employee_override in (None, "") else employee_override,
+        _effective_contribution_rate(contribution_rule, "employee_rate")
+        if employee_override in (None, "") else employee_override,
         "Employee contribution rate",
     )
     employer_rate = _bounded_rate(
-        contribution_rule.get("employer_rate", 0) if employer_override in (None, "") else employer_override,
+        _effective_contribution_rate(contribution_rule, "employer_rate")
+        if employer_override in (None, "") else employer_override,
         "Employer contribution rate",
     )
 
@@ -373,6 +420,9 @@ def calculate_scenario(
             "source_urls": rule.get("source_urls") or [],
             "notes": rule.get("notes") or [],
             "scheme": contribution_rule.get("scheme"),
+            "contribution_profile": contribution_profile,
+            "contribution_profile_label": contribution_profile_label,
+            "personal_reliefs_allowed": personal_reliefs_allowed,
         },
     )
 

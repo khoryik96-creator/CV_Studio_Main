@@ -303,6 +303,45 @@ function everyConnectionSurfaceUsesSharedRenderer() {
   assert.ok(functionSource(html, 'refreshIntegrationDiagnostics').includes('renderJAConnectionState'));
 }
 
+async function tokenRefreshUsesExpiryAndKeepsTransientConnection() {
+  assert.ok(!/setInterval\s*\([\s\S]{0,300}\/jobadder\/refresh_token/.test(html),
+    'JobAdder token refresh must not run on a fixed interval');
+
+  const timers = [];
+  const context = vm.createContext({
+    console,
+    Promise,
+    Math,
+    Number,
+    Date: {now() { return 1000000; }},
+    window: {_jaToken: false},
+    clearTimeout() {},
+    setTimeout(fn, delay) { timers.push({fn, delay}); return timers.length; },
+    fetch() {
+      return Promise.resolve({
+        ok: false,
+        status: 503,
+        json() { return Promise.resolve({error: 'temporarily unavailable'}); },
+      });
+    },
+    applyJAPublicInfo() { throw new Error('transient failure must not replace connection state'); },
+    renderJAConnectionState() { throw new Error('transient failure must not render disconnected state'); },
+  });
+  vm.runInContext(
+    'var _jaRefreshTimer = null;\n' +
+    functionSource(html, 'scheduleJobAdderTokenRefresh') + '\n' +
+    functionSource(html, 'refreshJobAdderTokenNearExpiry'),
+    context,
+  );
+  context.scheduleJobAdderTokenRefresh({connected: true, expires_at: 1360, needs_reconnect: false});
+  assert.strictEqual(timers.length, 1);
+  assert.strictEqual(timers[0].delay, 240000, 'refresh is scheduled two minutes before expiry');
+  context.window._jaToken = true;
+  await context.refreshJobAdderTokenNearExpiry();
+  assert.strictEqual(context.window._jaToken, true, 'temporary failure keeps the existing connection marker');
+  assert.strictEqual(timers[timers.length - 1].delay, 60000, 'temporary failure retries after one minute');
+}
+
 const cases = [
   ['Format and Settings JobAdder controls are centralized', formatAndSettingsMarkupAreCentralized],
   ['missing setup opens and focuses Settings', missingSetupOpensAndFocusesSettings],
@@ -311,6 +350,7 @@ const cases = [
   ['sign-out success ordering and failure visibility', signOutIsConfirmedSuccessOrderedAndFailureVisible],
   ['tenant-bound browser state invalidation is complete', tenantBoundBrowserStateInvalidationIsComplete],
   ['all connection surfaces use the shared renderer', everyConnectionSurfaceUsesSharedRenderer],
+  ['token refresh uses expiry and preserves transient connection', tokenRefreshUsesExpiryAndKeepsTransientConnection],
 ];
 
 (async function run() {

@@ -25,14 +25,44 @@
   `54298b9b6a822e1f36c9c101f1ff4edc9c7e835f`
 - Phase 7B-4 source baseline Git commit (merged Phase 7B-3):
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
-- Working branch candidate: none after the owner-authorized v24.6.341 merge.
-- Active work: none recorded; start the next task from current `master`.
+- Working branch candidate: `chatgpt/pr159-v24.6.344-reliability-tax-update`.
+- Active work: v24.6.344 reliability/tax corrective is complete locally and
+  awaiting explicit owner authorization before commit, push or PR creation.
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
   and its merge through PR #156.
-- Current stop: after v24.6.341 validation and owner-authorized PR #156 merge.
-  Do not infer any follow-on feature or extraction scope.
+- Current stop: v24.6.344 is validated locally but remains uncommitted and
+  unpushed. Do not merge or publish it without explicit owner authorization.
+
+## v24.6.344 crawler, JobAdder, Malaysia tax and installer corrective
+
+- AI Crawler has a 330-second internal processing deadline, smaller bounded
+  detail/resume budgets and partial-result metadata. It returns useful ranked
+  candidates with a visible warning instead of letting optional enrichment run
+  into the browser's 420-second timeout.
+- JobAdder refreshes shortly before the protected token expiry. Multiple tabs
+  reuse the backend refresh lock, transient 429/5xx/network failures preserve
+  the connection and retry, and only permanent 400/401/403 refresh failures
+  require reconnecting.
+- Malaysia YA2025 now includes the official 30% non-resident rule with personal
+  reliefs disabled. Tax residence stays separate from EPF/pass profiles:
+  Malaysian citizen, PR, EP, RP-T and spousal/long-term-visit pass. EP/RP-T/
+  spousal profiles apply the mandatory 2% + 2% rate from October 2025 as a
+  clearly labelled annual comparison assumption.
+- The tax updater has a one-click next-year draft action using registered
+  official LHDN/KWSP or IRAS/CPF sources. It refuses to draft when the sources
+  do not explicitly support the requested year, never auto-publishes and keeps
+  the existing human review/approval gate.
+- Windows receipt verification now uses the same `LOCALAPPDATA` path as the
+  Python verifier. Antiword hash and signature checks no longer depend on
+  user-controlled `HOME` module auto-loading.
+- No route was added or removed; the sealed 116-route contract and SHA remain
+  unchanged. No dependency or protected-package boundary changed.
+- Validation: 922 passed, 4 skipped, 93 subtests; all JavaScript fixtures;
+  Windows protected source/dependency preflight; Python/JavaScript syntax;
+  version gates; and diff whitespace review (only expected CRLF version-stamp
+  notices remain).
 
 ## v24.6.341 OCR partial-failure corrective
 

@@ -59,6 +59,7 @@ function applyJAPublicInfo(info, options) {
     } catch(e) {}
   }
   updateJASecretFieldHint();
+  scheduleJobAdderTokenRefresh(info);
 }
 
 function jaSafeTenantLabel(info) {
@@ -573,8 +574,44 @@ function showJADialog(email) {
   });
 }
 
-// ── JobAdder token auto-refresh timer ────────────────────────────────
-setInterval(async function(){
-  if(!window._jaToken)return;
-  try{var r=await fetch('/jobadder/refresh_token',{method:'POST'}),d=await r.json().catch(function(){return {};});if(r.ok||r.status===401){applyJAPublicInfo(d);renderJAConnectionState(d);}}catch(e){}
-},5*60*1000);
+// ── JobAdder token expiry-aware refresh ─────────────────────────────
+// Access tokens last about an hour. Refresh once shortly before the protected
+// backend expiry instead of forcing a token rotation every five minutes from
+// every open tab. The backend lock deduplicates tabs that wake together.
+var _jaRefreshTimer = null;
+function scheduleJobAdderTokenRefresh(info, retryDelayMs) {
+  if (_jaRefreshTimer) {
+    clearTimeout(_jaRefreshTimer);
+    _jaRefreshTimer = null;
+  }
+  // applyJAPublicInfo runs before renderJAConnectionState on initial load, so
+  // schedule from the fresh public payload rather than the previous global.
+  if (!info || !info.connected || info.needs_reconnect) return;
+  var expiresAtMs = Number(info.expires_at || 0) * 1000;
+  var delay = Number(retryDelayMs || 0);
+  if (!(delay > 0)) {
+    delay = expiresAtMs > Date.now()
+      ? Math.max(30000, expiresAtMs - Date.now() - 120000)
+      : 30000;
+  }
+  delay = Math.min(delay, 55 * 60 * 1000);
+  _jaRefreshTimer = setTimeout(refreshJobAdderTokenNearExpiry, delay);
+}
+
+async function refreshJobAdderTokenNearExpiry() {
+  _jaRefreshTimer = null;
+  if (!window._jaToken) return;
+  try {
+    var r = await fetch('/jobadder/refresh_token', {method:'POST'});
+    var d = await r.json().catch(function(){ return {}; });
+    if (r.ok || r.status === 401) {
+      applyJAPublicInfo(d);
+      renderJAConnectionState(d);
+      return;
+    }
+    // Temporary token-service/network failures keep the existing connection.
+    scheduleJobAdderTokenRefresh({connected:true, expires_at: Math.floor(Date.now()/1000) + 180, needs_reconnect:false}, 60000);
+  } catch(e) {
+    scheduleJobAdderTokenRefresh({connected:true, expires_at: Math.floor(Date.now()/1000) + 180, needs_reconnect:false}, 60000);
+  }
+}

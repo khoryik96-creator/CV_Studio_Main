@@ -52,6 +52,42 @@ def test_malaysia_sample_calculation(malaysia_rule):
     assert result.total_employer_cost == 197568
 
 
+def test_malaysia_nonresident_uses_flat_tax_and_ignores_reliefs(malaysia_nonresident_rule):
+    result = calculate_scenario(
+        base_scenario(
+            residency="Non-Resident",
+            contribution_profile="employment_pass",
+            personal_tax_reliefs=999999,
+        ),
+        malaysia_nonresident_rule,
+        1,
+    )
+    assert result.taxable_income == result.gross_annual_cash
+    assert result.estimated_income_tax == 52920
+    assert result.marginal_income_tax_rate == 0.3
+    assert result.rule_metadata["personal_reliefs_allowed"] is False
+
+
+def test_malaysia_2025_foreign_pass_uses_october_epf_start(malaysia_rule):
+    result = calculate_scenario(
+        base_scenario(contribution_profile="employment_pass", personal_tax_reliefs=0),
+        malaysia_rule,
+        1,
+    )
+    assert result.employee_contribution_rate == 0.005
+    assert result.employer_contribution_rate == 0.005
+    assert result.employee_contribution == 882
+    assert result.rule_metadata["contribution_profile_label"] == "Employment Pass (EP)"
+
+
+def test_malaysia_permanent_resident_keeps_citizen_epf_profile(malaysia_rule):
+    result = calculate_scenario(
+        base_scenario(contribution_profile="permanent_resident"), malaysia_rule, 1
+    )
+    assert result.employee_contribution_rate == 0.11
+    assert result.employer_contribution_rate == 0.12
+
+
 def test_gross_ex_variable_subtracts_the_variable_bonus(malaysia_rule):
     result = calculate_scenario(base_scenario(), malaysia_rule, 1.0)
     assert result.variable_bonus == 14400
