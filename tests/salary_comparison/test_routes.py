@@ -1,3 +1,5 @@
+import json
+
 
 def scenario(country, reporting, base, allowance=0, reliefs=0):
     return {
@@ -182,6 +184,26 @@ def test_unwritable_data_dir_returns_clean_handled_error(tmp_path):
     payload = response.get_json()
     assert payload["type"] == "RuleRepositoryError"
     assert "data directory" in payload["error"].lower()
+
+
+def test_malformed_contribution_profiles_returns_handled_error(client, data_dir):
+    rule_path = data_dir / "tax_rules.json"
+    payload = json.loads(rule_path.read_text(encoding="utf-8"))
+    resident = next(
+        rule for rule in payload["rules"]
+        if rule["country"] == "Malaysia"
+        and rule["tax_year"] == 2025
+        and rule["residency"] == "Resident"
+    )
+    resident["contribution_profiles"] = 7
+    rule_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    response = client.get("/salary-comparison/api/config")
+
+    assert response.status_code == 400
+    error = response.get_json()
+    assert error["type"] == "RuleRepositoryError"
+    assert "contribution_profiles must be a list" in error["error"]
 
 
 def test_unexpected_error_response_is_diagnosable(client, monkeypatch):

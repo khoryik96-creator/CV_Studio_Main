@@ -76,32 +76,36 @@ def _merge_packaged_tax_rules(destination: Path, packaged: Path) -> None:
         existing_default = str(
             existing.get("default_contribution_profile") or ""
         ).strip()
+        profiles_missing = "contribution_profiles" not in existing
+        default_missing = "default_contribution_profile" not in existing
+        copied_packaged_profiles = False
         if (
             isinstance(packaged_profiles, list)
             and packaged_profiles
-            and not existing_profiles
-            and (not existing_default or existing_default == packaged_default)
+            and (
+                (profiles_missing and default_missing)
+                or (
+                    isinstance(existing_profiles, list)
+                    and not existing_profiles
+                    and bool(existing_default)
+                    and existing_default == packaged_default
+                )
+            )
         ):
-            # Older normalized/AI-published rules may contain an explicit empty
-            # list. Treat that as the pre-profile shape for a matching packaged
-            # identity. The original migration added the packaged default name
-            # without its list, creating a rule the repository could not load.
+            # Backfill the original pre-profile shape only when both fields are
+            # absent, or repair the exact matching-default/empty-list pair
+            # created by the earlier migration. An explicit empty list without
+            # a default is valid and intentionally keeps the legacy rule.
             existing["contribution_profiles"] = deepcopy(packaged_profiles)
-            existing_profiles = existing["contribution_profiles"]
+            copied_packaged_profiles = True
             changed = True
 
-        profile_ids = {
-            str(profile.get("id") or "").strip()
-            for profile in (existing_profiles or [])
-            if isinstance(profile, dict)
-        }
         if (
-            packaged_default
-            and packaged_default in profile_ids
+            copied_packaged_profiles
+            and packaged_default
             and not existing_default
         ):
             existing["default_contribution_profile"] = packaged_default
-            existing_default = packaged_default
             changed = True
         for field in _ADDITIVE_RULE_FIELDS:
             if field not in existing and field in packaged_rule:

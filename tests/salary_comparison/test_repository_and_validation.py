@@ -120,11 +120,7 @@ def test_bootstrap_adds_new_rules_without_overwriting_user_values(tmp_path):
     assert rule_path.read_text(encoding="utf-8") == once
 
 
-@pytest.mark.parametrize("keep_injected_default", [False, True])
-def test_bootstrap_repairs_empty_packaged_profile_pair_idempotently(
-    tmp_path,
-    keep_injected_default,
-):
+def test_bootstrap_repairs_matching_default_with_empty_profiles_idempotently(tmp_path):
     from salary_comparison.bootstrap import ensure_data_dir
 
     target = tmp_path / "persistent"
@@ -138,8 +134,6 @@ def test_bootstrap_repairs_empty_packaged_profile_pair_idempotently(
         and rule["residency"] == "Resident"
     )
     resident["contribution_profiles"] = []
-    if not keep_injected_default:
-        resident.pop("default_contribution_profile", None)
     rule_path.write_text(json.dumps(payload), encoding="utf-8")
 
     ensure_data_dir(target)
@@ -157,6 +151,38 @@ def test_bootstrap_repairs_empty_packaged_profile_pair_idempotently(
     once = rule_path.read_text(encoding="utf-8")
     ensure_data_dir(target)
     assert rule_path.read_text(encoding="utf-8") == once
+
+
+def test_bootstrap_preserves_valid_explicit_empty_profile_list(tmp_path):
+    from salary_comparison.bootstrap import ensure_data_dir
+
+    target = tmp_path / "persistent"
+    ensure_data_dir(target)
+    rule_path = target / "tax_rules.json"
+    payload = json.loads(rule_path.read_text(encoding="utf-8"))
+    resident = next(
+        rule for rule in payload["rules"]
+        if rule["country"] == "Malaysia"
+        and rule["tax_year"] == 2025
+        and rule["residency"] == "Resident"
+    )
+    resident["contribution_profiles"] = []
+    resident.pop("default_contribution_profile", None)
+    rule_path.write_text(json.dumps(payload), encoding="utf-8")
+    before = rule_path.read_text(encoding="utf-8")
+
+    ensure_data_dir(target)
+
+    after = rule_path.read_text(encoding="utf-8")
+    assert after == before
+    stored = json.loads(after)["rules"]
+    preserved = next(
+        rule for rule in stored
+        if rule["country"] == "Malaysia"
+        and rule["tax_year"] == 2025
+        and rule["residency"] == "Resident"
+    )
+    assert validate_rule(preserved)["contribution_profiles"] == []
 
 
 def test_bootstrap_does_not_replace_empty_custom_profile_pair(tmp_path):
