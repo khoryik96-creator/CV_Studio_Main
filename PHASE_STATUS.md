@@ -25,8 +25,11 @@
   `54298b9b6a822e1f36c9c101f1ff4edc9c7e835f`
 - Phase 7B-4 source baseline Git commit (merged Phase 7B-3):
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
-- Working branch candidate: none.
-- Active work: none.
+- Working branch candidate:
+  `chatgpt/pr167-v24.6.351-jobadder-resume-replacement`.
+- Active work: JobAdder original-CV attachment validation, candidate-contact
+  sanitation and blank-trailing-PDF corrective; planned PR #167 is not yet
+  opened or merged.
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
@@ -35,8 +38,41 @@
   source-access corrective. PR #165 merged the v24.6.349 salary
   contribution-profile repair. PR #166 merged the v24.6.350 salary
   profile-migration safety corrective.
-- Current stop: v24.6.350 is merged on `master`; no follow-on implementation
-  is active.
+- Current stop: v24.6.350 is merged on `master`; v24.6.351 is validated on the
+  working branch and is not yet merged.
+
+## v24.6.351 JobAdder original-CV upload corrective
+
+- Create Profile preserves the browser's original File object, and the backend
+  sends deterministic PDF/DOCX/DOC MIME metadata instead of labelling every
+  JobAdder Resume upload as generic `application/octet-stream`.
+- Multipart boundaries are unique and checked against the uploaded bytes. An
+  empty CV is rejected locally before any JobAdder write.
+- A candidate that was already found or successfully created is no longer
+  reported as wholly missing when only its résumé attachment fails. The row
+  keeps the JobAdder profile link, shows JobAdder's readable validation detail,
+  and offers a résumé-only retry that does not repeat extraction, paid parsing
+  or candidate creation.
+- New-candidate original-CV failures are no longer silently swallowed. Remote
+  error text is escaped before rendering.
+- AI-produced email labels/placeholders and concatenated phone prose are
+  normalized before candidate create/update. An invalid email stops locally
+  with a clear manual-entry message, while an invalid optional phone is omitted
+  instead of producing JobAdder's 422/50-character rejection. Any remaining
+  JobAdder validation response exposes its readable field-level reason.
+- Near-uniform rendered PDF pages are recorded as intentionally blank. Blank
+  trailing pages therefore do not become false partial-extraction warnings,
+  while faint, blurry, rotated and otherwise unreadable scans retain the
+  existing safety stop. The two owner PDFs reproduce 5,733 and 15,621 recovered
+  characters respectively with no partial warning after the correction.
+- The owner-supplied DOCX/PDFs and diagnostic were used read-only to verify the
+  reported scenarios and are not stored in Git. No live JobAdder write or paid
+  AI call was made during implementation or QA.
+- No route, schema, dependency or protected-package boundary changed.
+- Validation: 956 passed, 4 skipped, 96 subtests; all 19 JavaScript fixtures;
+  24-assertion source smoke; real extraction of both supplied PDFs; Windows
+  protected-source/Antiword/Tesseract/adm-zip preflight; route, architecture
+  and version gates.
 
 ## v24.6.350 salary profile-migration safety corrective
 

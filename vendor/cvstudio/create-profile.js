@@ -42,21 +42,27 @@ function renderJACreateList() {
            : item.jaClass === 'show uploading' ? '#2b6cb0'
            : 'var(--text3)';
     var statusHtml;
-    if (item.jaProfileUrl) {
-      statusHtml = '✅ <a href="' + escAttr(item.jaProfileUrl) + '" target="_blank" rel="noopener noreferrer" style="color:#2f855a;font-weight:600;text-decoration:underline;">View in JobAdder ↗</a>';
+    var profileLink = item.jaProfileUrl
+      ? '<a href="' + escAttr(item.jaProfileUrl) + '" target="_blank" rel="noopener noreferrer" style="color:#2f855a;font-weight:600;text-decoration:underline;">View in JobAdder ↗</a>'
+      : '';
+    if (item.jaProfileUrl && item.status !== 'error') {
+      statusHtml = '✅ ' + profileLink;
     } else if (item.status === 'needemail') {
       statusHtml = '<input type="email" placeholder="" data-jcid="' + item.id + '" '
         + 'onchange="setJACreateEmail(this,this.dataset.jcid)" '
         + 'style="font-size:11px;padding:2px 6px;border:1px solid #c05621;border-radius:4px;width:160px;background:var(--card);color:var(--text1);" />';
+    } else if (item.status === 'error') {
+      statusHtml = '<span title="' + escAttr(item.statusText || 'Failed') + '">' + esc(item.statusText || 'Failed') + '</span>'
+        + (profileLink ? '<span style="display:block;margin-top:3px;">' + profileLink + '</span>' : '');
     } else {
-      statusHtml = item.statusText || 'Pending';
+      statusHtml = esc(item.statusText || 'Pending');
     }
     var sourceMeta = item._oneNoteRowIndex !== undefined ? ('<span style="display:block;font-size:10px;color:var(--text3);margin-top:2px;">From OneNote · ' + esc(item._forcedEmail || '') + '</span>') : '';
     return '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;">'
       + '<span style="font-size:13px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📋 ' + esc(item.file.name) + sourceMeta + '</span>'
-      + '<span style="font-size:11px;min-width:140px;color:' + sc + ';">' + statusHtml + '</span>'
+      + '<span style="font-size:11px;min-width:140px;max-width:360px;white-space:normal;color:' + sc + ';">' + statusHtml + '</span>'
       + (item.cost ? '<span style="font-size:11px;color:var(--text3);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:1px 7px;">🔥 $' + item.cost.toFixed(4) + '</span>' : '')
-      + ((item.status === 'pending' || item.status === 'error') ? '<button type="button" data-jcid="' + escAttr(item.id) + '" onclick="event.stopPropagation();runJACreateOne(this.dataset.jcid);return false;" style="font-size:11px;padding:2px 10px;border-radius:6px;border:none;background:#2b6cb0;color:#fff;cursor:pointer;margin-right:4px;">Create</button>' : '')
+      + ((item.status === 'pending' || item.status === 'error') ? '<button type="button" data-jcid="' + escAttr(item.id) + '" onclick="event.stopPropagation();runJACreateOne(this.dataset.jcid);return false;" style="font-size:11px;padding:2px 10px;border-radius:6px;border:none;background:#2b6cb0;color:#fff;cursor:pointer;margin-right:4px;">' + (item._resumeUploadFailed ? 'Retry CV' : 'Create') + '</button>' : '')
       + '<button type="button" data-ja-create-remove="1" data-jcid="' + escAttr(item.id) + '" onclick="return removeJACreateItem(this.getAttribute(\'data-jcid\'), event)" aria-label="Remove file" title="Remove file" style="font-size:11px;padding:2px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface);cursor:pointer;">✕</button>'
       + '</div>';
   }).join('');
@@ -97,7 +103,13 @@ function clearJACreateQueue() {
 function extractJACreateEmailFallback(text) {
   var s = String(text || '');
   var m = s.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
-  return m ? m[0].trim() : '';
+  return m ? m[0].trim().toLowerCase() : '';
+}
+
+function cleanJACreateEmailCandidate(raw) {
+  if (Array.isArray(raw)) raw = raw.length ? raw[0] : '';
+  if (raw && typeof raw === 'object') raw = raw.address || raw.email || '';
+  return extractJACreateEmailFallback(raw);
 }
 
 function cleanJACreatePhoneCandidate(raw) {
@@ -130,10 +142,12 @@ function extractJACreatePhoneFallback(text) {
 
 function applyJACreateContactFallback(cand, cvText) {
   cand = cand || {};
+  cand.email = cleanJACreateEmailCandidate(cand.email);
   if (!cand.email) {
     var e = extractJACreateEmailFallback(cvText);
     if (e) cand.email = e;
   }
+  cand.phone = cleanJACreatePhoneCandidate(cand.phone);
   if (!cand.phone) {
     var p = extractJACreatePhoneFallback(cvText);
     if (p) cand.phone = p;
@@ -141,9 +155,53 @@ function applyJACreateContactFallback(cand, cvText) {
   return cand;
 }
 
+function jaCreateErrorMessage(error) {
+  var message = String(error && error.message || 'Failed').replace(/\s+/g, ' ').trim();
+  if (!message) message = 'Failed';
+  return message.length > 260 ? message.substring(0, 257) + '…' : message;
+}
+
+async function markJACreateResumeUploadFailure(item, error) {
+  item.status = 'error';
+  item.jaClass = 'show ja-err';
+  item._resumeUploadFailed = true;
+  item.statusText = '⚠️ Profile exists, but the latest CV was not uploaded — ' + jaCreateErrorMessage(error);
+  if (!item.jaProfileUrl && item._candidateId) {
+    try { item.jaProfileUrl = await jaProfileUrlAsync(item._candidateId); } catch (linkError) {}
+  }
+}
+
+async function retryJACreateResumeUpload(item) {
+  var tabRun = markTabRunning('jacreate');
+  item.status = 'processing';
+  item.statusText = '⏳ Retrying latest CV upload…';
+  item.jaClass = 'show uploading';
+  renderJACreateList();
+  try {
+    await jaUploadOriginalCV(item._candidateId, item.file, item.file.name);
+    item.status = 'done';
+    item.statusText = '✅ Latest CV uploaded';
+    item.jaClass = 'show uploaded';
+    item._resumeUploadFailed = false;
+    if (!item.jaProfileUrl) item.jaProfileUrl = await jaProfileUrlAsync(item._candidateId);
+    oneNoteProfileCreateCompleted(item, item._candidateId, item._parsedCand || {}, !!item._candidateWasCreated);
+    markTabDone('jacreate', tabRun);
+    showToast('Latest CV uploaded to the existing JobAdder profile', 'ok');
+  } catch (error) {
+    await markJACreateResumeUploadFailure(item, error);
+    oneNoteProfileCreateFailed(item, error);
+    markTabFailed('jacreate', tabRun);
+    showToast(item.statusText, 'err');
+  }
+  renderJACreateList();
+}
+
 async function setJACreateEmail(el, id) {
-  var email = el.value.trim();
-  if (!email) return;
+  var email = cleanJACreateEmailCandidate(el.value);
+  if (!email || email !== el.value.trim().toLowerCase()) {
+    showToast('Enter one valid email address', 'err');
+    return;
+  }
   var item = _jaCreateQueue.find(function(x){ return x.id === id; });
   if (!item) return;
   item._manualEmail = email;
@@ -160,12 +218,13 @@ async function setJACreateEmail(el, id) {
     var candidates = (searchData.items || []);
     if (candidates.length > 0) {
       var eid2 = candidates[0].candidateId;
+      item._candidateId = eid2;
+      item._candidateWasCreated = false;
       var uF2 = {};
       if (cand.phone) { uF2.mobile = cand.phone; uF2.phone = cand.phone; }
       if (cand.linkedin) { var l2 = cand.linkedin.trim(); if (!l2.startsWith('http')) l2='https://'+l2; uF2.social={linkedin:l2}; }
       if (Object.keys(uF2).length) { try { await jaUpdateCandidate(eid2, uF2); } catch(e){} }
-      var oAB = await item.file.arrayBuffer();
-      await jaUploadOriginalCV(eid2, new Blob([oAB]), item.file.name);
+      await jaUploadOriginalCV(eid2, item.file, item.file.name);
       item.status='done'; item.jaClass='show uploaded';
       item.jaProfileUrl = await jaProfileUrlAsync(eid2);
       item.statusText = '✅ Updated existing profile';
@@ -173,8 +232,10 @@ async function setJACreateEmail(el, id) {
       var eF2 = {};
       if (cand.phone) { eF2.mobile=cand.phone; eF2.phone=cand.phone; }
       if (cand.linkedin) { var l3=cand.linkedin.trim(); if(!l3.startsWith('http'))l3='https://'+l3; eF2.social={linkedin:l3}; }
-      var oAB2 = await item.file.arrayBuffer();
-      var nC = await jaCreateCandidate(firstName, lastName, email, new Blob([oAB2]), item.file.name, eF2);
+      var nC = await jaCreateCandidate(firstName, lastName, email, item.file, item.file.name, eF2);
+      item._candidateId = nC.candidateId;
+      item._candidateWasCreated = true;
+      if (nC.originalCvUploadError) throw nC.originalCvUploadError;
       item.status='done'; item.jaClass='show uploaded';
       item.jaProfileUrl = await jaProfileUrlAsync(nC.candidateId);
       item.statusText = '✅ Profile created';
@@ -183,8 +244,12 @@ async function setJACreateEmail(el, id) {
     statsRecord(manualCreateName, 'create', item.cost || 0, item._statsModel || aiRoutePayload('ja_create').model, item.jaProfileUrl || '', item._statsProvider || aiRoutePayload('ja_create').provider, item._statsMeta);
     markTabDone('jacreate', _tabRun);
   } catch(err) {
-    item.status='error'; item.statusText='❌ '+(err.message||'Failed').substring(0,50); item.jaClass='show ja-err';
-    showToast('Failed: '+(err.message||'').split('|')[0].trim(), 'err');
+    if (err && err.isResumeUploadFailure && item._candidateId) {
+      await markJACreateResumeUploadFailure(item, err);
+    } else {
+      item.status='error'; item.statusText='❌ '+jaCreateErrorMessage(err); item.jaClass='show ja-err';
+    }
+    showToast(item.statusText, 'err');
     markTabFailed('jacreate', _tabRun);
   }
   renderJACreateList();
@@ -193,6 +258,10 @@ async function setJACreateEmail(el, id) {
 async function runJACreateOne(id) {
   var item = _jaCreateQueue.find(function(x){ return x.id === id; });
   if (!item || !window._jaToken) return;
+  if (item._resumeUploadFailed && item._candidateId) {
+    await retryJACreateResumeUpload(item);
+    return;
+  }
   // Temporarily run just this item by marking others as skip
   var prev = _jaCreateQueue.map(function(x){ return { id: x.id, status: x.status }; });
   _jaCreateQueue.forEach(function(x){ if (x.id !== id) x._skip = true; });
@@ -210,6 +279,12 @@ async function runJACreateAll() {
   for (var i = 0; i < _jaCreateQueue.length; i++) {
     var item = _jaCreateQueue[i];
     if (item.status === 'done' || item._skip) continue;
+    if (item._resumeUploadFailed && item._candidateId) {
+      await retryJACreateResumeUpload(item);
+      if (item.status === 'done') doneCount++; else errCount++;
+      statusEl.textContent = (doneCount + errCount) + ' / ' + _jaCreateQueue.length + ' processed';
+      continue;
+    }
 
     item.status = 'processing'; item.statusText = '⏳ Extracting CV…'; item.jaClass = 'show uploading';
     renderJACreateList();
@@ -243,11 +318,12 @@ async function runJACreateAll() {
       if (parsed.warning) showToast(parsed.warning, 'info');
       var cand = (parsed && parsed.data && parsed.data.candidate) ? parsed.data.candidate : {};
       cand = applyJACreateContactFallback(cand, cvText);
+      item._parsedCand = cand;
       // A CV launched from an unmatched OneNote note must create/search using
       // that note's confirmed email, even when the CV contains no email or a
       // different contact address. This keeps the new profile tied to the
       // exact screening-note row that initiated the action.
-      if (item._forcedEmail) cand.email = String(item._forcedEmail || '').trim().toLowerCase();
+      if (item._forcedEmail) cand.email = cleanJACreateEmailCandidate(item._forcedEmail);
       if (!String(cand.name || '').trim() && item._oneNoteSourceName) cand.name = String(item._oneNoteSourceName || '').trim();
       // Track cost
       var createCost = responseCost(parsed, jaRoute.model, jaRoute.provider);
@@ -278,6 +354,8 @@ async function runJACreateAll() {
       if (candidates.length > 0) {
         // Existing candidate — update profile fields then upload CV
         var existingId = candidates[0].candidateId;
+        item._candidateId = existingId;
+        item._candidateWasCreated = false;
         item.statusText = '⏳ Updating profile…';
         renderJACreateList();
         // Build update payload from extracted fields
@@ -307,8 +385,7 @@ async function runJACreateAll() {
         // Upload original CV to Resume slot
         item.statusText = '⏳ Uploading CV…';
         renderJACreateList();
-        var origAB = await item.file.arrayBuffer();
-        await jaUploadOriginalCV(existingId, new Blob([origAB]), item.file.name);
+        await jaUploadOriginalCV(existingId, item.file, item.file.name);
         item.status = 'done'; item.jaClass = 'show uploaded';
         item.jaProfileUrl = await jaProfileUrlAsync(existingId);
         item.statusText = '✅ Updated existing profile';
@@ -340,8 +417,10 @@ async function runJACreateAll() {
         var cIndustryCustom = buildIndustryCustomFields(cand);
         if (cIndustryCustom) extraFields.custom = cIndustryCustom;
 
-        var origAB2 = await item.file.arrayBuffer();
-        var newCand = await jaCreateCandidate(firstName, lastName, email, new Blob([origAB2]), item.file.name, extraFields);
+        var newCand = await jaCreateCandidate(firstName, lastName, email, item.file, item.file.name, extraFields);
+        item._candidateId = newCand.candidateId;
+        item._candidateWasCreated = true;
+        if (newCand.originalCvUploadError) throw newCand.originalCvUploadError;
         item.status = 'done'; item.jaClass = 'show uploaded';
         item.jaProfileUrl = await jaProfileUrlAsync(newCand.candidateId);
         item.statusText = '✅ Profile created';
@@ -351,10 +430,14 @@ async function runJACreateAll() {
       }
 
     } catch(err) {
-      item.status = 'error';
-      item.statusText = '❌ ' + (err.message || 'Failed').substring(0, 50);
-      item.jaClass = 'show ja-err';
-      showToast('❌ Failed: ' + item.file.name + ' — ' + (err.message||'').split('|')[0].trim(), 'err');
+      if (err && err.isResumeUploadFailure && item._candidateId) {
+        await markJACreateResumeUploadFailure(item, err);
+      } else {
+        item.status = 'error';
+        item.statusText = '❌ ' + jaCreateErrorMessage(err);
+        item.jaClass = 'show ja-err';
+      }
+      showToast(item.statusText, 'err');
       oneNoteProfileCreateFailed(item, err);
       errCount++;
     }

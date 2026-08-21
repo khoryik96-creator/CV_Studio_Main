@@ -438,7 +438,13 @@ async function jaCreateCandidate(firstName, lastName, email, originalBlob, origi
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify(payload)
   }, 15000, 'profile creation');
-  if (!r.ok) { var e = await r.json(); throw new Error(e.error || 'Create failed: ' + (e.detail||'')); }
+  if (!r.ok) {
+    var e = await r.json().catch(function(){ return {}; });
+    var createMessage = e.error || 'Create failed';
+    var createDetail = e.jobadder_message || e.detail || '';
+    if (createDetail && createDetail !== createMessage) createMessage += ' — ' + createDetail;
+    throw new Error(createMessage);
+  }
   var newCand = await r.json();
   // Upload original CV to Resume slot if provided
   if (originalBlob && newCand.candidateId) {
@@ -446,6 +452,10 @@ async function jaCreateCandidate(firstName, lastName, email, originalBlob, origi
       await jaUploadOriginalCV(newCand.candidateId, originalBlob, originalFname || 'Original_CV.pdf');
     } catch(e) {
       console.warn('Original CV upload failed:', e.message);
+      // The candidate exists even though its latest original CV does not. Keep
+      // that partial result explicit so Create Profile cannot report a false
+      // all-green success or create the same candidate again on retry.
+      newCand.originalCvUploadError = e;
     }
   }
   return newCand;
@@ -477,10 +487,16 @@ async function jaUploadOriginalCV(candidateId, blob, fname) {
   fd.append('file', blob, fname);
   var r = await jaPostWithRetry('/jobadder/upload_original_cv', { method: 'POST', body: fd }, 30000, 'original CV upload');
   if (!r.ok) {
-    var e = await r.json();
-    var msg = e.error || 'Original CV upload failed';
-    if (e.detail) msg += ' | ' + e.detail;
-    throw new Error(msg);
+    var payload = await r.json().catch(function(){ return {}; });
+    var msg = payload.error || 'Original CV upload failed';
+    var detail = payload.jobadder_message || payload.detail || '';
+    if (detail && detail !== msg) msg += ' — ' + detail;
+    var uploadError = new Error(msg);
+    uploadError.status = r.status;
+    uploadError.code = payload.code || '';
+    uploadError.detail = detail;
+    uploadError.isResumeUploadFailure = true;
+    throw uploadError;
   }
   return r.json();
 }

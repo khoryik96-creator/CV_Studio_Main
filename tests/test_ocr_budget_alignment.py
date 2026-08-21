@@ -234,6 +234,38 @@ class OcrDeadlineBehaviorTests(unittest.TestCase):
         )
         self.assertEqual(result, {40: "fixed"})
 
+    def test_uniform_light_page_is_recorded_blank_without_calling_ocr(self):
+        class BlankImage(self._Image):
+            def convert(self, mode):
+                self_outer.assertEqual(mode, "L")
+                return self
+
+            @staticmethod
+            def getextrema():
+                return (252, 252)
+
+        self_outer = self
+
+        class Tesseract:
+            @staticmethod
+            def image_to_string(*_args, **_kwargs):
+                raise AssertionError("a proven blank page must not reach OCR")
+
+        result = document_safety.ocr_pdf_pages_pagewise(
+            b"pdf",
+            Tesseract(),
+            page_numbers=[2],
+            pdf_page_count=lambda _raw: 2,
+            render_pdf_page_images=lambda *_args, **_kwargs: [BlankImage()],
+            ocr_semaphore=threading.BoundedSemaphore(1),
+            max_ocr_pages=30,
+            max_image_pixels=60_000_000,
+            deadline_seconds=180,
+        )
+
+        self.assertEqual(result, {})
+        self.assertEqual(result.visually_blank_pages, {2})
+
 
 if __name__ == "__main__":
     unittest.main()
