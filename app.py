@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.350"
+_INSTALL_RECEIPT_VERSION = "v24.6.351"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -341,7 +341,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.350"
+_CVSTUDIO_VERSION = "v24.6.351"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -8001,6 +8001,78 @@ def _safe_jobadder_attachment_filename(value, fallback):
     return name[:180]
 
 
+_JOBADDER_ATTACHMENT_CONTENT_TYPES = {
+    ".doc": "application/msword",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".pdf": "application/pdf",
+}
+
+
+def _jobadder_attachment_content_type(filename):
+    """Return deterministic MIME metadata for the CV types accepted by the UI."""
+    extension = os.path.splitext(str(filename or ""))[1].lower()
+    return _JOBADDER_ATTACHMENT_CONTENT_TYPES.get(
+        extension,
+        "application/octet-stream",
+    )
+
+
+def _jobadder_attachment_multipart(file_data, filename):
+    """Build one RFC 7578 fileData part with a collision-safe boundary."""
+    file_data = bytes(file_data or b"")
+    for _attempt in range(4):
+        boundary = "----CVStudioBoundary" + secrets.token_hex(18)
+        if boundary.encode("ascii") not in file_data:
+            break
+    else:  # Practically unreachable, but never emit an ambiguous multipart body.
+        raise RuntimeError("Could not prepare a safe CV upload boundary")
+    crlf = b"\x0d\x0a"
+    boundary_bytes = boundary.encode("ascii")
+    content_type = _jobadder_attachment_content_type(filename)
+    body = b"--" + boundary_bytes + crlf
+    body += (
+        b'Content-Disposition: form-data; name="fileData"; filename="'
+        + filename.encode("utf-8", errors="replace")
+        + b'"'
+        + crlf
+    )
+    body += b"Content-Type: " + content_type.encode("ascii") + crlf + crlf
+    body += file_data + crlf
+    body += b"--" + boundary_bytes + b"--" + crlf
+    return body, boundary
+
+
+def _jobadder_attachment_error_summary(raw_detail):
+    """Extract a readable validation message while preserving the raw detail."""
+    detail = str(raw_detail or "").strip()
+    if not detail:
+        return "JobAdder rejected the CV attachment without an explanation."
+    try:
+        payload = json.loads(detail)
+    except (TypeError, ValueError):
+        return detail[:1200]
+    messages = []
+    if isinstance(payload, dict):
+        for key in ("message", "error", "detail", "title"):
+            value = payload.get(key)
+            if isinstance(value, str) and value.strip():
+                messages.append(value.strip())
+        errors = payload.get("errors")
+        if isinstance(errors, dict):
+            for value in errors.values():
+                if isinstance(value, list):
+                    messages.extend(str(item).strip() for item in value if str(item).strip())
+                elif str(value or "").strip():
+                    messages.append(str(value).strip())
+        elif isinstance(errors, list):
+            messages.extend(str(item).strip() for item in errors if str(item).strip())
+    elif isinstance(payload, list):
+        messages.extend(str(item).strip() for item in payload if str(item).strip())
+    if not messages:
+        return detail[:1200]
+    return " ".join(dict.fromkeys(messages))[:1200]
+
+
 @app.route("/jobadder/upload_original_cv", methods=["POST"])
 @_ja_critical_write_route
 def jobadder_upload_original_cv():
@@ -8018,14 +8090,9 @@ def jobadder_upload_original_cv():
     try:
         file_data = file.read()
         filename  = _safe_jobadder_attachment_filename(file.filename, "Original_CV.pdf")
-        boundary  = "----CVStudioBoundary7MA4YWxkTrZu0gW"
-        bnd       = boundary.encode()
-        crlf      = b"\x0d\x0a"
-        body  = b"--" + bnd + crlf
-        body += b'Content-Disposition: form-data; name="fileData"; filename="' + filename.encode("utf-8", errors="replace") + b'"' + crlf
-        body += b"Content-Type: application/octet-stream" + crlf + crlf
-        body += file_data + crlf
-        body += b"--" + bnd + b"--" + crlf
+        if not file_data:
+            return jsonify({"error": "The selected CV file is empty"}), 400
+        body, boundary = _jobadder_attachment_multipart(file_data, filename)
         response = _JOBADDER_CLIENT.request_raw(
             "candidates/{}/attachments/Resume".format(candidate_id),
             method="POST",
@@ -8041,8 +8108,15 @@ def jobadder_upload_original_cv():
         )
         return jsonify({"ok": True, "response": response.body.decode() if response.body else ""})
     except urllib.error.HTTPError as e:
-        err_body = e.read().decode()
-        return jsonify({"error": "JobAdder error: {}".format(e.code), "detail": err_body}), e.code
+        err_body = e.read().decode(errors="replace")
+        payload = {
+            "error": "JobAdder error: {}".format(e.code),
+            "detail": err_body,
+            "jobadder_message": _jobadder_attachment_error_summary(err_body),
+        }
+        if e.code == 422:
+            payload["code"] = "JOBADDER_ATTACHMENT_VALIDATION_FAILED"
+        return jsonify(payload), e.code
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

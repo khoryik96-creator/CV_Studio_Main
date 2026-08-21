@@ -225,6 +225,22 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
+- **JobAdder original-CV upload corrective — v24.6.351 / planned PR #167, NOT
+  MERGED.** Branch `chatgpt/pr167-v24.6.351-jobadder-resume-replacement`
+  preserves the original browser File and sends PDF/DOCX/DOC MIME metadata in
+  JobAdder's `fileData` multipart part rather than generic
+  `application/octet-stream`. If a candidate exists but its latest CV upload is
+  rejected, the UI keeps the profile link, shows the readable JobAdder
+  validation reason and offers a résumé-only retry without repeating
+  extraction, paid parsing or candidate creation. Newly created candidates no
+  longer hide a failed original-CV attachment, empty files stop before the
+  remote write, and remote error text is escaped. Multipart boundaries are
+  unique and collision-checked. The owner-supplied DOCX was inspected read-only
+  and remains outside Git. No live JobAdder write, route, schema, dependency or
+  protected-package boundary change. Validation: 951 passed, 4 skipped, 96
+  subtests; all JavaScript fixtures; 24-assertion source smoke; Windows
+  protected-source/Antiword/Tesseract/adm-zip preflight; route, architecture
+  and version gates.
 - **Persistent salary-rule migration — v24.6.346 / planned PR #161, NOT
   MERGED.** Branch `chatgpt/pr161-v24.6.346-salary-rule-migration` fixes an
   upgrade gap found after PR #159: an existing installation retained its old

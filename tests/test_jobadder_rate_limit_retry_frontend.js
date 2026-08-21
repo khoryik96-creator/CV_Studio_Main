@@ -40,21 +40,96 @@ function makeResponse(status, retryAfter) {
   };
 }
 
+class FakeFormData {
+  constructor() { this.entries = []; }
+  append(name, value, filename) { this.entries.push({ name, value, filename }); }
+}
+
 function buildContext(fetchImpl) {
   const toasts = [];
   const context = vm.createContext({
     console, Promise, Math, parseInt, isFinite, String, Object,
     setTimeout: function(fn) { fn(); return 0; }, // fire immediately: no real waiting in tests
+    FormData: FakeFormData,
     fetchWithTimeout: fetchImpl,
     showToast: function(msg, type) { toasts.push({ msg: msg, type: type }); },
   });
   vm.runInContext(
     functionRange(html, 'jaRetrySleep') + '\n' +
     functionRange(html, 'jaRateLimitDelayMs') + '\n' +
-    functionRange(html, 'jaPostWithRetry'),
+    functionRange(html, 'jaPostWithRetry') + '\n' +
+    'async ' + functionRange(html, 'jaUploadOriginalCV') + '\n' +
+    'async ' + functionRange(html, 'jaCreateCandidate'),
     context,
   );
   return { context, toasts };
+}
+
+async function originalCvUploadSurfacesReadable422AndRetryMetadata() {
+  const sourceFile = { marker: 'the original browser File object' };
+  let requestOptions = null;
+  const env = buildContext(function(_url, options) {
+    requestOptions = options;
+    return Promise.resolve({
+      status: 422,
+      ok: false,
+      headers: { get: function() { return null; } },
+      json: async function() {
+        return {
+          error: 'JobAdder error: 422',
+          code: 'JOBADDER_ATTACHMENT_VALIDATION_FAILED',
+          jobadder_message: 'The uploaded CV could not be accepted',
+          detail: '{"message":"raw response"}',
+        };
+      },
+    });
+  });
+  let thrown = null;
+  try {
+    await env.context.jaUploadOriginalCV(123, sourceFile, 'candidate.docx');
+  } catch (error) { thrown = error; }
+  assert.ok(thrown, 'the rejected attachment must remain failure-visible');
+  assert.strictEqual(thrown.status, 422);
+  assert.strictEqual(thrown.code, 'JOBADDER_ATTACHMENT_VALIDATION_FAILED');
+  assert.strictEqual(thrown.isResumeUploadFailure, true);
+  assert.ok(thrown.message.includes('The uploaded CV could not be accepted'));
+  const filePart = requestOptions.body.entries.find(function(entry) { return entry.name === 'file'; });
+  assert.strictEqual(filePart.value, sourceFile, 'the original File/Blob must be forwarded unchanged');
+  assert.strictEqual(filePart.filename, 'candidate.docx');
+}
+
+async function createdCandidateKeepsPartialResumeFailureExplicit() {
+  let calls = 0;
+  const env = buildContext(function() {
+    calls += 1;
+    if (calls === 1) {
+      return Promise.resolve({
+        status: 200,
+        ok: true,
+        headers: { get: function() { return null; } },
+        json: async function() { return { candidateId: 456 }; },
+      });
+    }
+    return Promise.resolve({
+      status: 422,
+      ok: false,
+      headers: { get: function() { return null; } },
+      json: async function() {
+        return {
+          error: 'JobAdder error: 422',
+          code: 'JOBADDER_ATTACHMENT_VALIDATION_FAILED',
+          jobadder_message: 'Attachment validation failed',
+        };
+      },
+    });
+  });
+  const result = await env.context.jaCreateCandidate(
+    'Fixture', 'Candidate', 'fixture@example.invalid', {}, 'candidate.pdf', {}
+  );
+  assert.strictEqual(result.candidateId, 456, 'the created candidate identity must be retained');
+  assert.ok(result.originalCvUploadError, 'the partial attachment failure must not be swallowed');
+  assert.strictEqual(result.originalCvUploadError.isResumeUploadFailure, true);
+  assert.strictEqual(calls, 2, 'one candidate write and one explicitly rejected attachment write');
 }
 
 async function retriesOn429ThenSucceeds() {
@@ -124,6 +199,8 @@ const cases = [
   ['persistent 429 gives up after bounded retries', persistent429GivesUpAfterBoundedRetries],
   ['thrown timeout is not retried', thrownTimeoutIsNotRetried],
   ['delay honours Retry-After, defaults, and clamps', delayHonoursRetryAfterAndDefaultsAndClamps],
+  ['original CV 422 remains readable and retryable', originalCvUploadSurfacesReadable422AndRetryMetadata],
+  ['created candidate keeps partial résumé failure explicit', createdCandidateKeepsPartialResumeFailureExplicit],
 ];
 
 (async function run() {
