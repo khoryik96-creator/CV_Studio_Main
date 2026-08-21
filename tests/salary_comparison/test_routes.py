@@ -57,7 +57,9 @@ def test_config_lists_countries_and_rules(client):
     assert {profile["id"] for profile in malaysia_nonresident["contribution_profiles"]} >= {
         "employment_pass", "residence_pass_talent", "permanent_resident", "spousal_visa",
     }
-    assert data["official_rule_sources"]["malaysia"]["tax_url"].startswith("https://www.hasil.gov.my/")
+    assert data["official_rule_sources"]["malaysia"]["tax_url"] == (
+        "https://www.hasil.gov.my/wp-content/uploads/navigasi-hasil-2026.pdf"
+    )
 
 
 def test_compare_endpoint(client):

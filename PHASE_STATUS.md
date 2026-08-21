@@ -25,15 +25,28 @@
   `54298b9b6a822e1f36c9c101f1ff4edc9c7e835f`
 - Phase 7B-4 source baseline Git commit (merged Phase 7B-3):
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
-- Working branch candidate: `chatgpt/pr159-v24.6.344-reliability-tax-update`.
-- Active work: v24.6.344 reliability/tax corrective is complete locally and
-  awaiting explicit owner authorization before commit, push or PR creation.
+- Working branch candidate: `chatgpt/pr162-v24.6.347-lhdn-source-fallback`.
+- Active work: v24.6.347 LHDN source reliability corrective.
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
   and its merge through PR #156.
-- Current stop: v24.6.344 is validated locally but remains uncommitted and
-  unpushed. Do not merge or publish it without explicit owner authorization.
+- Current stop: validate v24.6.347 locally, then publish and merge PR #162 as
+  explicitly authorized by the owner.
+
+## v24.6.347 LHDN source reliability corrective
+
+- Replaces the removed English Malaysia individual tax-rate page with LHDN's
+  live `Navigasi HASiL 2026` PDF, which explicitly contains the resident
+  individual schedule for YA2025.
+- The one-click updater tries only registered official fallback URLs and stores
+  the URL that actually supplied the text. It still stops with a clear error
+  when every approved tax source is unavailable.
+- The existing rule metadata now points to the reachable official LHDN source.
+- No route, schema, dependency or protected-package boundary changed.
+- Validation: 939 passed, 4 skipped, 93 subtests; live extraction from both
+  registered LHDN PDFs; Windows protected-source preflight; and 24-assertion
+  source smoke.
 
 ## v24.6.344 crawler, JobAdder, Malaysia tax and installer corrective
 

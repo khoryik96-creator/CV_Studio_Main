@@ -22,12 +22,19 @@ MAX_SOURCE_REDIRECTS = 5
 SOURCE_REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
 OFFICIAL_RULE_SOURCES = {
     "malaysia": {
-        "tax_url": "https://www.hasil.gov.my/en/individual/individual-life-cycle/income-declaration/tax-rate/",
+        "tax_url": "https://www.hasil.gov.my/wp-content/uploads/navigasi-hasil-2026.pdf",
         "contribution_url": "https://www.kwsp.gov.my/en/epf-act-1991-third-schedule",
     },
     "singapore": {
         "tax_url": "https://www.iras.gov.sg/taxes/individual-income-tax/basics-of-individual-income-tax/tax-residency-and-tax-rates/individual-income-tax-rates",
         "contribution_url": "https://www.cpf.gov.sg/employer/employer-obligations/how-much-cpf-contributions-to-pay",
+    },
+}
+OFFICIAL_RULE_SOURCE_FALLBACKS = {
+    "malaysia": {
+        "tax_url": (
+            "https://www.hasil.gov.my/wp-content/uploads/sepintas-e-buku-hasil-2025.pdf",
+        ),
     },
 }
 
@@ -158,6 +165,27 @@ def fetch_official_source(url: str, max_chars: int = 60000) -> str:
     if not text:
         raise AiRuleUpdateError(f"No readable content found at {url}")
     return text[:max(1000, min(int(max_chars), 200000))]
+
+
+def _fetch_registered_official_source(
+    primary_url: str,
+    fallback_urls: tuple[str, ...] = (),
+    *,
+    source_label: str,
+) -> tuple[str, str]:
+    """Fetch the first readable registered source and return its actual URL."""
+    failures: list[AiRuleUpdateError] = []
+    for candidate_url in (primary_url, *fallback_urls):
+        try:
+            safe_url = _public_source_url(candidate_url)
+            return safe_url, fetch_official_source(safe_url)
+        except AiRuleUpdateError as exc:
+            failures.append(exc)
+    last_failure = failures[-1] if failures else AiRuleUpdateError("No source URL is registered.")
+    raise AiRuleUpdateError(
+        f"Unable to retrieve any registered official {source_label} source. "
+        f"Tried {1 + len(fallback_urls)} approved URL(s). Last error: {last_failure}"
+    ) from last_failure
 
 
 def _prompt(country: str, tax_year: int, residency: str, tax_url: str, contribution_url: str,
@@ -389,10 +417,22 @@ def preview_rule_update(
             )
         tax_url = sources["tax_url"]
         contribution_url = sources["contribution_url"]
-    tax_url = _public_source_url(tax_url)
-    contribution_url = _public_source_url(contribution_url)
-    tax_text = fetch_official_source(tax_url)
-    contribution_text = fetch_official_source(contribution_url)
+        fallbacks = OFFICIAL_RULE_SOURCE_FALLBACKS.get(country.casefold(), {})
+        tax_url, tax_text = _fetch_registered_official_source(
+            tax_url,
+            fallbacks.get("tax_url", ()),
+            source_label=f"{country} tax",
+        )
+        contribution_url, contribution_text = _fetch_registered_official_source(
+            contribution_url,
+            fallbacks.get("contribution_url", ()),
+            source_label=f"{country} contribution",
+        )
+    else:
+        tax_url = _public_source_url(tax_url)
+        contribution_url = _public_source_url(contribution_url)
+        tax_text = fetch_official_source(tax_url)
+        contribution_text = fetch_official_source(contribution_url)
     prompt = _prompt(
         country, tax_year, residency, tax_url, contribution_url, tax_text, contribution_text,
         automatic=automatic,
