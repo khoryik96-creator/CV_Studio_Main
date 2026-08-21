@@ -25,14 +25,15 @@
   `54298b9b6a822e1f36c9c101f1ff4edc9c7e835f`
 - Phase 7B-4 source baseline Git commit (merged Phase 7B-3):
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
-- Working branch candidate: `chatgpt/pr162-v24.6.347-lhdn-source-fallback`.
-- Active work: v24.6.347 LHDN source reliability corrective.
+- Working branch candidate: none.
+- Active work: none.
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
-  and its merge through PR #156.
-- Current stop: validate v24.6.347 locally, then publish and merge PR #162 as
-  explicitly authorized by the owner.
+  and its merge through PR #156. PR #162 merged the v24.6.347 LHDN source
+  reliability corrective as `61a001d`.
+- Current stop: v24.6.347 is merged on `master`; no follow-on implementation
+  is active.
 
 ## v24.6.347 LHDN source reliability corrective
 
