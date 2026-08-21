@@ -33,6 +33,8 @@ const storage = new Map();
 let promptValue = '';
 const context = {
   console, JSON, String, Array, Object,
+  MONTH_ABBR: {jan:'Jan', jun:'Jun'},
+  MONTH_ABBR_BY_NUMBER: {1:'Jan', 6:'Jun'},
   LOCK_UNLOCK_VERSION: 'v24.6.246',
   CV_SCORING_LOCK_CODE: '1996',
   window: {prompt(){ return promptValue; }, alert(){}},
@@ -45,7 +47,7 @@ vm.createContext(context);
 [
   'cvParseIsLong','cvParseTimeoutMs','cvStripInferredTitle','cvCanonicalSectionHeading',
   'cvStripLeadingBulletMarker','cvStripAdditionalBulletMarkers',
-  'cvNormalizeBulletItems','cvNormalizeStructuredData','cvNormDateRange','summaryBulletLines',
+  'cvNormalizeBulletItems','cvNormalizeStructuredData','cvNormMonth','cvNormDateRange','summaryBulletLines',
   'formatSummaryBulletsFor','applyFormatSummaryBullets','cvSummaryPrompt','cvSummaryModifierForPreference','versionedUnlockKey','readVersionedUnlock',
   'writeVersionedUnlock','cvScoringIsUnlocked','cvScoringSetUnlocked','updateCvScoringLockUI',
   'requestCvScoringUnlock','aiCrawlerIsUnlocked','updateAiCrawlerLockUI','requestAiCrawlerUnlock',
@@ -266,8 +268,15 @@ assert.deepStrictEqual(
 
 assert.strictEqual(context.cvNormDateRange('to 2001'), '2001');
 assert.strictEqual(context.cvNormDateRange(''), '');
+assert.strictEqual(context.cvNormDateRange('2018 to 2018'), '2018');
+assert.strictEqual(context.cvNormDateRange('Jul - Dec 2019'), 'Jul 2019 to Dec 2019');
 assert.strictEqual(context.normalizeDateRange('to 1996'), '1996');
 assert.strictEqual(context.normalizeDateRange('to'), '');
+assert.strictEqual(context.normalizeDateRange('2018 to 2018'), '2018');
+assert.strictEqual(context.normalizeDateRange('Jan - Jun 2019'), 'Jan 2019 to Jun 2019');
+assert.ok(generate.includes("const subsectionHeading = String(exp.section_heading || '').trim();"));
+assert.ok(generate.includes('if (subsectionHeading) xml += boldBlackPara(subsectionHeading, 24);'));
+assert.ok(html.includes('preview-work-subsection'));
 
 assert.strictEqual(context.cvParseTimeoutMs('x'.repeat(7999)), 210000);
 assert.strictEqual(context.cvParseTimeoutMs('x'.repeat(8000)), 330000);

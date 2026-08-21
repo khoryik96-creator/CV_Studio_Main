@@ -194,6 +194,11 @@ _CV_SOURCE_SECTION_BOUNDARY_KEYS = {
     "other information",
     "hobbies",
     "interests",
+    "volunteer",
+    "volunteering",
+    "volunteer experience",
+    "volunteer community",
+    "community involvement",
 }
 
 
@@ -323,6 +328,26 @@ def _normalize_cv_date_range(value):
     # whether a given parse run emitted "06/2024" or "Jun 2024".
     text = re.sub(r"\b(\d{1,2})/(\d{4})\b", _numeric_month_year_repl, text)
     text = re.sub(r"\s+", " ", text).strip()
+    # A source can state a one-year qualification or role as either ``2018``
+    # or the redundant range ``2018 to 2018``. Render the compact, truthful
+    # single-year form rather than implying a multi-year span.
+    same_year = re.fullmatch(r"(\d{4})\s+to\s+\1", text, flags=re.I)
+    if same_year:
+        return same_year.group(1)
+    # Compact earlier-career lines often omit the repeated start year, e.g.
+    # ``Jul - Dec 2019``. The shared trailing year applies to both month
+    # endpoints; restoring it makes the range unambiguous without guessing.
+    same_year_months = re.fullmatch(
+        r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+to\s+"
+        r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})",
+        text,
+        flags=re.I,
+    )
+    if same_year_months:
+        start_month = _normalize_month_token(same_year_months.group(1))
+        end_month = _normalize_month_token(same_year_months.group(2))
+        year = same_year_months.group(3)
+        return f"{start_month} {year} to {end_month} {year}"
     return text
 
 
@@ -1030,12 +1055,98 @@ def _normalize_cv_structured_content(parsed):
     return parsed
 
 
-def _normalize_cv_data_for_output(parsed, source_text=""):
+def _recover_cv_source_skill_item_punctuation(parsed, source_text):
+    """Restore source separators for a one-line skill group without rewriting it.
+
+    Providers sometimes replace middle-dot separators with commas even though
+    every word is otherwise identical. Use a category-anchored source span only
+    when its alphanumeric content exactly matches the parsed items, so this is a
+    punctuation/layout repair rather than a prose rewrite.
+    """
+    if not isinstance(parsed, dict) or not str(source_text or "").strip():
+        return parsed
+    skills = parsed.get("skills")
+    if not isinstance(skills, list) or not skills:
+        return parsed
+
+    lines = [
+        re.sub(r"\s+", " ", str(line or "").strip())
+        for line in str(source_text).splitlines()
+        if str(line or "").strip()
+    ]
+    categories = [
+        re.sub(r"\s+", " ", str(skill.get("category") or "").strip())
+        for skill in skills
+        if isinstance(skill, dict) and str(skill.get("category") or "").strip()
+    ]
+
+    def content_key(value):
+        return re.sub(r"[^a-z0-9]+", "", str(value or "").lower())
+
+    def starts_category(line, category):
+        return re.match(
+            r"^" + re.escape(category) + r"\s*:?\s+(.+)$",
+            line,
+            re.I,
+        )
+
+    for skill in skills:
+        if not isinstance(skill, dict) or not isinstance(skill.get("items"), str):
+            continue
+        category = re.sub(r"\s+", " ", str(skill.get("category") or "").strip())
+        parsed_items = re.sub(r"\s+", " ", str(skill.get("items") or "").strip())
+        parsed_key = content_key(parsed_items)
+        if not category or not parsed_key:
+            continue
+        for index, line in enumerate(lines):
+            match = starts_category(line, category)
+            if not match:
+                continue
+            candidate = match.group(1).strip()
+            cursor = index + 1
+            while content_key(candidate) != parsed_key and cursor < len(lines):
+                following = lines[cursor]
+                if any(
+                    other.lower() != category.lower()
+                    and starts_category(following, other)
+                    for other in categories
+                ):
+                    break
+                if re.fullmatch(r"[A-Z][A-Z0-9 &/()\-]{3,}", following):
+                    break
+                candidate_key = content_key(candidate)
+                following_key = content_key(following)
+                if not parsed_key.startswith(candidate_key + following_key):
+                    break
+                candidate += " " + following
+                cursor += 1
+            if content_key(candidate) == parsed_key and re.search(r"[·•]", candidate):
+                skill["items"] = candidate
+                break
+    return parsed
+
+
+def _normalize_cv_data_for_output(
+    parsed, source_text="", *, preserve_work_order=False
+):
     """Normalize structured CV data for preview and DOCX export."""
     if not isinstance(parsed, dict):
         return parsed
+    experiences = parsed.get("work_experiences") or []
+    # The private marker controls this first post-reconciliation pass. A retained
+    # subsection heading carries the same source-order intent into the separate
+    # /generate-docx request without exposing internal reconciliation metadata.
+    authoritative_work_order = bool(
+        preserve_work_order
+        or parsed.pop("_work_experience_order_authoritative", False)
+        or any(
+            isinstance(exp, dict) and str(exp.get("section_heading") or "").strip()
+            for exp in experiences
+        )
+    )
     parsed = _normalize_cv_structured_content(parsed)
     parsed = _recover_cv_source_additional_sections(parsed, source_text)
+    parsed = _recover_cv_source_skill_item_punctuation(parsed, source_text)
     parsed = _remove_ungrounded_cv_github_links(parsed, source_text)
     cand = parsed.get("candidate") or {}
     if isinstance(cand, dict):
@@ -1070,8 +1181,10 @@ def _normalize_cv_data_for_output(parsed, source_text=""):
             exp["roles"] = _sort_cv_roles_reverse_chronological(
                 exp.get("roles") or []
             )
-    parsed["work_experiences"] = _sort_work_experiences_reverse_chronological(
+    parsed["work_experiences"] = (
         normalized_experiences
+        if authoritative_work_order
+        else _sort_work_experiences_reverse_chronological(normalized_experiences)
     )
     for edu in parsed.get("education") or []:
         if not isinstance(edu, dict):
@@ -1364,6 +1477,9 @@ def _merge_adjacent_continuous_company_stints(experiences):
             previous
             and previous.get("roles")
             and exp.get("roles")
+            # A source subsection heading starts a new semantic group even when
+            # the employer and dates happen to touch the preceding entry.
+            and not str(exp.get("section_heading") or "").strip()
             and _cv_company_names_groupable(
                 previous.get("company"), exp.get("company")
             )

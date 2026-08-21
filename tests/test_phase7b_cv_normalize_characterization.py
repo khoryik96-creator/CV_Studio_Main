@@ -49,6 +49,15 @@ class DateAndMonthTests(unittest.TestCase):
     def test_date_range_already_normal_preserved(self):
         self.assertEqual(cn._normalize_cv_date_range("2019 to 2021"), "2019 to 2021")
 
+    def test_redundant_single_year_range_is_compacted(self):
+        self.assertEqual(cn._normalize_cv_date_range("2018 to 2018"), "2018")
+
+    def test_compact_same_year_month_range_restores_shared_year(self):
+        self.assertEqual(
+            cn._normalize_cv_date_range("Jul - Dec 2019"),
+            "Jul 2019 to Dec 2019",
+        )
+
     def test_leading_dash_on_single_year_is_not_turned_into_to(self):
         # A DOCX list can prefix a graduation year with a dash ("- 2001"); it must
         # not become "to 2001", while a real range separator is still converted.
@@ -613,6 +622,46 @@ class SourceEnumeratorCleanupTests(unittest.TestCase):
 
 
 class EducationAndSkillsConsistencyTests(unittest.TestCase):
+    def test_source_middle_dot_skill_separators_are_preserved_when_content_matches(self):
+        parsed = {
+            "skills": [
+                {
+                    "category": "Delivery",
+                    "items": "End-to-end ownership, milestones & acceptance criteria, UAT, rollout & handover",
+                },
+                {
+                    "category": "Customer",
+                    "items": "Workflow mapping, discovery & requirements translation, value cases & KPIs",
+                },
+            ]
+        }
+        source = (
+            "CORE CAPABILITIES\n"
+            "Delivery End-to-end ownership · milestones & acceptance criteria · UAT, rollout & handover\n"
+            "Customer Workflow mapping · discovery & requirements translation · value\n"
+            "cases & KPIs\n"
+            "PROFESSIONAL EXPERIENCE\n"
+        )
+
+        normalized = cn._normalize_cv_data_for_output(parsed, source)
+
+        self.assertEqual(
+            normalized["skills"][0]["items"],
+            "End-to-end ownership · milestones & acceptance criteria · UAT, rollout & handover",
+        )
+        self.assertEqual(
+            normalized["skills"][1]["items"],
+            "Workflow mapping · discovery & requirements translation · value cases & KPIs",
+        )
+
+    def test_source_skill_punctuation_is_not_used_when_words_differ(self):
+        parsed = {"skills": [{"category": "Delivery", "items": "Different content"}]}
+        source = "Delivery Source-only · wording\nPROFESSIONAL EXPERIENCE\n"
+
+        normalized = cn._normalize_cv_data_for_output(parsed, source)
+
+        self.assertEqual(normalized["skills"][0]["items"], "Different content")
+
     def test_education_recovers_source_months_when_provider_returns_years_only(self):
         parsed = {
             "education": [

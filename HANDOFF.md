@@ -190,11 +190,8 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Crawler/JobAdder/Malaysia tax reliability corrective — v24.6.344,
-  local branch only.** Branch
-  `chatgpt/pr159-v24.6.344-reliability-tax-update` is complete and validated
-  locally but must not be committed, pushed or opened as a PR until the owner
-  explicitly authorizes those GitHub actions. AI Crawler now stops optional
+- **Crawler/JobAdder/Malaysia tax reliability corrective — v24.6.344 / PR
+  #159, MERGED.** AI Crawler now stops optional
   enrichment at a 330-second internal deadline and returns safe partial results
   rather than reaching the 420-second browser timeout. JobAdder refreshes near
   expiry, preserves the connection on transient failures and requires reconnect
@@ -207,6 +204,21 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   module loading. Validation: 922 passed, 4 skipped, 93 subtests; all JavaScript
   fixtures; protected Windows source/dependency preflight; route/version gates.
 
+- **Lee Lin Yuan CV source-order/fidelity corrective — v24.6.345 / planned PR
+  #160, NOT MERGED.** Branch
+  `chatgpt/pr160-v24.6.345-cv-source-order-fidelity` builds on the merged
+  v24.6.344 reliability/tax corrective. It preserves an explicit source
+  Professional Experience → Independent Consulting → Earlier Experience order
+  into Preview, and `/generate-docx` keeps that already-reviewed order; carries safe subsection
+  headings into preview/Word; restores explicit source glyph bullets only when
+  the source list is fuller than the provider role; recognizes title-first
+  single-year work headers and compact same-year Earlier Experience dates;
+  compacts `2018 to 2018` to `2018`; and restores source middle-dot skill
+  separators only after exact content matching. The owner-supplied real PDF
+  extracts seven source roles and all five TrustDecision bullets with the new
+  pass. Recovery also stops at later CV sections, rejects ungrounded bare-year
+  prose, and treats a subsection heading as a hard employer-merge boundary. No
+  route shape, storage schema, native dependency or package boundary changes.
 - **OCR partial-failure corrective — v24.6.341 / PR #156.** The owner
   authorized the corrective and its merge after validation. If OCR is
   unavailable for selected pages in a mixed PDF, `/extract-text` preserves

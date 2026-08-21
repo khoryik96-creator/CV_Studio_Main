@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.344"
+_INSTALL_RECEIPT_VERSION = "v24.6.345"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -341,7 +341,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.344"
+_CVSTUDIO_VERSION = "v24.6.345"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -1362,12 +1362,13 @@ Output: JSON object matching this exact schema (no variations):
   "summary_bullets": [],
   "work_experiences": [
     {
-      "date_range": "Mon YYYY to Mon YYYY or empty",
+      "date_range": "Mon YYYY to Mon YYYY, exact source YYYY, or empty",
       "company": "Company Name",
+      "section_heading": "Source work-history subsection heading such as Independent Consulting & Delivery or Earlier Experience, only on the first entry in that subsection; otherwise empty string",
       "roles": [
         {
           "title": "Job Title exactly as stated in the source, or empty string when absent",
-          "date_range": "Mon YYYY to Mon YYYY or empty",
+          "date_range": "Mon YYYY to Mon YYYY, exact source YYYY, or empty",
           "reason_for_leaving": "Reason text or empty string",
           "bullets": [
             "plain bullet text",
@@ -1395,6 +1396,7 @@ Output: JSON object matching this exact schema (no variations):
 
 RULES:
 - Work experiences in reverse chronological order (most recent first)
+- When the source separates overlapping work into explicit subsections such as Professional Experience, Independent Consulting & Delivery, Freelance Projects, or Earlier Experience, preserve the source subsection order. Put the subsection label in work_experiences[].section_heading on the first entry under that label; do not move a concurrent freelance/self-employed entry ahead of the candidate's primary current employment merely because its start year is newer.
 - If older/early-career roles have no reliable dates in the source CV, do NOT create separate company rows with empty dates such as " | Company". Group them under a single company entry named "Earlier Career" and preserve each role as bullets in the style "Job Title – Company".
 - If the source CV contains a work-history table with columns like Dates / Organization / Role, treat those rows as AUTHORITATIVE for employer name, date range, role title, and order. Reproduce every row from that table as a work experience role; do not skip, merge, or invent rows.
 - Do NOT use Project Experience fields such as "Organization", "Client", "Project Name", or "Location" to overwrite the employer/date/title from the work-history table. Project Organization can be the delivery/vendor/client context, not necessarily the employer row.
@@ -1424,7 +1426,7 @@ RULES:
 - candidate.address.state: state/province from address, or empty string
 - candidate.address.countryCode: 2-letter ISO country code from address (e.g. AU for Australia, MY for Malaysia), or empty string
 - candidate.name: the person's full name ONLY — never the address, city, country, email, phone, or a job title. It is normally the most prominent line at the very top of the CV (contact lines such as address/phone/email usually follow it, sometimes preceded by icon glyphs). Always output in Title Case (capitalize first letter of each word, lowercase the rest), e.g. "MOHAMMAD AJMER BIN ABDUL HASAN" → "Mohammad Ajmer Bin Abdul Hasan"
-- Work experience date ranges must use exactly this style: "Mon YYYY to Mon YYYY" or "Mon YYYY to Present". Convert "Till Date", "Current", hyphens/dashes, and ALL-CAPS months into this style (e.g. "OCT 2022 - Till Date" → "Oct 2022 to Present").
+- Work experience date ranges must use exactly this style: "Mon YYYY to Mon YYYY" or "Mon YYYY to Present". When the source states only one year, preserve it as exactly "YYYY"; never expand it to "YYYY to YYYY". Convert "Till Date", "Current", hyphens/dashes, and ALL-CAPS months into this style (e.g. "OCT 2022 - Till Date" → "Oct 2022 to Present").
 - DATE ACCURACY: transcribe every start and end month/year EXACTLY as written in the source. Never shift, round, guess, or invent a month or year. Only "Present"/"Current"/"Till date" (or no end at all) may become "to Present" — a stated end date such as a specific month/year is NEVER rewritten as "Present".
 - Work experience company names and role titles must not be returned in ALL CAPS unless they are genuine acronyms (e.g. COGNIZANT → Cognizant, DATA ECONOMY → Data Economy, WOLTERS KLUWER → Wolters Kluwer, but CGI/AWS/SQL/SAP stay uppercase).
 - EMPLOYER NAME FIDELITY: return each employer name as written in the source. Do not invent, swap, translate, expand an abbreviation, contract a full name, or borrow a name from a different role/company. You may drop a trailing legal form (Sdn Bhd, Pte Ltd, PT, Tbk, Inc, LLC) and fix casing, but the core name must match the source exactly. Never output a company name that does not appear in the CV.
@@ -11761,7 +11763,12 @@ def generate_docx():
         # it BEFORE _normalize_cv_structured_content strips the labels.
         _label_levels = _infer_label_bullet_levels(cv_data)
         cv_data = _normalize_cv_structured_content(cv_data)
-        cv_data = _normalize_cv_data_for_output(cv_data)
+        # Export the order the user saw in Preview. Source-authoritative CVs can
+        # intentionally place a concurrent consulting subsection after primary
+        # employment even when its start year is newer.
+        cv_data = _normalize_cv_data_for_output(
+            cv_data, preserve_work_order=True
+        )
         cv_data["_document_alignment"] = _normalize_cv_text_alignment(body.get("alignment"))
         cv_data["_summary_box_autofit"] = _summary_box_autofit_enabled(
             body.get("summary_box_autofit")

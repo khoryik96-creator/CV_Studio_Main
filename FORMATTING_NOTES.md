@@ -56,7 +56,14 @@ this:
 | `• a.`, `• 1-`, or `• a-` in the output | a bare source enumerator survived beside Word's own marker | `_CV_LEADING_BULLET_MARKER_RE` strips lower-case dot/hyphen and numeric-hyphen enumerators while preserving `3.5`, `5-star`, `-5%`, `i.e.`, capitalised initials and date ranges |
 | one continuous employer shown as several company blocks | provider split each promotion into a separate experience | `_merge_adjacent_continuous_company_stints` groups only neighbouring same-employer ranges whose bounded start/end points are all month-precise and touch; year-only or partially month-precise dates, gapped/non-adjacent returns and business-unit suffixes remain separate, while known broad location suffixes can still group |
 | an older employer appears before a newer employer | provider emitted inconsistent work-history order | `_sort_work_experiences_reverse_chronological` sorts dated employer blocks newest-first after safe grouping without moving undated source entries out of position |
+| concurrent freelance work jumps ahead of the candidate's primary current role | final normalization re-sorted a source-authoritative Professional Experience / Independent Consulting sequence by date | `_extract_authoritative_work_rows` retains safe source subsection headings, while `/generate-docx` preserves the already-reviewed preview order instead of sorting it again |
+| a source role or its duties disappear although explicit header/bullet lines are readable | provider omitted the role/bullets and authoritative reconciliation restored only headers | `_extract_authoritative_work_rows` captures explicit source glyph bullets, safe title-first single-year headers, and compact Earlier Experience entries; reconciliation uses the source list only when it is fuller than the provider role |
+| an Awards/Volunteer section appears inside the last job duties | source bullet recovery continued beyond the end of Work Experience | authoritative recovery stops at the shared allowlist of real CV section boundaries, including letter-spaced template headings, before collecting more duties; a role-local `ACHIEVEMENTS:` label is retained only when another dated job follows |
+| training prose such as `Manager — Leadership Programme 2023` becomes an employer or joins the preceding duty | a generic title word plus a trailing bare year looked like a work header/continuation | bare-year recovery requires either an exact provider employer/title pair or the explicit `Title | Company YYYY` structure; rejected header-shaped prose cannot become a wrapped duty |
+| two same-employer entries on opposite sides of a consulting subsection merge | continuous-stint grouping ignored the semantic subsection boundary | an incoming `section_heading` is a hard company-merge boundary |
 | education shows years even though the source includes months | provider dropped month precision | `_recover_education_date_range` restores only a nearby source range whose start/end years match the parsed education entry |
+| education renders `2018 to 2018` | provider expanded a single source graduation year into an identical-endpoint range | `_normalize_cv_date_range`, `normalizeDateRange`, and `cvNormDateRange` collapse identical year endpoints to the single year |
+| source Core Capabilities uses `·` separators but output changes them to commas | provider preserved every word but normalized the visible separators | `_recover_cv_source_skill_item_punctuation` restores the category-anchored source span only when its alphanumeric content exactly matches the parsed items |
 | Core Expertise alternates between bullets and one paragraph | provider returned `items` as an array, newline list, or comma-separated string in different runs | `_normalize_cv_structured_content` deterministically converts Core Expertise items into real Word bullets; a one-item provider list containing three or more comma-delimited values is also split, while a genuine phrase with one internal comma such as `Mergers, Acquisitions & Integration` remains one bullet |
 | `GitHub: https://github.com/unknown` appears without a source link | provider invented a placeholder portfolio URL | `_remove_ungrounded_cv_github_links` always removes the known placeholder, including source-free export; with source text it retains only matching GitHub paths and ignores terminal sentence periods |
 | `Position: Retrieved Resumes (SiVA folder: ...); Date Applied: ...` appears in Additional Information | JobStreet/SiVA application-routing metadata was mistaken for CV content | `_strip_cv_recruitment_tracking_metadata` removes the metadata at a line start or after a `|` item separator wherever the provider placed it |
@@ -80,7 +87,12 @@ this:
 - **`_normalize_cv_date_range`** — date normalisation; strips a **leading** dash
   (a date never starts with a minus) and a dangling leading `to` before one
   four-digit year, but preserves internal range separators (`2020 - 2023` →
-  `2020 to 2023`). Keep the matching browser and generator functions in sync.
+  `2020 to 2023`). It also compacts identical year endpoints and expands a
+  shared-year month span such as `Jul - Dec 2019` without guessing. Keep the
+  matching browser and generator functions in sync.
+- **`_recover_cv_source_skill_item_punctuation`** — restores visible middle-dot
+  separators only for a category-anchored source span whose words exactly match
+  the provider items after punctuation is ignored.
 - **`_strip_cv_recruitment_tracking_metadata`** — removes JobStreet/SiVA
   retrieval/application metadata recursively before it can render in any body
   section.
