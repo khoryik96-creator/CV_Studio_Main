@@ -142,6 +142,15 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 7. Recently completed (already on `master`)
 
+- **v24.6.348 KWSP source-access corrective:** the one-click Malaysia tax
+  updater uses KWSP's current Mandatory Contribution page instead of the
+  obsolete Third Schedule alias. Public KWSP requests carry ordinary
+  browser-compatible metadata required by its Cloudflare gate; no challenge,
+  cookie, login or private endpoint is used. Resident fallback uses the
+  official October-2025 Third Schedule, while Non-Resident fallback uses the
+  official non-Malaysian contribution flyer, preventing a fallback from
+  suggesting the wrong EPF profile. The actual successful URL is recorded.
+  No route, schema, dependency or protected-package boundary changed.
 - **v24.6.347 LHDN source reliability corrective:** the one-click Malaysia
   tax updater no longer uses the removed English LHDN tax-rate page. Its
   primary source is the live official `Navigasi HASiL 2026` PDF containing the

@@ -60,6 +60,9 @@ def test_config_lists_countries_and_rules(client):
     assert data["official_rule_sources"]["malaysia"]["tax_url"] == (
         "https://www.hasil.gov.my/wp-content/uploads/navigasi-hasil-2026.pdf"
     )
+    assert data["official_rule_sources"]["malaysia"]["contribution_url"] == (
+        "https://www.kwsp.gov.my/en/employer/responsibilities/mandatory-contribution"
+    )
 
 
 def test_compare_endpoint(client):

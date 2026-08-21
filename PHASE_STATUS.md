@@ -31,9 +31,25 @@
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
   and its merge through PR #156. PR #162 merged the v24.6.347 LHDN source
-  reliability corrective as `61a001d`.
-- Current stop: v24.6.347 is merged on `master`; no follow-on implementation
+  reliability corrective as `61a001d`. PR #164 merged the v24.6.348 KWSP
+  source-access corrective.
+- Current stop: v24.6.348 is merged on `master`; no follow-on implementation
   is active.
+
+## v24.6.348 KWSP source-access corrective
+
+- The one-click Malaysia updater now uses KWSP's current Mandatory
+  Contribution page rather than the obsolete Third Schedule page alias.
+- Public KWSP fetches include the browser-compatible request metadata required
+  by KWSP's Cloudflare gate. CV Studio does not solve a challenge, retain a
+  cookie, authenticate or use a private endpoint.
+- Registered fallbacks are residency-appropriate: the October-2025 Third
+  Schedule for Resident rules and the official non-Malaysian contribution
+  flyer for Non-Resident rules. The successful source URL is recorded.
+- No route, schema, dependency or protected-package boundary changed.
+- Validation: 943 passed, 4 skipped, 93 subtests; live extraction from all four
+  registered KWSP primary/fallback sources; Windows protected-source preflight;
+  and 24-assertion source smoke.
 
 ## v24.6.347 LHDN source reliability corrective
 
