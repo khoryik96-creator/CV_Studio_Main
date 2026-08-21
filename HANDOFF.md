@@ -142,6 +142,14 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 7. Recently completed (already on `master`)
 
+- **v24.6.350 salary profile-migration safety corrective:** the startup repair
+  now applies only to the exact packaged-default plus empty-list pair created
+  by the earlier migration. A valid explicit empty profile list with no
+  default remains authoritative and continues using the rule's legacy
+  contribution settings. Malformed profile values are left untouched for the
+  repository's established handled validation error instead of causing an
+  unexpected bootstrap `TypeError`/HTTP 500. No route, schema, dependency or
+  protected-package boundary changed.
 - **v24.6.349 salary contribution-profile repair:** startup repairs the known
   incomplete packaged-profile shape where a Malaysia Resident rule has the
   packaged default profile name but an empty profile list. The repair copies

@@ -33,9 +33,22 @@
   and its merge through PR #156. PR #162 merged the v24.6.347 LHDN source
   reliability corrective as `61a001d`. PR #164 merged the v24.6.348 KWSP
   source-access corrective. PR #165 merged the v24.6.349 salary
-  contribution-profile repair.
-- Current stop: v24.6.349 is merged on `master`; no follow-on implementation
+  contribution-profile repair. PR #166 merged the v24.6.350 salary
+  profile-migration safety corrective.
+- Current stop: v24.6.350 is merged on `master`; no follow-on implementation
   is active.
+
+## v24.6.350 salary profile-migration safety corrective
+
+- Narrows the startup profile repair to the exact matching packaged-default
+  and empty-list pair created by the earlier migration. Rules that genuinely
+  predate both profile fields still receive the established additive upgrade.
+- A valid explicit empty contribution-profile list with no default is
+  preserved, so it continues using the rule's legacy contribution settings.
+- Malformed profile values remain unchanged and reach the repository's normal
+  handled validation error rather than failing bootstrap with `TypeError` and
+  producing HTTP 500.
+- No route, schema, dependency or protected-package boundary changed.
 
 ## v24.6.349 salary contribution-profile repair
 
