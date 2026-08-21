@@ -12,6 +12,7 @@ import re
 
 from cvstudio_cv_normalize import (
     _CV_REDACTED_LANGUAGE_RE,
+    _CV_SOURCE_SECTION_BOUNDARY_KEYS,
     _WORK_TABLE_DATE_RE,
     _cv_combine_date_ranges,
     _cv_company_span_from_roles,
@@ -19,6 +20,7 @@ from cvstudio_cv_normalize import (
     _cv_date_sort_point,
     _cv_match_key,
     _cv_project_group_sort_key,
+    _cv_source_boundary_key,
     _cv_text_similarity,
     _cv_token_overlap_score,
     _normalize_cv_date_range,
@@ -466,17 +468,29 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
 
     def add_row(date_cell, company_cell, role_cell):
         if not date_cell or not company_cell or not role_cell:
-            return
+            return None
         if len(company_cell) > 120 or len(role_cell) > 160:
-            return
+            return None
         date_norm = _normalize_cv_date_range(date_cell)
         company_norm = _smart_title_text(company_cell, company=True)
         title_norm = _smart_title_text(role_cell, title=True)
         key = (_cv_match_key(date_norm), _cv_match_key(company_norm), _cv_match_key(title_norm))
         if key in seen:
-            return
+            return next(
+                (
+                    row for row in rows
+                    if (
+                        _cv_match_key(row.get("date_range")),
+                        _cv_match_key(row.get("company")),
+                        _cv_match_key(row.get("title")),
+                    ) == key
+                ),
+                None,
+            )
         seen.add(key)
-        rows.append({"date_range": date_norm, "company": company_norm, "title": title_norm})
+        row = {"date_range": date_norm, "company": company_norm, "title": title_norm}
+        rows.append(row)
+        return row
 
     # Existing explicit pipe-delimited layout.
     for line in lines:
@@ -497,11 +511,17 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
         add_row(date_cell, company_cell, role_cell)
 
     # Borderless/whitespace table layout from PDF extraction.
+    parsed_work_roles = _flatten_parsed_work_roles(parsed or {})
     known_titles = []
-    for item in _flatten_parsed_work_roles(parsed or {}):
+    known_work_pairs = set()
+    for item in parsed_work_roles:
         title = re.sub(r"\s+", " ", str(item.get("title") or "").strip())
         if title and title.lower() not in {t.lower() for t in known_titles}:
             known_titles.append(title)
+        company_key = _cv_match_key(item.get("company"))
+        title_key = _cv_match_key(title)
+        if company_key and title_key:
+            known_work_pairs.add((company_key, title_key))
     known_titles.sort(key=len, reverse=True)
 
     in_history = False
@@ -520,6 +540,7 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
         r"\s+[—–\-]?\s*((?:" + _mon_sub + r"\s+)?\d{4}\s*(?:to|[-–—])\s*(?:(?:" + _mon_sub + r"\s+)?\d{4}|Present|Current|Till\s*Date|To\s*Date))\s*$",
         re.I,
     )
+    title_first_single_year_at_end = re.compile(r"\s+(\d{4})\s*$")
     title_first_split = re.compile(r"^(?P<title>[A-Za-z][^—–|]{1,90}?)\s*[—–|]\s*(?P<company>.+)$")
     date_prefix = re.compile(
         r"^((?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+)?\d{4}\s*(?:-|–|—|to)\s*(?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+)?(?:\d{4}|Present|Current|Till\s*Date|To\s*Date))\s+(.+)$",
@@ -549,13 +570,114 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
                 return True
         return bool(generic_title.search(cleaned))
 
-    for line in lines:
+    def _title_first_row_parts(
+        line, *, allow_single_year=False, allow_unmatched_single_year=False
+    ):
+        tail = title_first_date_at_end.search(line)
+        single_year = False
+        if tail is None and allow_single_year:
+            tail = title_first_single_year_at_end.search(line)
+            single_year = tail is not None
+        if tail is None:
+            return None
+        head = line[:tail.start()].strip()
+        split = title_first_split.match(head)
+        if not split:
+            return None
+        side_left = split.group("title").strip().strip("|").strip()
+        side_right = split.group("company").strip().strip("|").strip()
+        left_is_title = _dash_side_is_role_title(side_left)
+        right_is_title = _dash_side_is_role_title(side_right)
+        # A trailing bare year is common prose, so only accept the compact
+        # header when one side independently looks like a role title.
+        if single_year and not (left_is_title or right_is_title):
+            return None
+        if right_is_title and not left_is_title:
+            company, title = side_left, side_right
+        else:
+            company, title = side_right, side_left
+        # Outside a recognized source work subsection, a bare-year row must
+        # agree with an employer/title pair the provider already found. This
+        # blocks prose such as "Manager — Leadership Programme 2023" from
+        # becoming an invented employer while still retaining genuine parsed
+        # one-year jobs. A subsection permits deterministic recovery of a role
+        # the provider omitted, as in Lee Lin Yuan's MySteel entry.
+        if (
+            single_year
+            and not allow_unmatched_single_year
+            and (_cv_match_key(company), _cv_match_key(title)) not in known_work_pairs
+        ):
+            return None
+        return tail.group(1).strip(), company, title
+
+    def _role_local_work_heading(line):
+        text = str(line or "").strip()
+        key = _cv_source_boundary_key(text.rstrip(":"))
+        return key in {"achievements", "responsibilities"} and (
+            text.endswith(":") or text.lower().startswith("key ")
+        )
+
+    def _is_cv_section_boundary(line):
+        text = str(line or "").strip()
+        if not text:
+            return False
+        text = re.sub(r"^\[\s*|\s*\]\s*:?$", "", text).strip().rstrip(":")
+        text = re.sub(r"[\s_\-–—=]+$", "", text).strip()
+        key = _cv_source_boundary_key(text)
+        if key in _CV_SOURCE_SECTION_BOUNDARY_KEYS:
+            return True
+        # Template headings are sometimes letter-spaced and may share a line
+        # with their first value: ``A W A R D S ____`` or
+        # ``L A N G U A G E S English``. Collapse only the leading run of
+        # single alphabetic tokens, then compare it with the central boundary
+        # allowlist; ordinary prose is unaffected.
+        letters = []
+        for token in text.split():
+            token = token.strip(".:;|[]()")
+            if not re.fullmatch(r"[A-Za-z]", token):
+                break
+            letters.append(token)
+        compact = "".join(letters).lower()
+        if len(compact) < 4:
+            return False
+        return any(
+            compact == re.sub(r"[^a-z]", "", boundary)
+            for boundary in _CV_SOURCE_SECTION_BOUNDARY_KEYS
+        )
+
+    def _rejected_single_year_header_shape(line):
+        tail = title_first_single_year_at_end.search(str(line or ""))
+        if tail is None:
+            return False
+        return bool(title_first_split.match(str(line)[:tail.start()].strip()))
+
+    # ``ACHIEVEMENTS:`` is role-local only when employment clearly continues
+    # with another dated job header. At the end of Work Experience it is a
+    # top-level CV section and must not be absorbed into the last role.
+    role_local_heading_indices = set()
+    for heading_index, heading_line in enumerate(lines):
+        if not _role_local_work_heading(heading_line):
+            continue
+        for following_line in lines[heading_index + 1:]:
+            if stop_heading.match(following_line) or _is_cv_section_boundary(following_line):
+                break
+            if date_prefix.match(following_line) or _title_first_row_parts(following_line):
+                role_local_heading_indices.add(heading_index)
+                break
+
+    for line_index, line in enumerate(lines):
         if not line:
             continue
         if history_heading.match(line):
             in_history = True
             continue
-        if in_history and stop_heading.match(line):
+        if in_history and (
+            stop_heading.match(line)
+            or (
+                _is_cv_section_boundary(line)
+                and line_index not in role_local_heading_indices
+            )
+        ):
             break
         if not in_history or re.match(r"^(?:Year|Date|Dates)\s+Company\s+Role$", line, re.I):
             continue
@@ -583,19 +705,120 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
         # is the role title so the employer and title are not swapped (which would
         # also blank the matched bullets during reconciliation). Strip any stray
         # pipe the trailing-date capture leaves behind.
-        tail = title_first_date_at_end.search(line)
-        if tail:
-            head = line[:tail.start()].strip()
-            split = title_first_split.match(head)
-            if split:
-                side_left = split.group("title").strip().strip("|").strip()
-                side_right = split.group("company").strip().strip("|").strip()
-                if _dash_side_is_role_title(side_right) and not _dash_side_is_role_title(side_left):
-                    # "<Company> — <Title>" order: the right side is the title.
-                    add_row(tail.group(1).strip(), side_left, side_right)
-                else:
-                    # Default "<Title> — <Company>" order.
-                    add_row(tail.group(1).strip(), side_right, side_left)
+        parts = _title_first_row_parts(line)
+        if parts:
+            add_row(*parts)
+
+    # Enrich the authoritative headers with source bullets and semantic work
+    # sub-section headings. This pass is deliberately limited to explicit
+    # bullet glyphs inside the work-history section; wrapped continuation lines
+    # are joined, but ordinary prose is never promoted into a duty.
+    source_bullet_marker = re.compile(r"^[•●▪◦‣∙·▶►➤⁃»›]\s*(.*)$")
+    work_group_heading = re.compile(
+        r"^(?:(?:INDEPENDENT|FREELANCE)(?:\s*/\s*(?:INDEPENDENT|FREELANCE))?"
+        r"\s+(?:CONSULTING|PROJECTS?)(?:\s*(?:&|AND|/)\s*(?:DELIVERY|PROJECTS?))?"
+        r"|EARLIER\s+(?:EXPERIENCE|CAREER))$",
+        re.I,
+    )
+    compact_earlier_role = re.compile(
+        r"^(?P<title>[^,•]{2,100}),\s*(?P<company>[^()•]{2,140}?)\s*"
+        r"\((?P<date>" + _mon_sub + r"\s*[-–—]\s*" + _mon_sub + r"\s+\d{4})\)$",
+        re.I,
+    )
+    active_row = None
+    active_bullet = ""
+    pending_section_heading = ""
+
+    def flush_source_bullet():
+        nonlocal active_bullet
+        text = re.sub(r"\s+", " ", active_bullet).strip()
+        if active_row is not None and text:
+            source_bullets = active_row.setdefault("source_bullets", [])
+            if text not in source_bullets:
+                source_bullets.append(text)
+        active_bullet = ""
+
+    in_history = False
+    for line_index, line in enumerate(lines):
+        if not line:
+            continue
+        if history_heading.match(line):
+            in_history = True
+            continue
+        if in_history and (
+            stop_heading.match(line)
+            or (
+                _is_cv_section_boundary(line)
+                and line_index not in role_local_heading_indices
+            )
+        ):
+            flush_source_bullet()
+            break
+        if not in_history:
+            continue
+        if active_row is not None and line_index in role_local_heading_indices:
+            flush_source_bullet()
+            continue
+        if work_group_heading.fullmatch(line):
+            flush_source_bullet()
+            active_row = None
+            pending_section_heading = _smart_title_text(line, title=True)
+            continue
+
+        # Compact early-career summaries can carry two or more entries on one
+        # line, separated by a visible bullet, with a shared year inside each
+        # parenthesized date range.
+        compact_matches = []
+        for segment in re.split(r"\s+[•●]\s+", line):
+            match = compact_earlier_role.fullmatch(segment.strip())
+            if match:
+                compact_matches.append(match)
+        if compact_matches and len(compact_matches) == len(re.split(r"\s+[•●]\s+", line)):
+            flush_source_bullet()
+            for match in compact_matches:
+                row = add_row(
+                    match.group("date"),
+                    match.group("company"),
+                    match.group("title"),
+                )
+                if row is not None and pending_section_heading:
+                    row["section_heading"] = pending_section_heading
+                    pending_section_heading = ""
+                active_row = row
+            continue
+
+        parts = _title_first_row_parts(
+            line,
+            allow_single_year=True,
+            allow_unmatched_single_year="|" in line,
+        )
+        if parts:
+            flush_source_bullet()
+            active_row = add_row(*parts)
+            if active_row is not None and pending_section_heading:
+                active_row["section_heading"] = pending_section_heading
+                pending_section_heading = ""
+            continue
+
+        # A line that structurally resembles a one-year job header but failed
+        # the grounding rules is neither a job nor a wrapped continuation of
+        # the preceding duty. Flush the real duty and discard the unsafe line.
+        if _rejected_single_year_header_shape(line):
+            flush_source_bullet()
+            continue
+
+        bullet_match = source_bullet_marker.match(line)
+        if bullet_match and active_row is not None:
+            flush_source_bullet()
+            active_bullet = bullet_match.group(1).strip()
+            continue
+        if active_bullet and active_row is not None:
+            if active_bullet.endswith("-") and re.match(r"^[a-z]", line):
+                active_bullet += line
+            else:
+                active_bullet += " " + line
+
+    flush_source_bullet()
 
     return rows
 
@@ -708,11 +931,30 @@ def _reconcile_work_experience_with_authoritative_table(parsed, cv_text):
         else:
             matched_role = {"reason_for_leaving": "", "bullets": []}
 
+        parsed_bullets = (
+            matched_role.get("bullets")
+            if isinstance(matched_role.get("bullets"), list)
+            else []
+        )
+        source_bullets = [
+            str(value).strip()
+            for value in (row.get("source_bullets") or [])
+            if str(value or "").strip()
+        ]
+        # Explicit source glyph bullets are stronger evidence than an incomplete
+        # provider list. Replace only when the deterministic source pass found
+        # more duties, preserving richer structured provider output otherwise.
+        role_bullets = (
+            source_bullets
+            if len(source_bullets) > len(_role_plain_bullets(matched_role))
+            else parsed_bullets
+        )
+
         role_obj = {
             "title": row.get("title") or matched_role.get("title") or "",
             "date_range": row.get("date_range") or matched_role.get("date_range") or "",
             "reason_for_leaving": matched_role.get("reason_for_leaving") or "",
-            "bullets": matched_role.get("bullets") if isinstance(matched_role.get("bullets"), list) else [],
+            "bullets": role_bullets,
         }
         comp_key = _cv_match_key(row.get("company"))
         if last_exp is not None and comp_key and comp_key == last_comp_key:
@@ -721,6 +963,8 @@ def _reconcile_work_experience_with_authoritative_table(parsed, cv_text):
             exp.setdefault("_source_dates", []).append(row.get("date_range") or "")
         else:
             exp = {"date_range": row.get("date_range") or "", "company": row.get("company") or "", "roles": [role_obj], "_source_dates": [row.get("date_range") or ""]}
+            if row.get("section_heading"):
+                exp["section_heading"] = row.get("section_heading")
             rebuilt.append(exp)
             last_exp = exp
             last_comp_key = comp_key
@@ -773,6 +1017,10 @@ def _reconcile_work_experience_with_authoritative_table(parsed, cv_text):
         exp.pop("_source_dates", None)
 
     parsed["work_experiences"] = rebuilt
+    # The rows above came directly from the source work-history sequence. Keep
+    # that order through final normalization so a concurrent freelance venture
+    # cannot jump ahead of the candidate's primary current employment.
+    parsed["_work_experience_order_authoritative"] = True
     cand = parsed.get("candidate") or {}
     if isinstance(cand, dict) and rebuilt:
         first_role = (rebuilt[0].get("roles") or [{}])[0]
@@ -784,4 +1032,3 @@ def _reconcile_work_experience_with_authoritative_table(parsed, cv_text):
             cand["is_employed"] = True
         parsed["candidate"] = cand
     return parsed
-

@@ -1152,6 +1152,282 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertEqual(out["candidate"]["current_company"], "TDCX")
         self.assertEqual(out["candidate"]["current_position"], "Product Support Engineer")
 
+    def test_source_work_subsections_restore_lee_history_without_resorting(self):
+        cv_text = (
+            "PROFESSIONAL EXPERIENCE\n"
+            "Senior Solution Consultant — Delivery & Presales | TrustDecision "
+            "(Fintech Fraud & Risk Technology) Jan 2025 – Present\n"
+            "● Owned two strategic Philippine banking and digital-wallet deployments end to end, "
+            "from discovery through award, implementation and go-\n"
+            "live. One was the company's first flagship banking client in that market.\n"
+            "● Acted as project manager on a major e-wallet engagement and ran a structured handover.\n"
+            "Senior IT Business Analyst / Solution Lead | Huawei Technologies — Asia Pacific "
+            "Dec 2019 – Jan 2025\n"
+            "● Directed a 2024 transformation portfolio of 21 initiatives.\n"
+            "INDEPENDENT CONSULTING & DELIVERY\n"
+            "Founder | Movaflow — SME Operations Consultancy, Kuala Lumpur 2026 – Present\n"
+            "● Founded an early-stage consultancy focused on operations and process improvement.\n"
+            "Consultant & Developer | De Hubs Logistics Sdn Bhd 2025 – 2026\n"
+            "● Built a standalone Windows desktop billing application.\n"
+            "Consultant & Developer | MySteel Construction Sdn Bhd 2025\n"
+            "● Built a mobile project-tracking application for a steelwork design services firm.\n"
+            "EARLIER EXPERIENCE\n"
+            "Corporate Banking Specialist, Hong Leong Bank Berhad (Jul – Dec 2019) • "
+            "Tax Operations Specialist, Royal Bank of Canada (Jan – Jun 2019)\n"
+            "EDUCATION & CERTIFICATIONS\n"
+        )
+        parsed = {
+            "candidate": {
+                "current_company": "Delivery & Presales | TrustDecision (Fintech Fraud & Risk Technology)",
+                "current_position": "Senior Solution Consultant",
+            },
+            "work_experiences": [
+                {
+                    "company": "Movaflow — SME Operations Consultancy, Kuala Lumpur",
+                    "date_range": "2026 to Present",
+                    "roles": [{"title": "Founder", "date_range": "", "bullets": ["Founded an early-stage consultancy focused on operations and process improvement."]}],
+                },
+                {
+                    "company": "Delivery & Presales | TrustDecision (Fintech Fraud & Risk Technology)",
+                    "date_range": "Jan 2025 to Present",
+                    "roles": [{"title": "Senior Solution Consultant", "date_range": "", "bullets": []}],
+                },
+                {
+                    "company": "De Hubs Logistics Sdn Bhd",
+                    "date_range": "2025 to 2026",
+                    "roles": [{"title": "Consultant & Developer", "date_range": "", "bullets": ["Built a standalone Windows desktop billing application."]}],
+                },
+                {
+                    "company": "Huawei Technologies — Asia Pacific",
+                    "date_range": "Dec 2019 to Jan 2025",
+                    "roles": [{"title": "Senior IT Business Analyst / Solution Lead", "date_range": "", "bullets": ["Directed a 2024 transformation portfolio of 21 initiatives."]}],
+                },
+            ],
+            "education": [{
+                "date_range": "2018 to 2018",
+                "institution": "Tunku Abdul Rahman University",
+                "degree": "B.Sc. (Hons) Financial Mathematics",
+            }],
+        }
+
+        reconciled = app._reconcile_work_experience_with_authoritative_table(parsed, cv_text)
+        normalized = app._normalize_cv_data_for_output(reconciled, cv_text)
+
+        work = normalized["work_experiences"]
+        self.assertEqual(
+            [entry["company"] for entry in work],
+            [
+                "Delivery & Presales | TrustDecision (Fintech Fraud & Risk Technology)",
+                "Huawei Technologies — Asia Pacific",
+                "Movaflow — SME Operations Consultancy, Kuala Lumpur",
+                "De Hubs Logistics Sdn Bhd",
+                "MySteel Construction Sdn Bhd",
+                "Hong Leong Bank Berhad",
+                "Royal Bank of Canada",
+            ],
+        )
+        self.assertEqual(len(work[0]["roles"][0]["bullets"]), 2)
+        self.assertIn("go-live", work[0]["roles"][0]["bullets"][0])
+        self.assertEqual(
+            work[2]["section_heading"],
+            "Independent Consulting & Delivery",
+        )
+        self.assertEqual(work[4]["date_range"], "2025")
+        self.assertEqual(
+            work[5]["section_heading"],
+            "Earlier Experience",
+        )
+        self.assertEqual(work[5]["date_range"], "Jul 2019 to Dec 2019")
+        self.assertEqual(work[6]["date_range"], "Jan 2019 to Jun 2019")
+        self.assertEqual(normalized["education"][0]["date_range"], "2018")
+        self.assertNotIn("_work_experience_order_authoritative", normalized)
+        normalized_again = app._normalize_cv_data_for_output(normalized, cv_text)
+        self.assertEqual(
+            [entry["company"] for entry in normalized_again["work_experiences"]],
+            [entry["company"] for entry in work],
+        )
+
+        response = app.app.test_client().post(
+            "/generate-docx",
+            json={"data": normalized_again},
+            headers={"Origin": "http://127.0.0.1:5000"},
+        )
+        self.assertEqual(response.status_code, 200)
+        with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
+            document_xml = archive.read("word/document.xml").decode("utf-8")
+        trust_position = document_xml.index("Jan 2025 to Present")
+        huawei_position = document_xml.index("Dec 2019 to Jan 2025")
+        independent_position = document_xml.index("Independent Consulting &amp; Delivery")
+        movaflow_position = document_xml.index("2026 to Present")
+        self.assertLess(trust_position, huawei_position)
+        self.assertLess(huawei_position, independent_position)
+        self.assertLess(independent_position, movaflow_position)
+        self.assertIn("Owned two strategic Philippine banking", document_xml)
+        self.assertIn("MySteel Construction Sdn Bhd", document_xml)
+        self.assertIn("Earlier Experience", document_xml)
+        self.assertIn("2018 | Tunku Abdul Rahman University", document_xml)
+        self.assertNotIn("2018 to 2018", document_xml)
+
+    def test_generate_docx_preserves_preview_work_order_without_subsection_heading(self):
+        response = app.app.test_client().post(
+            "/generate-docx",
+            json={"data": {
+                "candidate": {"name": "Concurrent Work Fixture"},
+                "work_experiences": [
+                    {
+                        "company": "Primary Co",
+                        "date_range": "Jan 2025 to Present",
+                        "roles": [{"title": "Director", "date_range": "", "bullets": []}],
+                    },
+                    {
+                        "company": "Side Co",
+                        "date_range": "2026 to Present",
+                        "roles": [{"title": "Founder", "date_range": "", "bullets": []}],
+                    },
+                ],
+                "education": [],
+                "certifications": [],
+                "skills": [],
+            }},
+            headers={"Origin": "http://127.0.0.1:5000"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
+            document_xml = archive.read("word/document.xml").decode("utf-8")
+        self.assertLess(document_xml.index("Primary Co"), document_xml.index("Side Co"))
+
+    def test_source_bullet_recovery_stops_at_awards_section(self):
+        source = (
+            "PROFESSIONAL EXPERIENCE\n"
+            "Engineer | Acme Jan 2020 - Dec 2022\n"
+            "● Maintained systems.\n"
+            "AWARDS\n"
+            "● Excellence Award 2019\n"
+        )
+
+        rows = app._extract_authoritative_work_rows(source)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].get("source_bullets"), ["Maintained systems."])
+
+    def test_bare_year_programme_prose_does_not_become_an_employer(self):
+        source = (
+            "PROFESSIONAL EXPERIENCE\n"
+            "Engineer | Acme Jan 2020 - Dec 2022\n"
+            "● Maintained systems.\n"
+            "Manager — Leadership Programme 2023\n"
+        )
+
+        rows = app._extract_authoritative_work_rows(source)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["company"], "Acme")
+        self.assertEqual(
+            rows[0].get("source_bullets"),
+            ["Maintained systems."],
+        )
+
+    def test_bare_year_programme_prose_is_rejected_inside_work_subsection(self):
+        source = (
+            "PROFESSIONAL EXPERIENCE\n"
+            "INDEPENDENT CONSULTING & DELIVERY\n"
+            "Consultant | Acme 2024 - 2025\n"
+            "● Delivered an operating model.\n"
+            "Manager — Leadership Programme 2023\n"
+        )
+
+        rows = app._extract_authoritative_work_rows(source)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["company"], "Acme")
+        self.assertEqual(
+            rows[0].get("source_bullets"),
+            ["Delivered an operating model."],
+        )
+
+    def test_letter_spaced_section_heading_stops_source_bullet_recovery(self):
+        source = (
+            "PROFESSIONAL EXPERIENCE\n"
+            "Engineer | Acme Jan 2020 - Dec 2022\n"
+            "● Maintained systems.\n"
+            "A W A R D S ______\n"
+            "● Excellence Award 2019\n"
+            "L A N G U A G E S English\n"
+        )
+
+        rows = app._extract_authoritative_work_rows(source)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].get("source_bullets"), ["Maintained systems."])
+
+    def test_role_level_achievements_heading_does_not_end_work_history(self):
+        source = (
+            "PROFESSIONAL EXPERIENCE\n"
+            "Engineer | Acme Jan 2020 - Dec 2022\n"
+            "● Maintained systems.\n"
+            "ACHIEVEMENTS:\n"
+            "● Reduced incidents by 20%.\n"
+            "Analyst | Beta Jan 2018 - Dec 2019\n"
+            "● Produced reports.\n"
+            "EDUCATION\n"
+        )
+
+        rows = app._extract_authoritative_work_rows(source)
+
+        self.assertEqual([row["company"] for row in rows], ["Acme", "Beta"])
+        self.assertEqual(
+            rows[0].get("source_bullets"),
+            ["Maintained systems.", "Reduced incidents by 20%."],
+        )
+        self.assertEqual(rows[1].get("source_bullets"), ["Produced reports."])
+
+    def test_top_level_achievements_heading_does_not_enter_last_job(self):
+        source = (
+            "PROFESSIONAL EXPERIENCE\n"
+            "Engineer | Acme Jan 2020 - Dec 2022\n"
+            "● Maintained systems.\n"
+            "ACHIEVEMENTS:\n"
+            "● Excellence Award 2019\n"
+        )
+
+        rows = app._extract_authoritative_work_rows(source)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].get("source_bullets"), ["Maintained systems."])
+
+    def test_same_employer_subsection_heading_is_a_hard_merge_boundary(self):
+        parsed = {
+            "work_experiences": [
+                {
+                    "company": "Acme",
+                    "date_range": "Jan 2024 to Dec 2024",
+                    "roles": [{"title": "Employee", "date_range": "", "bullets": []}],
+                },
+                {
+                    "company": "Acme",
+                    "date_range": "Jan 2025 to Dec 2025",
+                    "section_heading": "Independent Consulting",
+                    "roles": [{"title": "Consultant", "date_range": "", "bullets": []}],
+                },
+            ]
+        }
+
+        normalized = app._normalize_cv_data_for_output(parsed)
+
+        self.assertEqual(len(normalized["work_experiences"]), 2)
+        self.assertEqual(
+            normalized["work_experiences"][1]["section_heading"],
+            "Independent Consulting",
+        )
+
+    def test_prompt_allows_exact_single_year_work_entries(self):
+        self.assertIn(
+            '"date_range": "Mon YYYY to Mon YYYY, exact source YYYY, or empty"',
+            app.SYSTEM_PROMPT,
+        )
+        self.assertIn('preserve it as exactly "YYYY"', app.SYSTEM_PROMPT)
+
     def test_prompt_requires_employer_and_title_fidelity(self):
         self.assertIn("EMPLOYER NAME FIDELITY", app.SYSTEM_PROMPT)
         self.assertIn("ROLE TITLE FIDELITY", app.SYSTEM_PROMPT)

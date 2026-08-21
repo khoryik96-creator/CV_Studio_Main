@@ -28,8 +28,8 @@ import zipfile
 import zlib
 from pathlib import Path
 
-VERSION = "v24.6.344"
-VERSION_SLUG = "v24_6_344"
+VERSION = "v24.6.345"
+VERSION_SLUG = "v24_6_345"
 PRODUCT = "TheGuoLab-CVStudio"
 RECEIPT_SCHEMA = 2
 TOTP_MASK = bytes([147,57,36,83,116,245,122,57,165,162,176,168,249,50,204,128,45,174,232,56])

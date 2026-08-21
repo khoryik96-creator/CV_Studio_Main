@@ -221,7 +221,14 @@ function cvNormDateRange(value) {
   text = text.replace(/\s*-\s*/g, ' to ');
   text = text.replace(/\s+to\s+/gi, ' to ');
   text = text.replace(/\b(January|February|March|April|June|July|August|September|Sept|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\b/gi, function(m){ return cvNormMonth(m); });
-  return text.replace(/\s+/g, ' ').trim();
+  text = text.replace(/\s+/g, ' ').trim();
+  var sameYear = text.match(/^(\d{4})\s+to\s+\1$/i);
+  if (sameYear) return sameYear[1];
+  var sameYearMonths = text.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+to\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})$/i);
+  if (sameYearMonths) {
+    return cvNormMonth(sameYearMonths[1]) + ' ' + sameYearMonths[3] + ' to ' + cvNormMonth(sameYearMonths[2]) + ' ' + sameYearMonths[3];
+  }
+  return text;
 }
 function cvSmartText(value, kind) {
   var text = String(value == null ? '' : value).trim();
@@ -458,6 +465,9 @@ function renderPreview(d) {
   html += '<div class="preview-section">W O R K &nbsp; E X P E R I E N C E S</div>';
   for (var exp of (d.work_experiences || [])) {
     var roles = Array.isArray(exp.roles) ? exp.roles : [];
+    if (String(exp.section_heading || '').trim()) {
+      html += '<div class="preview-role preview-work-subsection">' + esc(String(exp.section_heading).trim()) + '</div>';
+    }
     for (var ri = 0; ri < roles.length; ri++) {
       var role = roles[ri];
       if (ri === 0) html += '<div class="preview-company">' + esc(cvExperienceHeader(exp)) + '</div>';

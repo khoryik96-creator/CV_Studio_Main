@@ -185,7 +185,16 @@ function normalizeDateRange(value) {
     const n = parseInt(mm, 10);
     return (n >= 1 && n <= 12) ? (MONTH_ABBR_BY_NUMBER[n] + ' ' + yyyy) : m;
   });
-  return text.replace(/\s+/g, ' ').trim();
+  text = text.replace(/\s+/g, ' ').trim();
+  const sameYear = text.match(/^(\d{4})\s+to\s+\1$/i);
+  if (sameYear) return sameYear[1];
+  const sameYearMonths = text.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+to\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})$/i);
+  if (sameYearMonths) {
+    const startMonth = MONTH_ABBR[String(sameYearMonths[1]).toLowerCase()] || sameYearMonths[1];
+    const endMonth = MONTH_ABBR[String(sameYearMonths[2]).toLowerCase()] || sameYearMonths[2];
+    return `${startMonth} ${sameYearMonths[3]} to ${endMonth} ${sameYearMonths[3]}`;
+  }
+  return text;
 }
 
 function stripInferredCvTitle(value) {
@@ -423,6 +432,8 @@ function makeWorkSection(experiences) {
   for (let ei = 0; ei < experiences.length; ei++) {
     const exp = experiences[ei];
     const roles = Array.isArray(exp.roles) ? exp.roles : [];
+    const subsectionHeading = String(exp.section_heading || '').trim();
+    if (subsectionHeading) xml += boldBlackPara(subsectionHeading, 24);
     for (let ri = 0; ri < roles.length; ri++) {
       const role = roles[ri];
 
