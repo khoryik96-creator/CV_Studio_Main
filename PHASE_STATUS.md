@@ -25,10 +25,8 @@
   `54298b9b6a822e1f36c9c101f1ff4edc9c7e835f`
 - Phase 7B-4 source baseline Git commit (merged Phase 7B-3):
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
-- Current merged source: v24.6.351 at `master` commit `dd0575d`.
-- Active work: v24.6.352 Windows watchdog recovery corrective on
-  `chatgpt/pr169-v24.6.352-watchdog-recovery`; planned PR #169 is not yet
-  opened or merged.
+- Current merged source: v24.6.352 through PR #169.
+- Active work: none for the v24.6.352 corrective; PR #169 is merged.
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
@@ -38,8 +36,8 @@
   contribution-profile repair. PR #166 merged the v24.6.350 salary
   profile-migration safety corrective. PR #167 merged the v24.6.351 JobAdder
   original-CV, candidate-contact and blank-PDF corrective as `85dc896`.
-- Current stop: v24.6.351 is merged on `master` as `dd0575d`; v24.6.352 is
-  active on the working branch and is not yet merged.
+- Current stop: v24.6.352 is merged on `master` through PR #169; no newer
+  corrective is active.
 
 ## v24.6.352 Windows watchdog recovery corrective
 

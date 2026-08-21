@@ -225,8 +225,8 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Windows watchdog recovery corrective — v24.6.352 / planned PR #169, NOT
-  MERGED.** Branch `chatgpt/pr169-v24.6.352-watchdog-recovery` corrects a
+- **Windows watchdog recovery corrective — v24.6.352 / PR #169, MERGED.**
+  Branch `chatgpt/pr169-v24.6.352-watchdog-recovery` corrects a
   long-standing Windows recovery dead-end. When the listener still existed but
   stopped answering after sleep or a hang, `WATCHDOG.vbs` asked
   `INSTANCE_PORT.ps1` to stop it; the helper terminated the calling watchdog
