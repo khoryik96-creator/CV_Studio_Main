@@ -1,3 +1,4 @@
+import json
 from copy import deepcopy
 
 import pytest
@@ -69,12 +70,63 @@ def test_rule_validation_rejects_brackets_after_open_end(malaysia_rule):
     with pytest.raises(RuleValidationError):
         validate_rule(broken)
 
-def test_bootstrap_seeds_without_overwriting(tmp_path):
+def test_bootstrap_adds_new_rules_without_overwriting_user_values(tmp_path):
     from salary_comparison.bootstrap import ensure_data_dir
     target = tmp_path / "persistent"
     ensure_data_dir(target)
     assert (target / "country_currency.json").exists()
-    original = target / "tax_rules.json"
-    original.write_text('{"rules": [{"custom": true}]}', encoding="utf-8")
+    rule_path = target / "tax_rules.json"
+    payload = json.loads(rule_path.read_text(encoding="utf-8"))
+    payload["rules"] = [
+        rule for rule in payload["rules"]
+        if not (
+            rule["country"] == "Malaysia"
+            and rule["tax_year"] == 2025
+            and rule["residency"] == "Non-Resident"
+        )
+    ]
+    resident = next(
+        rule for rule in payload["rules"]
+        if rule["country"] == "Malaysia"
+        and rule["tax_year"] == 2025
+        and rule["residency"] == "Resident"
+    )
+    resident["tax_brackets"][0]["rate"] = 0.123
+    resident.pop("contribution_profiles")
+    resident.pop("default_contribution_profile")
+    resident.pop("personal_reliefs_allowed")
+    rule_path.write_text(json.dumps(payload), encoding="utf-8")
+
     ensure_data_dir(target)
-    assert original.read_text(encoding="utf-8") == '{"rules": [{"custom": true}]}'
+    migrated = json.loads(rule_path.read_text(encoding="utf-8"))
+    migrated_resident = next(
+        rule for rule in migrated["rules"]
+        if rule["country"] == "Malaysia"
+        and rule["tax_year"] == 2025
+        and rule["residency"] == "Resident"
+    )
+    assert migrated_resident["tax_brackets"][0]["rate"] == 0.123
+    assert migrated_resident["contribution_profiles"]
+    assert migrated_resident["personal_reliefs_allowed"] is True
+    assert any(
+        rule["country"] == "Malaysia"
+        and rule["tax_year"] == 2025
+        and rule["residency"] == "Non-Resident"
+        for rule in migrated["rules"]
+    )
+
+    once = rule_path.read_text(encoding="utf-8")
+    ensure_data_dir(target)
+    assert rule_path.read_text(encoding="utf-8") == once
+
+
+def test_bootstrap_does_not_replace_malformed_user_rule_file(tmp_path):
+    from salary_comparison.bootstrap import ensure_data_dir
+    target = tmp_path / "persistent"
+    target.mkdir()
+    rule_path = target / "tax_rules.json"
+    rule_path.write_text('{"rules": [{"custom": true}]}', encoding="utf-8")
+
+    ensure_data_dir(target)
+
+    assert rule_path.read_text(encoding="utf-8") == '{"rules": [{"custom": true}]}'

@@ -190,6 +190,16 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
+- **Persistent salary-rule migration — v24.6.346 / planned PR #161, NOT
+  MERGED.** Branch `chatgpt/pr161-v24.6.346-salary-rule-migration` fixes an
+  upgrade gap found after PR #159: an existing installation retained its old
+  persistent `tax_rules.json`, so the packaged Malaysia YA2025 Non-Resident
+  rule was never copied and calculations still returned “No rules”. Startup now
+  appends missing packaged country/year/residency identities and missing
+  additive contribution-profile fields atomically, while preserving all
+  existing user-approved brackets, rates, notes, sources and custom values.
+  Invalid or unrecognized user files remain untouched, and the migration is
+  idempotent.
 - **Crawler/JobAdder/Malaysia tax reliability corrective — v24.6.344 / PR
   #159, MERGED.** AI Crawler now stops optional
   enrichment at a 330-second internal deadline and returns safe partial results
