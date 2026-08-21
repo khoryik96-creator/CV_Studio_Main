@@ -120,6 +120,68 @@ def test_bootstrap_adds_new_rules_without_overwriting_user_values(tmp_path):
     assert rule_path.read_text(encoding="utf-8") == once
 
 
+@pytest.mark.parametrize("keep_injected_default", [False, True])
+def test_bootstrap_repairs_empty_packaged_profile_pair_idempotently(
+    tmp_path,
+    keep_injected_default,
+):
+    from salary_comparison.bootstrap import ensure_data_dir
+
+    target = tmp_path / "persistent"
+    ensure_data_dir(target)
+    rule_path = target / "tax_rules.json"
+    payload = json.loads(rule_path.read_text(encoding="utf-8"))
+    resident = next(
+        rule for rule in payload["rules"]
+        if rule["country"] == "Malaysia"
+        and rule["tax_year"] == 2025
+        and rule["residency"] == "Resident"
+    )
+    resident["contribution_profiles"] = []
+    if not keep_injected_default:
+        resident.pop("default_contribution_profile", None)
+    rule_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    ensure_data_dir(target)
+    repaired = json.loads(rule_path.read_text(encoding="utf-8"))
+    repaired_resident = next(
+        rule for rule in repaired["rules"]
+        if rule["country"] == "Malaysia"
+        and rule["tax_year"] == 2025
+        and rule["residency"] == "Resident"
+    )
+    normalized = validate_rule(repaired_resident)
+    assert normalized["contribution_profiles"]
+    assert normalized["default_contribution_profile"] == "malaysian_citizen"
+
+    once = rule_path.read_text(encoding="utf-8")
+    ensure_data_dir(target)
+    assert rule_path.read_text(encoding="utf-8") == once
+
+
+def test_bootstrap_does_not_replace_empty_custom_profile_pair(tmp_path):
+    from salary_comparison.bootstrap import ensure_data_dir
+
+    target = tmp_path / "persistent"
+    ensure_data_dir(target)
+    rule_path = target / "tax_rules.json"
+    payload = json.loads(rule_path.read_text(encoding="utf-8"))
+    resident = next(
+        rule for rule in payload["rules"]
+        if rule["country"] == "Malaysia"
+        and rule["tax_year"] == 2025
+        and rule["residency"] == "Resident"
+    )
+    resident["default_contribution_profile"] = "custom_profile"
+    resident["contribution_profiles"] = []
+    rule_path.write_text(json.dumps(payload), encoding="utf-8")
+    before = rule_path.read_text(encoding="utf-8")
+
+    ensure_data_dir(target)
+
+    assert rule_path.read_text(encoding="utf-8") == before
+
+
 def test_bootstrap_does_not_replace_malformed_user_rule_file(tmp_path):
     from salary_comparison.bootstrap import ensure_data_dir
     target = tmp_path / "persistent"

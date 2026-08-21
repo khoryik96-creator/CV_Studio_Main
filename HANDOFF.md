@@ -142,6 +142,15 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 7. Recently completed (already on `master`)
 
+- **v24.6.349 salary contribution-profile repair:** startup repairs the known
+  incomplete packaged-profile shape where a Malaysia Resident rule has the
+  packaged default profile name but an empty profile list. The repair copies
+  only the matching packaged profile set and leaves brackets, rates, sources,
+  notes and other user-approved values unchanged. Same-year one-click AI tax
+  updates now preserve the stored contribution/pass profiles, preventing the
+  invalid shape from being published again. A mismatched custom default is not
+  rewritten. No route, schema, dependency or protected-package boundary
+  changed.
 - **v24.6.348 KWSP source-access corrective:** the one-click Malaysia tax
   updater uses KWSP's current Mandatory Contribution page instead of the
   obsolete Third Schedule alias. Public KWSP requests carry ordinary
