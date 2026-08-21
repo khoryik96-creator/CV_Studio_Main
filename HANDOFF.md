@@ -142,6 +142,15 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 7. Recently completed (already on `master`)
 
+- **v24.6.347 LHDN source reliability corrective:** the one-click Malaysia
+  tax updater no longer uses the removed English LHDN tax-rate page. Its
+  primary source is the live official `Navigasi HASiL 2026` PDF containing the
+  YA2025 resident schedule, with the official 2025 `Sepintas` booklet as a
+  registered fallback. Automatic source selection records whichever approved
+  URL was actually read, retries only registered official alternatives, and
+  still fails clearly when every approved source is unavailable. The stored
+  YA2025 resident rule now points to the live LHDN source. No route, schema,
+  dependency or protected-package boundary changed.
 - **Deeper audit pass (Einstein, 2026-08-08):** found and fixed a real bug
   left over from the "Company – Title | dates" formatting fix (#87):
   `cvstudio_cv_normalize._smart_word_case` never got the vowelless-acronym
