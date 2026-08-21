@@ -25,11 +25,8 @@
   `54298b9b6a822e1f36c9c101f1ff4edc9c7e835f`
 - Phase 7B-4 source baseline Git commit (merged Phase 7B-3):
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
-- Working branch candidate:
-  `chatgpt/pr167-v24.6.351-jobadder-resume-replacement`.
-- Active work: JobAdder original-CV attachment validation, candidate-contact
-  sanitation and blank-trailing-PDF corrective; planned PR #167 is not yet
-  opened or merged.
+- Current merged source: v24.6.351 at `master` commit `85dc896`.
+- Active work: none for the v24.6.351 corrective; PR #167 is merged.
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
@@ -37,11 +34,12 @@
   reliability corrective as `61a001d`. PR #164 merged the v24.6.348 KWSP
   source-access corrective. PR #165 merged the v24.6.349 salary
   contribution-profile repair. PR #166 merged the v24.6.350 salary
-  profile-migration safety corrective.
-- Current stop: v24.6.350 is merged on `master`; v24.6.351 is validated on the
-  working branch and is not yet merged.
+  profile-migration safety corrective. PR #167 merged the v24.6.351 JobAdder
+  original-CV, candidate-contact and blank-PDF corrective as `85dc896`.
+- Current stop: v24.6.351 is merged on `master` as `85dc896`; no newer
+  corrective is active.
 
-## v24.6.351 JobAdder original-CV upload corrective
+## v24.6.351 JobAdder original-CV, candidate-contact and blank-PDF corrective
 
 - Create Profile preserves the browser's original File object, and the backend
   sends deterministic PDF/DOCX/DOC MIME metadata instead of labelling every

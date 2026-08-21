@@ -221,13 +221,13 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   `/extract-text` recognizes `(cid:N)`/control-code layers and visually sparse
   image/vector PDFs, and every timed browser caller shares one OCR-aware request
   budget. These releases introduced aggregate/document-wide OCR decisions; the
-  page-aware corrective below supersedes those details once merged.
+  merged page-aware corrective below supersedes those details.
 
 ## 8. Open / deferred work
 
-- **JobAdder original-CV upload corrective — v24.6.351 / planned PR #167, NOT
-  MERGED.** Branch `chatgpt/pr167-v24.6.351-jobadder-resume-replacement`
-  preserves the original browser File and sends PDF/DOCX/DOC MIME metadata in
+- **JobAdder original-CV upload corrective — v24.6.351 / PR #167, MERGED.**
+  PR #167 was squash-merged to `master` as `85dc896`. The corrective preserves
+  the original browser File and sends PDF/DOCX/DOC MIME metadata in
   JobAdder's `fileData` multipart part rather than generic
   `application/octet-stream`. If a candidate exists but its latest CV upload is
   rejected, the UI keeps the profile link, shows the readable JobAdder
