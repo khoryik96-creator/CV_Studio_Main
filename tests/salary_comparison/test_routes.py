@@ -127,6 +127,42 @@ def test_publish_requires_admin_token_when_configured(app):
     assert response.status_code == 403
 
 
+def test_same_year_ai_preview_preserves_stored_contribution_profiles(
+    client,
+    malaysia_rule,
+    monkeypatch,
+):
+    from salary_comparison import routes as sc_routes
+    from salary_comparison.validators import validate_rule
+
+    proposal = dict(malaysia_rule)
+    proposal.pop("default_contribution_profile", None)
+    proposal["contribution_profiles"] = []
+    proposal = validate_rule(proposal)
+    monkeypatch.setattr(
+        sc_routes,
+        "preview_rule_update",
+        lambda payload, key_resolver=None: {
+            "rule": proposal,
+            "usage": {"input_tokens": 1, "output_tokens": 1},
+            "provider": "deepseek",
+            "model": "test-model",
+        },
+    )
+
+    response = client.post(
+        "/salary-comparison/api/rules/preview",
+        json={"auto_sources": True},
+    )
+
+    assert response.status_code == 200
+    rule = response.get_json()["rule"]
+    stored_rule = validate_rule(malaysia_rule)
+    assert rule["contribution_profiles"] == stored_rule["contribution_profiles"]
+    assert rule["default_contribution_profile"] == "malaysian_citizen"
+    assert any("stored 2025 rule" in note for note in rule["notes"])
+
+
 def test_unwritable_data_dir_returns_clean_handled_error(tmp_path):
     # A data directory that cannot be seeded must surface a clear 400, not an
     # opaque 500 "Unexpected salary-comparison error."

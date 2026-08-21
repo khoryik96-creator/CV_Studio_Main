@@ -289,21 +289,23 @@ def rules_preview_api():
         country = str(result["rule"].get("country") or "").casefold()
         residency = str(result["rule"].get("residency") or "").casefold()
         target_year = int(result["rule"]["tax_year"])
-        prior_rules = [
+        continuity_rules = [
             rule for rule in _repo().list_rules()
             if str(rule.get("country") or "").casefold() == country
             and str(rule.get("residency") or "").casefold() == residency
-            and int(rule.get("tax_year")) < target_year
+            and int(rule.get("tax_year")) <= target_year
             and rule.get("contribution_profiles")
         ]
-        if prior_rules:
-            source_rule = max(prior_rules, key=lambda rule: int(rule["tax_year"]))
+        if continuity_rules:
+            source_rule = max(
+                continuity_rules, key=lambda rule: int(rule["tax_year"])
+            )
             result["rule"]["contribution_profiles"] = deepcopy(source_rule["contribution_profiles"])
             result["rule"]["default_contribution_profile"] = source_rule.get(
                 "default_contribution_profile"
             )
             result["rule"].setdefault("notes", []).append(
-                f"Contribution/pass profiles were copied from {source_rule['tax_year']} for continuity; "
+                f"Contribution/pass profiles were preserved from the stored {source_rule['tax_year']} rule; "
                 "review every rate and effective date before publishing."
             )
             result["rule"] = validate_rule(result["rule"])

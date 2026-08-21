@@ -9,8 +9,6 @@ DATA_FILES = ("country_currency.json", "tax_rules.json", "fx_cache.json")
 
 _ADDITIVE_RULE_FIELDS = (
     "personal_reliefs_allowed",
-    "default_contribution_profile",
-    "contribution_profiles",
 )
 
 
@@ -70,6 +68,41 @@ def _merge_packaged_tax_rules(destination: Path, packaged: Path) -> None:
             current_by_identity[identity] = added
             changed = True
             continue
+        packaged_profiles = packaged_rule.get("contribution_profiles")
+        existing_profiles = existing.get("contribution_profiles")
+        packaged_default = str(
+            packaged_rule.get("default_contribution_profile") or ""
+        ).strip()
+        existing_default = str(
+            existing.get("default_contribution_profile") or ""
+        ).strip()
+        if (
+            isinstance(packaged_profiles, list)
+            and packaged_profiles
+            and not existing_profiles
+            and (not existing_default or existing_default == packaged_default)
+        ):
+            # Older normalized/AI-published rules may contain an explicit empty
+            # list. Treat that as the pre-profile shape for a matching packaged
+            # identity. The original migration added the packaged default name
+            # without its list, creating a rule the repository could not load.
+            existing["contribution_profiles"] = deepcopy(packaged_profiles)
+            existing_profiles = existing["contribution_profiles"]
+            changed = True
+
+        profile_ids = {
+            str(profile.get("id") or "").strip()
+            for profile in (existing_profiles or [])
+            if isinstance(profile, dict)
+        }
+        if (
+            packaged_default
+            and packaged_default in profile_ids
+            and not existing_default
+        ):
+            existing["default_contribution_profile"] = packaged_default
+            existing_default = packaged_default
+            changed = True
         for field in _ADDITIVE_RULE_FIELDS:
             if field not in existing and field in packaged_rule:
                 existing[field] = deepcopy(packaged_rule[field])

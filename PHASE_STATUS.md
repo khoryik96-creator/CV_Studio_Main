@@ -32,9 +32,23 @@
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
   and its merge through PR #156. PR #162 merged the v24.6.347 LHDN source
   reliability corrective as `61a001d`. PR #164 merged the v24.6.348 KWSP
-  source-access corrective.
-- Current stop: v24.6.348 is merged on `master`; no follow-on implementation
+  source-access corrective. PR #165 merged the v24.6.349 salary
+  contribution-profile repair.
+- Current stop: v24.6.349 is merged on `master`; no follow-on implementation
   is active.
+
+## v24.6.349 salary contribution-profile repair
+
+- Startup repairs the specific incomplete stored-rule shape created when the
+  packaged Malaysia Resident default contribution profile was added without
+  its matching profile list. Only the matching packaged contribution profiles
+  are restored; user-approved tax brackets, rates, sources, notes and other
+  custom values are preserved.
+- Same-year one-click AI tax previews now retain the stored contribution/pass
+  profiles when the provider omits them, so publishing an updated tax rule
+  cannot recreate the invalid pair.
+- Custom rules with a different default profile are not silently rewritten.
+- No route, schema, dependency or protected-package boundary changed.
 
 ## v24.6.348 KWSP source-access corrective
 
