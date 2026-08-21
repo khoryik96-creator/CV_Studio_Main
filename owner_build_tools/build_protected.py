@@ -28,8 +28,8 @@ import zipfile
 import zlib
 from pathlib import Path
 
-VERSION = "v24.6.351"
-VERSION_SLUG = "v24_6_351"
+VERSION = "v24.6.352"
+VERSION_SLUG = "v24_6_352"
 PRODUCT = "TheGuoLab-CVStudio"
 RECEIPT_SCHEMA = 2
 TOTP_MASK = bytes([147,57,36,83,116,245,122,57,165,162,176,168,249,50,204,128,45,174,232,56])
@@ -651,6 +651,8 @@ def patch_launchers(root: Path,target: str) -> None:
             raise RuntimeError("Windows shutdown is not instance/PID/port-identity scoped.")
         if r"runtime\native\CVStudio.exe" not in watchdog or "/instance-id" not in watchdog:
             raise RuntimeError("Windows watchdog lacks native package identity checks.")
+        if "-PreserveWatchdog" not in watchdog or "[switch]$PreserveWatchdog" not in helper:
+            raise RuntimeError("Windows watchdog recovery can terminate its own relaunch supervisor.")
         if "ExpectedPid" not in helper or "Get-NetTCPConnection" not in helper or "/instance" not in helper or "root_hash" not in helper or "Stop-CVStudioWatchdogs" not in helper:
             raise RuntimeError("Windows verified port ownership/watchdog helper is missing.")
         restore_ps=(root/"RESTORE_PREVIOUS.ps1").read_text(encoding="utf-8-sig")
@@ -766,6 +768,8 @@ def build_package(source: Path,work: Path,out_dir: Path,target: str,dist: Path,n
         watchdog=(package/"WATCHDOG.vbs").read_text(encoding="utf-8")
         if r"runtime\native\CVStudio.exe" not in watchdog or "/instance-id" not in watchdog:
             raise RuntimeError("Protected Windows watchdog does not launch the native runtime directly.")
+        if "-PreserveWatchdog" not in watchdog or "[switch]$PreserveWatchdog" not in instance_helper:
+            raise RuntimeError("Protected Windows watchdog cannot survive its own recovery stop.")
     pyfiles=[p for p in package.rglob("*.py")]
     allowed={(package/"app.py").resolve()}
     unexpected=[str(p.relative_to(package)) for p in pyfiles if p.resolve() not in allowed]

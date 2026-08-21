@@ -225,6 +225,21 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
+- **Windows watchdog recovery corrective — v24.6.352 / planned PR #169, NOT
+  MERGED.** Branch `chatgpt/pr169-v24.6.352-watchdog-recovery` corrects a
+  long-standing Windows recovery dead-end. When the listener still existed but
+  stopped answering after sleep or a hang, `WATCHDOG.vbs` asked
+  `INSTANCE_PORT.ps1` to stop it; the helper terminated the calling watchdog
+  before that watchdog could launch the replacement, leaving port 5000 down
+  until a manual launch. Watchdog-initiated recovery now preserves only its own
+  supervisor, while deliberate Stop, upgrade and package-replacement callers
+  retain the established old-watchdog-first shutdown contract. Focused source
+  contracts and both protected-build validation stages reject either side of
+  that distinction regressing. No route, schema, dependency, credential,
+  external-call, user-data or protected-package-boundary change. Validation:
+  959 passed, 4 skipped, 96 subtests; all 20 JavaScript source/fixture scripts;
+  24-assertion source smoke; repository byte consistency; PowerShell parsing;
+  Windows protected-source/Antiword/Tesseract/adm-zip/launcher preflight.
 - **JobAdder original-CV upload corrective — v24.6.351 / PR #167, MERGED.**
   PR #167 was squash-merged to `master` as `85dc896`. The corrective preserves
   the original browser File and sends PDF/DOCX/DOC MIME metadata in
