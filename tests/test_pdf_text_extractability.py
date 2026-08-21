@@ -211,6 +211,21 @@ class PdfPageRoutingTests(unittest.TestCase):
             [],
         )
 
+    def test_proven_blank_trailing_page_is_not_reported_as_lost_content(self):
+        class OcrResults(dict):
+            visually_blank_pages = {3}
+
+        pages = [
+            {"text": "", "ocr_reason": "sparse-visual"},
+            {"text": "", "ocr_reason": "sparse-visual"},
+            {"text": "", "ocr_reason": "empty-document"},
+        ]
+        ocr_texts = OcrResults({1: "Recovered page one", 2: "Recovered page two"})
+        self.assertEqual(
+            app._pdf_ocr_pages_without_usable_text(pages, ocr_texts, [1, 2, 3]),
+            [],
+        )
+
     def test_extract_route_ocrs_only_broken_pages_and_preserves_order(self):
         cid = "".join("(cid:%d)" % (i % 30 + 1) for i in range(300))
         pages = [

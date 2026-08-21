@@ -235,12 +235,19 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   extraction, paid parsing or candidate creation. Newly created candidates no
   longer hide a failed original-CV attachment, empty files stop before the
   remote write, and remote error text is escaped. Multipart boundaries are
-  unique and collision-checked. The owner-supplied DOCX was inspected read-only
-  and remains outside Git. No live JobAdder write, route, schema, dependency or
-  protected-package boundary change. Validation: 951 passed, 4 skipped, 96
-  subtests; all JavaScript fixtures; 24-assertion source smoke; Windows
-  protected-source/Antiword/Tesseract/adm-zip preflight; route, architecture
-  and version gates.
+  unique and collision-checked. A follow-up owner diagnostic showed that AI
+  contact fields could still reach JobAdder as invalid email prose or a phone
+  string longer than 50 characters; Create Profile and the backend now reduce
+  these to one valid contact or omit the invalid optional phone, and candidate
+  validation failures expose JobAdder's readable reason. PDF OCR also records
+  only near-uniform rendered pages as intentionally blank, so blank trailing
+  pages no longer stop Create Profile while unreadable scans remain
+  failure-visible. The owner-supplied DOCX/PDFs and diagnostic were inspected
+  read-only and remain outside Git. No live JobAdder write, paid AI call, route,
+  schema, dependency or protected-package boundary change. Validation: 956
+  passed, 4 skipped, 96 subtests; all 19 JavaScript fixtures; 24-assertion
+  source smoke; real extraction of both supplied PDFs; Windows protected-source/
+  Antiword/Tesseract/adm-zip preflight; route, architecture and version gates.
 - **Persistent salary-rule migration — v24.6.346 / planned PR #161, NOT
   MERGED.** Branch `chatgpt/pr161-v24.6.346-salary-rule-migration` fixes an
   upgrade gap found after PR #159: an existing installation retained its old

@@ -1080,15 +1080,17 @@ def _pdf_ocr_pages_without_usable_text(page_records, ocr_page_texts, ocr_page_nu
     """Pages routed to OCR that still contributed nothing to the merged text.
 
     OCR can return without raising (no dependency/timeout error) yet still fail
-    a specific page: a blurry or heavily skewed scan, a rotated page, or a
-    genuinely blank page all yield empty or near-empty text from Tesseract.
-    _merge_pdf_page_texts silently drops such a page from the document, so the
-    caller must check this to know the extraction may be incomplete even when
-    OCR itself never threw an error.
+    a specific page: a blurry or heavily skewed scan, or a rotated page, can
+    yield empty text from Tesseract.  Pages independently proven to be visually
+    blank are intentionally omitted rather than reported as lost content.
     """
+    visually_blank_pages = set(
+        getattr(ocr_page_texts, "visually_blank_pages", None) or ()
+    )
     return [
         page_number
         for page_number in ocr_page_numbers
+        if page_number not in visually_blank_pages
         if not _pdf_page_merge_choice(
             page_records[page_number - 1], ocr_page_texts, page_number
         )
@@ -13184,8 +13186,9 @@ def extract_text():
                             bullet_levels = []
 
                     # OCR can return without raising yet still fail a specific
-                    # page -- a blurry or skewed scan, a rotated page, or a
-                    # genuinely blank page all yield empty text from Tesseract.
+                    # page -- a blurry or skewed scan or a rotated page can
+                    # yield empty text from Tesseract. Proven blank pages are
+                    # intentionally ignored by the shared OCR result metadata.
                     # _merge_pdf_page_texts silently drops such a page, so a
                     # dependency outage is not the only way this document can
                     # end up incomplete; check the actual per-page outcome too.

@@ -438,7 +438,13 @@ async function jaCreateCandidate(firstName, lastName, email, originalBlob, origi
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify(payload)
   }, 15000, 'profile creation');
-  if (!r.ok) { var e = await r.json(); throw new Error(e.error || 'Create failed: ' + (e.detail||'')); }
+  if (!r.ok) {
+    var e = await r.json().catch(function(){ return {}; });
+    var createMessage = e.error || 'Create failed';
+    var createDetail = e.jobadder_message || e.detail || '';
+    if (createDetail && createDetail !== createMessage) createMessage += ' — ' + createDetail;
+    throw new Error(createMessage);
+  }
   var newCand = await r.json();
   // Upload original CV to Resume slot if provided
   if (originalBlob && newCand.candidateId) {

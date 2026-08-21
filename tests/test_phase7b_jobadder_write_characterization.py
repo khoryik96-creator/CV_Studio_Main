@@ -12,10 +12,12 @@ stripping, candidateId handling).
 """
 
 import json
+import io
 import os
 from pathlib import Path
 import tempfile
 import unittest
+import urllib.error
 
 _MODULE_TEMPORARY = tempfile.TemporaryDirectory(
     prefix="cvstudio-phase7b-ja-write-"
@@ -40,9 +42,12 @@ class _FakeJobAdderClient:
     def __init__(self):
         self.json_calls = []
         self.json_response = (200, {"candidateId": 123, "fake": True})
+        self.error = None
 
     def request_json(self, endpoint, **kwargs):
         self.json_calls.append((endpoint, kwargs))
+        if self.error:
+            raise self.error
         return self.json_response
 
 
@@ -103,6 +108,56 @@ class Phase7BJobAdderWriteTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 400)
         self.assertEqual(self.client_double.json_calls, [])
+
+    def test_create_candidate_rejects_invalid_email_before_remote_write(self):
+        response = self.http.post(
+            "/jobadder/create_candidate",
+            json={"firstName": "Ada", "email": "Email not available"},
+            headers=self._headers("phase7b-ja-create-invalid-email"),
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("valid format", response.get_json()["error"])
+        self.assertEqual(self.client_double.json_calls, [])
+
+    def test_create_candidate_extracts_one_phone_from_concatenated_ai_text(self):
+        response = self.http.post(
+            "/jobadder/create_candidate",
+            json={
+                "firstName": "Ada",
+                "email": "Email: ADA@EXAMPLE.COM",
+                "phone": "Mobile: +60 12-345 6789 Address and unrelated prose " * 3,
+                "mobile": "Mobile: +60 12-345 6789 Address and unrelated prose " * 3,
+            },
+            headers=self._headers("phase7b-ja-create-contact-clean"),
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = json.loads(self.client_double.json_calls[0][1]["body"])
+        self.assertEqual(payload["email"], "ada@example.com")
+        self.assertEqual(payload["phone"], "+60 12-345 6789")
+        self.assertEqual(payload["mobile"], "+60 12-345 6789")
+        self.assertLessEqual(len(payload["phone"]), 50)
+
+    def test_create_candidate_surfaces_readable_jobadder_validation_reason(self):
+        detail = json.dumps({
+            "message": "Validation failed",
+            "errors": [{"message": "Email provided is not valid", "fields": ["email"]}],
+        }).encode()
+        self.client_double.error = urllib.error.HTTPError(
+            "https://api.example.invalid/candidates",
+            422,
+            "Unprocessable Entity",
+            {},
+            io.BytesIO(detail),
+        )
+        response = self.http.post(
+            "/jobadder/create_candidate",
+            json={"firstName": "Ada", "email": "ada@example.com"},
+            headers=self._headers("phase7b-ja-create-remote-validation"),
+        )
+        self.assertEqual(response.status_code, 422)
+        payload = response.get_json()
+        self.assertIn("Validation failed", payload["jobadder_message"])
+        self.assertIn("Email provided is not valid", payload["jobadder_message"])
 
     def test_update_candidate_puts_to_candidate_id_and_strips_id_from_body(self):
         response = self.http.post(

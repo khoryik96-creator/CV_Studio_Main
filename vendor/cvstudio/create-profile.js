@@ -103,7 +103,13 @@ function clearJACreateQueue() {
 function extractJACreateEmailFallback(text) {
   var s = String(text || '');
   var m = s.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
-  return m ? m[0].trim() : '';
+  return m ? m[0].trim().toLowerCase() : '';
+}
+
+function cleanJACreateEmailCandidate(raw) {
+  if (Array.isArray(raw)) raw = raw.length ? raw[0] : '';
+  if (raw && typeof raw === 'object') raw = raw.address || raw.email || '';
+  return extractJACreateEmailFallback(raw);
 }
 
 function cleanJACreatePhoneCandidate(raw) {
@@ -136,10 +142,12 @@ function extractJACreatePhoneFallback(text) {
 
 function applyJACreateContactFallback(cand, cvText) {
   cand = cand || {};
+  cand.email = cleanJACreateEmailCandidate(cand.email);
   if (!cand.email) {
     var e = extractJACreateEmailFallback(cvText);
     if (e) cand.email = e;
   }
+  cand.phone = cleanJACreatePhoneCandidate(cand.phone);
   if (!cand.phone) {
     var p = extractJACreatePhoneFallback(cvText);
     if (p) cand.phone = p;
@@ -189,8 +197,11 @@ async function retryJACreateResumeUpload(item) {
 }
 
 async function setJACreateEmail(el, id) {
-  var email = el.value.trim();
-  if (!email) return;
+  var email = cleanJACreateEmailCandidate(el.value);
+  if (!email || email !== el.value.trim().toLowerCase()) {
+    showToast('Enter one valid email address', 'err');
+    return;
+  }
   var item = _jaCreateQueue.find(function(x){ return x.id === id; });
   if (!item) return;
   item._manualEmail = email;
@@ -312,7 +323,7 @@ async function runJACreateAll() {
       // that note's confirmed email, even when the CV contains no email or a
       // different contact address. This keeps the new profile tied to the
       // exact screening-note row that initiated the action.
-      if (item._forcedEmail) cand.email = String(item._forcedEmail || '').trim().toLowerCase();
+      if (item._forcedEmail) cand.email = cleanJACreateEmailCandidate(item._forcedEmail);
       if (!String(cand.name || '').trim() && item._oneNoteSourceName) cand.name = String(item._oneNoteSourceName || '').trim();
       // Track cost
       var createCost = responseCost(parsed, jaRoute.model, jaRoute.provider);

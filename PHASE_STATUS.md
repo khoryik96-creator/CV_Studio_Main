@@ -27,8 +27,9 @@
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
 - Working branch candidate:
   `chatgpt/pr167-v24.6.351-jobadder-resume-replacement`.
-- Active work: JobAdder original-CV attachment validation and partial-result
-  corrective is validated; planned PR #167 is not yet opened or merged.
+- Active work: JobAdder original-CV attachment validation, candidate-contact
+  sanitation and blank-trailing-PDF corrective; planned PR #167 is not yet
+  opened or merged.
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
@@ -54,13 +55,24 @@
   or candidate creation.
 - New-candidate original-CV failures are no longer silently swallowed. Remote
   error text is escaped before rendering.
-- The owner-supplied DOCX is valid and was used read-only to verify the exact
-  existing-candidate/latest-résumé scenario; it is not stored in Git. No live
-  JobAdder write was made during implementation or QA.
+- AI-produced email labels/placeholders and concatenated phone prose are
+  normalized before candidate create/update. An invalid email stops locally
+  with a clear manual-entry message, while an invalid optional phone is omitted
+  instead of producing JobAdder's 422/50-character rejection. Any remaining
+  JobAdder validation response exposes its readable field-level reason.
+- Near-uniform rendered PDF pages are recorded as intentionally blank. Blank
+  trailing pages therefore do not become false partial-extraction warnings,
+  while faint, blurry, rotated and otherwise unreadable scans retain the
+  existing safety stop. The two owner PDFs reproduce 5,733 and 15,621 recovered
+  characters respectively with no partial warning after the correction.
+- The owner-supplied DOCX/PDFs and diagnostic were used read-only to verify the
+  reported scenarios and are not stored in Git. No live JobAdder write or paid
+  AI call was made during implementation or QA.
 - No route, schema, dependency or protected-package boundary changed.
-- Validation: 951 passed, 4 skipped, 96 subtests; all JavaScript fixtures;
-  24-assertion source smoke; Windows protected-source/Antiword/Tesseract/
-  adm-zip preflight; route, architecture and version gates.
+- Validation: 956 passed, 4 skipped, 96 subtests; all 19 JavaScript fixtures;
+  24-assertion source smoke; real extraction of both supplied PDFs; Windows
+  protected-source/Antiword/Tesseract/adm-zip preflight; route, architecture
+  and version gates.
 
 ## v24.6.350 salary profile-migration safety corrective
 

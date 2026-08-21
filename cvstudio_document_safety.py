@@ -20,6 +20,40 @@ OCR_PAGE_TEXT_TIMEOUT_SECONDS = 35
 ALLOWED_IMAGE_FORMATS = frozenset({"BMP", "JPEG", "PNG", "TIFF", "WEBP"})
 
 
+class PdfOcrPageResults(dict):
+    """Page-numbered OCR text plus pages proven visually blank.
+
+    This remains a normal ``dict`` for every established caller.  The extra
+    set lets the extraction route distinguish an intentionally blank trailing
+    page from a scan that Tesseract failed to read.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.visually_blank_pages: set[int] = set()
+
+
+def rendered_pdf_page_is_visually_blank(image: Any) -> bool:
+    """Recognize only near-uniform white/very-light rendered pages.
+
+    Keep this deliberately narrow.  A faint, blurry or low-contrast scan must
+    still reach OCR and remain failure-visible if no text can be recovered.
+    """
+    grayscale = None
+    try:
+        grayscale = image.convert("L")
+        low, high = grayscale.getextrema()
+        return int(low) >= 248 and int(high) - int(low) <= 2
+    except (AttributeError, TypeError, ValueError):
+        return False
+    finally:
+        if grayscale is not None and grayscale is not image:
+            try:
+                grayscale.close()
+            except Exception:  # cleanup-only
+                pass
+
+
 def document_validation_status(exc: BaseException) -> int:
     """Map hostile/oversized document failures to a client-safe HTTP status."""
     message = str(exc or "").lower()
@@ -254,7 +288,7 @@ def ocr_pdf_pages_pagewise(
             "Wait for it to finish and try again."
         )
     started = monotonic()
-    results: dict[int, str] = {}
+    results = PdfOcrPageResults()
 
     def remaining_timeout(limit: int) -> int:
         remaining = float(deadline_seconds) - (monotonic() - started)
@@ -277,12 +311,17 @@ def ocr_pdf_pages_pagewise(
                 continue
             image = images[0]
             try:
-                ocr_timeout = remaining_timeout(OCR_PAGE_TEXT_TIMEOUT_SECONDS)
                 width, height = image.size
                 if width * height > max_image_pixels:
                     raise ValueError(
                         "PDF page dimensions exceed the safe OCR limit"
                     )
+                if rendered_pdf_page_is_visually_blank(image):
+                    if monotonic() - started > deadline_seconds:
+                        raise TimeoutError("OCR exceeded the safe processing time limit")
+                    results.visually_blank_pages.add(page_number)
+                    continue
+                ocr_timeout = remaining_timeout(OCR_PAGE_TEXT_TIMEOUT_SECONDS)
                 results[page_number] = pytesseract.image_to_string(
                     image, lang="eng", timeout=ocr_timeout
                 )
