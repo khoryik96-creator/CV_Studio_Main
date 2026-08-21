@@ -2,7 +2,8 @@ param(
     [ValidateSet('Inspect','Stop')]
     [string]$Mode = 'Inspect',
     [string]$Root = $PSScriptRoot,
-    [int]$ExpectedPid = 0
+    [int]$ExpectedPid = 0,
+    [switch]$PreserveWatchdog
 )
 $ErrorActionPreference = 'SilentlyContinue'
 
@@ -105,9 +106,13 @@ if ($Mode -eq 'Stop') {
         exit 5
     }
 
-    # Stop the watchdog belonging to the verified package first, otherwise it can
-    # immediately recreate pythonw.exe after the listener is terminated.
-    Stop-CVStudioWatchdogs $record.Root
+    # Deliberate Stop/upgrade/package-replacement callers must stop the old
+    # watchdog before its listener. During watchdog-initiated recovery, keep the
+    # calling watchdog alive so it can launch the replacement after this helper
+    # terminates the unresponsive listener.
+    if (-not $PreserveWatchdog) {
+        Stop-CVStudioWatchdogs $record.Root
+    }
     Stop-Process -Id ([int]$record.Pid) -Force -ErrorAction Stop
 
     # Close a small restart race.  Re-stop only a listener that still proves it is
@@ -117,7 +122,9 @@ if ($Mode -eq 'Stop') {
         $again = Get-PortRecord
         if ($again.State -eq 'free') { break }
         if ($again.State -in @('same','other') -and (Normalize-PathText $again.Root) -eq (Normalize-PathText $record.Root)) {
-            Stop-CVStudioWatchdogs $again.Root
+            if (-not $PreserveWatchdog) {
+                Stop-CVStudioWatchdogs $again.Root
+            }
             Stop-Process -Id ([int]$again.Pid) -Force -ErrorAction SilentlyContinue
             continue
         }

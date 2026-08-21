@@ -1,5 +1,5 @@
 Option Explicit
-Const EXPECTED_VERSION = "v24.6.351"
+Const EXPECTED_VERSION = "v24.6.352"
 Const HTTP_TIMEOUT_MS = 2500
 Dim objShell,objFSO,scriptDir,identityURL,missed
 Set objShell=CreateObject("WScript.Shell")
@@ -31,6 +31,9 @@ Function PortInfo(mode,pid)
   On Error Resume Next
   Dim cmd:cmd="powershell.exe -NoProfile -ExecutionPolicy Bypass -File """ & scriptDir & "\INSTANCE_PORT.ps1"" -Mode " & mode & " -Root """ & scriptDir & """"
   If pid>0 Then cmd=cmd & " -ExpectedPid " & CStr(pid)
+  ' A watchdog-initiated recycle must not terminate this watchdog before it can
+  ' launch the replacement server. Deliberate Stop/upgrade callers omit this.
+  If LCase(CStr(mode))="stop" Then cmd=cmd & " -PreserveWatchdog"
   Dim ex:Set ex=objShell.Exec(cmd):PortInfo=Trim(ex.StdOut.ReadAll())
   If Err.Number<>0 Then PortInfo="unavailable"
   Err.Clear:On Error GoTo 0

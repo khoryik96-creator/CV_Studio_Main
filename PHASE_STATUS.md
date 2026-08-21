@@ -25,8 +25,8 @@
   `54298b9b6a822e1f36c9c101f1ff4edc9c7e835f`
 - Phase 7B-4 source baseline Git commit (merged Phase 7B-3):
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
-- Current merged source: v24.6.351 at `master` commit `85dc896`.
-- Active work: none for the v24.6.351 corrective; PR #167 is merged.
+- Current merged source: v24.6.352 through PR #169.
+- Active work: none for the v24.6.352 corrective; PR #169 is merged.
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
@@ -36,8 +36,30 @@
   contribution-profile repair. PR #166 merged the v24.6.350 salary
   profile-migration safety corrective. PR #167 merged the v24.6.351 JobAdder
   original-CV, candidate-contact and blank-PDF corrective as `85dc896`.
-- Current stop: v24.6.351 is merged on `master` as `85dc896`; no newer
+- Current stop: v24.6.352 is merged on `master` through PR #169; no newer
   corrective is active.
+
+## v24.6.352 Windows watchdog recovery corrective
+
+- A long-standing Windows recovery dead-end was reproduced from the launch
+  scripts. When port 5000 still belonged to the exact package but its server
+  stopped answering, `WATCHDOG.vbs` called `INSTANCE_PORT.ps1 -Mode Stop`.
+  That helper stopped the package watchdog first, then stopped the listener;
+  the now-terminated watchdog could never execute its following `LaunchServer`.
+- Watchdog-initiated recovery now passes `-PreserveWatchdog`. The helper keeps
+  that supervisor alive through the bounded verified-listener stop and restart
+  race, so it can launch the replacement. `START_HIDDEN.vbs`, `STOP_CORE.ps1`,
+  upgrades and package replacement do not pass the flag and therefore preserve
+  the established old-watchdog-first shutdown behavior.
+- Focused regressions require both sides of this contract. Windows protected
+  source and packaged-tree validation reject a package that loses the
+  recovery-only preserve flag.
+- No route, schema, dependency, credential, external-call, user-data or
+  protected-package boundary changed.
+- Validation: 959 passed, 4 skipped, 96 subtests; all 20 JavaScript
+  source/fixture scripts; 24-assertion source smoke; repository byte
+  consistency; PowerShell parsing; Windows protected-source/Antiword/
+  Tesseract/adm-zip/launcher preflight.
 
 ## v24.6.351 JobAdder original-CV, candidate-contact and blank-PDF corrective
 
