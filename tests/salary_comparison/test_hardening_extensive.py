@@ -19,6 +19,7 @@ from salary_comparison.ai_rule_updater import (
     _call_deepseek,
     _extract_json,
     fetch_official_source,
+    _official_source_request_headers,
     _public_source_url,
     _response_bytes,
     preview_rule_update,
@@ -260,7 +261,9 @@ def test_source_redirect_is_validated_before_private_destination_is_contacted(mo
         calls.append((url, kwargs))
         return RedirectResponse()
 
-    monkeypatch.setattr("salary_comparison.ai_rule_updater.socket.getaddrinfo", resolve_public)
+    monkeypatch.setattr(
+        "salary_comparison.ai_rule_updater.socket.getaddrinfo", resolve_public
+    )
     monkeypatch.setattr("salary_comparison.ai_rule_updater.requests.get", fake_get)
 
     with pytest.raises(AiRuleUpdateError, match="private"):
@@ -268,6 +271,47 @@ def test_source_redirect_is_validated_before_private_destination_is_contacted(mo
 
     assert [url for url, _ in calls] == ["https://public.example/start"]
     assert calls[0][1]["allow_redirects"] is False
+
+
+def test_kwsp_source_uses_browser_compatible_public_request_headers(monkeypatch):
+    seen = {}
+
+    def resolve_public(host, port):
+        assert host == "www.kwsp.gov.my"
+        return [(None, None, None, None, ("104.18.0.1", port))]
+
+    class Response:
+        status_code = 200
+        headers = {"content-type": "text/html; charset=UTF-8"}
+        encoding = "utf-8"
+
+        def iter_content(self, chunk_size):
+            yield b"<html><body>Official EPF contribution information</body></html>"
+
+        def raise_for_status(self):
+            pass
+
+        def close(self):
+            pass
+
+    def fake_get(url, **kwargs):
+        seen.update(kwargs["headers"])
+        return Response()
+
+    monkeypatch.setattr("salary_comparison.ai_rule_updater.socket.getaddrinfo", resolve_public)
+    monkeypatch.setattr("salary_comparison.ai_rule_updater.requests.get", fake_get)
+
+    text = fetch_official_source(
+        "https://www.kwsp.gov.my/en/employer/responsibilities/mandatory-contribution"
+    )
+
+    assert "Official EPF" in text
+    assert seen["User-Agent"].startswith("Mozilla/5.0")
+    assert seen["Accept-Language"] == "en-US,en;q=0.9"
+    assert seen["Referer"].endswith("/mandatory-contribution")
+    assert "Referer" not in _official_source_request_headers(
+        "https://www.hasil.gov.my/rates.pdf"
+    )
 
 
 def test_source_size_limit_rejected():
@@ -380,8 +424,12 @@ def test_one_click_preview_uses_registered_tax_fallback_and_records_actual_sourc
             raise AiRuleUpdateError("primary source moved")
         return "official text explicitly supporting 2026"
 
-    monkeypatch.setattr("salary_comparison.ai_rule_updater._public_source_url", lambda value: value)
-    monkeypatch.setattr("salary_comparison.ai_rule_updater.fetch_official_source", fake_fetch)
+    monkeypatch.setattr(
+        "salary_comparison.ai_rule_updater._public_source_url", lambda value: value
+    )
+    monkeypatch.setattr(
+        "salary_comparison.ai_rule_updater.fetch_official_source", fake_fetch
+    )
     returned = deepcopy(malaysia_rule)
     returned["tax_year"] = 2026
     returned["source_year_supported"] = True
@@ -408,6 +456,83 @@ def test_one_click_preview_reports_when_all_registered_tax_sources_fail(monkeypa
     )
 
     with pytest.raises(AiRuleUpdateError, match="any registered official Malaysia tax source"):
+        preview_rule_update({
+            "provider": "deepseek", "api_key": "key", "model": "model",
+            "country": "Malaysia", "tax_year": 2026, "residency": "Resident",
+            "auto_sources": True,
+        })
+
+
+@pytest.mark.parametrize(
+    ("residency", "expected_primary", "expected_fallback"),
+    [
+        (
+            "Resident",
+            "https://www.kwsp.gov.my/en/employer/responsibilities/mandatory-contribution",
+            "https://www.kwsp.gov.my/documents/d/guest/third_schedule_from_-1-october-2025",
+        ),
+        (
+            "Non-Resident",
+            "https://www.kwsp.gov.my/en/employer/responsibilities/non-malaysian-citizen-employees",
+            "https://www.kwsp.gov.my/documents/d/guest/migrant-worker-flyer-eng-3",
+        ),
+    ],
+)
+def test_one_click_preview_uses_residency_appropriate_contribution_fallback(
+    monkeypatch,
+    malaysia_rule,
+    residency,
+    expected_primary,
+    expected_fallback,
+):
+    seen_urls = []
+
+    def fake_fetch(value):
+        seen_urls.append(value)
+        if value == expected_primary:
+            raise AiRuleUpdateError("primary contribution source unavailable")
+        return "official text explicitly supporting 2026"
+
+    monkeypatch.setattr("salary_comparison.ai_rule_updater._public_source_url", lambda value: value)
+    monkeypatch.setattr("salary_comparison.ai_rule_updater.fetch_official_source", fake_fetch)
+    returned = deepcopy(malaysia_rule)
+    returned["tax_year"] = 2026
+    returned["residency"] = residency
+    returned["source_year_supported"] = True
+    monkeypatch.setattr(
+        "salary_comparison.ai_rule_updater._call_deepseek",
+        lambda *a: (returned, {"input_tokens": 1, "output_tokens": 1}),
+    )
+
+    result = preview_rule_update({
+        "provider": "deepseek", "api_key": "key", "model": "model",
+        "country": "Malaysia", "tax_year": 2026, "residency": residency,
+        "auto_sources": True,
+    })
+
+    assert seen_urls[1:3] == [expected_primary, expected_fallback]
+    assert result["rule"]["source_urls"][1] == expected_fallback
+
+
+def test_one_click_preview_reports_when_all_registered_contribution_sources_fail(
+    monkeypatch,
+):
+    def fake_fetch(value):
+        if "hasil.gov.my" in value:
+            return "official tax text"
+        raise AiRuleUpdateError(f"unavailable: {value}")
+
+    monkeypatch.setattr(
+        "salary_comparison.ai_rule_updater._public_source_url", lambda value: value
+    )
+    monkeypatch.setattr(
+        "salary_comparison.ai_rule_updater.fetch_official_source", fake_fetch
+    )
+
+    with pytest.raises(
+        AiRuleUpdateError,
+        match="any registered official Malaysia contribution source",
+    ):
         preview_rule_update({
             "provider": "deepseek", "api_key": "key", "model": "model",
             "country": "Malaysia", "tax_year": 2026, "residency": "Resident",

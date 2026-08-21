@@ -23,7 +23,7 @@ SOURCE_REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
 OFFICIAL_RULE_SOURCES = {
     "malaysia": {
         "tax_url": "https://www.hasil.gov.my/wp-content/uploads/navigasi-hasil-2026.pdf",
-        "contribution_url": "https://www.kwsp.gov.my/en/epf-act-1991-third-schedule",
+        "contribution_url": "https://www.kwsp.gov.my/en/employer/responsibilities/mandatory-contribution",
     },
     "singapore": {
         "tax_url": "https://www.iras.gov.sg/taxes/individual-income-tax/basics-of-individual-income-tax/tax-residency-and-tax-rates/individual-income-tax-rates",
@@ -35,6 +35,24 @@ OFFICIAL_RULE_SOURCE_FALLBACKS = {
         "tax_url": (
             "https://www.hasil.gov.my/wp-content/uploads/sepintas-e-buku-hasil-2025.pdf",
         ),
+        "contribution_url": (
+            "https://www.kwsp.gov.my/documents/d/guest/third_schedule_from_-1-october-2025",
+        ),
+        "contribution_url_by_residency": {
+            "non-resident": (
+                "https://www.kwsp.gov.my/documents/d/guest/migrant-worker-flyer-eng-3",
+            ),
+        },
+    },
+}
+OFFICIAL_RULE_SOURCE_RESIDENCY_OVERRIDES = {
+    "malaysia": {
+        "contribution_url": {
+            "non-resident": (
+                "https://www.kwsp.gov.my/en/employer/responsibilities/"
+                "non-malaysian-citizen-employees"
+            ),
+        },
     },
 }
 
@@ -112,6 +130,33 @@ def _response_bytes(response: Any, max_bytes: int = MAX_SOURCE_BYTES) -> bytes:
     return content
 
 
+def _official_source_request_headers(url: str) -> dict[str, str]:
+    headers = {
+        "User-Agent": "CVStudio-SalaryComparison/1.4",
+        "Accept": "text/html,application/pdf,*/*",
+    }
+    hostname = (urlparse(url).hostname or "").casefold()
+    if hostname == "kwsp.gov.my" or hostname.endswith(".kwsp.gov.my"):
+        # KWSP's public pages use a Cloudflare browser check and return HTTP 403
+        # to the utility-style user agent above. These are ordinary public
+        # documents; browser-compatible request metadata is sufficient and no
+        # challenge, cookie, login or private endpoint is used.
+        headers.update({
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/139.0.0.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/pdf;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": (
+                "https://www.kwsp.gov.my/en/employer/responsibilities/"
+                "mandatory-contribution"
+            ),
+        })
+    return headers
+
+
 def fetch_official_source(url: str, max_chars: int = 60000) -> str:
     url = _public_source_url(url)
     current_url = url
@@ -121,7 +166,7 @@ def fetch_official_source(url: str, max_chars: int = 60000) -> str:
             current_url = _public_source_url(current_url)
             response = requests.get(
                 current_url,
-                headers={"User-Agent": "CVStudio-SalaryComparison/1.4", "Accept": "text/html,application/pdf,*/*"},
+                headers=_official_source_request_headers(current_url),
                 timeout=45,
                 stream=True,
                 allow_redirects=False,
@@ -418,6 +463,16 @@ def preview_rule_update(
         tax_url = sources["tax_url"]
         contribution_url = sources["contribution_url"]
         fallbacks = OFFICIAL_RULE_SOURCE_FALLBACKS.get(country.casefold(), {})
+        residency_overrides = OFFICIAL_RULE_SOURCE_RESIDENCY_OVERRIDES.get(
+            country.casefold(), {}
+        )
+        contribution_url = residency_overrides.get("contribution_url", {}).get(
+            residency.casefold(), contribution_url
+        )
+        contribution_fallbacks = fallbacks.get("contribution_url", ())
+        contribution_fallbacks = fallbacks.get(
+            "contribution_url_by_residency", {}
+        ).get(residency.casefold(), contribution_fallbacks)
         tax_url, tax_text = _fetch_registered_official_source(
             tax_url,
             fallbacks.get("tax_url", ()),
@@ -425,7 +480,7 @@ def preview_rule_update(
         )
         contribution_url, contribution_text = _fetch_registered_official_source(
             contribution_url,
-            fallbacks.get("contribution_url", ()),
+            contribution_fallbacks,
             source_label=f"{country} contribution",
         )
     else:
