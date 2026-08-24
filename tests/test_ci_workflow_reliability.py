@@ -27,16 +27,13 @@ def test_regression_ci_runs_on_pull_requests_and_merged_master() -> None:
     _assert_action_is_immutably_pinned(workflow, "actions/setup-node", 1)
 
 
-def test_protected_build_runs_for_packaging_changes_and_uses_live_version() -> None:
+def test_protected_build_is_manual_only_and_uses_live_version() -> None:
     workflow = (ROOT / ".github" / "workflows" / "build-protected.yml").read_text(
         encoding="utf-8"
     )
-    assert "pull_request:\n    branches:\n      - master\n    paths:" in workflow
-    assert '      - "owner_build_tools/**"' in workflow
-    assert '      - ".github/workflows/build-protected.yml"' in workflow
-    assert '      - "UPDATE*.bat"' in workflow
-    assert '      - "UPDATE*.ps1"' in workflow
-    assert "group: cv-studio-protected-${{ github.event.pull_request.number || github.ref }}" in workflow
+    assert "pull_request:" not in workflow
+    assert "workflow_dispatch:" in workflow
+    assert "group: cv-studio-protected-${{ github.ref }}" in workflow
     assert "cancel-in-progress: true" in workflow
     assert "timeout-minutes: 150" in workflow
     assert build_protected.NATIVE_COMPILE_TIMEOUT_SECONDS == 7200

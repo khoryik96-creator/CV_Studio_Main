@@ -25,9 +25,9 @@
   `54298b9b6a822e1f36c9c101f1ff4edc9c7e835f`
 - Phase 7B-4 source baseline Git commit (merged Phase 7B-3):
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
-- Current merged source: v24.6.353 through PR #171.
-- Active work: v24.6.354 updater/CI reliability corrective on
-  `chatgpt/pr173-v24.6.354-update-ci-reliability` in open PR #173.
+- Current merged source: v24.6.354 through PR #173 (`0f2c6f5`).
+- Active work: v24.6.355 manual-only protected-build configuration on
+  `chatgpt/pr174-v24.6.355-manual-protected-build` for planned PR #174.
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
@@ -37,9 +37,32 @@
   contribution-profile repair. PR #166 merged the v24.6.350 salary
   profile-migration safety corrective. PR #167 merged the v24.6.351 JobAdder
   original-CV, candidate-contact and blank-PDF corrective as `85dc896`. PR #171
-  merged the v24.6.353 Windows source-updater hardening as `af322db`.
-- Current stop: v24.6.353 is merged on `master` through PR #171; v24.6.354 is
+  merged the v24.6.353 Windows source-updater hardening as `af322db`. PR #173
+  merged the v24.6.354 updater/CI reliability corrective as `0f2c6f5`; its
+  final protected retry was cancelled at the owner's request to conserve CI
+  minutes, with the retained local builder designated as the final package
+  check.
+- Current stop: v24.6.354 is merged on `master` through PR #173; v24.6.355 is
   active and unmerged on the branch above.
+
+## v24.6.355 manual-only protected-build configuration
+
+- The expensive `Build protected CV Studio packages` workflow has no automatic
+  pull-request or push trigger. It retains only `workflow_dispatch`, so an
+  owner must deliberately choose **Run workflow** in GitHub Actions.
+- The workflow stays disabled in GitHub while this PR is open, preventing the
+  configuration PR itself from consuming protected-build minutes. Re-enable it
+  only after merge; the committed manual-only trigger then remains in force.
+- Local Windows protected builds continue through
+  `owner_build_tools/BUILD_PROTECTED_WINDOWS.bat`. The owner will report any
+  local failure for correction.
+- Ordinary regression CI and Dependabot remain enabled. No application route,
+  schema, runtime, dependency, credential, external-call, user-data or
+  protected-package-content boundary changed.
+- Validation: 973 passed, 4 skipped, 96 subtests; all 19 frontend fixtures;
+  24 source-smoke assertions; tracked Python, JavaScript and PowerShell syntax;
+  repository/version consistency; and Windows protected-source
+  Antiword/Tesseract/adm-zip preflight.
 
 ## v24.6.354 Windows source updater and CI reliability corrective
 

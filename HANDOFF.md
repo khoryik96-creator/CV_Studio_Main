@@ -237,16 +237,28 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
+- **Manual-only protected builds — v24.6.355 / planned PR #174, ACTIVE.**
+  Branch `chatgpt/pr174-v24.6.355-manual-protected-build` removes the expensive
+  protected workflow's automatic pull-request trigger. After merge, re-enable
+  the currently disabled workflow in GitHub so its explicit **Run workflow**
+  action is available; do not restore automatic PR builds. The local
+  `owner_build_tools/BUILD_PROTECTED_WINDOWS.bat` remains authoritative, and
+  the owner will report any local build failure. Ordinary regression CI and
+  Dependabot remain enabled. No application route, schema, runtime,
+  dependency, credential, external-call, user-data or protected-package
+  content changes. Validation: 973 passed, 4 skipped, 96 subtests; all 19
+  frontend fixtures; 24 source-smoke assertions; tracked syntax; repository
+  consistency; and Windows Antiword/Tesseract/adm-zip protected preflight.
 - **Windows source update and CI reliability — v24.6.354 / PR #173,
-  ACTIVE.** Branch `chatgpt/pr173-v24.6.354-update-ci-reliability` adds a
+  MERGED.** Branch `chatgpt/pr173-v24.6.354-update-ci-reliability` adds a
   dependency and authorization preflight before the current server is stopped,
   waits for the existing bounded startup health check, and records a small
   rotating local update log plus the previous/current Git commits for safe
   recovery guidance. It does not install dependencies automatically and does
   not reset local edits. Regression CI now runs on merged `master`, maintained
   GitHub action runtimes replace warning-producing versions and are pinned to
-  immutable commit SHAs, packaging-boundary pull requests run one cancelable
-  Windows protected build per PR, and the low-memory single-worker Nuitka
+  immutable commit SHAs. PR #174 supersedes its automatic protected-build
+  trigger with a manual-only action. The low-memory single-worker Nuitka
   compile has a bounded 120-minute allowance inside a 150-minute workflow
   budget. Batch-file validation uses one shared inventory. Weekly Dependabot
   version-update PRs cover exact-pinned Python
