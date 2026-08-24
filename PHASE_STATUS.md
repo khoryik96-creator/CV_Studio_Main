@@ -25,9 +25,8 @@
   `54298b9b6a822e1f36c9c101f1ff4edc9c7e835f`
 - Phase 7B-4 source baseline Git commit (merged Phase 7B-3):
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
-- Current merged source: v24.6.352 through PR #169.
-- Active work: v24.6.353 source-updater hardening on planned PR #171, branch
-  `chatgpt/pr171-v24.6.353-update-launcher-hardening`.
+- Current merged source: v24.6.353 through PR #171.
+- Active work: none for the v24.6.353 corrective; PR #171 is merged.
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
@@ -36,9 +35,10 @@
   source-access corrective. PR #165 merged the v24.6.349 salary
   contribution-profile repair. PR #166 merged the v24.6.350 salary
   profile-migration safety corrective. PR #167 merged the v24.6.351 JobAdder
-  original-CV, candidate-contact and blank-PDF corrective as `85dc896`.
-- Current stop: v24.6.352 is merged on `master` through PR #169; v24.6.353 is
-  active on its isolated branch and is not merged.
+  original-CV, candidate-contact and blank-PDF corrective as `85dc896`. PR #171
+  merged the v24.6.353 Windows source-updater hardening as `af322db`.
+- Current stop: v24.6.353 is merged on `master` through PR #171; no newer
+  corrective is active.
 
 ## v24.6.353 Windows source updater hardening corrective
 
@@ -58,6 +58,10 @@
 - `UPDATE.bat` remains excluded from protected colleague package contents. No
   route, schema, dependency, credential, external call or user-data boundary
   changes.
+- Validation: 964 passed, 4 skipped, 96 subtests; all 19 frontend fixtures;
+  24-assertion source smoke; tracked-language syntax; repository/version
+  consistency; Windows protected-source Antiword/Tesseract/adm-zip preflight;
+  and successful Windows x64, macOS Intel and macOS Apple Silicon CI jobs.
 
 ## v24.6.352 Windows watchdog recovery corrective
 
