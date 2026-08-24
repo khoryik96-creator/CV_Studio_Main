@@ -25,10 +25,9 @@
   `54298b9b6a822e1f36c9c101f1ff4edc9c7e835f`
 - Phase 7B-4 source baseline Git commit (merged Phase 7B-3):
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
-- Current merged source: v24.6.358 through PR #177
-  (`2c06bc5c30fba3afcd1885b1ea4cada01fd1fc3a`).
-- Active work: v24.6.359 updater preflight-output corrective on
-  `chatgpt/pr179-v24.6.359-updater-preflight-output` for planned PR #179.
+- Current merged source: v24.6.359 through PR #179
+  (`a20b7f99c133e6082a9f10602df2ef8fa94314b5`).
+- Active work: none.
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
@@ -45,9 +44,10 @@
   check. PR #174 merged the manual-only protected-build configuration as
   `ab96824`. PR #175 merged the updater preflight-path fix. PR #176 merged the
   audit hardening as `d94554c`. PR #177 merged the updater runtime-consistency
-  corrective as `2c06bc5`; current master is v24.6.358.
-- Current stop: v24.6.358 is merged on `master` through PR #177; v24.6.359 is
-  active and unmerged on the branch above.
+  corrective as `2c06bc5`. PR #179 merged the updater preflight-output
+  corrective as `a20b7f9`; current master is v24.6.359.
+- Current stop: v24.6.359 is merged on `master` through PR #179; no corrective
+  branch is active.
 
 ## v24.6.359 updater preflight-output corrective
 
@@ -59,8 +59,10 @@
   diagnostic. Its failure regression verifies exit code 8, the actionable
   message, no conversion crash and that the current server remains untouched.
 - No route, schema, dependency, CV-formatting, credential, paid/external call,
-  candidate-data, storage or protected-build trigger changes. Planned PR #179
-  remains unmerged pending owner review.
+  candidate-data, storage or protected-build trigger changes. PR #179 merged to
+  `master` as `a20b7f9` after 982 tests, 4 skips and 96 subtests passed locally;
+  hosted runners did not start because the Actions spending limit was
+  exhausted.
 
 ## v24.6.358 updater runtime-consistency corrective
 
