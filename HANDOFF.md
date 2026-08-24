@@ -66,7 +66,7 @@ Expected Linux result: **1 known failure** —
 `test_legacy_doc_requires_and_uses_verified_antiword` (the Antiword binary is
 not functional on Linux; it is a Windows-only runtime — the app correctly
 returns 424 rather than trusting an unverified extraction). A verified Windows
-x64 environment currently passes **981 tests, 4 skipped, 96 subtests**.
+x64 environment currently passes **982 tests, 4 skipped, 96 subtests**.
 **Do not commit `.venv_test/`** (or
 `node_modules/`). Both paths are gitignored, but keep generated dependency
 trees out of commits and continue staging source files explicitly rather than
@@ -246,8 +246,12 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   the complete runtime set, then startup launches that same resolved
   executable. This prevents a stale first Python from taking the app down after
   a later Python passed preflight, and prevents manual pulls or one-time updater
-  transitions from restarting with stale packages. Focused Windows regressions
-  cover exact-version acceptance and rejection. No route, schema, CV
+  transitions from restarting with stale packages. The downloaded preflight is
+  self-contained for the one-time v24.6.357 upgrade, before the new runtime
+  helper exists in the old checkout, and future updater runs verify that the
+  candidate contains the helper before changing source. Focused Windows
+  regressions cover exact-version acceptance, rejection and that transition.
+  No route, schema, CV
   formatting, credential, external-call or user-data boundary changes. No
   merge without owner approval.
 - **Audit hardening — v24.6.357 / PR #176, MERGED.** PR #176 merged to

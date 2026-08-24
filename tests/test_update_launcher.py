@@ -79,6 +79,7 @@ def _make_windows_fixture(
     (source / "requirements.txt").write_text(
         "fixture-package==1.0\n", encoding="utf-8"
     )
+    (source / "PYTHON_RUNTIME.ps1").write_text("exit 0\n", encoding="utf-8")
     _write_batch(
         source / "CV Studio.bat",
         [
@@ -102,6 +103,7 @@ def _make_windows_fixture(
             "FORCE_STOP.ps1",
             "CV Studio.bat",
             "requirements.txt",
+            "PYTHON_RUNTIME.ps1",
         ],
         cwd=source,
     )
@@ -190,6 +192,7 @@ def test_update_launcher_hardening_source_contract() -> None:
     assert "diff --quiet --ignore-submodules --" in core
     assert "diff --cached --quiet --ignore-submodules --" in core
     assert "candidate_dependency_manifest_changed" in core
+    assert "candidate_python_runtime_missing" in core
     current_preflight = core.index("Checking the current CV Studio installation")
     fetch = core.index("fetch --no-tags origin")
     candidate_preflight = core.index("Checking the downloaded updater")
@@ -232,7 +235,10 @@ def test_update_preflight_uses_shared_exact_python_runtime_resolver() -> None:
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows PowerShell runtime resolver")
-def test_python_runtime_resolver_returns_the_exact_validated_interpreter() -> None:
+def test_python_runtime_resolver_returns_the_exact_validated_interpreter(
+    tmp_path: Path,
+) -> None:
+    output_path = tmp_path / "resolved-python.txt"
     result = subprocess.run(
         [
             "powershell.exe",
@@ -245,6 +251,8 @@ def test_python_runtime_resolver_returns_the_exact_validated_interpreter() -> No
             str(ROOT),
             "-Candidates",
             sys.executable,
+            "-OutputPath",
+            str(output_path),
         ],
         cwd=ROOT,
         capture_output=True,
@@ -252,7 +260,8 @@ def test_python_runtime_resolver_returns_the_exact_validated_interpreter() -> No
         timeout=30,
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    resolved = Path(result.stdout.strip())
+    assert not result.stdout.strip()
+    resolved = Path(output_path.read_text(encoding="utf-8").strip())
     assert resolved.is_file()
     assert resolved.parent.resolve() == Path(sys.executable).parent.resolve()
     assert resolved.name.lower() in {"python.exe", "pythonw.exe"}
@@ -330,6 +339,57 @@ def test_real_update_preflight_uses_launcher_path_python_before_stale_fixed_inst
             "Bypass",
             "-File",
             str(source / "UPDATE_PREFLIGHT.ps1"),
+            "-Root",
+            str(source),
+        ],
+        cwd=source,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        env=env,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Update preflight passed" in result.stdout
+
+
+@pytest.mark.skipif(
+    os.name != "nt"
+    or shutil.which("python") is None
+    or shutil.which("node") is None
+    or not _windows_tesseract_is_available(),
+    reason="Windows Python/Node/Tesseract updater preflight",
+)
+def test_downloaded_preflight_is_self_contained_for_v357_upgrade_transition(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "v357-source"
+    source.mkdir()
+    candidate_preflight = tmp_path / "candidate_update_preflight.ps1"
+    shutil.copy2(UPDATE_PREFLIGHT, candidate_preflight)
+    for name in (
+        "CV Studio.bat",
+        "START_HIDDEN.vbs",
+        "FORCE_STOP.ps1",
+    ):
+        (source / name).write_text("fixture\n", encoding="utf-8")
+    shutil.copy2(ROOT / "requirements.txt", source / "requirements.txt")
+    (source / "package.json").write_text("{}\n", encoding="utf-8")
+    (source / "INSTALL_RECEIPT.ps1").write_text("exit 0\n", encoding="utf-8")
+    shutil.copytree(
+        ROOT / "node_modules" / "adm-zip",
+        source / "node_modules" / "adm-zip",
+    )
+    env = dict(os.environ)
+    env["PATH"] = str(Path(sys.executable).parent) + os.pathsep + env.get("PATH", "")
+
+    result = subprocess.run(
+        [
+            "powershell.exe",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(candidate_preflight),
             "-Root",
             str(source),
         ],

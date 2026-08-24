@@ -59,6 +59,10 @@
   manual GitHub Desktop pull and the one-time transition from an older updater
   cannot restart CV Studio with merely importable but stale dependency
   versions; `INSTALL.bat` remains the explicit repair path.
+- The downloaded candidate preflight remains self-contained while the old
+  v24.6.357 checkout does not yet contain `PYTHON_RUNTIME.ps1`; subsequent
+  updater runs also verify that the candidate contains that helper before
+  changing source files.
 - Focused Windows regressions cover exact-version acceptance/rejection and seal
   the shared resolver into source preflight, startup and protected Windows
   package validation. No route, schema, CV-formatting, credential, paid or
