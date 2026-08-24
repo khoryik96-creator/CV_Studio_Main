@@ -63,12 +63,16 @@
   Windows batch-file inventory. The new updater preflight participates in the
   protected source checks while `UPDATE.bat` remains excluded from colleague
   packages.
+- Dependabot checks Python packages and GitHub Actions weekly, grouping routine
+  minor/patch proposals while leaving major upgrades visible individually.
+  npm version updates are intentionally excluded: the only npm dependency,
+  `adm-zip`, requires deliberate vetted-tree and aggregate-hash replacement.
 - No route, schema, application dependency, credential, external-call,
   user-data or protected colleague-package-content boundary changed.
-- Validation: 969 passed, 4 skipped, 96 subtests; all 19 frontend fixtures;
+- Validation: 971 passed, 4 skipped, 96 subtests; all 19 frontend fixtures;
   24-assertion source smoke; tracked Python, JavaScript and PowerShell syntax;
   repository/version consistency; Windows protected-source Antiword/Tesseract/
-  adm-zip preflight; and 17 focused updater, workflow, dependency and version
+  adm-zip preflight; and 19 focused updater, workflow, dependency and version
   tests.
 
 ## v24.6.353 Windows source updater hardening corrective

@@ -64,7 +64,7 @@ Expected Linux result: **1 known failure** —
 `test_legacy_doc_requires_and_uses_verified_antiword` (the Antiword binary is
 not functional on Linux; it is a Windows-only runtime — the app correctly
 returns 424 rather than trusting an unverified extraction). A verified Windows
-x64 environment currently passes **969 tests, 4 skipped, 96 subtests**.
+x64 environment currently passes **971 tests, 4 skipped, 96 subtests**.
 **Do not commit `.venv_test/`** (or
 `node_modules/`). Both paths are gitignored, but keep generated dependency
 trees out of commits and continue staging source files explicitly rather than
@@ -246,7 +246,10 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   not reset local edits. Regression CI now runs on merged `master`, maintained
   GitHub action runtimes replace warning-producing versions, packaging-boundary
   pull requests run a real Windows protected build, and batch-file validation
-  uses one shared inventory. No route, schema, application dependency,
+  uses one shared inventory. Weekly Dependabot version-update PRs cover Python
+  packages and GitHub Actions; npm is intentionally excluded because the sole
+  `adm-zip` dependency uses an owner-vetted tree and pinned aggregate hash. No
+  route, schema, application dependency,
   credential, external-call, user-data or protected colleague-package-content
   boundary changes.
 - **Windows watchdog recovery corrective — v24.6.352 / PR #169, MERGED.**
