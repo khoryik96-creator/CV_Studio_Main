@@ -1,4 +1,9 @@
-param([string]$Root = $PSScriptRoot)
+param(
+    [string]$Root = $PSScriptRoot,
+    [switch]$ResolvePythonOnly,
+    [string[]]$PythonCandidates = @(),
+    [string]$PythonOutputPath = ''
+)
 $ErrorActionPreference = 'Stop'
 
 function Stop-WithError([string]$Message, [int]$Code) {
@@ -6,10 +11,117 @@ function Stop-WithError([string]$Message, [int]$Code) {
     exit $Code
 }
 
+function Resolve-ExactPythonRuntime {
+    param([string]$SourceRoot, [string[]]$Candidates = @())
+
+    $requirementsPath = Join-Path $SourceRoot 'requirements.txt'
+    if (-not (Test-Path -LiteralPath $requirementsPath -PathType Leaf)) {
+        return ''
+    }
+    if ($Candidates.Count -eq 0) {
+        $Candidates = @(
+            @(
+                [string](Get-Command python.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -First 1),
+                $(if ($env:LOCALAPPDATA) { Join-Path $env:LOCALAPPDATA 'Programs\Python\Python314\python.exe' }),
+                $(if ($env:LOCALAPPDATA) { Join-Path $env:LOCALAPPDATA 'Programs\Python\Python313\python.exe' }),
+                $(if ($env:LOCALAPPDATA) { Join-Path $env:LOCALAPPDATA 'Programs\Python\Python312\python.exe' }),
+                $(if ($env:LOCALAPPDATA) { Join-Path $env:LOCALAPPDATA 'Programs\Python\Python311\python.exe' }),
+                'C:\Python314\python.exe',
+                'C:\Python313\python.exe',
+                'C:\Python312\python.exe',
+                'C:\Python311\python.exe'
+            ) | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) } | Select-Object -Unique
+        )
+    } else {
+        $Candidates = @(
+            $Candidates |
+                Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) } |
+                Select-Object -Unique
+        )
+    }
+
+    $probe = @'
+import importlib.metadata as metadata
+import pathlib
+import re
+import sys
+
+requirements_path = pathlib.Path(sys.argv[1])
+try:
+    lines = requirements_path.read_text(encoding="utf-8").splitlines()
+except Exception:
+    raise SystemExit(3)
+
+pins = []
+for raw_line in lines:
+    line = raw_line.split("#", 1)[0].strip()
+    if not line:
+        continue
+    if line.count("==") != 1:
+        raise SystemExit(3)
+    name, expected = (part.strip() for part in line.split("==", 1))
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+", name) or not expected or re.search(r"[\s;]", expected):
+        raise SystemExit(3)
+    pins.append((name, expected))
+
+if not pins:
+    raise SystemExit(3)
+
+try:
+    for name, expected in pins:
+        if metadata.version(name).casefold() != expected.casefold():
+            raise SystemExit(2)
+    import flask, pdfplumber, docx, pytesseract, pdf2image, pypdfium2
+    import PIL, olefile, certifi, reportlab, openpyxl, bs4, pypdf, requests, waitress
+except SystemExit:
+    raise
+except Exception:
+    raise SystemExit(2)
+'@
+
+    $probePath = [IO.Path]::GetTempFileName()
+    $resolved = ''
+    try {
+        [IO.File]::WriteAllText($probePath, $probe, [Text.UTF8Encoding]::new($false))
+        foreach ($candidate in $Candidates) {
+            try {
+                & ([string]$candidate) $probePath $requirementsPath 2>$null | Out-Null
+                if ([int]$LASTEXITCODE -ne 0) { continue }
+                $candidatePath = [IO.Path]::GetFullPath([string]$candidate)
+                $pythonw = Join-Path (Split-Path -Parent $candidatePath) 'pythonw.exe'
+                $resolved = if (Test-Path -LiteralPath $pythonw -PathType Leaf) {
+                    [IO.Path]::GetFullPath($pythonw)
+                } else {
+                    $candidatePath
+                }
+                break
+            } catch {}
+        }
+    } finally {
+        Remove-Item -LiteralPath $probePath -Force -ErrorAction SilentlyContinue
+    }
+    return $resolved
+}
+
 try {
     $Root = [IO.Path]::GetFullPath($Root).TrimEnd('\','/')
 } catch {
     Stop-WithError 'The CV Studio folder path is invalid.' 2
+}
+
+if ($ResolvePythonOnly) {
+    $resolvedPython = [string](Resolve-ExactPythonRuntime -SourceRoot $Root -Candidates $PythonCandidates)
+    if ([string]::IsNullOrWhiteSpace($resolvedPython)) { exit 8 }
+    if ([string]::IsNullOrWhiteSpace($PythonOutputPath)) {
+        Write-Output $resolvedPython
+    } else {
+        [IO.File]::WriteAllText(
+            [IO.Path]::GetFullPath($PythonOutputPath),
+            $resolvedPython,
+            [Text.UTF8Encoding]::new($false)
+        )
+    }
+    exit 0
 }
 $programFilesX86 = [string]${env:ProgramFiles(x86)}
 
@@ -21,6 +133,11 @@ $required = @(
     'package.json',
     'requirements.txt'
 )
+$sourcePreflight = [IO.Path]::GetFullPath((Join-Path $Root 'UPDATE_PREFLIGHT.ps1'))
+$runningPreflight = [IO.Path]::GetFullPath($MyInvocation.MyCommand.Path)
+if ($runningPreflight -eq $sourcePreflight) {
+    $required += 'PYTHON_RUNTIME.ps1'
+}
 $missing = @($required | Where-Object { -not (Test-Path -LiteralPath (Join-Path $Root $_) -PathType Leaf) })
 if ($missing.Count -gt 0) {
     Stop-WithError ("Required update file(s) are missing: {0}" -f ($missing -join ', ')) 2
@@ -61,32 +178,10 @@ if ($LASTEXITCODE -ne 0) {
 
 $nativeRuntime = Join-Path $Root 'runtime\native\CVStudio.exe'
 if (-not (Test-Path -LiteralPath $nativeRuntime -PathType Leaf)) {
-    $pythonCandidates = @(
-        @(
-            [string](Get-Command python.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -First 1),
-            (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python314\python.exe'),
-            (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python313\python.exe'),
-            (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python312\python.exe'),
-            (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python311\python.exe'),
-            'C:\Python314\python.exe',
-            'C:\Python313\python.exe',
-            'C:\Python312\python.exe',
-            'C:\Python311\python.exe'
-        ) | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) } | Select-Object -Unique
-    )
-    if ($pythonCandidates.Count -eq 0) {
-        Stop-WithError 'Python is unavailable. Run INSTALL.bat while the current server is still running.' 8
-    }
-    $imports = 'import flask,pdfplumber,docx,pytesseract,pdf2image,pypdfium2,PIL,olefile,certifi,reportlab,openpyxl,bs4,pypdf,requests,waitress'
-    $python = $null
-    foreach ($candidate in $pythonCandidates) {
-        try {
-            & ([string]$candidate) -c $imports 2>$null
-            if ($LASTEXITCODE -eq 0) { $python = [string]$candidate; break }
-        } catch {}
-    }
-    if (-not $python) {
-        Stop-WithError 'One or more Python runtime packages are missing. Run INSTALL.bat.' 8
+    $resolvedPython = [string](Resolve-ExactPythonRuntime -SourceRoot $Root)
+    if ([string]::IsNullOrWhiteSpace($resolvedPython) -or
+            -not (Test-Path -LiteralPath $resolvedPython -PathType Leaf)) {
+        Stop-WithError 'Python or one or more exact runtime package versions are missing. Run INSTALL.bat.' 8
     }
 }
 

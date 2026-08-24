@@ -40,8 +40,8 @@ except ModuleNotFoundError:  # Direct `python owner_build_tools/build_protected.
         find_pinned_checkout_action,
     )
 
-VERSION = "v24.6.357"
-VERSION_SLUG = "v24_6_357"
+VERSION = "v24.6.358"
+VERSION_SLUG = "v24_6_358"
 PRODUCT = "TheGuoLab-CVStudio"
 RECEIPT_SCHEMA = 2
 TOTP_MASK = bytes([147,57,36,83,116,245,122,57,165,162,176,168,249,50,204,128,45,174,232,56])
@@ -104,7 +104,7 @@ SALARY_COMPARISON_MODULES = (
 )
 ROOT_FILES = (
     "CV Studio.bat","INSTALL.bat","INSTALL_CORE.bat","INSTALL_CORE.ps1","INSTALL_RECEIPT.ps1",
-    "START_HIDDEN.vbs","STOP.bat","STOP_CORE.ps1","FORCE_STOP.bat","FORCE_STOP.ps1","WATCHDOG.vbs","INSTANCE_PORT.ps1","RESTORE_PREVIOUS.bat","RESTORE_PREVIOUS.ps1","install.sh","start.sh","restore_previous.sh",
+    "START_HIDDEN.vbs","STOP.bat","STOP_CORE.ps1","FORCE_STOP.bat","FORCE_STOP.ps1","WATCHDOG.vbs","INSTANCE_PORT.ps1","RESTORE_PREVIOUS.bat","RESTORE_PREVIOUS.ps1","PYTHON_RUNTIME.ps1","install.sh","start.sh","restore_previous.sh",
     "package.json","requirements.txt","cv_studio_logo.png","cv_studio.ico",
 )
 BANNED_DIRS = {"__pycache__",".git",".pytest_cache",".mypy_cache"}
@@ -265,7 +265,7 @@ def validate_repository_dependency_state(root: Path) -> None:
             raise RuntimeError(f"{rel} is not CRLF-only. Run repo_consistency.py --repair.")
         if not raw.lower().startswith(b"option explicit"):
             raise RuntimeError(f"{rel} does not begin with Option Explicit at byte zero.")
-    for rel in ("INSTANCE_PORT.ps1", "STOP_CORE.ps1", "FORCE_STOP.ps1", "RESTORE_PREVIOUS.ps1", "UPDATE_CORE.ps1", "UPDATE_PREFLIGHT.ps1"):
+    for rel in ("INSTANCE_PORT.ps1", "STOP_CORE.ps1", "FORCE_STOP.ps1", "RESTORE_PREVIOUS.ps1", "PYTHON_RUNTIME.ps1", "UPDATE_CORE.ps1", "UPDATE_PREFLIGHT.ps1"):
         helper_raw = (root / rel).read_bytes()
         if helper_raw.startswith(b"\xef\xbb\xbf"):
             raise RuntimeError(f"{rel} contains a UTF-8 BOM. Run repo_consistency.py --repair.")
@@ -700,7 +700,7 @@ def patch_launchers(root: Path,target: str) -> None:
         stop_core=(root/"STOP_CORE.ps1").read_text(encoding="utf-8-sig")
         watchdog=(root/"WATCHDOG.vbs").read_text(encoding="utf-8")
         helper=(root/"INSTANCE_PORT.ps1").read_text(encoding="utf-8-sig")
-        if r"runtime\native\CVStudio.exe" not in start or "ServerXMLHTTP.6.0" not in start or "/instance-id" not in start:
+        if r"runtime\native\CVStudio.exe" not in start or "ServerXMLHTTP.6.0" not in start or "/instance-id" not in start or "PYTHON_RUNTIME.ps1" not in start:
             raise RuntimeError("Windows hidden launcher lacks native/timeout/instance validation.")
         if "STOP_CORE.ps1" not in stop or "cvstudio.$instance.pid.json" not in stop_core or "INSTANCE_PORT.ps1" not in stop_core or "-Mode Stop" not in stop_core:
             raise RuntimeError("Windows shutdown is not instance/PID/port-identity scoped.")
@@ -739,7 +739,7 @@ def prune_target_incompatible_launchers(root: Path, target: str) -> None:
             "CV Studio.bat", "INSTALL.bat", "INSTALL_CORE.bat", "INSTALL_CORE.ps1",
             "INSTALL_RECEIPT.ps1", "START_HIDDEN.vbs", "STOP.bat", "STOP_CORE.ps1",
             "WATCHDOG.vbs", "INSTANCE_PORT.ps1", "RESTORE_PREVIOUS.bat",
-            "RESTORE_PREVIOUS.ps1", "cv_studio.ico",
+            "RESTORE_PREVIOUS.ps1", "PYTHON_RUNTIME.ps1", "cv_studio.ico",
         )
     else:
         remove = ()

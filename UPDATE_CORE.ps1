@@ -156,6 +156,12 @@ if (-not $git) {
                 Stop-Update 'The downloaded master dependency files could not be inspected safely. No source files were changed.' 17
             }
 
+            & $git cat-file -e 'refs/remotes/origin/master:PYTHON_RUNTIME.ps1' 2>$null
+            if ($LASTEXITCODE -ne 0) {
+                Write-UpdateLog 'candidate_python_runtime_missing'
+                Stop-Update 'The downloaded master version is missing its Python runtime checker. No source files were changed.' 17
+            }
+
             $candidatePreflight = Join-Path $stateDir 'candidate_update_preflight.ps1'
             try {
                 $candidateLines = @(& $git show 'refs/remotes/origin/master:UPDATE_PREFLIGHT.ps1')

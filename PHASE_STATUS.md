@@ -25,10 +25,10 @@
   `54298b9b6a822e1f36c9c101f1ff4edc9c7e835f`
 - Phase 7B-4 source baseline Git commit (merged Phase 7B-3):
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
-- Current merged source: v24.6.356 through PR #175
-  (`64d86d2ed7048443d9ddcf041e441952e022daae`).
-- Active work: v24.6.357 audit hardening on
-  `chatgpt/pr176-v24.6.357-audit-hardening` for planned PR #176.
+- Current merged source: v24.6.357 through PR #176
+  (`d94554c9920a0f76da0406f0eac569b1e34bcc31`).
+- Active work: v24.6.358 updater runtime-consistency corrective on
+  `chatgpt/pr177-v24.6.358-updater-runtime-consistency` for planned PR #177.
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
@@ -43,10 +43,31 @@
   final protected retry was cancelled at the owner's request to conserve CI
   minutes, with the retained local builder designated as the final package
   check. PR #174 merged the manual-only protected-build configuration as
-  `ab96824`. PR #175 merged the updater preflight-path fix; current master is
-  `64d86d2` at v24.6.356.
-- Current stop: v24.6.356 is merged on `master` through PR #175; v24.6.357 is
+  `ab96824`. PR #175 merged the updater preflight-path fix. PR #176 merged the
+  audit hardening as `d94554c`; current master is v24.6.357.
+- Current stop: v24.6.357 is merged on `master` through PR #176; v24.6.358 is
   active and unmerged on the branch above.
+
+## v24.6.358 updater runtime-consistency corrective
+
+- One shared PowerShell resolver owns Windows source-mode Python selection for
+  both update preflight and `START_HIDDEN.vbs`. It verifies every exact
+  `requirements.txt` distribution version and imports the complete runtime set,
+  then startup launches the exact executable returned by that probe.
+- A stale PATH Python can no longer pass control to a different interpreter or
+  take the working server down after a later candidate passed preflight. A
+  manual GitHub Desktop pull and the one-time transition from an older updater
+  cannot restart CV Studio with merely importable but stale dependency
+  versions; `INSTALL.bat` remains the explicit repair path.
+- The downloaded candidate preflight remains self-contained while the old
+  v24.6.357 checkout does not yet contain `PYTHON_RUNTIME.ps1`; subsequent
+  updater runs also verify that the candidate contains that helper before
+  changing source files.
+- Focused Windows regressions cover exact-version acceptance/rejection and seal
+  the shared resolver into source preflight, startup and protected Windows
+  package validation. No route, schema, CV-formatting, credential, paid or
+  external-call, candidate-data or storage behavior changes. Planned PR #177
+  remains unmerged pending owner review.
 
 ## v24.6.357 audit hardening
 
@@ -65,11 +86,11 @@
   Copied owner-only Nuitka diagnostics replace source/build/user roots with
   placeholders before leaving the temporary build folder.
 - Exact pins update pdfplumber 0.11.10, pypdfium2 5.13.0, certifi 2026.7.22 and
-  ReportLab 5.0.1. A clean isolated Python 3.14 environment passes 978 tests,
+  ReportLab 5.0.1. A clean isolated Python 3.14 environment passes 979 tests,
   4 skips and 96 subtests with these versions.
 - No route, schema, credential, CV-formatting, candidate-data, paid/external
-  call or automatic protected-build boundary changes. Planned PR #176 remains
-  unmerged pending owner review.
+  call or automatic protected-build boundary changes. PR #176 merged to
+  `master` as `d94554c`.
 
 ## v24.6.355 manual-only protected-build configuration
 
