@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 import re
 
+from owner_build_tools import build_protected
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -36,6 +38,11 @@ def test_protected_build_runs_for_packaging_changes_and_uses_live_version() -> N
     assert '      - "UPDATE*.ps1"' in workflow
     assert "group: cv-studio-protected-${{ github.event.pull_request.number || github.ref }}" in workflow
     assert "cancel-in-progress: true" in workflow
+    assert "timeout-minutes: 150" in workflow
+    assert build_protected.NATIVE_COMPILE_TIMEOUT_SECONDS == 7200
+    assert "timeout=NATIVE_COMPILE_TIMEOUT_SECONDS" in Path(
+        build_protected.__file__
+    ).read_text(encoding="utf-8")
     _assert_action_is_immutably_pinned(workflow, "actions/checkout", 1)
     _assert_action_is_immutably_pinned(workflow, "actions/setup-python", 1)
     _assert_action_is_immutably_pinned(workflow, "actions/setup-node", 1)

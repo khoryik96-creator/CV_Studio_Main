@@ -72,7 +72,10 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.select-targets.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 120
+    # The single-worker, low-memory Windows compile can exceed 90 minutes.
+    # Keep a bounded margin around the builder's 120-minute compile timeout for
+    # dependency setup, smoke testing, cleanup, and artifact uploads.
+    timeout-minutes: 150
 
     steps:
       - name: Disable Git line-ending conversion

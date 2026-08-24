@@ -246,8 +246,10 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   not reset local edits. Regression CI now runs on merged `master`, maintained
   GitHub action runtimes replace warning-producing versions and are pinned to
   immutable commit SHAs, packaging-boundary pull requests run one cancelable
-  Windows protected build per PR, and batch-file validation uses one shared
-  inventory. Weekly Dependabot version-update PRs cover exact-pinned Python
+  Windows protected build per PR, and the low-memory single-worker Nuitka
+  compile has a bounded 120-minute allowance inside a 150-minute workflow
+  budget. Batch-file validation uses one shared inventory. Weekly Dependabot
+  version-update PRs cover exact-pinned Python
   packages and GitHub Actions; npm is intentionally excluded because the sole
   `adm-zip` dependency uses an owner-vetted tree and pinned aggregate hash.
   GitHub Dependabot alerts, malware alerts, automatic security updates and

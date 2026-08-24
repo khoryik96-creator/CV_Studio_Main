@@ -109,6 +109,10 @@ ROOT_FILES = (
 BANNED_DIRS = {"__pycache__",".git",".pytest_cache",".mypy_cache"}
 BANNED_FILES = {".DS_Store","package-lock.json","npm-shrinkwrap.json","startup_authorization_error.txt","startup_timing.log","install_health_report.json","install_log.txt"}
 BANNED_SUFFIXES = {".pyc",".pyo",".bak"}
+# The current Windows standalone build exceeds the former 90-minute ceiling
+# with the deliberately conservative --low-memory --jobs=1 settings. Keep the
+# compile bounded, but leave enough headroom for the full current source tree.
+NATIVE_COMPILE_TIMEOUT_SECONDS = 7200
 
 
 def run(cmd: list[str], *, cwd: Path | None = None, env: dict[str,str] | None = None,
@@ -592,7 +596,7 @@ def compile_native(root: Path, work: Path, target: str, source_entry: Path | Non
                 cmd += ["--include-module=pythoncom","--include-module=pywintypes","--include-module=win32com.client"]
         except Exception: pass
     cmd.append(str(source_entry or (root/"app.py")))
-    run(cmd,cwd=root,timeout=5400)
+    run(cmd,cwd=root,timeout=NATIVE_COMPILE_TIMEOUT_SECONDS)
     dist_dirs=sorted(out.glob("*.dist"),key=lambda p:p.stat().st_mtime,reverse=True)
     if not dist_dirs: raise RuntimeError("Nuitka did not produce a .dist directory.")
     dist=dist_dirs[0]

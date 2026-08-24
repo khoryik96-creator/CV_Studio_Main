@@ -63,7 +63,10 @@
   commit. GitHub actions use maintained runtime versions pinned to immutable
   commit SHAs. Protected-packaging boundary changes trigger a real Windows
   protected build, older runs for the same PR are canceled, and artifact names
-  use the repository `VERSION` instead of a stale hard-coded release.
+  use the repository `VERSION` instead of a stale hard-coded release. The
+  current low-memory, single-worker Nuitka build exceeded the former internal
+  90-minute ceiling; its compile is now bounded at 120 minutes inside a
+  150-minute workflow budget, leaving time for setup, smoke and uploads.
 - Repository consistency and protected build validation share one authoritative
   Windows batch-file inventory. The new updater preflight participates in the
   protected source checks while `UPDATE.bat` remains excluded from colleague
