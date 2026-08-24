@@ -80,7 +80,7 @@ if "%UPDATE_APPLIED%"=="1" call :log current_commit=%CURRENT_COMMIT%
 :preflight
 echo Checking the updated CV Studio before stopping the current server...
 if not exist "%~dp0UPDATE_PREFLIGHT.ps1" goto :preflight_helper_missing
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0UPDATE_PREFLIGHT.ps1" -Root "%~dp0"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0UPDATE_PREFLIGHT.ps1"
 set "PREFLIGHT_RC=%ERRORLEVEL%"
 if not "%PREFLIGHT_RC%"=="0" goto :preflight_failed
 call :log preflight_passed
@@ -88,7 +88,7 @@ call :log preflight_passed
 :restart
 echo Stopping any running CV Studio server...
 if not exist "%~dp0FORCE_STOP.ps1" goto :stop_helper_missing
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0FORCE_STOP.ps1" -Root "%~dp0"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0FORCE_STOP.ps1"
 set "STOP_RC=%ERRORLEVEL%"
 if not "%STOP_RC%"=="0" goto :stop_failed
 

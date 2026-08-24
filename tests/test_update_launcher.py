@@ -56,16 +56,20 @@ def _make_windows_fixture(
     git = shutil.which("git")
     assert git is not None
 
-    source = tmp_path / "source"
+    source = tmp_path / "CV Studio source"
     remote = tmp_path / "remote.git"
     source.mkdir()
     shutil.copy2(UPDATE_LAUNCHER, source / "UPDATE.bat")
     (source / "UPDATE_PREFLIGHT.ps1").write_text(
-        f"param([string]$Root)\nexit {preflight_exit}\n",
+        "param([string]$Root = $PSScriptRoot)\n"
+        "try { $Root = [IO.Path]::GetFullPath($Root).TrimEnd('\\','/') } "
+        "catch { exit 2 }\n"
+        "if ($Root -ne [IO.Path]::GetFullPath($PSScriptRoot).TrimEnd('\\','/')) { exit 2 }\n"
+        f"exit {preflight_exit}\n",
         encoding="utf-8",
     )
     (source / "FORCE_STOP.ps1").write_text(
-        f"param([string]$Root)\nSet-Content -LiteralPath (Join-Path $PSScriptRoot 'stopped.txt') -Value stopped\nexit {stop_exit}\n",
+        f"param([string]$Root = $PSScriptRoot)\nSet-Content -LiteralPath (Join-Path $Root 'stopped.txt') -Value stopped\nexit {stop_exit}\n",
         encoding="utf-8",
     )
     _write_batch(
@@ -139,6 +143,8 @@ def test_update_launcher_hardening_source_contract() -> None:
     preflight_call = text.index('powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0UPDATE_PREFLIGHT.ps1"')
     start_call = text.index('call "%~dp0CV Studio.bat" --wait')
     assert preflight_call < stop_call < stop_result < stop_gate < start_call
+    assert '-File "%~dp0UPDATE_PREFLIGHT.ps1" -Root "%~dp0"' not in text
+    assert '-File "%~dp0FORCE_STOP.ps1" -Root "%~dp0"' not in text
     assert 'set "START_RC=%ERRORLEVEL%"' in text[start_call:]
     assert 'exit /b %START_RC%' in text[start_call:]
     assert "Previous source commit:" in text
