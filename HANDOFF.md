@@ -237,19 +237,21 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Windows source update and CI reliability — v24.6.354 / planned PR #173,
+- **Windows source update and CI reliability — v24.6.354 / PR #173,
   ACTIVE.** Branch `chatgpt/pr173-v24.6.354-update-ci-reliability` adds a
   dependency and authorization preflight before the current server is stopped,
   waits for the existing bounded startup health check, and records a small
   rotating local update log plus the previous/current Git commits for safe
   recovery guidance. It does not install dependencies automatically and does
   not reset local edits. Regression CI now runs on merged `master`, maintained
-  GitHub action runtimes replace warning-producing versions, packaging-boundary
-  pull requests run a real Windows protected build, and batch-file validation
-  uses one shared inventory. Weekly Dependabot version-update PRs cover Python
+  GitHub action runtimes replace warning-producing versions and are pinned to
+  immutable commit SHAs, packaging-boundary pull requests run one cancelable
+  Windows protected build per PR, and batch-file validation uses one shared
+  inventory. Weekly Dependabot version-update PRs cover exact-pinned Python
   packages and GitHub Actions; npm is intentionally excluded because the sole
-  `adm-zip` dependency uses an owner-vetted tree and pinned aggregate hash. No
-  route, schema, application dependency,
+  `adm-zip` dependency uses an owner-vetted tree and pinned aggregate hash.
+  GitHub Dependabot alerts, malware alerts, automatic security updates and
+  grouped security updates are enabled. No route, schema, dependency-set,
   credential, external-call, user-data or protected colleague-package-content
   boundary changes.
 - **Windows watchdog recovery corrective — v24.6.352 / PR #169, MERGED.**

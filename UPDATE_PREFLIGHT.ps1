@@ -63,11 +63,11 @@ $nativeRuntime = Join-Path $Root 'runtime\native\CVStudio.exe'
 if (-not (Test-Path -LiteralPath $nativeRuntime -PathType Leaf)) {
     $pythonCandidates = @(
         @(
+            [string](Get-Command python.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -First 1),
             (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python312\python.exe'),
             (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python311\python.exe'),
             'C:\Python312\python.exe',
-            'C:\Python311\python.exe',
-            [string](Get-Command python.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -First 1)
+            'C:\Python311\python.exe'
         ) | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) } | Select-Object -Unique
     )
     if ($pythonCandidates.Count -eq 0) {

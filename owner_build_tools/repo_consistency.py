@@ -22,7 +22,10 @@ BASE_INSTALL = "npm install --ignore-scripts --no-audit --no-fund --package-lock
 OBFUSCATOR_INSTALL = "npm install --no-save --ignore-scripts --no-audit --no-fund --package-lock=false javascript-obfuscator@4.1.1"
 GIT_CONFIG_COMMAND = "git config --global core.autocrlf false"
 GIT_ATTRIBUTES_RULE = "* -text"
-CHECKOUT_ACTION = "actions/checkout@v7"
+CHECKOUT_ACTION = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
+PINNED_CHECKOUT_ACTION_RE = re.compile(
+    r"actions/checkout@[0-9a-f]{40}\s+#\s+v\d+(?:\.\d+){0,2}"
+)
 LOCK_FILES = ("package-lock.json", "npm-shrinkwrap.json")
 BATCH_FILES = (
     "CV Studio.bat",
@@ -143,6 +146,11 @@ def _has_only_crlf(raw: bytes) -> bool:
 
 def _has_only_lf(raw: bytes) -> bool:
     return b"\r" not in raw
+
+
+def find_pinned_checkout_action(text: str) -> str | None:
+    match = PINNED_CHECKOUT_ACTION_RE.search(text)
+    return match.group(0) if match else None
 
 
 def repair(root: Path) -> list[str]:
@@ -373,10 +381,12 @@ def verify(root: Path) -> dict:
             errors.append("workflow is missing the pinned javascript-obfuscator install command")
         if GIT_CONFIG_COMMAND not in text:
             errors.append("workflow must disable core.autocrlf before actions/checkout")
-        elif CHECKOUT_ACTION not in text:
-            errors.append(f"protected workflow must use the maintained checkout action {CHECKOUT_ACTION}")
-        elif text.index(GIT_CONFIG_COMMAND) > text.index(f"uses: {CHECKOUT_ACTION}"):
-            errors.append("workflow disables core.autocrlf too late; it must happen before checkout")
+        else:
+            checkout_action = find_pinned_checkout_action(text)
+            if checkout_action is None:
+                errors.append("protected workflow must pin actions/checkout to a 40-character commit SHA")
+            elif text.index(GIT_CONFIG_COMMAND) > text.index(f"uses: {checkout_action}"):
+                errors.append("workflow disables core.autocrlf too late; it must happen before checkout")
 
     gitignore = root / ".gitignore"
     gi = gitignore.read_text(encoding="utf-8-sig") if gitignore.exists() else ""

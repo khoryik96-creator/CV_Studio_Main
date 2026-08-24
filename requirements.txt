@@ -7,9 +7,9 @@ pypdfium2==5.8.0
 Pillow==12.3.0
 olefile==0.47
 certifi==2026.5.20
-reportlab>=4,<5
-openpyxl>=3.1,<4
-beautifulsoup4>=4.12,<5
-pypdf>=4,<7
-requests>=2.31,<3
+reportlab==4.5.1
+openpyxl==3.1.5
+beautifulsoup4==4.15.0
+pypdf==6.16.2
+requests==2.34.2
 waitress==3.0.2

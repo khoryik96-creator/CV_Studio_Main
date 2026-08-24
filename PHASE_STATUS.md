@@ -27,7 +27,7 @@
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
 - Current merged source: v24.6.353 through PR #171.
 - Active work: v24.6.354 updater/CI reliability corrective on
-  `chatgpt/pr173-v24.6.354-update-ci-reliability` for planned PR #173.
+  `chatgpt/pr173-v24.6.354-update-ci-reliability` in open PR #173.
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
@@ -54,10 +54,15 @@
 - A bounded, rotating `source_update.log` records update, preflight, stop and
   restart outcomes without credentials or candidate data. Tests use an
   isolated state directory and prove preflight failures do not stop or restart
-  CV Studio.
+  CV Studio. A real local Git pull also proves that Windows can replace the
+  running `UPDATE.bat` and still complete its stop/restart sequence.
+- Source preflight now tries the PATH Python first, matching the real launcher
+  and installer. A stale broken fixed-location Python can no longer block an
+  otherwise healthy update.
 - Regression CI now runs for pull requests and the exact merged `master`
-  commit. GitHub actions use maintained runtime versions, protected-packaging
-  boundary changes trigger a real Windows protected build, and artifact names
+  commit. GitHub actions use maintained runtime versions pinned to immutable
+  commit SHAs. Protected-packaging boundary changes trigger a real Windows
+  protected build, older runs for the same PR are canceled, and artifact names
   use the repository `VERSION` instead of a stale hard-coded release.
 - Repository consistency and protected build validation share one authoritative
   Windows batch-file inventory. The new updater preflight participates in the
@@ -65,14 +70,20 @@
   packages.
 - Dependabot checks Python packages and GitHub Actions weekly, grouping routine
   minor/patch proposals while leaving major upgrades visible individually.
+  All 15 direct Python requirements are exact-pinned so installs are
+  reproducible and Dependabot proposals show a precise version change. GitHub
+  Dependabot alerts, malware alerts, automatic security updates and grouped
+  security updates are enabled; version-update PRs activate when this branch is
+  merged.
   npm version updates are intentionally excluded: the only npm dependency,
   `adm-zip`, requires deliberate vetted-tree and aggregate-hash replacement.
-- No route, schema, application dependency, credential, external-call,
-  user-data or protected colleague-package-content boundary changed.
-- Validation: 971 passed, 4 skipped, 96 subtests; all 19 frontend fixtures;
+- No route, schema, dependency-set, credential, external-call, user-data or
+  protected colleague-package-content boundary changed. Five existing tested
+  Python dependency ranges were tightened to their installed exact versions.
+- Validation: 973 passed, 4 skipped, 96 subtests; all 19 frontend fixtures;
   24-assertion source smoke; tracked Python, JavaScript and PowerShell syntax;
   repository/version consistency; Windows protected-source Antiword/Tesseract/
-  adm-zip preflight; and 19 focused updater, workflow, dependency and version
+  adm-zip preflight; and 28 focused updater, workflow, dependency and version
   tests.
 
 ## v24.6.353 Windows source updater hardening corrective

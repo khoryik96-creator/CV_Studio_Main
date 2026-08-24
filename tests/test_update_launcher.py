@@ -106,6 +106,29 @@ def _run_windows_launcher(source: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _push_self_update(tmp_path: Path, *, branch: str = "launcher-test") -> None:
+    git = shutil.which("git")
+    assert git is not None
+    writer = tmp_path / "writer"
+    _run([git, "clone", str(tmp_path / "remote.git"), str(writer)], cwd=tmp_path)
+    _run([git, "checkout", branch], cwd=writer)
+    _run([git, "config", "user.name", "CV Studio update test"], cwd=writer)
+    _run([git, "config", "user.email", "update@example.invalid"], cwd=writer)
+    launcher = (writer / "UPDATE.bat").read_text(encoding="utf-8")
+    launcher = launcher.replace(
+        "title CV Studio - Update\n",
+        "rem pulled self-update fixture\ntitle CV Studio - Update\n",
+        1,
+    )
+    (writer / "UPDATE.bat").write_bytes(
+        launcher.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "\r\n").encode("utf-8")
+    )
+    (writer / "pulled.txt").write_text("pulled\n", encoding="utf-8")
+    _run([git, "add", "UPDATE.bat", "pulled.txt"], cwd=writer)
+    _run([git, "commit", "-m", "update running launcher"], cwd=writer)
+    _run([git, "push", "origin", branch], cwd=writer)
+
+
 def test_update_launcher_hardening_source_contract() -> None:
     text = UPDATE_LAUNCHER.read_text(encoding="utf-8")
     assert "echo Current branch: %BRANCH%" not in text
@@ -148,10 +171,15 @@ def test_update_preflight_preserves_single_executable_candidates_as_arrays() -> 
 
 
 @pytest.mark.skipif(
-    os.name != "nt" or shutil.which("node") is None or not _windows_tesseract_is_available(),
-    reason="Windows Node/Tesseract updater preflight",
+    os.name != "nt"
+    or shutil.which("python") is None
+    or shutil.which("node") is None
+    or not _windows_tesseract_is_available(),
+    reason="Windows Python/Node/Tesseract updater preflight",
 )
-def test_real_update_preflight_accepts_single_system_runtime_candidates(tmp_path: Path) -> None:
+def test_real_update_preflight_uses_launcher_path_python_before_stale_fixed_install(
+    tmp_path: Path,
+) -> None:
     source = tmp_path / "source"
     source.mkdir()
     shutil.copy2(UPDATE_PREFLIGHT, source / "UPDATE_PREFLIGHT.ps1")
@@ -164,13 +192,16 @@ def test_real_update_preflight_accepts_single_system_runtime_candidates(tmp_path
         (source / name).write_text("fixture\n", encoding="utf-8")
     (source / "package.json").write_text("{}\n", encoding="utf-8")
     (source / "INSTALL_RECEIPT.ps1").write_text("exit 0\n", encoding="utf-8")
-    native = source / "runtime" / "native"
-    native.mkdir(parents=True)
-    (native / "CVStudio.exe").write_bytes(b"fixture")
     shutil.copytree(
         ROOT / "node_modules" / "adm-zip",
         source / "node_modules" / "adm-zip",
     )
+    fake_local = tmp_path / "fake-local-app-data"
+    fake_python = fake_local / "Programs" / "Python" / "Python312" / "python.exe"
+    fake_python.parent.mkdir(parents=True)
+    fake_python.write_bytes(b"not an executable")
+    env = dict(os.environ)
+    env["LOCALAPPDATA"] = str(fake_local)
 
     result = subprocess.run(
         [
@@ -187,9 +218,24 @@ def test_real_update_preflight_accepts_single_system_runtime_candidates(tmp_path
         capture_output=True,
         text=True,
         timeout=30,
+        env=env,
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert "Update preflight passed" in result.stdout
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows cmd.exe launcher behavior")
+def test_update_launcher_survives_replacing_itself_during_real_pull(tmp_path: Path) -> None:
+    source = _make_windows_fixture(tmp_path)
+    _push_self_update(tmp_path)
+
+    result = _run_windows_launcher(source)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (source / "pulled.txt").read_text(encoding="utf-8") == "pulled\n"
+    assert "rem pulled self-update fixture" in (source / "UPDATE.bat").read_text(encoding="utf-8")
+    assert (source / "stopped.txt").is_file()
+    assert (source / "started.txt").is_file()
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows cmd.exe launcher behavior")

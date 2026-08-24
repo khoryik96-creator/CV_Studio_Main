@@ -29,9 +29,15 @@ import zlib
 from pathlib import Path
 
 try:
-    from owner_build_tools.repo_consistency import BATCH_FILES as REPOSITORY_BATCH_FILES
+    from owner_build_tools.repo_consistency import (
+        BATCH_FILES as REPOSITORY_BATCH_FILES,
+        find_pinned_checkout_action,
+    )
 except ModuleNotFoundError:  # Direct `python owner_build_tools/build_protected.py` execution.
-    from repo_consistency import BATCH_FILES as REPOSITORY_BATCH_FILES
+    from repo_consistency import (
+        BATCH_FILES as REPOSITORY_BATCH_FILES,
+        find_pinned_checkout_action,
+    )
 
 VERSION = "v24.6.354"
 VERSION_SLUG = "v24_6_354"
@@ -187,9 +193,9 @@ def validate_repository_dependency_state(root: Path) -> None:
     if "* -text" not in [line.strip() for line in attr_lines]:
         raise RuntimeError(".gitattributes must contain '* -text' before protected CI builds.")
     git_guard = "git config --global core.autocrlf false"
-    checkout_action = "actions/checkout@v7"
-    if checkout_action not in workflow_text:
-        raise RuntimeError(f"Protected workflow must use the maintained checkout action {checkout_action}.")
+    checkout_action = find_pinned_checkout_action(workflow_text)
+    if checkout_action is None:
+        raise RuntimeError("Protected workflow must pin actions/checkout to a 40-character commit SHA.")
     if git_guard not in workflow_text or workflow_text.index(git_guard) > workflow_text.index(f"uses: {checkout_action}"):
         raise RuntimeError("Protected workflow must disable core.autocrlf before actions/checkout.")
     posix_files = (
