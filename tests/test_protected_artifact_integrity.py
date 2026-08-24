@@ -49,6 +49,20 @@ def test_nuitka_report_copy_removes_source_build_and_user_paths(tmp_path: Path) 
     assert "${build_root}" in text
 
 
+def test_native_source_seals_every_blind_cv_prompt(tmp_path: Path) -> None:
+    staged, report = build_protected.prepare_native_source(ROOT, tmp_path)
+
+    staged_text = staged.read_text(encoding="utf-8")
+    assert set(report["sealed_constants"]) == {
+        "SYSTEM_PROMPT",
+        "BLIND_SYSTEM_PROMPT",
+        "BLIND_CANDIDATE_GENDER_NEUTRALIZATION_INSTRUCTION",
+    }
+    assert "You are a professional CV parser" not in staged_text
+    assert "You are a CV anonymisation specialist" not in staged_text
+    assert "CANDIDATE GENDER NEUTRALIZATION" not in staged_text
+
+
 def test_manual_protected_workflow_uploads_checksum_with_colleague_zip() -> None:
     workflow = (ROOT / ".github" / "workflows" / "build-protected.yml").read_text(
         encoding="utf-8"
