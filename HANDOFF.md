@@ -239,8 +239,8 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Updater runtime consistency — v24.6.358 / planned PR #177, ACTIVE.** Branch
-  `chatgpt/pr177-v24.6.358-updater-runtime-consistency` makes update preflight
+- **Updater runtime consistency — v24.6.358 / PR #177, MERGED.** PR #177 merged
+  to `master` as `2c06bc5`. It makes update preflight
   and source startup use one shared Python resolver. It accepts only an
   interpreter that has every exact `requirements.txt` version and can import
   the complete runtime set, then startup launches that same resolved
@@ -252,8 +252,9 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   candidate contains the helper before changing source. Focused Windows
   regressions cover exact-version acceptance, rejection and that transition.
   No route, schema, CV
-  formatting, credential, external-call or user-data boundary changes. No
-  merge without owner approval.
+  formatting, credential, external-call or user-data boundary changes. Final
+  local validation passed 982 tests, 4 skips and 96 subtests; hosted jobs did
+  not start because the Actions spending limit was exhausted.
 - **Audit hardening — v24.6.357 / PR #176, MERGED.** PR #176 merged to
   `master` as `d94554c`. It hardens source updates so only a
   clean `master` can update and both the current and downloaded preflight run

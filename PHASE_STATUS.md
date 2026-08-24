@@ -25,10 +25,9 @@
   `54298b9b6a822e1f36c9c101f1ff4edc9c7e835f`
 - Phase 7B-4 source baseline Git commit (merged Phase 7B-3):
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
-- Current merged source: v24.6.357 through PR #176
-  (`d94554c9920a0f76da0406f0eac569b1e34bcc31`).
-- Active work: v24.6.358 updater runtime-consistency corrective on
-  `chatgpt/pr177-v24.6.358-updater-runtime-consistency` for planned PR #177.
+- Current merged source: v24.6.358 through PR #177
+  (`2c06bc5c30fba3afcd1885b1ea4cada01fd1fc3a`).
+- Active work: none.
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
@@ -44,9 +43,10 @@
   minutes, with the retained local builder designated as the final package
   check. PR #174 merged the manual-only protected-build configuration as
   `ab96824`. PR #175 merged the updater preflight-path fix. PR #176 merged the
-  audit hardening as `d94554c`; current master is v24.6.357.
-- Current stop: v24.6.357 is merged on `master` through PR #176; v24.6.358 is
-  active and unmerged on the branch above.
+  audit hardening as `d94554c`. PR #177 merged the updater runtime-consistency
+  corrective as `2c06bc5`; current master is v24.6.358.
+- Current stop: v24.6.358 is merged on `master` through PR #177; no corrective
+  branch is active.
 
 ## v24.6.358 updater runtime-consistency corrective
 
@@ -66,8 +66,10 @@
 - Focused Windows regressions cover exact-version acceptance/rejection and seal
   the shared resolver into source preflight, startup and protected Windows
   package validation. No route, schema, CV-formatting, credential, paid or
-  external-call, candidate-data or storage behavior changes. Planned PR #177
-  remains unmerged pending owner review.
+  external-call, candidate-data or storage behavior changes. PR #177 merged to
+  `master` as `2c06bc5` after 982 tests, 4 skips and 96 subtests passed locally;
+  hosted runners did not start because the Actions spending limit was
+  exhausted.
 
 ## v24.6.357 audit hardening
 
