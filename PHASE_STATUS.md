@@ -26,7 +26,8 @@
 - Phase 7B-4 source baseline Git commit (merged Phase 7B-3):
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
 - Current merged source: v24.6.353 through PR #171.
-- Active work: none for the v24.6.353 corrective; PR #171 is merged.
+- Active work: v24.6.354 updater/CI reliability corrective on
+  `chatgpt/pr173-v24.6.354-update-ci-reliability` for planned PR #173.
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
@@ -37,8 +38,38 @@
   profile-migration safety corrective. PR #167 merged the v24.6.351 JobAdder
   original-CV, candidate-contact and blank-PDF corrective as `85dc896`. PR #171
   merged the v24.6.353 Windows source-updater hardening as `af322db`.
-- Current stop: v24.6.353 is merged on `master` through PR #171; no newer
-  corrective is active.
+- Current stop: v24.6.353 is merged on `master` through PR #171; v24.6.354 is
+  active and unmerged on the branch above.
+
+## v24.6.354 Windows source updater and CI reliability corrective
+
+- `UPDATE.bat` validates authorization and the installed Node, Python and
+  Tesseract runtime before stopping the current server. Missing dependencies
+  leave the running app untouched and give a clear `INSTALL.bat` instruction;
+  the updater does not install anything automatically.
+- The updater waits for `START_HIDDEN.vbs`'s existing bounded health/identity
+  result instead of reporting success immediately. Failures preserve the real
+  error code and show the previous/current Git commits plus non-destructive
+  GitHub Desktop recovery guidance.
+- A bounded, rotating `source_update.log` records update, preflight, stop and
+  restart outcomes without credentials or candidate data. Tests use an
+  isolated state directory and prove preflight failures do not stop or restart
+  CV Studio.
+- Regression CI now runs for pull requests and the exact merged `master`
+  commit. GitHub actions use maintained runtime versions, protected-packaging
+  boundary changes trigger a real Windows protected build, and artifact names
+  use the repository `VERSION` instead of a stale hard-coded release.
+- Repository consistency and protected build validation share one authoritative
+  Windows batch-file inventory. The new updater preflight participates in the
+  protected source checks while `UPDATE.bat` remains excluded from colleague
+  packages.
+- No route, schema, application dependency, credential, external-call,
+  user-data or protected colleague-package-content boundary changed.
+- Validation: 969 passed, 4 skipped, 96 subtests; all 19 frontend fixtures;
+  24-assertion source smoke; tracked Python, JavaScript and PowerShell syntax;
+  repository/version consistency; Windows protected-source Antiword/Tesseract/
+  adm-zip preflight; and 17 focused updater, workflow, dependency and version
+  tests.
 
 ## v24.6.353 Windows source updater hardening corrective
 

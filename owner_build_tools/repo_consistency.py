@@ -22,6 +22,7 @@ BASE_INSTALL = "npm install --ignore-scripts --no-audit --no-fund --package-lock
 OBFUSCATOR_INSTALL = "npm install --no-save --ignore-scripts --no-audit --no-fund --package-lock=false javascript-obfuscator@4.1.1"
 GIT_CONFIG_COMMAND = "git config --global core.autocrlf false"
 GIT_ATTRIBUTES_RULE = "* -text"
+CHECKOUT_ACTION = "actions/checkout@v7"
 LOCK_FILES = ("package-lock.json", "npm-shrinkwrap.json")
 BATCH_FILES = (
     "CV Studio.bat",
@@ -30,6 +31,7 @@ BATCH_FILES = (
     "MERGE_TITLE_CACHE.bat",
     "RESTORE_PREVIOUS.bat",
     "STOP.bat",
+    "FORCE_STOP.bat",
     "UPDATE.bat",
     "owner_build_tools/BUILD_PROTECTED_WINDOWS.bat",
     "owner_build_tools/APPLY_PRIVATE_REPO_FIX_WINDOWS.bat",
@@ -37,7 +39,9 @@ BATCH_FILES = (
 NO_BOM_UTF8_FILES = (
     "INSTANCE_PORT.ps1",
     "STOP_CORE.ps1",
+    "FORCE_STOP.ps1",
     "RESTORE_PREVIOUS.ps1",
+    "UPDATE_PREFLIGHT.ps1",
 )
 VBS_FILES = (
     "START_HIDDEN.vbs",
@@ -225,7 +229,7 @@ def repair(root: Path) -> list[str]:
         text2 = text2.replace(base_line + "\n", base_line + "\n" + indent + OBFUSCATOR_INSTALL + "\n", 1)
         changes.append("added pinned javascript-obfuscator install to workflow")
     if GIT_CONFIG_COMMAND not in text2:
-        checkout = "      - name: Check out private source\n        uses: actions/checkout@v4\n"
+        checkout = f"      - name: Check out private source\n        uses: {CHECKOUT_ACTION}\n"
         pre = (
             "      - name: Disable Git line-ending conversion\n"
             "        shell: bash\n"
@@ -369,7 +373,9 @@ def verify(root: Path) -> dict:
             errors.append("workflow is missing the pinned javascript-obfuscator install command")
         if GIT_CONFIG_COMMAND not in text:
             errors.append("workflow must disable core.autocrlf before actions/checkout")
-        elif text.index(GIT_CONFIG_COMMAND) > text.index("uses: actions/checkout@v4"):
+        elif CHECKOUT_ACTION not in text:
+            errors.append(f"protected workflow must use the maintained checkout action {CHECKOUT_ACTION}")
+        elif text.index(GIT_CONFIG_COMMAND) > text.index(f"uses: {CHECKOUT_ACTION}"):
             errors.append("workflow disables core.autocrlf too late; it must happen before checkout")
 
     gitignore = root / ".gitignore"
@@ -412,7 +418,7 @@ def main() -> int:
         for error in result["errors"]:
             print("ERROR:", error)
         return 1
-    print("Private repository is byte-stable and consistent: adm-zip 0.6.0, Antiword 1.3.5 Windows/macOS runtimes and source, mandatory Tesseract verifier, no lock file, exact Git bytes, no-BOM CRLF batch files, BOM-free CRLF .vbs launchers, no-BOM LF POSIX scripts, BOM-free INSTANCE_PORT.ps1/STOP_CORE.ps1/RESTORE_PREVIOUS.ps1.")
+    print("Private repository is byte-stable and consistent: adm-zip 0.6.0, Antiword 1.3.5 Windows/macOS runtimes and source, mandatory Tesseract verifier, no lock file, exact Git bytes, no-BOM CRLF batch files, BOM-free CRLF .vbs launchers, no-BOM LF POSIX scripts, and BOM-free PowerShell helpers.")
     return 0
 
 
