@@ -1,6 +1,6 @@
 Option Explicit
 
-Const EXPECTED_VERSION = "v24.6.357"
+Const EXPECTED_VERSION = "v24.6.358"
 Const CV_PORT = 5000
 Const HTTP_TIMEOUT_MS = 2500
 
@@ -158,22 +158,27 @@ Sub LaunchServer()
     End If
     Dim appEntry : appEntry = scriptDir & "\app.py"
     If Not objFSO.FileExists(appEntry) And objFSO.FileExists(scriptDir & "\app.pyc") Then appEntry = scriptDir & "\app.pyc"
-    Dim candidates, c
-    candidates = Array("pythonw", _
-      objShell.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Programs\Python\Python314\pythonw.exe", _
-      objShell.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Programs\Python\Python313\pythonw.exe", _
-      objShell.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Programs\Python\Python312\pythonw.exe", _
-      objShell.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Programs\Python\Python311\pythonw.exe", _
-      "C:\Python314\pythonw.exe", "C:\Python313\pythonw.exe", _
-      "C:\Python312\pythonw.exe", "C:\Python311\pythonw.exe")
-    For Each c In candidates
-        If c = "pythonw" Then
-            If objShell.Run("cmd /c pythonw --version >nul 2>&1",0,True)=0 Then objShell.Run "pythonw """ & appEntry & """",0,False : On Error GoTo 0 : Exit Sub
-        ElseIf objFSO.FileExists(c) Then
-            objShell.Run """" & c & """ """ & appEntry & """",0,False : On Error GoTo 0 : Exit Sub
-        End If
-    Next
-    objShell.Run "python """ & appEntry & """", 0, False
+    Dim runtimeHelper : runtimeHelper = scriptDir & "\PYTHON_RUNTIME.ps1"
+    If Not objFSO.FileExists(runtimeHelper) Then
+        MsgBox "The Python runtime checker is missing. Run INSTALL.bat and complete setup again.",48,"CV Studio installation incomplete"
+        WScript.Quit 8
+    End If
+    Dim tempFolder : tempFolder = objFSO.GetSpecialFolder(2)
+    Dim runtimeResult : runtimeResult = objFSO.BuildPath(tempFolder, objFSO.GetTempName)
+    Dim resolveCmd : resolveCmd = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File """ & runtimeHelper & """ -Root """ & scriptDir & """ -OutputPath """ & runtimeResult & """"
+    Dim resolveRc : resolveRc = objShell.Run(resolveCmd, 0, True)
+    Dim resolvedPython : resolvedPython = ""
+    If resolveRc = 0 And objFSO.FileExists(runtimeResult) Then
+        Dim resultFile : Set resultFile = objFSO.OpenTextFile(runtimeResult, 1, False)
+        resolvedPython = Trim(resultFile.ReadAll)
+        resultFile.Close
+    End If
+    If objFSO.FileExists(runtimeResult) Then objFSO.DeleteFile runtimeResult, True
+    If resolveRc <> 0 Or resolvedPython = "" Or Not objFSO.FileExists(resolvedPython) Then
+        MsgBox "Python or one or more exact runtime package versions are missing. Run INSTALL.bat and complete setup again.",48,"CV Studio installation incomplete"
+        WScript.Quit 8
+    End If
+    objShell.Run """" & resolvedPython & """ """ & appEntry & """", 0, False
     On Error GoTo 0
 End Sub
 

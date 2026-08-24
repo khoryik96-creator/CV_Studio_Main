@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 
 import pytest
 
@@ -15,6 +16,7 @@ UPDATE_LAUNCHER = ROOT / "UPDATE.bat"
 UPDATE_CORE = ROOT / "UPDATE_CORE.ps1"
 SOURCE_LAUNCHER = ROOT / "CV Studio.bat"
 UPDATE_PREFLIGHT = ROOT / "UPDATE_PREFLIGHT.ps1"
+PYTHON_RUNTIME = ROOT / "PYTHON_RUNTIME.ps1"
 
 
 def _windows_tesseract_is_available() -> bool:
@@ -198,6 +200,10 @@ def test_update_launcher_hardening_source_contract() -> None:
     source_launcher = SOURCE_LAUNCHER.read_text(encoding="utf-8")
     assert 'if /i "%~1"=="--wait" goto :wait_for_start' in source_launcher
     assert 'cscript.exe //nologo "%~dp0START_HIDDEN.vbs"' in source_launcher
+    hidden_launcher = (ROOT / "START_HIDDEN.vbs").read_text(encoding="utf-8")
+    assert "PYTHON_RUNTIME.ps1" in hidden_launcher
+    assert "resolvedPython" in hidden_launcher
+    assert 'candidates = Array("pythonw"' not in hidden_launcher
 
 
 def test_update_launcher_is_in_batch_byte_validation() -> None:
@@ -211,18 +217,74 @@ def test_update_launcher_is_in_batch_byte_validation() -> None:
     assert "for rel in REPOSITORY_BATCH_FILES" in validation
     assert "batch_files =" not in validation
     assert '"UPDATE_CORE.ps1"' in protected_builder
+    assert '"PYTHON_RUNTIME.ps1"' in protected_builder
 
 
-def test_update_preflight_preserves_single_executable_candidates_as_arrays() -> None:
+def test_update_preflight_uses_shared_exact_python_runtime_resolver() -> None:
     text = UPDATE_PREFLIGHT.read_text(encoding="utf-8")
-    for variable in ("nodeCandidates", "pythonCandidates", "tesseractCandidates"):
+    for variable in ("nodeCandidates", "tesseractCandidates"):
         assignment = text.index(f"${variable} = @(")
         first_candidate = text.index("@(", assignment + len(f"${variable} = @("))
         count_gate = text.index(f"if (${variable}.Count -eq 0)", assignment)
         assert assignment < first_candidate < count_gate
-    assert "Python314\\python.exe" in text
-    assert "Python313\\python.exe" in text
-    assert "foreach ($candidate in $pythonCandidates)" in text
+    assert "PYTHON_RUNTIME.ps1" in text
+    assert "exact runtime package versions" in text
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows PowerShell runtime resolver")
+def test_python_runtime_resolver_returns_the_exact_validated_interpreter() -> None:
+    result = subprocess.run(
+        [
+            "powershell.exe",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(PYTHON_RUNTIME),
+            "-Root",
+            str(ROOT),
+            "-Candidates",
+            sys.executable,
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    resolved = Path(result.stdout.strip())
+    assert resolved.is_file()
+    assert resolved.parent.resolve() == Path(sys.executable).parent.resolve()
+    assert resolved.name.lower() in {"python.exe", "pythonw.exe"}
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows PowerShell runtime resolver")
+def test_python_runtime_resolver_rejects_stale_installed_versions(tmp_path: Path) -> None:
+    stale_requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8").replace(
+        "flask==3.1.3", "flask==0.0.0", 1
+    )
+    (tmp_path / "requirements.txt").write_text(stale_requirements, encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            "powershell.exe",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(PYTHON_RUNTIME),
+            "-Root",
+            str(tmp_path),
+            "-Candidates",
+            sys.executable,
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 8, result.stdout + result.stderr
+    assert not result.stdout.strip()
 
 
 @pytest.mark.skipif(
@@ -238,13 +300,14 @@ def test_real_update_preflight_uses_launcher_path_python_before_stale_fixed_inst
     source = tmp_path / "source"
     source.mkdir()
     shutil.copy2(UPDATE_PREFLIGHT, source / "UPDATE_PREFLIGHT.ps1")
+    shutil.copy2(PYTHON_RUNTIME, source / "PYTHON_RUNTIME.ps1")
     for name in (
         "CV Studio.bat",
         "START_HIDDEN.vbs",
         "FORCE_STOP.ps1",
-        "requirements.txt",
     ):
         (source / name).write_text("fixture\n", encoding="utf-8")
+    shutil.copy2(ROOT / "requirements.txt", source / "requirements.txt")
     (source / "package.json").write_text("{}\n", encoding="utf-8")
     (source / "INSTALL_RECEIPT.ps1").write_text("exit 0\n", encoding="utf-8")
     shutil.copytree(
@@ -257,6 +320,7 @@ def test_real_update_preflight_uses_launcher_path_python_before_stale_fixed_inst
     fake_python.write_bytes(b"not an executable")
     env = dict(os.environ)
     env["LOCALAPPDATA"] = str(fake_local)
+    env["PATH"] = str(Path(sys.executable).parent) + os.pathsep + env.get("PATH", "")
 
     result = subprocess.run(
         [

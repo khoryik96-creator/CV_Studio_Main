@@ -45,12 +45,13 @@ behavior-preserving and hold the route SHA constant.
 
 ## 3. CI and local verification
 
-GitHub Actions is currently provisioning successfully. Regression CI runs on
-pull requests and again on the exact commit pushed to `master`. The expensive
-protected-package workflow is deliberately **manual-only** and runs only when
-the owner chooses **Run workflow**; pull requests never start it automatically.
-Continue to verify locally before pushing so CI is a second, independent gate
-rather than the first place a regression is discovered:
+Regression CI is configured for pull requests and the exact commit pushed to
+`master`; runner provisioning can still fail when the account's Actions
+spending limit is exhausted, so the complete local gate remains mandatory. The
+expensive protected-package workflow is deliberately **manual-only** and runs
+only when the owner chooses **Run workflow**; pull requests never start it
+automatically. Continue to verify locally before pushing so CI is a second,
+independent gate rather than the first place a regression is discovered:
 
 ```bash
 python -m venv .venv_test
@@ -65,7 +66,7 @@ Expected Linux result: **1 known failure** —
 `test_legacy_doc_requires_and_uses_verified_antiword` (the Antiword binary is
 not functional on Linux; it is a Windows-only runtime — the app correctly
 returns 424 rather than trusting an unverified extraction). A verified Windows
-x64 environment currently passes **978 tests, 4 skipped, 96 subtests**.
+x64 environment currently passes **981 tests, 4 skipped, 96 subtests**.
 **Do not commit `.venv_test/`** (or
 `node_modules/`). Both paths are gitignored, but keep generated dependency
 trees out of commits and continue staging source files explicitly rather than
@@ -238,8 +239,19 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Audit hardening — v24.6.357 / planned PR #176, ACTIVE.** Branch
-  `chatgpt/pr176-v24.6.357-audit-hardening` hardens source updates so only a
+- **Updater runtime consistency — v24.6.358 / planned PR #177, ACTIVE.** Branch
+  `chatgpt/pr177-v24.6.358-updater-runtime-consistency` makes update preflight
+  and source startup use one shared Python resolver. It accepts only an
+  interpreter that has every exact `requirements.txt` version and can import
+  the complete runtime set, then startup launches that same resolved
+  executable. This prevents a stale first Python from taking the app down after
+  a later Python passed preflight, and prevents manual pulls or one-time updater
+  transitions from restarting with stale packages. Focused Windows regressions
+  cover exact-version acceptance and rejection. No route, schema, CV
+  formatting, credential, external-call or user-data boundary changes. No
+  merge without owner approval.
+- **Audit hardening — v24.6.357 / PR #176, MERGED.** PR #176 merged to
+  `master` as `d94554c`. It hardens source updates so only a
   clean `master` can update and both the current and downloaded preflight run
   before Git changes local source. The PowerShell update transaction is loaded
   before the merge, so replacing `UPDATE.bat` during a real fast-forward cannot
@@ -248,7 +260,9 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   owner paths from copied Nuitka diagnostics and validates four dependency
   upgrades in an isolated Python 3.14 environment. Routes, schemas,
   credentials, CV formatting and manual-only protected-build behavior remain
-  unchanged. No merge without owner approval.
+  unchanged. Final local validation passed 979 tests, 4 skips and 96 subtests;
+  the final hosted jobs did not start because the Actions spending limit was
+  exhausted.
 - **Manual-only protected builds — v24.6.355 / PR #174, MERGED.** PR #174
   removed the expensive protected workflow's automatic pull-request trigger
   and left its explicit **Run workflow** action enabled. Do not restore
