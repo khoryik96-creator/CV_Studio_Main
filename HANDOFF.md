@@ -43,11 +43,13 @@ register it there and in `owner_build_tools/build_protected.py` (the `required`
 tuple **and** the `py_compile` preflight). Extractions should be
 behavior-preserving and hold the route SHA constant.
 
-## 3. CI is currently unavailable — verify locally
+## 3. CI and local verification
 
-GitHub Actions runners fail at provisioning (the owner hit their billing/quota);
-jobs die in under 20s with `runner_id: 0`. Do **not** wait on CI — verify
-locally:
+GitHub Actions is currently provisioning successfully. Regression CI runs on
+pull requests and again on the exact commit pushed to `master`. Pull requests
+that touch protected-packaging or launcher boundaries also run a real Windows
+protected build. Continue to verify locally before pushing so CI is a second,
+independent gate rather than the first place a regression is discovered:
 
 ```bash
 python -m venv .venv_test
@@ -62,7 +64,7 @@ Expected Linux result: **1 known failure** —
 `test_legacy_doc_requires_and_uses_verified_antiword` (the Antiword binary is
 not functional on Linux; it is a Windows-only runtime — the app correctly
 returns 424 rather than trusting an unverified extraction). A verified Windows
-x64 environment currently passes **922 tests, 4 skipped, 93 subtests**.
+x64 environment currently passes **971 tests, 4 skipped, 96 subtests**.
 **Do not commit `.venv_test/`** (or
 `node_modules/`). Both paths are gitignored, but keep generated dependency
 trees out of commits and continue staging source files explicitly rather than
@@ -235,6 +237,25 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
+- **Windows source update and CI reliability — v24.6.354 / PR #173,
+  ACTIVE.** Branch `chatgpt/pr173-v24.6.354-update-ci-reliability` adds a
+  dependency and authorization preflight before the current server is stopped,
+  waits for the existing bounded startup health check, and records a small
+  rotating local update log plus the previous/current Git commits for safe
+  recovery guidance. It does not install dependencies automatically and does
+  not reset local edits. Regression CI now runs on merged `master`, maintained
+  GitHub action runtimes replace warning-producing versions and are pinned to
+  immutable commit SHAs, packaging-boundary pull requests run one cancelable
+  Windows protected build per PR, and the low-memory single-worker Nuitka
+  compile has a bounded 120-minute allowance inside a 150-minute workflow
+  budget. Batch-file validation uses one shared inventory. Weekly Dependabot
+  version-update PRs cover exact-pinned Python
+  packages and GitHub Actions; npm is intentionally excluded because the sole
+  `adm-zip` dependency uses an owner-vetted tree and pinned aggregate hash.
+  GitHub Dependabot alerts, malware alerts, automatic security updates and
+  grouped security updates are enabled. No route, schema, dependency-set,
+  credential, external-call, user-data or protected colleague-package-content
+  boundary changes.
 - **Windows watchdog recovery corrective — v24.6.352 / PR #169, MERGED.**
   Branch `chatgpt/pr169-v24.6.352-watchdog-recovery` corrects a
   long-standing Windows recovery dead-end. When the listener still existed but

@@ -1,6 +1,27 @@
 name: Build protected CV Studio packages
 
 on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - ".github/workflows/build-protected.yml"
+      - "owner_build_tools/**"
+      - "requirements.txt"
+      - "package.json"
+      - "CV Studio.bat"
+      - "INSTALL*.bat"
+      - "INSTALL*.ps1"
+      - "START_HIDDEN.vbs"
+      - "WATCHDOG.vbs"
+      - "STOP*.bat"
+      - "STOP*.ps1"
+      - "FORCE_STOP*.bat"
+      - "FORCE_STOP*.ps1"
+      - "UPDATE*.bat"
+      - "UPDATE*.ps1"
+      - "INSTANCE_PORT.ps1"
+      - "RESTORE_PREVIOUS.*"
   workflow_dispatch:
     inputs:
       targets:
@@ -14,6 +35,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: cv-studio-protected-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   # Cheap 1x ubuntu runner: pick the build matrix from the chosen target so
@@ -47,7 +72,10 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.select-targets.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 120
+    # The single-worker, low-memory Windows compile can exceed 90 minutes.
+    # Keep a bounded margin around the builder's 120-minute compile timeout for
+    # dependency setup, smoke testing, cleanup, and artifact uploads.
+    timeout-minutes: 150
 
     steps:
       - name: Disable Git line-ending conversion
@@ -55,10 +83,15 @@ jobs:
         run: git config --global core.autocrlf false
 
       - name: Check out private source
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Read package version
+        id: package-version
+        shell: bash
+        run: echo "value=$(tr -d '\r\n' < VERSION)" >> "$GITHUB_OUTPUT"
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python }}
           cache: pip
@@ -73,7 +106,7 @@ jobs:
           fi
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
 
@@ -150,9 +183,9 @@ jobs:
           PY
 
       - name: Upload colleague package and public smoke result
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: cv-studio-v24.6.246-${{ matrix.target }}-COLLEAGUE
+          name: cv-studio-v${{ steps.package-version.outputs.value }}-${{ matrix.target }}-COLLEAGUE
           path: |
             protected-output/*colleague.zip
             protected-output/*protected_smoke.json
@@ -160,9 +193,9 @@ jobs:
           retention-days: 14
 
       - name: Upload owner-only compiler diagnostics
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: cv-studio-v24.6.246-${{ matrix.target }}-OWNER-DIAGNOSTICS
+          name: cv-studio-v${{ steps.package-version.outputs.value }}-${{ matrix.target }}-OWNER-DIAGNOSTICS
           path: |
             protected-output/*nuitka_report.xml
             protected-output/*runtime.log

@@ -28,8 +28,19 @@ import zipfile
 import zlib
 from pathlib import Path
 
-VERSION = "v24.6.353"
-VERSION_SLUG = "v24_6_353"
+try:
+    from owner_build_tools.repo_consistency import (
+        BATCH_FILES as REPOSITORY_BATCH_FILES,
+        find_pinned_checkout_action,
+    )
+except ModuleNotFoundError:  # Direct `python owner_build_tools/build_protected.py` execution.
+    from repo_consistency import (
+        BATCH_FILES as REPOSITORY_BATCH_FILES,
+        find_pinned_checkout_action,
+    )
+
+VERSION = "v24.6.354"
+VERSION_SLUG = "v24_6_354"
 PRODUCT = "TheGuoLab-CVStudio"
 RECEIPT_SCHEMA = 2
 TOTP_MASK = bytes([147,57,36,83,116,245,122,57,165,162,176,168,249,50,204,128,45,174,232,56])
@@ -98,6 +109,10 @@ ROOT_FILES = (
 BANNED_DIRS = {"__pycache__",".git",".pytest_cache",".mypy_cache"}
 BANNED_FILES = {".DS_Store","package-lock.json","npm-shrinkwrap.json","startup_authorization_error.txt","startup_timing.log","install_health_report.json","install_log.txt"}
 BANNED_SUFFIXES = {".pyc",".pyo",".bak"}
+# The current Windows standalone build exceeds the former 90-minute ceiling
+# with the deliberately conservative --low-memory --jobs=1 settings. Keep the
+# compile bounded, but leave enough headroom for the full current source tree.
+NATIVE_COMPILE_TIMEOUT_SECONDS = 7200
 
 
 def run(cmd: list[str], *, cwd: Path | None = None, env: dict[str,str] | None = None,
@@ -182,19 +197,17 @@ def validate_repository_dependency_state(root: Path) -> None:
     if "* -text" not in [line.strip() for line in attr_lines]:
         raise RuntimeError(".gitattributes must contain '* -text' before protected CI builds.")
     git_guard = "git config --global core.autocrlf false"
-    if git_guard not in workflow_text or workflow_text.index(git_guard) > workflow_text.index("uses: actions/checkout@v4"):
+    checkout_action = find_pinned_checkout_action(workflow_text)
+    if checkout_action is None:
+        raise RuntimeError("Protected workflow must pin actions/checkout to a 40-character commit SHA.")
+    if git_guard not in workflow_text or workflow_text.index(git_guard) > workflow_text.index(f"uses: {checkout_action}"):
         raise RuntimeError("Protected workflow must disable core.autocrlf before actions/checkout.")
-    batch_files = (
-        "CV Studio.bat", "INSTALL.bat", "INSTALL_CORE.bat", "MERGE_TITLE_CACHE.bat", "RESTORE_PREVIOUS.bat", "STOP.bat", "FORCE_STOP.bat", "UPDATE.bat",
-        "owner_build_tools/BUILD_PROTECTED_WINDOWS.bat",
-        "owner_build_tools/APPLY_PRIVATE_REPO_FIX_WINDOWS.bat",
-    )
     posix_files = (
         "install.sh", "start.sh", "restore_previous.sh",
         "owner_build_tools/BUILD_PROTECTED_MAC.command",
         "owner_build_tools/APPLY_PRIVATE_REPO_FIX_MAC.command",
     )
-    for rel in batch_files:
+    for rel in REPOSITORY_BATCH_FILES:
         raw = (root / rel).read_bytes()
         if raw.startswith(b"\xef\xbb\xbf"):
             raise RuntimeError(f"Windows batch file contains a UTF-8 BOM: {rel}. Run repo_consistency.py --repair.")
@@ -210,7 +223,7 @@ def validate_repository_dependency_state(root: Path) -> None:
             raise RuntimeError(f"{rel} is not CRLF-only. Run repo_consistency.py --repair.")
         if not raw.lower().startswith(b"option explicit"):
             raise RuntimeError(f"{rel} does not begin with Option Explicit at byte zero.")
-    for rel in ("INSTANCE_PORT.ps1", "STOP_CORE.ps1", "FORCE_STOP.ps1", "RESTORE_PREVIOUS.ps1"):
+    for rel in ("INSTANCE_PORT.ps1", "STOP_CORE.ps1", "FORCE_STOP.ps1", "RESTORE_PREVIOUS.ps1", "UPDATE_PREFLIGHT.ps1"):
         helper_raw = (root / rel).read_bytes()
         if helper_raw.startswith(b"\xef\xbb\xbf"):
             raise RuntimeError(f"{rel} contains a UTF-8 BOM. Run repo_consistency.py --repair.")
@@ -583,7 +596,7 @@ def compile_native(root: Path, work: Path, target: str, source_entry: Path | Non
                 cmd += ["--include-module=pythoncom","--include-module=pywintypes","--include-module=win32com.client"]
         except Exception: pass
     cmd.append(str(source_entry or (root/"app.py")))
-    run(cmd,cwd=root,timeout=5400)
+    run(cmd,cwd=root,timeout=NATIVE_COMPILE_TIMEOUT_SECONDS)
     dist_dirs=sorted(out.glob("*.dist"),key=lambda p:p.stat().st_mtime,reverse=True)
     if not dist_dirs: raise RuntimeError("Nuitka did not produce a .dist directory.")
     dist=dist_dirs[0]

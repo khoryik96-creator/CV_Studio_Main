@@ -22,6 +22,10 @@ BASE_INSTALL = "npm install --ignore-scripts --no-audit --no-fund --package-lock
 OBFUSCATOR_INSTALL = "npm install --no-save --ignore-scripts --no-audit --no-fund --package-lock=false javascript-obfuscator@4.1.1"
 GIT_CONFIG_COMMAND = "git config --global core.autocrlf false"
 GIT_ATTRIBUTES_RULE = "* -text"
+CHECKOUT_ACTION = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
+PINNED_CHECKOUT_ACTION_RE = re.compile(
+    r"actions/checkout@[0-9a-f]{40}\s+#\s+v\d+(?:\.\d+){0,2}"
+)
 LOCK_FILES = ("package-lock.json", "npm-shrinkwrap.json")
 BATCH_FILES = (
     "CV Studio.bat",
@@ -30,6 +34,7 @@ BATCH_FILES = (
     "MERGE_TITLE_CACHE.bat",
     "RESTORE_PREVIOUS.bat",
     "STOP.bat",
+    "FORCE_STOP.bat",
     "UPDATE.bat",
     "owner_build_tools/BUILD_PROTECTED_WINDOWS.bat",
     "owner_build_tools/APPLY_PRIVATE_REPO_FIX_WINDOWS.bat",
@@ -37,7 +42,9 @@ BATCH_FILES = (
 NO_BOM_UTF8_FILES = (
     "INSTANCE_PORT.ps1",
     "STOP_CORE.ps1",
+    "FORCE_STOP.ps1",
     "RESTORE_PREVIOUS.ps1",
+    "UPDATE_PREFLIGHT.ps1",
 )
 VBS_FILES = (
     "START_HIDDEN.vbs",
@@ -141,6 +148,11 @@ def _has_only_lf(raw: bytes) -> bool:
     return b"\r" not in raw
 
 
+def find_pinned_checkout_action(text: str) -> str | None:
+    match = PINNED_CHECKOUT_ACTION_RE.search(text)
+    return match.group(0) if match else None
+
+
 def repair(root: Path) -> list[str]:
     changes: list[str] = []
     for name in LOCK_FILES:
@@ -225,7 +237,7 @@ def repair(root: Path) -> list[str]:
         text2 = text2.replace(base_line + "\n", base_line + "\n" + indent + OBFUSCATOR_INSTALL + "\n", 1)
         changes.append("added pinned javascript-obfuscator install to workflow")
     if GIT_CONFIG_COMMAND not in text2:
-        checkout = "      - name: Check out private source\n        uses: actions/checkout@v4\n"
+        checkout = f"      - name: Check out private source\n        uses: {CHECKOUT_ACTION}\n"
         pre = (
             "      - name: Disable Git line-ending conversion\n"
             "        shell: bash\n"
@@ -369,8 +381,12 @@ def verify(root: Path) -> dict:
             errors.append("workflow is missing the pinned javascript-obfuscator install command")
         if GIT_CONFIG_COMMAND not in text:
             errors.append("workflow must disable core.autocrlf before actions/checkout")
-        elif text.index(GIT_CONFIG_COMMAND) > text.index("uses: actions/checkout@v4"):
-            errors.append("workflow disables core.autocrlf too late; it must happen before checkout")
+        else:
+            checkout_action = find_pinned_checkout_action(text)
+            if checkout_action is None:
+                errors.append("protected workflow must pin actions/checkout to a 40-character commit SHA")
+            elif text.index(GIT_CONFIG_COMMAND) > text.index(f"uses: {checkout_action}"):
+                errors.append("workflow disables core.autocrlf too late; it must happen before checkout")
 
     gitignore = root / ".gitignore"
     gi = gitignore.read_text(encoding="utf-8-sig") if gitignore.exists() else ""
@@ -412,7 +428,7 @@ def main() -> int:
         for error in result["errors"]:
             print("ERROR:", error)
         return 1
-    print("Private repository is byte-stable and consistent: adm-zip 0.6.0, Antiword 1.3.5 Windows/macOS runtimes and source, mandatory Tesseract verifier, no lock file, exact Git bytes, no-BOM CRLF batch files, BOM-free CRLF .vbs launchers, no-BOM LF POSIX scripts, BOM-free INSTANCE_PORT.ps1/STOP_CORE.ps1/RESTORE_PREVIOUS.ps1.")
+    print("Private repository is byte-stable and consistent: adm-zip 0.6.0, Antiword 1.3.5 Windows/macOS runtimes and source, mandatory Tesseract verifier, no lock file, exact Git bytes, no-BOM CRLF batch files, BOM-free CRLF .vbs launchers, no-BOM LF POSIX scripts, and BOM-free PowerShell helpers.")
     return 0
 
 
