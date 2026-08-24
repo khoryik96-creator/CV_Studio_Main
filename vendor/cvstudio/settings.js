@@ -245,6 +245,47 @@ function setCvSummaryDetailPreference(scope, value, silent) {
 })();
 document.addEventListener('DOMContentLoaded', renderCvSummaryDetailSettings);
 
+// Blind CV candidate-gender neutralization
+var CV_BLIND_CANDIDATE_GENDER_NEUTRAL_STORE = 'cvstudio_blind_candidate_gender_neutral_v1';
+window._cvBlindCandidateGenderNeutral = false;
+
+function getCvBlindCandidateGenderNeutralization() {
+  return window._cvBlindCandidateGenderNeutral === true;
+}
+function renderCvBlindCandidateGenderNeutralizationSetting() {
+  var enabled = getCvBlindCandidateGenderNeutralization();
+  var checkbox = document.getElementById('cvBlindCandidateGenderNeutralToggle');
+  var label = document.getElementById('cvBlindCandidateGenderNeutralLabel');
+  if (checkbox) checkbox.checked = enabled;
+  if (label) label.textContent = enabled ? 'On' : 'Off';
+}
+function setCvBlindCandidateGenderNeutralization(enabled, silent) {
+  window._cvBlindCandidateGenderNeutral = enabled === true;
+  try {
+    cvStudioDurableSettingSet(
+      CV_BLIND_CANDIDATE_GENDER_NEUTRAL_STORE,
+      getCvBlindCandidateGenderNeutralization() ? 'true' : 'false'
+    );
+  } catch(e) {}
+  renderCvBlindCandidateGenderNeutralizationSetting();
+  if (!silent) {
+    showToast(
+      getCvBlindCandidateGenderNeutralization()
+        ? 'Blind CV will neutralize only pronouns that refer to the candidate.'
+        : 'Blind CV will keep candidate pronouns unchanged.',
+      'ok'
+    );
+  }
+  return getCvBlindCandidateGenderNeutralization();
+}
+(function restoreCvBlindCandidateGenderNeutralization(){
+  var stored = null;
+  try { stored = localStorage.getItem(CV_BLIND_CANDIDATE_GENDER_NEUTRAL_STORE); } catch(e) {}
+  window._cvBlindCandidateGenderNeutral = stored === 'true';
+  setTimeout(renderCvBlindCandidateGenderNeutralizationSetting, 0);
+})();
+document.addEventListener('DOMContentLoaded', renderCvBlindCandidateGenderNeutralizationSetting);
+
 // ── Word export format (.doc / .docx) ────────────────────────────
 // Storage getter/setter (wordExportFormat / setWordExportFormat) live in
 // hyppies-export.js; this only drives the Settings segmented toggle.

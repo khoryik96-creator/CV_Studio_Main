@@ -40,8 +40,8 @@ except ModuleNotFoundError:  # Direct `python owner_build_tools/build_protected.
         find_pinned_checkout_action,
     )
 
-VERSION = "v24.6.359"
-VERSION_SLUG = "v24_6_359"
+VERSION = "v24.6.360"
+VERSION_SLUG = "v24_6_360"
 PRODUCT = "TheGuoLab-CVStudio"
 RECEIPT_SCHEMA = 2
 TOTP_MASK = bytes([147,57,36,83,116,245,122,57,165,162,176,168,249,50,204,128,45,174,232,56])
@@ -546,7 +546,7 @@ def _seal_native_text(value: str, seed: str) -> str:
 
 
 def prepare_native_source(root: Path, work: Path) -> tuple[Path,dict]:
-    """Seal the two largest proprietary prompt constants before native compile.
+    """Seal proprietary prompt constants before native compile.
 
     The readable owner source remains untouched. This does not make an offline
     binary impossible to reverse engineer, but it prevents ordinary `strings`
@@ -561,7 +561,11 @@ def prepare_native_source(root: Path, work: Path) -> tuple[Path,dict]:
     tree=__import__("ast").parse(source_text)
     line_starts=[0]
     for line in body.splitlines(keepends=True): line_starts.append(line_starts[-1]+len(line))
-    targets={"SYSTEM_PROMPT","BLIND_SYSTEM_PROMPT"}
+    targets={
+        "SYSTEM_PROMPT",
+        "BLIND_SYSTEM_PROMPT",
+        "BLIND_CANDIDATE_GENDER_NEUTRALIZATION_INSTRUCTION",
+    }
     replacements=[]; report={"sealed_constants":{},"mode":"zlib-xor-b85-runtime-decode"}
     for node in tree.body:
         if not isinstance(node,__import__("ast").Assign) or not isinstance(node.value,__import__("ast").Constant) or not isinstance(node.value.value,str):
@@ -602,7 +606,14 @@ def prepare_native_source(root: Path, work: Path) -> tuple[Path,dict]:
         original_hash=meta["source_sha256"]
         if original_hash==hashlib.sha256(staged_text.encode("utf-8")).hexdigest():
             raise RuntimeError("Prompt sealing verification failed for "+name)
-    if "You are a professional CV parser" in staged_text or "You are a CV anonymisation specialist" in staged_text:
+    if any(
+        marker in staged_text
+        for marker in (
+            "You are a professional CV parser",
+            "You are a CV anonymisation specialist",
+            "CANDIDATE GENDER NEUTRALIZATION",
+        )
+    ):
         raise RuntimeError("Plaintext proprietary prompt remained in native compile source")
     report["staged_sha256"]=sha256_file(staged)
     return staged,report
@@ -787,7 +798,11 @@ def build_package(source: Path,work: Path,out_dir: Path,target: str,dist: Path,n
     if not binaries: raise RuntimeError("Native executable missing during packaging.")
     binary=sorted(binaries,key=lambda p:len(p.name))[0]
     binary_bytes=binary.read_bytes()
-    for marker in (b"You are a professional CV parser", b"You are a CV anonymisation specialist"):
+    for marker in (
+        b"You are a professional CV parser",
+        b"You are a CV anonymisation specialist",
+        b"CANDIDATE GENDER NEUTRALIZATION",
+    ):
         if marker in binary_bytes:
             raise RuntimeError("Plaintext proprietary prompt leaked into native executable")
     (package/"app.py").write_text(launcher_stub(binary.name),encoding="utf-8")

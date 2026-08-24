@@ -294,6 +294,9 @@ async function runBatch() {
   // Snapshot the preference once so changing Settings during a running batch
   // cannot produce a ZIP containing mixed Left and Justify documents.
   var batchDocumentAlignment = getCvTextAlignment();
+  // Keep every blinded file in this run consistent if Settings changes while
+  // a large batch is still processing.
+  var batchBlindCandidateGenderNeutral = isBlind && getCvBlindCandidateGenderNeutralization();
 
   // Step definitions vary by mode
   function makeSteps(activeIdx) {
@@ -380,7 +383,7 @@ async function runBatch() {
       // ── Step 2 (blind only): Blind CV ────────────────────────────────────
       if (isBlind) {
         batchSetProgress(bf, pcts[2], 'Blinding identity & company names…', makeSteps(2));
-        var bRes = await fetchWithTimeout('/blind', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ api_key: key, api_key_slot: route.api_key_slot, cv_data: cvData, model: route.model, provider: route.provider }) }, 180000);
+        var bRes = await fetchWithTimeout('/blind', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ api_key: key, api_key_slot: route.api_key_slot, cv_data: cvData, model: route.model, provider: route.provider, neutralize_candidate_gender: batchBlindCandidateGenderNeutral }) }, 180000);
         var bData = await bRes.json().catch(function(){ return {}; });
         if (!bRes.ok || bData.error) {
           recordPaidAiFailure('Batch CV blinding failed — ' + bf.file.name, bData, route.model, route.provider);

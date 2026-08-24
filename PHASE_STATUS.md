@@ -27,7 +27,9 @@
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
 - Current merged source: v24.6.359 through PR #179
   (`a20b7f99c133e6082a9f10602df2ef8fa94314b5`).
-- Active work: none.
+- Active work: v24.6.360 Blind CV candidate-gender neutralization on
+  `chatgpt/pr181-v24.6.360-blind-gender-neutralization` (planned PR #181,
+  unmerged).
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
@@ -46,8 +48,24 @@
   audit hardening as `d94554c`. PR #177 merged the updater runtime-consistency
   corrective as `2c06bc5`. PR #179 merged the updater preflight-output
   corrective as `a20b7f9`; current master is v24.6.359.
-- Current stop: v24.6.359 is merged on `master` through PR #179; no corrective
-  branch is active.
+- Current stop: v24.6.359 is merged on `master` through PR #179. The v24.6.360
+  Blind CV candidate-gender neutralization branch is active and unmerged.
+
+## v24.6.360 Blind CV candidate-gender neutralization (active, unmerged)
+
+- General Settings has an off-by-default toggle used only by single and batch
+  Blind CV. Enabled runs rewrite candidate-only pronouns to `the candidate` /
+  `the candidate's`, expand candidate contractions grammatically and avoid
+  candidate-referent they/them.
+- The instruction explicitly preserves gendered references to managers,
+  colleagues, clients, referees, family members and every other party. It is
+  part of the existing paid blinding request and does not add another AI call.
+- Single runs snapshot the toggle before parsing; batch runs snapshot it once
+  for the whole run. The setting is included in established non-secret durable
+  browser/SQLite backup and restore.
+- Default Blind CV behavior and all normal Format CV paths remain unchanged.
+  No route, schema, dependency, credential, paid-call-count, candidate-data or
+  protected-build trigger change.
 
 ## v24.6.359 updater preflight-output corrective
 

@@ -239,6 +239,18 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
+- **Blind CV candidate-gender neutralization — v24.6.360 / planned PR #181,
+  ACTIVE AND UNMERGED.** Branch
+  `chatgpt/pr181-v24.6.360-blind-gender-neutralization` adds an off-by-default
+  General Settings toggle used only by single and batch Blind CV. When enabled,
+  the existing blinding call rewrites only pronouns that refer to the candidate
+  into `the candidate` / `the candidate's` forms, including contractions, and
+  does not use candidate-referent they/them. Pronouns and gender references for
+  managers, colleagues, clients, referees, family members and other parties are
+  explicitly preserved. The setting uses the established durable browser/
+  SQLite allowlist and batch runs snapshot it once. Normal Format CV and the
+  default Blind CV prompt remain unchanged. Routes, schemas, dependencies,
+  credentials, paid-call count and protected-build triggers remain unchanged.
 - **Updater preflight-output corrective — v24.6.359 / PR #179, MERGED.** PR
   #179 merged to `master` as `a20b7f9`. It keeps the
   downloaded preflight's visible diagnostic output out of the PowerShell

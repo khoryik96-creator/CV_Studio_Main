@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.359"
+_INSTALL_RECEIPT_VERSION = "v24.6.360"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -341,7 +341,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.359"
+_CVSTUDIO_VERSION = "v24.6.360"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -13829,6 +13829,24 @@ PRESERVE EVERYTHING ELSE exactly as-is:
 Output starts with { and ends with }. No markdown fences. No backticks."""
 
 
+BLIND_CANDIDATE_GENDER_NEUTRALIZATION_INSTRUCTION = """
+
+CANDIDATE GENDER NEUTRALIZATION — ENABLED BY THE USER:
+- Neutralize ONLY pronouns whose referent is the candidate. Do not change pronouns, gendered words, or stated gender for managers, colleagues, clients, referees, family members, or any other party.
+- Use "the candidate" for candidate-only he/she/him/her/they/them references and "the candidate's" for candidate-only possessive his/her/hers/their/theirs references. This includes candidate pronouns already present in the source.
+- Expand candidate-only contractions grammatically: he'll/she'll → "the candidate will"; he's/she's → "the candidate is" or "the candidate has" according to context; he'd/she'd → "the candidate would" or "the candidate had" according to context.
+- Replace candidate-only himself/herself with "the candidate" or "the candidate personally", whichever preserves the sentence meaning.
+- Never leave or introduce they, them, their, theirs, themself, or themselves when those words refer to the candidate.
+- Preserve all other wording and the JSON structure. Do not infer or alter another person's gender.
+"""
+
+
+def _blind_system_prompt(neutralize_candidate_gender=False):
+    if neutralize_candidate_gender is True:
+        return BLIND_SYSTEM_PROMPT + BLIND_CANDIDATE_GENDER_NEUTRALIZATION_INSTRUCTION
+    return BLIND_SYSTEM_PROMPT
+
+
 @app.route("/blind", methods=["POST"])
 def blind_cv():
     """Take already-parsed CV JSON and return a blinded version of it."""
@@ -13841,6 +13859,7 @@ def blind_cv():
         cv_data = body.get("cv_data")
         model   = body.get("model") or "claude-sonnet-4-6"
         llm_provider = (body.get("provider") or "anthropic").strip().lower()
+        neutralize_candidate_gender = body.get("neutralize_candidate_gender") is True
         usage = _merge_llm_usage()
 
         if not api_key:
@@ -13851,7 +13870,7 @@ def blind_cv():
         data = call_llm(llm_provider, api_key, {
             "model": model,
             "max_tokens": 64000,
-            "system": BLIND_SYSTEM_PROMPT,
+            "system": _blind_system_prompt(neutralize_candidate_gender),
             "messages": [{"role": "user", "content": f"Anonymise this parsed CV JSON:\n\n{json.dumps(cv_data)}"}]
         })
         usage = _merge_llm_usage(usage, data.get("usage"))

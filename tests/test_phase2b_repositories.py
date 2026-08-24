@@ -252,6 +252,10 @@ class Phase2BRepositoryTests(unittest.TestCase):
             "cvstudio_batch_summary_detail_v1",
             storage_module.BROWSER_SETTING_KEYS,
         )
+        self.assertIn(
+            "cvstudio_blind_candidate_gender_neutral_v1",
+            storage_module.BROWSER_SETTING_KEYS,
+        )
         repository = BrowserSettingsRepository(self.storage)
         legacy = {
             "hy_provider": "openai",
