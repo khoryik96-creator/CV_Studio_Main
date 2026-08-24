@@ -1318,7 +1318,7 @@ def _cvstudio_security_headers(response):
         "form-action 'self'; connect-src 'self'; "
         "img-src 'self' data: blob:; font-src 'self' data:; "
         "style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; "
-        "frame-src 'self' blob:; worker-src 'self' blob:"
+        "frame-src 'self' data: blob:; worker-src 'self' blob:"
     )
     if request.path.startswith("/salary-comparison"):
         response.headers.setdefault(

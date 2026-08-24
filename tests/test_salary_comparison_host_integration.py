@@ -61,13 +61,14 @@ class SalaryComparisonHostIntegrationTests(unittest.TestCase):
         self.assertIn("base-uri 'none'", salary_csp)
         self.assertIn("object-src 'none'", salary_csp)
         self.assertIn("connect-src 'self'", salary_csp)
-        self.assertIn("frame-src 'self' blob:", salary_csp)
+        self.assertIn("frame-src 'self' data: blob:", salary_csp)
         self.assertTrue(salary_csp.endswith("frame-ancestors 'self'"))
         # Every other route keeps the strict anti-clickjacking default.
         index = client.get("/")
         self.assertEqual(index.headers.get("X-Frame-Options"), "DENY")
         index_csp = index.headers.get("Content-Security-Policy") or ""
         self.assertIn("default-src 'self'", index_csp)
+        self.assertIn("frame-src 'self' data: blob:", index_csp)
         self.assertTrue(index_csp.endswith("frame-ancestors 'none'"))
 
     def test_key_resolver_is_wired_into_the_blueprint(self):

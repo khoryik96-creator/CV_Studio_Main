@@ -74,6 +74,9 @@ def _make_windows_fixture(
         f"param([string]$Root = $PSScriptRoot)\nSet-Content -LiteralPath (Join-Path $Root 'stopped.txt') -Value stopped\nexit {stop_exit}\n",
         encoding="utf-8",
     )
+    (source / "requirements.txt").write_text(
+        "fixture-package==1.0\n", encoding="utf-8"
+    )
     _write_batch(
         source / "CV Studio.bat",
         [
@@ -96,6 +99,7 @@ def _make_windows_fixture(
             "UPDATE_PREFLIGHT.ps1",
             "FORCE_STOP.ps1",
             "CV Studio.bat",
+            "requirements.txt",
         ],
         cwd=source,
     )
@@ -125,6 +129,7 @@ def _push_self_update(
     *,
     branch: str = "master",
     candidate_preflight_exit: int | None = None,
+    dependency_manifest_change: bool = False,
 ) -> None:
     git = shutil.which("git")
     assert git is not None
@@ -153,6 +158,11 @@ def _push_self_update(
             encoding="utf-8",
         )
         changed.append("UPDATE_PREFLIGHT.ps1")
+    if dependency_manifest_change:
+        (writer / "requirements.txt").write_text(
+            "fixture-package==2.0\n", encoding="utf-8"
+        )
+        changed.append("requirements.txt")
     _run([git, "add", *changed], cwd=writer)
     _run([git, "commit", "-m", "update running launcher"], cwd=writer)
     _run([git, "push", "origin", branch], cwd=writer)
@@ -177,6 +187,7 @@ def test_update_launcher_hardening_source_contract() -> None:
     assert "$branch -cne 'master'" in core
     assert "diff --quiet --ignore-submodules --" in core
     assert "diff --cached --quiet --ignore-submodules --" in core
+    assert "candidate_dependency_manifest_changed" in core
     current_preflight = core.index("Checking the current CV Studio installation")
     fetch = core.index("fetch --no-tags origin")
     candidate_preflight = core.index("Checking the downloaded updater")
@@ -296,6 +307,26 @@ def test_update_launcher_checks_downloaded_preflight_before_changing_source(
     assert result.returncode == 8, result.stdout + result.stderr
     assert "downloaded master version needs installation work" in result.stdout
     assert before == after
+    assert not (source / "pulled.txt").exists()
+    assert not (source / "stopped.txt").exists()
+    assert not (source / "started.txt").exists()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows cmd.exe launcher behavior")
+def test_update_launcher_stops_before_pull_when_dependency_manifest_changes(
+    tmp_path: Path,
+) -> None:
+    source = _make_windows_fixture(tmp_path)
+    before = _run([shutil.which("git") or "git", "rev-parse", "HEAD"], cwd=source).stdout.strip()
+    _push_self_update(tmp_path, dependency_manifest_change=True)
+
+    result = _run_windows_launcher(source)
+
+    after = _run([shutil.which("git") or "git", "rev-parse", "HEAD"], cwd=source).stdout.strip()
+    assert result.returncode == 18, result.stdout + result.stderr
+    assert "changes runtime dependencies" in result.stdout
+    assert before == after
+    assert "fixture-package==1.0" in (source / "requirements.txt").read_text(encoding="utf-8")
     assert not (source / "pulled.txt").exists()
     assert not (source / "stopped.txt").exists()
     assert not (source / "started.txt").exists()

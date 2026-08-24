@@ -141,6 +141,21 @@ if (-not $git) {
                 Stop-Update 'Local master and GitHub master have diverged. Open GitHub Desktop to review the history safely.' 16
             }
 
+            # The candidate preflight runs before source files are changed, so
+            # it cannot safely validate new exact dependency pins against the
+            # old checkout. Stop instead of restarting with stale packages.
+            $dependencyManifests = @('requirements.txt', 'package.json', 'package-lock.json')
+            & $git diff --quiet HEAD refs/remotes/origin/master -- @dependencyManifests
+            $dependencyDiffRc = [int]$LASTEXITCODE
+            if ($dependencyDiffRc -eq 1) {
+                Write-UpdateLog 'candidate_dependency_manifest_changed'
+                Stop-Update 'The downloaded master version changes runtime dependencies. No source files were changed. Pull master in GitHub Desktop, then run INSTALL.bat in this exact folder.' 18
+            }
+            if ($dependencyDiffRc -ne 0) {
+                Write-UpdateLog ("candidate_dependency_check_failed_{0}" -f $dependencyDiffRc)
+                Stop-Update 'The downloaded master dependency files could not be inspected safely. No source files were changed.' 17
+            }
+
             $candidatePreflight = Join-Path $stateDir 'candidate_update_preflight.ps1'
             try {
                 $candidateLines = @(& $git show 'refs/remotes/origin/master:UPDATE_PREFLIGHT.ps1')
