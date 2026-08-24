@@ -26,6 +26,7 @@ import time
 import urllib.request
 import zipfile
 import zlib
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 try:
@@ -39,8 +40,8 @@ except ModuleNotFoundError:  # Direct `python owner_build_tools/build_protected.
         find_pinned_checkout_action,
     )
 
-VERSION = "v24.6.356"
-VERSION_SLUG = "v24_6_356"
+VERSION = "v24.6.357"
+VERSION_SLUG = "v24_6_357"
 PRODUCT = "TheGuoLab-CVStudio"
 RECEIPT_SCHEMA = 2
 TOTP_MASK = bytes([147,57,36,83,116,245,122,57,165,162,176,168,249,50,204,128,45,174,232,56])
@@ -134,6 +135,47 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
+def write_sha256_sidecar(artifact: Path) -> Path:
+    """Write a portable checksum file beside a completed distributable."""
+    sidecar = artifact.with_name(artifact.name + ".sha256")
+    sidecar.write_text(
+        f"{sha256_file(artifact)}  {artifact.name}\n",
+        encoding="ascii",
+        newline="\n",
+    )
+    return sidecar
+
+
+def copy_sanitized_nuitka_report(
+    source_report: Path,
+    destination: Path,
+    *,
+    source_root: Path,
+    work_root: Path,
+) -> None:
+    """Retain compiler diagnostics without exposing the builder's local paths."""
+    text = source_report.read_text(encoding="utf-8")
+    replacements = (
+        (work_root.resolve(), "${build_root}"),
+        (source_root.resolve(), "${source_root}"),
+        (Path.home().resolve(), "~"),
+    )
+    for local_path, placeholder in replacements:
+        variants = {str(local_path), local_path.as_posix()}
+        for value in sorted(variants, key=len, reverse=True):
+            text = re.sub(re.escape(value), lambda _match, p=placeholder: p, text, flags=re.I)
+    # Fail closed if either exact build root survived through an unexpected
+    # separator/case representation. The report is owner-only, but it should be
+    # safe to attach to an issue without disclosing a Windows user profile.
+    lowered = text.casefold()
+    for local_path, _placeholder in replacements[:2]:
+        if str(local_path).casefold() in lowered or local_path.as_posix().casefold() in lowered:
+            raise RuntimeError("Nuitka report still contains an unsanitized local path")
+    ET.fromstring(text)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(text, encoding="utf-8", newline="\n")
+
+
 def sha256_tree(root: Path) -> str:
     """Return a deterministic aggregate hash on Windows, macOS and Linux.
 
@@ -223,7 +265,7 @@ def validate_repository_dependency_state(root: Path) -> None:
             raise RuntimeError(f"{rel} is not CRLF-only. Run repo_consistency.py --repair.")
         if not raw.lower().startswith(b"option explicit"):
             raise RuntimeError(f"{rel} does not begin with Option Explicit at byte zero.")
-    for rel in ("INSTANCE_PORT.ps1", "STOP_CORE.ps1", "FORCE_STOP.ps1", "RESTORE_PREVIOUS.ps1", "UPDATE_PREFLIGHT.ps1"):
+    for rel in ("INSTANCE_PORT.ps1", "STOP_CORE.ps1", "FORCE_STOP.ps1", "RESTORE_PREVIOUS.ps1", "UPDATE_CORE.ps1", "UPDATE_PREFLIGHT.ps1"):
         helper_raw = (root / rel).read_bytes()
         if helper_raw.startswith(b"\xef\xbb\xbf"):
             raise RuntimeError(f"{rel} contains a UTF-8 BOM. Run repo_consistency.py --repair.")
@@ -802,7 +844,12 @@ def build_package(source: Path,work: Path,out_dir: Path,target: str,dist: Path,n
         if p.is_file(): manifest["files"][p.relative_to(package).as_posix()]={"sha256":sha256_file(p),"bytes":p.stat().st_size}
     (package/"PROTECTED_BUILD_MANIFEST.json").write_text(json.dumps(manifest,indent=2,sort_keys=True),encoding="utf-8")
     out_dir.mkdir(parents=True,exist_ok=True)
-    shutil.copy2(nuitka_report,out_dir/f"cv_studio_{VERSION_SLUG}_{target}_nuitka_report.xml")
+    copy_sanitized_nuitka_report(
+        nuitka_report,
+        out_dir/f"cv_studio_{VERSION_SLUG}_{target}_nuitka_report.xml",
+        source_root=source,
+        work_root=work,
+    )
     artifact=out_dir/f"the_guo_lab_{VERSION_SLUG}_native_protected_{target}_colleague.zip"
     if artifact.exists(): artifact.unlink()
     with zipfile.ZipFile(artifact,"w",zipfile.ZIP_DEFLATED,compresslevel=9) as z:
@@ -1183,10 +1230,12 @@ def main() -> int:
             try: smoke={"ok":None,"skipped":True} if args.skip_smoke else smoke_test(package,source,output,target,args.smoke_timeout)
             except Exception: artifact.unlink(missing_ok=True); raise
             smoke_path=output/f"cv_studio_{VERSION_SLUG}_{target}_protected_smoke.json"; smoke_path.write_text(json.dumps(smoke,indent=2),encoding="utf-8")
-            print("Artifact:",artifact); print("SHA256:",sha256_file(artifact)); print("Smoke:",smoke_path)
+            checksum_path=write_sha256_sidecar(artifact)
+            print("Artifact:",artifact); print("SHA256:",sha256_file(artifact)); print("Checksum:",checksum_path); print("Smoke:",smoke_path)
     except Exception:
         # Failed builds must never leave a misleading distributable ZIP.
         for p in output.glob(f"the_guo_lab_{VERSION_SLUG}_native_protected_{target}_colleague.zip"): p.unlink(missing_ok=True)
+        for p in output.glob(f"the_guo_lab_{VERSION_SLUG}_native_protected_{target}_colleague.zip.sha256"): p.unlink(missing_ok=True)
         raise
     return 0
 

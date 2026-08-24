@@ -1,6 +1,6 @@
 Option Explicit
 
-Const EXPECTED_VERSION = "v24.6.356"
+Const EXPECTED_VERSION = "v24.6.357"
 Const CV_PORT = 5000
 Const HTTP_TIMEOUT_MS = 2500
 
@@ -160,8 +160,11 @@ Sub LaunchServer()
     If Not objFSO.FileExists(appEntry) And objFSO.FileExists(scriptDir & "\app.pyc") Then appEntry = scriptDir & "\app.pyc"
     Dim candidates, c
     candidates = Array("pythonw", _
+      objShell.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Programs\Python\Python314\pythonw.exe", _
+      objShell.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Programs\Python\Python313\pythonw.exe", _
       objShell.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Programs\Python\Python312\pythonw.exe", _
       objShell.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Programs\Python\Python311\pythonw.exe", _
+      "C:\Python314\pythonw.exe", "C:\Python313\pythonw.exe", _
       "C:\Python312\pythonw.exe", "C:\Python311\pythonw.exe")
     For Each c In candidates
         If c = "pythonw" Then

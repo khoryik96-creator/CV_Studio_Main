@@ -167,6 +167,7 @@ jobs:
           name: cv-studio-v${{ steps.package-version.outputs.value }}-${{ matrix.target }}-COLLEAGUE
           path: |
             protected-output/*colleague.zip
+            protected-output/*colleague.zip.sha256
             protected-output/*protected_smoke.json
           if-no-files-found: error
           retention-days: 14

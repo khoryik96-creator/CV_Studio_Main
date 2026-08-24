@@ -44,6 +44,7 @@ NO_BOM_UTF8_FILES = (
     "STOP_CORE.ps1",
     "FORCE_STOP.ps1",
     "RESTORE_PREVIOUS.ps1",
+    "UPDATE_CORE.ps1",
     "UPDATE_PREFLIGHT.ps1",
 )
 VBS_FILES = (

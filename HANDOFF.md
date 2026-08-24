@@ -46,10 +46,11 @@ behavior-preserving and hold the route SHA constant.
 ## 3. CI and local verification
 
 GitHub Actions is currently provisioning successfully. Regression CI runs on
-pull requests and again on the exact commit pushed to `master`. Pull requests
-that touch protected-packaging or launcher boundaries also run a real Windows
-protected build. Continue to verify locally before pushing so CI is a second,
-independent gate rather than the first place a regression is discovered:
+pull requests and again on the exact commit pushed to `master`. The expensive
+protected-package workflow is deliberately **manual-only** and runs only when
+the owner chooses **Run workflow**; pull requests never start it automatically.
+Continue to verify locally before pushing so CI is a second, independent gate
+rather than the first place a regression is discovered:
 
 ```bash
 python -m venv .venv_test
@@ -64,7 +65,7 @@ Expected Linux result: **1 known failure** —
 `test_legacy_doc_requires_and_uses_verified_antiword` (the Antiword binary is
 not functional on Linux; it is a Windows-only runtime — the app correctly
 returns 424 rather than trusting an unverified extraction). A verified Windows
-x64 environment currently passes **971 tests, 4 skipped, 96 subtests**.
+x64 environment currently passes **978 tests, 4 skipped, 96 subtests**.
 **Do not commit `.venv_test/`** (or
 `node_modules/`). Both paths are gitignored, but keep generated dependency
 trees out of commits and continue staging source files explicitly rather than
@@ -237,11 +238,21 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Manual-only protected builds — v24.6.355 / planned PR #174, ACTIVE.**
-  Branch `chatgpt/pr174-v24.6.355-manual-protected-build` removes the expensive
-  protected workflow's automatic pull-request trigger. After merge, re-enable
-  the currently disabled workflow in GitHub so its explicit **Run workflow**
-  action is available; do not restore automatic PR builds. The local
+- **Audit hardening — v24.6.357 / planned PR #176, ACTIVE.** Branch
+  `chatgpt/pr176-v24.6.357-audit-hardening` hardens source updates so only a
+  clean `master` can update and both the current and downloaded preflight run
+  before Git changes local source. The PowerShell update transaction is loaded
+  before the merge, so replacing `UPDATE.bat` during a real fast-forward cannot
+  corrupt the running update. It also broadens compatible Python discovery,
+  adds a behavior-compatible CSP, emits a distributable ZIP checksum, removes
+  owner paths from copied Nuitka diagnostics and validates four dependency
+  upgrades in an isolated Python 3.14 environment. Routes, schemas,
+  credentials, CV formatting and manual-only protected-build behavior remain
+  unchanged. No merge without owner approval.
+- **Manual-only protected builds — v24.6.355 / PR #174, MERGED.** PR #174
+  removed the expensive protected workflow's automatic pull-request trigger
+  and left its explicit **Run workflow** action enabled. Do not restore
+  automatic PR builds. The local
   `owner_build_tools/BUILD_PROTECTED_WINDOWS.bat` remains authoritative, and
   the owner will report any local build failure. Ordinary regression CI and
   Dependabot remain enabled. No application route, schema, runtime,
@@ -460,7 +471,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   broke a ~900-line characterization test and was reverted.
 - **Phase 7B modularization** can continue: extract pure clusters, keep it
   behavior-preserving, hold the route SHA constant.
-- **Waitress server swap (backburner #4) — STAGED ON BRANCH, NOT MERGED.**
+- **Waitress server swap (backburner #4) — MERGED AND PROTECTED-BUILD VERIFIED.**
   `app._run_cvstudio_server()` prefers Waitress and falls back to Werkzeug
   `app.run` if Waitress is unavailable or `CVSTUDIO_SERVER=werkzeug` is set, so
   it degrades safely. Loopback-only bind; `threads=16`; and critically
@@ -468,9 +479,9 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   (300s ceiling × 3 chained parse attempts + 120s = 1020s) so a long/truncated
   `/parse` connection is never cut mid-flight — do not hardcode this or the
   timeout bug returns. Covered by `tests/test_server_runtime.py`; route SHA and
-  version surfaces unchanged. **Gate before merging:** run the actual protected
-  Windows/macOS build and confirm Waitress is frozen in (else the fallback
-  quietly serves on the dev server) and that a real long AI parse completes.
+  version surfaces unchanged. The owner's v24.6.356 protected Windows build
+  report confirms Waitress 3.0.2 is frozen into the native runtime. Future
+  protected builds must retain that explicit inclusion and smoke coverage.
   `waitress==3.0.2` is in `requirements.txt`; it is a pip dep, not a repo source
   file, so it is not in the `build_protected.py` `required` tuple.
 
