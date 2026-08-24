@@ -64,8 +64,12 @@ if (-not (Test-Path -LiteralPath $nativeRuntime -PathType Leaf)) {
     $pythonCandidates = @(
         @(
             [string](Get-Command python.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -First 1),
+            (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python314\python.exe'),
+            (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python313\python.exe'),
             (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python312\python.exe'),
             (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python311\python.exe'),
+            'C:\Python314\python.exe',
+            'C:\Python313\python.exe',
             'C:\Python312\python.exe',
             'C:\Python311\python.exe'
         ) | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) } | Select-Object -Unique
@@ -73,10 +77,15 @@ if (-not (Test-Path -LiteralPath $nativeRuntime -PathType Leaf)) {
     if ($pythonCandidates.Count -eq 0) {
         Stop-WithError 'Python is unavailable. Run INSTALL.bat while the current server is still running.' 8
     }
-    $python = [string]$pythonCandidates[0]
     $imports = 'import flask,pdfplumber,docx,pytesseract,pdf2image,pypdfium2,PIL,olefile,certifi,reportlab,openpyxl,bs4,pypdf,requests,waitress'
-    & $python -c $imports
-    if ($LASTEXITCODE -ne 0) {
+    $python = $null
+    foreach ($candidate in $pythonCandidates) {
+        try {
+            & ([string]$candidate) -c $imports 2>$null
+            if ($LASTEXITCODE -eq 0) { $python = [string]$candidate; break }
+        } catch {}
+    }
+    if (-not $python) {
         Stop-WithError 'One or more Python runtime packages are missing. Run INSTALL.bat.' 8
     }
 }

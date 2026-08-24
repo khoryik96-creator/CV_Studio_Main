@@ -21,7 +21,8 @@ Never distribute a protected package unless its platform build finishes with:
 2. native compilation passed;
 3. source-leak scan passed;
 4. `/ping`, `/status`, `/`, vendor asset and DOCX-generation smoke tests passed;
-5. a protected smoke JSON file showing `"ok": true`.
+5. a protected smoke JSON file showing `"ok": true`;
+6. the adjacent `*.zip.sha256` matches the colleague ZIP.
 
 A failed smoke test deletes the colleague ZIP automatically. The original private-source ZIP remains the only patch base.
 
@@ -34,6 +35,17 @@ owner_build_tools\BUILD_PROTECTED_WINDOWS.bat
 ```
 
 The artifact is written to `protected-output`.
+
+The builder writes a standard SHA-256 sidecar beside each completed colleague
+ZIP. Keep both files together and verify the checksum before distributing the
+ZIP. Owner-only Nuitka reports in the same output folder are sanitized to use
+source/build placeholders; they remain diagnostics and are never included in
+the colleague package.
+
+Windows binaries are not Authenticode-signed unless the owner supplies and
+integrates a trusted code-signing certificate. The checksum proves the ZIP was
+not changed after this build; it does not replace publisher signing or remove
+Windows reputation warnings.
 
 ## v24.6.246 candidate platform boundary
 

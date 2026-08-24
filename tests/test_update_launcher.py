@@ -12,6 +12,7 @@ from owner_build_tools.repo_consistency import BATCH_FILES
 
 ROOT = Path(__file__).resolve().parents[1]
 UPDATE_LAUNCHER = ROOT / "UPDATE.bat"
+UPDATE_CORE = ROOT / "UPDATE_CORE.ps1"
 SOURCE_LAUNCHER = ROOT / "CV Studio.bat"
 UPDATE_PREFLIGHT = ROOT / "UPDATE_PREFLIGHT.ps1"
 
@@ -48,7 +49,7 @@ def _write_batch(path: Path, lines: list[str]) -> None:
 def _make_windows_fixture(
     tmp_path: Path,
     *,
-    branch: str = "launcher-test",
+    branch: str = "master",
     preflight_exit: int = 0,
     stop_exit: int = 0,
     start_exit: int = 0,
@@ -60,17 +61,21 @@ def _make_windows_fixture(
     remote = tmp_path / "remote.git"
     source.mkdir()
     shutil.copy2(UPDATE_LAUNCHER, source / "UPDATE.bat")
+    shutil.copy2(UPDATE_CORE, source / "UPDATE_CORE.ps1")
     (source / "UPDATE_PREFLIGHT.ps1").write_text(
         "param([string]$Root = $PSScriptRoot)\n"
         "try { $Root = [IO.Path]::GetFullPath($Root).TrimEnd('\\','/') } "
         "catch { exit 2 }\n"
-        "if ($Root -ne [IO.Path]::GetFullPath($PSScriptRoot).TrimEnd('\\','/')) { exit 2 }\n"
+        "if (-not (Test-Path -LiteralPath (Join-Path $Root 'CV Studio.bat'))) { exit 2 }\n"
         f"exit {preflight_exit}\n",
         encoding="utf-8",
     )
     (source / "FORCE_STOP.ps1").write_text(
         f"param([string]$Root = $PSScriptRoot)\nSet-Content -LiteralPath (Join-Path $Root 'stopped.txt') -Value stopped\nexit {stop_exit}\n",
         encoding="utf-8",
+    )
+    (source / "requirements.txt").write_text(
+        "fixture-package==1.0\n", encoding="utf-8"
     )
     _write_batch(
         source / "CV Studio.bat",
@@ -86,11 +91,20 @@ def _make_windows_fixture(
     _run([git, "config", "user.name", "CV Studio test"], cwd=source)
     _run([git, "config", "user.email", "test@example.invalid"], cwd=source)
     _run(
-        [git, "add", "UPDATE.bat", "UPDATE_PREFLIGHT.ps1", "FORCE_STOP.ps1", "CV Studio.bat"],
+        [
+            git,
+            "add",
+            "UPDATE.bat",
+            "UPDATE_CORE.ps1",
+            "UPDATE_PREFLIGHT.ps1",
+            "FORCE_STOP.ps1",
+            "CV Studio.bat",
+            "requirements.txt",
+        ],
         cwd=source,
     )
     _run([git, "commit", "-m", "launcher fixture"], cwd=source)
-    _run([git, "checkout", "-b", branch], cwd=source)
+    _run([git, "branch", "-M", branch], cwd=source)
     _run([git, "remote", "add", "origin", str(remote)], cwd=source)
     _run([git, "push", "-u", "origin", "HEAD"], cwd=source)
     return source
@@ -110,7 +124,13 @@ def _run_windows_launcher(source: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
-def _push_self_update(tmp_path: Path, *, branch: str = "launcher-test") -> None:
+def _push_self_update(
+    tmp_path: Path,
+    *,
+    branch: str = "master",
+    candidate_preflight_exit: int | None = None,
+    dependency_manifest_change: bool = False,
+) -> None:
     git = shutil.which("git")
     assert git is not None
     writer = tmp_path / "writer"
@@ -128,27 +148,52 @@ def _push_self_update(tmp_path: Path, *, branch: str = "launcher-test") -> None:
         launcher.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "\r\n").encode("utf-8")
     )
     (writer / "pulled.txt").write_text("pulled\n", encoding="utf-8")
-    _run([git, "add", "UPDATE.bat", "pulled.txt"], cwd=writer)
+    changed = ["UPDATE.bat", "pulled.txt"]
+    if candidate_preflight_exit is not None:
+        preflight = (writer / "UPDATE_PREFLIGHT.ps1").read_text(encoding="utf-8")
+        before, marker, _last = preflight.rpartition("exit 0")
+        assert marker
+        (writer / "UPDATE_PREFLIGHT.ps1").write_text(
+            before + f"exit {candidate_preflight_exit}" + _last,
+            encoding="utf-8",
+        )
+        changed.append("UPDATE_PREFLIGHT.ps1")
+    if dependency_manifest_change:
+        (writer / "requirements.txt").write_text(
+            "fixture-package==2.0\n", encoding="utf-8"
+        )
+        changed.append("requirements.txt")
+    _run([git, "add", *changed], cwd=writer)
     _run([git, "commit", "-m", "update running launcher"], cwd=writer)
     _run([git, "push", "origin", branch], cwd=writer)
 
 
 def test_update_launcher_hardening_source_contract() -> None:
     text = UPDATE_LAUNCHER.read_text(encoding="utf-8")
-    assert "echo Current branch: %BRANCH%" not in text
-    assert '"%GIT%" rev-parse --abbrev-ref HEAD' in text
-    stop_call = text.index('powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0FORCE_STOP.ps1"')
-    stop_result = text.index('set "STOP_RC=%ERRORLEVEL%"')
-    stop_gate = text.index('if not "%STOP_RC%"=="0" goto :stop_failed')
-    preflight_call = text.index('powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0UPDATE_PREFLIGHT.ps1"')
-    start_call = text.index('call "%~dp0CV Studio.bat" --wait')
-    assert preflight_call < stop_call < stop_result < stop_gate < start_call
-    assert '-File "%~dp0UPDATE_PREFLIGHT.ps1" -Root "%~dp0"' not in text
-    assert '-File "%~dp0FORCE_STOP.ps1" -Root "%~dp0"' not in text
-    assert 'set "START_RC=%ERRORLEVEL%"' in text[start_call:]
-    assert 'exit /b %START_RC%' in text[start_call:]
-    assert "Previous source commit:" in text
-    assert "source_update.log" in text
+    assert 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0UPDATE_CORE.ps1"' in text
+    assert text.rstrip().endswith(
+        'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0UPDATE_CORE.ps1" & exit /b !ERRORLEVEL!'
+    )
+
+    core = UPDATE_CORE.read_text(encoding="utf-8")
+    stop_call = core.index("& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $stopHelper")
+    stop_result = core.index("$stopRc = [int]$LASTEXITCODE")
+    stop_gate = core.index("if ($stopRc -ne 0)")
+    start_call = core.index("& $launcher '--wait'")
+    assert stop_call < stop_result < stop_gate < start_call
+    assert "Previous source commit:" in core
+    assert "source_update.log" in core
+    assert "symbolic-ref --quiet --short HEAD" in core
+    assert "$branch -cne 'master'" in core
+    assert "diff --quiet --ignore-submodules --" in core
+    assert "diff --cached --quiet --ignore-submodules --" in core
+    assert "candidate_dependency_manifest_changed" in core
+    current_preflight = core.index("Checking the current CV Studio installation")
+    fetch = core.index("fetch --no-tags origin")
+    candidate_preflight = core.index("Checking the downloaded updater")
+    merge = core.index("merge --ff-only refs/remotes/origin/master")
+    post_preflight = core.index("Checking CV Studio before stopping")
+    assert current_preflight < fetch < candidate_preflight < merge < post_preflight < stop_call
 
     source_launcher = SOURCE_LAUNCHER.read_text(encoding="utf-8")
     assert 'if /i "%~1"=="--wait" goto :wait_for_start' in source_launcher
@@ -165,6 +210,7 @@ def test_update_launcher_is_in_batch_byte_validation() -> None:
     validation = protected_builder[validation_start:validation_end]
     assert "for rel in REPOSITORY_BATCH_FILES" in validation
     assert "batch_files =" not in validation
+    assert '"UPDATE_CORE.ps1"' in protected_builder
 
 
 def test_update_preflight_preserves_single_executable_candidates_as_arrays() -> None:
@@ -174,6 +220,9 @@ def test_update_preflight_preserves_single_executable_candidates_as_arrays() -> 
         first_candidate = text.index("@(", assignment + len(f"${variable} = @("))
         count_gate = text.index(f"if (${variable}.Count -eq 0)", assignment)
         assert assignment < first_candidate < count_gate
+    assert "Python314\\python.exe" in text
+    assert "Python313\\python.exe" in text
+    assert "foreach ($candidate in $pythonCandidates)" in text
 
 
 @pytest.mark.skipif(
@@ -245,14 +294,72 @@ def test_update_launcher_survives_replacing_itself_during_real_pull(tmp_path: Pa
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows cmd.exe launcher behavior")
+def test_update_launcher_checks_downloaded_preflight_before_changing_source(
+    tmp_path: Path,
+) -> None:
+    source = _make_windows_fixture(tmp_path)
+    before = _run([shutil.which("git") or "git", "rev-parse", "HEAD"], cwd=source).stdout.strip()
+    _push_self_update(tmp_path, candidate_preflight_exit=8)
+
+    result = _run_windows_launcher(source)
+
+    after = _run([shutil.which("git") or "git", "rev-parse", "HEAD"], cwd=source).stdout.strip()
+    assert result.returncode == 8, result.stdout + result.stderr
+    assert "downloaded master version needs installation work" in result.stdout
+    assert before == after
+    assert not (source / "pulled.txt").exists()
+    assert not (source / "stopped.txt").exists()
+    assert not (source / "started.txt").exists()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows cmd.exe launcher behavior")
+def test_update_launcher_stops_before_pull_when_dependency_manifest_changes(
+    tmp_path: Path,
+) -> None:
+    source = _make_windows_fixture(tmp_path)
+    before = _run([shutil.which("git") or "git", "rev-parse", "HEAD"], cwd=source).stdout.strip()
+    _push_self_update(tmp_path, dependency_manifest_change=True)
+
+    result = _run_windows_launcher(source)
+
+    after = _run([shutil.which("git") or "git", "rev-parse", "HEAD"], cwd=source).stdout.strip()
+    assert result.returncode == 18, result.stdout + result.stderr
+    assert "changes runtime dependencies" in result.stdout
+    assert before == after
+    assert "fixture-package==1.0" in (source / "requirements.txt").read_text(encoding="utf-8")
+    assert not (source / "pulled.txt").exists()
+    assert not (source / "stopped.txt").exists()
+    assert not (source / "started.txt").exists()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows cmd.exe launcher behavior")
 def test_update_launcher_does_not_execute_branch_name(tmp_path: Path) -> None:
     source = _make_windows_fixture(tmp_path, branch="safe&echo.BRANCH_INJECTION")
     result = _run_windows_launcher(source)
     lines = [line.strip() for line in result.stdout.splitlines()]
-    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.returncode == 14, result.stdout + result.stderr
     assert "safe&echo.BRANCH_INJECTION" in lines
     assert "BRANCH_INJECTION" not in lines
-    assert (source / "started.txt").is_file()
+    assert "allowed only from the master branch" in result.stdout
+    assert not (source / "stopped.txt").exists()
+    assert not (source / "started.txt").exists()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows cmd.exe launcher behavior")
+def test_update_launcher_refuses_dirty_tracked_master_without_fetch_or_restart(
+    tmp_path: Path,
+) -> None:
+    source = _make_windows_fixture(tmp_path)
+    (source / "CV Studio.bat").write_bytes(
+        (source / "CV Studio.bat").read_bytes() + b"rem local owner change\r\n"
+    )
+
+    result = _run_windows_launcher(source)
+
+    assert result.returncode == 15, result.stdout + result.stderr
+    assert "uncommitted tracked changes" in result.stdout
+    assert not (source / "stopped.txt").exists()
+    assert not (source / "started.txt").exists()
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows cmd.exe launcher behavior")

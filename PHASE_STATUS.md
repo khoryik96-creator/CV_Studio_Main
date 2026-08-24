@@ -25,9 +25,10 @@
   `54298b9b6a822e1f36c9c101f1ff4edc9c7e835f`
 - Phase 7B-4 source baseline Git commit (merged Phase 7B-3):
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
-- Current merged source: v24.6.354 through PR #173 (`0f2c6f5`).
-- Active work: v24.6.355 manual-only protected-build configuration on
-  `chatgpt/pr174-v24.6.355-manual-protected-build` for planned PR #174.
+- Current merged source: v24.6.356 through PR #175
+  (`64d86d2ed7048443d9ddcf041e441952e022daae`).
+- Active work: v24.6.357 audit hardening on
+  `chatgpt/pr176-v24.6.357-audit-hardening` for planned PR #176.
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
@@ -41,9 +42,34 @@
   merged the v24.6.354 updater/CI reliability corrective as `0f2c6f5`; its
   final protected retry was cancelled at the owner's request to conserve CI
   minutes, with the retained local builder designated as the final package
-  check.
-- Current stop: v24.6.354 is merged on `master` through PR #173; v24.6.355 is
+  check. PR #174 merged the manual-only protected-build configuration as
+  `ab96824`. PR #175 merged the updater preflight-path fix; current master is
+  `64d86d2` at v24.6.356.
+- Current stop: v24.6.356 is merged on `master` through PR #175; v24.6.357 is
   active and unmerged on the branch above.
+
+## v24.6.357 audit hardening
+
+- Source update execution moves into a preloaded PowerShell transaction so a
+  real fast-forward may replace `UPDATE.bat` without corrupting the running
+  updater. Automatic updates require a clean exact `master`, validate the
+  current installation before fetch, validate the downloaded preflight before
+  changing source and retain the established no-reset/no-auto-install safety.
+- Python source preflight tries every compatible PATH/fixed candidate and adds
+  Python 3.13/3.14 fixed locations, so one stale executable cannot hide a
+  healthy installation. The source launcher mirrors those fixed locations.
+- Browser responses retain same-origin Salary framing and all existing inline
+  scripts/styles while adding compatible default/base/object/form/connect/
+  image/font/frame/worker CSP restrictions.
+- Protected builds write a standard SHA-256 sidecar beside the colleague ZIP.
+  Copied owner-only Nuitka diagnostics replace source/build/user roots with
+  placeholders before leaving the temporary build folder.
+- Exact pins update pdfplumber 0.11.10, pypdfium2 5.13.0, certifi 2026.7.22 and
+  ReportLab 5.0.1. A clean isolated Python 3.14 environment passes 978 tests,
+  4 skips and 96 subtests with these versions.
+- No route, schema, credential, CV-formatting, candidate-data, paid/external
+  call or automatic protected-build boundary changes. Planned PR #176 remains
+  unmerged pending owner review.
 
 ## v24.6.355 manual-only protected-build configuration
 
