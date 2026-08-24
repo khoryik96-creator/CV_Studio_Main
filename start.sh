@@ -1,10 +1,10 @@
 #!/bin/bash
-# The 郭 Lab CV Studio — macOS launcher v24.6.352
+# The 郭 Lab CV Studio — macOS launcher v24.6.353
 set -u
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 STATE_DIR="$HOME/.guo_lab_cv_studio"
 URL="http://localhost:5000"
-VERSION="v24.6.352"
+VERSION="v24.6.353"
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 mkdir -p "$STATE_DIR"
 

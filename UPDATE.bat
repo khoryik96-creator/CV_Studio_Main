@@ -27,9 +27,17 @@ if not defined GIT (
 
 echo Using git: "%GIT%"
 echo.
-set "BRANCH=master"
-for /f "usebackq delims=" %%B in (`"%GIT%" rev-parse --abbrev-ref HEAD`) do set "BRANCH=%%B"
-echo Current branch: %BRANCH%
+"%GIT%" rev-parse --is-inside-work-tree >nul 2>&1
+set "RC=%ERRORLEVEL%"
+if not "%RC%"=="0" (
+  echo This folder is not a Git clone, so it cannot update automatically.
+  echo The app will still start on the current version.
+  echo.
+  pause
+  goto :restart
+)
+echo Current branch:
+"%GIT%" rev-parse --abbrev-ref HEAD
 echo Pulling the latest version...
 echo.
 "%GIT%" pull --ff-only
@@ -51,7 +59,10 @@ if not "%RC%"=="0" (
 
 :restart
 echo Stopping any running CV Studio server...
-if exist "%~dp0FORCE_STOP.ps1" powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0FORCE_STOP.ps1" -Root "%~dp0" >nul 2>&1
+if not exist "%~dp0FORCE_STOP.ps1" goto :stop_helper_missing
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0FORCE_STOP.ps1" -Root "%~dp0"
+set "STOP_RC=%ERRORLEVEL%"
+if not "%STOP_RC%"=="0" goto :stop_failed
 
 echo Starting CV Studio...
 if not exist "%~dp0CV Studio.bat" (
@@ -62,4 +73,19 @@ if not exist "%~dp0CV Studio.bat" (
   exit /b 1
 )
 call "%~dp0CV Studio.bat"
-exit /b 0
+exit /b %ERRORLEVEL%
+
+:stop_helper_missing
+echo ERROR: FORCE_STOP.ps1 was not found in this folder.
+echo CV Studio was not restarted because the old server could still be running.
+echo.
+pause
+exit /b 2
+
+:stop_failed
+echo.
+echo ERROR: CV Studio could not be stopped safely ^(exit code %STOP_RC%^).
+echo The app was not restarted. Review the message above, then try again.
+echo.
+pause
+exit /b %STOP_RC%
