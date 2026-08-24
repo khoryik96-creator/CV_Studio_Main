@@ -30,6 +30,7 @@ BATCH_FILES = (
     "MERGE_TITLE_CACHE.bat",
     "RESTORE_PREVIOUS.bat",
     "STOP.bat",
+    "UPDATE.bat",
     "owner_build_tools/BUILD_PROTECTED_WINDOWS.bat",
     "owner_build_tools/APPLY_PRIVATE_REPO_FIX_WINDOWS.bat",
 )

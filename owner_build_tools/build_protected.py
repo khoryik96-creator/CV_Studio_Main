@@ -28,8 +28,8 @@ import zipfile
 import zlib
 from pathlib import Path
 
-VERSION = "v24.6.352"
-VERSION_SLUG = "v24_6_352"
+VERSION = "v24.6.353"
+VERSION_SLUG = "v24_6_353"
 PRODUCT = "TheGuoLab-CVStudio"
 RECEIPT_SCHEMA = 2
 TOTP_MASK = bytes([147,57,36,83,116,245,122,57,165,162,176,168,249,50,204,128,45,174,232,56])
@@ -185,7 +185,7 @@ def validate_repository_dependency_state(root: Path) -> None:
     if git_guard not in workflow_text or workflow_text.index(git_guard) > workflow_text.index("uses: actions/checkout@v4"):
         raise RuntimeError("Protected workflow must disable core.autocrlf before actions/checkout.")
     batch_files = (
-        "CV Studio.bat", "INSTALL.bat", "INSTALL_CORE.bat", "MERGE_TITLE_CACHE.bat", "RESTORE_PREVIOUS.bat", "STOP.bat", "FORCE_STOP.bat",
+        "CV Studio.bat", "INSTALL.bat", "INSTALL_CORE.bat", "MERGE_TITLE_CACHE.bat", "RESTORE_PREVIOUS.bat", "STOP.bat", "FORCE_STOP.bat", "UPDATE.bat",
         "owner_build_tools/BUILD_PROTECTED_WINDOWS.bat",
         "owner_build_tools/APPLY_PRIVATE_REPO_FIX_WINDOWS.bat",
     )

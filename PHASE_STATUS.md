@@ -26,7 +26,8 @@
 - Phase 7B-4 source baseline Git commit (merged Phase 7B-3):
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
 - Current merged source: v24.6.352 through PR #169.
-- Active work: none for the v24.6.352 corrective; PR #169 is merged.
+- Active work: v24.6.353 source-updater hardening on planned PR #171, branch
+  `chatgpt/pr171-v24.6.353-update-launcher-hardening`.
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
@@ -36,8 +37,27 @@
   contribution-profile repair. PR #166 merged the v24.6.350 salary
   profile-migration safety corrective. PR #167 merged the v24.6.351 JobAdder
   original-CV, candidate-contact and blank-PDF corrective as `85dc896`.
-- Current stop: v24.6.352 is merged on `master` through PR #169; no newer
-  corrective is active.
+- Current stop: v24.6.352 is merged on `master` through PR #169; v24.6.353 is
+  active on its isolated branch and is not merged.
+
+## v24.6.353 Windows source updater hardening corrective
+
+- `UPDATE.bat` displays Git's branch output directly instead of expanding a
+  branch name into a `cmd.exe` command line. Branch metacharacters such as `&`
+  therefore remain data and cannot start another command.
+- A missing or unsuccessful `FORCE_STOP.ps1` now stops the update/restart flow
+  with a visible error. The updater no longer launches a second instance while
+  the previous server may still own port 5000.
+- The updater returns the real `CV Studio.bat` startup result, preserving the
+  existing authorization and startup failure codes instead of always exiting
+  successfully.
+- The source-only updater is registered in both repository-consistency and
+  protected-source batch-byte validation. Focused tests execute the launcher
+  in isolated temporary Git repositories on Windows and cover branch-name
+  safety, stop failure and startup failure.
+- `UPDATE.bat` remains excluded from protected colleague package contents. No
+  route, schema, dependency, credential, external call or user-data boundary
+  changes.
 
 ## v24.6.352 Windows watchdog recovery corrective
 

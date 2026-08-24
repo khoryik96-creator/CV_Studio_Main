@@ -225,6 +225,16 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
+- **Windows source updater hardening — v24.6.353 / planned PR #171, ACTIVE.**
+  Branch `chatgpt/pr171-v24.6.353-update-launcher-hardening` prevents a Git
+  branch name from being parsed as `cmd.exe` syntax, refuses to relaunch when
+  the deliberate force-stop helper fails, and propagates the established
+  `CV Studio.bat` startup result instead of always reporting success. The
+  source-only updater now joins the repository's no-BOM/CRLF batch validation,
+  with real Windows regressions for branch-name safety and both failure paths.
+  `UPDATE.bat` remains a Git-clone convenience and is not added to the
+  protected colleague package. No route, schema, dependency, credential,
+  external-call, user-data or protected-package-content boundary changes.
 - **Windows watchdog recovery corrective — v24.6.352 / PR #169, MERGED.**
   Branch `chatgpt/pr169-v24.6.352-watchdog-recovery` corrects a
   long-standing Windows recovery dead-end. When the listener still existed but
