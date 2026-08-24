@@ -337,6 +337,68 @@ class Phase5BAICostCharacterizationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(_LEGACY_AI_SUCCESS_FIELDS["/blind"] <= set(response.get_json()))
 
+    def test_blind_candidate_gender_neutralization_is_explicit_and_opt_in(self):
+        parsed_data = {
+            "candidate": {"name": "Fixture Candidate"},
+            "work_experiences": [
+                {
+                    "company": "Fixture Company",
+                    "roles": [
+                        {
+                            "title": "Engineer",
+                            "bullets": [
+                                "She supported her manager while he led the client meeting."
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+        prompts = []
+
+        def fake_llm(_provider, _api_key, payload):
+            prompts.append(payload["system"])
+            return {
+                "content": [{"type": "text", "text": json.dumps(parsed_data)}],
+                "usage": {},
+            }
+
+        with mock.patch.object(
+            app, "_resolve_request_api_key", return_value="<fixture-credential>"
+        ), mock.patch.object(app, "call_llm", side_effect=fake_llm), mock.patch.object(
+            app,
+            "_blind_postprocess_company_mentions",
+            side_effect=lambda value, _source: value,
+        ):
+            disabled = self._post_paid(
+                "/blind",
+                {
+                    "cv_data": parsed_data,
+                    "provider": "anthropic",
+                    "neutralize_candidate_gender": False,
+                },
+                "blind-gender-neutral-disabled",
+            )
+            enabled = self._post_paid(
+                "/blind",
+                {
+                    "cv_data": parsed_data,
+                    "provider": "anthropic",
+                    "neutralize_candidate_gender": True,
+                },
+                "blind-gender-neutral-enabled",
+            )
+
+        self.assertEqual(disabled.status_code, 200)
+        self.assertEqual(enabled.status_code, 200)
+        self.assertEqual(prompts[0], app.BLIND_SYSTEM_PROMPT)
+        self.assertNotIn("CANDIDATE GENDER NEUTRALIZATION", prompts[0])
+        self.assertIn("CANDIDATE GENDER NEUTRALIZATION", prompts[1])
+        self.assertIn('"the candidate will"', prompts[1])
+        self.assertIn('"the candidate\'s"', prompts[1])
+        self.assertIn("Never leave or introduce they, them, their", prompts[1])
+        self.assertIn("managers, colleagues, clients", prompts[1])
+
     def test_existing_failure_and_salary_processing_fields_are_preserved(self):
         with mock.patch.object(
             app, "_resolve_request_api_key", return_value="<fixture-credential>"

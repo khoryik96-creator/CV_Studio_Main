@@ -105,6 +105,13 @@ assert.ok(html.includes("setCvSummaryDetailPreference('single','concise')"));
 assert.ok(html.includes("setCvSummaryDetailPreference('single','detailed')"));
 assert.ok(html.includes("setCvSummaryDetailPreference('batch','concise')"));
 assert.ok(html.includes("setCvSummaryDetailPreference('batch','detailed')"));
+assert.ok(html.includes('id="cvBlindCandidateGenderNeutralToggle"'));
+assert.ok(html.includes('onchange="setCvBlindCandidateGenderNeutralization(this.checked)"'));
+assert.ok(html.includes('references to managers, colleagues, clients and other people stay unchanged'));
+assert.ok(html.includes("window._cvBlindCandidateGenderNeutral = stored === 'true'"));
+assert.strictEqual((html.match(/neutralize_candidate_gender:/g) || []).length, 2);
+assert.ok(html.includes('var blindCandidateGenderNeutral = blind && getCvBlindCandidateGenderNeutralization()'));
+assert.ok(html.includes('var batchBlindCandidateGenderNeutral = isBlind && getCvBlindCandidateGenderNeutralization()'));
 assert.ok(html.includes("window._cvSummaryBoxAutoFit = stored !== 'false'"));
 assert.strictEqual((html.match(/summary_box_autofit: getCvSummaryBoxAutoFit\(\)/g) || []).length, 2);
 assert.ok(html.includes("fd.append('summary_box_autofit', getCvSummaryBoxAutoFit() ? 'true' : 'false')"));
@@ -160,6 +167,31 @@ assert.strictEqual(autoFitContext.getCvSummaryBoxAutoFit(), false);
 assert.strictEqual(autoFitElements.cvSummaryBoxAutoFitToggle.checked, false);
 assert.strictEqual(autoFitElements.cvSummaryBoxAutoFitLabel.textContent, 'Off');
 assert.deepStrictEqual(autoFitWrites[0], ['cvstudio_summary_box_autofit_v1', 'false']);
+
+const blindGenderElements = {
+  cvBlindCandidateGenderNeutralToggle: {checked: false},
+  cvBlindCandidateGenderNeutralLabel: {textContent: ''},
+};
+const blindGenderWrites = [];
+const blindGenderContext = {
+  window: {_cvBlindCandidateGenderNeutral: false},
+  document: {getElementById(id){ return blindGenderElements[id] || null; }},
+  CV_BLIND_CANDIDATE_GENDER_NEUTRAL_STORE: 'cvstudio_blind_candidate_gender_neutral_v1',
+  cvStudioDurableSettingSet(key, value){ blindGenderWrites.push([key, value]); },
+  showToast(){},
+};
+vm.createContext(blindGenderContext);
+[
+  'getCvBlindCandidateGenderNeutralization',
+  'renderCvBlindCandidateGenderNeutralizationSetting',
+  'setCvBlindCandidateGenderNeutralization'
+].forEach(name => vm.runInContext(fn(name), blindGenderContext));
+assert.strictEqual(blindGenderContext.getCvBlindCandidateGenderNeutralization(), false);
+blindGenderContext.setCvBlindCandidateGenderNeutralization(true, true);
+assert.strictEqual(blindGenderContext.getCvBlindCandidateGenderNeutralization(), true);
+assert.strictEqual(blindGenderElements.cvBlindCandidateGenderNeutralToggle.checked, true);
+assert.strictEqual(blindGenderElements.cvBlindCandidateGenderNeutralLabel.textContent, 'On');
+assert.deepStrictEqual(blindGenderWrites[0], ['cvstudio_blind_candidate_gender_neutral_v1', 'true']);
 
 const detailElements = {
   cvSingleSummaryConcise: {style:{}, setAttribute(name, value){ this[name] = value; }},

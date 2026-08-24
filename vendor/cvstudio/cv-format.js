@@ -1,5 +1,6 @@
 async function startFormat(blind) {
   blind = !!blind;
+  var blindCandidateGenderNeutral = blind && getCvBlindCandidateGenderNeutralization();
   var raw = '';
   if (_activeInputTab === 'upload') {
     raw = _extractedText;
@@ -107,7 +108,7 @@ async function startFormat(blind) {
         if (_fake2 < 68) { _fake2 += (68 - _fake2) * 0.04; document.getElementById('progressFill').style.width = _fake2 + '%'; }
       }, 300);
 
-      var bRes = await fetchWithTimeout('/blind', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({api_key: key, api_key_slot: route.api_key_slot, cv_data: _parsedData, model: route.model, provider: route.provider}) }, 180000);
+      var bRes = await fetchWithTimeout('/blind', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({api_key: key, api_key_slot: route.api_key_slot, cv_data: _parsedData, model: route.model, provider: route.provider, neutralize_candidate_gender: blindCandidateGenderNeutral}) }, 180000);
       var bRawText = await bRes.text();
       var bData;
       try { bData = JSON.parse(bRawText); } catch(je) { throw new Error('Blind API returned invalid JSON:\n' + bRawText.slice(0,600)); }
