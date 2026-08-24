@@ -1,27 +1,6 @@
 name: Build protected CV Studio packages
 
 on:
-  pull_request:
-    branches:
-      - master
-    paths:
-      - ".github/workflows/build-protected.yml"
-      - "owner_build_tools/**"
-      - "requirements.txt"
-      - "package.json"
-      - "CV Studio.bat"
-      - "INSTALL*.bat"
-      - "INSTALL*.ps1"
-      - "START_HIDDEN.vbs"
-      - "WATCHDOG.vbs"
-      - "STOP*.bat"
-      - "STOP*.ps1"
-      - "FORCE_STOP*.bat"
-      - "FORCE_STOP*.ps1"
-      - "UPDATE*.bat"
-      - "UPDATE*.ps1"
-      - "INSTANCE_PORT.ps1"
-      - "RESTORE_PREVIOUS.*"
   workflow_dispatch:
     inputs:
       targets:
@@ -37,7 +16,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cv-studio-protected-${{ github.event.pull_request.number || github.ref }}
+  group: cv-studio-protected-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
