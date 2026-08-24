@@ -27,7 +27,8 @@
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
 - Current merged source: v24.6.358 through PR #177
   (`2c06bc5c30fba3afcd1885b1ea4cada01fd1fc3a`).
-- Active work: none.
+- Active work: v24.6.359 updater preflight-output corrective on
+  `chatgpt/pr179-v24.6.359-updater-preflight-output` for planned PR #179.
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
@@ -45,8 +46,21 @@
   `ab96824`. PR #175 merged the updater preflight-path fix. PR #176 merged the
   audit hardening as `d94554c`. PR #177 merged the updater runtime-consistency
   corrective as `2c06bc5`; current master is v24.6.358.
-- Current stop: v24.6.358 is merged on `master` through PR #177; no corrective
-  branch is active.
+- Current stop: v24.6.358 is merged on `master` through PR #177; v24.6.359 is
+  active and unmerged on the branch above.
+
+## v24.6.359 updater preflight-output corrective
+
+- `Invoke-Preflight` displays the downloaded PowerShell preflight's output but
+  returns only its numeric exit code. Visible success/error text can no longer
+  turn the function result into `System.Object[]` and crash `Stop-Update` with a
+  brief red parameter-conversion error.
+- The Windows updater fixture now always prints a realistic child-preflight
+  diagnostic. Its failure regression verifies exit code 8, the actionable
+  message, no conversion crash and that the current server remains untouched.
+- No route, schema, dependency, CV-formatting, credential, paid/external call,
+  candidate-data, storage or protected-build trigger changes. Planned PR #179
+  remains unmerged pending owner review.
 
 ## v24.6.358 updater runtime-consistency corrective
 

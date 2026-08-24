@@ -27,8 +27,10 @@ function Write-UpdateLog {
 function Invoke-Preflight {
     param([string]$ScriptPath, [string]$SourceRoot)
     if (-not (Test-Path -LiteralPath $ScriptPath -PathType Leaf)) { return 9 }
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ScriptPath -Root $SourceRoot
-    return [int]$LASTEXITCODE
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ScriptPath -Root $SourceRoot 2>&1 |
+        ForEach-Object { Write-Host ([string]$_) }
+    $preflightExitCode = [int]$LASTEXITCODE
+    return $preflightExitCode
 }
 
 try {

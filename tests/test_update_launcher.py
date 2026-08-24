@@ -69,6 +69,7 @@ def _make_windows_fixture(
         "try { $Root = [IO.Path]::GetFullPath($Root).TrimEnd('\\','/') } "
         "catch { exit 2 }\n"
         "if (-not (Test-Path -LiteralPath (Join-Path $Root 'CV Studio.bat'))) { exit 2 }\n"
+        "Write-Host 'Fixture preflight diagnostic.'\n"
         f"exit {preflight_exit}\n",
         encoding="utf-8",
     )
@@ -501,7 +502,9 @@ def test_update_launcher_leaves_server_untouched_after_preflight_failure(tmp_pat
     source = _make_windows_fixture(tmp_path, preflight_exit=8)
     result = _run_windows_launcher(source)
     assert result.returncode == 8, result.stdout + result.stderr
+    assert "Fixture preflight diagnostic." in result.stdout
     assert "current CV Studio server was left untouched" in result.stdout
+    assert "Cannot process argument transformation" not in result.stdout + result.stderr
     assert not (source / "stopped.txt").exists()
     assert not (source / "started.txt").exists()
 
