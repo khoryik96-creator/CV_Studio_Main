@@ -239,6 +239,16 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
+- **Updater preflight-output corrective — v24.6.359 / planned PR #179,
+  ACTIVE.** Branch `chatgpt/pr179-v24.6.359-updater-preflight-output` keeps the
+  downloaded preflight's visible diagnostic output out of the PowerShell
+  function return pipeline. `Invoke-Preflight` now returns only the numeric exit
+  code, so a real success/error message cannot become a `System.Object[]` and
+  crash `Stop-Update` with a disappearing red conversion error. The Windows
+  launcher fixture now always emits a realistic preflight diagnostic and seals
+  the failure path at exit code 8 with the running server untouched. No route,
+  schema, dependency, CV-formatting, credential, external-call or user-data
+  boundary changes. No merge without owner approval.
 - **Updater runtime consistency — v24.6.358 / PR #177, MERGED.** PR #177 merged
   to `master` as `2c06bc5`. It makes update preflight
   and source startup use one shared Python resolver. It accepts only an
