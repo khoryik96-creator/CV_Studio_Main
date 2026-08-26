@@ -244,19 +244,21 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Experimental OneNote Activity creator attribution — v24.6.361 / planned
+- **Experimental OneNote Activity creator attribution — v24.6.362 / planned
   PR #182, ACTIVE AND UNMERGED.** Branch
-  `chatgpt/pr182-v24.6.361-onenote-activity-createdby` keeps the existing
-  structured `POST /candidates/{candidateId}/activities` write and optionally
-  adds `createdBy: {email: ...}` when a recruiter explicitly configures their
-  JobAdder user email. The setting is editable, durable per installation and
-  can be copied from the connected Microsoft/OneNote account. It is explicitly
-  marked experimental because JobAdder support advised this creator object for
-  activity notes while the public `AddCandidateActivityCommand` schema still
-  omits it. Invalid emails stop before transport, and a rejection is never
-  silently retried without creator attribution. A successful response that
-  does not report `createdBy` produces a visible review warning. No Candidate
-  Note fallback, new route, dependency or protected-build boundary is added.
+  `chatgpt/pr182-v24.6.362-onenote-activity-userid` keeps the existing structured
+  `POST /candidates/{candidateId}/activities` write. The v24.6.361 owner test
+  proved that JobAdder silently ignored `createdBy.email` and recorded the
+  authenticated developer instead. The second pilot therefore resolves the
+  configured email through the official read-only Users endpoint and sends
+  `createdBy: {userId: ...}` using the exact matched JobAdder user ID. The
+  setting remains editable, durable per installation and copyable from the
+  connected Microsoft/OneNote account. Invalid/unmatched users stop before the
+  Activity write, and a rejection is never silently retried without creator
+  attribution. Requested/reported creator details and warnings are saved in the
+  transfer record. It remains experimental because the public
+  `AddCandidateActivityCommand` schema omits `createdBy`. No Candidate Note
+  fallback, new route, dependency or protected-build boundary is added.
 - **Updater preflight-output corrective — v24.6.359 / PR #179, MERGED.** PR
   #179 merged to `master` as `a20b7f9`. It keeps the
   downloaded preflight's visible diagnostic output out of the PowerShell

@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.361"
+_INSTALL_RECEIPT_VERSION = "v24.6.362"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -341,7 +341,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.361"
+_CVSTUDIO_VERSION = "v24.6.362"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -3675,13 +3675,69 @@ def jobadder_onenote_log_screening():
     if not note_text:
         return jsonify({"error": "Missing note_text"}), 400
 
+    creator_identity = None
+    if created_by_email:
+        creator_path = "users?{}".format(urllib.parse.urlencode({"email": created_by_email}))
+        try:
+            creator_status, creator_result = _ja_get_json(creator_path, timeout=25)
+        except PermissionError as e:
+            return jsonify({"error": str(e)}), 401
+        except Exception as e:
+            return jsonify({
+                "error": "Could not resolve the JobAdder activity creator before transfer",
+                "why": str(e)[:1000],
+                "creator_attribution_requested": {"email": created_by_email},
+                "activity_created": False,
+            }), 502
+        try:
+            creator_status_code = int(creator_status)
+        except (TypeError, ValueError):
+            creator_status_code = 0
+        if not (200 <= creator_status_code < 300) or not isinstance(creator_result, dict):
+            return jsonify({
+                "error": "Could not resolve the JobAdder activity creator before transfer",
+                "why": "JobAdder user lookup returned HTTP {}.".format(creator_status),
+                "creator_attribution_requested": {"email": created_by_email},
+                "activity_created": False,
+            }), 502
+        creator_items = creator_result.get("items")
+        creator_items = creator_items if isinstance(creator_items, list) else []
+        creator_matches = [
+            item for item in creator_items
+            if isinstance(item, dict)
+            and str(item.get("email") or "").strip().lower() == created_by_email.lower()
+        ]
+        if len(creator_matches) != 1:
+            return jsonify({
+                "error": "JobAdder activity creator email did not resolve to exactly one user",
+                "creator_attribution_requested": {"email": created_by_email},
+                "matching_users": len(creator_matches),
+                "activity_created": False,
+            }), 400
+        try:
+            creator_user_id = int(creator_matches[0].get("userId"))
+        except (TypeError, ValueError):
+            creator_user_id = 0
+        if creator_user_id <= 0:
+            return jsonify({
+                "error": "The matched JobAdder user has no usable user ID",
+                "creator_attribution_requested": {"email": created_by_email},
+                "activity_created": False,
+            }), 400
+        creator_identity = {
+            "userId": creator_user_id,
+            "email": created_by_email,
+            "firstName": str(creator_matches[0].get("firstName") or "").strip(),
+            "lastName": str(creator_matches[0].get("lastName") or "").strip(),
+        }
+
     candidate_id_q = urllib.parse.quote(candidate_id, safe="")
     create_path = "candidates/{}/activities".format(candidate_id_q)
     activity_url = _jobadder_candidate_activity_url(candidate_id)
     payload = _ja_official_screening_activity_payload(
         fields,
         note_text,
-        created_by_email=created_by_email,
+        created_by_user_id=(creator_identity or {}).get("userId"),
     )
     salary_ai_config = dict(data.get("salary_ai") or {}) if isinstance(data.get("salary_ai"), dict) else {}
     if salary_ai_config:
@@ -3715,9 +3771,9 @@ def jobadder_onenote_log_screening():
                 "raw": body[:3000],
             }],
         }
-        if created_by_email:
+        if creator_identity:
             error_response.update({
-                "creator_attribution_requested": {"email": created_by_email},
+                "creator_attribution_requested": creator_identity,
                 "next_step": (
                     "JobAdder rejected the structured Activity request with creator attribution. "
                     "CV Studio did not retry without it, because that could record the Activity "
@@ -3742,9 +3798,9 @@ def jobadder_onenote_log_screening():
             "salary_canonical": preview_salary_canonical,
             "attempts": [{"path": create_path, "error": str(e)[:1000]}],
         }
-        if created_by_email:
+        if creator_identity:
             error_response.update({
-                "creator_attribution_requested": {"email": created_by_email},
+                "creator_attribution_requested": creator_identity,
                 "next_step": (
                     "The structured Activity request with creator attribution failed. CV Studio "
                     "did not retry without it, because that could record the Activity under the "
@@ -3773,12 +3829,29 @@ def jobadder_onenote_log_screening():
     if candidate_read_warning and not any(candidate_read_warning in str(part) for part in warning_parts):
         warning_parts.append(candidate_read_warning)
     reported_creator = result.get("createdBy") if isinstance(result, dict) else None
-    if created_by_email and not reported_creator:
-        warning_parts.append(
-            "JobAdder accepted the Activity, but its response did not confirm the requested creator {}. Check the Activity in JobAdder during this pilot.".format(
-                created_by_email
-            )
-        )
+    if creator_identity:
+        reported_user_id = None
+        if isinstance(reported_creator, dict):
+            try:
+                reported_user_id = int(reported_creator.get("userId"))
+            except (TypeError, ValueError):
+                reported_user_id = None
+        if reported_user_id != creator_identity["userId"]:
+            if reported_user_id:
+                warning_parts.append(
+                    "JobAdder created the Activity under user ID {} instead of requested user ID {} ({}).".format(
+                        reported_user_id,
+                        creator_identity["userId"],
+                        created_by_email,
+                    )
+                )
+            else:
+                warning_parts.append(
+                    "JobAdder accepted the Activity, but its response did not confirm requested user ID {} ({}). Check the Activity in JobAdder during this pilot.".format(
+                        creator_identity["userId"],
+                        created_by_email,
+                    )
+                )
     warning = " ".join(p for p in warning_parts if p).strip()
     return jsonify({
         "ok": True,
@@ -3787,7 +3860,7 @@ def jobadder_onenote_log_screening():
         "status": status,
         "candidate_id": candidate_id,
         "email": email,
-        "creator_attribution_requested": ({"email": created_by_email} if created_by_email else None),
+        "creator_attribution_requested": creator_identity,
         "creator_attribution_reported": reported_creator,
         "activity_id": activity_id,
         "activity_url": activity_url,

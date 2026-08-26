@@ -107,11 +107,15 @@ class Phase5BAICostCharacterizationTests(unittest.TestCase):
             captured.append((path, payload, timeout))
             return 201, {
                 "activityId": 91,
-                "createdBy": {"email": "recruiter@example.com"},
+                "createdBy": {"userId": 29970, "email": "recruiter@example.com"},
             }
 
         with mock.patch.object(app, "_ja_refresh_access_token", return_value="fixture-token"), mock.patch.object(
             app, "_ja_post_json", side_effect=post_json
+        ), mock.patch.object(
+            app,
+            "_ja_get_json",
+            return_value=(200, {"items": [{"userId": 29970, "email": "recruiter@example.com", "firstName": "Fixture", "lastName": "Recruiter"}]}),
         ), mock.patch.object(
             app, "_ja_salary_ai_extract", return_value=({}, {})
         ), mock.patch.object(
@@ -135,13 +139,10 @@ class Phase5BAICostCharacterizationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(captured), 1)
         self.assertEqual(captured[0][0], "candidates/123/activities")
-        self.assertEqual(
-            captured[0][1]["createdBy"],
-            {"email": "recruiter@example.com"},
-        )
+        self.assertEqual(captured[0][1]["createdBy"], {"userId": 29970})
         self.assertEqual(
             response.get_json()["creator_attribution_reported"],
-            {"email": "recruiter@example.com"},
+            {"email": "recruiter@example.com", "userId": 29970},
         )
 
     def test_onenote_invalid_creator_email_stops_before_jobadder_write(self):
@@ -174,6 +175,10 @@ class Phase5BAICostCharacterizationTests(unittest.TestCase):
         with mock.patch.object(app, "_ja_refresh_access_token", return_value="fixture-token"), mock.patch.object(
             app, "_ja_post_json", side_effect=rejected
         ) as post_json, mock.patch.object(
+            app,
+            "_ja_get_json",
+            return_value=(200, {"items": [{"userId": 29970, "email": "recruiter@example.com"}]}),
+        ), mock.patch.object(
             app, "_ja_salary_ai_extract", return_value=({}, {})
         ), mock.patch.object(
             app, "_ja_spa_browser_bridge", return_value={"script": "manual-only"}
@@ -195,9 +200,28 @@ class Phase5BAICostCharacterizationTests(unittest.TestCase):
         payload = response.get_json()
         self.assertEqual(
             payload["creator_attribution_requested"],
-            {"email": "recruiter@example.com"},
+            {"email": "recruiter@example.com", "firstName": "", "lastName": "", "userId": 29970},
         )
         self.assertIn("did not retry without it", payload["next_step"])
+
+    def test_onenote_unmatched_creator_email_stops_before_activity_write(self):
+        with mock.patch.object(app, "_ja_refresh_access_token", return_value="fixture-token"), mock.patch.object(
+            app, "_ja_get_json", return_value=(200, {"items": []})
+        ), mock.patch.object(app, "_ja_post_json") as post_json:
+            response = self._post_paid(
+                "/jobadder/onenote_log_screening",
+                {
+                    "candidate_id": "123",
+                    "created_by_email": "missing@example.com",
+                    "fields": {"presentability_rating": "4"},
+                    "note_text": "Presentability: 4/4",
+                },
+                "phase5b-onenote-unmatched-created-by",
+            )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.get_json()["activity_created"])
+        post_json.assert_not_called()
 
     def test_paid_route_helper_confirmation_and_global_guard_inventory(self):
         rules = {rule.rule: rule for rule in app.app.url_map.iter_rules()}

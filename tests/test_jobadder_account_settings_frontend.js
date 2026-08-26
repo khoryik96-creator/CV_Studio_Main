@@ -312,7 +312,8 @@ function oneNoteCreatorAttributionIsExplicitAndFailClosed() {
   const transfer = functionSource(html, 'oneNoteTransferSelected');
   assert.ok(transfer.includes('created_by_email: creatorEmail'));
   assert.ok(transfer.includes('oneNoteJobAdderCreatorEmail()'));
-  assert.ok(transfer.includes('will stop without retrying under the shared account'));
+  assert.ok(transfer.includes('exact JobAdder user ID'));
+  assert.ok(transfer.includes('will not retry under the shared account'));
   assert.ok(!transfer.includes("delete payload.created_by_email"));
 }
 

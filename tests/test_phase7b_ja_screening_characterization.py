@@ -186,19 +186,19 @@ class OfficialScreeningActivityPayloadTests(unittest.TestCase):
         self.assertEqual(payload["answers"]["textAnswers"], [])
         self.assertEqual(payload["answers"]["ratingValueAnswers"], [{"questionId": 62988, "rating": 4}])
 
-    def test_optional_creator_email_uses_support_advised_submit_user_shape(self):
+    def test_optional_creator_user_id_uses_support_advised_submit_user_shape(self):
         payload = screening._ja_official_screening_activity_payload(
             _FIELDS,
             "note",
-            created_by_email=" recruiter@example.com ",
+            created_by_user_id="29970",
         )
-        self.assertEqual(payload["createdBy"], {"email": "recruiter@example.com"})
+        self.assertEqual(payload["createdBy"], {"userId": 29970})
 
-    def test_blank_creator_email_preserves_documented_activity_payload(self):
+    def test_blank_creator_user_id_preserves_documented_activity_payload(self):
         payload = screening._ja_official_screening_activity_payload(
             _FIELDS,
             "note",
-            created_by_email="  ",
+            created_by_user_id="",
         )
         self.assertNotIn("createdBy", payload)
 

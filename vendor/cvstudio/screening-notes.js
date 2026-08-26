@@ -264,6 +264,9 @@ function oneNoteRecordTransfer(row, resp) {
     ai_model: String(proc.model || 'none'),
     ai_cost_usd: Number(proc.costUsd || 0),
     processing_mode: String(proc.salaryCalculation || 'deterministic_code'),
+    creator_attribution_requested: (resp && resp.creator_attribution_requested) || null,
+    creator_attribution_reported: (resp && resp.creator_attribution_reported) || null,
+    warning: String((resp && resp.warning) || ''),
     ai_event_key: 'success:' + String(row.candidate_id || '') + ':' + String((((canon||{}).validation||{}).salaryFingerprint) || '')
   };
   var records = oneNoteRecordsLoad();
@@ -319,11 +322,16 @@ function oneNoteRenderRecords() {
   el.innerHTML = records.map(function(r){
     var d = new Date(r.ts || Date.now());
     var stamp = isNaN(d.getTime()) ? '-' : (d.toLocaleDateString('en-MY',{day:'2-digit',month:'short',year:'numeric'}) + ' ' + d.toLocaleTimeString('en-MY',{hour:'2-digit',minute:'2-digit'}));
+    var requestedCreator = r.creator_attribution_requested || null;
+    var reportedCreator = r.creator_attribution_reported || null;
+    var creatorText = requestedCreator ? ('Requested JobAdder creator: ' + (requestedCreator.email || '-') + (requestedCreator.userId ? (' · user ID ' + requestedCreator.userId) : '') + '. JobAdder response: ' + (reportedCreator ? ((reportedCreator.email || ((reportedCreator.firstName || '') + ' ' + (reportedCreator.lastName || '')).trim() || 'user') + (reportedCreator.userId ? (' · user ID ' + reportedCreator.userId) : '')) : 'creator not returned; verify in JobAdder.')) : '';
     return '<div class="onenote-record-item">'
       + '<div class="onenote-record-head"><span>' + esc(r.name || r.email || 'Candidate') + '</span><span class="onenote-status ' + (String(r.status||'').indexOf('Failed')===0 ? 'err' : 'ok') + '">' + esc(r.status || 'Transferred') + '</span></div>'
       + '<div class="onenote-record-meta">' + esc(stamp) + (r.email ? ' · ' + esc(r.email) : '') + (r.candidate_id ? ' · ID ' + esc(r.candidate_id) : '') + '</div>'
       + (r.salary_canonical ? ('<div class="onenote-record-meta" style="margin-top:5px;line-height:1.45;">' + esc(((r.salary_canonical.current||{}).display || 'Current not updated') + ' · ' + ((r.salary_canonical.expected||{}).display || 'Expected not updated') + (((r.salary_canonical.notice||{}).display) ? (' · Notice: ' + (r.salary_canonical.notice||{}).display) : '')) + '</div>') : '')
       + (r.salary_canonical && (r.salary_canonical.currencySelection||{}).jobAdderOption ? ('<div class="onenote-record-meta" style="margin-top:4px;line-height:1.45;">' + esc('JobAdder Currency: ' + (r.salary_canonical.currencySelection||{}).jobAdderOption + ((r.salary_canonical.currencySelection||{}).selectionRule === 'expected_salary_currency_wins' ? ' · Expected Salary wins' : '')) + '</div>') : '')
+      + (creatorText ? ('<div class="onenote-record-meta" style="margin-top:4px;line-height:1.45;">' + esc(creatorText) + '</div>') : '')
+      + (r.warning ? ('<div class="onenote-record-meta" style="margin-top:4px;line-height:1.45;color:#b45309;">' + esc(r.warning) + '</div>') : '')
       + '<div class="onenote-record-meta" style="margin-top:4px;line-height:1.45;">' + esc((r.ai_used ? ('AI extracted components: ' + (r.ai_provider || 'provider') + (r.ai_model && r.ai_model !== 'none' ? (' / ' + r.ai_model) : '')) : (r.ai_api_called || Number(r.ai_cost_usd||0)>0) ? ('AI attempted: ' + (r.ai_provider || 'provider') + ' · unusable result, local fallback') : 'AI: Not called · Local deterministic') + ' · Cost $' + Number(r.ai_cost_usd || 0).toFixed(4) + ' / RM ' + (Number(r.ai_cost_usd || 0) * (typeof USD_TO_MYR === 'number' ? USD_TO_MYR : 4.47)).toFixed(2)) + '</div>'
       + (r.url ? '<div style="margin-top:6px;"><a class="sec" href="' + escAttr(r.url) + '" target="_blank" rel="noopener" style="font-size:11px;text-decoration:none;">Open Activity ↗</a></div>' : '')
       + '</div>';
@@ -2324,7 +2332,7 @@ function oneNoteRenderRows() {
     ].join('');
     var missingBox = missing.length ? '<div class="onenote-missing-list"><b>Missing mandatory:</b> ' + esc(missing.map(function(x){return x[1];}).join(', ')) + '</div>' : '<div class="onenote-complete-note">Ready: Presentability rating is filled.</div>';
     var errBox = row.transfer_error ? ('<div class="onenote-error-detail">' + esc(row.transfer_error) + '</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;"><button type="button" class="onenote-error-copy" onclick="oneNoteCopyTransferError(' + idx + ')">Copy JobAdder error</button><button type="button" class="onenote-error-copy" onclick="oneNoteCopyBrowserScript(' + idx + ')">Copy Emergency Create Script</button><button type="button" class="onenote-error-copy" onclick="oneNoteCopyBrowserPayload(' + idx + ')">Copy Emergency Payload</button></div><div class="onenote-muted" style="margin-top:5px;">The official OAuth activity write failed. The browser script is an emergency CREATE-only fallback using the logged-in JobAdder tab; it never updates an existing Screening Call.</div>') : '';
-    var warningBox = row.transfer_warning ? ('<div style="margin-top:7px;padding:8px 10px;border:1px solid #f59e0b;border-radius:9px;background:rgba(245,158,11,.08);font-size:11px;line-height:1.45;color:var(--text2);"><b>Profile update warning:</b> ' + esc(row.transfer_warning) + '</div>') : '';
+    var warningBox = row.transfer_warning ? ('<div style="margin-top:7px;padding:8px 10px;border:1px solid #f59e0b;border-radius:9px;background:rgba(245,158,11,.08);font-size:11px;line-height:1.45;color:var(--text2);"><b>Transfer warning:</b> ' + esc(row.transfer_warning) + '</div>') : '';
     var profileState = String(row.profile_create_state || '');
     var profileBox = row.profile_create_message ? ('<div class="onenote-profile-create-note ' + escAttr(profileState) + '">' + esc(row.profile_create_message) + '</div>') : '';
     var corrections = Array.isArray(f._spelling_corrections) ? f._spelling_corrections : [];
@@ -2464,10 +2472,10 @@ async function oneNoteTransferSelected() {
   if (!targets.length) { showToast('No matched candidates with Presentability selected to transfer', 'err'); return false; }
   var creatorEmail = oneNoteJobAdderCreatorEmail();
   var creatorMessage = creatorEmail
-    ? ('CV Studio will ask JobAdder to record the creator as ' + creatorEmail + '. If JobAdder rejects this experimental Activity field, the transfer will stop without retrying under the shared account.')
+    ? ('CV Studio will resolve ' + creatorEmail + ' to an exact JobAdder user ID and request that user as the Activity creator. If resolution or attribution fails, it will not retry under the shared account.')
     : 'No creator override is set, so JobAdder will record the connected developer account as the creator.';
   if (!window.confirm('Transfer ' + targets.length + ' selected Screening Call activity/activities to JobAdder?\n\n' + creatorMessage)) return false;
-  var ok = 0, fail = 0, profileWarnings = 0;
+  var ok = 0, fail = 0, transferWarnings = 0;
   for (var i=0;i<_oneNoteRows.length;i++) {
     var row = _oneNoteRows[i];
     if (!row.selected || !row.candidate_id || oneNoteMissingFields(row.fields).length) continue;
@@ -2487,7 +2495,7 @@ async function oneNoteTransferSelected() {
       row.transfer_count = Number(row.transfer_count || 0) + 1;
       row.status = 'done'; row.statusText = row.transfer_count > 1 ? 'Transferred again ✓' : 'Transferred ✓'; row.selected = false; row.retransfer_ready = false; row.transfer_error = ''; row.transfer_error_detail = ''; row.browser_bridge = null; row.activity_url = d.activity_url || jaActivityUrl(row.candidate_id);
       row.transfer_warning = String((d && d.warning) || '').trim(); row.salary_canonical = (d && d.salary_canonical) || null; oneNoteUpdateSalaryAiBadge(row.salary_canonical);
-      if (row.transfer_warning) { row.statusText = row.transfer_count > 1 ? 'Transferred again ✓ · profile warning' : 'Transferred ✓ · profile warning'; profileWarnings++; }
+      if (row.transfer_warning) { row.statusText = row.transfer_count > 1 ? 'Transferred again ✓ · review warning' : 'Transferred ✓ · review warning'; transferWarnings++; }
       oneNoteRecordTransfer(row, d); ok++;
     } catch(e) {
       row.status = 'err'; row.statusText = (e.message || 'Transfer failed').split('\n')[0].slice(0, 80);
@@ -2496,8 +2504,8 @@ async function oneNoteTransferSelected() {
     }
     oneNoteRenderRows();
   }
-  if (ok) { var lastCanon=((_oneNoteRows.filter(function(x){return x.salary_canonical;}).slice(-1)[0]||{}).salary_canonical||{}); var lastProc=lastCanon.processing||{}; var cs=lastCanon.currencySelection||{}; var aiMsg=lastProc.aiUsed ? (' Salary components/currency extracted by '+providerLabel(lastProc.provider,lastProc.model)+(lastProc.cacheHit?' from cache':'')+'; deterministic code calculated final values. AI cost $'+Number(lastProc.costUsd||0).toFixed(4)+'.') : ' Salary calculation/currency detection used the local deterministic fallback; AI cost $0.0000.'; var currencyMsg=cs.jobAdderOption ? (' JobAdder Currency set to '+cs.jobAdderOption+(cs.selectionRule==='expected_salary_currency_wins'?' using Expected Salary priority.':'.')) : ''; oneNoteShowSuccess('Transferred successfully: ' + ok + ' Screening Call activit' + (ok === 1 ? 'y' : 'ies') + ' to JobAdder.' + (profileWarnings ? (' ' + profileWarnings + ' candidate profile update(s) need review.') : ' Salary/notice profile updates completed or were safely skipped when blank.') + aiMsg + currencyMsg); oneNoteSwitchMiniTab('record'); }
-  showToast('OneNote transfer done: ' + ok + ' ok' + (profileWarnings ? ', ' + profileWarnings + ' profile warning' + (profileWarnings === 1 ? '' : 's') : '') + (fail ? ', ' + fail + ' failed' : ''), fail ? 'err' : (profileWarnings ? 'info' : 'ok'));
+  if (ok) { var lastCanon=((_oneNoteRows.filter(function(x){return x.salary_canonical;}).slice(-1)[0]||{}).salary_canonical||{}); var lastProc=lastCanon.processing||{}; var cs=lastCanon.currencySelection||{}; var aiMsg=lastProc.aiUsed ? (' Salary components/currency extracted by '+providerLabel(lastProc.provider,lastProc.model)+(lastProc.cacheHit?' from cache':'')+'; deterministic code calculated final values. AI cost $'+Number(lastProc.costUsd||0).toFixed(4)+'.') : ' Salary calculation/currency detection used the local deterministic fallback; AI cost $0.0000.'; var currencyMsg=cs.jobAdderOption ? (' JobAdder Currency set to '+cs.jobAdderOption+(cs.selectionRule==='expected_salary_currency_wins'?' using Expected Salary priority.':'.')) : ''; oneNoteShowSuccess('Transferred successfully: ' + ok + ' Screening Call activit' + (ok === 1 ? 'y' : 'ies') + ' to JobAdder.' + (transferWarnings ? (' ' + transferWarnings + ' transfer(s) need review; open the record for details.') : ' Salary/notice profile updates completed or were safely skipped when blank.') + aiMsg + currencyMsg); oneNoteSwitchMiniTab('record'); }
+  showToast('OneNote transfer done: ' + ok + ' ok' + (transferWarnings ? ', ' + transferWarnings + ' review warning' + (transferWarnings === 1 ? '' : 's') : '') + (fail ? ', ' + fail + ' failed' : ''), fail ? 'err' : (transferWarnings ? 'info' : 'ok'));
   return fail ? false : true;
 }
 var _oneNoteActivityDiagnosticReportText = '';

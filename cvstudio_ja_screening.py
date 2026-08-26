@@ -545,7 +545,7 @@ def _ja_activity_payload_variants(candidate_id, activity_type, subject, note_tex
     return exact_variants + [setting_named, with_candidate, base]
 
 
-def _ja_official_screening_activity_payload(fields, note_text="", created_by_email=""):
+def _ja_official_screening_activity_payload(fields, note_text="", created_by_user_id=None):
     fields = fields or {}
     rating = _onenote_presentability_rating_int(fields)
     if rating not in (1, 2, 3, 4):
@@ -578,13 +578,18 @@ def _ja_official_screening_activity_payload(fields, note_text="", created_by_ema
             ],
         },
     }
-    creator_email = _onenote_clean_field_value(created_by_email, max_len=254)
-    if creator_email:
+    creator_user_id = None
+    try:
+        if created_by_user_id not in (None, ""):
+            creator_user_id = int(created_by_user_id)
+    except (TypeError, ValueError):
+        creator_user_id = None
+    if creator_user_id and creator_user_id > 0:
         # JobAdder support advised that creator attribution accepts the same
         # SubmitUserModel shape used by Candidate Notes. The public
         # AddCandidateActivity schema currently omits this property, so callers
         # must treat a rejection as final and must not retry without it.
-        payload["createdBy"] = {"email": creator_email}
+        payload["createdBy"] = {"userId": creator_user_id}
     return payload
 
 
@@ -613,7 +618,7 @@ def _ja_spa_browser_bridge(candidate_id, fields, note_text="", email="", salary_
     payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
     compact_payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     script = """(async () => {
-  const helperVersion = 'v24.6.361';
+  const helperVersion = 'v24.6.362';
   const candidateId = %s;
   const payload = %s;
   const profilePath = %s;
