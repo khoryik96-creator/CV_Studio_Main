@@ -4,6 +4,7 @@ window._oneNoteJobAdderAccountSeq = 0;
 var ONE_NOTE_RECORD_KEY = 'cv_studio_onenote_transfer_records_v1';
 var ONE_NOTE_SALARY_AI_KEY = 'cv_studio_onenote_salary_ai_enabled_v1';
 var ONE_NOTE_SPELLING_CORRECTION_KEY = 'cvstudio_onenote_spelling_correction_v1';
+var ONE_NOTE_JOBADDER_CREATOR_EMAIL_KEY = 'cvstudio_onenote_jobadder_creator_email_v1';
 var _oneNoteRecordsSqliteCache = null;
 var _oneNoteRecordsMutationVersion = 0;
 var _oneNoteRecordsHydrationPromise = null;
@@ -29,6 +30,36 @@ function oneNoteLoadSpellingCorrectionSetting() {
 }
 function oneNoteSaveSpellingCorrectionSetting() {
   try { cvStudioDurableSettingSet(ONE_NOTE_SPELLING_CORRECTION_KEY, oneNoteSpellingCorrectionEnabled() ? '1' : '0'); } catch(e) {}
+}
+function oneNoteJobAdderCreatorEmail() {
+  try { return String(localStorage.getItem(ONE_NOTE_JOBADDER_CREATOR_EMAIL_KEY) || '').trim(); } catch(e) { return ''; }
+}
+function oneNoteRenderJobAdderCreatorEmail() {
+  var email = oneNoteJobAdderCreatorEmail();
+  ['settingsOneNoteJobAdderCreatorEmail', 'oneNoteJobAdderCreatorEmail'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el && el.value !== email) el.value = email;
+  });
+  var status = document.getElementById('oneNoteJobAdderCreatorStatus');
+  if (status) status.textContent = email ? ('Requested creator: ' + email) : 'Uses connected JobAdder account';
+  return email;
+}
+function oneNoteSetJobAdderCreatorEmail(value, silent) {
+  var email = String(value || '').trim();
+  try { cvStudioDurableSettingSet(ONE_NOTE_JOBADDER_CREATOR_EMAIL_KEY, email); } catch(e) {}
+  ['settingsOneNoteJobAdderCreatorEmail', 'oneNoteJobAdderCreatorEmail'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.value = email;
+  });
+  oneNoteRenderJobAdderCreatorEmail();
+  if (!silent) showToast(email ? ('JobAdder creator set to ' + email) : 'JobAdder creator override cleared', 'ok');
+  return email;
+}
+function oneNoteUseMicrosoftAccountAsJobAdderCreator() {
+  var email = String(window._oneNoteAccountEmail || '').trim();
+  if (!email) { showToast('Connect OneNote first so CV Studio can read your Microsoft account email', 'err'); return false; }
+  oneNoteSetJobAdderCreatorEmail(email, false);
+  return true;
 }
 function oneNoteSalaryAiEnabled() {
   var el=document.getElementById('oneNoteSalaryAiEnabled');
@@ -1249,6 +1280,7 @@ function oneNoteApiLoadSettings() {
     var mode = oneNoteStoredSourceMode();
     oneNoteApiSyncFields(clientId, tenant, mode);
     oneNoteLoadSpellingCorrectionSetting();
+    oneNoteRenderJobAdderCreatorEmail();
   } catch(e) {}
 }
 function oneNoteApiSaveSettings(silent) {
@@ -1267,6 +1299,8 @@ function oneNoteApiSaveSettings(silent) {
     cvStudioDurableSettingSet('onenote_ms_tenant', tenant);
     cvStudioDurableSettingSet('onenote_source_mode', mode);
     oneNoteSaveSpellingCorrectionSetting();
+    var creatorInput = document.getElementById('settingsOneNoteJobAdderCreatorEmail');
+    if (creatorInput) oneNoteSetJobAdderCreatorEmail(creatorInput.value, true);
     oneNoteApiSyncFields(clientId, tenant, mode);
     try { oneNoteSourceModeChanged(true); } catch(e2) {}
     if (!silent) showToast('OneNote API settings saved', 'ok');
@@ -2428,14 +2462,18 @@ async function oneNoteTransferSelected() {
   if (incomplete.length) { showToast(incomplete.length + ' selected row(s) missing Presentability rating', 'err'); oneNoteRenderRows(); return false; }
   var targets = _oneNoteRows.filter(function(r){ return r.selected && r.candidate_id && !oneNoteMissingFields(r.fields).length; });
   if (!targets.length) { showToast('No matched candidates with Presentability selected to transfer', 'err'); return false; }
-  if (!window.confirm('Transfer ' + targets.length + ' selected Screening Call activity/activities to JobAdder?\n\nThese should log under Activities for the currently connected JobAdder account.')) return false;
+  var creatorEmail = oneNoteJobAdderCreatorEmail();
+  var creatorMessage = creatorEmail
+    ? ('CV Studio will ask JobAdder to record the creator as ' + creatorEmail + '. If JobAdder rejects this experimental Activity field, the transfer will stop without retrying under the shared account.')
+    : 'No creator override is set, so JobAdder will record the connected developer account as the creator.';
+  if (!window.confirm('Transfer ' + targets.length + ' selected Screening Call activity/activities to JobAdder?\n\n' + creatorMessage)) return false;
   var ok = 0, fail = 0, profileWarnings = 0;
   for (var i=0;i<_oneNoteRows.length;i++) {
     var row = _oneNoteRows[i];
     if (!row.selected || !row.candidate_id || oneNoteMissingFields(row.fields).length) continue;
     row.status = 'pending'; row.statusText = 'Transferring…'; row.transfer_error = ''; row.transfer_error_detail = ''; row.transfer_warning = ''; row.browser_bridge = null; oneNoteRenderRows();
     try {
-      var payload = { candidate_id: row.candidate_id, email: row.email, note_type: noteType, fields: row.fields, note_text: oneNoteBuildStructuredNote(row), create_as: 'activity', salary_ai: oneNoteSalaryAiConfig(), spelling_correction: oneNoteSpellingCorrectionEnabled() };
+      var payload = { candidate_id: row.candidate_id, email: row.email, note_type: noteType, fields: row.fields, note_text: oneNoteBuildStructuredNote(row), create_as: 'activity', created_by_email: creatorEmail, salary_ai: oneNoteSalaryAiConfig(), spelling_correction: oneNoteSpellingCorrectionEnabled() };
       var r = await fetchWithTimeout('/jobadder/onenote_log_screening', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)}, 90000);
       var d = await r.json().catch(function(){ return {}; });
       if (!r.ok || !d.ok) {

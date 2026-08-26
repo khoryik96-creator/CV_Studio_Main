@@ -303,6 +303,19 @@ function everyConnectionSurfaceUsesSharedRenderer() {
   assert.ok(functionSource(html, 'refreshIntegrationDiagnostics').includes('renderJAConnectionState'));
 }
 
+function oneNoteCreatorAttributionIsExplicitAndFailClosed() {
+  [
+    'settingsOneNoteJobAdderCreatorEmail',
+    'oneNoteJobAdderCreatorEmail',
+    'Use connected OneNote email',
+  ].forEach(marker => assert.ok(html.includes(marker), 'OneNote creator UI missing: ' + marker));
+  const transfer = functionSource(html, 'oneNoteTransferSelected');
+  assert.ok(transfer.includes('created_by_email: creatorEmail'));
+  assert.ok(transfer.includes('oneNoteJobAdderCreatorEmail()'));
+  assert.ok(transfer.includes('will stop without retrying under the shared account'));
+  assert.ok(!transfer.includes("delete payload.created_by_email"));
+}
+
 async function tokenRefreshUsesExpiryAndKeepsTransientConnection() {
   assert.ok(!/setInterval\s*\([\s\S]{0,300}\/jobadder\/refresh_token/.test(html),
     'JobAdder token refresh must not run on a fixed interval');
@@ -350,6 +363,7 @@ const cases = [
   ['sign-out success ordering and failure visibility', signOutIsConfirmedSuccessOrderedAndFailureVisible],
   ['tenant-bound browser state invalidation is complete', tenantBoundBrowserStateInvalidationIsComplete],
   ['all connection surfaces use the shared renderer', everyConnectionSurfaceUsesSharedRenderer],
+  ['OneNote creator attribution is explicit and fail-closed', oneNoteCreatorAttributionIsExplicitAndFailClosed],
   ['token refresh uses expiry and preserves transient connection', tokenRefreshUsesExpiryAndKeepsTransientConnection],
 ];
 

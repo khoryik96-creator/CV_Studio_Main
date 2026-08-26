@@ -186,6 +186,22 @@ class OfficialScreeningActivityPayloadTests(unittest.TestCase):
         self.assertEqual(payload["answers"]["textAnswers"], [])
         self.assertEqual(payload["answers"]["ratingValueAnswers"], [{"questionId": 62988, "rating": 4}])
 
+    def test_optional_creator_email_uses_support_advised_submit_user_shape(self):
+        payload = screening._ja_official_screening_activity_payload(
+            _FIELDS,
+            "note",
+            created_by_email=" recruiter@example.com ",
+        )
+        self.assertEqual(payload["createdBy"], {"email": "recruiter@example.com"})
+
+    def test_blank_creator_email_preserves_documented_activity_payload(self):
+        payload = screening._ja_official_screening_activity_payload(
+            _FIELDS,
+            "note",
+            created_by_email="  ",
+        )
+        self.assertNotIn("createdBy", payload)
+
     def test_rating_out_of_range_raises(self):
         with self.assertRaises(ValueError):
             screening._ja_official_screening_activity_payload({"presentability_rating": "9"}, "")

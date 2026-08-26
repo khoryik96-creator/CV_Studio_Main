@@ -25,11 +25,11 @@
   `54298b9b6a822e1f36c9c101f1ff4edc9c7e835f`
 - Phase 7B-4 source baseline Git commit (merged Phase 7B-3):
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
-- Current merged source: v24.6.359 through PR #179
-  (`a20b7f99c133e6082a9f10602df2ef8fa94314b5`).
-- Active work: v24.6.360 Blind CV candidate-gender neutralization on
-  `chatgpt/pr181-v24.6.360-blind-gender-neutralization` (planned PR #181,
-  unmerged).
+- Current merged source: v24.6.360 through PR #181
+  (`541cbf3c57b5765bcece019a074849884e950cca`).
+- Active work: v24.6.361 experimental OneNote Activity creator attribution on
+  `chatgpt/pr182-v24.6.361-onenote-activity-createdby` (planned PR #182,
+  unmerged; owner test required before any PR or merge).
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
@@ -47,11 +47,34 @@
   `ab96824`. PR #175 merged the updater preflight-path fix. PR #176 merged the
   audit hardening as `d94554c`. PR #177 merged the updater runtime-consistency
   corrective as `2c06bc5`. PR #179 merged the updater preflight-output
-  corrective as `a20b7f9`; current master is v24.6.359.
-- Current stop: v24.6.359 is merged on `master` through PR #179. The v24.6.360
-  Blind CV candidate-gender neutralization branch is active and unmerged.
+  corrective as `a20b7f9`. PR #181 merged Blind CV candidate-gender
+  neutralization as `541cbf3`; current master is v24.6.360.
+- Current stop: v24.6.360 is merged on `master` through PR #181. The v24.6.361
+  experimental OneNote Activity creator-attribution branch is active and
+  unmerged pending owner testing.
 
-## v24.6.360 Blind CV candidate-gender neutralization (active, unmerged)
+## v24.6.361 experimental OneNote Activity creator attribution (active, unmerged)
+
+- OneNote settings and the transfer toolbar accept an optional JobAdder user
+  email and offer a one-click copy from the connected Microsoft/OneNote account.
+- When explicitly set, structured Candidate Screening Call Activity writes add
+  the support-advised `createdBy: {email: ...}` object. The existing Activity
+  endpoint, answer schema and Candidate Note prohibition remain unchanged.
+- This is an owner-test pilot: JobAdder's public Note command documents
+  `createdBy`, but its public Activity command currently does not. Invalid email
+  values stop locally. JobAdder rejection triggers one visible failure and no
+  unattributed retry; a success response without creator confirmation warns the
+  recruiter to verify the resulting Activity in JobAdder.
+- The email is a non-secret durable per-installation setting. No new route,
+  dependency, paid call, candidate-data field or protected-package manifest
+  boundary is introduced.
+- Local verification passed 989 tests, 4 skips and 96 subtests; all frontend
+  fixtures, tracked Python/JavaScript/PowerShell syntax checks, repository
+  consistency and the 24-assertion live source smoke also passed. The owner must
+  still verify the resulting Activity creator in JobAdder because the public
+  Activity schema does not document this support-advised field.
+
+## v24.6.360 Blind CV candidate-gender neutralization (merged through PR #181)
 
 - General Settings has an off-by-default toggle used only by single and batch
   Blind CV. Enabled runs rewrite candidate-only pronouns to `the candidate` /

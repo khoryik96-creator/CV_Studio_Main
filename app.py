@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.360"
+_INSTALL_RECEIPT_VERSION = "v24.6.361"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -341,7 +341,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.360"
+_CVSTUDIO_VERSION = "v24.6.361"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -3650,8 +3650,19 @@ def jobadder_onenote_log_screening():
     data = request.get_json(silent=True) or {}
     candidate_id = str(data.get("candidate_id") or data.get("candidateId") or "").strip()
     email = str(data.get("email") or "").strip()
+    created_by_email = str(data.get("created_by_email") or "").strip()
     if not candidate_id:
         return jsonify({"error": "Missing candidate_id"}), 400
+    if created_by_email and (
+        len(created_by_email) > 254
+        or created_by_email.count("@") != 1
+        or any(char.isspace() for char in created_by_email)
+        or not all(created_by_email.split("@"))
+    ):
+        return jsonify({
+            "error": "JobAdder activity creator email is invalid",
+            "field": "created_by_email",
+        }), 400
     spelling_correction = _ja_bool_setting(data.get("spelling_correction"), default=True)
     fields = _onenote_normalize_screening_fields(data.get("fields") or {})
     if spelling_correction:
@@ -3667,7 +3678,11 @@ def jobadder_onenote_log_screening():
     candidate_id_q = urllib.parse.quote(candidate_id, safe="")
     create_path = "candidates/{}/activities".format(candidate_id_q)
     activity_url = _jobadder_candidate_activity_url(candidate_id)
-    payload = _ja_official_screening_activity_payload(fields, note_text)
+    payload = _ja_official_screening_activity_payload(
+        fields,
+        note_text,
+        created_by_email=created_by_email,
+    )
     salary_ai_config = dict(data.get("salary_ai") or {}) if isinstance(data.get("salary_ai"), dict) else {}
     if salary_ai_config:
         # Browser requests carry only a backend-secure sentinel after the localStorage
@@ -3683,7 +3698,7 @@ def jobadder_onenote_log_screening():
         browser_bridge = _ja_spa_browser_bridge(candidate_id, fields, note_text, email=email, salary_canonical=preview_salary_canonical)
         http_status = int(e.code)
         response_status = http_status if http_status in (401, 403) else 502
-        return jsonify({
+        error_response = {
             "error": "Could not create JobAdder Candidate Screening Call through the official OAuth API. No Candidate Note was created.",
             "why": _ja_compact_error_body(body) or "JobAdder rejected AddCandidateActivity.",
             "next_step": "Use Copy Create Script only as the emergency fallback. It creates a new Screening Call through the logged-in JobAdder browser and never edits an existing Screening Call.",
@@ -3699,12 +3714,24 @@ def jobadder_onenote_log_screening():
                 "detail": _ja_compact_error_body(body),
                 "raw": body[:3000],
             }],
-        }), response_status
+        }
+        if created_by_email:
+            error_response.update({
+                "creator_attribution_requested": {"email": created_by_email},
+                "next_step": (
+                    "JobAdder rejected the structured Activity request with creator attribution. "
+                    "CV Studio did not retry without it, because that could record the Activity "
+                    "under the shared developer account. Confirm AddCandidateActivity createdBy "
+                    "support with JobAdder, or deliberately clear the creator email if shared-account "
+                    "attribution is acceptable."
+                ),
+            })
+        return jsonify(error_response), response_status
     except PermissionError as e:
         return jsonify({"error": str(e)}), 401
     except Exception as e:
         browser_bridge = _ja_spa_browser_bridge(candidate_id, fields, note_text, email=email, salary_canonical=preview_salary_canonical)
-        return jsonify({
+        error_response = {
             "error": "Could not create JobAdder Candidate Screening Call through the official OAuth API. No Candidate Note was created.",
             "why": str(e)[:1000],
             "candidate_id": candidate_id,
@@ -3714,7 +3741,17 @@ def jobadder_onenote_log_screening():
             "browser_bridge": browser_bridge,
             "salary_canonical": preview_salary_canonical,
             "attempts": [{"path": create_path, "error": str(e)[:1000]}],
-        }), 502
+        }
+        if created_by_email:
+            error_response.update({
+                "creator_attribution_requested": {"email": created_by_email},
+                "next_step": (
+                    "The structured Activity request with creator attribution failed. CV Studio "
+                    "did not retry without it, because that could record the Activity under the "
+                    "shared developer account."
+                ),
+            })
+        return jsonify(error_response), 502
 
     activity_id = None
     if isinstance(result, dict):
@@ -3735,6 +3772,13 @@ def jobadder_onenote_log_screening():
     candidate_read_warning = profile_update.get("candidate_read_warning")
     if candidate_read_warning and not any(candidate_read_warning in str(part) for part in warning_parts):
         warning_parts.append(candidate_read_warning)
+    reported_creator = result.get("createdBy") if isinstance(result, dict) else None
+    if created_by_email and not reported_creator:
+        warning_parts.append(
+            "JobAdder accepted the Activity, but its response did not confirm the requested creator {}. Check the Activity in JobAdder during this pilot.".format(
+                created_by_email
+            )
+        )
     warning = " ".join(p for p in warning_parts if p).strip()
     return jsonify({
         "ok": True,
@@ -3743,6 +3787,8 @@ def jobadder_onenote_log_screening():
         "status": status,
         "candidate_id": candidate_id,
         "email": email,
+        "creator_attribution_requested": ({"email": created_by_email} if created_by_email else None),
+        "creator_attribution_reported": reported_creator,
         "activity_id": activity_id,
         "activity_url": activity_url,
         "screening_fields": fields,

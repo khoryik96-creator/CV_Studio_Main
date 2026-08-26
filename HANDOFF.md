@@ -146,6 +146,11 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 7. Recently completed (already on `master`)
 
+- **v24.6.360 Blind CV candidate-gender neutralization:** PR #181 was
+  squash-merged to `master` as `541cbf3`. The off-by-default General Settings
+  toggle affects only single and batch Blind CV and rewrites only pronouns that
+  refer to the candidate. Normal Format CV, other people mentioned in a CV and
+  the default Blind CV behavior remain unchanged.
 - **v24.6.353 Windows source updater hardening:** PR #171 was squash-merged to
   `master` as `af322db`. `UPDATE.bat` now prevents Git branch names from being
   parsed as `cmd.exe` syntax, refuses to relaunch when the deliberate
@@ -239,18 +244,19 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Blind CV candidate-gender neutralization — v24.6.360 / planned PR #181,
-  ACTIVE AND UNMERGED.** Branch
-  `chatgpt/pr181-v24.6.360-blind-gender-neutralization` adds an off-by-default
-  General Settings toggle used only by single and batch Blind CV. When enabled,
-  the existing blinding call rewrites only pronouns that refer to the candidate
-  into `the candidate` / `the candidate's` forms, including contractions, and
-  does not use candidate-referent they/them. Pronouns and gender references for
-  managers, colleagues, clients, referees, family members and other parties are
-  explicitly preserved. The setting uses the established durable browser/
-  SQLite allowlist and batch runs snapshot it once. Normal Format CV and the
-  default Blind CV prompt remain unchanged. Routes, schemas, dependencies,
-  credentials, paid-call count and protected-build triggers remain unchanged.
+- **Experimental OneNote Activity creator attribution — v24.6.361 / planned
+  PR #182, ACTIVE AND UNMERGED.** Branch
+  `chatgpt/pr182-v24.6.361-onenote-activity-createdby` keeps the existing
+  structured `POST /candidates/{candidateId}/activities` write and optionally
+  adds `createdBy: {email: ...}` when a recruiter explicitly configures their
+  JobAdder user email. The setting is editable, durable per installation and
+  can be copied from the connected Microsoft/OneNote account. It is explicitly
+  marked experimental because JobAdder support advised this creator object for
+  activity notes while the public `AddCandidateActivityCommand` schema still
+  omits it. Invalid emails stop before transport, and a rejection is never
+  silently retried without creator attribution. A successful response that
+  does not report `createdBy` produces a visible review warning. No Candidate
+  Note fallback, new route, dependency or protected-build boundary is added.
 - **Updater preflight-output corrective — v24.6.359 / PR #179, MERGED.** PR
   #179 merged to `master` as `a20b7f9`. It keeps the
   downloaded preflight's visible diagnostic output out of the PowerShell

@@ -880,6 +880,7 @@ BROWSER_SETTING_KEYS = frozenset(
         "cvstudio_ppc_outlook_ms_client_v1",
         "cvstudio_ppc_outlook_drafts_v1",
         "cvstudio_onenote_spelling_correction_v1",
+        "cvstudio_onenote_jobadder_creator_email_v1",
         "cv_studio_onenote_salary_ai_enabled_v1",
         "onenote_source_mode",
         "onenote_ms_client_id",

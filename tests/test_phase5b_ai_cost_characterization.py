@@ -9,6 +9,7 @@ _sys.path.insert(0, str(Path(__file__).resolve().parent))
 from frontend_sources import frontend_source
 import tempfile
 import unittest
+import urllib.error
 from unittest import mock
 
 
@@ -98,6 +99,105 @@ class Phase5BAICostCharacterizationTests(unittest.TestCase):
                 json=payload,
                 headers=self._headers(request_id),
             )
+
+    def test_onenote_activity_creator_email_reaches_single_official_write(self):
+        captured = []
+
+        def post_json(path, payload, timeout=30):
+            captured.append((path, payload, timeout))
+            return 201, {
+                "activityId": 91,
+                "createdBy": {"email": "recruiter@example.com"},
+            }
+
+        with mock.patch.object(app, "_ja_refresh_access_token", return_value="fixture-token"), mock.patch.object(
+            app, "_ja_post_json", side_effect=post_json
+        ), mock.patch.object(
+            app, "_ja_salary_ai_extract", return_value=({}, {})
+        ), mock.patch.object(
+            app,
+            "_ja_update_candidate_salary_notice",
+            return_value={"ok": True, "salary_canonical": {}},
+        ):
+            response = self._post_paid(
+                "/jobadder/onenote_log_screening",
+                {
+                    "candidate_id": "123",
+                    "email": "candidate@example.com",
+                    "created_by_email": "recruiter@example.com",
+                    "fields": {"presentability_rating": "4"},
+                    "note_text": "Presentability: 4/4",
+                    "salary_ai": {"enabled": False},
+                },
+                "phase5b-onenote-created-by",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(captured), 1)
+        self.assertEqual(captured[0][0], "candidates/123/activities")
+        self.assertEqual(
+            captured[0][1]["createdBy"],
+            {"email": "recruiter@example.com"},
+        )
+        self.assertEqual(
+            response.get_json()["creator_attribution_reported"],
+            {"email": "recruiter@example.com"},
+        )
+
+    def test_onenote_invalid_creator_email_stops_before_jobadder_write(self):
+        with mock.patch.object(app, "_ja_refresh_access_token", return_value="fixture-token"), mock.patch.object(
+            app, "_ja_post_json"
+        ) as post_json:
+            response = self._post_paid(
+                "/jobadder/onenote_log_screening",
+                {
+                    "candidate_id": "123",
+                    "created_by_email": "not an email",
+                    "fields": {"presentability_rating": "4"},
+                    "note_text": "Presentability: 4/4",
+                },
+                "phase5b-onenote-invalid-created-by",
+            )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["field"], "created_by_email")
+        post_json.assert_not_called()
+
+    def test_onenote_rejected_creator_email_is_not_retried_without_attribution(self):
+        rejected = urllib.error.HTTPError(
+            "https://api.jobadder.com/v2/candidates/123/activities",
+            422,
+            "Unprocessable Entity",
+            {},
+            io.BytesIO(b'{"message":"createdBy is not supported"}'),
+        )
+        with mock.patch.object(app, "_ja_refresh_access_token", return_value="fixture-token"), mock.patch.object(
+            app, "_ja_post_json", side_effect=rejected
+        ) as post_json, mock.patch.object(
+            app, "_ja_salary_ai_extract", return_value=({}, {})
+        ), mock.patch.object(
+            app, "_ja_spa_browser_bridge", return_value={"script": "manual-only"}
+        ):
+            response = self._post_paid(
+                "/jobadder/onenote_log_screening",
+                {
+                    "candidate_id": "123",
+                    "created_by_email": "recruiter@example.com",
+                    "fields": {"presentability_rating": "4"},
+                    "note_text": "Presentability: 4/4",
+                    "salary_ai": {"enabled": False},
+                },
+                "phase5b-onenote-rejected-created-by",
+            )
+
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(post_json.call_count, 1)
+        payload = response.get_json()
+        self.assertEqual(
+            payload["creator_attribution_requested"],
+            {"email": "recruiter@example.com"},
+        )
+        self.assertIn("did not retry without it", payload["next_step"])
 
     def test_paid_route_helper_confirmation_and_global_guard_inventory(self):
         rules = {rule.rule: rule for rule in app.app.url_map.iter_rules()}

@@ -545,7 +545,7 @@ def _ja_activity_payload_variants(candidate_id, activity_type, subject, note_tex
     return exact_variants + [setting_named, with_candidate, base]
 
 
-def _ja_official_screening_activity_payload(fields, note_text=""):
+def _ja_official_screening_activity_payload(fields, note_text="", created_by_email=""):
     fields = fields or {}
     rating = _onenote_presentability_rating_int(fields)
     if rating not in (1, 2, 3, 4):
@@ -567,7 +567,7 @@ def _ja_official_screening_activity_payload(fields, note_text=""):
         # unanswered questions rather than inserting artificial N/A text.
         if value:
             text_answers.append({"questionId": int(question_id), "text": value})
-    return {
+    payload = {
         "activitySettingId": _ONENOTE_JA_SCREENING_SETTING_ID,
         "answers": {
             "textAnswers": text_answers,
@@ -578,6 +578,14 @@ def _ja_official_screening_activity_payload(fields, note_text=""):
             ],
         },
     }
+    creator_email = _onenote_clean_field_value(created_by_email, max_len=254)
+    if creator_email:
+        # JobAdder support advised that creator attribution accepts the same
+        # SubmitUserModel shape used by Candidate Notes. The public
+        # AddCandidateActivity schema currently omits this property, so callers
+        # must treat a rejection as final and must not retry without it.
+        payload["createdBy"] = {"email": creator_email}
+    return payload
 
 
 def _ja_spa_browser_bridge(candidate_id, fields, note_text="", email="", salary_canonical=None, spelling_correction=True):
@@ -605,7 +613,7 @@ def _ja_spa_browser_bridge(candidate_id, fields, note_text="", email="", salary_
     payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
     compact_payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     script = """(async () => {
-  const helperVersion = 'v24.6.360';
+  const helperVersion = 'v24.6.361';
   const candidateId = %s;
   const payload = %s;
   const profilePath = %s;

@@ -169,7 +169,7 @@ function cvStudioSafeLocalDataKey(key){
   if(/token|secret|password|api[_-]?key|authy|receipt|credential|device[_-]?code|owner[_-]?only/i.test(key))return false;
   var exact={
     'cvstudio_ppc_meta_v1':1,'cvstudio_ppc_ui_state_v1':1,'cvstudio_ppc_kpi_visibility_v1':1,'cvstudio_ppc_column_visibility_v1':1,'cvstudio_ppc_invoice_email_v1':1,'cvstudio_ppc_outlook_ms_client_v1':1,'cvstudio_ppc_outlook_drafts_v1':1,
-    'cvstudio_onenote_saved_desktop_links_v1':1,'cvstudio_onenote_spelling_correction_v1':1,'cv_studio_onenote_salary_ai_enabled_v1':1,'onenote_source_mode':1,'onenote_ms_client_id':1,'onenote_ms_tenant':1,
+    'cvstudio_onenote_saved_desktop_links_v1':1,'cvstudio_onenote_spelling_correction_v1':1,'cvstudio_onenote_jobadder_creator_email_v1':1,'cv_studio_onenote_salary_ai_enabled_v1':1,'onenote_source_mode':1,'onenote_ms_client_id':1,'onenote_ms_tenant':1,
     'cvstudio_cv_text_alignment_v1':1,'cvstudio_summary_box_autofit_v1':1,'cvstudio_single_summary_detail_v1':1,'cvstudio_batch_summary_detail_v1':1,'cvstudio_blind_candidate_gender_neutral_v1':1,'cvstudio_page_nav_pinned_v1':1,'cvstudio_spider_preview_memory_mode_v1':1,'ja_auto_upload':1,'hy_provider':1,'hy_model':1,'hy_lead_provider':1,'hy_lead_model':1,'hy_search_provider':1,'hy_enrichment_provider':1
   };
   if(exact[key])return true;
@@ -281,7 +281,7 @@ var _cvStudioPhase2bSettingsStartupPromise=cvStudioHydrateBrowserSettings();
 function exportCvStudioLocalData(){
   var settings=cvStudioLocalDataSettingsSnapshot(false);
   var records={onenote_transfer_records:(typeof oneNoteRecordsLoad==='function'?oneNoteRecordsLoad():[]),onenote_saved_links:(typeof oneNoteReadSavedLinks==='function'?oneNoteReadSavedLinks():[])};
-  var payload={product:'CV Studio local data',version:'v24.6.360',schema:1,exportedAt:new Date().toISOString(),includes:['PPC metadata and preferences','saved OneNote links and parser preferences','OneNote transfer record history (private application data)','invoice recipient/settings and draft links','CV alignment and navigation preferences','AI routing/provider selections without API keys'],settings:settings,records:records};
+  var payload={product:'CV Studio local data',version:'v24.6.361',schema:1,exportedAt:new Date().toISOString(),includes:['PPC metadata and preferences','saved OneNote links and parser preferences','OneNote transfer record history (private application data)','invoice recipient/settings and draft links','CV alignment and navigation preferences','AI routing/provider selections without API keys'],settings:settings,records:records};
   var blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='cv_studio_local_data_'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(url);a.remove();},0);showToast('Non-secret local data exported.','ok');
 }
 function cvStudioPersistImportedLocalData(payload){
@@ -441,7 +441,7 @@ function cvLockedTabLabel() {
 // Unlocks persist across normal browser/app restarts for the same installed build,
 // but deliberately reset after a new CV Studio version is installed. This keeps the
 // lock in place after upgrades while avoiding repeated prompts during daily use.
-var LOCK_UNLOCK_VERSION = 'v24.6.360';
+var LOCK_UNLOCK_VERSION = 'v24.6.361';
 function versionedUnlockKey(base) {
   return base + '_' + String(LOCK_UNLOCK_VERSION || '').replace(/[^0-9A-Za-z]+/g, '_');
 }
