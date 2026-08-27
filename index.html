@@ -640,8 +640,10 @@
               <span class="pill" id="cvDownloadFormattedFolderAccess">Browser default</span>
             </div>
             <div id="cvDownloadFormattedFolderName" style="font-size:12px;color:var(--text2);word-break:break-word;">Browser Downloads folder</div>
+            <div id="cvDownloadFormattedFolderPreview" style="font-size:10.5px;color:var(--text3);line-height:1.4;word-break:break-word;">Example: Browser Downloads\Hyppies CV - Candidate.docx</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <button class="kbtn" type="button" onclick="cvStudioChooseDownloadDirectory('formatted')">Choose folder</button>
+              <button class="kbtn" type="button" onclick="cvStudioVerifyDownloadDirectory('formatted')">Check access</button>
               <button class="kbtn" type="button" onclick="cvStudioClearDownloadDirectory('formatted')">Use browser default</button>
             </div>
           </div>
@@ -655,13 +657,15 @@
               <span class="pill" id="cvDownloadBlindFolderAccess">Browser default</span>
             </div>
             <div id="cvDownloadBlindFolderName" style="font-size:12px;color:var(--text2);word-break:break-word;">Browser Downloads folder</div>
+            <div id="cvDownloadBlindFolderPreview" style="font-size:10.5px;color:var(--text3);line-height:1.4;word-break:break-word;">Example: Browser Downloads\Hyppies CV - Candidate (Blinded).docx</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <button class="kbtn" type="button" onclick="cvStudioChooseDownloadDirectory('blind')">Choose folder</button>
+              <button class="kbtn" type="button" onclick="cvStudioVerifyDownloadDirectory('blind')">Check access</button>
               <button class="kbtn" type="button" onclick="cvStudioClearDownloadDirectory('blind')">Use browser default</button>
             </div>
           </div>
 
-          <div style="font-size:10.5px;color:var(--text3);line-height:1.45;">The same folder can be used for both. Existing files are not overwritten; CV Studio adds <b>(1)</b>, <b>(2)</b>, and so on when needed. Folder access is stored only in this browser and is not included in local-data exports.</div>
+          <div style="font-size:10.5px;color:var(--text3);line-height:1.45;">The same folder can be used for both. Existing files are not overwritten; CV Studio adds <b>(1)</b>, <b>(2)</b>, and so on when needed. For privacy, browsers expose only the selected folder name—not its full Windows path. Folder access is stored only in this browser and is not included in local-data exports.</div>
           <div id="cvDownloadFolderSupport" style="display:none;font-size:11px;color:#92400e;line-height:1.45;padding:9px 10px;border:1px solid #f59e0b;background:#fffbeb;border-radius:9px;"></div>
         </div>
       </div><!-- /settingsPaneDownloads -->

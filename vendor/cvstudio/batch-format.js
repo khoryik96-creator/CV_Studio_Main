@@ -512,6 +512,7 @@ async function downloadSingleBatchFile(id) {
   var kind = item.kind || bf.downloadKind || (bf.status === 'done-blind' ? 'blind' : 'formatted');
   var result = await cvStudioSaveDownloadBlob(item.blob, item.filename, kind);
   if (result.method === 'folder') showToast('Saved ' + result.filename + ' to ' + (result.folder || 'the selected folder') + '.', 'ok');
+  else if (result.configured) showToast('Selected folder was not used because ' + result.fallbackReason + '. Downloaded ' + result.filename + ' using browser Downloads.', 'err');
   else showToast('Downloaded ' + result.filename + ' using the browser Downloads folder.', 'ok');
 }
 
@@ -525,7 +526,11 @@ async function downloadBatchZip() {
     _batchBlobs.forEach(function(item, index) {
       setTimeout(function(){ cvStudioSaveDownloadBlob(item.blob, item.filename, kind, destination); }, index * 300);
     });
-    showToast('Downloading ' + _batchBlobs.length + ' file' + (_batchBlobs.length !== 1 ? 's' : '') + ' using the browser Downloads folder...', 'ok');
+    showToast(
+      (destination.configured ? 'Selected folder needs write access. ' : '') +
+      'Downloading ' + _batchBlobs.length + ' file' + (_batchBlobs.length !== 1 ? 's' : '') + ' using the browser Downloads folder...',
+      destination.configured ? 'err' : 'ok'
+    );
     return;
   }
   var folderCount = 0;

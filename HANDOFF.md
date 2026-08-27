@@ -267,7 +267,11 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   all 20 frontend fixtures; 24-assertion live source smoke; 142 Python, 71
   JavaScript, 9 PowerShell and 5 POSIX-shell syntax checks; repository
   consistency; and the Windows Antiword/Tesseract/adm-zip protected-source
-  preflight.
+  preflight. Owner preview follow-up also hardens the merged download-folder
+  feature: folder selection now requests write access immediately, Settings
+  shows a privacy-safe example destination and a Check access action, and any
+  selected-folder failure explains the reason before falling back to browser
+  Downloads instead of silently appearing to ignore the selection.
 - **Updater preflight-output corrective — v24.6.359 / PR #179, MERGED.** PR
   #179 merged to `master` as `a20b7f9`. It keeps the
   downloaded preflight's visible diagnostic output out of the PowerShell

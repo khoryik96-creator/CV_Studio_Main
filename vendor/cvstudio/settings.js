@@ -240,12 +240,24 @@ function cvStudioGetDownloadDirectory(kind) {
 function cvStudioDirectoryWritePermission(handle, requestIfNeeded) {
   if (!handle || handle.kind !== 'directory') return Promise.resolve(false);
   var options = {mode:'readwrite'};
-  var query = typeof handle.queryPermission === 'function' ? handle.queryPermission(options) : Promise.resolve('prompt');
+  var query;
+  try { query = typeof handle.queryPermission === 'function' ? handle.queryPermission(options) : Promise.resolve('prompt'); }
+  catch(error) { query = Promise.resolve('prompt'); }
   return Promise.resolve(query).then(function(state){
     if (state === 'granted') return true;
     if (!requestIfNeeded || typeof handle.requestPermission !== 'function') return false;
-    return handle.requestPermission(options).then(function(result){ return result === 'granted'; });
+    try {
+      return Promise.resolve(handle.requestPermission(options)).then(function(result){ return result === 'granted'; });
+    } catch(error) {
+      return false;
+    }
   }).catch(function(){ return false; });
+}
+
+function cvStudioDownloadExampleFilename(kind) {
+  return normalizeCvDownloadDestination(kind) === 'blind'
+    ? 'Hyppies CV - Candidate (Blinded).docx'
+    : 'Hyppies CV - Candidate.docx';
 }
 
 function cvStudioRenderDownloadDirectory(kind, handle) {
@@ -253,15 +265,20 @@ function cvStudioRenderDownloadDirectory(kind, handle) {
   var prefix = kind === 'blind' ? 'cvDownloadBlind' : 'cvDownloadFormatted';
   var nameNode = document.getElementById(prefix + 'FolderName');
   var accessNode = document.getElementById(prefix + 'FolderAccess');
+  var previewNode = document.getElementById(prefix + 'FolderPreview');
+  var exampleName = cvStudioDownloadExampleFilename(kind);
   if (!handle) {
     if (nameNode) nameNode.textContent = 'Browser Downloads folder';
     if (accessNode) { accessNode.textContent = 'Browser default'; accessNode.classList.remove('ok'); }
+    if (previewNode) previewNode.textContent = 'Example: Browser Downloads\\' + exampleName;
     return Promise.resolve(false);
   }
-  if (nameNode) nameNode.textContent = 'Selected folder: ' + String(handle.name || 'Chosen folder');
+  var folderName = String(handle.name || 'Chosen folder');
+  if (nameNode) nameNode.textContent = 'Selected folder: ' + folderName;
+  if (previewNode) previewNode.textContent = 'Example: …\\' + folderName + '\\' + exampleName;
   return cvStudioDirectoryWritePermission(handle, false).then(function(granted){
     if (accessNode) {
-      accessNode.textContent = granted ? 'Ready' : 'Access on next download';
+      accessNode.textContent = granted ? 'Ready to save' : 'Access required';
       accessNode.classList.toggle('ok', granted);
     }
     return granted;
@@ -291,17 +308,40 @@ async function cvStudioChooseDownloadDirectory(kind) {
     var handle = await window.showDirectoryPicker({id:'cvstudio-' + kind + '-cv', mode:'readwrite'});
     if (!handle || handle.kind !== 'directory') throw new Error('A folder was not selected');
     _cvDownloadDirectoryCache[kind] = handle;
+    var permitted = await cvStudioDirectoryWritePermission(handle, true);
     var persisted = true;
     try { await cvStudioStoreDownloadDirectory(kind, handle); }
     catch(storageError) { persisted = false; }
     await cvStudioRenderDownloadDirectory(kind, handle);
-    showToast((kind === 'blind' ? 'Blind' : 'Formatted') + ' CV folder selected' + (persisted ? '.' : ' for this tab; the browser could not remember it.'), persisted ? 'ok' : 'info');
+    if (!permitted) {
+      showToast('Folder selected, but write access was not granted. Click Check access before downloading.', 'err');
+      return false;
+    }
+    showToast((kind === 'blind' ? 'Blind' : 'Formatted') + ' CV folder is ready' + (persisted ? '.' : ' for this tab; the browser could not remember it.'), persisted ? 'ok' : 'info');
     return true;
   } catch(error) {
     if (error && error.name === 'AbortError') return false;
     showToast('Could not select the folder. Browser Downloads will remain available.', 'err');
     return false;
   }
+}
+
+async function cvStudioVerifyDownloadDirectory(kind) {
+  kind = normalizeCvDownloadDestination(kind);
+  var handle = await cvStudioGetDownloadDirectory(kind);
+  if (!handle) {
+    showToast('Choose a folder first.', 'info');
+    return false;
+  }
+  var permitted = await cvStudioDirectoryWritePermission(handle, true);
+  await cvStudioRenderDownloadDirectory(kind, handle);
+  showToast(
+    permitted
+      ? (kind === 'blind' ? 'Blind' : 'Formatted') + ' CV folder is ready to save.'
+      : 'Write access was not granted. CV Studio will use browser Downloads until access is allowed.',
+    permitted ? 'ok' : 'err'
+  );
+  return permitted;
 }
 
 async function cvStudioClearDownloadDirectory(kind) {
@@ -360,14 +400,23 @@ async function cvStudioPrepareDownloadDestination(kind) {
   var handle = await cvStudioGetDownloadDirectory(kind);
   if (!handle) return {kind:kind, handle:null, configured:false};
   var permitted = await cvStudioDirectoryWritePermission(handle, true);
-  if (permitted) cvStudioRenderDownloadDirectory(kind, handle);
+  await cvStudioRenderDownloadDirectory(kind, handle);
   return {kind:kind, handle:permitted ? handle : null, configured:true, permissionDenied:!permitted};
+}
+
+function cvStudioDownloadFallbackReason(error) {
+  var name = String(error && error.name || '');
+  if (name === 'NotAllowedError' || name === 'SecurityError') return 'write permission was not granted';
+  if (name === 'QuotaExceededError') return 'the selected drive has insufficient free space';
+  if (name === 'AbortError') return 'the folder write was cancelled';
+  return 'the selected folder could not be written to';
 }
 
 async function cvStudioSaveDownloadBlob(blob, filename, kind, preparedDestination) {
   kind = normalizeCvDownloadDestination(kind);
   var safeName = cvStudioSafeDownloadFilename(filename);
   var destination = preparedDestination || await cvStudioPrepareDownloadDestination(kind);
+  var folderFailure = destination && destination.permissionDenied ? 'write permission was not granted' : '';
   if (destination && destination.handle) {
     var writable = null;
     try {
@@ -379,9 +428,16 @@ async function cvStudioSaveDownloadBlob(blob, filename, kind, preparedDestinatio
       return {method:'folder', filename:uniqueName, folder:String(destination.handle.name || '')};
     } catch(error) {
       if (writable && typeof writable.abort === 'function') { try { await writable.abort(); } catch(_abortError) {} }
+      folderFailure = cvStudioDownloadFallbackReason(error);
+      await cvStudioRenderDownloadDirectory(kind, destination.handle);
     }
   }
-  return cvStudioFallbackDownloadBlob(blob, safeName);
+  var fallback = cvStudioFallbackDownloadBlob(blob, safeName);
+  if (destination && destination.configured) {
+    fallback.configured = true;
+    fallback.fallbackReason = folderFailure || 'the selected folder was unavailable';
+  }
+  return fallback;
 }
 
 document.addEventListener('DOMContentLoaded', renderCvDownloadSettings);

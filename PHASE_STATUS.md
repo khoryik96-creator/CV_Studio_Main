@@ -73,6 +73,11 @@
   JavaScript, 9 PowerShell and 5 POSIX-shell syntax checks; repository
   consistency; and the Windows Antiword/Tesseract/adm-zip protected-source
   preflight.
+- Preview follow-up for the merged Downloads feature requests write access
+  while the folder picker still has a direct user gesture, adds a privacy-safe
+  example destination and Check access action to Settings, and reports why a
+  configured folder fell back to browser Downloads instead of hiding the
+  failure. Browsers expose only the folder name, never the full Windows path.
 
 ## v24.6.361 CV download folders (merged through PR #182)
 

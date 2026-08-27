@@ -36,8 +36,13 @@ function markupAndWiringContract() {
   assert.ok(html.includes('id="settingsPaneDownloads"'));
   assert.ok(html.includes('id="cvDownloadFormattedFolderName"'));
   assert.ok(html.includes('id="cvDownloadBlindFolderName"'));
+  assert.ok(html.includes('id="cvDownloadFormattedFolderPreview"'));
+  assert.ok(html.includes('id="cvDownloadBlindFolderPreview"'));
   assert.ok(html.includes("cvStudioChooseDownloadDirectory('formatted')"));
   assert.ok(html.includes("cvStudioChooseDownloadDirectory('blind')"));
+  assert.ok(html.includes("cvStudioVerifyDownloadDirectory('formatted')"));
+  assert.ok(html.includes("cvStudioVerifyDownloadDirectory('blind')"));
+  assert.ok(html.includes('browsers expose only the selected folder name'));
   assert.ok(html.includes('The same folder can be used for both'));
 
   const showSettings = functionSource(html, 'showSettingsTab');
@@ -96,6 +101,7 @@ async function directFolderAndFallbackContract() {
     'cvStudioFallbackDownloadBlob',
     'cvStudioUniqueDownloadFilename',
     'cvStudioDirectoryWritePermission',
+    'cvStudioDownloadFallbackReason',
     'cvStudioPrepareDownloadDestination',
     'cvStudioSaveDownloadBlob',
   ]);
@@ -141,6 +147,65 @@ async function directFolderAndFallbackContract() {
   assert.strictEqual(clicked.length, 1);
   assert.strictEqual(clicked[0].download, 'Fallback.docx');
   assert.deepStrictEqual(revoked, ['blob:fallback']);
+  assert.strictEqual(fallback.configured, true);
+  assert.strictEqual(fallback.fallbackReason, 'write permission was not granted');
+
+  const failedWrite = {
+    kind: 'directory', name: 'Read only',
+    async queryPermission(){ return 'granted'; },
+    async getFileHandle(name, options) {
+      if (!options) { const error = new Error('missing'); error.name = 'NotFoundError'; throw error; }
+      return {async createWritable(){ const error = new Error('blocked'); error.name = 'NotAllowedError'; throw error; }};
+    },
+  };
+  context.cvStudioGetDownloadDirectory = async () => failedWrite;
+  const writeFallback = await context.cvStudioSaveDownloadBlob(blob, 'Write failed.docx', 'formatted');
+  assert.strictEqual(writeFallback.method, 'browser');
+  assert.strictEqual(writeFallback.configured, true);
+  assert.strictEqual(writeFallback.fallbackReason, 'write permission was not granted');
+}
+
+async function selectionPermissionAndPreviewContract() {
+  const nodes = {};
+  function node(id) {
+    if (!nodes[id]) nodes[id] = {textContent:'', classList:{remove(){}, toggle(){}}};
+    return nodes[id];
+  }
+  const toasts = [];
+  const handle = {
+    kind:'directory', name:'Recruitment CVs',
+    async queryPermission(){ return this.permissionRequested ? 'granted' : 'prompt'; },
+    async requestPermission(){ this.permissionRequested = true; return 'granted'; },
+  };
+  const context = {
+    String, Promise,
+    window:{indexedDB:{}, async showDirectoryPicker(){ return handle; }},
+    document:{getElementById:node},
+    showToast(message, level){ toasts.push({message, level}); },
+    _cvDownloadDirectoryCache:{},
+    async cvStudioStoreDownloadDirectory(){ return true; },
+    async cvStudioGetDownloadDirectory(){ return handle; },
+  };
+  loadFunctions(context, [
+    'normalizeCvDownloadDestination',
+    'cvStudioDirectoryWritePermission',
+    'cvStudioDownloadExampleFilename',
+    'cvStudioRenderDownloadDirectory',
+    'cvStudioChooseDownloadDirectory',
+    'cvStudioVerifyDownloadDirectory',
+  ]);
+  const chosen = await context.cvStudioChooseDownloadDirectory('formatted');
+  assert.strictEqual(chosen, true);
+  assert.strictEqual(handle.permissionRequested, true);
+  assert.strictEqual(nodes.cvDownloadFormattedFolderAccess.textContent, 'Ready to save');
+  assert.strictEqual(nodes.cvDownloadFormattedFolderName.textContent, 'Selected folder: Recruitment CVs');
+  assert.strictEqual(nodes.cvDownloadFormattedFolderPreview.textContent, 'Example: …\\Recruitment CVs\\Hyppies CV - Candidate.docx');
+  assert.ok(toasts[0].message.includes('folder is ready'));
+
+  handle.permissionRequested = false;
+  const verified = await context.cvStudioVerifyDownloadDirectory('blind');
+  assert.strictEqual(verified, true);
+  assert.strictEqual(handle.permissionRequested, true);
 }
 
 async function longDuplicateAndBatchModeContract() {
@@ -184,6 +249,7 @@ Promise.resolve()
   .then(markupAndWiringContract)
   .then(filenameSafetyContract)
   .then(directFolderAndFallbackContract)
+  .then(selectionPermissionAndPreviewContract)
   .then(longDuplicateAndBatchModeContract)
   .then(() => console.log('CV download folder frontend fixtures passed'))
   .catch((error) => { console.error(error); process.exit(1); });
