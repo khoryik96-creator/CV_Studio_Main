@@ -269,9 +269,10 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   consistency; and the Windows Antiword/Tesseract/adm-zip protected-source
   preflight. Owner preview follow-up also hardens the merged download-folder
   feature: folder selection now requests write access immediately, Settings
-  shows a privacy-safe example destination and a Check access action, and any
-  selected-folder failure explains the reason before falling back to browser
-  Downloads instead of silently appearing to ignore the selection.
+  shows the real selected folder name, the exact last-saved filename and a
+  Check access action, and any selected-folder failure identifies the actual
+  browser-Downloads fallback instead of silently appearing to ignore the
+  selection. The browser does not disclose the absolute filesystem path.
 - **Updater preflight-output corrective — v24.6.359 / PR #179, MERGED.** PR
   #179 merged to `master` as `a20b7f9`. It keeps the
   downloaded preflight's visible diagnostic output out of the PowerShell

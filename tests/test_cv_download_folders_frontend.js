@@ -76,6 +76,7 @@ function filenameSafetyContract() {
 async function directFolderAndFallbackContract() {
   const clicked = [];
   const revoked = [];
+  const renderedDestinations = [];
   const body = {appendChild(){}, removeChild(){}};
   const context = {
     String, Math, Date, Promise,
@@ -93,7 +94,9 @@ async function directFolderAndFallbackContract() {
     setTimeout(fn){ fn(); },
     showToast(){},
     cvStudioRenderDownloadDirectory(){ return Promise.resolve(true); },
+    cvStudioRenderDownloadDestination(kind, handle){ renderedDestinations.push({kind, handle}); },
     _cvDownloadDirectoryCache: {},
+    _cvDownloadLastResult: {},
   };
   loadFunctions(context, [
     'normalizeCvDownloadDestination',
@@ -135,6 +138,8 @@ async function directFolderAndFallbackContract() {
   assert.strictEqual(saved.filename, 'Hyppies CV (1).docx');
   assert.deepStrictEqual(writes[0], {name:'Hyppies CV (1).docx', blob});
   assert.strictEqual(clicked.length, 0);
+  assert.deepStrictEqual(context._cvDownloadLastResult.formatted, saved);
+  assert.strictEqual(renderedDestinations[0].handle, handle);
 
   const denied = {
     kind: 'directory', name: 'Denied',
@@ -149,6 +154,7 @@ async function directFolderAndFallbackContract() {
   assert.deepStrictEqual(revoked, ['blob:fallback']);
   assert.strictEqual(fallback.configured, true);
   assert.strictEqual(fallback.fallbackReason, 'write permission was not granted');
+  assert.deepStrictEqual(context._cvDownloadLastResult.blind, fallback);
 
   const failedWrite = {
     kind: 'directory', name: 'Read only',
@@ -183,13 +189,14 @@ async function selectionPermissionAndPreviewContract() {
     document:{getElementById:node},
     showToast(message, level){ toasts.push({message, level}); },
     _cvDownloadDirectoryCache:{},
+    _cvDownloadLastResult:{},
     async cvStudioStoreDownloadDirectory(){ return true; },
     async cvStudioGetDownloadDirectory(){ return handle; },
   };
   loadFunctions(context, [
     'normalizeCvDownloadDestination',
     'cvStudioDirectoryWritePermission',
-    'cvStudioDownloadExampleFilename',
+    'cvStudioRenderDownloadDestination',
     'cvStudioRenderDownloadDirectory',
     'cvStudioChooseDownloadDirectory',
     'cvStudioVerifyDownloadDirectory',
@@ -199,8 +206,20 @@ async function selectionPermissionAndPreviewContract() {
   assert.strictEqual(handle.permissionRequested, true);
   assert.strictEqual(nodes.cvDownloadFormattedFolderAccess.textContent, 'Ready to save');
   assert.strictEqual(nodes.cvDownloadFormattedFolderName.textContent, 'Selected folder: Recruitment CVs');
-  assert.strictEqual(nodes.cvDownloadFormattedFolderPreview.textContent, 'Example: …\\Recruitment CVs\\Hyppies CV - Candidate.docx');
+  assert.strictEqual(nodes.cvDownloadFormattedFolderPreview.textContent, 'Destination: selected folder “Recruitment CVs” (full path hidden by browser)');
   assert.ok(toasts[0].message.includes('folder is ready'));
+
+  context._cvDownloadLastResult.formatted = {
+    method:'folder', folder:'Recruitment CVs', filename:'Hyppies CV - Lee.docx',
+  };
+  context.cvStudioRenderDownloadDestination('formatted', handle);
+  assert.strictEqual(nodes.cvDownloadFormattedFolderPreview.textContent, 'Last saved: Recruitment CVs\\Hyppies CV - Lee.docx');
+
+  context._cvDownloadLastResult.blind = {
+    method:'browser', filename:'Hyppies CV - Lee (Blinded).docx',
+  };
+  context.cvStudioRenderDownloadDestination('blind', null);
+  assert.strictEqual(nodes.cvDownloadBlindFolderPreview.textContent, 'Last download: Browser Downloads\\Hyppies CV - Lee (Blinded).docx');
 
   handle.permissionRequested = false;
   const verified = await context.cvStudioVerifyDownloadDirectory('blind');

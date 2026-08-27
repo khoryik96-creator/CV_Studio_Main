@@ -129,6 +129,7 @@ document.addEventListener('DOMContentLoaded', initCvReadonlyCaretGuard);
 var CV_DOWNLOAD_DIRECTORY_DB = 'cvstudio_download_directories_v1';
 var CV_DOWNLOAD_DIRECTORY_STORE = 'directories';
 var _cvDownloadDirectoryCache = {};
+var _cvDownloadLastResult = {};
 
 function normalizeCvDownloadDestination(kind) {
   return String(kind || '').toLowerCase() === 'blind' ? 'blind' : 'formatted';
@@ -254,10 +255,21 @@ function cvStudioDirectoryWritePermission(handle, requestIfNeeded) {
   }).catch(function(){ return false; });
 }
 
-function cvStudioDownloadExampleFilename(kind) {
-  return normalizeCvDownloadDestination(kind) === 'blind'
-    ? 'Hyppies CV - Candidate (Blinded).docx'
-    : 'Hyppies CV - Candidate.docx';
+function cvStudioRenderDownloadDestination(kind, handle) {
+  kind = normalizeCvDownloadDestination(kind);
+  var prefix = kind === 'blind' ? 'cvDownloadBlind' : 'cvDownloadFormatted';
+  var previewNode = document.getElementById(prefix + 'FolderPreview');
+  if (!previewNode) return;
+  var last = _cvDownloadLastResult[kind];
+  if (last && last.filename) {
+    previewNode.textContent = last.method === 'folder'
+      ? 'Last saved: ' + String(last.folder || (handle && handle.name) || 'Selected folder') + '\\' + String(last.filename)
+      : 'Last download: Browser Downloads\\' + String(last.filename);
+    return;
+  }
+  previewNode.textContent = handle
+    ? 'Destination: selected folder “' + String(handle.name || 'Chosen folder') + '” (full path hidden by browser)'
+    : 'Destination: your browser\'s configured Downloads folder';
 }
 
 function cvStudioRenderDownloadDirectory(kind, handle) {
@@ -265,17 +277,15 @@ function cvStudioRenderDownloadDirectory(kind, handle) {
   var prefix = kind === 'blind' ? 'cvDownloadBlind' : 'cvDownloadFormatted';
   var nameNode = document.getElementById(prefix + 'FolderName');
   var accessNode = document.getElementById(prefix + 'FolderAccess');
-  var previewNode = document.getElementById(prefix + 'FolderPreview');
-  var exampleName = cvStudioDownloadExampleFilename(kind);
   if (!handle) {
     if (nameNode) nameNode.textContent = 'Browser Downloads folder';
     if (accessNode) { accessNode.textContent = 'Browser default'; accessNode.classList.remove('ok'); }
-    if (previewNode) previewNode.textContent = 'Example: Browser Downloads\\' + exampleName;
+    cvStudioRenderDownloadDestination(kind, null);
     return Promise.resolve(false);
   }
   var folderName = String(handle.name || 'Chosen folder');
   if (nameNode) nameNode.textContent = 'Selected folder: ' + folderName;
-  if (previewNode) previewNode.textContent = 'Example: …\\' + folderName + '\\' + exampleName;
+  cvStudioRenderDownloadDestination(kind, handle);
   return cvStudioDirectoryWritePermission(handle, false).then(function(granted){
     if (accessNode) {
       accessNode.textContent = granted ? 'Ready to save' : 'Access required';
@@ -308,6 +318,7 @@ async function cvStudioChooseDownloadDirectory(kind) {
     var handle = await window.showDirectoryPicker({id:'cvstudio-' + kind + '-cv', mode:'readwrite'});
     if (!handle || handle.kind !== 'directory') throw new Error('A folder was not selected');
     _cvDownloadDirectoryCache[kind] = handle;
+    _cvDownloadLastResult[kind] = null;
     var permitted = await cvStudioDirectoryWritePermission(handle, true);
     var persisted = true;
     try { await cvStudioStoreDownloadDirectory(kind, handle); }
@@ -347,6 +358,7 @@ async function cvStudioVerifyDownloadDirectory(kind) {
 async function cvStudioClearDownloadDirectory(kind) {
   kind = normalizeCvDownloadDestination(kind);
   _cvDownloadDirectoryCache[kind] = null;
+  _cvDownloadLastResult[kind] = null;
   var removed = true;
   try { await cvStudioDeleteDownloadDirectory(kind); }
   catch(error) { removed = !window.indexedDB; }
@@ -425,7 +437,10 @@ async function cvStudioSaveDownloadBlob(blob, filename, kind, preparedDestinatio
       writable = await fileHandle.createWritable();
       await writable.write(blob);
       await writable.close();
-      return {method:'folder', filename:uniqueName, folder:String(destination.handle.name || '')};
+      var saved = {method:'folder', filename:uniqueName, folder:String(destination.handle.name || '')};
+      _cvDownloadLastResult[kind] = saved;
+      cvStudioRenderDownloadDestination(kind, destination.handle);
+      return saved;
     } catch(error) {
       if (writable && typeof writable.abort === 'function') { try { await writable.abort(); } catch(_abortError) {} }
       folderFailure = cvStudioDownloadFallbackReason(error);
@@ -437,6 +452,8 @@ async function cvStudioSaveDownloadBlob(blob, filename, kind, preparedDestinatio
     fallback.configured = true;
     fallback.fallbackReason = folderFailure || 'the selected folder was unavailable';
   }
+  _cvDownloadLastResult[kind] = fallback;
+  cvStudioRenderDownloadDestination(kind, null);
   return fallback;
 }
 
