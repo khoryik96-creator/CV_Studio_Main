@@ -146,6 +146,13 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 7. Recently completed (already on `master`)
 
+- **v24.6.360 Blind CV candidate-gender neutralization:** PR #181 was
+  squash-merged to `master` as `541cbf3`. General Settings now has an
+  off-by-default toggle used only by single and batch Blind CV. Enabled runs
+  rewrite candidate-only pronouns to `the candidate` / `the candidate's`
+  forms without changing references to other people. Normal Format CV and the
+  default Blind CV prompt remain unchanged. No route, schema, dependency,
+  credential, paid-call-count or protected-build-trigger boundary changed.
 - **v24.6.353 Windows source updater hardening:** PR #171 was squash-merged to
   `master` as `af322db`. `UPDATE.bat` now prevents Git branch names from being
   parsed as `cmd.exe` syntax, refuses to relaunch when the deliberate
@@ -239,18 +246,25 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Blind CV candidate-gender neutralization — v24.6.360 / planned PR #181,
-  ACTIVE AND UNMERGED.** Branch
-  `chatgpt/pr181-v24.6.360-blind-gender-neutralization` adds an off-by-default
-  General Settings toggle used only by single and batch Blind CV. When enabled,
-  the existing blinding call rewrites only pronouns that refer to the candidate
-  into `the candidate` / `the candidate's` forms, including contractions, and
-  does not use candidate-referent they/them. Pronouns and gender references for
-  managers, colleagues, clients, referees, family members and other parties are
-  explicitly preserved. The setting uses the established durable browser/
-  SQLite allowlist and batch runs snapshot it once. Normal Format CV and the
-  default Blind CV prompt remain unchanged. Routes, schemas, dependencies,
-  credentials, paid-call count and protected-build triggers remain unchanged.
+- **CV download folders — v24.6.361 / planned PR #182, ACTIVE AND UNMERGED.**
+  Branch `chatgpt/pr182-v24.6.361-cv-download-folders` adds Settings →
+  Downloads with separate user-selected destinations for Formatted CV and
+  Blind CV; each applies to both single and batch downloads and both may use
+  the same folder. Chromium's browser-authorized File System Access API and
+  local IndexedDB handle storage are used without exposing the full path.
+  Existing files receive a numbered filename instead of being overwritten.
+  Unsupported, expired or denied folder access visibly falls back to the
+  established browser Downloads behavior. The post-review corrective reserves
+  suffix space before shortening a long filename, so `(1)` cannot be truncated
+  into an overwrite, and records the mode that produced each batch file so a
+  later Format/Blind tab switch cannot redirect it to the wrong folder. Only CV
+  DOCX downloads change; no
+  route, schema, dependency, credential, AI/external-call, CV-content or
+  protected-build-trigger boundary changes. Validation: 984 tests passed, 4
+  skipped and 96 subtests; all 20 frontend fixtures; 24-assertion live source
+  smoke; Python/JavaScript/PowerShell/POSIX syntax; dependency and repository
+  consistency; Windows Antiword/Tesseract/adm-zip protected-source preflight;
+  and a clean v24.6.361 browser render at `http://127.0.0.1:5059/`.
 - **Updater preflight-output corrective — v24.6.359 / PR #179, MERGED.** PR
   #179 merged to `master` as `a20b7f9`. It keeps the
   downloaded preflight's visible diagnostic output out of the PowerShell

@@ -537,10 +537,8 @@ function esc(s) {
   return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-function downloadDocx() {
+async function downloadDocx() {
   if (!window._docxBlob) { showToast('Format a CV first', 'err'); return; }
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(window._docxBlob);
   var name;
   if (window._isBlind) {
     var realName = window._realCandidateName || (_parsedData && _parsedData.candidate && _parsedData.candidate.name) || '';
@@ -552,9 +550,9 @@ function downloadDocx() {
       ? 'Hyppies CV - ' + toTitleCase(_parsedData.candidate.name) + '.docx'
       : 'Hyppies CV - Formatted.docx';
   }
-  a.download = name;
-  a.click();
-  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+  var result = await cvStudioSaveDownloadBlob(window._docxBlob, name, window._isBlind ? 'blind' : 'formatted');
+  if (result.method === 'folder') showToast('Saved ' + result.filename + ' to ' + (result.folder || 'the selected folder') + '.', 'ok');
+  else showToast('Downloaded ' + result.filename + ' using the browser Downloads folder.', 'ok');
 }
 
 function clearInput() {

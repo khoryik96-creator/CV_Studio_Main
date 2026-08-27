@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>CV Studio</title>
 <link rel="icon" type="image/png" href="cv_studio_logo.png?v=24.6.79-ui"/>
-<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.360">
-<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.360"></script>
+<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.361">
+<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.361"></script>
 <script>
 /* CV Studio Doctor — built-in diagnostic recorder.
  * Records JS errors, unhandled rejections, failed/slow network calls and
@@ -254,7 +254,7 @@
 <div class="app">
   <div class="header" style="position:relative;">
     <div>
-      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.360 (Offline) by The 郭 Lab</span></h1>
+      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.361 (Offline) by The 郭 Lab</span></h1>
 
     </div>
     <div class="header-tools">
@@ -278,6 +278,7 @@
         <button type="button" class="settings-tab" id="settingsTabOneNote" onclick="showSettingsTab('onenote')">OneNote API</button>
         <button type="button" class="settings-tab" id="settingsTabIntegrations" onclick="showSettingsTab('integrations')">Integrations &amp; Data</button>
         <button type="button" class="settings-tab" id="settingsTabGeneral" onclick="showSettingsTab('general')">General Settings</button>
+        <button type="button" class="settings-tab" id="settingsTabDownloads" onclick="showSettingsTab('downloads')">Downloads</button>
         <button type="button" class="settings-tab" id="settingsTabBackground" onclick="showSettingsTab('background')">Wallpaper / Background</button>
       </div>
       <div class="settings-pane active" id="settingsPaneRouting">
@@ -623,6 +624,47 @@
 
       </div>
       </div><!-- /settingsPaneGeneral -->
+
+      <div class="settings-pane" id="settingsPaneDownloads">
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div style="font-size:11px;color:var(--text3);line-height:1.5;padding:10px 12px;border:1px solid #bfdbfe;background:#eff6ff;border-radius:10px;">
+            Choose where CV Studio saves Word files. Your browser keeps the full folder path private, and may ask you to confirm access again after a restart. If direct folder access is unavailable, CV Studio safely uses the browser's normal Downloads folder instead.
+          </div>
+
+          <div style="border:1px solid var(--border);background:var(--surface);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:9px;">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+              <div>
+                <div style="font-size:13px;font-weight:800;color:var(--text1);">Formatted CV</div>
+                <div style="font-size:10.5px;color:var(--text3);line-height:1.4;margin-top:2px;">Used by both single Format CV and batch Format All downloads.</div>
+              </div>
+              <span class="pill" id="cvDownloadFormattedFolderAccess">Browser default</span>
+            </div>
+            <div id="cvDownloadFormattedFolderName" style="font-size:12px;color:var(--text2);word-break:break-word;">Browser Downloads folder</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="kbtn" type="button" onclick="cvStudioChooseDownloadDirectory('formatted')">Choose folder</button>
+              <button class="kbtn" type="button" onclick="cvStudioClearDownloadDirectory('formatted')">Use browser default</button>
+            </div>
+          </div>
+
+          <div style="border:1px solid var(--border);background:var(--surface);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:9px;">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+              <div>
+                <div style="font-size:13px;font-weight:800;color:var(--text1);">Blind CV</div>
+                <div style="font-size:10.5px;color:var(--text3);line-height:1.4;margin-top:2px;">Used by both single Blind CV and batch Blind All downloads.</div>
+              </div>
+              <span class="pill" id="cvDownloadBlindFolderAccess">Browser default</span>
+            </div>
+            <div id="cvDownloadBlindFolderName" style="font-size:12px;color:var(--text2);word-break:break-word;">Browser Downloads folder</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="kbtn" type="button" onclick="cvStudioChooseDownloadDirectory('blind')">Choose folder</button>
+              <button class="kbtn" type="button" onclick="cvStudioClearDownloadDirectory('blind')">Use browser default</button>
+            </div>
+          </div>
+
+          <div style="font-size:10.5px;color:var(--text3);line-height:1.45;">The same folder can be used for both. Existing files are not overwritten; CV Studio adds <b>(1)</b>, <b>(2)</b>, and so on when needed. Folder access is stored only in this browser and is not included in local-data exports.</div>
+          <div id="cvDownloadFolderSupport" style="display:none;font-size:11px;color:#92400e;line-height:1.45;padding:9px 10px;border:1px solid #f59e0b;background:#fffbeb;border-radius:9px;"></div>
+        </div>
+      </div><!-- /settingsPaneDownloads -->
 
       <div class="settings-pane" id="settingsPaneBackground">
         <div style="display:flex;flex-direction:column;gap:12px;">
@@ -2264,33 +2306,33 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
-<script src="/vendor/cvstudio/api-transport.js?v=v24.6.360"></script>
-<script src="/vendor/cvstudio/page-nav.js?v=v24.6.360"></script>
-<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.360"></script>
-<script src="/vendor/cvstudio/create-profile.js?v=v24.6.360"></script>
-<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.360"></script>
-<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.360"></script>
-<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.360"></script>
-<script src="/vendor/cvstudio/company-profile.js?v=v24.6.360"></script>
-<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.360"></script>
-<script src="/vendor/cvstudio/appearance.js?v=v24.6.360"></script>
-<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.360"></script>
-<script src="/vendor/cvstudio/docx-export.js?v=v24.6.360"></script>
-<script src="/vendor/cvstudio/the-owl.js?v=v24.6.360"></script>
-<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.360"></script>
-<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.360"></script>
-<script src="/vendor/cvstudio/settings.js?v=v24.6.360"></script>
-<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.360"></script>
-<script src="/vendor/cvstudio/tab-status.js?v=v24.6.360"></script>
-<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.360"></script>
-<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.360"></script>
-<script src="/vendor/cvstudio/cv-format.js?v=v24.6.360"></script>
-<script src="/vendor/cvstudio/locks.js?v=v24.6.360"></script>
-<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.360"></script>
-<script src="/vendor/cvstudio/ppc.js?v=v24.6.360"></script>
-<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.360"></script>
-<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.360"></script>
-<script src="/vendor/cvstudio/batch-format.js?v=v24.6.360"></script>
+<script src="/vendor/cvstudio/api-transport.js?v=v24.6.361"></script>
+<script src="/vendor/cvstudio/page-nav.js?v=v24.6.361"></script>
+<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.361"></script>
+<script src="/vendor/cvstudio/create-profile.js?v=v24.6.361"></script>
+<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.361"></script>
+<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.361"></script>
+<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.361"></script>
+<script src="/vendor/cvstudio/company-profile.js?v=v24.6.361"></script>
+<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.361"></script>
+<script src="/vendor/cvstudio/appearance.js?v=v24.6.361"></script>
+<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.361"></script>
+<script src="/vendor/cvstudio/docx-export.js?v=v24.6.361"></script>
+<script src="/vendor/cvstudio/the-owl.js?v=v24.6.361"></script>
+<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.361"></script>
+<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.361"></script>
+<script src="/vendor/cvstudio/settings.js?v=v24.6.361"></script>
+<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.361"></script>
+<script src="/vendor/cvstudio/tab-status.js?v=v24.6.361"></script>
+<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.361"></script>
+<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.361"></script>
+<script src="/vendor/cvstudio/cv-format.js?v=v24.6.361"></script>
+<script src="/vendor/cvstudio/locks.js?v=v24.6.361"></script>
+<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.361"></script>
+<script src="/vendor/cvstudio/ppc.js?v=v24.6.361"></script>
+<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.361"></script>
+<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.361"></script>
+<script src="/vendor/cvstudio/batch-format.js?v=v24.6.361"></script>
 <script>
 
 document.addEventListener('DOMContentLoaded', initPageNavPin);
@@ -2308,9 +2350,9 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 
 </script>
-<script src="/vendor/cvstudio/input-file.js?v=v24.6.360"></script>
-<script src="/vendor/cvstudio/stats.js?v=v24.6.360"></script>
-<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.360"></script>
+<script src="/vendor/cvstudio/input-file.js?v=v24.6.361"></script>
+<script src="/vendor/cvstudio/stats.js?v=v24.6.361"></script>
+<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.361"></script>
 <script>
 try { updateSummaryLockUI(); } catch(e) {}
 try { updateCvScoringLockUI(); } catch(e) {}

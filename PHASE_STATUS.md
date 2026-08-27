@@ -25,11 +25,10 @@
   `54298b9b6a822e1f36c9c101f1ff4edc9c7e835f`
 - Phase 7B-4 source baseline Git commit (merged Phase 7B-3):
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
-- Current merged source: v24.6.359 through PR #179
-  (`a20b7f99c133e6082a9f10602df2ef8fa94314b5`).
-- Active work: v24.6.360 Blind CV candidate-gender neutralization on
-  `chatgpt/pr181-v24.6.360-blind-gender-neutralization` (planned PR #181,
-  unmerged).
+- Current merged source: v24.6.360 through PR #181
+  (`541cbf3`).
+- Active work: v24.6.361 CV download folders on
+  `chatgpt/pr182-v24.6.361-cv-download-folders` (planned PR #182, unmerged).
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
@@ -47,11 +46,41 @@
   `ab96824`. PR #175 merged the updater preflight-path fix. PR #176 merged the
   audit hardening as `d94554c`. PR #177 merged the updater runtime-consistency
   corrective as `2c06bc5`. PR #179 merged the updater preflight-output
-  corrective as `a20b7f9`; current master is v24.6.359.
-- Current stop: v24.6.359 is merged on `master` through PR #179. The v24.6.360
-  Blind CV candidate-gender neutralization branch is active and unmerged.
+  corrective as `a20b7f9`. PR #181 merged the v24.6.360 Blind CV
+  candidate-gender neutralization feature as `541cbf3`; current master is
+  v24.6.360.
+- Current stop: v24.6.360 is merged on `master` through PR #181. The v24.6.361
+  CV download-folder branch is active and unmerged.
 
-## v24.6.360 Blind CV candidate-gender neutralization (active, unmerged)
+## v24.6.361 CV download folders (active, unmerged)
+
+- Settings → Downloads provides separate Formatted CV and Blind CV destination
+  folders. Each destination covers both single and batch downloads, and users
+  may deliberately select the same folder for both.
+- Supported Chromium browsers store only the browser-authorized directory
+  handle in local IndexedDB; the full private path is neither exposed nor sent
+  to the backend. Restarted browsers may require permission confirmation on the
+  next download.
+- Direct saves sanitize generated names and choose a numbered filename rather
+  than overwriting an existing file. Unsupported, denied or failed folder
+  access falls back to the established browser Downloads mechanism, including
+  its existing spaced batch-download behavior.
+- The post-review corrective preserves the complete numbered suffix when a
+  near-limit filename must be shortened and fails safe rather than overwriting
+  after the bounded collision search. Batch results retain their processing
+  mode, so changing the visible Format All / Blind All selection after a run
+  cannot redirect completed files to the other destination.
+- Only formatted/blinded CV DOCX downloads change. Reports, CSVs, diagnostics
+  and every other export remain unchanged. No route, schema, dependency,
+  credential, paid/AI/external call, CV content/formatting or protected-build
+  trigger changes.
+- Validation: 984 tests passed, 4 skipped and 96 subtests; all 20 frontend
+  fixtures; 24 live source-smoke assertions; 142 Python, 70 JavaScript, 9
+  PowerShell and 3 POSIX-shell syntax checks; exact dependency and repository
+  consistency; Windows Antiword/Tesseract/adm-zip protected-source preflight;
+  and a clean real-browser render with no console warnings/errors.
+
+## v24.6.360 Blind CV candidate-gender neutralization (merged through PR #181)
 
 - General Settings has an off-by-default toggle used only by single and batch
   Blind CV. Enabled runs rewrite candidate-only pronouns to `the candidate` /

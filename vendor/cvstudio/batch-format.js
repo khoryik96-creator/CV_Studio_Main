@@ -409,10 +409,11 @@ async function runBatch() {
 
       bf.cvData   = cvData;
       bf.filename = fname;
+      bf.downloadKind = isBlind ? 'blind' : 'formatted';
       bf.progPct  = donePct;
       bf.progSteps = makeSteps(99); // all done
       bf.status   = isBlind ? 'done-blind' : 'done-ok';
-      _batchBlobs.push({ filename: fname, blob: blob });
+      _batchBlobs.push({ filename: fname, blob: blob, kind: bf.downloadKind });
       bf._docxBlob = blob; // store for manual email upload
       // Record to stats
       bf._statsRecordId = statsRecord(displayName, isBlind ? 'blind' : 'format', bf.cost, route.model, '', route.provider, statsMetaFromResponse({usage:bf.usage,cost:bf.cost,model:route.model,provider:route.provider}, route.model, route.provider)); // exact row URL is attached after upload
@@ -503,32 +504,36 @@ async function runBatch() {
   }
 }
 
-function downloadSingleBatchFile(id) {
+async function downloadSingleBatchFile(id) {
   var bf = _batchFiles.find(function(f) { return f.id === id; });
   if (!bf || !bf.filename) { showToast('File not ready', 'err'); return; }
   var item = _batchBlobs.find(function(b) { return b.filename === bf.filename; });
   if (!item) { showToast('File not found in memory', 'err'); return; }
-  var a = document.createElement('a');
-  var objUrl = URL.createObjectURL(item.blob);
-  a.href = objUrl;
-  a.download = item.filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(function(){ URL.revokeObjectURL(objUrl); }, 1000);
+  var kind = item.kind || bf.downloadKind || (bf.status === 'done-blind' ? 'blind' : 'formatted');
+  var result = await cvStudioSaveDownloadBlob(item.blob, item.filename, kind);
+  if (result.method === 'folder') showToast('Saved ' + result.filename + ' to ' + (result.folder || 'the selected folder') + '.', 'ok');
+  else showToast('Downloaded ' + result.filename + ' using the browser Downloads folder.', 'ok');
 }
 
-function downloadBatchZip() {
+async function downloadBatchZip() {
   if (_batchBlobs.length === 0) { showToast('No processed files to download', 'err'); return; }
-  _batchBlobs.forEach(function(item, i) {
-    setTimeout(function() {
-      var a = document.createElement('a');
-      var objUrl = URL.createObjectURL(item.blob);
-      a.href = objUrl;
-      a.download = item.filename;
-      a.click();
-      setTimeout(function(){ URL.revokeObjectURL(objUrl); }, 1000);
-    }, i * 300);
-  });
-  showToast('Downloading ' + _batchBlobs.length + ' file' + (_batchBlobs.length !== 1 ? 's' : '') + '...', 'ok');
+  var firstItem = _batchBlobs[0];
+  var firstFile = _batchFiles.find(function(file){ return file.filename === firstItem.filename; });
+  var kind = firstItem.kind || (firstFile && firstFile.downloadKind) || (firstFile && firstFile.status === 'done-blind' ? 'blind' : 'formatted');
+  var destination = await cvStudioPrepareDownloadDestination(kind);
+  if (!destination.handle) {
+    _batchBlobs.forEach(function(item, index) {
+      setTimeout(function(){ cvStudioSaveDownloadBlob(item.blob, item.filename, kind, destination); }, index * 300);
+    });
+    showToast('Downloading ' + _batchBlobs.length + ' file' + (_batchBlobs.length !== 1 ? 's' : '') + ' using the browser Downloads folder...', 'ok');
+    return;
+  }
+  var folderCount = 0;
+  for (var i = 0; i < _batchBlobs.length; i += 1) {
+    var item = _batchBlobs[i];
+    var result = await cvStudioSaveDownloadBlob(item.blob, item.filename, kind, destination);
+    if (result.method === 'folder') folderCount += 1;
+  }
+  if (folderCount === _batchBlobs.length) showToast('Saved ' + folderCount + ' file' + (folderCount !== 1 ? 's' : '') + ' to the selected folder.', 'ok');
+  else showToast('Downloaded ' + _batchBlobs.length + ' file' + (_batchBlobs.length !== 1 ? 's' : '') + (folderCount ? ' (' + folderCount + ' saved to the selected folder)' : ' using the browser Downloads folder') + '.', 'ok');
 }

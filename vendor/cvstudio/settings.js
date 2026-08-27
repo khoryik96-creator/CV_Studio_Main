@@ -121,6 +121,271 @@ function initCvReadonlyCaretGuard() {
 }
 document.addEventListener('DOMContentLoaded', initCvReadonlyCaretGuard);
 
+// ── CV download destinations ──────────────────────────────────────
+// Chromium's File System Access API is the only browser-safe way for a local
+// page to write to a user-selected folder. Directory handles are kept in
+// IndexedDB because localStorage cannot store them. Unsupported browsers and
+// expired/denied permissions retain the established browser-download path.
+var CV_DOWNLOAD_DIRECTORY_DB = 'cvstudio_download_directories_v1';
+var CV_DOWNLOAD_DIRECTORY_STORE = 'directories';
+var _cvDownloadDirectoryCache = {};
+
+function normalizeCvDownloadDestination(kind) {
+  return String(kind || '').toLowerCase() === 'blind' ? 'blind' : 'formatted';
+}
+
+function cvStudioSafeDownloadFilename(filename) {
+  var value = String(filename || 'CV Studio download.docx')
+    .replace(/[\/\\\u0000-\u001f<>:\x22|?*]/g, '_')
+    .replace(/^[. ]+/g, '')
+    .replace(/[. ]+$/g, '')
+    .trim();
+  if (!value) value = 'CV Studio download.docx';
+  var dot = value.lastIndexOf('.');
+  var extension = dot > 0 ? value.slice(dot) : '';
+  var stem = dot > 0 ? value.slice(0, dot) : value;
+  if (/^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(stem)) stem = '_' + stem;
+  var maxLength = 180;
+  if ((stem + extension).length > maxLength) stem = stem.slice(0, Math.max(1, maxLength - extension.length)).replace(/[. ]+$/g, '');
+  return (stem || 'CV Studio download') + extension;
+}
+
+function cvStudioFallbackDownloadBlob(blob, filename) {
+  var safeName = cvStudioSafeDownloadFilename(filename);
+  var url = URL.createObjectURL(blob);
+  var anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = safeName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  setTimeout(function(){
+    URL.revokeObjectURL(url);
+    if (anchor.parentNode) anchor.parentNode.removeChild(anchor);
+    else if (typeof anchor.remove === 'function') anchor.remove();
+  }, 1000);
+  return {method:'browser', filename:safeName};
+}
+
+function cvStudioOpenDownloadDirectoryDb() {
+  return new Promise(function(resolve, reject) {
+    if (!window.indexedDB) { reject(new Error('IndexedDB is unavailable')); return; }
+    var request = window.indexedDB.open(CV_DOWNLOAD_DIRECTORY_DB, 1);
+    request.onupgradeneeded = function() {
+      var db = request.result;
+      if (!db.objectStoreNames.contains(CV_DOWNLOAD_DIRECTORY_STORE)) db.createObjectStore(CV_DOWNLOAD_DIRECTORY_STORE);
+    };
+    request.onsuccess = function(){ resolve(request.result); };
+    request.onerror = function(){ reject(request.error || new Error('Could not open download folder storage')); };
+    request.onblocked = function(){ reject(new Error('Download folder storage is blocked')); };
+  });
+}
+
+function cvStudioDownloadDirectoryTransaction(mode, work) {
+  return cvStudioOpenDownloadDirectoryDb().then(function(db) {
+    return new Promise(function(resolve, reject) {
+      var transaction, result, settled = false;
+      function finishError(error) {
+        if (settled) return;
+        settled = true;
+        try { db.close(); } catch(_closeError) {}
+        reject(error || new Error('Download folder storage failed'));
+      }
+      try { transaction = db.transaction(CV_DOWNLOAD_DIRECTORY_STORE, mode); }
+      catch(error) { try { db.close(); } catch(_error) {} reject(error); return; }
+      var store = transaction.objectStore(CV_DOWNLOAD_DIRECTORY_STORE);
+      var request;
+      try { request = work(store); }
+      catch(error2) { try { transaction.abort(); } catch(_error2) {} finishError(error2); return; }
+      request.onsuccess = function(){ result = request.result; };
+      request.onerror = function(){ finishError(request.error); };
+      transaction.oncomplete = function(){
+        if (settled) return;
+        settled = true;
+        try { db.close(); } catch(_error3) {}
+        resolve(result);
+      };
+      transaction.onabort = transaction.onerror = function(){ finishError(transaction.error); };
+    });
+  });
+}
+
+function cvStudioReadDownloadDirectory(kind) {
+  kind = normalizeCvDownloadDestination(kind);
+  return cvStudioDownloadDirectoryTransaction('readonly', function(store){ return store.get(kind); });
+}
+
+function cvStudioStoreDownloadDirectory(kind, handle) {
+  kind = normalizeCvDownloadDestination(kind);
+  return cvStudioDownloadDirectoryTransaction('readwrite', function(store){ return store.put(handle, kind); });
+}
+
+function cvStudioDeleteDownloadDirectory(kind) {
+  kind = normalizeCvDownloadDestination(kind);
+  return cvStudioDownloadDirectoryTransaction('readwrite', function(store){ return store.delete(kind); });
+}
+
+function cvStudioGetDownloadDirectory(kind) {
+  kind = normalizeCvDownloadDestination(kind);
+  if (Object.prototype.hasOwnProperty.call(_cvDownloadDirectoryCache, kind)) return Promise.resolve(_cvDownloadDirectoryCache[kind]);
+  return cvStudioReadDownloadDirectory(kind).then(function(handle){
+    handle = handle && handle.kind === 'directory' ? handle : null;
+    _cvDownloadDirectoryCache[kind] = handle;
+    return handle;
+  }).catch(function(){
+    _cvDownloadDirectoryCache[kind] = null;
+    return null;
+  });
+}
+
+function cvStudioDirectoryWritePermission(handle, requestIfNeeded) {
+  if (!handle || handle.kind !== 'directory') return Promise.resolve(false);
+  var options = {mode:'readwrite'};
+  var query = typeof handle.queryPermission === 'function' ? handle.queryPermission(options) : Promise.resolve('prompt');
+  return Promise.resolve(query).then(function(state){
+    if (state === 'granted') return true;
+    if (!requestIfNeeded || typeof handle.requestPermission !== 'function') return false;
+    return handle.requestPermission(options).then(function(result){ return result === 'granted'; });
+  }).catch(function(){ return false; });
+}
+
+function cvStudioRenderDownloadDirectory(kind, handle) {
+  kind = normalizeCvDownloadDestination(kind);
+  var prefix = kind === 'blind' ? 'cvDownloadBlind' : 'cvDownloadFormatted';
+  var nameNode = document.getElementById(prefix + 'FolderName');
+  var accessNode = document.getElementById(prefix + 'FolderAccess');
+  if (!handle) {
+    if (nameNode) nameNode.textContent = 'Browser Downloads folder';
+    if (accessNode) { accessNode.textContent = 'Browser default'; accessNode.classList.remove('ok'); }
+    return Promise.resolve(false);
+  }
+  if (nameNode) nameNode.textContent = 'Selected folder: ' + String(handle.name || 'Chosen folder');
+  return cvStudioDirectoryWritePermission(handle, false).then(function(granted){
+    if (accessNode) {
+      accessNode.textContent = granted ? 'Ready' : 'Access on next download';
+      accessNode.classList.toggle('ok', granted);
+    }
+    return granted;
+  });
+}
+
+function renderCvDownloadSettings() {
+  var support = document.getElementById('cvDownloadFolderSupport');
+  var supported = typeof window.showDirectoryPicker === 'function' && !!window.indexedDB;
+  if (support) {
+    support.style.display = supported ? 'none' : 'block';
+    support.textContent = supported ? '' : 'This browser does not support remembered folder access. CV Studio will continue using the browser\'s normal Downloads folder.';
+  }
+  return Promise.all(['formatted','blind'].map(function(kind){
+    return cvStudioGetDownloadDirectory(kind).then(function(handle){ return cvStudioRenderDownloadDirectory(kind, handle); });
+  }));
+}
+
+async function cvStudioChooseDownloadDirectory(kind) {
+  kind = normalizeCvDownloadDestination(kind);
+  if (typeof window.showDirectoryPicker !== 'function' || !window.indexedDB) {
+    renderCvDownloadSettings();
+    showToast('This browser cannot remember a download folder. Browser Downloads will be used.', 'info');
+    return false;
+  }
+  try {
+    var handle = await window.showDirectoryPicker({id:'cvstudio-' + kind + '-cv', mode:'readwrite'});
+    if (!handle || handle.kind !== 'directory') throw new Error('A folder was not selected');
+    _cvDownloadDirectoryCache[kind] = handle;
+    var persisted = true;
+    try { await cvStudioStoreDownloadDirectory(kind, handle); }
+    catch(storageError) { persisted = false; }
+    await cvStudioRenderDownloadDirectory(kind, handle);
+    showToast((kind === 'blind' ? 'Blind' : 'Formatted') + ' CV folder selected' + (persisted ? '.' : ' for this tab; the browser could not remember it.'), persisted ? 'ok' : 'info');
+    return true;
+  } catch(error) {
+    if (error && error.name === 'AbortError') return false;
+    showToast('Could not select the folder. Browser Downloads will remain available.', 'err');
+    return false;
+  }
+}
+
+async function cvStudioClearDownloadDirectory(kind) {
+  kind = normalizeCvDownloadDestination(kind);
+  _cvDownloadDirectoryCache[kind] = null;
+  var removed = true;
+  try { await cvStudioDeleteDownloadDirectory(kind); }
+  catch(error) { removed = !window.indexedDB; }
+  await cvStudioRenderDownloadDirectory(kind, null);
+  showToast(
+    (kind === 'blind' ? 'Blind' : 'Formatted') + ' CV will use the browser Downloads folder.' +
+      (removed ? '' : ' The saved choice could not be removed permanently; try again before restarting.'),
+    removed ? 'ok' : 'err'
+  );
+  return removed;
+}
+
+async function cvStudioUniqueDownloadFilename(handle, filename) {
+  var safe = cvStudioSafeDownloadFilename(filename);
+  var dot = safe.lastIndexOf('.');
+  var extension = dot > 0 ? safe.slice(dot) : '';
+  var stem = dot > 0 ? safe.slice(0, dot) : safe;
+  function withSuffix(suffix) {
+    suffix = String(suffix || '');
+    var maxStemLength = Math.max(1, 180 - extension.length - suffix.length);
+    var shortenedStem = stem.slice(0, maxStemLength).replace(/[. ]+$/g, '');
+    if (!shortenedStem) shortenedStem = 'CV Studio download'.slice(0, maxStemLength);
+    return cvStudioSafeDownloadFilename(shortenedStem + suffix + extension);
+  }
+  for (var index = 0; index < 1000; index += 1) {
+    var suffix = index ? ' (' + index + ')' : '';
+    var candidate = withSuffix(suffix);
+    try {
+      await handle.getFileHandle(candidate);
+    } catch(error) {
+      if (error && error.name === 'NotFoundError') return candidate;
+      throw error;
+    }
+  }
+  var timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  for (var attempt = 0; attempt < 100; attempt += 1) {
+    var fallbackSuffix = ' - ' + timestamp + (attempt ? '-' + attempt : '');
+    var fallbackCandidate = withSuffix(fallbackSuffix);
+    try {
+      await handle.getFileHandle(fallbackCandidate);
+    } catch(error2) {
+      if (error2 && error2.name === 'NotFoundError') return fallbackCandidate;
+      throw error2;
+    }
+  }
+  throw new Error('Could not find an unused filename in the selected folder');
+}
+
+async function cvStudioPrepareDownloadDestination(kind) {
+  kind = normalizeCvDownloadDestination(kind);
+  var handle = await cvStudioGetDownloadDirectory(kind);
+  if (!handle) return {kind:kind, handle:null, configured:false};
+  var permitted = await cvStudioDirectoryWritePermission(handle, true);
+  if (permitted) cvStudioRenderDownloadDirectory(kind, handle);
+  return {kind:kind, handle:permitted ? handle : null, configured:true, permissionDenied:!permitted};
+}
+
+async function cvStudioSaveDownloadBlob(blob, filename, kind, preparedDestination) {
+  kind = normalizeCvDownloadDestination(kind);
+  var safeName = cvStudioSafeDownloadFilename(filename);
+  var destination = preparedDestination || await cvStudioPrepareDownloadDestination(kind);
+  if (destination && destination.handle) {
+    var writable = null;
+    try {
+      var uniqueName = await cvStudioUniqueDownloadFilename(destination.handle, safeName);
+      var fileHandle = await destination.handle.getFileHandle(uniqueName, {create:true});
+      writable = await fileHandle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return {method:'folder', filename:uniqueName, folder:String(destination.handle.name || '')};
+    } catch(error) {
+      if (writable && typeof writable.abort === 'function') { try { await writable.abort(); } catch(_abortError) {} }
+    }
+  }
+  return cvStudioFallbackDownloadBlob(blob, safeName);
+}
+
+document.addEventListener('DOMContentLoaded', renderCvDownloadSettings);
+
 // ── Formatted CV paragraph alignment ─────────────────────────────
 var CV_TEXT_ALIGNMENT_STORE = 'cvstudio_cv_text_alignment_v1';
 window._cvTextAlignment = 'left';
