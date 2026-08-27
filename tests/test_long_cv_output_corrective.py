@@ -61,6 +61,57 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         dense += "\nKey achievement"
         self.assertEqual(app._cv_parse_backend_timeout_seconds(dense), 300)
 
+    def test_docx_extraction_preserves_real_list_markers_and_plain_headings(self):
+        from docx import Document
+
+        document = Document()
+        heading = document.add_paragraph("Implementation")
+        heading.runs[0].bold = True
+        document.add_paragraph("Configured the system", style="List Bullet")
+        table = document.add_table(rows=1, cols=1)
+        cell = table.cell(0, 0)
+        cell.paragraphs[0].text = "Rollout"
+        cell.paragraphs[0].runs[0].bold = True
+        cell.add_paragraph("Delivered the rollout", style="List Bullet")
+        payload = io.BytesIO()
+        document.save(payload)
+
+        extracted = app._extract_docx_text_preserve_tables(payload.getvalue()).splitlines()
+        self.assertIn("Implementation", extracted)
+        self.assertIn("• Configured the system", extracted)
+        self.assertIn("Rollout", extracted)
+        self.assertIn("• Delivered the rollout", extracted)
+        self.assertNotIn("• Implementation", extracted)
+        self.assertNotIn("• Rollout", extracted)
+
+    def test_common_role_subheadings_render_as_sections_not_bullets(self):
+        normalized = app._normalize_cv_bullet_items([
+            "Implementation",
+            "Configured the system",
+            "Delivered the rollout",
+            "Rollout:",
+            "Deployed the release",
+            "Activities Description",
+            "Documented the process",
+        ])
+        self.assertEqual(normalized, [
+            {
+                "heading": "Implementation",
+                "bullets": ["Configured the system", "Delivered the rollout"],
+                "kind": "section",
+            },
+            {
+                "heading": "Rollout",
+                "bullets": ["Deployed the release"],
+                "kind": "section",
+            },
+            {
+                "heading": "Activities Description",
+                "bullets": ["Documented the process"],
+                "kind": "section",
+            },
+        ])
+
     def test_parse_route_passes_long_timeout_to_provider(self):
         provider_result = {
             "content": [{"type": "text", "text": json.dumps({

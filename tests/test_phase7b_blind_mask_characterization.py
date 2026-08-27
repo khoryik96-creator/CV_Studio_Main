@@ -41,13 +41,92 @@ class RecursiveTests(unittest.TestCase):
         seen = set(bm._blind_walk_strings({"a": "x", "b": ["y", {"c": "z"}]}))
         self.assertEqual(seen, {"x", "y", "z"})
 
+    def test_restore_cv_bullet_structure_keeps_blinded_text(self):
+        original = {
+            "work_experiences": [{"roles": [{"bullets": [
+                {"heading": "Implementation", "bullets": [
+                    "Configured Acme systems",
+                    "Delivered Acme rollout",
+                ], "kind": "section", "unexpected_source_note": "Acme secret"},
+                "Plain duty",
+            ]}]}],
+        }
+        blinded = {
+            "work_experiences": [{"roles": [{"bullets": [
+                "Implementation",
+                "Configured [Company] systems",
+                "Delivered [Company] rollout",
+                "Plain duty",
+            ]}]}],
+        }
+        repaired = bm._blind_restore_cv_bullet_structure(blinded, original)
+        section = repaired["work_experiences"][0]["roles"][0]["bullets"][0]
+        self.assertEqual(section, {
+            "heading": "Implementation",
+            "bullets": [
+                "Configured [Company] systems",
+                "Delivered [Company] rollout",
+            ],
+            "kind": "section",
+        })
+        self.assertNotIn("unexpected_source_note", section)
+        self.assertEqual(
+            repaired["work_experiences"][0]["roles"][0]["bullets"][1],
+            "Plain duty",
+        )
+        self.assertNotIn("Acme", str(repaired))
+
+    def test_restore_cv_bullet_structure_does_not_guess_on_count_mismatch(self):
+        original = {"work_experiences": [{"roles": [{"bullets": [
+            {"heading": "Acme Implementation", "bullets": ["One", "Two"], "kind": "section"},
+        ]}]}]}
+        blinded = {"work_experiences": [{"roles": [{"bullets": [
+            "[Company] Implementation", "One",
+        ]}]}]}
+        repaired = bm._blind_restore_cv_bullet_structure(blinded, original)
+        self.assertEqual(
+            repaired["work_experiences"][0]["roles"][0]["bullets"],
+            ["[Company] Implementation", "One"],
+        )
+        self.assertNotIn("Acme", str(repaired))
+
+    def test_restore_cv_bullet_structure_ignores_malformed_nested_source_item(self):
+        original = {"work_experiences": [{"roles": [{"bullets": [
+            {"heading": "Implementation", "bullets": ["One", 7], "kind": "section"},
+        ]}]}]}
+        blinded = {"work_experiences": [{"roles": [{"bullets": [
+            "Implementation", "One",
+        ]}]}]}
+        repaired = bm._blind_restore_cv_bullet_structure(blinded, original)
+        self.assertEqual(
+            repaired["work_experiences"][0]["roles"][0]["bullets"],
+            ["Implementation", "One"],
+        )
+
+    def test_restore_cv_bullet_structure_does_not_apply_to_shifted_role(self):
+        original = {"work_experiences": [{"roles": [{
+            "title": "First role",
+            "date_range": "2020 to 2021",
+            "bullets": [{"heading": "Support", "bullets": ["One"], "kind": "section"}],
+        }]}]}
+        blinded = {"work_experiences": [{"roles": [{
+            "title": "Second role",
+            "date_range": "2022 to 2023",
+            "bullets": ["Support", "One"],
+        }]}]}
+        repaired = bm._blind_restore_cv_bullet_structure(blinded, original)
+        self.assertEqual(
+            repaired["work_experiences"][0]["roles"][0]["bullets"],
+            ["Support", "One"],
+        )
+
 
 class SmokeAndHygieneTests(unittest.TestCase):
     def test_symbols_present(self):
         for name in [
             "_blind_walk_strings", "_blind_add_mask_term", "_blind_collect_org_mask_terms",
             "_blind_replace_org_terms_in_text", "_blind_mask_org_terms_recursive",
-            "_blind_postprocess_company_mentions",
+            "_blind_postprocess_company_mentions", "_blind_restore_cv_bullet_structure",
         ]:
             self.assertTrue(callable(getattr(bm, name)), name)
 

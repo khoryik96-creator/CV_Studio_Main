@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.361"
+_INSTALL_RECEIPT_VERSION = "v24.6.362"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -341,7 +341,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.361"
+_CVSTUDIO_VERSION = "v24.6.362"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -12189,10 +12189,43 @@ def _extract_docx_text_preserve_tables(file_bytes):
     def clean(text):
         return re.sub(r"\s+", " ", (text or "")).strip()
 
+    def paragraph_has_numbering(paragraph):
+        """True when Word renders this paragraph with a list marker.
+
+        ``Paragraph.text`` deliberately omits Word's numbering glyph.  Preserve
+        that structural signal for the CV parser by checking direct numbering
+        and any numbering inherited through the paragraph's style chain.
+        """
+        try:
+            direct = paragraph._p.xpath("./w:pPr/w:numPr/w:numId/@w:val")
+            if any(str(value) != "0" for value in direct):
+                return True
+            style = paragraph.style
+            seen = set()
+            while style is not None and style.style_id not in seen:
+                seen.add(style.style_id)
+                inherited = style._element.xpath("./w:pPr/w:numPr/w:numId/@w:val")
+                if any(str(value) != "0" for value in inherited):
+                    return True
+                style = style.base_style
+        except Exception:
+            return False
+        return False
+
+    def paragraph_line(paragraph):
+        value = clean(paragraph.text)
+        if not value:
+            return ""
+        if paragraph_has_numbering(paragraph) and not re.match(
+            r"^[•●▪◦‣⁃∙·‧]\s*", value
+        ):
+            return "• " + value
+        return value
+
     def cell_lines(cell):
         out = []
         for paragraph in cell.paragraphs:
-            value = clean(paragraph.text)
+            value = paragraph_line(paragraph)
             if value and (not out or value != out[-1]):
                 out.append(value)
         return out
@@ -12229,7 +12262,7 @@ def _extract_docx_text_preserve_tables(file_bytes):
         for hdr in (section.header, section.first_page_header, section.even_page_header):
             try:
                 for paragraph in hdr.paragraphs:
-                    append_header(paragraph.text)
+                    append_header(paragraph_line(paragraph))
                 for table in getattr(hdr, "tables", []) or []:
                     for row in table.rows:
                         for value in row_lines(row):
@@ -12241,7 +12274,7 @@ def _extract_docx_text_preserve_tables(file_bytes):
     for child in body.iterchildren():
         tag = child.tag.rsplit('}', 1)[-1]
         if tag == 'p':
-            value = clean(_DocxParagraph(child, doc).text)
+            value = paragraph_line(_DocxParagraph(child, doc))
             if value:
                 lines.append(value)
         elif tag == 'tbl':
@@ -13682,6 +13715,7 @@ from cvstudio_blind_mask import (
     _blind_mask_org_terms_recursive,
     _blind_postprocess_company_mentions,
     _blind_replace_org_terms_in_text,
+    _blind_restore_cv_bullet_structure,
     _blind_walk_strings,
 )
 
@@ -13900,10 +13934,15 @@ def blind_cv():
             ))
             return jsonify(out), 500
 
+        # Preserve section/list containers even when the provider flattened the
+        # same blinded strings, then run the normal bullet repair before preview.
+        blinded = _blind_restore_cv_bullet_structure(blinded, cv_data)
+
         # Deterministic last line of defence: mask residual employer/client/competitor
         # names that the AI may have left inside bullets, project descriptions,
         # achievements, highlights, summaries, or additional information.
         blinded = _blind_postprocess_company_mentions(blinded, cv_data)
+        blinded = _normalize_cv_structured_content(blinded)
 
         out = {"ok": True, "data": blinded, "usage": usage, "model": model, "provider": llm_provider}
         out.update(_llm_response_cost_fields(model, usage, llm_provider))

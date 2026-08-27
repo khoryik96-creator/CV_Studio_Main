@@ -10,6 +10,7 @@ Pure functions and module-level data only - no Flask, no globals, no network.
 This module never imports ``app``.
 """
 
+import copy
 import re
 
 
@@ -158,6 +159,123 @@ def _blind_mask_org_terms_recursive(obj, terms):
     if isinstance(obj, str):
         return _blind_replace_org_terms_in_text(obj, terms)
     return obj
+
+
+def _blind_role_bullet_texts(items):
+    """Flatten role bullet/section text without carrying source wording.
+
+    The blind provider is instructed to preserve JSON structure, but can turn a
+    valid section object into a run of plain strings.  This helper reads only the
+    provider's already-blinded response so repairing the shape cannot reintroduce
+    an employer or client name from the original CV.
+    """
+    out = []
+    source = items if isinstance(items, list) else []
+    for item in source:
+        if isinstance(item, str):
+            if item.strip():
+                out.append(item)
+            continue
+        if not isinstance(item, dict):
+            continue
+        heading = item.get("heading") or item.get("title") or ""
+        if str(heading).strip():
+            out.append(str(heading))
+        out.extend(_blind_role_bullet_texts(item.get("bullets") or item.get("items") or []))
+    return out
+
+
+def _blind_rebuild_role_bullets(template_items, blinded_items):
+    """Apply blinded text to the original bullet container shape when exact."""
+    if not isinstance(template_items, list) or not isinstance(blinded_items, list):
+        return None
+    if any(not isinstance(item, (str, dict)) for item in template_items):
+        return None
+    replacement = _blind_role_bullet_texts(blinded_items)
+    template_count = len(_blind_role_bullet_texts(template_items))
+    if not replacement or len(replacement) != template_count:
+        return None
+    cursor = 0
+
+    def rebuild(items):
+        nonlocal cursor
+        rebuilt = []
+        for item in items:
+            if isinstance(item, str):
+                rebuilt.append(replacement[cursor])
+                cursor += 1
+                continue
+            if not isinstance(item, dict):
+                return None
+            heading = item.get("heading") or item.get("title") or ""
+            children = item.get("bullets") or item.get("items") or []
+            if not str(heading).strip() or not isinstance(children, list):
+                return None
+            # Reconstruct only the documented structural keys.  Never copy an
+            # unknown value from the unblinded source object back into output.
+            group = {
+                "heading": replacement[cursor],
+                "bullets": [],
+                "kind": "section",
+            }
+            cursor += 1
+            group["bullets"] = rebuild(children)
+            if group["bullets"] is None:
+                return None
+            rebuilt.append(group)
+        return rebuilt
+
+    rebuilt = rebuild(template_items)
+    return rebuilt if cursor == len(replacement) else None
+
+
+def _blind_restore_cv_bullet_structure(blinded, original_cv):
+    """Restore role section/list containers when the model only flattened them.
+
+    Repair is deliberately bounded to corresponding work-experience/role indexes
+    whose flattened text counts match exactly.  A malformed or shortened response
+    is left untouched rather than guessing or copying unblinded source wording.
+    """
+    if not isinstance(blinded, dict) or not isinstance(original_cv, dict):
+        return blinded
+    # Copy only the provider response.  No source object is ever copied into it.
+    repaired = copy.deepcopy(blinded)
+    original_experiences = original_cv.get("work_experiences") or []
+    blinded_experiences = repaired.get("work_experiences") or []
+    for exp_index, original_exp in enumerate(original_experiences):
+        if exp_index >= len(blinded_experiences):
+            break
+        blinded_exp = blinded_experiences[exp_index]
+        if not isinstance(original_exp, dict) or not isinstance(blinded_exp, dict):
+            continue
+        original_roles = original_exp.get("roles") or []
+        blinded_roles = blinded_exp.get("roles") or []
+        for role_index, original_role in enumerate(original_roles):
+            if role_index >= len(blinded_roles):
+                break
+            blinded_role = blinded_roles[role_index]
+            if not isinstance(original_role, dict) or not isinstance(blinded_role, dict):
+                continue
+            identity_mismatch = any(
+                str(original_role.get(key) or "").strip()
+                and str(blinded_role.get(key) or "").strip()
+                and str(original_role.get(key)).strip().casefold()
+                != str(blinded_role.get(key)).strip().casefold()
+                for key in ("title", "date_range")
+            )
+            if identity_mismatch:
+                continue
+            template_items = original_role.get("bullets") or []
+            # No section object means there is no container shape to restore.
+            if not any(isinstance(item, dict) for item in template_items):
+                continue
+            rebuilt = _blind_rebuild_role_bullets(
+                template_items,
+                blinded_role.get("bullets") or [],
+            )
+            if rebuilt is not None:
+                blinded_role["bullets"] = rebuilt
+    return repaired
 
 
 def _blind_postprocess_company_mentions(blinded, original_cv):

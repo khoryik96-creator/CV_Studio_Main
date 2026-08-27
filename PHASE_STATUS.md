@@ -25,10 +25,11 @@
   `54298b9b6a822e1f36c9c101f1ff4edc9c7e835f`
 - Phase 7B-4 source baseline Git commit (merged Phase 7B-3):
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
-- Current merged source: v24.6.360 through PR #181
-  (`541cbf3`).
-- Active work: v24.6.361 CV download folders on
-  `chatgpt/pr182-v24.6.361-cv-download-folders` (planned PR #182, unmerged).
+- Current merged source: v24.6.361 through PR #182
+  (`67defbc`).
+- Active work: v24.6.362 Blind CV bullet preservation on
+  `chatgpt/pr183-v24.6.362-blind-cv-bullet-normalization` (planned PR #183,
+  unmerged).
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
@@ -47,12 +48,33 @@
   audit hardening as `d94554c`. PR #177 merged the updater runtime-consistency
   corrective as `2c06bc5`. PR #179 merged the updater preflight-output
   corrective as `a20b7f9`. PR #181 merged the v24.6.360 Blind CV
-  candidate-gender neutralization feature as `541cbf3`; current master is
-  v24.6.360.
-- Current stop: v24.6.360 is merged on `master` through PR #181. The v24.6.361
-  CV download-folder branch is active and unmerged.
+  candidate-gender neutralization feature as `541cbf3`. PR #182 merged the
+  v24.6.361 CV download-folder feature as `67defbc`; current master is
+  v24.6.361.
+- Current stop: v24.6.361 is merged on `master` through PR #182. The v24.6.362
+  Blind CV bullet-preservation branch is active and unmerged.
 
-## v24.6.361 CV download folders (active, unmerged)
+## v24.6.362 Blind CV bullet preservation (active, unmerged)
+
+- Re-uploading a CV Studio-formatted DOCX no longer loses the distinction
+  between true Word list paragraphs and plain bold role subheadings before
+  `/parse`.
+- `/blind` restores the original section/list container shape only when the
+  original and already-blinded flattened text counts match exactly, then runs
+  the established CV bullet normalizer before preview/export. The repair uses
+  no original wording or unknown source fields, so it cannot reintroduce a
+  masked employer or client name.
+- Established generic source labels (`Implementation`, `Support`, `Rollout`,
+  and `Activities Description`) render as unbulleted section headings with
+  their following duties as real bullets.
+- No route, schema, dependency, credential, paid-call-count or protected-build
+  boundary changes. Validation: 990 tests passed, 4 skipped and 96 subtests;
+  all 20 frontend fixtures; 24-assertion live source smoke; 142 Python, 71
+  JavaScript, 9 PowerShell and 5 POSIX-shell syntax checks; repository
+  consistency; and the Windows Antiword/Tesseract/adm-zip protected-source
+  preflight.
+
+## v24.6.361 CV download folders (merged through PR #182)
 
 - Settings → Downloads provides separate Formatted CV and Blind CV destination
   folders. Each destination covers both single and batch downloads, and users
@@ -79,6 +101,7 @@
   PowerShell and 3 POSIX-shell syntax checks; exact dependency and repository
   consistency; Windows Antiword/Tesseract/adm-zip protected-source preflight;
   and a clean real-browser render with no console warnings/errors.
+- PR #182 was squash-merged to `master` as `67defbc` after owner approval.
 
 ## v24.6.360 Blind CV candidate-gender neutralization (merged through PR #181)
 

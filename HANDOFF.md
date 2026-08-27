@@ -146,6 +146,13 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 7. Recently completed (already on `master`)
 
+- **v24.6.361 CV download folders:** PR #182 was squash-merged to `master` as
+  `67defbc`. Settings → Downloads provides separate browser-authorized
+  destinations for Formatted CV and Blind CV, covering both single and batch
+  downloads. Existing files are safely numbered and unsupported, expired or
+  denied folder access visibly falls back to the browser Downloads behavior.
+  No route, schema, dependency, credential, AI/external-call, CV-content or
+  protected-build-trigger boundary changed.
 - **v24.6.360 Blind CV candidate-gender neutralization:** PR #181 was
   squash-merged to `master` as `541cbf3`. General Settings now has an
   off-by-default toggle used only by single and batch Blind CV. Enabled runs
@@ -246,25 +253,21 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **CV download folders — v24.6.361 / planned PR #182, ACTIVE AND UNMERGED.**
-  Branch `chatgpt/pr182-v24.6.361-cv-download-folders` adds Settings →
-  Downloads with separate user-selected destinations for Formatted CV and
-  Blind CV; each applies to both single and batch downloads and both may use
-  the same folder. Chromium's browser-authorized File System Access API and
-  local IndexedDB handle storage are used without exposing the full path.
-  Existing files receive a numbered filename instead of being overwritten.
-  Unsupported, expired or denied folder access visibly falls back to the
-  established browser Downloads behavior. The post-review corrective reserves
-  suffix space before shortening a long filename, so `(1)` cannot be truncated
-  into an overwrite, and records the mode that produced each batch file so a
-  later Format/Blind tab switch cannot redirect it to the wrong folder. Only CV
-  DOCX downloads change; no
-  route, schema, dependency, credential, AI/external-call, CV-content or
-  protected-build-trigger boundary changes. Validation: 984 tests passed, 4
-  skipped and 96 subtests; all 20 frontend fixtures; 24-assertion live source
-  smoke; Python/JavaScript/PowerShell/POSIX syntax; dependency and repository
-  consistency; Windows Antiword/Tesseract/adm-zip protected-source preflight;
-  and a clean v24.6.361 browser render at `http://127.0.0.1:5059/`.
+- **Blind CV bullet preservation — v24.6.362 / planned PR #183, ACTIVE AND
+  UNMERGED.** Branch
+  `chatgpt/pr183-v24.6.362-blind-cv-bullet-normalization` fixes the supplied
+  formatted-CV → Blind CV regression. DOCX extraction preserves real Word list
+  paragraphs while leaving ordinary bold role subheadings plain; Blind CV
+  restores an exact matching original section/list container shape using only
+  already-blinded provider text and normalizes it before preview/export. A
+  mismatch is left untouched, and no unblinded source wording or unknown field
+  can be copied into the output. Focused regressions use no paid AI call. No
+  route, schema, dependency, credential, paid-call-count or protected-package
+  boundary changes. Validation: 990 tests passed, 4 skipped and 96 subtests;
+  all 20 frontend fixtures; 24-assertion live source smoke; 142 Python, 71
+  JavaScript, 9 PowerShell and 5 POSIX-shell syntax checks; repository
+  consistency; and the Windows Antiword/Tesseract/adm-zip protected-source
+  preflight.
 - **Updater preflight-output corrective — v24.6.359 / PR #179, MERGED.** PR
   #179 merged to `master` as `a20b7f9`. It keeps the
   downloaded preflight's visible diagnostic output out of the PowerShell

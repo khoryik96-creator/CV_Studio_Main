@@ -615,7 +615,8 @@ def _correct_mistagged_candidate_name(parsed, cv_text=""):
 
 
 _CV_SECTION_HEADING_RE = re.compile(
-    r"^\s*(?:key\s+)?(responsibilit(?:y|ies)|achievements?)\s*:?\s*$",
+    r"^\s*(?:(?:key\s+)?(?P<key>responsibilit(?:y|ies)|achievements?)|"
+    r"(?P<plain>implementation|support|rollout|activities?\s+description))\s*:?\s*$",
     re.I,
 )
 
@@ -637,7 +638,11 @@ def _canonical_cv_section_heading(value):
     match = _CV_SECTION_HEADING_RE.fullmatch(text)
     if not match:
         return text
-    return "Key achievements" if match.group(1).lower().startswith("achievement") else "Key responsibilities"
+    key = match.group("key")
+    if key:
+        return "Key achievements" if key.lower().startswith("achievement") else "Key responsibilities"
+    # Generic source subheadings are structural labels, not wording to rewrite.
+    return text.rstrip(":").strip()
 
 
 _CV_LEADING_BULLET_MARKER_RE = re.compile(
