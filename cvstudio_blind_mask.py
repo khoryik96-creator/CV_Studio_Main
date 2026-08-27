@@ -242,6 +242,10 @@ def _blind_restore_cv_bullet_structure(blinded, original_cv):
     repaired = copy.deepcopy(blinded)
     original_experiences = original_cv.get("work_experiences") or []
     blinded_experiences = repaired.get("work_experiences") or []
+    if not isinstance(original_experiences, list) or not isinstance(
+        blinded_experiences, list
+    ):
+        return repaired
     for exp_index, original_exp in enumerate(original_experiences):
         if exp_index >= len(blinded_experiences):
             break
@@ -250,6 +254,10 @@ def _blind_restore_cv_bullet_structure(blinded, original_cv):
             continue
         original_roles = original_exp.get("roles") or []
         blinded_roles = blinded_exp.get("roles") or []
+        if not isinstance(original_roles, list) or not isinstance(
+            blinded_roles, list
+        ):
+            continue
         for role_index, original_role in enumerate(original_roles):
             if role_index >= len(blinded_roles):
                 break

@@ -120,6 +120,26 @@ class RecursiveTests(unittest.TestCase):
             ["Support", "One"],
         )
 
+    def test_restore_cv_bullet_structure_tolerates_unexpected_nested_shapes(self):
+        original = {"work_experiences": [{"roles": [{}]}]}
+        malformed_values = (
+            {"bad": "shape"},
+            "not a list",
+            7,
+        )
+        for value in malformed_values:
+            blinded = {"work_experiences": value}
+            self.assertEqual(
+                bm._blind_restore_cv_bullet_structure(blinded, original),
+                blinded,
+            )
+        for value in malformed_values:
+            blinded = {"work_experiences": [{"roles": value}]}
+            self.assertEqual(
+                bm._blind_restore_cv_bullet_structure(blinded, original),
+                blinded,
+            )
+
 
 class SmokeAndHygieneTests(unittest.TestCase):
     def test_symbols_present(self):

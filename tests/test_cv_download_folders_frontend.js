@@ -84,27 +84,34 @@ async function nativeFolderSaveAndFallbackContract() {
     URL:{createObjectURL(){return 'blob:fallback';},revokeObjectURL(v){revoked.push(v);}},
     setTimeout(fn){fn();},
     _cvDownloadLastResult:{},
-    _cvNativeDownloadFolderState:{native_supported:true,folders:{
+    _cvNativeDownloadFolderState:{native_supported:true,status_loaded:true,folders:{
       formatted:{configured:true,path:'C:\\CV Output',available:true},
       blind:{configured:false,path:'',available:false},
     }},
+    _cvNativeDownloadFolderLoadPromise:null,
     cvStudioRenderDownloadDestination(){},
     async fetch(path, options){
       requests.push({path,options});
+      if(path==='/downloads/folders')return {ok:true,async json(){return {ok:true,native_supported:true,folders:{
+        formatted:{configured:true,path:'C:\\CV Output',available:true},
+        blind:{configured:false,path:'',available:false},
+      }};}};
       if(saveSucceeds)return {ok:true,async json(){return {ok:true,filename:'Hyppies CV (1).docx',folder:'C:\\CV Output',path:'C:\\CV Output\\Hyppies CV (1).docx'};}};
       return {ok:false,async json(){return {ok:false,error:'Drive unavailable'};}};
     },
   };
   loadFunctions(context,[
     'normalizeCvDownloadDestination','cvStudioSafeDownloadFilename','cvStudioFallbackDownloadBlob',
-    'cvStudioNativeDownloadFolder','cvStudioPrepareDownloadDestination','cvStudioSaveDownloadBlob',
+    'cvStudioNativeDownloadFolder','cvStudioLoadDownloadFolderState',
+    'cvStudioPrepareDownloadDestination','cvStudioSaveDownloadBlob',
   ]);
 
   const blob={fixture:true};
   const saved=await context.cvStudioSaveDownloadBlob(blob,'Hyppies CV.docx','formatted');
   assert.strictEqual(saved.method,'folder');
   assert.strictEqual(saved.path,'C:\\CV Output\\Hyppies CV (1).docx');
-  assert.strictEqual(requests[0].path,'/downloads/save');
+  assert.strictEqual(requests[0].path,'/downloads/folders');
+  assert.strictEqual(requests[1].path,'/downloads/save');
   assert.strictEqual(clicked.length,0);
 
   const browser=await context.cvStudioSaveDownloadBlob(blob,'Blind.docx','blind');
@@ -117,6 +124,32 @@ async function nativeFolderSaveAndFallbackContract() {
   assert.strictEqual(fallback.configured,true);
   assert.ok(fallback.fallbackReason.includes('Drive unavailable'));
   assert.deepStrictEqual(revoked,['blob:fallback']);
+}
+
+async function folderStatusFailureStopsBrowserFallbackContract() {
+  const clicked=[];
+  const context={
+    String,Math,Date,Promise,
+    window:{},
+    document:{body:{appendChild(){}},createElement(){return {click(){clicked.push(this.download);},remove(){}};}},
+    URL:{createObjectURL(){return 'blob:must-not-download';},revokeObjectURL(){}},
+    setTimeout(fn){fn();},
+    _cvDownloadLastResult:{},
+    _cvNativeDownloadFolderState:{native_supported:true,status_loaded:false,folders:{formatted:null,blind:null}},
+    _cvNativeDownloadFolderLoadPromise:null,
+    cvStudioRenderDownloadDestination(){},
+    async fetch(){throw new Error('Folder status unavailable');},
+  };
+  loadFunctions(context,[
+    'normalizeCvDownloadDestination','cvStudioSafeDownloadFilename','cvStudioFallbackDownloadBlob',
+    'cvStudioNativeDownloadFolder','cvStudioLoadDownloadFolderState',
+    'cvStudioPrepareDownloadDestination','cvStudioSaveDownloadBlob',
+  ]);
+  const result=await context.cvStudioSaveDownloadBlob({fixture:true},'Sensitive CV.docx','formatted');
+  assert.strictEqual(result.method,'failed');
+  assert.strictEqual(result.configured,true);
+  assert.ok(result.fallbackReason.includes('Folder status unavailable'));
+  assert.deepStrictEqual(clicked,[]);
 }
 
 async function nativeSelectionAndFullPathPreviewContract() {
@@ -148,13 +181,14 @@ async function nativeSelectionAndFullPathPreviewContract() {
 
 async function batchModeContract() {
   const saveCalls=[];
+  const toasts=[];
   const context={
     _batchMode:'blind',
     _batchFiles:[{id:'formatted-row',filename:'Formatted.docx',status:'done-ok',downloadKind:'formatted'}],
     _batchBlobs:[{filename:'Formatted.docx',blob:{id:1},kind:'formatted'}],
     cvStudioSaveDownloadBlob:async (blob,filename,kind)=>{saveCalls.push({blob,filename,kind});return {method:'folder',filename,folder:'Formatted'};},
     cvStudioPrepareDownloadDestination:async (kind)=>({kind,configured:true,folder:{path:'C:\\Formatted'},handle:{native:true}}),
-    showToast(){},setTimeout(fn){fn();},
+    showToast(message,level){toasts.push({message,level});},setTimeout(fn){fn();},
   };
   loadFunctions(context,['downloadSingleBatchFile','downloadBatchZip']);
   await context.downloadSingleBatchFile('formatted-row');
@@ -162,6 +196,11 @@ async function batchModeContract() {
   saveCalls.length=0;
   await context.downloadBatchZip();
   assert.strictEqual(saveCalls[0].kind,'formatted');
+  saveCalls.length=0;
+  context.cvStudioPrepareDownloadDestination=async ()=>({statusFailed:true,fallbackReason:'Folder status unavailable',handle:null});
+  await context.downloadBatchZip();
+  assert.strictEqual(saveCalls.length,0);
+  assert.ok(toasts[toasts.length-1].message.includes('Download was not started'));
 }
 
 async function staleStartupRegistrationRepairContract() {
@@ -195,6 +234,7 @@ Promise.resolve()
   .then(markupAndWiringContract)
   .then(filenameSafetyContract)
   .then(nativeFolderSaveAndFallbackContract)
+  .then(folderStatusFailureStopsBrowserFallbackContract)
   .then(nativeSelectionAndFullPathPreviewContract)
   .then(batchModeContract)
   .then(staleStartupRegistrationRepairContract)

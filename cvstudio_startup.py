@@ -68,13 +68,21 @@ class StartupService:
                     expected = os.path.realpath(os.path.join(self._root_path(), "START_HIDDEN.vbs"))
                     expected_command = 'wscript.exe "{}"'.format(expected)
                     configured = os.path.normcase(value.strip()) == os.path.normcase(expected_command)
+                    managed_path = _managed_windows_startup_path(value)
                     repair_required = bool(
-                        not configured and _managed_windows_startup_path(value)
+                        not configured
+                        and managed_path
+                        and not os.path.isfile(managed_path)
                     )
                     return self._jsonify({
                         "enabled": bool(configured or repair_required),
                         "configured": bool(configured),
                         "repair_required": repair_required,
+                        "other_installation": bool(
+                            not configured
+                            and managed_path
+                            and os.path.isfile(managed_path)
+                        ),
                         "command": value if configured else "",
                         "instance_id": instance_id,
                     })
@@ -151,9 +159,10 @@ class StartupService:
                     value = str(winreg.QueryValueEx(key, _WINDOWS_RUN_VALUE)[0] or "")
                     expected = os.path.realpath(os.path.join(self._root_path(), "START_HIDDEN.vbs"))
                     expected_command = 'wscript.exe "{}"'.format(expected)
+                    managed_path = _managed_windows_startup_path(value)
                     if (
                         os.path.normcase(value.strip()) == os.path.normcase(expected_command)
-                        or _managed_windows_startup_path(value)
+                        or (managed_path and not os.path.isfile(managed_path))
                     ):
                         winreg.DeleteValue(key, _WINDOWS_RUN_VALUE)
                 except FileNotFoundError:

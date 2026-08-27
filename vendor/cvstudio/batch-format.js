@@ -522,6 +522,10 @@ async function downloadBatchZip() {
   var firstFile = _batchFiles.find(function(file){ return file.filename === firstItem.filename; });
   var kind = firstItem.kind || (firstFile && firstFile.downloadKind) || (firstFile && firstFile.status === 'done-blind' ? 'blind' : 'formatted');
   var destination = await cvStudioPrepareDownloadDestination(kind);
+  if (destination.statusFailed) {
+    showToast('Download was not started: ' + destination.fallbackReason + '. Reload CV Studio or check Settings → Downloads.', 'err');
+    return;
+  }
   if (!destination.handle) {
     _batchBlobs.forEach(function(item, index) {
       setTimeout(function(){ cvStudioSaveDownloadBlob(item.blob, item.filename, kind, destination); }, index * 300);

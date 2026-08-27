@@ -92,7 +92,13 @@
   Startup enable route. A successful installation also moves an already-enabled
   entry to the new root. Unknown Run commands remain untouched, and disabling
   Startup removes a recognized stale CV Studio entry.
-- Final validation after the native/startup corrections: 1008 tests passed, 4 skipped
+- PR review corrections make startup repair strictly stale-only, so a preview
+  cannot take over or disable another existing installation. Download
+  preparation refreshes folder status and fails closed when it is unknown;
+  Windows/UNC/macOS root selections remain intact; saved files must be real
+  DOCX ZIP containers with the required Word parts; and malformed nested Blind
+  CV AI JSON is preserved instead of causing a generic 500.
+- Final validation after the PR review corrections: 1015 tests passed, 4 skipped
   and 96 subtests; all 20 frontend fixtures; 24 live source-smoke assertions;
   repository consistency; and the Windows Antiword/Tesseract/adm-zip
   protected-source preflight.

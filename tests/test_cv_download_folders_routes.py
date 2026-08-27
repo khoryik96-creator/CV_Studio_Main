@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+import zipfile
 
 from owner_build_tools.build_protected import write_test_receipt
 
@@ -23,6 +24,14 @@ finally:
         os.environ["CVSTUDIO_DB_PATH"] = _ORIGINAL_DATABASE_OVERRIDE
 
 from cvstudio_downloads import LocalDownloadService
+
+
+def _docx_bytes():
+    payload = io.BytesIO()
+    with zipfile.ZipFile(payload, "w", zipfile.ZIP_STORED) as archive:
+        archive.writestr("[Content_Types].xml", "<Types/>")
+        archive.writestr("word/document.xml", "<document/>")
+    return payload.getvalue()
 
 
 class CvDownloadFolderRouteTests(unittest.TestCase):
@@ -90,12 +99,13 @@ class CvDownloadFolderRouteTests(unittest.TestCase):
         self.assertEqual(checked.status_code, 200)
         self.assertTrue(checked.get_json()["folder"]["writable"])
 
+        generated = _docx_bytes()
         saved = self.client.post(
             "/downloads/save",
             data={
                 "kind": "formatted",
                 "filename": "Hyppies CV.docx",
-                "file": (io.BytesIO(b"PK\x03\x04generated-docx"), "Hyppies CV.docx"),
+                "file": (io.BytesIO(generated), "Hyppies CV.docx"),
             },
             headers=self._headers("download-route-save"),
             content_type="multipart/form-data",
@@ -104,7 +114,7 @@ class CvDownloadFolderRouteTests(unittest.TestCase):
         self.assertEqual(saved.get_json()["path"], str(self.folder / "Hyppies CV.docx"))
         self.assertEqual(
             (self.folder / "Hyppies CV.docx").read_bytes(),
-            b"PK\x03\x04generated-docx",
+            generated,
         )
 
         cleared = self.client.delete(
@@ -133,6 +143,22 @@ class CvDownloadFolderRouteTests(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["code"], "DOWNLOAD_FOLDER_UNAVAILABLE")
         self.assertEqual(payload["request_id"], "download-route-missing")
+
+    def test_invalid_zip_signature_imitation_is_rejected_and_removed(self):
+        self.service._write_state_unlocked({"formatted": str(self.folder)})
+        response = self.client.post(
+            "/downloads/save",
+            data={
+                "kind": "formatted",
+                "filename": "Fake.docx",
+                "file": (io.BytesIO(b"PK\x03\x04not-a-real-zip"), "Fake.docx"),
+            },
+            headers=self._headers("download-route-invalid-docx"),
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["code"], "DOWNLOAD_FILE_INVALID")
+        self.assertEqual(list(self.folder.iterdir()), [])
 
 
 if __name__ == "__main__":

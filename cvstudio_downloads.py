@@ -16,6 +16,7 @@ import re
 import subprocess
 import threading
 from typing import BinaryIO, Callable
+import zipfile
 
 
 DOWNLOAD_KINDS = ("formatted", "blind")
@@ -354,6 +355,17 @@ class LocalDownloadService:
             os.fsync(handle.fileno())
             handle.close()
             handle = None
+            try:
+                with zipfile.ZipFile(destination, "r") as archive:
+                    names = set(archive.namelist())
+                    required = {"[Content_Types].xml", "word/document.xml"}
+                    if not required.issubset(names):
+                        raise zipfile.BadZipFile("required DOCX parts are missing")
+            except (OSError, zipfile.BadZipFile, zipfile.LargeZipFile) as exc:
+                raise DownloadFolderError(
+                    "DOWNLOAD_FILE_INVALID",
+                    "The generated CV Word file is invalid.",
+                ) from exc
             completed = True
         except DownloadFolderError:
             raise
@@ -490,7 +502,9 @@ class LocalDownloadService:
                 "CV Studio could not open the system folder picker.",
                 status=503,
             )
-        selected = str(process.stdout or "").strip().rstrip("/\\")
+        # Remove only the process line ending. Path-significant separators (and
+        # legal macOS leading/trailing spaces) must remain untouched.
+        selected = str(process.stdout or "").rstrip("\r\n")
         if not selected:
             return None
         return selected

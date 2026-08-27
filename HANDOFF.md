@@ -288,8 +288,16 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   it through the guarded enable route, while a successful `INSTALL.bat` carries
   an already-enabled entry to the new root. Unknown Run commands are left
   untouched, and disabling Startup removes a recognized stale CV Studio entry.
+  The PR review corrective makes that repair strictly stale-only: another
+  existing installation is reported but never taken over or disabled by a
+  preview. Download preparation now refreshes local folder status and stops if
+  that check fails, so an unknown state cannot silently become Browser
+  Downloads. Native selection preserves Windows/UNC/macOS filesystem roots;
+  the save service validates the real DOCX ZIP container and required Word
+  parts; and malformed nested Blind-CV AI JSON is left unchanged rather than
+  escaping as a generic 500.
   The sealed route contract is intentionally re-baselined from 116 to 118.
-  Final validation after the native/startup corrections: 1008 tests passed, 4 skipped
+  Final validation after the PR review corrections: 1015 tests passed, 4 skipped
   and 96 subtests; all 20 frontend fixtures; 24-assertion live source smoke;
   repository consistency; and Windows Antiword/Tesseract/adm-zip protected-
   source preflight.

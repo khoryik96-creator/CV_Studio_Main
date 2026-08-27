@@ -110,6 +110,24 @@ class CvStartupStaleRegistrationTests(unittest.TestCase):
         )
         self.assertEqual(fake.set_values[0][2], expected)
 
+    def test_status_does_not_take_over_another_existing_installation(self):
+        with tempfile.TemporaryDirectory(prefix="cvstudio-other-install-") as td:
+            launcher = Path(td) / "START_HIDDEN.vbs"
+            launcher.write_text("Option Explicit", encoding="utf-8")
+            command = 'wscript.exe "{}"'.format(launcher)
+            fake = _FakeWinreg(command)
+            platform_patch, module_patch = self._windows(fake)
+            with platform_patch, module_patch:
+                payload = self.service.status()
+                disabled = self.service.disable()
+        self.assertFalse(payload["enabled"])
+        self.assertFalse(payload["configured"])
+        self.assertFalse(payload["repair_required"])
+        self.assertTrue(payload["other_installation"])
+        self.assertEqual(disabled, {"ok": True})
+        self.assertFalse(fake.deleted)
+        self.assertEqual(fake.value, command)
+
     def test_disable_removes_old_managed_path_but_not_an_unknown_command(self):
         managed = _FakeWinreg('wscript.exe "C:\\Old\\START_HIDDEN.vbs"')
         platform_patch, module_patch = self._windows(managed)
