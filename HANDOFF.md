@@ -282,8 +282,14 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   and the Python process writes each DOCX with exclusive non-overwriting names.
   Browser Downloads is used only when no custom folder is configured; a failed
   configured-folder write stops visibly instead of placing the file elsewhere.
+  The branch also repairs the product-owned Windows startup registration when
+  it still targets a moved/deleted CV Studio folder: Settings recognizes only
+  the exact historical `wscript.exe "...\\START_HIDDEN.vbs"` form and rebinds
+  it through the guarded enable route, while a successful `INSTALL.bat` carries
+  an already-enabled entry to the new root. Unknown Run commands are left
+  untouched, and disabling Startup removes a recognized stale CV Studio entry.
   The sealed route contract is intentionally re-baselined from 116 to 118.
-  Final validation after the native correction: 1003 tests passed, 4 skipped
+  Final validation after the native/startup corrections: 1008 tests passed, 4 skipped
   and 96 subtests; all 20 frontend fixtures; 24-assertion live source smoke;
   repository consistency; and Windows Antiword/Tesseract/adm-zip protected-
   source preflight.

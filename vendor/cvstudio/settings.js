@@ -563,18 +563,24 @@ async function loadStartupStatus() {
     var cb = document.getElementById('startupToggle');
     var lb = document.getElementById('startupLabel');
     if (cb) cb.checked = !!d.enabled;
+    if (d.repair_required) {
+      if (lb) lb.textContent = 'Repairing…';
+      await setStartup(true, { repair: true });
+      return;
+    }
     if (lb) lb.textContent = d.enabled ? 'On' : 'Off';
   } catch(e) {}
 }
 
-async function setStartup(enable) {
+async function setStartup(enable, options) {
+  options = options || {};
   var lb = document.getElementById('startupLabel');
   try {
     var r = await fetch(enable ? '/startup/enable' : '/startup/disable', { method: 'POST' });
     var d = await r.json();
     if (d.ok) {
       if (lb) lb.textContent = enable ? 'On' : 'Off';
-      showToast(enable ? '✅ CV Studio will launch at Windows startup' : '✅ Startup launch disabled', 'ok');
+      showToast(options.repair ? '✅ Windows startup location updated' : (enable ? '✅ CV Studio will launch at Windows startup' : '✅ Startup launch disabled'), 'ok');
     } else {
       if (lb) lb.textContent = enable ? 'Off' : 'On';
       var cb = document.getElementById('startupToggle');

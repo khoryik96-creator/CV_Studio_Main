@@ -12,6 +12,22 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class NodeInstallerDependencyTests(unittest.TestCase):
+    def test_successful_install_moves_an_existing_startup_entry_to_new_root(self):
+        installer = (ROOT / "INSTALL_CORE.ps1").read_text(encoding="utf-8-sig")
+        function = installer.split(
+            "function Repair-CvStudioStartupRegistration {", 1
+        )[1].split("function Get-DesktopCvStudioShortcutPath {", 1)[0]
+
+        self.assertIn("$valueName = 'GUOLabCVStudio'", function)
+        self.assertIn("START_HIDDEN\\.vbs", function)
+        self.assertIn("Set-ItemProperty", function)
+        self.assertIn("was left unchanged", function)
+        self.assertIn("Repair-CvStudioStartupRegistration | Out-Null", installer)
+        self.assertLess(
+            installer.index("if ($ok) {\n    Create-Shortcut -Phase 'final'"),
+            installer.index("Repair-CvStudioStartupRegistration | Out-Null"),
+        )
+
     def test_fresh_source_does_not_run_noisy_require_probe_before_install(self):
         installer = (ROOT / "INSTALL_CORE.ps1").read_text(encoding="utf-8-sig")
         function = installer.split("function Install-NodePackages {", 1)[1].split(

@@ -293,6 +293,33 @@ function Create-Shortcut {
     return $false
 }
 
+function Repair-CvStudioStartupRegistration {
+    # Preserve an existing enabled CV Studio startup preference when a release
+    # is installed from a new folder. Only the product-owned Run value and the
+    # exact historical wscript + START_HIDDEN.vbs shape are eligible.
+    $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+    $valueName = 'GUOLabCVStudio'
+    try {
+        $current = [string](Get-ItemPropertyValue -LiteralPath $runKey -Name $valueName -ErrorAction Stop)
+    } catch {
+        return $true
+    }
+    $expected = 'wscript.exe "{0}"' -f (Join-Path $Root 'START_HIDDEN.vbs')
+    if ($current.Trim() -ieq $expected) { return $true }
+    if ($current -notmatch '(?i)^\s*(?:"(?:[^"\r\n]*[\\/])?wscript(?:\.exe)?"|(?:[^\s"\r\n]*[\\/])?wscript(?:\.exe)?)\s+"[^"\r\n]+[\\/]START_HIDDEN\.vbs"\s*$') {
+        Write-Step '    WARNING: The Windows startup value is not a recognized CV Studio command and was left unchanged.'
+        return $true
+    }
+    try {
+        Set-ItemProperty -LiteralPath $runKey -Name $valueName -Value $expected -Type String -ErrorAction Stop
+        Write-Step "    Windows startup location updated to this CV Studio folder."
+        return $true
+    } catch {
+        Write-Step "    WARNING: Windows startup location could not be updated: $($_.Exception.Message)"
+        return $false
+    }
+}
+
 $script:UpdateStateDir = Join-Path $env:LOCALAPPDATA 'TheGuoLab\CVStudio'
 $script:UpdateStatePath = Join-Path $script:UpdateStateDir 'update_state.json'
 $script:GlobalReceiptPath = Join-Path $script:UpdateStateDir 'install_receipt.json'
@@ -1468,6 +1495,7 @@ if ($ok) {
 
 if ($ok) {
     Create-Shortcut -Phase 'final' | Out-Null
+    Repair-CvStudioStartupRegistration | Out-Null
     Create-RestoreShortcut -Context $script:RollbackContext
     Refresh-IconCache
     Add-DefenderExclusion

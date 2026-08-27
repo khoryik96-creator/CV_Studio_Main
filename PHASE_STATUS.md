@@ -86,7 +86,13 @@
   folder is configured; a configured-folder failure stops visibly and cannot
   silently place the file elsewhere. Separate Formatted/Blind paths remain
   private local runtime state and are excluded from local-data exports.
-- Final validation after the native correction: 1003 tests passed, 4 skipped
+- A stale product-owned Windows startup entry can no longer keep launching a
+  deleted previous folder. Settings identifies only the exact historical
+  `wscript.exe "...\\START_HIDDEN.vbs"` form and rebinds it through the guarded
+  Startup enable route. A successful installation also moves an already-enabled
+  entry to the new root. Unknown Run commands remain untouched, and disabling
+  Startup removes a recognized stale CV Studio entry.
+- Final validation after the native/startup corrections: 1008 tests passed, 4 skipped
   and 96 subtests; all 20 frontend fixtures; 24 live source-smoke assertions;
   repository consistency; and the Windows Antiword/Tesseract/adm-zip
   protected-source preflight.

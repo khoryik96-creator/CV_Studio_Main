@@ -164,11 +164,39 @@ async function batchModeContract() {
   assert.strictEqual(saveCalls[0].kind,'formatted');
 }
 
+async function staleStartupRegistrationRepairContract() {
+  const nodes={
+    startupToggle:{checked:false},
+    startupLabel:{textContent:''},
+  };
+  const requests=[];
+  const toasts=[];
+  const context={
+    Promise,
+    document:{getElementById(id){return nodes[id] || null;}},
+    async fetch(path,options){
+      requests.push({path,options:options || {}});
+      if(path==='/startup/status')return {async json(){return {enabled:true,configured:false,repair_required:true};}};
+      if(path==='/startup/enable')return {async json(){return {ok:true};}};
+      throw new Error('Unexpected request: '+path);
+    },
+    showToast(message,level){toasts.push({message,level});},
+  };
+  loadFunctions(context,['setStartup','loadStartupStatus']);
+  await context.loadStartupStatus();
+  assert.strictEqual(nodes.startupToggle.checked,true);
+  assert.strictEqual(nodes.startupLabel.textContent,'On');
+  assert.deepStrictEqual(requests.map((item)=>item.path),['/startup/status','/startup/enable']);
+  assert.strictEqual(requests[1].options.method,'POST');
+  assert.ok(toasts[0].message.includes('startup location updated'));
+}
+
 Promise.resolve()
   .then(markupAndWiringContract)
   .then(filenameSafetyContract)
   .then(nativeFolderSaveAndFallbackContract)
   .then(nativeSelectionAndFullPathPreviewContract)
   .then(batchModeContract)
+  .then(staleStartupRegistrationRepairContract)
   .then(()=>console.log('CV download folder frontend fixtures passed'))
   .catch((error)=>{console.error(error);process.exit(1);});
