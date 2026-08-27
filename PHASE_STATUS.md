@@ -65,6 +65,11 @@
   than overwriting an existing file. Unsupported, denied or failed folder
   access falls back to the established browser Downloads mechanism, including
   its existing spaced batch-download behavior.
+- The post-review corrective preserves the complete numbered suffix when a
+  near-limit filename must be shortened and fails safe rather than overwriting
+  after the bounded collision search. Batch results retain their processing
+  mode, so changing the visible Format All / Blind All selection after a run
+  cannot redirect completed files to the other destination.
 - Only formatted/blinded CV DOCX downloads change. Reports, CSVs, diagnostics
   and every other export remain unchanged. No route, schema, dependency,
   credential, paid/AI/external call, CV content/formatting or protected-build

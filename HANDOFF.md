@@ -254,7 +254,11 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   local IndexedDB handle storage are used without exposing the full path.
   Existing files receive a numbered filename instead of being overwritten.
   Unsupported, expired or denied folder access visibly falls back to the
-  established browser Downloads behavior. Only CV DOCX downloads change; no
+  established browser Downloads behavior. The post-review corrective reserves
+  suffix space before shortening a long filename, so `(1)` cannot be truncated
+  into an overwrite, and records the mode that produced each batch file so a
+  later Format/Blind tab switch cannot redirect it to the wrong folder. Only CV
+  DOCX downloads change; no
   route, schema, dependency, credential, AI/external-call, CV-content or
   protected-build-trigger boundary changes. Validation: 984 tests passed, 4
   skipped and 96 subtests; all 20 frontend fixtures; 24-assertion live source

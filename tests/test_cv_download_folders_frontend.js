@@ -51,8 +51,10 @@ function markupAndWiringContract() {
 
   const batchOne = functionSource(html, 'downloadSingleBatchFile');
   const batchAll = functionSource(html, 'downloadBatchZip');
-  assert.ok(batchOne.includes("_batchMode === 'blind' ? 'blind' : 'formatted'"));
-  assert.ok(batchAll.includes("_batchMode === 'blind' ? 'blind' : 'formatted'"));
+  assert.ok(batchOne.includes('item.kind || bf.downloadKind'));
+  assert.ok(batchAll.includes('firstItem.kind'));
+  assert.ok(!batchOne.includes('_batchMode'));
+  assert.ok(!batchAll.includes('_batchMode'));
   assert.ok(batchOne.includes('cvStudioSaveDownloadBlob'));
   assert.ok(batchAll.includes('cvStudioPrepareDownloadDestination'));
 }
@@ -141,9 +143,47 @@ async function directFolderAndFallbackContract() {
   assert.deepStrictEqual(revoked, ['blob:fallback']);
 }
 
+async function longDuplicateAndBatchModeContract() {
+  const filenameContext = {String, Math, Date, Promise};
+  loadFunctions(filenameContext, ['cvStudioSafeDownloadFilename', 'cvStudioUniqueDownloadFilename']);
+  const longName = filenameContext.cvStudioSafeDownloadFilename('Hyppies CV - ' + 'X'.repeat(220) + '.docx');
+  assert.strictEqual(longName.length, 180);
+  const checked = [];
+  const longHandle = {
+    async getFileHandle(name) {
+      checked.push(name);
+      if (name === longName) return {name};
+      const error = new Error('missing'); error.name = 'NotFoundError'; throw error;
+    },
+  };
+  const numbered = await filenameContext.cvStudioUniqueDownloadFilename(longHandle, longName);
+  assert.notStrictEqual(numbered, longName);
+  assert.ok(numbered.endsWith(' (1).docx'));
+  assert.ok(numbered.length <= 180);
+  assert.deepStrictEqual(checked.slice(0, 2), [longName, numbered]);
+
+  const saveCalls = [];
+  const batchContext = {
+    _batchMode: 'blind',
+    _batchFiles: [{id:'formatted-row', filename:'Formatted.docx', status:'done-ok', downloadKind:'formatted'}],
+    _batchBlobs: [{filename:'Formatted.docx', blob:{id:1}, kind:'formatted'}],
+    cvStudioSaveDownloadBlob: async (blob, filename, kind) => { saveCalls.push({blob, filename, kind}); return {method:'folder', filename, folder:'Formatted'}; },
+    cvStudioPrepareDownloadDestination: async (kind) => ({kind, handle:{name:'Formatted'}}),
+    showToast(){},
+    setTimeout(fn){ fn(); },
+  };
+  loadFunctions(batchContext, ['downloadSingleBatchFile', 'downloadBatchZip']);
+  await batchContext.downloadSingleBatchFile('formatted-row');
+  assert.strictEqual(saveCalls[0].kind, 'formatted');
+  saveCalls.length = 0;
+  await batchContext.downloadBatchZip();
+  assert.strictEqual(saveCalls[0].kind, 'formatted');
+}
+
 Promise.resolve()
   .then(markupAndWiringContract)
   .then(filenameSafetyContract)
   .then(directFolderAndFallbackContract)
+  .then(longDuplicateAndBatchModeContract)
   .then(() => console.log('CV download folder frontend fixtures passed'))
   .catch((error) => { console.error(error); process.exit(1); });

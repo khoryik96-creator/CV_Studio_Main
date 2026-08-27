@@ -324,9 +324,16 @@ async function cvStudioUniqueDownloadFilename(handle, filename) {
   var dot = safe.lastIndexOf('.');
   var extension = dot > 0 ? safe.slice(dot) : '';
   var stem = dot > 0 ? safe.slice(0, dot) : safe;
+  function withSuffix(suffix) {
+    suffix = String(suffix || '');
+    var maxStemLength = Math.max(1, 180 - extension.length - suffix.length);
+    var shortenedStem = stem.slice(0, maxStemLength).replace(/[. ]+$/g, '');
+    if (!shortenedStem) shortenedStem = 'CV Studio download'.slice(0, maxStemLength);
+    return cvStudioSafeDownloadFilename(shortenedStem + suffix + extension);
+  }
   for (var index = 0; index < 1000; index += 1) {
     var suffix = index ? ' (' + index + ')' : '';
-    var candidate = cvStudioSafeDownloadFilename(stem + suffix + extension);
+    var candidate = withSuffix(suffix);
     try {
       await handle.getFileHandle(candidate);
     } catch(error) {
@@ -334,7 +341,18 @@ async function cvStudioUniqueDownloadFilename(handle, filename) {
       throw error;
     }
   }
-  return cvStudioSafeDownloadFilename(stem + ' - ' + new Date().toISOString().replace(/[:.]/g, '-') + extension);
+  var timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  for (var attempt = 0; attempt < 100; attempt += 1) {
+    var fallbackSuffix = ' - ' + timestamp + (attempt ? '-' + attempt : '');
+    var fallbackCandidate = withSuffix(fallbackSuffix);
+    try {
+      await handle.getFileHandle(fallbackCandidate);
+    } catch(error2) {
+      if (error2 && error2.name === 'NotFoundError') return fallbackCandidate;
+      throw error2;
+    }
+  }
+  throw new Error('Could not find an unused filename in the selected folder');
 }
 
 async function cvStudioPrepareDownloadDestination(kind) {

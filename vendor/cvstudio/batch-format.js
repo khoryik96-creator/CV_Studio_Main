@@ -409,10 +409,11 @@ async function runBatch() {
 
       bf.cvData   = cvData;
       bf.filename = fname;
+      bf.downloadKind = isBlind ? 'blind' : 'formatted';
       bf.progPct  = donePct;
       bf.progSteps = makeSteps(99); // all done
       bf.status   = isBlind ? 'done-blind' : 'done-ok';
-      _batchBlobs.push({ filename: fname, blob: blob });
+      _batchBlobs.push({ filename: fname, blob: blob, kind: bf.downloadKind });
       bf._docxBlob = blob; // store for manual email upload
       // Record to stats
       bf._statsRecordId = statsRecord(displayName, isBlind ? 'blind' : 'format', bf.cost, route.model, '', route.provider, statsMetaFromResponse({usage:bf.usage,cost:bf.cost,model:route.model,provider:route.provider}, route.model, route.provider)); // exact row URL is attached after upload
@@ -508,7 +509,7 @@ async function downloadSingleBatchFile(id) {
   if (!bf || !bf.filename) { showToast('File not ready', 'err'); return; }
   var item = _batchBlobs.find(function(b) { return b.filename === bf.filename; });
   if (!item) { showToast('File not found in memory', 'err'); return; }
-  var kind = _batchMode === 'blind' ? 'blind' : 'formatted';
+  var kind = item.kind || bf.downloadKind || (bf.status === 'done-blind' ? 'blind' : 'formatted');
   var result = await cvStudioSaveDownloadBlob(item.blob, item.filename, kind);
   if (result.method === 'folder') showToast('Saved ' + result.filename + ' to ' + (result.folder || 'the selected folder') + '.', 'ok');
   else showToast('Downloaded ' + result.filename + ' using the browser Downloads folder.', 'ok');
@@ -516,7 +517,9 @@ async function downloadSingleBatchFile(id) {
 
 async function downloadBatchZip() {
   if (_batchBlobs.length === 0) { showToast('No processed files to download', 'err'); return; }
-  var kind = _batchMode === 'blind' ? 'blind' : 'formatted';
+  var firstItem = _batchBlobs[0];
+  var firstFile = _batchFiles.find(function(file){ return file.filename === firstItem.filename; });
+  var kind = firstItem.kind || (firstFile && firstFile.downloadKind) || (firstFile && firstFile.status === 'done-blind' ? 'blind' : 'formatted');
   var destination = await cvStudioPrepareDownloadDestination(kind);
   if (!destination.handle) {
     _batchBlobs.forEach(function(item, index) {
