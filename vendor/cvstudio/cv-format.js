@@ -552,7 +552,7 @@ async function downloadDocx() {
   }
   var result = await cvStudioSaveDownloadBlob(window._docxBlob, name, window._isBlind ? 'blind' : 'formatted');
   if (result.method === 'folder') showToast('Saved ' + result.filename + ' to ' + (result.folder || 'the selected folder') + '.', 'ok');
-  else if (result.configured) showToast('Selected folder was not used because ' + result.fallbackReason + '. Downloaded ' + result.filename + ' using browser Downloads.', 'err');
+  else if (result.configured) showToast('Download was not saved: ' + result.fallbackReason + '. Check or choose the folder in Settings → Downloads.', 'err');
   else showToast('Downloaded ' + result.filename + ' using the browser Downloads folder.', 'ok');
 }
 

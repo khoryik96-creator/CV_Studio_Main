@@ -20,8 +20,8 @@ traps that the code alone won't warn you about.
 `app.py` ends with `_finalize_modular_monolith_app(...)`, which hard-asserts at
 import time:
 
-- `expected_route_count = 116`
-- `expected_route_contract_sha256 = "855e04d56c550c35739c70d2dc8d35fc9d2b37d35f76453b7f3d472cf702d18e"`
+- `expected_route_count = 118`
+- `expected_route_contract_sha256 = "42768445b8fe97e48688238c02bebf5abce0251befc3d212c2d2b029911f7862"`
 - 5 before-request guards, in this exact order:
   `_assign_cvstudio_request_id`, `_reject_declared_oversize_request`,
   `_reject_non_local_host_header`, `_require_ai_spend_browser_session`,
@@ -30,7 +30,7 @@ import time:
 
 If you add, remove, or rename **any** route, the app refuses to boot until you
 recompute the SHA and bump the count in `app.py` **and** in the ~12 test files
-that pin `116` / the SHA (`tests/test_phase7a_*`, `tests/test_phase5b_*`, etc.).
+that pin `118` / the SHA (`tests/test_phase7a_*`, `tests/test_phase5b_*`, etc.).
 If you are not touching routes, leave all of this alone.
 
 ## 2. Architecture and module extractions
@@ -261,9 +261,11 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   restores an exact matching original section/list container shape using only
   already-blinded provider text and normalizes it before preview/export. A
   mismatch is left untouched, and no unblinded source wording or unknown field
-  can be copied into the output. Focused regressions use no paid AI call. No
-  route, schema, dependency, credential, paid-call-count or protected-package
-  boundary changes. Validation: 990 tests passed, 4 skipped and 96 subtests;
+  can be copied into the output. Focused regressions use no paid AI call. The
+  later native-download corrective adds two local routes and one packaged
+  source module, but no storage-schema migration, credential, paid-call-count
+  or package target change. Earlier validation: 990 tests passed, 4 skipped
+  and 96 subtests;
   all 20 frontend fixtures; 24-assertion live source smoke; 142 Python, 71
   JavaScript, 9 PowerShell and 5 POSIX-shell syntax checks; repository
   consistency; and the Windows Antiword/Tesseract/adm-zip protected-source
@@ -272,7 +274,19 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   shows the real selected folder name, the exact last-saved filename and a
   Check access action, and any selected-folder failure identifies the actual
   browser-Downloads fallback instead of silently appearing to ignore the
-  selection. The browser does not disclose the absolute filesystem path.
+  selection. Owner testing then confirmed the embedded Codex browser still
+  refused some directory-handle writes. The v24.6.362 follow-up therefore adds
+  `cvstudio_downloads.py` and two guarded local routes: Settings opens the
+  native Windows/macOS folder picker, stores separate Formatted/Blind paths
+  only in private runtime state, shows the full configured and last-saved path,
+  and the Python process writes each DOCX with exclusive non-overwriting names.
+  Browser Downloads is used only when no custom folder is configured; a failed
+  configured-folder write stops visibly instead of placing the file elsewhere.
+  The sealed route contract is intentionally re-baselined from 116 to 118.
+  Final validation after the native correction: 1003 tests passed, 4 skipped
+  and 96 subtests; all 20 frontend fixtures; 24-assertion live source smoke;
+  repository consistency; and Windows Antiword/Tesseract/adm-zip protected-
+  source preflight.
 - **Updater preflight-output corrective — v24.6.359 / PR #179, MERGED.** PR
   #179 merged to `master` as `a20b7f9`. It keeps the
   downloaded preflight's visible diagnostic output out of the PowerShell

@@ -139,7 +139,7 @@ class Phase4BackendModularizationCharacterizationTests(unittest.TestCase):
 
     def test_selected_route_methods_endpoints_and_global_boundaries_are_exact(self):
         rules = {rule.rule: rule for rule in app.app.url_map.iter_rules()}
-        self.assertEqual(len(rules), 116)
+        self.assertEqual(len(rules), 118)
         for path, (methods, endpoint) in _SELECTED_ROUTES.items():
             self.assertIn(path, rules)
             self.assertEqual(rules[path].methods & {"GET", "POST"}, methods)

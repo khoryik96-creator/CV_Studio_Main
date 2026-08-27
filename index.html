@@ -628,7 +628,7 @@
       <div class="settings-pane" id="settingsPaneDownloads">
         <div style="display:flex;flex-direction:column;gap:12px;">
           <div style="font-size:11px;color:var(--text3);line-height:1.5;padding:10px 12px;border:1px solid #bfdbfe;background:#eff6ff;border-radius:10px;">
-            Choose where CV Studio saves Word files. Your browser keeps the full folder path private, and may ask you to confirm access again after a restart. If direct folder access is unavailable, CV Studio safely uses the browser's normal Downloads folder instead.
+            Choose where CV Studio saves Word files. CV Studio's local process remembers and writes to the exact folder shown below, including after a restart. If no folder is configured, the browser's normal Downloads folder is used.
           </div>
 
           <div style="border:1px solid var(--border);background:var(--surface);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:9px;">
@@ -665,7 +665,7 @@
             </div>
           </div>
 
-          <div style="font-size:10.5px;color:var(--text3);line-height:1.45;">The same folder can be used for both. Existing files are not overwritten; CV Studio adds <b>(1)</b>, <b>(2)</b>, and so on when needed. For privacy, browsers expose only the selected folder name—not its full Windows path. Folder access is stored only in this browser and is not included in local-data exports.</div>
+          <div style="font-size:10.5px;color:var(--text3);line-height:1.45;">The same folder can be used for both. Existing files are not overwritten; CV Studio adds <b>(1)</b>, <b>(2)</b>, and so on when needed. The folder paths are stored only in CV Studio's private local runtime state and are not included in local-data exports.</div>
           <div id="cvDownloadFolderSupport" style="display:none;font-size:11px;color:#92400e;line-height:1.45;padding:9px 10px;border:1px solid #f59e0b;background:#fffbeb;border-radius:9px;"></div>
         </div>
       </div><!-- /settingsPaneDownloads -->

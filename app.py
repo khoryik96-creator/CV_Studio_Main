@@ -256,6 +256,7 @@ from cvstudio_jobs import (
     PersistentJobStore,
     deterministic_job_id,
 )
+from cvstudio_downloads import DownloadFolderError, LocalDownloadService
 from cvstudio_ai_costs import (
     MODEL_PRICING_USD_PER_MILLION as _PHASE5B_MODEL_PRICING,
     cost_details as _phase5b_cost_details,
@@ -425,6 +426,11 @@ _RUNTIME_STATE_DIR = os.path.join(
 _RUNTIME_LOG_PATH = os.environ.get("CVSTUDIO_RUNTIME_LOG_PATH") or os.path.join(_RUNTIME_STATE_DIR, "runtime.log")
 _RUNTIME_PID_PATH = os.path.join(_RUNTIME_STATE_DIR, "cvstudio.{}.pid.json".format(_CVSTUDIO_INSTANCE_ID))
 _RUNTIME_LEGACY_PID_PATH = os.path.join(_RUNTIME_STATE_DIR, "cvstudio.pid.json")
+_CVSTUDIO_DOWNLOAD_FOLDERS_PATH = (
+    os.environ.get("CVSTUDIO_DOWNLOAD_FOLDERS_PATH")
+    or os.path.join(_RUNTIME_STATE_DIR, "download_folders.json")
+)
+_cvstudio_download_service = LocalDownloadService(_CVSTUDIO_DOWNLOAD_FOLDERS_PATH)
 
 
 def _rotate_runtime_log(path):
@@ -1883,6 +1889,63 @@ def instance_id_text():
 @app.route("/ping", methods=["GET"])
 def ping():
     return _CVSTUDIO_RUNTIME_SERVICE.ping()
+
+
+def _cvstudio_download_error(error):
+    return _cvstudio_error_payload(
+        getattr(error, "code", "DOWNLOAD_FOLDER_FAILED"),
+        getattr(error, "public_message", "The local download-folder action failed."),
+        int(getattr(error, "status", 400) or 400),
+        retryable=int(getattr(error, "status", 400) or 400) >= 500,
+        action="choose_download_folder",
+    )
+
+
+@app.route("/downloads/folders", methods=["GET", "POST", "DELETE"])
+def cvstudio_download_folders():
+    try:
+        if request.method == "GET":
+            payload = _cvstudio_download_service.folders()
+            return jsonify({"ok": True, **payload})
+        data = request.get_json(silent=True) or {}
+        kind = data.get("kind")
+        if request.method == "DELETE":
+            folder = _cvstudio_download_service.clear_folder(kind)
+            return jsonify({"ok": True, "kind": str(kind or ""), "folder": folder})
+        action = str(data.get("action") or "select").strip().lower()
+        if action == "select":
+            folder = _cvstudio_download_service.select_folder(kind)
+        elif action == "check":
+            folder = _cvstudio_download_service.check_folder(kind)
+        else:
+            return _cvstudio_error_payload(
+                "DOWNLOAD_FOLDER_ACTION_INVALID",
+                "Choose a supported download-folder action.",
+                400,
+            )
+        return jsonify({"ok": True, "kind": str(kind or ""), "folder": folder})
+    except DownloadFolderError as error:
+        return _cvstudio_download_error(error)
+
+
+@app.route("/downloads/save", methods=["POST"])
+def cvstudio_download_save():
+    upload = request.files.get("file")
+    if upload is None:
+        return _cvstudio_error_payload(
+            "DOWNLOAD_FILE_MISSING",
+            "The generated CV file is missing.",
+            400,
+        )
+    try:
+        result = _cvstudio_download_service.save_file(
+            request.form.get("kind"),
+            request.form.get("filename") or upload.filename,
+            upload.stream,
+        )
+        return jsonify({"ok": True, **result})
+    except DownloadFolderError as error:
+        return _cvstudio_download_error(error)
 
 # ── JobAdder OAuth and protected credential store ────────────────────
 _ja_creds_store = {}
@@ -14297,9 +14360,9 @@ _salary_comparison.init_app(app, url_prefix="/salary-comparison")
 
 _CVSTUDIO_ARCHITECTURE = _finalize_modular_monolith_app(
     app,
-    expected_route_count=116,
+    expected_route_count=118,
     expected_route_contract_sha256=(
-        "855e04d56c550c35739c70d2dc8d35fc9d2b37d35f76453b7f3d472cf702d18e"
+        "42768445b8fe97e48688238c02bebf5abce0251befc3d212c2d2b029911f7862"
     ),
     expected_before_request_handlers=(
         "_assign_cvstudio_request_id",

@@ -103,6 +103,11 @@ DEFAULT_MODULES = (
         ("cvstudio_runtime.py",),
     ),
     ModuleDefinition(
+        "downloads",
+        "domain",
+        ("cvstudio_downloads.py",),
+    ),
+    ModuleDefinition(
         "web_assets",
         "domain",
         ("cvstudio_web_assets.py",),
@@ -303,6 +308,7 @@ DEFAULT_MODULES = (
             "blind_mask",
             "diagnostics",
             "documents",
+            "downloads",
             "external_clients",
             "jobadder_request",
             "jobadder_read",

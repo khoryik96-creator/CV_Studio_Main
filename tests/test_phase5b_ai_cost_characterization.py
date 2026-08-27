@@ -101,7 +101,7 @@ class Phase5BAICostCharacterizationTests(unittest.TestCase):
 
     def test_paid_route_helper_confirmation_and_global_guard_inventory(self):
         rules = {rule.rule: rule for rule in app.app.url_map.iter_rules()}
-        self.assertEqual(len(rules), 116)
+        self.assertEqual(len(rules), 118)
         self.assertEqual(app._AI_SPEND_EXACT_PATHS, frozenset(_PAID_BROWSER_ROUTE_CONTRACTS))
         for path, (methods, endpoint) in _PAID_BROWSER_ROUTE_CONTRACTS.items():
             self.assertEqual(rules[path].methods & {"GET", "POST"}, methods)

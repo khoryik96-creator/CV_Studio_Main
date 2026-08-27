@@ -67,18 +67,29 @@
 - Established generic source labels (`Implementation`, `Support`, `Rollout`,
   and `Activities Description`) render as unbulleted section headings with
   their following duties as real bullets.
-- No route, schema, dependency, credential, paid-call-count or protected-build
-  boundary changes. Validation: 990 tests passed, 4 skipped and 96 subtests;
+- The native download-folder corrective intentionally adds two guarded local
+  routes and re-baselines the sealed route contract from 116 to 118. It adds no
+  storage-schema migration, credential, AI/external call or package target.
+  Earlier validation passed 990 tests, 4 skipped and 96 subtests;
   all 20 frontend fixtures; 24-assertion live source smoke; 142 Python, 71
   JavaScript, 9 PowerShell and 5 POSIX-shell syntax checks; repository
   consistency; and the Windows Antiword/Tesseract/adm-zip protected-source
   preflight.
-- Preview follow-up for the merged Downloads feature requests write access
-  while the folder picker still has a direct user gesture, shows the real
-  selected folder name and exact last-saved filename, adds a Check access
-  action to Settings, and reports why a configured folder fell back to browser
-  Downloads instead of hiding the failure. Browsers expose only the folder
-  name, never the full Windows path.
+- Preview follow-up for the merged Downloads feature first requested browser
+  write access while the picker had a direct user gesture. Owner testing proved
+  that the Codex embedded browser could still ignore that directory handle and
+  put the file in Browser Downloads. The current correction moves configured
+  paths and writes into the local `cvstudio_downloads.py` service. Settings now
+  opens the native Windows/macOS folder picker, displays the full configured and
+  last-saved path, checks actual write access, and saves DOCX files with
+  exclusive numbered names. Browser Downloads is used only when no custom
+  folder is configured; a configured-folder failure stops visibly and cannot
+  silently place the file elsewhere. Separate Formatted/Blind paths remain
+  private local runtime state and are excluded from local-data exports.
+- Final validation after the native correction: 1003 tests passed, 4 skipped
+  and 96 subtests; all 20 frontend fixtures; 24 live source-smoke assertions;
+  repository consistency; and the Windows Antiword/Tesseract/adm-zip
+  protected-source preflight.
 
 ## v24.6.361 CV download folders (merged through PR #182)
 

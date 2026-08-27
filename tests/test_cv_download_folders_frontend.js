@@ -2,12 +2,14 @@
 
 const assert = require('assert');
 const vm = require('vm');
-
 const html = require('./frontend_sources').frontendSource();
 
 function functionSource(source, name) {
-  const asyncStart = source.indexOf('async function ' + name + '(');
-  const start = asyncStart >= 0 ? asyncStart : source.indexOf('function ' + name + '(');
+  const asyncStart = source.lastIndexOf('async function ' + name + '(');
+  const regularStart = source.lastIndexOf('function ' + name + '(');
+  const start = asyncStart >= 0 && regularStart === asyncStart + 6
+    ? asyncStart
+    : Math.max(asyncStart, regularStart);
   assert.ok(start >= 0, 'missing function: ' + name);
   let brace = source.indexOf('{', start), depth = 0, quote = '', escaped = false;
   for (let i = brace; i < source.length; i += 1) {
@@ -42,17 +44,15 @@ function markupAndWiringContract() {
   assert.ok(html.includes("cvStudioChooseDownloadDirectory('blind')"));
   assert.ok(html.includes("cvStudioVerifyDownloadDirectory('formatted')"));
   assert.ok(html.includes("cvStudioVerifyDownloadDirectory('blind')"));
-  assert.ok(html.includes('browsers expose only the selected folder name'));
+  assert.ok(html.includes("CV Studio's private local runtime state"));
   assert.ok(html.includes('The same folder can be used for both'));
+  assert.ok(!html.includes('browsers expose only the selected folder name'));
 
   const showSettings = functionSource(html, 'showSettingsTab');
   assert.ok(showSettings.includes("downloads:'Downloads'"));
   assert.ok(showSettings.includes("'downloads'"));
-  assert.ok(showSettings.includes("renderCvDownloadSettings"));
-
-  const single = functionSource(html, 'downloadDocx');
-  assert.ok(single.includes("window._isBlind ? 'blind' : 'formatted'"));
-  assert.ok(single.includes('cvStudioSaveDownloadBlob'));
+  assert.ok(showSettings.includes('renderCvDownloadSettings'));
+  assert.ok(functionSource(html, 'downloadDocx').includes('cvStudioSaveDownloadBlob'));
 
   const batchOne = functionSource(html, 'downloadSingleBatchFile');
   const batchAll = functionSource(html, 'downloadBatchZip');
@@ -73,202 +73,102 @@ function filenameSafetyContract() {
   assert.ok(context.cvStudioSafeDownloadFilename('x'.repeat(240) + '.docx').length <= 180);
 }
 
-async function directFolderAndFallbackContract() {
-  const clicked = [];
-  const revoked = [];
-  const renderedDestinations = [];
-  const body = {appendChild(){}, removeChild(){}};
+async function nativeFolderSaveAndFallbackContract() {
+  const clicked = [], revoked = [], requests = [];
+  let saveSucceeds = true;
   const context = {
     String, Math, Date, Promise,
-    window: {},
-    document: {
-      body,
-      createElement() {
-        return {click(){ clicked.push({href:this.href, download:this.download}); }, remove(){}};
-      },
-    },
-    URL: {
-      createObjectURL(){ return 'blob:fallback'; },
-      revokeObjectURL(value){ revoked.push(value); },
-    },
-    setTimeout(fn){ fn(); },
-    showToast(){},
-    cvStudioRenderDownloadDirectory(){ return Promise.resolve(true); },
-    cvStudioRenderDownloadDestination(kind, handle){ renderedDestinations.push({kind, handle}); },
-    _cvDownloadDirectoryCache: {},
-    _cvDownloadLastResult: {},
-  };
-  loadFunctions(context, [
-    'normalizeCvDownloadDestination',
-    'cvStudioSafeDownloadFilename',
-    'cvStudioFallbackDownloadBlob',
-    'cvStudioUniqueDownloadFilename',
-    'cvStudioDirectoryWritePermission',
-    'cvStudioDownloadFallbackReason',
-    'cvStudioPrepareDownloadDestination',
-    'cvStudioSaveDownloadBlob',
-  ]);
-
-  assert.strictEqual(context.normalizeCvDownloadDestination('blind'), 'blind');
-  assert.strictEqual(context.normalizeCvDownloadDestination('anything'), 'formatted');
-
-  const writes = [];
-  const handle = {
-    kind: 'directory',
-    name: 'CV Output',
-    async queryPermission(){ return 'granted'; },
-    async getFileHandle(name, options) {
-      if (!options && name === 'Hyppies CV.docx') return {name};
-      if (!options) { const error = new Error('missing'); error.name = 'NotFoundError'; throw error; }
-      return {
-        async createWritable() {
-          return {
-            async write(blob){ writes.push({name, blob}); },
-            async close(){ writes.push({closed:name}); },
-            async abort(){ writes.push({aborted:name}); },
-          };
-        },
-      };
-    },
-  };
-  context.cvStudioGetDownloadDirectory = async () => handle;
-  const blob = {fixture:true};
-  const saved = await context.cvStudioSaveDownloadBlob(blob, 'Hyppies CV.docx', 'formatted');
-  assert.strictEqual(saved.method, 'folder');
-  assert.strictEqual(saved.filename, 'Hyppies CV (1).docx');
-  assert.deepStrictEqual(writes[0], {name:'Hyppies CV (1).docx', blob});
-  assert.strictEqual(clicked.length, 0);
-  assert.deepStrictEqual(context._cvDownloadLastResult.formatted, saved);
-  assert.strictEqual(renderedDestinations[0].handle, handle);
-
-  const denied = {
-    kind: 'directory', name: 'Denied',
-    async queryPermission(){ return 'denied'; },
-    async requestPermission(){ return 'denied'; },
-  };
-  context.cvStudioGetDownloadDirectory = async () => denied;
-  const fallback = await context.cvStudioSaveDownloadBlob(blob, 'Fallback.docx', 'blind');
-  assert.strictEqual(fallback.method, 'browser');
-  assert.strictEqual(clicked.length, 1);
-  assert.strictEqual(clicked[0].download, 'Fallback.docx');
-  assert.deepStrictEqual(revoked, ['blob:fallback']);
-  assert.strictEqual(fallback.configured, true);
-  assert.strictEqual(fallback.fallbackReason, 'write permission was not granted');
-  assert.deepStrictEqual(context._cvDownloadLastResult.blind, fallback);
-
-  const failedWrite = {
-    kind: 'directory', name: 'Read only',
-    async queryPermission(){ return 'granted'; },
-    async getFileHandle(name, options) {
-      if (!options) { const error = new Error('missing'); error.name = 'NotFoundError'; throw error; }
-      return {async createWritable(){ const error = new Error('blocked'); error.name = 'NotAllowedError'; throw error; }};
-    },
-  };
-  context.cvStudioGetDownloadDirectory = async () => failedWrite;
-  const writeFallback = await context.cvStudioSaveDownloadBlob(blob, 'Write failed.docx', 'formatted');
-  assert.strictEqual(writeFallback.method, 'browser');
-  assert.strictEqual(writeFallback.configured, true);
-  assert.strictEqual(writeFallback.fallbackReason, 'write permission was not granted');
-}
-
-async function selectionPermissionAndPreviewContract() {
-  const nodes = {};
-  function node(id) {
-    if (!nodes[id]) nodes[id] = {textContent:'', classList:{remove(){}, toggle(){}}};
-    return nodes[id];
-  }
-  const toasts = [];
-  const handle = {
-    kind:'directory', name:'Recruitment CVs',
-    async queryPermission(){ return this.permissionRequested ? 'granted' : 'prompt'; },
-    async requestPermission(){ this.permissionRequested = true; return 'granted'; },
-  };
-  const context = {
-    String, Promise,
-    window:{indexedDB:{}, async showDirectoryPicker(){ return handle; }},
-    document:{getElementById:node},
-    showToast(message, level){ toasts.push({message, level}); },
-    _cvDownloadDirectoryCache:{},
+    FormData: class { constructor(){this.entries=[];} append(){this.entries.push(Array.from(arguments));} },
+    window:{},
+    document:{body:{appendChild(){}},createElement(){return {click(){clicked.push(this.download);},remove(){}};}},
+    URL:{createObjectURL(){return 'blob:fallback';},revokeObjectURL(v){revoked.push(v);}},
+    setTimeout(fn){fn();},
     _cvDownloadLastResult:{},
-    async cvStudioStoreDownloadDirectory(){ return true; },
-    async cvStudioGetDownloadDirectory(){ return handle; },
-  };
-  loadFunctions(context, [
-    'normalizeCvDownloadDestination',
-    'cvStudioDirectoryWritePermission',
-    'cvStudioRenderDownloadDestination',
-    'cvStudioRenderDownloadDirectory',
-    'cvStudioChooseDownloadDirectory',
-    'cvStudioVerifyDownloadDirectory',
-  ]);
-  const chosen = await context.cvStudioChooseDownloadDirectory('formatted');
-  assert.strictEqual(chosen, true);
-  assert.strictEqual(handle.permissionRequested, true);
-  assert.strictEqual(nodes.cvDownloadFormattedFolderAccess.textContent, 'Ready to save');
-  assert.strictEqual(nodes.cvDownloadFormattedFolderName.textContent, 'Selected folder: Recruitment CVs');
-  assert.strictEqual(nodes.cvDownloadFormattedFolderPreview.textContent, 'Destination: selected folder “Recruitment CVs” (full path hidden by browser)');
-  assert.ok(toasts[0].message.includes('folder is ready'));
-
-  context._cvDownloadLastResult.formatted = {
-    method:'folder', folder:'Recruitment CVs', filename:'Hyppies CV - Lee.docx',
-  };
-  context.cvStudioRenderDownloadDestination('formatted', handle);
-  assert.strictEqual(nodes.cvDownloadFormattedFolderPreview.textContent, 'Last saved: Recruitment CVs\\Hyppies CV - Lee.docx');
-
-  context._cvDownloadLastResult.blind = {
-    method:'browser', filename:'Hyppies CV - Lee (Blinded).docx',
-  };
-  context.cvStudioRenderDownloadDestination('blind', null);
-  assert.strictEqual(nodes.cvDownloadBlindFolderPreview.textContent, 'Last download: Browser Downloads\\Hyppies CV - Lee (Blinded).docx');
-
-  handle.permissionRequested = false;
-  const verified = await context.cvStudioVerifyDownloadDirectory('blind');
-  assert.strictEqual(verified, true);
-  assert.strictEqual(handle.permissionRequested, true);
-}
-
-async function longDuplicateAndBatchModeContract() {
-  const filenameContext = {String, Math, Date, Promise};
-  loadFunctions(filenameContext, ['cvStudioSafeDownloadFilename', 'cvStudioUniqueDownloadFilename']);
-  const longName = filenameContext.cvStudioSafeDownloadFilename('Hyppies CV - ' + 'X'.repeat(220) + '.docx');
-  assert.strictEqual(longName.length, 180);
-  const checked = [];
-  const longHandle = {
-    async getFileHandle(name) {
-      checked.push(name);
-      if (name === longName) return {name};
-      const error = new Error('missing'); error.name = 'NotFoundError'; throw error;
+    _cvNativeDownloadFolderState:{native_supported:true,folders:{
+      formatted:{configured:true,path:'C:\\CV Output',available:true},
+      blind:{configured:false,path:'',available:false},
+    }},
+    cvStudioRenderDownloadDestination(){},
+    async fetch(path, options){
+      requests.push({path,options});
+      if(saveSucceeds)return {ok:true,async json(){return {ok:true,filename:'Hyppies CV (1).docx',folder:'C:\\CV Output',path:'C:\\CV Output\\Hyppies CV (1).docx'};}};
+      return {ok:false,async json(){return {ok:false,error:'Drive unavailable'};}};
     },
   };
-  const numbered = await filenameContext.cvStudioUniqueDownloadFilename(longHandle, longName);
-  assert.notStrictEqual(numbered, longName);
-  assert.ok(numbered.endsWith(' (1).docx'));
-  assert.ok(numbered.length <= 180);
-  assert.deepStrictEqual(checked.slice(0, 2), [longName, numbered]);
+  loadFunctions(context,[
+    'normalizeCvDownloadDestination','cvStudioSafeDownloadFilename','cvStudioFallbackDownloadBlob',
+    'cvStudioNativeDownloadFolder','cvStudioPrepareDownloadDestination','cvStudioSaveDownloadBlob',
+  ]);
 
-  const saveCalls = [];
-  const batchContext = {
-    _batchMode: 'blind',
-    _batchFiles: [{id:'formatted-row', filename:'Formatted.docx', status:'done-ok', downloadKind:'formatted'}],
-    _batchBlobs: [{filename:'Formatted.docx', blob:{id:1}, kind:'formatted'}],
-    cvStudioSaveDownloadBlob: async (blob, filename, kind) => { saveCalls.push({blob, filename, kind}); return {method:'folder', filename, folder:'Formatted'}; },
-    cvStudioPrepareDownloadDestination: async (kind) => ({kind, handle:{name:'Formatted'}}),
-    showToast(){},
-    setTimeout(fn){ fn(); },
+  const blob={fixture:true};
+  const saved=await context.cvStudioSaveDownloadBlob(blob,'Hyppies CV.docx','formatted');
+  assert.strictEqual(saved.method,'folder');
+  assert.strictEqual(saved.path,'C:\\CV Output\\Hyppies CV (1).docx');
+  assert.strictEqual(requests[0].path,'/downloads/save');
+  assert.strictEqual(clicked.length,0);
+
+  const browser=await context.cvStudioSaveDownloadBlob(blob,'Blind.docx','blind');
+  assert.strictEqual(browser.method,'browser');
+  assert.strictEqual(clicked[0],'Blind.docx');
+
+  saveSucceeds=false;
+  const fallback=await context.cvStudioSaveDownloadBlob(blob,'Failure.docx','formatted');
+  assert.strictEqual(fallback.method,'failed');
+  assert.strictEqual(fallback.configured,true);
+  assert.ok(fallback.fallbackReason.includes('Drive unavailable'));
+  assert.deepStrictEqual(revoked,['blob:fallback']);
+}
+
+async function nativeSelectionAndFullPathPreviewContract() {
+  const nodes={};
+  function node(id){if(!nodes[id])nodes[id]={textContent:'',style:{},classList:{remove(){},toggle(){}}};return nodes[id];}
+  const toasts=[];
+  const context={
+    String,Promise,document:{getElementById:node},
+    showToast(message,level){toasts.push({message,level});},
+    _cvDownloadLastResult:{},
+    _cvNativeDownloadFolderState:{native_supported:true,folders:{formatted:null,blind:null}},
+    async cvStudioNativeDownloadFolderRequest(){return {ok:true,folder:{configured:true,path:'C:\\Recruitment\\CVs',available:true,writable:true}};},
   };
-  loadFunctions(batchContext, ['downloadSingleBatchFile', 'downloadBatchZip']);
-  await batchContext.downloadSingleBatchFile('formatted-row');
-  assert.strictEqual(saveCalls[0].kind, 'formatted');
-  saveCalls.length = 0;
-  await batchContext.downloadBatchZip();
-  assert.strictEqual(saveCalls[0].kind, 'formatted');
+  loadFunctions(context,[
+    'normalizeCvDownloadDestination','cvStudioRenderDownloadDestination',
+    'cvStudioRenderDownloadDirectory','cvStudioChooseDownloadDirectory',
+  ]);
+  const chosen=await context.cvStudioChooseDownloadDirectory('formatted');
+  assert.strictEqual(chosen,true);
+  assert.strictEqual(nodes.cvDownloadFormattedFolderName.textContent,'C:\\Recruitment\\CVs');
+  assert.strictEqual(nodes.cvDownloadFormattedFolderPreview.textContent,'Destination: C:\\Recruitment\\CVs');
+  assert.strictEqual(nodes.cvDownloadFormattedFolderAccess.textContent,'Configured');
+  assert.ok(toasts[0].message.includes('C:\\Recruitment\\CVs'));
+
+  context._cvDownloadLastResult.formatted={method:'folder',path:'C:\\Recruitment\\CVs\\Hyppies CV.docx'};
+  context.cvStudioRenderDownloadDestination('formatted',{configured:true,path:'C:\\Recruitment\\CVs',available:true});
+  assert.strictEqual(nodes.cvDownloadFormattedFolderPreview.textContent,'Last saved: C:\\Recruitment\\CVs\\Hyppies CV.docx');
+}
+
+async function batchModeContract() {
+  const saveCalls=[];
+  const context={
+    _batchMode:'blind',
+    _batchFiles:[{id:'formatted-row',filename:'Formatted.docx',status:'done-ok',downloadKind:'formatted'}],
+    _batchBlobs:[{filename:'Formatted.docx',blob:{id:1},kind:'formatted'}],
+    cvStudioSaveDownloadBlob:async (blob,filename,kind)=>{saveCalls.push({blob,filename,kind});return {method:'folder',filename,folder:'Formatted'};},
+    cvStudioPrepareDownloadDestination:async (kind)=>({kind,configured:true,folder:{path:'C:\\Formatted'},handle:{native:true}}),
+    showToast(){},setTimeout(fn){fn();},
+  };
+  loadFunctions(context,['downloadSingleBatchFile','downloadBatchZip']);
+  await context.downloadSingleBatchFile('formatted-row');
+  assert.strictEqual(saveCalls[0].kind,'formatted');
+  saveCalls.length=0;
+  await context.downloadBatchZip();
+  assert.strictEqual(saveCalls[0].kind,'formatted');
 }
 
 Promise.resolve()
   .then(markupAndWiringContract)
   .then(filenameSafetyContract)
-  .then(directFolderAndFallbackContract)
-  .then(selectionPermissionAndPreviewContract)
-  .then(longDuplicateAndBatchModeContract)
-  .then(() => console.log('CV download folder frontend fixtures passed'))
-  .catch((error) => { console.error(error); process.exit(1); });
+  .then(nativeFolderSaveAndFallbackContract)
+  .then(nativeSelectionAndFullPathPreviewContract)
+  .then(batchModeContract)
+  .then(()=>console.log('CV download folder frontend fixtures passed'))
+  .catch((error)=>{console.error(error);process.exit(1);});

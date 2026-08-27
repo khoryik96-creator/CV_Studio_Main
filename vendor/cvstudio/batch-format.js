@@ -512,7 +512,7 @@ async function downloadSingleBatchFile(id) {
   var kind = item.kind || bf.downloadKind || (bf.status === 'done-blind' ? 'blind' : 'formatted');
   var result = await cvStudioSaveDownloadBlob(item.blob, item.filename, kind);
   if (result.method === 'folder') showToast('Saved ' + result.filename + ' to ' + (result.folder || 'the selected folder') + '.', 'ok');
-  else if (result.configured) showToast('Selected folder was not used because ' + result.fallbackReason + '. Downloaded ' + result.filename + ' using browser Downloads.', 'err');
+  else if (result.configured) showToast('Download was not saved: ' + result.fallbackReason + '. Check or choose the folder in Settings → Downloads.', 'err');
   else showToast('Downloaded ' + result.filename + ' using the browser Downloads folder.', 'ok');
 }
 
@@ -534,11 +534,14 @@ async function downloadBatchZip() {
     return;
   }
   var folderCount = 0;
+  var failedCount = 0;
   for (var i = 0; i < _batchBlobs.length; i += 1) {
     var item = _batchBlobs[i];
     var result = await cvStudioSaveDownloadBlob(item.blob, item.filename, kind, destination);
     if (result.method === 'folder') folderCount += 1;
+    else if (result.method === 'failed') failedCount += 1;
   }
   if (folderCount === _batchBlobs.length) showToast('Saved ' + folderCount + ' file' + (folderCount !== 1 ? 's' : '') + ' to the selected folder.', 'ok');
+  else if (failedCount) showToast('Saved ' + folderCount + ' file' + (folderCount !== 1 ? 's' : '') + '; ' + failedCount + ' could not be saved. Check the folder in Settings → Downloads.', 'err');
   else showToast('Downloaded ' + _batchBlobs.length + ' file' + (_batchBlobs.length !== 1 ? 's' : '') + (folderCount ? ' (' + folderCount + ' saved to the selected folder)' : ' using the browser Downloads folder') + '.', 'ok');
 }
