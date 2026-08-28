@@ -63,6 +63,8 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
 
     def test_docx_extraction_preserves_real_list_markers_and_plain_headings(self):
         from docx import Document
+        from docx.oxml import OxmlElement
+        from docx.oxml.ns import qn
 
         document = Document()
         heading = document.add_paragraph("Implementation")
@@ -73,6 +75,11 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         cell.paragraphs[0].text = "Rollout"
         cell.paragraphs[0].runs[0].bold = True
         cell.add_paragraph("Delivered the rollout", style="List Bullet")
+        suppressed = document.add_paragraph("Intentionally plain", style="List Bullet")
+        num_pr = suppressed._p.get_or_add_pPr().get_or_add_numPr()
+        num_id = OxmlElement("w:numId")
+        num_id.set(qn("w:val"), "0")
+        num_pr.append(num_id)
         payload = io.BytesIO()
         document.save(payload)
 
@@ -81,8 +88,10 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertIn("• Configured the system", extracted)
         self.assertIn("Rollout", extracted)
         self.assertIn("• Delivered the rollout", extracted)
+        self.assertIn("Intentionally plain", extracted)
         self.assertNotIn("• Implementation", extracted)
         self.assertNotIn("• Rollout", extracted)
+        self.assertNotIn("• Intentionally plain", extracted)
 
     def test_common_role_subheadings_render_as_sections_not_bullets(self):
         normalized = app._normalize_cv_bullet_items([

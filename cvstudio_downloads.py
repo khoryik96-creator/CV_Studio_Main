@@ -63,6 +63,21 @@ def safe_download_filename(filename: object) -> str:
     return (stem or "CV Studio download") + extension
 
 
+def default_download_state_path(
+    runtime_state_dir: os.PathLike[str] | str,
+    *,
+    local_appdata: str | None = None,
+    system_name: str | None = None,
+    user_home: os.PathLike[str] | str | None = None,
+) -> str:
+    """Return an absolute per-user settings path on every supported platform."""
+    system = str(system_name or platform.system())
+    if local_appdata or system == "Windows":
+        return str(Path(runtime_state_dir) / "download_folders.json")
+    home = Path(user_home) if user_home is not None else Path.home()
+    return str(home.expanduser().resolve() / ".guo_lab_cv_studio" / "download_folders.json")
+
+
 class LocalDownloadService:
     """Persist two local folders and save generated DOCX files safely."""
 
@@ -515,6 +530,7 @@ __all__ = [
     "DownloadFolderError",
     "LocalDownloadService",
     "MAX_DOWNLOAD_BYTES",
+    "default_download_state_path",
     "normalize_download_kind",
     "safe_download_filename",
 ]

@@ -98,7 +98,10 @@
   Windows/UNC/macOS root selections remain intact; saved files must be real
   DOCX ZIP containers with the required Word parts; and malformed nested Blind
   CV AI JSON is preserved instead of causing a generic 500.
-- Final validation after the PR review corrections: 1015 tests passed, 4 skipped
+- Final review-thread corrections store Darwin folder state in the absolute
+  per-user `~/.guo_lab_cv_studio` directory when `LOCALAPPDATA` is absent and
+  honor direct/style Word `numId=0` values as explicit bullet suppression.
+- Final validation after all PR review corrections: 1017 tests passed, 4 skipped
   and 96 subtests; all 20 frontend fixtures; 24 live source-smoke assertions;
   repository consistency; and the Windows Antiword/Tesseract/adm-zip
   protected-source preflight.

@@ -9,6 +9,7 @@ import pytest
 from cvstudio_downloads import (
     DownloadFolderError,
     LocalDownloadService,
+    default_download_state_path,
     safe_download_filename,
 )
 
@@ -19,6 +20,27 @@ def _docx_bytes(text="generated"):
         archive.writestr("[Content_Types].xml", "<Types/>")
         archive.writestr("word/document.xml", "<document>{}</document>".format(text))
     return payload.getvalue()
+
+
+def test_default_state_path_is_absolute_and_user_scoped_on_macos(tmp_path):
+    runtime = Path("~\\AppData\\Local") / "TheGuoLab" / "CVStudio"
+    result = default_download_state_path(
+        runtime,
+        local_appdata=None,
+        system_name="Darwin",
+        user_home=tmp_path,
+    )
+    assert result == str(tmp_path / ".guo_lab_cv_studio" / "download_folders.json")
+    assert Path(result).is_absolute()
+
+
+def test_default_state_path_preserves_explicit_local_appdata_override(tmp_path):
+    runtime = tmp_path / "isolated-runtime"
+    assert default_download_state_path(
+        runtime,
+        local_appdata=str(tmp_path),
+        system_name="Darwin",
+    ) == str(runtime / "download_folders.json")
 
 
 def test_filename_is_windows_safe_and_bounded():

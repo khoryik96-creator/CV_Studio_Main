@@ -256,7 +256,11 @@ from cvstudio_jobs import (
     PersistentJobStore,
     deterministic_job_id,
 )
-from cvstudio_downloads import DownloadFolderError, LocalDownloadService
+from cvstudio_downloads import (
+    DownloadFolderError,
+    LocalDownloadService,
+    default_download_state_path,
+)
 from cvstudio_ai_costs import (
     MODEL_PRICING_USD_PER_MILLION as _PHASE5B_MODEL_PRICING,
     cost_details as _phase5b_cost_details,
@@ -428,7 +432,10 @@ _RUNTIME_PID_PATH = os.path.join(_RUNTIME_STATE_DIR, "cvstudio.{}.pid.json".form
 _RUNTIME_LEGACY_PID_PATH = os.path.join(_RUNTIME_STATE_DIR, "cvstudio.pid.json")
 _CVSTUDIO_DOWNLOAD_FOLDERS_PATH = (
     os.environ.get("CVSTUDIO_DOWNLOAD_FOLDERS_PATH")
-    or os.path.join(_RUNTIME_STATE_DIR, "download_folders.json")
+    or default_download_state_path(
+        _RUNTIME_STATE_DIR,
+        local_appdata=os.environ.get("LOCALAPPDATA"),
+    )
 )
 _cvstudio_download_service = LocalDownloadService(_CVSTUDIO_DOWNLOAD_FOLDERS_PATH)
 
@@ -12261,15 +12268,15 @@ def _extract_docx_text_preserve_tables(file_bytes):
         """
         try:
             direct = paragraph._p.xpath("./w:pPr/w:numPr/w:numId/@w:val")
-            if any(str(value) != "0" for value in direct):
-                return True
+            if direct:
+                return any(str(value) != "0" for value in direct)
             style = paragraph.style
             seen = set()
             while style is not None and style.style_id not in seen:
                 seen.add(style.style_id)
                 inherited = style._element.xpath("./w:pPr/w:numPr/w:numId/@w:val")
-                if any(str(value) != "0" for value in inherited):
-                    return True
+                if inherited:
+                    return any(str(value) != "0" for value in inherited)
                 style = style.base_style
         except Exception:
             return False

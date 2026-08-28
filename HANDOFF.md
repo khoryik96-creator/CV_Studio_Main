@@ -296,8 +296,12 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   the save service validates the real DOCX ZIP container and required Word
   parts; and malformed nested Blind-CV AI JSON is left unchanged rather than
   escaping as a generic 500.
+  Final GitHub-thread corrections keep Darwin folder state in the absolute
+  per-user `~/.guo_lab_cv_studio` directory when `LOCALAPPDATA` is absent, and
+  honor a direct or style-level Word `numId=0` as explicit list suppression
+  instead of falling through to inherited numbering.
   The sealed route contract is intentionally re-baselined from 116 to 118.
-  Final validation after the PR review corrections: 1015 tests passed, 4 skipped
+  Final validation after all PR review corrections: 1017 tests passed, 4 skipped
   and 96 subtests; all 20 frontend fixtures; 24-assertion live source smoke;
   repository consistency; and Windows Antiword/Tesseract/adm-zip protected-
   source preflight.
