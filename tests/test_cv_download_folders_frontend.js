@@ -52,7 +52,9 @@ function markupAndWiringContract() {
   assert.ok(showSettings.includes("downloads:'Downloads'"));
   assert.ok(showSettings.includes("'downloads'"));
   assert.ok(showSettings.includes('renderCvDownloadSettings'));
-  assert.ok(functionSource(html, 'downloadDocx').includes('cvStudioSaveDownloadBlob'));
+  const singleDownload = functionSource(html, 'downloadDocx');
+  assert.ok(singleDownload.includes('cvStudioSaveDownloadBlob'));
+  assert.ok(singleDownload.includes('result.uncertain'));
 
   const batchOne = functionSource(html, 'downloadSingleBatchFile');
   const batchAll = functionSource(html, 'downloadBatchZip');
@@ -61,7 +63,9 @@ function markupAndWiringContract() {
   assert.ok(!batchOne.includes('_batchMode'));
   assert.ok(!batchAll.includes('_batchMode'));
   assert.ok(batchOne.includes('cvStudioSaveDownloadBlob'));
+  assert.ok(batchOne.includes('result.uncertain'));
   assert.ok(batchAll.includes('cvStudioPrepareDownloadDestination'));
+  assert.ok(batchAll.includes('uncertainCount'));
 }
 
 function filenameSafetyContract() {
@@ -75,7 +79,7 @@ function filenameSafetyContract() {
 
 async function nativeFolderSaveAndFallbackContract() {
   const clicked = [], revoked = [], requests = [];
-  let saveSucceeds = true;
+  let saveMode = 'success';
   const context = {
     String, Math, Date, Promise,
     FormData: class { constructor(){this.entries=[];} append(){this.entries.push(Array.from(arguments));} },
@@ -96,7 +100,8 @@ async function nativeFolderSaveAndFallbackContract() {
         formatted:{configured:true,path:'C:\\CV Output',available:true},
         blind:{configured:false,path:'',available:false},
       }};}};
-      if(saveSucceeds)return {ok:true,async json(){return {ok:true,filename:'Hyppies CV (1).docx',folder:'C:\\CV Output',path:'C:\\CV Output\\Hyppies CV (1).docx'};}};
+      if(saveMode==='success')return {ok:true,async json(){return {ok:true,filename:'Hyppies CV (1).docx',folder:'C:\\CV Output',path:'C:\\CV Output\\Hyppies CV (1).docx'};}};
+      if(saveMode==='lost')throw new Error('Connection lost after upload');
       return {ok:false,async json(){return {ok:false,error:'Drive unavailable'};}};
     },
   };
@@ -118,11 +123,19 @@ async function nativeFolderSaveAndFallbackContract() {
   assert.strictEqual(browser.method,'browser');
   assert.strictEqual(clicked[0],'Blind.docx');
 
-  saveSucceeds=false;
+  saveMode='failed';
   const fallback=await context.cvStudioSaveDownloadBlob(blob,'Failure.docx','formatted');
   assert.strictEqual(fallback.method,'failed');
   assert.strictEqual(fallback.configured,true);
   assert.ok(fallback.fallbackReason.includes('Drive unavailable'));
+
+  saveMode='lost';
+  const uncertain=await context.cvStudioSaveDownloadBlob(blob,'Uncertain.docx','formatted');
+  assert.strictEqual(uncertain.method,'uncertain');
+  assert.strictEqual(uncertain.uncertain,true);
+  assert.strictEqual(uncertain.folder,'C:\\CV Output');
+  assert.ok(uncertain.fallbackReason.includes('could not confirm'));
+  assert.ok(uncertain.fallbackReason.includes('before retrying'));
   assert.deepStrictEqual(revoked,['blob:fallback']);
 }
 

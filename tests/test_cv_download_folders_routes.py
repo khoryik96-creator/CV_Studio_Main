@@ -75,6 +75,18 @@ class CvDownloadFolderRouteTests(unittest.TestCase):
         self.assertEqual(blocked.status_code, 403)
         self.assertEqual(blocked.get_json()["code"], "UNSAFE_LOCAL_REQUEST")
 
+    def test_non_object_folder_request_is_rejected_without_http_500(self):
+        response = self.client.post(
+            "/downloads/folders",
+            json=[{"kind": "formatted"}],
+            headers=self._headers("download-route-non-object"),
+        )
+        self.assertEqual(response.status_code, 400)
+        payload = response.get_json()
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["code"], "DOWNLOAD_FOLDER_REQUEST_INVALID")
+        self.assertEqual(payload["request_id"], "download-route-non-object")
+
     def test_select_status_check_save_and_clear_round_trip(self):
         self.service._choose_folder_native = lambda _initial: str(self.folder)
         selected = self.client.post(
