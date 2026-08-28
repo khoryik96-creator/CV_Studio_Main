@@ -65,11 +65,132 @@ _BLIND_SUMMARY_URL_RE = re.compile(
     r"(?<![A-Za-z0-9])(?:https?://|www\.|(?:linkedin|github)\.com/)[^\s<>()]+",
     re.I,
 )
+_BLIND_SUMMARY_PHONE_CANDIDATE_RE = re.compile(
+    r"(?<![A-Za-z0-9])\+?\d[\d\s().\-]{6,}\d(?![A-Za-z0-9])"
+)
 _BLIND_SUMMARY_CATEGORY_RE = re.compile(
     r"^(?:summary|professional summary|executive summary|profile|professional profile|career profile|objective|career objective|overview|about(?:\s+him(?:\s*/\s*her)?|\s+her|\s+the\s+candidate)?)$",
     re.I,
 )
-_BLIND_SUMMARY_MARKER_RE = re.compile(r"^\s*[-*•]\s+")
+_BLIND_SUMMARY_MARKER_RE = re.compile(
+    r"^\s*(?:(?:[-*•●▪◦‣⁃∙·‧])+\s+|(?:\(?\d{1,3}[.)])\s+)"
+)
+_BLIND_SUMMARY_CONTEXT_NAME_RE = re.compile(
+    r"\b(?i:client|customer|employer|company|organization|organisation|university|school|college|institution)"
+    r"(?:[ \t]+(?i:named|called))?[ \t]*[:\-]?[ \t]+(?:(?i:the)[ \t]+)?"
+    r"([A-Z][A-Za-z0-9&.'’\-]*(?:[ \t]+[A-Z][A-Za-z0-9&.'’\-]*){0,5})",
+)
+_BLIND_SUMMARY_BRAND_CONTEXT_RE = re.compile(
+    r"\b([A-Z][A-Za-z0-9&.'’\-]*(?:[ \t]+[A-Z][A-Za-z0-9&.'’\-]*){0,4})[ \t]+"
+    r"(?:product|platform|solution|system|rollout|implementation|application|programme|program|project)\b",
+)
+_BLIND_SUMMARY_BRAND_TOKEN_RE = re.compile(
+    r"\b([A-Z][A-Za-z0-9]{3,})\b"
+)
+_BLIND_INSTITUTION_SUFFIX_RE = re.compile(
+    r"\b([A-Z][A-Za-z0-9&.'’\-]*(?:\s+[A-Za-z0-9&.'’\-]+){0,8}\s+"
+    r"(?i:University|College|School|Institute|Polytechnic|Academy))\b"
+)
+_BLIND_INSTITUTION_PREFIX_RE = re.compile(
+    r"\b((?i:University|College|School|Institute|Polytechnic|Academy)[ \t]+"
+    r"(?:of[ \t]+)?[A-Z][A-Za-z0-9&.'’\-]*(?:[ \t]+[A-Za-z0-9&.'’\-]+){0,7})\b"
+)
+
+
+def _blind_identifier_pattern(value, *, case_sensitive_single=False):
+    exact = str(value or "").strip()
+    if not exact:
+        return None
+    flags = 0 if case_sensitive_single and not re.search(r"\s", exact) else re.I
+    return re.compile(
+        r"(?<![A-Za-z0-9])" + re.escape(exact) + r"(?![A-Za-z0-9])",
+        flags,
+    )
+
+
+def _blind_replace_identifier(
+    text, value, replacement, *, case_sensitive_single=False
+):
+    pattern = _blind_identifier_pattern(
+        value, case_sensitive_single=case_sensitive_single
+    )
+    return pattern.sub(replacement, text) if pattern is not None else text
+
+
+def _blind_redact_phone_candidates(text):
+    def replace(match):
+        value = match.group(0)
+        digits = re.sub(r"\D", "", value)
+        # Preserve ordinary date ranges such as 2020 - 2023. Phone-like text
+        # must carry an international prefix or at least nine digits.
+        return "[Phone Redacted]" if value.lstrip().startswith("+") or len(digits) >= 9 else value
+
+    return _BLIND_SUMMARY_PHONE_CANDIDATE_RE.sub(replace, text)
+
+
+def _blind_summary_plausible_identifier(value):
+    text = re.sub(r"\s+", " ", str(value or "")).strip(" .,:;|-/")
+    if not text or len(text) < 3:
+        return ""
+    low = text.casefold()
+    if low in _BLIND_ORG_TECH_ALLOWLIST:
+        return ""
+    if low in {
+        "candidate", "company", "client", "customer", "project", "programme",
+        "program", "platform", "system", "solution", "university", "college",
+        "school", "institution", "implementation", "current company",
+    }:
+        return ""
+    tokens = re.findall(r"[A-Za-z0-9]+", text)
+    safe_parts = {
+        *(_BLIND_ORG_TECH_ALLOWLIST),
+        "project", "system", "solution", "implementation", "application",
+        "program", "programme", "management", "accounting", "finance",
+        "controlling", "technology", "technologies", "engineering",
+    }
+    if tokens and all(token.casefold() in safe_parts for token in tokens):
+        return ""
+    if tokens and all(token.isupper() and len(token) <= 5 for token in tokens):
+        return ""
+    return text
+
+
+def _blind_summary_context_replacements(text):
+    replacements = []
+    seen = set()
+
+    def add(value, replacement="[Company]"):
+        clean = _blind_summary_plausible_identifier(value)
+        key = clean.casefold()
+        if clean and key not in seen:
+            seen.add(key)
+            replacements.append((clean, replacement, False))
+
+    source = str(text or "")
+    for match in _BLIND_SUMMARY_CONTEXT_NAME_RE.finditer(source):
+        add(match.group(1))
+    for match in _BLIND_SUMMARY_BRAND_CONTEXT_RE.finditer(source):
+        add(match.group(1), "[Product]")
+    for match in _BLIND_SUMMARY_BRAND_TOKEN_RE.finditer(source):
+        token = match.group(1)
+        low = token.casefold()
+        has_internal_brand_style = any(
+            character.isupper() or character.isdigit() for character in token[1:]
+        )
+        has_brand_suffix = any(
+            low.endswith(suffix) and len(low) - len(suffix) >= 3
+            for suffix in (
+                "tech", "core", "soft", "pay", "bank", "labs",
+                "systems", "solutions", "digital", "global", "group",
+            )
+        )
+        if has_internal_brand_style or has_brand_suffix:
+            add(token, "[Company]")
+    for match in _BLIND_INSTITUTION_SUFFIX_RE.finditer(source):
+        add(match.group(1), "[Institution]")
+    for match in _BLIND_INSTITUTION_PREFIX_RE.finditer(source):
+        add(match.group(1), "[Institution]")
+    return replacements
 
 
 def _blind_walk_strings(obj):
@@ -119,6 +240,196 @@ def _blind_prepare_summary_bullets(cv_data):
         prepared["summary_bullets"] = summary
         prepared["skills"] = remaining
     return prepared
+
+
+def _blind_source_summary_text(original_cv):
+    if not isinstance(original_cv, dict):
+        return ""
+    values = original_cv.get("summary_bullets")
+    if not isinstance(values, list):
+        return ""
+    return "\n".join(value for value in values if isinstance(value, str))
+
+
+def _blind_collect_summary_identity_replacements(original_cv):
+    """Collect exact source identifiers that may not survive in a blind summary."""
+    if not isinstance(original_cv, dict):
+        return []
+    replacements = []
+    seen = set()
+
+    def add(value, replacement, case_sensitive_single=False):
+        exact = re.sub(r"\s+", " ", str(value or "")).strip(" .,:;|-/")
+        key = exact.casefold()
+        if len(exact) < 3 or key in seen:
+            return
+        seen.add(key)
+        replacements.append((exact, replacement, case_sensitive_single))
+
+    candidate = (
+        original_cv.get("candidate")
+        if isinstance(original_cv.get("candidate"), dict)
+        else {}
+    )
+    candidate_name = str(candidate.get("name") or "").strip()
+    if candidate_name.casefold() not in {"", "candidate", "the candidate", "[candidate]"}:
+        add(candidate_name, "the candidate", True)
+    add(candidate.get("email"), "[Email Redacted]")
+    add(candidate.get("phone"), "[Phone Redacted]")
+    add(candidate.get("linkedin"), "[Link Redacted]")
+
+    for education in original_cv.get("education") or []:
+        if isinstance(education, dict):
+            add(education.get("institution"), "[Institution]", True)
+    for term in _blind_collect_org_mask_terms(original_cv):
+        add(term, "[Company]")
+    for term, replacement, case_sensitive_single in _blind_summary_context_replacements(
+        _blind_source_summary_text(original_cv)
+    ):
+        add(term, replacement, case_sensitive_single)
+
+    return sorted(replacements, key=lambda item: -len(item[0]))
+
+
+def _blind_summary_candidate_name_from_text(source_text):
+    lines = [
+        _BLIND_SUMMARY_MARKER_RE.sub("", re.sub(r"\s+", " ", line)).strip()
+        for line in str(source_text or "").splitlines()
+        if str(line or "").strip()
+    ]
+    for line in lines[:30]:
+        match = re.match(r"^(?:candidate\s+)?name\s*[:|]\s*(.+)$", line, re.I)
+        if match:
+            return match.group(1).strip()
+
+    excluded = {
+        "about him her", "about the candidate", "summary", "professional summary",
+        "profile", "professional profile", "curriculum vitae", "resume", "work experience",
+        "work experiences", "education", "skills", "technical skills",
+    }
+    title_words = {
+        "manager", "engineer", "consultant", "director", "analyst", "officer",
+        "developer", "architect", "specialist", "lead", "head", "executive",
+        "administrator", "president", "partner",
+    }
+    for line in lines[:8]:
+        if len(line) > 80 or any(value in line for value in ("@", "http://", "https://", "|", ":")):
+            continue
+        words = line.split()
+        if not 2 <= len(words) <= 6:
+            continue
+        if re.sub(r"[^a-z]+", " ", line.casefold()).strip() in excluded:
+            continue
+        if not all(re.fullmatch(r"[A-Za-z][A-Za-z'’\-]*", word) for word in words):
+            continue
+        if any(word.casefold() in title_words for word in words):
+            continue
+        if all(word.isupper() or word[:1].isupper() for word in words):
+            return line
+    return ""
+
+
+def _blind_collect_plain_summary_identity_replacements(source_text):
+    """Collect conservative identity terms from an unparsed CV summary source."""
+    source = str(source_text or "")
+    replacements = []
+    seen = set()
+
+    def add(value, replacement="[Company]", case_sensitive_single=False):
+        exact = re.sub(r"\s+", " ", str(value or "")).strip(" .,:;|-/")
+        key = exact.casefold()
+        if len(exact) < 3 or key in seen:
+            return
+        seen.add(key)
+        replacements.append((exact, replacement, case_sensitive_single))
+
+    add(_blind_summary_candidate_name_from_text(source), "the candidate", True)
+    label_pattern = re.compile(
+        r"^(current\s+company|company|employer|client|customer|organization|organisation|institution|university|school|college)\s*[:|]\s*(.+)$",
+        re.I,
+    )
+    institution_labels = {"institution", "university", "school", "college"}
+    for raw_line in source.splitlines():
+        line = re.sub(r"\s+", " ", raw_line).strip()
+        match = label_pattern.match(line)
+        if match:
+            label = match.group(1).casefold()
+            value = re.split(r"\s+\|\s+", match.group(2), maxsplit=1)[0].strip()
+            add(value, "[Institution]" if label in institution_labels else "[Company]", True)
+        if "|" in line and re.search(r"\b(?:19|20)\d{2}\b", line):
+            value = line.rsplit("|", 1)[-1].strip()
+            replacement = (
+                "[Institution]"
+                if _BLIND_INSTITUTION_SUFFIX_RE.search(value)
+                or _BLIND_INSTITUTION_PREFIX_RE.search(value)
+                else "[Company]"
+            )
+            add(value, replacement, replacement == "[Institution]")
+        for suffix_match in _BLIND_ORG_SUFFIX_RE.finditer(line):
+            add(suffix_match.group(1), "[Company]")
+        for suffix_match in _BLIND_INSTITUTION_SUFFIX_RE.finditer(line):
+            add(suffix_match.group(1), "[Institution]", True)
+        for prefix_match in _BLIND_INSTITUTION_PREFIX_RE.finditer(line):
+            add(prefix_match.group(1), "[Institution]", True)
+
+    compact = re.sub(r"\s+", " ", source)
+    for name in _BLIND_CURATED_ORG_NAMES:
+        if name.casefold() in _BLIND_ORG_TECH_ALLOWLIST:
+            continue
+        if _blind_identifier_pattern(name).search(compact):
+            add(name, "[Company]")
+    for term, replacement, case_sensitive_single in _blind_summary_context_replacements(source):
+        add(term, replacement, case_sensitive_single)
+
+    return sorted(replacements, key=lambda item: -len(item[0]))
+
+
+def _blind_apply_summary_replacements(text, replacements):
+    safe = _BLIND_SUMMARY_MARKER_RE.sub("", str(text or "")).strip()
+    for source_value, replacement, case_sensitive_single in replacements:
+        safe = _blind_replace_identifier(
+            safe,
+            source_value,
+            replacement,
+            case_sensitive_single=case_sensitive_single,
+        )
+    safe = _BLIND_SUMMARY_EMAIL_RE.sub("[Email Redacted]", safe)
+    safe = _BLIND_SUMMARY_URL_RE.sub("[Link Redacted]", safe)
+    safe = _blind_redact_phone_candidates(safe)
+    return safe
+
+
+def _blind_generated_summary_items(raw_text):
+    raw = re.sub(r"```(?:text|markdown|md)?", "", str(raw_text or ""), flags=re.I)
+    raw = raw.replace("```", "").strip()
+    lines = [line.strip() for line in raw.splitlines() if line.strip()]
+    marked = [line for line in lines if _BLIND_SUMMARY_MARKER_RE.match(line)]
+    return _blind_summary_items(marked or lines)
+
+
+def _blind_finalize_generated_summary_text(raw_text, source_text):
+    """Fail closed and scrub the standalone anonymized-summary response."""
+    if not str(source_text or "").strip():
+        raise ValueError("Anonymized CV Summary requires the unchanged source CV")
+    bullets = _blind_generated_summary_items(raw_text)
+    if not bullets:
+        raise ValueError("Anonymized CV Summary returned no usable bullets")
+    replacements = _blind_collect_plain_summary_identity_replacements(source_text)
+    safe_bullets = []
+    for bullet in bullets:
+        safe = _blind_apply_summary_replacements(bullet, replacements)
+        if not safe:
+            raise ValueError("Anonymized CV Summary returned an empty bullet")
+        for source_value, _replacement, case_sensitive_single in replacements:
+            pattern = _blind_identifier_pattern(
+                source_value, case_sensitive_single=case_sensitive_single
+            )
+            if pattern is not None and pattern.search(safe):
+                raise ValueError(
+                    "Anonymized CV Summary still contains a source identifier"
+                )
+        safe_bullets.append(safe)
+    return "\n".join("- " + bullet for bullet in safe_bullets)
 
 
 def _blind_add_mask_term(terms, value):
@@ -354,39 +665,27 @@ def _blind_finalize_summary_bullets(blinded, original_cv):
         raise ValueError("Blind CV could not preserve the About Him / Her summary")
     output_bullets = []
     for value in output:
-        if not isinstance(value, str) or not value.strip():
+        if not isinstance(value, str):
             raise ValueError("Blind CV returned an invalid About Him / Her summary")
-        output_bullets.append(value.strip())
+        clean = _BLIND_SUMMARY_MARKER_RE.sub("", value).strip()
+        if not clean:
+            raise ValueError("Blind CV returned an invalid About Him / Her summary")
+        output_bullets.append(clean)
     if len(output_bullets) != len(source_bullets):
         raise ValueError("Blind CV could not preserve every About Him / Her summary bullet")
 
-    candidate = (
-        original_cv.get("candidate")
-        if isinstance(original_cv.get("candidate"), dict)
-        else {}
-    )
-    candidate_name = str(candidate.get("name") or "").strip()
-    direct_replacements = [
-        (candidate.get("email"), "[Email Redacted]"),
-        (candidate.get("phone"), "[Phone Redacted]"),
-        (candidate.get("linkedin"), "[Link Redacted]"),
-    ]
-    if candidate_name.casefold() not in {"", "candidate", "the candidate", "[candidate]"}:
-        direct_replacements.insert(0, (candidate_name, "the candidate"))
-    for education in original_cv.get("education") or []:
-        if isinstance(education, dict):
-            direct_replacements.append(
-                (education.get("institution"), "[Institution]")
-            )
+    direct_replacements = _blind_collect_summary_identity_replacements(original_cv)
     safe_bullets = []
     for bullet in output_bullets:
-        safe = bullet
-        for source_value, replacement in direct_replacements:
-            exact = str(source_value or "").strip()
-            if exact:
-                safe = re.sub(re.escape(exact), replacement, safe, flags=re.I)
-        safe = _BLIND_SUMMARY_EMAIL_RE.sub("[Email Redacted]", safe)
-        safe = _BLIND_SUMMARY_URL_RE.sub("[Link Redacted]", safe)
+        safe = _blind_apply_summary_replacements(bullet, direct_replacements)
+        for source_value, _replacement, case_sensitive_single in direct_replacements:
+            pattern = _blind_identifier_pattern(
+                source_value, case_sensitive_single=case_sensitive_single
+            )
+            if pattern is not None and pattern.search(safe):
+                raise ValueError(
+                    "Blind CV About Him / Her summary still contains a source identifier"
+                )
         safe_bullets.append(safe)
 
     repaired = copy.deepcopy(blinded)

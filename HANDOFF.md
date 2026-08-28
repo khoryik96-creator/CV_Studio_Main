@@ -263,23 +263,30 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **CV Summary and Blind CV summary anonymization — v24.6.365 / planned PR
+- **CV Summary and Blind CV summary anonymization — v24.6.366 / planned PR
   #186, ACTIVE AND UNMERGED.** Branch
-  `chatgpt/pr186-v24.6.365-summary-anonymization` adds an off-by-default
+  `chatgpt/pr186-v24.6.366-summary-anonymization-review-fixes` adds an off-by-default
   anonymized-output option directly to CV Summary. Its prompt retains supported
   role, technology, qualification, date, metric and achievement detail while
   excluding candidate identity/contact details and named employers, clients,
-  products and education institutions. Single and batch Blind CV now promote a
+  products and education institutions. A server-side final safety pass scrubs
+  source identifiers and rejects a still-identifying response before the UI can
+  label, copy or export it as anonymized. Single and batch Blind CV now promote a
   parsed Summary/Profile/About Him / Her skill section back into
   `summary_bullets`; linked CV Summary bullets are no longer discarded merely
-  because Blind CV was selected. `/blind` requires the provider to preserve the
+  because Blind CV was selected. DOCX extraction preserves each numbered
+  summary textbox paragraph, removes AlternateContent duplicates and orders the
+  ABOUT HIM / HER label before its bullets. `/blind` requires the provider to preserve the
   exact populated summary-bullet count, deterministically scrubs direct
-  candidate PII, and then runs the established organisation safety sweep. A
+  candidate PII plus contextual unknown client/product names, and then runs the
+  established organisation safety sweep. Whole-identifier/case-safe matching
+  protects ordinary text such as `may` and `commitment`, and provider-returned
+  list markers are removed before Word numbering. A
   provider that drops or corrupts the populated summary fails visibly instead
   of publishing a blank About Him / Her box. No route, storage schema,
   dependency, credential, AI-call-count or protected-package boundary change.
   PR #185 remains a separate active branch and is not included here. Local
-  validation: 1025 tests passed, 4 skipped and 96 subtests; all 20 frontend
+  validation: 1035 tests passed, 4 skipped and 96 subtests; all 20 frontend
   fixture groups; 24 live source-smoke assertions; repository consistency,
   Git whitespace and Windows protected-source/dependency preflight.
 - **Feature download destinations — v24.6.364 / PR #185, ACTIVE AND

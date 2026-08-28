@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.365"
+_INSTALL_RECEIPT_VERSION = "v24.6.366"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -346,7 +346,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.365"
+_CVSTUDIO_VERSION = "v24.6.366"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -9070,6 +9070,8 @@ def generate_ai():
         feature = str(body.get("feature") or "").strip().lower()
         if feature == "the_spider" and not _ai_crawler_lock_allowed(body):
             return _ai_crawler_locked_response()
+        anonymized_summary = feature == "summary_anonymized"
+        summary_source_text = str(body.get("source_cv_text") or "")
 
         api_key = _resolve_request_api_key(body, "main")
         prompt = (body.get("prompt") or "").strip()
@@ -9083,6 +9085,8 @@ def generate_ai():
             return jsonify({"error": "API key required"}), 400
         if not prompt:
             return jsonify({"error": "Prompt required"}), 400
+        if anonymized_summary and not summary_source_text.strip():
+            return jsonify({"error": "Anonymized CV Summary requires the unchanged source CV"}), 400
 
         payload = {
             "model": model,
@@ -9145,6 +9149,36 @@ def generate_ai():
             return jsonify(out), 400
 
         usage = data.get("usage", {})
+        if anonymized_summary:
+            try:
+                raw_summary = "".join(
+                    str(block.get("text") or "")
+                    for block in data.get("content", [])
+                    if isinstance(block, dict)
+                )
+                safe_summary = _blind_finalize_generated_summary_text(
+                    raw_summary,
+                    summary_source_text,
+                )
+                data = dict(data)
+                data["content"] = [{"type": "text", "text": safe_summary}]
+            except ValueError as exc:
+                out = {
+                    "error": str(exc),
+                    "paid_ai_failure": bool(_llm_usage_int(usage, "api_calls")),
+                    "usage": usage,
+                    "model": model,
+                    "provider": llm_provider,
+                }
+                out.update(_llm_response_cost_fields(model, usage, llm_provider))
+                out.update(_llm_paid_failure_fields(
+                    exc,
+                    model,
+                    llm_provider,
+                    usage,
+                    attempted=True,
+                ))
+                return jsonify(out), 500
         out = {"ok": True, "content": data.get("content", []), "usage": usage, "model": model, "provider": llm_provider}
         out.update(_llm_response_cost_fields(model, usage, llm_provider))
         return jsonify(out)
@@ -12247,6 +12281,61 @@ def _extract_pdf_bullet_levels(file_bytes, page_numbers=None):
     return _pdf_bullet_levels_from_lines(lines)
 
 
+def _extract_docx_textbox_lines(document_xml):
+    """Return textbox paragraphs without flattening Word list boundaries.
+
+    CV Studio's summary and its ABOUT HIM / HER label are separate drawing
+    shapes. Word stores the content shape before the label shape and duplicates
+    both through AlternateContent fallbacks. Keep each ``w:p`` as one line,
+    discard only exact duplicate fallback groups, and move the label immediately
+    before its numbered summary group so the CV parser sees a real section.
+    """
+    xml = str(document_xml or "")
+    if not xml:
+        return []
+    groups = []
+    seen = set()
+    for match in re.finditer(
+        r"<w:txbxContent\b[^>]*>(.*?)</w:txbxContent>",
+        xml,
+        re.S,
+    ):
+        lines = []
+        numbered = False
+        for paragraph in re.findall(
+            r"<w:p(?=[ />])[^>]*>.*?</w:p>",
+            match.group(1),
+            re.S,
+        ):
+            value = _summary_docx_visible_text(paragraph)
+            if not value:
+                continue
+            is_numbered = bool(re.search(r"<w:numPr\b|<w:numId\b", paragraph))
+            numbered = numbered or is_numbered
+            if is_numbered and not _BLIND_SUMMARY_MARKER_RE.match(value):
+                value = "• " + value
+            lines.append(value)
+        key = tuple(lines)
+        if lines and key not in seen:
+            seen.add(key)
+            groups.append({"lines": lines, "numbered": numbered})
+
+    ordered = []
+    about_keys = {"abouthimher", "abouthim", "abouther", "aboutthecandidate"}
+    for group in groups:
+        key = (
+            re.sub(r"[^a-z]+", "", group["lines"][0].casefold())
+            if len(group["lines"]) == 1
+            else ""
+        )
+        if key in about_keys and ordered and ordered[-1]["numbered"]:
+            summary_group = ordered.pop()
+            ordered.extend((group, summary_group))
+        else:
+            ordered.append(group)
+    return [line for group in ordered for line in group["lines"]]
+
+
 def _extract_docx_text_preserve_tables(file_bytes):
     _validate_zip_payload(file_bytes, "DOCX")
     """Extract DOCX text, preserving table-cell paragraph/bullet boundaries.
@@ -13414,13 +13503,11 @@ def extract_text():
                         hdr_text = ' '.join(hdr_text.split()).strip()
                         if hdr_text and hdr_text not in paragraphs:
                             paragraphs.insert(0, hdr_text)
-                    # Also extract textboxes from document body
+                    # Also extract textboxes from document body. Preserve each
+                    # list paragraph and put ABOUT HIM / HER before its content;
+                    # flattening the whole box loses the original summary bullets.
                     doc_xml = z.read('word/document.xml').decode('utf-8', errors='ignore')
-                    for txbx in re.findall(r'<w:txbxContent>(.*?)</w:txbxContent>', doc_xml, re.DOTALL):
-                        txbx_text = re.sub(r'<[^>]+>', ' ', txbx)
-                        txbx_text = ' '.join(txbx_text.split()).strip()
-                        if txbx_text and txbx_text not in paragraphs:
-                            paragraphs.append(txbx_text)
+                    paragraphs.extend(_extract_docx_textbox_lines(doc_xml))
             except Exception as exc:
                 app.logger.warning("DOCX raw XML fallback extraction skipped: %s", exc)
 
@@ -13788,8 +13875,10 @@ from cvstudio_blind_mask import (
     _BLIND_CURATED_ORG_NAMES,
     _BLIND_ORG_SUFFIX_RE,
     _BLIND_ORG_TECH_ALLOWLIST,
+    _BLIND_SUMMARY_MARKER_RE,
     _blind_add_mask_term,
     _blind_collect_org_mask_terms,
+    _blind_finalize_generated_summary_text,
     _blind_finalize_summary_bullets,
     _blind_mask_org_terms_recursive,
     _blind_postprocess_company_mentions,

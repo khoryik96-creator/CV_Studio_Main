@@ -276,7 +276,12 @@ async function generateSummary(modifier) {
   if (output) { output.style.display = 'block'; output.innerHTML = '<div style="display:flex;align-items:center;gap:10px;color:var(--text3);"><span class="spinner"></span><span>Generating summary with ' + esc(route.display) + '…</span></div>'; }
   if (placeholder) placeholder.style.display = 'none'; if (btn) btn.disabled = true; updateSummaryRouteBadge();
   try {
-    var r = await fetchWithTimeout('/generate-ai', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ api_key: route.api_key, api_key_slot: route.api_key_slot, provider: route.provider, model: route.model, prompt: prompt, max_tokens: modifier === 'longer' ? 1600 : 1000, use_tools:false }) }, 180000);
+    var summaryRequest = { api_key: route.api_key, api_key_slot: route.api_key_slot, provider: route.provider, model: route.model, prompt: prompt, max_tokens: modifier === 'longer' ? 1600 : 1000, use_tools:false };
+    if (anonymize) {
+      summaryRequest.feature = 'summary_anonymized';
+      summaryRequest.source_cv_text = cv;
+    }
+    var r = await fetchWithTimeout('/generate-ai', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(summaryRequest) }, 180000);
     var d = await r.json().catch(function(){ return {}; });
     if (!r.ok || d.error) {
       recordPaidAiFailure('CV Summary failed output', d, route.model, route.provider);

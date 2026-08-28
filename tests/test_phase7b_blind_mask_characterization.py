@@ -206,6 +206,77 @@ class RecursiveTests(unittest.TestCase):
             finalized["summary_bullets"], ["The candidate led delivery."]
         )
 
+    def test_finalize_summary_uses_identifier_boundaries_and_safe_single_case(self):
+        original = {
+            "candidate": {"name": "May"},
+            "summary_bullets": ["One"],
+            "education": [{"institution": "MIT"}],
+        }
+        finalized = bm._blind_finalize_summary_bullets(
+            {"summary_bullets": ["This role may require long-term commitment."]},
+            original,
+        )
+        self.assertEqual(
+            finalized["summary_bullets"],
+            ["This role may require long-term commitment."],
+        )
+
+    def test_finalize_summary_masks_unknown_context_names_and_strips_markers(self):
+        original = {
+            "candidate": {"name": "Jane Example"},
+            "summary_bullets": ["Delivered the FalconX rollout for Novacore."],
+            "work_experiences": [],
+            "education": [],
+        }
+        finalized = bm._blind_finalize_summary_bullets(
+            {"summary_bullets": ["- Delivered the FalconX rollout for Novacore."]},
+            original,
+        )
+        self.assertEqual(
+            finalized["summary_bullets"],
+            ["Delivered the [Product] rollout for [Company]."],
+        )
+
+    def test_finalize_generated_summary_scrubs_source_identifiers(self):
+        finalized = bm._blind_finalize_generated_summary_text(
+            "- Jane Example led the FalconX rollout for Novacore. Contact jane@example.com",
+            "Jane Example\nCurrent Company: Novacore\nWorked on the FalconX rollout for Novacore.\nEmail: jane@example.com",
+        )
+        self.assertEqual(
+            finalized,
+            "- the candidate led the [Product] rollout for [Company]. Contact [Email Redacted]",
+        )
+
+    def test_finalize_generated_summary_preserves_role_and_technology_terms(self):
+        finalized = bm._blind_finalize_generated_summary_text(
+            "- Experienced Software Engineer skilled with Microsoft Excel.",
+            "Software Engineer\n2020 | University of Tenaga Nasional\nSkilled with Microsoft Excel",
+        )
+        self.assertEqual(
+            finalized,
+            "- Experienced Software Engineer skilled with Microsoft Excel.",
+        )
+
+    def test_finalize_generated_summary_preserves_other_people(self):
+        finalized = bm._blind_finalize_generated_summary_text(
+            "- the candidate worked with John Smith on regional delivery.",
+            "Jane Example\nWorked with John Smith on regional delivery.",
+        )
+        self.assertEqual(
+            finalized,
+            "- the candidate worked with John Smith on regional delivery.",
+        )
+
+    def test_phone_redaction_keeps_real_date_ranges(self):
+        self.assertEqual(
+            bm._blind_redact_phone_candidates("Worked from 2020 - 2023."),
+            "Worked from 2020 - 2023.",
+        )
+        self.assertEqual(
+            bm._blind_redact_phone_candidates("Call +60 12-345 6789."),
+            "Call [Phone Redacted].",
+        )
+
     def test_finalize_summary_refuses_silent_provider_loss(self):
         original = {"summary_bullets": ["One", "Two"]}
         with self.assertRaisesRegex(ValueError, "preserve every"):
@@ -221,6 +292,7 @@ class SmokeAndHygieneTests(unittest.TestCase):
             "_blind_replace_org_terms_in_text", "_blind_mask_org_terms_recursive",
             "_blind_postprocess_company_mentions", "_blind_restore_cv_bullet_structure",
             "_blind_prepare_summary_bullets", "_blind_finalize_summary_bullets",
+            "_blind_finalize_generated_summary_text",
         ]:
             self.assertTrue(callable(getattr(bm, name)), name)
 

@@ -241,6 +241,8 @@ const anonymizedSummaryPrompt = context.cvSummaryPrompt('SOURCE CV', 'normal', '
 assert.ok(anonymizedSummaryPrompt.includes('ANONYMIZATION — REQUIRED'));
 assert.ok(anonymizedSummaryPrompt.includes('Refer to the candidate only as "the candidate"'));
 assert.ok(anonymizedSummaryPrompt.includes('Do not name any employer, client, customer'));
+assert.ok(html.includes("summaryRequest.feature = 'summary_anonymized'"));
+assert.ok(html.includes('summaryRequest.source_cv_text = cv'));
 assert.strictEqual(context.cvSummaryModifierForPreference('concise'), 'normal');
 assert.strictEqual(context.cvSummaryModifierForPreference('detailed'), 'longer');
 
