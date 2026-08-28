@@ -82,14 +82,20 @@ assert.deepStrictEqual(
   ['**Cloud platforms** leader', 'Built delivery teams']
 );
 assert.deepStrictEqual(JSON.parse(JSON.stringify(context.formatSummaryBulletsFor('DIFFERENT CV', false))), []);
-assert.deepStrictEqual(JSON.parse(JSON.stringify(context.formatSummaryBulletsFor('RAW CV', true))), []);
+assert.deepStrictEqual(
+  JSON.parse(JSON.stringify(context.formatSummaryBulletsFor('RAW CV', true))),
+  ['**Cloud platforms** leader', 'Built delivery teams']
+);
 const formatted = context.applyFormatSummaryBullets({candidate:{name:'Summary Fixture'}}, 'RAW CV', false);
 assert.deepStrictEqual(
   JSON.parse(JSON.stringify(formatted.summary_bullets)),
   ['**Cloud platforms** leader', 'Built delivery teams']
 );
 const blinded = context.applyFormatSummaryBullets({candidate:{name:'Summary Fixture'}}, 'RAW CV', true);
-assert.strictEqual(blinded.summary_bullets, undefined);
+assert.deepStrictEqual(
+  JSON.parse(JSON.stringify(blinded.summary_bullets)),
+  ['**Cloud platforms** leader', 'Built delivery teams']
+);
 assert.ok(html.includes('id="btnSummaryFormat"'));
 assert.ok(html.includes('onclick="formatSummaryResume()"'));
 assert.ok(html.includes('id="btnSummaryApplyDocx"'));
@@ -106,6 +112,8 @@ assert.ok(html.includes("setCvSummaryDetailPreference('single','detailed')"));
 assert.ok(html.includes("setCvSummaryDetailPreference('batch','concise')"));
 assert.ok(html.includes("setCvSummaryDetailPreference('batch','detailed')"));
 assert.ok(html.includes('id="cvBlindCandidateGenderNeutralToggle"'));
+assert.ok(html.includes('id="summaryAnonymizeToggle"'));
+assert.ok(html.includes('Generate anonymized summary'));
 assert.ok(html.includes('onchange="setCvBlindCandidateGenderNeutralization(this.checked)"'));
 assert.ok(html.includes('references to managers, colleagues, clients and other people stay unchanged'));
 assert.ok(html.includes("window._cvBlindCandidateGenderNeutral = stored === 'true'"));
@@ -228,6 +236,11 @@ const summaryPrompt = context.cvSummaryPrompt('SOURCE CV', 'normal', 'Emphasise 
 assert.ok(summaryPrompt.includes('Use 6-7 bullet points.'));
 assert.ok(summaryPrompt.includes('Emphasise leadership.'));
 assert.ok(summaryPrompt.includes('SOURCE CV'));
+assert.ok(!summaryPrompt.includes('ANONYMIZATION — REQUIRED'));
+const anonymizedSummaryPrompt = context.cvSummaryPrompt('SOURCE CV', 'normal', '', true);
+assert.ok(anonymizedSummaryPrompt.includes('ANONYMIZATION — REQUIRED'));
+assert.ok(anonymizedSummaryPrompt.includes('Refer to the candidate only as "the candidate"'));
+assert.ok(anonymizedSummaryPrompt.includes('Do not name any employer, client, customer'));
 assert.strictEqual(context.cvSummaryModifierForPreference('concise'), 'normal');
 assert.strictEqual(context.cvSummaryModifierForPreference('detailed'), 'longer');
 

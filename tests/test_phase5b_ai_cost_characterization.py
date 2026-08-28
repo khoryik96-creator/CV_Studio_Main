@@ -399,6 +399,56 @@ class Phase5BAICostCharacterizationTests(unittest.TestCase):
         self.assertIn("Never leave or introduce they, them, their", prompts[1])
         self.assertIn("managers, colleagues, clients", prompts[1])
 
+    def test_blind_preserves_and_anonymizes_about_summary(self):
+        parsed_data = {
+            "candidate": {
+                "name": "Fixture Candidate",
+                "email": "fixture@example.com",
+            },
+            "summary_bullets": [
+                "Fixture Candidate led delivery for Fixture Company.",
+                "Contact fixture@example.com for details.",
+            ],
+            "work_experiences": [{"company": "Fixture Company", "roles": []}],
+        }
+        provider_data = {
+            "candidate": {"name": "Candidate", "email": "[Email Redacted]"},
+            "summary_bullets": [
+                "Fixture Candidate led delivery for Fixture Company.",
+                "Contact fixture@example.com for details.",
+            ],
+            "work_experiences": [{"company": "[Company]", "roles": []}],
+        }
+
+        with mock.patch.object(
+            app, "_resolve_request_api_key", return_value="<fixture-credential>"
+        ), mock.patch.object(
+            app,
+            "call_llm",
+            return_value={
+                "content": [{"type": "text", "text": json.dumps(provider_data)}],
+                "usage": {},
+            },
+        ):
+            response = self._post_paid(
+                "/blind",
+                {"cv_data": parsed_data, "provider": "anthropic"},
+                "blind-preserve-summary",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        bullets = response.get_json()["data"]["summary_bullets"]
+        self.assertEqual(len(bullets), 2)
+        blob = " ".join(bullets)
+        self.assertNotIn("Fixture Candidate", blob)
+        self.assertNotIn("fixture@example.com", blob)
+        self.assertNotIn("Fixture Company", blob)
+        self.assertIn("the candidate", blob)
+        self.assertIn("[Email Redacted]", blob)
+        self.assertIn("[Company]", blob)
+        self.assertIn("ABOUT HIM / HER SUMMARY", app.BLIND_SYSTEM_PROMPT)
+        self.assertIn("Never delete, omit, combine", app.BLIND_SYSTEM_PROMPT)
+
     def test_existing_failure_and_salary_processing_fields_are_preserved(self):
         with mock.patch.object(
             app, "_resolve_request_api_key", return_value="<fixture-credential>"

@@ -27,8 +27,29 @@ class CollectTests(unittest.TestCase):
         terms = bm._blind_collect_org_mask_terms({"experience": [{"company": "Bolttech Sdn Bhd"}]})
         self.assertIsInstance(terms, list)
 
-
 class RecursiveTests(unittest.TestCase):
+    def test_prepare_summary_promotes_about_box_and_removes_duplicate_skill(self):
+        prepared = bm._blind_prepare_summary_bullets(
+            {
+                "summary_bullets": [],
+                "skills": [
+                    {
+                        "category": "About Him / Her",
+                        "items": "- Led Maybank delivery\n- Built regional platforms",
+                    },
+                    {"category": "Technology", "items": "Python, SQL"},
+                ],
+            }
+        )
+        self.assertEqual(
+            prepared["summary_bullets"],
+            ["Led Maybank delivery", "Built regional platforms"],
+        )
+        self.assertEqual(
+            prepared["skills"],
+            [{"category": "Technology", "items": "Python, SQL"}],
+        )
+
     def test_mask_recursive_scrubs_nested_strings(self):
         data = {"summary": "Led a team at Bolttech", "skills": ["Python", "worked at Bolttech"]}
         masked = bm._blind_mask_org_terms_recursive(data, ["Bolttech"])
@@ -140,6 +161,58 @@ class RecursiveTests(unittest.TestCase):
                 blinded,
             )
 
+    def test_finalize_summary_preserves_count_and_scrubs_direct_identity(self):
+        original = {
+            "candidate": {
+                "name": "Jane Candidate",
+                "email": "jane@example.com",
+                "phone": "+60 12-345 6789",
+                "linkedin": "https://linkedin.com/in/jane-candidate",
+            },
+            "summary_bullets": ["One", "Two"],
+            "education": [{"institution": "Fixture Technology University"}],
+        }
+        blinded = {
+            "summary_bullets": [
+                "Jane Candidate led delivery; jane@example.com",
+                "Studied at Fixture Technology University; see https://linkedin.com/in/jane-candidate or +60 12-345 6789",
+            ]
+        }
+
+        finalized = bm._blind_finalize_summary_bullets(blinded, original)
+
+        self.assertEqual(len(finalized["summary_bullets"]), 2)
+        blob = " ".join(finalized["summary_bullets"])
+        self.assertNotIn("Jane Candidate", blob)
+        self.assertNotIn("jane@example.com", blob)
+        self.assertNotIn("linkedin.com/in/jane-candidate", blob)
+        self.assertNotIn("+60 12-345 6789", blob)
+        self.assertNotIn("Fixture Technology University", blob)
+        self.assertIn("the candidate", blob)
+        self.assertIn("[Email Redacted]", blob)
+        self.assertIn("[Link Redacted]", blob)
+        self.assertIn("[Phone Redacted]", blob)
+        self.assertIn("[Institution]", blob)
+
+    def test_finalize_summary_does_not_duplicate_generic_candidate_label(self):
+        original = {
+            "candidate": {"name": "Candidate"},
+            "summary_bullets": ["One"],
+        }
+        finalized = bm._blind_finalize_summary_bullets(
+            {"summary_bullets": ["The candidate led delivery."]}, original
+        )
+        self.assertEqual(
+            finalized["summary_bullets"], ["The candidate led delivery."]
+        )
+
+    def test_finalize_summary_refuses_silent_provider_loss(self):
+        original = {"summary_bullets": ["One", "Two"]}
+        with self.assertRaisesRegex(ValueError, "preserve every"):
+            bm._blind_finalize_summary_bullets(
+                {"summary_bullets": ["Only one"]}, original
+            )
+
 
 class SmokeAndHygieneTests(unittest.TestCase):
     def test_symbols_present(self):
@@ -147,6 +220,7 @@ class SmokeAndHygieneTests(unittest.TestCase):
             "_blind_walk_strings", "_blind_add_mask_term", "_blind_collect_org_mask_terms",
             "_blind_replace_org_terms_in_text", "_blind_mask_org_terms_recursive",
             "_blind_postprocess_company_mentions", "_blind_restore_cv_bullet_structure",
+            "_blind_prepare_summary_bullets", "_blind_finalize_summary_bullets",
         ]:
             self.assertTrue(callable(getattr(bm, name)), name)
 

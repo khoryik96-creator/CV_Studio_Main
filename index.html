@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>CV Studio</title>
 <link rel="icon" type="image/png" href="cv_studio_logo.png?v=24.6.79-ui"/>
-<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.363">
-<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.363"></script>
+<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.365">
+<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.365"></script>
 <script>
 /* CV Studio Doctor — built-in diagnostic recorder.
  * Records JS errors, unhandled rejections, failed/slow network calls and
@@ -254,7 +254,7 @@
 <div class="app">
   <div class="header" style="position:relative;">
     <div>
-      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.363 (Offline) by The 郭 Lab</span></h1>
+      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.365 (Offline) by The 郭 Lab</span></h1>
 
     </div>
     <div class="header-tools">
@@ -761,6 +761,10 @@
             </div>
             <input type="text" id="summaryCustomDir" placeholder="" style="display:none;margin-top:8px;width:100%;font-size:12px;padding:7px 9px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text1);"/>
           </div>
+          <label class="lead-quick-toggle" title="Hides the candidate's name, contact details, employers, clients and education institutions in the generated summary. Other people mentioned in the CV are not renamed.">
+            <input type="checkbox" id="summaryAnonymizeToggle" onchange="updateSummaryAnonymizeHint()" /> Generate anonymized summary
+          </label>
+          <div id="summaryAnonymizeHint" style="font-size:11px;color:var(--text3);line-height:1.4;margin-top:-8px;">Off — the summary may use identifying details supported by the CV.</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
             <button class="primary" id="btnSummaryGen" onclick="generateSummary('normal')" style="font-size:13px;">Generate CV Summary</button>
             <button class="sec" onclick="generateSummary('shorter')" style="font-size:12px;">Shorter</button>
@@ -2310,33 +2314,33 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
-<script src="/vendor/cvstudio/api-transport.js?v=v24.6.363"></script>
-<script src="/vendor/cvstudio/page-nav.js?v=v24.6.363"></script>
-<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.363"></script>
-<script src="/vendor/cvstudio/create-profile.js?v=v24.6.363"></script>
-<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.363"></script>
-<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.363"></script>
-<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.363"></script>
-<script src="/vendor/cvstudio/company-profile.js?v=v24.6.363"></script>
-<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.363"></script>
-<script src="/vendor/cvstudio/appearance.js?v=v24.6.363"></script>
-<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.363"></script>
-<script src="/vendor/cvstudio/docx-export.js?v=v24.6.363"></script>
-<script src="/vendor/cvstudio/the-owl.js?v=v24.6.363"></script>
-<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.363"></script>
-<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.363"></script>
-<script src="/vendor/cvstudio/settings.js?v=v24.6.363"></script>
-<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.363"></script>
-<script src="/vendor/cvstudio/tab-status.js?v=v24.6.363"></script>
-<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.363"></script>
-<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.363"></script>
-<script src="/vendor/cvstudio/cv-format.js?v=v24.6.363"></script>
-<script src="/vendor/cvstudio/locks.js?v=v24.6.363"></script>
-<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.363"></script>
-<script src="/vendor/cvstudio/ppc.js?v=v24.6.363"></script>
-<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.363"></script>
-<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.363"></script>
-<script src="/vendor/cvstudio/batch-format.js?v=v24.6.363"></script>
+<script src="/vendor/cvstudio/api-transport.js?v=v24.6.365"></script>
+<script src="/vendor/cvstudio/page-nav.js?v=v24.6.365"></script>
+<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.365"></script>
+<script src="/vendor/cvstudio/create-profile.js?v=v24.6.365"></script>
+<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.365"></script>
+<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.365"></script>
+<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.365"></script>
+<script src="/vendor/cvstudio/company-profile.js?v=v24.6.365"></script>
+<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.365"></script>
+<script src="/vendor/cvstudio/appearance.js?v=v24.6.365"></script>
+<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.365"></script>
+<script src="/vendor/cvstudio/docx-export.js?v=v24.6.365"></script>
+<script src="/vendor/cvstudio/the-owl.js?v=v24.6.365"></script>
+<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.365"></script>
+<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.365"></script>
+<script src="/vendor/cvstudio/settings.js?v=v24.6.365"></script>
+<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.365"></script>
+<script src="/vendor/cvstudio/tab-status.js?v=v24.6.365"></script>
+<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.365"></script>
+<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.365"></script>
+<script src="/vendor/cvstudio/cv-format.js?v=v24.6.365"></script>
+<script src="/vendor/cvstudio/locks.js?v=v24.6.365"></script>
+<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.365"></script>
+<script src="/vendor/cvstudio/ppc.js?v=v24.6.365"></script>
+<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.365"></script>
+<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.365"></script>
+<script src="/vendor/cvstudio/batch-format.js?v=v24.6.365"></script>
 <script>
 
 document.addEventListener('DOMContentLoaded', initPageNavPin);
@@ -2354,9 +2358,9 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 
 </script>
-<script src="/vendor/cvstudio/input-file.js?v=v24.6.363"></script>
-<script src="/vendor/cvstudio/stats.js?v=v24.6.363"></script>
-<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.363"></script>
+<script src="/vendor/cvstudio/input-file.js?v=v24.6.365"></script>
+<script src="/vendor/cvstudio/stats.js?v=v24.6.365"></script>
+<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.365"></script>
 <script>
 try { updateSummaryLockUI(); } catch(e) {}
 try { updateCvScoringLockUI(); } catch(e) {}

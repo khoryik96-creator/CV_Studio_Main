@@ -57,6 +57,19 @@ _BLIND_ORG_SUFFIX_RE = re.compile(
     r"\b([A-Z][A-Za-z0-9&.'’\-]*(?:\s+[A-Za-z0-9&.'’\-]+){0,8}\s+"
     r"(?i:Sdn\.?\s*Bhd\.?|Bhd\.?|Berhad|Pte\.?\s*Ltd\.?|Pvt\.?\s*Ltd\.?|Ltd\.?|Limited|Inc\.?|LLC|LLP|PLC|Corp\.?|Corporation|Company|Co\.?|Group|Holdings|Bank|Insurance|Assurance|Telecommunications|Telekom|Technologies|Technology|Solutions|Services|Consulting))\b"
 )
+_BLIND_SUMMARY_EMAIL_RE = re.compile(
+    r"(?<![A-Za-z0-9._%+\-])[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}(?![A-Za-z0-9._%+\-])",
+    re.I,
+)
+_BLIND_SUMMARY_URL_RE = re.compile(
+    r"(?<![A-Za-z0-9])(?:https?://|www\.|(?:linkedin|github)\.com/)[^\s<>()]+",
+    re.I,
+)
+_BLIND_SUMMARY_CATEGORY_RE = re.compile(
+    r"^(?:summary|professional summary|executive summary|profile|professional profile|career profile|objective|career objective|overview|about(?:\s+him(?:\s*/\s*her)?|\s+her|\s+the\s+candidate)?)$",
+    re.I,
+)
+_BLIND_SUMMARY_MARKER_RE = re.compile(r"^\s*[-*•]\s+")
 
 
 def _blind_walk_strings(obj):
@@ -68,6 +81,44 @@ def _blind_walk_strings(obj):
             yield from _blind_walk_strings(v)
     elif isinstance(obj, str):
         yield obj
+
+
+def _blind_summary_items(value):
+    values = value if isinstance(value, list) else str(value or "").splitlines()
+    out = []
+    for item in values:
+        if not isinstance(item, str):
+            continue
+        clean = _BLIND_SUMMARY_MARKER_RE.sub("", item).strip()
+        if clean:
+            out.append(clean)
+    return out[:20]
+
+
+def _blind_prepare_summary_bullets(cv_data):
+    """Promote source Summary/About content before the provider blinds it."""
+    if not isinstance(cv_data, dict):
+        return cv_data
+    prepared = copy.deepcopy(cv_data)
+    direct = _blind_summary_items(prepared.get("summary_bullets"))
+    skills = prepared.get("skills") if isinstance(prepared.get("skills"), list) else []
+    promoted = []
+    remaining = []
+    for item in skills:
+        if (
+            isinstance(item, dict)
+            and _BLIND_SUMMARY_CATEGORY_RE.fullmatch(
+                str(item.get("category") or "").strip()
+            )
+        ):
+            promoted.extend(_blind_summary_items(item.get("items")))
+        else:
+            remaining.append(item)
+    summary = (direct or promoted)[:20]
+    if summary:
+        prepared["summary_bullets"] = summary
+        prepared["skills"] = remaining
+    return prepared
 
 
 def _blind_add_mask_term(terms, value):
@@ -283,6 +334,63 @@ def _blind_restore_cv_bullet_structure(blinded, original_cv):
             )
             if rebuilt is not None:
                 blinded_role["bullets"] = rebuilt
+    return repaired
+
+
+def _blind_finalize_summary_bullets(blinded, original_cv):
+    """Preserve a populated blinded summary and scrub direct candidate PII."""
+    if not isinstance(blinded, dict) or not isinstance(original_cv, dict):
+        return blinded
+    source = original_cv.get("summary_bullets")
+    source_bullets = (
+        [value.strip() for value in source if isinstance(value, str) and value.strip()]
+        if isinstance(source, list)
+        else []
+    )
+    if not source_bullets:
+        return blinded
+    output = blinded.get("summary_bullets")
+    if not isinstance(output, list):
+        raise ValueError("Blind CV could not preserve the About Him / Her summary")
+    output_bullets = []
+    for value in output:
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("Blind CV returned an invalid About Him / Her summary")
+        output_bullets.append(value.strip())
+    if len(output_bullets) != len(source_bullets):
+        raise ValueError("Blind CV could not preserve every About Him / Her summary bullet")
+
+    candidate = (
+        original_cv.get("candidate")
+        if isinstance(original_cv.get("candidate"), dict)
+        else {}
+    )
+    candidate_name = str(candidate.get("name") or "").strip()
+    direct_replacements = [
+        (candidate.get("email"), "[Email Redacted]"),
+        (candidate.get("phone"), "[Phone Redacted]"),
+        (candidate.get("linkedin"), "[Link Redacted]"),
+    ]
+    if candidate_name.casefold() not in {"", "candidate", "the candidate", "[candidate]"}:
+        direct_replacements.insert(0, (candidate_name, "the candidate"))
+    for education in original_cv.get("education") or []:
+        if isinstance(education, dict):
+            direct_replacements.append(
+                (education.get("institution"), "[Institution]")
+            )
+    safe_bullets = []
+    for bullet in output_bullets:
+        safe = bullet
+        for source_value, replacement in direct_replacements:
+            exact = str(source_value or "").strip()
+            if exact:
+                safe = re.sub(re.escape(exact), replacement, safe, flags=re.I)
+        safe = _BLIND_SUMMARY_EMAIL_RE.sub("[Email Redacted]", safe)
+        safe = _BLIND_SUMMARY_URL_RE.sub("[Link Redacted]", safe)
+        safe_bullets.append(safe)
+
+    repaired = copy.deepcopy(blinded)
+    repaired["summary_bullets"] = safe_bullets
     return repaired
 
 
