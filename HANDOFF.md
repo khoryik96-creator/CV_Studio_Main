@@ -20,8 +20,8 @@ traps that the code alone won't warn you about.
 `app.py` ends with `_finalize_modular_monolith_app(...)`, which hard-asserts at
 import time:
 
-- `expected_route_count = 116`
-- `expected_route_contract_sha256 = "855e04d56c550c35739c70d2dc8d35fc9d2b37d35f76453b7f3d472cf702d18e"`
+- `expected_route_count = 118`
+- `expected_route_contract_sha256 = "42768445b8fe97e48688238c02bebf5abce0251befc3d212c2d2b029911f7862"`
 - 5 before-request guards, in this exact order:
   `_assign_cvstudio_request_id`, `_reject_declared_oversize_request`,
   `_reject_non_local_host_header`, `_require_ai_spend_browser_session`,
@@ -30,7 +30,7 @@ import time:
 
 If you add, remove, or rename **any** route, the app refuses to boot until you
 recompute the SHA and bump the count in `app.py` **and** in the ~12 test files
-that pin `116` / the SHA (`tests/test_phase7a_*`, `tests/test_phase5b_*`, etc.).
+that pin `118` / the SHA (`tests/test_phase7a_*`, `tests/test_phase5b_*`, etc.).
 If you are not touching routes, leave all of this alone.
 
 ## 2. Architecture and module extractions
@@ -146,6 +146,13 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 7. Recently completed (already on `master`)
 
+- **v24.6.361 CV download folders:** PR #182 was squash-merged to `master` as
+  `67defbc`. Settings → Downloads provides separate browser-authorized
+  destinations for Formatted CV and Blind CV, covering both single and batch
+  downloads. Existing files are safely numbered and unsupported, expired or
+  denied folder access visibly falls back to the browser Downloads behavior.
+  No route, schema, dependency, credential, AI/external-call, CV-content or
+  protected-build-trigger boundary changed.
 - **v24.6.360 Blind CV candidate-gender neutralization:** PR #181 was
   squash-merged to `master` as `541cbf3`. General Settings now has an
   off-by-default toggle used only by single and batch Blind CV. Enabled runs
@@ -246,25 +253,58 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **CV download folders — v24.6.361 / planned PR #182, ACTIVE AND UNMERGED.**
-  Branch `chatgpt/pr182-v24.6.361-cv-download-folders` adds Settings →
-  Downloads with separate user-selected destinations for Formatted CV and
-  Blind CV; each applies to both single and batch downloads and both may use
-  the same folder. Chromium's browser-authorized File System Access API and
-  local IndexedDB handle storage are used without exposing the full path.
-  Existing files receive a numbered filename instead of being overwritten.
-  Unsupported, expired or denied folder access visibly falls back to the
-  established browser Downloads behavior. The post-review corrective reserves
-  suffix space before shortening a long filename, so `(1)` cannot be truncated
-  into an overwrite, and records the mode that produced each batch file so a
-  later Format/Blind tab switch cannot redirect it to the wrong folder. Only CV
-  DOCX downloads change; no
-  route, schema, dependency, credential, AI/external-call, CV-content or
-  protected-build-trigger boundary changes. Validation: 984 tests passed, 4
-  skipped and 96 subtests; all 20 frontend fixtures; 24-assertion live source
-  smoke; Python/JavaScript/PowerShell/POSIX syntax; dependency and repository
-  consistency; Windows Antiword/Tesseract/adm-zip protected-source preflight;
-  and a clean v24.6.361 browser render at `http://127.0.0.1:5059/`.
+- **Blind CV bullet preservation — v24.6.362 / planned PR #183, ACTIVE AND
+  UNMERGED.** Branch
+  `chatgpt/pr183-v24.6.362-blind-cv-bullet-normalization` fixes the supplied
+  formatted-CV → Blind CV regression. DOCX extraction preserves real Word list
+  paragraphs while leaving ordinary bold role subheadings plain; Blind CV
+  restores an exact matching original section/list container shape using only
+  already-blinded provider text and normalizes it before preview/export. A
+  mismatch is left untouched, and no unblinded source wording or unknown field
+  can be copied into the output. Focused regressions use no paid AI call. The
+  later native-download corrective adds two local routes and one packaged
+  source module, but no storage-schema migration, credential, paid-call-count
+  or package target change. Earlier validation: 990 tests passed, 4 skipped
+  and 96 subtests;
+  all 20 frontend fixtures; 24-assertion live source smoke; 142 Python, 71
+  JavaScript, 9 PowerShell and 5 POSIX-shell syntax checks; repository
+  consistency; and the Windows Antiword/Tesseract/adm-zip protected-source
+  preflight. Owner preview follow-up also hardens the merged download-folder
+  feature: folder selection now requests write access immediately, Settings
+  shows the real selected folder name, the exact last-saved filename and a
+  Check access action, and any selected-folder failure identifies the actual
+  browser-Downloads fallback instead of silently appearing to ignore the
+  selection. Owner testing then confirmed the embedded Codex browser still
+  refused some directory-handle writes. The v24.6.362 follow-up therefore adds
+  `cvstudio_downloads.py` and two guarded local routes: Settings opens the
+  native Windows/macOS folder picker, stores separate Formatted/Blind paths
+  only in private runtime state, shows the full configured and last-saved path,
+  and the Python process writes each DOCX with exclusive non-overwriting names.
+  Browser Downloads is used only when no custom folder is configured; a failed
+  configured-folder write stops visibly instead of placing the file elsewhere.
+  The branch also repairs the product-owned Windows startup registration when
+  it still targets a moved/deleted CV Studio folder: Settings recognizes only
+  the exact historical `wscript.exe "...\\START_HIDDEN.vbs"` form and rebinds
+  it through the guarded enable route, while a successful `INSTALL.bat` carries
+  an already-enabled entry to the new root. Unknown Run commands are left
+  untouched, and disabling Startup removes a recognized stale CV Studio entry.
+  The PR review corrective makes that repair strictly stale-only: another
+  existing installation is reported but never taken over or disabled by a
+  preview. Download preparation now refreshes local folder status and stops if
+  that check fails, so an unknown state cannot silently become Browser
+  Downloads. Native selection preserves Windows/UNC/macOS filesystem roots;
+  the save service validates the real DOCX ZIP container and required Word
+  parts; and malformed nested Blind-CV AI JSON is left unchanged rather than
+  escaping as a generic 500.
+  Final GitHub-thread corrections keep Darwin folder state in the absolute
+  per-user `~/.guo_lab_cv_studio` directory when `LOCALAPPDATA` is absent, and
+  honor a direct or style-level Word `numId=0` as explicit list suppression
+  instead of falling through to inherited numbering.
+  The sealed route contract is intentionally re-baselined from 116 to 118.
+  Final validation after all PR review corrections: 1017 tests passed, 4 skipped
+  and 96 subtests; all 20 frontend fixtures; 24-assertion live source smoke;
+  repository consistency; and Windows Antiword/Tesseract/adm-zip protected-
+  source preflight.
 - **Updater preflight-output corrective — v24.6.359 / PR #179, MERGED.** PR
   #179 merged to `master` as `a20b7f9`. It keeps the
   downloaded preflight's visible diagnostic output out of the PowerShell

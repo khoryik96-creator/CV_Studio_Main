@@ -130,7 +130,7 @@ class Phase5APersistentJobsCharacterizationTests(unittest.TestCase):
 
     def test_long_running_route_inventory_and_global_contracts_are_exact(self):
         rules = {rule.rule: rule for rule in app.app.url_map.iter_rules()}
-        self.assertEqual(len(rules), 116)
+        self.assertEqual(len(rules), 118)
         for path, (methods, endpoint) in _LONG_RUNNING_ROUTE_CONTRACTS.items():
             self.assertIn(path, rules)
             self.assertEqual(rules[path].methods & {"GET", "POST"}, methods)

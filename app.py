@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.361"
+_INSTALL_RECEIPT_VERSION = "v24.6.362"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -256,6 +256,11 @@ from cvstudio_jobs import (
     PersistentJobStore,
     deterministic_job_id,
 )
+from cvstudio_downloads import (
+    DownloadFolderError,
+    LocalDownloadService,
+    default_download_state_path,
+)
 from cvstudio_ai_costs import (
     MODEL_PRICING_USD_PER_MILLION as _PHASE5B_MODEL_PRICING,
     cost_details as _phase5b_cost_details,
@@ -341,7 +346,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.361"
+_CVSTUDIO_VERSION = "v24.6.362"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -425,6 +430,14 @@ _RUNTIME_STATE_DIR = os.path.join(
 _RUNTIME_LOG_PATH = os.environ.get("CVSTUDIO_RUNTIME_LOG_PATH") or os.path.join(_RUNTIME_STATE_DIR, "runtime.log")
 _RUNTIME_PID_PATH = os.path.join(_RUNTIME_STATE_DIR, "cvstudio.{}.pid.json".format(_CVSTUDIO_INSTANCE_ID))
 _RUNTIME_LEGACY_PID_PATH = os.path.join(_RUNTIME_STATE_DIR, "cvstudio.pid.json")
+_CVSTUDIO_DOWNLOAD_FOLDERS_PATH = (
+    os.environ.get("CVSTUDIO_DOWNLOAD_FOLDERS_PATH")
+    or default_download_state_path(
+        _RUNTIME_STATE_DIR,
+        local_appdata=os.environ.get("LOCALAPPDATA"),
+    )
+)
+_cvstudio_download_service = LocalDownloadService(_CVSTUDIO_DOWNLOAD_FOLDERS_PATH)
 
 
 def _rotate_runtime_log(path):
@@ -1883,6 +1896,63 @@ def instance_id_text():
 @app.route("/ping", methods=["GET"])
 def ping():
     return _CVSTUDIO_RUNTIME_SERVICE.ping()
+
+
+def _cvstudio_download_error(error):
+    return _cvstudio_error_payload(
+        getattr(error, "code", "DOWNLOAD_FOLDER_FAILED"),
+        getattr(error, "public_message", "The local download-folder action failed."),
+        int(getattr(error, "status", 400) or 400),
+        retryable=int(getattr(error, "status", 400) or 400) >= 500,
+        action="choose_download_folder",
+    )
+
+
+@app.route("/downloads/folders", methods=["GET", "POST", "DELETE"])
+def cvstudio_download_folders():
+    try:
+        if request.method == "GET":
+            payload = _cvstudio_download_service.folders()
+            return jsonify({"ok": True, **payload})
+        data = request.get_json(silent=True) or {}
+        kind = data.get("kind")
+        if request.method == "DELETE":
+            folder = _cvstudio_download_service.clear_folder(kind)
+            return jsonify({"ok": True, "kind": str(kind or ""), "folder": folder})
+        action = str(data.get("action") or "select").strip().lower()
+        if action == "select":
+            folder = _cvstudio_download_service.select_folder(kind)
+        elif action == "check":
+            folder = _cvstudio_download_service.check_folder(kind)
+        else:
+            return _cvstudio_error_payload(
+                "DOWNLOAD_FOLDER_ACTION_INVALID",
+                "Choose a supported download-folder action.",
+                400,
+            )
+        return jsonify({"ok": True, "kind": str(kind or ""), "folder": folder})
+    except DownloadFolderError as error:
+        return _cvstudio_download_error(error)
+
+
+@app.route("/downloads/save", methods=["POST"])
+def cvstudio_download_save():
+    upload = request.files.get("file")
+    if upload is None:
+        return _cvstudio_error_payload(
+            "DOWNLOAD_FILE_MISSING",
+            "The generated CV file is missing.",
+            400,
+        )
+    try:
+        result = _cvstudio_download_service.save_file(
+            request.form.get("kind"),
+            request.form.get("filename") or upload.filename,
+            upload.stream,
+        )
+        return jsonify({"ok": True, **result})
+    except DownloadFolderError as error:
+        return _cvstudio_download_error(error)
 
 # ── JobAdder OAuth and protected credential store ────────────────────
 _ja_creds_store = {}
@@ -12189,10 +12259,43 @@ def _extract_docx_text_preserve_tables(file_bytes):
     def clean(text):
         return re.sub(r"\s+", " ", (text or "")).strip()
 
+    def paragraph_has_numbering(paragraph):
+        """True when Word renders this paragraph with a list marker.
+
+        ``Paragraph.text`` deliberately omits Word's numbering glyph.  Preserve
+        that structural signal for the CV parser by checking direct numbering
+        and any numbering inherited through the paragraph's style chain.
+        """
+        try:
+            direct = paragraph._p.xpath("./w:pPr/w:numPr/w:numId/@w:val")
+            if direct:
+                return any(str(value) != "0" for value in direct)
+            style = paragraph.style
+            seen = set()
+            while style is not None and style.style_id not in seen:
+                seen.add(style.style_id)
+                inherited = style._element.xpath("./w:pPr/w:numPr/w:numId/@w:val")
+                if inherited:
+                    return any(str(value) != "0" for value in inherited)
+                style = style.base_style
+        except Exception:
+            return False
+        return False
+
+    def paragraph_line(paragraph):
+        value = clean(paragraph.text)
+        if not value:
+            return ""
+        if paragraph_has_numbering(paragraph) and not re.match(
+            r"^[•●▪◦‣⁃∙·‧]\s*", value
+        ):
+            return "• " + value
+        return value
+
     def cell_lines(cell):
         out = []
         for paragraph in cell.paragraphs:
-            value = clean(paragraph.text)
+            value = paragraph_line(paragraph)
             if value and (not out or value != out[-1]):
                 out.append(value)
         return out
@@ -12229,7 +12332,7 @@ def _extract_docx_text_preserve_tables(file_bytes):
         for hdr in (section.header, section.first_page_header, section.even_page_header):
             try:
                 for paragraph in hdr.paragraphs:
-                    append_header(paragraph.text)
+                    append_header(paragraph_line(paragraph))
                 for table in getattr(hdr, "tables", []) or []:
                     for row in table.rows:
                         for value in row_lines(row):
@@ -12241,7 +12344,7 @@ def _extract_docx_text_preserve_tables(file_bytes):
     for child in body.iterchildren():
         tag = child.tag.rsplit('}', 1)[-1]
         if tag == 'p':
-            value = clean(_DocxParagraph(child, doc).text)
+            value = paragraph_line(_DocxParagraph(child, doc))
             if value:
                 lines.append(value)
         elif tag == 'tbl':
@@ -13682,6 +13785,7 @@ from cvstudio_blind_mask import (
     _blind_mask_org_terms_recursive,
     _blind_postprocess_company_mentions,
     _blind_replace_org_terms_in_text,
+    _blind_restore_cv_bullet_structure,
     _blind_walk_strings,
 )
 
@@ -13900,10 +14004,15 @@ def blind_cv():
             ))
             return jsonify(out), 500
 
+        # Preserve section/list containers even when the provider flattened the
+        # same blinded strings, then run the normal bullet repair before preview.
+        blinded = _blind_restore_cv_bullet_structure(blinded, cv_data)
+
         # Deterministic last line of defence: mask residual employer/client/competitor
         # names that the AI may have left inside bullets, project descriptions,
         # achievements, highlights, summaries, or additional information.
         blinded = _blind_postprocess_company_mentions(blinded, cv_data)
+        blinded = _normalize_cv_structured_content(blinded)
 
         out = {"ok": True, "data": blinded, "usage": usage, "model": model, "provider": llm_provider}
         out.update(_llm_response_cost_fields(model, usage, llm_provider))
@@ -14258,9 +14367,9 @@ _salary_comparison.init_app(app, url_prefix="/salary-comparison")
 
 _CVSTUDIO_ARCHITECTURE = _finalize_modular_monolith_app(
     app,
-    expected_route_count=116,
+    expected_route_count=118,
     expected_route_contract_sha256=(
-        "855e04d56c550c35739c70d2dc8d35fc9d2b37d35f76453b7f3d472cf702d18e"
+        "42768445b8fe97e48688238c02bebf5abce0251befc3d212c2d2b029911f7862"
     ),
     expected_before_request_handlers=(
         "_assign_cvstudio_request_id",

@@ -11,10 +11,34 @@ observable behaviour, response payloads and status codes are unchanged.
 from __future__ import annotations
 
 import os
+import ntpath
 import platform
 import plistlib
+import re
 import subprocess
 from typing import Any, Callable
+
+
+_WINDOWS_RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+_WINDOWS_RUN_VALUE = "GUOLabCVStudio"
+_WINDOWS_WSCRIPT_COMMAND_RE = re.compile(
+    r'^\s*(?:"(?:[^"\r\n]*[\\/])?wscript(?:\.exe)?"|'
+    r'(?:[^\s"\r\n]*[\\/])?wscript(?:\.exe)?)\s+"([^"\r\n]+)"\s*$',
+    re.IGNORECASE,
+)
+
+
+def _managed_windows_startup_path(command: str) -> str:
+    """Return the VBS path only for CV Studio's exact legacy Run command."""
+    match = _WINDOWS_WSCRIPT_COMMAND_RE.fullmatch(str(command or ""))
+    if not match:
+        return ""
+    path = match.group(1).strip()
+    if not ntpath.isabs(path):
+        return ""
+    if ntpath.basename(path).lower() != "start_hidden.vbs":
+        return ""
+    return ntpath.normpath(path)
 
 
 class StartupService:
@@ -38,17 +62,34 @@ class StartupService:
             if platform.system() == "Windows":
                 import winreg
                 key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-                    r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_READ)
+                    _WINDOWS_RUN_KEY, 0, winreg.KEY_READ)
                 try:
-                    value = str(winreg.QueryValueEx(key, "GUOLabCVStudio")[0] or "")
-                    winreg.CloseKey(key)
+                    value = str(winreg.QueryValueEx(key, _WINDOWS_RUN_VALUE)[0] or "")
                     expected = os.path.realpath(os.path.join(self._root_path(), "START_HIDDEN.vbs"))
                     expected_command = 'wscript.exe "{}"'.format(expected)
                     configured = os.path.normcase(value.strip()) == os.path.normcase(expected_command)
-                    return self._jsonify({"enabled": bool(configured), "configured": bool(configured), "command": value if configured else "", "instance_id": instance_id})
+                    managed_path = _managed_windows_startup_path(value)
+                    repair_required = bool(
+                        not configured
+                        and managed_path
+                        and not os.path.isfile(managed_path)
+                    )
+                    return self._jsonify({
+                        "enabled": bool(configured or repair_required),
+                        "configured": bool(configured),
+                        "repair_required": repair_required,
+                        "other_installation": bool(
+                            not configured
+                            and managed_path
+                            and os.path.isfile(managed_path)
+                        ),
+                        "command": value if configured else "",
+                        "instance_id": instance_id,
+                    })
                 except FileNotFoundError:
-                    winreg.CloseKey(key)
                     return self._jsonify({"enabled": False, "instance_id": instance_id})
+                finally:
+                    winreg.CloseKey(key)
             elif platform.system() == "Darwin":
                 plist = os.path.expanduser("~/Library/LaunchAgents/com.hyppies.cvstudio.{}.plist".format(instance_id))
                 if not os.path.exists(plist):
@@ -76,8 +117,8 @@ class StartupService:
                 vbs_path = os.path.join(script_dir, "START_HIDDEN.vbs")
                 cmd = f'wscript.exe "{vbs_path}"'
                 key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-                    r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_SET_VALUE)
-                winreg.SetValueEx(key, "GUOLabCVStudio", 0, winreg.REG_SZ, cmd)
+                    _WINDOWS_RUN_KEY, 0, winreg.KEY_SET_VALUE)
+                winreg.SetValueEx(key, _WINDOWS_RUN_VALUE, 0, winreg.REG_SZ, cmd)
                 winreg.CloseKey(key)
             elif platform.system() == "Darwin":
                 sh_path = os.path.realpath(os.path.join(script_dir, "start.sh"))
@@ -113,16 +154,21 @@ class StartupService:
             if platform.system() == "Windows":
                 import winreg
                 key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-                    r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_SET_VALUE)
+                    _WINDOWS_RUN_KEY, 0, winreg.KEY_QUERY_VALUE | winreg.KEY_SET_VALUE)
                 try:
-                    value = str(winreg.QueryValueEx(key, "GUOLabCVStudio")[0] or "")
+                    value = str(winreg.QueryValueEx(key, _WINDOWS_RUN_VALUE)[0] or "")
                     expected = os.path.realpath(os.path.join(self._root_path(), "START_HIDDEN.vbs"))
                     expected_command = 'wscript.exe "{}"'.format(expected)
-                    if os.path.normcase(value.strip()) == os.path.normcase(expected_command):
-                        winreg.DeleteValue(key, "GUOLabCVStudio")
+                    managed_path = _managed_windows_startup_path(value)
+                    if (
+                        os.path.normcase(value.strip()) == os.path.normcase(expected_command)
+                        or (managed_path and not os.path.isfile(managed_path))
+                    ):
+                        winreg.DeleteValue(key, _WINDOWS_RUN_VALUE)
                 except FileNotFoundError:
                     pass
-                winreg.CloseKey(key)
+                finally:
+                    winreg.CloseKey(key)
             elif platform.system() == "Darwin":
                 label = "com.hyppies.cvstudio.{}".format(self._instance_id())
                 plist_path = os.path.expanduser("~/Library/LaunchAgents/" + label + ".plist")

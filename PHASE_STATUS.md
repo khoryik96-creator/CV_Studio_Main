@@ -25,10 +25,11 @@
   `54298b9b6a822e1f36c9c101f1ff4edc9c7e835f`
 - Phase 7B-4 source baseline Git commit (merged Phase 7B-3):
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
-- Current merged source: v24.6.360 through PR #181
-  (`541cbf3`).
-- Active work: v24.6.361 CV download folders on
-  `chatgpt/pr182-v24.6.361-cv-download-folders` (planned PR #182, unmerged).
+- Current merged source: v24.6.361 through PR #182
+  (`67defbc`).
+- Active work: v24.6.362 Blind CV bullet preservation on
+  `chatgpt/pr183-v24.6.362-blind-cv-bullet-normalization` (planned PR #183,
+  unmerged).
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
@@ -47,12 +48,65 @@
   audit hardening as `d94554c`. PR #177 merged the updater runtime-consistency
   corrective as `2c06bc5`. PR #179 merged the updater preflight-output
   corrective as `a20b7f9`. PR #181 merged the v24.6.360 Blind CV
-  candidate-gender neutralization feature as `541cbf3`; current master is
-  v24.6.360.
-- Current stop: v24.6.360 is merged on `master` through PR #181. The v24.6.361
-  CV download-folder branch is active and unmerged.
+  candidate-gender neutralization feature as `541cbf3`. PR #182 merged the
+  v24.6.361 CV download-folder feature as `67defbc`; current master is
+  v24.6.361.
+- Current stop: v24.6.361 is merged on `master` through PR #182. The v24.6.362
+  Blind CV bullet-preservation branch is active and unmerged.
 
-## v24.6.361 CV download folders (active, unmerged)
+## v24.6.362 Blind CV bullet preservation (active, unmerged)
+
+- Re-uploading a CV Studio-formatted DOCX no longer loses the distinction
+  between true Word list paragraphs and plain bold role subheadings before
+  `/parse`.
+- `/blind` restores the original section/list container shape only when the
+  original and already-blinded flattened text counts match exactly, then runs
+  the established CV bullet normalizer before preview/export. The repair uses
+  no original wording or unknown source fields, so it cannot reintroduce a
+  masked employer or client name.
+- Established generic source labels (`Implementation`, `Support`, `Rollout`,
+  and `Activities Description`) render as unbulleted section headings with
+  their following duties as real bullets.
+- The native download-folder corrective intentionally adds two guarded local
+  routes and re-baselines the sealed route contract from 116 to 118. It adds no
+  storage-schema migration, credential, AI/external call or package target.
+  Earlier validation passed 990 tests, 4 skipped and 96 subtests;
+  all 20 frontend fixtures; 24-assertion live source smoke; 142 Python, 71
+  JavaScript, 9 PowerShell and 5 POSIX-shell syntax checks; repository
+  consistency; and the Windows Antiword/Tesseract/adm-zip protected-source
+  preflight.
+- Preview follow-up for the merged Downloads feature first requested browser
+  write access while the picker had a direct user gesture. Owner testing proved
+  that the Codex embedded browser could still ignore that directory handle and
+  put the file in Browser Downloads. The current correction moves configured
+  paths and writes into the local `cvstudio_downloads.py` service. Settings now
+  opens the native Windows/macOS folder picker, displays the full configured and
+  last-saved path, checks actual write access, and saves DOCX files with
+  exclusive numbered names. Browser Downloads is used only when no custom
+  folder is configured; a configured-folder failure stops visibly and cannot
+  silently place the file elsewhere. Separate Formatted/Blind paths remain
+  private local runtime state and are excluded from local-data exports.
+- A stale product-owned Windows startup entry can no longer keep launching a
+  deleted previous folder. Settings identifies only the exact historical
+  `wscript.exe "...\\START_HIDDEN.vbs"` form and rebinds it through the guarded
+  Startup enable route. A successful installation also moves an already-enabled
+  entry to the new root. Unknown Run commands remain untouched, and disabling
+  Startup removes a recognized stale CV Studio entry.
+- PR review corrections make startup repair strictly stale-only, so a preview
+  cannot take over or disable another existing installation. Download
+  preparation refreshes folder status and fails closed when it is unknown;
+  Windows/UNC/macOS root selections remain intact; saved files must be real
+  DOCX ZIP containers with the required Word parts; and malformed nested Blind
+  CV AI JSON is preserved instead of causing a generic 500.
+- Final review-thread corrections store Darwin folder state in the absolute
+  per-user `~/.guo_lab_cv_studio` directory when `LOCALAPPDATA` is absent and
+  honor direct/style Word `numId=0` values as explicit bullet suppression.
+- Final validation after all PR review corrections: 1017 tests passed, 4 skipped
+  and 96 subtests; all 20 frontend fixtures; 24 live source-smoke assertions;
+  repository consistency; and the Windows Antiword/Tesseract/adm-zip
+  protected-source preflight.
+
+## v24.6.361 CV download folders (merged through PR #182)
 
 - Settings → Downloads provides separate Formatted CV and Blind CV destination
   folders. Each destination covers both single and batch downloads, and users
@@ -79,6 +133,7 @@
   PowerShell and 3 POSIX-shell syntax checks; exact dependency and repository
   consistency; Windows Antiword/Tesseract/adm-zip protected-source preflight;
   and a clean real-browser render with no console warnings/errors.
+- PR #182 was squash-merged to `master` as `67defbc` after owner approval.
 
 ## v24.6.360 Blind CV candidate-gender neutralization (merged through PR #181)
 

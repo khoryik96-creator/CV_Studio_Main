@@ -69,6 +69,7 @@ this:
 | `Position: Retrieved Resumes (SiVA folder: ...); Date Applied: ...` appears in Additional Information | JobStreet/SiVA application-routing metadata was mistaken for CV content | `_strip_cv_recruitment_tracking_metadata` removes the metadata at a line start or after a `|` item separator wherever the provider placed it |
 | Project Involvement History or Participated Training Programme is missing | provider truncated or skipped bracketed sections near the bottom of a long CV | `_recover_cv_source_additional_sections` restores every allowlisted source item, stops at recognized simple or combined CV headings (`&` and literal `AND` are equivalent), preserves ordinary explicitly bulleted items even when their text resembles a heading, but treats numbered, all-caps or colon-emphasized marked headings as real boundaries; training duplicates are removed from certifications |
 | recovered Project/Training items are comma-separated in preview but bulleted in Word | browser preview flattened structured item arrays | `cvSkillPreviewHtml` uses the same multiple-items-as-bullets rule as `generate.js` |
+| a CV Studio-formatted DOCX becomes double-bulleted or turns bold role subheadings into bullets after Blind CV | `python-docx`'s `Paragraph.text` omits Word numbering, then the blind provider can flatten section objects into plain strings | `_extract_docx_text_preserve_tables` prefixes only paragraphs carrying real Word numbering; `/blind` restores an exact matching original role section/list shape using only already-blinded response text, then re-runs `_normalize_cv_structured_content` |
 
 ### Key files/functions (`cvstudio_cv_normalize.py`)
 
@@ -109,7 +110,8 @@ this:
   when source text is available, removes any other provider-emitted GitHub path
   that cannot be matched to the extracted source CV.
 - **`_CV_SECTION_HEADING_RE`** — detects "Key responsibilities" / "Key
-  achievements" labels.
+  achievements" labels and the established generic role subheadings
+  `Implementation`, `Support`, `Rollout`, and `Activities Description`.
 
 ### Section-object contract
 
@@ -118,6 +120,14 @@ this:
 bullets as strings. `generate.js` renders a `kind:"section"` heading **without**
 a bullet marker (bold) and its `bullets` as list items. When the AI returns a
 label flat instead of nested, `_absorb_orphan_section_labels` re-nests it.
+
+For a formatted DOCX uploaded again, `_extract_docx_text_preserve_tables`
+preserves the otherwise invisible Word list signal by prefixing real numbered
+paragraphs with `• ` while leaving ordinary bold headings unmarked. Blind CV
+then uses `_blind_restore_cv_bullet_structure` to reapply the original role
+container shape only when the original and already-blinded flattened text
+counts match exactly. It never copies source wording or unknown source fields;
+a mismatch is left untouched instead of guessed.
 
 ## ⚠️ Highest-risk code
 

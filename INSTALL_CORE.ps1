@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Continue'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 if (-not $Root.EndsWith('\')) { $Root += '\' }
 $Log = Join-Path $Root 'install_log.txt'
-$InstallVersion = 'v24.6.361'
+$InstallVersion = 'v24.6.362'
 $AntiwordVersion = '1.3.5'
 $AntiwordRuntimeFileCount = 37
 $AntiwordManifestSha256 = '7d365a89f268a2fc34f815b369474124bc6a1aac02e9b0b57e6dfd5eb5368da0'
@@ -291,6 +291,33 @@ function Create-Shortcut {
         Write-Step "    WARNING: Fallback launcher also failed: $($_.Exception.Message)"
     }
     return $false
+}
+
+function Repair-CvStudioStartupRegistration {
+    # Preserve an existing enabled CV Studio startup preference when a release
+    # is installed from a new folder. Only the product-owned Run value and the
+    # exact historical wscript + START_HIDDEN.vbs shape are eligible.
+    $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+    $valueName = 'GUOLabCVStudio'
+    try {
+        $current = [string](Get-ItemPropertyValue -LiteralPath $runKey -Name $valueName -ErrorAction Stop)
+    } catch {
+        return $true
+    }
+    $expected = 'wscript.exe "{0}"' -f (Join-Path $Root 'START_HIDDEN.vbs')
+    if ($current.Trim() -ieq $expected) { return $true }
+    if ($current -notmatch '(?i)^\s*(?:"(?:[^"\r\n]*[\\/])?wscript(?:\.exe)?"|(?:[^\s"\r\n]*[\\/])?wscript(?:\.exe)?)\s+"[^"\r\n]+[\\/]START_HIDDEN\.vbs"\s*$') {
+        Write-Step '    WARNING: The Windows startup value is not a recognized CV Studio command and was left unchanged.'
+        return $true
+    }
+    try {
+        Set-ItemProperty -LiteralPath $runKey -Name $valueName -Value $expected -Type String -ErrorAction Stop
+        Write-Step "    Windows startup location updated to this CV Studio folder."
+        return $true
+    } catch {
+        Write-Step "    WARNING: Windows startup location could not be updated: $($_.Exception.Message)"
+        return $false
+    }
 }
 
 $script:UpdateStateDir = Join-Path $env:LOCALAPPDATA 'TheGuoLab\CVStudio'
@@ -675,7 +702,7 @@ function Install-PythonPackages {
     }
     $stampDir = Join-Path $env:APPDATA 'GUOLabCVStudio'
     New-Item -ItemType Directory -Path $stampDir -Force | Out-Null
-    Set-Content -LiteralPath (Join-Path $stampDir '.deps_ok') -Value 'v24.6.361-bundled-pdfium-ocr-antiword' -Encoding ASCII
+    Set-Content -LiteralPath (Join-Path $stampDir '.deps_ok') -Value 'v24.6.362-bundled-pdfium-ocr-antiword' -Encoding ASCII
     Write-Step '    Python packages ready.'
     return $true
 }
@@ -1468,6 +1495,7 @@ if ($ok) {
 
 if ($ok) {
     Create-Shortcut -Phase 'final' | Out-Null
+    Repair-CvStudioStartupRegistration | Out-Null
     Create-RestoreShortcut -Context $script:RollbackContext
     Refresh-IconCache
     Add-DefenderExclusion
