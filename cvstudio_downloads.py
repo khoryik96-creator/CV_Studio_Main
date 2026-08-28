@@ -8,12 +8,15 @@ Python process.  It is deliberately independent of Flask and ``app.py``.
 
 from __future__ import annotations
 
+import ctypes
+import errno
 import json
 import os
 from pathlib import Path
 import platform
 import re
 import subprocess
+import tempfile
 import threading
 from typing import BinaryIO, Callable
 import zipfile
@@ -25,6 +28,7 @@ _WINDOWS_RESERVED_STEM_RE = re.compile(
     r"^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])$", re.IGNORECASE
 )
 _UNSAFE_FILENAME_RE = re.compile(r'[\\/\x00-\x1f<>:"|?*]')
+_DARWIN_RENAME_EXCL = 0x00000004
 
 
 class DownloadFolderError(RuntimeError):
@@ -76,6 +80,40 @@ def default_download_state_path(
         return str(Path(runtime_state_dir) / "download_folders.json")
     home = Path(user_home) if user_home is not None else Path.home()
     return str(home.expanduser().resolve() / ".guo_lab_cv_studio" / "download_folders.json")
+
+
+def _publish_file_no_replace(staged_path: Path, destination: Path) -> None:
+    """Publish one same-directory file atomically without replacing a peer."""
+    if os.name == "nt":
+        # Windows rename is atomic and refuses an existing destination.
+        os.rename(staged_path, destination)
+        return
+    if platform.system() == "Darwin":
+        # macOS renamex_np supplies the no-replace guarantee that plain POSIX
+        # rename lacks, including on volumes that do not support hard links.
+        libc = ctypes.CDLL(None, use_errno=True)
+        rename_exclusive = libc.renamex_np
+        rename_exclusive.argtypes = (
+            ctypes.c_char_p,
+            ctypes.c_char_p,
+            ctypes.c_uint,
+        )
+        rename_exclusive.restype = ctypes.c_int
+        result = rename_exclusive(
+            os.fsencode(staged_path),
+            os.fsencode(destination),
+            _DARWIN_RENAME_EXCL,
+        )
+        if result == 0:
+            return
+        error_number = ctypes.get_errno()
+        if error_number == errno.EEXIST:
+            raise FileExistsError(error_number, os.strerror(error_number), destination)
+        raise OSError(error_number, os.strerror(error_number), destination)
+    # The native picker is unsupported elsewhere, but retain safe behavior for
+    # tests or explicitly preconfigured local state.
+    os.link(staged_path, destination)
+    staged_path.unlink()
 
 
 class LocalDownloadService:
@@ -331,10 +369,10 @@ class LocalDownloadService:
                 "Only generated CV Word files can use a configured download folder.",
             )
         destination = None
+        staged_path = None
         handle = None
-        completed = False
         try:
-            destination, handle = self._open_unused_destination(Path(folder), safe_name)
+            staged_path, handle = self._open_staged_destination(Path(folder))
             total = 0
             signature = bytearray()
             while True:
@@ -371,7 +409,7 @@ class LocalDownloadService:
             handle.close()
             handle = None
             try:
-                with zipfile.ZipFile(destination, "r") as archive:
+                with zipfile.ZipFile(staged_path, "r") as archive:
                     names = set(archive.namelist())
                     required = {"[Content_Types].xml", "word/document.xml"}
                     if not required.issubset(names):
@@ -381,7 +419,10 @@ class LocalDownloadService:
                     "DOWNLOAD_FILE_INVALID",
                     "The generated CV Word file is invalid.",
                 ) from exc
-            completed = True
+            destination = self._publish_staged_destination(
+                Path(folder), safe_name, staged_path
+            )
+            staged_path = None
         except DownloadFolderError:
             raise
         except OSError as exc:
@@ -397,9 +438,9 @@ class LocalDownloadService:
                 except Exception:
                     # cleanup-only: the original handled save failure is retained
                     pass
-            if not completed and destination is not None:
+            if staged_path is not None:
                 try:
-                    destination.unlink(missing_ok=True)
+                    staged_path.unlink(missing_ok=True)
                 except Exception:
                     # cleanup-only: never mask the structured save failure
                     pass
@@ -420,14 +461,43 @@ class LocalDownloadService:
         stem = stem[:maximum_stem].rstrip(". ") or "CV Studio download"[:maximum_stem]
         return safe_download_filename(stem + suffix + extension)
 
-    def _open_unused_destination(self, folder: Path, filename: str):
+    @staticmethod
+    def _open_staged_destination(folder: Path):
+        try:
+            descriptor, raw_path = tempfile.mkstemp(
+                prefix=".cvstudio-download-",
+                suffix=".tmp",
+                dir=str(folder),
+            )
+            return Path(raw_path), os.fdopen(descriptor, "wb")
+        except OSError as exc:
+            raise DownloadFolderError(
+                "DOWNLOAD_SAVE_FAILED",
+                "CV Studio could not write the generated CV to the selected folder.",
+                status=503,
+            ) from exc
+
+    def _publish_staged_destination(
+        self, folder: Path, filename: str, staged_path: Path
+    ) -> Path:
+        """Atomically expose a validated staged file without overwriting."""
         for index in range(1000):
             suffix = " ({})".format(index) if index else ""
             candidate = folder / self._filename_with_suffix(filename, suffix)
             try:
-                return candidate, candidate.open("xb")
+                # The random staging name, never the final DOCX name, is all
+                # that can remain after a process interruption.
+                _publish_file_no_replace(staged_path, candidate)
             except FileExistsError:
                 continue
+            try:
+                staged_path.unlink(missing_ok=True)
+            except OSError:
+                # The published DOCX is complete and valid. A temporary staging
+                # link is harmless and can be removed manually if the host
+                # filesystem temporarily refused cleanup.
+                pass
+            return candidate
         raise DownloadFolderError(
             "DOWNLOAD_NAME_EXHAUSTED",
             "CV Studio could not find an unused filename in the selected folder.",

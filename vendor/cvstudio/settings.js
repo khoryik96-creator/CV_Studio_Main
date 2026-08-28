@@ -181,6 +181,7 @@ function cvStudioRenderDownloadDestination(kind, folder) {
   var last = _cvDownloadLastResult[kind];
   if (last && last.path) previewNode.textContent = 'Last saved: ' + String(last.path);
   else if (last && last.filename && last.method === 'browser') previewNode.textContent = 'Last download: Browser Downloads\\' + String(last.filename);
+  else if (last && last.method === 'uncertain') previewNode.textContent = 'Last save could not be confirmed — check: ' + String(last.folder || folder && folder.path || 'selected folder');
   else if (last && last.method === 'failed') previewNode.textContent = 'Last save failed — destination remains: ' + String(folder && folder.path || 'selected folder');
   else if (folder && folder.configured && folder.path) previewNode.textContent = 'Destination: ' + String(folder.path);
   else previewNode.textContent = 'Destination: your browser\'s configured Downloads folder';
@@ -348,29 +349,43 @@ async function cvStudioSaveDownloadBlob(blob, filename, kind, preparedDestinatio
     return unavailable;
   }
   if (destination && destination.configured) {
+    var response;
+    var data;
     try {
       var form = new FormData();
       form.append('kind', kind);
       form.append('filename', safeName);
       form.append('file', blob, safeName);
-      var response = await fetch('/downloads/save', {method:'POST', body:form, cvStudioNoTimeout:true});
-      var data = await response.json().catch(function(){ return {}; });
-      if (!response.ok || !data.ok) throw new Error(data.error || data.message || 'Configured-folder save failed.');
-      var saved = {method:'folder', filename:data.filename, folder:data.folder, path:data.path};
-      _cvDownloadLastResult[kind] = saved;
-      cvStudioRenderDownloadDestination(kind, destination.folder);
-      return saved;
+      response = await fetch('/downloads/save', {method:'POST', body:form, cvStudioNoTimeout:true});
+      data = await response.json();
     } catch(error) {
+      var uncertain = {
+        method:'uncertain',
+        configured:true,
+        uncertain:true,
+        filename:safeName,
+        folder:String(destination.folder && destination.folder.path || ''),
+        fallbackReason:'CV Studio could not confirm whether the file was saved. Check the selected folder before retrying.',
+      };
+      _cvDownloadLastResult[kind] = uncertain;
+      cvStudioRenderDownloadDestination(kind, destination.folder);
+      return uncertain;
+    }
+    if (!response.ok || !data.ok) {
       var failed = {
         method:'failed',
         configured:true,
         filename:safeName,
-        fallbackReason:(error && error.message) || 'the selected folder could not be written to',
+        fallbackReason:data.error || data.message || 'the selected folder could not be written to',
       };
       _cvDownloadLastResult[kind] = failed;
       cvStudioRenderDownloadDestination(kind, destination.folder);
       return failed;
     }
+    var saved = {method:'folder', filename:data.filename, folder:data.folder, path:data.path};
+    _cvDownloadLastResult[kind] = saved;
+    cvStudioRenderDownloadDestination(kind, destination.folder);
+    return saved;
   }
   var browser = cvStudioFallbackDownloadBlob(blob, safeName);
   _cvDownloadLastResult[kind] = browser;

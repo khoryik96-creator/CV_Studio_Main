@@ -6,6 +6,7 @@ import zipfile
 
 import pytest
 
+import cvstudio_downloads
 from cvstudio_downloads import (
     DownloadFolderError,
     LocalDownloadService,
@@ -97,6 +98,32 @@ def test_save_uses_configured_folder_and_never_overwrites(tmp_path):
     assert result["path"] == str(folder / "Hyppies CV (1).docx")
     assert original.read_bytes() == b"original"
     assert (folder / "Hyppies CV (1).docx").read_bytes() == generated
+
+
+def test_save_validates_temporary_stage_before_publishing_final_docx(tmp_path, monkeypatch):
+    folder = tmp_path / "CV Output"
+    folder.mkdir()
+    service = LocalDownloadService(tmp_path / "download_folders.json")
+    service._write_state_unlocked({"formatted": str(folder)})
+    generated = _docx_bytes("atomic")
+    real_zip_file = zipfile.ZipFile
+    inspected = []
+
+    def inspect_staged_file(path, *args, **kwargs):
+        inspected.append(Path(path))
+        assert Path(path).suffix == ".tmp"
+        assert list(folder.glob("*.docx")) == []
+        return real_zip_file(path, *args, **kwargs)
+
+    monkeypatch.setattr(cvstudio_downloads.zipfile, "ZipFile", inspect_staged_file)
+    result = service.save_file(
+        "formatted", "Atomic.docx", io.BytesIO(generated)
+    )
+
+    assert inspected
+    assert result["path"] == str(folder / "Atomic.docx")
+    assert (folder / "Atomic.docx").read_bytes() == generated
+    assert not list(folder.glob(".cvstudio-download-*.tmp"))
 
 
 def test_failed_or_oversized_save_removes_partial_file(tmp_path):

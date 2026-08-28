@@ -25,10 +25,10 @@
   `54298b9b6a822e1f36c9c101f1ff4edc9c7e835f`
 - Phase 7B-4 source baseline Git commit (merged Phase 7B-3):
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
-- Current merged source: v24.6.361 through PR #182
-  (`67defbc`).
-- Active work: v24.6.362 Blind CV bullet preservation on
-  `chatgpt/pr183-v24.6.362-blind-cv-bullet-normalization` (planned PR #183,
+- Current merged source: v24.6.362 through PR #183
+  (`809da3e`).
+- Active work: v24.6.363 post-merge review corrective on
+  `chatgpt/pr184-v24.6.363-post-merge-review-fixes` (planned PR #184,
   unmerged).
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
@@ -49,12 +49,32 @@
   corrective as `2c06bc5`. PR #179 merged the updater preflight-output
   corrective as `a20b7f9`. PR #181 merged the v24.6.360 Blind CV
   candidate-gender neutralization feature as `541cbf3`. PR #182 merged the
-  v24.6.361 CV download-folder feature as `67defbc`; current master is
-  v24.6.361.
-- Current stop: v24.6.361 is merged on `master` through PR #182. The v24.6.362
-  Blind CV bullet-preservation branch is active and unmerged.
+  v24.6.361 CV download-folder feature as `67defbc`. PR #183 merged the
+  v24.6.362 Blind CV bullet and native-download corrective as `809da3e`;
+  current master is v24.6.362.
+- Current stop: v24.6.362 is merged on `master` through PR #183. The v24.6.363
+  post-merge review corrective is active and unmerged.
 
-## v24.6.362 Blind CV bullet preservation (active, unmerged)
+## v24.6.363 post-merge review corrective (active, unmerged)
+
+- Native CV downloads are validated in a temporary same-folder staging file and
+  atomically published only after the DOCX container passes validation. An
+  interrupted write can no longer leave a partial file under the requested
+  official-looking `.docx` name.
+- A lost browser response after upload is an uncertain outcome, not a confirmed
+  failure. Single and batch downloads tell the user to check the selected
+  folder before retrying, avoiding accidental duplicate CVs.
+- `/downloads/folders` rejects arrays, strings and other non-object JSON with a
+  structured 400 response instead of allowing an attribute error to become a
+  generic HTTP 500.
+- Handoff records now identify v24.6.362 and PR #183 as merged. This corrective
+  changes no route, schema, dependency, credential, paid-call-count or
+  protected-package boundary. Final local validation passed 1019 tests, 4
+  skipped and 96 subtests; all 20 frontend fixtures; 24 live source-smoke
+  assertions; tracked syntax; repository consistency; and the Windows
+  protected-source preflight.
+
+## v24.6.362 Blind CV bullet preservation (merged through PR #183)
 
 - Re-uploading a CV Studio-formatted DOCX no longer loses the distinction
   between true Word list paragraphs and plain bold role subheadings before
