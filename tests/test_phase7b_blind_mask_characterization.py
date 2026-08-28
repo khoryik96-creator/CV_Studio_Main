@@ -267,6 +267,96 @@ class RecursiveTests(unittest.TestCase):
             "- the candidate worked with John Smith on regional delivery.",
         )
 
+    def test_finalize_summary_redacts_identifiers_split_by_markdown(self):
+        original = {
+            "candidate": {
+                "name": "Jane Example",
+                "current_company": "Acme Sdn Bhd",
+            },
+            "summary_bullets": [
+                "Jane Example led delivery for Acme Sdn Bhd."
+            ],
+            "work_experiences": [{"company": "Acme Sdn Bhd", "roles": []}],
+            "education": [],
+        }
+        finalized = bm._blind_finalize_summary_bullets(
+            {
+                "summary_bullets": [
+                    "**Jane** Example led delivery for **Acme** Sdn Bhd."
+                ]
+            },
+            original,
+        )
+        self.assertEqual(
+            finalized["summary_bullets"],
+            ["the candidate led delivery for [Company]."],
+        )
+        self.assertEqual(
+            bm._blind_replace_identifier("Company", "Company", "[Company]"),
+            "[Company]",
+        )
+
+    def test_finalize_generated_summary_redacts_labeled_physical_address(self):
+        finalized = bm._blind_finalize_generated_summary_text(
+            "- the candidate lives at 12 Jalan Ampang, Kuala Lumpur.",
+            "Jane Example\nAddress: 12 Jalan Ampang, Kuala Lumpur.",
+        )
+        self.assertEqual(
+            finalized,
+            "- the candidate lives at [Address Redacted].",
+        )
+
+    def test_pipe_identity_uses_company_column_instead_of_role(self):
+        expected = ("Acme", "[Company]", False)
+        self.assertEqual(
+            bm._blind_summary_pipe_identity(
+                "2019 | Acme | Senior Engineer"
+            ),
+            expected,
+        )
+        self.assertEqual(
+            bm._blind_summary_pipe_identity(
+                "Senior Engineer | Acme | 2019"
+            ),
+            expected,
+        )
+        self.assertEqual(
+            bm._blind_summary_pipe_identity(
+                "2019 | Senior Engineer | Acme"
+            ),
+            expected,
+        )
+
+    def test_finalize_generated_summary_preserves_camel_case_technologies(self):
+        finalized = bm._blind_finalize_generated_summary_text(
+            "- the candidate built PowerBI dashboards with JavaScript and NodeJS.",
+            "Jane Example\nBuilt PowerBI dashboards with JavaScript and NodeJS.",
+        )
+        self.assertEqual(
+            finalized,
+            "- the candidate built PowerBI dashboards with JavaScript and NodeJS.",
+        )
+
+    def test_company_suffix_collection_does_not_consume_sentence_lead_in(self):
+        finalized = bm._blind_finalize_generated_summary_text(
+            "- the candidate worked with Acme Technology on migration.",
+            "Jane Example\nWorked with Acme Technology on migration.",
+        )
+        self.assertEqual(
+            finalized,
+            "- the candidate worked with [Company] on migration.",
+        )
+
+    def test_finalize_generated_summary_redacts_single_word_candidate_name(self):
+        finalized = bm._blind_finalize_generated_summary_text(
+            "- **Sukarno** led regional delivery.",
+            "Sukarno\nRegional delivery specialist",
+        )
+        self.assertEqual(
+            finalized,
+            "- the candidate led regional delivery.",
+        )
+
     def test_phone_redaction_keeps_real_date_ranges(self):
         self.assertEqual(
             bm._blind_redact_phone_candidates("Worked from 2020 - 2023."),

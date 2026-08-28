@@ -263,9 +263,9 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **CV Summary and Blind CV summary anonymization — v24.6.366 / planned PR
+- **CV Summary and Blind CV summary anonymization — v24.6.367 / planned PR
   #186, ACTIVE AND UNMERGED.** Branch
-  `chatgpt/pr186-v24.6.366-summary-anonymization-review-fixes` adds an off-by-default
+  `chatgpt/pr186-v24.6.367-summary-anonymization-final-review-fixes` adds an off-by-default
   anonymized-output option directly to CV Summary. Its prompt retains supported
   role, technology, qualification, date, metric and achievement detail while
   excluding candidate identity/contact details and named employers, clients,
@@ -282,11 +282,15 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   established organisation safety sweep. Whole-identifier/case-safe matching
   protects ordinary text such as `may` and `commitment`, and provider-returned
   list markers are removed before Word numbering. A
+  final corrective makes identifier matching Markdown-aware, redacts labeled
+  physical addresses, selects employers rather than roles from dated
+  multi-column rows, preserves camel-case technologies such as PowerBI,
+  JavaScript and NodeJS, and trims prose before company legal suffixes. A
   provider that drops or corrupts the populated summary fails visibly instead
   of publishing a blank About Him / Her box. No route, storage schema,
   dependency, credential, AI-call-count or protected-package boundary change.
   PR #185 remains a separate active branch and is not included here. Local
-  validation: 1035 tests passed, 4 skipped and 96 subtests; all 20 frontend
+  validation: 1041 tests passed, 4 skipped and 96 subtests; all 20 frontend
   fixture groups; 24 live source-smoke assertions; repository consistency,
   Git whitespace and Windows protected-source/dependency preflight.
 - **Feature download destinations — v24.6.364 / PR #185, ACTIVE AND
