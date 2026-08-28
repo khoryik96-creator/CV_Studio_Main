@@ -10,6 +10,7 @@ import cvstudio_downloads
 from cvstudio_downloads import (
     DownloadFolderError,
     LocalDownloadService,
+    _publish_file_no_replace,
     default_download_state_path,
     safe_download_filename,
 )
@@ -124,6 +125,19 @@ def test_save_validates_temporary_stage_before_publishing_final_docx(tmp_path, m
     assert result["path"] == str(folder / "Atomic.docx")
     assert (folder / "Atomic.docx").read_bytes() == generated
     assert not list(folder.glob(".cvstudio-download-*.tmp"))
+
+
+def test_posix_publish_leaves_staging_cleanup_to_the_caller(tmp_path, monkeypatch):
+    staged = tmp_path / "stage.tmp"
+    destination = tmp_path / "Published.docx"
+    staged.write_bytes(b"complete")
+
+    monkeypatch.setattr(cvstudio_downloads.os, "name", "posix")
+    monkeypatch.setattr(cvstudio_downloads.platform, "system", lambda: "Linux")
+    _publish_file_no_replace(staged, destination)
+
+    assert destination.read_bytes() == b"complete"
+    assert staged.read_bytes() == b"complete"
 
 
 def test_failed_or_oversized_save_removes_partial_file(tmp_path):

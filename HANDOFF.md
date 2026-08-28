@@ -273,7 +273,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   to `/downloads/folders` receives a handled 400 response instead of a generic
   500. This handoff and `PHASE_STATUS.md` now identify PR #183 as merged. No
   route, schema, dependency, credential, paid-call-count or protected-package
-  boundary changes. Final local validation: 1019 tests passed, 4 skipped and 96
+  boundary changes. Final local validation: 1020 tests passed, 4 skipped and 96
   subtests; all 20 frontend fixtures; 24-assertion live source smoke; tracked
   Python/JavaScript/PowerShell syntax; repository consistency; and the Windows
   Antiword/Tesseract/adm-zip protected-source preflight.

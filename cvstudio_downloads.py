@@ -113,7 +113,6 @@ def _publish_file_no_replace(staged_path: Path, destination: Path) -> None:
     # The native picker is unsupported elsewhere, but retain safe behavior for
     # tests or explicitly preconfigured local state.
     os.link(staged_path, destination)
-    staged_path.unlink()
 
 
 class LocalDownloadService:
