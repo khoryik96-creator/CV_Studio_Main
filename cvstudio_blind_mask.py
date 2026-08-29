@@ -70,13 +70,25 @@ _BLIND_SUMMARY_URL_RE = re.compile(
     r")",
     re.I,
 )
+_BLIND_SUMMARY_BARE_DOMAIN_RE = re.compile(
+    r"(?<![A-Za-z0-9@])"
+    r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,62}[A-Za-z0-9])?\.)+"
+    r"[A-Za-z]{2,63}(?:/[^\s<>()]*)?",
+    re.I,
+)
+_BLIND_SUMMARY_NON_DOMAIN_SUFFIXES = {
+    "css", "csv", "doc", "docx", "html", "ini", "java", "js", "json",
+    "log", "md", "pdf", "php", "ppt", "pptx", "py", "sql", "svg",
+    "ts", "txt", "xls", "xlsx", "xml", "yaml", "yml",
+}
 _BLIND_SUMMARY_PHONE_CANDIDATE_RE = re.compile(
     r"(?<![A-Za-z0-9])\+?\d[\d\s().\-]{6,}\d(?![A-Za-z0-9])"
 )
 _BLIND_SUMMARY_PHONE_CONTEXT_RE = re.compile(
-    r"\b(?:call|contact(?:\s+(?:number|no\.?))?|mobile(?:\s+(?:number|no\.?))?|"
+    r"(?:\b(?:call|contact(?:\s+(?:number|no\.?))?|mobile(?:\s+(?:number|no\.?))?|"
     r"phone(?:\s+(?:number|no\.?))?|tel(?:ephone)?|whatsapp)"
-    r"\s*(?:(?:number|no\.?)\s*)?(?::|#|-|is|at)?\s*$",
+    r"\s*(?:(?:number|no\.?)\s*)?(?::|#|-|is|at)?|"
+    r"(?<![A-Za-z0-9])(?:m|t)\s*[:#-])\s*$",
     re.I,
 )
 _BLIND_SUMMARY_ADDRESS_LINE_RE = re.compile(
@@ -89,13 +101,13 @@ _BLIND_SUMMARY_INLINE_ADDRESS_RE = re.compile(
 )
 _BLIND_SUMMARY_STREET_MARKER_RE = re.compile(
     r"\b(?:jalan|jln|lorong|lrg|persiaran|lebuh|lebuhraya|street|st|road|rd|"
-    r"avenue|ave|lane|ln|drive|dr|boulevard|blvd|highway|suite|unit|block|blok|"
+    r"avenue|ave|lane|ln|drive|dr|boulevard|blvd|highway|suite|unit|block|blok|level|"
     r"floor|tingkat|apartment|apt|residensi|residency|residence|condominium|"
     r"menara|plaza)\b",
     re.I,
 )
 _BLIND_SUMMARY_UNLABELED_ADDRESS_RE = re.compile(
-    r"^(?:(?:no\.?|unit|suite|block|blok|lot|floor|tingkat)\s*)?"
+    r"^(?:(?:no\.?|unit|suite|block|blok|lot|floor|tingkat|level)\s*)?"
     r"(?:[A-Za-z]{0,3}[-/]?)?\d+[A-Za-z]?(?:[-/]\d+[A-Za-z]?){0,3}"
     r"(?:\s*,?\s*|\s+).+",
     re.I,
@@ -107,6 +119,10 @@ _BLIND_SUMMARY_DATE_RANGE_RE = re.compile(
     r"(?:(?:(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|"
     r"jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|"
     r"dec(?:ember)?)\.?\s+)?\b(?:19|20)\d{2}\b|present\b|current\b|now\b)",
+    re.I,
+)
+_BLIND_SUMMARY_PARENTHETICAL_YEAR_RE = re.compile(
+    r"\(\s*(?:19|20)\d{2}\s*\)",
     re.I,
 )
 _BLIND_SUMMARY_CATEGORY_RE = re.compile(
@@ -235,15 +251,10 @@ def _blind_redact_phone_candidates(text):
             or (digits.startswith("60") and 10 <= len(digits) <= 12)
         ):
             return "[Phone Redacted]"
-        groups = re.findall(r"\d+", value)
-        whitespace_grouped_metric = (
-            bool(re.search(r"\s", value))
-            and not re.search(r"[().-]", value)
-            and len(groups) >= 2
-            and len(groups[0]) <= 3
-            and all(len(group) == 3 for group in groups[1:])
+        grouped_metric = bool(
+            re.fullmatch(r"\d{1,3}(?:(?:\s|\.)\d{3}){2,}", value.strip())
         )
-        if whitespace_grouped_metric:
+        if grouped_metric:
             return value
         if re.search(r"[\s().-]", value):
             return "[Phone Redacted]"
@@ -455,8 +466,20 @@ def _blind_summary_name_word(value):
     token = token.strip(".")
     if not token:
         return False
+    if re.fullmatch(r"a/[pl]", token, re.I):
+        return True
     parts = re.split(r"['’\-]", token)
     return all(part and part.isalpha() for part in parts)
+
+
+def _blind_summary_bare_domain(value):
+    """Return a source-derived bare domain while rejecting common file/code names."""
+    candidate = str(value or "").rstrip(".,;:!?")
+    host = candidate.split("/", 1)[0].rstrip(".")
+    suffix = host.rsplit(".", 1)[-1].casefold() if "." in host else ""
+    if not suffix or suffix in _BLIND_SUMMARY_NON_DOMAIN_SUFFIXES:
+        return ""
+    return candidate
 
 
 def _blind_summary_candidate_name_from_text(source_text):
@@ -580,11 +603,14 @@ def _blind_summary_section_replacement(lines, index):
 
 
 def _blind_summary_dated_line_identity(line):
-    """Return an organization written on the same line as its date range."""
+    """Return an organization written on the same line as its employment date."""
     raw = re.sub(r"\s+", " ", str(line or "")).strip()
-    if not _BLIND_SUMMARY_DATE_RANGE_RE.search(raw) or "|" in raw:
+    has_date_range = bool(_BLIND_SUMMARY_DATE_RANGE_RE.search(raw))
+    has_single_year = bool(_BLIND_SUMMARY_PARENTHETICAL_YEAR_RE.search(raw))
+    if not (has_date_range or has_single_year) or "|" in raw:
         return ""
     without_date = _BLIND_SUMMARY_DATE_RANGE_RE.sub(" ", raw)
+    without_date = _BLIND_SUMMARY_PARENTHETICAL_YEAR_RE.sub(" ", without_date)
     without_date = re.sub(r"[()\[\]{}]", " ", without_date)
     without_date = without_date.strip(" .,:;|-/–—")
     without_date = re.sub(r"^(?:at|for|with)\s+", "", without_date, flags=re.I)
@@ -596,7 +622,10 @@ def _blind_summary_vertical_identity_replacements(lines):
     identities = []
     cleaned = [re.sub(r"\s+", " ", str(line or "")).strip() for line in lines]
     for index, line in enumerate(cleaned):
-        if not _BLIND_SUMMARY_DATE_RANGE_RE.search(line):
+        if not (
+            _BLIND_SUMMARY_DATE_RANGE_RE.search(line)
+            or _BLIND_SUMMARY_PARENTHETICAL_YEAR_RE.search(line)
+        ):
             continue
         section_replacement = _blind_summary_section_replacement(cleaned, index)
         if section_replacement is None:
@@ -723,6 +752,10 @@ def _blind_collect_plain_summary_identity_replacements(source_text):
                 is_labeled or is_early_standalone
             ):
                 add(phone_value, "[Phone Redacted]", True)
+        for domain_match in _BLIND_SUMMARY_BARE_DOMAIN_RE.finditer(line):
+            domain_value = _blind_summary_bare_domain(domain_match.group(0))
+            if domain_value:
+                add(domain_value, "[Link Redacted]")
         match = label_pattern.match(line)
         if match:
             label = match.group(1).casefold()
@@ -756,6 +789,11 @@ def _blind_collect_plain_summary_identity_replacements(source_text):
 
 def _blind_apply_summary_replacements(text, replacements):
     safe = _BLIND_SUMMARY_MARKER_RE.sub("", str(text or "")).strip()
+    # Redact explicit links before exact source identifiers so a provider that
+    # adds ``https://`` to a source bare domain cannot leave a malformed partial
+    # link such as ``https://[Link Redacted]`` for the later pass.
+    safe = _BLIND_SUMMARY_EMAIL_RE.sub("[Email Redacted]", safe)
+    safe = _BLIND_SUMMARY_URL_RE.sub("[Link Redacted]", safe)
     for source_value, replacement, case_sensitive_single in replacements:
         safe = _blind_replace_identifier(
             safe,

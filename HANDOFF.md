@@ -146,6 +146,16 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 7. Recently completed (already on `master`)
 
+- **Summary anonymization safety follow-up — v24.6.369 / PR #187, MERGED.**
+  PR #187 merged to `master` as `2f345b7`. The deterministic summary safety
+  pass handles Unicode and initialled candidate names, bare personal domains,
+  Malaysian unit-style addresses, international/contact-context phone numbers,
+  employers written on the same line as their dates, and education acronyms in
+  an Education section. Phone detection preserves grouped achievement metrics,
+  Blind CV retains every populated source summary bullet, and every successful
+  `/generate-ai` fallback passes through the same deterministic anonymization
+  finalizer. PR #185 remains separate and unmerged.
+
 - **v24.6.362 Blind CV bullet and native-download corrective:** PR #183 was
   squash-merged to `master` as `809da3e`. Blind CV preserves real Word list
   structure without converting role subheadings into bullets; native
@@ -263,21 +273,23 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Summary anonymization safety follow-up — v24.6.369 / PR #187, ACTIVE AND
-  UNMERGED.** Branch `chatgpt/pr187-v24.6.369-anonymization-safety-fixes`
-  closes the post-merge review findings from PR #186. The final safety pass now
-  handles Unicode and initialled candidate names, bare personal domains,
-  Malaysian unit-style addresses, international/contact-context phone numbers,
-  employers written on the same line as their dates, and education acronyms in
-  an Education section. Phone detection preserves grouped achievement metrics,
-  Blind CV no longer truncates a populated source summary at 20 bullets, and
-  every successful `/generate-ai` fallback passes through the same deterministic
-  anonymization finalizer. No route, storage schema, dependency, credential,
-  paid-call-count, CV-formatting or protected-package boundary change. PR #185
-  remains separate and unmerged. Local validation: 1056 tests passed, 4
-  skipped and 102 subtests; all 20 frontend fixture groups; 24 live
-  source-smoke assertions; repository consistency; Git whitespace; and the
-  Windows protected-source/Antiword/Tesseract/adm-zip preflight.
+- **Anonymization edge-case corrective — v24.6.370 / planned PR #188, ACTIVE
+  AND UNMERGED.** Branch
+  `chatgpt/pr188-v24.6.370-anonymization-edge-case-fixes` covers Malaysian
+  `A/P` and `A/L` lineage-token names, short `M:` / `T:` phone labels,
+  source-derived personal domains with newer valid top-level domains,
+  parenthesized single-year employer rows and addresses beginning with
+  `Level`. Dot-grouped achievement metrics such as `100.000.000` remain
+  professional content. Common file/code suffixes are excluded from the new
+  source-domain path, protecting dotted technologies such as `Node.js`. No
+  route, storage schema, dependency, credential, paid-call-count,
+  CV-formatting or protected-package boundary change. PR #185 remains separate
+  and untouched. Local validation: 1058 tests passed, 4 skipped and 112
+  subtests; all 20 frontend fixture groups; 24 live source-smoke assertions;
+  tracked Python, JavaScript, PowerShell and POSIX-shell syntax; repository
+  consistency; Git whitespace; and the Windows protected-source/Antiword/
+  Tesseract/adm-zip preflight. Open PR #188 only after the owner's explicit
+  instruction.
 - **CV Summary and Blind CV summary anonymization — v24.6.368 / PR
   #186, MERGED.** PR #186 merged to `master` as `fbdf0e7`. Its branch
   `chatgpt/pr186-v24.6.367-summary-anonymization-final-review-fixes` added an off-by-default
@@ -315,8 +327,8 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 - **Feature download destinations — v24.6.364 / PR #185, ACTIVE AND
   UNMERGED.** Branch `chatgpt/pr185-v24.6.364-feature-download-folders` adds
   separate configured destinations for Company Profile, Summary Output, Blind
-  JD and The Owl. Keep PR #187 separate; rebase and resolve version order when
-  the owner approves PR #185.
+  JD and The Owl. Keep planned PR #188 separate; rebase and resolve version
+  order when the owner approves PR #185.
 - **Post-merge review corrective — v24.6.363 / PR #184, MERGED.** PR #184
   merged to `master` as `1912d48`. Its branch
   `chatgpt/pr184-v24.6.363-post-merge-review-fixes` closes
