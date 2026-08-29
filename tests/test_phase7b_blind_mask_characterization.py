@@ -27,8 +27,29 @@ class CollectTests(unittest.TestCase):
         terms = bm._blind_collect_org_mask_terms({"experience": [{"company": "Bolttech Sdn Bhd"}]})
         self.assertIsInstance(terms, list)
 
-
 class RecursiveTests(unittest.TestCase):
+    def test_prepare_summary_promotes_about_box_and_removes_duplicate_skill(self):
+        prepared = bm._blind_prepare_summary_bullets(
+            {
+                "summary_bullets": [],
+                "skills": [
+                    {
+                        "category": "About Him / Her",
+                        "items": "- Led Maybank delivery\n- Built regional platforms",
+                    },
+                    {"category": "Technology", "items": "Python, SQL"},
+                ],
+            }
+        )
+        self.assertEqual(
+            prepared["summary_bullets"],
+            ["Led Maybank delivery", "Built regional platforms"],
+        )
+        self.assertEqual(
+            prepared["skills"],
+            [{"category": "Technology", "items": "Python, SQL"}],
+        )
+
     def test_mask_recursive_scrubs_nested_strings(self):
         data = {"summary": "Led a team at Bolttech", "skills": ["Python", "worked at Bolttech"]}
         masked = bm._blind_mask_org_terms_recursive(data, ["Bolttech"])
@@ -140,6 +161,258 @@ class RecursiveTests(unittest.TestCase):
                 blinded,
             )
 
+    def test_finalize_summary_preserves_count_and_scrubs_direct_identity(self):
+        original = {
+            "candidate": {
+                "name": "Jane Candidate",
+                "email": "jane@example.com",
+                "phone": "+60 12-345 6789",
+                "linkedin": "https://linkedin.com/in/jane-candidate",
+            },
+            "summary_bullets": ["One", "Two"],
+            "education": [{"institution": "Fixture Technology University"}],
+        }
+        blinded = {
+            "summary_bullets": [
+                "Jane Candidate led delivery; jane@example.com",
+                "Studied at Fixture Technology University; see https://linkedin.com/in/jane-candidate or +60 12-345 6789",
+            ]
+        }
+
+        finalized = bm._blind_finalize_summary_bullets(blinded, original)
+
+        self.assertEqual(len(finalized["summary_bullets"]), 2)
+        blob = " ".join(finalized["summary_bullets"])
+        self.assertNotIn("Jane Candidate", blob)
+        self.assertNotIn("jane@example.com", blob)
+        self.assertNotIn("linkedin.com/in/jane-candidate", blob)
+        self.assertNotIn("+60 12-345 6789", blob)
+        self.assertNotIn("Fixture Technology University", blob)
+        self.assertIn("the candidate", blob)
+        self.assertIn("[Email Redacted]", blob)
+        self.assertIn("[Link Redacted]", blob)
+        self.assertIn("[Phone Redacted]", blob)
+        self.assertIn("[Institution]", blob)
+
+    def test_finalize_summary_does_not_duplicate_generic_candidate_label(self):
+        original = {
+            "candidate": {"name": "Candidate"},
+            "summary_bullets": ["One"],
+        }
+        finalized = bm._blind_finalize_summary_bullets(
+            {"summary_bullets": ["The candidate led delivery."]}, original
+        )
+        self.assertEqual(
+            finalized["summary_bullets"], ["The candidate led delivery."]
+        )
+
+    def test_finalize_summary_uses_identifier_boundaries_and_safe_single_case(self):
+        original = {
+            "candidate": {"name": "May"},
+            "summary_bullets": ["One"],
+            "education": [{"institution": "MIT"}],
+        }
+        finalized = bm._blind_finalize_summary_bullets(
+            {"summary_bullets": ["This role may require long-term commitment."]},
+            original,
+        )
+        self.assertEqual(
+            finalized["summary_bullets"],
+            ["This role may require long-term commitment."],
+        )
+
+    def test_finalize_summary_masks_unknown_context_names_and_strips_markers(self):
+        original = {
+            "candidate": {"name": "Jane Example"},
+            "summary_bullets": ["Delivered the FalconX rollout for Novacore."],
+            "work_experiences": [],
+            "education": [],
+        }
+        finalized = bm._blind_finalize_summary_bullets(
+            {"summary_bullets": ["- Delivered the FalconX rollout for Novacore."]},
+            original,
+        )
+        self.assertEqual(
+            finalized["summary_bullets"],
+            ["Delivered the [Product] rollout for [Company]."],
+        )
+
+    def test_finalize_generated_summary_scrubs_source_identifiers(self):
+        finalized = bm._blind_finalize_generated_summary_text(
+            "- Jane Example led the FalconX rollout for Novacore. Contact jane@example.com",
+            "Jane Example\nCurrent Company: Novacore\nWorked on the FalconX rollout for Novacore.\nEmail: jane@example.com",
+        )
+        self.assertEqual(
+            finalized,
+            "- the candidate led the [Product] rollout for [Company]. Contact [Email Redacted]",
+        )
+
+    def test_finalize_generated_summary_preserves_role_and_technology_terms(self):
+        finalized = bm._blind_finalize_generated_summary_text(
+            "- Experienced Software Engineer skilled with Microsoft Excel.",
+            "Software Engineer\n2020 | University of Tenaga Nasional\nSkilled with Microsoft Excel",
+        )
+        self.assertEqual(
+            finalized,
+            "- Experienced Software Engineer skilled with Microsoft Excel.",
+        )
+
+    def test_finalize_generated_summary_preserves_other_people(self):
+        finalized = bm._blind_finalize_generated_summary_text(
+            "- the candidate worked with John Smith on regional delivery.",
+            "Jane Example\nWorked with John Smith on regional delivery.",
+        )
+        self.assertEqual(
+            finalized,
+            "- the candidate worked with John Smith on regional delivery.",
+        )
+
+    def test_finalize_summary_redacts_identifiers_split_by_markdown(self):
+        original = {
+            "candidate": {
+                "name": "Jane Example",
+                "current_company": "Acme Sdn Bhd",
+            },
+            "summary_bullets": [
+                "Jane Example led delivery for Acme Sdn Bhd."
+            ],
+            "work_experiences": [{"company": "Acme Sdn Bhd", "roles": []}],
+            "education": [],
+        }
+        finalized = bm._blind_finalize_summary_bullets(
+            {
+                "summary_bullets": [
+                    "**Jane** Example led delivery for **Acme** Sdn Bhd."
+                ]
+            },
+            original,
+        )
+        self.assertEqual(
+            finalized["summary_bullets"],
+            ["the candidate led delivery for [Company]."],
+        )
+        self.assertEqual(
+            bm._blind_replace_identifier("Company", "Company", "[Company]"),
+            "[Company]",
+        )
+
+    def test_finalize_generated_summary_redacts_labeled_physical_address(self):
+        finalized = bm._blind_finalize_generated_summary_text(
+            "- the candidate lives at 12 Jalan Ampang, Kuala Lumpur.",
+            "Jane Example\nAddress: 12 Jalan Ampang, Kuala Lumpur.",
+        )
+        self.assertEqual(
+            finalized,
+            "- the candidate lives at [Address Redacted].",
+        )
+
+    def test_pipe_identity_uses_company_column_instead_of_role(self):
+        expected = ("Acme", "[Company]", False)
+        self.assertEqual(
+            bm._blind_summary_pipe_identity(
+                "2019 | Acme | Senior Engineer"
+            ),
+            expected,
+        )
+        self.assertEqual(
+            bm._blind_summary_pipe_identity(
+                "Senior Engineer | Acme | 2019"
+            ),
+            expected,
+        )
+        self.assertEqual(
+            bm._blind_summary_pipe_identity(
+                "2019 | Senior Engineer | Acme"
+            ),
+            expected,
+        )
+
+    def test_finalize_generated_summary_preserves_camel_case_technologies(self):
+        finalized = bm._blind_finalize_generated_summary_text(
+            "- the candidate built PowerBI dashboards with JavaScript and NodeJS.",
+            "Jane Example\nBuilt PowerBI dashboards with JavaScript and NodeJS.",
+        )
+        self.assertEqual(
+            finalized,
+            "- the candidate built PowerBI dashboards with JavaScript and NodeJS.",
+        )
+
+    def test_company_suffix_collection_does_not_consume_sentence_lead_in(self):
+        finalized = bm._blind_finalize_generated_summary_text(
+            "- the candidate worked with Acme Technology on migration.",
+            "Jane Example\nWorked with Acme Technology on migration.",
+        )
+        self.assertEqual(
+            finalized,
+            "- the candidate worked with [Company] on migration.",
+        )
+
+    def test_finalize_generated_summary_redacts_single_word_candidate_name(self):
+        finalized = bm._blind_finalize_generated_summary_text(
+            "- **Sukarno** led regional delivery.",
+            "Sukarno\nRegional delivery specialist",
+        )
+        self.assertEqual(
+            finalized,
+            "- the candidate led regional delivery.",
+        )
+
+    def test_finalize_generated_summary_redacts_name_from_mixed_contact_header(self):
+        finalized = bm._blind_finalize_generated_summary_text(
+            "- Jane Example leads regional delivery.",
+            "Jane Example | +60 12-345 6789 | jane@example.com\nSenior Consultant",
+        )
+        self.assertEqual(finalized, "- the candidate leads regional delivery.")
+
+    def test_finalize_generated_summary_redacts_vertical_standalone_employer(self):
+        finalized = bm._blind_finalize_generated_summary_text(
+            "- the candidate worked at Acme as a Senior Engineer.",
+            "Jane Example\nEXPERIENCE\nAcme\nSenior Engineer\n2020 - Present",
+        )
+        self.assertEqual(
+            finalized,
+            "- the candidate worked at [Company] as a Senior Engineer.",
+        )
+
+    def test_finalize_generated_summary_redacts_unlabeled_street_address(self):
+        finalized = bm._blind_finalize_generated_summary_text(
+            "- the candidate lives at 12 Jalan Ampang, Kuala Lumpur.",
+            "Jane Example\n12 Jalan Ampang, Kuala Lumpur",
+        )
+        self.assertEqual(
+            finalized,
+            "- the candidate lives at [Address Redacted].",
+        )
+
+    def test_phone_redaction_preserves_long_unformatted_achievement_metric(self):
+        self.assertEqual(
+            bm._blind_redact_phone_candidates(
+                "Processed 100000000 records annually."
+            ),
+            "Processed 100000000 records annually.",
+        )
+        self.assertEqual(
+            bm._blind_redact_phone_candidates("Phone: 912345678"),
+            "Phone: [Phone Redacted]",
+        )
+
+    def test_phone_redaction_keeps_real_date_ranges(self):
+        self.assertEqual(
+            bm._blind_redact_phone_candidates("Worked from 2020 - 2023."),
+            "Worked from 2020 - 2023.",
+        )
+        self.assertEqual(
+            bm._blind_redact_phone_candidates("Call +60 12-345 6789."),
+            "Call [Phone Redacted].",
+        )
+
+    def test_finalize_summary_refuses_silent_provider_loss(self):
+        original = {"summary_bullets": ["One", "Two"]}
+        with self.assertRaisesRegex(ValueError, "preserve every"):
+            bm._blind_finalize_summary_bullets(
+                {"summary_bullets": ["Only one"]}, original
+            )
+
 
 class SmokeAndHygieneTests(unittest.TestCase):
     def test_symbols_present(self):
@@ -147,6 +420,8 @@ class SmokeAndHygieneTests(unittest.TestCase):
             "_blind_walk_strings", "_blind_add_mask_term", "_blind_collect_org_mask_terms",
             "_blind_replace_org_terms_in_text", "_blind_mask_org_terms_recursive",
             "_blind_postprocess_company_mentions", "_blind_restore_cv_bullet_structure",
+            "_blind_prepare_summary_bullets", "_blind_finalize_summary_bullets",
+            "_blind_finalize_generated_summary_text",
         ]:
             self.assertTrue(callable(getattr(bm, name)), name)
 

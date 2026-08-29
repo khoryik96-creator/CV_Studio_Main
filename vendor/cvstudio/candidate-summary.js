@@ -3,6 +3,7 @@ var _summaryFocus = 'general';
 window._summaryLastModifier = 'normal';
 window._summaryGeneratedBullets = [];
 window._summaryGeneratedSource = '';
+window._summaryGeneratedAnonymized = null;
 window._formatSummaryDraft = null;
 window._summarySourceDocxFile = null;
 window._summarySourceDocxText = '';
@@ -55,9 +56,27 @@ function renderSummaryText(raw) {
   if (!src.length) src = ['No summary returned. Try regenerating or use a different provider.'];
   return '<ul class="summary-list">' + src.map(function(t){ return '<li>' + boldSafeSummary(t) + '</li>'; }).join('') + '</ul>';
 }
+function getSummaryAnonymizationEnabled() {
+  var toggle = document.getElementById('summaryAnonymizeToggle');
+  return !!(toggle && toggle.checked);
+}
+function updateSummaryAnonymizeHint() {
+  var enabled = getSummaryAnonymizationEnabled();
+  var hint = document.getElementById('summaryAnonymizeHint');
+  if (hint) hint.textContent = enabled
+    ? 'On — candidate identity, contact details, employers, clients and education institutions will be generalized.'
+    : 'Off — the summary may use identifying details supported by the CV.';
+}
+function updateSummaryOutputTitle() {
+  var title = document.getElementById('summaryOutputTitle');
+  if (!title) return;
+  title.textContent = window._summaryGeneratedAnonymized === true
+    ? 'Anonymized CV Summary'
+    : 'CV Summary Output';
+}
 function formatSummaryBulletsFor(raw, blind) {
   var draft = window._formatSummaryDraft;
-  if (blind || !draft || String(draft.cv_text || '').trim() !== String(raw || '').trim()) return [];
+  if (!draft || String(draft.cv_text || '').trim() !== String(raw || '').trim()) return [];
   return (Array.isArray(draft.bullets) ? draft.bullets : [])
     .map(function(value){ return String(value || '').trim(); })
     .filter(Boolean)
@@ -99,7 +118,7 @@ async function formatSummaryResume() {
   var bullets = sourceMatches && Array.isArray(window._summaryGeneratedBullets) ? window._summaryGeneratedBullets.slice() : [];
   if (!cv) { showToast('Paste or upload a CV first', 'err'); return; }
   if (!bullets.length) { showToast(sourceMatches ? 'Generate a CV Summary first' : 'The CV changed — regenerate its summary first', 'err'); return; }
-  window._formatSummaryDraft = { cv_text: cv, bullets: bullets };
+  window._formatSummaryDraft = { cv_text: cv, bullets: bullets, anonymized: window._summaryGeneratedAnonymized === true };
   var input = document.getElementById('cvInput');
   if (input) input.value = cv;
   var count = document.getElementById('charCount');
@@ -145,7 +164,7 @@ async function applySummaryToUploadedDocx() {
     var url = URL.createObjectURL(blob);
     var link = document.createElement('a');
     link.href = url;
-    link.download = base + ' - Summary.docx';
+    link.download = base + (window._summaryGeneratedAnonymized === true ? ' - Anonymized Summary.docx' : ' - Summary.docx');
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -194,10 +213,11 @@ async function handleSummaryFile(file) {
     markTabFailed('summary', run); showToast('CV Summary extraction failed: ' + (e.message || 'Unknown error'), 'err');
   }
 }
-function cvSummaryPrompt(cv, modifier, focusNote) {
+function cvSummaryPrompt(cv, modifier, focusNote, anonymize) {
   modifier = modifier || 'normal';
   var modNote = modifier === 'shorter' ? 'Use exactly 4-5 bullet points.' : modifier === 'longer' ? 'Use 8-10 detailed bullet points with useful metrics where available.' : 'Use 6-7 bullet points.';
-  return 'You are a senior recruitment consultant. Produce a professional candidate summary.\n\nRULES:\n- Output ONLY bullet points, no intro, no headers.\n- Every bullet starts with "- ".\n- Bold the most important keyword or phrase per bullet using **double asterisks**.\n- Third-person, professional, concise.\n- Do not invent employers, dates, certifications, industries, metrics, or achievements that are not supported by the CV.\n- Keep the candidate marketable but accurate.\n- ' + modNote + '\n' + (focusNote ? ('- ' + focusNote + '\n') : '') + '\nCV:\n---\n' + cv + '\n---';
+  var anonymizeRules = anonymize ? '\nANONYMIZATION — REQUIRED:\n- Refer to the candidate only as "the candidate". Do not output the candidate name or gendered candidate pronouns.\n- Do not output email addresses, phone numbers, URLs, personal websites, or precise home addresses.\n- Do not name any employer, client, customer, product brand, university, school, or education institution. Replace them with accurate generic descriptions such as "a leading regional bank", "a global technology company", or "an established university".\n- Preserve supported job titles, responsibilities, technologies, qualifications, dates, metrics and achievements unless a detail itself directly identifies the candidate or organization.\n- Do not rename or neutralize managers, colleagues, clients, referees, or other people; simply avoid unnecessary identifying references to them.\n' : '';
+  return 'You are a senior recruitment consultant. Produce a professional candidate summary.\n\nRULES:\n- Output ONLY bullet points, no intro, no headers.\n- Every bullet starts with "- ".\n- Bold the most important keyword or phrase per bullet using **double asterisks**.\n- Third-person, professional, concise.\n- Do not invent employers, dates, certifications, industries, metrics, or achievements that are not supported by the CV.\n- Keep the candidate marketable but accurate.\n- ' + modNote + '\n' + (focusNote ? ('- ' + focusNote + '\n') : '') + anonymizeRules + '\nCV:\n---\n' + cv + '\n---';
 }
 function cvSummaryModifierForPreference(preference) {
   return String(preference || '').toLowerCase() === 'detailed' ? 'longer' : 'normal';
@@ -242,18 +262,26 @@ async function generateSummary(modifier) {
   var route = aiRoutePayload('summary');
   if (!route.api_key) { showToast('Save an API key for CV Summary route', 'err'); return; }
   var focusNote = getSummaryFocusPrompt();
-  var prompt = cvSummaryPrompt(cv, modifier, focusNote);
+  var anonymize = getSummaryAnonymizationEnabled();
+  var prompt = cvSummaryPrompt(cv, modifier, focusNote, anonymize);
   var output = document.getElementById('summaryOutput'), placeholder = document.getElementById('summaryPlaceholder'), costEl = document.getElementById('summaryCost'), btn = document.getElementById('btnSummaryGen');
   var formatBtn = document.getElementById('btnSummaryFormat');
   window._summaryGeneratedBullets = [];
   window._summaryGeneratedSource = '';
+  window._summaryGeneratedAnonymized = null;
+  updateSummaryOutputTitle();
   if (formatBtn) formatBtn.disabled = true;
   updateSummaryApplyDocxButton();
   var run = markTabRunning('summary');
   if (output) { output.style.display = 'block'; output.innerHTML = '<div style="display:flex;align-items:center;gap:10px;color:var(--text3);"><span class="spinner"></span><span>Generating summary with ' + esc(route.display) + '…</span></div>'; }
   if (placeholder) placeholder.style.display = 'none'; if (btn) btn.disabled = true; updateSummaryRouteBadge();
   try {
-    var r = await fetchWithTimeout('/generate-ai', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ api_key: route.api_key, api_key_slot: route.api_key_slot, provider: route.provider, model: route.model, prompt: prompt, max_tokens: modifier === 'longer' ? 1600 : 1000, use_tools:false }) }, 180000);
+    var summaryRequest = { api_key: route.api_key, api_key_slot: route.api_key_slot, provider: route.provider, model: route.model, prompt: prompt, max_tokens: modifier === 'longer' ? 1600 : 1000, use_tools:false };
+    if (anonymize) {
+      summaryRequest.feature = 'summary_anonymized';
+      summaryRequest.source_cv_text = cv;
+    }
+    var r = await fetchWithTimeout('/generate-ai', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(summaryRequest) }, 180000);
     var d = await r.json().catch(function(){ return {}; });
     if (!r.ok || d.error) {
       recordPaidAiFailure('CV Summary failed output', d, route.model, route.provider);
@@ -266,14 +294,16 @@ async function generateSummary(modifier) {
     }
     window._summaryGeneratedBullets = summaryBulletLines(raw);
     window._summaryGeneratedSource = cv;
+    window._summaryGeneratedAnonymized = anonymize;
     if (!window._summaryGeneratedBullets.length) throw new Error('Empty summary returned');
     if (output) output.innerHTML = renderSummaryText(raw);
+    updateSummaryOutputTitle();
     if (formatBtn) formatBtn.disabled = !ta || String(ta.value || '').trim() !== cv;
     updateSummaryApplyDocxButton();
     var usage = normalizeUsageClient(d.usage || {}); var cost = responseCost(d, route.model, route.provider);
     if (costEl) costEl.textContent = (cost > 0 ? ('$' + cost.toFixed(4) + ' · ') : '') + ((usage.input_tokens || 0) + (usage.output_tokens || 0)).toLocaleString() + ' tokens · ' + providerLabel(d.provider || route.provider, d.model || route.model);
-    statsRecord('CV Summary — ' + getSummaryFocusLabel(), 'summary', cost, d.model || route.model, '', d.provider || route.provider, statsMetaFromResponse(d, route.model, route.provider));
-    markTabDone('summary', run); showToast('CV Summary generated', 'ok');
+    statsRecord((anonymize ? 'Anonymized CV Summary — ' : 'CV Summary — ') + getSummaryFocusLabel(), 'summary', cost, d.model || route.model, '', d.provider || route.provider, statsMetaFromResponse(d, route.model, route.provider));
+    markTabDone('summary', run); showToast(anonymize ? 'Anonymized CV Summary generated' : 'CV Summary generated', 'ok');
   } catch(e) {
     if (output) output.innerHTML = '<div style="color:var(--red);font-size:13px;line-height:1.5;">⚠ ' + esc(e.message || 'CV Summary failed') + '</div>';
     markTabFailed('summary', run); showToast('CV Summary failed: ' + (e.message || 'Unknown error').split('\n')[0], 'err');
@@ -289,6 +319,8 @@ function initSummaryTabUI() {
         updateSummaryCharCount();
         window._summaryGeneratedBullets = [];
         window._summaryGeneratedSource = '';
+        window._summaryGeneratedAnonymized = null;
+        updateSummaryOutputTitle();
         if (window._summarySourceDocxFile && String(ta.value || '').trim() !== String(window._summarySourceDocxText || '').trim()) {
           window._summarySourceDocxFile = null;
           window._summarySourceDocxText = '';
@@ -302,6 +334,8 @@ function initSummaryTabUI() {
       ta._summaryCharCountBound = true;
     }
     updateSummaryCharCount();
+    updateSummaryAnonymizeHint();
+    updateSummaryOutputTitle();
   } catch(e) {}
 }
 function suppressSummaryTabAutoCaret() {
@@ -371,10 +405,12 @@ function clearSummaryTab() {
   var c = document.getElementById('summaryCost'); if (c) c.textContent = '';
   window._summaryGeneratedBullets = [];
   window._summaryGeneratedSource = '';
+  window._summaryGeneratedAnonymized = null;
   window._summarySourceDocxFile = null;
   window._summarySourceDocxText = '';
   var formatBtn = document.getElementById('btnSummaryFormat'); if (formatBtn) formatBtn.disabled = true;
   updateSummaryApplyDocxButton();
   clearFormatSummaryDraft();
   updateSummaryCharCount();
+  updateSummaryOutputTitle();
 }

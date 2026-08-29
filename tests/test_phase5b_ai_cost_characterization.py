@@ -399,6 +399,162 @@ class Phase5BAICostCharacterizationTests(unittest.TestCase):
         self.assertIn("Never leave or introduce they, them, their", prompts[1])
         self.assertIn("managers, colleagues, clients", prompts[1])
 
+    def test_blind_preserves_and_anonymizes_about_summary(self):
+        parsed_data = {
+            "candidate": {
+                "name": "Fixture Candidate",
+                "email": "fixture@example.com",
+            },
+            "summary_bullets": [
+                "Fixture Candidate led delivery for Fixture Company.",
+                "Contact fixture@example.com for details.",
+            ],
+            "work_experiences": [{"company": "Fixture Company", "roles": []}],
+        }
+        provider_data = {
+            "candidate": {"name": "Candidate", "email": "[Email Redacted]"},
+            "summary_bullets": [
+                "Fixture Candidate led delivery for Fixture Company.",
+                "Contact fixture@example.com for details.",
+            ],
+            "work_experiences": [{"company": "[Company]", "roles": []}],
+        }
+
+        with mock.patch.object(
+            app, "_resolve_request_api_key", return_value="<fixture-credential>"
+        ), mock.patch.object(
+            app,
+            "call_llm",
+            return_value={
+                "content": [{"type": "text", "text": json.dumps(provider_data)}],
+                "usage": {},
+            },
+        ):
+            response = self._post_paid(
+                "/blind",
+                {"cv_data": parsed_data, "provider": "anthropic"},
+                "blind-preserve-summary",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        bullets = response.get_json()["data"]["summary_bullets"]
+        self.assertEqual(len(bullets), 2)
+        blob = " ".join(bullets)
+        self.assertNotIn("Fixture Candidate", blob)
+        self.assertNotIn("fixture@example.com", blob)
+        self.assertNotIn("Fixture Company", blob)
+        self.assertIn("the candidate", blob)
+        self.assertIn("[Email Redacted]", blob)
+        self.assertIn("[Company]", blob)
+        self.assertIn("ABOUT HIM / HER SUMMARY", app.BLIND_SYSTEM_PROMPT)
+        self.assertIn("Never delete, omit, combine", app.BLIND_SYSTEM_PROMPT)
+
+    def test_blind_masks_unknown_summary_only_client_and_product(self):
+        parsed_data = {
+            "candidate": {"name": "Jane Example"},
+            "summary_bullets": ["Delivered the FalconX rollout for Novacore."],
+            "work_experiences": [],
+            "education": [],
+        }
+        provider_data = {
+            "candidate": {"name": "Candidate"},
+            "summary_bullets": ["- Delivered the FalconX rollout for Novacore."],
+            "work_experiences": [],
+            "education": [],
+        }
+        with mock.patch.object(
+            app, "_resolve_request_api_key", return_value="<fixture-credential>"
+        ), mock.patch.object(
+            app,
+            "call_llm",
+            return_value={
+                "content": [{"type": "text", "text": json.dumps(provider_data)}],
+                "usage": {},
+            },
+        ):
+            response = self._post_paid(
+                "/blind",
+                {"cv_data": parsed_data, "provider": "anthropic"},
+                "blind-summary-unknown-identifiers",
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.get_json()["data"]["summary_bullets"],
+            ["Delivered the [Product] rollout for [Company]."],
+        )
+
+    def test_generate_ai_anonymized_summary_sanitizes_provider_output(self):
+        source = (
+            "Jane Example\nCurrent Company: Novacore\n"
+            "Worked on the FalconX rollout for Novacore.\nEmail: jane@example.com"
+        )
+        with mock.patch.object(
+            app, "_resolve_request_api_key", return_value="<fixture-credential>"
+        ), mock.patch.object(
+            app,
+            "call_llm",
+            return_value={
+                "content": [{
+                    "type": "text",
+                    "text": "- Jane Example led the FalconX rollout for Novacore. Contact jane@example.com",
+                }],
+                "usage": {},
+            },
+        ):
+            response = self._post_paid(
+                "/generate-ai",
+                {
+                    "feature": "summary_anonymized",
+                    "source_cv_text": source,
+                    "prompt": "fixture prompt",
+                    "provider": "anthropic",
+                },
+                "anonymized-summary-safety",
+            )
+        self.assertEqual(response.status_code, 200)
+        text = response.get_json()["content"][0]["text"]
+        self.assertNotIn("Jane Example", text)
+        self.assertNotIn("FalconX", text)
+        self.assertNotIn("Novacore", text)
+        self.assertNotIn("jane@example.com", text)
+        self.assertIn("the candidate", text)
+        self.assertIn("[Product]", text)
+        self.assertIn("[Company]", text)
+        self.assertIn("[Email Redacted]", text)
+
+    def test_anonymized_summary_requires_source_before_paid_call(self):
+        with mock.patch.object(
+            app, "_resolve_request_api_key", return_value="<fixture-credential>"
+        ), mock.patch.object(app, "call_llm") as call_llm:
+            response = self._post_paid(
+                "/generate-ai",
+                {
+                    "feature": "summary_anonymized",
+                    "prompt": "fixture prompt",
+                    "provider": "anthropic",
+                },
+                "anonymized-summary-missing-source",
+            )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("unchanged source CV", response.get_json()["error"])
+        call_llm.assert_not_called()
+
+    def test_docx_textbox_summary_keeps_paragraphs_and_label_order(self):
+        summary = (
+            '<w:txbxContent><w:p><w:pPr><w:numPr><w:numId w:val="2"/>'
+            '</w:numPr></w:pPr><w:r><w:t>First summary</w:t></w:r></w:p>'
+            '<w:p><w:pPr><w:numPr><w:numId w:val="2"/></w:numPr></w:pPr>'
+            '<w:r><w:t>Second summary</w:t></w:r></w:p></w:txbxContent>'
+        )
+        heading = (
+            '<w:txbxContent><w:p><w:r><w:t>ABOUT HIM / HER</w:t>'
+            '</w:r></w:p></w:txbxContent>'
+        )
+        self.assertEqual(
+            app._extract_docx_textbox_lines(summary + heading + summary + heading),
+            ["ABOUT HIM / HER", "• First summary", "• Second summary"],
+        )
+
     def test_existing_failure_and_salary_processing_fields_are_preserved(self):
         with mock.patch.object(
             app, "_resolve_request_api_key", return_value="<fixture-credential>"

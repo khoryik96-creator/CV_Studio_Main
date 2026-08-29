@@ -263,8 +263,48 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Post-merge review corrective — v24.6.363 / planned PR #184, ACTIVE AND
-  UNMERGED.** Branch `chatgpt/pr184-v24.6.363-post-merge-review-fixes` closes
+- **CV Summary and Blind CV summary anonymization — v24.6.368 / PR
+  #186, ACTIVE AND UNMERGED.** Branch
+  `chatgpt/pr186-v24.6.367-summary-anonymization-final-review-fixes` adds an off-by-default
+  anonymized-output option directly to CV Summary. Its prompt retains supported
+  role, technology, qualification, date, metric and achievement detail while
+  excluding candidate identity/contact details and named employers, clients,
+  products and education institutions. A server-side final safety pass scrubs
+  source identifiers and rejects a still-identifying response before the UI can
+  label, copy or export it as anonymized. Single and batch Blind CV now promote a
+  parsed Summary/Profile/About Him / Her skill section back into
+  `summary_bullets`; linked CV Summary bullets are no longer discarded merely
+  because Blind CV was selected. DOCX extraction preserves each numbered
+  summary textbox paragraph, removes AlternateContent duplicates and orders the
+  ABOUT HIM / HER label before its bullets. `/blind` requires the provider to preserve the
+  exact populated summary-bullet count, deterministically scrubs direct
+  candidate PII plus contextual unknown client/product names, and then runs the
+  established organisation safety sweep. Whole-identifier/case-safe matching
+  protects ordinary text such as `may` and `commitment`, and provider-returned
+  list markers are removed before Word numbering. A
+  final corrective makes identifier matching Markdown-aware, redacts labeled
+  physical addresses, selects employers rather than roles from dated
+  multi-column rows, preserves camel-case technologies such as PowerBI,
+  JavaScript and NodeJS, and trims prose before company legal suffixes. The
+  PR-review corrective also reads candidate names from mixed name/contact
+  headers, masks standalone employers beside vertical work-history date rows,
+  redacts unlabeled numbered street addresses, and preserves long uninterrupted
+  achievement metrics that do not carry phone context. A
+  provider that drops or corrupts the populated summary fails visibly instead
+  of publishing a blank About Him / Her box. No route, storage schema,
+  dependency, credential, AI-call-count or protected-package boundary change.
+  PR #185 remains a separate active branch and is not included here. Local
+  validation: 1045 tests passed, 4 skipped and 96 subtests; all 20 frontend
+  fixture groups; 24 live source-smoke assertions; repository consistency,
+  Git whitespace and Windows protected-source/dependency preflight.
+- **Feature download destinations — v24.6.364 / PR #185, ACTIVE AND
+  UNMERGED.** Branch `chatgpt/pr185-v24.6.364-feature-download-folders` adds
+  separate configured destinations for Company Profile, Summary Output, Blind
+  JD and The Owl. Do not stack PR #186 commits on that branch; merge/rebase in
+  version order when the owner approves them.
+- **Post-merge review corrective — v24.6.363 / PR #184, MERGED.** PR #184
+  merged to `master` as `1912d48`. Its branch
+  `chatgpt/pr184-v24.6.363-post-merge-review-fixes` closes
   four findings from the v24.6.362 review. Native saves validate a temporary
   same-folder staging file before atomically publishing the final DOCX name, so
   a crash cannot expose a partial official-looking CV. A lost browser response

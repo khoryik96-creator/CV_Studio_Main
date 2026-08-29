@@ -25,11 +25,11 @@
   `54298b9b6a822e1f36c9c101f1ff4edc9c7e835f`
 - Phase 7B-4 source baseline Git commit (merged Phase 7B-3):
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
-- Current merged source: v24.6.362 through PR #183
-  (`809da3e`).
-- Active work: v24.6.363 post-merge review corrective on
-  `chatgpt/pr184-v24.6.363-post-merge-review-fixes` (planned PR #184,
-  unmerged).
+- Current merged source: v24.6.363 through PR #184 (`1912d48`).
+- Active work is split across two unmerged branches: v24.6.364 feature download
+  destinations on `chatgpt/pr185-v24.6.364-feature-download-folders` (PR #185),
+  and v24.6.368 summary anonymization corrective on
+  `chatgpt/pr186-v24.6.367-summary-anonymization-final-review-fixes` (PR #186).
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
@@ -50,10 +50,49 @@
   corrective as `a20b7f9`. PR #181 merged the v24.6.360 Blind CV
   candidate-gender neutralization feature as `541cbf3`. PR #182 merged the
   v24.6.361 CV download-folder feature as `67defbc`. PR #183 merged the
-  v24.6.362 Blind CV bullet and native-download corrective as `809da3e`;
-  current master is v24.6.362.
-- Current stop: v24.6.362 is merged on `master` through PR #183. The v24.6.363
-  post-merge review corrective is active and unmerged.
+  v24.6.362 Blind CV bullet and native-download corrective as `809da3e`; PR
+  #184 then merged v24.6.363 as `1912d48`.
+- Current stop: v24.6.363 is merged on `master` through PR #184. PR #185 and
+  PR #186 are separate active, unmerged branches.
+
+## v24.6.368 CV Summary and Blind CV summary anonymization (active, unmerged)
+
+- CV Summary has an off-by-default `Generate anonymized summary` option in the
+  module itself. It excludes candidate identity/contact details and named
+  employers, clients, product brands and education institutions while keeping
+  supported professional substance. The generic AI route applies a dedicated
+  server-side source-identifier safety pass before returning this feature's
+  output, so a provider response is never labelled anonymized on prompt trust
+  alone.
+- Single and batch Blind CV preserve linked Summary-module bullets and promote
+  parsed Summary/Profile/About Him / Her content into `summary_bullets` before
+  blinding. The summary skill entry is removed only after successful promotion,
+  preventing a duplicated Additional Information copy. The DOCX extractor now
+  keeps every numbered textbox paragraph, removes only exact fallback copies,
+  and presents the ABOUT HIM / HER label before the summary bullets; the exact
+  owner-supplied Samba formatted CV retains all eight source bullets.
+- `/blind` instructs the provider to retain and anonymize every populated
+  summary bullet. The backend enforces the item count, scrubs direct candidate
+  name/email/phone/link data, masks contextual unknown client/product names,
+  strips provider-added list markers, and applies the established organisation
+  sweep. Identifier matching is boundary- and short-name-case-safe, protecting
+  normal text such as lowercase `may`, `commitment`, technologies and real date
+  ranges. The final review corrective also matches identifiers split by
+  Markdown formatting, redacts labeled physical addresses, chooses the company
+  rather than the role in dated pipe-delimited rows, preserves camel-case
+  technologies such as PowerBI, JavaScript and NodeJS, and trims sentence
+  lead-ins before legal-suffix company matches. The PR-review corrective reads
+  candidate names from mixed name/contact headers, detects standalone employers
+  beside vertical work-history dates, redacts unlabeled numbered street
+  addresses, and preserves long uninterrupted achievement metrics without
+  phone formatting or context. Missing, malformed or
+  still-identifying summary output fails visibly
+  rather than generating a blank About Him / Her box.
+- No route, storage schema, dependency, credential, paid-call-count or
+  protected-package boundary change. PR #185 remains separate. Local
+  validation passed 1045 tests, 4 skipped and 96 subtests; all 20 frontend
+  fixture groups; 24 live source-smoke assertions; repository consistency,
+  Git whitespace and Windows protected-source/dependency preflight.
 
 ## v24.6.363 post-merge review corrective (active, unmerged)
 
