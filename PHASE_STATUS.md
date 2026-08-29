@@ -28,8 +28,8 @@
 - Current merged source: v24.6.363 through PR #184 (`1912d48`).
 - Active work is split across two unmerged branches: v24.6.364 feature download
   destinations on `chatgpt/pr185-v24.6.364-feature-download-folders` (PR #185),
-  and v24.6.367 summary anonymization corrective on
-  `chatgpt/pr186-v24.6.367-summary-anonymization-final-review-fixes` (planned PR #186).
+  and v24.6.368 summary anonymization corrective on
+  `chatgpt/pr186-v24.6.367-summary-anonymization-final-review-fixes` (PR #186).
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
@@ -53,9 +53,9 @@
   v24.6.362 Blind CV bullet and native-download corrective as `809da3e`; PR
   #184 then merged v24.6.363 as `1912d48`.
 - Current stop: v24.6.363 is merged on `master` through PR #184. PR #185 and
-  planned PR #186 are separate active, unmerged branches.
+  PR #186 are separate active, unmerged branches.
 
-## v24.6.367 CV Summary and Blind CV summary anonymization (active, unmerged)
+## v24.6.368 CV Summary and Blind CV summary anonymization (active, unmerged)
 
 - CV Summary has an off-by-default `Generate anonymized summary` option in the
   module itself. It excludes candidate identity/contact details and named
@@ -81,12 +81,16 @@
   Markdown formatting, redacts labeled physical addresses, chooses the company
   rather than the role in dated pipe-delimited rows, preserves camel-case
   technologies such as PowerBI, JavaScript and NodeJS, and trims sentence
-  lead-ins before legal-suffix company matches. Missing, malformed or
+  lead-ins before legal-suffix company matches. The PR-review corrective reads
+  candidate names from mixed name/contact headers, detects standalone employers
+  beside vertical work-history dates, redacts unlabeled numbered street
+  addresses, and preserves long uninterrupted achievement metrics without
+  phone formatting or context. Missing, malformed or
   still-identifying summary output fails visibly
   rather than generating a blank About Him / Her box.
 - No route, storage schema, dependency, credential, paid-call-count or
   protected-package boundary change. PR #185 remains separate. Local
-  validation passed 1041 tests, 4 skipped and 96 subtests; all 20 frontend
+  validation passed 1045 tests, 4 skipped and 96 subtests; all 20 frontend
   fixture groups; 24 live source-smoke assertions; repository consistency,
   Git whitespace and Windows protected-source/dependency preflight.
 

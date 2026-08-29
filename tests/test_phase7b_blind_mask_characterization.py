@@ -357,6 +357,45 @@ class RecursiveTests(unittest.TestCase):
             "- the candidate led regional delivery.",
         )
 
+    def test_finalize_generated_summary_redacts_name_from_mixed_contact_header(self):
+        finalized = bm._blind_finalize_generated_summary_text(
+            "- Jane Example leads regional delivery.",
+            "Jane Example | +60 12-345 6789 | jane@example.com\nSenior Consultant",
+        )
+        self.assertEqual(finalized, "- the candidate leads regional delivery.")
+
+    def test_finalize_generated_summary_redacts_vertical_standalone_employer(self):
+        finalized = bm._blind_finalize_generated_summary_text(
+            "- the candidate worked at Acme as a Senior Engineer.",
+            "Jane Example\nEXPERIENCE\nAcme\nSenior Engineer\n2020 - Present",
+        )
+        self.assertEqual(
+            finalized,
+            "- the candidate worked at [Company] as a Senior Engineer.",
+        )
+
+    def test_finalize_generated_summary_redacts_unlabeled_street_address(self):
+        finalized = bm._blind_finalize_generated_summary_text(
+            "- the candidate lives at 12 Jalan Ampang, Kuala Lumpur.",
+            "Jane Example\n12 Jalan Ampang, Kuala Lumpur",
+        )
+        self.assertEqual(
+            finalized,
+            "- the candidate lives at [Address Redacted].",
+        )
+
+    def test_phone_redaction_preserves_long_unformatted_achievement_metric(self):
+        self.assertEqual(
+            bm._blind_redact_phone_candidates(
+                "Processed 100000000 records annually."
+            ),
+            "Processed 100000000 records annually.",
+        )
+        self.assertEqual(
+            bm._blind_redact_phone_candidates("Phone: 912345678"),
+            "Phone: [Phone Redacted]",
+        )
+
     def test_phone_redaction_keeps_real_date_ranges(self):
         self.assertEqual(
             bm._blind_redact_phone_candidates("Worked from 2020 - 2023."),
