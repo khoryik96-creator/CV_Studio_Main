@@ -522,6 +522,91 @@ class Phase5BAICostCharacterizationTests(unittest.TestCase):
         self.assertIn("[Company]", text)
         self.assertIn("[Email Redacted]", text)
 
+    def test_generate_ai_anonymized_summary_sanitizes_no_tools_fallback(self):
+        source = "Jane Example\nCurrent Company: Novacore"
+        with mock.patch.object(
+            app, "_resolve_request_api_key", return_value="<fixture-credential>"
+        ), mock.patch.object(
+            app,
+            "call_llm",
+            return_value={
+                "content": [{
+                    "type": "text",
+                    "text": "- Jane Example led delivery for Novacore.",
+                }],
+                "usage": {},
+            },
+        ):
+            response = self._post_paid(
+                "/generate-ai",
+                {
+                    "feature": "summary_anonymized",
+                    "source_cv_text": source,
+                    "prompt": "fixture prompt",
+                    "provider": "deepseek",
+                    "use_tools": True,
+                },
+                "anonymized-summary-no-tools-fallback",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        text = payload["content"][0]["text"]
+        self.assertNotIn("Jane Example", text)
+        self.assertNotIn("Novacore", text)
+        self.assertIn("the candidate", text)
+        self.assertIn("[Company]", text)
+        self.assertIn("continued without live search", payload["warning"])
+
+    def test_generate_ai_anonymized_summary_sanitizes_http_tools_fallback(self):
+        source = "Jane Example\nCurrent Company: Novacore"
+        tool_error = app.urllib.error.HTTPError(
+            "https://fixture.invalid",
+            400,
+            "Bad Request",
+            {},
+            io.BytesIO(json.dumps({
+                "error": {"message": "web_search tool is not enabled"}
+            }).encode("utf-8")),
+        )
+        self.addCleanup(tool_error.close)
+        with mock.patch.object(
+            app, "_resolve_request_api_key", return_value="<fixture-credential>"
+        ), mock.patch.object(
+            app,
+            "call_llm",
+            side_effect=[
+                tool_error,
+                {
+                    "content": [{
+                        "type": "text",
+                        "text": "- Jane Example led delivery for Novacore.",
+                    }],
+                    "usage": {},
+                },
+            ],
+        ):
+            response = self._post_paid(
+                "/generate-ai",
+                {
+                    "feature": "summary_anonymized",
+                    "source_cv_text": source,
+                    "prompt": "fixture prompt",
+                    "provider": "anthropic",
+                    "use_tools": True,
+                },
+                "anonymized-summary-http-tools-fallback",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        text = payload["content"][0]["text"]
+        self.assertNotIn("Jane Example", text)
+        self.assertNotIn("Novacore", text)
+        self.assertIn("the candidate", text)
+        self.assertIn("[Company]", text)
+        self.assertIn("continued without web search", payload["warning"])
+
     def test_anonymized_summary_requires_source_before_paid_call(self):
         with mock.patch.object(
             app, "_resolve_request_api_key", return_value="<fixture-credential>"

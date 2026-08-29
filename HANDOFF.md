@@ -263,9 +263,24 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
+- **Summary anonymization safety follow-up — v24.6.369 / PR #187, ACTIVE AND
+  UNMERGED.** Branch `chatgpt/pr187-v24.6.369-anonymization-safety-fixes`
+  closes the post-merge review findings from PR #186. The final safety pass now
+  handles Unicode and initialled candidate names, bare personal domains,
+  Malaysian unit-style addresses, international/contact-context phone numbers,
+  employers written on the same line as their dates, and education acronyms in
+  an Education section. Phone detection preserves grouped achievement metrics,
+  Blind CV no longer truncates a populated source summary at 20 bullets, and
+  every successful `/generate-ai` fallback passes through the same deterministic
+  anonymization finalizer. No route, storage schema, dependency, credential,
+  paid-call-count, CV-formatting or protected-package boundary change. PR #185
+  remains separate and unmerged. Local validation: 1056 tests passed, 4
+  skipped and 102 subtests; all 20 frontend fixture groups; 24 live
+  source-smoke assertions; repository consistency; Git whitespace; and the
+  Windows protected-source/Antiword/Tesseract/adm-zip preflight.
 - **CV Summary and Blind CV summary anonymization — v24.6.368 / PR
-  #186, ACTIVE AND UNMERGED.** Branch
-  `chatgpt/pr186-v24.6.367-summary-anonymization-final-review-fixes` adds an off-by-default
+  #186, MERGED.** PR #186 merged to `master` as `fbdf0e7`. Its branch
+  `chatgpt/pr186-v24.6.367-summary-anonymization-final-review-fixes` added an off-by-default
   anonymized-output option directly to CV Summary. Its prompt retains supported
   role, technology, qualification, date, metric and achievement detail while
   excluding candidate identity/contact details and named employers, clients,
@@ -293,15 +308,15 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   provider that drops or corrupts the populated summary fails visibly instead
   of publishing a blank About Him / Her box. No route, storage schema,
   dependency, credential, AI-call-count or protected-package boundary change.
-  PR #185 remains a separate active branch and is not included here. Local
+  PR #185 remains a separate active branch and was not included there. Local
   validation: 1045 tests passed, 4 skipped and 96 subtests; all 20 frontend
   fixture groups; 24 live source-smoke assertions; repository consistency,
   Git whitespace and Windows protected-source/dependency preflight.
 - **Feature download destinations — v24.6.364 / PR #185, ACTIVE AND
   UNMERGED.** Branch `chatgpt/pr185-v24.6.364-feature-download-folders` adds
   separate configured destinations for Company Profile, Summary Output, Blind
-  JD and The Owl. Do not stack PR #186 commits on that branch; merge/rebase in
-  version order when the owner approves them.
+  JD and The Owl. Keep PR #187 separate; rebase and resolve version order when
+  the owner approves PR #185.
 - **Post-merge review corrective — v24.6.363 / PR #184, MERGED.** PR #184
   merged to `master` as `1912d48`. Its branch
   `chatgpt/pr184-v24.6.363-post-merge-review-fixes` closes

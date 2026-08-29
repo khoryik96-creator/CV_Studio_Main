@@ -62,11 +62,22 @@ _BLIND_SUMMARY_EMAIL_RE = re.compile(
     re.I,
 )
 _BLIND_SUMMARY_URL_RE = re.compile(
-    r"(?<![A-Za-z0-9])(?:https?://|www\.|(?:linkedin|github)\.com/)[^\s<>()]+",
+    r"(?<![A-Za-z0-9@])(?:"
+    r"(?:https?://|www\.)[^\s<>()]+|"
+    r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,62}[A-Za-z0-9])?\.)+"
+    r"(?:com|net|org|io|dev|me|co|info|biz|ai|app|tech|site|online|xyz|"
+    r"cloud|digital|website|my|sg|uk)(?:/[^\s<>()]*)?"
+    r")",
     re.I,
 )
 _BLIND_SUMMARY_PHONE_CANDIDATE_RE = re.compile(
     r"(?<![A-Za-z0-9])\+?\d[\d\s().\-]{6,}\d(?![A-Za-z0-9])"
+)
+_BLIND_SUMMARY_PHONE_CONTEXT_RE = re.compile(
+    r"\b(?:call|contact(?:\s+(?:number|no\.?))?|mobile(?:\s+(?:number|no\.?))?|"
+    r"phone(?:\s+(?:number|no\.?))?|tel(?:ephone)?|whatsapp)"
+    r"\s*(?:(?:number|no\.?)\s*)?(?::|#|-|is|at)?\s*$",
+    re.I,
 )
 _BLIND_SUMMARY_ADDRESS_LINE_RE = re.compile(
     r"^(?:(?:home|residential|mailing|current|permanent)\s+)?address\s*[:|\-]\s*(.+)$",
@@ -79,16 +90,23 @@ _BLIND_SUMMARY_INLINE_ADDRESS_RE = re.compile(
 _BLIND_SUMMARY_STREET_MARKER_RE = re.compile(
     r"\b(?:jalan|jln|lorong|lrg|persiaran|lebuh|lebuhraya|street|st|road|rd|"
     r"avenue|ave|lane|ln|drive|dr|boulevard|blvd|highway|suite|unit|block|blok|"
-    r"floor|tingkat|apartment|apt|residency|residence|condominium)\b",
+    r"floor|tingkat|apartment|apt|residensi|residency|residence|condominium|"
+    r"menara|plaza)\b",
     re.I,
 )
 _BLIND_SUMMARY_UNLABELED_ADDRESS_RE = re.compile(
-    r"^(?:no\.?\s*)?\d+[A-Za-z]?(?:[-/]\d+[A-Za-z]?)?(?:\s*,?\s*|\s+).+",
+    r"^(?:(?:no\.?|unit|suite|block|blok|lot|floor|tingkat)\s*)?"
+    r"(?:[A-Za-z]{0,3}[-/]?)?\d+[A-Za-z]?(?:[-/]\d+[A-Za-z]?){0,3}"
+    r"(?:\s*,?\s*|\s+).+",
     re.I,
 )
 _BLIND_SUMMARY_DATE_RANGE_RE = re.compile(
-    r"\b(?:19|20)\d{2}\b\s*(?:[-–—]|to)\s*"
-    r"(?:\b(?:19|20)\d{2}\b|present\b|current\b|now\b)",
+    r"\b(?:(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|"
+    r"jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|"
+    r"dec(?:ember)?)\.?\s+)?(?:19|20)\d{2}\b\s*(?:[-–—]|to)\s*"
+    r"(?:(?:(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|"
+    r"jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|"
+    r"dec(?:ember)?)\.?\s+)?\b(?:19|20)\d{2}\b|present\b|current\b|now\b)",
     re.I,
 )
 _BLIND_SUMMARY_CATEGORY_RE = re.compile(
@@ -200,19 +218,34 @@ def _blind_redact_phone_candidates(text):
         # must carry a prefix, formatting, a recognised local shape, or nearby
         # contact wording. A long uninterrupted achievement metric is not a
         # phone number merely because it contains nine or more digits.
-        if value.lstrip().startswith("+"):
-            return "[Phone Redacted]"
-        if len(digits) < 9:
+        if re.fullmatch(
+            r"\s*(?:19|20)\d{2}\s*[-–—]\s*(?:19|20)\d{2}\s*",
+            value,
+        ):
             return value
-        if re.search(r"[\s().-]", value):
+        nearby = match.string[max(0, match.start() - 48):match.start()]
+        if _BLIND_SUMMARY_PHONE_CONTEXT_RE.search(nearby):
+            return "[Phone Redacted]"
+        if not 8 <= len(digits) <= 15:
+            return value
+        if value.lstrip().startswith("+"):
             return "[Phone Redacted]"
         if (
             (digits.startswith("0") and 9 <= len(digits) <= 11)
             or (digits.startswith("60") and 10 <= len(digits) <= 12)
         ):
             return "[Phone Redacted]"
-        nearby = match.string[max(0, match.start() - 24):match.start()]
-        if re.search(r"\b(?:call|contact|mobile|phone|tel|telephone|whatsapp)\s*[:#-]?\s*$", nearby, re.I):
+        groups = re.findall(r"\d+", value)
+        whitespace_grouped_metric = (
+            bool(re.search(r"\s", value))
+            and not re.search(r"[().-]", value)
+            and len(groups) >= 2
+            and len(groups[0]) <= 3
+            and all(len(group) == 3 for group in groups[1:])
+        )
+        if whitespace_grouped_metric:
+            return value
+        if re.search(r"[\s().-]", value):
             return "[Phone Redacted]"
         return value
 
@@ -317,7 +350,7 @@ def _blind_walk_strings(obj):
         yield obj
 
 
-def _blind_summary_items(value):
+def _blind_summary_items(value, *, limit=20):
     values = value if isinstance(value, list) else str(value or "").splitlines()
     out = []
     for item in values:
@@ -326,7 +359,7 @@ def _blind_summary_items(value):
         clean = _BLIND_SUMMARY_MARKER_RE.sub("", item).strip()
         if clean:
             out.append(clean)
-    return out[:20]
+    return out if limit is None else out[:limit]
 
 
 def _blind_prepare_summary_bullets(cv_data):
@@ -334,7 +367,7 @@ def _blind_prepare_summary_bullets(cv_data):
     if not isinstance(cv_data, dict):
         return cv_data
     prepared = copy.deepcopy(cv_data)
-    direct = _blind_summary_items(prepared.get("summary_bullets"))
+    direct = _blind_summary_items(prepared.get("summary_bullets"), limit=None)
     skills = prepared.get("skills") if isinstance(prepared.get("skills"), list) else []
     promoted = []
     remaining = []
@@ -345,10 +378,10 @@ def _blind_prepare_summary_bullets(cv_data):
                 str(item.get("category") or "").strip()
             )
         ):
-            promoted.extend(_blind_summary_items(item.get("items")))
+            promoted.extend(_blind_summary_items(item.get("items"), limit=None))
         else:
             remaining.append(item)
-    summary = (direct or promoted)[:20]
+    summary = direct or promoted
     if summary:
         prepared["summary_bullets"] = summary
         prepared["skills"] = remaining
@@ -404,6 +437,28 @@ def _blind_collect_summary_identity_replacements(original_cv):
     return sorted(replacements, key=lambda item: -len(item[0]))
 
 
+def _blind_summary_strip_name_honorifics(value):
+    clean = re.sub(r"\s+", " ", str(value or "")).strip()
+    clean = re.sub(r"^(?:tan\s+sri)\s+", "", clean, flags=re.I)
+    honorifics = {
+        "mr", "mrs", "ms", "miss", "mx", "dr", "prof", "professor",
+        "ir", "ts", "dato", "datuk", "datin",
+    }
+    words = clean.split()
+    while words and re.sub(r"[^\w]+", "", words[0], flags=re.UNICODE).casefold() in honorifics:
+        words.pop(0)
+    return " ".join(words)
+
+
+def _blind_summary_name_word(value):
+    token = str(value or "").strip()
+    token = token.strip(".")
+    if not token:
+        return False
+    parts = re.split(r"['’\-]", token)
+    return all(part and part.isalpha() for part in parts)
+
+
 def _blind_summary_candidate_name_from_text(source_text):
     lines = [
         _BLIND_SUMMARY_MARKER_RE.sub("", re.sub(r"\s+", " ", line)).strip()
@@ -413,7 +468,9 @@ def _blind_summary_candidate_name_from_text(source_text):
     for line in lines[:30]:
         match = re.match(r"^(?:candidate\s+)?name\s*[:|]\s*(.+)$", line, re.I)
         if match:
-            return match.group(1).split("|", 1)[0].strip()
+            return _blind_summary_strip_name_honorifics(
+                match.group(1).split("|", 1)[0]
+            )
 
     excluded = {
         "about him her", "about the candidate", "summary", "professional summary",
@@ -429,7 +486,9 @@ def _blind_summary_candidate_name_from_text(source_text):
         # CV headers commonly keep the name and contact fields on one pipe row.
         # Only inspect the first segment so the contact fields do not cause the
         # candidate-name detector to discard the entire header.
-        line = original_line.split("|", 1)[0].strip()
+        line = _blind_summary_strip_name_honorifics(
+            original_line.split("|", 1)[0]
+        )
         if len(line) > 80 or any(value in line for value in ("@", "http://", "https://", ":")):
             continue
         words = line.split()
@@ -437,9 +496,9 @@ def _blind_summary_candidate_name_from_text(source_text):
             continue
         if re.sub(r"[^a-z]+", " ", line.casefold()).strip() in excluded:
             continue
-        if not all(re.fullmatch(r"[A-Za-z][A-Za-z'’\-]*", word) for word in words):
+        if not all(_blind_summary_name_word(word) for word in words):
             continue
-        if any(word.casefold() in title_words for word in words):
+        if any(word.strip(".'’-,").casefold() in title_words for word in words):
             continue
         if len(words) == 1 and line != lines[0]:
             continue
@@ -488,12 +547,67 @@ def _blind_summary_standalone_org_candidate(value):
     return line.strip(" .,:;|-/")
 
 
-def _blind_summary_vertical_org_identities(lines):
-    """Collect likely employers next to work-history date ranges."""
+def _blind_summary_section_replacement(lines, index):
+    """Classify a dated vertical row from its nearest preceding section."""
+    education_sections = {
+        "education", "education history", "academic background",
+        "academic qualifications", "educational qualifications",
+    }
+    work_sections = {
+        "experience", "work experience", "work experiences",
+        "employment", "employment history", "work history", "career history",
+        "professional experience", "career experience",
+    }
+    neutral_sections = {
+        "qualifications", "professional qualifications", "certifications",
+        "certificates", "training", "training courses", "courses", "skills",
+        "technical skills", "core expertise", "projects", "project experience",
+        "awards", "achievements",
+    }
+    for prior in range(index - 1, -1, -1):
+        heading = re.sub(
+            r"[^a-z]+",
+            " ",
+            str(lines[prior] or "").casefold(),
+        ).strip()
+        if heading in education_sections:
+            return "[Institution]"
+        if heading in work_sections:
+            return "[Company]"
+        if heading in neutral_sections:
+            return None
+    return "[Company]"
+
+
+def _blind_summary_dated_line_identity(line):
+    """Return an organization written on the same line as its date range."""
+    raw = re.sub(r"\s+", " ", str(line or "")).strip()
+    if not _BLIND_SUMMARY_DATE_RANGE_RE.search(raw) or "|" in raw:
+        return ""
+    without_date = _BLIND_SUMMARY_DATE_RANGE_RE.sub(" ", raw)
+    without_date = re.sub(r"[()\[\]{}]", " ", without_date)
+    without_date = without_date.strip(" .,:;|-/–—")
+    without_date = re.sub(r"^(?:at|for|with)\s+", "", without_date, flags=re.I)
+    return _blind_summary_standalone_org_candidate(without_date)
+
+
+def _blind_summary_vertical_identity_replacements(lines):
+    """Collect organizations beside dates with section-aware replacements."""
     identities = []
     cleaned = [re.sub(r"\s+", " ", str(line or "")).strip() for line in lines]
     for index, line in enumerate(cleaned):
         if not _BLIND_SUMMARY_DATE_RANGE_RE.search(line):
+            continue
+        section_replacement = _blind_summary_section_replacement(cleaned, index)
+        if section_replacement is None:
+            continue
+        pipe_value, pipe_replacement, _case_sensitive = _blind_summary_pipe_identity(line)
+        if pipe_value:
+            identities.append((pipe_value, pipe_replacement))
+            continue
+        same_line = _blind_summary_dated_line_identity(line)
+        if same_line:
+            identities.append((same_line, section_replacement))
             continue
         neighbor_indexes = (
             list(range(index - 1, max(-1, index - 3), -1))
@@ -502,9 +616,17 @@ def _blind_summary_vertical_org_identities(lines):
         for neighbor_index in neighbor_indexes:
             candidate = _blind_summary_standalone_org_candidate(cleaned[neighbor_index])
             if candidate:
-                identities.append(candidate)
+                identities.append((candidate, section_replacement))
                 break
     return identities
+
+
+def _blind_summary_vertical_org_identities(lines):
+    """Compatibility wrapper returning only dated organization identities."""
+    return [
+        identity
+        for identity, _replacement in _blind_summary_vertical_identity_replacements(lines)
+    ]
 
 
 def _blind_summary_pipe_identity(line):
@@ -571,7 +693,7 @@ def _blind_collect_plain_summary_identity_replacements(source_text):
     )
     institution_labels = {"institution", "university", "school", "college"}
     source_lines = source.splitlines()
-    for raw_line in source_lines:
+    for line_index, raw_line in enumerate(source_lines):
         line = re.sub(r"\s+", " ", raw_line).strip()
         address_match = _BLIND_SUMMARY_ADDRESS_LINE_RE.match(line)
         if address_match:
@@ -586,6 +708,21 @@ def _blind_collect_plain_summary_identity_replacements(source_text):
         ):
             add(line, "[Address Redacted]", True)
             add(line.split(",", 1)[0].strip(), "[Address Redacted]", True)
+        for phone_match in _BLIND_SUMMARY_PHONE_CANDIDATE_RE.finditer(line):
+            phone_value = phone_match.group(0).strip()
+            phone_digits = re.sub(r"\D", "", phone_value)
+            prefix = line[:phone_match.start()]
+            is_labeled = bool(_BLIND_SUMMARY_PHONE_CONTEXT_RE.search(prefix))
+            is_early_standalone = (
+                line_index < 12
+                and phone_match.start() == 0
+                and phone_match.end() == len(line)
+                and not _BLIND_SUMMARY_DATE_RANGE_RE.fullmatch(line)
+            )
+            if 8 <= len(phone_digits) <= 15 and (
+                is_labeled or is_early_standalone
+            ):
+                add(phone_value, "[Phone Redacted]", True)
         match = label_pattern.match(line)
         if match:
             label = match.group(1).casefold()
@@ -600,8 +737,10 @@ def _blind_collect_plain_summary_identity_replacements(source_text):
         for prefix_match in _BLIND_INSTITUTION_PREFIX_RE.finditer(line):
             add(prefix_match.group(1), "[Institution]", True)
 
-    for employer in _blind_summary_vertical_org_identities(source_lines):
-        add(employer, "[Company]", True)
+    for identity, replacement in _blind_summary_vertical_identity_replacements(
+        source_lines
+    ):
+        add(identity, replacement, True)
 
     compact = re.sub(r"\s+", " ", source)
     for name in _BLIND_CURATED_ORG_NAMES:

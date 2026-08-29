@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.368"
+_INSTALL_RECEIPT_VERSION = "v24.6.369"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -346,7 +346,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.368"
+_CVSTUDIO_VERSION = "v24.6.369"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -9096,6 +9096,7 @@ def generate_ai():
         if use_tools:
             payload["tools"] = [{"type": "web_search_20250305", "name": "web_search", "max_uses": max_uses}]
 
+        warning = ""
         try:
             if use_tools and not _LLM_PROVIDER_INFO.get(llm_provider, {}).get("supports_web_search", True):
                 # DeepSeek cannot browse the web; behave like the "workspace doesn't
@@ -9104,18 +9105,9 @@ def generate_ai():
                 no_tools_payload = dict(payload)
                 no_tools_payload.pop("tools", None)
                 data = call_llm(llm_provider, api_key, no_tools_payload)
-                usage = data.get("usage", {})
-                out = {
-                    "ok": True,
-                    "content": data.get("content", []),
-                    "usage": usage,
-                    "model": model,
-                    "provider": llm_provider,
-                    "warning": "DeepSeek cannot browse the web itself; continued without live search. Results may be less current.",
-                }
-                out.update(_llm_response_cost_fields(model, usage, llm_provider))
-                return jsonify(out)
-            data = call_llm(llm_provider, api_key, payload)
+                warning = "DeepSeek cannot browse the web itself; continued without live search. Results may be less current."
+            else:
+                data = call_llm(llm_provider, api_key, payload)
         except urllib.error.HTTPError as e:
             err_body = e.read()
             try:
@@ -9128,25 +9120,16 @@ def generate_ai():
             if use_tools and re.search(r"web[_\s-]?search|tool|permission|not enabled|not authorized|unsupported", msg, re.I):
                 payload.pop("tools", None)
                 data = call_llm(llm_provider, api_key, payload)
-                usage = data.get("usage", {})
-                out = {
-                    "ok": True,
-                    "content": data.get("content", []),
-                    "usage": usage,
-                    "model": model,
-                    "provider": llm_provider,
-                    "warning": "Web search unavailable; continued without web search."
-                }
-                out.update(_llm_response_cost_fields(model, usage, llm_provider))
-                return jsonify(out)
-            out = {"error": _provider_error_message(llm_provider, msg)}
-            out.update(_llm_paid_failure_fields(
-                e,
-                model,
-                llm_provider,
-                attempted=True,
-            ))
-            return jsonify(out), 400
+                warning = "Web search unavailable; continued without web search."
+            else:
+                out = {"error": _provider_error_message(llm_provider, msg)}
+                out.update(_llm_paid_failure_fields(
+                    e,
+                    model,
+                    llm_provider,
+                    attempted=True,
+                ))
+                return jsonify(out), 400
 
         usage = data.get("usage", {})
         if anonymized_summary:
@@ -9180,6 +9163,8 @@ def generate_ai():
                 ))
                 return jsonify(out), 500
         out = {"ok": True, "content": data.get("content", []), "usage": usage, "model": model, "provider": llm_provider}
+        if warning:
+            out["warning"] = warning
         out.update(_llm_response_cost_fields(model, usage, llm_provider))
         return jsonify(out)
 
