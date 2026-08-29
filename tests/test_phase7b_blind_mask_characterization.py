@@ -50,6 +50,15 @@ class RecursiveTests(unittest.TestCase):
             [{"category": "Technology", "items": "Python, SQL"}],
         )
 
+    def test_prepare_summary_preserves_more_than_twenty_source_bullets(self):
+        source_bullets = [f"Summary bullet {index}" for index in range(1, 26)]
+
+        prepared = bm._blind_prepare_summary_bullets(
+            {"summary_bullets": source_bullets, "skills": []}
+        )
+
+        self.assertEqual(prepared["summary_bullets"], source_bullets)
+
     def test_mask_recursive_scrubs_nested_strings(self):
         data = {"summary": "Led a team at Bolttech", "skills": ["Python", "worked at Bolttech"]}
         masked = bm._blind_mask_org_terms_recursive(data, ["Bolttech"])
@@ -364,6 +373,30 @@ class RecursiveTests(unittest.TestCase):
         )
         self.assertEqual(finalized, "- the candidate leads regional delivery.")
 
+    def test_finalize_generated_summary_redacts_unicode_and_initialled_names(self):
+        cases = (
+            ("José García", "- José García leads regional delivery."),
+            ("A. R. Rahman", "- A. R. Rahman leads regional delivery."),
+            ("Mohd. Faizal", "- Mohd. Faizal leads regional delivery."),
+        )
+        for source_name, output in cases:
+            with self.subTest(source_name=source_name):
+                finalized = bm._blind_finalize_generated_summary_text(
+                    output,
+                    f"{source_name}\nSenior Consultant",
+                )
+                self.assertEqual(
+                    finalized,
+                    "- the candidate leads regional delivery.",
+                )
+
+    def test_finalize_generated_summary_redacts_bare_personal_website(self):
+        finalized = bm._blind_finalize_generated_summary_text(
+            "- Portfolio: janedoe.dev",
+            "Jane Example\nPortfolio: janedoe.dev",
+        )
+        self.assertEqual(finalized, "- Portfolio: [Link Redacted]")
+
     def test_finalize_generated_summary_redacts_vertical_standalone_employer(self):
         finalized = bm._blind_finalize_generated_summary_text(
             "- the candidate worked at Acme as a Senior Engineer.",
@@ -374,6 +407,36 @@ class RecursiveTests(unittest.TestCase):
             "- the candidate worked at [Company] as a Senior Engineer.",
         )
 
+    def test_finalize_generated_summary_redacts_employer_on_date_line(self):
+        for dated_employer in (
+            "Acme (2020 - Present)",
+            "2020 - Present Acme",
+            "Acme - 2020 to Present",
+        ):
+            with self.subTest(dated_employer=dated_employer):
+                finalized = bm._blind_finalize_generated_summary_text(
+                    "- the candidate worked at Acme.",
+                    f"Jane Example\nEXPERIENCE\n{dated_employer}",
+                )
+                self.assertEqual(
+                    finalized,
+                    "- the candidate worked at [Company].",
+                )
+
+    def test_finalize_generated_summary_uses_education_section_for_acronym(self):
+        finalized = bm._blind_finalize_generated_summary_text(
+            "- Graduated from MIT.",
+            "Jane Example\nEDUCATION\nMIT\n2010 - 2014",
+        )
+        self.assertEqual(finalized, "- Graduated from [Institution].")
+
+    def test_finalize_generated_summary_preserves_dated_qualification_acronym(self):
+        finalized = bm._blind_finalize_generated_summary_text(
+            "- Holds CFA.",
+            "Jane Example\nPROFESSIONAL QUALIFICATIONS\nCFA\n2020 - 2023",
+        )
+        self.assertEqual(finalized, "- Holds CFA.")
+
     def test_finalize_generated_summary_redacts_unlabeled_street_address(self):
         finalized = bm._blind_finalize_generated_summary_text(
             "- the candidate lives at 12 Jalan Ampang, Kuala Lumpur.",
@@ -382,6 +445,16 @@ class RecursiveTests(unittest.TestCase):
         self.assertEqual(
             finalized,
             "- the candidate lives at [Address Redacted].",
+        )
+
+    def test_finalize_generated_summary_redacts_malaysian_unit_address(self):
+        finalized = bm._blind_finalize_generated_summary_text(
+            "- Lives at B-12-3, Residensi Sentral, Kuala Lumpur.",
+            "Jane Example\nB-12-3, Residensi Sentral, Kuala Lumpur",
+        )
+        self.assertEqual(
+            finalized,
+            "- Lives at [Address Redacted].",
         )
 
     def test_phone_redaction_preserves_long_unformatted_achievement_metric(self):
@@ -394,6 +467,34 @@ class RecursiveTests(unittest.TestCase):
         self.assertEqual(
             bm._blind_redact_phone_candidates("Phone: 912345678"),
             "Phone: [Phone Redacted]",
+        )
+
+    def test_phone_redaction_uses_contact_context_and_preserves_grouped_metric(self):
+        self.assertEqual(
+            bm._blind_redact_phone_candidates("Contact number is 912345678"),
+            "Contact number is [Phone Redacted]",
+        )
+        self.assertEqual(
+            bm._blind_redact_phone_candidates(
+                "Processed 100 000 000 records annually."
+            ),
+            "Processed 100 000 000 records annually.",
+        )
+        self.assertEqual(
+            bm._blind_redact_phone_candidates(
+                "Improved quality by 3.5% and reduced cost by -5%."
+            ),
+            "Improved quality by 3.5% and reduced cost by -5%.",
+        )
+
+    def test_finalize_generated_summary_redacts_bare_source_phone(self):
+        finalized = bm._blind_finalize_generated_summary_text(
+            "- Reach the candidate at 91234567.",
+            "Jane Example\n91234567\nSenior Consultant",
+        )
+        self.assertEqual(
+            finalized,
+            "- Reach the candidate at [Phone Redacted].",
         )
 
     def test_phone_redaction_keeps_real_date_ranges(self):

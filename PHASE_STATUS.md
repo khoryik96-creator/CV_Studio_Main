@@ -25,11 +25,11 @@
   `54298b9b6a822e1f36c9c101f1ff4edc9c7e835f`
 - Phase 7B-4 source baseline Git commit (merged Phase 7B-3):
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
-- Current merged source: v24.6.363 through PR #184 (`1912d48`).
+- Current merged source: v24.6.368 through PR #186 (`fbdf0e7`).
 - Active work is split across two unmerged branches: v24.6.364 feature download
   destinations on `chatgpt/pr185-v24.6.364-feature-download-folders` (PR #185),
-  and v24.6.368 summary anonymization corrective on
-  `chatgpt/pr186-v24.6.367-summary-anonymization-final-review-fixes` (PR #186).
+  and v24.6.369 anonymization safety fixes on
+  `chatgpt/pr187-v24.6.369-anonymization-safety-fixes` (PR #187).
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
@@ -51,11 +51,31 @@
   candidate-gender neutralization feature as `541cbf3`. PR #182 merged the
   v24.6.361 CV download-folder feature as `67defbc`. PR #183 merged the
   v24.6.362 Blind CV bullet and native-download corrective as `809da3e`; PR
-  #184 then merged v24.6.363 as `1912d48`.
-- Current stop: v24.6.363 is merged on `master` through PR #184. PR #185 and
-  PR #186 are separate active, unmerged branches.
+  #184 then merged v24.6.363 as `1912d48`; PR #186 merged v24.6.368 as
+  `fbdf0e7`.
+- Current stop: v24.6.368 is merged on `master` through PR #186. PR #185 and
+  PR #187 are separate active, unmerged branches.
 
-## v24.6.368 CV Summary and Blind CV summary anonymization (active, unmerged)
+## v24.6.369 summary anonymization safety follow-up (active, unmerged)
+
+- Unicode and initialled candidate names, bare personal domains, Malaysian
+  unit-style addresses, international/contact-context phone numbers and
+  employers written on dated lines are covered by the deterministic summary
+  safety pass. Education acronyms beside dates use the Education section and
+  are replaced as institutions rather than companies.
+- Grouped achievement metrics remain intact, while exact source phone details
+  are removed. Blind CV preserves every populated source summary bullet instead
+  of truncating at 20.
+- DeepSeek's no-tools path and the HTTP tool-unavailable retry now join the
+  normal response path before summary anonymization, so neither can return raw
+  provider content. No route, storage schema, dependency, credential,
+  paid-call-count, CV-formatting or protected-package boundary change. PR #185
+  remains separate. Local validation passed 1056 tests, 4 skipped and 102
+  subtests; all 20 frontend fixture groups; 24 live source-smoke assertions;
+  repository consistency; Git whitespace; and the Windows protected-source/
+  Antiword/Tesseract/adm-zip preflight.
+
+## v24.6.368 CV Summary and Blind CV summary anonymization (merged through PR #186)
 
 - CV Summary has an off-by-default `Generate anonymized summary` option in the
   module itself. It excludes candidate identity/contact details and named
@@ -94,7 +114,7 @@
   fixture groups; 24 live source-smoke assertions; repository consistency,
   Git whitespace and Windows protected-source/dependency preflight.
 
-## v24.6.363 post-merge review corrective (active, unmerged)
+## v24.6.363 post-merge review corrective (merged through PR #184)
 
 - Native CV downloads are validated in a temporary same-folder staging file and
   atomically published only after the DOCX container passes validation. An
