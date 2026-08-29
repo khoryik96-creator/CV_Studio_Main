@@ -378,6 +378,8 @@ class RecursiveTests(unittest.TestCase):
             ("José García", "- José García leads regional delivery."),
             ("A. R. Rahman", "- A. R. Rahman leads regional delivery."),
             ("Mohd. Faizal", "- Mohd. Faizal leads regional delivery."),
+            ("Anita A/P Muthu", "- Anita A/P Muthu leads regional delivery."),
+            ("Kumar A/L Raj", "- Kumar A/L Raj leads regional delivery."),
         )
         for source_name, output in cases:
             with self.subTest(source_name=source_name):
@@ -391,11 +393,27 @@ class RecursiveTests(unittest.TestCase):
                 )
 
     def test_finalize_generated_summary_redacts_bare_personal_website(self):
-        finalized = bm._blind_finalize_generated_summary_text(
-            "- Portfolio: janedoe.dev",
-            "Jane Example\nPortfolio: janedoe.dev",
+        cases = (
+            ("janedoe.dev", "janedoe.dev"),
+            ("janedoe.design", "janedoe.design"),
+            ("janedoe.design", "https://janedoe.design"),
         )
-        self.assertEqual(finalized, "- Portfolio: [Link Redacted]")
+        for source_website, generated_website in cases:
+            with self.subTest(generated_website=generated_website):
+                finalized = bm._blind_finalize_generated_summary_text(
+                    f"- Portfolio: {generated_website}",
+                    f"Jane Example\nPortfolio: {source_website}",
+                )
+                self.assertEqual(finalized, "- Portfolio: [Link Redacted]")
+
+    def test_finalize_generated_summary_preserves_dotted_technology_name(self):
+        self.assertEqual(bm._blind_summary_bare_domain("Node.js"), "")
+        self.assertEqual(
+            bm._blind_apply_summary_replacements(
+                "- Built production services with Node.js.", []
+            ),
+            "Built production services with Node.js.",
+        )
 
     def test_finalize_generated_summary_redacts_vertical_standalone_employer(self):
         finalized = bm._blind_finalize_generated_summary_text(
@@ -412,6 +430,7 @@ class RecursiveTests(unittest.TestCase):
             "Acme (2020 - Present)",
             "2020 - Present Acme",
             "Acme - 2020 to Present",
+            "Acme (2019)",
         ):
             with self.subTest(dated_employer=dated_employer):
                 finalized = bm._blind_finalize_generated_summary_text(
@@ -448,14 +467,20 @@ class RecursiveTests(unittest.TestCase):
         )
 
     def test_finalize_generated_summary_redacts_malaysian_unit_address(self):
-        finalized = bm._blind_finalize_generated_summary_text(
-            "- Lives at B-12-3, Residensi Sentral, Kuala Lumpur.",
-            "Jane Example\nB-12-3, Residensi Sentral, Kuala Lumpur",
+        cases = (
+            "B-12-3, Residensi Sentral, Kuala Lumpur",
+            "Level 12, Menara Sentral, Kuala Lumpur",
         )
-        self.assertEqual(
-            finalized,
-            "- Lives at [Address Redacted].",
-        )
+        for address in cases:
+            with self.subTest(address=address):
+                finalized = bm._blind_finalize_generated_summary_text(
+                    f"- Lives at {address}.",
+                    f"Jane Example\n{address}",
+                )
+                self.assertEqual(
+                    finalized,
+                    "- Lives at [Address Redacted].",
+                )
 
     def test_phone_redaction_preserves_long_unformatted_achievement_metric(self):
         self.assertEqual(
@@ -482,6 +507,12 @@ class RecursiveTests(unittest.TestCase):
         )
         self.assertEqual(
             bm._blind_redact_phone_candidates(
+                "Processed 100.000.000 records annually."
+            ),
+            "Processed 100.000.000 records annually.",
+        )
+        self.assertEqual(
+            bm._blind_redact_phone_candidates(
                 "Improved quality by 3.5% and reduced cost by -5%."
             ),
             "Improved quality by 3.5% and reduced cost by -5%.",
@@ -496,6 +527,18 @@ class RecursiveTests(unittest.TestCase):
             finalized,
             "- Reach the candidate at [Phone Redacted].",
         )
+
+    def test_finalize_generated_summary_redacts_short_labeled_phone(self):
+        for label in ("M", "T"):
+            with self.subTest(label=label):
+                finalized = bm._blind_finalize_generated_summary_text(
+                    "- Reach the candidate at 91234567.",
+                    f"Jane Example\n{label}: 91234567\nSenior Consultant",
+                )
+                self.assertEqual(
+                    finalized,
+                    "- Reach the candidate at [Phone Redacted].",
+                )
 
     def test_phone_redaction_keeps_real_date_ranges(self):
         self.assertEqual(

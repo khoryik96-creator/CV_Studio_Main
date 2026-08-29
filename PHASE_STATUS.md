@@ -25,11 +25,11 @@
   `54298b9b6a822e1f36c9c101f1ff4edc9c7e835f`
 - Phase 7B-4 source baseline Git commit (merged Phase 7B-3):
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
-- Current merged source: v24.6.368 through PR #186 (`fbdf0e7`).
+- Current merged source: v24.6.369 through PR #187 (`2f345b7`).
 - Active work is split across two unmerged branches: v24.6.364 feature download
   destinations on `chatgpt/pr185-v24.6.364-feature-download-folders` (PR #185),
-  and v24.6.369 anonymization safety fixes on
-  `chatgpt/pr187-v24.6.369-anonymization-safety-fixes` (PR #187).
+  and the v24.6.370 anonymization edge-case corrective on
+  `chatgpt/pr188-v24.6.370-anonymization-edge-case-fixes` (planned PR #188).
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
@@ -52,11 +52,28 @@
   v24.6.361 CV download-folder feature as `67defbc`. PR #183 merged the
   v24.6.362 Blind CV bullet and native-download corrective as `809da3e`; PR
   #184 then merged v24.6.363 as `1912d48`; PR #186 merged v24.6.368 as
-  `fbdf0e7`.
-- Current stop: v24.6.368 is merged on `master` through PR #186. PR #185 and
-  PR #187 are separate active, unmerged branches.
+  `fbdf0e7`; PR #187 merged v24.6.369 as `2f345b7`.
+- Current stop: v24.6.369 is merged on `master` through PR #187. PR #185 and
+  the planned PR #188 are separate active, unmerged branches.
 
-## v24.6.369 summary anonymization safety follow-up (active, unmerged)
+## v24.6.370 anonymization edge-case corrective (active, unmerged)
+
+- The deterministic anonymized-summary safety pass now covers Malaysian
+  `A/P` and `A/L` lineage-token names, short `M:` / `T:` phone labels,
+  source-derived personal domains with newer valid top-level domains,
+  parenthesized single-year employer rows and addresses beginning with
+  `Level`. Dot-grouped achievement metrics such as `100.000.000` remain
+  professional content rather than being treated as phone numbers.
+- The source-derived domain path rejects common file/code suffixes, protecting
+  dotted technology names such as `Node.js`. No route, storage schema,
+  dependency, credential, paid-call-count, CV-formatting or protected-package
+  boundary changes. PR #185 remains separate and untouched. Local validation:
+  1058 tests passed, 4 skipped and 112 subtests; all 20 frontend fixture groups;
+  24 live source-smoke assertions; tracked Python, JavaScript, PowerShell and
+  POSIX-shell syntax; repository consistency; Git whitespace; and the Windows
+  protected-source/Antiword/Tesseract/adm-zip preflight.
+
+## v24.6.369 summary anonymization safety follow-up (merged through PR #187)
 
 - Unicode and initialled candidate names, bare personal domains, Malaysian
   unit-style addresses, international/contact-context phone numbers and
