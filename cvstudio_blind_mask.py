@@ -81,6 +81,9 @@ _BLIND_SUMMARY_NON_DOMAIN_SUFFIXES = {
     "log", "md", "pdf", "php", "ppt", "pptx", "py", "sql", "svg",
     "ts", "txt", "xls", "xlsx", "xml", "yaml", "yml",
 }
+_BLIND_SUMMARY_DOTTED_DEGREE_RE = re.compile(
+    r"(?:[BM]\.(?:Arch|Com|Ed|Eng|Pharm|Sc|Tech)|D\.Phil)"
+)
 _BLIND_SUMMARY_PHONE_CANDIDATE_RE = re.compile(
     r"(?<![A-Za-z0-9])\+?\d[\d\s().\-]{6,}\d(?![A-Za-z0-9])"
 )
@@ -121,8 +124,8 @@ _BLIND_SUMMARY_DATE_RANGE_RE = re.compile(
     r"dec(?:ember)?)\.?\s+)?\b(?:19|20)\d{2}\b|present\b|current\b|now\b)",
     re.I,
 )
-_BLIND_SUMMARY_PARENTHETICAL_YEAR_RE = re.compile(
-    r"\(\s*(?:19|20)\d{2}\s*\)",
+_BLIND_SUMMARY_SINGLE_YEAR_RE = re.compile(
+    r"(?:\(\s*)?\b(?:19|20)\d{2}\b(?:\s*\))?",
     re.I,
 )
 _BLIND_SUMMARY_CATEGORY_RE = re.compile(
@@ -472,14 +475,47 @@ def _blind_summary_name_word(value):
     return all(part and part.isalpha() for part in parts)
 
 
+def _blind_summary_lineage_name_variants(value):
+    """Return compact and spaced Malaysian lineage spellings for one name."""
+    original = re.sub(r"\s+", " ", str(value or "")).strip()
+    if not original:
+        return []
+    compact = re.sub(
+        r"\b([Aa])\s*/\s*([PpLl])\b",
+        lambda match: "{}/{}".format(match.group(1), match.group(2)),
+        original,
+    )
+    spaced = re.sub(
+        r"\b([Aa])\s*/\s*([PpLl])\b",
+        lambda match: "{} / {}".format(match.group(1), match.group(2)),
+        original,
+    )
+    return list(dict.fromkeys((original, compact, spaced)))
+
+
 def _blind_summary_bare_domain(value):
     """Return a source-derived bare domain while rejecting common file/code names."""
     candidate = str(value or "").rstrip(".,;:!?")
     host = candidate.split("/", 1)[0].rstrip(".")
     suffix = host.rsplit(".", 1)[-1].casefold() if "." in host else ""
-    if not suffix or suffix in _BLIND_SUMMARY_NON_DOMAIN_SUFFIXES:
+    if (
+        not suffix
+        or suffix in _BLIND_SUMMARY_NON_DOMAIN_SUFFIXES
+        or _BLIND_SUMMARY_DOTTED_DEGREE_RE.fullmatch(host)
+    ):
         return ""
     return candidate
+
+
+def _blind_redact_summary_urls(text):
+    """Redact links without treating supported dotted degree names as URLs."""
+    def replace(match):
+        value = match.group(0)
+        if re.match(r"(?:https?://|www\.)", value, re.I):
+            return "[Link Redacted]"
+        return "[Link Redacted]" if _blind_summary_bare_domain(value) else value
+
+    return _BLIND_SUMMARY_URL_RE.sub(replace, str(text or ""))
 
 
 def _blind_summary_candidate_name_from_text(source_text):
@@ -514,7 +550,12 @@ def _blind_summary_candidate_name_from_text(source_text):
         )
         if len(line) > 80 or any(value in line for value in ("@", "http://", "https://", ":")):
             continue
-        words = line.split()
+        validation_line = re.sub(
+            r"\b([Aa])\s*/\s*([PpLl])\b",
+            lambda match: "{}/{}".format(match.group(1), match.group(2)),
+            line,
+        )
+        words = validation_line.split()
         if not 1 <= len(words) <= 6:
             continue
         if re.sub(r"[^a-z]+", " ", line.casefold()).strip() in excluded:
@@ -525,7 +566,12 @@ def _blind_summary_candidate_name_from_text(source_text):
             continue
         if len(words) == 1 and line != lines[0]:
             continue
-        if all(word.isupper() or word[:1].isupper() for word in words):
+        if all(
+            word.isupper()
+            or word[:1].isupper()
+            or bool(re.fullmatch(r"a/[pl]", word, re.I))
+            for word in words
+        ):
             return line
     return ""
 
@@ -606,13 +652,18 @@ def _blind_summary_dated_line_identity(line):
     """Return an organization written on the same line as its employment date."""
     raw = re.sub(r"\s+", " ", str(line or "")).strip()
     has_date_range = bool(_BLIND_SUMMARY_DATE_RANGE_RE.search(raw))
-    has_single_year = bool(_BLIND_SUMMARY_PARENTHETICAL_YEAR_RE.search(raw))
+    has_single_year = bool(_BLIND_SUMMARY_SINGLE_YEAR_RE.search(raw))
     if not (has_date_range or has_single_year) or "|" in raw:
         return ""
     without_date = _BLIND_SUMMARY_DATE_RANGE_RE.sub(" ", raw)
-    without_date = _BLIND_SUMMARY_PARENTHETICAL_YEAR_RE.sub(" ", without_date)
+    without_date = _BLIND_SUMMARY_SINGLE_YEAR_RE.sub(" ", without_date)
     without_date = re.sub(r"[()\[\]{}]", " ", without_date)
     without_date = without_date.strip(" .,:;|-/–—")
+    role_company = re.search(r"\b(?:at|for|with)\s+(.+)$", without_date, re.I)
+    if role_company:
+        candidate = _blind_summary_standalone_org_candidate(role_company.group(1))
+        if candidate:
+            return candidate
     without_date = re.sub(r"^(?:at|for|with)\s+", "", without_date, flags=re.I)
     return _blind_summary_standalone_org_candidate(without_date)
 
@@ -624,7 +675,7 @@ def _blind_summary_vertical_identity_replacements(lines):
     for index, line in enumerate(cleaned):
         if not (
             _BLIND_SUMMARY_DATE_RANGE_RE.search(line)
-            or _BLIND_SUMMARY_PARENTHETICAL_YEAR_RE.search(line)
+            or _BLIND_SUMMARY_SINGLE_YEAR_RE.search(line)
         ):
             continue
         section_replacement = _blind_summary_section_replacement(cleaned, index)
@@ -715,7 +766,9 @@ def _blind_collect_plain_summary_identity_replacements(source_text):
         seen.add(key)
         replacements.append((exact, replacement, case_sensitive_single))
 
-    add(_blind_summary_candidate_name_from_text(source), "the candidate", True)
+    candidate_name = _blind_summary_candidate_name_from_text(source)
+    for name_variant in _blind_summary_lineage_name_variants(candidate_name):
+        add(name_variant, "the candidate", True)
     label_pattern = re.compile(
         r"^(current\s+company|company|employer|client|customer|organization|organisation|institution|university|school|college)\s*[:|]\s*(.+)$",
         re.I,
@@ -756,6 +809,9 @@ def _blind_collect_plain_summary_identity_replacements(source_text):
             domain_value = _blind_summary_bare_domain(domain_match.group(0))
             if domain_value:
                 add(domain_value, "[Link Redacted]")
+                domain_host = domain_value.split("/", 1)[0].rstrip(".")
+                if domain_host != domain_value:
+                    add(domain_host, "[Link Redacted]")
         match = label_pattern.match(line)
         if match:
             label = match.group(1).casefold()
@@ -793,7 +849,7 @@ def _blind_apply_summary_replacements(text, replacements):
     # adds ``https://`` to a source bare domain cannot leave a malformed partial
     # link such as ``https://[Link Redacted]`` for the later pass.
     safe = _BLIND_SUMMARY_EMAIL_RE.sub("[Email Redacted]", safe)
-    safe = _BLIND_SUMMARY_URL_RE.sub("[Link Redacted]", safe)
+    safe = _blind_redact_summary_urls(safe)
     for source_value, replacement, case_sensitive_single in replacements:
         safe = _blind_replace_identifier(
             safe,
@@ -802,7 +858,7 @@ def _blind_apply_summary_replacements(text, replacements):
             case_sensitive_single=case_sensitive_single,
         )
     safe = _BLIND_SUMMARY_EMAIL_RE.sub("[Email Redacted]", safe)
-    safe = _BLIND_SUMMARY_URL_RE.sub("[Link Redacted]", safe)
+    safe = _blind_redact_summary_urls(safe)
     safe = _blind_redact_phone_candidates(safe)
     safe = _BLIND_SUMMARY_INLINE_ADDRESS_RE.sub("[Address Redacted]", safe)
     return safe
