@@ -146,6 +146,14 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 7. Recently completed (already on `master`)
 
+- **Anonymization edge-case corrective — v24.6.370 / PR #188, MERGED.**
+  PR #188 merged to `master` as `b52b5b0`; all three hosted Windows/macOS jobs
+  passed. It covers compact Malaysian `A/P` and `A/L` names, short `M:` / `T:`
+  phone labels, source-derived personal domains with newer top-level domains,
+  parenthesized single-year employer rows, `Level`-style addresses and
+  dot-grouped achievement metrics while protecting dotted technology/file
+  names. PR #185 remains separate and unmerged.
+
 - **Summary anonymization safety follow-up — v24.6.369 / PR #187, MERGED.**
   PR #187 merged to `master` as `2f345b7`. The deterministic summary safety
   pass handles Unicode and initialled candidate names, bare personal domains,
@@ -273,23 +281,20 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Anonymization edge-case corrective — v24.6.370 / planned PR #188, ACTIVE
+- **Anonymization final edge corrective — v24.6.371 / planned PR #189, ACTIVE
   AND UNMERGED.** Branch
-  `chatgpt/pr188-v24.6.370-anonymization-edge-case-fixes` covers Malaysian
-  `A/P` and `A/L` lineage-token names, short `M:` / `T:` phone labels,
-  source-derived personal domains with newer valid top-level domains,
-  parenthesized single-year employer rows and addresses beginning with
-  `Level`. Dot-grouped achievement metrics such as `100.000.000` remain
-  professional content. Common file/code suffixes are excluded from the new
-  source-domain path, protecting dotted technologies such as `Node.js`. No
-  route, storage schema, dependency, credential, paid-call-count,
-  CV-formatting or protected-package boundary change. PR #185 remains separate
-  and untouched. Local validation: 1058 tests passed, 4 skipped and 112
-  subtests; all 20 frontend fixture groups; 24 live source-smoke assertions;
-  tracked Python, JavaScript, PowerShell and POSIX-shell syntax; repository
-  consistency; Git whitespace; and the Windows protected-source/Antiword/
-  Tesseract/adm-zip preflight. Open PR #188 only after the owner's explicit
-  instruction.
+  `chatgpt/pr189-v24.6.371-anonymization-final-edge-fixes` protects dotted
+  degree abbreviations from link redaction, records both the complete source
+  website path and its hostname, recognizes compact/spaced/lowercase Malaysian
+  `A/P` / `A/L` name forms, and masks employers in unparenthesized or
+  role-bearing single-year rows. No route, storage schema, dependency,
+  credential, paid-call-count, CV-formatting or protected-package boundary
+  change. PR #185 remains separate and untouched. Local validation: 1060 tests
+  passed, 4 skipped and 128 subtests; all 20 frontend fixture groups; 24 live
+  source-smoke assertions; tracked Python, JavaScript, PowerShell and POSIX-shell
+  syntax; repository consistency; Git whitespace; and the Windows
+  protected-source/Antiword/Tesseract/adm-zip preflight. Open PR #189 only after
+  the owner's explicit instruction.
 - **CV Summary and Blind CV summary anonymization — v24.6.368 / PR
   #186, MERGED.** PR #186 merged to `master` as `fbdf0e7`. Its branch
   `chatgpt/pr186-v24.6.367-summary-anonymization-final-review-fixes` added an off-by-default
@@ -327,7 +332,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 - **Feature download destinations — v24.6.364 / PR #185, ACTIVE AND
   UNMERGED.** Branch `chatgpt/pr185-v24.6.364-feature-download-folders` adds
   separate configured destinations for Company Profile, Summary Output, Blind
-  JD and The Owl. Keep planned PR #188 separate; rebase and resolve version
+  JD and The Owl. Keep planned PR #189 separate; rebase and resolve version
   order when the owner approves PR #185.
 - **Post-merge review corrective — v24.6.363 / PR #184, MERGED.** PR #184
   merged to `master` as `1912d48`. Its branch

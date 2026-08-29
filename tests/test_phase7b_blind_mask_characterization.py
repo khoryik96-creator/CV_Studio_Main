@@ -380,6 +380,9 @@ class RecursiveTests(unittest.TestCase):
             ("Mohd. Faizal", "- Mohd. Faizal leads regional delivery."),
             ("Anita A/P Muthu", "- Anita A/P Muthu leads regional delivery."),
             ("Kumar A/L Raj", "- Kumar A/L Raj leads regional delivery."),
+            ("Anita A / P Muthu", "- Anita A / P Muthu leads regional delivery."),
+            ("Kumar A / L Raj", "- Kumar A / L Raj leads regional delivery."),
+            ("Anita a/p Muthu", "- Anita a/p Muthu leads regional delivery."),
         )
         for source_name, output in cases:
             with self.subTest(source_name=source_name):
@@ -392,11 +395,26 @@ class RecursiveTests(unittest.TestCase):
                     "- the candidate leads regional delivery.",
                 )
 
+    def test_finalize_generated_summary_redacts_normalized_lineage_spacing(self):
+        cases = (
+            ("Anita A / P Muthu", "- Anita A/P Muthu leads delivery."),
+            ("Kumar A/L Raj", "- Kumar A / L Raj leads delivery."),
+        )
+        for source_name, output in cases:
+            with self.subTest(source_name=source_name):
+                finalized = bm._blind_finalize_generated_summary_text(
+                    output,
+                    f"{source_name}\nSenior Consultant",
+                )
+                self.assertEqual(finalized, "- the candidate leads delivery.")
+
     def test_finalize_generated_summary_redacts_bare_personal_website(self):
         cases = (
             ("janedoe.dev", "janedoe.dev"),
             ("janedoe.design", "janedoe.design"),
             ("janedoe.design", "https://janedoe.design"),
+            ("janedoe.design/work", "janedoe.design"),
+            ("b.tech", "b.tech"),
         )
         for source_website, generated_website in cases:
             with self.subTest(generated_website=generated_website):
@@ -415,6 +433,15 @@ class RecursiveTests(unittest.TestCase):
             "Built production services with Node.js.",
         )
 
+    def test_finalize_generated_summary_preserves_dotted_degree_abbreviations(self):
+        for degree in ("B.Sc", "M.Sc", "B.Eng", "M.Eng", "B.Tech", "M.Tech"):
+            with self.subTest(degree=degree):
+                finalized = bm._blind_finalize_generated_summary_text(
+                    f"- Holds a {degree} degree.",
+                    f"Jane Example\nEDUCATION\n{degree} degree",
+                )
+                self.assertEqual(finalized, f"- Holds a {degree} degree.")
+
     def test_finalize_generated_summary_redacts_vertical_standalone_employer(self):
         finalized = bm._blind_finalize_generated_summary_text(
             "- the candidate worked at Acme as a Senior Engineer.",
@@ -431,6 +458,9 @@ class RecursiveTests(unittest.TestCase):
             "2020 - Present Acme",
             "Acme - 2020 to Present",
             "Acme (2019)",
+            "Acme 2019",
+            "Senior Engineer at Acme (2019)",
+            "Senior Engineer at Acme 2019",
         ):
             with self.subTest(dated_employer=dated_employer):
                 finalized = bm._blind_finalize_generated_summary_text(
