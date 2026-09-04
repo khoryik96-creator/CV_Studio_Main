@@ -635,6 +635,47 @@ function setCvBlindCandidateGenderNeutralization(enabled, silent) {
 })();
 document.addEventListener('DOMContentLoaded', renderCvBlindCandidateGenderNeutralizationSetting);
 
+// Auto-correct spelling / punctuation / capitalization in formatted CVs
+var CV_AUTOCORRECT_LANGUAGE_STORE = 'cvstudio_autocorrect_language_v1';
+window._cvAutoCorrectLanguage = false;
+
+function getCvAutoCorrectLanguage() {
+  return window._cvAutoCorrectLanguage === true;
+}
+function renderCvAutoCorrectLanguageSetting() {
+  var enabled = getCvAutoCorrectLanguage();
+  var checkbox = document.getElementById('cvAutoCorrectLanguageToggle');
+  var label = document.getElementById('cvAutoCorrectLanguageLabel');
+  if (checkbox) checkbox.checked = enabled;
+  if (label) label.textContent = enabled ? 'On' : 'Off';
+}
+function setCvAutoCorrectLanguage(enabled, silent) {
+  window._cvAutoCorrectLanguage = enabled === true;
+  try {
+    cvStudioDurableSettingSet(
+      CV_AUTOCORRECT_LANGUAGE_STORE,
+      getCvAutoCorrectLanguage() ? 'true' : 'false'
+    );
+  } catch(e) {}
+  renderCvAutoCorrectLanguageSetting();
+  if (!silent) {
+    showToast(
+      getCvAutoCorrectLanguage()
+        ? 'Formatted CVs will auto-correct spelling, punctuation and capitalization.'
+        : 'Formatted CVs will keep the original spelling and punctuation.',
+      'ok'
+    );
+  }
+  return getCvAutoCorrectLanguage();
+}
+(function restoreCvAutoCorrectLanguage(){
+  var stored = null;
+  try { stored = localStorage.getItem(CV_AUTOCORRECT_LANGUAGE_STORE); } catch(e) {}
+  window._cvAutoCorrectLanguage = stored === 'true';
+  setTimeout(renderCvAutoCorrectLanguageSetting, 0);
+})();
+document.addEventListener('DOMContentLoaded', renderCvAutoCorrectLanguageSetting);
+
 // ── Word export format (.doc / .docx) ────────────────────────────
 // Storage getter/setter (wordExportFormat / setWordExportFormat) live in
 // hyppies-export.js; this only drives the Settings segmented toggle.

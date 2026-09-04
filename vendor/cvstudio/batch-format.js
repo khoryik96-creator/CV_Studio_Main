@@ -353,7 +353,7 @@ async function runBatch() {
 
       // ── Step 1: Parse CV ─────────────────────────────────────────────────
       batchSetProgress(bf, pcts[1], 'Parsing ' + (cvParseIsLong(rawText) ? 'long CV' : 'CV') + ' with ' + route.provider_label + '…', makeSteps(1));
-      var pRes = await fetchWithTimeout('/parse', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ api_key: key, api_key_slot: route.api_key_slot, cv_text: rawText, model: route.model, provider: route.provider }) }, cvParseTimeoutMs(rawText));
+      var pRes = await fetchWithTimeout('/parse', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ api_key: key, api_key_slot: route.api_key_slot, cv_text: rawText, model: route.model, provider: route.provider, auto_correct_language: getCvAutoCorrectLanguage() }) }, cvParseTimeoutMs(rawText));
       var pData = await pRes.json().catch(function(){ return {}; });
       if (!pRes.ok || pData.error) {
         recordPaidAiFailure('Batch CV parse failed — ' + bf.file.name, pData, route.model, route.provider);

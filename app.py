@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.374"
+_INSTALL_RECEIPT_VERSION = "v24.6.375"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -346,7 +346,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.374"
+_CVSTUDIO_VERSION = "v24.6.375"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -8722,6 +8722,23 @@ def test_key():
         return jsonify(out)
 
 
+CV_LANGUAGE_CORRECTION_INSTRUCTION = """
+
+LANGUAGE AUTO-CORRECTION — ENABLED BY THE USER:
+- Correct obvious spelling mistakes, punctuation, and capitalization (capital/lowercase) in the text you place into the JSON fields, so the formatted CV reads cleanly.
+- Fix sentence and heading capitalization (start sentences with a capital; lowercase words that were wrongly capitalized mid-sentence) and normalise punctuation and spacing (stray double spaces, missing full stops, misplaced commas).
+- PRESERVE EXACTLY, never "correct": proper nouns and people's names, company/product/brand names, job titles as written, technical terms and acronyms (e.g. iOS, JavaScript, SQL, .NET, PhD, KPI), URLs, emails, phone numbers, file names, and any deliberate mixed-case token. When unsure whether a token is a misspelling or a real name/term, leave it unchanged.
+- Do NOT rewrite, rephrase, embellish, translate, summarise, add, or remove content, and do NOT change any facts, numbers, dates, currencies, or the meaning of a sentence. Correct only spelling, punctuation, and capitalization.
+- Preserve the JSON schema and every field exactly as required by the base instructions.
+"""
+
+
+def _parse_system_prompt(correct_language=False):
+    if correct_language is True:
+        return SYSTEM_PROMPT + CV_LANGUAGE_CORRECTION_INSTRUCTION
+    return SYSTEM_PROMPT
+
+
 @app.route("/parse", methods=["POST"])
 def parse_cv():
     try:
@@ -8732,6 +8749,7 @@ def parse_cv():
         cv_text = (body.get("cv_text") or "").strip()
         model   = body.get("model") or "claude-sonnet-4-6"
         llm_provider = (body.get("provider") or "anthropic").strip().lower()
+        correct_language = body.get("auto_correct_language") is True
         usage_total = _merge_llm_usage()
 
         if not api_key:
@@ -8760,7 +8778,7 @@ def parse_cv():
             # label retention, or section inclusion from one run to the next.
             "temperature": 0,
             "_timeout_seconds": parse_timeout_seconds,
-            "system": SYSTEM_PROMPT,
+            "system": _parse_system_prompt(correct_language),
             "messages": [{"role": "user", "content": f"Parse this raw CV into the JSON schema:\n\n{cv_text}"}]
         })
         usage_total = _merge_llm_usage(usage_total, data.get("usage"))
