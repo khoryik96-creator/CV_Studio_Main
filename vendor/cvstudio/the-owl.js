@@ -756,16 +756,26 @@ function theOwlWordShell(title, subtitle, bodyHtml) {
   return '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="UTF-8"><title>' + _escDoc(title || 'The Owl') + '</title>'
     + '<style>@page{margin:0.58in 0.62in;} body{font-family:Calibri,Arial,sans-serif;color:#1f2937;font-size:9.6pt;line-height:1.34;} .page{max-width:760px;margin:0 auto;} .brand{text-align:center;margin:0 0 10px;} .hero{border:1px solid #e7e5f4;background:#fbfbff;padding:12px 16px;margin:0 0 12px;} .hero h1{font-size:18pt;line-height:1.12;margin:0 0 4px;color:#352a86;font-weight:700;} .subtitle{font-size:8.8pt;color:#666b78;margin:0;line-height:1.3;} h2{font-size:10.1pt;line-height:1.18;text-transform:uppercase;letter-spacing:.035em;margin:13px 0 6px;color:#1d4ed8;border-top:1px solid #e5e7eb;padding-top:7px;page-break-after:avoid;} h4{font-size:9.6pt;line-height:1.22;margin:8px 0 4px;color:#374151;font-weight:700;page-break-after:avoid;} p{margin:3px 0 6px;line-height:1.34;} ul{margin:3px 0 7px 15px;padding:0;} li{margin:2px 0 3px;line-height:1.3;padding-left:1px;} .market-doc-list{margin:0 0 0 14px;padding:0;} .market-two-col{width:100%;border-collapse:collapse;margin:2px 0 7px;table-layout:fixed;} .market-two-col td{width:50%;vertical-align:top;padding:0 10px 0 0;border:0;} .market-meta-line{background:#f7f7fb;border:1px solid #e5e7eb;padding:6px 8px;color:#555;margin:3px 0 6px;} .market-table-wrap{margin:4px 0 8px;} table.market-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:8.6pt;line-height:1.2;} .market-table th,.market-table td{border:1px solid #dfe5ef;padding:5px 6px;text-align:left;vertical-align:top;} .market-table th{background:#f1f5f9;color:#111827;font-weight:700;} .market-table td:first-child{font-weight:700;} .footer{margin-top:16px;border-top:1px solid #e5e7eb;padding-top:7px;color:#9ca3af;font-size:8pt;text-align:center;}</style></head><body><div class="page"><div class="brand"><img src="' + HYPPIES_LOGO_URI + '" alt="Hyppies" style="width:74px;height:auto;display:block;border:0;margin:0 auto"></div><div class="hero"><h1>' + _escDoc(title || 'The Owl') + '</h1><p class="subtitle">' + _escDoc(subtitle || 'Hyppies') + '</p></div>' + bodyHtml + '<div class="footer">Hyppies · Confidential · For internal sourcing use only</div></div></body></html>';
 }
-function exportTheOwlWord() {
+async function exportTheOwlWord() {
+  try { return await exportTheOwlWordImpl(); }
+  catch (e) { showToast('The Owl Word export failed: ' + ((e && e.message) || 'unexpected error'), 'err'); }
+}
+
+async function exportTheOwlWordImpl() {
   var text = (window._theOwlPlainText || ((document.getElementById('theOwlBody') || {}).innerText || '')).trim();
   if (!text) { showToast('Generate The Owl map first', 'err'); return; }
   var meta = window._theOwlMeta || getMarketMeta();
   var bodyHtml = '<p class="market-meta-line"><strong>Target location:</strong> ' + _escDoc(meta.location) + '<br><strong>Priority industries:</strong> ' + _escDoc(meta.industries) + '</p>' + marketTextToDocHtml(text);
   var html = theOwlWordShell('The Owl Talent Map', 'Hyppies · ' + meta.location + ' · ' + meta.industries, bodyHtml);
-  exportWordDocument(html, 'the-owl-talent-map-' + _safeFileStem(meta.location));
-  showToast('The Owl Word report exported', 'ok');
+  var output = await exportWordDocumentToDestination(html, 'the-owl-talent-map-' + _safeFileStem(meta.location), 'owl');
+  cvStudioShowDownloadResult(output.result, 'The Owl Word .' + output.format);
 }
-function exportTheOwlPDF() {
+async function exportTheOwlPDF() {
+  try { return await exportTheOwlPDFImpl(); }
+  catch (e) { showToast('The Owl PDF report failed: ' + ((e && e.message) || 'unexpected error'), 'err'); }
+}
+
+async function exportTheOwlPDFImpl() {
   var text = (window._theOwlPlainText || ((document.getElementById('theOwlBody') || {}).innerText || '')).trim();
   if (!text) { showToast('Generate The Owl map first', 'err'); return; }
   if (!(window.jspdf && window.jspdf.jsPDF)) {
@@ -855,8 +865,9 @@ function exportTheOwlPDF() {
   });
   var total=doc.internal.getNumberOfPages();
   for(var pg=1; pg<=total; pg++){ doc.setPage(pg); doc.setDrawColor(235,235,235); doc.line(margin,pageH-14,pageW-margin,pageH-14); doc.setFont('helvetica','normal'); doc.setFontSize(7.2); doc.setTextColor(150,150,150); doc.text('Hyppies - Confidential - For internal sourcing use only', margin, pageH-8); doc.text('Page '+pg+' of '+total, pageW-margin, pageH-8, {align:'right'}); }
-  doc.save('the-owl-talent-map-' + _safeFileStem(meta.location) + '-' + new Date().toISOString().slice(0,10) + '.pdf');
-  showToast('The Owl PDF report exported', 'ok');
+  var filename = 'the-owl-talent-map-' + _safeFileStem(meta.location) + '-' + new Date().toISOString().slice(0,10) + '.pdf';
+  var result = await cvStudioSaveDownloadBlob(doc.output('blob'), filename, 'owl');
+  cvStudioShowDownloadResult(result, 'The Owl PDF report');
 }
 function clearTheOwl() {
   clearTabRunState('theowl');

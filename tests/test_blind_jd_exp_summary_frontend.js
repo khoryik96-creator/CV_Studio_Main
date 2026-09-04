@@ -9,9 +9,12 @@ const html = require('./frontend_sources').frontendSource();
 
 function functionRange(source, name) {
   const marker = 'function ' + name + '(';
-  const start = source.indexOf(marker);
-  if (start < 0) throw new Error('Missing function: ' + name);
-  const brace = source.indexOf('{', start + marker.length);
+  const functionStart = source.indexOf(marker);
+  if (functionStart < 0) throw new Error('Missing function: ' + name);
+  const start = functionStart >= 6 && source.slice(functionStart - 6, functionStart) === 'async '
+    ? functionStart - 6
+    : functionStart;
+  const brace = source.indexOf('{', functionStart + marker.length);
   let depth = 0, quote = '', escaped = false, lineComment = false, blockComment = false;
   for (let index = brace; index < source.length; index += 1) {
     const char = source[index], next = source[index + 1] || '';
@@ -71,9 +74,9 @@ function previewOmitsOnlyStandaloneExperienceBadge() {
   assert.strictEqual(jd.exp_range, '8+ years <leadership> & delivery');
 }
 
-function wordExportOmitsOnlyTopExperienceSummary() {
+async function wordExportOmitsOnlyTopExperienceSummary() {
   let capturedBlob = null;
-  let clickedAnchor = null;
+  let saved = null;
   function BlobFixture(parts, options) {
     this.parts = parts;
     this.options = options;
@@ -89,18 +92,11 @@ function wordExportOmitsOnlyTopExperienceSummary() {
     Date,
     Blob: BlobFixture,
     HYPPIES_LOGO_URI: 'data:image/jpeg;base64,fixture',
-    URL: {
-      createObjectURL() { return 'blob:blind-jd-fixture'; },
-      revokeObjectURL() {},
+    async cvStudioSaveDownloadBlob(blob, filename, kind) {
+      saved = {blob, filename, kind};
+      return {method:'folder', path:'C:\\Blind JD\\' + filename};
     },
-    document: {
-      createElement(name) {
-        assert.strictEqual(name, 'a');
-        clickedAnchor = {href: '', download: '', click() { this.clicked = true; }};
-        return clickedAnchor;
-      },
-    },
-    setTimeout(fn) { fn(); },
+    cvStudioShowDownloadResult() {},
     showToast() {},
   });
   vm.runInContext(functions([
@@ -108,14 +104,16 @@ function wordExportOmitsOnlyTopExperienceSummary() {
     '_wordDocShell',
     '_safeFileStem',
     'wordExportFormat',
-    '_downloadExportBlob',
-    'exportWordDocument',
+    '_buildWordExport',
+    'exportWordDocumentToDestination',
     'exportAnonJDDoc',
+    'exportAnonJDDocImpl',
   ]), context);
-  context.exportAnonJDDoc();
+  await context.exportAnonJDDoc();
 
   assert.ok(capturedBlob, 'Word export should create a blob');
-  assert.ok(clickedAnchor && clickedAnchor.clicked, 'Word export should trigger its download');
+  assert.strictEqual(saved.kind, 'blind_jd');
+  assert.ok(saved.filename.endsWith('.doc'));
   const exported = capturedBlob.parts.join('');
   assert.ok(exported.includes('Work Arrangement: Hybrid &lt;3 days&gt; &amp; flexible'));
   assert.ok(exported.includes('Location: Kuala Lumpur &lt;HQ&gt; &amp; Region'));
@@ -178,11 +176,13 @@ class FakePDF {
     this.textGroups.push({values: values.map(String), x, y, options});
     values.forEach(item => this.textCalls.push({value: String(item), x, y, options}));
   }
+  output(type) { assert.strictEqual(type, 'blob'); return {pdfFixture:true}; }
   save(name) { this.savedName = name; }
 }
 
-function pdfExportOmitsExpAndUsesMetadataWidth() {
+async function pdfExportOmitsExpAndUsesMetadataWidth() {
   const jd = blindJDFixture();
+  let saved = null;
   const context = vm.createContext({
     console,
     window: {_lastAnonJD: jd, jspdf: {jsPDF: FakePDF}},
@@ -191,10 +191,12 @@ function pdfExportOmitsExpAndUsesMetadataWidth() {
     String,
     Date,
     HYPPIES_LOGO_URI: 'data:image/jpeg;base64,fixture',
+    async cvStudioSaveDownloadBlob(blob, filename, kind) { saved = {blob, filename, kind}; return {method:'folder', path:'C:\\Blind JD\\' + filename}; },
+    cvStudioShowDownloadResult() {},
     showToast() {},
   });
-  vm.runInContext(functions(['cvPdfSafeText', '_safeFileStem', 'exportAnonJDPDF']), context);
-  context.exportAnonJDPDF();
+  vm.runInContext(functions(['cvPdfSafeText', '_safeFileStem', 'exportAnonJDPDF', 'exportAnonJDPDFImpl']), context);
+  await context.exportAnonJDPDF();
 
   const doc = FakePDF.instance;
   const exportedText = doc.textCalls.map(call => call.value);
@@ -215,10 +217,12 @@ function pdfExportOmitsExpAndUsesMetadataWidth() {
     'two metadata tiles should fill the complete 174 mm content width with one 4 mm gap',
   );
   assert.strictEqual(metadataTiles[1].x + metadataTiles[1].width, 192);
+  assert.strictEqual(saved.kind, 'blind_jd');
+  assert.ok(saved.filename.endsWith('.pdf'));
   assert.strictEqual(jd.exp_range, '8+ years <leadership> & delivery');
 }
 
-function pdfLongMetadataWrapsWithinContentBounds() {
+async function pdfLongMetadataWrapsWithinContentBounds() {
   const jd = Object.assign(blindJDFixture(), {
     job_title: 'Manager, Regulatory Reporting',
     location: 'Malaysia',
@@ -233,10 +237,12 @@ function pdfLongMetadataWrapsWithinContentBounds() {
     String,
     Date,
     HYPPIES_LOGO_URI: 'data:image/jpeg;base64,fixture',
+    async cvStudioSaveDownloadBlob() { return {method:'folder', path:'C:\\Blind JD\\output.pdf'}; },
+    cvStudioShowDownloadResult() {},
     showToast() {},
   });
-  vm.runInContext(functions(['cvPdfSafeText', '_safeFileStem', 'exportAnonJDPDF']), context);
-  context.exportAnonJDPDF();
+  vm.runInContext(functions(['cvPdfSafeText', '_safeFileStem', 'exportAnonJDPDF', 'exportAnonJDPDFImpl']), context);
+  await context.exportAnonJDPDF();
 
   const doc = FakePDF.instance;
   const headerMetadata = doc.textGroups.find(group =>
@@ -272,8 +278,8 @@ function pdfLongMetadataWrapsWithinContentBounds() {
 function expRangeSchemaAndUnrelatedContentRemain() {
   const generateSource = functionRange(html, 'generateAnonJD').source;
   const previewSource = functionRange(html, 'renderAnonJDCard').source;
-  const wordSource = functionRange(html, 'exportAnonJDDoc').source;
-  const pdfSource = functionRange(html, 'exportAnonJDPDF').source;
+  const wordSource = functionRange(html, 'exportAnonJDDocImpl').source;
+  const pdfSource = functionRange(html, 'exportAnonJDPDFImpl').source;
 
   assert.ok(generateSource.includes('"exp_range":null'));
   assert.ok(generateSource.includes('window._lastAnonJD = jd;'));
@@ -320,11 +326,11 @@ const cases = [
   ['exp_range schema and unrelated Blind JD content remain', expRangeSchemaAndUnrelatedContentRemain],
 ];
 
-(function run() {
+(async function run() {
   const failures = [];
   for (const [name, test] of cases) {
     try {
-      test();
+      await test();
       console.log('PASS:', name);
     } catch (error) {
       failures.push({name, error});

@@ -126,8 +126,32 @@ document.addEventListener('DOMContentLoaded', initCvReadonlyCaretGuard);
 // because embedded Chromium does not reliably honour direct folder writes.
 var _cvDownloadLastResult = {};
 
+// Single source of truth for the configurable download destinations. Keep this
+// aligned with DOWNLOAD_ALLOWED_EXTENSIONS in cvstudio_downloads.py.
+var CV_DOWNLOAD_KINDS = ['formatted', 'blind', 'company_profile', 'summary', 'blind_jd', 'owl'];
+
+function cvStudioEmptyDownloadFolders() {
+  var folders = {};
+  CV_DOWNLOAD_KINDS.forEach(function(kind){ folders[kind] = null; });
+  return folders;
+}
+
+function cvStudioDownloadDestinationConfig(kind) {
+  var value = String(kind || '').toLowerCase();
+  if (value === 'blind') return {kind:'blind', prefix:'cvDownloadBlind', label:'Blind CV'};
+  if (value === 'company_profile') return {kind:'company_profile', prefix:'cvDownloadCompanyProfile', label:'Company Profile'};
+  if (value === 'summary') return {kind:'summary', prefix:'cvDownloadSummary', label:'Summary Output'};
+  if (value === 'blind_jd') return {kind:'blind_jd', prefix:'cvDownloadBlindJd', label:'Blind JD'};
+  if (value === 'owl') return {kind:'owl', prefix:'cvDownloadOwl', label:'The Owl'};
+  return {kind:'formatted', prefix:'cvDownloadFormatted', label:'Formatted CV'};
+}
+
+function cvStudioDownloadDestinationKinds() {
+  return CV_DOWNLOAD_KINDS.slice();
+}
+
 function normalizeCvDownloadDestination(kind) {
-  return String(kind || '').toLowerCase() === 'blind' ? 'blind' : 'formatted';
+  return cvStudioDownloadDestinationConfig(kind).kind;
 }
 
 function cvStudioSafeDownloadFilename(filename) {
@@ -162,8 +186,8 @@ function cvStudioFallbackDownloadBlob(blob, filename) {
   return {method:'browser', filename:safeName};
 }
 
-// The generated DOCX is posted back to that local process for saving.
-var _cvNativeDownloadFolderState = {native_supported:false, status_loaded:false, folders:{formatted:null, blind:null}};
+// The generated file is posted back to that local process for saving.
+var _cvNativeDownloadFolderState = {native_supported:false, status_loaded:false, folders:cvStudioEmptyDownloadFolders()};
 var _cvNativeDownloadFolderLoadPromise = null;
 
 function cvStudioNativeDownloadFolder(kind) {
@@ -175,7 +199,7 @@ function cvStudioNativeDownloadFolder(kind) {
 
 function cvStudioRenderDownloadDestination(kind, folder) {
   kind = normalizeCvDownloadDestination(kind);
-  var prefix = kind === 'blind' ? 'cvDownloadBlind' : 'cvDownloadFormatted';
+  var prefix = cvStudioDownloadDestinationConfig(kind).prefix;
   var previewNode = document.getElementById(prefix + 'FolderPreview');
   if (!previewNode) return;
   var last = _cvDownloadLastResult[kind];
@@ -190,7 +214,7 @@ function cvStudioRenderDownloadDestination(kind, folder) {
 function cvStudioRenderDownloadDirectory(kind, folder) {
   kind = normalizeCvDownloadDestination(kind);
   folder = folder && typeof folder === 'object' ? folder : {configured:false,path:'',available:false};
-  var prefix = kind === 'blind' ? 'cvDownloadBlind' : 'cvDownloadFormatted';
+  var prefix = cvStudioDownloadDestinationConfig(kind).prefix;
   var nameNode = document.getElementById(prefix + 'FolderName');
   var accessNode = document.getElementById(prefix + 'FolderAccess');
   if (folder.configured) {
@@ -232,7 +256,7 @@ async function cvStudioLoadDownloadFolderState() {
     _cvNativeDownloadFolderState = {
       native_supported:!!data.native_supported,
       status_loaded:true,
-      folders:data.folders || {formatted:null, blind:null},
+      folders:data.folders || cvStudioEmptyDownloadFolders(),
     };
     return _cvNativeDownloadFolderState;
   })();
@@ -250,8 +274,9 @@ async function renderCvDownloadSettings() {
   var support = document.getElementById('cvDownloadFolderSupport');
   try {
     var data = await cvStudioLoadDownloadFolderState();
-    cvStudioRenderDownloadDirectory('formatted', cvStudioNativeDownloadFolder('formatted'));
-    cvStudioRenderDownloadDirectory('blind', cvStudioNativeDownloadFolder('blind'));
+    cvStudioDownloadDestinationKinds().forEach(function(kind){
+      cvStudioRenderDownloadDirectory(kind, cvStudioNativeDownloadFolder(kind));
+    });
     if (support) {
       support.style.display = data.native_supported ? 'none' : 'block';
       support.textContent = data.native_supported ? '' : 'This platform cannot open a native folder picker. CV Studio will use Browser Downloads unless a supported local build is used.';
@@ -268,13 +293,14 @@ async function renderCvDownloadSettings() {
 
 async function cvStudioChooseDownloadDirectory(kind) {
   kind = normalizeCvDownloadDestination(kind);
+  var config = cvStudioDownloadDestinationConfig(kind);
   try {
     var data = await cvStudioNativeDownloadFolderRequest('POST', {kind:kind, action:'select'});
     _cvNativeDownloadFolderState.folders[kind] = data.folder;
     _cvNativeDownloadFolderState.status_loaded = true;
     _cvDownloadLastResult[kind] = null;
     cvStudioRenderDownloadDirectory(kind, data.folder);
-    showToast((kind === 'blind' ? 'Blind' : 'Formatted') + ' CV folder saved: ' + data.folder.path, 'ok');
+    showToast(config.label + ' folder saved: ' + data.folder.path, 'ok');
     return true;
   } catch(error) {
     if (error && error.code === 'DOWNLOAD_FOLDER_SELECTION_CANCELLED') return false;
@@ -285,12 +311,13 @@ async function cvStudioChooseDownloadDirectory(kind) {
 
 async function cvStudioVerifyDownloadDirectory(kind) {
   kind = normalizeCvDownloadDestination(kind);
+  var config = cvStudioDownloadDestinationConfig(kind);
   try {
     var data = await cvStudioNativeDownloadFolderRequest('POST', {kind:kind, action:'check'});
     _cvNativeDownloadFolderState.folders[kind] = data.folder;
     _cvNativeDownloadFolderState.status_loaded = true;
     cvStudioRenderDownloadDirectory(kind, data.folder);
-    showToast((kind === 'blind' ? 'Blind' : 'Formatted') + ' CV folder is writable: ' + data.folder.path, 'ok');
+    showToast(config.label + ' folder is writable: ' + data.folder.path, 'ok');
     return true;
   } catch(error) {
     await renderCvDownloadSettings();
@@ -301,13 +328,14 @@ async function cvStudioVerifyDownloadDirectory(kind) {
 
 async function cvStudioClearDownloadDirectory(kind) {
   kind = normalizeCvDownloadDestination(kind);
+  var config = cvStudioDownloadDestinationConfig(kind);
   try {
     var data = await cvStudioNativeDownloadFolderRequest('DELETE', {kind:kind});
     _cvNativeDownloadFolderState.folders[kind] = data.folder;
     _cvNativeDownloadFolderState.status_loaded = true;
     _cvDownloadLastResult[kind] = null;
     cvStudioRenderDownloadDirectory(kind, data.folder);
-    showToast((kind === 'blind' ? 'Blind' : 'Formatted') + ' CV will use Browser Downloads.', 'ok');
+    showToast(config.label + ' will use Browser Downloads.', 'ok');
     return true;
   } catch(error) {
     showToast((error && error.message) || 'Could not clear the download folder.', 'err');
@@ -336,6 +364,18 @@ async function cvStudioPrepareDownloadDestination(kind) {
 async function cvStudioSaveDownloadBlob(blob, filename, kind, preparedDestination) {
   kind = normalizeCvDownloadDestination(kind);
   var safeName = cvStudioSafeDownloadFilename(filename);
+  function cvStudioAddBrowserFallback(resultObj) {
+    // A configured-folder save failed or could not be confirmed: never lose the
+    // generated file -- also hand it to the browser Downloads folder so the user
+    // still receives it (worst case a duplicate, never a silent data loss).
+    try {
+      cvStudioFallbackDownloadBlob(blob, safeName);
+      resultObj.browserFallback = true;
+    } catch (fallbackError) {
+      resultObj.browserFallback = false;
+    }
+    return resultObj;
+  }
   var destination = preparedDestination || await cvStudioPrepareDownloadDestination(kind);
   if (destination && destination.statusFailed) {
     var unavailable = {
@@ -346,7 +386,7 @@ async function cvStudioSaveDownloadBlob(blob, filename, kind, preparedDestinatio
     };
     _cvDownloadLastResult[kind] = unavailable;
     cvStudioRenderDownloadDestination(kind, destination.folder);
-    return unavailable;
+    return cvStudioAddBrowserFallback(unavailable);
   }
   if (destination && destination.configured) {
     var response;
@@ -369,7 +409,7 @@ async function cvStudioSaveDownloadBlob(blob, filename, kind, preparedDestinatio
       };
       _cvDownloadLastResult[kind] = uncertain;
       cvStudioRenderDownloadDestination(kind, destination.folder);
-      return uncertain;
+      return cvStudioAddBrowserFallback(uncertain);
     }
     if (!response.ok || !data.ok) {
       var failed = {
@@ -380,7 +420,7 @@ async function cvStudioSaveDownloadBlob(blob, filename, kind, preparedDestinatio
       };
       _cvDownloadLastResult[kind] = failed;
       cvStudioRenderDownloadDestination(kind, destination.folder);
-      return failed;
+      return cvStudioAddBrowserFallback(failed);
     }
     var saved = {method:'folder', filename:data.filename, folder:data.folder, path:data.path};
     _cvDownloadLastResult[kind] = saved;
@@ -391,6 +431,32 @@ async function cvStudioSaveDownloadBlob(blob, filename, kind, preparedDestinatio
   _cvDownloadLastResult[kind] = browser;
   cvStudioRenderDownloadDestination(kind, destination && destination.folder);
   return browser;
+}
+
+function cvStudioShowDownloadResult(result, label) {
+  label = String(label || 'File');
+  if (result && result.method === 'folder') {
+    showToast(label + ' saved to ' + String(result.path || result.folder || 'the selected folder'), 'ok');
+    return true;
+  }
+  if (result && result.method === 'browser') {
+    showToast(label + ' downloaded using the browser Downloads folder.', 'ok');
+    return true;
+  }
+  if (result && result.browserFallback) {
+    // The configured folder failed but the file was not lost: it went to the
+    // browser Downloads folder instead. Surface it as a warning, not an error.
+    var fbWhy = result.fallbackReason ? ' (' + String(result.fallbackReason).replace(/[. ]+$/g, '') + ')' : '';
+    showToast(label + " couldn't be saved to the selected folder" + fbWhy + '; downloaded to your browser instead. Check Settings → Downloads.', 'warn');
+    return true;
+  }
+  if (result && result.uncertain) {
+    showToast(result.fallbackReason || (label + ' save could not be confirmed.'), 'err');
+    return false;
+  }
+  var reason = result && result.fallbackReason ? ': ' + result.fallbackReason.replace(/[. ]+$/g, '') + '. ' : '. ';
+  showToast(label + ' was not saved' + reason + 'Check its folder in Settings → Downloads.', 'err');
+  return false;
 }
 
 document.addEventListener('DOMContentLoaded', renderCvDownloadSettings);
