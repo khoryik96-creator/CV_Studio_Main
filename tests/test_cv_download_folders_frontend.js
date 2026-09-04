@@ -239,6 +239,51 @@ async function showDownloadResultReportsBrowserFallbackContract() {
   assert.strictEqual(toasts[1].level,'err');
 }
 
+async function clearDownloadDirectoryConfirmsBeforeResetContract() {
+  const deletes=[];
+  let confirmMessage='';
+  let confirmAnswer=false;
+  const context={
+    String, Promise,
+    window:{confirm(message){confirmMessage=message; return confirmAnswer;}},
+    showToast(){},
+    _cvDownloadLastResult:{},
+    _cvNativeDownloadFolderState:{native_supported:true,folders:{
+      company_profile:{configured:true,path:'C:\\Recruitment\\Company',available:true},
+      formatted:{configured:false,path:'',available:false},
+    }},
+    async cvStudioNativeDownloadFolderRequest(method,payload){deletes.push({method,payload});return {folder:{configured:false,path:'',available:false}};},
+    cvStudioRenderDownloadDirectory(){},
+  };
+  loadFunctions(context,[
+    'cvStudioDownloadDestinationConfig','normalizeCvDownloadDestination',
+    'cvStudioNativeDownloadFolder','cvStudioClearDownloadDirectory',
+  ]);
+
+  // Configured folder + user cancels the confirm -> nothing is cleared.
+  confirmAnswer=false;
+  const cancelled=await context.cvStudioClearDownloadDirectory('company_profile');
+  assert.strictEqual(cancelled,false,'a cancelled confirm must abort the reset');
+  assert.strictEqual(deletes.length,0,'no DELETE is sent when the user cancels');
+  assert.ok(confirmMessage.includes('Company Profile'),'confirm names the destination');
+  assert.ok(confirmMessage.includes('C:\\Recruitment\\Company'),'confirm shows the current folder');
+
+  // Configured folder + user accepts -> the folder is cleared.
+  confirmAnswer=true;
+  const accepted=await context.cvStudioClearDownloadDirectory('company_profile');
+  assert.strictEqual(accepted,true);
+  assert.strictEqual(deletes.length,1,'accepting the confirm sends the DELETE');
+  assert.strictEqual(deletes[0].method,'DELETE');
+
+  // Already browser-default (not configured) -> no confirm, proceeds silently.
+  confirmMessage='';
+  confirmAnswer=false;
+  const already=await context.cvStudioClearDownloadDirectory('formatted');
+  assert.strictEqual(already,true,'an unconfigured destination does not require confirmation');
+  assert.strictEqual(confirmMessage,'','no confirm prompt when there is nothing to lose');
+  assert.strictEqual(deletes.length,2,'the unconfigured reset still calls through');
+}
+
 async function nativeSelectionAndFullPathPreviewContract() {
   const nodes={};
   function node(id){if(!nodes[id])nodes[id]={textContent:'',style:{},classList:{remove(){},toggle(){}}};return nodes[id];}
@@ -325,6 +370,7 @@ Promise.resolve()
   .then(folderStatusFailureFallsBackToBrowserContract)
   .then(showDownloadResultReportsBrowserFallbackContract)
   .then(nativeSelectionAndFullPathPreviewContract)
+  .then(clearDownloadDirectoryConfirmsBeforeResetContract)
   .then(batchModeContract)
   .then(staleStartupRegistrationRepairContract)
   .then(()=>console.log('CV download folder frontend fixtures passed'))
