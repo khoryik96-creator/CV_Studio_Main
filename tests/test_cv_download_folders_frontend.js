@@ -76,12 +76,22 @@ function markupAndWiringContract() {
   assert.ok(batchAll.includes('uncertainCount'));
 
   const summary = functionSource(html, 'applySummaryToUploadedDocx');
-  const companyWord = functionSource(html, 'exportCompanyDoc');
-  const companyPdf = functionSource(html, 'exportCompanyPDF');
-  const blindJdWord = functionSource(html, 'exportAnonJDDoc');
-  const blindJdPdf = functionSource(html, 'exportAnonJDPDF');
-  const owlWord = functionSource(html, 'exportTheOwlWord');
-  const owlPdf = functionSource(html, 'exportTheOwlPDF');
+  const companyWord = functionSource(html, 'exportCompanyDocImpl');
+  const companyPdf = functionSource(html, 'exportCompanyPDFImpl');
+  const blindJdWord = functionSource(html, 'exportAnonJDDocImpl');
+  const blindJdPdf = functionSource(html, 'exportAnonJDPDFImpl');
+  const owlWord = functionSource(html, 'exportTheOwlWordImpl');
+  const owlPdf = functionSource(html, 'exportTheOwlPDFImpl');
+  // Each public export is a thin guarded wrapper so a build/save failure shows a
+  // user-facing error instead of an unhandled promise rejection (silent no-op).
+  ['exportCompanyDoc', 'exportCompanyPDF', 'exportAnonJDDoc', 'exportAnonJDPDF',
+   'exportTheOwlWord', 'exportTheOwlPDF'].forEach(function(name){
+    const wrapper = functionSource(html, name);
+    assert.ok(wrapper.includes('try {') && wrapper.includes('catch'),
+      name + ' must wrap its implementation in try/catch');
+    assert.ok(wrapper.includes('showToast'), name + ' must surface a failure toast');
+    assert.ok(wrapper.includes(name + 'Impl('), name + ' must delegate to its impl');
+  });
   // Summary DOCX routes through the Summary Output folder (this feature) while
   // still honouring the anonymized filename introduced by the anonymization work.
   assert.ok(summary.includes("cvStudioSaveDownloadBlob(blob, summaryName, 'summary')"));
@@ -155,29 +165,38 @@ async function nativeFolderSaveAndFallbackContract() {
   assert.strictEqual(browser.method,'browser');
   assert.strictEqual(clicked[0],'Blind.docx');
 
+  // A definitive folder-save failure must NOT lose the file: it also lands in
+  // the browser Downloads folder (the same place unconfigured saves use).
   saveMode='failed';
   const fallback=await context.cvStudioSaveDownloadBlob(blob,'Failure.docx','formatted');
   assert.strictEqual(fallback.method,'failed');
   assert.strictEqual(fallback.configured,true);
+  assert.strictEqual(fallback.browserFallback,true);
   assert.ok(fallback.fallbackReason.includes('Drive unavailable'));
+  assert.strictEqual(clicked[1],'Failure.docx');
 
+  // An unconfirmed (network-dropped) save also falls back rather than risk loss.
   saveMode='lost';
   const uncertain=await context.cvStudioSaveDownloadBlob(blob,'Uncertain.docx','formatted');
   assert.strictEqual(uncertain.method,'uncertain');
   assert.strictEqual(uncertain.uncertain,true);
+  assert.strictEqual(uncertain.browserFallback,true);
   assert.strictEqual(uncertain.folder,'C:\\CV Output');
   assert.ok(uncertain.fallbackReason.includes('could not confirm'));
   assert.ok(uncertain.fallbackReason.includes('before retrying'));
-  assert.deepStrictEqual(revoked,['blob:fallback']);
+  assert.strictEqual(clicked[2],'Uncertain.docx');
+  // One browser fallback per failed/uncertain save (the blind case plus these two).
+  assert.strictEqual(revoked.length,3);
+  assert.ok(revoked.every(function(v){return v==='blob:fallback';}));
 }
 
-async function folderStatusFailureStopsBrowserFallbackContract() {
+async function folderStatusFailureFallsBackToBrowserContract() {
   const clicked=[];
   const context={
     String,Math,Date,Promise,
     window:{},
     document:{body:{appendChild(){}},createElement(){return {click(){clicked.push(this.download);},remove(){}};}},
-    URL:{createObjectURL(){return 'blob:must-not-download';},revokeObjectURL(){}},
+    URL:{createObjectURL(){return 'blob:fallback';},revokeObjectURL(){}},
     setTimeout(fn){fn();},
     _cvDownloadLastResult:{},
     _cvNativeDownloadFolderState:{native_supported:true,status_loaded:false,folders:{formatted:null,blind:null}},
@@ -190,11 +209,34 @@ async function folderStatusFailureStopsBrowserFallbackContract() {
     'cvStudioNativeDownloadFolder','cvStudioLoadDownloadFolderState',
     'cvStudioPrepareDownloadDestination','cvStudioSaveDownloadBlob',
   ]);
+  // When the configured folder's status cannot even be verified, the generated
+  // file must not be lost: it falls back to the browser Downloads folder.
   const result=await context.cvStudioSaveDownloadBlob({fixture:true},'Sensitive CV.docx','formatted');
   assert.strictEqual(result.method,'failed');
   assert.strictEqual(result.configured,true);
+  assert.strictEqual(result.browserFallback,true);
   assert.ok(result.fallbackReason.includes('Folder status unavailable'));
-  assert.deepStrictEqual(clicked,[]);
+  assert.deepStrictEqual(clicked,['Sensitive CV.docx']);
+}
+
+async function showDownloadResultReportsBrowserFallbackContract() {
+  const toasts=[];
+  const context={String, showToast(message,level){toasts.push({message,level});}};
+  loadFunctions(context,['cvStudioShowDownloadResult']);
+  // A folder failure that fell back to the browser is a warning, not an error,
+  // and reports success so callers do not treat it as a lost file.
+  const ok=context.cvStudioShowDownloadResult(
+    {method:'failed',configured:true,browserFallback:true,fallbackReason:'Drive unavailable.'},
+    'Company Profile PDF');
+  assert.strictEqual(ok,true);
+  assert.strictEqual(toasts[0].level,'warn');
+  assert.ok(toasts[0].message.includes('downloaded to your browser instead'));
+  assert.ok(toasts[0].message.includes('Drive unavailable'));
+  // A true failure with no fallback at all is still an error returning false.
+  const bad=context.cvStudioShowDownloadResult(
+    {method:'failed',configured:true,fallbackReason:'nowhere to write'},'Company Profile PDF');
+  assert.strictEqual(bad,false);
+  assert.strictEqual(toasts[1].level,'err');
 }
 
 async function nativeSelectionAndFullPathPreviewContract() {
@@ -280,7 +322,8 @@ Promise.resolve()
   .then(markupAndWiringContract)
   .then(filenameSafetyContract)
   .then(nativeFolderSaveAndFallbackContract)
-  .then(folderStatusFailureStopsBrowserFallbackContract)
+  .then(folderStatusFailureFallsBackToBrowserContract)
+  .then(showDownloadResultReportsBrowserFallbackContract)
   .then(nativeSelectionAndFullPathPreviewContract)
   .then(batchModeContract)
   .then(staleStartupRegistrationRepairContract)

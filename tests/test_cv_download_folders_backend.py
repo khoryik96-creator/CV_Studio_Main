@@ -460,3 +460,84 @@ def test_check_folder_performs_and_cleans_real_write_probe(tmp_path):
     assert payload["writable"] is True
     assert payload["path"] == str(folder)
     assert list(folder.iterdir()) == []
+
+
+# Representative markup mirroring the real Word (.doc) export shells
+# (_wordDocShell / theOwlWordShell) so the strict validator is proven to accept
+# the constructs those shells actually emit -- tables with colgroup/col, a
+# two-column layout table, nested lists, chips, a callout, and void elements
+# (meta/img/br). This guards against the validator ever false-rejecting a
+# legitimately generated export.
+_REAL_SHELL_DOC = (
+    b'<html xmlns:o="urn:schemas-microsoft-com:office:office" '
+    b'xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="UTF-8">'
+    b"<title>Market Map</title><style>body{color:#171717;}</style></head>"
+    b'<body><div class="page"><div class="brand">'
+    b'<img src="data:image/png;base64,AAAA" alt="Hyppies"></div>'
+    b'<div class="hero"><h1>Market Map</h1><p class="subtitle">Hyppies</p></div>'
+    b"<h2>Companies</h2>"
+    b'<div class="market-table-wrap"><table class="market-table" cellspacing="0" '
+    b'cellpadding="0" border="1"><colgroup><col style="width:35%">'
+    b'<col style="width:14%"><col style="width:51%"></colgroup><thead><tr>'
+    b"<th>Company</th><th>Tier</th><th>Notes</th></tr></thead><tbody><tr>"
+    b"<td>Acme</td><td>1</td><td>Primary lead</td></tr></tbody></table></div>"
+    b'<table class="market-two-col" role="presentation"><tr>'
+    b'<td><ul class="market-doc-list"><li>Left one</li><li>Left two</li></ul></td>'
+    b'<td><ul class="market-doc-list"><li>Right one</li></ul></td></tr></table>'
+    b'<div class="callout"><h2 style="margin-top:0">Why Join Us</h2>'
+    b"<ul><li>Growth<br>and impact</li></ul></div>"
+    b'<p>Chips: <span class="chip">Python</span> <span class="chip">Node.js</span></p>'
+    b'<div class="footer">Hyppies</div></div></body></html>'
+)
+
+
+@pytest.mark.parametrize("kind", ["company_profile", "blind_jd", "owl"])
+def test_generated_word_shells_pass_validation(tmp_path, kind):
+    folder = tmp_path / kind
+    folder.mkdir()
+    service = LocalDownloadService(tmp_path / "download_folders.json")
+    service._write_state_unlocked({kind: str(folder)})
+
+    result = service.save_file(kind, "Report.doc", io.BytesIO(_REAL_SHELL_DOC))
+
+    assert result["path"] == str(folder / "Report.doc")
+    assert (folder / "Report.doc").read_bytes() == _REAL_SHELL_DOC
+
+
+def test_valid_pdf_is_accepted_when_pdf_parser_dependency_is_unavailable(
+    tmp_path, monkeypatch
+):
+    # A missing/broken pypdfium2 at request time must not be misreported as a
+    # corrupt file: a structurally valid PDF still saves (deep page validation
+    # is skipped, the magic-byte + trailer checks still apply).
+    import sys
+
+    monkeypatch.setitem(sys.modules, "pypdfium2", None)  # forces ImportError
+    folder = tmp_path / "owl"
+    folder.mkdir()
+    service = LocalDownloadService(tmp_path / "download_folders.json")
+    service._write_state_unlocked({"owl": str(folder)})
+    content = _pdf_bytes()
+
+    result = service.save_file("owl", "NoParser.pdf", io.BytesIO(content))
+
+    assert result["path"] == str(folder / "NoParser.pdf")
+    assert (folder / "NoParser.pdf").read_bytes() == content
+
+
+def test_corrupt_pdf_still_rejected_when_parser_available(tmp_path):
+    # The dependency-unavailable leniency must not weaken corrupt-file detection
+    # when the parser IS present: a %PDF- file with a valid-looking trailer but
+    # no real pages is still rejected.
+    pytest.importorskip("pypdfium2")
+    folder = tmp_path / "owl"
+    folder.mkdir()
+    service = LocalDownloadService(tmp_path / "download_folders.json")
+    service._write_state_unlocked({"owl": str(folder)})
+    fake = b"%PDF-1.4\n%garbage not a real body\nstartxref 9 %%EOF\n"
+
+    with pytest.raises(DownloadFolderError) as raised:
+        service.save_file("owl", "Corrupt.pdf", io.BytesIO(fake))
+
+    assert raised.value.code == "DOWNLOAD_FILE_INVALID"
+    assert list(folder.iterdir()) == []

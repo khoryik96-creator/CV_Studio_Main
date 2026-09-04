@@ -1,5 +1,10 @@
 // ── Company Profile Export ────────────────────────────────────────────
 async function exportCompanyDoc() {
+  try { return await exportCompanyDocImpl(); }
+  catch (e) { showToast('Company Profile Word export failed: ' + ((e && e.message) || 'unexpected error'), 'err'); }
+}
+
+async function exportCompanyDocImpl() {
   var p = window._lastCompanyProfile;
   if (!p) { showToast('Generate a profile first', 'err'); return; }
   function arr(v) { return Array.isArray(v) ? v : (v ? [String(v)] : []); }
@@ -36,6 +41,11 @@ async function exportCompanyDoc() {
 }
 
 async function exportCompanyPDF() {
+  try { return await exportCompanyPDFImpl(); }
+  catch (e) { showToast('Company Profile PDF failed: ' + ((e && e.message) || 'unexpected error'), 'err'); }
+}
+
+async function exportCompanyPDFImpl() {
   var p = window._lastCompanyProfile;
   if (!p) { showToast('Generate a profile first', 'err'); return; }
   if (!(window.jspdf && window.jspdf.jsPDF)) {

@@ -749,6 +749,11 @@ function renderAnonJDCard(j) {
 
 // ── Blind JD Export ─────────────────────────────────────────────
 async function exportAnonJDDoc() {
+  try { return await exportAnonJDDocImpl(); }
+  catch (e) { showToast('Blind JD Word export failed: ' + ((e && e.message) || 'unexpected error'), 'err'); }
+}
+
+async function exportAnonJDDocImpl() {
   var j = window._lastAnonJD;
   if (!j) { showToast('Generate Blind JD first', 'err'); return; }
   function arr(v) { return Array.isArray(v) ? v : (v ? [String(v)] : []); }
@@ -786,6 +791,11 @@ async function exportAnonJDDoc() {
 }
 
 async function exportAnonJDPDF() {
+  try { return await exportAnonJDPDFImpl(); }
+  catch (e) { showToast('Blind JD PDF failed: ' + ((e && e.message) || 'unexpected error'), 'err'); }
+}
+
+async function exportAnonJDPDFImpl() {
   var j = window._lastAnonJD;
   if (!j) { showToast('Generate Blind JD first', 'err'); return; }
   if (!(window.jspdf && window.jspdf.jsPDF)) {

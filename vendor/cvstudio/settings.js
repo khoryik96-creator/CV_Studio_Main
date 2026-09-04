@@ -126,6 +126,16 @@ document.addEventListener('DOMContentLoaded', initCvReadonlyCaretGuard);
 // because embedded Chromium does not reliably honour direct folder writes.
 var _cvDownloadLastResult = {};
 
+// Single source of truth for the configurable download destinations. Keep this
+// aligned with DOWNLOAD_ALLOWED_EXTENSIONS in cvstudio_downloads.py.
+var CV_DOWNLOAD_KINDS = ['formatted', 'blind', 'company_profile', 'summary', 'blind_jd', 'owl'];
+
+function cvStudioEmptyDownloadFolders() {
+  var folders = {};
+  CV_DOWNLOAD_KINDS.forEach(function(kind){ folders[kind] = null; });
+  return folders;
+}
+
 function cvStudioDownloadDestinationConfig(kind) {
   var value = String(kind || '').toLowerCase();
   if (value === 'blind') return {kind:'blind', prefix:'cvDownloadBlind', label:'Blind CV'};
@@ -137,7 +147,7 @@ function cvStudioDownloadDestinationConfig(kind) {
 }
 
 function cvStudioDownloadDestinationKinds() {
-  return ['formatted', 'blind', 'company_profile', 'summary', 'blind_jd', 'owl'];
+  return CV_DOWNLOAD_KINDS.slice();
 }
 
 function normalizeCvDownloadDestination(kind) {
@@ -177,7 +187,7 @@ function cvStudioFallbackDownloadBlob(blob, filename) {
 }
 
 // The generated file is posted back to that local process for saving.
-var _cvNativeDownloadFolderState = {native_supported:false, status_loaded:false, folders:{formatted:null, blind:null, company_profile:null, summary:null, blind_jd:null, owl:null}};
+var _cvNativeDownloadFolderState = {native_supported:false, status_loaded:false, folders:cvStudioEmptyDownloadFolders()};
 var _cvNativeDownloadFolderLoadPromise = null;
 
 function cvStudioNativeDownloadFolder(kind) {
@@ -246,7 +256,7 @@ async function cvStudioLoadDownloadFolderState() {
     _cvNativeDownloadFolderState = {
       native_supported:!!data.native_supported,
       status_loaded:true,
-      folders:data.folders || {formatted:null, blind:null, company_profile:null, summary:null, blind_jd:null, owl:null},
+      folders:data.folders || cvStudioEmptyDownloadFolders(),
     };
     return _cvNativeDownloadFolderState;
   })();
@@ -354,6 +364,18 @@ async function cvStudioPrepareDownloadDestination(kind) {
 async function cvStudioSaveDownloadBlob(blob, filename, kind, preparedDestination) {
   kind = normalizeCvDownloadDestination(kind);
   var safeName = cvStudioSafeDownloadFilename(filename);
+  function cvStudioAddBrowserFallback(resultObj) {
+    // A configured-folder save failed or could not be confirmed: never lose the
+    // generated file -- also hand it to the browser Downloads folder so the user
+    // still receives it (worst case a duplicate, never a silent data loss).
+    try {
+      cvStudioFallbackDownloadBlob(blob, safeName);
+      resultObj.browserFallback = true;
+    } catch (fallbackError) {
+      resultObj.browserFallback = false;
+    }
+    return resultObj;
+  }
   var destination = preparedDestination || await cvStudioPrepareDownloadDestination(kind);
   if (destination && destination.statusFailed) {
     var unavailable = {
@@ -364,7 +386,7 @@ async function cvStudioSaveDownloadBlob(blob, filename, kind, preparedDestinatio
     };
     _cvDownloadLastResult[kind] = unavailable;
     cvStudioRenderDownloadDestination(kind, destination.folder);
-    return unavailable;
+    return cvStudioAddBrowserFallback(unavailable);
   }
   if (destination && destination.configured) {
     var response;
@@ -387,7 +409,7 @@ async function cvStudioSaveDownloadBlob(blob, filename, kind, preparedDestinatio
       };
       _cvDownloadLastResult[kind] = uncertain;
       cvStudioRenderDownloadDestination(kind, destination.folder);
-      return uncertain;
+      return cvStudioAddBrowserFallback(uncertain);
     }
     if (!response.ok || !data.ok) {
       var failed = {
@@ -398,7 +420,7 @@ async function cvStudioSaveDownloadBlob(blob, filename, kind, preparedDestinatio
       };
       _cvDownloadLastResult[kind] = failed;
       cvStudioRenderDownloadDestination(kind, destination.folder);
-      return failed;
+      return cvStudioAddBrowserFallback(failed);
     }
     var saved = {method:'folder', filename:data.filename, folder:data.folder, path:data.path};
     _cvDownloadLastResult[kind] = saved;
@@ -419,6 +441,13 @@ function cvStudioShowDownloadResult(result, label) {
   }
   if (result && result.method === 'browser') {
     showToast(label + ' downloaded using the browser Downloads folder.', 'ok');
+    return true;
+  }
+  if (result && result.browserFallback) {
+    // The configured folder failed but the file was not lost: it went to the
+    // browser Downloads folder instead. Surface it as a warning, not an error.
+    var fbWhy = result.fallbackReason ? ' (' + String(result.fallbackReason).replace(/[. ]+$/g, '') + ')' : '';
+    showToast(label + " couldn't be saved to the selected folder" + fbWhy + '; downloaded to your browser instead. Check Settings → Downloads.', 'warn');
     return true;
   }
   if (result && result.uncertain) {

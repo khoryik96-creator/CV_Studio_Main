@@ -107,6 +107,7 @@ async function wordExportOmitsOnlyTopExperienceSummary() {
     '_buildWordExport',
     'exportWordDocumentToDestination',
     'exportAnonJDDoc',
+    'exportAnonJDDocImpl',
   ]), context);
   await context.exportAnonJDDoc();
 
@@ -194,7 +195,7 @@ async function pdfExportOmitsExpAndUsesMetadataWidth() {
     cvStudioShowDownloadResult() {},
     showToast() {},
   });
-  vm.runInContext(functions(['cvPdfSafeText', '_safeFileStem', 'exportAnonJDPDF']), context);
+  vm.runInContext(functions(['cvPdfSafeText', '_safeFileStem', 'exportAnonJDPDF', 'exportAnonJDPDFImpl']), context);
   await context.exportAnonJDPDF();
 
   const doc = FakePDF.instance;
@@ -240,7 +241,7 @@ async function pdfLongMetadataWrapsWithinContentBounds() {
     cvStudioShowDownloadResult() {},
     showToast() {},
   });
-  vm.runInContext(functions(['cvPdfSafeText', '_safeFileStem', 'exportAnonJDPDF']), context);
+  vm.runInContext(functions(['cvPdfSafeText', '_safeFileStem', 'exportAnonJDPDF', 'exportAnonJDPDFImpl']), context);
   await context.exportAnonJDPDF();
 
   const doc = FakePDF.instance;
@@ -277,8 +278,8 @@ async function pdfLongMetadataWrapsWithinContentBounds() {
 function expRangeSchemaAndUnrelatedContentRemain() {
   const generateSource = functionRange(html, 'generateAnonJD').source;
   const previewSource = functionRange(html, 'renderAnonJDCard').source;
-  const wordSource = functionRange(html, 'exportAnonJDDoc').source;
-  const pdfSource = functionRange(html, 'exportAnonJDPDF').source;
+  const wordSource = functionRange(html, 'exportAnonJDDocImpl').source;
+  const pdfSource = functionRange(html, 'exportAnonJDPDFImpl').source;
 
   assert.ok(generateSource.includes('"exp_range":null'));
   assert.ok(generateSource.includes('window._lastAnonJD = jd;'));

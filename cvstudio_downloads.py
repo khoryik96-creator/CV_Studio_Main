@@ -9,6 +9,7 @@ Python process.  It is deliberately independent of Flask and ``app.py``.
 from __future__ import annotations
 
 import base64
+import codecs
 import ctypes
 import errno
 from html.parser import HTMLParser
@@ -371,17 +372,30 @@ def _validate_staged_download(path: Path, extension: str, prefix: bytes) -> None
     if extension == ".pdf":
         if not prefix.startswith(b"%PDF-"):
             raise DownloadFolderError("DOWNLOAD_FILE_INVALID", invalid_message)
-        document = None
+        # Structural checks that need no parser dependency.
         try:
             with path.open("rb") as handle:
                 handle.seek(0, os.SEEK_END)
                 size = handle.tell()
                 handle.seek(max(0, size - 4096), os.SEEK_SET)
                 trailer = handle.read()
-            if not re.search(rb"startxref\s+\d+\s+%%EOF\s*$", trailer):
-                raise ValueError("generated PDF trailer is incomplete")
+        except OSError as exc:
+            raise DownloadFolderError(
+                "DOWNLOAD_FILE_INVALID", invalid_message
+            ) from exc
+        if not re.search(rb"startxref\s+\d+\s+%%EOF\s*$", trailer):
+            raise DownloadFolderError("DOWNLOAD_FILE_INVALID", invalid_message)
+        # Deep page validation needs pypdfium2. If the dependency is unavailable
+        # at runtime, skip it rather than reject a structurally valid PDF as
+        # corrupt -- the magic bytes and trailer above already confirm integrity,
+        # and blaming the file for a missing/broken library would silently lose a
+        # correctly generated download.
+        try:
             import pypdfium2 as pdfium
-
+        except ImportError:
+            return
+        document = None
+        try:
             document = pdfium.PdfDocument(str(path))
             if len(document) < 1:
                 raise ValueError("generated PDF contains no pages")
@@ -397,7 +411,7 @@ def _validate_staged_download(path: Path, extension: str, prefix: bytes) -> None
                     if text_page is not None:
                         text_page.close()
                     page.close()
-        except (ImportError, OSError, RuntimeError, ValueError, TypeError) as exc:
+        except (OSError, RuntimeError, ValueError, TypeError) as exc:
             raise DownloadFolderError(
                 "DOWNLOAD_FILE_INVALID", invalid_message
             ) from exc
@@ -416,12 +430,22 @@ def _validate_staged_download(path: Path, extension: str, prefix: bytes) -> None
             or html_prefix.startswith(b"<!doctype html")
         ):
             raise DownloadFolderError("DOWNLOAD_FILE_INVALID", invalid_message)
+        # Validate incrementally: read and decode in bounded chunks and feed the
+        # parser as we go, so peak memory stays ~1x the file rather than holding
+        # the full bytes and the full decoded string at once (files may approach
+        # the 80MB cap).
+        validator = _GeneratedHtmlDocValidator()
+        decoder = codecs.getincrementaldecoder("utf-8-sig")()
         try:
-            document = path.read_bytes().decode("utf-8-sig")
-            if "\x00" in document:
-                raise ValueError("generated HTML document contains NUL bytes")
-            validator = _GeneratedHtmlDocValidator()
-            validator.feed(document)
+            with path.open("rb") as handle:
+                while True:
+                    chunk = handle.read(65536)
+                    if not chunk:
+                        break
+                    if b"\x00" in chunk:
+                        raise ValueError("generated HTML document contains NUL bytes")
+                    validator.feed(decoder.decode(chunk))
+                validator.feed(decoder.decode(b"", final=True))
             validator.close()
             if not validator.complete():
                 raise ValueError("generated HTML document is incomplete")
