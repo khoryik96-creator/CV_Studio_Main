@@ -661,8 +661,8 @@ function setCvAutoCorrectLanguage(enabled, silent) {
   if (!silent) {
     showToast(
       getCvAutoCorrectLanguage()
-        ? 'Formatted CVs will auto-correct spelling, punctuation and capitalization.'
-        : 'Formatted CVs will keep the original spelling and punctuation.',
+        ? 'Formatted CVs will auto-correct spelling, punctuation, capitalization and known product-name casing.'
+        : 'Auto-correct off. CVs keep the standard light formatting (obvious typos only).',
       'ok'
     );
   }

@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.375"
+_INSTALL_RECEIPT_VERSION = "v24.6.376"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -346,7 +346,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.375"
+_CVSTUDIO_VERSION = "v24.6.376"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -8722,21 +8722,39 @@ def test_key():
         return jsonify(out)
 
 
-CV_LANGUAGE_CORRECTION_INSTRUCTION = """
+# The base prompt already contains a light "fix spelling/typos silently" line.
+# When the user enables auto-correction we REPLACE that single line with a fuller,
+# self-consistent instruction (rather than appending a second rule that would
+# contradict it), so the model gets one coherent language-correction directive.
+_CV_BASE_TEXT_INSTRUCTION = "- All text: fix spelling/typos silently, preserve everything else"
 
-LANGUAGE AUTO-CORRECTION — ENABLED BY THE USER:
-- Correct obvious spelling mistakes, punctuation, and capitalization (capital/lowercase) in the text you place into the JSON fields, so the formatted CV reads cleanly.
-- Fix sentence and heading capitalization (start sentences with a capital; lowercase words that were wrongly capitalized mid-sentence) and normalise punctuation and spacing (stray double spaces, missing full stops, misplaced commas).
-- PRESERVE EXACTLY, never "correct": proper nouns and people's names, company/product/brand names, job titles as written, technical terms and acronyms (e.g. iOS, JavaScript, SQL, .NET, PhD, KPI), URLs, emails, phone numbers, file names, and any deliberate mixed-case token. When unsure whether a token is a misspelling or a real name/term, leave it unchanged.
-- Do NOT rewrite, rephrase, embellish, translate, summarise, add, or remove content, and do NOT change any facts, numbers, dates, currencies, or the meaning of a sentence. Correct only spelling, punctuation, and capitalization.
-- Preserve the JSON schema and every field exactly as required by the base instructions.
-"""
+CV_LANGUAGE_CORRECTION_INSTRUCTION = (
+    "- All text: correct spelling, punctuation, and capitalization (capital/lowercase) so the CV reads cleanly, "
+    "changing ONLY language mechanics and never the meaning:\n"
+    "    * Fix obvious spelling mistakes and typos, punctuation, spacing, and sentence/heading capitalization "
+    "(start sentences with a capital; lowercase words wrongly capitalized mid-sentence).\n"
+    "    * Correct the casing of well-known technology, product, framework, and company names to their standard "
+    "form, e.g. kafka -> Kafka, javascript -> JavaScript, github -> GitHub, sql -> SQL, mysql -> MySQL, "
+    "aws -> AWS, .net -> .NET, nodejs -> Node.js, powerbi -> Power BI.\n"
+    "    * Preserve people's names and any unfamiliar word or acronym exactly as written; when unsure whether a "
+    "token is a misspelling or a real name/term, leave it unchanged. Never change a person's name to a similar "
+    "common word.\n"
+    "    * Do NOT rephrase, reword, embellish, translate, add, or remove content, and do NOT change any numbers, "
+    "dates, currencies, URLs, emails, or the meaning of a sentence."
+)
 
 
 def _parse_system_prompt(correct_language=False):
-    if correct_language is True:
-        return SYSTEM_PROMPT + CV_LANGUAGE_CORRECTION_INSTRUCTION
-    return SYSTEM_PROMPT
+    """Return the parse system prompt, upgrading the base spelling line to the
+    full language-correction directive only when the user enabled the toggle."""
+    if correct_language is not True:
+        return SYSTEM_PROMPT
+    if _CV_BASE_TEXT_INSTRUCTION in SYSTEM_PROMPT:
+        return SYSTEM_PROMPT.replace(
+            _CV_BASE_TEXT_INSTRUCTION, CV_LANGUAGE_CORRECTION_INSTRUCTION
+        )
+    # Anchor moved: still apply the directive rather than silently no-op.
+    return SYSTEM_PROMPT + "\n" + CV_LANGUAGE_CORRECTION_INSTRUCTION
 
 
 @app.route("/parse", methods=["POST"])

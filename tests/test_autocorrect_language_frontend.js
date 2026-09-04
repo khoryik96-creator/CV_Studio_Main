@@ -80,9 +80,10 @@ function togglesOffAndRespectsSilent() {
 }
 
 function wiredIntoParseAndSettings() {
-  // Both the single and batch format flows must forward the flag to /parse.
+  // Single format, batch format, and JobAdder Create Profile all parse a CV and
+  // must forward the flag to /parse so correction behaves consistently.
   const parseCalls = (html.match(/auto_correct_language:\s*getCvAutoCorrectLanguage\(\)/g) || []).length;
-  assert.ok(parseCalls >= 2, 'single and batch /parse requests both send the flag, saw ' + parseCalls);
+  assert.ok(parseCalls >= 3, 'single, batch, and create-profile /parse requests send the flag, saw ' + parseCalls);
   // Durable-key allowlist and the Settings control exist.
   assert.ok(html.includes("'cvstudio_autocorrect_language_v1':1"), 'key registered as durable');
   assert.ok(html.includes('id="cvAutoCorrectLanguageToggle"'), 'toggle control present');

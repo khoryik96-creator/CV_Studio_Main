@@ -308,7 +308,7 @@ async function runJACreateAll() {
       var parseRes = await fetchWithTimeout('/parse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ api_key: jaRoute.api_key, cv_text: cvText, model: jaRoute.model, provider: jaRoute.provider })
+        body: JSON.stringify({ api_key: jaRoute.api_key, cv_text: cvText, model: jaRoute.model, provider: jaRoute.provider, auto_correct_language: getCvAutoCorrectLanguage() })
       }, cvParseTimeoutMs(cvText));
       var parsed = await parseRes.json().catch(function(){ return {}; });
       if (!parseRes.ok || parsed.error) {
