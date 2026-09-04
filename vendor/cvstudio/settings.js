@@ -329,6 +329,15 @@ async function cvStudioVerifyDownloadDirectory(kind) {
 async function cvStudioClearDownloadDirectory(kind) {
   kind = normalizeCvDownloadDestination(kind);
   var config = cvStudioDownloadDestinationConfig(kind);
+  // Guard against an accidental click: only a currently-configured folder has
+  // anything to lose, so confirm before switching it back to browser Downloads.
+  var current = cvStudioNativeDownloadFolder(kind);
+  if (current && current.configured) {
+    var where = current.path ? ('\n\nCurrent folder:\n' + current.path) : '';
+    if (!window.confirm(config.label + ' will stop saving to its folder and use the browser Downloads folder instead.' + where + '\n\nContinue?')) {
+      return false;
+    }
+  }
   try {
     var data = await cvStudioNativeDownloadFolderRequest('DELETE', {kind:kind});
     _cvNativeDownloadFolderState.folders[kind] = data.folder;
