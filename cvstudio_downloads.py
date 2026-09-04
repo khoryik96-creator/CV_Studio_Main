@@ -630,6 +630,65 @@ class LocalDownloadService:
             self._write_state_unlocked(folders)
         return self._folder_payload(None)
 
+    def open_folder(self, kind: object) -> dict[str, object]:
+        """Open the *stored* folder for this kind in the OS file manager.
+
+        Only ever opens the path already saved for a valid download kind -- never
+        a client-supplied path -- so this cannot be used to launch arbitrary
+        locations.
+        """
+        normalized = normalize_download_kind(kind)
+        path = self._configured_path(normalized)
+        if not path:
+            raise DownloadFolderError(
+                "DOWNLOAD_FOLDER_NOT_CONFIGURED",
+                "Choose a download folder first.",
+                status=409,
+            )
+        if not os.path.isdir(path):
+            raise DownloadFolderError(
+                "DOWNLOAD_FOLDER_UNAVAILABLE",
+                "The selected download folder is no longer available. Choose it again.",
+                status=409,
+            )
+        system = self._system_name()
+        try:
+            if system == "Windows":
+                # explorer.exe returns a non-zero exit code even on success, so a
+                # raised exception -- not the return code -- is the failure signal.
+                self._run_process(
+                    ["explorer.exe", os.path.normpath(path)], timeout=15, check=False
+                )
+            elif system == "Darwin":
+                result = self._run_process(
+                    ["/usr/bin/open", path],
+                    capture_output=True,
+                    text=True,
+                    timeout=15,
+                    check=False,
+                )
+                if getattr(result, "returncode", 0):
+                    raise DownloadFolderError(
+                        "DOWNLOAD_FOLDER_OPEN_FAILED",
+                        "CV Studio could not open the download folder.",
+                        status=503,
+                    )
+            else:
+                raise DownloadFolderError(
+                    "DOWNLOAD_FOLDER_OPEN_UNSUPPORTED",
+                    "Opening the download folder is not supported on this platform.",
+                    status=501,
+                )
+        except DownloadFolderError:
+            raise
+        except (OSError, ValueError, subprocess.SubprocessError) as exc:
+            raise DownloadFolderError(
+                "DOWNLOAD_FOLDER_OPEN_FAILED",
+                "CV Studio could not open the download folder.",
+                status=503,
+            ) from exc
+        return self._folder_payload(path)
+
     def check_folder(self, kind: object) -> dict[str, object]:
         normalized = normalize_download_kind(kind)
         path = self._configured_path(normalized)

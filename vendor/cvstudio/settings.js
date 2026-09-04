@@ -326,6 +326,29 @@ async function cvStudioVerifyDownloadDirectory(kind) {
   }
 }
 
+async function cvStudioOpenDownloadDirectory(kind) {
+  kind = normalizeCvDownloadDestination(kind);
+  var config = cvStudioDownloadDestinationConfig(kind);
+  var current = cvStudioNativeDownloadFolder(kind);
+  if (!current || !current.configured) {
+    showToast(config.label + ' has no folder set — choose a folder first.', 'info');
+    return false;
+  }
+  try {
+    var data = await cvStudioNativeDownloadFolderRequest('POST', {kind:kind, action:'open'});
+    if (data && data.folder) {
+      _cvNativeDownloadFolderState.folders[kind] = data.folder;
+      _cvNativeDownloadFolderState.status_loaded = true;
+      cvStudioRenderDownloadDirectory(kind, data.folder);
+    }
+    showToast('Opened the ' + config.label + ' folder.', 'ok');
+    return true;
+  } catch(error) {
+    showToast((error && error.message) || 'Could not open the download folder.', 'err');
+    return false;
+  }
+}
+
 async function cvStudioClearDownloadDirectory(kind) {
   kind = normalizeCvDownloadDestination(kind);
   var config = cvStudioDownloadDestinationConfig(kind);

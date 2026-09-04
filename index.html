@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>CV Studio</title>
 <link rel="icon" type="image/png" href="cv_studio_logo.png?v=24.6.79-ui"/>
-<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.376">
-<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.376"></script>
+<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.377">
+<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.377"></script>
 <script>
 /* CV Studio Doctor — built-in diagnostic recorder.
  * Records JS errors, unhandled rejections, failed/slow network calls and
@@ -254,7 +254,7 @@
 <div class="app">
   <div class="header" style="position:relative;">
     <div>
-      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.376 (Offline) by The 郭 Lab</span></h1>
+      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.377 (Offline) by The 郭 Lab</span></h1>
 
     </div>
     <div class="header-tools">
@@ -655,6 +655,7 @@
             <div id="cvDownloadFormattedFolderPreview" style="font-size:10.5px;color:var(--text3);line-height:1.4;word-break:break-word;">Destination: your browser's configured Downloads folder</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <button class="kbtn" type="button" onclick="cvStudioChooseDownloadDirectory('formatted')">Choose folder</button>
+              <button class="kbtn" type="button" title="Open this folder to see the downloaded files" onclick="cvStudioOpenDownloadDirectory('formatted')">📂 Open</button>
               <button class="kbtn" type="button" onclick="cvStudioVerifyDownloadDirectory('formatted')">Check access</button>
               <button class="kbtn" type="button" onclick="cvStudioClearDownloadDirectory('formatted')">Use browser default</button>
             </div>
@@ -672,6 +673,7 @@
             <div id="cvDownloadBlindFolderPreview" style="font-size:10.5px;color:var(--text3);line-height:1.4;word-break:break-word;">Destination: your browser's configured Downloads folder</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <button class="kbtn" type="button" onclick="cvStudioChooseDownloadDirectory('blind')">Choose folder</button>
+              <button class="kbtn" type="button" title="Open this folder to see the downloaded files" onclick="cvStudioOpenDownloadDirectory('blind')">📂 Open</button>
               <button class="kbtn" type="button" onclick="cvStudioVerifyDownloadDirectory('blind')">Check access</button>
               <button class="kbtn" type="button" onclick="cvStudioClearDownloadDirectory('blind')">Use browser default</button>
             </div>
@@ -689,6 +691,7 @@
             <div id="cvDownloadCompanyProfileFolderPreview" style="font-size:10.5px;color:var(--text3);line-height:1.4;word-break:break-word;">Destination: your browser's configured Downloads folder</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <button class="kbtn" type="button" onclick="cvStudioChooseDownloadDirectory('company_profile')">Choose folder</button>
+              <button class="kbtn" type="button" title="Open this folder to see the downloaded files" onclick="cvStudioOpenDownloadDirectory('company_profile')">📂 Open</button>
               <button class="kbtn" type="button" onclick="cvStudioVerifyDownloadDirectory('company_profile')">Check access</button>
               <button class="kbtn" type="button" onclick="cvStudioClearDownloadDirectory('company_profile')">Use browser default</button>
             </div>
@@ -706,6 +709,7 @@
             <div id="cvDownloadSummaryFolderPreview" style="font-size:10.5px;color:var(--text3);line-height:1.4;word-break:break-word;">Destination: your browser's configured Downloads folder</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <button class="kbtn" type="button" onclick="cvStudioChooseDownloadDirectory('summary')">Choose folder</button>
+              <button class="kbtn" type="button" title="Open this folder to see the downloaded files" onclick="cvStudioOpenDownloadDirectory('summary')">📂 Open</button>
               <button class="kbtn" type="button" onclick="cvStudioVerifyDownloadDirectory('summary')">Check access</button>
               <button class="kbtn" type="button" onclick="cvStudioClearDownloadDirectory('summary')">Use browser default</button>
             </div>
@@ -723,6 +727,7 @@
             <div id="cvDownloadBlindJdFolderPreview" style="font-size:10.5px;color:var(--text3);line-height:1.4;word-break:break-word;">Destination: your browser's configured Downloads folder</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <button class="kbtn" type="button" onclick="cvStudioChooseDownloadDirectory('blind_jd')">Choose folder</button>
+              <button class="kbtn" type="button" title="Open this folder to see the downloaded files" onclick="cvStudioOpenDownloadDirectory('blind_jd')">📂 Open</button>
               <button class="kbtn" type="button" onclick="cvStudioVerifyDownloadDirectory('blind_jd')">Check access</button>
               <button class="kbtn" type="button" onclick="cvStudioClearDownloadDirectory('blind_jd')">Use browser default</button>
             </div>
@@ -740,6 +745,7 @@
             <div id="cvDownloadOwlFolderPreview" style="font-size:10.5px;color:var(--text3);line-height:1.4;word-break:break-word;">Destination: your browser's configured Downloads folder</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <button class="kbtn" type="button" onclick="cvStudioChooseDownloadDirectory('owl')">Choose folder</button>
+              <button class="kbtn" type="button" title="Open this folder to see the downloaded files" onclick="cvStudioOpenDownloadDirectory('owl')">📂 Open</button>
               <button class="kbtn" type="button" onclick="cvStudioVerifyDownloadDirectory('owl')">Check access</button>
               <button class="kbtn" type="button" onclick="cvStudioClearDownloadDirectory('owl')">Use browser default</button>
             </div>
@@ -2394,33 +2400,33 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
-<script src="/vendor/cvstudio/api-transport.js?v=v24.6.376"></script>
-<script src="/vendor/cvstudio/page-nav.js?v=v24.6.376"></script>
-<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.376"></script>
-<script src="/vendor/cvstudio/create-profile.js?v=v24.6.376"></script>
-<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.376"></script>
-<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.376"></script>
-<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.376"></script>
-<script src="/vendor/cvstudio/company-profile.js?v=v24.6.376"></script>
-<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.376"></script>
-<script src="/vendor/cvstudio/appearance.js?v=v24.6.376"></script>
-<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.376"></script>
-<script src="/vendor/cvstudio/docx-export.js?v=v24.6.376"></script>
-<script src="/vendor/cvstudio/the-owl.js?v=v24.6.376"></script>
-<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.376"></script>
-<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.376"></script>
-<script src="/vendor/cvstudio/settings.js?v=v24.6.376"></script>
-<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.376"></script>
-<script src="/vendor/cvstudio/tab-status.js?v=v24.6.376"></script>
-<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.376"></script>
-<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.376"></script>
-<script src="/vendor/cvstudio/cv-format.js?v=v24.6.376"></script>
-<script src="/vendor/cvstudio/locks.js?v=v24.6.376"></script>
-<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.376"></script>
-<script src="/vendor/cvstudio/ppc.js?v=v24.6.376"></script>
-<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.376"></script>
-<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.376"></script>
-<script src="/vendor/cvstudio/batch-format.js?v=v24.6.376"></script>
+<script src="/vendor/cvstudio/api-transport.js?v=v24.6.377"></script>
+<script src="/vendor/cvstudio/page-nav.js?v=v24.6.377"></script>
+<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.377"></script>
+<script src="/vendor/cvstudio/create-profile.js?v=v24.6.377"></script>
+<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.377"></script>
+<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.377"></script>
+<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.377"></script>
+<script src="/vendor/cvstudio/company-profile.js?v=v24.6.377"></script>
+<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.377"></script>
+<script src="/vendor/cvstudio/appearance.js?v=v24.6.377"></script>
+<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.377"></script>
+<script src="/vendor/cvstudio/docx-export.js?v=v24.6.377"></script>
+<script src="/vendor/cvstudio/the-owl.js?v=v24.6.377"></script>
+<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.377"></script>
+<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.377"></script>
+<script src="/vendor/cvstudio/settings.js?v=v24.6.377"></script>
+<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.377"></script>
+<script src="/vendor/cvstudio/tab-status.js?v=v24.6.377"></script>
+<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.377"></script>
+<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.377"></script>
+<script src="/vendor/cvstudio/cv-format.js?v=v24.6.377"></script>
+<script src="/vendor/cvstudio/locks.js?v=v24.6.377"></script>
+<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.377"></script>
+<script src="/vendor/cvstudio/ppc.js?v=v24.6.377"></script>
+<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.377"></script>
+<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.377"></script>
+<script src="/vendor/cvstudio/batch-format.js?v=v24.6.377"></script>
 <script>
 
 document.addEventListener('DOMContentLoaded', initPageNavPin);
@@ -2438,9 +2444,9 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 
 </script>
-<script src="/vendor/cvstudio/input-file.js?v=v24.6.376"></script>
-<script src="/vendor/cvstudio/stats.js?v=v24.6.376"></script>
-<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.376"></script>
+<script src="/vendor/cvstudio/input-file.js?v=v24.6.377"></script>
+<script src="/vendor/cvstudio/stats.js?v=v24.6.377"></script>
+<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.377"></script>
 <script>
 try { updateSummaryLockUI(); } catch(e) {}
 try { updateCvScoringLockUI(); } catch(e) {}

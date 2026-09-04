@@ -284,6 +284,51 @@ async function clearDownloadDirectoryConfirmsBeforeResetContract() {
   assert.strictEqual(deletes.length,2,'the unconfigured reset still calls through');
 }
 
+async function openDownloadDirectoryContract() {
+  const requests = [];
+  const toasts = [];
+  const context = {
+    String, Promise,
+    showToast(message, level) { toasts.push({ message, level }); },
+    _cvDownloadLastResult: {},
+    _cvNativeDownloadFolderState: { native_supported: true, folders: {
+      company_profile: { configured: true, path: 'C:\\Recruitment\\Company', available: true },
+      formatted: { configured: false, path: '', available: false },
+    } },
+    cvStudioRenderDownloadDirectory() {},
+    async cvStudioNativeDownloadFolderRequest(method, payload) {
+      requests.push({ method, payload });
+      return { ok: true, folder: { configured: true, path: 'C:\\Recruitment\\Company', available: true } };
+    },
+  };
+  loadFunctions(context, [
+    'cvStudioDownloadDestinationConfig', 'normalizeCvDownloadDestination',
+    'cvStudioNativeDownloadFolder', 'cvStudioOpenDownloadDirectory',
+  ]);
+
+  // Configured destination -> posts the 'open' action for that kind.
+  const opened = await context.cvStudioOpenDownloadDirectory('company_profile');
+  assert.strictEqual(opened, true);
+  assert.strictEqual(requests.length, 1);
+  assert.strictEqual(requests[0].method, 'POST');
+  assert.strictEqual(requests[0].payload.kind, 'company_profile');
+  assert.strictEqual(requests[0].payload.action, 'open');
+
+  // Unconfigured destination -> no request, a gentle prompt to choose a folder.
+  const noop = await context.cvStudioOpenDownloadDirectory('formatted');
+  assert.strictEqual(noop, false);
+  assert.strictEqual(requests.length, 1, 'no open request for an unconfigured folder');
+  assert.ok(toasts.some(function(t){ return /choose a folder/i.test(t.message); }));
+}
+
+function openFolderButtonsPresentOnEveryDestination() {
+  ['formatted', 'blind', 'company_profile', 'summary', 'blind_jd', 'owl'].forEach(function(kind){
+    assert.ok(
+      html.includes("cvStudioOpenDownloadDirectory('" + kind + "')"),
+      'open-folder button missing for ' + kind);
+  });
+}
+
 async function nativeSelectionAndFullPathPreviewContract() {
   const nodes={};
   function node(id){if(!nodes[id])nodes[id]={textContent:'',style:{},classList:{remove(){},toggle(){}}};return nodes[id];}
@@ -371,6 +416,8 @@ Promise.resolve()
   .then(showDownloadResultReportsBrowserFallbackContract)
   .then(nativeSelectionAndFullPathPreviewContract)
   .then(clearDownloadDirectoryConfirmsBeforeResetContract)
+  .then(openDownloadDirectoryContract)
+  .then(openFolderButtonsPresentOnEveryDestination)
   .then(batchModeContract)
   .then(staleStartupRegistrationRepairContract)
   .then(()=>console.log('CV download folder frontend fixtures passed'))
