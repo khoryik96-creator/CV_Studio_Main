@@ -68,14 +68,22 @@ function _downloadExportBlob(blob, filename) {
   a.click();
   setTimeout(function () { URL.revokeObjectURL(a.href); }, 0);
 }
+function _buildWordExport(fullHtml, stem) {
+  var name = String(stem || 'export') + '-' + new Date().toISOString().slice(0, 10);
+  if (wordExportFormat() === 'docx' && typeof htmlToDocxBlob === 'function') {
+    return {blob:htmlToDocxBlob(fullHtml), filename:name + '.docx', format:'docx'};
+  }
+  return {blob:new Blob([fullHtml], { type: 'application/msword' }), filename:name + '.doc', format:'doc'};
+}
 // Export a Word document from the export-shell HTML, honouring the toggle.
 // `stem` excludes the trailing date + extension. Returns 'doc' | 'docx'.
 function exportWordDocument(fullHtml, stem) {
-  var name = String(stem || 'export') + '-' + new Date().toISOString().slice(0, 10);
-  if (wordExportFormat() === 'docx' && typeof htmlToDocxBlob === 'function') {
-    _downloadExportBlob(htmlToDocxBlob(fullHtml), name + '.docx');
-    return 'docx';
-  }
-  _downloadExportBlob(new Blob([fullHtml], { type: 'application/msword' }), name + '.doc');
-  return 'doc';
+  var output = _buildWordExport(fullHtml, stem);
+  _downloadExportBlob(output.blob, output.filename);
+  return output.format;
+}
+async function exportWordDocumentToDestination(fullHtml, stem, kind) {
+  var output = _buildWordExport(fullHtml, stem);
+  var result = await cvStudioSaveDownloadBlob(output.blob, output.filename, kind);
+  return {format:output.format, result:result};
 }

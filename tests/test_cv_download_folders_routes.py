@@ -5,6 +5,8 @@ import tempfile
 import unittest
 import zipfile
 
+from pypdf import PdfWriter
+
 from owner_build_tools.build_protected import write_test_receipt
 
 
@@ -31,6 +33,14 @@ def _docx_bytes():
     with zipfile.ZipFile(payload, "w", zipfile.ZIP_STORED) as archive:
         archive.writestr("[Content_Types].xml", "<Types/>")
         archive.writestr("word/document.xml", "<document/>")
+    return payload.getvalue()
+
+
+def _pdf_bytes():
+    payload = io.BytesIO()
+    writer = PdfWriter()
+    writer.add_blank_page(width=612, height=792)
+    writer.write(payload)
     return payload.getvalue()
 
 
@@ -171,6 +181,27 @@ class CvDownloadFolderRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.get_json()["code"], "DOWNLOAD_FILE_INVALID")
         self.assertEqual(list(self.folder.iterdir()), [])
+
+    def test_company_profile_pdf_uses_its_own_configured_destination(self):
+        self.service._write_state_unlocked({"company_profile": str(self.folder)})
+        generated = _pdf_bytes()
+
+        saved = self.client.post(
+            "/downloads/save",
+            data={
+                "kind": "company_profile",
+                "filename": "Company Profile.pdf",
+                "file": (io.BytesIO(generated), "Company Profile.pdf"),
+            },
+            headers=self._headers("download-route-company-pdf"),
+            content_type="multipart/form-data",
+        )
+
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(
+            saved.get_json()["path"], str(self.folder / "Company Profile.pdf")
+        )
+        self.assertEqual((self.folder / "Company Profile.pdf").read_bytes(), generated)
 
 
 if __name__ == "__main__":

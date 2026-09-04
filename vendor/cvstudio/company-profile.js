@@ -1,5 +1,5 @@
 // ── Company Profile Export ────────────────────────────────────────────
-function exportCompanyDoc() {
+async function exportCompanyDoc() {
   var p = window._lastCompanyProfile;
   if (!p) { showToast('Generate a profile first', 'err'); return; }
   function arr(v) { return Array.isArray(v) ? v : (v ? [String(v)] : []); }
@@ -31,11 +31,11 @@ function exportCompanyDoc() {
     + (arr(p.tech_stack).length ? '<h2>Tech Stack</h2><p>'+arr(p.tech_stack).map(function(t){return '<span class="chip">'+_escDoc(t)+'</span>';}).join(' ')+'</p>' : '')
     + (arr(p.why_join).length ? '<div class="callout"><h2 style="margin-top:0;border-bottom:0;padding-bottom:0">Why Join</h2><ul>'+arr(p.why_join).map(function(b){return '<li>'+_escDoc(b)+'</li>';}).join('')+'</ul></div>' : '');
   var html = _wordDocShell(p.company_name||'Company Profile', meta||'Hyppies', body);
-  var fmt = exportWordDocument(html, 'company-profile-'+_safeFileStem(p.company_name));
-  showToast('Word .' + fmt + ' exported!', 'ok');
+  var output = await exportWordDocumentToDestination(html, 'company-profile-'+_safeFileStem(p.company_name), 'company_profile');
+  cvStudioShowDownloadResult(output.result, 'Company Profile Word .' + output.format);
 }
 
-function exportCompanyPDF() {
+async function exportCompanyPDF() {
   var p = window._lastCompanyProfile;
   if (!p) { showToast('Generate a profile first', 'err'); return; }
   if (!(window.jspdf && window.jspdf.jsPDF)) {
@@ -116,8 +116,9 @@ function exportCompanyPDF() {
 
   var total=doc.internal.getNumberOfPages();
   for(var pg=1;pg<=total;pg++){doc.setPage(pg);doc.setDrawColor(...C.hairline);doc.setLineWidth(0.25);doc.line(margin,284,pageW-margin,284);doc.setFont('helvetica','normal');doc.setFontSize(7.5);doc.setTextColor(...C.dim);doc.text('Hyppies  |  Confidential  |  For candidate use only',margin,290);doc.text('Page '+pg+' of '+total,pageW-margin,290,{align:'right'});}
-  doc.save('company-profile-'+_safeFileStem(p.company_name)+'-'+new Date().toISOString().slice(0,10)+'.pdf');
-  showToast('PDF exported!', 'ok');
+  var filename = 'company-profile-'+_safeFileStem(p.company_name)+'-'+new Date().toISOString().slice(0,10)+'.pdf';
+  var result = await cvStudioSaveDownloadBlob(doc.output('blob'), filename, 'company_profile');
+  cvStudioShowDownloadResult(result, 'Company Profile PDF');
 }
 
 // ── Company Profile Tab ───────────────────────────────────────────────

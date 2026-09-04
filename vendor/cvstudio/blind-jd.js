@@ -748,7 +748,7 @@ function renderAnonJDCard(j) {
 }
 
 // ── Blind JD Export ─────────────────────────────────────────────
-function exportAnonJDDoc() {
+async function exportAnonJDDoc() {
   var j = window._lastAnonJD;
   if (!j) { showToast('Generate Blind JD first', 'err'); return; }
   function arr(v) { return Array.isArray(v) ? v : (v ? [String(v)] : []); }
@@ -781,11 +781,11 @@ function exportAnonJDDoc() {
     body += '<h2>Alternative Job Titles</h2><p>' + arr(j.alt_titles).map(function(t){ return '<span class="chip">' + _escDoc(String(t).trim()) + '</span>'; }).join(' ') + '</p>';
   }
   var html = _wordDocShell(j.job_title || 'Role Brief', 'Hyppies', body);
-  var fmt = exportWordDocument(html, 'blind-jd-' + _safeFileStem(j.job_title));
-  showToast('Word .' + fmt + ' exported!', 'ok');
+  var output = await exportWordDocumentToDestination(html, 'blind-jd-' + _safeFileStem(j.job_title), 'blind_jd');
+  cvStudioShowDownloadResult(output.result, 'Blind JD Word .' + output.format);
 }
 
-function exportAnonJDPDF() {
+async function exportAnonJDPDF() {
   var j = window._lastAnonJD;
   if (!j) { showToast('Generate Blind JD first', 'err'); return; }
   if (!(window.jspdf && window.jspdf.jsPDF)) {
@@ -866,6 +866,7 @@ function exportAnonJDPDF() {
 
   var total=doc.internal.getNumberOfPages();
   for(var pg=1;pg<=total;pg++){ doc.setPage(pg); doc.setDrawColor(...C.hairline); doc.setLineWidth(0.25); doc.line(margin,284,pageW-margin,284); doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(...C.dim); doc.text('Hyppies  |  Confidential  |  For candidate use only',margin,290); doc.text('Page '+pg+' of '+total,pageW-margin,290,{align:'right'}); }
-  doc.save('blind-jd-'+_safeFileStem(j.job_title)+'-'+new Date().toISOString().slice(0,10)+'.pdf');
-  showToast('PDF exported!', 'ok');
+  var filename = 'blind-jd-'+_safeFileStem(j.job_title)+'-'+new Date().toISOString().slice(0,10)+'.pdf';
+  var result = await cvStudioSaveDownloadBlob(doc.output('blob'), filename, 'blind_jd');
+  cvStudioShowDownloadResult(result, 'Blind JD PDF');
 }

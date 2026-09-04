@@ -1,4 +1,4 @@
-"""Native local download-folder service for generated CV documents.
+"""Native local download-folder service for generated CV Studio files.
 
 Browser download APIs cannot reliably write to an arbitrary folder in every
 embedded Chromium host.  This service keeps the chosen folders in CV Studio's
@@ -8,8 +8,10 @@ Python process.  It is deliberately independent of Flask and ``app.py``.
 
 from __future__ import annotations
 
+import base64
 import ctypes
 import errno
+from html.parser import HTMLParser
 import json
 import os
 from pathlib import Path
@@ -22,13 +24,175 @@ from typing import BinaryIO, Callable
 import zipfile
 
 
-DOWNLOAD_KINDS = ("formatted", "blind")
+DOWNLOAD_ALLOWED_EXTENSIONS = {
+    "formatted": frozenset({".docx"}),
+    "blind": frozenset({".docx"}),
+    "company_profile": frozenset({".doc", ".docx", ".pdf"}),
+    "summary": frozenset({".docx"}),
+    "blind_jd": frozenset({".doc", ".docx", ".pdf"}),
+    "owl": frozenset({".doc", ".docx", ".pdf"}),
+}
+DOWNLOAD_KINDS = tuple(DOWNLOAD_ALLOWED_EXTENSIONS)
 MAX_DOWNLOAD_BYTES = 80 * 1024 * 1024
 _WINDOWS_RESERVED_STEM_RE = re.compile(
     r"^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])$", re.IGNORECASE
 )
 _UNSAFE_FILENAME_RE = re.compile(r'[\\/\x00-\x1f<>:"|?*]')
 _DARWIN_RENAME_EXCL = 0x00000004
+_HTML_VOID_ELEMENTS = frozenset(
+    {
+        "area",
+        "base",
+        "br",
+        "col",
+        "embed",
+        "hr",
+        "img",
+        "input",
+        "link",
+        "meta",
+        "param",
+        "source",
+        "track",
+        "wbr",
+    }
+)
+
+_WINDOWS_FOLDER_PICKER_SCRIPT = r'''Add-Type -AssemblyName System.Windows.Forms
+$source = @"
+using System;
+using System.IO;
+using System.Runtime.InteropServices;
+
+namespace CVStudio {
+    [Flags]
+    internal enum FileOpenOptions : uint {
+        FOS_PICKFOLDERS = 0x00000020,
+        FOS_FORCEFILESYSTEM = 0x00000040,
+        FOS_PATHMUSTEXIST = 0x00000800,
+        FOS_DONTADDTORECENT = 0x02000000
+    }
+
+    internal enum Sigdn : uint {
+        SIGDN_FILESYSPATH = 0x80058000
+    }
+
+    [ComImport]
+    [Guid("DC1C5A9C-E88A-4DDE-A5A1-60F82A20AEF7")]
+    internal class FileOpenDialogCom { }
+
+    [ComImport]
+    [Guid("42F85136-DB7E-439C-85F1-E4075D135FC8")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IFileDialog {
+        [PreserveSig] int Show(IntPtr parent);
+        void SetFileTypes(uint count, IntPtr filterSpec);
+        void SetFileTypeIndex(uint index);
+        void GetFileTypeIndex(out uint index);
+        void Advise(IntPtr events, out uint cookie);
+        void Unadvise(uint cookie);
+        void SetOptions(FileOpenOptions options);
+        void GetOptions(out FileOpenOptions options);
+        void SetDefaultFolder(IShellItem item);
+        void SetFolder(IShellItem item);
+        void GetFolder(out IShellItem item);
+        void GetCurrentSelection(out IShellItem item);
+        void SetFileName([MarshalAs(UnmanagedType.LPWStr)] string name);
+        void GetFileName([MarshalAs(UnmanagedType.LPWStr)] out string name);
+        void SetTitle([MarshalAs(UnmanagedType.LPWStr)] string title);
+        void SetOkButtonLabel([MarshalAs(UnmanagedType.LPWStr)] string text);
+        void SetFileNameLabel([MarshalAs(UnmanagedType.LPWStr)] string label);
+        void GetResult(out IShellItem item);
+        void AddPlace(IShellItem item, int alignment);
+        void SetDefaultExtension([MarshalAs(UnmanagedType.LPWStr)] string extension);
+        void Close(int result);
+        void SetClientGuid(ref Guid guid);
+        void ClearClientData();
+        void SetFilter(IntPtr filter);
+    }
+
+    [ComImport]
+    [Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IShellItem {
+        void BindToHandler(IntPtr bindContext, ref Guid handler, ref Guid iid, out IntPtr result);
+        void GetParent(out IShellItem parent);
+        void GetDisplayName(Sigdn name, out IntPtr value);
+        void GetAttributes(uint mask, out uint attributes);
+        void Compare(IShellItem item, uint hint, out int order);
+    }
+
+    public static class NativeFolderPicker {
+        [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
+        private static extern void SHCreateItemFromParsingName(
+            [MarshalAs(UnmanagedType.LPWStr)] string path,
+            IntPtr bindContext,
+            ref Guid iid,
+            [MarshalAs(UnmanagedType.Interface)] out IShellItem item);
+
+        public static string Pick(IntPtr owner, string initialPath) {
+            IFileDialog dialog = null;
+            IShellItem result = null;
+            try {
+                dialog = (IFileDialog)new FileOpenDialogCom();
+                FileOpenOptions options;
+                dialog.GetOptions(out options);
+                dialog.SetOptions(options
+                    | FileOpenOptions.FOS_PICKFOLDERS
+                    | FileOpenOptions.FOS_FORCEFILESYSTEM
+                    | FileOpenOptions.FOS_PATHMUSTEXIST
+                    | FileOpenOptions.FOS_DONTADDTORECENT);
+                dialog.SetTitle("Choose where CV Studio saves generated files");
+                dialog.SetOkButtonLabel("Select Folder");
+
+                if (!String.IsNullOrWhiteSpace(initialPath) && Directory.Exists(initialPath)) {
+                    IShellItem initial = null;
+                    try {
+                        Guid shellItemId = new Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE");
+                        SHCreateItemFromParsingName(initialPath, IntPtr.Zero, ref shellItemId, out initial);
+                        dialog.SetFolder(initial);
+                    } catch { }
+                    finally {
+                        if (initial != null) Marshal.FinalReleaseComObject(initial);
+                    }
+                }
+
+                int status = dialog.Show(owner);
+                if (status == unchecked((int)0x800704C7)) return null;
+                if (status != 0) Marshal.ThrowExceptionForHR(status);
+                dialog.GetResult(out result);
+                IntPtr rawPath;
+                result.GetDisplayName(Sigdn.SIGDN_FILESYSPATH, out rawPath);
+                try { return Marshal.PtrToStringUni(rawPath); }
+                finally { Marshal.FreeCoTaskMem(rawPath); }
+            } finally {
+                if (result != null) Marshal.FinalReleaseComObject(result);
+                if (dialog != null) Marshal.FinalReleaseComObject(dialog);
+            }
+        }
+    }
+}
+"@
+Add-Type -TypeDefinition $source -Language CSharp
+$owner = New-Object System.Windows.Forms.Form
+$owner.TopMost = $true
+$owner.ShowInTaskbar = $false
+$owner.StartPosition = 'CenterScreen'
+$owner.Size = New-Object System.Drawing.Size(1, 1)
+$owner.Opacity = 0
+$selected = $null
+try {
+    $owner.Show()
+    $selected = [CVStudio.NativeFolderPicker]::Pick($owner.Handle, $env:CVSTUDIO_PICKER_INITIAL)
+} finally {
+    $owner.Close()
+    $owner.Dispose()
+}
+if ([String]::IsNullOrWhiteSpace($selected)) { exit 2 }
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+[Console]::Out.Write($selected)
+exit 0
+'''
 
 
 class DownloadFolderError(RuntimeError):
@@ -41,12 +205,84 @@ class DownloadFolderError(RuntimeError):
         self.status = int(status)
 
 
+class _GeneratedHtmlDocValidator(HTMLParser):
+    """Require the complete, balanced HTML document CV Studio generates."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.stack: list[str] = []
+        self.seen_html = False
+        self.seen_head = False
+        self.seen_body = False
+        self.closed_html = False
+        self.invalid = False
+
+    def handle_decl(self, declaration: str) -> None:
+        if self.seen_html or str(declaration or "").strip().lower() != "doctype html":
+            self.invalid = True
+
+    def unknown_decl(self, _data: str) -> None:
+        self.invalid = True
+
+    def handle_starttag(self, tag: str, _attrs) -> None:
+        name = str(tag or "").lower()
+        if self.closed_html:
+            self.invalid = True
+            return
+        if not self.seen_html:
+            if name != "html":
+                self.invalid = True
+                return
+            self.seen_html = True
+        elif name == "html":
+            self.invalid = True
+            return
+        if name == "head":
+            if self.seen_head or self.stack != ["html"]:
+                self.invalid = True
+            self.seen_head = True
+        elif name == "body":
+            if self.seen_body or self.stack != ["html"]:
+                self.invalid = True
+            self.seen_body = True
+        if name not in _HTML_VOID_ELEMENTS:
+            self.stack.append(name)
+
+    def handle_startendtag(self, tag: str, attrs) -> None:
+        name = str(tag or "").lower()
+        self.handle_starttag(name, attrs)
+        if name not in _HTML_VOID_ELEMENTS:
+            self.handle_endtag(name)
+
+    def handle_endtag(self, tag: str) -> None:
+        name = str(tag or "").lower()
+        if name in _HTML_VOID_ELEMENTS or not self.stack or self.stack[-1] != name:
+            self.invalid = True
+            return
+        self.stack.pop()
+        if name == "html":
+            self.closed_html = True
+
+    def handle_data(self, data: str) -> None:
+        if str(data or "").strip() and (not self.seen_html or self.closed_html):
+            self.invalid = True
+
+    def complete(self) -> bool:
+        return bool(
+            not self.invalid
+            and self.seen_html
+            and self.seen_body
+            and self.closed_html
+            and not self.stack
+        )
+
+
 def normalize_download_kind(kind: object) -> str:
     value = str(kind or "").strip().lower()
     if value not in DOWNLOAD_KINDS:
         raise DownloadFolderError(
             "DOWNLOAD_KIND_INVALID",
-            "Choose either the Formatted CV or Blind CV download folder.",
+            "Choose a supported CV Studio download folder.",
         )
     return value
 
@@ -115,8 +351,93 @@ def _publish_file_no_replace(staged_path: Path, destination: Path) -> None:
     os.link(staged_path, destination)
 
 
+def _validate_staged_download(path: Path, extension: str, prefix: bytes) -> None:
+    """Validate each generated file type before its final name is exposed."""
+    invalid_message = "The generated download file is invalid."
+    if extension == ".docx":
+        if not prefix.startswith(b"PK\x03\x04"):
+            raise DownloadFolderError("DOWNLOAD_FILE_INVALID", invalid_message)
+        try:
+            with zipfile.ZipFile(path, "r") as archive:
+                names = set(archive.namelist())
+                required = {"[Content_Types].xml", "word/document.xml"}
+                if not required.issubset(names):
+                    raise zipfile.BadZipFile("required DOCX parts are missing")
+        except (OSError, zipfile.BadZipFile, zipfile.LargeZipFile) as exc:
+            raise DownloadFolderError(
+                "DOWNLOAD_FILE_INVALID", invalid_message
+            ) from exc
+        return
+    if extension == ".pdf":
+        if not prefix.startswith(b"%PDF-"):
+            raise DownloadFolderError("DOWNLOAD_FILE_INVALID", invalid_message)
+        document = None
+        try:
+            with path.open("rb") as handle:
+                handle.seek(0, os.SEEK_END)
+                size = handle.tell()
+                handle.seek(max(0, size - 4096), os.SEEK_SET)
+                trailer = handle.read()
+            if not re.search(rb"startxref\s+\d+\s+%%EOF\s*$", trailer):
+                raise ValueError("generated PDF trailer is incomplete")
+            import pypdfium2 as pdfium
+
+            document = pdfium.PdfDocument(str(path))
+            if len(document) < 1:
+                raise ValueError("generated PDF contains no pages")
+            for index in range(len(document)):
+                page = document[index]
+                text_page = None
+                try:
+                    width, height = page.get_size()
+                    if width <= 0 or height <= 0:
+                        raise ValueError("generated PDF page has invalid dimensions")
+                    text_page = page.get_textpage()
+                finally:
+                    if text_page is not None:
+                        text_page.close()
+                    page.close()
+        except (ImportError, OSError, RuntimeError, ValueError, TypeError) as exc:
+            raise DownloadFolderError(
+                "DOWNLOAD_FILE_INVALID", invalid_message
+            ) from exc
+        finally:
+            if document is not None:
+                try:
+                    document.close()
+                except Exception:
+                    # cleanup-only: validation success/failure remains authoritative
+                    pass
+        return
+    if extension == ".doc":
+        html_prefix = prefix.lstrip(b"\xef\xbb\xbf\x00\t\r\n ").lower()
+        if not (
+            html_prefix.startswith(b"<html")
+            or html_prefix.startswith(b"<!doctype html")
+        ):
+            raise DownloadFolderError("DOWNLOAD_FILE_INVALID", invalid_message)
+        try:
+            document = path.read_bytes().decode("utf-8-sig")
+            if "\x00" in document:
+                raise ValueError("generated HTML document contains NUL bytes")
+            validator = _GeneratedHtmlDocValidator()
+            validator.feed(document)
+            validator.close()
+            if not validator.complete():
+                raise ValueError("generated HTML document is incomplete")
+        except (OSError, UnicodeError, ValueError) as exc:
+            raise DownloadFolderError(
+                "DOWNLOAD_FILE_INVALID", invalid_message
+            ) from exc
+        return
+    raise DownloadFolderError(
+        "DOWNLOAD_FILE_TYPE_INVALID",
+        "This file type is not supported for the selected download folder.",
+    )
+
+
 class LocalDownloadService:
-    """Persist two local folders and save generated DOCX files safely."""
+    """Persist local output folders and save generated files safely."""
 
     def __init__(
         self,
@@ -362,10 +683,11 @@ class LocalDownloadService:
                 status=409,
             )
         safe_name = safe_download_filename(filename)
-        if not safe_name.lower().endswith(".docx"):
+        extension = Path(safe_name).suffix.lower()
+        if extension not in DOWNLOAD_ALLOWED_EXTENSIONS[normalized]:
             raise DownloadFolderError(
                 "DOWNLOAD_FILE_TYPE_INVALID",
-                "Only generated CV Word files can use a configured download folder.",
+                "This file type is not supported for the selected download folder.",
             )
         destination = None
         staged_path = None
@@ -373,7 +695,7 @@ class LocalDownloadService:
         try:
             staged_path, handle = self._open_staged_destination(Path(folder))
             total = 0
-            signature = bytearray()
+            prefix = bytearray()
             while True:
                 chunk = stream.read(1024 * 1024)
                 if not chunk:
@@ -381,43 +703,28 @@ class LocalDownloadService:
                 if not isinstance(chunk, (bytes, bytearray)):
                     raise DownloadFolderError(
                         "DOWNLOAD_FILE_INVALID",
-                        "The generated CV Word file is invalid.",
+                        "The generated download file is invalid.",
                     )
-                if len(signature) < 4:
-                    signature.extend(chunk[: 4 - len(signature)])
+                if len(prefix) < 8192:
+                    prefix.extend(chunk[: 8192 - len(prefix)])
                 total += len(chunk)
                 if total > int(maximum_bytes):
                     raise DownloadFolderError(
                         "DOWNLOAD_FILE_TOO_LARGE",
-                        "The generated CV is too large to save.",
+                        "The generated file is too large to save.",
                         status=413,
                     )
                 handle.write(chunk)
             if total == 0:
                 raise DownloadFolderError(
                     "DOWNLOAD_FILE_EMPTY",
-                    "The generated CV Word file is empty.",
-                )
-            if bytes(signature) != b"PK\x03\x04":
-                raise DownloadFolderError(
-                    "DOWNLOAD_FILE_INVALID",
-                    "The generated CV Word file is invalid.",
+                    "The generated download file is empty.",
                 )
             handle.flush()
             os.fsync(handle.fileno())
             handle.close()
             handle = None
-            try:
-                with zipfile.ZipFile(staged_path, "r") as archive:
-                    names = set(archive.namelist())
-                    required = {"[Content_Types].xml", "word/document.xml"}
-                    if not required.issubset(names):
-                        raise zipfile.BadZipFile("required DOCX parts are missing")
-            except (OSError, zipfile.BadZipFile, zipfile.LargeZipFile) as exc:
-                raise DownloadFolderError(
-                    "DOWNLOAD_FILE_INVALID",
-                    "The generated CV Word file is invalid.",
-                ) from exc
+            _validate_staged_download(staged_path, extension, bytes(prefix))
             destination = self._publish_staged_destination(
                 Path(folder), safe_name, staged_path
             )
@@ -427,7 +734,7 @@ class LocalDownloadService:
         except OSError as exc:
             raise DownloadFolderError(
                 "DOWNLOAD_SAVE_FAILED",
-                "CV Studio could not write the generated CV to the selected folder.",
+                "CV Studio could not write the generated file to the selected folder.",
                 status=503,
             ) from exc
         finally:
@@ -472,7 +779,7 @@ class LocalDownloadService:
         except OSError as exc:
             raise DownloadFolderError(
                 "DOWNLOAD_SAVE_FAILED",
-                "CV Studio could not write the generated CV to the selected folder.",
+                "CV Studio could not write the generated file to the selected folder.",
                 status=503,
             ) from exc
 
@@ -516,21 +823,9 @@ class LocalDownloadService:
     def _choose_folder_native(self, initial_path: str) -> str | None:
         system = self._system_name()
         if system == "Windows":
-            script = (
-                "Add-Type -AssemblyName System.Windows.Forms;"
-                "$dialog=New-Object System.Windows.Forms.FolderBrowserDialog;"
-                "$dialog.Description='Choose where CV Studio saves generated CVs';"
-                "if($env:CVSTUDIO_PICKER_INITIAL -and (Test-Path -LiteralPath $env:CVSTUDIO_PICKER_INITIAL)){"
-                "$dialog.SelectedPath=$env:CVSTUDIO_PICKER_INITIAL};"
-                "$owner=New-Object System.Windows.Forms.Form;"
-                "$owner.TopMost=$true;$owner.ShowInTaskbar=$false;"
-                "$owner.StartPosition='CenterScreen';$owner.Size=New-Object System.Drawing.Size(1,1);"
-                "$owner.Opacity=0;$owner.Show();"
-                "$result=$dialog.ShowDialog($owner);$owner.Close();"
-                "if($result -eq [System.Windows.Forms.DialogResult]::OK){"
-                "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8;"
-                "[Console]::Out.Write($dialog.SelectedPath);exit 0};exit 2"
-            )
+            encoded_script = base64.b64encode(
+                _WINDOWS_FOLDER_PICKER_SCRIPT.encode("utf-16-le")
+            ).decode("ascii")
             env = os.environ.copy()
             env["CVSTUDIO_PICKER_INITIAL"] = initial_path
             kwargs = {
@@ -554,13 +849,13 @@ class LocalDownloadService:
                     "-STA",
                     "-WindowStyle",
                     "Hidden",
-                    "-Command",
-                    script,
+                    "-EncodedCommand",
+                    encoded_script,
                 ],
                 **kwargs,
             )
         elif system == "Darwin":
-            prompt = 'choose folder with prompt "Choose where CV Studio saves generated CVs"'
+            prompt = 'choose folder with prompt "Choose where CV Studio saves generated files"'
             process = self._run_picker_process(
                 ["/usr/bin/osascript", "-e", "POSIX path of ({})".format(prompt)],
                 capture_output=True,
@@ -596,6 +891,7 @@ class LocalDownloadService:
 
 __all__ = [
     "DOWNLOAD_KINDS",
+    "DOWNLOAD_ALLOWED_EXTENSIONS",
     "DownloadFolderError",
     "LocalDownloadService",
     "MAX_DOWNLOAD_BYTES",

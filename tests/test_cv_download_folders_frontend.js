@@ -40,12 +40,20 @@ function markupAndWiringContract() {
   assert.ok(html.includes('id="cvDownloadBlindFolderName"'));
   assert.ok(html.includes('id="cvDownloadFormattedFolderPreview"'));
   assert.ok(html.includes('id="cvDownloadBlindFolderPreview"'));
+  assert.ok(html.includes('id="cvDownloadCompanyProfileFolderPreview"'));
+  assert.ok(html.includes('id="cvDownloadSummaryFolderPreview"'));
+  assert.ok(html.includes('id="cvDownloadBlindJdFolderPreview"'));
+  assert.ok(html.includes('id="cvDownloadOwlFolderPreview"'));
   assert.ok(html.includes("cvStudioChooseDownloadDirectory('formatted')"));
   assert.ok(html.includes("cvStudioChooseDownloadDirectory('blind')"));
   assert.ok(html.includes("cvStudioVerifyDownloadDirectory('formatted')"));
   assert.ok(html.includes("cvStudioVerifyDownloadDirectory('blind')"));
+  assert.ok(html.includes("cvStudioChooseDownloadDirectory('company_profile')"));
+  assert.ok(html.includes("cvStudioChooseDownloadDirectory('summary')"));
+  assert.ok(html.includes("cvStudioChooseDownloadDirectory('blind_jd')"));
+  assert.ok(html.includes("cvStudioChooseDownloadDirectory('owl')"));
   assert.ok(html.includes("CV Studio's private local runtime state"));
-  assert.ok(html.includes('The same folder can be used for both'));
+  assert.ok(html.includes('The same folder can be used for any or all destinations'));
   assert.ok(!html.includes('browsers expose only the selected folder name'));
 
   const showSettings = functionSource(html, 'showSettingsTab');
@@ -66,6 +74,30 @@ function markupAndWiringContract() {
   assert.ok(batchOne.includes('result.uncertain'));
   assert.ok(batchAll.includes('cvStudioPrepareDownloadDestination'));
   assert.ok(batchAll.includes('uncertainCount'));
+
+  const summary = functionSource(html, 'applySummaryToUploadedDocx');
+  const companyWord = functionSource(html, 'exportCompanyDoc');
+  const companyPdf = functionSource(html, 'exportCompanyPDF');
+  const blindJdWord = functionSource(html, 'exportAnonJDDoc');
+  const blindJdPdf = functionSource(html, 'exportAnonJDPDF');
+  const owlWord = functionSource(html, 'exportTheOwlWord');
+  const owlPdf = functionSource(html, 'exportTheOwlPDF');
+  // Summary DOCX routes through the Summary Output folder (this feature) while
+  // still honouring the anonymized filename introduced by the anonymization work.
+  assert.ok(summary.includes("cvStudioSaveDownloadBlob(blob, summaryName, 'summary')"));
+  assert.ok(summary.includes("_summaryGeneratedAnonymized === true ? ' - Anonymized Summary.docx' : ' - Summary.docx'"));
+  assert.ok(companyWord.includes("'company_profile'"));
+  assert.ok(companyPdf.includes("doc.output('blob')"));
+  assert.ok(companyPdf.includes("'company_profile'"));
+  assert.ok(!companyPdf.includes('doc.save('));
+  assert.ok(blindJdWord.includes("'blind_jd'"));
+  assert.ok(blindJdPdf.includes("doc.output('blob')"));
+  assert.ok(blindJdPdf.includes("'blind_jd'"));
+  assert.ok(!blindJdPdf.includes('doc.save('));
+  assert.ok(owlWord.includes("'owl'"));
+  assert.ok(owlPdf.includes("doc.output('blob')"));
+  assert.ok(owlPdf.includes("'owl'"));
+  assert.ok(!owlPdf.includes('doc.save('));
 }
 
 function filenameSafetyContract() {
@@ -106,7 +138,7 @@ async function nativeFolderSaveAndFallbackContract() {
     },
   };
   loadFunctions(context,[
-    'normalizeCvDownloadDestination','cvStudioSafeDownloadFilename','cvStudioFallbackDownloadBlob',
+    'cvStudioDownloadDestinationConfig','normalizeCvDownloadDestination','cvStudioSafeDownloadFilename','cvStudioFallbackDownloadBlob',
     'cvStudioNativeDownloadFolder','cvStudioLoadDownloadFolderState',
     'cvStudioPrepareDownloadDestination','cvStudioSaveDownloadBlob',
   ]);
@@ -154,7 +186,7 @@ async function folderStatusFailureStopsBrowserFallbackContract() {
     async fetch(){throw new Error('Folder status unavailable');},
   };
   loadFunctions(context,[
-    'normalizeCvDownloadDestination','cvStudioSafeDownloadFilename','cvStudioFallbackDownloadBlob',
+    'cvStudioDownloadDestinationConfig','normalizeCvDownloadDestination','cvStudioSafeDownloadFilename','cvStudioFallbackDownloadBlob',
     'cvStudioNativeDownloadFolder','cvStudioLoadDownloadFolderState',
     'cvStudioPrepareDownloadDestination','cvStudioSaveDownloadBlob',
   ]);
@@ -173,23 +205,24 @@ async function nativeSelectionAndFullPathPreviewContract() {
     String,Promise,document:{getElementById:node},
     showToast(message,level){toasts.push({message,level});},
     _cvDownloadLastResult:{},
-    _cvNativeDownloadFolderState:{native_supported:true,folders:{formatted:null,blind:null}},
+    _cvNativeDownloadFolderState:{native_supported:true,folders:{formatted:null,blind:null,company_profile:null,summary:null,blind_jd:null,owl:null}},
     async cvStudioNativeDownloadFolderRequest(){return {ok:true,folder:{configured:true,path:'C:\\Recruitment\\CVs',available:true,writable:true}};},
   };
   loadFunctions(context,[
-    'normalizeCvDownloadDestination','cvStudioRenderDownloadDestination',
+    'cvStudioDownloadDestinationConfig','normalizeCvDownloadDestination','cvStudioRenderDownloadDestination',
     'cvStudioRenderDownloadDirectory','cvStudioChooseDownloadDirectory',
   ]);
-  const chosen=await context.cvStudioChooseDownloadDirectory('formatted');
+  const chosen=await context.cvStudioChooseDownloadDirectory('company_profile');
   assert.strictEqual(chosen,true);
-  assert.strictEqual(nodes.cvDownloadFormattedFolderName.textContent,'C:\\Recruitment\\CVs');
-  assert.strictEqual(nodes.cvDownloadFormattedFolderPreview.textContent,'Destination: C:\\Recruitment\\CVs');
-  assert.strictEqual(nodes.cvDownloadFormattedFolderAccess.textContent,'Configured');
+  assert.strictEqual(nodes.cvDownloadCompanyProfileFolderName.textContent,'C:\\Recruitment\\CVs');
+  assert.strictEqual(nodes.cvDownloadCompanyProfileFolderPreview.textContent,'Destination: C:\\Recruitment\\CVs');
+  assert.strictEqual(nodes.cvDownloadCompanyProfileFolderAccess.textContent,'Configured');
+  assert.ok(toasts[0].message.includes('Company Profile'));
   assert.ok(toasts[0].message.includes('C:\\Recruitment\\CVs'));
 
-  context._cvDownloadLastResult.formatted={method:'folder',path:'C:\\Recruitment\\CVs\\Hyppies CV.docx'};
-  context.cvStudioRenderDownloadDestination('formatted',{configured:true,path:'C:\\Recruitment\\CVs',available:true});
-  assert.strictEqual(nodes.cvDownloadFormattedFolderPreview.textContent,'Last saved: C:\\Recruitment\\CVs\\Hyppies CV.docx');
+  context._cvDownloadLastResult.company_profile={method:'folder',path:'C:\\Recruitment\\CVs\\Company.pdf'};
+  context.cvStudioRenderDownloadDestination('company_profile',{configured:true,path:'C:\\Recruitment\\CVs',available:true});
+  assert.strictEqual(nodes.cvDownloadCompanyProfileFolderPreview.textContent,'Last saved: C:\\Recruitment\\CVs\\Company.pdf');
 }
 
 async function batchModeContract() {

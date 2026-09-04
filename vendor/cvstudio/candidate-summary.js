@@ -161,15 +161,9 @@ async function applySummaryToUploadedDocx() {
     }
     var blob = await response.blob();
     var base = String(file.name || 'Hyppies CV.docx').replace(/\.docx$/i, '');
-    var url = URL.createObjectURL(blob);
-    var link = document.createElement('a');
-    link.href = url;
-    link.download = base + (window._summaryGeneratedAnonymized === true ? ' - Anonymized Summary.docx' : ' - Summary.docx');
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
-    showToast('Summary placeholder filled in the uploaded DOCX', 'ok');
+    var summaryName = base + (window._summaryGeneratedAnonymized === true ? ' - Anonymized Summary.docx' : ' - Summary.docx');
+    var result = await cvStudioSaveDownloadBlob(blob, summaryName, 'summary');
+    cvStudioShowDownloadResult(result, 'Summary output');
   } catch(e) {
     showToast('DOCX Summary failed: ' + (e.message || 'Unknown error'), 'err');
   } finally {
