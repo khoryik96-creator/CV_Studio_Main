@@ -146,13 +146,18 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 7. Recently completed (already on `master`)
 
+- **Current merged baseline, checked 2026-09-05: v24.6.374, `ebdc0f8`.**
+  PR #189 merged as `2c216c6` on 2026-08-29; PR #185 merged as `b84c36f` on
+  2026-09-04. Their old branches are not active claims. The current PR #191
+  review is listed in section 8; nothing from it is merged yet.
+
 - **Anonymization edge-case corrective — v24.6.370 / PR #188, MERGED.**
   PR #188 merged to `master` as `b52b5b0`; all three hosted Windows/macOS jobs
   passed. It covers compact Malaysian `A/P` and `A/L` names, short `M:` / `T:`
   phone labels, source-derived personal domains with newer top-level domains,
   parenthesized single-year employer rows, `Level`-style addresses and
   dot-grouped achievement metrics while protecting dotted technology/file
-  names. PR #185 remains separate and unmerged.
+  names. PR #185 was separate then and has since merged.
 
 - **Summary anonymization safety follow-up — v24.6.369 / PR #187, MERGED.**
   PR #187 merged to `master` as `2f345b7`. The deterministic summary safety
@@ -162,7 +167,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   an Education section. Phone detection preserves grouped achievement metrics,
   Blind CV retains every populated source summary bullet, and every successful
   `/generate-ai` fallback passes through the same deterministic anonymization
-  finalizer. PR #185 remains separate and unmerged.
+  finalizer. PR #185 was separate then and has since merged.
 
 - **v24.6.362 Blind CV bullet and native-download corrective:** PR #183 was
   squash-merged to `master` as `809da3e`. Blind CV preserves real Word list
@@ -281,20 +286,30 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Anonymization final edge corrective — v24.6.371 / planned PR #189, ACTIVE
-  AND UNMERGED.** Branch
+- **PR #191 — v24.6.378, ACTIVE AND UNMERGED.** Existing PR source branch:
+  `claude/pr157-chatgpt-fix-zke4cy`; Codex local review branch:
+  `codex/pr191-v24.6.378-review-fixes`. Includes Claude's off-by-default
+  language auto-correction (single/batch formatting AND JobAdder Create Profile)
+  and Open Folder buttons for all six download destinations. Corrections keep
+  the preference on during existing parse retries, reject browser fallback for
+  invalid files/requests, and make single/batch download messages accurately
+  distinguish folder saves, browser fallback and uncertainty. No extra paid
+  calls, schema/route changes, credential changes or native protected build.
+  Await owner merge approval. See issue #35 for the live claim and test results.
+
+- **Anonymization final edge corrective — v24.6.371 / PR #189, MERGED
+  as `2c216c6`.** Historical branch
   `chatgpt/pr189-v24.6.371-anonymization-final-edge-fixes` protects dotted
   degree abbreviations from link redaction, records both the complete source
   website path and its hostname, recognizes compact/spaced/lowercase Malaysian
   `A/P` / `A/L` name forms, and masks employers in unparenthesized or
   role-bearing single-year rows. No route, storage schema, dependency,
   credential, paid-call-count, CV-formatting or protected-package boundary
-  change. PR #185 remains separate and untouched. Local validation: 1060 tests
+  change. PR #185 was separate at that time. Local validation: 1060 tests
   passed, 4 skipped and 128 subtests; all 20 frontend fixture groups; 24 live
   source-smoke assertions; tracked Python, JavaScript, PowerShell and POSIX-shell
   syntax; repository consistency; Git whitespace; and the Windows
-  protected-source/Antiword/Tesseract/adm-zip preflight. Open PR #189 only after
-  the owner's explicit instruction.
+  protected-source/Antiword/Tesseract/adm-zip preflight. Merged 2026-08-29.
 - **CV Summary and Blind CV summary anonymization — v24.6.368 / PR
   #186, MERGED.** PR #186 merged to `master` as `fbdf0e7`. Its branch
   `chatgpt/pr186-v24.6.367-summary-anonymization-final-review-fixes` added an off-by-default
@@ -325,15 +340,14 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   provider that drops or corrupts the populated summary fails visibly instead
   of publishing a blank About Him / Her box. No route, storage schema,
   dependency, credential, AI-call-count or protected-package boundary change.
-  PR #185 remains a separate active branch and was not included there. Local
+  PR #185 was a separate branch at the time and was not included there. Local
   validation: 1045 tests passed, 4 skipped and 96 subtests; all 20 frontend
   fixture groups; 24 live source-smoke assertions; repository consistency,
   Git whitespace and Windows protected-source/dependency preflight.
-- **Feature download destinations — v24.6.364 / PR #185, ACTIVE AND
-  UNMERGED.** Branch `chatgpt/pr185-v24.6.364-feature-download-folders` adds
+- **Feature download destinations — PR #185, MERGED as `b84c36f`.**
+  Historical branch `chatgpt/pr185-v24.6.364-feature-download-folders` adds
   separate configured destinations for Company Profile, Summary Output, Blind
-  JD and The Owl. Keep planned PR #189 separate; rebase and resolve version
-  order when the owner approves PR #185.
+  JD and The Owl. Merged 2026-09-04; both PR #185 and #189 are now in master.
 - **Post-merge review corrective — v24.6.363 / PR #184, MERGED.** PR #184
   merged to `master` as `1912d48`. Its branch
   `chatgpt/pr184-v24.6.363-post-merge-review-fixes` closes

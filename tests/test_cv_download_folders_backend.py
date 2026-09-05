@@ -541,3 +541,62 @@ def test_corrupt_pdf_still_rejected_when_parser_available(tmp_path):
 
     assert raised.value.code == "DOWNLOAD_FILE_INVALID"
     assert list(folder.iterdir()) == []
+
+
+def _service_with_recorder(tmp_path, system, calls):
+    def fake_run(cmd, **kwargs):
+        calls.append({"cmd": cmd, "kwargs": kwargs})
+        class _Result:
+            returncode = 0
+        return _Result()
+    return LocalDownloadService(
+        tmp_path / "download_folders.json",
+        system_name=lambda: system,
+        run_process=fake_run,
+    )
+
+
+def test_open_folder_launches_the_stored_windows_path(tmp_path):
+    folder = tmp_path / "company_profile"
+    folder.mkdir()
+    calls = []
+    service = _service_with_recorder(tmp_path, "Windows", calls)
+    service._write_state_unlocked({"company_profile": str(folder)})
+
+    result = service.open_folder("company_profile")
+
+    assert result["path"] == str(folder)
+    assert len(calls) == 1
+    assert calls[0]["cmd"][0] == "explorer.exe"
+    assert calls[0]["cmd"][1] == os.path.normpath(str(folder))
+
+
+def test_open_folder_launches_the_stored_macos_path(tmp_path):
+    folder = tmp_path / "owl"
+    folder.mkdir()
+    calls = []
+    service = _service_with_recorder(tmp_path, "Darwin", calls)
+    service._write_state_unlocked({"owl": str(folder)})
+
+    service.open_folder("owl")
+
+    assert calls[0]["cmd"] == ["/usr/bin/open", str(folder)]
+
+
+def test_open_folder_requires_a_configured_folder(tmp_path):
+    calls = []
+    service = _service_with_recorder(tmp_path, "Windows", calls)
+    with pytest.raises(DownloadFolderError) as raised:
+        service.open_folder("company_profile")
+    assert raised.value.code == "DOWNLOAD_FOLDER_NOT_CONFIGURED"
+    assert calls == []  # nothing was launched
+
+
+def test_open_folder_rejects_a_stored_path_that_no_longer_exists(tmp_path):
+    calls = []
+    service = _service_with_recorder(tmp_path, "Windows", calls)
+    service._write_state_unlocked({"summary": str(tmp_path / "gone")})
+    with pytest.raises(DownloadFolderError) as raised:
+        service.open_folder("summary")
+    assert raised.value.code == "DOWNLOAD_FOLDER_UNAVAILABLE"
+    assert calls == []

@@ -62,7 +62,7 @@ function markupAndWiringContract() {
   assert.ok(showSettings.includes('renderCvDownloadSettings'));
   const singleDownload = functionSource(html, 'downloadDocx');
   assert.ok(singleDownload.includes('cvStudioSaveDownloadBlob'));
-  assert.ok(singleDownload.includes('result.uncertain'));
+  assert.ok(singleDownload.includes('cvStudioShowDownloadResult'));
 
   const batchOne = functionSource(html, 'downloadSingleBatchFile');
   const batchAll = functionSource(html, 'downloadBatchZip');
@@ -71,7 +71,7 @@ function markupAndWiringContract() {
   assert.ok(!batchOne.includes('_batchMode'));
   assert.ok(!batchAll.includes('_batchMode'));
   assert.ok(batchOne.includes('cvStudioSaveDownloadBlob'));
-  assert.ok(batchOne.includes('result.uncertain'));
+  assert.ok(batchOne.includes('cvStudioShowDownloadResult'));
   assert.ok(batchAll.includes('cvStudioPrepareDownloadDestination'));
   assert.ok(batchAll.includes('uncertainCount'));
 
@@ -144,7 +144,9 @@ async function nativeFolderSaveAndFallbackContract() {
       }};}};
       if(saveMode==='success')return {ok:true,async json(){return {ok:true,filename:'Hyppies CV (1).docx',folder:'C:\\CV Output',path:'C:\\CV Output\\Hyppies CV (1).docx'};}};
       if(saveMode==='lost')throw new Error('Connection lost after upload');
-      return {ok:false,async json(){return {ok:false,error:'Drive unavailable'};}};
+      if(saveMode==='html-rejection')return {ok:false,status:413,async json(){throw new Error('Not JSON');}};
+      if(saveMode.startsWith('reject:'))return {ok:false,async json(){return {ok:false,code:saveMode.slice(7),error:'Request rejected'};}};
+      return {ok:false,async json(){return {ok:false,code:'DOWNLOAD_FOLDER_UNAVAILABLE',error:'Drive unavailable'};}};
     },
   };
   loadFunctions(context,[
@@ -188,6 +190,23 @@ async function nativeFolderSaveAndFallbackContract() {
   // One browser fallback per failed/uncertain save (the blind case plus these two).
   assert.strictEqual(revoked.length,3);
   assert.ok(revoked.every(function(v){return v==='blob:fallback';}));
+
+  // Every rejection stays rejected, including future/unknown validation codes.
+  for (const code of ['DOWNLOAD_FILE_INVALID','DOWNLOAD_FILE_EMPTY','DOWNLOAD_FILE_TOO_LARGE',
+    'DOWNLOAD_FILE_TYPE_INVALID','DOWNLOAD_KIND_INVALID','CSRF_INVALID','FUTURE_REJECTION','']) {
+    saveMode='reject:'+code;
+    const rejected=await context.cvStudioSaveDownloadBlob(blob,'Rejected.docx','formatted');
+    assert.strictEqual(rejected.method,'failed');
+    assert.strictEqual(rejected.code,code);
+    assert.ok(!rejected.browserFallback);
+    assert.strictEqual(clicked.length,3,'must not bypass '+code);
+  }
+  saveMode='html-rejection';
+  const htmlRejected=await context.cvStudioSaveDownloadBlob(blob,'Rejected.docx','formatted');
+  assert.strictEqual(htmlRejected.code,'DOWNLOAD_REQUEST_REJECTED');
+  assert.ok(!htmlRejected.browserFallback);
+  assert.ok(!htmlRejected.uncertain);
+  assert.strictEqual(clicked.length,3);
 }
 
 async function folderStatusFailureFallsBackToBrowserContract() {
@@ -230,13 +249,20 @@ async function showDownloadResultReportsBrowserFallbackContract() {
     'Company Profile PDF');
   assert.strictEqual(ok,true);
   assert.strictEqual(toasts[0].level,'warn');
-  assert.ok(toasts[0].message.includes('downloaded to your browser instead'));
+  assert.ok(toasts[0].message.includes('browser download started instead'));
   assert.ok(toasts[0].message.includes('Drive unavailable'));
   // A true failure with no fallback at all is still an error returning false.
   const bad=context.cvStudioShowDownloadResult(
     {method:'failed',configured:true,fallbackReason:'nowhere to write'},'Company Profile PDF');
   assert.strictEqual(bad,false);
   assert.strictEqual(toasts[1].level,'err');
+  const uncertain=context.cvStudioShowDownloadResult(
+    {method:'uncertain',uncertain:true,browserFallback:true},'CV');
+  assert.strictEqual(uncertain,true);
+  assert.strictEqual(toasts[2].level,'warn');
+  assert.ok(toasts[2].message.includes('could not be confirmed'));
+  assert.ok(toasts[2].message.includes('duplicates before retrying'));
+  assert.ok(!toasts[2].message.includes("couldn't be saved"));
 }
 
 async function clearDownloadDirectoryConfirmsBeforeResetContract() {
@@ -284,6 +310,51 @@ async function clearDownloadDirectoryConfirmsBeforeResetContract() {
   assert.strictEqual(deletes.length,2,'the unconfigured reset still calls through');
 }
 
+async function openDownloadDirectoryContract() {
+  const requests = [];
+  const toasts = [];
+  const context = {
+    String, Promise,
+    showToast(message, level) { toasts.push({ message, level }); },
+    _cvDownloadLastResult: {},
+    _cvNativeDownloadFolderState: { native_supported: true, folders: {
+      company_profile: { configured: true, path: 'C:\\Recruitment\\Company', available: true },
+      formatted: { configured: false, path: '', available: false },
+    } },
+    cvStudioRenderDownloadDirectory() {},
+    async cvStudioNativeDownloadFolderRequest(method, payload) {
+      requests.push({ method, payload });
+      return { ok: true, folder: { configured: true, path: 'C:\\Recruitment\\Company', available: true } };
+    },
+  };
+  loadFunctions(context, [
+    'cvStudioDownloadDestinationConfig', 'normalizeCvDownloadDestination',
+    'cvStudioNativeDownloadFolder', 'cvStudioOpenDownloadDirectory',
+  ]);
+
+  // Configured destination -> posts the 'open' action for that kind.
+  const opened = await context.cvStudioOpenDownloadDirectory('company_profile');
+  assert.strictEqual(opened, true);
+  assert.strictEqual(requests.length, 1);
+  assert.strictEqual(requests[0].method, 'POST');
+  assert.strictEqual(requests[0].payload.kind, 'company_profile');
+  assert.strictEqual(requests[0].payload.action, 'open');
+
+  // Unconfigured destination -> no request, a gentle prompt to choose a folder.
+  const noop = await context.cvStudioOpenDownloadDirectory('formatted');
+  assert.strictEqual(noop, false);
+  assert.strictEqual(requests.length, 1, 'no open request for an unconfigured folder');
+  assert.ok(toasts.some(function(t){ return /choose a folder/i.test(t.message); }));
+}
+
+function openFolderButtonsPresentOnEveryDestination() {
+  ['formatted', 'blind', 'company_profile', 'summary', 'blind_jd', 'owl'].forEach(function(kind){
+    assert.ok(
+      html.includes("cvStudioOpenDownloadDirectory('" + kind + "')"),
+      'open-folder button missing for ' + kind);
+  });
+}
+
 async function nativeSelectionAndFullPathPreviewContract() {
   const nodes={};
   function node(id){if(!nodes[id])nodes[id]={textContent:'',style:{},classList:{remove(){},toggle(){}}};return nodes[id];}
@@ -323,7 +394,7 @@ async function batchModeContract() {
     cvStudioPrepareDownloadDestination:async (kind)=>({kind,configured:true,folder:{path:'C:\\Formatted'},handle:{native:true}}),
     showToast(message,level){toasts.push({message,level});},setTimeout(fn){fn();},
   };
-  loadFunctions(context,['downloadSingleBatchFile','downloadBatchZip']);
+  loadFunctions(context,['cvStudioShowDownloadResult','downloadSingleBatchFile','downloadBatchZip']);
   await context.downloadSingleBatchFile('formatted-row');
   assert.strictEqual(saveCalls[0].kind,'formatted');
   saveCalls.length=0;
@@ -334,6 +405,38 @@ async function batchModeContract() {
   await context.downloadBatchZip();
   assert.strictEqual(saveCalls.length,0);
   assert.ok(toasts[toasts.length-1].message.includes('Download was not started'));
+}
+
+async function downloadCallerOutcomesContract() {
+  const toasts=[];
+  let next={method:'failed',configured:true,browserFallback:true};
+  const context={
+    String,window:{_docxBlob:{},_isBlind:false},_parsedData:null,
+    _batchFiles:[{id:'row',filename:'CV.docx',downloadKind:'formatted'}],
+    _batchBlobs:[{filename:'CV.docx',blob:{},kind:'formatted'}],
+    async cvStudioSaveDownloadBlob(){return next;},
+    async cvStudioPrepareDownloadDestination(){return {configured:true,handle:{native:true}};},
+    showToast(message,level){toasts.push({message,level});},
+  };
+  loadFunctions(context,['cvStudioShowDownloadResult','downloadDocx','downloadSingleBatchFile','downloadBatchZip']);
+  for (const run of [()=>context.downloadDocx(),()=>context.downloadSingleBatchFile('row')]) {
+    await run();
+    assert.strictEqual(toasts.at(-1).level,'warn');
+    assert.ok(toasts.at(-1).message.includes('browser download started instead'));
+  }
+  await context.downloadBatchZip();
+  assert.strictEqual(toasts.at(-1).level,'warn');
+  assert.ok(toasts.at(-1).message.includes('browser downloads started for 1'));
+  assert.ok(!toasts.at(-1).message.includes('could not be saved'));
+  next={method:'uncertain',uncertain:true,browserFallback:true};
+  await context.downloadBatchZip();
+  assert.ok(toasts.at(-1).message.includes('1 folder saves could not be confirmed'));
+  assert.ok(toasts.at(-1).message.includes('duplicates'));
+  next={method:'failed',configured:true,code:'DOWNLOAD_FILE_INVALID'};
+  await context.downloadBatchZip();
+  assert.strictEqual(toasts.at(-1).level,'err');
+  assert.ok(toasts.at(-1).message.includes('browser downloads started for 0'));
+  assert.ok(toasts.at(-1).message.includes('1 could not be saved or downloaded'));
 }
 
 async function staleStartupRegistrationRepairContract() {
@@ -371,7 +474,10 @@ Promise.resolve()
   .then(showDownloadResultReportsBrowserFallbackContract)
   .then(nativeSelectionAndFullPathPreviewContract)
   .then(clearDownloadDirectoryConfirmsBeforeResetContract)
+  .then(openDownloadDirectoryContract)
+  .then(openFolderButtonsPresentOnEveryDestination)
   .then(batchModeContract)
+  .then(downloadCallerOutcomesContract)
   .then(staleStartupRegistrationRepairContract)
   .then(()=>console.log('CV download folder frontend fixtures passed'))
   .catch((error)=>{console.error(error);process.exit(1);});

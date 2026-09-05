@@ -65,7 +65,7 @@ async function startFormat(blind) {
   }, 300);
 
   try {
-    var res = await fetchWithTimeout('/parse', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({api_key: key, api_key_slot: route.api_key_slot, cv_text: raw, model: route.model, provider: route.provider}) }, cvParseTimeoutMs(raw));
+    var res = await fetchWithTimeout('/parse', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({api_key: key, api_key_slot: route.api_key_slot, cv_text: raw, model: route.model, provider: route.provider, auto_correct_language: getCvAutoCorrectLanguage()}) }, cvParseTimeoutMs(raw));
     var rawText = await res.text();
     var data;
     try { data = JSON.parse(rawText); } catch(je) { throw new Error('Server returned invalid JSON:\n' + rawText.slice(0,600)); }
@@ -551,10 +551,7 @@ async function downloadDocx() {
       : 'Hyppies CV - Formatted.docx';
   }
   var result = await cvStudioSaveDownloadBlob(window._docxBlob, name, window._isBlind ? 'blind' : 'formatted');
-  if (result.method === 'folder') showToast('Saved ' + result.filename + ' to ' + (result.folder || 'the selected folder') + '.', 'ok');
-  else if (result.uncertain) showToast(result.fallbackReason, 'err');
-  else if (result.configured) showToast('Download was not saved: ' + result.fallbackReason + '. Check or choose the folder in Settings → Downloads.', 'err');
-  else showToast('Downloaded ' + result.filename + ' using the browser Downloads folder.', 'ok');
+  cvStudioShowDownloadResult(result, name);
 }
 
 function clearInput() {

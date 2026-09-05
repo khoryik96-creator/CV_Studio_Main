@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.374"
+_INSTALL_RECEIPT_VERSION = "v24.6.378"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -346,7 +346,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.374"
+_CVSTUDIO_VERSION = "v24.6.378"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -1932,6 +1932,8 @@ def cvstudio_download_folders():
             folder = _cvstudio_download_service.select_folder(kind)
         elif action == "check":
             folder = _cvstudio_download_service.check_folder(kind)
+        elif action == "open":
+            folder = _cvstudio_download_service.open_folder(kind)
         else:
             return _cvstudio_error_payload(
                 "DOWNLOAD_FOLDER_ACTION_INVALID",
@@ -8722,6 +8724,41 @@ def test_key():
         return jsonify(out)
 
 
+# The base prompt already contains a light "fix spelling/typos silently" line.
+# When the user enables auto-correction we REPLACE that single line with a fuller,
+# self-consistent instruction (rather than appending a second rule that would
+# contradict it), so the model gets one coherent language-correction directive.
+_CV_BASE_TEXT_INSTRUCTION = "- All text: fix spelling/typos silently, preserve everything else"
+
+CV_LANGUAGE_CORRECTION_INSTRUCTION = (
+    "- All text: correct spelling, punctuation, and capitalization (capital/lowercase) so the CV reads cleanly, "
+    "changing ONLY language mechanics and never the meaning:\n"
+    "    * Fix obvious spelling mistakes and typos, punctuation, spacing, and sentence/heading capitalization "
+    "(start sentences with a capital; lowercase words wrongly capitalized mid-sentence).\n"
+    "    * Correct the casing of well-known technology, product, framework, and company names to their standard "
+    "form, e.g. kafka -> Kafka, javascript -> JavaScript, github -> GitHub, sql -> SQL, mysql -> MySQL, "
+    "aws -> AWS, .net -> .NET, nodejs -> Node.js, powerbi -> Power BI.\n"
+    "    * Preserve people's names and any unfamiliar word or acronym exactly as written; when unsure whether a "
+    "token is a misspelling or a real name/term, leave it unchanged. Never change a person's name to a similar "
+    "common word.\n"
+    "    * Do NOT rephrase, reword, embellish, translate, add, or remove content, and do NOT change any numbers, "
+    "dates, currencies, URLs, emails, or the meaning of a sentence."
+)
+
+
+def _parse_system_prompt(correct_language=False):
+    """Return the parse system prompt, upgrading the base spelling line to the
+    full language-correction directive only when the user enabled the toggle."""
+    if correct_language is not True:
+        return SYSTEM_PROMPT
+    if _CV_BASE_TEXT_INSTRUCTION in SYSTEM_PROMPT:
+        return SYSTEM_PROMPT.replace(
+            _CV_BASE_TEXT_INSTRUCTION, CV_LANGUAGE_CORRECTION_INSTRUCTION
+        )
+    # Anchor moved: still apply the directive rather than silently no-op.
+    return SYSTEM_PROMPT + "\n" + CV_LANGUAGE_CORRECTION_INSTRUCTION
+
+
 @app.route("/parse", methods=["POST"])
 def parse_cv():
     try:
@@ -8732,6 +8769,7 @@ def parse_cv():
         cv_text = (body.get("cv_text") or "").strip()
         model   = body.get("model") or "claude-sonnet-4-6"
         llm_provider = (body.get("provider") or "anthropic").strip().lower()
+        correct_language = body.get("auto_correct_language") is True
         usage_total = _merge_llm_usage()
 
         if not api_key:
@@ -8760,7 +8798,7 @@ def parse_cv():
             # label retention, or section inclusion from one run to the next.
             "temperature": 0,
             "_timeout_seconds": parse_timeout_seconds,
-            "system": SYSTEM_PROMPT,
+            "system": _parse_system_prompt(correct_language),
             "messages": [{"role": "user", "content": f"Parse this raw CV into the JSON schema:\n\n{cv_text}"}]
         })
         usage_total = _merge_llm_usage(usage_total, data.get("usage"))
@@ -8887,7 +8925,7 @@ def parse_cv():
                         "max_tokens": 64000,
                         "temperature": 0,
                         "_timeout_seconds": parse_timeout_seconds,
-                        "system": SYSTEM_PROMPT,
+                        "system": _parse_system_prompt(correct_language),
                         "messages": [{"role": "user", "content": brevity_prompt}]
                     })
                     usage_total = _merge_llm_usage(usage_total, s2_data.get("usage"))
@@ -8915,6 +8953,7 @@ def parse_cv():
                             "max_tokens": 64000,
                             "temperature": 0,
                             "_timeout_seconds": parse_timeout_seconds,
+                            **({"system": _parse_system_prompt(True)} if correct_language else {}),
                             "messages": [
                                 {"role": "user",  "content": f"Parse this CV into the JSON schema:\n\n{cv_text}"},
                                 {"role": "assistant", "content": raw_text},

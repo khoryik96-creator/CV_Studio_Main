@@ -889,6 +889,7 @@ BROWSER_SETTING_KEYS = frozenset(
         "cvstudio_single_summary_detail_v1",
         "cvstudio_batch_summary_detail_v1",
         "cvstudio_blind_candidate_gender_neutral_v1",
+        "cvstudio_autocorrect_language_v1",
         "cvstudio_page_nav_pinned_v1",
         "cvstudio_spider_preview_memory_mode_v1",
         "ja_auto_upload",
