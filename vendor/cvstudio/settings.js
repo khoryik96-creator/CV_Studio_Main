@@ -205,7 +205,8 @@ function cvStudioRenderDownloadDestination(kind, folder) {
   var last = _cvDownloadLastResult[kind];
   if (last && last.path) previewNode.textContent = 'Last saved: ' + String(last.path);
   else if (last && last.filename && last.method === 'browser') previewNode.textContent = 'Last download: Browser Downloads\\' + String(last.filename);
-  else if (last && last.method === 'uncertain') previewNode.textContent = 'Last save could not be confirmed — check: ' + String(last.folder || folder && folder.path || 'selected folder');
+  else if (last && last.method === 'uncertain') previewNode.textContent = 'Last save could not be confirmed — check: ' + String(last.folder || folder && folder.path || 'selected folder') + (last.browserFallback ? '. Browser download also started; check for duplicates.' : '');
+  else if (last && last.browserFallback) previewNode.textContent = 'Folder save failed; browser download started: ' + String(last.filename);
   else if (last && last.method === 'failed') previewNode.textContent = 'Last save failed — destination remains: ' + String(folder && folder.path || 'selected folder');
   else if (folder && folder.configured && folder.path) previewNode.textContent = 'Destination: ' + String(folder.path);
   else previewNode.textContent = 'Destination: your browser\'s configured Downloads folder';
@@ -397,15 +398,15 @@ async function cvStudioSaveDownloadBlob(blob, filename, kind, preparedDestinatio
   kind = normalizeCvDownloadDestination(kind);
   var safeName = cvStudioSafeDownloadFilename(filename);
   function cvStudioAddBrowserFallback(resultObj) {
-    // A configured-folder save failed or could not be confirmed: never lose the
-    // generated file -- also hand it to the browser Downloads folder so the user
-    // still receives it (worst case a duplicate, never a silent data loss).
+    // Only folder/infrastructure failures may fall back. A server rejection of
+    // the file or request must not be bypassed by downloading the same bytes.
     try {
       cvStudioFallbackDownloadBlob(blob, safeName);
       resultObj.browserFallback = true;
     } catch (fallbackError) {
       resultObj.browserFallback = false;
     }
+    cvStudioRenderDownloadDestination(kind, destination && destination.folder);
     return resultObj;
   }
   var destination = preparedDestination || await cvStudioPrepareDownloadDestination(kind);
@@ -431,6 +432,16 @@ async function cvStudioSaveDownloadBlob(blob, filename, kind, preparedDestinatio
       response = await fetch('/downloads/save', {method:'POST', body:form, cvStudioNoTimeout:true});
       data = await response.json();
     } catch(error) {
+      if (response && !response.ok) {
+        // Some guards/proxies return HTML (for example a 413), not JSON.
+        // A known HTTP rejection is not an ambiguous successful save.
+        var rejected = {method:'failed', configured:true, filename:safeName,
+          code:'DOWNLOAD_REQUEST_REJECTED',
+          fallbackReason:'The server rejected the download request (HTTP ' + response.status + ').'};
+        _cvDownloadLastResult[kind] = rejected;
+        cvStudioRenderDownloadDestination(kind, destination.folder);
+        return rejected;
+      }
       var uncertain = {
         method:'uncertain',
         configured:true,
@@ -443,16 +454,21 @@ async function cvStudioSaveDownloadBlob(blob, filename, kind, preparedDestinatio
       cvStudioRenderDownloadDestination(kind, destination.folder);
       return cvStudioAddBrowserFallback(uncertain);
     }
-    if (!response.ok || !data.ok) {
+    if (!response.ok || !data || !data.ok) {
       var failed = {
         method:'failed',
         configured:true,
         filename:safeName,
-        fallbackReason:data.error || data.message || 'the selected folder could not be written to',
+        code:String(data && data.code || ''),
+        fallbackReason:data && (data.error || data.message) || 'the selected folder could not be written to',
       };
       _cvDownloadLastResult[kind] = failed;
       cvStudioRenderDownloadDestination(kind, destination.folder);
-      return cvStudioAddBrowserFallback(failed);
+      // Fail closed for validation/security rejections and unknown errors.
+      var folderFailureCodes = ['DOWNLOAD_FOLDER_NOT_CONFIGURED', 'DOWNLOAD_FOLDER_UNAVAILABLE',
+        'DOWNLOAD_FOLDER_NOT_WRITABLE', 'DOWNLOAD_SETTINGS_UNAVAILABLE', 'DOWNLOAD_SETTINGS_INVALID',
+        'DOWNLOAD_SAVE_FAILED', 'DOWNLOAD_NAME_EXHAUSTED'];
+      return folderFailureCodes.indexOf(failed.code) >= 0 ? cvStudioAddBrowserFallback(failed) : failed;
     }
     var saved = {method:'folder', filename:data.filename, folder:data.folder, path:data.path};
     _cvDownloadLastResult[kind] = saved;
@@ -476,10 +492,14 @@ function cvStudioShowDownloadResult(result, label) {
     return true;
   }
   if (result && result.browserFallback) {
+    if (result.uncertain) {
+      showToast(label + ' folder save could not be confirmed. A browser download was also started; check both locations for duplicates before retrying.', 'warn');
+      return true;
+    }
     // The configured folder failed but the file was not lost: it went to the
     // browser Downloads folder instead. Surface it as a warning, not an error.
     var fbWhy = result.fallbackReason ? ' (' + String(result.fallbackReason).replace(/[. ]+$/g, '') + ')' : '';
-    showToast(label + " couldn't be saved to the selected folder" + fbWhy + '; downloaded to your browser instead. Check Settings → Downloads.', 'warn');
+    showToast(label + " couldn't be saved to the selected folder" + fbWhy + '; browser download started instead. Check Settings → Downloads.', 'warn');
     return true;
   }
   if (result && result.uncertain) {

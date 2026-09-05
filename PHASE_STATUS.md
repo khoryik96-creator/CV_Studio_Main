@@ -25,11 +25,12 @@
   `54298b9b6a822e1f36c9c101f1ff4edc9c7e835f`
 - Phase 7B-4 source baseline Git commit (merged Phase 7B-3):
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
-- Current merged source: v24.6.370 through PR #188 (`b52b5b0`).
-- Active work is split across two unmerged branches: v24.6.364 feature download
-  destinations on `chatgpt/pr185-v24.6.364-feature-download-folders` (PR #185),
-  and the v24.6.371 anonymization final edge corrective on
-  `chatgpt/pr189-v24.6.371-anonymization-final-edge-fixes` (planned PR #189).
+- Current merged source: v24.6.374 (`ebdc0f8`), verified 2026-09-05.
+- PR #189 merged as `2c216c6`; PR #185 merged as `b84c36f`. Neither is an
+  active branch claim. PR #191 is the only current feature/review work here:
+  auto-correction, Open Folder and download fallback corrections, v24.6.378.
+  Local review branch: `codex/pr191-v24.6.378-review-fixes`; existing PR source:
+  `claude/pr157-chatgpt-fix-zke4cy`. Await owner approval before merge.
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
@@ -54,10 +55,27 @@
   #184 then merged v24.6.363 as `1912d48`; PR #186 merged v24.6.368 as
   `fbdf0e7`; PR #187 merged v24.6.369 as `2f345b7`; PR #188 merged v24.6.370
   as `b52b5b0`.
-- Current stop: v24.6.370 is merged on `master` through PR #188. PR #185 and
-  the planned PR #189 are separate active, unmerged branches.
+- Current stop: PR #191 review corrections are unmerged. No release or native
+  protected build is produced by this work; protected builds remain manual.
 
-## v24.6.371 anonymization final edge corrective (active, unmerged)
+## v24.6.378 PR #191 review corrections (unmerged)
+
+- Keep server file/request rejections from triggering a browser download;
+  allow fallback only for recognized folder/storage failures. Keep uncertain
+  saves explicit and warn about possible duplicates when a browser fallback starts.
+- Single and batch CV exports report the same fallback outcome as other modules.
+- Auto-correction is off by default, applies to single/batch formatting and
+  JobAdder Create Profile as disclosed in Settings, and remains enabled during
+  every existing parse recovery attempt. No extra AI calls are introduced.
+- Add isolated, no-network route tests and frontend payload/outcome coverage.
+  Routes, storage schemas, credentials and protected-package boundaries stay unchanged.
+- Validation: 1110 Python tests passed, 4 skipped, 128 subtests; all 21 frontend
+  fixture groups; 24 live source-smoke assertions; tracked Python/JavaScript/
+  PowerShell syntax, changed POSIX-script syntax, repository consistency and
+  Windows protected-source preflight (verified Antiword, Tesseract and adm-zip).
+  No live AI/JobAdder requests or native protected compilation were performed.
+
+## v24.6.371 anonymization final edge corrective (merged through PR #189)
 
 - The deterministic anonymized-summary safety pass preserves dotted degree
   abbreviations, redacts both the complete source website path and its hostname,

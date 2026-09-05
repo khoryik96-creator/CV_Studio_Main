@@ -6,6 +6,8 @@
 
 const assert = require('assert');
 const vm = require('vm');
+const fs = require('fs');
+const path = require('path');
 const html = require('./frontend_sources').frontendSource();
 
 function functionRange(source, name) {
@@ -82,12 +84,26 @@ function togglesOffAndRespectsSilent() {
 function wiredIntoParseAndSettings() {
   // Single format, batch format, and JobAdder Create Profile all parse a CV and
   // must forward the flag to /parse so correction behaves consistently.
-  const parseCalls = (html.match(/auto_correct_language:\s*getCvAutoCorrectLanguage\(\)/g) || []).length;
-  assert.ok(parseCalls >= 3, 'single, batch, and create-profile /parse requests send the flag, saw ' + parseCalls);
+  for (const module of ['cv-format.js','batch-format.js','create-profile.js']) {
+    const source = fs.readFileSync(path.join(__dirname,'../vendor/cvstudio',module),'utf8');
+    const requests = [...source.matchAll(/JSON\.stringify\((\{[^\n]*auto_correct_language:[^\n]*?\})\)/g)];
+    assert.strictEqual(requests.length,1,module+' has one parse payload with the preference');
+    for (const enabled of [false,true]) {
+      const env=buildContext();
+      env.context.setCvAutoCorrectLanguage(enabled,true);
+      Object.assign(env.context, {key:'fixture-key',route:{model:'fixture',provider:'fixture'},
+        jaRoute:{api_key:'fixture-key',model:'fixture',provider:'fixture'},
+        raw:'Example Candidate',rawText:'Example Candidate',cvText:'Example Candidate'});
+      const sent=JSON.parse(vm.runInContext('JSON.stringify('+requests[0][1]+')',env.context));
+      assert.strictEqual(sent.auto_correct_language,enabled,module+' sends a real boolean');
+      assert.strictEqual(sent.cv_text,'Example Candidate',module+' does not alter input');
+    }
+  }
   // Durable-key allowlist and the Settings control exist.
   assert.ok(html.includes("'cvstudio_autocorrect_language_v1':1"), 'key registered as durable');
   assert.ok(html.includes('id="cvAutoCorrectLanguageToggle"'), 'toggle control present');
   assert.ok(html.includes('onchange="setCvAutoCorrectLanguage(this.checked)"'), 'toggle wired to setter');
+  assert.ok(html.includes('JobAdder profile creation'), 'settings disclose create-profile scope');
 }
 
 const cases = [
