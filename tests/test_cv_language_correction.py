@@ -8,9 +8,13 @@ appended as a second, conflicting rule. Off is the base prompt unchanged.
 """
 
 import importlib
+import copy
+import io
 import json
 import os
 from pathlib import Path
+import xml.etree.ElementTree as ET
+import zipfile
 
 import pytest
 
@@ -110,3 +114,56 @@ def test_route_applies_language_preference_to_each_attempt(app, monkeypatch, fla
         assert "3.5% in 2025" in source
         assert "Example Candidate" in source
     assert response.get_json()["data"]["candidate"]["name"] == candidate["name"]
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+def test_skill_casing_survives_parse_and_real_docx_export(app, monkeypatch, enabled):
+    items = "Kafka, JavaScript, GitHub" if enabled else "kafka, javascript, github"
+    expected = "Kafka · JavaScript · GitHub" if enabled else "kafka · javascript · github"
+    parsed = {"candidate": {"name": "Example Candidate"}, "work_experiences": [],
+              "education": [], "certifications": [],
+              "skills": [{"category": "Technical Skills", "items": items}]}
+
+    def fake_call(provider, key, payload):
+        assert payload["system"] == app._parse_system_prompt(enabled)
+        return {"content": [{"type": "text", "text": json.dumps(parsed)}], "usage": {}}
+
+    monkeypatch.setattr(app, "call_llm", fake_call)
+    monkeypatch.setattr(app, "_resolve_request_api_key", lambda *a, **k: "fixture-key")
+    monkeypatch.setattr(app, "_ai_spend_session_allowed", lambda *a, **k: True)
+    headers = {"Origin": "http://127.0.0.1:5000", "X-CV-Studio-Request": "1"}
+    client = app.app.test_client()
+    response = client.post("/parse", json={
+        "cv_text": "Example Candidate\nTechnical Skills: kafka · javascript · github",
+        "auto_correct_language": enabled,
+    }, headers=headers)
+    assert response.status_code == 200
+    data = response.get_json()["data"]
+    assert data["skills"][0]["items"] == expected
+    document = client.post("/generate-docx", json={"data": data}, headers=headers)
+    assert document.status_code == 200
+    with zipfile.ZipFile(io.BytesIO(document.data)) as archive:
+        root = ET.fromstring(archive.read("word/document.xml"))
+    text = "".join(node.text or "" for node in root.iter(
+        "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t"))
+    assert expected in text
+
+
+@pytest.mark.parametrize("source, provider, expected", [
+    ("kafka · javascript · github", "Kafka · JavaScript · GitHub", "Kafka · JavaScript · GitHub"),
+    ("KAFKA • JAVASCRIPT", "Kafka, JavaScript", "Kafka • JavaScript"),
+    ("c++ · .net · 3.5 · -5% · 2020 - 2023", "C++, .NET, 3.5, -5%, 2020 - 2023",
+     "C++ · .NET · 3.5 · -5% · 2020 - 2023"),
+    ("design, build · rollout & handover", "Design, Build, Rollout & Handover",
+     "Design, Build · Rollout & Handover"),
+    ("kafka · java", "Kafka, JavaScript", "Kafka, JavaScript"),
+])
+def test_separator_recovery_preserves_casing_and_source_symbols(source, provider, expected):
+    from cvstudio_cv_normalize import _normalize_cv_data_for_output
+
+    data = {"skills": [{"category": "Technical Skills", "items": provider}]}
+    source_text = "Technical Skills: " + source
+    result = _normalize_cv_data_for_output(data, source_text)
+    assert result["skills"][0]["items"] == expected
+    before = copy.deepcopy(result["skills"])
+    assert _normalize_cv_data_for_output(result, source_text)["skills"] == before

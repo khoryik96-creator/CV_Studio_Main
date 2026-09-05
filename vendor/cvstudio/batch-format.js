@@ -129,6 +129,7 @@ function renderBatchList() {
       : '';
     var dlBtn = (bf.status === 'done-ok' || bf.status === 'done-blind')
       ? '<button class="batch-file-dl" onclick="downloadSingleBatchFile(\'' + bf.id + '\')" title="Download">⬇ Download</button>'
+        + '<button class="batch-file-dl" type="button" onclick="openBatchOutputFolder(\'' + bf.id + '\')" title="Open configured output folder" aria-label="Open configured output folder">📂</button>'
       : '';
 
     // Build mini progress bar for processing/done/err states
@@ -512,6 +513,15 @@ async function downloadSingleBatchFile(id) {
   var kind = item.kind || bf.downloadKind || (bf.status === 'done-blind' ? 'blind' : 'formatted');
   var result = await cvStudioSaveDownloadBlob(item.blob, item.filename, kind);
   cvStudioShowDownloadResult(result, item.filename);
+}
+
+async function openBatchOutputFolder(id) {
+  var file = id ? _batchFiles.find(function(row){ return row.id === id; }) : null;
+  var item = id ? file && _batchBlobs.find(function(row){ return row.filename === file.filename; }) : _batchBlobs[0];
+  if (!item) { showToast('File not ready', 'err'); return false; }
+  if (!file) file = _batchFiles.find(function(row){ return row.filename === item.filename; });
+  var kind = item.kind || (file && file.downloadKind) || (file && file.status === 'done-blind' ? 'blind' : 'formatted');
+  return cvStudioOpenOutputFolder(kind);
 }
 
 async function downloadBatchZip() {
