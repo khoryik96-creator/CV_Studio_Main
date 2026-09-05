@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>CV Studio</title>
 <link rel="icon" type="image/png" href="cv_studio_logo.png?v=24.6.79-ui"/>
-<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.379">
-<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.379"></script>
+<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.380">
+<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.380"></script>
 <script>
 /* CV Studio Doctor — built-in diagnostic recorder.
  * Records JS errors, unhandled rejections, failed/slow network calls and
@@ -254,7 +254,7 @@
 <div class="app">
   <div class="header" style="position:relative;">
     <div>
-      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.379 (Offline) by The 郭 Lab</span></h1>
+      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.380 (Offline) by The 郭 Lab</span></h1>
 
     </div>
     <div class="header-tools">
@@ -860,7 +860,7 @@
         </div>
       </div>
       <div class="card">
-        <div class="card-head"><h2 id="summaryOutputTitle">CV Summary Output</h2><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;"><span id="summaryCost" style="font-size:11px;color:var(--text3);background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:1px 8px;"></span><button class="primary" id="btnSummaryFormat" onclick="formatSummaryResume()" style="font-size:11px;padding:3px 10px;" disabled>Format Resume</button><button class="sec" id="btnSummaryApplyDocx" onclick="applySummaryToUploadedDocx()" style="font-size:11px;padding:3px 10px;" title="Available only when the Summary source was uploaded as DOCX" disabled>Add to Uploaded DOCX</button><button class="sec" onclick="copySummaryOutput()" style="font-size:11px;padding:3px 10px;">Copy</button><button class="sec" onclick="generateSummary(window._summaryLastModifier || 'normal')" style="font-size:11px;padding:3px 10px;">↻ Regenerate</button></div></div>
+        <div class="card-head"><h2 id="summaryOutputTitle">CV Summary Output</h2><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;"><span id="summaryCost" style="font-size:11px;color:var(--text3);background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:1px 8px;"></span><button class="primary" id="btnSummaryFormat" onclick="formatSummaryResume()" style="font-size:11px;padding:3px 10px;" disabled>Format Resume</button><button class="sec" id="btnSummaryApplyDocx" onclick="applySummaryToUploadedDocx()" style="font-size:11px;padding:3px 10px;" title="Available only when the Summary source was uploaded as DOCX" disabled>Add to Uploaded DOCX</button><button class="sec" type="button" data-cv-open-ready="btnSummaryApplyDocx" onclick="cvStudioOpenOutputFolder('summary')" title="Open configured output folder" aria-label="Open Summary output folder" style="display:none;" disabled>📂</button><button class="sec" onclick="copySummaryOutput()" style="font-size:11px;padding:3px 10px;">Copy</button><button class="sec" onclick="generateSummary(window._summaryLastModifier || 'normal')" style="font-size:11px;padding:3px 10px;">↻ Regenerate</button></div></div>
         <div class="card-body" style="padding:18px;">
           <div id="summaryOutput" class="summary-output-scroll" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;min-height:260px;font-size:13px;"></div>
           <div id="summaryPlaceholder" style="border:2px dashed var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;min-height:260px;color:var(--text3);font-size:13px;background:var(--surface);text-align:center;padding:20px;">CV summary will appear here</div>
@@ -1023,6 +1023,7 @@
               <button class="sec" id="theOwlCopyBtn" onclick="copyTheOwlReport()" style="font-size:12px;display:none;">Copy Report</button>
               <button class="sec" id="theOwlWordBtn" onclick="exportTheOwlWord()" style="font-size:12px;display:none;">⬇ Export Word</button>
               <button class="sec" id="theOwlPdfBtn" onclick="exportTheOwlPDF()" style="font-size:12px;display:none;">⬇ Export PDF</button>
+              <button class="sec" type="button" data-cv-open-ready="theOwlWordBtn" onclick="cvStudioOpenOutputFolder('owl')" title="Open configured output folder" aria-label="Open The Owl output folder" style="display:none;" disabled>📂</button>
               <button class="primary" id="theOwlBtn" onclick="generateTheOwl()" style="font-size:13px;">Generate The Owl Map</button>
             </div>
           </div>
@@ -1035,6 +1036,7 @@
               <button class="sec" onclick="copyTheOwlReport()" style="font-size:12px;">Copy Report</button>
               <button class="sec" onclick="exportTheOwlWord()" style="font-size:12px;">⬇ Export Word</button>
               <button class="sec" onclick="exportTheOwlPDF()" style="font-size:12px;">⬇ Export PDF</button>
+              <button class="sec" type="button" data-cv-open-ready="theOwlWordBtn" onclick="cvStudioOpenOutputFolder('owl')" title="Open configured output folder" aria-label="Open The Owl output folder" style="display:none;" disabled>📂</button>
             </div>
           </div>
         </div>
@@ -1251,6 +1253,7 @@
         <h2>Preview &amp; Output <span class="blind-badge" id="blindBadge" style="display:none">BLINDED</span></h2>
         <div class="btn-row">
           <button class="sec" id="btnDocx" onclick="downloadDocx()" disabled>Download DOCX</button>
+          <button class="sec" type="button" data-cv-open-ready="btnDocx" onclick="cvStudioOpenOutputFolder(window._isBlind ? 'blind' : 'formatted')" title="Open configured output folder" aria-label="Open CV output folder" style="display:none;" disabled>📂</button>
           <button class="sec" id="btnJALogin" onclick="jobAdderLogin()"
             style="font-size:12px;padding:4px 12px;height:30px;white-space:nowrap;">
             🔗 Connect JobAdder
@@ -1328,6 +1331,7 @@
       <div class="batch-controls" id="batchControls" style="display:none">
         <button class="primary" id="btnBatchRun" onclick="runBatch()">Start Processing</button>
         <button class="sec" id="btnBatchDownload" onclick="downloadBatchZip()" disabled>⬇ Download All Files</button>
+        <button class="sec" type="button" data-cv-open-ready="btnBatchDownload" onclick="openBatchOutputFolder()" title="Open configured output folder" aria-label="Open batch output folder" style="display:none;" disabled>📂</button>
         <button class="sec" onclick="clearBatch()">Clear All</button>
         <span class="batch-summary" id="batchSummary"></span>
         <span class="batch-total-cost" id="batchTotalCost" style="display:none"></span>
@@ -1452,6 +1456,7 @@
                 <button class="sec" onclick="generateCompanyProfile()" style="font-size:11px;padding:3px 10px;">↻ Regenerate</button>
                 <button class="sec" onclick="exportCompanyDoc()" style="font-size:11px;padding:3px 10px;">⬇ Export Word</button>
                 <button class="sec" onclick="exportCompanyPDF()" style="font-size:11px;padding:3px 10px;">⬇ Export PDF</button>
+                <button class="sec" type="button" data-cv-open-ready="companyOutput" onclick="cvStudioOpenOutputFolder('company_profile')" title="Open configured output folder" aria-label="Open Company Profile output folder" style="display:none;" disabled>📂</button>
                 <span id="companyStatus" style="font-size:11px;color:var(--text3);"></span>
               </div>
               <div id="companyOutput" style="display:none;">
@@ -2066,6 +2071,7 @@
                 <button class="sec" onclick="generateAnonJD()" style="font-size:11px;padding:3px 10px;">↻ Regenerate</button>
                 <button class="sec" onclick="exportAnonJDDoc()" style="font-size:11px;padding:3px 10px;">⬇ Export Word</button>
                 <button class="sec" onclick="exportAnonJDPDF()" style="font-size:11px;padding:3px 10px;">⬇ Export PDF</button>
+                <button class="sec" type="button" data-cv-open-ready="anonJDOutput" onclick="cvStudioOpenOutputFolder('blind_jd')" title="Open configured output folder" aria-label="Open Blind JD output folder" style="display:none;" disabled>📂</button>
               </div>
               <div id="anonJDCompareGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:16px;align-items:stretch;">
                 <div style="display:flex;flex-direction:column;min-width:0;">
@@ -2400,33 +2406,33 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
-<script src="/vendor/cvstudio/api-transport.js?v=v24.6.379"></script>
-<script src="/vendor/cvstudio/page-nav.js?v=v24.6.379"></script>
-<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.379"></script>
-<script src="/vendor/cvstudio/create-profile.js?v=v24.6.379"></script>
-<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.379"></script>
-<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.379"></script>
-<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.379"></script>
-<script src="/vendor/cvstudio/company-profile.js?v=v24.6.379"></script>
-<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.379"></script>
-<script src="/vendor/cvstudio/appearance.js?v=v24.6.379"></script>
-<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.379"></script>
-<script src="/vendor/cvstudio/docx-export.js?v=v24.6.379"></script>
-<script src="/vendor/cvstudio/the-owl.js?v=v24.6.379"></script>
-<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.379"></script>
-<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.379"></script>
-<script src="/vendor/cvstudio/settings.js?v=v24.6.379"></script>
-<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.379"></script>
-<script src="/vendor/cvstudio/tab-status.js?v=v24.6.379"></script>
-<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.379"></script>
-<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.379"></script>
-<script src="/vendor/cvstudio/cv-format.js?v=v24.6.379"></script>
-<script src="/vendor/cvstudio/locks.js?v=v24.6.379"></script>
-<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.379"></script>
-<script src="/vendor/cvstudio/ppc.js?v=v24.6.379"></script>
-<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.379"></script>
-<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.379"></script>
-<script src="/vendor/cvstudio/batch-format.js?v=v24.6.379"></script>
+<script src="/vendor/cvstudio/api-transport.js?v=v24.6.380"></script>
+<script src="/vendor/cvstudio/page-nav.js?v=v24.6.380"></script>
+<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.380"></script>
+<script src="/vendor/cvstudio/create-profile.js?v=v24.6.380"></script>
+<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.380"></script>
+<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.380"></script>
+<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.380"></script>
+<script src="/vendor/cvstudio/company-profile.js?v=v24.6.380"></script>
+<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.380"></script>
+<script src="/vendor/cvstudio/appearance.js?v=v24.6.380"></script>
+<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.380"></script>
+<script src="/vendor/cvstudio/docx-export.js?v=v24.6.380"></script>
+<script src="/vendor/cvstudio/the-owl.js?v=v24.6.380"></script>
+<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.380"></script>
+<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.380"></script>
+<script src="/vendor/cvstudio/settings.js?v=v24.6.380"></script>
+<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.380"></script>
+<script src="/vendor/cvstudio/tab-status.js?v=v24.6.380"></script>
+<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.380"></script>
+<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.380"></script>
+<script src="/vendor/cvstudio/cv-format.js?v=v24.6.380"></script>
+<script src="/vendor/cvstudio/locks.js?v=v24.6.380"></script>
+<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.380"></script>
+<script src="/vendor/cvstudio/ppc.js?v=v24.6.380"></script>
+<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.380"></script>
+<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.380"></script>
+<script src="/vendor/cvstudio/batch-format.js?v=v24.6.380"></script>
 <script>
 
 document.addEventListener('DOMContentLoaded', initPageNavPin);
@@ -2444,9 +2450,9 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 
 </script>
-<script src="/vendor/cvstudio/input-file.js?v=v24.6.379"></script>
-<script src="/vendor/cvstudio/stats.js?v=v24.6.379"></script>
-<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.379"></script>
+<script src="/vendor/cvstudio/input-file.js?v=v24.6.380"></script>
+<script src="/vendor/cvstudio/stats.js?v=v24.6.380"></script>
+<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.380"></script>
 <script>
 try { updateSummaryLockUI(); } catch(e) {}
 try { updateCvScoringLockUI(); } catch(e) {}

@@ -350,6 +350,35 @@ async function cvStudioOpenDownloadDirectory(kind) {
   }
 }
 
+// Output toolbars do not require visiting Settings first. Refresh persisted
+// destinations before opening so another tab's folder change is respected.
+async function cvStudioOpenOutputFolder(kind) {
+  try {
+    await cvStudioLoadDownloadFolderState();
+    return await cvStudioOpenDownloadDirectory(kind);
+  } catch(error) {
+    showToast((error && error.message) || 'Could not load the output folder.', 'err');
+    return false;
+  }
+}
+
+function cvStudioInitOutputFolderButtons() {
+  document.querySelectorAll('[data-cv-open-ready]').forEach(function(button) {
+    var target = document.getElementById(button.getAttribute('data-cv-open-ready'));
+    if (!target) return;
+    function syncReady() {
+      var ready = !target.disabled && !target.hidden && target.style.display !== 'none';
+      button.disabled = !ready;
+      button.style.display = ready ? '' : 'none';
+    }
+    syncReady();
+    if (button._cvFolderReadyObserver) button._cvFolderReadyObserver.disconnect();
+    button._cvFolderReadyObserver = new MutationObserver(syncReady);
+    button._cvFolderReadyObserver.observe(target, {attributes:true, attributeFilter:['disabled','hidden','style']});
+  });
+}
+document.addEventListener('DOMContentLoaded', cvStudioInitOutputFolderButtons);
+
 async function cvStudioClearDownloadDirectory(kind) {
   kind = normalizeCvDownloadDestination(kind);
   var config = cvStudioDownloadDestinationConfig(kind);

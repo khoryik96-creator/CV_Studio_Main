@@ -28,7 +28,7 @@
 - Current merged source: v24.6.378 (`a5bf89d`), verified 2026-09-05.
 - PR #189 merged as `2c216c6`; PR #185 merged as `b84c36f`. Neither is an
   active branch claim. PR #191 is merged with owner approval. Current work is
-  v24.6.379 on `codex/pr192-v24.6.379-preserve-corrected-casing`; PR number is
+  v24.6.380 on `codex/pr192-v24.6.380-output-folder-shortcuts`; PR number is
   provisional, with no PR opened and no merge authorized yet.
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
@@ -54,10 +54,25 @@
   #184 then merged v24.6.363 as `1912d48`; PR #186 merged v24.6.368 as
   `fbdf0e7`; PR #187 merged v24.6.369 as `2f345b7`; PR #188 merged v24.6.370
   as `b52b5b0`.
-- Current stop: v24.6.379 skill-casing corrective is unmerged. No release or native
+- Current stop: v24.6.380 output-folder shortcuts and skill-casing fix are unmerged. No release or native
   protected build is produced by this work; protected builds remain manual.
 
-## v24.6.379 skill-casing corrective (unmerged)
+## v24.6.380 output-folder shortcuts (unmerged)
+
+- Add accessible folder icons beside ready outputs for Format/Blind CV,
+  their batch outputs, Summary, Company Profile, Blind JD and The Owl.
+- Refresh the existing saved destination before opening it; batch shortcuts
+  use the output's saved kind, not the current processing mode. Icons follow
+  readiness/reset state. Browser-only export categories remain unchanged,
+  as explicitly requested by the owner.
+- Includes the v24.6.379 skill-casing corrective below. No new routes,
+  download categories, dependencies or storage schemas.
+- Validation: 1117 Python tests passed, 4 skipped, 128 subtests; all 21 frontend
+  fixtures; 24 live source-smoke assertions; repository consistency and
+  Windows protected-source/dependency preflight passed. No paid calls or
+  native protected build were run.
+
+## v24.6.379 skill-casing corrective (included in unmerged v24.6.380)
 
 - Skill separator recovery keeps matched provider ASCII letter casing while
   retaining the source's punctuation and symbols. No rewording or additional

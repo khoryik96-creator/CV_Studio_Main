@@ -286,7 +286,19 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Skill-casing corrective — v24.6.379, ACTIVE AND UNMERGED.** Branch
+- **Output-folder shortcuts — v24.6.380, ACTIVE AND UNMERGED.** Current branch:
+  `codex/pr192-v24.6.380-output-folder-shortcuts` (PR number remains provisional;
+  no PR opened). Includes the v24.6.379 skill-casing corrective below. Adds
+  accessible folder-icon shortcuts beside ready Format/Blind CV, batch-all and
+  individual batch downloads, Summary DOCX, Company Profile, Blind JD and both
+  Owl export toolbars. Shortcuts track existing output readiness and refresh
+  persisted folder settings before opening; batch routing uses the saved file
+  kind, not the current UI mode. Settings shortcuts remain. The owner explicitly
+  excluded browser-only exports (e.g. Stats, Lead Finder and CV Scoring); no new
+  download category, route, dependency, data schema or paid call is introduced.
+  Await owner instruction before PR creation or merge.
+
+- **Skill-casing corrective — v24.6.379, INCLUDED IN v24.6.380 ABOVE.** Previous branch
   `codex/pr192-v24.6.379-preserve-corrected-casing` (PR #192 is provisional;
   no PR opened yet). Source skill separator recovery retains matched provider
   ASCII letter casing instead of restoring the source's lowercase spelling.

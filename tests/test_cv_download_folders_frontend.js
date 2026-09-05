@@ -466,6 +466,77 @@ async function staleStartupRegistrationRepairContract() {
   assert.ok(toasts[0].message.includes('startup location updated'));
 }
 
+async function outputFolderShortcutsContract() {
+  const targets = {};
+  const buttons = [];
+  const markup = [...html.matchAll(/<button[^>]*data-cv-open-ready="([^"]+)"[^>]*>/g)];
+  assert.strictEqual(markup.length,7,'all output toolbars, including both Owl controls');
+  for (const match of markup) {
+    assert.ok(match[0].includes('aria-label='));
+    assert.ok(match[0].includes('title="Open configured output folder"'));
+    const id = match[1];
+    targets[id] = {disabled:true,hidden:false,style:{display:'none'}};
+    buttons.push({style:{},getAttribute(){return id;}});
+  }
+  assert.deepStrictEqual(Object.keys(targets).sort(),
+    ['btnDocx','btnBatchDownload','btnSummaryApplyDocx','companyOutput','anonJDOutput','theOwlWordBtn'].sort());
+  const observers=[];
+  const context={
+    document:{querySelectorAll(){return buttons;},getElementById(id){return targets[id];}},
+    MutationObserver:class {
+      constructor(callback){this.callback=callback;observers.push(this);}
+      observe(target,options){this.target=target;this.options=options;}
+      disconnect(){this.disconnected=true;}
+    },
+  };
+  loadFunctions(context,['cvStudioInitOutputFolderButtons']);
+  context.cvStudioInitOutputFolderButtons();
+  buttons.forEach(button=>assert.strictEqual(button.style.display,'none'));
+  observers.forEach(observer=>{
+    observer.target.disabled=false; observer.target.style.display=''; observer.callback();
+  });
+  buttons.forEach(button=>{assert.strictEqual(button.disabled,false);assert.strictEqual(button.style.display,'');});
+  observers.forEach(observer=>{observer.target.disabled=true;observer.callback();});
+  buttons.forEach(button=>assert.strictEqual(button.disabled,true));
+  context.cvStudioInitOutputFolderButtons();
+  assert.ok(observers.slice(0,7).every(observer=>observer.disconnected),'no duplicate observers');
+
+  const calls=[];
+  const opener={
+    async cvStudioLoadDownloadFolderState(){calls.push('load');},
+    async cvStudioOpenDownloadDirectory(kind){calls.push(kind);return true;},
+    showToast(message){calls.push(message);},
+  };
+  loadFunctions(opener,['cvStudioOpenOutputFolder']);
+  assert.strictEqual(await opener.cvStudioOpenOutputFolder('owl'),true);
+  assert.deepStrictEqual(calls,['load','owl']);
+  calls.length=0;
+  opener.cvStudioLoadDownloadFolderState=async()=>{throw new Error('Folder status failed');};
+  assert.strictEqual(await opener.cvStudioOpenOutputFolder('summary'),false);
+  assert.deepStrictEqual(calls,['Folder status failed']);
+
+  const batch={
+    _batchMode:'formatted',
+    _batchFiles:[{id:'blind-ready',filename:'CV.docx',status:'done-blind',downloadKind:'blind'}],
+    _batchBlobs:[{filename:'CV.docx',kind:'blind'}],
+    async cvStudioOpenOutputFolder(kind){calls.push(kind);return true;},
+    showToast(message){calls.push(message);},
+  };
+  calls.length=0;
+  loadFunctions(batch,['openBatchOutputFolder']);
+  await batch.openBatchOutputFolder('blind-ready');
+  await batch.openBatchOutputFolder();
+  assert.deepStrictEqual(calls,['blind','blind'],'stored output kind, not current mode');
+  await batch.openBatchOutputFolder('missing');
+  assert.strictEqual(calls.at(-1),'File not ready');
+  const buttonExpression=html.match(/var dlBtn = [\s\S]*?: '';/)[0];
+  for (const status of ['pending','processing','done-err','done-ok','done-blind']) {
+    const sandbox={bf:{id:'fixture',status}};
+    vm.runInNewContext(buttonExpression,sandbox);
+    assert.strictEqual(sandbox.dlBtn.includes('openBatchOutputFolder'),status==='done-ok'||status==='done-blind');
+  }
+}
+
 Promise.resolve()
   .then(markupAndWiringContract)
   .then(filenameSafetyContract)
@@ -479,5 +550,6 @@ Promise.resolve()
   .then(batchModeContract)
   .then(downloadCallerOutcomesContract)
   .then(staleStartupRegistrationRepairContract)
+  .then(outputFolderShortcutsContract)
   .then(()=>console.log('CV download folder frontend fixtures passed'))
   .catch((error)=>{console.error(error);process.exit(1);});
