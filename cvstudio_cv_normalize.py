@@ -1126,6 +1126,16 @@ def _recover_cv_source_skill_item_punctuation(parsed, source_text):
                 candidate += " " + following
                 cursor += 1
             if content_key(candidate) == parsed_key and re.search(r"[·•]", candidate):
+                # Restore punctuation, not stale source casing. Transfer only
+                # matched ASCII characters; keep every source separator/symbol
+                # and leave ambiguous Unicode mappings in their original form.
+                source_chars = re.findall(r"[A-Za-z0-9]", candidate)
+                parsed_chars = re.findall(r"[A-Za-z0-9]", parsed_items)
+                if "".join(source_chars).lower() == "".join(parsed_chars).lower():
+                    corrected_chars = iter(parsed_chars)
+                    candidate = re.sub(
+                        r"[A-Za-z0-9]", lambda match: next(corrected_chars), candidate
+                    )
                 skill["items"] = candidate
                 break
     return parsed

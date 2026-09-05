@@ -93,7 +93,10 @@ this:
   matching browser and generator functions in sync.
 - **`_recover_cv_source_skill_item_punctuation`** — restores visible middle-dot
   separators only for a category-anchored source span whose words exactly match
-  the provider items after punctuation is ignored.
+  the provider items after punctuation is ignored. Matched ASCII letter casing
+  comes from the provider rather than the source, so the final normalization
+  does not undo auto-correction. Source separators, symbols and word order stay
+  intact; this pass never invents spelling corrections.
 - **`_strip_cv_recruitment_tracking_metadata`** — removes JobStreet/SiVA
   retrieval/application metadata recursively before it can render in any body
   section.

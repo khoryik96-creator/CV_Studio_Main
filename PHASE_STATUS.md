@@ -25,12 +25,11 @@
   `54298b9b6a822e1f36c9c101f1ff4edc9c7e835f`
 - Phase 7B-4 source baseline Git commit (merged Phase 7B-3):
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
-- Current merged source: v24.6.374 (`ebdc0f8`), verified 2026-09-05.
+- Current merged source: v24.6.378 (`a5bf89d`), verified 2026-09-05.
 - PR #189 merged as `2c216c6`; PR #185 merged as `b84c36f`. Neither is an
-  active branch claim. PR #191 is the only current feature/review work here:
-  auto-correction, Open Folder and download fallback corrections, v24.6.378.
-  Local review branch: `codex/pr191-v24.6.378-review-fixes`; existing PR source:
-  `claude/pr157-chatgpt-fix-zke4cy`. Await owner approval before merge.
+  active branch claim. PR #191 is merged with owner approval. Current work is
+  v24.6.379 on `codex/pr192-v24.6.379-preserve-corrected-casing`; PR number is
+  provisional, with no PR opened and no merge authorized yet.
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
@@ -55,10 +54,23 @@
   #184 then merged v24.6.363 as `1912d48`; PR #186 merged v24.6.368 as
   `fbdf0e7`; PR #187 merged v24.6.369 as `2f345b7`; PR #188 merged v24.6.370
   as `b52b5b0`.
-- Current stop: PR #191 review corrections are unmerged. No release or native
+- Current stop: v24.6.379 skill-casing corrective is unmerged. No release or native
   protected build is produced by this work; protected builds remain manual.
 
-## v24.6.378 PR #191 review corrections (unmerged)
+## v24.6.379 skill-casing corrective (unmerged)
+
+- Skill separator recovery keeps matched provider ASCII letter casing while
+  retaining the source's punctuation and symbols. No rewording or additional
+  AI call; the existing exact-content guard remains.
+- Regression coverage includes `/parse` through real DOCX generation with
+  correction ON/OFF, matched letter casing, internal commas, symbols, dates,
+  different-content rejection and repeated-normalization stability.
+- Validation: 1117 Python tests passed, 4 skipped, 128 subtests; all 21 frontend
+  fixtures; 24 live source-smoke assertions; syntax, repository consistency
+  and Windows protected-source/dependency preflight passed. No paid calls or
+  native protected build were run.
+
+## v24.6.378 PR #191 review corrections (merged)
 
 - Keep server file/request rejections from triggering a browser download;
   allow fallback only for recognized folder/storage failures. Keep uncertain

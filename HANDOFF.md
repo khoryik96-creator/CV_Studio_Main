@@ -146,10 +146,10 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 7. Recently completed (already on `master`)
 
-- **Current merged baseline, checked 2026-09-05: v24.6.374, `ebdc0f8`.**
+- **Current merged baseline, checked 2026-09-05: v24.6.378, `a5bf89d`.**
   PR #189 merged as `2c216c6` on 2026-08-29; PR #185 merged as `b84c36f` on
-  2026-09-04. Their old branches are not active claims. The current PR #191
-  review is listed in section 8; nothing from it is merged yet.
+  2026-09-04. PR #191 merged as `a5bf89d` on 2026-09-05 after all hosted
+  checks passed. Their old branches are not active claims.
 
 - **Anonymization edge-case corrective — v24.6.370 / PR #188, MERGED.**
   PR #188 merged to `master` as `b52b5b0`; all three hosted Windows/macOS jobs
@@ -286,7 +286,17 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **PR #191 — v24.6.378, ACTIVE AND UNMERGED.** Existing PR source branch:
+- **Skill-casing corrective — v24.6.379, ACTIVE AND UNMERGED.** Branch
+  `codex/pr192-v24.6.379-preserve-corrected-casing` (PR #192 is provisional;
+  no PR opened yet). Source skill separator recovery retains matched provider
+  ASCII letter casing instead of restoring the source's lowercase spelling.
+  Original separators/symbols and existing content-match guards remain intact.
+  Tests reproduce the enabled case through `/parse` and real DOCX generation,
+  verify OFF output and protect internal commas, symbols, metrics and dates.
+  No route, schema, dependency, credentials or paid-call changes. Await owner
+  instructions before PR creation or merge.
+
+- **PR #191 — v24.6.378, MERGED as `a5bf89d`.** Historical PR source branch:
   `claude/pr157-chatgpt-fix-zke4cy`; Codex local review branch:
   `codex/pr191-v24.6.378-review-fixes`. Includes Claude's off-by-default
   language auto-correction (single/batch formatting AND JobAdder Create Profile)
@@ -295,7 +305,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   invalid files/requests, and make single/batch download messages accurately
   distinguish folder saves, browser fallback and uncertainty. No extra paid
   calls, schema/route changes, credential changes or native protected build.
-  Await owner merge approval. See issue #35 for the live claim and test results.
+  Merged with owner approval. See issue #35 for the completed claim and test results.
 
 - **Anonymization final edge corrective — v24.6.371 / PR #189, MERGED
   as `2c216c6`.** Historical branch
