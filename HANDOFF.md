@@ -146,7 +146,8 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 7. Recently completed (already on `master`)
 
-- **Current merged baseline, checked 2026-09-06: v24.6.380, `ac2afab`.**
+- **Current merged baseline, checked 2026-09-06: v24.6.381, `a5fa125`.**
+  PR #193 merged after all three hosted checks passed.
   PR #189 merged as `2c216c6` on 2026-08-29; PR #185 merged as `b84c36f` on
   2026-09-04. PR #191 merged as `a5bf89d` on 2026-09-05 after all hosted
   checks passed. PR #192 merged v24.6.380 as `ac2afab`; its three hosted checks
@@ -287,8 +288,18 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Batch/Owl lifecycle corrective — v24.6.381, ACTIVE AND UNMERGED.** Branch
-  `codex/pr193-v24.6.381-batch-owl-reliability` (193 provisional; no PR opened).
+- **Unused-helper cleanup — v24.6.383, ACTIVE AND UNMERGED.** Branch
+  `codex/pr195-v24.6.383-unused-helper-cleanup` (195 provisional; no PR opened).
+  Independently based on master `a5fa125`; removes only four unreferenced
+  definitions: `_spider_fetch_candidate_bundle`, `_lead_provider_from_model`,
+  `_lead_pricing_for_model` and `_blind_summary_vertical_org_identities`.
+  Their live replacements, all other function bodies and 118-route seal remain.
+  No dependencies, schemas or protected-package boundary changes. The separate
+  `codex/pr194-v24.6.382-async-handler-safety` branch contains the behavioral
+  fixes; they are NOT included here. Rebase/re-stamp before merging second.
+
+- **Batch/Owl lifecycle corrective — v24.6.381, MERGED in PR #193.** Branch
+  `codex/pr193-v24.6.381-batch-owl-reliability` is complete.
   Owner authorized fixes from the broader master audit: unique row IDs bind
   batch downloads to the correct CV; completed outputs survive later runs;
   removals prune downloads and are blocked during processing; mixed Format/Blind
@@ -297,7 +308,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   with controls hidden during regeneration. Tests cover complete mocked batch
   and Owl lifecycles with no live AI/JobAdder calls. No routes, schemas,
   dependencies, CV-content pipeline or protected-package boundaries changed.
-  Await owner instruction before PR creation or merge.
+  Merged with owner approval as `a5fa125`; no active claim remains.
 
 - **Output-folder shortcuts — v24.6.380, MERGED in PR #192.** Completed branch:
   `codex/pr192-v24.6.380-output-folder-shortcuts`. Includes the v24.6.379

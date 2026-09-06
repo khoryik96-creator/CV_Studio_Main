@@ -701,14 +701,6 @@ def _blind_summary_vertical_identity_replacements(lines):
     return identities
 
 
-def _blind_summary_vertical_org_identities(lines):
-    """Compatibility wrapper returning only dated organization identities."""
-    return [
-        identity
-        for identity, _replacement in _blind_summary_vertical_identity_replacements(lines)
-    ]
-
-
 def _blind_summary_pipe_identity(line):
     """Return the likely organization/institution from a dated pipe row."""
     parts = [part.strip() for part in str(line or "").split("|")]
