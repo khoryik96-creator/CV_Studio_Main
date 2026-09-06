@@ -60,7 +60,7 @@ function markupAndWiringContract() {
   assert.ok(showSettings.includes("downloads:'Downloads'"));
   assert.ok(showSettings.includes("'downloads'"));
   assert.ok(showSettings.includes('renderCvDownloadSettings'));
-  const singleDownload = functionSource(html, 'downloadDocx');
+  const singleDownload = functionSource(html, 'downloadDocxImpl');
   assert.ok(singleDownload.includes('cvStudioSaveDownloadBlob'));
   assert.ok(singleDownload.includes('cvStudioShowDownloadResult'));
 
@@ -418,7 +418,7 @@ async function downloadCallerOutcomesContract() {
     async cvStudioPrepareDownloadDestination(){return {configured:true,handle:{native:true}};},
     showToast(message,level){toasts.push({message,level});},
   };
-  loadFunctions(context,['cvStudioShowDownloadResult','downloadDocx','downloadSingleBatchFile','downloadBatchZip']);
+  loadFunctions(context,['cvStudioShowDownloadResult','downloadDocx','downloadDocxImpl','downloadSingleBatchFile','downloadBatchZip']);
   for (const run of [()=>context.downloadDocx(),()=>context.downloadSingleBatchFile('row')]) {
     await run();
     assert.strictEqual(toasts.at(-1).level,'warn');
@@ -523,7 +523,7 @@ async function outputFolderShortcutsContract() {
     showToast(message){calls.push(message);},
   };
   calls.length=0;
-  loadFunctions(batch,['openBatchOutputFolder']);
+  loadFunctions(batch,['openBatchOutputFolder','openBatchOutputFolderImpl']);
   await batch.openBatchOutputFolder('blind-ready');
   await batch.openBatchOutputFolder();
   assert.deepStrictEqual(calls,['blind','blind'],'stored output kind, not current mode');

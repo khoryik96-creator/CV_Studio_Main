@@ -25,11 +25,11 @@
   `54298b9b6a822e1f36c9c101f1ff4edc9c7e835f`
 - Phase 7B-4 source baseline Git commit (merged Phase 7B-3):
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
-- Current merged source: v24.6.381 (`a5fa125`), verified 2026-09-06.
+- Current merged source: v24.6.382 (`75c43b6`), verified 2026-09-06.
 - PR #189 merged as `2c216c6`; PR #185 merged as `b84c36f`. Neither is an
-  active branch claim. PRs #191–#193 are merged with owner approval. Current work is
-  v24.6.383 on `codex/pr195-v24.6.383-unused-helper-cleanup`; PR number is
-  provisional, with no PR opened and no merge authorized yet.
+  active branch claim. PRs #191–#194 are merged with owner approval. Current work is
+  v24.6.383 on `codex/pr195-v24.6.383-unused-helper-cleanup`, integrating
+  the v24.6.382 fixes from PR #194. Owner approved merging both after checks.
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
@@ -54,16 +54,25 @@
   #184 then merged v24.6.363 as `1912d48`; PR #186 merged v24.6.368 as
   `fbdf0e7`; PR #187 merged v24.6.369 as `2f345b7`; PR #188 merged v24.6.370
   as `b52b5b0`.
-- Current stop: v24.6.383 unused-helper cleanup is unmerged. PR #193 is merged. No release or native
+- Current stop: v24.6.383 cleanup awaits checks and merge after PR #194. No release or native
   protected build is produced by this work; protected builds remain manual.
 
-## v24.6.383 unused-helper cleanup (unmerged)
+## v24.6.383 unused-helper cleanup (owner-approved merge pending checks)
 
-- Deletes four confirmed unreferenced Python definitions only. The live
-  implementations and all remaining function bodies stay unchanged.
-- Independent of the v24.6.382 async-handler branch; no behavior fixes are
-  included here. Rebase and re-stamp this branch if it merges second.
-- No route, schema, dependency, CV-formatting or protected-boundary changes.
+- Removes only four unreferenced Python definitions. All other function bodies
+  remain unchanged, including the v24.6.382 fixes merged in PR #194.
+- Integrated validation: 1117 passed, 4 skipped, 128 subtests; all 23 frontend
+  groups; 24 live source-smoke assertions; protected-source/dependency preflight
+  and repository consistency passed. No native protected compilation.
+
+## v24.6.382 async-handler corrective (merged in PR #194)
+
+- Owner requested fixes from Claude's audit. Guard OneNote, Outlook and CV
+  download entry points, preserve failed-disconnect state and close reserved
+  tabs on uncertain test-draft responses. Never replay uploads or drafts.
+- Queue skip flags are released on interrupted one-item profile creation.
+- No CV-formatting, route, schema, dependency or protected-build changes.
+- Four unused Python helpers are tracked separately from behavior changes.
 
 ## v24.6.381 batch/Owl lifecycle corrective (merged in PR #193)
 

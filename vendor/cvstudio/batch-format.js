@@ -519,6 +519,13 @@ async function downloadSingleBatchFile(id) {
 }
 
 async function openBatchOutputFolder(id) {
+  try { return await openBatchOutputFolderImpl(id); }
+  catch (e) {
+    showToast('Could not open the output folder. Check Settings → Downloads.', 'err');
+    return false;
+  }
+}
+async function openBatchOutputFolderImpl(id) {
   if (!id && _batchBlobs.length) {
     var kinds = Array.from(new Set(_batchBlobs.map(function(item){ return item.kind; })));
     var opened = true;
