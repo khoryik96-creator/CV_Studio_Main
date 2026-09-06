@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.383"
+_INSTALL_RECEIPT_VERSION = "v24.6.384"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -262,6 +262,7 @@ from cvstudio_downloads import (
     default_download_state_path,
 )
 from cvstudio_ai_costs import (
+    AI_COST_GUARDRAIL_ENV as _PHASE5B_GUARDRAIL_ENV,
     MODEL_PRICING_USD_PER_MILLION as _PHASE5B_MODEL_PRICING,
     cost_details as _phase5b_cost_details,
     enforce_request_guardrail as _phase5b_enforce_request_guardrail,
@@ -273,6 +274,16 @@ from cvstudio_ai_costs import (
     pricing_for_model as _phase5b_pricing_for_model,
     unavailable_external_billing as _phase5b_unavailable_external_billing,
     usage_int as _phase5b_usage_int,
+)
+
+# The per-request AI spend ceiling is only active when its environment variable
+# is set, and no launcher was setting one, so the guardrail shipped switched
+# off. Apply a default that no legitimate request reaches - a very large CV
+# estimates around $4 on the most expensive configured model - while still
+# blocking a runaway payload. Setting the variable explicitly still wins.
+_CVSTUDIO_DEFAULT_AI_REQUEST_CEILING_USD = "10.00"
+os.environ.setdefault(
+    _PHASE5B_GUARDRAIL_ENV, _CVSTUDIO_DEFAULT_AI_REQUEST_CEILING_USD
 )
 from cvstudio_ai_providers import (
     _openai_payload_from_anthropic_shape,
@@ -346,7 +357,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.383"
+_CVSTUDIO_VERSION = "v24.6.384"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -3897,6 +3908,7 @@ def jobadder_onenote_activity_diagnostic():
 
 
 _JA_ACTIVITY_CREATE_DIAG_USED = set()
+_JA_ACTIVITY_CREATE_DIAG_LOCK = threading.Lock()
 
 
 def _ja_activity_diagnostic_post(path, payload, timeout=25):
@@ -3923,10 +3935,14 @@ def jobadder_onenote_activity_create_diagnostic():
         return jsonify({"error": "Type CREATE ONE MAX LOW TEST exactly before running the controlled POST."}), 400
 
     guard_key = (_CVSTUDIO_VERSION, candidate_id)
-    if guard_key in _JA_ACTIVITY_CREATE_DIAG_USED:
-        return jsonify({"error": "The one-shot controlled POST has already been run in this CV Studio session. Restarting is intentionally required before any repeat test."}), 409
-    # Mark before the network call so a timeout/double-click cannot emit a second POST.
-    _JA_ACTIVITY_CREATE_DIAG_USED.add(guard_key)
+    # Claim the one-shot slot atomically. A bare check-then-add lets two
+    # concurrent server threads both pass the test and emit two POSTs, which is
+    # exactly what this guard exists to prevent.
+    with _JA_ACTIVITY_CREATE_DIAG_LOCK:
+        if guard_key in _JA_ACTIVITY_CREATE_DIAG_USED:
+            return jsonify({"error": "The one-shot controlled POST has already been run in this CV Studio session. Restarting is intentionally required before any repeat test."}), 409
+        # Mark before the network call so a timeout/double-click cannot emit a second POST.
+        _JA_ACTIVITY_CREATE_DIAG_USED.add(guard_key)
 
     cid_q = urllib.parse.quote(candidate_id, safe="")
     list_path = "candidates/{}/activities".format(cid_q)
@@ -13893,6 +13909,7 @@ from cvstudio_blind_mask import (
     _blind_prepare_summary_bullets,
     _blind_replace_org_terms_in_text,
     _blind_restore_cv_bullet_structure,
+    _blind_scrub_candidate_identity,
     _blind_walk_strings,
 )
 
@@ -14126,6 +14143,12 @@ def blind_cv():
         # names that the AI may have left inside bullets, project descriptions,
         # achievements, highlights, summaries, or additional information.
         blinded = _blind_postprocess_company_mentions(blinded, cv_data)
+
+        # The company sweep above only masks employers. Sweep the candidate's own
+        # name, email, phone and personal links across the whole document too, so
+        # a bullet the model rewrote but did not anonymise cannot carry direct
+        # identity through to preview and export.
+        blinded = _blind_scrub_candidate_identity(blinded, cv_data)
         blinded = _normalize_cv_structured_content(blinded)
 
         out = {"ok": True, "data": blinded, "usage": usage, "model": model, "provider": llm_provider}
