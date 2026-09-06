@@ -67,7 +67,7 @@ function markupAndWiringContract() {
   const batchOne = functionSource(html, 'downloadSingleBatchFile');
   const batchAll = functionSource(html, 'downloadBatchZip');
   assert.ok(batchOne.includes('item.kind || bf.downloadKind'));
-  assert.ok(batchAll.includes('firstItem.kind'));
+  assert.ok(batchAll.includes('destinations[item.kind]'));
   assert.ok(!batchOne.includes('_batchMode'));
   assert.ok(!batchAll.includes('_batchMode'));
   assert.ok(batchOne.includes('cvStudioSaveDownloadBlob'));
@@ -389,7 +389,7 @@ async function batchModeContract() {
   const context={
     _batchMode:'blind',
     _batchFiles:[{id:'formatted-row',filename:'Formatted.docx',status:'done-ok',downloadKind:'formatted'}],
-    _batchBlobs:[{filename:'Formatted.docx',blob:{id:1},kind:'formatted'}],
+    _batchBlobs:[{id:'formatted-row',filename:'Formatted.docx',blob:{id:1},kind:'formatted'}],
     cvStudioSaveDownloadBlob:async (blob,filename,kind)=>{saveCalls.push({blob,filename,kind});return {method:'folder',filename,folder:'Formatted'};},
     cvStudioPrepareDownloadDestination:async (kind)=>({kind,configured:true,folder:{path:'C:\\Formatted'},handle:{native:true}}),
     showToast(message,level){toasts.push({message,level});},setTimeout(fn){fn();},
@@ -413,7 +413,7 @@ async function downloadCallerOutcomesContract() {
   const context={
     String,window:{_docxBlob:{},_isBlind:false},_parsedData:null,
     _batchFiles:[{id:'row',filename:'CV.docx',downloadKind:'formatted'}],
-    _batchBlobs:[{filename:'CV.docx',blob:{},kind:'formatted'}],
+    _batchBlobs:[{id:'row',filename:'CV.docx',blob:{},kind:'formatted'}],
     async cvStudioSaveDownloadBlob(){return next;},
     async cvStudioPrepareDownloadDestination(){return {configured:true,handle:{native:true}};},
     showToast(message,level){toasts.push({message,level});},
@@ -518,7 +518,7 @@ async function outputFolderShortcutsContract() {
   const batch={
     _batchMode:'formatted',
     _batchFiles:[{id:'blind-ready',filename:'CV.docx',status:'done-blind',downloadKind:'blind'}],
-    _batchBlobs:[{filename:'CV.docx',kind:'blind'}],
+    _batchBlobs:[{id:'blind-ready',filename:'CV.docx',kind:'blind'}],
     async cvStudioOpenOutputFolder(kind){calls.push(kind);return true;},
     showToast(message){calls.push(message);},
   };
