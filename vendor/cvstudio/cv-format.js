@@ -538,6 +538,13 @@ function esc(s) {
 }
 
 async function downloadDocx() {
+  try { return await downloadDocxImpl(); }
+  catch (e) {
+    showToast('CV download could not be confirmed. Check the destination before retrying.', 'err');
+    return false;
+  }
+}
+async function downloadDocxImpl() {
   if (!window._docxBlob) { showToast('Format a CV first', 'err'); return; }
   var name;
   if (window._isBlind) {

@@ -56,7 +56,8 @@ independent gate rather than the first place a regression is discovered:
 ```bash
 python -m venv .venv_test
 .venv_test/bin/pip install flask pytest python-docx olefile reportlab beautifulsoup4 pypdf requests openpyxl
-npm install   # generate.js needs adm-zip; without node_modules the /generate-docx
+npm install --ignore-scripts --no-audit --no-fund --package-lock=false
+              # generate.js needs adm-zip; without node_modules the /generate-docx
               # DOCX-render tests (test_bullet_nesting, test_long_cv_output_corrective,
               # the phase2a support-bundle regression) all 500 and look like breakage.
 SALARY_COMPARISON_DATA_DIR=/tmp/sal/data .venv_test/bin/python -m pytest tests/ -q
@@ -146,7 +147,8 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 7. Recently completed (already on `master`)
 
-- **Current merged baseline, checked 2026-09-06: v24.6.380, `ac2afab`.**
+- **Current merged baseline, checked 2026-09-06: v24.6.381, `a5fa125`.**
+  PR #193 merged after all three hosted checks passed.
   PR #189 merged as `2c216c6` on 2026-08-29; PR #185 merged as `b84c36f` on
   2026-09-04. PR #191 merged as `a5bf89d` on 2026-09-05 after all hosted
   checks passed. PR #192 merged v24.6.380 as `ac2afab`; its three hosted checks
@@ -287,8 +289,20 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Batch/Owl lifecycle corrective — v24.6.381, ACTIVE AND UNMERGED.** Branch
-  `codex/pr193-v24.6.381-batch-owl-reliability` (193 provisional; no PR opened).
+- **Async-handler audit corrective — v24.6.382, ACTIVE AND UNMERGED.** Branch
+  `codex/pr194-v24.6.382-async-handler-safety` (194 provisional; no PR opened).
+  OneNote section/upload, Outlook settings/login/test and CV download/folder
+  entry points report unexpected failures without replaying remote writes.
+  Failed Outlook disconnects preserve the known account/configuration state;
+  settings changes and reconnect stop on that failure. An uncertain test-draft
+  response closes its blank tab and asks the user to check Outlook Drafts.
+  One-item Create Profile runs always clear their temporary queue skip flags.
+  Existing delegated upload/folder catches remain intact. No routes, schemas,
+  dependencies, CV content/formatting or protected-package boundaries change.
+  The four unused Python helpers from the audit are separate cleanup work.
+
+- **Batch/Owl lifecycle corrective — v24.6.381, MERGED in PR #193.** Branch
+  `codex/pr193-v24.6.381-batch-owl-reliability` is complete.
   Owner authorized fixes from the broader master audit: unique row IDs bind
   batch downloads to the correct CV; completed outputs survive later runs;
   removals prune downloads and are blocked during processing; mixed Format/Blind
@@ -297,7 +311,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   with controls hidden during regeneration. Tests cover complete mocked batch
   and Owl lifecycles with no live AI/JobAdder calls. No routes, schemas,
   dependencies, CV-content pipeline or protected-package boundaries changed.
-  Await owner instruction before PR creation or merge.
+  Merged with owner approval as `a5fa125`; no active claim remains.
 
 - **Output-folder shortcuts — v24.6.380, MERGED in PR #192.** Completed branch:
   `codex/pr192-v24.6.380-output-folder-shortcuts`. Includes the v24.6.379
