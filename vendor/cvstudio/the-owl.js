@@ -675,6 +675,7 @@ async function generateTheOwl() {
   window._theOwlPlainText = '';
   window._theOwlHTML = '';
   window._theOwlMeta = meta;
+  ['theOwlCopyBtn','theOwlWordBtn','theOwlPdfBtn'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display='none'; });
   if (badge) badge.textContent = meta.location;
   if (footer) footer.style.display = 'none';
   if (output) output.classList.add('show');
@@ -714,7 +715,7 @@ async function generateTheOwl() {
 }
 function buildTheOwlPlainText() {
   var meta = window._theOwlMeta || getMarketMeta();
-  var body = window._theOwlPlainText || ((document.getElementById('theOwlBody') || {}).innerText || '');
+  var body = window._theOwlPlainText || '';
   return [
     'THE OWL TALENT MAP',
     'Generated: ' + new Date().toLocaleString('en-MY'),
@@ -735,8 +736,8 @@ function buildTheOwlPlainText() {
 }
 async function copyTheOwlReport() {
   var el = document.getElementById('theOwlBody');
-  if (!el || !el.innerText.trim()) { showToast('Generate The Owl map first', 'err'); return; }
-  var blocks = parseMarketBlocks(window._theOwlPlainText || el.innerText);
+  if (!el || !String(window._theOwlPlainText || '').trim()) { showToast('Generate The Owl map first', 'err'); return; }
+  var blocks = parseMarketBlocks(window._theOwlPlainText);
   var html = '<div style="font-family:Calibri,Arial,sans-serif;font-size:11pt;line-height:1.5">' + marketBlocksToHTML(blocks, true) + '</div>';
   var plain = buildTheOwlPlainText();
   try {
@@ -762,7 +763,7 @@ async function exportTheOwlWord() {
 }
 
 async function exportTheOwlWordImpl() {
-  var text = (window._theOwlPlainText || ((document.getElementById('theOwlBody') || {}).innerText || '')).trim();
+  var text = String(window._theOwlPlainText || '').trim();
   if (!text) { showToast('Generate The Owl map first', 'err'); return; }
   var meta = window._theOwlMeta || getMarketMeta();
   var bodyHtml = '<p class="market-meta-line"><strong>Target location:</strong> ' + _escDoc(meta.location) + '<br><strong>Priority industries:</strong> ' + _escDoc(meta.industries) + '</p>' + marketTextToDocHtml(text);
@@ -776,7 +777,7 @@ async function exportTheOwlPDF() {
 }
 
 async function exportTheOwlPDFImpl() {
-  var text = (window._theOwlPlainText || ((document.getElementById('theOwlBody') || {}).innerText || '')).trim();
+  var text = String(window._theOwlPlainText || '').trim();
   if (!text) { showToast('Generate The Owl map first', 'err'); return; }
   if (!(window.jspdf && window.jspdf.jsPDF)) {
     if (window.cvStudioLoadJSPDF) window.cvStudioLoadJSPDF(exportTheOwlPDF, function() { showToast('PDF library not loaded - try Word export instead', 'err'); });

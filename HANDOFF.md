@@ -146,10 +146,11 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 7. Recently completed (already on `master`)
 
-- **Current merged baseline, checked 2026-09-05: v24.6.378, `a5bf89d`.**
+- **Current merged baseline, checked 2026-09-06: v24.6.380, `ac2afab`.**
   PR #189 merged as `2c216c6` on 2026-08-29; PR #185 merged as `b84c36f` on
   2026-09-04. PR #191 merged as `a5bf89d` on 2026-09-05 after all hosted
-  checks passed. Their old branches are not active claims.
+  checks passed. PR #192 merged v24.6.380 as `ac2afab`; its three hosted checks
+  passed. Their old branches are not active claims.
 
 - **Anonymization edge-case corrective — v24.6.370 / PR #188, MERGED.**
   PR #188 merged to `master` as `b52b5b0`; all three hosted Windows/macOS jobs
@@ -286,9 +287,21 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Output-folder shortcuts — v24.6.380, ACTIVE AND UNMERGED.** Current branch:
-  `codex/pr192-v24.6.380-output-folder-shortcuts` (PR number remains provisional;
-  no PR opened). Includes the v24.6.379 skill-casing corrective below. Adds
+- **Batch/Owl lifecycle corrective — v24.6.381, ACTIVE AND UNMERGED.** Branch
+  `codex/pr193-v24.6.381-batch-owl-reliability` (193 provisional; no PR opened).
+  Owner authorized fixes from the broader master audit: unique row IDs bind
+  batch downloads to the correct CV; completed outputs survive later runs;
+  removals prune downloads and are blocked during processing; mixed Format/Blind
+  outputs retain their own destinations; failed new runs cannot report earlier
+  successes as their own. Owl export/copy accepts only generated report text,
+  with controls hidden during regeneration. Tests cover complete mocked batch
+  and Owl lifecycles with no live AI/JobAdder calls. No routes, schemas,
+  dependencies, CV-content pipeline or protected-package boundaries changed.
+  Await owner instruction before PR creation or merge.
+
+- **Output-folder shortcuts — v24.6.380, MERGED in PR #192.** Completed branch:
+  `codex/pr192-v24.6.380-output-folder-shortcuts`. Includes the v24.6.379
+  skill-casing corrective below. Adds
   accessible folder-icon shortcuts beside ready Format/Blind CV, batch-all and
   individual batch downloads, Summary DOCX, Company Profile, Blind JD and both
   Owl export toolbars. Shortcuts track existing output readiness and refresh
@@ -296,17 +309,17 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   kind, not the current UI mode. Settings shortcuts remain. The owner explicitly
   excluded browser-only exports (e.g. Stats, Lead Finder and CV Scoring); no new
   download category, route, dependency, data schema or paid call is introduced.
-  Await owner instruction before PR creation or merge.
+  Merged with owner approval as `ac2afab`.
 
-- **Skill-casing corrective — v24.6.379, INCLUDED IN v24.6.380 ABOVE.** Previous branch
+- **Skill-casing corrective — v24.6.379, MERGED WITH v24.6.380 ABOVE.** Previous branch
   `codex/pr192-v24.6.379-preserve-corrected-casing` (PR #192 is provisional;
   no PR opened yet). Source skill separator recovery retains matched provider
   ASCII letter casing instead of restoring the source's lowercase spelling.
   Original separators/symbols and existing content-match guards remain intact.
   Tests reproduce the enabled case through `/parse` and real DOCX generation,
   verify OFF output and protect internal commas, symbols, metrics and dates.
-  No route, schema, dependency, credentials or paid-call changes. Await owner
-  instructions before PR creation or merge.
+  No route, schema, dependency, credentials or paid-call changes. Owner
+  approval was subsequently granted through PR #192; this claim is complete.
 
 - **PR #191 — v24.6.378, MERGED as `a5bf89d`.** Historical PR source branch:
   `claude/pr157-chatgpt-fix-zke4cy`; Codex local review branch:
