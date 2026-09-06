@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.382"
+_INSTALL_RECEIPT_VERSION = "v24.6.383"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -346,7 +346,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.382"
+_CVSTUDIO_VERSION = "v24.6.383"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -5120,14 +5120,6 @@ def _spider_fetch_candidate_resume_text(token, candidate_id):
     return "", "resume text unavailable"
 
 
-def _spider_fetch_candidate_bundle(token, candidate_id, include_resume=True):
-    detail = _spider_fetch_candidate_detail(token, candidate_id)
-    resume_text, resume_source = ("", "")
-    if include_resume:
-        resume_text, resume_source = _spider_fetch_candidate_resume_text(token, candidate_id)
-    return {"detail": detail, "resume_text": resume_text, "resume_source": resume_source}
-
-
 def _ai_crawler_lock_allowed(body=None):
     """Compatibility hook retained after removing the AI Crawler password."""
     return True
@@ -9254,14 +9246,6 @@ def _llm_paid_failure_fields(
         usage=usage,
         attempted=attempted,
     )
-
-
-def _lead_provider_from_model(model, provider=None):
-    return _phase5b_normalize_provider(model, provider)
-
-
-def _lead_pricing_for_model(model, provider=None):
-    return _phase5b_pricing_for_model(model, provider)
 
 
 def _lead_cost(model, usage, provider=None):

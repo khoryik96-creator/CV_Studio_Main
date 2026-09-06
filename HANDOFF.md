@@ -147,8 +147,8 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 7. Recently completed (already on `master`)
 
-- **Current merged baseline, checked 2026-09-06: v24.6.381, `a5fa125`.**
-  PR #193 merged after all three hosted checks passed.
+- **Current merged baseline, checked 2026-09-06: v24.6.382, `75c43b6`.**
+  PRs #193 and #194 merged after all three hosted checks passed.
   PR #189 merged as `2c216c6` on 2026-08-29; PR #185 merged as `b84c36f` on
   2026-09-04. PR #191 merged as `a5bf89d` on 2026-09-05 after all hosted
   checks passed. PR #192 merged v24.6.380 as `ac2afab`; its three hosted checks
@@ -289,14 +289,24 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Async-handler audit corrective — v24.6.382, ACTIVE AND UNMERGED.** Branch
-  `codex/pr194-v24.6.382-async-handler-safety` (194 provisional; no PR opened).
+- **Unused-helper cleanup — v24.6.383, owner-approved merge pending checks.**
+  Branch `codex/pr195-v24.6.383-unused-helper-cleanup` integrates the v24.6.382
+  fixes before this second PR. Its own code delta removes only the four
+  unreferenced definitions: `_spider_fetch_candidate_bundle`,
+  `_lead_provider_from_model`, `_lead_pricing_for_model` and
+  `_blind_summary_vertical_org_identities`. Live replacements and the 118-route
+  contract remain. No schema, dependency or protected-boundary changes.
+
+- **Async-handler audit corrective — v24.6.382, MERGED in PR #194.** Branch
+  `codex/pr194-v24.6.382-async-handler-safety` is complete at `75c43b6`.
   OneNote section/upload, Outlook settings/login/test and CV download/folder
   entry points report unexpected failures without replaying remote writes.
   Failed Outlook disconnects preserve the known account/configuration state;
   settings changes and reconnect stop on that failure. An uncertain test-draft
   response closes its blank tab and asks the user to check Outlook Drafts.
   One-item Create Profile runs always clear their temporary queue skip flags.
+  The PR review also corrected the lingering OneNote loading indicator after
+  fallback failure; its rejection and non-OK HTTP regressions pass.
   Existing delegated upload/folder catches remain intact. No routes, schemas,
   dependencies, CV content/formatting or protected-package boundaries change.
   The four unused Python helpers from the audit are separate cleanup work.
