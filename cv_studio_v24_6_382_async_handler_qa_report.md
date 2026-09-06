@@ -8,6 +8,8 @@ Base: master `a5fa125` (v24.6.381). Branch:
 - OneNote section loading and Outlook connection testing now contain unexpected
   rejected promises at their existing UI entry points. A failed child section
   request cannot become the parent picker's successful-load notification.
+  The PR-review corrective also replaces the parent's loading indicator with
+  a visible failure message on both rejected and non-OK fallback responses.
 - OneNote upload failures escaping the existing per-item guard now mark only
   the still-present originating row as unconfirmed; replaced rows are untouched.
   Temporary Create Profile skip flags are released even if the run rejects.

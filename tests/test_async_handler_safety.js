@@ -70,6 +70,12 @@ async function oneNoteSections() {
   assert.strictEqual(await c.oneNoteLoadPicker(), false);
   assert.strictEqual(c.notices.length, 1);
   assert.strictEqual(c.notices[0][1], 'err', 'parent cannot announce a successful load');
+  assert.match(nodes.oneNotePageList.textContent, /Could not load OneNote sections/);
+  assert.strictEqual(nodes.oneNotePageList.style.display, 'block');
+  c.fetch = async url => url.includes('/notebooks') ? ok({items: []}) :
+    {ok: false, json: async () => ({error: 'Controlled HTTP failure'})};
+  assert.strictEqual(await c.oneNoteLoadPicker(), false);
+  assert.match(nodes.oneNotePageList.textContent, /Could not load OneNote sections/);
 }
 
 async function oneNoteUpload() {

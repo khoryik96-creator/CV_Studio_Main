@@ -1886,7 +1886,10 @@ async function oneNoteLoadPicker() {
       } catch(e) {}
     }
     if (!allSections.length) {
-      if (await oneNoteLoadSectionsForSelectedNotebook(true) === false) return false;
+      if (await oneNoteLoadSectionsForSelectedNotebook(true) === false) {
+        if (list) { list.textContent = 'Could not load OneNote sections. Try loading the picker again.'; list.style.display = 'block'; }
+        return false;
+      }
     } else {
       oneNoteFillSelect(secSel, allSections, 'Select section');
     }
