@@ -265,8 +265,8 @@ async function runJACreateOne(id) {
   // Temporarily run just this item by marking others as skip
   var prev = _jaCreateQueue.map(function(x){ return { id: x.id, status: x.status }; });
   _jaCreateQueue.forEach(function(x){ if (x.id !== id) x._skip = true; });
-  await runJACreateAll();
-  _jaCreateQueue.forEach(function(x){ delete x._skip; });
+  try { await runJACreateAll(); }
+  finally { _jaCreateQueue.forEach(function(x){ delete x._skip; }); }
 }
 
 async function runJACreateAll() {

@@ -1096,6 +1096,25 @@ function oneNoteUploadCvForRow(idx) {
   return true;
 }
 async function oneNoteHandleCvUpload(files) {
+  var row = _oneNoteRows[_oneNoteCvUploadRowIndex];
+  try { return await oneNoteHandleCvUploadImpl(files); }
+  catch (e) {
+    // Do not offer an automatic retry: a remote write may have completed.
+    var message = 'CV upload result could not be confirmed. Check JobAdder before retrying.';
+    if (row && _oneNoteRows.indexOf(row) >= 0 && row.profile_create_state === 'running') {
+      row.profile_create_state = 'error';
+      row.profile_create_message = message;
+      row.status = 'err';
+      row.statusText = 'Upload result unconfirmed';
+      row.selected = false;
+      oneNoteRenderRows();
+      oneNoteUpdateSummaryFromRows();
+    }
+    showToast(message, 'err');
+    return false;
+  }
+}
+async function oneNoteHandleCvUploadImpl(files) {
   var idx = _oneNoteCvUploadRowIndex;
   _oneNoteCvUploadRowIndex = -1;
   var row = _oneNoteRows[idx];
@@ -1867,7 +1886,7 @@ async function oneNoteLoadPicker() {
       } catch(e) {}
     }
     if (!allSections.length) {
-      await oneNoteLoadSectionsForSelectedNotebook(true);
+      if (await oneNoteLoadSectionsForSelectedNotebook(true) === false) return false;
     } else {
       oneNoteFillSelect(secSel, allSections, 'Select section');
     }
@@ -1884,6 +1903,14 @@ async function oneNoteLoadPicker() {
   }
 }
 async function oneNoteLoadSectionsForSelectedNotebook(silent) {
+  try { return await oneNoteLoadSectionsForSelectedNotebookImpl(silent); }
+  catch (e) {
+    oneNoteSetSectionPickerHint('Could not load sections. Try selecting the notebook again.', 'warn');
+    showToast('Could not load OneNote sections. Check the connection and try again.', 'err');
+    return false;
+  }
+}
+async function oneNoteLoadSectionsForSelectedNotebookImpl(silent) {
   await oneNoteRestoreMicrosoftToken();
   var nbSel = document.getElementById('oneNoteNotebookSelect');
   var secSel = document.getElementById('oneNoteSectionSelect');
@@ -1903,17 +1930,15 @@ async function oneNoteLoadSectionsForSelectedNotebook(silent) {
     return;
   }
   if (oneNoteSelectedSourceMode() === 'desktop') {
-    await oneNoteLoadDesktopPicker(silent);
-    return;
+    return await oneNoteLoadDesktopPicker(silent);
   }
   if (!notebookId && !silent) {
-    await oneNoteLoadPicker();
-    return;
+    return await oneNoteLoadPicker();
   }
   var url = '/onenote/sections?top=200' + (notebookId ? ('&notebook_id=' + encodeURIComponent(notebookId)) : '');
   var r = await fetch(url);
   var d = await r.json().catch(function(){ return {}; });
-  if (!r.ok) { showToast(d.error || 'Could not load OneNote sections', 'err'); return; }
+  if (!r.ok) { showToast(d.error || 'Could not load OneNote sections', 'err'); return false; }
   var items = d.items || [];
   if (notebookId) {
     var nbName = nbSel && nbSel.options && nbSel.selectedIndex >= 0 ? nbSel.options[nbSel.selectedIndex].textContent : '';

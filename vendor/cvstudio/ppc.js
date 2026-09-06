@@ -324,6 +324,10 @@ function ppcLoadOutlookSettingsPanel(){
   ppcRenderOutlookIntegrationState();refreshIntegrationDiagnostics();
 }
 async function ppcSaveOutlookSettingsFromPanel(){
+  try{return await ppcSaveOutlookSettingsFromPanelImpl();}
+  catch(e){showToast('Could not save Outlook settings. Check the connection and try again.','err');return false;}
+}
+async function ppcSaveOutlookSettingsFromPanelImpl(){
   var old=ppcOutlookClientLoad();
   var clientId=String((document.getElementById('settingsOutlookClientId')||{}).value||'').trim();
   var tenant=String((document.getElementById('settingsOutlookTenant')||{}).value||'common').trim()||'common';
@@ -331,7 +335,7 @@ async function ppcSaveOutlookSettingsFromPanel(){
   var changed=clientId!==old.client_id||tenant!==old.tenant;
   if(changed&&_ppcOutlookConnected){
     if(!window.confirm('Changing the Outlook app settings will disconnect the current Microsoft account. Continue?'))return false;
-    await ppcDisconnectOutlook(false);
+    if(!await ppcDisconnectOutlook(false)){showToast('Outlook could not be disconnected. App settings were not changed.','err');return false;}
   }
   ppcOutlookClientSave({client_id:clientId,tenant:tenant});ppcOutlookDeviceSave(null);ppcUpdateOutlookConnectButton();
   showToast('Outlook app settings saved. Connect Outlook to approve User.Read and Mail.ReadWrite.','ok');return true;
@@ -350,10 +354,10 @@ async function ppcRestoreOutlookToken(force){
   try{return await _ppcOutlookRestorePromise;}finally{_ppcOutlookRestorePromise=null;}
 }
 async function ppcDisconnectOutlook(showMessage){
-  ppcOutlookPurgeLegacyBrowserToken();ppcOutlookDeviceSave(null);_ppcOutlookConnected=false;_ppcOutlookAccount={};ppcUpdateOutlookConnectButton();
   try{
     var r=await fetch('/ppc/outlook/disconnect',{method:'POST'}),d=await r.json().catch(function(){return {};});
     if(!r.ok)throw new Error(d.error||'Could not disconnect Outlook');
+    ppcOutlookPurgeLegacyBrowserToken();ppcOutlookDeviceSave(null);_ppcOutlookConnected=false;_ppcOutlookAccount={};ppcUpdateOutlookConnectButton();
     _ppcOutlookStorage=d.storage||_ppcOutlookStorage;if(showMessage!==false)showToast('Microsoft Outlook disconnected.','ok');return true;
   }catch(e){if(showMessage!==false)showToast((e&&e.message)||'Could not disconnect Outlook','err');return false;}
 }
@@ -381,11 +385,19 @@ async function ppcFinishOutlookLogin(){
   showToast('Microsoft Outlook connected as '+(ppcOutlookAccountLabel()||'the approved account')+'.','ok');return true;
 }
 async function ppcConnectOutlookDrafts(){
+  try{return await ppcConnectOutlookDraftsImpl();}
+  catch(e){showToast('Outlook login could not be completed. Check the connection and try again.','err');return false;}
+}
+async function ppcConnectOutlookDraftsImpl(){
   var dev=ppcOutlookDeviceLoad();if(dev&&dev.login_session_id)return ppcFinishOutlookLogin();
-  if(_ppcOutlookConnected){if(!window.confirm('Outlook is connected as '+(ppcOutlookAccountLabel()||'a Microsoft account')+'. Reconnect with another account?'))return true;await ppcDisconnectOutlook(false);}
+  if(_ppcOutlookConnected){if(!window.confirm('Outlook is connected as '+(ppcOutlookAccountLabel()||'a Microsoft account')+'. Reconnect with another account?'))return true;if(!await ppcDisconnectOutlook(false)){showToast('Outlook could not be disconnected. Reconnection was not started.','err');return false;}}
   return ppcStartOutlookLogin();
 }
 async function ppcTestOutlookConnection(){
+  try{return await ppcTestOutlookConnectionImpl();}
+  catch(e){showToast('Could not test the Outlook connection. Check the connection and try again.','err');return false;}
+}
+async function ppcTestOutlookConnectionImpl(){
   var r=await fetch('/ppc/outlook/test_connection',{method:'POST'}),d=await r.json().catch(function(){return {};});
   if(!r.ok){ppcShowOutlookError(d,'Outlook connection test failed');if(d.needs_reconnect)await ppcDisconnectOutlook(false);return false;}
   _ppcOutlookConnected=true;_ppcOutlookAccount=d.account||{};_ppcOutlookStorage=d.storage||_ppcOutlookStorage;ppcSetOutlookTechnicalError(null);ppcUpdateOutlookConnectButton();showToast('Outlook connection works for '+(ppcOutlookAccountLabel()||'the connected account')+'.','ok');return true;
@@ -394,7 +406,9 @@ async function ppcCreateOutlookTestDraft(event){
   if(event){event.preventDefault();event.stopPropagation();}
   var opened=null;try{opened=window.open('about:blank','_blank');}catch(e){}
   if(!opened){showToast('Allow pop-ups for CV Studio to open the test draft.','err');return false;}
-  var r=await fetch('/ppc/outlook/create_test_draft',{method:'POST'}),d=await r.json().catch(function(){return {};});
+  var r,d;
+  try{r=await fetch('/ppc/outlook/create_test_draft',{method:'POST'});d=await r.json();if(!d||typeof d!=='object'||Array.isArray(d)||(r.ok&&!d.webLink))throw new Error('Unconfirmed draft response');}
+  catch(e){try{opened.close();}catch(ignore){}showToast('The test draft result could not be confirmed. Check Outlook Drafts before trying again. Nothing was sent.','err');return false;}
   if(!r.ok){try{opened.close();}catch(e){}ppcShowOutlookError(d,'Could not create the Outlook test draft');if(d.needs_reconnect)await ppcDisconnectOutlook(false);return false;}
   try{opened.opener=null;opened.location.replace(d.webLink);}catch(e){try{opened.location.href=d.webLink;}catch(ignore){}}
   if(d.account){_ppcOutlookAccount=d.account;ppcUpdateOutlookConnectButton();}showToast('Test draft created. Nothing was sent.','ok');return true;
