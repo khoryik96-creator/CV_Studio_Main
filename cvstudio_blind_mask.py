@@ -54,41 +54,55 @@ _BLIND_CURATED_ORG_NAMES = {
 }
 
 
-# Given names and surnames that are also ordinary English words. A single name
-# token from this set is never swept across a whole CV, because "Will delivered
-# the migration", "Grace period", "Rose from 12% to 40%" and "Frank discussion"
-# are prose, not the candidate.
-_BLIND_COMMON_WORD_NAMES = {
+# Given names and surnames that are also ordinary English words. A single name token
+# from this set is never swept across a whole CV, because "Will delivered the
+# migration", "Grace period", "Rose from 12% to 40%" and "Frank discussion" are prose,
+# not the candidate.
+_BLIND_COMMON_WORD_NAMES = frozenset({
     "abbey", "amber", "angel", "april", "august", "autumn", "baker", "bill",
     "bond", "brook", "brooke", "cash", "chance", "charity", "chase", "cliff",
     "dawn", "dean", "drew", "duke", "earl", "faith", "field", "flint", "ford",
     "frank", "grace", "grant", "gray", "green", "hope", "house", "hunter",
-    "june", "justice", "king", "lane", "major", "mark", "mason", "mercy",
+    "june", "justice", "king", "lane", "long", "major", "mark", "mason", "mercy",
     "miles", "noble", "olive", "page", "paige", "parker", "pearl", "penny",
-    "pierce", "price", "prince", "rich", "rose", "royal", "sage", "sonny",
+    "pierce", "price", "prince", "rich", "rose", "royal", "sage", "sharp", "sonny",
     "stone", "storm", "summer", "sunny", "swift", "victor", "ward", "wilder",
     "will", "wisdom", "wood", "young",
-}
+    # Words that read as ordinary nouns in a CV even when capitalised.
+    "church", "temple", "abbot", "bishop", "chapel", "cross", "east", "west",
+    "north", "south", "bright", "strong", "best", "first", "senior", "junior",
+})
 
-
-# Curated organisation names that are also ordinary English words. Only these need
-# the capitalisation rule; every other mask term - including employer names taken
-# from the parsed CV, which are often typed lowercase - keeps the original
-# case-insensitive masking so a real employer can never survive the sweep.
-# A replaced name can open a line, a bullet or a sentence, so the generic label has to
-# be recapitalised there rather than exporting "- the candidate led delivery."
-_BLIND_GENERIC_LABEL_SENTENCE_RE = re.compile(
-    r"(\A[-*\u2022\u00b7]?\s*|[.!?]\s+|\n\s*[-*\u2022\u00b7]?\s*)the candidate\b"
-)
+# Place names common in this market that are also surnames or given names. "Shah Alam",
+# "Petaling Jaya" and "Johor Bahru" appear in CVs as locations far more often than a
+# candidate's own name does.
+_BLIND_PLACE_WORD_NAMES = frozenset({
+    "alam", "jaya", "bahru", "baru", "lumpur", "pinang", "penang", "damansara",
+    "bangsar", "cheras", "klang", "subang", "puchong", "kajang", "seremban",
+    "ipoh", "kuching", "johor", "melaka", "malacca", "perak", "kedah", "kelantan",
+    "pahang", "sabah", "sarawak", "selangor", "putra", "putrajaya", "cyberjaya",
+    "sentral", "ampang", "setia", "utara", "selatan", "timur", "barat", "indah",
+    "permai", "singapore", "jakarta", "bandung", "surabaya", "manila", "bangkok",
+})
 
 # Lineage, honorific and nobiliary particles. They are part of a person's full name but
-# belong to many other people too, so sweeping one on its own rewrites unrelated names
-# ("Siti binti Rahman" -> "Siti the candidate Rahman").
-_BLIND_DOUBLED_ARTICLE_RE = re.compile(r"\bthe\s+the candidate\b", re.I)
-_BLIND_IDENTIFIER_TOKEN_RE = re.compile(r"[A-Za-z0-9]+(?:_[A-Za-z0-9]+)+")
-_BLIND_GENERIC_LABEL_ANY_RE = re.compile(r"(?<![A-Za-z0-9])the candidate(?![A-Za-z0-9])", re.I)
-_BLIND_LINK_SCHEME_LEFTOVER_RE = re.compile(r"(?:https?://|www\.)+\[Link Redacted\]", re.I)
+# belong to many other people too, so sweeping one on its own - or sweeping a run that
+# begins or ends with one - rewrites unrelated names ("Siti binti Rahman" ->
+# "Siti the candidate").
+_BLIND_NAME_PARTICLES = frozenset({
+    "binti", "binte", "bint", "ibnu", "ibn", "anak", "abdul", "haji", "hajjah",
+    "syed", "sharifah", "tengku", "raja", "nik", "wan", "van", "von", "der",
+    "den", "del", "della", "dos", "das", "mac", "abu", "bin", "bte",
+})
 
+# Technology, tool and platform names that are also given names. The module already
+# keeps _BLIND_ORG_TECH_ALLOWLIST for the organisation sweep; the name sweep needs the
+# same protection, or a candidate called Ruby turns "Ruby on Rails" into a placeholder.
+_BLIND_TECHNOLOGY_GIVEN_NAMES = frozenset({
+    "ruby", "java", "jade", "athena", "kafka", "scala", "chef", "puppet", "maven",
+    "django", "flask", "pandas", "angular", "ember", "grafana", "kibana", "hudson",
+    "jenkins", "jira", "nexus", "sage", "oracle", "aurora", "cassandra", "hadoop",
+})
 
 # Words the anonymiser itself emits. A fixture or placeholder name containing one of
 # these would otherwise make the sweep rewrite its own output.
@@ -97,24 +111,31 @@ _BLIND_GENERIC_PLACEHOLDER_WORDS = frozenset({
     "organization", "institution", "university", "redacted", "anonymous", "person",
 })
 
-
-_BLIND_NAME_PARTICLES = frozenset({
-    "binti", "binte", "bint", "ibnu", "ibn", "anak", "abdul", "haji", "hajjah",
-    "syed", "sharifah", "tengku", "raja", "nik", "wan", "van", "von", "der",
-    "den", "del", "della", "dos", "das", "mac", "abu", "bin", "bte",
-})
-
-# Technology, tool and platform names that are also given names. The module already keeps
-# _BLIND_ORG_TECH_ALLOWLIST for the organisation sweep; the name sweep needs the same
-# protection or a candidate called Ruby turns "Ruby on Rails" into a placeholder.
-_BLIND_TECHNOLOGY_GIVEN_NAMES = frozenset({
-    "ruby", "java", "jade", "athena", "kafka", "scala", "chef", "puppet", "maven",
-    "django", "flask", "pandas", "angular", "ember", "grafana", "kibana", "hudson",
-    "jenkins", "jira", "nexus", "sage", "oracle", "aurora", "cassandra", "hadoop",
-})
-
-
+# Curated organisation names that are also ordinary English words. Only these get the
+# capitalisation rule, and only when the term was not collected from an employer field:
+# a company genuinely named Grab or Shell must be masked however it is written.
 _BLIND_AMBIGUOUS_ORG_WORDS = frozenset({"boost", "grab", "meta", "shell", "yes", "misc"})
+
+# A replaced name can open a line, a bullet or a sentence, so the generic label has to be
+# recapitalised there rather than exporting "- the candidate led delivery."
+_BLIND_GENERIC_LABEL_SENTENCE_RE = re.compile(
+    r"(\A[-*\u2022\u00b7]?\s*|[.!?]\s+|\n\s*[-*\u2022\u00b7]?\s*)the candidate\b"
+)
+# Substituting a noun phrase where a bare noun stood can double the article.
+_BLIND_DOUBLED_ARTICLE_RE = re.compile(r"\bthe\s+the candidate\b", re.I)
+# Pipeline, table and file names carry identity too, and have to go as a whole token.
+_BLIND_IDENTIFIER_TOKEN_RE = re.compile(r"[A-Za-z0-9]+(?:_[A-Za-z0-9]+)+")
+# The label anywhere in a header field, so "Name | Title" keeps its title.
+_BLIND_GENERIC_LABEL_ANY_RE = re.compile(r"(?<![A-Za-z0-9])the candidate(?![A-Za-z0-9])", re.I)
+# A stored bare domain leaves "https://[Link Redacted]" when the text spelled the scheme.
+_BLIND_LINK_SCHEME_LEFTOVER_RE = re.compile(r"(?:https?://|www\.)+\[Link Redacted\]", re.I)
+# The word immediately before or after a bare name match, used to tell "Alam led the
+# migration" (the person) from "Shah Alam" (a place).
+_BLIND_WORD_BEFORE_RE = re.compile(r"([A-Za-z][A-Za-z'\u2019-]*)(\s+)\Z")
+_BLIND_WORD_AFTER_RE = re.compile(r"\A(\s+)([A-Za-z][A-Za-z'\u2019-]*)")
+# Whether that preceding word is itself sentence-initial, in which case its capital says
+# nothing about whether it is a proper noun.
+_BLIND_SENTENCE_START_RE = re.compile(r"(?:\A|[.!?]\s+|\n\s*)[A-Za-z][A-Za-z'\u2019-]*\s+\Z")
 
 
 _BLIND_ORG_SUFFIX_RE = re.compile(
@@ -325,7 +346,9 @@ def _blind_redact_phone_candidates(text):
             return value
         # A plain decimal measurement (99.999999 percent uptime) is not a phone
         # number merely because it carries a decimal point.
-        if re.fullmatch(r"\d+\.\d+", value.strip()):
+        # Bounded: 99.999999 is a measurement, but 44.7911123456 is a phone number
+        # written with a dot, and an unbounded pattern would let it through.
+        if re.fullmatch(r"\d{1,4}\.\d{1,6}", value.strip()):
             return value
         if re.search(r"[\s().-]", value):
             return "[Phone Redacted]"
@@ -479,6 +502,16 @@ def _blind_source_summary_text(original_cv):
     return "\n".join(value for value in values if isinstance(value, str))
 
 
+def _blind_replacement_contains_word(replacement, key):
+    """Report whether a replacement label contains the source as a whole word."""
+    text = str(replacement or "").casefold()
+    if not key or not text:
+        return False
+    return bool(
+        re.search(r"(?<![a-z0-9])" + re.escape(key) + r"(?![a-z0-9])", text)
+    )
+
+
 def _blind_replacement_collector():
     """Return the (add, collected) pair the three identity collectors share.
 
@@ -496,8 +529,10 @@ def _blind_replacement_collector():
         key = exact.casefold()
         if len(exact) < 3 or key in seen:
             return
-        if key in str(replacement or "").casefold():
+        if _blind_replacement_contains_word(replacement, key):
             # Replacing "Candidate" with "the candidate" would rewrite its own output.
+            # This has to be a whole-word test: "Andi" is a substring of "the candidate"
+            # but a perfectly ordinary name that must still be masked.
             return
         seen.add(key)
         replacements.append((exact, replacement, case_sensitive_single))
@@ -992,6 +1027,14 @@ def _blind_add_mask_term(terms, value):
     terms.add(text)
 
 
+@functools.lru_cache(maxsize=64)
+def _blind_ambiguous_brand_prefix_pattern(name):
+    """Match an ambiguous curated name only as an exactly-cased brand compound."""
+    return re.compile(
+        r"(?<![A-Za-z0-9])" + re.escape(name) + r"(?=[A-Z][a-z]|[0-9])"
+    )
+
+
 def _blind_curated_name_present(name, compact_text, exact_pat, prefix_pat):
     """Report whether a curated organisation name appears as a proper noun.
 
@@ -1002,12 +1045,34 @@ def _blind_curated_name_present(name, compact_text, exact_pat, prefix_pat):
     """
     if name.casefold() not in _BLIND_AMBIGUOUS_ORG_WORDS:
         return bool(exact_pat.search(compact_text) or prefix_pat.search(compact_text))
-    # "BOOSTED REVENUE" contains BOOST and "metadata" contains meta, so a prefix hit
-    # proves nothing. Only a standalone capitalised mention shows the organisation is
-    # really named in this CV.
-    return any(
-        not match.group(0).islower() for match in exact_pat.finditer(compact_text)
+    # "BOOSTED REVENUE" contains BOOST and "metadata" contains meta, so a
+    # case-insensitive prefix hit proves nothing. A standalone capitalised mention does,
+    # and so does an exactly-cased CamelCase compound: GrabFood and BoostPay are brands,
+    # while "boosted", "Boosted" and "BOOSTED" are not.
+    if any(not match.group(0).islower() for match in exact_pat.finditer(compact_text)):
+        return True
+    return bool(_blind_ambiguous_brand_prefix_pattern(name).search(compact_text))
+
+
+def _blind_collect_employer_terms(original_cv):
+    """Return the casefolded mask terms that came from an employer field.
+
+    These are real companies the candidate worked for, so the everyday-word rule that
+    protects prose from curated names like Grab or Shell must not apply to them.
+    """
+    employers = set()
+    if not isinstance(original_cv, dict):
+        return frozenset()
+    candidate = (
+        original_cv.get("candidate")
+        if isinstance(original_cv.get("candidate"), dict)
+        else {}
     )
+    _blind_add_mask_term(employers, candidate.get("current_company"))
+    for experience in original_cv.get("work_experiences") or []:
+        if isinstance(experience, dict):
+            _blind_add_mask_term(employers, experience.get("company"))
+    return frozenset(term.casefold() for term in employers)
 
 
 def _blind_collect_org_mask_terms(original_cv):
@@ -1046,7 +1111,7 @@ def _blind_collect_org_mask_terms(original_cv):
 
 
 @functools.lru_cache(maxsize=64)
-def _blind_org_term_specs(terms):
+def _blind_org_term_specs(terms, employer_terms=()):
     """Compile one matcher per mask term, as (pattern, ambiguous) pairs.
 
     Cached because the sweep runs once per string of a parsed CV against a term
@@ -1060,7 +1125,14 @@ def _blind_org_term_specs(terms):
         low = term.lower().strip()
         if low in _BLIND_ORG_TECH_ALLOWLIST:
             continue
-        ambiguous = low in _BLIND_AMBIGUOUS_ORG_WORDS and not re.search(r"\s", term)
+        ambiguous = (
+            low in _BLIND_AMBIGUOUS_ORG_WORDS
+            and not re.search(r"\s", term)
+            # Provenance decides: the capitalisation rule exists to protect prose from
+            # a curated everyday word. A company the candidate actually worked for must
+            # be masked however it is written.
+            and low not in employer_terms
+        )
         # Preserve already-masked descriptors/placeholders.
         specs.append((
             re.compile(r"(?<![A-Za-z0-9])" + re.escape(term) + r"(?![A-Za-z0-9])", re.I),
@@ -1095,22 +1167,27 @@ def _blind_mask_org_match(match, ambiguous):
     return "[Company]"
 
 
-def _blind_replace_org_terms_in_text(text, terms):
+def _blind_replace_org_terms_in_text(text, terms, employer_terms=()):
     if not isinstance(text, str) or not text or not terms:
         return text
     out = text
-    for pattern, ambiguous in _blind_org_term_specs(tuple(terms)):
+    for pattern, ambiguous in _blind_org_term_specs(
+        tuple(terms), tuple(sorted(employer_terms))
+    ):
         out = pattern.sub(lambda match: _blind_mask_org_match(match, ambiguous), out)
     return out
 
 
-def _blind_mask_org_terms_recursive(obj, terms):
+def _blind_mask_org_terms_recursive(obj, terms, employer_terms=()):
     if isinstance(obj, dict):
-        return {k: _blind_mask_org_terms_recursive(v, terms) for k, v in obj.items()}
+        return {
+            k: _blind_mask_org_terms_recursive(v, terms, employer_terms)
+            for k, v in obj.items()
+        }
     if isinstance(obj, list):
-        return [_blind_mask_org_terms_recursive(v, terms) for v in obj]
+        return [_blind_mask_org_terms_recursive(v, terms, employer_terms) for v in obj]
     if isinstance(obj, str):
-        return _blind_replace_org_terms_in_text(obj, terms)
+        return _blind_replace_org_terms_in_text(obj, terms, employer_terms)
     return obj
 
 
@@ -1296,44 +1373,130 @@ def _blind_postprocess_company_mentions(blinded, original_cv):
     terms = _blind_collect_org_mask_terms(original_cv)
     if not terms:
         return blinded
-    return _blind_mask_org_terms_recursive(blinded, terms)
+    return _blind_mask_org_terms_recursive(
+        blinded, terms, _blind_collect_employer_terms(original_cv)
+    )
 
 
-def _blind_candidate_name_tokens(full_name):
-    """Return the individual name words that are safe to sweep on their own.
+def _blind_name_word_is_sweepable(word):
+    """Report whether one name word can stand alone as a sweep term."""
+    low = word.casefold()
+    if len(word) < 4:
+        # Tan, Lee, Lim and Ng are among the most common surnames in this market and
+        # collide constantly with ordinary text.
+        return False
+    return not (
+        low in _BLIND_COMMON_WORD_NAMES
+        or low in _BLIND_PLACE_WORD_NAMES
+        or low in _BLIND_GENERIC_PLACEHOLDER_WORDS
+        or low in _BLIND_NAME_PARTICLES
+        or low in _BLIND_TECHNOLOGY_GIVEN_NAMES
+        or low in _BLIND_ORG_TECH_ALLOWLIST
+    )
 
-    A model that rewrites a bullet often keeps the candidate's first name alone
-    ("Vinay led the migration"), which the full-name pattern cannot catch. Only
-    tokens that cannot be mistaken for prose qualify: at least four alphabetic
-    characters, and never an everyday English word that happens to be a name.
-    Short tokens are excluded because Tan, Lee, Lim and Ng are among the most
-    common surnames in this market and collide constantly with ordinary text.
-    """
+
+def _blind_candidate_name_words(full_name):
+    """Split a full name into its clean alphabetic words."""
     words = [
         word.strip(".,;:|()[]")
         for word in re.sub(r"\s+", " ", str(full_name or "")).strip().split()
     ]
-    words = [word for word in words if word and _blind_summary_name_word(word)]
-    tokens = []
-    # Longer runs first: "Wei Ming" has to be replaced as one name, otherwise
-    # sweeping "Ming" alone leaves the stranded fragment "Wei the candidate".
+    return [word for word in words if word and _blind_summary_name_word(word)]
+
+
+def _blind_candidate_name_runs(full_name):
+    """Return the multi-word runs inside a name that are safe to replace as a unit.
+
+    "Wei Ming" has to be replaced as one name, otherwise sweeping "Ming" alone leaves
+    the stranded fragment "Wei the candidate". A run must begin and end with a real
+    name word: "binti Rahman" and "van der" are shared by whole families, so sweeping
+    them rewrites other people ("Siti binti Rahman" -> "Siti the candidate").
+    """
+    words = _blind_candidate_name_words(full_name)
+    runs = []
     for size in range(len(words) - 1, 1, -1):
         for start in range(0, len(words) - size + 1):
-            tokens.append(" ".join(words[start:start + size]))
-    for word in words:
-        low = word.casefold()
-        if len(word) < 4:
-            continue
-        if (
-            low in _BLIND_COMMON_WORD_NAMES
-            or low in _BLIND_GENERIC_PLACEHOLDER_WORDS
-            or low in _BLIND_NAME_PARTICLES
-            or low in _BLIND_TECHNOLOGY_GIVEN_NAMES
-            or low in _BLIND_ORG_TECH_ALLOWLIST
+            run = words[start:start + size]
+            edges = (run[0].casefold(), run[-1].casefold())
+            if any(
+                edge in _BLIND_NAME_PARTICLES or edge in _BLIND_COMMON_WORD_NAMES
+                for edge in edges
+            ):
+                continue
+            runs.append(" ".join(run))
+    return runs
+
+
+def _blind_candidate_name_tokens(full_name):
+    """Return the individual name words that are safe to sweep on their own."""
+    return [
+        word
+        for word in _blind_candidate_name_words(full_name)
+        if _blind_name_word_is_sweepable(word)
+    ]
+
+
+def _blind_replace_name_tokens(text, tokens):
+    """Replace a bare given name or surname, but only where it reads as the person.
+
+    A single name word is the riskiest thing this module replaces: Alam, Church, Sharp,
+    Long and Jaya are also places, nouns and adjectives, and no denylist can name them
+    all. Two structural rules do the work instead.
+
+    An all-lowercase match is ordinary prose - "delivered long-term value", "a sharp
+    reduction", "the local church" - so only a capitalised match is considered.
+
+    A capitalised match flanked by another capitalised word that is not part of this
+    candidate's own name is part of a larger proper noun - "Shah Alam", "Alam Sutera" -
+    rather than the person, who appears as a bare first name among ordinary words. A
+    sentence-initial capital on the preceding word carries no such signal and is ignored.
+    """
+    if not text or not tokens:
+        return text
+    lowered = {token.casefold() for token in tokens}
+    pattern = re.compile(
+        r"(?<![A-Za-z0-9])("
+        + "|".join(re.escape(token) for token in sorted(tokens, key=len, reverse=True))
+        + r")(?![A-Za-z0-9])",
+        re.I,
+    )
+
+    def replace(match):
+        found = match.group(0)
+        if found.islower():
+            return found
+        source = match.string
+        before = source[:match.start()]
+        after = source[match.end():]
+        previous = _BLIND_WORD_BEFORE_RE.search(before)
+        following = _BLIND_WORD_AFTER_RE.match(after)
+        if previous is not None and previous.group(1).casefold() in _BLIND_NAME_PARTICLES:
+            # "binti Rahman" names the candidate's father, and every one of his other
+            # children shares it. Sweeping it rewrites unrelated people; the candidate's
+            # own full form was already replaced as a unit above.
+            return found
+        def is_proper_noun_neighbour(word, sentence_initial=False):
+            if not word or not word[:1].isupper():
+                return False
+            if word.casefold() in lowered:
+                return False
+            if found.isupper() and word.isupper():
+                # On an ALL-CAPS line every word is capitalised, so a capitalised
+                # neighbour says nothing about whether this is a larger proper noun.
+                return False
+            # A sentence-initial capital carries no proper-noun signal either.
+            return not sentence_initial
+
+        if previous is not None and is_proper_noun_neighbour(
+            previous.group(1),
+            sentence_initial=bool(_BLIND_SENTENCE_START_RE.search(before)),
         ):
-            continue
-        tokens.append(word)
-    return tokens
+            return found
+        if following is not None and is_proper_noun_neighbour(following.group(2)):
+            return found
+        return "the candidate"
+
+    return pattern.sub(replace, text)
 
 
 def _blind_redact_identifier_tokens(text, name_tokens):
@@ -1422,13 +1585,12 @@ def _blind_collect_candidate_identity_replacements(original_cv):
     raw_name = _blind_summary_strip_name_honorifics(candidate.get("name"))
     if raw_name.casefold() not in {"", "candidate", "the candidate", "[candidate]"}:
         for variant in _blind_summary_lineage_name_variants(raw_name):
-            add(variant, "the candidate", True)
-        for token in _blind_candidate_name_tokens(raw_name):
-            # Matched case-insensitively: CVs and headings are often typed in
-            # capitals, and "VINAY LED THE MIGRATION" leaks just as badly. The
-            # exclusion lists above already removed every token that could be
-            # mistaken for an ordinary word, so this cannot corrupt prose.
-            add(token, "the candidate", False)
+            # A single-word name is left to the bare-name pass, which applies the
+            # capitalisation and proper-noun rules an exact match cannot.
+            if re.search(r"\s", variant):
+                add(variant, "the candidate", True)
+        for run in _blind_candidate_name_runs(raw_name):
+            add(run, "the candidate", True)
 
     add(candidate.get("email"), "[Email Redacted]")
     add(candidate.get("phone"), "[Phone Redacted]")
@@ -1441,7 +1603,7 @@ def _blind_collect_candidate_identity_replacements(original_cv):
     return collected()
 
 
-def _blind_apply_candidate_identity(text, replacements, phone_digits="", name_tokens=frozenset()):
+def _blind_apply_candidate_identity(text, replacements, phone_digits="", name_tokens=()):
     """Replace exact candidate identifiers without reformatting the text.
 
     Deliberately narrower than the summary scrub: a whole-document pass must not
@@ -1451,7 +1613,9 @@ def _blind_apply_candidate_identity(text, replacements, phone_digits="", name_to
     safe = str(text or "")
     if not safe:
         return safe
-    safe = _blind_redact_identifier_tokens(safe, name_tokens)
+    safe = _blind_redact_identifier_tokens(safe, frozenset(
+        token.casefold() for token in name_tokens
+    ))
     lowered = safe.casefold()
     # The same text with Markdown markers removed, because "**Vinay** Lariya" does not
     # contain "vinay lariya" but still has to be matched. Replacements only ever remove
@@ -1482,6 +1646,8 @@ def _blind_apply_candidate_identity(text, replacements, phone_digits="", name_to
             replacement,
             case_sensitive_single=case_sensitive_single,
         )
+    # Last, so a full name and its multi-word runs are replaced as units first.
+    safe = _blind_replace_name_tokens(safe, name_tokens)
     safe = _blind_redact_candidate_phone(safe, phone_digits)
     # Any email address surviving in a blind CV is a leak regardless of whose it
     # is, and the pattern cannot match ordinary prose.
@@ -1498,7 +1664,7 @@ def _blind_apply_candidate_identity(text, replacements, phone_digits="", name_to
     )
 
 
-def _blind_apply_candidate_identity_recursive(obj, replacements, phone_digits="", name_tokens=frozenset()):
+def _blind_apply_candidate_identity_recursive(obj, replacements, phone_digits="", name_tokens=()):
     if isinstance(obj, dict):
         return {
             key: _blind_apply_candidate_identity_recursive(value, replacements, phone_digits, name_tokens)
@@ -1527,17 +1693,15 @@ def _blind_scrub_candidate_identity(blinded, original_cv):
     phone_digits = _blind_candidate_phone_digits(
         candidate.get("phone") if isinstance(candidate, dict) else ""
     )
-    if not replacements and not phone_digits:
-        return blinded
-    name_tokens = frozenset(
-        token.casefold()
-        for token in _blind_candidate_name_tokens(
+    name_tokens = tuple(
+        _blind_candidate_name_tokens(
             _blind_summary_strip_name_honorifics(
                 candidate.get("name") if isinstance(candidate, dict) else ""
             )
         )
-        if " " not in token
     )
+    if not replacements and not phone_digits and not name_tokens:
+        return blinded
     scrubbed = _blind_apply_candidate_identity_recursive(
         blinded, replacements, phone_digits, name_tokens
     )

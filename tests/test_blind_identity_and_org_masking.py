@@ -496,5 +496,145 @@ class ReviewRegressionTests(unittest.TestCase):
         self.assertIn("still running the previous version", source)
 
 
+class SecondReviewRegressionTests(unittest.TestCase):
+    """Cases a second review of these fixes found."""
+
+    @staticmethod
+    def _cv(name, **extra):
+        candidate = {"name": name}
+        candidate.update(extra)
+        return {"candidate": candidate}
+
+    def _scrub(self, text, name, **extra):
+        return bm._blind_scrub_candidate_identity(
+            {"b": [text]}, self._cv(name, **extra)
+        )["b"][0]
+
+    def test_bare_name_does_not_rewrite_lowercase_prose(self):
+        # A name word only counts when it is capitalised: prose uses the common word
+        # in lower case.
+        for name, text in (
+            ("Long Wei Ming", "Delivered long-term roadmap."),
+            ("Adam Sharp", "Drove a sharp reduction in cost."),
+            ("Sarah Church", "Served the local church."),
+            ("Rose Tan", "Revenue rose from 12% to 40%."),
+        ):
+            with self.subTest(name=name):
+                self.assertEqual(self._scrub(text, name), text)
+
+    def test_bare_name_inside_a_larger_proper_noun_survives(self):
+        # "Shah Alam" is a city and "Vinay Kumar" is a different person.
+        self.assertEqual(
+            self._scrub("Based in Shah Alam.", "Muhammad Alam"), "Based in Shah Alam."
+        )
+        self.assertEqual(
+            self._scrub("Worked with Vinay Kumar too.", "Vinay Lariya"),
+            "Worked with Vinay Kumar too.",
+        )
+
+    def test_bare_name_standing_alone_is_still_scrubbed(self):
+        self.assertEqual(
+            self._scrub("Vinay led the migration.", "Vinay Lariya"),
+            "The candidate led the migration.",
+        )
+        self.assertEqual(
+            self._scrub("Worked with Vinay on it.", "Vinay Lariya"),
+            "Worked with the candidate on it.",
+        )
+
+    def test_all_caps_line_still_loses_the_name(self):
+        # On an ALL-CAPS line every word is capitalised, so a capitalised neighbour is
+        # not evidence of a larger proper noun.
+        self.assertEqual(
+            self._scrub("VINAY LED THE MIGRATION", "Vinay Lariya"),
+            "The candidate LED THE MIGRATION",
+        )
+
+    def test_name_that_is_a_substring_of_the_label_is_still_scrubbed(self):
+        # "andi" is a substring of "the candidate"; the self-reference guard must be a
+        # whole-word test or this candidate is never masked at all.
+        self.assertEqual(
+            self._scrub("Andi led the migration.", "Andi"),
+            "The candidate led the migration.",
+        )
+
+    def test_mononym_is_scrubbed_in_any_casing(self):
+        self.assertEqual(
+            self._scrub("SUHARTO delivered it. Suharto led the team.", "Suharto"),
+            "The candidate delivered it. The candidate led the team.",
+        )
+
+    def test_multi_word_run_never_starts_or_ends_on_a_particle(self):
+        # "van der" and "binti Rahman" are shared by whole families.
+        self.assertEqual(
+            self._scrub(
+                "Marieke van der Meer shipped it; van der Waals forces apply.",
+                "Marieke van der Meer",
+            ),
+            "The candidate shipped it; van der Waals forces apply.",
+        )
+        self.assertEqual(
+            self._scrub(
+                "Coordinated with Siti binti Rahman on payroll.",
+                "Nur Aisyah binti Rahman",
+            ),
+            "Coordinated with Siti binti Rahman on payroll.",
+        )
+
+    def test_employer_named_like_an_everyday_word_is_always_masked(self):
+        # Provenance, not the word itself, decides. A company the candidate worked for
+        # must be masked however it is written.
+        cv = {
+            "work_experiences": [
+                {"company": "Grab", "bullets": ["see grab.com and worked at grab"]}
+            ]
+        }
+        out = bm._blind_postprocess_company_mentions(json.loads(json.dumps(cv)), cv)
+        self.assertNotIn("grab", out["work_experiences"][0]["bullets"][0].lower())
+
+    def test_everyday_word_that_is_not_the_employer_still_survives(self):
+        cv = {
+            "work_experiences": [
+                {
+                    "company": "Acme Widgets",
+                    "bullets": ["Helped grab market share at Grab Holdings."],
+                }
+            ]
+        }
+        out = bm._blind_postprocess_company_mentions(json.loads(json.dumps(cv)), cv)
+        bullet = out["work_experiences"][0]["bullets"][0]
+        self.assertIn("grab market share", bullet)
+        self.assertIn("[Company]", bullet)
+
+    def test_brand_compound_only_cv_still_registers_the_name(self):
+        # A CV that never writes "Grab" alone, only "GrabFood", must still mask it.
+        cv = {
+            "work_experiences": [
+                {
+                    "company": "Acme Widgets",
+                    "bullets": ["Launched GrabFood and BoostPay.", "Boosted revenue."],
+                }
+            ]
+        }
+        out = bm._blind_postprocess_company_mentions(json.loads(json.dumps(cv)), cv)
+        bullets = out["work_experiences"][0]["bullets"]
+        self.assertEqual(bullets[0], "Launched [Company]Food and [Company]Pay.")
+        self.assertEqual(bullets[1], "Boosted revenue.")
+
+    def test_dotted_phone_number_is_still_redacted(self):
+        self.assertIn(
+            "[Phone Redacted]",
+            bm._blind_redact_phone_candidates("Reach me on 44.7911123456"),
+        )
+
+    def test_decimal_measurements_are_still_preserved(self):
+        for text in (
+            "Handled 99.999999 percent uptime.",
+            "Ratio 12.5 to 1 achieved.",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(bm._blind_redact_phone_candidates(text), text)
+
+
 if __name__ == "__main__":
     unittest.main()
