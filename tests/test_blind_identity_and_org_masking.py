@@ -872,6 +872,13 @@ _BLIND_PROSE_CORPUS = (
     "Coordinated with Siti binti Rahman on payroll.",
     "van der Waals forces apply.",
     "Revenue rose from 12% to 40%.",
+    "Tuning max_connections and thread_max_size.",
+    "Used ada_boost and grid_search for the model.",
+    "Owns cust_order_fact and dim_date tables.",
+    "Escalated to the min_value and sum_total defaults.",
+    "Worked with Dr Suresh Nair on the rollout.",
+    "Reviewed by Prof Anita Menon last quarter.",
+    "Mr Kumar attended the steering committee.",
 )
 
 # Candidate names spanning the shapes this market actually sees.
@@ -885,6 +892,10 @@ _BLIND_NAME_CORPUS = (
     "Fran\u00e7ois Dubois",
     "Suharto",
     "Ali",
+    "Mary Smith-Jones",
+    "Sean O'Brien",
+    "Jean-Luc Picard",
+    "Nur Aisyah binti Abdul-Rahman",
 )
 
 # Sentence frames a model actually produces, with {name} standing for whatever the
@@ -902,6 +913,12 @@ _BLIND_LEAK_FRAMES = (
     "- {name} owned delivery.",
     "Project lead: {name} delivered on time.",
     "{name} Senior Data Engineer at Acme.",
+    "Reference available from Mr {name}.",
+    "Contact Dr {name} for details.",
+    "Escalated to {name} and closed it.",
+    "{name} Lead Architect, Cloud Platform",
+    "{name}-led delivery succeeded.",
+    "Handover notes from {name} were filed.",
 )
 
 
@@ -953,6 +970,118 @@ class BlindSweepInvariantTests(unittest.TestCase):
         ):
             with self.subTest(name=name):
                 self.assertEqual(self._scrub(line, name), line)
+
+
+class FourthReviewRegressionTests(unittest.TestCase):
+    """Cases a fourth review of these fixes found, plus one it led me to."""
+
+    def _scrub(self, text, name, **extra):
+        candidate = {"name": name}
+        candidate.update(extra)
+        return bm._blind_scrub_candidate_identity(
+            {"b": [text]}, {"candidate": candidate}
+        )["b"][0]
+
+    def test_compound_surname_standing_alone_is_replaced(self):
+        # The matcher recognised these but the replacer compared alphabetic parts
+        # against the whole compound, so it matched and then did nothing.
+        for name, text in (
+            ("Mary Smith-Jones", "Smith-Jones delivered the platform."),
+            ("Sean O'Brien", "O'Brien led the migration."),
+            ("Jean-Luc Picard", "Jean-Luc owned delivery."),
+        ):
+            with self.subTest(name=name):
+                out = self._scrub(text, name)
+                self.assertEqual(out, "The candidate " + text.split(" ", 1)[1])
+
+    def test_either_half_of_a_compound_surname_is_replaced(self):
+        self.assertEqual(
+            self._scrub("Jones delivered it.", "Mary Smith-Jones"),
+            "The candidate delivered it.",
+        )
+
+    def test_honorific_does_not_shield_the_name_and_goes_with_it(self):
+        for text, expected in (
+            ("Reference available from Mr Lariya.", "Reference available from the candidate."),
+            ("Contact Dr Lariya for details.", "Contact the candidate for details."),
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(self._scrub(text, "Vinay Lariya"), expected)
+
+    def test_possessive_survives_the_replacement(self):
+        # The honorific span must not swallow the possessive of a bare name.
+        self.assertEqual(
+            self._scrub("Mary's team shipped it.", "Mary Smith-Jones"),
+            "The candidate's team shipped it.",
+        )
+        self.assertEqual(
+            self._scrub("Vinay\u2019s role grew.", "Vinay Lariya"),
+            "The candidate\u2019s role grew.",
+        )
+
+    def test_honorific_before_a_full_name_goes_with_it(self):
+        self.assertEqual(
+            self._scrub("Contact Dr Vinay Lariya today.", "Vinay Lariya"),
+            "Contact the candidate today.",
+        )
+
+    def test_honorific_does_not_strip_a_third_party_name(self):
+        # An honorific belongs to whoever follows it. Ignoring it must not disable the
+        # protection that keeps somebody else's full name intact.
+        self.assertEqual(
+            self._scrub("Worked with Dr Suresh Lariya.", "Vinay Lariya"),
+            "Worked with Dr Suresh Lariya.",
+        )
+
+    def test_compound_name_is_taken_whole_before_its_halves(self):
+        # Both halves are sweep terms, so the longest form has to match first or the
+        # compound is replaced twice.
+        self.assertEqual(
+            self._scrub("Smith-Jones-led delivery succeeded.", "Mary Smith-Jones"),
+            "The candidate-led delivery succeeded.",
+        )
+
+    def test_ordinary_snake_case_identifiers_survive(self):
+        # One short, common part is not evidence: max_connections is configuration, and
+        # ada_boost is an algorithm.
+        for name, text in (
+            ("Max Chen", "Tuning max_connections and thread_max_size."),
+            ("Ada Wong", "Used ada_boost for the model."),
+        ):
+            with self.subTest(name=name):
+                self.assertEqual(self._scrub(text, name), text)
+
+    def test_identifier_carrying_the_name_is_still_replaced(self):
+        self.assertEqual(
+            self._scrub("Rebuilt vinay_lariya_pipeline nightly.", "Vinay Lariya"),
+            "Rebuilt the candidate nightly.",
+        )
+        self.assertEqual(
+            self._scrub("Owner_Vinay signed off.", "Vinay Lariya"),
+            "The candidate signed off.",
+        )
+
+    def test_first_last_email_does_not_leave_a_dangling_article(self):
+        out = self._scrub(
+            "Reach me at vinay_lariya@corp.com anytime.",
+            "Vinay Lariya",
+            email="vinay_lariya@corp.com",
+        )
+        self.assertEqual(out, "Reach me at [Email Redacted] anytime.")
+
+    def test_address_at_the_end_of_a_sentence_is_redacted(self):
+        # The trailing guard excluded ".", so an address written last in a bullet - the
+        # commonest place for one - was never redacted.
+        self.assertEqual(
+            bm._BLIND_SUMMARY_EMAIL_RE.sub(
+                "[Email Redacted]", "Referee: someone@else.com."
+            ),
+            "Referee: [Email Redacted].",
+        )
+        self.assertEqual(
+            bm._BLIND_SUMMARY_EMAIL_RE.sub("[Email Redacted]", "Mail user@corp.com.my now"),
+            "Mail [Email Redacted] now",
+        )
 
 
 if __name__ == "__main__":
