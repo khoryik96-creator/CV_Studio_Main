@@ -788,5 +788,63 @@ class ThirdReviewRegressionTests(unittest.TestCase):
         )
 
 
+class CodexReviewRegressionTests(unittest.TestCase):
+    """Cases the automated PR review on #198 found."""
+
+    def _scrub(self, text, name):
+        return bm._blind_scrub_candidate_identity(
+            {"b": [text]}, {"candidate": {"name": name}}
+        )["b"][0]
+
+    def test_accented_names_are_matched(self):
+        # An ASCII-only word class stops partway through "Jose" and leaks the name.
+        self.assertEqual(
+            self._scrub("Jos\u00e9 led the migration.", "Jos\u00e9"),
+            "The candidate led the migration.",
+        )
+        self.assertEqual(
+            self._scrub("Fran\u00e7ois led it.", "Fran\u00e7ois Dubois"),
+            "The candidate led it.",
+        )
+
+    def test_sentence_leading_word_does_not_shield_the_name(self):
+        # "Contact" and "Ask" are capitalised because they open a sentence, not because
+        # they are somebody's name.
+        for text, expected in (
+            ("Contact Vinay.", "Contact the candidate."),
+            ("Ask Vinay tomorrow.", "Ask the candidate tomorrow."),
+            ("References\nVinay led it.", "References\nThe candidate led it."),
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(self._scrub(text, "Vinay Lariya"), expected)
+
+    def test_longer_proper_nouns_are_preserved(self):
+        # The exemption must not be limited to runs of exactly two words.
+        self.assertEqual(
+            self._scrub("Based in Greater Victoria Area.", "Victoria Lee"),
+            "Based in Greater Victoria Area.",
+        )
+        self.assertEqual(
+            self._scrub("Worked with Vinay Kumar Singh.", "Vinay Lariya"),
+            "Worked with Vinay Kumar Singh.",
+        )
+
+    def test_dotted_phone_with_a_short_subscriber_part_is_redacted(self):
+        for text in ("Reach me at 65.91234567", "Call 44.7911123456 now"):
+            with self.subTest(text=text):
+                self.assertIn("[Phone Redacted]", bm._blind_redact_phone_candidates(text))
+
+    def test_long_decimals_beside_a_unit_stay_measurements(self):
+        for text in (
+            "Uptime of 99.9999999 percent.",
+            "Handled 99.999999 percent uptime.",
+            "Availability 99.99999999 held.",
+            "Cost RM 12.345678 million.",
+            "Saved RM 250000.00 annually.",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(bm._blind_redact_phone_candidates(text), text)
+
+
 if __name__ == "__main__":
     unittest.main()

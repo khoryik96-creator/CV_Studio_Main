@@ -132,8 +132,9 @@ _BLIND_GENERIC_LABEL_ANY_RE = re.compile(r"(?<![A-Za-z0-9])the candidate(?![A-Za
 _BLIND_LINK_SCHEME_LEFTOVER_RE = re.compile(r"(?:https?://|www\.)+\[Link Redacted\]", re.I)
 # The word immediately before or after a bare name match, used to tell "Alam led the
 # migration" (the person) from "Shah Alam" (a place).
-# A maximal run of capitalised words: the unit a bare name has to be judged inside.
-_BLIND_CAPITAL_RUN_RE = re.compile(r"[A-Z][A-Za-z0-9'\u2019-]*(?:\s+[A-Z][A-Za-z0-9'\u2019-]*)*")
+# One word of a name. Unicode-aware: Jose, Francois and Munoz are spelled with accented
+# letters, and an ASCII-only class would stop matching partway through and leak the name.
+_BLIND_NAME_RUN_WORD_RE = re.compile(r"[^\W\d_][\w'\u2019\-]*", re.UNICODE)
 _BLIND_WORD_BEFORE_RE = re.compile(r"([A-Za-z][A-Za-z'\u2019/-]*)(\s+)\Z")
 _BLIND_WORD_AFTER_RE = re.compile(r"\A(\s+)([A-Za-z][A-Za-z'\u2019-]*)")
 # Whether that preceding word is itself sentence-initial, in which case its capital says
@@ -145,6 +146,21 @@ _BLIND_ORG_SUFFIX_RE = re.compile(
     r"\b([A-Z][A-Za-z0-9&.'’\-]*(?:\s+[A-Za-z0-9&.'’\-]+){0,8}\s+"
     r"(?i:Sdn\.?\s*Bhd\.?|Bhd\.?|Berhad|Pte\.?\s*Ltd\.?|Pvt\.?\s*Ltd\.?|Ltd\.?|Limited|Inc\.?|LLC|LLP|PLC|Corp\.?|Corporation|Company|Co\.?|Group|Holdings|Bank|Insurance|Assurance|Telecommunications|Telekom|Technologies|Technology|Solutions|Services|Consulting))\b"
 )
+# Units that mark a long decimal as a measurement rather than a dotted phone number.
+_BLIND_MEASUREMENT_BEFORE_RE = re.compile(
+    r"(?:[$\u00a3\u20ac]|\b(?:rm|usd|sgd|myr|idr|thb|php|eur|gbp|aud|jpy|inr"
+    r"|uptime|availability|accuracy|precision|ratio|rate|score|average|mean|median"
+    r"|version|latency|throughput|coverage|margin|yield)\s*)\Z",
+    re.I,
+)
+_BLIND_MEASUREMENT_AFTER_RE = re.compile(
+    r"\s*(?:%|\b(?:percent|pct|per\s*cent|million|billion|thousand|bn|mn|k"
+    r"|hours?|days?|weeks?|months?|years?|seconds?|ms|s|gb|tb|mb|kb|x|times"
+    r"|uptime|availability|accuracy|score|points?|units?)\b)",
+    re.I,
+)
+
+
 _BLIND_SUMMARY_EMAIL_RE = re.compile(
     r"(?<![A-Za-z0-9._%+\-])[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}(?![A-Za-z0-9._%+\-])",
     re.I,
@@ -347,13 +363,19 @@ def _blind_redact_phone_candidates(text):
         )
         if grouped_metric:
             return value
-        # A plain decimal measurement (99.999999 percent uptime) is not a phone
-        # number merely because it carries a decimal point.
-        # A dotted phone number ("44.7911123456") carries a long run of digits after
-        # the point; a measurement or a money figure does not, however large its whole
-        # part ("250000.50", "99.9999999").
-        if re.fullmatch(r"\d+\.\d{1,8}", value.strip()):
-            return value
+        # A decimal is a measurement, not a dotted phone number - but only when it
+        # reads like one. Two or three decimal places is money or a plain figure
+        # ("250000.50"); a longer fraction needs a unit beside it ("99.9999999
+        # percent", "RM 12.345678"), because "65.91234567" on its own is a phone
+        # number with a country code.
+        decimal = re.fullmatch(r"\d+\.(\d+)", value.strip())
+        if decimal is not None:
+            if len(decimal.group(1)) <= 3:
+                return value
+            before = match.string[max(0, match.start() - 24):match.start()]
+            after = match.string[match.end():match.end() + 24]
+            if _BLIND_MEASUREMENT_BEFORE_RE.search(before) or _BLIND_MEASUREMENT_AFTER_RE.match(after):
+                return value
         if re.search(r"[\s().-]", value):
             return "[Phone Redacted]"
         return value
@@ -1432,6 +1454,43 @@ def _blind_candidate_name_tokens(full_name):
     return [word for word in words if _blind_name_word_is_sweepable(word)]
 
 
+def _blind_is_sentence_initial(text, position):
+    """Report whether the word at ``position`` opens a sentence or a line."""
+    before = text[:position]
+    if not before.strip():
+        return True
+    return bool(re.search(r"[.!?:;]\s*\Z|\n\s*\Z", before))
+
+
+def _blind_name_word_is_person_like(word):
+    """Title Case only: ETL and AWS are acronyms, not somebody's name."""
+    return bool(word[:1].isupper() and not word.isupper())
+
+
+def _blind_capitalised_runs(text):
+    """Group the text into runs of capitalised words joined by blanks on one line."""
+    runs = []
+    current = []
+    previous_end = None
+    for match in _BLIND_NAME_RUN_WORD_RE.finditer(text):
+        word = match.group(0)
+        if not word[:1].isupper():
+            if current:
+                runs.append(current)
+                current = []
+            previous_end = match.end()
+            continue
+        if current and not re.fullmatch(r"[ \t]+", text[previous_end:match.start()]):
+            # A newline or punctuation ends the run: "References\nVinay" is two runs.
+            runs.append(current)
+            current = []
+        current.append((word, match.start(), match.end()))
+        previous_end = match.end()
+    if current:
+        runs.append(current)
+    return runs
+
+
 def _blind_replace_name_tokens(text, tokens, name_words=(), mononym=False):
     """Replace a bare given name or surname, but only where it reads as the person.
 
@@ -1440,16 +1499,16 @@ def _blind_replace_name_tokens(text, tokens, name_words=(), mononym=False):
     Structural rules do the work instead, applied to the whole run of capitalised words
     the match sits in rather than to one neighbouring word.
 
-    An all-lowercase match is ordinary prose - "delivered long-term value", "a sharp
-    reduction", "the local church" - and is never replaced.
+    A lowercase word is never part of a run, so ordinary prose - "delivered long-term
+    value", "a sharp reduction", "the local church" - is untouched.
 
-    Inside a capitalised run, another of the candidate's own name words confirms the
-    person, so the whole run goes ("Ming Tan", "Vinay Kumar Lariya"). A two-word run
-    whose other word is a Title Case word belonging to nobody in this name is a
-    different person or a larger proper noun - "Vinay Kumar", "Shah Alam" - and is left
-    alone. Anything else is a heading or a technical phrase where the capital carries no
-    such signal ("Vinay ETL Pipeline Rebuild", "VINAY LED THE MIGRATION"), so only the
-    name itself is replaced.
+    Inside a run, two of the candidate's own name words confirm the person and the whole
+    run goes ("Ming Tan", "Vinay Kumar Lariya"). Otherwise, if every other word in the
+    run is a Title Case word belonging to nobody in this name, the run is a different
+    person or a larger proper noun - "Vinay Kumar", "Greater Victoria Area" - and is
+    left alone. A word that merely opens a sentence or a line is not evidence of that
+    ("Contact Vinay", "Ask Vinay"), and neither is an acronym ("Vinay AWS migration") or
+    an ALL-CAPS line, so those still lose the name.
 
     A mononym has no other name word to corroborate with, and nothing else identifies
     the candidate, so it is always replaced.
@@ -1462,47 +1521,44 @@ def _blind_replace_name_tokens(text, tokens, name_words=(), mononym=False):
         for word in name_words
         if word.casefold() not in _BLIND_NAME_PARTICLES
     } or set(token_set)
-    token_pattern = re.compile(
-        r"(?<![A-Za-z0-9])("
-        + "|".join(re.escape(token) for token in sorted(tokens, key=len, reverse=True))
-        + r")(?![A-Za-z0-9])",
-        re.I,
-    )
 
-    def is_person_word(word):
-        """Title Case only: ETL and AWS are acronyms, not somebody's name."""
-        return bool(word[:1].isupper() and not word.isupper())
-
-    def replace(match):
-        run = match.group(0)
-        words = run.split()
-        lowered_words = [word.casefold() for word in words]
-        if not any(word in token_set for word in lowered_words):
-            return run
-        preceding = _BLIND_WORD_BEFORE_RE.search(match.string[:match.start()])
+    out = text
+    for run in reversed(_blind_capitalised_runs(text)):
+        lowered = [word.casefold() for word, _start, _end in run]
+        if not any(word in token_set for word in lowered):
+            continue
+        start, end = run[0][1], run[-1][2]
+        preceding = _BLIND_WORD_BEFORE_RE.search(text[:start])
         if preceding is not None and preceding.group(1).casefold() in _BLIND_NAME_PARTICLES:
             # "binti Rahman" names the candidate's father, and every one of his other
-            # children shares it. Sweeping it rewrites unrelated people; the candidate's
-            # own full form was already replaced as a unit before this pass.
-            return run
-        if sum(1 for low in lowered_words if low in name_set) >= 2:
-            # Two words of this candidate's own name in one run: it is the person,
-            # middle names and all ("Vinay Kumar Lariya", "Ming Tan").
-            return "the candidate"
-        others = [word for word, low in zip(words, lowered_words) if low not in name_set]
-        if not mononym and len(words) == 2 and others and is_person_word(others[0]):
-            # One name word beside one Title Case word belonging to nobody in this
-            # name: a different person or a larger proper noun.
-            return run
-        return token_pattern.sub("the candidate", run)
-
-    def replace_lowercase_safe(match):
-        found = match.group(0)
-        if found.islower():
-            return found
-        return replace(match)
-
-    return _BLIND_CAPITAL_RUN_RE.sub(replace_lowercase_safe, text)
+            # children shares it. The candidate's own full form was already replaced as
+            # a unit before this pass.
+            continue
+        if sum(1 for word in lowered if word in name_set) >= 2:
+            out = out[:start] + "the candidate" + out[end:]
+            continue
+        others = [
+            word
+            for index, (word, word_start, _word_end) in enumerate(run)
+            if lowered[index] not in name_set
+            and not (index == 0 and _blind_is_sentence_initial(text, word_start))
+        ]
+        if (
+            not mononym
+            and others
+            and all(_blind_name_word_is_person_like(word) for word in others)
+        ):
+            continue
+        pieces = []
+        cursor = start
+        for word, word_start, word_end in run:
+            pieces.append(out[cursor:word_start])
+            pieces.append(
+                "the candidate" if word.casefold() in token_set else word
+            )
+            cursor = word_end
+        out = out[:start] + "".join(pieces) + out[end:]
+    return out
 
 
 def _blind_redact_identifier_tokens(text, name_tokens):
