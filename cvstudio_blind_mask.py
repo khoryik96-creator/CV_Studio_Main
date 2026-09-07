@@ -1505,8 +1505,7 @@ def _blind_name_word_is_person_like(word):
     """
     if not word[:1].isupper() or word.isupper():
         return False
-    low = word.casefold().strip(".")
-    return low not in _BLIND_JOB_TITLE_WORDS and low not in _BLIND_HONORIFICS
+    return word.casefold().strip(".") not in _BLIND_JOB_TITLE_WORDS
 
 
 def _blind_capitalised_runs(text):
@@ -1549,24 +1548,27 @@ def _blind_name_word_keys(word):
     return keys
 
 
-def _blind_replace_name_within_word(word, token_set):
+@functools.lru_cache(maxsize=64)
+def _blind_name_part_pattern(tokens):
+    """Match any name form inside a word, longest first, at letter boundaries."""
+    return re.compile(
+        r"(?<![^\W\d_])(?:"
+        + "|".join(re.escape(token) for token in sorted(tokens, key=len, reverse=True))
+        + r")(?![^\W\d_])",
+        re.I,
+    )
+
+
+def _blind_replace_name_within_word(word, tokens):
     """Replace the name inside one written word, keeping the rest of it.
 
-    "Vinay's" becomes "the candidate's" and "Lariya-led" becomes "the candidate-led";
-    replacing the whole word would delete the possessive or the compound.
+    "Vinay's" becomes "the candidate's" and "Lariya-led" becomes "the candidate-led".
+    Longest form first, so a compound surname is taken whole: "Smith-Jones-led" must not
+    match "Smith" and "Jones" separately and produce "the candidate-the candidate-led".
     """
     bare = re.sub(r"['\u2019]s\Z", "", word, flags=re.I)
     suffix = word[len(bare):]
-    if bare.casefold() in token_set:
-        # The compound itself is the name: Smith-Jones, O'Brien, Abdul-Rahman. Replacing
-        # its alphabetic parts one by one would match none of them and leave it intact.
-        return "the candidate" + suffix
-
-    def replace_part(match):
-        part = match.group(0)
-        return "the candidate" if part.casefold() in token_set else part
-
-    return re.sub(r"[^\W\d_]+", replace_part, bare) + suffix
+    return _blind_name_part_pattern(tokens).sub("the candidate", bare) + suffix
 
 
 def _blind_replace_name_tokens(text, tokens, name_words=(), mononym=False):
@@ -1598,6 +1600,7 @@ def _blind_replace_name_tokens(text, tokens, name_words=(), mononym=False):
     if not text or not tokens:
         return text
     token_set = {token.casefold() for token in tokens}
+    token_key = tuple(sorted(token_set))
     name_set = {
         word.casefold()
         for word in name_words
@@ -1637,6 +1640,9 @@ def _blind_replace_name_tokens(text, tokens, name_words=(), mononym=False):
             word
             for index, (word, word_start, _word_end) in enumerate(run)
             if not is_name[index]
+            # An honorific belongs to whoever follows it, so it is ignored here rather
+            # than counted: "Dr Suresh Lariya" is still somebody else's full name.
+            and word.casefold().strip(".") not in _BLIND_HONORIFICS
             and not (index == 0 and _blind_is_sentence_initial(text, word_start))
         ]
         # A mononym has no second name word to corroborate with, so a capitalised
@@ -1671,7 +1677,7 @@ def _blind_replace_name_tokens(text, tokens, name_words=(), mononym=False):
         cursor = start
         for word, word_start, word_end in run:
             pieces.append(out[cursor:word_start])
-            pieces.append(_blind_replace_name_within_word(word, token_set))
+            pieces.append(_blind_replace_name_within_word(word, token_key))
             cursor = word_end
         out = out[:start] + "".join(pieces) + out[end:]
     return out

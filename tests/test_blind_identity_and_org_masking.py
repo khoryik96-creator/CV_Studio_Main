@@ -876,6 +876,9 @@ _BLIND_PROSE_CORPUS = (
     "Used ada_boost and grid_search for the model.",
     "Owns cust_order_fact and dim_date tables.",
     "Escalated to the min_value and sum_total defaults.",
+    "Worked with Dr Suresh Nair on the rollout.",
+    "Reviewed by Prof Anita Menon last quarter.",
+    "Mr Kumar attended the steering committee.",
 )
 
 # Candidate names spanning the shapes this market actually sees.
@@ -914,6 +917,8 @@ _BLIND_LEAK_FRAMES = (
     "Contact Dr {name} for details.",
     "Escalated to {name} and closed it.",
     "{name} Lead Architect, Cloud Platform",
+    "{name}-led delivery succeeded.",
+    "Handover notes from {name} were filed.",
 )
 
 
@@ -1018,6 +1023,22 @@ class FourthReviewRegressionTests(unittest.TestCase):
         self.assertEqual(
             self._scrub("Contact Dr Vinay Lariya today.", "Vinay Lariya"),
             "Contact the candidate today.",
+        )
+
+    def test_honorific_does_not_strip_a_third_party_name(self):
+        # An honorific belongs to whoever follows it. Ignoring it must not disable the
+        # protection that keeps somebody else's full name intact.
+        self.assertEqual(
+            self._scrub("Worked with Dr Suresh Lariya.", "Vinay Lariya"),
+            "Worked with Dr Suresh Lariya.",
+        )
+
+    def test_compound_name_is_taken_whole_before_its_halves(self):
+        # Both halves are sweep terms, so the longest form has to match first or the
+        # compound is replaced twice.
+        self.assertEqual(
+            self._scrub("Smith-Jones-led delivery succeeded.", "Mary Smith-Jones"),
+            "The candidate-led delivery succeeded.",
         )
 
     def test_ordinary_snake_case_identifiers_survive(self):
