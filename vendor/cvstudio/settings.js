@@ -241,7 +241,14 @@ async function cvStudioNativeDownloadFolderRequest(method, payload) {
   });
   var data = await response.json().catch(function(){ return {}; });
   if (!response.ok || !data.ok) {
-    var error = new Error(data.error || data.message || 'Download-folder request failed.');
+    var message = data.error || data.message || 'Download-folder request failed.';
+    // The browser loads index.html and these modules from disk on every request, but
+    // app.py is only read when the server process starts. After an update the page can
+    // therefore ask for an action the still-running old server has never heard of.
+    if (data.code === 'DOWNLOAD_FOLDER_ACTION_INVALID') {
+      message = 'CV Studio was updated but is still running the previous version. Close and reopen CV Studio, then try again.';
+    }
+    var error = new Error(message);
     error.code = data.code || '';
     throw error;
   }

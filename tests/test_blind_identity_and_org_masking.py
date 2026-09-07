@@ -21,6 +21,7 @@ import unittest
 from unittest import mock
 
 import cvstudio_blind_mask as bm
+from cvstudio_ai_costs import AICostGuardrailError
 
 _MODULE_TEMPORARY = tempfile.TemporaryDirectory(prefix="cvstudio-blind-identity-")
 _ORIGINAL_DATABASE_OVERRIDE = os.environ.get("CVSTUDIO_DB_PATH")
@@ -286,11 +287,45 @@ class BlindRouteIdentityTests(unittest.TestCase):
 
 class SpendAndConcurrencyGuardTests(unittest.TestCase):
     def test_ai_request_ceiling_is_enabled_by_default(self):
-        from cvstudio_ai_costs import guardrail_configuration
+        from cvstudio_ai_costs import (
+            AI_COST_DEFAULT_REQUEST_CEILING_USD,
+            AI_COST_GUARDRAIL_ENV,
+            guardrail_configuration,
+        )
 
-        config = guardrail_configuration()
+        # Pass the mapping explicitly: another test module pops this variable out of
+        # os.environ permanently, so reading the live process environment here would
+        # make the result depend on test order.
+        config = guardrail_configuration(environ={})
         self.assertTrue(config["enabled"])
-        self.assertEqual(config["limit_usd"], 10.0)
+        self.assertEqual(
+            config["limit_usd"], float(AI_COST_DEFAULT_REQUEST_CEILING_USD)
+        )
+        off = guardrail_configuration(environ={AI_COST_GUARDRAIL_ENV: "off"})
+        self.assertFalse(off["enabled"])
+
+    def test_default_ceiling_clears_the_priciest_legitimate_request(self):
+        from cvstudio_ai_costs import enforce_request_guardrail
+
+        # 64k output tokens on a "pro" model, and on any unrecognised model id, price
+        # at the provider ceiling. A 500KB CV must still go through; 5MB must not.
+        def payload(model, chars):
+            return {
+                "model": model,
+                "max_tokens": 64000,
+                "messages": [{"role": "user", "content": "x" * chars}],
+            }
+
+        for model in ("gpt-5.5-pro", "gpt-9-not-in-the-price-table"):
+            with self.subTest(model=model):
+                allowed = enforce_request_guardrail(
+                    "openai", payload(model, 500_000), environ={}
+                )
+                self.assertEqual(allowed["status"], "allowed")
+                with self.assertRaises(AICostGuardrailError):
+                    enforce_request_guardrail(
+                        "openai", payload(model, 5_000_000), environ={}
+                    )
 
     def test_one_shot_activity_diagnostic_claims_its_slot_under_a_lock(self):
         import threading
@@ -306,6 +341,159 @@ class SpendAndConcurrencyGuardTests(unittest.TestCase):
         # concurrent server threads can each emit the one-shot POST.
         self.assertLess(claim, check)
         self.assertLess(check, add)
+
+
+class ReviewRegressionTests(unittest.TestCase):
+    """Cases a review of the first attempt at these fixes found."""
+
+    @staticmethod
+    def _original(name="Vinay Lariya", **extra):
+        candidate = {"name": name}
+        candidate.update(extra)
+        return {"candidate": candidate}
+
+    def test_real_employer_is_masked_whatever_its_casing(self):
+        # The first fix spared every lowercase single-token match, which also spared
+        # genuine employers written in lowercase.
+        for text, terms, expected in (
+            ("Worked at petronas on upstream data.", ["Petronas"], "[Company]"),
+            ("Senior engineer at iflix", ["iflix"], "[Company]"),
+        ):
+            with self.subTest(text=text):
+                self.assertIn(expected, bm._blind_replace_org_terms_in_text(text, terms))
+
+    def test_brand_compound_in_capitals_is_still_masked(self):
+        self.assertEqual(
+            bm._blind_replace_org_terms_in_text("LED THE MAXISONE LAUNCH", ["Maxis"]),
+            "LED THE [Company]ONE LAUNCH",
+        )
+
+    def test_all_caps_prose_does_not_register_an_ambiguous_name(self):
+        terms = bm._blind_collect_org_mask_terms(
+            {
+                "work_experiences": [
+                    {
+                        "company": "Acme Widgets",
+                        "bullets": ["BOOSTED REVENUE", "METADATA CATALOG", "YESTERDAY SHIPPED"],
+                    }
+                ]
+            }
+        )
+        self.assertEqual(terms, ["Acme Widgets"])
+
+    def test_name_in_capitals_is_scrubbed(self):
+        out = bm._blind_scrub_candidate_identity(
+            {"b": ["VINAY LED THE MIGRATION"]}, self._original()
+        )
+        self.assertNotIn("VINAY", out["b"][0])
+
+    def test_name_beside_an_underscore_is_scrubbed(self):
+        out = bm._blind_scrub_candidate_identity(
+            {"b": ["Vinay led it. Owner_Vinay signed off."]}, self._original()
+        )
+        self.assertNotIn("Vinay", out["b"][0])
+
+    def test_whole_snake_case_identifier_is_replaced_once(self):
+        out = bm._blind_scrub_candidate_identity(
+            {"b": ["Rebuilt the vinay_lariya_pipeline DAG."]}, self._original()
+        )
+        self.assertEqual(out["b"], ["Rebuilt the candidate DAG."])
+
+    def test_unrelated_snake_case_tables_are_untouched(self):
+        text = "Owns cust_order_fact and dim_date tables."
+        out = bm._blind_scrub_candidate_identity({"b": [text]}, self._original())
+        self.assertEqual(out["b"], [text])
+
+    def test_phone_is_scrubbed_however_it_is_punctuated(self):
+        original = self._original(phone="+60123456789")
+        for text in (
+            "Reach him on +60 12-345 6789 anytime.",
+            "Mobile 012-345 6789 today.",
+            "Direct line 0123456789.",
+        ):
+            with self.subTest(text=text):
+                out = bm._blind_scrub_candidate_identity({"b": [text]}, original)
+                self.assertIn("[Phone Redacted]", out["b"][0])
+
+    def test_metric_sharing_a_digit_tail_is_not_a_phone_number(self):
+        original = self._original(phone="+60123456789")
+        for text in (
+            "Processed 123456789 records nightly.",
+            "Cut cost from 1,250,000 to 900,000.",
+        ):
+            with self.subTest(text=text):
+                out = bm._blind_scrub_candidate_identity({"b": [text]}, original)
+                self.assertEqual(out["b"], [text])
+
+    def test_link_is_scrubbed_with_or_without_its_scheme(self):
+        original = self._original(linkedin="https://linkedin.com/in/vinaylariya")
+        for text in (
+            "See https://linkedin.com/in/vinaylariya",
+            "Profile at linkedin.com/in/vinaylariya",
+            "Profile at www.linkedin.com/in/vinaylariya",
+        ):
+            with self.subTest(text=text):
+                out = bm._blind_scrub_candidate_identity({"b": [text]}, original)
+                self.assertNotIn("vinaylariya", out["b"][0])
+                self.assertIn("[Link Redacted]", out["b"][0])
+
+    def test_technology_that_is_also_a_given_name_survives(self):
+        out = bm._blind_scrub_candidate_identity(
+            {"skills": ["Ruby on Rails", "Java", "Kafka"]}, self._original("Ruby Tan")
+        )
+        self.assertEqual(out["skills"], ["Ruby on Rails", "Java", "Kafka"])
+
+    def test_lineage_particle_is_not_swept_on_its_own(self):
+        text = "Coordinated with Siti binti Rahman on payroll."
+        out = bm._blind_scrub_candidate_identity(
+            {"b": [text]}, self._original("Nur Aisyah binti Abdullah")
+        )
+        self.assertEqual(out["b"], [text])
+
+    def test_bullet_marker_still_opens_with_a_capital(self):
+        out = bm._blind_scrub_candidate_identity(
+            {"b": ["- Vinay Lariya led it."]}, self._original()
+        )
+        self.assertEqual(out["b"], ["- The candidate led it."])
+
+    def test_markdown_split_name_is_replaced_as_one_name(self):
+        out = bm._blind_scrub_candidate_identity(
+            {"b": ["**Vinay** Lariya owned it."]}, self._original()
+        )
+        self.assertEqual(out["b"], ["The candidate owned it."])
+
+    def test_generic_label_is_never_swept_as_a_name(self):
+        # "Fixture Candidate" must not make the sweep rewrite its own placeholder.
+        out = bm._blind_scrub_candidate_identity(
+            {"b": ["the candidate led delivery."]}, self._original("Fixture Candidate")
+        )
+        self.assertEqual(out["b"], ["The candidate led delivery."])
+
+    def test_header_label_keeps_surrounding_text(self):
+        for name, expected in (
+            ("Vinay Lariya | Data Engineer", "Candidate | Data Engineer"),
+            ("[Vinay Lariya]", "[Candidate]"),
+            ("Vinay Lariya", "Candidate"),
+        ):
+            with self.subTest(name=name):
+                out = bm._blind_scrub_candidate_identity(
+                    {"candidate": {"name": name}}, self._original()
+                )
+                self.assertEqual(out["candidate"]["name"], expected)
+
+    def test_blind_jd_exports_are_named_hyppies(self):
+        source = (
+            Path(__file__).resolve().parents[1] / "vendor" / "cvstudio" / "blind-jd.js"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("'blind-jd-'", source)
+        self.assertEqual(source.count("'hyppies-jd-'"), 2)
+
+    def test_stale_server_action_error_asks_for_a_restart(self):
+        source = (
+            Path(__file__).resolve().parents[1] / "vendor" / "cvstudio" / "settings.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn("DOWNLOAD_FOLDER_ACTION_INVALID", source)
+        self.assertIn("still running the previous version", source)
 
 
 if __name__ == "__main__":
