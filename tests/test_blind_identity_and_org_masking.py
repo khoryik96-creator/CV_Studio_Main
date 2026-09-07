@@ -606,20 +606,41 @@ class SecondReviewRegressionTests(unittest.TestCase):
         self.assertIn("grab market share", bullet)
         self.assertIn("[Company]", bullet)
 
-    def test_brand_compound_only_cv_still_registers_the_name(self):
-        # A CV that never writes "Grab" alone, only "GrabFood", must still mask it.
+    def test_brand_compound_masks_when_the_word_is_the_employer(self):
+        # The employer path is what carries a brand compound: Grab is collected from the
+        # employer field, so GrabFood is masked while "Grabbing" keeps its first syllable.
         cv = {
             "work_experiences": [
                 {
-                    "company": "Acme Widgets",
-                    "bullets": ["Launched GrabFood and BoostPay.", "Boosted revenue."],
+                    "company": "Grab",
+                    "bullets": ["Launched GrabFood.", "Grabbing market share.", "worked at grab"],
                 }
             ]
         }
         out = bm._blind_postprocess_company_mentions(json.loads(json.dumps(cv)), cv)
         bullets = out["work_experiences"][0]["bullets"]
-        self.assertEqual(bullets[0], "Launched [Company]Food and [Company]Pay.")
-        self.assertEqual(bullets[1], "Boosted revenue.")
+        self.assertEqual(bullets[0], "Launched [Company]Food.")
+        self.assertEqual(bullets[1], "Grabbing market share.")
+        self.assertEqual(bullets[2], "worked at [Company]")
+
+    def test_brand_compound_alone_does_not_register_an_unrelated_word(self):
+        # Deliberate trade: a CamelCase compound is not evidence that an everyday word
+        # names this candidate's employer. MetaTrader and MetaBase are unrelated
+        # products, and collecting "Meta" from them would export "[Company]Trader".
+        cv = {
+            "work_experiences": [
+                {
+                    "company": "Acme Widgets",
+                    "bullets": ["Used MetaTrader 5 and MetaBase dashboards."],
+                }
+            ]
+        }
+        self.assertNotIn("Meta", bm._blind_collect_org_mask_terms(cv))
+        out = bm._blind_postprocess_company_mentions(json.loads(json.dumps(cv)), cv)
+        self.assertEqual(
+            out["work_experiences"][0]["bullets"][0],
+            "Used MetaTrader 5 and MetaBase dashboards.",
+        )
 
     def test_dotted_phone_number_is_still_redacted(self):
         self.assertIn(
@@ -631,6 +652,195 @@ class SecondReviewRegressionTests(unittest.TestCase):
         for text in (
             "Handled 99.999999 percent uptime.",
             "Ratio 12.5 to 1 achieved.",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(bm._blind_redact_phone_candidates(text), text)
+
+
+class ThirdReviewRegressionTests(unittest.TestCase):
+    """Cases a third review of these fixes found."""
+
+    def _scrub(self, text, name, **extra):
+        candidate = {"name": name}
+        candidate.update(extra)
+        return bm._blind_scrub_candidate_identity(
+            {"b": [text]}, {"candidate": candidate}
+        )["b"][0]
+
+    def test_mononym_is_masked_even_when_it_is_an_everyday_word(self):
+        # A single-word name is the candidate's entire identity: nothing else in the
+        # document names them, so the denylists must not veto it.
+        self.assertEqual(
+            self._scrub("Ali led the migration.", "Ali"),
+            "The candidate led the migration.",
+        )
+        self.assertEqual(
+            self._scrub("Grace led delivery. Contact Grace.", "Grace"),
+            "The candidate led delivery. Contact the candidate.",
+        )
+
+    def test_mononym_that_is_an_everyday_word_still_spares_prose(self):
+        # The capitalisation rule keeps doing the work.
+        self.assertEqual(
+            self._scrub("The grace period ended early.", "Grace"),
+            "The grace period ended early.",
+        )
+
+    def test_mononym_is_masked_beside_another_capitalised_word(self):
+        # With no second name word there is nothing to corroborate against, so a
+        # mononym is sweept beside a capital rather than left to leak.
+        self.assertEqual(
+            self._scrub("Suharto Widodo led delivery.", "Suharto"),
+            "The candidate Widodo led delivery.",
+        )
+
+    def test_acronyms_and_headings_do_not_shield_the_name(self):
+        for text, expected in (
+            ("Vinay ETL Pipeline Rebuild", "The candidate ETL Pipeline Rebuild"),
+            ("Vinay AWS migration lead", "The candidate AWS migration lead"),
+            ("VINAY LED THE MIGRATION", "The candidate LED THE MIGRATION"),
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(self._scrub(text, "Vinay Lariya"), expected)
+
+    def test_full_name_with_a_middle_name_is_replaced_as_one_run(self):
+        # Two of the candidate's own name words in one run confirm the person.
+        self.assertEqual(
+            self._scrub("Vinay Kumar Lariya led it.", "Vinay Lariya"),
+            "The candidate led it.",
+        )
+
+    def test_a_different_person_sharing_a_first_name_survives(self):
+        self.assertEqual(
+            self._scrub("Worked with Vinay Kumar too.", "Vinay Lariya"),
+            "Worked with Vinay Kumar too.",
+        )
+
+    def test_short_name_word_still_corroborates(self):
+        # "Tan" is too short to be a sweep term on its own, but it still confirms that
+        # "Ming Tan" is the candidate.
+        self.assertEqual(
+            self._scrub("Ming Tan led the rollout.", "Tan Wei Ming"),
+            "The candidate led the rollout.",
+        )
+
+    def test_run_edged_by_an_everyday_word_is_still_collected(self):
+        # Only a particle edge disqualifies a run; "Wei Long" is two ordinary name words.
+        self.assertEqual(
+            self._scrub("Wei Long led the project.", "Lee Wei Long"),
+            "The candidate led the project.",
+        )
+
+    def test_indian_lineage_particle_does_not_rewrite_another_person(self):
+        self.assertEqual(
+            self._scrub("Referee: Devi a/p Raman was contacted.", "Muthu a/p Raman"),
+            "Referee: Devi a/p Raman was contacted.",
+        )
+        self.assertEqual(
+            self._scrub("Muthu a/p Raman owned delivery.", "Muthu a/p Raman"),
+            "The candidate owned delivery.",
+        )
+
+    def test_employer_masking_never_eats_an_inflection(self):
+        # Provenance decides whether a lowercase match is masked; it must not also relax
+        # the brand-prefix rule, or "Grabbing" loses its first syllable.
+        cv = {
+            "work_experiences": [
+                {
+                    "company": "Grab",
+                    "bullets": ["Grabbing market share.", "metadata rebuilt."],
+                }
+            ]
+        }
+        out = bm._blind_postprocess_company_mentions(json.loads(json.dumps(cv)), cv)
+        self.assertEqual(
+            out["work_experiences"][0]["bullets"],
+            ["Grabbing market share.", "metadata rebuilt."],
+        )
+
+    def test_everyday_employer_words_keep_their_inflections(self):
+        for company, text in (
+            ("Meta", "metadata lineage rebuilt."),
+            ("Yes", "Yesterday's run was clean."),
+            ("Boost", "Boosted revenue by 30%."),
+            ("Shell", "Shelling out weekly reports."),
+        ):
+            with self.subTest(company=company):
+                cv = {"work_experiences": [{"company": company, "bullets": [text]}]}
+                out = bm._blind_postprocess_company_mentions(
+                    json.loads(json.dumps(cv)), cv
+                )
+                self.assertEqual(out["work_experiences"][0]["bullets"], [text])
+
+    def test_large_decimals_are_not_phone_numbers(self):
+        for text in (
+            "Saved RM 250000.00 annually.",
+            "Grew revenue to 1250000.50 this year.",
+            "Uptime of 99.9999999 percent.",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(bm._blind_redact_phone_candidates(text), text)
+
+    def test_dotted_phone_is_still_redacted(self):
+        self.assertIn(
+            "[Phone Redacted]",
+            bm._blind_redact_phone_candidates("Reach me on 44.7911123456"),
+        )
+
+
+class CodexReviewRegressionTests(unittest.TestCase):
+    """Cases the automated PR review on #198 found."""
+
+    def _scrub(self, text, name):
+        return bm._blind_scrub_candidate_identity(
+            {"b": [text]}, {"candidate": {"name": name}}
+        )["b"][0]
+
+    def test_accented_names_are_matched(self):
+        # An ASCII-only word class stops partway through "Jose" and leaks the name.
+        self.assertEqual(
+            self._scrub("Jos\u00e9 led the migration.", "Jos\u00e9"),
+            "The candidate led the migration.",
+        )
+        self.assertEqual(
+            self._scrub("Fran\u00e7ois led it.", "Fran\u00e7ois Dubois"),
+            "The candidate led it.",
+        )
+
+    def test_sentence_leading_word_does_not_shield_the_name(self):
+        # "Contact" and "Ask" are capitalised because they open a sentence, not because
+        # they are somebody's name.
+        for text, expected in (
+            ("Contact Vinay.", "Contact the candidate."),
+            ("Ask Vinay tomorrow.", "Ask the candidate tomorrow."),
+            ("References\nVinay led it.", "References\nThe candidate led it."),
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(self._scrub(text, "Vinay Lariya"), expected)
+
+    def test_longer_proper_nouns_are_preserved(self):
+        # The exemption must not be limited to runs of exactly two words.
+        self.assertEqual(
+            self._scrub("Based in Greater Victoria Area.", "Victoria Lee"),
+            "Based in Greater Victoria Area.",
+        )
+        self.assertEqual(
+            self._scrub("Worked with Vinay Kumar Singh.", "Vinay Lariya"),
+            "Worked with Vinay Kumar Singh.",
+        )
+
+    def test_dotted_phone_with_a_short_subscriber_part_is_redacted(self):
+        for text in ("Reach me at 65.91234567", "Call 44.7911123456 now"):
+            with self.subTest(text=text):
+                self.assertIn("[Phone Redacted]", bm._blind_redact_phone_candidates(text))
+
+    def test_long_decimals_beside_a_unit_stay_measurements(self):
+        for text in (
+            "Uptime of 99.9999999 percent.",
+            "Handled 99.999999 percent uptime.",
+            "Availability 99.99999999 held.",
+            "Cost RM 12.345678 million.",
+            "Saved RM 250000.00 annually.",
         ):
             with self.subTest(text=text):
                 self.assertEqual(bm._blind_redact_phone_candidates(text), text)
