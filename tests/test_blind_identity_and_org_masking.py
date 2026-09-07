@@ -198,12 +198,17 @@ class CandidateIdentitySweepTests(unittest.TestCase):
         )
         self.assertEqual(out["bullets"], [text])
 
-    def test_short_surnames_are_not_swept(self):
-        text = "Tan led delivery for Tan Chong Motor."
+    def test_short_surname_is_swept_but_a_company_sharing_it_is_not(self):
+        # Three letters is enough for a name word here - Tan, Nur and Wei are ordinary
+        # given names and surnames - while "Tan Chong Motor" keeps its proper-noun
+        # protection, because the words beside it belong to nobody in this name.
         out = bm._blind_scrub_candidate_identity(
-            {"bullets": [text]}, self._original("Tan Wei Ming")
+            {"bullets": ["Tan led delivery for Tan Chong Motor."]},
+            self._original("Tan Wei Ming"),
         )
-        self.assertEqual(out["bullets"], [text])
+        self.assertEqual(
+            out["bullets"], ["The candidate led delivery for Tan Chong Motor."]
+        )
 
     def test_header_name_is_normalised_when_the_model_left_it(self):
         out = bm._blind_scrub_candidate_identity(
@@ -844,6 +849,110 @@ class CodexReviewRegressionTests(unittest.TestCase):
         ):
             with self.subTest(text=text):
                 self.assertEqual(bm._blind_redact_phone_candidates(text), text)
+
+
+# Every line a blind CV must NOT change, whatever the candidate is called. Ordinary CV
+# prose, technology, places, months, money and third parties.
+_BLIND_PROSE_CORPUS = (
+    "Delivered long-term roadmap and a sharp reduction in cost.",
+    "Served the local church community programme.",
+    "Automated ETL with shell scripting and Python.",
+    "Built the metadata catalog and boosted margins.",
+    "Yesterday the pipeline ran clean; grabbing share early.",
+    "Based in Shah Alam and Petaling Jaya.",
+    "Based in Greater Victoria Area.",
+    "May 2023 to June 2024 covered the migration.",
+    "Long Term Incentive Plan was revised.",
+    "Ruby on Rails, Java, Kafka and Cassandra.",
+    "Used MetaTrader 5 and MetaBase dashboards.",
+    "Saved RM 250000.00 annually.",
+    "Uptime of 99.9999999 percent.",
+    "Processed 123456789 records nightly.",
+    "Referee: Suresh Nair was contacted.",
+    "Coordinated with Siti binti Rahman on payroll.",
+    "van der Waals forces apply.",
+    "Revenue rose from 12% to 40%.",
+)
+
+# Candidate names spanning the shapes this market actually sees.
+_BLIND_NAME_CORPUS = (
+    "Vinay Lariya",
+    "Tan Wei Ming",
+    "Nur Aisyah binti Rahman",
+    "Muthu a/p Raman",
+    "Marieke van der Meer",
+    "Jos\u00e9 Fern\u00e1ndez",
+    "Fran\u00e7ois Dubois",
+    "Suharto",
+    "Ali",
+)
+
+# Sentence frames a model actually produces, with {name} standing for whatever the
+# provider left behind. Each one must lose the name.
+_BLIND_LEAK_FRAMES = (
+    "{name} led the Kafka migration.",
+    "Worked with {name} on the platform.",
+    "Contact {name}.",
+    "Ask {name} tomorrow.",
+    "{name}'s team shipped it.",
+    "{name}\u2019s role expanded.",
+    "References\n{name} led it.",
+    "{name} ETL Pipeline Rebuild",
+    "{name} AWS migration lead",
+    "- {name} owned delivery.",
+    "Project lead: {name} delivered on time.",
+    "{name} Senior Data Engineer at Acme.",
+)
+
+
+class BlindSweepInvariantTests(unittest.TestCase):
+    """Two invariants over a corpus, rather than one test per reported example.
+
+    Every fix in this area has been a judgement about natural language, and each round
+    of review probed inputs the previous round did not. Checking both directions across
+    a corpus catches that class of case here instead.
+    """
+
+    @staticmethod
+    def _scrub(text, name):
+        return bm._blind_scrub_candidate_identity(
+            {"b": [text]}, {"candidate": {"name": name}}
+        )["b"][0]
+
+    def test_no_candidate_name_survives_any_frame(self):
+        for name in _BLIND_NAME_CORPUS:
+            words = [
+                word
+                for word in name.split()
+                if word.casefold() not in bm._BLIND_NAME_PARTICLES
+            ]
+            for frame in _BLIND_LEAK_FRAMES:
+                for written in (name, words[0], words[-1]):
+                    with self.subTest(name=name, frame=frame, written=written):
+                        out = self._scrub(frame.format(name=written), name)
+                        self.assertNotIn(
+                            written,
+                            out,
+                            "{!r} survived in {!r}".format(written, out),
+                        )
+
+    def test_ordinary_cv_prose_is_never_rewritten(self):
+        for name in _BLIND_NAME_CORPUS:
+            for line in _BLIND_PROSE_CORPUS:
+                with self.subTest(name=name, line=line):
+                    self.assertEqual(self._scrub(line, name), line)
+
+    def test_everyday_word_names_do_not_rewrite_their_own_word(self):
+        # The hardest shape: the candidate's whole name is also an ordinary word. The
+        # capitalisation and number rules carry these.
+        for name, line in (
+            ("May", "May 2023 to June 2024 covered the migration."),
+            ("Long", "Long Term Incentive Plan was revised."),
+            ("Victoria", "Based in Greater Victoria Area."),
+            ("Grace", "The grace period ended early."),
+        ):
+            with self.subTest(name=name):
+                self.assertEqual(self._scrub(line, name), line)
 
 
 if __name__ == "__main__":
