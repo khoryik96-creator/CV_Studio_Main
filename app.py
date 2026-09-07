@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.383"
+_INSTALL_RECEIPT_VERSION = "v24.6.385"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -346,7 +346,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.383"
+_CVSTUDIO_VERSION = "v24.6.385"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -3897,6 +3897,7 @@ def jobadder_onenote_activity_diagnostic():
 
 
 _JA_ACTIVITY_CREATE_DIAG_USED = set()
+_JA_ACTIVITY_CREATE_DIAG_LOCK = threading.Lock()
 
 
 def _ja_activity_diagnostic_post(path, payload, timeout=25):
@@ -3923,10 +3924,14 @@ def jobadder_onenote_activity_create_diagnostic():
         return jsonify({"error": "Type CREATE ONE MAX LOW TEST exactly before running the controlled POST."}), 400
 
     guard_key = (_CVSTUDIO_VERSION, candidate_id)
-    if guard_key in _JA_ACTIVITY_CREATE_DIAG_USED:
-        return jsonify({"error": "The one-shot controlled POST has already been run in this CV Studio session. Restarting is intentionally required before any repeat test."}), 409
-    # Mark before the network call so a timeout/double-click cannot emit a second POST.
-    _JA_ACTIVITY_CREATE_DIAG_USED.add(guard_key)
+    # Claim the one-shot slot atomically. A bare check-then-add lets two
+    # concurrent server threads both pass the test and emit two POSTs, which is
+    # exactly what this guard exists to prevent.
+    with _JA_ACTIVITY_CREATE_DIAG_LOCK:
+        if guard_key in _JA_ACTIVITY_CREATE_DIAG_USED:
+            return jsonify({"error": "The one-shot controlled POST has already been run in this CV Studio session. Restarting is intentionally required before any repeat test."}), 409
+        # Mark before the network call so a timeout/double-click cannot emit a second POST.
+        _JA_ACTIVITY_CREATE_DIAG_USED.add(guard_key)
 
     cid_q = urllib.parse.quote(candidate_id, safe="")
     list_path = "candidates/{}/activities".format(cid_q)
@@ -13893,6 +13898,7 @@ from cvstudio_blind_mask import (
     _blind_prepare_summary_bullets,
     _blind_replace_org_terms_in_text,
     _blind_restore_cv_bullet_structure,
+    _blind_scrub_candidate_identity,
     _blind_walk_strings,
 )
 
@@ -14126,6 +14132,12 @@ def blind_cv():
         # names that the AI may have left inside bullets, project descriptions,
         # achievements, highlights, summaries, or additional information.
         blinded = _blind_postprocess_company_mentions(blinded, cv_data)
+
+        # The company sweep above only masks employers. Sweep the candidate's own
+        # name, email, phone and personal links across the whole document too, so
+        # a bullet the model rewrote but did not anonymise cannot carry direct
+        # identity through to preview and export.
+        blinded = _blind_scrub_candidate_identity(blinded, cv_data)
         blinded = _normalize_cv_structured_content(blinded)
 
         out = {"ok": True, "data": blinded, "usage": usage, "model": model, "provider": llm_provider}

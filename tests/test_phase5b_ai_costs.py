@@ -2,6 +2,7 @@ import unittest
 from decimal import Decimal
 
 from cvstudio_ai_costs import (
+    AI_COST_DEFAULT_REQUEST_CEILING_USD,
     AI_COST_GUARDRAIL_ENV,
     AICostGuardrailConfigurationError,
     AICostGuardrailError,
@@ -573,7 +574,17 @@ class Phase5BAICostFoundationTests(unittest.TestCase):
             "max_tokens": 1000,
             "messages": [{"role": "user", "content": "fixture"}],
         }
-        disabled = enforce_request_guardrail("anthropic", payload, environ={})
+        # An unset variable now means the built-in ceiling, not "no ceiling":
+        # the protection must not depend on a launcher exporting anything.
+        defaulted = enforce_request_guardrail("anthropic", payload, environ={})
+        self.assertTrue(defaulted["enabled"])
+        self.assertEqual(defaulted["status"], "allowed")
+        self.assertEqual(
+            defaulted["limit_usd"], float(AI_COST_DEFAULT_REQUEST_CEILING_USD)
+        )
+        disabled = enforce_request_guardrail(
+            "anthropic", payload, environ={AI_COST_GUARDRAIL_ENV: "off"}
+        )
         self.assertEqual(
             disabled,
             {

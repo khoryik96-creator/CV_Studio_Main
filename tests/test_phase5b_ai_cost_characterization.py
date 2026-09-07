@@ -443,7 +443,10 @@ class Phase5BAICostCharacterizationTests(unittest.TestCase):
         self.assertNotIn("Fixture Candidate", blob)
         self.assertNotIn("fixture@example.com", blob)
         self.assertNotIn("Fixture Company", blob)
-        self.assertIn("the candidate", blob)
+        # The generic label replaces the name; a bullet that starts with it is
+        # capitalised so the exported document does not open mid-sentence.
+        self.assertIn("the candidate", blob.lower())
+        self.assertTrue(bullets[0].startswith("The candidate"), bullets[0])
         self.assertIn("[Email Redacted]", blob)
         self.assertIn("[Company]", blob)
         self.assertIn("ABOUT HIM / HER SUMMARY", app.BLIND_SYSTEM_PROMPT)

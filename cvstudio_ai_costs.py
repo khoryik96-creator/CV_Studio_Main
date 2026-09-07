@@ -18,6 +18,15 @@ from typing import Any, Mapping
 
 AI_COST_GUARDRAIL_ENV = "CVSTUDIO_AI_MAX_ESTIMATED_REQUEST_USD"
 AI_COST_GUARDRAIL_MAX_USD = Decimal("10000")
+# The ceiling has to hold for the most expensive request CV Studio can legitimately
+# make: a 500KB CV with the hardcoded 64k output budget prices at about $26.50 on the
+# costliest configured model, and an unrecognised model id is charged at that same
+# provider ceiling. $60 clears that with room to spare while still stopping a runaway
+# payload - the same request over a 5MB body prices at about $161.
+AI_COST_DEFAULT_REQUEST_CEILING_USD = Decimal("60")
+# The guardrail is on unless it is switched off on purpose, so the protection does not
+# depend on which module happened to be imported first.
+AI_COST_GUARDRAIL_OFF_VALUES = frozenset({"off", "none", "disabled", "no", "false"})
 AI_COST_BILLING_MAX_AMOUNT = Decimal("1000000000000")
 AI_COST_BILLING_MAX_DECIMAL_PLACES = 18
 AI_COST_BILLING_MAX_SIGNIFICANT_DIGITS = 30
@@ -1113,10 +1122,18 @@ def guardrail_configuration(
     """Return the bounded call-time guardrail configuration."""
     source = os.environ if environ is None else environ
     raw = str(source.get(AI_COST_GUARDRAIL_ENV) or "").strip()
-    if not raw:
+    if raw.casefold() in AI_COST_GUARDRAIL_OFF_VALUES:
         return {
             "enabled": False,
             "limit_usd": None,
+            "source": AI_COST_GUARDRAIL_ENV,
+        }
+    if not raw:
+        default = AI_COST_DEFAULT_REQUEST_CEILING_USD
+        return {
+            "enabled": True,
+            "limit_usd": float(default),
+            "limit_usd_text": format(default, "f"),
             "source": AI_COST_GUARDRAIL_ENV,
         }
     try:
