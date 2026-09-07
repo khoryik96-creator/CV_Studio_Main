@@ -98,6 +98,22 @@ _BLIND_NAME_PARTICLES = frozenset({
     "a/p", "a/l",
 })
 
+# Titles that precede a name. "Mr Lariya" is the candidate with an honorific, not two
+# people, so an honorific is never evidence that a run names somebody else.
+_BLIND_HONORIFICS = frozenset({
+    "mr", "mrs", "ms", "miss", "mx", "dr", "prof", "professor",
+    "ir", "ts", "dato", "datuk", "datin", "sir", "madam", "puan", "encik", "tuan",
+})
+
+# A title left in front of the label once the name behind it is gone. The exact
+# full-name replacement runs before the bare-name pass, so "Dr Vinay Lariya" becomes
+# "Dr the candidate" there and the title has to be absorbed afterwards.
+_BLIND_HONORIFIC_LABEL_RE = re.compile(
+    r"(?<![A-Za-z0-9])(?:" + "|".join(sorted(_BLIND_HONORIFICS, key=len, reverse=True))
+    + r")\.?\s+the candidate\b",
+    re.I,
+)
+
 # Role and job-title vocabulary. A CV header reads "Name Senior Data Engineer", so
 # these Title Case words are not evidence that a capitalised run names somebody else.
 # Kept to role words only - place words such as Greater and Area must stay evidence, or
@@ -177,7 +193,9 @@ _BLIND_MEASUREMENT_AFTER_RE = re.compile(
 
 
 _BLIND_SUMMARY_EMAIL_RE = re.compile(
-    r"(?<![A-Za-z0-9._%+\-])[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}(?![A-Za-z0-9._%+\-])",
+    # The trailing guard deliberately omits "." - a full stop ends the sentence, and
+    # excluding it meant an address written last in a bullet was never redacted.
+    r"(?<![A-Za-z0-9._%+\-])[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}(?![A-Za-z0-9_%+\-])",
     re.I,
 )
 _BLIND_SUMMARY_URL_RE = re.compile(
@@ -618,12 +636,8 @@ def _blind_collect_summary_identity_replacements(original_cv):
 def _blind_summary_strip_name_honorifics(value):
     clean = re.sub(r"\s+", " ", str(value or "")).strip()
     clean = re.sub(r"^(?:tan\s+sri)\s+", "", clean, flags=re.I)
-    honorifics = {
-        "mr", "mrs", "ms", "miss", "mx", "dr", "prof", "professor",
-        "ir", "ts", "dato", "datuk", "datin",
-    }
     words = clean.split()
-    while words and re.sub(r"[^\w]+", "", words[0], flags=re.UNICODE).casefold() in honorifics:
+    while words and re.sub(r"[^\w]+", "", words[0], flags=re.UNICODE).casefold() in _BLIND_HONORIFICS:
         words.pop(0)
     return " ".join(words)
 
@@ -1461,6 +1475,11 @@ def _blind_candidate_name_runs(full_name):
 def _blind_candidate_name_tokens(full_name):
     """Return the individual name words that are safe to sweep on their own."""
     words = _blind_candidate_name_words(full_name)
+    # A compound surname stands alone in either form: "Smith-Jones" and plain "Jones".
+    for word in list(words):
+        for part in re.split(r"[-\u2010-\u2015]", word):
+            if part and part not in words:
+                words.append(part)
     if len(words) == 1:
         # A mononym is the candidate's entire identity. Nothing else in the document
         # names them, so it is swept even when it is also an everyday word - the
@@ -1486,7 +1505,8 @@ def _blind_name_word_is_person_like(word):
     """
     if not word[:1].isupper() or word.isupper():
         return False
-    return word.casefold() not in _BLIND_JOB_TITLE_WORDS
+    low = word.casefold().strip(".")
+    return low not in _BLIND_JOB_TITLE_WORDS and low not in _BLIND_HONORIFICS
 
 
 def _blind_capitalised_runs(text):
@@ -1535,12 +1555,17 @@ def _blind_replace_name_within_word(word, token_set):
     "Vinay's" becomes "the candidate's" and "Lariya-led" becomes "the candidate-led";
     replacing the whole word would delete the possessive or the compound.
     """
+    bare = re.sub(r"['\u2019]s\Z", "", word, flags=re.I)
+    suffix = word[len(bare):]
+    if bare.casefold() in token_set:
+        # The compound itself is the name: Smith-Jones, O'Brien, Abdul-Rahman. Replacing
+        # its alphabetic parts one by one would match none of them and leave it intact.
+        return "the candidate" + suffix
+
     def replace_part(match):
         part = match.group(0)
         return "the candidate" if part.casefold() in token_set else part
 
-    bare = re.sub(r"['\u2019]s\Z", "", word, flags=re.I)
-    suffix = word[len(bare):]
     return re.sub(r"[^\W\d_]+", replace_part, bare) + suffix
 
 
@@ -1604,6 +1629,8 @@ def _blind_replace_name_tokens(text, tokens, name_words=(), mononym=False):
             # with them and a job title that follows does not.
             first = is_name.index(True)
             last = len(is_name) - 1 - is_name[::-1].index(True)
+            while first > 0 and run[first - 1][0].casefold().strip(".") in _BLIND_HONORIFICS:
+                first -= 1
             out = out[:run[first][1]] + "the candidate" + out[run[last][2]:]
             continue
         others = [
@@ -1623,6 +1650,23 @@ def _blind_replace_name_tokens(text, tokens, name_words=(), mononym=False):
             and all(_blind_name_word_is_person_like(word) for word in others)
         ):
             continue
+        first = is_token.index(True)
+        last = len(is_token) - 1 - is_token[::-1].index(True)
+        while first > 0 and run[first - 1][0].casefold().strip(".") in _BLIND_HONORIFICS:
+            first -= 1
+        span = range(first, last + 1)
+        honorifics_in_span = [
+            index
+            for index in span
+            if run[index][0].casefold().strip(".") in _BLIND_HONORIFICS
+        ]
+        if honorifics_in_span and all(
+            is_token[index] or index in honorifics_in_span for index in span
+        ):
+            # "Mr Lariya" and "Dr Vinay Lariya" are the candidate with a title in front,
+            # so the title goes with the name rather than being left stranded.
+            out = out[:run[first][1]] + "the candidate" + out[run[last][2]:]
+            continue
         pieces = []
         cursor = start
         for word, word_start, word_end in run:
@@ -1638,15 +1682,25 @@ def _blind_redact_identifier_tokens(text, name_tokens):
 
     Pipeline, table and file names carry identity too (``vinay_lariya_pipeline``).
     Substituting inside the token would leave "the candidate_lariya_pipeline", so the
-    token is replaced as a unit before the ordinary passes run.
+    token is replaced as a unit. Ordinary snake_case has no capitals to judge by, so the
+    evidence has to come from the parts themselves.
     """
     if not name_tokens:
         return text
 
     def replace(match):
         token = match.group(0)
-        if {part.casefold() for part in token.split("_")} & name_tokens:
+        matched = {part.casefold() for part in token.split("_")} & name_tokens
+        if len(matched) >= 2:
+            # Two name words in one identifier: vinay_lariya_pipeline.
             return "the candidate"
+        if len(matched) == 1:
+            # One is weak evidence. "max_connections" and "thread_max_size" are ordinary
+            # configuration for a candidate called Max, and "ada_boost" is an algorithm.
+            # Only a distinctive name word carries an identifier on its own.
+            part = next(iter(matched))
+            if len(part) >= 4 and _blind_name_word_is_sweepable(part):
+                return "the candidate"
         return token
 
     return _BLIND_IDENTIFIER_TOKEN_RE.sub(replace, text)
@@ -1749,6 +1803,9 @@ def _blind_apply_candidate_identity(
     safe = str(text or "")
     if not safe:
         return safe
+    # E-mail first: "vinay_lariya@corp.com" is an address, not a snake_case identifier,
+    # and rewriting its local part would export "the [Email Redacted]".
+    safe = _BLIND_SUMMARY_EMAIL_RE.sub("[Email Redacted]", safe)
     safe = _blind_redact_identifier_tokens(safe, frozenset(
         token.casefold() for token in name_tokens
     ))
@@ -1791,6 +1848,7 @@ def _blind_apply_candidate_identity(
     # A stored bare domain leaves "https://[Link Redacted]" behind when the document
     # spelled the link with a scheme.
     safe = _BLIND_LINK_SCHEME_LEFTOVER_RE.sub("[Link Redacted]", safe)
+    safe = _BLIND_HONORIFIC_LABEL_RE.sub("the candidate", safe)
     # Substituting a noun phrase where a bare noun stood can double the article.
     safe = _BLIND_DOUBLED_ARTICLE_RE.sub("the candidate", safe)
     # A replaced name can open a line, a bullet or a sentence, so restore the capital
