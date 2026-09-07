@@ -64,6 +64,8 @@ _BLIND_COMMON_WORD_NAMES = frozenset({
     "dawn", "dean", "drew", "duke", "earl", "faith", "field", "flint", "ford",
     "frank", "grace", "grant", "gray", "green", "hope", "house", "hunter",
     "june", "justice", "king", "lane", "long", "major", "mark", "mason", "mercy",
+    "january", "february", "march", "may", "july", "september", "october",
+    "november", "december",
     "miles", "noble", "olive", "page", "paige", "parker", "pearl", "penny",
     "pierce", "price", "prince", "rich", "rose", "royal", "sage", "sharp", "sonny",
     "stone", "storm", "summer", "sunny", "swift", "victor", "ward", "wilder",
@@ -93,7 +95,22 @@ _BLIND_NAME_PARTICLES = frozenset({
     "binti", "binte", "bint", "ibnu", "ibn", "anak", "abdul", "haji", "hajjah",
     "syed", "sharifah", "tengku", "raja", "nik", "wan", "van", "von", "der",
     "den", "del", "della", "dos", "das", "mac", "abu", "bin", "bte",
-    "a/p", "a/l", "a / p", "a / l",
+    "a/p", "a/l",
+})
+
+# Role and job-title vocabulary. A CV header reads "Name Senior Data Engineer", so
+# these Title Case words are not evidence that a capitalised run names somebody else.
+# Kept to role words only - place words such as Greater and Area must stay evidence, or
+# "Greater Victoria Area" loses its protection.
+_BLIND_JOB_TITLE_WORDS = frozenset({
+    "senior", "junior", "lead", "leader", "principal", "associate", "assistant",
+    "intern", "trainee", "head", "chief", "vice", "president", "director", "manager",
+    "engineer", "developer", "analyst", "consultant", "architect", "specialist",
+    "officer", "executive", "administrator", "coordinator", "supervisor", "technician",
+    "scientist", "designer", "strategist", "advisor", "adviser", "founder",
+    "data", "software", "systems", "business", "project", "product", "technical",
+    "engineering", "operations", "marketing", "sales", "finance", "delivery",
+    "platform", "cloud", "security", "quality", "network", "infrastructure",
 })
 
 # Technology, tool and platform names that are also given names. The module already
@@ -135,11 +152,9 @@ _BLIND_LINK_SCHEME_LEFTOVER_RE = re.compile(r"(?:https?://|www\.)+\[Link Redacte
 # One word of a name. Unicode-aware: Jose, Francois and Munoz are spelled with accented
 # letters, and an ASCII-only class would stop matching partway through and leak the name.
 _BLIND_NAME_RUN_WORD_RE = re.compile(r"[^\W\d_][\w'\u2019\-]*", re.UNICODE)
+# A number straight after a name-shaped word: "May 2023" is a date, not a person.
+_BLIND_TRAILING_NUMBER_RE = re.compile(r"[\s,\u2013\u2014-]*\d")
 _BLIND_WORD_BEFORE_RE = re.compile(r"([A-Za-z][A-Za-z'\u2019/-]*)(\s+)\Z")
-_BLIND_WORD_AFTER_RE = re.compile(r"\A(\s+)([A-Za-z][A-Za-z'\u2019-]*)")
-# Whether that preceding word is itself sentence-initial, in which case its capital says
-# nothing about whether it is a proper noun.
-_BLIND_SENTENCE_START_RE = re.compile(r"(?:\A|[.!?]\s+|\n\s*)[A-Za-z][A-Za-z'\u2019-]*\s+\Z")
 
 
 _BLIND_ORG_SUFFIX_RE = re.compile(
@@ -1400,9 +1415,9 @@ def _blind_postprocess_company_mentions(blinded, original_cv):
 def _blind_name_word_is_sweepable(word):
     """Report whether one name word can stand alone as a sweep term."""
     low = word.casefold()
-    if len(word) < 4:
-        # Tan, Lee, Lim and Ng are among the most common surnames in this market and
-        # collide constantly with ordinary text.
+    if len(word) < 3:
+        # Two letters is too little to be sure of: Ng and Oh are surnames here, but the
+        # same letters open far too many ordinary words.
         return False
     return not (
         low in _BLIND_COMMON_WORD_NAMES
@@ -1459,12 +1474,19 @@ def _blind_is_sentence_initial(text, position):
     before = text[:position]
     if not before.strip():
         return True
-    return bool(re.search(r"[.!?:;]\s*\Z|\n\s*\Z", before))
+    return bool(re.search(r"[.!?]\s*\Z|\n\s*\Z", before))
 
 
 def _blind_name_word_is_person_like(word):
-    """Title Case only: ETL and AWS are acronyms, not somebody's name."""
-    return bool(word[:1].isupper() and not word.isupper())
+    """Report whether a run word could be part of somebody else's name.
+
+    Title Case only - ETL and AWS are acronyms - and never role vocabulary, because a
+    CV header reads "Suharto Senior Data Engineer" and those words would otherwise
+    shield the candidate's own name standing right in front of them.
+    """
+    if not word[:1].isupper() or word.isupper():
+        return False
+    return word.casefold() not in _BLIND_JOB_TITLE_WORDS
 
 
 def _blind_capitalised_runs(text):
@@ -1491,27 +1513,62 @@ def _blind_capitalised_runs(text):
     return runs
 
 
+def _blind_name_word_keys(word):
+    """Return the forms of one written word that could be a name.
+
+    A run word carries its punctuation - "Vinay's", "Vinay\u2019s", "Lariya-led" - so
+    comparing the written word against the name would miss every possessive and every
+    hyphenated compound, and the candidate's real name would survive.
+    """
+    keys = {word.casefold()}
+    bare = re.sub(r"['\u2019]s\Z", "", word, flags=re.I)
+    keys.add(bare.casefold())
+    for part in re.split(r"[-\u2010-\u2015]", bare):
+        if part:
+            keys.add(part.casefold())
+    return keys
+
+
+def _blind_replace_name_within_word(word, token_set):
+    """Replace the name inside one written word, keeping the rest of it.
+
+    "Vinay's" becomes "the candidate's" and "Lariya-led" becomes "the candidate-led";
+    replacing the whole word would delete the possessive or the compound.
+    """
+    def replace_part(match):
+        part = match.group(0)
+        return "the candidate" if part.casefold() in token_set else part
+
+    bare = re.sub(r"['\u2019]s\Z", "", word, flags=re.I)
+    suffix = word[len(bare):]
+    return re.sub(r"[^\W\d_]+", replace_part, bare) + suffix
+
+
 def _blind_replace_name_tokens(text, tokens, name_words=(), mononym=False):
     """Replace a bare given name or surname, but only where it reads as the person.
 
-    A single name word is the riskiest thing this module replaces: Alam, Church, Sharp
-    and Long are also places, nouns and adjectives, and no denylist can name them all.
-    Structural rules do the work instead, applied to the whole run of capitalised words
-    the match sits in rather than to one neighbouring word.
+    A single name word is the riskiest thing this module replaces: Alam, Church, Sharp,
+    May and Long are also places, months, nouns and adjectives, and no denylist can name
+    them all. Structural rules do the work instead, applied to the whole run of
+    capitalised words the match sits in rather than to one neighbouring word.
 
     A lowercase word is never part of a run, so ordinary prose - "delivered long-term
     value", "a sharp reduction", "the local church" - is untouched.
 
-    Inside a run, two of the candidate's own name words confirm the person and the whole
-    run goes ("Ming Tan", "Vinay Kumar Lariya"). Otherwise, if every other word in the
-    run is a Title Case word belonging to nobody in this name, the run is a different
-    person or a larger proper noun - "Vinay Kumar", "Greater Victoria Area" - and is
-    left alone. A word that merely opens a sentence or a line is not evidence of that
-    ("Contact Vinay", "Ask Vinay"), and neither is an acronym ("Vinay AWS migration") or
-    an ALL-CAPS line, so those still lose the name.
+    Inside a run, two of the candidate's own name words confirm the person, and
+    everything from the first to the last of them goes, which covers a middle name
+    ("Vinay Kumar Lariya") without swallowing a job title that follows ("Vinay Lariya
+    Senior Data Engineer"). Otherwise, if every other word in the run is a Title Case
+    word belonging to nobody in this name, the run is a different person or a larger
+    proper noun - "Vinay Kumar", "Greater Victoria Area", "Referee: Suresh Lariya" - and
+    is left alone. A word that merely opens a sentence or a line is not evidence of that
+    ("Contact Vinay"), and neither is an acronym ("Vinay AWS migration") or an ALL-CAPS
+    line, so those still lose the name.
 
-    A mononym has no other name word to corroborate with, and nothing else identifies
-    the candidate, so it is always replaced.
+    A mononym is the candidate's entire identity and nothing else in the document names
+    them, so the everyday-word denylist does not veto it. The run rules still apply, and
+    a mononym that is also an everyday word is not taken when a number follows it, which
+    is what separates "May 2023 to June 2024" from "May led delivery".
     """
     if not text or not tokens:
         return text
@@ -1521,11 +1578,16 @@ def _blind_replace_name_tokens(text, tokens, name_words=(), mononym=False):
         for word in name_words
         if word.casefold() not in _BLIND_NAME_PARTICLES
     } or set(token_set)
+    everyday_mononym = mononym and any(
+        not _blind_name_word_is_sweepable(token) for token in tokens
+    )
 
     out = text
     for run in reversed(_blind_capitalised_runs(text)):
-        lowered = [word.casefold() for word, _start, _end in run]
-        if not any(word in token_set for word in lowered):
+        keys = [_blind_name_word_keys(word) for word, _start, _end in run]
+        is_token = [bool(key & token_set) for key in keys]
+        is_name = [bool(key & name_set) for key in keys]
+        if not any(is_token):
             continue
         start, end = run[0][1], run[-1][2]
         preceding = _BLIND_WORD_BEFORE_RE.search(text[:start])
@@ -1534,17 +1596,29 @@ def _blind_replace_name_tokens(text, tokens, name_words=(), mononym=False):
             # children shares it. The candidate's own full form was already replaced as
             # a unit before this pass.
             continue
-        if sum(1 for word in lowered if word in name_set) >= 2:
-            out = out[:start] + "the candidate" + out[end:]
+        if everyday_mononym and _BLIND_TRAILING_NUMBER_RE.match(text[end:]):
+            # "May 2023", "Long 2024": a date or a figure, not the person.
+            continue
+        if sum(1 for flag in is_name if flag) >= 2:
+            # Everything from the first name word to the last, so a middle name goes
+            # with them and a job title that follows does not.
+            first = is_name.index(True)
+            last = len(is_name) - 1 - is_name[::-1].index(True)
+            out = out[:run[first][1]] + "the candidate" + out[run[last][2]:]
             continue
         others = [
             word
             for index, (word, word_start, _word_end) in enumerate(run)
-            if lowered[index] not in name_set
+            if not is_name[index]
             and not (index == 0 and _blind_is_sentence_initial(text, word_start))
         ]
+        # A mononym has no second name word to corroborate with, so a capitalised
+        # neighbour must not shield it - but only where the name leads the run. A person
+        # is referred to name-first ("Suharto Widodo led delivery"); a name sitting
+        # inside a longer run is part of a larger proper noun ("Greater Victoria Area").
+        mononym_leads = mononym and not everyday_mononym and is_name[0]
         if (
-            not mononym
+            not mononym_leads
             and others
             and all(_blind_name_word_is_person_like(word) for word in others)
         ):
@@ -1553,9 +1627,7 @@ def _blind_replace_name_tokens(text, tokens, name_words=(), mononym=False):
         cursor = start
         for word, word_start, word_end in run:
             pieces.append(out[cursor:word_start])
-            pieces.append(
-                "the candidate" if word.casefold() in token_set else word
-            )
+            pieces.append(_blind_replace_name_within_word(word, token_set))
             cursor = word_end
         out = out[:start] + "".join(pieces) + out[end:]
     return out
