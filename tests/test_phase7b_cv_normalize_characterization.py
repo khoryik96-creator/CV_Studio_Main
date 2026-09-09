@@ -69,6 +69,44 @@ class DateAndMonthTests(unittest.TestCase):
         self.assertEqual(cn._normalize_cv_date_range("to"), "")
         self.assertEqual(cn._normalize_cv_date_range("2020 - 2023"), "2020 to 2023")
 
+    def test_day_of_month_is_dropped_to_house_style_month_and_year(self):
+        # CV date ranges are month + year; a specific day is noise.
+        self.assertEqual(
+            cn._normalize_cv_date_range("12 Jul–31 Aug 2026"),
+            "Jul 2026 to Aug 2026",
+        )
+        self.assertEqual(
+            cn._normalize_cv_date_range("31 Aug 2026 - Present"),
+            "Aug 2026 to Present",
+        )
+        self.assertEqual(cn._normalize_cv_date_range("Jul 11, 2026"), "Jul 2026")
+        self.assertEqual(
+            cn._normalize_cv_date_range("1st Mar 2020 - 15th Jun 2021"),
+            "Mar 2020 to Jun 2021",
+        )
+        # A four-digit year must never be mistaken for a day.
+        self.assertEqual(cn._normalize_cv_date_range("May 2018 - Dec 2020"), "May 2018 to Dec 2020")
+
+    def test_range_separator_before_a_day_is_not_read_as_an_iso_month(self):
+        # Regression: "Apr 2022-11 Jul 2026" is "Apr 2022" to "11 Jul 2026". The
+        # ISO YYYY-MM rule used to read the "2022-11" as November 2022, emitting
+        # the corrupted "Apr Nov 2022 Jul 2026" into the formatted CV.
+        self.assertEqual(
+            cn._normalize_cv_date_range("Apr 2022–11 Jul 2026"),
+            "Apr 2022 to Jul 2026",
+        )
+        self.assertEqual(
+            cn._normalize_cv_date_range("Apr 2022-11 Jul 2026"),
+            "Apr 2022 to Jul 2026",
+        )
+        # Genuine ISO year-months still convert.
+        self.assertEqual(
+            cn._normalize_cv_date_range("2020-06 to 2025-07"),
+            "Jun 2020 to Jul 2025",
+        )
+        self.assertEqual(cn._normalize_cv_date_range("2020-06-15"), "Jun 2020")
+        self.assertEqual(cn._cv_pretranslate_iso_dates("2019-12"), "Dec 2019")
+
     def test_date_range_numeric_month_year_to_house_style(self):
         # A parse run that emits "06/2024" must normalise to the same "Mon YYYY"
         # form as a run that emits "Jun 2024", so re-formatting is consistent.
