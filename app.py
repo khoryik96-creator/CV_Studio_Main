@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.392"
+_INSTALL_RECEIPT_VERSION = "v24.6.393"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -346,7 +346,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.392"
+_CVSTUDIO_VERSION = "v24.6.393"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -9053,7 +9053,9 @@ def parse_cv():
             msg = err.get("error", {}).get("message", "API error")
         except:
             msg = err_body.decode("utf-8", errors="replace")[:300]
-        out = {"error": _provider_error_message(llm_provider, msg)}
+        out = {"error": _llm_failure_report(
+            e, llm_provider, _provider_error_message(llm_provider, msg)
+        )[0]}
         out.update(_llm_paid_failure_fields(
             e,
             model,
@@ -9158,7 +9160,9 @@ def generate_ai():
                 data = call_llm(llm_provider, api_key, payload)
                 warning = "Web search unavailable; continued without web search."
             else:
-                out = {"error": _provider_error_message(llm_provider, msg)}
+                out = {"error": _llm_failure_report(
+            e, llm_provider, _provider_error_message(llm_provider, msg)
+        )[0]}
                 out.update(_llm_paid_failure_fields(
                     e,
                     model,
@@ -9242,6 +9246,12 @@ _AI_PROVIDER_LABELS = {
     "openai": "OpenAI",
 }
 _AI_UPSTREAM_EXPLANATIONS = {
+    400: "request rejected as invalid",
+    401: "authentication failed, check the saved API key",
+    402: "insufficient balance",
+    403: "access denied for this API key",
+    413: "request too large",
+    422: "invalid model or request",
     429: "rate limit reached",
     500: "provider error",
     502: "provider error",
@@ -9251,7 +9261,7 @@ _AI_UPSTREAM_EXPLANATIONS = {
 }
 
 
-def _llm_failure_report(error, provider=""):
+def _llm_failure_report(error, provider="", message=None):
     """Return (message, upstream_status) naming the provider and what it answered.
 
     A bare "AI provider request failed" cannot be acted on: a rate limit, an outage and
@@ -9259,7 +9269,8 @@ def _llm_failure_report(error, provider=""):
     place to keep their usage and cost accounting, which means Flask's structured
     external-service handler never runs for them, so the status has to be surfaced here.
     """
-    message = str(error or "").strip() or "AI provider request failed"
+    message = str(message if message is not None else error or "").strip()
+    message = message or "AI provider request failed"
     status = 0
     for attribute in ("status", "code"):
         try:
@@ -14199,7 +14210,9 @@ def blind_cv():
             msg = err.get("error", {}).get("message", "API error")
         except:
             msg = err_body.decode("utf-8", errors="replace")[:300]
-        out = {"error": _provider_error_message(llm_provider, msg)}
+        out = {"error": _llm_failure_report(
+            e, llm_provider, _provider_error_message(llm_provider, msg)
+        )[0]}
         out.update(_llm_paid_failure_fields(
             e,
             model,

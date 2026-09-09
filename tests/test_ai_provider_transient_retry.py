@@ -142,6 +142,53 @@ class FailureReportTests(unittest.TestCase):
         message, _status = app._llm_failure_report(error, "anthropic")
         self.assertEqual(message.count("returned 429"), 1)
 
+    def test_retry_after_is_found_whatever_its_casing(self):
+        # HTTP/2 lower-cases header names, so a case-sensitive lookup would miss the
+        # delay the provider asked for and burn both retries while still limited.
+        for casing in ("Retry-After", "retry-after", "RETRY-AFTER"):
+            with self.subTest(casing=casing):
+                error = ExternalServiceHTTPError(
+                    "ai_provider", "u", 429, "r", {casing: "25"}, b"{}"
+                )
+                self.assertEqual(AIProviderClient._rejection_delay(error, 0), 25.0)
+
+    def test_redacted_headers_keep_case_insensitive_semantics(self):
+        error = ExternalServiceHTTPError(
+            "ai_provider", "u", 429, "r", {"retry-after": "7"}, b"{}"
+        )
+        self.assertEqual(error.redacted_headers.get("Retry-After"), "7")
+        self.assertIn("RETRY-AFTER", error.redacted_headers)
+
+    def test_http_failures_also_name_the_provider_and_status(self):
+        # ExternalServiceHTTPError subclasses urllib.error.HTTPError, so the routes'
+        # HTTP-specific handler sees it before the generic one; the formatter has to be
+        # applied there too or real provider failures never gain the detail.
+        import inspect
+
+        for handler in (app.parse_cv, app.blind_cv, app.generate_ai):
+            source = inspect.getsource(handler)
+            with self.subTest(handler=handler.__name__):
+                self.assertNotIn(
+                    'out = {"error": _provider_error_message(llm_provider, msg)}', source
+                )
+                self.assertIn("_llm_failure_report(", source)
+
+    def test_an_explicit_message_is_kept_and_only_prefixed(self):
+        message, status = app._llm_failure_report(
+            ExternalServiceHTTPError("ai_provider", "u", 429, "r", {}, b"{}"),
+            "anthropic",
+            "API provider error: rate limit",
+        )
+        self.assertEqual(status, 429)
+        self.assertTrue(message.startswith("Anthropic returned 429 - rate limit reached."))
+        self.assertIn("API provider error: rate limit", message)
+
+    def test_auth_failure_is_described_rather_than_called_an_outage(self):
+        message, _status = app._llm_failure_report(
+            ExternalServiceError("ai_provider", "failed", status=401), "anthropic"
+        )
+        self.assertIn("authentication failed", message)
+
     def test_paid_ai_routes_report_through_the_helper(self):
         import inspect
 

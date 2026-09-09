@@ -109,7 +109,9 @@ def redact_external_headers(headers):
     for key, value in items:
         name = str(key)
         out[name] = "[redacted]" if name.lower() in _SENSITIVE_HEADER_NAMES else redact_external_text(value, 1000)
-    return out
+    # Response headers keep case-insensitive semantics: an upstream on HTTP/2 sends
+    # "retry-after" in lower case, and a plain dict would miss the delay it asked for.
+    return _CaseInsensitiveHeaders(out)
 
 
 def _redact_error_body(body):
