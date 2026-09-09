@@ -982,8 +982,30 @@ class AIProviderClient:
         },
     }
 
-    def __init__(self, transport=None):
+    # Statuses where the provider states it rejected the request without running the
+    # model, so nothing was charged and sending it again cannot double-bill: 429 is a
+    # rate limit and 529 is an explicit "overloaded". Everything else stays un-retried on
+    # purpose - a 500 or a 503 may have been answered after the model already ran, and
+    # re-sending a chargeable call on a maybe is worse than surfacing the failure.
+    _REJECTED_BEFORE_WORK = frozenset({429, 529})
+    _RETRY_LIMIT = 2
+
+    def __init__(self, transport=None, sleeper=None):
         self.transport = transport or ExternalServiceTransport()
+        self._sleeper = sleeper or time.sleep
+
+    @classmethod
+    def _rejection_delay(cls, error, attempt):
+        """Honour Retry-After when the provider sends one, else back off briefly."""
+        header = ""
+        try:
+            header = (error.redacted_headers or {}).get("Retry-After") or ""
+        except Exception:
+            header = ""
+        try:
+            return float(max(1, min(30, int(str(header).strip()))))
+        except (TypeError, ValueError):
+            return min(8.0, 1.0 * (2 ** max(0, int(attempt or 0))))
 
     @staticmethod
     def _provider_name(provider):
@@ -1011,16 +1033,34 @@ class AIProviderClient:
             headers[config["api_key_header"]] = "Bearer " + key
         else:
             headers[config["api_key_header"]] = key
-        response = self.transport.request(
-            "ai_provider",
-            config["url"],
-            method="POST",
-            body=json.dumps(payload or {}).encode("utf-8"),
-            headers=headers,
-            timeout=bounded_timeout(timeout, 180, 15, 300),
-            timeout_maximum=300,
-            allowed_hosts=config["hosts"],
-            safe_to_retry=False,
-            retries=0,
-        )
-        return json.loads(response.body.decode("utf-8", errors="strict"))
+        body = json.dumps(payload or {}).encode("utf-8")
+        bounded = bounded_timeout(timeout, 180, 15, 300)
+        attempt = 0
+        while True:
+            try:
+                response = self.transport.request(
+                    "ai_provider",
+                    config["url"],
+                    method="POST",
+                    body=body,
+                    headers=headers,
+                    timeout=bounded,
+                    timeout_maximum=300,
+                    allowed_hosts=config["hosts"],
+                    safe_to_retry=False,
+                    retries=0,
+                )
+            except ExternalServiceHTTPError as error:
+                status = int(getattr(error, "code", 0) or 0)
+                if status not in self._REJECTED_BEFORE_WORK or attempt >= self._RETRY_LIMIT:
+                    raise
+                delay = self._rejection_delay(error, attempt)
+                try:
+                    error.close()
+                except Exception:
+                    # cleanup-only: a close failure must not hide the provider error.
+                    pass
+                self._sleeper(delay)
+                attempt += 1
+                continue
+            return json.loads(response.body.decode("utf-8", errors="strict"))

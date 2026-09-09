@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.391"
+_INSTALL_RECEIPT_VERSION = "v24.6.392"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -346,7 +346,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.391"
+_CVSTUDIO_VERSION = "v24.6.392"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -9080,7 +9080,7 @@ def parse_cv():
     except Exception as e:
         traceback.print_exc()
         usage = locals().get("usage_total") or _merge_llm_usage()
-        out = {"error": str(e), "paid_ai_failure": bool(_llm_usage_int(usage, "api_calls")),
+        out = {"error": _llm_failure_report(e, locals().get("llm_provider", ""))[0], "paid_ai_failure": bool(_llm_usage_int(usage, "api_calls")),
                "usage": usage, "model": locals().get("model", ""), "provider": locals().get("llm_provider", "anthropic")}
         out.update(_llm_response_cost_fields(out["model"], usage, out["provider"]))
         out.update(_llm_paid_failure_fields(
@@ -9206,7 +9206,7 @@ def generate_ai():
 
     except Exception as e:
         traceback.print_exc()
-        out = {"error": str(e)}
+        out = {"error": _llm_failure_report(e, locals().get("llm_provider", ""))[0]}
         out.update(_llm_paid_failure_fields(
             e,
             locals().get("model", ""),
@@ -9234,6 +9234,54 @@ def _llm_cost_details(model, usage, provider=None):
 def _llm_response_cost_fields(model, usage, provider=None):
     details = _llm_cost_details(model, usage, provider)
     return {"cost": float(details.get("usd") or 0.0), "cost_details": details}
+
+
+_AI_PROVIDER_LABELS = {
+    "anthropic": "Anthropic",
+    "deepseek": "DeepSeek",
+    "openai": "OpenAI",
+}
+_AI_UPSTREAM_EXPLANATIONS = {
+    429: "rate limit reached",
+    500: "provider error",
+    502: "provider error",
+    503: "provider temporarily unavailable",
+    504: "provider timed out",
+    529: "provider overloaded",
+}
+
+
+def _llm_failure_report(error, provider=""):
+    """Return (message, upstream_status) naming the provider and what it answered.
+
+    A bare "AI provider request failed" cannot be acted on: a rate limit, an outage and
+    an oversized request all read the same. The AI routes catch every exception in one
+    place to keep their usage and cost accounting, which means Flask's structured
+    external-service handler never runs for them, so the status has to be surfaced here.
+    """
+    message = str(error or "").strip() or "AI provider request failed"
+    status = 0
+    for attribute in ("status", "code"):
+        try:
+            candidate = int(getattr(error, attribute, 0) or 0)
+        except (TypeError, ValueError):
+            candidate = 0
+        if 400 <= candidate <= 599:
+            status = candidate
+            break
+    if not status:
+        return message, 0
+    label = _AI_PROVIDER_LABELS.get(
+        str(getattr(error, "service", "") or provider or "").strip().lower().replace("ai_provider", ""),
+        _AI_PROVIDER_LABELS.get(str(provider or "").strip().lower(), "The AI provider"),
+    )
+    explanation = _AI_UPSTREAM_EXPLANATIONS.get(status, "")
+    detail = "{} returned {}{}".format(
+        label, status, " - " + explanation if explanation else ""
+    )
+    if detail.casefold() not in message.casefold():
+        message = detail + ". " + message
+    return message, status
 
 
 def _llm_paid_failure_fields(
@@ -14164,7 +14212,7 @@ def blind_cv():
     except Exception as e:
         traceback.print_exc()
         usage = locals().get("usage") or _merge_llm_usage()
-        out = {"error": str(e), "paid_ai_failure": bool(_llm_usage_int(usage, "api_calls")), "usage": usage,
+        out = {"error": _llm_failure_report(e, locals().get("llm_provider", ""))[0], "paid_ai_failure": bool(_llm_usage_int(usage, "api_calls")), "usage": usage,
                "model": locals().get("model", ""), "provider": locals().get("llm_provider", "anthropic")}
         out.update(_llm_response_cost_fields(out["model"], usage, out["provider"]))
         out.update(_llm_paid_failure_fields(
