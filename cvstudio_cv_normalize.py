@@ -81,8 +81,11 @@ def _cv_pretranslate_iso_dates(text):
     # A "YYYY-NN" directly followed by a month name is NOT an ISO year-month:
     # the dash is a range separator and NN is a day, as in
     # "Apr 2022-11 Jul 2026". Reading that as November 2022 corrupted the range.
+    # The guard is deliberately same-line ([ \t]* rather than \s*): this helper
+    # also runs over whole CV documents, where a real ISO date can sit at the end
+    # of a line whose next line happens to start with a month name.
     text = re.sub(
-        r"\b((?:19|20)\d{2})-(0[1-9]|1[0-2])\b(?!\s*" + _CV_MONTH_WORD + r"\b)",
+        r"\b((?:19|20)\d{2})-(0[1-9]|1[0-2])\b(?![ \t]*" + _CV_MONTH_WORD + r"\b)",
         _iso_year_month_repl,
         text,
         flags=re.I,
@@ -97,9 +100,11 @@ _CV_DAY_BEFORE_MONTH_RE = re.compile(
     r"\b(?:0?[1-9]|[12]\d|3[01])(?:st|nd|rd|th)?\b\s+(?=" + _CV_MONTH_WORD + r"\b)",
     re.I,
 )
+# No trailing year is required: "Jul 1 - Aug 31, 2026" carries the year only on
+# the second endpoint, and leaving the first day in place would also defeat the
+# shared-year restoration further down.
 _CV_DAY_AFTER_MONTH_RE = re.compile(
-    r"\b(" + _CV_MONTH_WORD + r")\.?\s+(?:0?[1-9]|[12]\d|3[01])(?:st|nd|rd|th)?\b\s*,?\s*"
-    r"(?=(?:19|20)\d{2}\b)",
+    r"\b(" + _CV_MONTH_WORD + r")\.?\s+(?:0?[1-9]|[12]\d|3[01])(?:st|nd|rd|th)?\b,?",
     re.I,
 )
 
@@ -111,7 +116,7 @@ def _cv_strip_day_of_month(text):
     four-digit years are never touched.
     """
     text = _CV_DAY_BEFORE_MONTH_RE.sub("", str(text or ""))
-    text = _CV_DAY_AFTER_MONTH_RE.sub(r"\1 ", text)
+    text = _CV_DAY_AFTER_MONTH_RE.sub(r"\1", text)
     return text
 
 

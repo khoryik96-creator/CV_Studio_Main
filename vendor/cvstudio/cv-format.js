@@ -400,8 +400,16 @@ function cvNormalizeStructuredData(data) {
   var certifications = Array.isArray(data.certifications) ? data.certifications : (data.certifications ? [data.certifications] : []);
   data.certifications = cvStripAdditionalBulletMarkers(certifications, true);
   var skills = Array.isArray(data.skills) ? data.skills : [];
+  // Mirror generate.js: a skills group only counts when it has a printable
+  // item, so a category with empty items cannot raise a SKILLS heading over
+  // nothing and leave the preview disagreeing with the generated DOCX.
   data.skills = skills.filter(function(value){
-    return value && typeof value === 'object' && (String(value.category || '').trim() || String(value.items || '').trim());
+    if (!value || typeof value !== 'object') return false;
+    var rawItems = value.items || '';
+    var lines = Array.isArray(rawItems)
+      ? rawItems.map(function(line){ return String(line || '').trim(); }).filter(Boolean)
+      : String(rawItems).split(/\r?\n/).map(function(line){ return line.trim(); }).filter(Boolean);
+    return lines.length > 0;
   }).map(function(value){
     value.items = cvStripAdditionalBulletMarkers(value.items || '', false);
     return value;

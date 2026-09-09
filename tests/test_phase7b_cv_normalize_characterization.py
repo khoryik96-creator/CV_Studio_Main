@@ -107,6 +107,34 @@ class DateAndMonthTests(unittest.TestCase):
         self.assertEqual(cn._normalize_cv_date_range("2020-06-15"), "Jun 2020")
         self.assertEqual(cn._cv_pretranslate_iso_dates("2019-12"), "Dec 2019")
 
+    def test_iso_guard_is_same_line_so_documents_still_convert(self):
+        # The month-name guard must not reach across a newline: this helper also
+        # runs over whole CV documents, where a real ISO date can end a line whose
+        # next line happens to start with a month name. Both dates must convert.
+        document = "Acme 2020-06 - 2025-07\nJun 2015 - May 2020"
+        converted = cn._cv_pretranslate_iso_dates(document)
+        self.assertIn("Jun 2020", converted)
+        self.assertIn("Jul 2025", converted)
+        self.assertNotIn("2025-07", converted)
+        # The same-line guard still protects the range-separator case.
+        self.assertEqual(
+            cn._cv_pretranslate_iso_dates("Apr 2022-11 Jul 2026"),
+            "Apr 2022-11 Jul 2026",
+        )
+
+    def test_day_stripping_is_symmetric_across_both_orderings(self):
+        # "Jul 1 - Aug 31, 2026" carries the year only on the second endpoint;
+        # it must reduce identically to the day-before-month spelling.
+        self.assertEqual(
+            cn._normalize_cv_date_range("Jul 1 - Aug 31, 2026"),
+            "Jul 2026 to Aug 2026",
+        )
+        self.assertEqual(
+            cn._normalize_cv_date_range("1 Jul - 31 Aug 2026"),
+            "Jul 2026 to Aug 2026",
+        )
+        self.assertEqual(cn._normalize_cv_date_range("Jun 5 2019"), "Jun 2019")
+
     def test_date_range_numeric_month_year_to_house_style(self):
         # A parse run that emits "06/2024" must normalise to the same "Mon YYYY"
         # form as a run that emits "Jun 2024", so re-formatting is consistent.
