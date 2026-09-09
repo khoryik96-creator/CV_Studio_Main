@@ -856,6 +856,52 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertEqual(invalid_docx.status_code, 400)
         self.assertIn("valid DOCX", invalid_docx.get_json()["error"])
 
+    def _docx_xml(self, data):
+        response = app.app.test_client().post(
+            "/generate-docx",
+            json={"data": data},
+            headers={"Origin": "http://127.0.0.1:5000"},
+        )
+        self.assertEqual(response.status_code, 200)
+        with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
+            return archive.read("word/document.xml").decode("utf-8")
+
+    def test_a_skills_group_without_items_never_prints_a_skills_heading(self):
+        # A parse can emit a category with no items ({"category": "Skills",
+        # "items": ""}). That must not print the "Skills:" heading above nothing.
+        base = {
+            "candidate": {"name": "Empty Skills Fixture"},
+            "work_experiences": [], "education": [], "certifications": [],
+        }
+
+        # Only an empty skills group: no Skills heading, and with no
+        # certifications the whole Additional Information section is omitted.
+        only_empty = self._docx_xml(dict(base, skills=[{"category": "Skills", "items": ""}]))
+        self.assertNotIn("<w:t>Skills:</w:t>", only_empty)
+        self.assertNotIn("A D D I T I O N A L", only_empty)
+
+        # Certifications present, skills empty: certs render, Skills heading does not.
+        with_certs = dict(base, skills=[{"category": "Skills", "items": "   "}])
+        with_certs["certifications"] = ["ISC2 Candidate"]
+        certs_xml = self._docx_xml(with_certs)
+        self.assertIn("License and Certification:", certs_xml)
+        self.assertIn("ISC2 Candidate", certs_xml)
+        self.assertNotIn("<w:t>Skills:</w:t>", certs_xml)
+
+        # Regression: a real skills group still renders heading and items.
+        real = self._docx_xml(dict(base, skills=[{"category": "Skills", "items": "Leadership"}]))
+        self.assertEqual(real.count("<w:t>Skills:</w:t>"), 1)
+        self.assertIn("Leadership", real)
+
+        # Regression: an empty group alongside a real one keeps the real content.
+        mixed = self._docx_xml(dict(base, skills=[
+            {"category": "Skills", "items": ""},
+            {"category": "Additional Skills", "items": ["MS Office", "Python"]},
+        ]))
+        self.assertIn("Additional Skills:", mixed)
+        self.assertIn("MS Office", mixed)
+        self.assertIn("Python", mixed)
+
     def _summary_source_docx(self, extra_body_xml):
         """A minimal generated CV DOCX with extra paragraphs after the table."""
         client = app.app.test_client()

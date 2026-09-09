@@ -752,9 +752,22 @@ function makeEducationSection(education) {
 }
 
 // ── Additional info ───────────────────────────────────────────────────────────
+// The printable lines of one skills group. ``items`` arrives either as an array
+// or as a newline-separated string, so both shapes are reduced the same way.
+function skillItemLines(skill) {
+  const rawItems = (skill && skill.items) || '';
+  return Array.isArray(rawItems)
+    ? rawItems.map(line => String(line).trim()).filter(line => line.length > 0)
+    : String(rawItems).split(/\n/).map(line => line.trim()).filter(line => line.length > 0);
+}
+
 function makeAdditionalSection(certs, skills) {
   certs = (certs || []).filter(c => String(c || '').trim());
-  skills = (skills || []).filter(s => s && typeof s === 'object' && (String(s.category || '').trim() || String(s.items || '').trim()));
+  // A skills group only counts when it actually has an item to print. A parse
+  // can emit a category with empty items (e.g. {category:"Skills", items:""}),
+  // which previously still satisfied this filter and printed the "Skills:"
+  // heading above nothing.
+  skills = (skills || []).filter(s => s && typeof s === 'object' && skillItemLines(s).length > 0);
   if (!certs.length && !skills.length) return '';
 
   let xml = sectionHeader('A D D I T I O N A L   I N F O R M A T I O N    ______________________________________');
@@ -776,10 +789,7 @@ function makeAdditionalSection(certs, skills) {
       const category = String(s.category || '').trim();
       if (category && !/^skills?$/i.test(category)) xml += boldBlackPara(category + ':', 24);
       // Items — handle both array and newline-separated string
-      const rawItems = s.items || '';
-      const lines = Array.isArray(rawItems)
-        ? rawItems.map(l => String(l).trim()).filter(l => l.length > 0)
-        : String(rawItems).split(/\n/).map(l => l.trim()).filter(l => l.length > 0);
+      const lines = skillItemLines(s);
       if (!lines.length) continue;
       if (lines.length > 1) {
         for (const line of lines) {
