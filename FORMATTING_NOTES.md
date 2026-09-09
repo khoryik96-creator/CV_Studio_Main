@@ -91,6 +91,11 @@ this:
   `2020 to 2023`). It also compacts identical year endpoints and expands a
   shared-year month span such as `Jul - Dec 2019` without guessing. Keep the
   matching browser and generator functions in sync.
+  The v24.6.395 corrective preserves two-digit years (including mixed precision)
+  rather than assuming every number beside a month is a day. Full day/month/year
+  dates and explicit day-bearing shared-year ranges reduce to month + year.
+  Python, `cvNormDateRange` and `normalizeDateRange` share cross-language tests
+  in `tests/test_cv_date_parity.py` and `tests/test_cv_date_parity.js`.
 - **`_recover_cv_source_skill_item_punctuation`** — restores visible middle-dot
   separators only for a category-anchored source span whose words exactly match
   the provider items after punctuation is ignored. Matched ASCII letter casing

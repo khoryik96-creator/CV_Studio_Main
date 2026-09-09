@@ -93,30 +93,41 @@ def _cv_pretranslate_iso_dates(text):
     return text
 
 
-# House style is month + year: a specific day adds noise to a CV date range.
-# Stripping the day also removes the "YYYY-DD" shape that collided with the ISO
-# year-month rule above.
+# A number beside a month may be a two-digit year. Require a complete date,
+# or an entire day-bearing range with an explicit shared year, before removal.
+# Keep this logic mirrored in both JavaScript date normalizers.
+_CV_DAY_WORD = r"(?:0?[1-9]|[12]\d|3[01])(?:st|nd|rd|th)?"
 _CV_DAY_BEFORE_MONTH_RE = re.compile(
-    r"\b(?:0?[1-9]|[12]\d|3[01])(?:st|nd|rd|th)?\b\s+(?=" + _CV_MONTH_WORD + r"\b)",
-    re.I,
+    r"\b" + _CV_DAY_WORD + r"[ \t]+(" + _CV_MONTH_WORD + r")\.?\s+(\d{4})\b", re.I,
 )
-# No trailing year is required: "Jul 1 - Aug 31, 2026" carries the year only on
-# the second endpoint, and leaving the first day in place would also defeat the
-# shared-year restoration further down.
 _CV_DAY_AFTER_MONTH_RE = re.compile(
-    r"\b(" + _CV_MONTH_WORD + r")\.?\s+(?:0?[1-9]|[12]\d|3[01])(?:st|nd|rd|th)?\b,?",
-    re.I,
+    r"\b(" + _CV_MONTH_WORD + r")\.?[ \t]+" + _CV_DAY_WORD + r",?\s+(\d{4})\b", re.I,
+)
+_CV_SHARED_DAY_RANGE_RES = (
+    re.compile(
+        r"(" + _CV_MONTH_WORD + r")\.?\s+" + _CV_DAY_WORD + r"\s*(?:-|to)\s*("
+        + _CV_MONTH_WORD + r")\.?\s+" + _CV_DAY_WORD + r",?\s+(\d{4})", re.I,
+    ),
+    re.compile(
+        _CV_DAY_WORD + r"\s+(" + _CV_MONTH_WORD + r")\.?\s*(?:-|to)\s*"
+        + _CV_DAY_WORD + r"\s+(" + _CV_MONTH_WORD + r")\.?\s+(\d{4})", re.I,
+    ),
 )
 
 
 def _cv_strip_day_of_month(text):
     """Reduce "11 Jul 2026" or "Jul 11, 2026" to "Jul 2026".
 
-    Only a 1-2 digit number sitting directly beside a month name is removed, so
-    four-digit years are never touched.
+    Preserve ambiguous short years, including mixed "Jan 20 to Dec 2021".
+    A shared year is used only for an explicit day-bearing span on both ends.
     """
-    text = _CV_DAY_BEFORE_MONTH_RE.sub("", str(text or ""))
-    text = _CV_DAY_AFTER_MONTH_RE.sub(r"\1", text)
+    text = str(text or "")
+    for pattern in _CV_SHARED_DAY_RANGE_RES:
+        match = pattern.fullmatch(text)
+        if match:
+            return f"{match.group(1)} {match.group(3)} to {match.group(2)} {match.group(3)}"
+    text = _CV_DAY_BEFORE_MONTH_RE.sub(r"\1 \2", text)
+    text = _CV_DAY_AFTER_MONTH_RE.sub(r"\1 \2", text)
     return text
 
 

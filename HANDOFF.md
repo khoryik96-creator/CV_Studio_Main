@@ -147,7 +147,9 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 7. Recently completed (already on `master`)
 
-- **Current merged baseline, checked 2026-09-06: v24.6.382, `75c43b6`.**
+- **Current merged baseline, checked 2026-09-09: v24.6.393, `787e815`.**
+  PR #202 (v24.6.394) remains unmerged. The owner-authorized corrective is
+  `codex/pr202-v24.6.395-date-parity-fixes`, based on its head `317e320`.
   PRs #193 and #194 merged after all three hosted checks passed.
   PR #189 merged as `2c216c6` on 2026-08-29; PR #185 merged as `b84c36f` on
   2026-09-04. PR #191 merged as `a5bf89d` on 2026-09-05 after all hosted
@@ -288,6 +290,18 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   merged page-aware corrective below supersedes those details.
 
 ## 8. Open / deferred work
+
+- **PR #202 date parity corrective — v24.6.395, UNMERGED.**
+  Branch `codex/pr202-v24.6.395-date-parity-fixes` builds on PR #202 without
+  overwriting Claude's branch. Day removal requires a full date or a complete
+  day-bearing shared-year range; ambiguous short years stay intact, including
+  mixed short/four-digit endpoints. Python, browser preview and direct Word
+  generation use matching rules for day removal, ISO/numeric dates and normal
+  house-style ranges. Day/month matching cannot consume an ISO month from the
+  preceding line. Shared fixtures compare all three handlers and re-normalization;
+  real DOCX regressions cover work/education dates and retained duty text.
+  No routes, schemas, dependencies, credentials or paid-call boundaries change.
+  No PR creation, merge or native protected build requested.
 
 - **Unused-helper cleanup — v24.6.383, owner-approved merge pending checks.**
   Branch `codex/pr195-v24.6.383-unused-helper-cleanup` integrates the v24.6.382
