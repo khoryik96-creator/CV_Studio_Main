@@ -344,6 +344,10 @@ assert.ok(context.cvReadsAsReferenceHeading('Professional References'));
 assert.ok(context.cvReadsAsReferenceHeading('References Available Upon Request'));
 assert.ok(!context.cvReadsAsReferenceHeading('Reference Data Management'));
 assert.ok(!context.cvReadsAsReferenceHeading('Publications'));
+assert.ok(context.cvReadsAsReferenceHeading('RÉFÉRENCES'));
+assert.ok(context.cvReadsAsReferenceHeading('Références'));
+assert.ok(context.cvReadsAsReferenceHeading('Referee’s Details'));
+assert.ok(!context.cvReadsAsReferenceHeading('Réference Data Management'));
 assert.deepStrictEqual(
   context.cvDropReferenceSkills([
     {category:'Technical Skills',items:'Python, SQL'},

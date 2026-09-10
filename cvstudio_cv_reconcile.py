@@ -9,6 +9,7 @@ no Flask, no globals, no network, no AI call. This module never imports ``app``.
 """
 
 import re
+import unicodedata
 
 from cvstudio_cv_normalize import (
     _CV_REDACTED_LANGUAGE_RE,
@@ -423,8 +424,24 @@ _REFERENCE_ON_REQUEST_RE = re.compile(
 )
 
 
+# An accented heading ("RÉFÉRENCES", "Références") and a possessive one
+# ("Referee's Details") both have to tokenize to the same words as the plain
+# form, or the allowlist below never sees a reference word and the whole block
+# renders. Accents are folded away and the possessive "'s" dropped; the
+# apostrophe can arrive as ASCII or as either curly form.
+# The apostrophe and backtick are written as escapes, not literals, so the
+# brace matcher in tests/test_long_cv_output_corrective.js can lift the browser
+# mirror of this function out of its source without entering quote mode.
+_REFERENCE_POSSESSIVE_RE = re.compile(r"[\u0027\u2018\u2019\u02bc\u00b4\u0060]s\b", re.I)
+
+
 def _reference_heading_tokens(label):
-    return [token for token in re.split(r"[^A-Za-z]+", str(label or "")) if token]
+    # Possessives go first: NFKD turns an acute accent used as an apostrophe into
+    # a combining mark, so folding before stripping would leave a bare "s" token.
+    text = _REFERENCE_POSSESSIVE_RE.sub("", str(label or ""))
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return [token for token in re.split(r"[^A-Za-z]+", text) if token]
 
 
 def _reads_as_reference_heading(label):
@@ -455,6 +472,69 @@ def _strip_reference_on_request_items(items):
             return items, False
         return "\n".join(kept), True
     return items, False
+
+
+# A referees block is the one place in a CV where a phone number and an email
+# address belong to somebody else. The raw-text contact fallbacks in /parse take
+# the FIRST match in the document, so a candidate who lists no contact details of
+# their own would otherwise be given their referee's -- and the app searches and
+# uploads to JobAdder on that email. These spans let the fallbacks skip it.
+#
+# A span only opens on a line short enough to read as a heading. A sentence such
+# as "Provided references and contact details on request" is built entirely from
+# allowlisted words, so length is what separates it from a real heading.
+_REFERENCE_HEADING_MAX_TOKENS = 5
+
+
+def _reference_section_spans(cv_text):
+    """``(start, end)`` offsets of each referees section in the source text."""
+    text = str(cv_text or "")
+    if not text:
+        return []
+    lines = []
+    offset = 0
+    for line in text.split("\n"):
+        lines.append((offset, line))
+        offset += len(line) + 1
+    spans = []
+    open_start = None
+    for start, line in lines:
+        stripped = line.strip()
+        is_heading = (
+            bool(stripped)
+            and len(_reference_heading_tokens(stripped)) <= _REFERENCE_HEADING_MAX_TOKENS
+            and _reads_as_reference_heading(stripped)
+        )
+        if is_heading:
+            if open_start is None:
+                open_start = start
+            continue
+        if open_start is None:
+            continue
+        # Any other known section heading closes the block.
+        if stripped and _cv_source_boundary_key(stripped) in _CV_SOURCE_SECTION_BOUNDARY_KEYS:
+            spans.append((open_start, start))
+            open_start = None
+    if open_start is not None:
+        spans.append((open_start, len(text)))
+    return spans
+
+
+def _offset_in_spans(offset, spans):
+    return any(start <= offset < end for start, end in spans)
+
+
+def _search_outside_reference_sections(pattern, cv_text, spans=None):
+    """First match of ``pattern`` in ``cv_text`` that is not inside a referees block."""
+    text = str(cv_text or "")
+    if not text:
+        return None
+    if spans is None:
+        spans = _reference_section_spans(text)
+    for match in re.finditer(pattern, text):
+        if not _offset_in_spans(match.start(), spans):
+            return match
+    return None
 
 
 def _cv_skill_has_printable_item(items):

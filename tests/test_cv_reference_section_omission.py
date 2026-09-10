@@ -16,7 +16,12 @@ import unittest
 from cvstudio_cv_reconcile import (
     _drop_reference_sections as drop,
     _reads_as_reference_heading as reads_as_heading,
+    _reference_section_spans as spans,
+    _search_outside_reference_sections as search_outside,
 )
+
+_EMAIL_RE = r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}"
+_PHONE_RE = r"[+\(]?[\d][\d\s\-\(\)]{7,}[\d]"
 
 _APP_SOURCE = (Path(__file__).resolve().parent.parent / "app.py").read_text(encoding="utf-8")
 _CV_FORMAT_SOURCE = (
@@ -50,6 +55,16 @@ REFEREE_HEADINGS = [
     "Reference Information",
     "Referee List",
     "References Section",
+    # Accents and possessives have to fold away before the allowlist runs.
+    "RÉFÉRENCES",
+    "Références",
+    "Réferences",
+    "Referee’s Details",
+    "Referee's Details",
+    "Referees’ Contact Details",
+    "REFEREE’S DETAILS",
+    "Referee´s Details",
+    "Referee`s Details",
 ]
 
 # Labels that contain a reference word but name a discipline, not a referee.
@@ -61,6 +76,8 @@ KEPT_HEADINGS = [
     "References and Publications",
     "Credit Reference Analysis",
     "Self-Reference Resolution",
+    "Référence Data Management",
+    "Reference’s Data Platform",
 ]
 
 # Labels with no reference word at all, which the pass must never look at twice.
@@ -227,6 +244,97 @@ class DropReferenceSections(unittest.TestCase):
         self.assertIs(drop(parsed)["skills"], skills)
 
 
+class RefereeSectionSpans(unittest.TestCase):
+    """The raw-text contact fallbacks must not read a referee's phone or email."""
+
+    CV_WITH_BOTH = (
+        "JANE TAN\n"
+        "jane.tan@example.com | +60 11-111 1111\n"
+        "\n"
+        "WORK EXPERIENCE\n"
+        "Acme Sdn Bhd — Head of Operations\n"
+        "\n"
+        "REFERENCES\n"
+        "Ahmad Yusof, GM, Gamma Bhd, ahmad@gamma.com, +60 12-345 6789\n"
+    )
+    CV_REFEREE_ONLY = (
+        "JANE TAN\n"
+        "Head of Operations\n"
+        "\n"
+        "WORK EXPERIENCE\n"
+        "Acme Sdn Bhd — Head of Operations\n"
+        "\n"
+        "REFERENCES\n"
+        "Ahmad Yusof, GM, Gamma Bhd, ahmad@gamma.com, +60 12-345 6789\n"
+    )
+
+    def test_the_candidates_own_contact_details_still_win(self):
+        self.assertEqual(
+            search_outside(_EMAIL_RE, self.CV_WITH_BOTH).group(0),
+            "jane.tan@example.com",
+        )
+        self.assertEqual(
+            search_outside(_PHONE_RE, self.CV_WITH_BOTH).group(0).strip(),
+            "+60 11-111 1111",
+        )
+
+    def test_a_referees_contact_details_are_never_borrowed(self):
+        # No candidate contact details at all: the fallback must come back empty
+        # rather than hand JobAdder the referee's email.
+        self.assertIsNone(search_outside(_EMAIL_RE, self.CV_REFEREE_ONLY))
+        self.assertIsNone(search_outside(_PHONE_RE, self.CV_REFEREE_ONLY))
+
+    def test_a_section_after_the_referees_block_is_searched_again(self):
+        cv = (
+            "JANE TAN\n"
+            "\n"
+            "REFERENCES\n"
+            "Ahmad Yusof, ahmad@gamma.com\n"
+            "\n"
+            "PERSONAL DETAILS\n"
+            "jane.tan@example.com\n"
+        )
+        self.assertEqual(search_outside(_EMAIL_RE, cv).group(0), "jane.tan@example.com")
+
+    def test_accented_and_possessive_headings_open_a_span(self):
+        for heading in ("RÉFÉRENCES", "Références", "Referee’s Details", "Referees"):
+            with self.subTest(heading=heading):
+                cv = "JANE TAN\n\n" + heading + "\nAhmad Yusof, ahmad@gamma.com\n"
+                self.assertIsNone(search_outside(_EMAIL_RE, cv))
+
+    def test_a_sentence_built_from_allowlisted_words_opens_no_span(self):
+        # Every word of this line is in the heading allowlist, so only its length
+        # keeps it from swallowing the rest of the CV.
+        cv = (
+            "JANE TAN\n"
+            "Provided references and contact details on request\n"
+            "jane.tan@example.com\n"
+        )
+        self.assertEqual(spans(cv), [])
+        self.assertEqual(search_outside(_EMAIL_RE, cv).group(0), "jane.tan@example.com")
+
+    def test_a_cv_with_no_referees_block_has_no_spans(self):
+        cv = "JANE TAN\njane.tan@example.com\n\nWORK EXPERIENCE\nAcme Sdn Bhd\n"
+        self.assertEqual(spans(cv), [])
+        self.assertEqual(search_outside(_EMAIL_RE, cv).group(0), "jane.tan@example.com")
+
+    def test_empty_and_missing_source_text_is_safe(self):
+        for text in (None, "", 0):
+            with self.subTest(text=text):
+                self.assertEqual(spans(text), [])
+                self.assertIsNone(search_outside(_EMAIL_RE, text))
+
+    def test_the_span_covers_the_whole_trailing_block(self):
+        found = spans(self.CV_WITH_BOTH)
+        self.assertEqual(len(found), 1)
+        start, end = found[0]
+        covered = self.CV_WITH_BOTH[start:end]
+        self.assertIn("REFERENCES", covered)
+        self.assertIn("ahmad@gamma.com", covered)
+        self.assertNotIn("jane.tan@example.com", covered)
+        self.assertNotIn("WORK EXPERIENCE", covered)
+
+
 class PipelineWiring(unittest.TestCase):
     def test_parse_runs_the_pass(self):
         self.assertIn("parsed = _drop_reference_sections(parsed)", _APP_SOURCE)
@@ -235,6 +343,13 @@ class PipelineWiring(unittest.TestCase):
         # The second call site is what protects CV data parsed before the pass
         # existed, or edited by hand in the browser.
         self.assertIn("cv_data = _drop_reference_sections(cv_data)", _APP_SOURCE)
+
+    def test_the_contact_fallbacks_skip_referee_blocks(self):
+        self.assertIn("_reference_section_spans(cv_text) if cv_text else []", _APP_SOURCE)
+        self.assertEqual(_APP_SOURCE.count("_search_outside_reference_sections(\n"), 2)
+        # The old unguarded first-match scans must be gone.
+        self.assertNotIn("m = _re.search(r'[a-zA-Z0-9._%+", _APP_SOURCE)
+        self.assertNotIn("mp = _re.search(r'[+", _APP_SOURCE)
 
     def test_preview_mirrors_the_pass(self):
         self.assertIn("cvDropReferenceSkills(data.skills)", _CV_FORMAT_SOURCE)
@@ -271,6 +386,16 @@ class PreviewAndCodeParity(unittest.TestCase):
     def test_filler_word_lists_match(self):
         from cvstudio_cv_reconcile import _REFERENCE_HEADING_FILLER
         self.assertEqual(self._js_list("CV_REFERENCE_HEADING_FILLER"), _REFERENCE_HEADING_FILLER)
+
+    def test_possessive_patterns_match(self):
+        from cvstudio_cv_reconcile import _REFERENCE_POSSESSIVE_RE
+        match = re.search(r"CV_REFERENCE_POSSESSIVE_RE\s*=\s*/(.*)/gi;", _CV_FORMAT_SOURCE)
+        self.assertIsNotNone(match)
+        self.assertEqual(match.group(1), _REFERENCE_POSSESSIVE_RE.pattern)
+
+    def test_accent_folding_is_mirrored(self):
+        self.assertIn("normalize('NFKD')", _CV_FORMAT_SOURCE)
+        self.assertIn("[\\u0300-\\u036f]", _CV_FORMAT_SOURCE)
 
     def test_on_request_patterns_match(self):
         from cvstudio_cv_reconcile import _REFERENCE_ON_REQUEST_RE

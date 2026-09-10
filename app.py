@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.401"
+_INSTALL_RECEIPT_VERSION = "v24.6.402"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -346,7 +346,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.401"
+_CVSTUDIO_VERSION = "v24.6.402"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -1762,6 +1762,8 @@ from cvstudio_cv_reconcile import (
     _source_has_redacted_language_block,
     _clean_candidate_languages_from_redaction,
     _drop_reference_sections,
+    _reference_section_spans,
+    _search_outside_reference_sections,
     _order_same_company_roles_newest_first,
     _extract_explicit_project_blocks,
     _restore_explicit_project_headings,
@@ -8999,16 +9001,23 @@ def parse_cv():
         
         usage = usage_total
         # Email regex fallback — if Claude missed it, scan raw text
-        import re as _re
         cand = parsed.get("candidate", {})
+        # Both fallbacks take the FIRST match in the document, so a referees block
+        # is skipped: its phone and email belong to a third party, and the app
+        # searches and uploads to JobAdder on whatever lands in candidate.email.
+        _referee_spans = _reference_section_spans(cv_text) if cv_text else []
         if not cand.get("email") and cv_text:
-            m = _re.search(r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}', cv_text)
+            m = _search_outside_reference_sections(
+                r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}', cv_text, _referee_spans
+            )
             if m:
                 cand["email"] = m.group(0)
                 parsed["candidate"] = cand
         # Phone regex fallback
         if not cand.get("phone") and cv_text:
-            mp = _re.search(r'[+\(]?[\d][\d\s\-\(\)]{7,}[\d]', cv_text)
+            mp = _search_outside_reference_sections(
+                r'[+\(]?[\d][\d\s\-\(\)]{7,}[\d]', cv_text, _referee_spans
+            )
             if mp:
                 cand["phone"] = mp.group(0).strip()
                 parsed["candidate"] = cand

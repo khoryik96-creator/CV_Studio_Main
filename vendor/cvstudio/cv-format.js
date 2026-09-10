@@ -426,7 +426,15 @@ function cvReadsAsReferenceHeading(label) {
     'contactdetails', 'information', 'info', 'personal', 'professional', 'character', 'work',
     'employment', 'academic', 'business', 'available', 'upon', 'on', 'request', 'furnished',
     'provided', 'list', 'section'];
-  var tokens = String(label == null ? '' : label).split(/[^A-Za-z]+/)
+  // Fold accents and drop a possessive "'s" first, so "RÉFÉRENCES" and
+  // "Referee's Details" tokenize to the same words as the plain forms.
+  var CV_REFERENCE_POSSESSIVE_RE = /[\u0027\u2018\u2019\u02bc\u00b4\u0060]s\b/gi;
+  // Possessives go first: NFKD turns an acute accent used as an apostrophe into a
+  // combining mark, so folding before stripping would leave a bare "s" token.
+  var text = String(label == null ? '' : label)
+    .replace(CV_REFERENCE_POSSESSIVE_RE, '')
+    .normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+  var tokens = text.split(/[^A-Za-z]+/)
     .filter(Boolean).map(function(token){ return token.toLowerCase(); });
   if (!tokens.length) return false;
   if (!tokens.some(function(token){ return CV_REFERENCE_HEADING_WORDS.indexOf(token) !== -1; })) return false;
