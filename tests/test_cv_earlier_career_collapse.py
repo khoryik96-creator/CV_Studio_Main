@@ -658,9 +658,9 @@ class SidebarLeftTwoColumnTests(unittest.TestCase):
         # the CV filed the block under.
         source = self.source + (
             "KGB HOLDINGS SDN BHD\n"
-            "• Director - Someone Else (+6012 370 1233)\n"
+            "• Director - Someone Else (+6012 000 0002)\n"
             "PM BRANDS SDN BHD (HALO DIM SUM)\n"
-            "• Director - A Third Person (+6012 345 6789)\n"
+            "• Director - A Third Person (+6012 000 0003)\n"
         )
         found = self._subsidiaries(self._run(self._entries(), source))
         self.assertEqual(
