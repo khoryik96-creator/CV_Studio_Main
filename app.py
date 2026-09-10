@@ -1424,6 +1424,7 @@ RULES:
 - Work experiences in reverse chronological order (most recent first)
 - When the source separates overlapping work into explicit subsections such as Professional Experience, Independent Consulting & Delivery, Freelance Projects, or Earlier Experience, preserve the source subsection order. Put the subsection label in work_experiences[].section_heading on the first entry under that label; do not move a concurrent freelance/self-employed entry ahead of the candidate's primary current employment merely because its start year is newer.
 - If older/early-career roles have no reliable dates in the source CV, do NOT create separate company rows with empty dates such as " | Company". Group them under a single company entry named "Earlier Career" and preserve each role as bullets in the style "Job Title – Company".
+- A company or brand heading that sits directly under a dated role and has NO dates and NO job title of its own is a sub-project of that role, not a separate job and not early-career. Keep it inside that role, in place, as a bullet group: {"heading": "That Company (Brand)", "bullets": [its bullets]}. Never promote it to its own employer row, never move it elsewhere in the CV, and never fold it into "Earlier Career". The "Earlier Career" grouping above is only for genuinely old roles listed as bare "Job Title - Company" lines with no description of the work.
 - If the source CV contains a work-history table with columns like Dates / Organization / Role, treat those rows as AUTHORITATIVE for employer name, date range, role title, and order. Reproduce every row from that table as a work experience role; do not skip, merge, or invent rows.
 - Do NOT use Project Experience fields such as "Organization", "Client", "Project Name", or "Location" to overwrite the employer/date/title from the work-history table. Project Organization can be the delivery/vendor/client context, not necessarily the employer row.
 - Group multiple roles under one company ONLY when the source work-history rows explicitly show the same employer name for those roles. Never group roles across different employers, clients, projects, or non-adjacent rows.
@@ -1755,6 +1756,7 @@ from cvstudio_cv_normalize import (
 
 from cvstudio_cv_reconcile import (
     _role_plain_bullets,
+    _attach_untitled_subsidiary_entries,
     _collapse_incomplete_earlier_career,
     _source_has_redacted_language_block,
     _clean_candidate_languages_from_redaction,
@@ -9012,6 +9014,8 @@ def parse_cv():
         parsed = _reconcile_work_experience_with_authoritative_table(parsed, cv_text)
         parsed = _order_same_company_roles_newest_first(parsed)
         parsed = _restore_explicit_project_headings(parsed, cv_text)
+        # Before the Earlier Career grouping, so a sub-brand block never reaches it.
+        parsed = _attach_untitled_subsidiary_entries(parsed)
         parsed = _collapse_incomplete_earlier_career(parsed)
         parsed = _clean_candidate_languages_from_redaction(parsed, cv_text)
         parsed = _normalize_candidate_languages(parsed, cv_text)

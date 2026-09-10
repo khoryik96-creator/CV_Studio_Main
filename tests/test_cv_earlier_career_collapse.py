@@ -10,7 +10,10 @@ Career" as a bullet.
 import copy
 import unittest
 
-from cvstudio_cv_reconcile import _collapse_incomplete_earlier_career as collapse
+from cvstudio_cv_reconcile import (
+    _attach_untitled_subsidiary_entries as attach,
+    _collapse_incomplete_earlier_career as collapse,
+)
 
 
 def _entry(company, date_range="", title="", bullets=()):
@@ -119,6 +122,67 @@ class ExistingBlockTests(unittest.TestCase):
             any(bullet.strip().casefold() == "earlier career" for bullet in bullets),
             bullets,
         )
+
+
+def _pipeline(parsed):
+    return collapse(attach(copy.deepcopy(parsed)))["work_experiences"]
+
+
+class SubsidiaryBlockTests(unittest.TestCase):
+    """A sub-brand listed under a dated role belongs inside that role."""
+
+    def _cv(self):
+        return {"work_experiences": [
+            _entry("A&W Malaysia Sdn Bhd", "Feb 2025 to Aug 2025",
+                   "Head of Operations, Special Projects",
+                   ["Led the nationwide rollout of the SPMH framework."]),
+            _entry("PM Brands Sdn Bhd (Halo Dim Sum)", "", "",
+                   ["Developed the business proposal and rollout plan.",
+                    "Conducted market research and feasibility studies."]),
+            _entry("KGB Holdings Sdn Bhd", "Oct 2018 to Feb 2025",
+                   "Head of Operations - Business Partner", ["Led multi-site operations."]),
+        ]}
+
+    def test_it_is_not_promoted_to_its_own_employer_row(self):
+        companies = [entry["company"] for entry in _pipeline(self._cv())]
+        self.assertEqual(companies, ["A&W Malaysia Sdn Bhd", "KGB Holdings Sdn Bhd"])
+
+    def test_it_becomes_a_bullet_group_inside_the_role_above(self):
+        bullets = _pipeline(self._cv())[0]["roles"][0]["bullets"]
+        group = bullets[-1]
+        self.assertIsInstance(group, dict)
+        self.assertEqual(group["heading"], "PM Brands Sdn Bhd (Halo Dim Sum)")
+        self.assertEqual(group["bullets"], [
+            "Developed the business proposal and rollout plan.",
+            "Conducted market research and feasibility studies.",
+        ])
+
+    def test_the_host_role_keeps_its_own_bullets_first(self):
+        bullets = _pipeline(self._cv())[0]["roles"][0]["bullets"]
+        self.assertEqual(bullets[0], "Led the nationwide rollout of the SPMH framework.")
+
+    def test_an_undated_entry_that_has_a_title_is_left_alone(self):
+        # A titled role is a job the source simply did not date, not a sub-brand.
+        parsed = {"work_experiences": [
+            _entry("A", "2020 to 2022", "Role A", ["Did A."]),
+            _entry("B", "", "Head of Something", ["Did B.", "Did C."]),
+            _entry("C", "2015 to 2018", "Role C", ["Did C."]),
+        ]}
+        self.assertEqual([e["company"] for e in _pipeline(parsed)], ["A", "B", "C"])
+
+    def test_a_block_with_no_dated_role_above_it_is_left_alone(self):
+        parsed = {"work_experiences": [
+            _entry("PM Brands Sdn Bhd", "", "", ["Did A.", "Did B."]),
+            _entry("A", "2020 to 2022", "Role A", ["Did A."]),
+        ]}
+        self.assertEqual([e["company"] for e in _pipeline(parsed)][0], "PM Brands Sdn Bhd")
+
+    def test_an_earlier_career_grouping_is_never_absorbed(self):
+        parsed = {"work_experiences": [
+            _entry("A", "2020 to 2022", "Role A", ["Did A."]),
+            _entry("Earlier Career", "", "", ["Chef - Cafe (2016)", "Commis - FIQ (2015)"]),
+        ]}
+        self.assertEqual([e["company"] for e in _pipeline(parsed)], ["A", "Earlier Career"])
 
 
 class UnchangedBehaviourTests(unittest.TestCase):
