@@ -147,11 +147,12 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 7. Recently completed (already on `master`)
 
-- **Current merged baseline, checked 2026-09-09: v24.6.393, `787e815`.**
-  PR #202 (v24.6.394) remains unmerged. The owner-authorized corrective is
-  `codex/pr202-v24.6.395-date-parity-fixes`, based on its head `317e320`.
-  Replacement PR #203 contains both PR #202 and the corrective; the owner has
-  authorized its merge after validation, then closure of #202 as superseded.
+- **Current merged baseline, checked 2026-09-10: v24.6.395, `42dcb78`.**
+  PR #203 merged the complete PR #202 changes plus date-parity corrections;
+  PR #202 is closed as superseded. Both old branches are completed.
+  Current corrective: `codex/pr204-v24.6.396-date-edge-fixes` (PR number
+  provisional), covering cross-year date spans and non-breaking spaces only.
+  No PR or merge is requested for v24.6.396.
   PRs #193 and #194 merged after all three hosted checks passed.
   PR #189 merged as `2c216c6` on 2026-08-29; PR #185 merged as `b84c36f` on
   2026-09-04. PR #191 merged as `a5bf89d` on 2026-09-05 after all hosted
@@ -293,7 +294,16 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **PR #202 date parity corrective — v24.6.395, UNMERGED.**
+- **Date edge corrective — v24.6.396, UNMERGED.**
+  Starts at merged master `42dcb78`. Day-bearing December-to-January spans
+  retain their unspecified start year instead of copying the ending year;
+  the shared-month expansion applies the same chronology check on repeated
+  passes. Explicit years are unchanged. Unicode horizontal spaces normalize
+  before day removal while ISO source guards still cannot cross line breaks.
+  Python/browser/generator parity and real work/education DOCX tests cover both
+  fixes. No routes, schemas, dependencies, paid calls or native build changes.
+
+- **PR #202 date parity corrective — v24.6.395, MERGED via PR #203.**
   Branch `codex/pr202-v24.6.395-date-parity-fixes` builds on PR #202 without
   overwriting Claude's branch. Day removal requires a full date or a complete
   day-bearing shared-year range; ambiguous short years stay intact, including
@@ -304,7 +314,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   real DOCX regressions cover work/education dates and retained duty text.
   No routes, schemas, dependencies, credentials or paid-call boundaries change.
   PR #203 review also covers commas in complete day-first dates and shared-year
-  spans. Owner-approved merge awaits final gates; native protected builds remain manual.
+  spans. Merged as `42dcb78` after all hosted checks passed; native protected builds remain manual.
 
 - **Unused-helper cleanup — v24.6.383, owner-approved merge pending checks.**
   Branch `codex/pr195-v24.6.383-unused-helper-cleanup` integrates the v24.6.382

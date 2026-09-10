@@ -81,11 +81,11 @@ def _cv_pretranslate_iso_dates(text):
     # A "YYYY-NN" directly followed by a month name is NOT an ISO year-month:
     # the dash is a range separator and NN is a day, as in
     # "Apr 2022-11 Jul 2026". Reading that as November 2022 corrupted the range.
-    # The guard is deliberately same-line ([ \t]* rather than \s*): this helper
+    # The guard allows horizontal Unicode spaces but deliberately not newlines: this helper
     # also runs over whole CV documents, where a real ISO date can sit at the end
     # of a line whose next line happens to start with a month name.
     text = re.sub(
-        r"\b((?:19|20)\d{2})-(0[1-9]|1[0-2])\b(?![ \t]*" + _CV_MONTH_WORD + r"\b)",
+        r"\b((?:19|20)\d{2})-(0[1-9]|1[0-2])\b(?![ \t\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]*" + _CV_MONTH_WORD + r"\b)",
         _iso_year_month_repl,
         text,
         flags=re.I,
@@ -125,7 +125,9 @@ def _cv_strip_day_of_month(text):
     for pattern in _CV_SHARED_DAY_RANGE_RES:
         match = pattern.fullmatch(text)
         if match:
-            return f"{match.group(1)} {match.group(3)} to {match.group(2)} {match.group(3)}"
+            # Leave the omitted start year for the chronology-checked expansion
+            # below. A December-to-January span cannot share its ending year.
+            return f"{match.group(1)} to {match.group(2)} {match.group(3)}"
     text = _CV_DAY_BEFORE_MONTH_RE.sub(r"\1 \2", text)
     text = _CV_DAY_AFTER_MONTH_RE.sub(r"\1 \2", text)
     return text
@@ -351,6 +353,8 @@ def _normalize_month_token(m):
 
 def _normalize_cv_date_range(value):
     text = str(value or "").strip()
+    # Word/PDF horizontal spaces are ordinary date separators, not line breaks.
+    text = re.sub(r"[\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]", " ", text)
     if not text:
         return ""
     # Drop a leading dash/bullet the source baked in front of the date (e.g.
@@ -396,7 +400,8 @@ def _normalize_cv_date_range(value):
         return same_year.group(1)
     # Compact earlier-career lines often omit the repeated start year, e.g.
     # ``Jul - Dec 2019``. The shared trailing year applies to both month
-    # endpoints; restoring it makes the range unambiguous without guessing.
+    # endpoints only when their month order permits the same year. A reversed
+    # month span retains its unstated start year rather than guessing a year.
     same_year_months = re.fullmatch(
         r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+to\s+"
         r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})",
@@ -407,6 +412,8 @@ def _normalize_cv_date_range(value):
         start_month = _normalize_month_token(same_year_months.group(1))
         end_month = _normalize_month_token(same_year_months.group(2))
         year = same_year_months.group(3)
+        if _CV_MONTH_NUMBER[start_month.lower()] > _CV_MONTH_NUMBER[end_month.lower()]:
+            return text
         return f"{start_month} {year} to {end_month} {year}"
     return text
 

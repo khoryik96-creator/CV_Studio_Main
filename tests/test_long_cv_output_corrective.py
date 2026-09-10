@@ -905,6 +905,11 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
 
     def test_short_years_survive_and_full_days_normalize_in_word_outputs(self):
         cases = [
+            ("1 Dec - 31 Jan 2026", "Dec to Jan 2026"),
+            ("Dec 1 - Jan 31, 2026", "Dec to Jan 2026"),
+            ("1 Dec 2025 - 31 Jan 2026", "Dec 2025 to Jan 2026"),
+            ("1\u00a0March\u00a02021 - Present", "Mar 2021 to Present"),
+            ("March\u202f1, 2021 - Present", "Mar 2021 to Present"),
             ("Jan 20 - Dec 21", "Jan 20 to Dec 21"),
             ("Jan 20 to Dec 2021", "Jan 20 to Dec 2021"),
             ("Apr 2022–11 Jul 2026", "Apr 2022 to Jul 2026"),

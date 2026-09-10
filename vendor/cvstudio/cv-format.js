@@ -212,6 +212,7 @@ function cvNormMonth(m) {
 }
 function cvNormDateRange(value) {
   var text = String(value == null ? '' : value).trim();
+  text = text.replace(/[\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]/g, ' ');
   if (!text) return '';
   text = text.replace(/^[\s]*[-‐-―−•·▪◦*]+[\s]*/, '');
   if (!text) return '';
@@ -227,7 +228,8 @@ function cvNormDateRange(value) {
   var sharedDayRange = text.match(new RegExp('^(' + monthWord + ')\\.?\\s+' + dayWord + '\\s*(?:-|to)\\s*(' + monthWord + ')\\.?\\s+' + dayWord + ',?\\s+(\\d{4})$', 'i'))
     || text.match(new RegExp('^' + dayWord + '\\s+(' + monthWord + ')\\.?\\s*(?:-|to)\\s*' + dayWord + '\\s+(' + monthWord + ')\\.?,?\\s+(\\d{4})$', 'i'));
   if (sharedDayRange) {
-    text = sharedDayRange[1] + ' ' + sharedDayRange[3] + ' to ' + sharedDayRange[2] + ' ' + sharedDayRange[3];
+    // Leave the omitted year for the month-order check below.
+    text = sharedDayRange[1] + ' to ' + sharedDayRange[2] + ' ' + sharedDayRange[3];
   } else {
     text = text.replace(new RegExp('\\b' + dayWord + '[ \\t]+(' + monthWord + ')\\.?,?\\s+(\\d{4})\\b', 'gi'), '$1 $2');
     text = text.replace(new RegExp('\\b(' + monthWord + ')\\.?[ \\t]+' + dayWord + ',?\\s+(\\d{4})\\b', 'gi'), '$1 $2');
@@ -248,6 +250,8 @@ function cvNormDateRange(value) {
   if (sameYear) return sameYear[1];
   var sameYearMonths = text.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+to\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})$/i);
   if (sameYearMonths) {
+    // Cross-year spans keep their unstated start year; never guess backwards.
+    if (monthNumbers.indexOf(cvNormMonth(sameYearMonths[1])) > monthNumbers.indexOf(cvNormMonth(sameYearMonths[2]))) return text;
     return cvNormMonth(sameYearMonths[1]) + ' ' + sameYearMonths[3] + ' to ' + cvNormMonth(sameYearMonths[2]) + ' ' + sameYearMonths[3];
   }
   return text;

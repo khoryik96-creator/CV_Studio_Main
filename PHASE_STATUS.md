@@ -25,11 +25,11 @@
   `54298b9b6a822e1f36c9c101f1ff4edc9c7e835f`
 - Phase 7B-4 source baseline Git commit (merged Phase 7B-3):
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
-- Current merged source: v24.6.393 (`787e815`), verified 2026-09-09.
+- Current merged source: v24.6.395 (`42dcb78`), verified 2026-09-10.
 - PR #189 merged as `2c216c6`; PR #185 merged as `b84c36f`. Neither is an
   active branch claim. PRs #191–#194 are merged with owner approval. Current work is
-  v24.6.395 on `codex/pr202-v24.6.395-date-parity-fixes`, based on open PR #202.
-  PR #195 is merged; replacement PR #203 is authorized to merge after validation.
+  v24.6.396 on `codex/pr204-v24.6.396-date-edge-fixes` (PR number provisional).
+  PR #195 and #203 are merged; #202 is closed as superseded. No new PR/merge requested.
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
@@ -54,10 +54,23 @@
   #184 then merged v24.6.363 as `1912d48`; PR #186 merged v24.6.368 as
   `fbdf0e7`; PR #187 merged v24.6.369 as `2f345b7`; PR #188 merged v24.6.370
   as `b52b5b0`.
-- Current stop: v24.6.395 date-parity fixes await final PR #203 merge gates. No release or native
+- Current stop: v24.6.396 date-edge fixes await validation and owner preview. No release or native
   protected build is produced by this work; protected builds remain manual.
 
-## v24.6.395 PR #202 date-parity corrective (unmerged)
+## v24.6.396 date-edge corrective (unmerged)
+
+- Cross-year shared spans preserve the unspecified start year; same-year spans
+  still expand and explicit years remain authoritative.
+- Unicode horizontal spaces normalize before date matching; ISO guards accept
+  those spaces without reaching across newlines.
+- Shared parity checks cover 1556 cases, all month pairs, Unicode spacing,
+  repeated passes, and both direct/HTTP DOCX work and education output.
+- Final local gate: 1223 passed, 4 skipped, 2803 subtests; 24 frontend groups,
+  24 source-smoke assertions, 2160 additional date variants and protected-source
+  preflight passed. See `cv_studio_v24_6_396_date_edge_qa_report.md`.
+- No routes, schemas, dependencies, credentials or paid-call behavior changes.
+
+## v24.6.395 PR #202 date-parity corrective (merged via PR #203)
 
 - Preserves ambiguous two-digit years and mixed-precision ranges. Day removal
   requires a complete date or an explicit day-bearing shared-year span.
