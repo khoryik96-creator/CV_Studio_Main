@@ -857,6 +857,86 @@ class LongCvOutputCorrectiveTests(unittest.TestCase):
         self.assertEqual(invalid_docx.status_code, 400)
         self.assertIn("valid DOCX", invalid_docx.get_json()["error"])
 
+    def test_source_attachment_corrective_survives_parse_and_word_export(self):
+        def entry(company, dates, title, bullets):
+            return {"company": company, "date_range": dates, "roles": [
+                {"title": title, "date_range": dates, "bullets": bullets}
+            ]}
+        alpha = entry("Alpha Operations", "2024 to Present", "Director",
+                      ["Partnered with Project Delta on supplier onboarding."])
+        beta = entry("Beta Systems", "2020 to 2023", "Manager", ["Managed delivery."])
+        child = entry("Project Delta", "", "", ["Built the tool.", "Led implementation."])
+        promoted = copy.deepcopy(alpha)
+        promoted["roles"].append({"title": "Analyst", "date_range": "2020 to 2023",
+                                  "bullets": ["Analyst work."]})
+        cases = [
+            ([alpha, beta, child],
+             "Alpha Operations\nDirector\n2024 - Present\n"
+             "Partnered with Project Delta on supplier onboarding.\n"
+             "Beta Systems\nManager\n2020 - 2023\n"
+             "Project Delta\nBuilt the tool.\nLed implementation.",
+             ("Beta Systems", "Manager")),
+            ([promoted, child],
+             "Alpha Operations\nDirector\n2024 - Present\nDirector work.\n"
+             "Analyst\n2020 - 2023\nProject Delta\nBuilt the tool.\nLed implementation.",
+             ("Alpha Operations", "Analyst")),
+            ([alpha, child],
+             "Alpha Operations\nDirector\n2024 - Present\n- Led the team.\n"
+             "Project Delta\nConsultant\n2020 - 2023\nBuilt the tool.\nLed implementation.",
+             None),
+        ]
+        for entries, source, expected_parent in cases:
+            with self.subTest(parent=expected_parent):
+                parsed = {"candidate": {"name": "Source Fixture"}, "work_experiences": entries,
+                          "education": [], "certifications": [], "skills": []}
+                provider = {"content": [{"type": "text", "text": json.dumps(parsed)}], "usage": {}}
+                with (
+                    mock.patch.object(app, "call_llm", return_value=provider),
+                    mock.patch.object(app, "_ai_spend_session_allowed", return_value=True),
+                ):
+                    response = app.app.test_client().post(
+                        "/parse", json={"api_key": "fixture-key",
+                                        "cv_text": "Source Fixture\nWORK EXPERIENCE\n" + source},
+                        headers={"Origin": "http://127.0.0.1:5000", "X-CV-Studio-Request": "1"},
+                    )
+                self.assertEqual(response.status_code, 200)
+                data = response.get_json()["data"]
+                attached = [
+                    (exp["company"], role["title"])
+                    for exp in data["work_experiences"] for role in exp["roles"]
+                    for bullet in role["bullets"]
+                    if isinstance(bullet, dict) and bullet.get("heading") == "Project Delta"
+                ]
+                self.assertEqual(attached, [expected_parent] if expected_parent else [])
+                if expected_parent is None:
+                    self.assertIn("Project Delta", [exp["company"] for exp in data["work_experiences"]])
+                xml = self._docx_xml(data)
+                self.assertEqual(xml.count("Built the tool."), 1)
+                self.assertEqual(xml.count("Led implementation."), 1)
+                if expected_parent:
+                    self.assertLess(xml.index(expected_parent[1]), xml.index(">Project Delta<"))
+
+    def test_parse_on_request_line_retains_candidate_contact_fallback(self):
+        for statement in ("References available upon request", "• References available on request"):
+            with self.subTest(statement=statement):
+                provider = {"content": [{"type": "text", "text": json.dumps({
+                    "candidate": {"name": "Contact Fixture"}, "work_experiences": [],
+                    "education": [], "certifications": [], "skills": [],
+                })}], "usage": {}}
+                with (
+                    mock.patch.object(app, "call_llm", return_value=provider),
+                    mock.patch.object(app, "_ai_spend_session_allowed", return_value=True),
+                ):
+                    response = app.app.test_client().post(
+                        "/parse", json={"api_key": "fixture-key", "cv_text":
+                            "Contact Fixture\n" + statement + "\ncandidate@example.test\n+60 12-345 6789"},
+                        headers={"Origin": "http://127.0.0.1:5000", "X-CV-Studio-Request": "1"},
+                    )
+                self.assertEqual(response.status_code, 200)
+                candidate = response.get_json()["data"]["candidate"]
+                self.assertEqual(candidate["email"], "candidate@example.test")
+                self.assertEqual(candidate["phone"], "+60 12-345 6789")
+
     def _docx_xml(self, data):
         response = app.app.test_client().post(
             "/generate-docx",

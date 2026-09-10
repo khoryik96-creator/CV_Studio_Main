@@ -5,7 +5,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $Schema = 2
-$Version = 'v24.6.402'
+$Version = 'v24.6.403'
 $Product = 'TheGuoLab-CVStudio'
 
 function Get-TotpSecret {

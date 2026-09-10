@@ -147,11 +147,15 @@ def _heading_offsets(flat, line_start, name):
     ]
 
 
-def _block_offsets(flat, name):
+def _source_line_end(flat, line_start, offset):
+    return next((i for i in range(offset + 1, len(flat)) if line_start[i]), len(flat))
+
+
+def _block_offsets(flat, line_start, name, role):
     """Offsets where a sub-brand block's own name can begin.
 
-    Deliberately weaker than ``_heading_offsets``. A two-column CV extracted with
-    pdfplumber interleaves the sidebar into the main column, so the block's heading
+    A two-column CV extracted with pdfplumber interleaves the sidebar into the
+    main column, so the block's heading
     routinely lands mid-line behind unrelated text
     ("... (ERP, POS & HRIS) PM BRANDS SDN BHD"). Requiring a line or sentence boundary
     there rejects the real document. The parent side stays strict, and a name that
@@ -160,11 +164,47 @@ def _block_offsets(flat, name):
     pattern = _company_source_pattern(name)
     if pattern is None:
         return []
-    return [
-        match.start()
-        for match in pattern.finditer(flat)
-        if not _starts_a_listing_entry(flat, match.start())
-    ]
+    strong, column = [], []
+    for match in pattern.finditer(flat):
+        if _starts_a_listing_entry(flat, match.start()) and not line_start[match.start()]:
+            continue
+        end = _source_line_end(flat, line_start, match.start())
+        tail = flat[match.end():end].strip().lstrip(".:").strip()
+        # A heading may have sidebar bullets to its right, but not prose such as
+        # "Project Delta on supplier onboarding" or its own role/date metadata.
+        if tail and not re.match(r"^[•▪◦*]", tail):
+            continue
+        following_end = _source_line_end(flat, line_start, end) if end < len(flat) else end
+        following = flat[end:following_end].strip()
+        if not following:
+            continue
+        # Before any duties, an unexplained line may be a title/date the model
+        # missed. Do not erase that standalone job by treating it as a project.
+        first_items = _role_plain_bullets(role)
+        is_duty = bool(re.match(r"^[-•▪◦*]\s*\S", following))
+        if not is_duty and first_items:
+            source_key = _cv_match_key(following)
+            duty_key = _cv_match_key(first_items[0])
+            is_duty = bool(source_key and duty_key and (
+                source_key == duty_key or
+                (len(source_key) >= 24 and duty_key.startswith(source_key))
+            ))
+        if not is_duty:
+            continue
+        heading = _reads_as_heading(flat, line_start, match.start())
+        if not heading:
+            # For a mid-line two-column match, a list marker alone is not
+            # evidence: the following duty must actually belong to this block.
+            duty_words = re.findall(r"\w+", first_items[0].lower()) if first_items else []
+            source_words = re.findall(r"\w+", following.lower())
+            if len(duty_words) < 3 or not set(duty_words).issubset(set(source_words)):
+                continue
+        target = strong if heading else column
+        target.append(match.start())
+    # A real heading wins over a sidebar-like mention. Multiple possible blocks
+    # remain untouched rather than letting their model order decide ownership.
+    candidates = strong or column
+    return candidates if len(candidates) == 1 else []
 
 
 def _attach_untitled_subsidiary_entries(parsed, cv_text=""):
@@ -185,9 +225,10 @@ def _attach_untitled_subsidiary_entries(parsed, cv_text=""):
     last - so "whatever entry precedes it in the list" is not evidence, and trusting it
     filed a 2025 special project under a 2017 employer.
 
-    Only headings count on both sides: an employer named in a profile paragraph is a
-    mention, not the section the block sits in. When every dated employer cannot be
-    located as a heading, the ordering cannot be trusted and nothing is attached.
+    Headings and corroborated two-column blocks count: an employer named in a
+    profile paragraph is a mention, not the section the block sits in. When every
+    dated employer cannot be located as a heading, the ordering cannot be trusted
+    and nothing is attached.
     """
     if not isinstance(parsed, dict):
         return parsed
@@ -215,12 +256,35 @@ def _attach_untitled_subsidiary_entries(parsed, cv_text=""):
             return False
         return bool(_role_bullet_items(roles[0]))
 
-    def host_role(exp):
-        """The newest role of an entry, which is the one a heading displays."""
+    def host_role_index(exp, parent_start, parent_end, child_offset):
+        """Locate the source role, never assume the newest promotion owns it."""
         roles = (exp or {}).get("roles")
         if not isinstance(roles, list) or not roles or not isinstance(roles[0], dict):
             return None
-        return roles[0]
+        if len(roles) == 1:
+            return 0
+        anchors = []
+        seen = set()
+        for role_index, role in enumerate(roles):
+            if not isinstance(role, dict) or not str(role.get("title") or "").strip():
+                return None
+            pattern = _company_source_pattern(role["title"])
+            if pattern is None:
+                return None
+            offsets = []
+            for match in pattern.finditer(flat, parent_start, parent_end):
+                if not _reads_as_heading(flat, line_start, match.start()):
+                    continue
+                line_end = _source_line_end(flat, line_start, match.start())
+                tail = flat[match.end():min(line_end, parent_end)].strip(" .:")
+                if not tail or re.match(r"^[•▪◦*]", tail) or _WORK_TABLE_DATE_RE.fullmatch(tail.strip(" ()|:")):
+                    offsets.append(match.start())
+            if len(offsets) != 1 or offsets[0] in seen:
+                return None
+            seen.add(offsets[0])
+            if offsets[0] < child_offset:
+                anchors.append((offsets[0], role_index))
+        return max(anchors)[1] if anchors else None
 
     dated_indexes = [index for index, exp in enumerate(exps) if _entry_is_dated(exp)]
     if not dated_indexes:
@@ -238,7 +302,7 @@ def _attach_untitled_subsidiary_entries(parsed, cv_text=""):
     for index, exp in enumerate(exps):
         if not is_subsidiary(exp):
             continue
-        offsets = _block_offsets(flat, exp.get("company"))
+        offsets = _block_offsets(flat, line_start, exp.get("company"), exp["roles"][0])
         if not offsets:
             continue
         offset = offsets[0]
@@ -249,12 +313,19 @@ def _attach_untitled_subsidiary_entries(parsed, cv_text=""):
                 parents.append((max(earlier), parent_index))
         if not parents:
             continue
-        parent_index = max(parents)[1]
-        if host_role(exps[parent_index]) is None:
+        parent_start, parent_index = max(parents)
+        if sum(point == parent_start for point, _ in parents) != 1:
+            continue
+        parent_end = min(
+            (point for points in dated_headings.values() for point in points if point > parent_start),
+            default=len(flat),
+        )
+        role_index = host_role_index(exps[parent_index], parent_start, parent_end, offset)
+        if role_index is None:
             # Nothing to attach to. Leaving the block in place keeps its content in the
             # CV; dropping it would delete a company and its bullets outright.
             continue
-        attachments.setdefault(parent_index, []).append(index)
+        attachments.setdefault(parent_index, {}).setdefault(role_index, []).append((offset, index))
         absorbed.add(index)
     if not attachments:
         return parsed
@@ -264,19 +335,20 @@ def _attach_untitled_subsidiary_entries(parsed, cv_text=""):
         if index in absorbed:
             continue
         if index in attachments:
-            host = host_role(exp)
-            bullets = host.get("bullets")
-            if isinstance(bullets, str):
-                bullets = [bullets] if bullets.strip() else []
-            elif not isinstance(bullets, list):
-                bullets = []
-            host["bullets"] = bullets
-            for child in attachments[index]:
-                block = exps[child]
-                bullets.append({
-                    "heading": _smart_title_text(block.get("company") or "", company=True),
-                    "bullets": _role_bullet_items(block["roles"][0]),
-                })
+            for role_index, children in attachments[index].items():
+                host = exp["roles"][role_index]
+                bullets = host.get("bullets")
+                if isinstance(bullets, str):
+                    bullets = [bullets] if bullets.strip() else []
+                elif not isinstance(bullets, list):
+                    bullets = []
+                host["bullets"] = bullets
+                for _, child in sorted(children):
+                    block = exps[child]
+                    bullets.append({
+                        "heading": _smart_title_text(block.get("company") or "", company=True),
+                        "bullets": _role_bullet_items(block["roles"][0]),
+                    })
         kept.append(exp)
     parsed["work_experiences"] = kept
     return parsed
@@ -502,6 +574,9 @@ def _reference_section_spans(cv_text):
         stripped = line.strip()
         is_heading = (
             bool(stripped)
+            and not _REFERENCE_ON_REQUEST_RE.fullmatch(
+                " ".join(_reference_heading_tokens(stripped))
+            )
             and len(_reference_heading_tokens(stripped)) <= _REFERENCE_HEADING_MAX_TOKENS
             and _reads_as_reference_heading(stripped)
         )

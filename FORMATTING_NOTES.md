@@ -39,6 +39,22 @@ DeepSeek for AI. Current version is tracked in the repo-root `VERSION` file.
 
 ## The one root-cause pattern behind almost every formatting bug
 
+### Source ownership and referee boundaries (v24.6.403)
+
+`_attach_untitled_subsidiary_entries` must not trust the first name mention or
+the model's first role. A child block needs a unique source heading followed by
+its duties; weaker mid-line/two-column matches also need matching duty words.
+Unexplained title/date metadata or ambiguous headings leave the block separate.
+For promotions, source role headings determine the host role. These guards are
+conservative: uncertain grouping preserves the original entries and wording.
+
+`_reference_section_spans` does not begin a referee block at a standalone
+"References available upon request" statement. Candidate footer contacts below
+that statement remain eligible for fallback. The same statement inside a real
+referee section does not end that section or expose referee contacts.
+
+### Marker normalization
+
 **Source documents (especially DOCX / plain text) bake a list marker or label
 into the text**, and the normalizer didn't strip or restructure it, so it
 collides with the formatter's own rendering. Every fix so far is a variant of

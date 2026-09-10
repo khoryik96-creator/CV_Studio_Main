@@ -444,5 +444,86 @@ class TwoColumnExtractionTests(unittest.TestCase):
         self.assertNotIn("BBQ Chicken Malaysia", self._subsidiaries(self._run(entries)))
 
 
+class SourceSafetyCorrectiveTests(unittest.TestCase):
+    def setUp(self):
+        self.alpha = _entry("Alpha Operations", "2024 to Present", "Director",
+                            ["Partnered with Project Delta on supplier onboarding."])
+        self.beta = _entry("Beta Systems", "2020 to 2023", "Manager", ["Managed delivery."])
+        self.child = _entry("Project Delta", "", "", ["Built the tool.", "Led implementation."])
+        self.source = (
+            "Alpha Operations\nDirector\n2024 - Present\n"
+            "Partnered with Project Delta on supplier onboarding.\n"
+            "Beta Systems\nManager\n2020 - 2023\n"
+            "Project Delta\nBuilt the tool.\nLed implementation."
+        )
+
+    def run_attach(self, entries, source):
+        return attach({"work_experiences": copy.deepcopy(entries)}, source)["work_experiences"]
+
+    def test_actual_child_heading_wins_over_an_earlier_prose_mention(self):
+        for entries in ([self.alpha, self.beta, self.child],
+                        [self.child, self.beta, self.alpha]):
+            with self.subTest(order=[entry["company"] for entry in entries]):
+                result = self.run_attach(entries, self.source)
+                parent = next(entry for entry in result if entry["company"] == "Beta Systems")
+                self.assertEqual(parent["roles"][0]["bullets"][-1]["heading"], "Project Delta")
+                alpha = next(entry for entry in result if entry["company"] == "Alpha Operations")
+                self.assertEqual(alpha["roles"][0]["bullets"], self.alpha["roles"][0]["bullets"])
+
+    def test_a_midline_mention_without_its_own_duties_is_not_an_attachment(self):
+        source = ("Alpha Operations\nDirector\n2024 - Present\n"
+                  "Partnered with Project Delta\n- Managed suppliers.\n- Supported operations.")
+        result = self.run_attach([self.alpha, self.child], source)
+        self.assertEqual(result, [self.alpha, self.child])
+
+    def test_actual_duties_allow_a_genuine_midline_two_column_heading(self):
+        source = ("Alpha Operations\nDirector\n2024 - Present\n- Managed suppliers.\n"
+                  "Sidebar system skills Project Delta • Procurement\n"
+                  "• Built the tool.\n• Led implementation.")
+        result = self.run_attach([self.alpha, self.child], source)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["roles"][0]["bullets"][-1]["heading"], "Project Delta")
+
+    def test_source_older_promotion_gets_the_project_not_the_newest_role(self):
+        parent = copy.deepcopy(self.alpha)
+        parent["roles"].append({"title": "Analyst", "date_range": "2020 to 2023",
+                                "bullets": ["Analyst work."]})
+        source = ("Alpha Operations\nDirector\n2024 - Present\nDirector work.\n"
+                  "Analyst\n2020 - 2023\nProject Delta\nBuilt the tool.\nLed implementation.")
+        for roles in (parent["roles"], list(reversed(parent["roles"]))):
+            with self.subTest(titles=[role["title"] for role in roles]):
+                parent["roles"] = roles
+                result = self.run_attach([parent, self.child], source)[0]
+                analyst = next(role for role in result["roles"] if role["title"] == "Analyst")
+                director = next(role for role in result["roles"] if role["title"] == "Director")
+                self.assertEqual(analyst["bullets"][-1]["heading"], "Project Delta")
+                self.assertTrue(all(isinstance(item, str) for item in director["bullets"]))
+
+    def test_unlocatable_or_duplicate_role_titles_leave_the_block_separate(self):
+        for other in ("Missing Role", "Director"):
+            with self.subTest(other=other):
+                parent = copy.deepcopy(self.alpha)
+                parent["roles"].append({"title": other, "date_range": "2020 to 2023", "bullets": []})
+                result = self.run_attach([parent, self.child], self.source)
+                self.assertEqual(len(result), 2)
+
+    def test_source_job_metadata_overrides_missing_model_dates_and_title(self):
+        for metadata in ("Consultant\n2020 - 2023\n", "(2020 - 2023)\n", "Consultant\n"):
+            with self.subTest(metadata=metadata):
+                source = ("Alpha Operations\nDirector\n2024 - Present\n- Led the team.\n"
+                          "Project Delta\n" + metadata + "Built the tool.\nLed implementation.")
+                self.assertEqual(self.run_attach([self.alpha, self.child], source),
+                                 [self.alpha, self.child])
+
+    def test_repeated_possible_blocks_do_not_pick_the_first_arbitrarily(self):
+        source = self.source + "\nProject Delta\nBuilt the tool.\nLed implementation."
+        self.assertEqual(self.run_attach([self.alpha, self.beta, self.child], source),
+                         [self.alpha, self.beta, self.child])
+
+    def test_attachment_is_idempotent(self):
+        first = self.run_attach([self.alpha, self.beta, self.child], self.source)
+        self.assertEqual(self.run_attach(first, self.source), first)
+
+
 if __name__ == "__main__":
     unittest.main()
