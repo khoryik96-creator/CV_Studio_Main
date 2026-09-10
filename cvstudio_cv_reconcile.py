@@ -9,6 +9,7 @@ no Flask, no globals, no network, no AI call. This module never imports ``app``.
 """
 
 import re
+import unicodedata
 
 from cvstudio_cv_normalize import (
     _CV_REDACTED_LANGUAGE_RE,
@@ -392,6 +393,192 @@ def _collapse_incomplete_earlier_career(parsed):
             "bullets": bullets,
         }]
     }]
+    return parsed
+
+
+# ── References / referees ─────────────────────────────────────────────────────
+# A referees block is contact data for third parties, so it never belongs in the
+# formatted CV. The parse prompt asks the model to drop it, but the catch-all
+# "any other section" rule used to sweep it into a skills category, and already
+# parsed data can still carry one, so the removal is deterministic here too.
+#
+# Matching is on the CATEGORY LABEL only, and only when every word in it is part
+# of a referees heading. That keeps genuine skills such as "Reference Data
+# Management" or "Reference Architecture" -- which name a discipline, not a
+# referee -- untouched.
+_REFERENCE_HEADING_WORDS = frozenset({"reference", "references", "referee", "referees"})
+_REFERENCE_HEADING_FILLER = frozenset({
+    "and", "or", "details", "detail", "contacts", "contact", "contactdetails",
+    "information", "info", "personal", "professional", "character", "work",
+    "employment", "academic", "business", "available", "upon", "on", "request",
+    "furnished", "provided", "list", "section",
+})
+# "References available upon request" carries no information. It is dropped as a
+# whole line even inside a category that is kept for its other content.
+_REFERENCE_ON_REQUEST_RE = re.compile(
+    r"^(?:references?|referees?)"
+    r"(?:\s+(?:are|is|can\s+be|will\s+be|shall\s+be))?"
+    r"\s+(?:available|furnished|provided|supplied)"
+    r"(?:\s+(?:up)?on\s+request)?[.!]?$",
+    re.I,
+)
+
+
+# An accented heading ("RÉFÉRENCES", "Références") and a possessive one
+# ("Referee's Details") both have to tokenize to the same words as the plain
+# form, or the allowlist below never sees a reference word and the whole block
+# renders. Accents are folded away and the possessive "'s" dropped; the
+# apostrophe can arrive as ASCII or as either curly form.
+# The apostrophe and backtick are written as escapes, not literals, so the
+# brace matcher in tests/test_long_cv_output_corrective.js can lift the browser
+# mirror of this function out of its source without entering quote mode.
+_REFERENCE_POSSESSIVE_RE = re.compile(r"[\u0027\u2018\u2019\u02bc\u00b4\u0060]s\b", re.I)
+
+
+def _reference_heading_tokens(label):
+    # Possessives go first: NFKD turns an acute accent used as an apostrophe into
+    # a combining mark, so folding before stripping would leave a bare "s" token.
+    text = _REFERENCE_POSSESSIVE_RE.sub("", str(label or ""))
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return [token for token in re.split(r"[^A-Za-z]+", text) if token]
+
+
+def _reads_as_reference_heading(label):
+    """True when a skills-category label is purely a references/referees heading."""
+    tokens = [token.lower() for token in _reference_heading_tokens(label)]
+    if not tokens:
+        return False
+    if not any(token in _REFERENCE_HEADING_WORDS for token in tokens):
+        return False
+    return all(
+        token in _REFERENCE_HEADING_WORDS or token in _REFERENCE_HEADING_FILLER
+        for token in tokens
+    )
+
+
+def _strip_reference_on_request_items(items):
+    """Drop "references available upon request" lines, keeping the items' shape."""
+    if isinstance(items, list):
+        kept = [
+            item for item in items
+            if not (isinstance(item, str) and _REFERENCE_ON_REQUEST_RE.match(item.strip()))
+        ]
+        return kept, len(kept) != len(items)
+    if isinstance(items, str):
+        lines = items.split("\n")
+        kept = [line for line in lines if not _REFERENCE_ON_REQUEST_RE.match(line.strip())]
+        if len(kept) == len(lines):
+            return items, False
+        return "\n".join(kept), True
+    return items, False
+
+
+# A referees block is the one place in a CV where a phone number and an email
+# address belong to somebody else. The raw-text contact fallbacks in /parse take
+# the FIRST match in the document, so a candidate who lists no contact details of
+# their own would otherwise be given their referee's -- and the app searches and
+# uploads to JobAdder on that email. These spans let the fallbacks skip it.
+#
+# A span only opens on a line short enough to read as a heading. A sentence such
+# as "Provided references and contact details on request" is built entirely from
+# allowlisted words, so length is what separates it from a real heading.
+_REFERENCE_HEADING_MAX_TOKENS = 5
+
+
+def _reference_section_spans(cv_text):
+    """``(start, end)`` offsets of each referees section in the source text."""
+    text = str(cv_text or "")
+    if not text:
+        return []
+    lines = []
+    offset = 0
+    for line in text.split("\n"):
+        lines.append((offset, line))
+        offset += len(line) + 1
+    spans = []
+    open_start = None
+    for start, line in lines:
+        stripped = line.strip()
+        is_heading = (
+            bool(stripped)
+            and len(_reference_heading_tokens(stripped)) <= _REFERENCE_HEADING_MAX_TOKENS
+            and _reads_as_reference_heading(stripped)
+        )
+        if is_heading:
+            if open_start is None:
+                open_start = start
+            continue
+        if open_start is None:
+            continue
+        # Any other known section heading closes the block.
+        if stripped and _cv_source_boundary_key(stripped) in _CV_SOURCE_SECTION_BOUNDARY_KEYS:
+            spans.append((open_start, start))
+            open_start = None
+    if open_start is not None:
+        spans.append((open_start, len(text)))
+    return spans
+
+
+def _offset_in_spans(offset, spans):
+    return any(start <= offset < end for start, end in spans)
+
+
+def _search_outside_reference_sections(pattern, cv_text, spans=None):
+    """First match of ``pattern`` in ``cv_text`` that is not inside a referees block."""
+    text = str(cv_text or "")
+    if not text:
+        return None
+    if spans is None:
+        spans = _reference_section_spans(text)
+    for match in re.finditer(pattern, text):
+        if not _offset_in_spans(match.start(), spans):
+            return match
+    return None
+
+
+def _cv_skill_has_printable_item(items):
+    if isinstance(items, list):
+        return any(isinstance(item, str) and item.strip() for item in items)
+    return bool(str(items or "").strip())
+
+
+def _drop_reference_sections(parsed):
+    """Remove referees/references content from the parsed CV.
+
+    A whole skills category goes when its label reads as a referees heading; a
+    kept category only loses an "available upon request" line. Categories left
+    with nothing printable are removed, matching the renderer's own filter.
+    """
+    if not isinstance(parsed, dict):
+        return parsed
+    skills = parsed.get("skills")
+    if not isinstance(skills, list):
+        return parsed
+    kept = []
+    changed = False
+    for entry in skills:
+        if not isinstance(entry, dict):
+            kept.append(entry)
+            continue
+        if _reads_as_reference_heading(entry.get("category")):
+            changed = True
+            continue
+        items, stripped = _strip_reference_on_request_items(entry.get("items"))
+        if not stripped:
+            kept.append(entry)
+            continue
+        changed = True
+        # The label survived the heading test, so an emptied category was a
+        # referees block under another name. Drop it rather than print a heading
+        # over nothing.
+        if not _cv_skill_has_printable_item(items):
+            continue
+        entry = dict(entry)
+        entry["items"] = items
+        kept.append(entry)
+    if changed:
+        parsed["skills"] = kept
     return parsed
 
 

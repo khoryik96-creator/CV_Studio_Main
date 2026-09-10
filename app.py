@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.400"
+_INSTALL_RECEIPT_VERSION = "v24.6.402"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -346,7 +346,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.400"
+_CVSTUDIO_VERSION = "v24.6.402"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -1494,12 +1494,13 @@ SECTION MAPPING RULES — very important:
 OMISSION & EXTRA SECTIONS RULES:
 - Do NOT place phone numbers, email addresses, physical addresses, LinkedIn URLs, or location/relocation info into the formatted CV body (skills, summary, work experience bullets, education, additional information). HOWEVER, still extract these into candidate.email, candidate.phone, candidate.linkedin, and candidate.address in the JSON — the app uses them for JobAdder matching and upload.
 - SALARY / REMUNERATION — OMIT ENTIRELY: Never include any salary, remuneration, or compensation detail anywhere in the formatted CV body or JSON. This covers current/present salary, expected/asking/desired/target salary, base pay, monthly or annual salary figures, bonus, commission, incentives, allowances (transport/housing/meal/etc.), EPF/KWSP/benefits amounts, and total package/CTC figures — whether written inline or under a section labelled Current Remuneration, Remuneration, Compensation, Salary, Expected Salary, Current Salary, Salary Expectation, Package, or similar. Drop the whole section and every such figure; do NOT map it to a skills category, Additional Information, or any other field. This overrides the catch-all mapping rule below. (Notice period is NOT salary — keep mapping it to candidate.notice_period per the rule below.)
+- REFERENCES / REFEREES — OMIT ENTIRELY: Never include referee or reference details anywhere in the formatted CV body or JSON. This covers a section labelled References, Reference, Referees, Referee, Referee Details, Professional References, Character References, or similar, every referee's name, job title, employer, relationship, phone number and email, and a bare "References available upon request" line. Drop the whole section; do NOT map it to a skills category, Additional Information, or any other field. This overrides the catch-all mapping rule below. (A technical skill that merely contains the word reference, such as Reference Data Management or Reference Architecture, is NOT a referee section — keep it.)
 - RECRUITMENT-SYSTEM METADATA — OMIT ENTIRELY: Never include source-routing/application metadata such as "Position: Retrieved Resumes (SiVA folder: ...); Date Applied: ...", JobStreet/SiVA folder labels, retrieval status, or application dates anywhere in the JSON or formatted CV.
 - KEEP & map to Additional Information skills categories:
   - GitHub links, personal websites, portfolio URLs, Behance, Dribbble → { "category": "Portfolio & Links", "items": "GitHub: https://... | Website: https://..." }, but ONLY when the exact link is explicitly present in the source CV. Never invent, infer, complete, or emit a placeholder URL such as `https://github.com/unknown`; if no source link exists, omit the category.
   - Patents section → { "category": "Patents", "items": "Patent title (Patent number, Year)\nPatent title (Patent number, Year)" } — preserve each patent as a separate line with full detail
   - Publications, Research Papers → { "category": "Publications", "items": "Title (Journal, Year)\nTitle (Journal, Year)" }
-  - Any other section that does not fit work_experiences, education, certifications, or skills (e.g. Interests, References, Projects, Open Source, Speaking Engagements, Conference Talks) → add as its own skills category with a sensible category name, preserve all content. EXCEPTION: never apply this catch-all to salary/remuneration/compensation content — that is omitted entirely per the SALARY / REMUNERATION rule above.
+  - Any other section that does not fit work_experiences, education, certifications, or skills (e.g. Interests, Projects, Open Source, Speaking Engagements, Conference Talks) → add as its own skills category with a sensible category name, preserve all content. EXCEPTION: never apply this catch-all to salary/remuneration/compensation content or to references/referees — both are omitted entirely per the rules above.
   - Relocate/Open to relocation info → omit
   - Notice period if stated in the CV → map to candidate.notice_period VERBATIM. Copy the exact wording the CV uses (a month count like "1 month", "Immediate", or an availability date like "Available from 1 August 2026 onwards"). Never infer, round, or invent a value, and never convert an availability date into a month count. If no notice/availability is stated, return an empty string."""
 
@@ -1760,6 +1761,9 @@ from cvstudio_cv_reconcile import (
     _collapse_incomplete_earlier_career,
     _source_has_redacted_language_block,
     _clean_candidate_languages_from_redaction,
+    _drop_reference_sections,
+    _reference_section_spans,
+    _search_outside_reference_sections,
     _order_same_company_roles_newest_first,
     _extract_explicit_project_blocks,
     _restore_explicit_project_headings,
@@ -8997,16 +9001,23 @@ def parse_cv():
         
         usage = usage_total
         # Email regex fallback — if Claude missed it, scan raw text
-        import re as _re
         cand = parsed.get("candidate", {})
+        # Both fallbacks take the FIRST match in the document, so a referees block
+        # is skipped: its phone and email belong to a third party, and the app
+        # searches and uploads to JobAdder on whatever lands in candidate.email.
+        _referee_spans = _reference_section_spans(cv_text) if cv_text else []
         if not cand.get("email") and cv_text:
-            m = _re.search(r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}', cv_text)
+            m = _search_outside_reference_sections(
+                r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}', cv_text, _referee_spans
+            )
             if m:
                 cand["email"] = m.group(0)
                 parsed["candidate"] = cand
         # Phone regex fallback
         if not cand.get("phone") and cv_text:
-            mp = _re.search(r'[+\(]?[\d][\d\s\-\(\)]{7,}[\d]', cv_text)
+            mp = _search_outside_reference_sections(
+                r'[+\(]?[\d][\d\s\-\(\)]{7,}[\d]', cv_text, _referee_spans
+            )
             if mp:
                 cand["phone"] = mp.group(0).strip()
                 parsed["candidate"] = cand
@@ -9019,6 +9030,9 @@ def parse_cv():
         parsed = _collapse_incomplete_earlier_career(parsed)
         parsed = _clean_candidate_languages_from_redaction(parsed, cv_text)
         parsed = _normalize_candidate_languages(parsed, cv_text)
+        # A referees block is third-party contact data, so it never reaches the
+        # formatted CV even when the model maps it as a skills category.
+        parsed = _drop_reference_sections(parsed)
         # Outline-label nesting must be read from the raw bullet text, so infer it
         # BEFORE _normalize_cv_structured_content strips the labels, and return it
         # to the client to carry to /generate-docx.
@@ -12037,6 +12051,9 @@ def generate_docx():
         # Outline-label nesting is inferred from the raw bullet text, so compute
         # it BEFORE _normalize_cv_structured_content strips the labels.
         _label_levels = _infer_label_bullet_levels(cv_data)
+        # Referees never reach the document, including from CV data parsed before
+        # the parse-side pass existed or edited back in by hand.
+        cv_data = _drop_reference_sections(cv_data)
         cv_data = _normalize_cv_structured_content(cv_data)
         # Export the order the user saw in Preview. Source-authoritative CVs can
         # intentionally place a concurrent consulting subsection after primary
