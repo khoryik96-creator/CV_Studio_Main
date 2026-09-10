@@ -147,12 +147,15 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 7. Recently completed (already on `master`)
 
-- **Current merged baseline, checked 2026-09-10: v24.6.395, `42dcb78`.**
+- **Current merged baseline, checked 2026-09-10: v24.6.402, `6a454d7`.**
   PR #203 merged the complete PR #202 changes plus date-parity corrections;
   PR #202 is closed as superseded. Both old branches are completed.
-  Current corrective: `codex/pr204-v24.6.396-date-edge-fixes` (PR number
-  provisional), covering cross-year date spans and non-breaking spaces only.
-  No PR or merge is requested for v24.6.396.
+  PR #204 merged v24.6.396; PRs #205–#209 merged Claude's work-history and
+  referee corrections through v24.6.402. Those branches are completed.
+  Current corrective: `claude/pr157-chatgpt-fix-zke4cy`, carrying
+  v24.6.403 source-grounded project ownership forward with the v24.6.404
+  two-column repairs. `codex/pr210-v24.6.403-cv-source-safety` is its base and
+  is superseded; merge the combined branch rather than v24.6.403 alone.
   PRs #193 and #194 merged after all three hosted checks passed.
   PR #189 merged as `2c216c6` on 2026-08-29; PR #185 merged as `b84c36f` on
   2026-09-04. PR #191 merged as `a5bf89d` on 2026-09-05 after all hosted
@@ -294,7 +297,24 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Date edge corrective — v24.6.396, UNMERGED.**
+- **CV source-safety corrective — v24.6.403 plus v24.6.404, UNMERGED.**
+  Starts at merged master `6a454d7`. v24.6.404 repairs the real-document
+  regressions v24.6.403 introduced: a two-column block's duty is looked for
+  across its whole source span rather than the next line, a wrapped sidebar word
+  beside a heading no longer refuses it, a company matched inside a referees
+  block is skipped, and an unplaceable promotion falls back to the newest role
+  instead of leaving the sub-brand on its own dateless row. See
+  `cv_studio_v24_6_404_two_column_subsidiary_corrective_qa_report.md`. A project/sub-brand must have a unique
+  source heading and its own duties before attachment; corroborated mid-line
+  two-column headings remain supported. Source title/date metadata and
+  ambiguous matches keep a block standalone. With multiple promotions, source
+  role headings select the actual host instead of the model's first role.
+  A standalone "References available upon request" line does not start a
+  referee section or suppress candidate contact fallback; genuine reference
+  sections remain excluded. No routes, schemas, dependencies or paid calls
+  change. Protected-source validation only; native builds remain manual.
+
+- **Date edge corrective — v24.6.396, MERGED via PR #204.**
   Starts at merged master `42dcb78`. Day-bearing December-to-January spans
   retain their unspecified start year instead of copying the ending year;
   the shared-month expansion applies the same chronology check on repeated

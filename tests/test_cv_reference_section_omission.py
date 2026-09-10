@@ -318,6 +318,24 @@ class RefereeSectionSpans(unittest.TestCase):
         self.assertEqual(spans(cv), [])
         self.assertEqual(search_outside(_EMAIL_RE, cv).group(0), "jane.tan@example.com")
 
+    def test_on_request_statement_does_not_hide_candidate_footer_contacts(self):
+        for statement in (
+            "References available upon request",
+            "Referees will be provided on request.",
+            "• References available upon request",
+            "5. References available on request",
+            "RÉFÉRENCES AVAILABLE UPON REQUEST",
+        ):
+            with self.subTest(statement=statement):
+                cv = "Candidate Fixture\n" + statement + "\ncandidate@example.test\n+60 12-345 6789"
+                self.assertEqual(spans(cv), [])
+                self.assertEqual(search_outside(_EMAIL_RE, cv).group(0), "candidate@example.test")
+                self.assertEqual(search_outside(_PHONE_RE, cv).group(0), "+60 12-345 6789")
+
+    def test_on_request_statement_does_not_end_a_real_referee_block(self):
+        cv = "Candidate Fixture\nREFERENCES\nReferences available upon request\nreferee@example.test"
+        self.assertIsNone(search_outside(_EMAIL_RE, cv))
+
     def test_empty_and_missing_source_text_is_safe(self):
         for text in (None, "", 0):
             with self.subTest(text=text):

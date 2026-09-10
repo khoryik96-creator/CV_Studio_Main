@@ -25,11 +25,12 @@
   `54298b9b6a822e1f36c9c101f1ff4edc9c7e835f`
 - Phase 7B-4 source baseline Git commit (merged Phase 7B-3):
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
-- Current merged source: v24.6.395 (`42dcb78`), verified 2026-09-10.
+- Current merged source: v24.6.402 (`6a454d7`), verified 2026-09-10.
 - PR #189 merged as `2c216c6`; PR #185 merged as `b84c36f`. Neither is an
   active branch claim. PRs #191–#194 are merged with owner approval. Current work is
-  v24.6.396 on `codex/pr204-v24.6.396-date-edge-fixes` (PR number provisional).
-  PR #195 and #203 are merged; #202 is closed as superseded. No new PR/merge requested.
+  v24.6.404 on `claude/pr157-chatgpt-fix-zke4cy`, which carries v24.6.403 from
+  `codex/pr210-v24.6.403-cv-source-safety` forward with its two-column repairs.
+  PR #195 and #203–#209 are merged; #202 is closed as superseded. No new PR/merge requested.
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
@@ -54,10 +55,24 @@
   #184 then merged v24.6.363 as `1912d48`; PR #186 merged v24.6.368 as
   `fbdf0e7`; PR #187 merged v24.6.369 as `2f345b7`; PR #188 merged v24.6.370
   as `b52b5b0`.
-- Current stop: v24.6.396 date-edge fixes await validation and owner preview. No release or native
+- Current stop: v24.6.403 CV source-safety fixes await owner testing. No release or native
   protected build is produced by this work; protected builds remain manual.
 
-## v24.6.396 date-edge corrective (unmerged)
+## v24.6.403 CV source-safety corrective (unmerged)
+
+- Unique source headings and corroborated duties prevent prose mentions from
+  stealing a project. Ambiguous blocks and source job metadata remain separate.
+- Multi-role employers use source role headings, not model ordering, to identify
+  the host promotion. Existing two-column source support is retained.
+- Standalone on-request reference statements no longer hide candidate email or
+  phone fallback; real referee sections still cannot supply candidate contacts.
+- Pure-function and real parse/DOCX tests cover all four cases without live AI.
+- Final local gate: 1303 passed, 4 skipped, 2911 subtests; all 24 frontend groups,
+  24 source-smoke assertions, protected-source preflight and repository checks
+  passed. See `cv_studio_v24_6_403_cv_source_safety_qa_report.md`.
+- No routes, schemas, dependencies, credentials or paid-call behavior changes.
+
+## v24.6.396 date-edge corrective (merged via PR #204)
 
 - Cross-year shared spans preserve the unspecified start year; same-year spans
   still expand and explicit years remain authoritative.
