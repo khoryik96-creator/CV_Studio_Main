@@ -124,65 +124,141 @@ class ExistingBlockTests(unittest.TestCase):
         )
 
 
-def _pipeline(parsed):
-    return collapse(attach(copy.deepcopy(parsed)))["work_experiences"]
+_SOURCE = """
+A&W MALAYSIA SDN BHD
+Head of Operations, Special Projects
+(February 2025 - August 2025)
+- Led the nationwide rollout of the SPMH framework.
+PM BRANDS SDN BHD (HALO DIM SUM)
+- Developed the business proposal and rollout plan.
+- Conducted market research and feasibility studies.
+KGB HOLDINGS SDN BHD
+Head of Operations - Business Partner
+(October 2018 - February 2025)
+- Led multi-site operations.
+YBS AGRO PREMIERE SDN BHD
+Business Development Executive/ Junior Chef
+(October 2017 - August 2018)
+- Created the signature product.
+EARLIER CAREER
+- Outlet Assistant Chef - BBQ Chicken Malaysia (2017)
+- Commis - FIQ Gastronomy (2015)
+"""
+
+
+def _pipeline(parsed, source=_SOURCE):
+    return collapse(attach(copy.deepcopy(parsed), source))["work_experiences"]
 
 
 class SubsidiaryBlockTests(unittest.TestCase):
-    """A sub-brand listed under a dated role belongs inside that role."""
+    """A sub-brand listed under a dated role belongs inside that role.
 
-    def _cv(self):
-        return {"work_experiences": [
-            _entry("A&W Malaysia Sdn Bhd", "Feb 2025 to Aug 2025",
-                   "Head of Operations, Special Projects",
-                   ["Led the nationwide rollout of the SPMH framework."]),
-            _entry("PM Brands Sdn Bhd (Halo Dim Sum)", "", "",
-                   ["Developed the business proposal and rollout plan.",
-                    "Conducted market research and feasibility studies."]),
-            _entry("KGB Holdings Sdn Bhd", "Oct 2018 to Feb 2025",
-                   "Head of Operations - Business Partner", ["Led multi-site operations."]),
-        ]}
+    The parent comes from the source CV, never from the model's ordering: the model
+    moves such a block freely, and trusting its position filed a 2025 special project
+    under a 2017 employer.
+    """
+
+    _A_AND_W = _entry("A&W Malaysia Sdn Bhd", "Feb 2025 to Aug 2025",
+                      "Head of Operations, Special Projects",
+                      ["Led the nationwide rollout of the SPMH framework."])
+    _KGB = _entry("KGB Holdings Sdn Bhd", "Oct 2018 to Feb 2025",
+                  "Head of Operations - Business Partner", ["Led multi-site operations."])
+    _YBS = _entry("YBS Agro Premiere Sdn Bhd", "Oct 2017 to Aug 2018",
+                  "Business Development Executive/ Junior Chef", ["Created the signature product."])
+    _PM = _entry("PM Brands Sdn Bhd (Halo Dim Sum)", "", "",
+                 ["Developed the business proposal and rollout plan.",
+                  "Conducted market research and feasibility studies."])
+
+    def _subsidiary_of(self, entries):
+        for entry in _pipeline({"work_experiences": copy.deepcopy(entries)}):
+            for role in entry.get("roles", []):
+                for bullet in role.get("bullets", []):
+                    if isinstance(bullet, dict):
+                        return entry["company"], bullet
+        return None, None
+
+    def test_the_source_decides_the_parent_when_the_model_moves_the_block(self):
+        # The model emitted the block last, after a 2017 employer. The source puts it
+        # under A&W, and the source is what counts.
+        parent, group = self._subsidiary_of(
+            [self._A_AND_W, self._KGB, self._YBS, self._PM]
+        )
+        self.assertEqual(parent, "A&W Malaysia Sdn Bhd")
+        self.assertEqual(group["heading"], "PM Brands Sdn Bhd (Halo Dim Sum)")
+
+    def test_the_same_parent_when_the_model_keeps_it_in_place(self):
+        parent, _group = self._subsidiary_of(
+            [self._A_AND_W, self._PM, self._KGB, self._YBS]
+        )
+        self.assertEqual(parent, "A&W Malaysia Sdn Bhd")
 
     def test_it_is_not_promoted_to_its_own_employer_row(self):
-        companies = [entry["company"] for entry in _pipeline(self._cv())]
-        self.assertEqual(companies, ["A&W Malaysia Sdn Bhd", "KGB Holdings Sdn Bhd"])
-
-    def test_it_becomes_a_bullet_group_inside_the_role_above(self):
-        bullets = _pipeline(self._cv())[0]["roles"][0]["bullets"]
-        group = bullets[-1]
-        self.assertIsInstance(group, dict)
-        self.assertEqual(group["heading"], "PM Brands Sdn Bhd (Halo Dim Sum)")
-        self.assertEqual(group["bullets"], [
-            "Developed the business proposal and rollout plan.",
-            "Conducted market research and feasibility studies.",
-        ])
+        companies = [e["company"] for e in _pipeline(
+            {"work_experiences": [self._A_AND_W, self._KGB, self._YBS, self._PM]})]
+        self.assertNotIn("PM Brands Sdn Bhd (Halo Dim Sum)", companies)
 
     def test_the_host_role_keeps_its_own_bullets_first(self):
-        bullets = _pipeline(self._cv())[0]["roles"][0]["bullets"]
-        self.assertEqual(bullets[0], "Led the nationwide rollout of the SPMH framework.")
+        entry = _pipeline({"work_experiences": [self._A_AND_W, self._PM, self._KGB]})[0]
+        self.assertEqual(entry["roles"][0]["bullets"][0],
+                         "Led the nationwide rollout of the SPMH framework.")
+
+    def test_nothing_is_attached_without_source_text(self):
+        # No source means no evidence. Leaving the block alone is the safe outcome;
+        # guessing from list position is what caused the misattribution.
+        companies = [e["company"] for e in _pipeline(
+            {"work_experiences": [self._A_AND_W, self._KGB, self._YBS, self._PM]}, source="")]
+        self.assertIn("PM Brands Sdn Bhd (Halo Dim Sum)", companies)
+
+    def test_a_title_company_listing_line_is_not_absorbed(self):
+        # "Outlet Assistant Chef - BBQ Chicken Malaysia" is one entry of a listing, not
+        # a heading with bullets of its own.
+        parent, group = self._subsidiary_of([
+            self._A_AND_W, self._KGB, self._YBS,
+            _entry("BBQ Chicken Malaysia", "", "", ["Ran the line.", "Trained staff."]),
+        ])
+        self.assertIsNone(parent, group)
 
     def test_an_undated_entry_that_has_a_title_is_left_alone(self):
-        # A titled role is a job the source simply did not date, not a sub-brand.
-        parsed = {"work_experiences": [
-            _entry("A", "2020 to 2022", "Role A", ["Did A."]),
-            _entry("B", "", "Head of Something", ["Did B.", "Did C."]),
-            _entry("C", "2015 to 2018", "Role C", ["Did C."]),
-        ]}
-        self.assertEqual([e["company"] for e in _pipeline(parsed)], ["A", "B", "C"])
-
-    def test_a_block_with_no_dated_role_above_it_is_left_alone(self):
-        parsed = {"work_experiences": [
-            _entry("PM Brands Sdn Bhd", "", "", ["Did A.", "Did B."]),
-            _entry("A", "2020 to 2022", "Role A", ["Did A."]),
-        ]}
-        self.assertEqual([e["company"] for e in _pipeline(parsed)][0], "PM Brands Sdn Bhd")
+        companies = [e["company"] for e in _pipeline({"work_experiences": [
+            self._A_AND_W,
+            _entry("PM Brands Sdn Bhd (Halo Dim Sum)", "", "Head of Something",
+                   ["Did A.", "Did B."]),
+            self._KGB,
+        ]})]
+        self.assertIn("PM Brands Sdn Bhd (Halo Dim Sum)", companies)
 
     def test_an_earlier_career_grouping_is_never_absorbed(self):
-        parsed = {"work_experiences": [
-            _entry("A", "2020 to 2022", "Role A", ["Did A."]),
-            _entry("Earlier Career", "", "", ["Chef - Cafe (2016)", "Commis - FIQ (2015)"]),
-        ]}
-        self.assertEqual([e["company"] for e in _pipeline(parsed)], ["A", "Earlier Career"])
+        companies = [e["company"] for e in _pipeline({"work_experiences": [
+            self._A_AND_W,
+            _entry("Earlier Career", "", "",
+                   ["Outlet Assistant Chef - BBQ Chicken Malaysia (2017)",
+                    "Commis - FIQ Gastronomy (2015)"]),
+        ]})]
+        self.assertIn("Earlier Career", companies)
+
+    def test_a_suffixed_earlier_career_grouping_is_also_recognised(self):
+        companies = [e["company"] for e in _pipeline({"work_experiences": [
+            self._A_AND_W,
+            _entry("Earlier Career (Pre-2015)", "", "",
+                   ["Commis - FIQ Gastronomy (2015)", "Trainee - Hotel (2014)"]),
+        ]})]
+        self.assertIn("Earlier Career (Pre-2015)", companies)
+
+    def test_a_nested_group_inside_the_block_keeps_its_structure(self):
+        block = _entry("PM Brands Sdn Bhd (Halo Dim Sum)", "", "", [])
+        block["roles"] = [{"title": "", "date_range": "", "reason_for_leaving": "",
+                           "bullets": [{"heading": "Key achievements",
+                                        "bullets": ["Built the kiosk concept."]}]}]
+        _parent, group = self._subsidiary_of([self._A_AND_W, self._KGB, block])
+        self.assertIsInstance(group["bullets"][0], dict)
+        self.assertEqual(group["bullets"][0]["heading"], "Key achievements")
+
+    def test_a_host_role_whose_bullets_are_a_bare_string_keeps_them(self):
+        host = _entry("A&W Malaysia Sdn Bhd", "Feb 2025 to Aug 2025", "Head of Operations")
+        host["roles"] = [{"title": "Head of Operations", "date_range": "Feb 2025 to Aug 2025",
+                          "reason_for_leaving": "", "bullets": "Led the nationwide rollout."}]
+        entry = _pipeline({"work_experiences": [host, self._PM, self._KGB]})[0]
+        self.assertIn("Led the nationwide rollout.", entry["roles"][0]["bullets"])
 
 
 class UnchangedBehaviourTests(unittest.TestCase):

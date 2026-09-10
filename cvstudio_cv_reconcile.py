@@ -28,7 +28,7 @@ from cvstudio_cv_normalize import (
 )
 
 
-_EARLIER_CAREER_RE = re.compile(r"earlier\s+career", re.I)
+_EARLIER_CAREER_RE = re.compile(r"earlier\s+career\b", re.I)
 # An undated entry carrying at least this many descriptive bullets is a real job.
 _DESCRIBED_ROLE_BULLETS = 2
 
@@ -46,7 +46,42 @@ def _role_plain_bullets(role):
     return bullets
 
 
-def _attach_untitled_subsidiary_entries(parsed):
+# Characters that mark a company name as part of a "Job Title - Company" listing line
+# rather than a heading of its own.
+_LISTING_LEAD_CHARS = "-\u2010\u2011\u2012\u2013\u2014\u2015\u2022\u00b7*:,/|;"
+
+
+def _entry_is_dated(exp):
+    if not isinstance(exp, dict):
+        return False
+    if str(exp.get("date_range") or "").strip():
+        return True
+    for role in exp.get("roles") or []:
+        if isinstance(role, dict) and str(role.get("date_range") or "").strip():
+            return True
+    return False
+
+
+def _role_bullet_items(role):
+    """Return a role's bullets with any {heading, bullets} sub-group left intact."""
+    items = []
+    for item in (role or {}).get("bullets") or []:
+        if isinstance(item, str) and item.strip():
+            items.append(item.strip())
+        elif isinstance(item, dict) and (item.get("heading") or item.get("bullets")):
+            items.append(item)
+    return items
+
+
+def _flat_source_offset(flat_lower, name):
+    """Offset of a company name inside whitespace-flattened source text, or -1."""
+    needle = re.sub(r"\s+", " ", str(name or "")).strip().casefold()
+    if len(needle) < 3:
+        return -1
+    return flat_lower.find(needle)
+
+
+def _attach_untitled_subsidiary_entries(parsed, cv_text=""):
     """Fold a dateless, titleless company block into the role it sits under.
 
     Some CVs list a sub-brand or special project beneath a dated role, with the company
@@ -59,68 +94,98 @@ def _attach_untitled_subsidiary_entries(parsed):
         PM BRANDS SDN BHD (HALO DIM SUM)
           * Developed the business proposal ...
 
-    That block belongs to the role above it, so it becomes a bullet group inside that
-    role rather than an employer row of its own. Promoting it invents a job with no
-    dates; grouping it under Earlier Career files a current project beside decade-old
-    ones. Only an entry with bullets but no title and no dates qualifies, and only
-    directly after a dated entry, so a genuine undated job is never absorbed.
+    The parent is read from the source CV, never from the model's ordering. The model
+    moves such a block freely - in the case this was written for it emitted the block
+    last - so "whatever entry precedes it in the list" is not evidence, and trusting it
+    filed a 2025 special project under a 2017 employer. The parent is the employer whose
+    name most recently precedes the block in the source, and when the source cannot show
+    that, nothing is attached and the block is left where it is.
     """
     if not isinstance(parsed, dict):
         return parsed
     exps = parsed.get("work_experiences")
     if not isinstance(exps, list) or len(exps) < 2:
         return parsed
+    source = str(cv_text or "")
+    if not source.strip():
+        return parsed
+    flat = re.sub(r"\s+", " ", source)
+    lower = flat.casefold()
 
     def is_subsidiary(exp):
         if not isinstance(exp, dict):
             return False
-        if str(exp.get("date_range") or "").strip():
+        if _entry_is_dated(exp):
             return False
         if str(exp.get("section_heading") or "").strip():
             return False
         company = str(exp.get("company") or "").strip()
-        if not company or _EARLIER_CAREER_RE.fullmatch(company):
+        if not company or _EARLIER_CAREER_RE.match(company):
             return False
         roles = exp.get("roles") if isinstance(exp.get("roles"), list) else []
         if len(roles) != 1 or not isinstance(roles[0], dict):
             return False
-        role = roles[0]
-        if str(role.get("title") or "").strip():
+        if str(roles[0].get("title") or "").strip():
             return False
-        if str(role.get("date_range") or "").strip():
-            return False
-        return bool(_role_plain_bullets(role))
+        return bool(_role_bullet_items(roles[0]))
 
-    def host_role(exp):
-        """The role a following block attaches to: dated, and able to carry bullets."""
-        if not isinstance(exp, dict):
-            return None
-        roles = exp.get("roles") if isinstance(exp.get("roles"), list) else []
-        if not roles or not isinstance(roles[-1], dict):
-            return None
-        dated = str(exp.get("date_range") or "").strip() or str(
-            roles[-1].get("date_range") or ""
-        ).strip()
-        return roles[-1] if dated else None
-
-    kept = []
-    changed = False
-    for exp in exps:
-        host = host_role(kept[-1]) if kept else None
-        if host is not None and is_subsidiary(exp):
-            bullets = host.get("bullets")
-            if not isinstance(bullets, list):
-                bullets = []
-                host["bullets"] = bullets
-            bullets.append({
-                "heading": _smart_title_text(exp.get("company") or "", company=True),
-                "bullets": _role_plain_bullets(exp["roles"][0]),
-            })
-            changed = True
+    dated_offsets = []
+    for index, exp in enumerate(exps):
+        if not _entry_is_dated(exp):
             continue
+        offset = _flat_source_offset(lower, (exp or {}).get("company"))
+        if offset >= 0:
+            dated_offsets.append((offset, index))
+    if not dated_offsets:
+        return parsed
+
+    attachments = {}
+    for index, exp in enumerate(exps):
+        if not is_subsidiary(exp):
+            continue
+        offset = _flat_source_offset(lower, exp.get("company"))
+        if offset < 0:
+            continue
+        # A company that follows a dash or a bullet on the same line is one entry of a
+        # "Job Title - Company" listing, not a heading with bullets of its own.
+        lead = flat[:offset].rstrip()
+        if lead and lead[-1] in _LISTING_LEAD_CHARS:
+            continue
+        parents = [pair for pair in dated_offsets if pair[0] < offset]
+        if not parents:
+            continue
+        attachments.setdefault(max(parents)[1], []).append(index)
+    if not attachments:
+        return parsed
+
+    absorbed = {child for children in attachments.values() for child in children}
+    kept = []
+    for index, exp in enumerate(exps):
+        if index in absorbed:
+            continue
+        if index in attachments:
+            roles = exp.get("roles") if isinstance(exp.get("roles"), list) else []
+            # The newest role: _order_same_company_roles_newest_first puts it first, and
+            # a sub-brand shown under an employer heading belongs to the role displayed
+            # there, not to that employer's oldest position.
+            host = roles[0] if roles and isinstance(roles[0], dict) else None
+            if host is None:
+                kept.append(exp)
+                continue
+            bullets = host.get("bullets")
+            if isinstance(bullets, str):
+                bullets = [bullets] if bullets.strip() else []
+            elif not isinstance(bullets, list):
+                bullets = []
+            host["bullets"] = bullets
+            for child in attachments[index]:
+                block = exps[child]
+                bullets.append({
+                    "heading": _smart_title_text(block.get("company") or "", company=True),
+                    "bullets": _role_bullet_items(block["roles"][0]),
+                })
         kept.append(exp)
-    if changed:
-        parsed["work_experiences"] = kept
+    parsed["work_experiences"] = kept
     return parsed
 
 
@@ -140,7 +205,7 @@ def _collapse_incomplete_earlier_career(parsed):
 
     def is_earlier_career_block(exp):
         """Report whether the model already emitted its own Earlier Career grouping."""
-        return _EARLIER_CAREER_RE.fullmatch(
+        return _EARLIER_CAREER_RE.match(
             str((exp or {}).get("company") or "").strip()
         ) is not None
 
@@ -190,9 +255,11 @@ def _collapse_incomplete_earlier_career(parsed):
     first_title = ""
     for exp in block:
         company = _smart_title_text(exp.get("company") or "", company=True)
-        if is_earlier_career_block(exp):
-            # Already an Earlier Career grouping: take its bullets, not its name, or the
-            # heading is nested inside itself and printed a second time as a bullet.
+        already_grouped = is_earlier_career_block(exp)
+        if already_grouped:
+            # Already an Earlier Career grouping: take its bullets, not its name or its
+            # title, or the heading is nested inside itself and printed again as a
+            # bullet and as the role title.
             company = ""
         roles = exp.get("roles") if isinstance(exp.get("roles"), list) else []
         if not roles:
@@ -202,7 +269,7 @@ def _collapse_incomplete_earlier_career(parsed):
         for role in roles:
             if not isinstance(role, dict):
                 continue
-            title = _smart_title_text(role.get("title") or "", title=True)
+            title = "" if already_grouped else _smart_title_text(role.get("title") or "", title=True)
             if title and not first_title:
                 first_title = title
             if title and company:
