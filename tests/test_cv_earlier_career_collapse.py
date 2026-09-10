@@ -387,8 +387,13 @@ class TwoColumnExtractionTests(unittest.TestCase):
 
     Every earlier test in this file used clean synthetic text, so a rule that needed the
     block's heading to open a line or follow a sentence looked correct here and failed on
-    the real document, where the heading lands mid-line behind sidebar text
-    ("... (ERP, POS & HRIS) PM BRANDS SDN BHD"). This fixture is that shape.
+    the real document.
+
+    This fixture interleaves the sidebar to the RIGHT of the block heading, which still
+    leaves the heading opening its line. ``SidebarLeftTwoColumnTests`` below carries the
+    other half -- the sidebar to its LEFT, so the heading lands mid-line -- because a
+    later rule that only checked the line after the heading passed here and rejected the
+    real CV.
     """
 
     @classmethod
@@ -499,13 +504,30 @@ class SourceSafetyCorrectiveTests(unittest.TestCase):
                 self.assertEqual(analyst["bullets"][-1]["heading"], "Project Delta")
                 self.assertTrue(all(isinstance(item, str) for item in director["bullets"]))
 
-    def test_unlocatable_or_duplicate_role_titles_leave_the_block_separate(self):
+    def test_unlocatable_or_duplicate_role_titles_fall_back_to_the_newest_role(self):
+        # The source cannot say which promotion owns the block: one title it never
+        # prints as a heading, or two roles sharing one heading. The employer is still
+        # known, so the block goes to the newest role there. Declining would put the
+        # sub-brand back on its own dateless row, which is the defect this pass exists
+        # to remove and which shipped twice before.
         for other in ("Missing Role", "Director"):
             with self.subTest(other=other):
                 parent = copy.deepcopy(self.alpha)
                 parent["roles"].append({"title": other, "date_range": "2020 to 2023", "bullets": []})
-                result = self.run_attach([parent, self.child], self.source)
-                self.assertEqual(len(result), 2)
+                result = self.run_attach([parent, self.beta, self.child], self.source)
+                self.assertNotIn("Project Delta", [entry["company"] for entry in result])
+                host = next(entry for entry in result if entry["company"] == "Beta Systems")
+                self.assertEqual(host["roles"][0]["bullets"][-1]["heading"], "Project Delta")
+                self.assertEqual(
+                    host["roles"][0]["bullets"][-1]["bullets"],
+                    self.child["roles"][0]["bullets"],
+                )
+
+    def test_a_single_role_parent_is_unaffected_by_the_role_lookup(self):
+        result = self.run_attach([self.alpha, self.beta, self.child], self.source)
+        host = next(entry for entry in result if entry["company"] == "Beta Systems")
+        self.assertEqual(len(host["roles"]), 1)
+        self.assertEqual(host["roles"][0]["bullets"][-1]["heading"], "Project Delta")
 
     def test_source_job_metadata_overrides_missing_model_dates_and_title(self):
         for metadata in ("Consultant\n2020 - 2023\n", "(2020 - 2023)\n", "Consultant\n"):
@@ -524,6 +546,166 @@ class SourceSafetyCorrectiveTests(unittest.TestCase):
         first = self.run_attach([self.alpha, self.beta, self.child], self.source)
         self.assertEqual(self.run_attach(first, self.source), first)
 
+
+class SidebarLeftTwoColumnTests(unittest.TestCase):
+    """The shape pdfplumber really produces: the sidebar lands to the LEFT.
+
+    ``POS & HRIS) PM BRANDS SDN BHD (HALO DIM SUM)`` -- so the block heading is
+    mid-line, its first duty is two lines further down with a sidebar fragment
+    wedged in between, and a referees block at the foot of the CV repeats the
+    employer names. A rule that corroborated the heading from the single following
+    line passed every other test in this file and still dropped this block.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.source = (
+            Path(__file__).resolve().parent / "fixtures" / "cv_two_column_sidebar_left.txt"
+        ).read_text(encoding="utf-8")
+
+    def _run(self, entries, source=None):
+        return attach(
+            {"work_experiences": copy.deepcopy(entries)},
+            self.source if source is None else source,
+        )["work_experiences"]
+
+    @staticmethod
+    def _subsidiaries(entries):
+        return {
+            bullet["heading"]: entry["company"]
+            for entry in entries
+            for role in entry.get("roles", [])
+            if isinstance(role.get("bullets"), list)
+            for bullet in role["bullets"]
+            if isinstance(bullet, dict)
+        }
+
+    def _pm(self):
+        return _entry("PM Brands Sdn Bhd (Halo Dim Sum)", "", "", [
+            "Developed the business proposal and rollout plan for the Halo Dim Sum kiosk concept.",
+            "Conducted market research and feasibility studies to evaluate the commercial viability of the new business concept.",
+        ])
+
+    def _employers(self):
+        return [
+            _entry("A&W Malaysia Sdn Bhd", "Feb 2025 to Aug 2025",
+                   "Head of Operations, Special Projects", [
+                       "Led the nationwide rollout of the SPMH framework, including scheduling tools and KPI tracking across all A&W outlets.",
+                       "Involved directly in cost-saving initiatives by analysing cost leakages and implementing operational improvements and SOP enhancements.",
+                   ]),
+            _entry("KGB Holdings Sdn Bhd", "Oct 2018 to Feb 2025",
+                   "Head of Operations - Business Partner", [
+                       "Promoted from Area Manager to Operations Manager and subsequently Head of Operations (Business Partner)",
+                   ]),
+            _entry("YBS Agro Premiere Sdn Bhd", "Oct 2017 to Aug 2018",
+                   "Business Development Executive/ Junior Chef", [
+                       "Created and launched the signature Nasi Lemak Sambal Strawberry.",
+                   ]),
+        ]
+
+    def _entries(self, pm_last=True):
+        base = self._employers()
+        pm = self._pm()
+        return base + [pm] if pm_last else base[:1] + [pm] + base[1:]
+
+    def test_the_block_attaches_to_the_employer_above_it(self):
+        for pm_last in (True, False):
+            with self.subTest(pm_last=pm_last):
+                found = self._subsidiaries(self._run(self._entries(pm_last)))
+                self.assertEqual(
+                    found.get("PM Brands Sdn Bhd (Halo Dim Sum)"), "A&W Malaysia Sdn Bhd"
+                )
+
+    def test_it_is_not_left_as_its_own_dateless_employer_row(self):
+        companies = [entry["company"] for entry in self._run(self._entries())]
+        self.assertNotIn("PM Brands Sdn Bhd (Halo Dim Sum)", companies)
+
+    def test_the_blocks_own_bullets_survive_the_move(self):
+        found = None
+        for entry in self._run(self._entries()):
+            for role in entry.get("roles", []):
+                for bullet in role.get("bullets") or []:
+                    if isinstance(bullet, dict) and "PM Brands" in bullet["heading"]:
+                        found = bullet
+        self.assertIsNotNone(found)
+        self.assertEqual(found["bullets"], self._pm()["roles"][0]["bullets"])
+
+    def test_a_wrapped_sidebar_word_to_the_right_does_not_refuse_the_heading(self):
+        # The sidebar wraps mid-phrase, so the text beside a heading is a bare word
+        # with no bullet glyph of its own.
+        source = self.source.replace(
+            "POS & HRIS) PM BRANDS SDN BHD (HALO DIM SUM)\n",
+            "POS & HRIS) PM BRANDS SDN BHD (HALO DIM SUM) Management\n",
+        )
+        found = self._subsidiaries(self._run(self._entries(), source))
+        self.assertEqual(
+            found.get("PM Brands Sdn Bhd (Halo Dim Sum)"), "A&W Malaysia Sdn Bhd"
+        )
+
+    def test_a_name_inside_a_sentence_is_still_only_a_mention(self):
+        # The tail carries on the same sentence, which is what prose looks like.
+        source = self.source.replace(
+            "POS & HRIS) PM BRANDS SDN BHD (HALO DIM SUM)\n",
+            "POS & HRIS) PM BRANDS SDN BHD (HALO DIM SUM) on supplier onboarding.\n",
+        )
+        companies = [entry["company"] for entry in self._run(self._entries(), source)]
+        self.assertIn("PM Brands Sdn Bhd (Halo Dim Sum)", companies)
+
+    def test_the_referees_block_is_not_a_section_a_company_can_sit_in(self):
+        # The foot of the CV lists employers as referee contacts, each one reading as a
+        # clean heading. A sub-brand named there outranks the real mid-line heading on
+        # looks alone, and the employer above it in the referees list is not the employer
+        # the CV filed the block under.
+        source = self.source + (
+            "KGB HOLDINGS SDN BHD\n"
+            "• Director - Someone Else (+6012 370 1233)\n"
+            "PM BRANDS SDN BHD (HALO DIM SUM)\n"
+            "• Director - A Third Person (+6012 345 6789)\n"
+        )
+        found = self._subsidiaries(self._run(self._entries(), source))
+        self.assertEqual(
+            found.get("PM Brands Sdn Bhd (Halo Dim Sum)"), "A&W Malaysia Sdn Bhd"
+        )
+
+    def test_a_block_cannot_borrow_a_later_employers_duty_as_evidence(self):
+        # The model's duty text for the block appears only under KGB, after the next
+        # employer heading. The span stops there, so the mention stays a mention.
+        block = _entry("PM Brands Sdn Bhd (Halo Dim Sum)", "", "", [
+            "Promoted from Area Manager to Operations Manager and subsequently Head of Operations (Business Partner)",
+            "Ran the kiosk rollout.",
+        ])
+        entries = self._employers() + [block]
+        companies = [entry["company"] for entry in self._run(entries)]
+        self.assertIn("PM Brands Sdn Bhd (Halo Dim Sum)", companies)
+
+    def test_a_parent_with_a_promotion_still_receives_the_block(self):
+        # The source prints only the final title as a heading, so it cannot say which
+        # promotion ran the project. The employer is still known.
+        entries = self._employers() + [self._pm()]
+        entries[0]["roles"].append({
+            "title": "Senior Operations Manager",
+            "date_range": "Jan 2024 to Jan 2025",
+            "reason_for_leaving": "",
+            "bullets": ["Ran the central region."],
+        })
+        result = self._run(entries)
+        self.assertNotIn(
+            "PM Brands Sdn Bhd (Halo Dim Sum)", [entry["company"] for entry in result]
+        )
+        self.assertEqual(
+            self._subsidiaries(result).get("PM Brands Sdn Bhd (Halo Dim Sum)"),
+            "A&W Malaysia Sdn Bhd",
+        )
+
+    def test_an_early_career_listing_line_is_still_refused(self):
+        entries = self._entries() + [
+            _entry("BBQ Chicken Malaysia", "", "", ["Ran the line.", "Trained staff."])
+        ]
+        self.assertNotIn("BBQ Chicken Malaysia", self._subsidiaries(self._run(entries)))
+
+    def test_the_pass_is_idempotent_on_this_source(self):
+        once = self._run(self._entries())
+        self.assertEqual(self._run(once), once)
 
 if __name__ == "__main__":
     unittest.main()

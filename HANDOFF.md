@@ -152,9 +152,10 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   PR #202 is closed as superseded. Both old branches are completed.
   PR #204 merged v24.6.396; PRs #205–#209 merged Claude's work-history and
   referee corrections through v24.6.402. Those branches are completed.
-  Current corrective: `codex/pr210-v24.6.403-cv-source-safety` (PR number
-  provisional), covering source-grounded project ownership and candidate
-  contact fallback. No PR or merge is requested for v24.6.403.
+  Current corrective: `claude/pr157-chatgpt-fix-zke4cy`, carrying
+  v24.6.403 source-grounded project ownership forward with the v24.6.404
+  two-column repairs. `codex/pr210-v24.6.403-cv-source-safety` is its base and
+  is superseded; merge the combined branch rather than v24.6.403 alone.
   PRs #193 and #194 merged after all three hosted checks passed.
   PR #189 merged as `2c216c6` on 2026-08-29; PR #185 merged as `b84c36f` on
   2026-09-04. PR #191 merged as `a5bf89d` on 2026-09-05 after all hosted
@@ -296,8 +297,14 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **CV source-safety corrective — v24.6.403, UNMERGED.**
-  Starts at merged master `6a454d7`. A project/sub-brand must have a unique
+- **CV source-safety corrective — v24.6.403 plus v24.6.404, UNMERGED.**
+  Starts at merged master `6a454d7`. v24.6.404 repairs the real-document
+  regressions v24.6.403 introduced: a two-column block's duty is looked for
+  across its whole source span rather than the next line, a wrapped sidebar word
+  beside a heading no longer refuses it, a company matched inside a referees
+  block is skipped, and an unplaceable promotion falls back to the newest role
+  instead of leaving the sub-brand on its own dateless row. See
+  `cv_studio_v24_6_404_two_column_subsidiary_corrective_qa_report.md`. A project/sub-brand must have a unique
   source heading and its own duties before attachment; corroborated mid-line
   two-column headings remain supported. Source title/date metadata and
   ambiguous matches keep a block standalone. With multiple promotions, source

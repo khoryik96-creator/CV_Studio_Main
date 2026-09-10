@@ -28,7 +28,8 @@
 - Current merged source: v24.6.402 (`6a454d7`), verified 2026-09-10.
 - PR #189 merged as `2c216c6`; PR #185 merged as `b84c36f`. Neither is an
   active branch claim. PRs #191–#194 are merged with owner approval. Current work is
-  v24.6.403 on `codex/pr210-v24.6.403-cv-source-safety` (PR number provisional).
+  v24.6.404 on `claude/pr157-chatgpt-fix-zke4cy`, which carries v24.6.403 from
+  `codex/pr210-v24.6.403-cv-source-safety` forward with its two-column repairs.
   PR #195 and #203–#209 are merged; #202 is closed as superseded. No new PR/merge requested.
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.

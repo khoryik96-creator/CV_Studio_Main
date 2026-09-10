@@ -39,14 +39,32 @@ DeepSeek for AI. Current version is tracked in the repo-root `VERSION` file.
 
 ## The one root-cause pattern behind almost every formatting bug
 
-### Source ownership and referee boundaries (v24.6.403)
+### Source ownership and referee boundaries (v24.6.403, v24.6.404)
 
 `_attach_untitled_subsidiary_entries` must not trust the first name mention or
 the model's first role. A child block needs a unique source heading followed by
 its duties; weaker mid-line/two-column matches also need matching duty words.
 Unexplained title/date metadata or ambiguous headings leave the block separate.
-For promotions, source role headings determine the host role. These guards are
-conservative: uncertain grouping preserves the original entries and wording.
+These guards are conservative: uncertain grouping preserves the original entries
+and wording.
+
+**Look for a two-column block's duty across its whole span, never on the next
+line.** pdfplumber interleaves the sidebar into the main column, so a block's own
+duties arrive on non-adjacent lines with sidebar fragments between them. The line
+immediately after a mid-line heading is a sidebar fragment, not the duty. The
+evidence span runs from the heading to the next dated employer heading, which is
+also what stops a block borrowing a later employer's duties. For the same reason,
+text to the right of a heading only disqualifies it when it carries on the same
+sentence — a wrapped sidebar word arrives with no bullet glyph of its own.
+
+A referees list names employers and job titles as clean headings, so a company
+matched inside one outranks the real mid-line heading on looks alone. Matches at
+or after the referees block are skipped.
+
+For promotions, source role headings select the host role. When the source cannot
+say, the newest role of the correct employer takes the block: the employer is the
+part that matters, and declining puts the sub-brand back on its own dateless row,
+which is the defect the pass exists to remove.
 
 `_reference_section_spans` does not begin a referee block at a standalone
 "References available upon request" statement. Candidate footer contacts below

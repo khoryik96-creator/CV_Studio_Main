@@ -151,7 +151,48 @@ def _source_line_end(flat, line_start, offset):
     return next((i for i in range(offset + 1, len(flat)) if line_start[i]), len(flat))
 
 
-def _block_offsets(flat, line_start, name, role):
+def _source_block_span(flat, offset, boundaries):
+    """The source text from a sub-brand heading up to the next employer heading.
+
+    pdfplumber interleaves a two-column layout, so a block's own duties arrive on
+    non-adjacent lines with sidebar fragments wedged between them:
+
+        POS & HRIS) PM BRANDS SDN BHD (HALO DIM SUM)
+        • Cost Optimisation, Pricing & Margin
+        • Developed the business proposal and rollout plan for the Halo Dim Sum
+        Management
+        kiosk concept.
+
+    Corroborating a mid-line heading therefore has to look across that whole span.
+    The span stops at the next dated employer heading, so a block can never borrow
+    a later employer's duties as its evidence.
+    """
+    end = next((point for point in boundaries if point > offset), len(flat))
+    return flat[offset:end]
+
+
+def _reference_block_start(flat, line_start):
+    """Offset where a referees block begins in the flattened source, or ``None``.
+
+    A referees list names employers and job titles, so a company matched inside it
+    is a contact detail rather than the section the CV filed that company under.
+    """
+    for match in re.finditer(r"\b(?:references?|referees?)\b", flat, re.I):
+        offset = match.start()
+        if not line_start[offset]:
+            continue
+        line = flat[offset:_source_line_end(flat, line_start, offset)].strip()
+        tokens = _reference_heading_tokens(line)
+        if len(tokens) > _REFERENCE_HEADING_MAX_TOKENS:
+            continue
+        if _REFERENCE_ON_REQUEST_RE.fullmatch(" ".join(tokens)):
+            continue
+        if _reads_as_reference_heading(line):
+            return offset
+    return None
+
+
+def _block_offsets(flat, line_start, name, role, boundaries=()):
     """Offsets where a sub-brand block's own name can begin.
 
     A two-column CV extracted with pdfplumber interleaves the sidebar into the
@@ -164,15 +205,21 @@ def _block_offsets(flat, line_start, name, role):
     pattern = _company_source_pattern(name)
     if pattern is None:
         return []
+    referees_at = _reference_block_start(flat, line_start)
     strong, column = [], []
     for match in pattern.finditer(flat):
         if _starts_a_listing_entry(flat, match.start()) and not line_start[match.start()]:
             continue
+        if referees_at is not None and match.start() >= referees_at:
+            continue
         end = _source_line_end(flat, line_start, match.start())
         tail = flat[match.end():end].strip().lstrip(".:").strip()
-        # A heading may have sidebar bullets to its right, but not prose such as
-        # "Project Delta on supplier onboarding" or its own role/date metadata.
-        if tail and not re.match(r"^[•▪◦*]", tail):
+        # A heading can carry sidebar text to its right, and a wrapped sidebar word
+        # arrives with no bullet glyph of its own ("... (HALO DIM SUM) Management").
+        # What disqualifies a match is a tail that carries on the same sentence, which
+        # is what a name mentioned inside prose looks like ("Project Delta on supplier
+        # onboarding"), or the block's own role/date metadata.
+        if tail and (tail[:1].islower() or _WORK_TABLE_DATE_RE.search(tail)):
             continue
         following_end = _source_line_end(flat, line_start, end) if end < len(flat) else end
         following = flat[end:following_end].strip()
@@ -193,10 +240,13 @@ def _block_offsets(flat, line_start, name, role):
             continue
         heading = _reads_as_heading(flat, line_start, match.start())
         if not heading:
-            # For a mid-line two-column match, a list marker alone is not
-            # evidence: the following duty must actually belong to this block.
+            # For a mid-line two-column match, a list marker alone is not evidence:
+            # the duty has to belong to this block. Look for it across the block's
+            # whole span, because the extractor splits it over interleaved lines --
+            # checking only the next line rejects every real two-column CV.
             duty_words = re.findall(r"\w+", first_items[0].lower()) if first_items else []
-            source_words = re.findall(r"\w+", following.lower())
+            span = _source_block_span(flat, match.end(), boundaries)
+            source_words = re.findall(r"\w+", span.lower())
             if len(duty_words) < 3 or not set(duty_words).issubset(set(source_words)):
                 continue
         target = strong if heading else column
@@ -256,13 +306,16 @@ def _attach_untitled_subsidiary_entries(parsed, cv_text=""):
             return False
         return bool(_role_bullet_items(roles[0]))
 
-    def host_role_index(exp, parent_start, parent_end, child_offset):
-        """Locate the source role, never assume the newest promotion owns it."""
+    def source_role_index(exp, parent_start, parent_end, child_offset):
+        """The role whose source heading most recently precedes the block, or None.
+
+        A project belongs to the role that was running when it happened, not to
+        whichever promotion the model listed first. ``None`` means the source could
+        not say, and the caller falls back rather than dropping the block.
+        """
         roles = (exp or {}).get("roles")
-        if not isinstance(roles, list) or not roles or not isinstance(roles[0], dict):
+        if not isinstance(roles, list) or len(roles) < 2:
             return None
-        if len(roles) == 1:
-            return 0
         anchors = []
         seen = set()
         for role_index, role in enumerate(roles):
@@ -286,6 +339,21 @@ def _attach_untitled_subsidiary_entries(parsed, cv_text=""):
                 anchors.append((offsets[0], role_index))
         return max(anchors)[1] if anchors else None
 
+    def host_role_index(exp, parent_start, parent_end, child_offset):
+        """Which role of the parent receives the block.
+
+        The source decides when it can. When it cannot -- an untitled promotion, a
+        title the source never prints as a heading, two roles sharing one heading --
+        the newest role takes it. That keeps the block under the right employer,
+        which is the whole point of the pass; declining instead puts the sub-brand
+        back on its own dateless row, the defect this exists to remove.
+        """
+        roles = (exp or {}).get("roles")
+        if not isinstance(roles, list) or not roles or not isinstance(roles[0], dict):
+            return None
+        located = source_role_index(exp, parent_start, parent_end, child_offset)
+        return 0 if located is None else located
+
     dated_indexes = [index for index, exp in enumerate(exps) if _entry_is_dated(exp)]
     if not dated_indexes:
         return parsed
@@ -297,12 +365,20 @@ def _attach_untitled_subsidiary_entries(parsed, cv_text=""):
             return parsed
         dated_headings[index] = offsets
 
+    # Every employer heading in source order. A block's evidence span stops at the
+    # next one, so it can never corroborate itself with a later employer's duties.
+    heading_boundaries = sorted(
+        point for points in dated_headings.values() for point in points
+    )
+
     attachments = {}
     absorbed = set()
     for index, exp in enumerate(exps):
         if not is_subsidiary(exp):
             continue
-        offsets = _block_offsets(flat, line_start, exp.get("company"), exp["roles"][0])
+        offsets = _block_offsets(
+            flat, line_start, exp.get("company"), exp["roles"][0], heading_boundaries
+        )
         if not offsets:
             continue
         offset = offsets[0]
@@ -316,9 +392,8 @@ def _attach_untitled_subsidiary_entries(parsed, cv_text=""):
         parent_start, parent_index = max(parents)
         if sum(point == parent_start for point, _ in parents) != 1:
             continue
-        parent_end = min(
-            (point for points in dated_headings.values() for point in points if point > parent_start),
-            default=len(flat),
+        parent_end = next(
+            (point for point in heading_boundaries if point > parent_start), len(flat)
         )
         role_index = host_role_index(exps[parent_index], parent_start, parent_end, offset)
         if role_index is None:
