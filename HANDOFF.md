@@ -150,6 +150,8 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 - **Current merged baseline, checked 2026-09-09: v24.6.393, `787e815`.**
   PR #202 (v24.6.394) remains unmerged. The owner-authorized corrective is
   `codex/pr202-v24.6.395-date-parity-fixes`, based on its head `317e320`.
+  Replacement PR #203 contains both PR #202 and the corrective; the owner has
+  authorized its merge after validation, then closure of #202 as superseded.
   PRs #193 and #194 merged after all three hosted checks passed.
   PR #189 merged as `2c216c6` on 2026-08-29; PR #185 merged as `b84c36f` on
   2026-09-04. PR #191 merged as `a5bf89d` on 2026-09-05 after all hosted
@@ -301,7 +303,8 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   preceding line. Shared fixtures compare all three handlers and re-normalization;
   real DOCX regressions cover work/education dates and retained duty text.
   No routes, schemas, dependencies, credentials or paid-call boundaries change.
-  No PR creation, merge or native protected build requested.
+  PR #203 review also covers commas in complete day-first dates and shared-year
+  spans. Owner-approved merge awaits final gates; native protected builds remain manual.
 
 - **Unused-helper cleanup — v24.6.383, owner-approved merge pending checks.**
   Branch `codex/pr195-v24.6.383-unused-helper-cleanup` integrates the v24.6.382

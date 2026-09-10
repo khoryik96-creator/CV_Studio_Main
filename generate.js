@@ -175,11 +175,11 @@ function normalizeDateRange(value) {
   const monthWord = '(?:January|February|March|April|September|October|November|December|June|July|August|Sept|May|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)';
   const dayWord = '(?:0?[1-9]|[12]\\d|3[01])(?:st|nd|rd|th)?';
   const sharedDayRange = text.match(new RegExp('^(' + monthWord + ')\\.?\\s+' + dayWord + '\\s*(?:-|to)\\s*(' + monthWord + ')\\.?\\s+' + dayWord + ',?\\s+(\\d{4})$', 'i'))
-    || text.match(new RegExp('^' + dayWord + '\\s+(' + monthWord + ')\\.?\\s*(?:-|to)\\s*' + dayWord + '\\s+(' + monthWord + ')\\.?\\s+(\\d{4})$', 'i'));
+    || text.match(new RegExp('^' + dayWord + '\\s+(' + monthWord + ')\\.?\\s*(?:-|to)\\s*' + dayWord + '\\s+(' + monthWord + ')\\.?,?\\s+(\\d{4})$', 'i'));
   if (sharedDayRange) {
     text = sharedDayRange[1] + ' ' + sharedDayRange[3] + ' to ' + sharedDayRange[2] + ' ' + sharedDayRange[3];
   } else {
-    text = text.replace(new RegExp('\\b' + dayWord + '[ \\t]+(' + monthWord + ')\\.?\\s+(\\d{4})\\b', 'gi'), '$1 $2');
+    text = text.replace(new RegExp('\\b' + dayWord + '[ \\t]+(' + monthWord + ')\\.?,?\\s+(\\d{4})\\b', 'gi'), '$1 $2');
     text = text.replace(new RegExp('\\b(' + monthWord + ')\\.?[ \\t]+' + dayWord + ',?\\s+(\\d{4})\\b', 'gi'), '$1 $2');
   }
   // ISO YYYY-MM(-DD) -> "Mon YYYY" BEFORE turning "-" into "to", so a range like

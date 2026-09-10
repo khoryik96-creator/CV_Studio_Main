@@ -94,6 +94,7 @@ this:
   The v24.6.395 corrective preserves two-digit years (including mixed precision)
   rather than assuming every number beside a month is a day. Full day/month/year
   dates and explicit day-bearing shared-year ranges reduce to month + year.
+  Day-first dates may include a comma after the month, as in 20 March, 2021.
   Python, `cvNormDateRange` and `normalizeDateRange` share cross-language tests
   in `tests/test_cv_date_parity.py` and `tests/test_cv_date_parity.js`.
 - **`_recover_cv_source_skill_item_punctuation`** — restores visible middle-dot

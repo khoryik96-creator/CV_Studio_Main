@@ -24,6 +24,7 @@ class CvDateParityTests(unittest.TestCase):
             for day in ("1", "11", "21st"):
                 cases.extend([
                     [f"{day} {month} 2020 - Present", f"{month} 2020 to Present"],
+                    [f"{day} {month}, 2020 - Present", f"{month} 2020 to Present"],
                     [f"{month} {day}, 2020 - Present", f"{month} 2020 to Present"],
                 ])
         inputs = [case[0] for case in cases] + [case[1] for case in cases]

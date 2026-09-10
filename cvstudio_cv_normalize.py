@@ -98,7 +98,7 @@ def _cv_pretranslate_iso_dates(text):
 # Keep this logic mirrored in both JavaScript date normalizers.
 _CV_DAY_WORD = r"(?:0?[1-9]|[12]\d|3[01])(?:st|nd|rd|th)?"
 _CV_DAY_BEFORE_MONTH_RE = re.compile(
-    r"\b" + _CV_DAY_WORD + r"[ \t]+(" + _CV_MONTH_WORD + r")\.?\s+(\d{4})\b", re.I,
+    r"\b" + _CV_DAY_WORD + r"[ \t]+(" + _CV_MONTH_WORD + r")\.?,?\s+(\d{4})\b", re.I,
 )
 _CV_DAY_AFTER_MONTH_RE = re.compile(
     r"\b(" + _CV_MONTH_WORD + r")\.?[ \t]+" + _CV_DAY_WORD + r",?\s+(\d{4})\b", re.I,
@@ -110,7 +110,7 @@ _CV_SHARED_DAY_RANGE_RES = (
     ),
     re.compile(
         _CV_DAY_WORD + r"\s+(" + _CV_MONTH_WORD + r")\.?\s*(?:-|to)\s*"
-        + _CV_DAY_WORD + r"\s+(" + _CV_MONTH_WORD + r")\.?\s+(\d{4})", re.I,
+        + _CV_DAY_WORD + r"\s+(" + _CV_MONTH_WORD + r")\.?,?\s+(\d{4})", re.I,
     ),
 )
 

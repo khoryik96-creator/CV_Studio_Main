@@ -20,9 +20,9 @@ Based on PR #202 head `317e320` (v24.6.394), including master `787e815`
 
 ## Verification
 
-- Full isolated Windows suite: **1223 passed, 4 skipped, 2121 subtests passed**.
+- Full isolated Windows suite: **1223 passed, 4 skipped, 2161 subtests passed**.
 - All **24 frontend fixture groups** passed.
-- **879 date cases** compare Python, browser and generator, including checking
+- **919 date cases** compare Python, browser and generator, including checking
   that normalizing a second time makes no further change.
 - Real DOCX tests run through both `/generate-docx` and direct Node generation;
   work and education headers retain expected dates and duty wording survives.
@@ -34,4 +34,7 @@ Based on PR #202 head `317e320` (v24.6.394), including master `787e815`
 
 No production credentials or paid AI/Microsoft/JobAdder writes were used.
 No route, schema, dependency or protected-package boundary was changed.
-No native protected compilation, PR creation, merge or release was requested.
+PR #203 supersedes #202; the owner subsequently authorized merge after validation.
+Review added optional commas in complete day-first dates and shared-year spans.
+The expanded parity tests (919 cases) and all 24 frontend groups pass.
+No native protected compilation or release was requested.
