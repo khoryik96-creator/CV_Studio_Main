@@ -8,6 +8,7 @@ Career" as a bullet.
 """
 
 import copy
+from pathlib import Path
 import unittest
 
 from cvstudio_cv_reconcile import (
@@ -379,6 +380,68 @@ class TrailingScanTests(unittest.TestCase):
         ]}
         companies = [e["company"] for e in collapse(copy.deepcopy(parsed))["work_experiences"]]
         self.assertEqual(companies, ["KGB Holdings Sdn Bhd", "Described Role", "Earlier Career"])
+
+
+class TwoColumnExtractionTests(unittest.TestCase):
+    """The app extracts PDFs with pdfplumber, which interleaves a sidebar column.
+
+    Every earlier test in this file used clean synthetic text, so a rule that needed the
+    block's heading to open a line or follow a sentence looked correct here and failed on
+    the real document, where the heading lands mid-line behind sidebar text
+    ("... (ERP, POS & HRIS) PM BRANDS SDN BHD"). This fixture is that shape.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.source = (
+            Path(__file__).resolve().parent / "fixtures" / "cv_two_column_pdfplumber.txt"
+        ).read_text(encoding="utf-8")
+
+    def _run(self, entries):
+        return attach({"work_experiences": copy.deepcopy(entries)}, self.source)["work_experiences"]
+
+    @staticmethod
+    def _subsidiaries(entries):
+        return {
+            bullet["heading"]: entry["company"]
+            for entry in entries
+            for role in entry.get("roles", [])
+            if isinstance(role.get("bullets"), list)
+            for bullet in role["bullets"]
+            if isinstance(bullet, dict)
+        }
+
+    def _entries(self, pm_last=True):
+        base = [
+            _entry("A&W Malaysia Sdn Bhd", "Feb 2025 to Aug 2025",
+                   "Head of Operations, Special Projects", ["Led the nationwide rollout."]),
+            _entry("KGB Holdings Sdn Bhd", "Oct 2018 to Feb 2025",
+                   "Head of Operations - Business Partner", ["Led multi-site operations."]),
+            _entry("YBS Agro Premiere Sdn Bhd", "Oct 2017 to Aug 2018",
+                   "Business Development Executive/ Junior Chef", ["Created the product."]),
+        ]
+        pm = _entry("PM Brands Sdn Bhd (Halo Dim Sum)", "", "",
+                    ["Developed the business proposal.", "Conducted market research."])
+        return base + [pm] if pm_last else base[:1] + [pm] + base[1:]
+
+    def test_the_block_attaches_to_the_employer_above_it_in_the_source(self):
+        found = self._subsidiaries(self._run(self._entries(pm_last=True)))
+        self.assertEqual(found.get("PM Brands Sdn Bhd (Halo Dim Sum)"), "A&W Malaysia Sdn Bhd")
+
+    def test_the_same_parent_when_the_model_keeps_it_in_place(self):
+        found = self._subsidiaries(self._run(self._entries(pm_last=False)))
+        self.assertEqual(found.get("PM Brands Sdn Bhd (Halo Dim Sum)"), "A&W Malaysia Sdn Bhd")
+
+    def test_it_is_not_left_as_its_own_employer_row(self):
+        companies = [e["company"] for e in self._run(self._entries())]
+        self.assertNotIn("PM Brands Sdn Bhd (Halo Dim Sum)", companies)
+
+    def test_an_early_career_listing_line_is_still_refused(self):
+        # "Outlet Assistant Chef - BBQ Chicken Malaysia" follows a dash in the source.
+        entries = self._entries() + [
+            _entry("BBQ Chicken Malaysia", "", "", ["Ran the line.", "Trained staff."])
+        ]
+        self.assertNotIn("BBQ Chicken Malaysia", self._subsidiaries(self._run(entries)))
 
 
 if __name__ == "__main__":
