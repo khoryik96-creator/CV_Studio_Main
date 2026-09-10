@@ -216,7 +216,8 @@ class SubsidiaryBlockTests(unittest.TestCase):
             self._A_AND_W, self._KGB, self._YBS,
             _entry("BBQ Chicken Malaysia", "", "", ["Ran the line.", "Trained staff."]),
         ])
-        self.assertIsNone(parent, group)
+        self.assertIsNone(parent)
+        self.assertIsNone(group)
 
     def test_an_undated_entry_that_has_a_title_is_left_alone(self):
         companies = [e["company"] for e in _pipeline({"work_experiences": [
@@ -282,6 +283,102 @@ class UnchangedBehaviourTests(unittest.TestCase):
             _entry("B", "", "Role B"),
         ]}
         self.assertEqual(_collapsed(parsed), parsed["work_experiences"])
+
+
+class SourceAnchorHardeningTests(unittest.TestCase):
+    """Cases a review of the source-anchored attachment found."""
+
+    _PM = _entry("PM Brands Sdn Bhd (Halo Dim Sum)", "", "",
+                 ["Developed the business proposal.", "Conducted market research."])
+
+    @staticmethod
+    def _run(entries, source):
+        return attach({"work_experiences": copy.deepcopy(entries)}, source)["work_experiences"]
+
+    @staticmethod
+    def _subsidiaries(entries):
+        found = {}
+        for entry in entries:
+            for role in entry.get("roles", []):
+                if not isinstance(role.get("bullets"), list):
+                    continue
+                for bullet in role["bullets"]:
+                    if isinstance(bullet, dict):
+                        found[bullet["heading"]] = entry["company"]
+        return found
+
+    def test_a_block_is_never_deleted_when_the_parent_has_no_role(self):
+        # Dropping the child while refusing to attach it removed a company and all its
+        # bullets from the CV outright.
+        source = ("A&W MALAYSIA SDN BHD\nHead\n(Feb 2025 - Aug 2025)\n"
+                  "PM BRANDS SDN BHD (HALO DIM SUM)\n- a\n- b\n")
+        entries = self._run([
+            {"company": "A&W Malaysia Sdn Bhd", "date_range": "Feb 2025 to Aug 2025", "roles": []},
+            self._PM,
+        ], source)
+        self.assertIn("PM Brands Sdn Bhd (Halo Dim Sum)", [e["company"] for e in entries])
+        self.assertIn("Developed the business proposal.", str(entries))
+
+    def test_an_employer_named_in_a_profile_paragraph_is_not_the_parent(self):
+        source = ("PROFILE Experienced leader at KGB Holdings Sdn Bhd and others.\n"
+                  "A&W MALAYSIA SDN BHD\nHead\n(Feb 2025 - Aug 2025)\n- x\n"
+                  "PM BRANDS SDN BHD (HALO DIM SUM)\n- a\n- b\n"
+                  "KGB HOLDINGS SDN BHD\nHead\n(Oct 2018 - Feb 2025)\n- y\n")
+        entries = self._run([
+            _entry("A&W Malaysia Sdn Bhd", "Feb 2025 to Aug 2025", "Head", ["x"]),
+            _entry("KGB Holdings Sdn Bhd", "Oct 2018 to Feb 2025", "Head", ["y"]),
+            self._PM,
+        ], source)
+        self.assertEqual(
+            self._subsidiaries(entries).get("PM Brands Sdn Bhd (Halo Dim Sum)"),
+            "A&W Malaysia Sdn Bhd",
+        )
+
+    def test_a_heading_glued_to_the_previous_sentence_still_counts(self):
+        # Extracted PDF text loses line breaks: "...new business concept.KGB HOLDINGS".
+        source = ("A&W MALAYSIA SDN BHD\nHead\n(Feb 2025 - Aug 2025)\n"
+                  "- Improved SOP enhancements.PM BRANDS SDN BHD (HALO DIM SUM)\n- a\n- b\n")
+        entries = self._run([
+            _entry("A&W Malaysia Sdn Bhd", "Feb 2025 to Aug 2025", "Head", ["x"]),
+            self._PM,
+        ], source)
+        self.assertIn("PM Brands Sdn Bhd (Halo Dim Sum)", self._subsidiaries(entries))
+
+    def test_punctuation_drift_in_the_company_name_still_matches(self):
+        source = ("A&W MALAYSIA SDN BHD\nHead\n(Feb 2025 - Aug 2025)\n- x\n"
+                  "PM BRANDS SDN BHD\n- a\n- b\n")
+        entries = self._run([
+            _entry("A&W Malaysia Sdn. Bhd.", "Feb 2025 to Aug 2025", "Head", ["x"]),
+            _entry("PM Brands Sdn. Bhd.", "", "", ["a", "b"]),
+        ], source)
+        self.assertIn("PM Brands Sdn. Bhd.", self._subsidiaries(entries))
+
+    def test_offsets_survive_a_length_changing_casefold(self):
+        # casefold("\u00df") is "ss", so offsets taken from a casefolded copy no longer
+        # line up with the text they index.
+        source = ("STRA\u00dfE GMBH\nHead\n(2020 - 2022)\n- x\n"
+                  "PM BRANDS SDN BHD\n- a\n- b\n")
+        entries = self._run([
+            _entry("Stra\u00dfe GmbH", "2020 to 2022", "Head", ["x"]),
+            _entry("PM Brands Sdn Bhd", "", "", ["a", "b"]),
+        ], source)
+        self.assertEqual(
+            self._subsidiaries(entries).get("PM Brands Sdn Bhd"), "Stra\u00dfe GmbH"
+        )
+
+
+class TrailingScanTests(unittest.TestCase):
+    def test_bare_rows_above_a_described_entry_are_still_collapsed(self):
+        # A described role keeps its own row, but must not halt the scan, or the bare
+        # "| Company" rows above it stop being grouped.
+        parsed = {"work_experiences": [
+            _entry("KGB Holdings Sdn Bhd", "Oct 2018 to Feb 2025", "Head", ["Ran ops."]),
+            _entry("Bare One", "", "Chef"),
+            _entry("Bare Two", "", "Cook"),
+            _entry("Described Role", "", "", ["Lots of detail here.", "And more detail."]),
+        ]}
+        companies = [e["company"] for e in collapse(copy.deepcopy(parsed))["work_experiences"]]
+        self.assertEqual(companies, ["KGB Holdings Sdn Bhd", "Described Role", "Earlier Career"])
 
 
 if __name__ == "__main__":

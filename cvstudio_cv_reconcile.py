@@ -73,12 +73,71 @@ def _role_bullet_items(role):
     return items
 
 
-def _flat_source_offset(flat_lower, name):
-    """Offset of a company name inside whitespace-flattened source text, or -1."""
-    needle = re.sub(r"\s+", " ", str(name or "")).strip().casefold()
-    if len(needle) < 3:
-        return -1
-    return flat_lower.find(needle)
+def _flatten_source(text):
+    """Collapse whitespace, and record which characters opened a line.
+
+    Offsets stay valid for the returned string, so matching uses re.IGNORECASE rather
+    than casefold: casefold can change a string's length (ss, ligatures) and would shift
+    every offset computed from it.
+    """
+    chars = []
+    line_start = []
+    opening = True
+    spaced = False
+    for character in str(text or ""):
+        if character in "\r\n":
+            opening = True
+            spaced = True
+            continue
+        if character.isspace():
+            spaced = True
+            continue
+        if spaced and chars:
+            chars.append(" ")
+            line_start.append(False)
+        spaced = False
+        chars.append(character)
+        line_start.append(opening)
+        opening = False
+    return "".join(chars), line_start
+
+
+def _company_source_pattern(name):
+    """Match a company name across punctuation drift: "Sdn. Bhd." vs "SDN BHD"."""
+    tokens = [token for token in re.split(r"[\s.]+", str(name or "").strip()) if token]
+    if not tokens or len("".join(tokens)) < 3:
+        return None
+    return re.compile(r"[\s.]*".join(re.escape(token) for token in tokens), re.I)
+
+
+def _reads_as_heading(flat, line_start, offset):
+    """Report whether a match at ``offset`` starts a block rather than continuing text.
+
+    A name inside a profile paragraph ("experienced leader at KGB Holdings") is a
+    mention, not a heading, and must not decide where a sub-brand belongs. Extracted PDF
+    text loses many line breaks and glues a heading to the sentence before it
+    ("...new business concept.KGB HOLDINGS SDN BHD"), so the end of the previous
+    sentence counts as a boundary too. A name after a dash or a bullet is one entry of a
+    "Job Title - Company" listing and never a heading.
+    """
+    if offset < len(line_start) and line_start[offset]:
+        return True
+    lead = flat[:offset].rstrip()
+    if not lead:
+        return True
+    return lead[-1] in ".!?:;"
+
+
+def _heading_offsets(flat, line_start, name):
+    """Offsets where a company name reads as a heading rather than a mention."""
+    pattern = _company_source_pattern(name)
+    if pattern is None:
+        return []
+    return [
+        match.start()
+        for match in pattern.finditer(flat)
+        if _reads_as_heading(flat, line_start, match.start())
+    ]
 
 
 def _attach_untitled_subsidiary_entries(parsed, cv_text=""):
@@ -97,20 +156,20 @@ def _attach_untitled_subsidiary_entries(parsed, cv_text=""):
     The parent is read from the source CV, never from the model's ordering. The model
     moves such a block freely - in the case this was written for it emitted the block
     last - so "whatever entry precedes it in the list" is not evidence, and trusting it
-    filed a 2025 special project under a 2017 employer. The parent is the employer whose
-    name most recently precedes the block in the source, and when the source cannot show
-    that, nothing is attached and the block is left where it is.
+    filed a 2025 special project under a 2017 employer.
+
+    Only headings count on both sides: an employer named in a profile paragraph is a
+    mention, not the section the block sits in. When every dated employer cannot be
+    located as a heading, the ordering cannot be trusted and nothing is attached.
     """
     if not isinstance(parsed, dict):
         return parsed
     exps = parsed.get("work_experiences")
     if not isinstance(exps, list) or len(exps) < 2:
         return parsed
-    source = str(cv_text or "")
-    if not source.strip():
+    flat, line_start = _flatten_source(cv_text)
+    if not flat:
         return parsed
-    flat = re.sub(r"\s+", " ", source)
-    lower = flat.casefold()
 
     def is_subsidiary(exp):
         if not isinstance(exp, dict):
@@ -129,49 +188,56 @@ def _attach_untitled_subsidiary_entries(parsed, cv_text=""):
             return False
         return bool(_role_bullet_items(roles[0]))
 
-    dated_offsets = []
-    for index, exp in enumerate(exps):
-        if not _entry_is_dated(exp):
-            continue
-        offset = _flat_source_offset(lower, (exp or {}).get("company"))
-        if offset >= 0:
-            dated_offsets.append((offset, index))
-    if not dated_offsets:
+    def host_role(exp):
+        """The newest role of an entry, which is the one a heading displays."""
+        roles = (exp or {}).get("roles")
+        if not isinstance(roles, list) or not roles or not isinstance(roles[0], dict):
+            return None
+        return roles[0]
+
+    dated_indexes = [index for index, exp in enumerate(exps) if _entry_is_dated(exp)]
+    if not dated_indexes:
         return parsed
+    dated_headings = {}
+    for index in dated_indexes:
+        offsets = _heading_offsets(flat, line_start, exps[index].get("company"))
+        if not offsets:
+            # One employer we cannot place means "nearest preceding" is guesswork.
+            return parsed
+        dated_headings[index] = offsets
 
     attachments = {}
+    absorbed = set()
     for index, exp in enumerate(exps):
         if not is_subsidiary(exp):
             continue
-        offset = _flat_source_offset(lower, exp.get("company"))
-        if offset < 0:
+        offsets = _heading_offsets(flat, line_start, exp.get("company"))
+        if not offsets:
             continue
-        # A company that follows a dash or a bullet on the same line is one entry of a
-        # "Job Title - Company" listing, not a heading with bullets of its own.
-        lead = flat[:offset].rstrip()
-        if lead and lead[-1] in _LISTING_LEAD_CHARS:
-            continue
-        parents = [pair for pair in dated_offsets if pair[0] < offset]
+        offset = offsets[0]
+        parents = []
+        for parent_index, heading_offsets in dated_headings.items():
+            earlier = [item for item in heading_offsets if item < offset]
+            if earlier:
+                parents.append((max(earlier), parent_index))
         if not parents:
             continue
-        attachments.setdefault(max(parents)[1], []).append(index)
+        parent_index = max(parents)[1]
+        if host_role(exps[parent_index]) is None:
+            # Nothing to attach to. Leaving the block in place keeps its content in the
+            # CV; dropping it would delete a company and its bullets outright.
+            continue
+        attachments.setdefault(parent_index, []).append(index)
+        absorbed.add(index)
     if not attachments:
         return parsed
 
-    absorbed = {child for children in attachments.values() for child in children}
     kept = []
     for index, exp in enumerate(exps):
         if index in absorbed:
             continue
         if index in attachments:
-            roles = exp.get("roles") if isinstance(exp.get("roles"), list) else []
-            # The newest role: _order_same_company_roles_newest_first puts it first, and
-            # a sub-brand shown under an employer heading belongs to the role displayed
-            # there, not to that employer's oldest position.
-            host = roles[0] if roles and isinstance(roles[0], dict) else None
-            if host is None:
-                kept.append(exp)
-                continue
+            host = host_role(exp)
             bullets = host.get("bullets")
             if isinstance(bullets, str):
                 bullets = [bullets] if bullets.strip() else []
@@ -230,8 +296,6 @@ def _collapse_incomplete_earlier_career(parsed):
             return False
         if str(exp.get("date_range") or "").strip():
             return False
-        if is_described_role(exp):
-            return False
         roles = exp.get("roles") if isinstance(exp.get("roles"), list) else []
         if not roles:
             return bool(str(exp.get("company") or "").strip())
@@ -240,10 +304,15 @@ def _collapse_incomplete_earlier_career(parsed):
                 return False
         return bool(str(exp.get("company") or "").strip())
 
+    # Scan the whole trailing run of dateless entries. A described role inside that run
+    # keeps its own row, but must not halt the scan, or the bare "| Company" rows above
+    # it stop being collapsed and the drift this function exists to remove comes back.
     start = len(exps)
     while start > 0 and is_undated(exps[start - 1]):
         start -= 1
-    block = exps[start:]
+    tail = exps[start:]
+    block = [exp for exp in tail if not is_described_role(exp)]
+    described = [exp for exp in tail if is_described_role(exp)]
     # Do not collapse an all-undated work history. Some source CVs omit all
     # dates; turning the entire career into "Earlier Career" would be worse
     # than the original provider output. Only collapse trailing undated roles
@@ -285,7 +354,7 @@ def _collapse_incomplete_earlier_career(parsed):
     if len(bullets) < 2:
         return parsed
 
-    parsed["work_experiences"] = exps[:start] + [{
+    parsed["work_experiences"] = exps[:start] + described + [{
         "date_range": "",
         "company": "Earlier Career",
         "roles": [{
