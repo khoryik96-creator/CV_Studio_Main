@@ -788,6 +788,11 @@ def _spider_item_score(candidate, filters, enriched=False):
     blob = _spider_candidate_blob(candidate)
     blob_low = blob.lower()
     unknown, excluded, hard_passed = [], [], []
+    # A JobAdder custom field that was never tagged is missing data, not a
+    # mismatch. Excluding on it hides candidates purely because a consultant did
+    # not fill the field in. When this is on, an untagged field keeps the
+    # candidate and records a visible gap instead of dropping them silently.
+    include_untagged = bool(filters.get("include_untagged_fields"))
 
     industry = _spider_terms(filters.get("industry"), 24)
     if industry:
@@ -803,7 +808,9 @@ def _spider_item_score(candidate, filters, enriched=False):
         elif industry_status == "mismatch":
             return False, 0, [], unknown, ["industry mismatch: " + industry_evidence[:160]], hard_passed, []
         elif enriched:
-            return False, 0, [], unknown, ["industry not visible in JobAdder custom field"], hard_passed, []
+            if not include_untagged:
+                return False, 0, [], unknown, ["industry not visible in JobAdder custom field"], hard_passed, []
+            unknown.append("Industry not tagged in JobAdder")
         else:
             # Embed=self normally carries custom fields. The route loads full
             # detail before ranking only when an embedded row omits the field.
@@ -821,7 +828,9 @@ def _spider_item_score(candidate, filters, enriched=False):
         elif skills_status == "mismatch":
             return False, 0, [], unknown, ["IT skills mismatch: " + skills_evidence[:160]], hard_passed, []
         elif enriched:
-            return False, 0, [], unknown, ["IT Skills not visible in JobAdder custom field"], hard_passed, []
+            if not include_untagged:
+                return False, 0, [], unknown, ["IT Skills not visible in JobAdder custom field"], hard_passed, []
+            unknown.append("IT Skills not tagged in JobAdder")
         else:
             unknown.append("IT Skills require JobAdder candidate detail")
 
@@ -848,7 +857,9 @@ def _spider_item_score(candidate, filters, enriched=False):
         elif qualification_status == "mismatch":
             return False, 0, [], unknown, ["qualifications mismatch: " + qualification_evidence[:160]], hard_passed, []
         elif enriched:
-            return False, 0, [], unknown, ["Professional Qualifications not visible in JobAdder custom field"], hard_passed, []
+            if not include_untagged:
+                return False, 0, [], unknown, ["Professional Qualifications not visible in JobAdder custom field"], hard_passed, []
+            unknown.append("Professional Qualifications not tagged in JobAdder")
         else:
             unknown.append("Professional Qualifications require JobAdder candidate detail")
 
@@ -876,7 +887,9 @@ def _spider_item_score(candidate, filters, enriched=False):
         elif not enriched:
             unknown.append("Residential Status requires JobAdder candidate detail")
         else:
-            return False, 0, [], unknown, ["Residential Status not visible in JobAdder custom field"], hard_passed, []
+            if not include_untagged:
+                return False, 0, [], unknown, ["Residential Status not visible in JobAdder custom field"], hard_passed, []
+            unknown.append("Residential Status not tagged in JobAdder")
 
     salary_status, salary_evidence = _spider_salary_match(
         candidate,

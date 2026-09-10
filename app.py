@@ -7392,6 +7392,9 @@ def jobadder_spider_search():
         "salary_min": _spider_salary_bound(salary_min_raw),
         "salary_max": _spider_salary_bound(salary_max_raw),
         "include_missing_salary": bool(filters.get("include_missing_salary")),
+        # Keep candidates whose JobAdder custom fields were never tagged and flag
+        # the gap, instead of excluding them for missing data.
+        "include_untagged_fields": bool(filters.get("include_untagged_fields")),
         "years": _spider_min_years_value(filters.get("years_min") if filters.get("years_min") is not None else (filters.get("years") or filters.get("experience_years"))),
         "years_min": _spider_min_years_value(filters.get("years_min") if filters.get("years_min") is not None else (filters.get("years") or filters.get("experience_years"))),
         "years_max": _spider_max_years_value(filters.get("years_max") if filters.get("years_max") is not None else filters.get("experience_years_max")),
