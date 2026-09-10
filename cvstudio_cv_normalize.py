@@ -58,6 +58,13 @@ def _iso_year_month_repl(match):
     return match.group(0)
 
 
+# Shared month-word alternation (longest first so "January" wins over "Jan").
+_CV_MONTH_WORD = (
+    r"(?:January|February|March|April|September|October|November|December|"
+    r"June|July|August|Sept|May|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)"
+)
+
+
 def _cv_pretranslate_iso_dates(text):
     """Rewrite ISO-style YYYY-MM and YYYY-MM-DD dates to house-style "Mon YYYY".
 
@@ -71,7 +78,56 @@ def _cv_pretranslate_iso_dates(text):
     text = str(text or "")
     # YYYY-MM-DD first (drop the day), then the bare YYYY-MM.
     text = re.sub(r"\b((?:19|20)\d{2})-(0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])\b", _iso_year_month_repl, text)
-    text = re.sub(r"\b((?:19|20)\d{2})-(0[1-9]|1[0-2])\b", _iso_year_month_repl, text)
+    # A "YYYY-NN" directly followed by a month name is NOT an ISO year-month:
+    # the dash is a range separator and NN is a day, as in
+    # "Apr 2022-11 Jul 2026". Reading that as November 2022 corrupted the range.
+    # The guard is deliberately same-line ([ \t]* rather than \s*): this helper
+    # also runs over whole CV documents, where a real ISO date can sit at the end
+    # of a line whose next line happens to start with a month name.
+    text = re.sub(
+        r"\b((?:19|20)\d{2})-(0[1-9]|1[0-2])\b(?![ \t]*" + _CV_MONTH_WORD + r"\b)",
+        _iso_year_month_repl,
+        text,
+        flags=re.I,
+    )
+    return text
+
+
+# A number beside a month may be a two-digit year. Require a complete date,
+# or an entire day-bearing range with an explicit shared year, before removal.
+# Keep this logic mirrored in both JavaScript date normalizers.
+_CV_DAY_WORD = r"(?:0?[1-9]|[12]\d|3[01])(?:st|nd|rd|th)?"
+_CV_DAY_BEFORE_MONTH_RE = re.compile(
+    r"\b" + _CV_DAY_WORD + r"[ \t]+(" + _CV_MONTH_WORD + r")\.?,?\s+(\d{4})\b", re.I,
+)
+_CV_DAY_AFTER_MONTH_RE = re.compile(
+    r"\b(" + _CV_MONTH_WORD + r")\.?[ \t]+" + _CV_DAY_WORD + r",?\s+(\d{4})\b", re.I,
+)
+_CV_SHARED_DAY_RANGE_RES = (
+    re.compile(
+        r"(" + _CV_MONTH_WORD + r")\.?\s+" + _CV_DAY_WORD + r"\s*(?:-|to)\s*("
+        + _CV_MONTH_WORD + r")\.?\s+" + _CV_DAY_WORD + r",?\s+(\d{4})", re.I,
+    ),
+    re.compile(
+        _CV_DAY_WORD + r"\s+(" + _CV_MONTH_WORD + r")\.?\s*(?:-|to)\s*"
+        + _CV_DAY_WORD + r"\s+(" + _CV_MONTH_WORD + r")\.?,?\s+(\d{4})", re.I,
+    ),
+)
+
+
+def _cv_strip_day_of_month(text):
+    """Reduce "11 Jul 2026" or "Jul 11, 2026" to "Jul 2026".
+
+    Preserve ambiguous short years, including mixed "Jan 20 to Dec 2021".
+    A shared year is used only for an explicit day-bearing span on both ends.
+    """
+    text = str(text or "")
+    for pattern in _CV_SHARED_DAY_RANGE_RES:
+        match = pattern.fullmatch(text)
+        if match:
+            return f"{match.group(1)} {match.group(3)} to {match.group(2)} {match.group(3)}"
+    text = _CV_DAY_BEFORE_MONTH_RE.sub(r"\1 \2", text)
+    text = _CV_DAY_AFTER_MONTH_RE.sub(r"\1 \2", text)
     return text
 
 
@@ -314,6 +370,10 @@ def _normalize_cv_date_range(value):
     text = text.replace("–", "-").replace("—", "-").replace("−", "-")
     text = re.sub(r"\b(till\s*date|till\s*now|to\s*date|current|presently|now)\b", "Present", text, flags=re.I)
     text = re.sub(r"\bpresent\b", "Present", text, flags=re.I)
+    # House style is month + year, so drop any day-of-month first. This must run
+    # before the ISO rewrite: "Apr 2022-11 Jul 2026" would otherwise have its
+    # "2022-11" read as November 2022 instead of a range separator plus a day.
+    text = _cv_strip_day_of_month(text)
     # Convert ISO YYYY-MM(-DD) to "Mon YYYY" BEFORE turning "-" into "to", so an
     # ISO range like "2020-06 to 2025-07" is not shredded into "2020 to 06 ...".
     text = _cv_pretranslate_iso_dates(text)

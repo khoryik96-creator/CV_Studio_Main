@@ -25,11 +25,11 @@
   `54298b9b6a822e1f36c9c101f1ff4edc9c7e835f`
 - Phase 7B-4 source baseline Git commit (merged Phase 7B-3):
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
-- Current merged source: v24.6.382 (`75c43b6`), verified 2026-09-06.
+- Current merged source: v24.6.393 (`787e815`), verified 2026-09-09.
 - PR #189 merged as `2c216c6`; PR #185 merged as `b84c36f`. Neither is an
   active branch claim. PRs #191–#194 are merged with owner approval. Current work is
-  v24.6.383 on `codex/pr195-v24.6.383-unused-helper-cleanup`, integrating
-  the v24.6.382 fixes from PR #194. Owner approved merging both after checks.
+  v24.6.395 on `codex/pr202-v24.6.395-date-parity-fixes`, based on open PR #202.
+  PR #195 is merged; replacement PR #203 is authorized to merge after validation.
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
   The owner separately authorized the v24.6.341 OCR partial-failure corrective
@@ -54,10 +54,22 @@
   #184 then merged v24.6.363 as `1912d48`; PR #186 merged v24.6.368 as
   `fbdf0e7`; PR #187 merged v24.6.369 as `2f345b7`; PR #188 merged v24.6.370
   as `b52b5b0`.
-- Current stop: v24.6.383 cleanup awaits checks and merge after PR #194. No release or native
+- Current stop: v24.6.395 date-parity fixes await final PR #203 merge gates. No release or native
   protected build is produced by this work; protected builds remain manual.
 
-## v24.6.383 unused-helper cleanup (owner-approved merge pending checks)
+## v24.6.395 PR #202 date-parity corrective (unmerged)
+
+- Preserves ambiguous two-digit years and mixed-precision ranges. Day removal
+  requires a complete date or an explicit day-bearing shared-year span.
+- Python, browser and direct Word generator agree across 919 cases, including
+  ISO, numeric dates, shared years, short years and re-normalization.
+- PR #203 review adds commas after month names in complete day-first dates and
+  shared-year spans; the owner has authorized merge after validation.
+- Final local gate: 1223 passed, 4 skipped, 2161 subtests; all 24 frontend groups;
+  24 source-smoke assertions and protected-source/dependency checks passed.
+- No route, schema, dependency, credential or paid-call boundary changes.
+
+## v24.6.383 unused-helper cleanup (merged in PR #195)
 
 - Removes only four unreferenced Python definitions. All other function bodies
   remain unchanged, including the v24.6.382 fixes merged in PR #194.

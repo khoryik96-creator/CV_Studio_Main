@@ -163,17 +163,30 @@ function smartTitleText(value, opts = {}) {
 function normalizeDateRange(value) {
   let text = String(value == null ? '' : value).trim();
   if (!text) return '';
+  text = text.replace(/^[\s]*[-‐-―−•·▪◦*]+[\s]*/, '');
+  if (!text) return '';
   const loneEndYear = text.match(/^to\s+(\d{4})$/i);
   if (loneEndYear) text = loneEndYear[1];
   else if (/^to$/i.test(text)) return '';
   text = text.replace(/[–—−]/g, '-');
   text = text.replace(/\b(till\s*date|till\s*now|to\s*date|current|presently|now)\b/gi, 'Present');
   text = text.replace(/\bpresent\b/gi, 'Present');
+  // Mirror Python: short years are not days without explicit date evidence.
+  const monthWord = '(?:January|February|March|April|September|October|November|December|June|July|August|Sept|May|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)';
+  const dayWord = '(?:0?[1-9]|[12]\\d|3[01])(?:st|nd|rd|th)?';
+  const sharedDayRange = text.match(new RegExp('^(' + monthWord + ')\\.?\\s+' + dayWord + '\\s*(?:-|to)\\s*(' + monthWord + ')\\.?\\s+' + dayWord + ',?\\s+(\\d{4})$', 'i'))
+    || text.match(new RegExp('^' + dayWord + '\\s+(' + monthWord + ')\\.?\\s*(?:-|to)\\s*' + dayWord + '\\s+(' + monthWord + ')\\.?,?\\s+(\\d{4})$', 'i'));
+  if (sharedDayRange) {
+    text = sharedDayRange[1] + ' ' + sharedDayRange[3] + ' to ' + sharedDayRange[2] + ' ' + sharedDayRange[3];
+  } else {
+    text = text.replace(new RegExp('\\b' + dayWord + '[ \\t]+(' + monthWord + ')\\.?,?\\s+(\\d{4})\\b', 'gi'), '$1 $2');
+    text = text.replace(new RegExp('\\b(' + monthWord + ')\\.?[ \\t]+' + dayWord + ',?\\s+(\\d{4})\\b', 'gi'), '$1 $2');
+  }
   // ISO YYYY-MM(-DD) -> "Mon YYYY" BEFORE turning "-" into "to", so a range like
   // "2020-06 to 2025-07" is not shredded into "2020 to 06 to 2025 to 07".
   const isoRepl = function(m, yyyy, mm){ const n = parseInt(mm, 10); return (n >= 1 && n <= 12) ? (MONTH_ABBR_BY_NUMBER[n] + ' ' + yyyy) : m; };
   text = text.replace(/\b((?:19|20)\d{2})-(0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])\b/g, isoRepl);
-  text = text.replace(/\b((?:19|20)\d{2})-(0[1-9]|1[0-2])\b/g, isoRepl);
+  text = text.replace(new RegExp('\\b((?:19|20)\\d{2})-(0[1-9]|1[0-2])\\b(?![ \\t]*' + monthWord + '\\b)', 'gi'), isoRepl);
   text = text.replace(/\s*-\s*/g, ' to ');
   text = text.replace(/\s+to\s+/gi, ' to ');
   text = text.replace(/\b(January|February|March|April|June|July|August|September|Sept|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\b/gi, function(m){
@@ -752,9 +765,22 @@ function makeEducationSection(education) {
 }
 
 // ── Additional info ───────────────────────────────────────────────────────────
+// The printable lines of one skills group. ``items`` arrives either as an array
+// or as a newline-separated string, so both shapes are reduced the same way.
+function skillItemLines(skill) {
+  const rawItems = (skill && skill.items) || '';
+  return Array.isArray(rawItems)
+    ? rawItems.map(line => String(line).trim()).filter(line => line.length > 0)
+    : String(rawItems).split(/\n/).map(line => line.trim()).filter(line => line.length > 0);
+}
+
 function makeAdditionalSection(certs, skills) {
   certs = (certs || []).filter(c => String(c || '').trim());
-  skills = (skills || []).filter(s => s && typeof s === 'object' && (String(s.category || '').trim() || String(s.items || '').trim()));
+  // A skills group only counts when it actually has an item to print. A parse
+  // can emit a category with empty items (e.g. {category:"Skills", items:""}),
+  // which previously still satisfied this filter and printed the "Skills:"
+  // heading above nothing.
+  skills = (skills || []).filter(s => s && typeof s === 'object' && skillItemLines(s).length > 0);
   if (!certs.length && !skills.length) return '';
 
   let xml = sectionHeader('A D D I T I O N A L   I N F O R M A T I O N    ______________________________________');
@@ -776,10 +802,7 @@ function makeAdditionalSection(certs, skills) {
       const category = String(s.category || '').trim();
       if (category && !/^skills?$/i.test(category)) xml += boldBlackPara(category + ':', 24);
       // Items — handle both array and newline-separated string
-      const rawItems = s.items || '';
-      const lines = Array.isArray(rawItems)
-        ? rawItems.map(l => String(l).trim()).filter(l => l.length > 0)
-        : String(rawItems).split(/\n/).map(l => l.trim()).filter(l => l.length > 0);
+      const lines = skillItemLines(s);
       if (!lines.length) continue;
       if (lines.length > 1) {
         for (const line of lines) {

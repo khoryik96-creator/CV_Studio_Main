@@ -213,15 +213,36 @@ function cvNormMonth(m) {
 function cvNormDateRange(value) {
   var text = String(value == null ? '' : value).trim();
   if (!text) return '';
+  text = text.replace(/^[\s]*[-‐-―−•·▪◦*]+[\s]*/, '');
+  if (!text) return '';
   var loneEndYear = text.match(/^to\s+(\d{4})$/i);
   if (loneEndYear) text = loneEndYear[1];
   else if (/^to$/i.test(text)) return '';
   text = text.replace(/[–—−]/g, '-');
   text = text.replace(/\b(till\s*date|till\s*now|to\s*date|current|presently|now)\b/gi, 'Present');
   text = text.replace(/\bpresent\b/gi, 'Present');
+  // Mirror Python and generate.js; preserve ambiguous two-digit years.
+  var monthWord = '(?:January|February|March|April|September|October|November|December|June|July|August|Sept|May|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)';
+  var dayWord = '(?:0?[1-9]|[12]\\d|3[01])(?:st|nd|rd|th)?';
+  var sharedDayRange = text.match(new RegExp('^(' + monthWord + ')\\.?\\s+' + dayWord + '\\s*(?:-|to)\\s*(' + monthWord + ')\\.?\\s+' + dayWord + ',?\\s+(\\d{4})$', 'i'))
+    || text.match(new RegExp('^' + dayWord + '\\s+(' + monthWord + ')\\.?\\s*(?:-|to)\\s*' + dayWord + '\\s+(' + monthWord + ')\\.?,?\\s+(\\d{4})$', 'i'));
+  if (sharedDayRange) {
+    text = sharedDayRange[1] + ' ' + sharedDayRange[3] + ' to ' + sharedDayRange[2] + ' ' + sharedDayRange[3];
+  } else {
+    text = text.replace(new RegExp('\\b' + dayWord + '[ \\t]+(' + monthWord + ')\\.?,?\\s+(\\d{4})\\b', 'gi'), '$1 $2');
+    text = text.replace(new RegExp('\\b(' + monthWord + ')\\.?[ \\t]+' + dayWord + ',?\\s+(\\d{4})\\b', 'gi'), '$1 $2');
+  }
+  var monthNumbers = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var isoRepl = function(m, yyyy, mm){ return monthNumbers[parseInt(mm, 10) - 1] + ' ' + yyyy; };
+  text = text.replace(/\b((?:19|20)\d{2})-(0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])\b/g, isoRepl);
+  text = text.replace(new RegExp('\\b((?:19|20)\\d{2})-(0[1-9]|1[0-2])\\b(?![ \\t]*' + monthWord + '\\b)', 'gi'), isoRepl);
   text = text.replace(/\s*-\s*/g, ' to ');
   text = text.replace(/\s+to\s+/gi, ' to ');
   text = text.replace(/\b(January|February|March|April|June|July|August|September|Sept|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\b/gi, function(m){ return cvNormMonth(m); });
+  text = text.replace(/\b(\d{1,2})\/(\d{4})\b/g, function(m, mm, yyyy){
+    var n = parseInt(mm, 10);
+    return n >= 1 && n <= 12 ? monthNumbers[n - 1] + ' ' + yyyy : m;
+  });
   text = text.replace(/\s+/g, ' ').trim();
   var sameYear = text.match(/^(\d{4})\s+to\s+\1$/i);
   if (sameYear) return sameYear[1];
@@ -400,8 +421,16 @@ function cvNormalizeStructuredData(data) {
   var certifications = Array.isArray(data.certifications) ? data.certifications : (data.certifications ? [data.certifications] : []);
   data.certifications = cvStripAdditionalBulletMarkers(certifications, true);
   var skills = Array.isArray(data.skills) ? data.skills : [];
+  // Mirror generate.js: a skills group only counts when it has a printable
+  // item, so a category with empty items cannot raise a SKILLS heading over
+  // nothing and leave the preview disagreeing with the generated DOCX.
   data.skills = skills.filter(function(value){
-    return value && typeof value === 'object' && (String(value.category || '').trim() || String(value.items || '').trim());
+    if (!value || typeof value !== 'object') return false;
+    var rawItems = value.items || '';
+    var lines = Array.isArray(rawItems)
+      ? rawItems.map(function(line){ return String(line || '').trim(); }).filter(Boolean)
+      : String(rawItems).split(/\r?\n/).map(function(line){ return line.trim(); }).filter(Boolean);
+    return lines.length > 0;
   }).map(function(value){
     value.items = cvStripAdditionalBulletMarkers(value.items || '', false);
     return value;
