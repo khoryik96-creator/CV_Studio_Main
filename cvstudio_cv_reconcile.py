@@ -128,6 +128,12 @@ def _reads_as_heading(flat, line_start, offset):
     return lead[-1] in ".!?:;"
 
 
+def _starts_a_listing_entry(flat, offset):
+    """Report whether a match continues a "Job Title - Company" listing line."""
+    lead = flat[:offset].rstrip()
+    return bool(lead) and lead[-1] in _LISTING_LEAD_CHARS
+
+
 def _heading_offsets(flat, line_start, name):
     """Offsets where a company name reads as a heading rather than a mention."""
     pattern = _company_source_pattern(name)
@@ -137,6 +143,26 @@ def _heading_offsets(flat, line_start, name):
         match.start()
         for match in pattern.finditer(flat)
         if _reads_as_heading(flat, line_start, match.start())
+    ]
+
+
+def _block_offsets(flat, name):
+    """Offsets where a sub-brand block's own name can begin.
+
+    Deliberately weaker than ``_heading_offsets``. A two-column CV extracted with
+    pdfplumber interleaves the sidebar into the main column, so the block's heading
+    routinely lands mid-line behind unrelated text
+    ("... (ERP, POS & HRIS) PM BRANDS SDN BHD"). Requiring a line or sentence boundary
+    there rejects the real document. The parent side stays strict, and a name that
+    continues a listing line is still refused, so the pairing remains anchored.
+    """
+    pattern = _company_source_pattern(name)
+    if pattern is None:
+        return []
+    return [
+        match.start()
+        for match in pattern.finditer(flat)
+        if not _starts_a_listing_entry(flat, match.start())
     ]
 
 
@@ -211,7 +237,7 @@ def _attach_untitled_subsidiary_entries(parsed, cv_text=""):
     for index, exp in enumerate(exps):
         if not is_subsidiary(exp):
             continue
-        offsets = _heading_offsets(flat, line_start, exp.get("company"))
+        offsets = _block_offsets(flat, exp.get("company"))
         if not offsets:
             continue
         offset = offsets[0]
