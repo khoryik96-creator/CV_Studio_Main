@@ -95,6 +95,10 @@ this:
   rather than assuming every number beside a month is a day. Full day/month/year
   dates and explicit day-bearing shared-year ranges reduce to month + year.
   Day-first dates may include a comma after the month, as in 20 March, 2021.
+  v24.6.396 accepts Unicode horizontal spaces without crossing lines. Shared
+  years expand only when the start month is not later than the ending month;
+  `1 Dec - 31 Jan 2026` becomes `Dec to Jan 2026`, not a guessed start year.
+  Explicit `Dec 2025 to Jan 2026` stays intact on every pass.
   Python, `cvNormDateRange` and `normalizeDateRange` share cross-language tests
   in `tests/test_cv_date_parity.py` and `tests/test_cv_date_parity.js`.
 - **`_recover_cv_source_skill_item_punctuation`** — restores visible middle-dot

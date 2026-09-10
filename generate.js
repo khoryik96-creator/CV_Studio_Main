@@ -162,6 +162,7 @@ function smartTitleText(value, opts = {}) {
 
 function normalizeDateRange(value) {
   let text = String(value == null ? '' : value).trim();
+  text = text.replace(/[\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]/g, ' ');
   if (!text) return '';
   text = text.replace(/^[\s]*[-‐-―−•·▪◦*]+[\s]*/, '');
   if (!text) return '';
@@ -177,7 +178,8 @@ function normalizeDateRange(value) {
   const sharedDayRange = text.match(new RegExp('^(' + monthWord + ')\\.?\\s+' + dayWord + '\\s*(?:-|to)\\s*(' + monthWord + ')\\.?\\s+' + dayWord + ',?\\s+(\\d{4})$', 'i'))
     || text.match(new RegExp('^' + dayWord + '\\s+(' + monthWord + ')\\.?\\s*(?:-|to)\\s*' + dayWord + '\\s+(' + monthWord + ')\\.?,?\\s+(\\d{4})$', 'i'));
   if (sharedDayRange) {
-    text = sharedDayRange[1] + ' ' + sharedDayRange[3] + ' to ' + sharedDayRange[2] + ' ' + sharedDayRange[3];
+    // The month-order check below decides whether sharing the year is safe.
+    text = sharedDayRange[1] + ' to ' + sharedDayRange[2] + ' ' + sharedDayRange[3];
   } else {
     text = text.replace(new RegExp('\\b' + dayWord + '[ \\t]+(' + monthWord + ')\\.?,?\\s+(\\d{4})\\b', 'gi'), '$1 $2');
     text = text.replace(new RegExp('\\b(' + monthWord + ')\\.?[ \\t]+' + dayWord + ',?\\s+(\\d{4})\\b', 'gi'), '$1 $2');
@@ -205,6 +207,9 @@ function normalizeDateRange(value) {
   if (sameYearMonths) {
     const startMonth = MONTH_ABBR[String(sameYearMonths[1]).toLowerCase()] || sameYearMonths[1];
     const endMonth = MONTH_ABBR[String(sameYearMonths[2]).toLowerCase()] || sameYearMonths[2];
+    const monthOrder = Object.values(MONTH_ABBR_BY_NUMBER);
+    // Do not fabricate a start year for a December-to-January span.
+    if (monthOrder.indexOf(startMonth) > monthOrder.indexOf(endMonth)) return text;
     return `${startMonth} ${sameYearMonths[3]} to ${endMonth} ${sameYearMonths[3]}`;
   }
   return text;

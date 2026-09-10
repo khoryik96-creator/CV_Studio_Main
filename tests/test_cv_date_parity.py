@@ -13,6 +13,31 @@ class CvDateParityTests(unittest.TestCase):
     def test_all_three_normalizers_preserve_dates_and_are_idempotent(self):
         cases = json.loads((ROOT / "tests/fixtures/cv_date_cases.json").read_text(encoding="utf-8"))
         months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        for start_index, start in enumerate(months):
+            for end_index, end in enumerate(months):
+                start_date = start + " 2026" if start_index <= end_index else start
+                expected = f"{start_date} to {end} 2026"
+                cases.extend([
+                    [f"1 {start} - 28 {end} 2026", expected],
+                    [f"{start} 1 - {end} 28, 2026", expected],
+                    [f"{start} - {end} 2026", expected],
+                ])
+        for space in ("\u00a0", "\u1680", "\u2000", "\u2007", "\u2009", "\u202f", "\u205f", "\u3000"):
+            for month in months:
+                cases.extend([
+                    [f"1{space}{month}{space}2021 - Present", f"{month} 2021 to Present"],
+                    [f"{month}{space}1,{space}2021 - Present", f"{month} 2021 to Present"],
+                ])
+            self.assertEqual(
+                cn._cv_pretranslate_iso_dates(f"Apr 2022-11{space}Jul 2026"),
+                f"Apr 2022-11{space}Jul 2026",
+            )
+        for newline in ("\n", "\r\n", "\u2028", "\u2029"):
+            cases.append([f"2020-06{newline}Jun 2021", "Jun 2020 Jun 2021"])
+            self.assertEqual(
+                cn._cv_pretranslate_iso_dates(f"2020-06{newline}Jun 2021"),
+                f"Jun 2020{newline}Jun 2021",
+            )
         for month in months:
             # Every potentially day-like short year, including mixed precision.
             for year in range(32):
