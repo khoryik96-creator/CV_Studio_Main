@@ -47,6 +47,7 @@ vm.createContext(context);
 [
   'cvParseIsLong','cvParseTimeoutMs','cvStripInferredTitle','cvCanonicalSectionHeading',
   'cvStripLeadingBulletMarker','cvStripAdditionalBulletMarkers',
+  'cvReadsAsReferenceHeading','cvDropReferenceSkills',
   'cvNormalizeBulletItems','cvNormalizeStructuredData','cvNormMonth','cvNormDateRange','summaryBulletLines',
   'formatSummaryBulletsFor','applyFormatSummaryBullets','cvSummaryPrompt','cvSummaryModifierForPreference','versionedUnlockKey','readVersionedUnlock',
   'writeVersionedUnlock','cvScoringIsUnlocked','cvScoringSetUnlocked','updateCvScoringLockUI',
@@ -334,6 +335,32 @@ assert.strictEqual((html.match(/fetchWithTimeout\('\/parse'/g) || []).length, 3)
 assert.ok(html.includes('}, cvParseTimeoutMs(cvText));'));
 assert.ok(html.includes('}, cvParseTimeoutMs(raw));'));
 assert.ok(html.includes('}, cvParseTimeoutMs(rawText));'));
+
+// Referees never reach the formatted CV, and the Preview must agree with it. A
+// skills category whose label reads purely as a referees heading goes; one that
+// merely contains the word "reference" is a real skill and stays.
+assert.ok(context.cvReadsAsReferenceHeading('Referees'));
+assert.ok(context.cvReadsAsReferenceHeading('Professional References'));
+assert.ok(context.cvReadsAsReferenceHeading('References Available Upon Request'));
+assert.ok(!context.cvReadsAsReferenceHeading('Reference Data Management'));
+assert.ok(!context.cvReadsAsReferenceHeading('Publications'));
+assert.deepStrictEqual(
+  context.cvDropReferenceSkills([
+    {category:'Technical Skills',items:'Python, SQL'},
+    {category:'Reference Architecture',items:'Target state design'},
+    {category:'Referees',items:'Jane Lim, Director, Beta Sdn Bhd, +60 12-345 6789'},
+    {category:'Additional Information',items:'Willing to travel\nReferences available upon request'},
+    {category:'Interests',items:'References available on request'},
+  ]),
+  [
+    {category:'Technical Skills',items:'Python, SQL'},
+    {category:'Reference Architecture',items:'Target state design'},
+    {category:'Additional Information',items:'Willing to travel'},
+  ]
+);
+const refereeData = {work_experiences:[],certifications:[],skills:[{category:'Referees',items:'Jane Lim, Director'},{category:'Technical Skills',items:'Python'}]};
+context.cvNormalizeStructuredData(refereeData);
+assert.deepStrictEqual(refereeData.skills.map(s => s.category), ['Technical Skills']);
 
 const data = {candidate:{current_position:'Advisor (implied from responsibilities)'},work_experiences:[{roles:[{title:'Advisor (inferred from duties)',bullets:['{"heading":"Achievement","bullets":["Won award"]}']}]}],certifications:[''],skills:[{category:'Skills',items:'Leadership'}]};
 context.cvNormalizeStructuredData(data);

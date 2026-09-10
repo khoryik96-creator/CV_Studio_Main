@@ -395,6 +395,113 @@ def _collapse_incomplete_earlier_career(parsed):
     return parsed
 
 
+# ── References / referees ─────────────────────────────────────────────────────
+# A referees block is contact data for third parties, so it never belongs in the
+# formatted CV. The parse prompt asks the model to drop it, but the catch-all
+# "any other section" rule used to sweep it into a skills category, and already
+# parsed data can still carry one, so the removal is deterministic here too.
+#
+# Matching is on the CATEGORY LABEL only, and only when every word in it is part
+# of a referees heading. That keeps genuine skills such as "Reference Data
+# Management" or "Reference Architecture" -- which name a discipline, not a
+# referee -- untouched.
+_REFERENCE_HEADING_WORDS = frozenset({"reference", "references", "referee", "referees"})
+_REFERENCE_HEADING_FILLER = frozenset({
+    "and", "or", "details", "detail", "contacts", "contact", "contactdetails",
+    "information", "info", "personal", "professional", "character", "work",
+    "employment", "academic", "business", "available", "upon", "on", "request",
+    "furnished", "provided", "list", "section",
+})
+# "References available upon request" carries no information. It is dropped as a
+# whole line even inside a category that is kept for its other content.
+_REFERENCE_ON_REQUEST_RE = re.compile(
+    r"^(?:references?|referees?)"
+    r"(?:\s+(?:are|is|can\s+be|will\s+be|shall\s+be))?"
+    r"\s+(?:available|furnished|provided|supplied)"
+    r"(?:\s+(?:up)?on\s+request)?[.!]?$",
+    re.I,
+)
+
+
+def _reference_heading_tokens(label):
+    return [token for token in re.split(r"[^A-Za-z]+", str(label or "")) if token]
+
+
+def _reads_as_reference_heading(label):
+    """True when a skills-category label is purely a references/referees heading."""
+    tokens = [token.lower() for token in _reference_heading_tokens(label)]
+    if not tokens:
+        return False
+    if not any(token in _REFERENCE_HEADING_WORDS for token in tokens):
+        return False
+    return all(
+        token in _REFERENCE_HEADING_WORDS or token in _REFERENCE_HEADING_FILLER
+        for token in tokens
+    )
+
+
+def _strip_reference_on_request_items(items):
+    """Drop "references available upon request" lines, keeping the items' shape."""
+    if isinstance(items, list):
+        kept = [
+            item for item in items
+            if not (isinstance(item, str) and _REFERENCE_ON_REQUEST_RE.match(item.strip()))
+        ]
+        return kept, len(kept) != len(items)
+    if isinstance(items, str):
+        lines = items.split("\n")
+        kept = [line for line in lines if not _REFERENCE_ON_REQUEST_RE.match(line.strip())]
+        if len(kept) == len(lines):
+            return items, False
+        return "\n".join(kept), True
+    return items, False
+
+
+def _cv_skill_has_printable_item(items):
+    if isinstance(items, list):
+        return any(isinstance(item, str) and item.strip() for item in items)
+    return bool(str(items or "").strip())
+
+
+def _drop_reference_sections(parsed):
+    """Remove referees/references content from the parsed CV.
+
+    A whole skills category goes when its label reads as a referees heading; a
+    kept category only loses an "available upon request" line. Categories left
+    with nothing printable are removed, matching the renderer's own filter.
+    """
+    if not isinstance(parsed, dict):
+        return parsed
+    skills = parsed.get("skills")
+    if not isinstance(skills, list):
+        return parsed
+    kept = []
+    changed = False
+    for entry in skills:
+        if not isinstance(entry, dict):
+            kept.append(entry)
+            continue
+        if _reads_as_reference_heading(entry.get("category")):
+            changed = True
+            continue
+        items, stripped = _strip_reference_on_request_items(entry.get("items"))
+        if not stripped:
+            kept.append(entry)
+            continue
+        changed = True
+        # The label survived the heading test, so an emptied category was a
+        # referees block under another name. Drop it rather than print a heading
+        # over nothing.
+        if not _cv_skill_has_printable_item(items):
+            continue
+        entry = dict(entry)
+        entry["items"] = items
+        kept.append(entry)
+    if changed:
+        parsed["skills"] = kept
+    return parsed
+
+
 def _source_has_redacted_language_block(cv_text):
     """Return True only when a Languages block is explicitly redacted/masked.
 

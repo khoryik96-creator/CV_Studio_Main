@@ -410,6 +410,55 @@ function cvNormalizeBulletItems(items, allowStandaloneSections) {
   return out;
 }
 
+// ── References / referees ─────────────────────────────────────────────────────
+// Mirrors _drop_reference_sections in cvstudio_cv_reconcile.py. The server drops
+// referees at /parse and again at /generate-docx; doing it here too keeps Preview
+// agreeing with the generated DOCX for CV data parsed before that pass existed.
+// The word lists live inside the functions so each one can be lifted out and
+// exercised on its own, and tests/test_cv_reference_section_omission.py asserts
+// they still match the Python sets.
+
+// True only when every word of the label belongs to a referees heading, so a real
+// skill such as "Reference Data Management" survives.
+function cvReadsAsReferenceHeading(label) {
+  var CV_REFERENCE_HEADING_WORDS = ['reference', 'references', 'referee', 'referees'];
+  var CV_REFERENCE_HEADING_FILLER = ['and', 'or', 'details', 'detail', 'contacts', 'contact',
+    'contactdetails', 'information', 'info', 'personal', 'professional', 'character', 'work',
+    'employment', 'academic', 'business', 'available', 'upon', 'on', 'request', 'furnished',
+    'provided', 'list', 'section'];
+  var tokens = String(label == null ? '' : label).split(/[^A-Za-z]+/)
+    .filter(Boolean).map(function(token){ return token.toLowerCase(); });
+  if (!tokens.length) return false;
+  if (!tokens.some(function(token){ return CV_REFERENCE_HEADING_WORDS.indexOf(token) !== -1; })) return false;
+  return tokens.every(function(token){
+    return CV_REFERENCE_HEADING_WORDS.indexOf(token) !== -1
+      || CV_REFERENCE_HEADING_FILLER.indexOf(token) !== -1;
+  });
+}
+
+function cvDropReferenceSkills(skills) {
+  var CV_REFERENCE_ON_REQUEST_RE = /^(?:references?|referees?)(?:\s+(?:are|is|can\s+be|will\s+be|shall\s+be))?\s+(?:available|furnished|provided|supplied)(?:\s+(?:up)?on\s+request)?[.!]?$/i;
+  return (Array.isArray(skills) ? skills : []).filter(function(entry){
+    if (!entry || typeof entry !== 'object') return true;
+    if (cvReadsAsReferenceHeading(entry.category)) return false;
+    var rawItems = entry.items;
+    if (Array.isArray(rawItems)) {
+      entry.items = rawItems.filter(function(item){
+        return !(typeof item === 'string' && CV_REFERENCE_ON_REQUEST_RE.test(item.trim()));
+      });
+      return entry.items.length > 0;
+    }
+    if (typeof rawItems === 'string') {
+      var lines = rawItems.split(/\r?\n/);
+      var kept = lines.filter(function(line){ return !CV_REFERENCE_ON_REQUEST_RE.test(line.trim()); });
+      if (kept.length === lines.length) return true;
+      entry.items = kept.join('\n');
+      return kept.some(function(line){ return line.trim().length > 0; });
+    }
+    return true;
+  });
+}
+
 function cvNormalizeStructuredData(data) {
   if (!data || typeof data !== 'object') return data;
   var candidate = data.candidate || {};
@@ -424,7 +473,7 @@ function cvNormalizeStructuredData(data) {
   });
   var certifications = Array.isArray(data.certifications) ? data.certifications : (data.certifications ? [data.certifications] : []);
   data.certifications = cvStripAdditionalBulletMarkers(certifications, true);
-  var skills = Array.isArray(data.skills) ? data.skills : [];
+  var skills = cvDropReferenceSkills(data.skills);
   // Mirror generate.js: a skills group only counts when it has a printable
   // item, so a category with empty items cannot raise a SKILLS heading over
   // nothing and leave the preview disagreeing with the generated DOCX.
