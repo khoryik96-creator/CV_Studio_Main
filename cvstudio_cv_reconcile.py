@@ -176,19 +176,26 @@ def _reference_block_start(flat, line_start):
 
     A referees list names employers and job titles, so a company matched inside it
     is a contact detail rather than the section the CV filed that company under.
+
+    Every line is put through ``_reads_as_reference_heading`` rather than screened by
+    a word match first: that predicate folds accents and possessives, so a heading
+    reading "RÉFÉRENCES" or "Referee's Details" has to reach it. An ASCII prefilter
+    would drop exactly those, and the block would then anchor a sub-brand to
+    whichever employer the referees list happens to print above it.
     """
-    for match in re.finditer(r"\b(?:references?|referees?)\b", flat, re.I):
-        offset = match.start()
-        if not line_start[offset]:
-            continue
-        line = flat[offset:_source_line_end(flat, line_start, offset)].strip()
+    offset = 0
+    while offset < len(flat):
+        end = _source_line_end(flat, line_start, offset)
+        line = flat[offset:end].strip()
         tokens = _reference_heading_tokens(line)
-        if len(tokens) > _REFERENCE_HEADING_MAX_TOKENS:
-            continue
-        if _REFERENCE_ON_REQUEST_RE.fullmatch(" ".join(tokens)):
-            continue
-        if _reads_as_reference_heading(line):
+        if (
+            tokens
+            and len(tokens) <= _REFERENCE_HEADING_MAX_TOKENS
+            and not _REFERENCE_ON_REQUEST_RE.fullmatch(" ".join(tokens))
+            and _reads_as_reference_heading(line)
+        ):
             return offset
+        offset = end
     return None
 
 

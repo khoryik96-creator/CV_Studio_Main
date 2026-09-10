@@ -74,6 +74,19 @@ referee-statement fix.
   Premiere, then Earlier Career.
 - Launcher line endings and byte-order marks verified identical to master.
 
+## Review correction (v24.6.405)
+
+`_reference_block_start` screened lines with an ASCII word match before handing
+them to the accent-folding predicate, so a heading reading "RÉFÉRENCES" found no
+referees block at all. A sub-brand repeated in such a referees list then read as a
+clean heading, outranked the real mid-line one, and anchored the block to whichever
+employer the referees list printed above it. Reproduced: the block went to KGB
+Holdings instead of A&W Malaysia.
+
+Every line now goes through `_reads_as_reference_heading`, which already folds
+accents and possessives, with no prefilter in front of it. Four heading spellings
+are covered by a new test, which fails on v24.6.404.
+
 ## Boundaries and limitations
 
 No routes, guards, storage schemas, dependencies or live provider behaviour

@@ -667,6 +667,23 @@ class SidebarLeftTwoColumnTests(unittest.TestCase):
             found.get("PM Brands Sdn Bhd (Halo Dim Sum)"), "A&W Malaysia Sdn Bhd"
         )
 
+    def test_an_accented_referees_heading_is_still_a_referees_block(self):
+        # The heading reads "RÉFÉRENCES". Screening lines by an ASCII word match before
+        # the accent-folding predicate would miss it, and the sub-brand repeated in the
+        # referee list would then anchor to whichever employer sits above it there.
+        for heading in ("RÉFÉRENCES", "Références", "Referee’s Details", "REFEREES"):
+            with self.subTest(heading=heading):
+                source = self.source.replace("REFERENCES\n", heading + "\n", 1) + (
+                    "KGB HOLDINGS SDN BHD\n"
+                    "• Director - Someone Else (+6012 000 0002)\n"
+                    "PM BRANDS SDN BHD (HALO DIM SUM)\n"
+                    "• Director - A Third Person (+6012 000 0003)\n"
+                )
+                found = self._subsidiaries(self._run(self._entries(), source))
+                self.assertEqual(
+                    found.get("PM Brands Sdn Bhd (Halo Dim Sum)"), "A&W Malaysia Sdn Bhd"
+                )
+
     def test_a_block_cannot_borrow_a_later_employers_duty_as_evidence(self):
         # The model's duty text for the block appears only under KGB, after the next
         # employer heading. The span stops there, so the mention stays a mention.
