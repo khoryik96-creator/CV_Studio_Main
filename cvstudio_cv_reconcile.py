@@ -28,6 +28,11 @@ from cvstudio_cv_normalize import (
 )
 
 
+_EARLIER_CAREER_RE = re.compile(r"earlier\s+career", re.I)
+# An undated entry carrying at least this many descriptive bullets is a real job.
+_DESCRIBED_ROLE_BULLETS = 2
+
+
 def _role_plain_bullets(role):
     bullets = []
     for item in (role or {}).get("bullets") or []:
@@ -55,10 +60,34 @@ def _collapse_incomplete_earlier_career(parsed):
     if not isinstance(exps, list) or len(exps) < 2:
         return parsed
 
+    def is_earlier_career_block(exp):
+        """Report whether the model already emitted its own Earlier Career grouping."""
+        return _EARLIER_CAREER_RE.fullmatch(
+            str((exp or {}).get("company") or "").strip()
+        ) is not None
+
+    def is_described_role(exp):
+        """Report whether an undated entry is a real job rather than a listing.
+
+        An early-career listing is a bare "Title - Company" line. A described role
+        carries its own account of the work, and belongs where the source put it even
+        when the source gave it no dates - a 2025 role must not be filed beside 2015
+        ones just because its dates are missing.
+        """
+        if is_earlier_career_block(exp):
+            return False
+        described = 0
+        for role in (exp or {}).get("roles") or []:
+            if isinstance(role, dict):
+                described += len(_role_plain_bullets(role))
+        return described >= _DESCRIBED_ROLE_BULLETS
+
     def is_undated(exp):
         if not isinstance(exp, dict):
             return False
         if str(exp.get("date_range") or "").strip():
+            return False
+        if is_described_role(exp):
             return False
         roles = exp.get("roles") if isinstance(exp.get("roles"), list) else []
         if not roles:
@@ -83,6 +112,10 @@ def _collapse_incomplete_earlier_career(parsed):
     first_title = ""
     for exp in block:
         company = _smart_title_text(exp.get("company") or "", company=True)
+        if is_earlier_career_block(exp):
+            # Already an Earlier Career grouping: take its bullets, not its name, or the
+            # heading is nested inside itself and printed a second time as a bullet.
+            company = ""
         roles = exp.get("roles") if isinstance(exp.get("roles"), list) else []
         if not roles:
             if company:
@@ -111,7 +144,9 @@ def _collapse_incomplete_earlier_career(parsed):
         "date_range": "",
         "company": "Earlier Career",
         "roles": [{
-            "title": first_title or "Earlier Career",
+            # No title: the company row already reads "Earlier Career", and repeating it
+            # here prints the heading twice.
+            "title": first_title,
             "date_range": "",
             "reason_for_leaving": "",
             "bullets": bullets,
