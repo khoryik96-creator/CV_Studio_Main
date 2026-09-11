@@ -147,6 +147,62 @@ def _heading_offsets(flat, line_start, name):
     ]
 
 
+# A role heading often carries a place or a qualifier after a separator:
+# "Analyst - Kuala Lumpur", "Manager (Operations)", "Director | Group". That is the
+# same role, so it must not stop the heading being found -- a role the source prints
+# this way used to be unlocatable, and the project then went to the newest promotion
+# instead of the one that ran it.
+# Separator, then a name: it has to start with a capital or a digit and stay short.
+# "Analyst - work covered the regional desk" is a sentence, and reading it as a
+# qualifier put a project under the role that sentence happened to name.
+_ROLE_HEADING_QUALIFIER_RE = re.compile(
+    r"^[\-\u2010-\u2015,|/(\[]\s*[A-Z0-9(\[][^•▪◦*]{0,40}$"
+)
+_ROLE_HEADING_QUALIFIER_MAX_WORDS = 5
+# Capitalising the first word is not enough: "- Work covered the regional desk"
+# clears a leading-capital test and is still a sentence. A place or a scope reads
+# as a NAME, so every word in it is capitalised bar the connectors a name may
+# contain.
+_ROLE_QUALIFIER_CONNECTORS = frozenset({
+    "of", "and", "the", "for", "at", "in", "on", "to", "a", "an",
+    "de", "del", "der", "di", "du", "da", "la", "le", "van", "von",
+    "bin", "binti", "al",
+})
+
+
+def _reads_as_qualifier_name(text):
+    """Whether a fragment reads as a name rather than as prose."""
+    words = re.findall(r"[A-Za-z][A-Za-z.'\u2019-]*", str(text or ""))
+    if not words:
+        return False
+    named = False
+    for word in words:
+        if word[:1].isupper():
+            named = True
+            continue
+        if word.lower() in _ROLE_QUALIFIER_CONNECTORS:
+            continue
+        return False
+    return named
+
+
+def _role_heading_tail_is_incidental(tail):
+    """Whether text after a role heading leaves it still reading as that heading."""
+    tail = str(tail or "").strip()
+    if not tail:
+        return True
+    if re.match(r"^[•▪◦*]", tail):
+        return True
+    if _WORK_TABLE_DATE_RE.fullmatch(tail.strip(" ()|:")):
+        return True
+    if not _ROLE_HEADING_QUALIFIER_RE.match(tail):
+        return False
+    words = re.findall(r"[A-Za-z0-9]+", tail)
+    if len(words) > _ROLE_HEADING_QUALIFIER_MAX_WORDS:
+        return False
+    return _reads_as_qualifier_name(tail)
+
+
 def _source_line_end(flat, line_start, offset):
     return next((i for i in range(offset + 1, len(flat)) if line_start[i]), len(flat))
 
@@ -171,32 +227,54 @@ def _source_block_span(flat, offset, boundaries):
     return flat[offset:end]
 
 
-def _reference_block_start(flat, line_start):
-    """Offset where a referees block begins in the flattened source, or ``None``.
+def _reads_as_referees_heading_line(line):
+    """Whether one source line is a referees section heading.
 
-    A referees list names employers and job titles, so a company matched inside it
+    The line goes to ``_reads_as_reference_heading`` with nothing screening it
+    first: that predicate folds accents and possessives, so a heading reading
+    "RÉFÉRENCES" or "Referee's Details" has to reach it. A word match in front of it
+    would drop exactly those.
+    """
+    tokens = _reference_heading_tokens(line)
+    return bool(
+        tokens
+        and len(tokens) <= _REFERENCE_HEADING_MAX_TOKENS
+        and not _REFERENCE_ON_REQUEST_RE.fullmatch(" ".join(tokens))
+        and _reads_as_reference_heading(line)
+    )
+
+
+def _reference_block_spans(flat, line_start):
+    """``(start, end)`` of each referees section in the flattened source.
+
+    A referees list names employers and job titles, so a company matched inside one
     is a contact detail rather than the section the CV filed that company under.
 
-    Every line is put through ``_reads_as_reference_heading`` rather than screened by
-    a word match first: that predicate folds accents and possessives, so a heading
-    reading "RÉFÉRENCES" or "Referee's Details" has to reach it. An ASCII prefilter
-    would drop exactly those, and the block would then anchor a sub-brand to
-    whichever employer the referees list happens to print above it.
+    A section ENDS at the next recognised section heading. Some CVs put referees
+    part-way through -- after the profile, or between two halves of the work history
+    -- and treating the first referees heading as a cut to the end of the document
+    made every employer below it unreachable.
     """
+    spans = []
+    open_start = None
     offset = 0
     while offset < len(flat):
         end = _source_line_end(flat, line_start, offset)
         line = flat[offset:end].strip()
-        tokens = _reference_heading_tokens(line)
-        if (
-            tokens
-            and len(tokens) <= _REFERENCE_HEADING_MAX_TOKENS
-            and not _REFERENCE_ON_REQUEST_RE.fullmatch(" ".join(tokens))
-            and _reads_as_reference_heading(line)
+        if _reads_as_referees_heading_line(line):
+            if open_start is None:
+                open_start = offset
+            offset = end
+            continue
+        if open_start is not None and line and (
+            _cv_source_boundary_key(line) in _CV_SOURCE_SECTION_BOUNDARY_KEYS
         ):
-            return offset
+            spans.append((open_start, offset))
+            open_start = None
         offset = end
-    return None
+    if open_start is not None:
+        spans.append((open_start, len(flat)))
+    return spans
 
 
 def _block_offsets(flat, line_start, name, role, boundaries=()):
@@ -212,21 +290,31 @@ def _block_offsets(flat, line_start, name, role, boundaries=()):
     pattern = _company_source_pattern(name)
     if pattern is None:
         return []
-    referees_at = _reference_block_start(flat, line_start)
+    referees_spans = _reference_block_spans(flat, line_start)
     strong, column = [], []
     for match in pattern.finditer(flat):
         if _starts_a_listing_entry(flat, match.start()) and not line_start[match.start()]:
             continue
-        if referees_at is not None and match.start() >= referees_at:
+        if _offset_in_spans(match.start(), referees_spans):
             continue
         end = _source_line_end(flat, line_start, match.start())
         tail = flat[match.end():end].strip().lstrip(".:").strip()
-        # A heading can carry sidebar text to its right, and a wrapped sidebar word
-        # arrives with no bullet glyph of its own ("... (HALO DIM SUM) Management").
-        # What disqualifies a match is a tail that carries on the same sentence, which
-        # is what a name mentioned inside prose looks like ("Project Delta on supplier
-        # onboarding"), or the block's own role/date metadata.
-        if tail and (tail[:1].islower() or _WORK_TABLE_DATE_RE.search(tail)):
+        # A heading can carry sidebar text to its right, and a bullet glyph settles
+        # that the tail is a sidebar item -- a competency list is full of
+        # "• Executive Leadership" and "• Chef Training", and what it says does not
+        # matter. An UNGLYPHED tail is refused outright.
+        #
+        # v24.6.404 let unglyphed tails through so a wrapped sidebar word
+        # ("... (HALO DIM SUM) Management") would not refuse a heading, and tried to
+        # keep the block's own metadata out with a list of role nouns. A word list
+        # cannot be completed: "Financial Controller", "Quantity Surveyor" and
+        # "Sommelier" all slipped past it, and with the model having dropped that
+        # title the entry looked untitled, so a real job was absorbed into another
+        # employer and its title disappeared. Refusing costs at most a sub-brand
+        # left on its own dateless row, which is cosmetic; accepting loses a job.
+        # No real document has been seen with a wrapped word in that position --
+        # the CV this pass exists for has nothing after the heading at all.
+        if tail and not re.match(r"^[•▪◦*]", tail):
             continue
         following_end = _source_line_end(flat, line_start, end) if end < len(flat) else end
         following = flat[end:following_end].strip()
@@ -337,7 +425,7 @@ def _attach_untitled_subsidiary_entries(parsed, cv_text=""):
                     continue
                 line_end = _source_line_end(flat, line_start, match.start())
                 tail = flat[match.end():min(line_end, parent_end)].strip(" .:")
-                if not tail or re.match(r"^[•▪◦*]", tail) or _WORK_TABLE_DATE_RE.fullmatch(tail.strip(" ()|:")):
+                if _role_heading_tail_is_incidental(tail):
                     offsets.append(match.start())
             if len(offsets) != 1 or offsets[0] in seen:
                 return None
@@ -378,6 +466,26 @@ def _attach_untitled_subsidiary_entries(parsed, cv_text=""):
         point for points in dated_headings.values() for point in points
     )
 
+    def owning_employer(offset):
+        """``(entry index, role index)`` the source puts this offset under, or None."""
+        parents = []
+        for parent_index, heading_offsets in dated_headings.items():
+            earlier = [item for item in heading_offsets if item < offset]
+            if earlier:
+                parents.append((max(earlier), parent_index))
+        if not parents:
+            return None
+        parent_start, parent_index = max(parents)
+        if sum(point == parent_start for point, _ in parents) != 1:
+            return None
+        parent_end = next(
+            (point for point in heading_boundaries if point > parent_start), len(flat)
+        )
+        role_index = host_role_index(exps[parent_index], parent_start, parent_end, offset)
+        if role_index is None:
+            return None
+        return parent_index, role_index
+
     attachments = {}
     absorbed = set()
     for index, exp in enumerate(exps):
@@ -389,26 +497,52 @@ def _attach_untitled_subsidiary_entries(parsed, cv_text=""):
         if not offsets:
             continue
         offset = offsets[0]
-        parents = []
-        for parent_index, heading_offsets in dated_headings.items():
-            earlier = [item for item in heading_offsets if item < offset]
-            if earlier:
-                parents.append((max(earlier), parent_index))
-        if not parents:
-            continue
-        parent_start, parent_index = max(parents)
-        if sum(point == parent_start for point, _ in parents) != 1:
-            continue
-        parent_end = next(
-            (point for point in heading_boundaries if point > parent_start), len(flat)
-        )
-        role_index = host_role_index(exps[parent_index], parent_start, parent_end, offset)
-        if role_index is None:
+        owner = owning_employer(offset)
+        if owner is None:
             # Nothing to attach to. Leaving the block in place keeps its content in the
             # CV; dropping it would delete a company and its bullets outright.
             continue
+        parent_index, role_index = owner
         attachments.setdefault(parent_index, {}).setdefault(role_index, []).append((offset, index))
         absorbed.add(index)
+
+    # A model that already nested the block has the same ownership question to get
+    # wrong, and gets no correction from the loop above because the block never
+    # appears as an entry of its own. Re-read those groups from the source too, on
+    # the same evidence: a single located heading, under a different employer than
+    # the one holding it. Anything the source cannot place stays where it is.
+    moves = []
+    for index, exp in enumerate(exps):
+        # A provider can return a null or empty employment entry, and reading one
+        # here used to raise and turn /parse into an HTTP 500.
+        if index in absorbed or not isinstance(exp, dict):
+            continue
+        for role in (exp.get("roles") or []):
+            if not isinstance(role, dict) or not isinstance(role.get("bullets"), list):
+                continue
+            for item in role["bullets"]:
+                if not isinstance(item, dict):
+                    continue
+                heading = str(item.get("heading") or "").strip()
+                items = [line for line in (item.get("bullets") or []) if str(line).strip()]
+                if not heading or not items:
+                    continue
+                offsets = _block_offsets(
+                    flat, line_start, heading, {"bullets": items}, heading_boundaries
+                )
+                if not offsets:
+                    continue
+                owner = owning_employer(offsets[0])
+                if owner is None or owner[0] == index:
+                    continue
+                moves.append((offsets[0], index, role, item, owner))
+    for offset, _, role, item, owner in moves:
+        role["bullets"] = [entry for entry in role["bullets"] if entry is not item]
+        parent_index, role_index = owner
+        attachments.setdefault(parent_index, {}).setdefault(role_index, []).append(
+            (offset, item)
+        )
+
     if not attachments:
         return parsed
 
@@ -425,7 +559,11 @@ def _attach_untitled_subsidiary_entries(parsed, cv_text=""):
                 elif not isinstance(bullets, list):
                     bullets = []
                 host["bullets"] = bullets
-                for _, child in sorted(children):
+                for _, child in sorted(children, key=lambda pair: pair[0]):
+                    if isinstance(child, dict):
+                        # A group the model had already nested, moved whole.
+                        bullets.append(child)
+                        continue
                     block = exps[child]
                     bullets.append({
                         "heading": _smart_title_text(block.get("company") or "", company=True),

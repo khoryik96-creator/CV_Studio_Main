@@ -64,7 +64,40 @@ or after the referees block are skipped.
 For promotions, source role headings select the host role. When the source cannot
 say, the newest role of the correct employer takes the block: the employer is the
 part that matters, and declining puts the sub-brand back on its own dateless row,
-which is the defect the pass exists to remove.
+which is the defect the pass exists to remove. A role heading keeps its heading
+status through a trailing qualifier -- "Analyst - Kuala Lumpur", "Manager
+(Operations)" -- or that fallback fires far more often than it should.
+
+**Ask the ownership question of groups the model already nested, not only of
+entries.** The pass began by inspecting top-level entries alone, so a model that
+had already filed a sub-brand under the wrong employer got no correction at all.
+A nested group moves on the same evidence an entry does, and only when the source
+uniquely places its name under a different employer than the one holding it.
+
+**A bullet glyph is the only thing that makes a tail sidebar text.** An unglyphed
+phrase on the employer's own line is refused. "BETA SYSTEMS SDN BHD Financial
+Controller" is an employer printing its own title, and a model that dropped that
+title leaves the entry looking untitled -- absorbing it deletes a whole job and
+its title. v24.6.406 tried to tell that apart from a wrapped sidebar phrase with a
+list of role nouns; "Financial Controller", "Quantity Surveyor" and "Sommelier"
+all walked through it, which is what a word list does. Refusing costs a sub-brand
+its nesting in the one constructed case that relied on it, and no real document
+has been seen with a wrapped word in that position.
+
+**A role qualifier is a name, not a sentence.** "Analyst - Kuala Lumpur" is the
+same role; "Analyst - Work covered the regional desk" is prose that happens to
+start with a role name, and reading it as a qualifier located that role and took a
+project with it. A leading capital does not separate them -- prose capitalises its
+first word too. Every word after the separator has to read as part of a name:
+capitalised, or one of the connectors a name may contain.
+
+**Every new loop over work_experiences has to survive a null entry.** A provider
+can return one. One unguarded `exp.get` turned /parse into an HTTP 500 that master
+handled without complaint.
+
+**A referees section ends at the next section heading.** Treating the first
+referees heading as a cut to the end of the document makes every employer below
+it unreachable, and some CVs put referees part-way through.
 
 `_reference_section_spans` does not begin a referee block at a standalone
 "References available upon request" statement. Candidate footer contacts below

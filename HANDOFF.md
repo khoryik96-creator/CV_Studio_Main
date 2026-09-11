@@ -152,10 +152,11 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   PR #202 is closed as superseded. Both old branches are completed.
   PR #204 merged v24.6.396; PRs #205–#209 merged Claude's work-history and
   referee corrections through v24.6.402. Those branches are completed.
-  Current corrective: `claude/pr157-chatgpt-fix-zke4cy`, carrying
-  v24.6.403 source-grounded project ownership forward with the v24.6.404
-  two-column repairs. `codex/pr210-v24.6.403-cv-source-safety` is its base and
-  is superseded; merge the combined branch rather than v24.6.403 alone.
+  PR #210 merged v24.6.403 through v24.6.405 as `7f25538`; that branch and
+  `codex/pr210-v24.6.403-cv-source-safety` are both completed.
+  Current corrective: `claude/pr157-chatgpt-fix-zke4cy`, v24.6.409: four
+  source-ownership audit findings against v24.6.405, then two rounds of review
+  corrections on top of them.
   PRs #193 and #194 merged after all three hosted checks passed.
   PR #189 merged as `2c216c6` on 2026-08-29; PR #185 merged as `b84c36f` on
   2026-09-04. PR #191 merged as `a5bf89d` on 2026-09-05 after all hosted
@@ -297,7 +298,19 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **CV source-safety corrective — v24.6.403 plus v24.6.404, UNMERGED.**
+- **Source-ownership audit corrective — v24.6.406 through v24.6.409, UNMERGED.**
+  Starts at merged master `7f25538`. A group the model already nested is
+  re-read from the source; a role heading keeps its heading status through a
+  trailing place or qualifier; text on the employer's own line is refused so a
+  real job is not absorbed; a referees section ends at the next section heading
+  instead of cutting the document. v24.6.407 keeps a bullet-led sidebar tail
+  eligible whatever words it carries. v24.6.408 refuses an unglyphed tail
+  outright rather than screening it against a list of role nouns that could not
+  be completed, guards the new group loop against a null employment entry, and
+  stops a sentence after a separator reading as a role qualifier. See
+  `cv_studio_v24_6_406_source_ownership_audit_qa_report.md`.
+
+- **CV source-safety corrective — v24.6.403 plus v24.6.404, MERGED via PR #210.**
   Starts at merged master `6a454d7`. v24.6.404 repairs the real-document
   regressions v24.6.403 introduced: a two-column block's duty is looked for
   across its whole source span rather than the next line, a wrapped sidebar word
