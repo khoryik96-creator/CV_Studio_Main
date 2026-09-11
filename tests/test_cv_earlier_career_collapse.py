@@ -881,6 +881,26 @@ class SourceOwnershipAuditTests(unittest.TestCase):
                 self.assertEqual(found.get("Beta Systems Sdn Bhd"),
                                  ("Alpha Operations", "Director"))
 
+    def test_a_bullet_led_sidebar_tail_is_eligible_whatever_it_says(self):
+        # A competency list beside the heading is full of role nouns. The bullet
+        # glyph already settles that the tail is sidebar, so reading its words is
+        # what costs the attachment.
+        for fragment in ("Executive Leadership", "Chef Training & Development",
+                         "Director-level Stakeholder Management", "Supply Chain & Procurement",
+                         "Halal Executive Certification (2021)"):
+            with self.subTest(fragment=fragment):
+                source = (
+                    "ALPHA OPERATIONS\nDirector\n(2024 - Present)\n• Ran the group.\n"
+                    "PROJECT DELTA • " + fragment + "\n"
+                    "• Built the tool.\n• Led implementation.\n"
+                )
+                entries = [
+                    _entry("Alpha Operations", "2024 to Present", "Director", ["Ran the group."]),
+                    _entry("Project Delta", "", "", ["Built the tool.", "Led implementation."]),
+                ]
+                found = self._groups(self._run(entries, source))
+                self.assertEqual(found.get("Project Delta"), ("Alpha Operations", "Director"))
+
     # ── a referees section part-way through the document ──────────────────────
     MID_REFEREES_SOURCE = (
         "REFERENCES\nAvailable on request from the employers listed below.\n"

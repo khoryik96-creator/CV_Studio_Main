@@ -43,12 +43,24 @@ under "Reported and not changed".
   referees block still runs to the end, and a company named inside one is still
   skipped.
 
+## Review correction (v24.6.407)
+
+The job-title tail test was applied to every tail, including one carrying a bullet
+glyph. A two-column competency list beside a heading is full of role nouns --
+"• Executive Leadership", "• Chef Training" -- so the heading was refused and the
+sub-brand stayed a separate dateless entry.
+
+A bullet glyph already settles that the tail is a sidebar item, so all three
+rejections now apply only to an unglyphed tail, which is the only case the
+v24.6.404 relaxation was about. Five bullet-led fragments are covered by a new
+test, which fails on v24.6.406.
+
 ## Verification
 
 - `SourceOwnershipAuditTests` in `tests/test_cv_earlier_career_collapse.py`:
-  13 tests, 30 subtests. Against v24.6.405 they fail in 15 places across all four
+  14 tests, 35 subtests. Against v24.6.405 they fail in 15 places across all four
   findings, and the negative tests pass on both versions.
-- Complete suite: 1305 passed, 23 skipped, and the same 4 environment-only
+- Complete suite: 1306 passed, 23 skipped, and the same 4 environment-only
   failures as master (antiword, waitress twice, a Windows registry test).
   25 of 25 Node fixtures pass.
 - The real CV is unchanged: PM Brands nests under A&W Malaysia, and KGB's own

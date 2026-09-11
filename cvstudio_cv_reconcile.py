@@ -286,15 +286,17 @@ def _block_offsets(flat, line_start, name, role, boundaries=()):
             continue
         end = _source_line_end(flat, line_start, match.start())
         tail = flat[match.end():end].strip().lstrip(".:").strip()
-        # A heading can carry sidebar text to its right, and a wrapped sidebar word
-        # arrives with no bullet glyph of its own ("... (HALO DIM SUM) Management").
-        # What disqualifies a match is a tail that carries on the same sentence, which
-        # is what a name mentioned inside prose looks like ("Project Delta on supplier
-        # onboarding"), or the block's own role/date metadata -- a date, or a job
-        # title on the same line as the employer ("BETA SYSTEMS SDN BHD Senior
-        # Manager"). A model that dropped that title leaves the entry looking
-        # untitled, and absorbing it would delete a whole job.
-        if tail and (
+        # A heading can carry sidebar text to its right. A bullet glyph settles it:
+        # the tail is a sidebar item, and what it happens to say does not matter --
+        # a competency list is full of "• Executive Leadership" and "• Chef
+        # Training". Only an unglyphed tail has to be read, because then it is
+        # either a wrapped sidebar word ("... (HALO DIM SUM) Management") or the
+        # block's own metadata: prose carrying on the same sentence ("Project Delta
+        # on supplier onboarding"), a date, or a job title printed beside the
+        # employer ("BETA SYSTEMS SDN BHD Senior Manager"). A model that dropped
+        # that title leaves the entry looking untitled, and absorbing it would
+        # delete a whole job.
+        if tail and not re.match(r"^[•▪◦*]", tail) and (
             tail[:1].islower()
             or _WORK_TABLE_DATE_RE.search(tail)
             or _reads_as_job_title(tail)
