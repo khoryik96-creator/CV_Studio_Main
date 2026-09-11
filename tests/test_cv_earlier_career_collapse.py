@@ -874,6 +874,60 @@ class SourceOwnershipAuditTests(unittest.TestCase):
                 found = self._groups(self._run(self._promotion_entries(), source))
                 self.assertEqual(found.get("Project Delta"), ("Alpha Operations", "Director"))
 
+    # International place names, written as a CV writes them. An ASCII-only letter
+    # class split "São" into "S" and "o", left a lowercase fragment, and sent every
+    # accented location down the prose path. The referees heading lost the same way
+    # in v24.6.405, so the whole set is swept here rather than the four reported.
+    INTERNATIONAL_PLACES = [
+        "São Paulo", "Zürich", "Québec", "München", "Ávila", "Łódź", "Tromsø",
+        "Kraków", "Malmö", "Reykjavík", "İstanbul", "Aarhus", "Düsseldorf",
+        "Genève", "Bogotá", "Medellín", "Ciudad de México", "Brasília",
+        "Kuala Lumpur", "Petaling Jaya", "Hồ Chí Minh", "Αθήνα", "Москва", "東京",
+    ]
+
+    def test_an_accented_location_is_a_qualifier(self):
+        for place in self.INTERNATIONAL_PLACES:
+            for dash in ("-", "–"):
+                with self.subTest(place=place, dash=dash):
+                    source = (
+                        "ALPHA OPERATIONS\nDirector\n(2024 - Present)\n• Ran the group.\n"
+                        "Analyst " + dash + " " + place + "\n(2020 - 2023)\n• Ran the desk.\n"
+                        "PROJECT DELTA\n• Built the tool.\n• Led implementation.\n"
+                    )
+                    found = self._groups(self._run(self._promotion_entries(), source))
+                    self.assertEqual(found.get("Project Delta"),
+                                     ("Alpha Operations", "Analyst"))
+
+    def test_prose_carrying_an_accented_word_is_still_prose(self):
+        for tail in ("– Duties spanned the São Paulo desk",
+                     "- Work covered the Zürich office",
+                     "- Responsible for München and its region"):
+            with self.subTest(tail=tail):
+                source = (
+                    "ALPHA OPERATIONS\nDirector\n(2024 - Present)\n• Ran the group.\n"
+                    "Analyst " + tail + "\n(2020 - 2023)\n• Ran the desk.\n"
+                    "PROJECT DELTA\n• Built the tool.\n• Led implementation.\n"
+                )
+                found = self._groups(self._run(self._promotion_entries(), source))
+                self.assertEqual(found.get("Project Delta"),
+                                 ("Alpha Operations", "Director"))
+
+    def test_no_predicate_in_this_pass_assumes_ascii(self):
+        # Both text predicates that decide placement get the same sweep, because an
+        # ASCII letter class has now broken each of them once.
+        from cvstudio_cv_reconcile import (
+            _reads_as_qualifier_name, _reads_as_reference_heading,
+        )
+        for place in self.INTERNATIONAL_PLACES:
+            with self.subTest(place=place):
+                self.assertTrue(_reads_as_qualifier_name("- " + place))
+        # Accented SPELLINGS of the English words, which is what the referees
+        # predicate promises. Another language's word for references ("Referencias",
+        # "Referenzen") is a separate question and is not claimed here.
+        for heading in ("RÉFÉRENCES", "Références", "Réferences", "Referee\u2019s Details"):
+            with self.subTest(heading=heading):
+                self.assertTrue(_reads_as_reference_heading(heading))
+
     def test_a_long_qualifier_is_not_a_qualifier_either(self):
         source = (
             "ALPHA OPERATIONS\nDirector\n(2024 - Present)\n• Ran the group.\n"

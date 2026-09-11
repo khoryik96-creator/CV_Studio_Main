@@ -91,6 +91,15 @@ project with it. A leading capital does not separate them -- prose capitalises i
 first word too. Every word after the separator has to read as part of a name:
 capitalised, or one of the connectors a name may contain.
 
+**Do not spell a letter class `[A-Za-z]` where CV prose is being read.** CV text
+holds any script. `[A-Za-z]` split "São" into "S" and "o", left a lowercase
+fragment, and sent every accented place name down the prose path; the same mistake
+cost the referees heading in v24.6.405. Match a letter as `[^\W\d_]`, and remember
+a caseless script carries no capitalisation signal at all -- "東京" has to count as
+a name on its own. Two `[A-Za-z]` uses remain in the authoritative-work-table
+reconciliation (the title/company split and a single-letter token test); they are a
+separate pass, unexamined, and a likely lead if a non-Latin CV mis-splits a row.
+
 **Every new loop over work_experiences has to survive a null entry.** A provider
 can return one. One unguarded `exp.get` turned /parse into an HTTP 500 that master
 handled without complaint.

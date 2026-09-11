@@ -154,9 +154,10 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   referee corrections through v24.6.402. Those branches are completed.
   PR #210 merged v24.6.403 through v24.6.405 as `7f25538`; that branch and
   `codex/pr210-v24.6.403-cv-source-safety` are both completed.
-  Current corrective: `claude/pr157-chatgpt-fix-zke4cy`, v24.6.409: four
-  source-ownership audit findings against v24.6.405, then two rounds of review
-  corrections on top of them.
+  PR #211 merged v24.6.406 through v24.6.409 as `5b1f2a4`: four source-ownership
+  audit findings against v24.6.405, then three rounds of review corrections.
+  Current corrective: `claude/pr157-chatgpt-fix-zke4cy`, v24.6.410, an
+  accented-location fix on the role-qualifier test.
   PRs #193 and #194 merged after all three hosted checks passed.
   PR #189 merged as `2c216c6` on 2026-08-29; PR #185 merged as `b84c36f` on
   2026-09-04. PR #191 merged as `a5bf89d` on 2026-09-05 after all hosted
@@ -298,8 +299,17 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Source-ownership audit corrective — v24.6.406 through v24.6.409, UNMERGED.**
-  Starts at merged master `7f25538`. A group the model already nested is
+- **Role-qualifier script fix — v24.6.410, UNMERGED.**
+  Starts at merged master `5b1f2a4`. An ASCII-only letter class split an accented
+  place name, left a lowercase fragment and sent every international location down
+  the prose path, so a project went to the newest promotion instead of the role the
+  source named. The word test is script-agnostic, and a caseless script counts as a
+  name because capitalisation cannot signal anything there. See
+  `cv_studio_v24_6_410_role_qualifier_script_qa_report.md`.
+
+- **Source-ownership audit corrective — v24.6.406 through v24.6.409, MERGED via PR #211
+  as `5b1f2a4`.**
+  Started at merged master `7f25538`. A group the model already nested is
   re-read from the source; a role heading keeps its heading status through a
   trailing place or qualifier; text on the employer's own line is refused so a
   real job is not absorbed; a referees section ends at the next section heading
