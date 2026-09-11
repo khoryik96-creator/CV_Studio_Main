@@ -832,7 +832,9 @@ class SourceOwnershipAuditTests(unittest.TestCase):
         # "Analyst - Kuala Lumpur" is the same role. Failing to place it sent an
         # older project to the newer Director role through the fallback.
         for qualifier in ("- Kuala Lumpur", "– Kuala Lumpur", ", Kuala Lumpur",
-                          "| Group Office", "(Operations)", "/ Central Region"):
+                          "| Group Office", "(Operations)", "/ Central Region",
+                          "- KL", "- Head of Operations",
+                          "- Kuala Lumpur Regional Office"):
             with self.subTest(qualifier=qualifier):
                 source = (
                     "ALPHA OPERATIONS\nDirector\n(2024 - Present)\n• Ran the group.\n"
@@ -856,7 +858,13 @@ class SourceOwnershipAuditTests(unittest.TestCase):
         # sentence naming a role located that role and took the project with it.
         for tail in ("- work covered the regional desk", "- duties spanned the desk",
                      ", reporting to the group head", "- and later the group function",
-                     "/ responsible for the reporting line"):
+                     "/ responsible for the reporting line",
+                     # Capitalising the first word clears a leading-capital test and
+                     # is still a sentence, so every word has to read as a name.
+                     "- Work covered the regional desk", "- Duties spanned the desk",
+                     ", Reporting to the group head",
+                     "- Responsible for the reporting line",
+                     "- Covered the desk"):
             with self.subTest(tail=tail):
                 source = (
                     "ALPHA OPERATIONS\nDirector\n(2024 - Present)\n• Ran the group.\n"

@@ -159,6 +159,31 @@ _ROLE_HEADING_QUALIFIER_RE = re.compile(
     r"^[\-\u2010-\u2015,|/(\[]\s*[A-Z0-9(\[][^•▪◦*]{0,40}$"
 )
 _ROLE_HEADING_QUALIFIER_MAX_WORDS = 5
+# Capitalising the first word is not enough: "- Work covered the regional desk"
+# clears a leading-capital test and is still a sentence. A place or a scope reads
+# as a NAME, so every word in it is capitalised bar the connectors a name may
+# contain.
+_ROLE_QUALIFIER_CONNECTORS = frozenset({
+    "of", "and", "the", "for", "at", "in", "on", "to", "a", "an",
+    "de", "del", "der", "di", "du", "da", "la", "le", "van", "von",
+    "bin", "binti", "al",
+})
+
+
+def _reads_as_qualifier_name(text):
+    """Whether a fragment reads as a name rather than as prose."""
+    words = re.findall(r"[A-Za-z][A-Za-z.'\u2019-]*", str(text or ""))
+    if not words:
+        return False
+    named = False
+    for word in words:
+        if word[:1].isupper():
+            named = True
+            continue
+        if word.lower() in _ROLE_QUALIFIER_CONNECTORS:
+            continue
+        return False
+    return named
 
 
 def _role_heading_tail_is_incidental(tail):
@@ -173,7 +198,9 @@ def _role_heading_tail_is_incidental(tail):
     if not _ROLE_HEADING_QUALIFIER_RE.match(tail):
         return False
     words = re.findall(r"[A-Za-z0-9]+", tail)
-    return len(words) <= _ROLE_HEADING_QUALIFIER_MAX_WORDS
+    if len(words) > _ROLE_HEADING_QUALIFIER_MAX_WORDS:
+        return False
+    return _reads_as_qualifier_name(tail)
 
 
 def _source_line_end(flat, line_start, offset):

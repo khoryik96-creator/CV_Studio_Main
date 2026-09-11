@@ -85,10 +85,11 @@ its nesting in the one constructed case that relied on it, and no real document
 has been seen with a wrapped word in that position.
 
 **A role qualifier is a name, not a sentence.** "Analyst - Kuala Lumpur" is the
-same role; "Analyst - work covered the regional desk" is prose that happens to
+same role; "Analyst - Work covered the regional desk" is prose that happens to
 start with a role name, and reading it as a qualifier located that role and took a
-project with it. After the separator it has to start with a capital or a digit and
-stay within a few words.
+project with it. A leading capital does not separate them -- prose capitalises its
+first word too. Every word after the separator has to read as part of a name:
+capitalised, or one of the connectors a name may contain.
 
 **Every new loop over work_experiences has to survive a null entry.** A provider
 can return one. One unguarded `exp.get` turned /parse into an HTTP 500 that master

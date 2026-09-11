@@ -81,10 +81,31 @@ Three findings on the v24.6.406/407 work, each reproduced first.
 
 Five tests cover these; all five fail on v24.6.407.
 
+## Review correction (v24.6.409)
+
+Capitalising the first word cleared the v24.6.408 guard: "Analyst - Work covered
+the regional desk" starts with a capital, stays within five words, and was read as
+a place, so the project moved under Analyst.
+
+A leading capital was the wrong test. A place or a scope reads as a NAME, so every
+word in the qualifier now has to be capitalised, bar the small connectors a name
+may contain ("of", "the", "de", "bin"). "- Kuala Lumpur", "(Operations)",
+"- Head of Operations" and "- Kuala Lumpur Regional Office" still work;
+"- Work covered the regional desk" and "- Responsible for the reporting line" no
+longer do.
+
+Ten prose forms and nine qualifiers are covered. The prose cases fail on
+v24.6.408.
+
+The residue: a sentence in full title case ("- Work Covered The Regional Desk") is
+indistinguishable from a name by any textual test and would still pass. It costs a
+project's role within the right employer, never a job, and no CV has been seen
+that writes a clause that way.
+
 ## Verification
 
 - `SourceOwnershipAuditTests` in `tests/test_cv_earlier_career_collapse.py`:
-  18 tests, 52 subtests. Against v24.6.405 they fail in 15 places across all four
+  18 tests, 60 subtests. Against v24.6.405 they fail in 15 places across all four
   findings, and the negative tests pass on both versions.
 - Complete suite: 1310 passed, 23 skipped, and the same 4 environment-only
   failures as master (antiword, waitress twice, a Windows registry test).

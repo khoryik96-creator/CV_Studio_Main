@@ -154,7 +154,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   referee corrections through v24.6.402. Those branches are completed.
   PR #210 merged v24.6.403 through v24.6.405 as `7f25538`; that branch and
   `codex/pr210-v24.6.403-cv-source-safety` are both completed.
-  Current corrective: `claude/pr157-chatgpt-fix-zke4cy`, v24.6.408: four
+  Current corrective: `claude/pr157-chatgpt-fix-zke4cy`, v24.6.409: four
   source-ownership audit findings against v24.6.405, then two rounds of review
   corrections on top of them.
   PRs #193 and #194 merged after all three hosted checks passed.
@@ -298,7 +298,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Source-ownership audit corrective — v24.6.406 through v24.6.408, UNMERGED.**
+- **Source-ownership audit corrective — v24.6.406 through v24.6.409, UNMERGED.**
   Starts at merged master `7f25538`. A group the model already nested is
   re-read from the source; a role heading keeps its heading status through a
   trailing place or qualifier; text on the employer's own line is refused so a

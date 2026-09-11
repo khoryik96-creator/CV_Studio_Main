@@ -28,7 +28,7 @@
 - Current merged source: v24.6.405 (`7f25538`), verified 2026-09-11.
 - PR #189 merged as `2c216c6`; PR #185 merged as `b84c36f`. Neither is an
   active branch claim. PRs #191–#194 are merged with owner approval. Current work is
-  v24.6.408 on `claude/pr157-chatgpt-fix-zke4cy`: four source-ownership audit
+  v24.6.409 on `claude/pr157-chatgpt-fix-zke4cy`: four source-ownership audit
   findings against v24.6.405, then two rounds of review corrections.
   PR #210 merged v24.6.403-v24.6.405 as `7f25538`.
   PR #195 and #203–#209 are merged; #202 is closed as superseded. No new PR/merge requested.
@@ -56,7 +56,7 @@
   #184 then merged v24.6.363 as `1912d48`; PR #186 merged v24.6.368 as
   `fbdf0e7`; PR #187 merged v24.6.369 as `2f345b7`; PR #188 merged v24.6.370
   as `b52b5b0`.
-- Current stop: v24.6.408 source-ownership fixes await owner testing. No release or native
+- Current stop: v24.6.409 source-ownership fixes await owner testing. No release or native
   protected build is produced by this work; protected builds remain manual.
 
 ## v24.6.403-v24.6.405 CV source-safety corrective (merged via PR #210)
