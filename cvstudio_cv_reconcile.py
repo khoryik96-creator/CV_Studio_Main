@@ -152,11 +152,12 @@ def _heading_offsets(flat, line_start, name):
 # same role, so it must not stop the heading being found -- a role the source prints
 # this way used to be unlocatable, and the project then went to the newest promotion
 # instead of the one that ran it.
-# Separator, then a name: it has to start with a capital or a digit and stay short.
-# "Analyst - work covered the regional desk" is a sentence, and reading it as a
-# qualifier put a project under the role that sentence happened to name.
+# Separator, then something short. What makes it a qualifier rather than prose is
+# decided by _reads_as_qualifier_name below, in code, because the test is "does
+# every word read as part of a name" and that cannot be written as an ASCII
+# character class -- "Analyst - São Paulo" is a place, and a [A-Z] class rejects it.
 _ROLE_HEADING_QUALIFIER_RE = re.compile(
-    r"^[\-\u2010-\u2015,|/(\[]\s*[A-Z0-9(\[][^•▪◦*]{0,40}$"
+    r"^[\-\u2010-\u2015,|/(\[]\s*\S[^•▪◦*]{0,40}$"
 )
 _ROLE_HEADING_QUALIFIER_MAX_WORDS = 5
 # Capitalising the first word is not enough: "- Work covered the regional desk"
@@ -168,16 +169,27 @@ _ROLE_QUALIFIER_CONNECTORS = frozenset({
     "de", "del", "der", "di", "du", "da", "la", "le", "van", "von",
     "bin", "binti", "al",
 })
+# A word starts with any letter in any script and may carry marks, so the class is
+# "word character that is not a digit or underscore". Spelling this [A-Za-z] split
+# "São" into "S" and "o", left a lowercase fragment, and sent every accented place
+# name down the prose path. The same mistake cost the referees heading in v24.6.405.
+_ROLE_QUALIFIER_WORD_RE = re.compile(r"[^\W\d_][\w.'\u2019\-]*")
 
 
 def _reads_as_qualifier_name(text):
     """Whether a fragment reads as a name rather than as prose."""
-    words = re.findall(r"[A-Za-z][A-Za-z.'\u2019-]*", str(text or ""))
+    words = _ROLE_QUALIFIER_WORD_RE.findall(str(text or ""))
     if not words:
         return False
     named = False
     for word in words:
-        if word[:1].isupper():
+        if word[:1].isupper() or word[:1].istitle():
+            named = True
+            continue
+        # A caseless script cannot signal name-versus-prose by capitalisation at
+        # all, so "東京" has to count as a name word. Requiring a capital there
+        # rejected every CJK, Thai and Arabic place name outright.
+        if word.lower() == word.upper():
             named = True
             continue
         if word.lower() in _ROLE_QUALIFIER_CONNECTORS:
@@ -197,8 +209,7 @@ def _role_heading_tail_is_incidental(tail):
         return True
     if not _ROLE_HEADING_QUALIFIER_RE.match(tail):
         return False
-    words = re.findall(r"[A-Za-z0-9]+", tail)
-    if len(words) > _ROLE_HEADING_QUALIFIER_MAX_WORDS:
+    if len(re.findall(r"\w+", tail)) > _ROLE_HEADING_QUALIFIER_MAX_WORDS:
         return False
     return _reads_as_qualifier_name(tail)
 
