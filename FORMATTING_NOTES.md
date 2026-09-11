@@ -64,7 +64,25 @@ or after the referees block are skipped.
 For promotions, source role headings select the host role. When the source cannot
 say, the newest role of the correct employer takes the block: the employer is the
 part that matters, and declining puts the sub-brand back on its own dateless row,
-which is the defect the pass exists to remove.
+which is the defect the pass exists to remove. A role heading keeps its heading
+status through a trailing qualifier -- "Analyst - Kuala Lumpur", "Manager
+(Operations)" -- or that fallback fires far more often than it should.
+
+**Ask the ownership question of groups the model already nested, not only of
+entries.** The pass began by inspecting top-level entries alone, so a model that
+had already filed a sub-brand under the wrong employer got no correction at all.
+A nested group moves on the same evidence an entry does, and only when the source
+uniquely places its name under a different employer than the one holding it.
+
+**A tail on the employer's own line is sidebar wrap or it is the block's own
+metadata, and a role noun tells them apart.** "... (HALO DIM SUM) Management" is
+a wrapped sidebar phrase. "BETA SYSTEMS SDN BHD Senior Manager" is an employer
+printing its title, and a model that dropped that title leaves the entry looking
+untitled -- absorbing it deletes a whole job.
+
+**A referees section ends at the next section heading.** Treating the first
+referees heading as a cut to the end of the document makes every employer below
+it unreachable, and some CVs put referees part-way through.
 
 `_reference_section_spans` does not begin a referee block at a standalone
 "References available upon request" statement. Candidate footer contacts below

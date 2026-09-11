@@ -25,11 +25,11 @@
   `54298b9b6a822e1f36c9c101f1ff4edc9c7e835f`
 - Phase 7B-4 source baseline Git commit (merged Phase 7B-3):
   `1e75737cb83e32d4f70d100c0f77a3de720cca9c`
-- Current merged source: v24.6.402 (`6a454d7`), verified 2026-09-10.
+- Current merged source: v24.6.405 (`7f25538`), verified 2026-09-11.
 - PR #189 merged as `2c216c6`; PR #185 merged as `b84c36f`. Neither is an
   active branch claim. PRs #191–#194 are merged with owner approval. Current work is
-  v24.6.404 on `claude/pr157-chatgpt-fix-zke4cy`, which carries v24.6.403 from
-  `codex/pr210-v24.6.403-cv-source-safety` forward with its two-column repairs.
+  v24.6.406 on `claude/pr157-chatgpt-fix-zke4cy`, four source-ownership audit
+  findings against v24.6.405. PR #210 merged v24.6.403-v24.6.405 as `7f25538`.
   PR #195 and #203–#209 are merged; #202 is closed as superseded. No new PR/merge requested.
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
