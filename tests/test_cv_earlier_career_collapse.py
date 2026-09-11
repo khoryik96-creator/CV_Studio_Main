@@ -630,17 +630,27 @@ class SidebarLeftTwoColumnTests(unittest.TestCase):
         self.assertIsNotNone(found)
         self.assertEqual(found["bullets"], self._pm()["roles"][0]["bullets"])
 
-    def test_a_wrapped_sidebar_word_to_the_right_does_not_refuse_the_heading(self):
-        # The sidebar wraps mid-phrase, so the text beside a heading is a bare word
-        # with no bullet glyph of its own.
+    def test_an_unglyphed_word_to_the_right_refuses_the_heading(self):
+        # v24.6.404 accepted a bare word here, on the theory that the sidebar had
+        # wrapped mid-phrase. Nothing in that position can be told apart from an
+        # employer printing its own title, and v24.6.408 showed a word list cannot
+        # do it, so the heading is refused. The block keeps its own row, which costs
+        # a line of layout rather than a whole job.
         source = self.source.replace(
             "POS & HRIS) PM BRANDS SDN BHD (HALO DIM SUM)\n",
             "POS & HRIS) PM BRANDS SDN BHD (HALO DIM SUM) Management\n",
         )
-        found = self._subsidiaries(self._run(self._entries(), source))
-        self.assertEqual(
-            found.get("PM Brands Sdn Bhd (Halo Dim Sum)"), "A&W Malaysia Sdn Bhd"
+        companies = [entry["company"] for entry in self._run(self._entries(), source)]
+        self.assertIn("PM Brands Sdn Bhd (Halo Dim Sum)", companies)
+
+    def test_the_real_document_has_nothing_to_the_right_of_the_heading(self):
+        # Why refusing is affordable: the CV this pass exists for ends the line at
+        # the heading, so the two-column case never depended on that relaxation.
+        heading = "PM BRANDS SDN BHD (HALO DIM SUM)"
+        line = next(
+            text for text in self.source.split("\n") if heading in text
         )
+        self.assertTrue(line.rstrip().endswith(heading))
 
     def test_a_name_inside_a_sentence_is_still_only_a_mention(self):
         # The tail carries on the same sentence, which is what prose looks like.
@@ -736,10 +746,19 @@ class SourceOwnershipAuditTests(unittest.TestCase):
 
     @staticmethod
     def _groups(entries):
-        """{group heading: (employer, role title)} for every nested bullet group."""
+        """{group heading: (employer, role title)} for every nested bullet group.
+
+        Tolerates the malformed entries a provider can return, since one of these
+        tests feeds them in deliberately.
+        """
         found = {}
         for entry in entries:
-            for role in entry.get("roles") or []:
+            if not isinstance(entry, dict):
+                continue
+            roles = entry.get("roles")
+            for role in roles if isinstance(roles, list) else []:
+                if not isinstance(role, dict):
+                    continue
                 for item in role.get("bullets") or []:
                     if isinstance(item, dict):
                         found[item.get("heading")] = (entry.get("company"), role.get("title"))
@@ -832,6 +851,52 @@ class SourceOwnershipAuditTests(unittest.TestCase):
         found = self._groups(self._run(self._promotion_entries(), source))
         self.assertEqual(found.get("Project Delta"), ("Alpha Operations", "Analyst"))
 
+    def test_prose_after_a_separator_is_not_a_role_qualifier(self):
+        # v24.6.406 accepted anything after a separator as a place or scope, so a
+        # sentence naming a role located that role and took the project with it.
+        for tail in ("- work covered the regional desk", "- duties spanned the desk",
+                     ", reporting to the group head", "- and later the group function",
+                     "/ responsible for the reporting line"):
+            with self.subTest(tail=tail):
+                source = (
+                    "ALPHA OPERATIONS\nDirector\n(2024 - Present)\n• Ran the group.\n"
+                    "Analyst " + tail + "\n(2020 - 2023)\n• Ran the desk.\n"
+                    "PROJECT DELTA\n• Built the tool.\n• Led implementation.\n"
+                )
+                found = self._groups(self._run(self._promotion_entries(), source))
+                self.assertEqual(found.get("Project Delta"), ("Alpha Operations", "Director"))
+
+    def test_a_long_qualifier_is_not_a_qualifier_either(self):
+        source = (
+            "ALPHA OPERATIONS\nDirector\n(2024 - Present)\n• Ran the group.\n"
+            "Analyst - Kuala Lumpur Regional Office Strategy And Planning Unit\n"
+            "(2020 - 2023)\n• Ran the desk.\n"
+            "PROJECT DELTA\n• Built the tool.\n• Led implementation.\n"
+        )
+        found = self._groups(self._run(self._promotion_entries(), source))
+        self.assertEqual(found.get("Project Delta"), ("Alpha Operations", "Director"))
+
+    def test_a_null_or_empty_employment_entry_does_not_raise(self):
+        # A provider can return one, and reading it turned /parse into an HTTP 500.
+        source = (
+            "ALPHA OPERATIONS\nDirector\n(2024 - Present)\n• Ran the group.\n"
+            "PROJECT DELTA\n• Built the tool.\n• Led implementation.\n"
+        )
+        for bad in (None, {}, "", [], 0, {"roles": None}, {"company": None},
+                    {"roles": [None]}, {"roles": "Director"}):
+            with self.subTest(entry=bad):
+                entries = [
+                    _entry("Alpha Operations", "2024 to Present", "Director", ["Ran the group."]),
+                    bad,
+                    _entry("Project Delta", "", "", ["Built the tool.", "Led implementation."]),
+                ]
+                result = self._run(entries, source)
+                self.assertEqual(
+                    self._groups(result).get("Project Delta"),
+                    ("Alpha Operations", "Director"),
+                )
+                self.assertIn(bad, result)
+
     def test_prose_after_a_role_heading_still_blocks_it(self):
         # A sentence continuing past the title is not that role's heading, so the
         # source cannot say, and the newest role takes the project.
@@ -864,12 +929,16 @@ class SourceOwnershipAuditTests(unittest.TestCase):
                 companies = [entry["company"] for entry in self._run(entries, source)]
                 self.assertIn("Beta Systems Sdn Bhd", companies)
 
-    def test_a_wrapped_sidebar_word_is_still_not_a_job_title(self):
-        for word in ("Management", "Development", "Compliance", "Analytics"):
-            with self.subTest(word=word):
+    def test_a_title_no_word_list_would_carry_keeps_its_job(self):
+        # v24.6.406 tried to tell an employer's own title from sidebar wrap with a
+        # list of role nouns. Five of these six slipped past it, and the job was
+        # absorbed into the employer above with its title gone.
+        for title in ("Financial Controller", "Quantity Surveyor", "Brand Custodian",
+                      "Sommelier", "Actuary", "Management", "Development"):
+            with self.subTest(title=title):
                 source = (
                     "ALPHA OPERATIONS\nDirector\n(2024 - Present)\n• Ran the group.\n"
-                    "BETA SYSTEMS SDN BHD " + word + "\n"
+                    "BETA SYSTEMS SDN BHD " + title + "\n"
                     "• Ran the delivery team.\n• Owned the roadmap.\n"
                 )
                 entries = [
@@ -877,9 +946,8 @@ class SourceOwnershipAuditTests(unittest.TestCase):
                     _entry("Beta Systems Sdn Bhd", "", "",
                            ["Ran the delivery team.", "Owned the roadmap."]),
                 ]
-                found = self._groups(self._run(entries, source))
-                self.assertEqual(found.get("Beta Systems Sdn Bhd"),
-                                 ("Alpha Operations", "Director"))
+                companies = [entry["company"] for entry in self._run(entries, source)]
+                self.assertIn("Beta Systems Sdn Bhd", companies)
 
     def test_a_bullet_led_sidebar_tail_is_eligible_whatever_it_says(self):
         # A competency list beside the heading is full of role nouns. The bullet

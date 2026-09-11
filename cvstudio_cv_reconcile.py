@@ -147,29 +147,18 @@ def _heading_offsets(flat, line_start, name):
     ]
 
 
-# Role nouns. Text to the right of an employer heading is the block's own title
-# when it carries one of these, and a two-column sidebar fragment when it does not
-# ("Management", "Development", "Compliance" are sidebar wrap, not titles).
-_JOB_TITLE_NOUNS = frozenset({
-    "manager", "director", "executive", "officer", "head", "chief", "chef",
-    "engineer", "analyst", "consultant", "supervisor", "lead", "leader",
-    "president", "partner", "specialist", "coordinator", "assistant", "associate",
-    "administrator", "technician", "architect", "designer", "developer",
-    "accountant", "auditor", "advisor", "adviser", "principal", "founder",
-    "owner", "intern", "trainee", "apprentice", "clerk", "secretary", "cashier",
-    "operator", "agent", "representative", "rep", "commis", "sous", "chefs",
-    "managers", "directors", "executives", "officers", "engineers", "analysts",
-})
-
-
 # A role heading often carries a place or a qualifier after a separator:
 # "Analyst - Kuala Lumpur", "Manager (Operations)", "Director | Group". That is the
 # same role, so it must not stop the heading being found -- a role the source prints
 # this way used to be unlocatable, and the project then went to the newest promotion
 # instead of the one that ran it.
+# Separator, then a name: it has to start with a capital or a digit and stay short.
+# "Analyst - work covered the regional desk" is a sentence, and reading it as a
+# qualifier put a project under the role that sentence happened to name.
 _ROLE_HEADING_QUALIFIER_RE = re.compile(
-    r"^[\-\u2010-\u2015,|/(\[]\s*[^•▪◦*]{0,60}$"
+    r"^[\-\u2010-\u2015,|/(\[]\s*[A-Z0-9(\[][^•▪◦*]{0,40}$"
 )
+_ROLE_HEADING_QUALIFIER_MAX_WORDS = 5
 
 
 def _role_heading_tail_is_incidental(tail):
@@ -181,13 +170,10 @@ def _role_heading_tail_is_incidental(tail):
         return True
     if _WORK_TABLE_DATE_RE.fullmatch(tail.strip(" ()|:")):
         return True
-    return bool(_ROLE_HEADING_QUALIFIER_RE.match(tail))
-
-
-def _reads_as_job_title(text):
-    """Whether a fragment names a role rather than reading as sidebar wrap."""
-    words = re.findall(r"[A-Za-z]+", str(text or "").lower())
-    return any(word in _JOB_TITLE_NOUNS for word in words)
+    if not _ROLE_HEADING_QUALIFIER_RE.match(tail):
+        return False
+    words = re.findall(r"[A-Za-z0-9]+", tail)
+    return len(words) <= _ROLE_HEADING_QUALIFIER_MAX_WORDS
 
 
 def _source_line_end(flat, line_start, offset):
@@ -286,21 +272,22 @@ def _block_offsets(flat, line_start, name, role, boundaries=()):
             continue
         end = _source_line_end(flat, line_start, match.start())
         tail = flat[match.end():end].strip().lstrip(".:").strip()
-        # A heading can carry sidebar text to its right. A bullet glyph settles it:
-        # the tail is a sidebar item, and what it happens to say does not matter --
-        # a competency list is full of "• Executive Leadership" and "• Chef
-        # Training". Only an unglyphed tail has to be read, because then it is
-        # either a wrapped sidebar word ("... (HALO DIM SUM) Management") or the
-        # block's own metadata: prose carrying on the same sentence ("Project Delta
-        # on supplier onboarding"), a date, or a job title printed beside the
-        # employer ("BETA SYSTEMS SDN BHD Senior Manager"). A model that dropped
-        # that title leaves the entry looking untitled, and absorbing it would
-        # delete a whole job.
-        if tail and not re.match(r"^[•▪◦*]", tail) and (
-            tail[:1].islower()
-            or _WORK_TABLE_DATE_RE.search(tail)
-            or _reads_as_job_title(tail)
-        ):
+        # A heading can carry sidebar text to its right, and a bullet glyph settles
+        # that the tail is a sidebar item -- a competency list is full of
+        # "• Executive Leadership" and "• Chef Training", and what it says does not
+        # matter. An UNGLYPHED tail is refused outright.
+        #
+        # v24.6.404 let unglyphed tails through so a wrapped sidebar word
+        # ("... (HALO DIM SUM) Management") would not refuse a heading, and tried to
+        # keep the block's own metadata out with a list of role nouns. A word list
+        # cannot be completed: "Financial Controller", "Quantity Surveyor" and
+        # "Sommelier" all slipped past it, and with the model having dropped that
+        # title the entry looked untitled, so a real job was absorbed into another
+        # employer and its title disappeared. Refusing costs at most a sub-brand
+        # left on its own dateless row, which is cosmetic; accepting loses a job.
+        # No real document has been seen with a wrapped word in that position --
+        # the CV this pass exists for has nothing after the heading at all.
+        if tail and not re.match(r"^[•▪◦*]", tail):
             continue
         following_end = _source_line_end(flat, line_start, end) if end < len(flat) else end
         following = flat[end:following_end].strip()
@@ -499,7 +486,9 @@ def _attach_untitled_subsidiary_entries(parsed, cv_text=""):
     # the one holding it. Anything the source cannot place stays where it is.
     moves = []
     for index, exp in enumerate(exps):
-        if index in absorbed:
+        # A provider can return a null or empty employment entry, and reading one
+        # here used to raise and turn /parse into an HTTP 500.
+        if index in absorbed or not isinstance(exp, dict):
             continue
         for role in (exp.get("roles") or []):
             if not isinstance(role, dict) or not isinstance(role.get("bullets"), list):

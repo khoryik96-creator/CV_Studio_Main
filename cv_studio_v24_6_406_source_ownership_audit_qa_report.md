@@ -55,18 +55,46 @@ rejections now apply only to an unglyphed tail, which is the only case the
 v24.6.404 relaxation was about. Five bullet-led fragments are covered by a new
 test, which fails on v24.6.406.
 
+## Review corrections (v24.6.408)
+
+Three findings on the v24.6.406/407 work, each reproduced first.
+
+- **A job title no word list would carry absorbed its job.** "Financial
+  Controller", "Quantity Surveyor", "Brand Custodian", "Sommelier" and "Actuary"
+  all slipped past the role-noun list, so the job was absorbed into the employer
+  above and its title disappeared. The word list is deleted rather than extended:
+  an UNGLYPHED tail beside a heading is now refused outright, which is the
+  v24.6.403 rule. A bullet-led tail stays eligible, so the two-column case the
+  pass exists for is untouched -- that CV ends the line at the heading and never
+  depended on the v24.6.404 relaxation. The cost is the constructed
+  wrapped-sidebar-word case, which now leaves the block on its own row: a line of
+  layout rather than a lost job. A test pins that the real fixture has nothing to
+  the right of its heading.
+- **A null employment entry crashed /parse with HTTP 500.** The v24.6.406 group
+  loop read `exp.get` without checking the entry was a dict, and master handled
+  the same response. Reproduced with `None`, `""`, `[]` and `0`. The loop skips a
+  non-dict entry, and nine malformed shapes are covered by a test.
+- **A sentence after a separator read as a role qualifier.** "Analyst - work
+  covered the regional desk" located the Analyst role and took a project with it.
+  A qualifier now has to start with a capital or a digit and stay within five
+  words, which keeps "- Kuala Lumpur" and "(Operations)" while rejecting prose.
+
+Five tests cover these; all five fail on v24.6.407.
+
 ## Verification
 
 - `SourceOwnershipAuditTests` in `tests/test_cv_earlier_career_collapse.py`:
-  14 tests, 35 subtests. Against v24.6.405 they fail in 15 places across all four
+  18 tests, 52 subtests. Against v24.6.405 they fail in 15 places across all four
   findings, and the negative tests pass on both versions.
-- Complete suite: 1306 passed, 23 skipped, and the same 4 environment-only
+- Complete suite: 1310 passed, 23 skipped, and the same 4 environment-only
   failures as master (antiword, waitress twice, a Windows registry test).
   25 of 25 Node fixtures pass.
 - The real CV is unchanged: PM Brands nests under A&W Malaysia, and KGB's own
   three sub-sections stay under KGB rather than being relocated by the new pass.
   The pass is idempotent on that document.
-- The seven source shapes held since v24.6.404 all behave as before.
+- Of the seven source shapes held since v24.6.404, six behave as before. The
+  constructed wrapped-sidebar-word shape now leaves its block standalone, which
+  is the point of the v24.6.408 tail fix.
 - Launcher line endings and byte-order marks verified identical to master.
 
 ## Reported and not changed

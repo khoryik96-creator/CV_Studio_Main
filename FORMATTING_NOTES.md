@@ -74,11 +74,25 @@ had already filed a sub-brand under the wrong employer got no correction at all.
 A nested group moves on the same evidence an entry does, and only when the source
 uniquely places its name under a different employer than the one holding it.
 
-**A tail on the employer's own line is sidebar wrap or it is the block's own
-metadata, and a role noun tells them apart.** "... (HALO DIM SUM) Management" is
-a wrapped sidebar phrase. "BETA SYSTEMS SDN BHD Senior Manager" is an employer
-printing its title, and a model that dropped that title leaves the entry looking
-untitled -- absorbing it deletes a whole job.
+**A bullet glyph is the only thing that makes a tail sidebar text.** An unglyphed
+phrase on the employer's own line is refused. "BETA SYSTEMS SDN BHD Financial
+Controller" is an employer printing its own title, and a model that dropped that
+title leaves the entry looking untitled -- absorbing it deletes a whole job and
+its title. v24.6.406 tried to tell that apart from a wrapped sidebar phrase with a
+list of role nouns; "Financial Controller", "Quantity Surveyor" and "Sommelier"
+all walked through it, which is what a word list does. Refusing costs a sub-brand
+its nesting in the one constructed case that relied on it, and no real document
+has been seen with a wrapped word in that position.
+
+**A role qualifier is a name, not a sentence.** "Analyst - Kuala Lumpur" is the
+same role; "Analyst - work covered the regional desk" is prose that happens to
+start with a role name, and reading it as a qualifier located that role and took a
+project with it. After the separator it has to start with a capital or a digit and
+stay within a few words.
+
+**Every new loop over work_experiences has to survive a null entry.** A provider
+can return one. One unguarded `exp.get` turned /parse into an HTTP 500 that master
+handled without complaint.
 
 **A referees section ends at the next section heading.** Treating the first
 referees heading as a cut to the end of the document makes every employer below
