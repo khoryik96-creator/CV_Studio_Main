@@ -776,6 +776,45 @@ def _spider_match_fit_percent(candidate, filters, blob_low, discovery_hits):
     }
     return max(0, min(100, percent)), evidence[:10], unknown[:8], breakdown
 
+# ── Blank profile fields ──────────────────────────────────────────────────────
+# A JobAdder candidate carries custom fields a recruiter fills in by hand. When
+# one is blank, the eligibility gate below drops the candidate, because a filter
+# on that field cannot be satisfied by a field that holds nothing.
+#
+# That is the right call for the ranked results and stays exactly as it is. But
+# "we have no data" is not "this person does not match", and the CV usually says
+# what the field does not. These candidates are worth setting aside for review
+# rather than discarding silently, so the reasons carry a field key.
+#
+# Residential Status is deliberately NOT here. It is a legal status, a CV is not
+# authority for it, and guessing it from one would be both unreliable and unfair.
+_SPIDER_BLANK_FIELD_REASONS = {
+    "industry not visible in JobAdder custom field": "industry",
+    "IT Skills not visible in JobAdder custom field": "it_skills",
+    "Professional Qualifications not visible in JobAdder custom field": "qualifications",
+}
+
+
+def _spider_blank_profile_fields(excluded):
+    """Field keys whose blank custom field is the ONLY reason a candidate was cut.
+
+    Returns an empty list as soon as any reason is a real mismatch, so a candidate
+    the source actively disqualifies never reaches the review list.
+    """
+    reasons = [str(reason or "").strip() for reason in (excluded or [])]
+    reasons = [reason for reason in reasons if reason]
+    if not reasons:
+        return []
+    fields = []
+    for reason in reasons:
+        field = _SPIDER_BLANK_FIELD_REASONS.get(reason)
+        if field is None:
+            return []
+        if field not in fields:
+            fields.append(field)
+    return fields
+
+
 def _spider_item_score(candidate, filters, enriched=False):
     """Return (keep, fit_percent, fit evidence, unknown, excluded, hard_passed, discovery evidence).
 

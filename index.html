@@ -1144,6 +1144,7 @@
             <div class="spider-output-tabs" id="theSpiderOutputTabs" role="tablist">
               <button type="button" class="spider-output-tab active" id="theSpiderTabNotes" role="tab" aria-selected="true" onclick="setTheSpiderOutputTab('notes')">Sourcing Notes &amp; Scorecard</button>
               <button type="button" class="spider-output-tab" id="theSpiderTabResults" role="tab" aria-selected="false" onclick="setTheSpiderOutputTab('results')">JobAdder Candidate Results</button>
+              <button type="button" class="spider-output-tab" id="theSpiderTabReview" role="tab" aria-selected="false" onclick="setTheSpiderOutputTab('review')">Needs Checking <span id="theSpiderReviewCount" class="spider-badge">0</span></button>
             </div>
             <div class="spider-output spider-output-tab-panel active show" id="theSpiderOutput" data-spider-panel="notes" role="tabpanel">
               <div class="spider-output-head"><div class="spider-output-label">AI Crawler Sourcing Notes &amp; Scorecard</div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;"><button class="sec" id="theSpiderCopyBtn" onclick="copyTheSpiderReport()" style="font-size:12px;display:none;">Copy Report</button><span id="theSpiderBadge" class="spider-badge">JobAdder</span></div></div>
@@ -1152,6 +1153,11 @@
             <div class="spider-output spider-output-tab-panel" id="theSpiderSearchOutput" data-spider-panel="results" role="tabpanel" hidden>
               <div class="spider-output-head"><div class="spider-output-label">JobAdder Candidate Results</div><div class="spider-result-sort-wrap"><label for="theSpiderSort">Sort</label><select id="theSpiderSort" class="spider-result-sort" onchange="sortTheSpiderResults(this.value)"><option value="fit_desc">Job fit: High to low</option><option value="fit_asc">Job fit: Low to high</option><option value="current_salary_desc">Current salary: High to low</option><option value="current_salary_asc">Current salary: Low to high</option><option value="expected_salary_desc">Expected salary: High to low</option><option value="expected_salary_asc">Expected salary: Low to high</option><option value="notice_asc">Notice: Shortest first</option><option value="notice_desc">Notice: Longest first</option><option value="updated_desc">Recently updated</option><option value="name_asc">Name: A to Z</option></select><span id="theSpiderSearchBadge" class="spider-badge">—</span></div></div>
               <div class="spider-body-output" id="theSpiderSearchBody"></div>
+            </div>
+            <div class="spider-output spider-output-tab-panel" id="theSpiderReviewOutput" data-spider-panel="review" role="tabpanel" hidden>
+              <div class="spider-output-head"><div class="spider-output-label">Needs Checking</div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;"><button class="sec" id="theSpiderSuggestTagsBtn" onclick="suggestTheSpiderTagsFromCv()" style="font-size:12px;">Suggest tags from CV</button><span id="theSpiderReviewBadge" class="spider-badge">—</span></div></div>
+              <div style="font-size:11px;color:var(--text3);line-height:1.5;padding:0 2px 8px;">Dropped only because a JobAdder field was left blank, not because they mismatched. Suggestions are read from the CV and are never saved to JobAdder from here.</div>
+              <div class="spider-body-output" id="theSpiderReviewBody"></div>
             </div>
           </div>
         </div>
