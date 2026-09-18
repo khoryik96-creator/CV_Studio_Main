@@ -2789,14 +2789,11 @@ var THE_SPIDER_REVIEW_FIELD_LABELS = {
   it_skills: 'IT Skills',
   qualifications: 'Professional Qualifications'
 };
-var THE_SPIDER_REVIEW_FIELD_OPTION_LISTS = {
-  industry: 'theSpiderIndustryOptions',
-  it_skills: 'theSpiderItSkillOptions',
-  qualifications: 'theSpiderQualificationOptions'
-};
-// One AI call covers a batch. Kept small so the prompt stays well inside a single
-// request even when every CV excerpt is full length.
-var THE_SPIDER_REVIEW_BATCH = 20;
+// One AI call covers a batch. Sized so that the prompt and, more importantly, the
+// JSON coming back both fit comfortably: every candidate in a batch needs a full
+// object in the reply, and a reply cut off mid-object parses as nothing at all.
+var THE_SPIDER_REVIEW_BATCH = 8;
+var THE_SPIDER_REVIEW_MAX_TOKENS = 2000;
 
 function getTheSpiderReviewQueue() {
   if (!Array.isArray(window._theSpiderNeedsChecking)) window._theSpiderNeedsChecking = [];
@@ -2819,7 +2816,8 @@ function setTheSpiderReviewQueue(rows) {
 // The fixed vocabulary the AI must choose from. Read from the datalists the
 // options loader already filled, so the list is whatever JobAdder actually offers.
 function theSpiderReviewFieldOptions(field) {
-  var listId = THE_SPIDER_REVIEW_FIELD_OPTION_LISTS[field];
+  // Same datalist the filter controls read, named in one place only.
+  var listId = (THE_SPIDER_MULTI_CONFIG[field] || {}).options;
   var list = listId ? document.getElementById(listId) : null;
   if (!list) return [];
   var values = [];
@@ -2831,8 +2829,10 @@ function theSpiderReviewFieldOptions(field) {
 }
 
 function theSpiderReviewRowName(row) {
-  var card = (row && row.card) || {};
-  var name = String(card.name || card.full_name || card.candidate_name || '').trim();
+  // The search puts the name on the row itself. An earlier draft looked inside
+  // row.card, which only ever holds salary and notice period, so every row read
+  // as a bare id.
+  var name = String((row && row.name) || '').trim();
   if (name) return name;
   return 'Candidate ' + String((row && row.candidate_id) || '');
 }
@@ -2958,7 +2958,7 @@ async function suggestTheSpiderTagsFromCv() {
   try {
     for (var start = 0; start < rows.length; start += THE_SPIDER_REVIEW_BATCH) {
       var batch = rows.slice(start, start + THE_SPIDER_REVIEW_BATCH);
-      var d = await callAIProxy(theSpiderReviewSuggestionPrompt(batch), 1600, false, 0, 'the_spider');
+      var d = await callAIProxy(theSpiderReviewSuggestionPrompt(batch), THE_SPIDER_REVIEW_MAX_TOKENS, false, 0, 'the_spider');
       var suggestions = parseTheSpiderReviewSuggestions(aiText(d));
       suggestions.forEach(function(entry){
         var row = byId[String(entry.candidate_id || '').trim()];
@@ -2973,7 +2973,6 @@ async function suggestTheSpiderTagsFromCv() {
         if (Object.keys(picked).length) tagged += 1;
       });
       try {
-        var usage = normalizeUsageClient(d.usage || {});
         var cost = responseCost(d, route.model, route.provider);
         statsRecord('AI Crawler — blank field tagging', 'spider', cost, d.model || route.model, '', d.provider || route.provider, statsMetaFromResponse(d, route.model, route.provider));
       } catch (e) {}

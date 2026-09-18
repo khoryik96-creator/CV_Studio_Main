@@ -157,9 +157,11 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   PR #211 merged v24.6.406 through v24.6.409 as `5b1f2a4`: four source-ownership
   audit findings against v24.6.405, then three rounds of review corrections.
   PR #212 merged v24.6.410 as `960a086`, closing the source-ownership run.
-  Current work: `claude/ai-crawler-search-refinement`, v24.6.411 then v24.6.412,
-  the AI Crawler blank-field review queue and the save that writes a reviewed tag
-  back into JobAdder. These are features, not correctives.
+  Current work: `claude/ai-crawler-search-refinement`, v24.6.411 through
+  v24.6.413, the AI Crawler blank-field review queue and the save that writes a
+  reviewed tag back into JobAdder. v24.6.413 is a corrective on the two features
+  below it and must ship with them: as first written the queue never ran at all,
+  and the save could clear a candidate's other custom fields.
   PRs #193 and #194 merged after all three hosted checks passed.
   PR #189 merged as `2c216c6` on 2026-08-29; PR #185 merged as `b84c36f` on
   2026-09-04. PR #191 merged as `a5bf89d` on 2026-09-05 after all hosted
@@ -300,6 +302,19 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   merged page-aware corrective below supersedes those details.
 
 ## 8. Open / deferred work
+
+- **AI Crawler review-queue corrective — v24.6.413, UNMERGED.**
+  Fixes thirteen confirmed findings against v24.6.411 and v24.6.412. Two mattered:
+  the queue was collected inside the scorer, which never sees candidates the
+  eligibility pass has already dropped, so the feature returned an empty queue on
+  every search; and the save sent only the field it was filling, in the wrong
+  shape, which on a tenant treating UpdateCandidate.custom as replacement-like
+  would clear the record's other custom fields. Also: no vocabulary check existed
+  for IT Skills or Qualifications, a bare string wrote one tag per character, every
+  row displayed a bare id, a renamed field read as blank, the id was unescaped, and
+  a write cleared caches nothing had invalidated. The search route is now covered
+  end to end, which is the only level at which the first fault was visible. See
+  `cv_studio_v24_6_413_spider_review_corrective.md`.
 
 - **AI Crawler reviewed-tag save — v24.6.412, UNMERGED.**
   Sits on v24.6.411 below. Ticking a suggestion now writes it into the JobAdder

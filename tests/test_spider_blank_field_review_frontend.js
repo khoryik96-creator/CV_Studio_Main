@@ -68,8 +68,10 @@ vm.createContext(context);
   'setTheSpiderReviewQueue',
   'getTheSpiderReviewQueue',
 ].forEach(name => vm.runInContext(fnFrom(source, name), context));
+// The datalist ids come from the filter controls' own config, so this test
+// loads that rather than a second copy of the same three names.
 vm.runInContext(
-  source.match(/var THE_SPIDER_REVIEW_FIELD_OPTION_LISTS = \{[\s\S]*?\};/)[0],
+  source.match(/var THE_SPIDER_MULTI_CONFIG = \{[\s\S]*?\};/)[0],
   context
 );
 
@@ -153,9 +155,17 @@ context.setTheSpiderReviewQueue(null);
 assert.deepStrictEqual(plain(context.getTheSpiderReviewQueue()), []);
 
 // ── a row always has something to show a person ──────────────────────────────
-assert.strictEqual(context.theSpiderReviewRowName({ card: { name: 'Alex Tan' } }), 'Alex Tan');
+// The name comes from the row, which is where the search puts it. An earlier
+// draft read row.card.name, a shape the server never sends, so every row showed
+// a bare id while this test passed on invented data.
+assert.strictEqual(context.theSpiderReviewRowName({ name: 'Alex Tan' }), 'Alex Tan');
 assert.strictEqual(context.theSpiderReviewRowName({ candidate_id: '42' }), 'Candidate 42');
 assert.strictEqual(context.theSpiderReviewRowName({}), 'Candidate ');
+// The card holds salary and notice period only; it must not be mistaken for a name.
+assert.strictEqual(
+  context.theSpiderReviewRowName({ candidate_id: '42', card: { name: 'Nope' } }),
+  'Candidate 42'
+);
 
 // ── the page still declares the tab and never writes to JobAdder from here ───
 const html = fs.readFileSync('index.html', 'utf8');
