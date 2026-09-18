@@ -1211,6 +1211,73 @@ SPIDER_RESIDENTIAL_STATUS_FIELD_ID = 5
 SPIDER_QUALIFICATIONS_FIELD_ID = 7
 
 
+# The three fields the review queue can fill, and where each one lives. Industry
+# is the exception: its value decides the field, because a broad category writes
+# to #1 and a sub-category to #2, so it is resolved per value rather than fixed.
+SPIDER_WRITABLE_FIELDS = {
+    "it_skills": {
+        "label": "IT Skills",
+        "field_id": SPIDER_IT_SKILLS_FIELD_ID,
+        "expected_labels": ("IT Skills",),
+    },
+    "qualifications": {
+        "label": "Professional Qualifications",
+        "field_id": SPIDER_QUALIFICATIONS_FIELD_ID,
+        "expected_labels": ("Professional Qualifications", "Qualifications"),
+    },
+    "industry": {
+        "label": "Industry",
+        "field_id": None,
+        "expected_labels": ("Industry", "Industry Sub-Category"),
+    },
+}
+
+
+def _spider_writable_field_targets(field_key, values):
+    """Resolve requested values into ``{field id: [canonical value]}``.
+
+    Returns ``(targets, rejected)``. A value that is not in this tenant's
+    vocabulary is rejected rather than written, so a model that ignored the
+    allowed list cannot reach the profile.
+    """
+    spec = SPIDER_WRITABLE_FIELDS.get(str(field_key or ""))
+    if spec is None:
+        return {}, [str(value) for value in (values or [])]
+    targets = {}
+    rejected = []
+    for value in (values or []):
+        text = re.sub(r"\s+", " ", str(value or "")).strip()
+        if not text:
+            continue
+        if field_key == "industry":
+            # The canonical taxonomy in this module is the authority, and it also
+            # decides which of the two industry fields the value belongs to.
+            field_id, canonical = _spider_industry_filter_spec(text)
+            if field_id is None or not canonical:
+                rejected.append(text)
+                continue
+        else:
+            field_id, canonical = spec["field_id"], text
+        bucket = targets.setdefault(int(field_id), [])
+        if canonical not in bucket:
+            bucket.append(canonical)
+    return targets, rejected
+
+
+def _spider_field_is_blank(candidate, field_id, expected_labels=()):
+    """Whether this candidate's custom field currently holds nothing.
+
+    The write only ever fills a blank. A field somebody has since filled in is
+    left exactly as they left it.
+    """
+    values = _spider_industry_custom_values(
+        candidate,
+        int(field_id),
+        expected_labels=tuple(expected_labels or ()),
+    )
+    return not values
+
+
 def _spider_it_skills_match(candidate, selected, require_all=False):
     """Match selected dropdown values against JobAdder IT Skills field #3."""
     selected_terms = _spider_terms(selected, 24)

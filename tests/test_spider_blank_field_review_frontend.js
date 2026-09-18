@@ -186,6 +186,7 @@ const builtIns = new Set([
   'Promise', 'document', 'window', 'console', 'parseInt', 'parseFloat', 'isNaN',
   'Error', 'RegExp', 'Set', 'Map', 'if', 'for', 'while', 'switch', 'catch',
   'function', 'return', 'typeof', 'await', 'new', 'var', 'let', 'const',
+  'setTimeout', 'clearTimeout', 'confirm', 'alert', 'fetch',
   'else', 'do', 'try', 'in', 'of', 'delete', 'void', 'throw',
 ]);
 const called = new Set(

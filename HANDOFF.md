@@ -157,8 +157,9 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   PR #211 merged v24.6.406 through v24.6.409 as `5b1f2a4`: four source-ownership
   audit findings against v24.6.405, then three rounds of review corrections.
   PR #212 merged v24.6.410 as `960a086`, closing the source-ownership run.
-  Current work: `claude/ai-crawler-search-refinement`, v24.6.411, the AI Crawler
-  blank-field review queue. This is a feature, not a corrective.
+  Current work: `claude/ai-crawler-search-refinement`, v24.6.411 then v24.6.412,
+  the AI Crawler blank-field review queue and the save that writes a reviewed tag
+  back into JobAdder. These are features, not correctives.
   PRs #193 and #194 merged after all three hosted checks passed.
   PR #189 merged as `2c216c6` on 2026-08-29; PR #185 merged as `b84c36f` on
   2026-09-04. PR #191 merged as `a5bf89d` on 2026-09-05 after all hosted
@@ -300,15 +301,25 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **AI Crawler blank-field review queue — v24.6.411, UNMERGED.**
+- **AI Crawler reviewed-tag save — v24.6.412, UNMERGED.**
+  Sits on v24.6.411 below. Ticking a suggestion now writes it into the JobAdder
+  custom field, which is the part that actually repairs the profile. New guarded
+  route `/jobadder/spider_apply_tags`: the candidate is re-read before every
+  write, only a field that is still blank is ever filled, and every value is
+  checked against the tenant's own option list on the server as well as in the
+  browser. Only Industry, IT Skills and Professional Qualifications are writable;
+  Residential Status is deliberately not. The sealed route count moved 118 → 119
+  with the digest recomputed in the same commit. See
+  `cv_studio_v24_6_412_spider_apply_tags_qa_report.md`.
+
+- **AI Crawler blank-field review queue — v24.6.411, UNMERGED (PR #214).**
   Starts at merged master `960a086`. A JobAdder custom field left blank drops a
   candidate from the search even when their CV names the value. Those candidates
   are now set aside in a Needs Checking list instead of being discarded, and one
   AI call per batch proposes the missing tag from JobAdder's own option list.
-  Ranked results are unchanged and nothing writes to JobAdder. See
-  `cv_studio_v24_6_411_spider_blank_field_review_qa_report.md`.
-  Follow-up, not yet started: pushing an approved suggestion back into the
-  JobAdder custom field, which is the part that actually repairs the profile.
+  Ranked results are unchanged and nothing writes to JobAdder at this version.
+  See `cv_studio_v24_6_411_spider_blank_field_review_qa_report.md`. The follow-up
+  it named is v24.6.412 above.
 
 - **Role-qualifier script fix — v24.6.410, MERGED via PR #212 as `960a086`.**
   Starts at merged master `5b1f2a4`. An ASCII-only letter class split an accented

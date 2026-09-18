@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.411"
+_INSTALL_RECEIPT_VERSION = "v24.6.412"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -346,7 +346,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.411"
+_CVSTUDIO_VERSION = "v24.6.412"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -4128,6 +4128,9 @@ from cvstudio_spider_score import (
     _spider_salary_bound,
     _spider_salary_match,
     _spider_blank_profile_fields,
+    _spider_field_is_blank,
+    _spider_writable_field_targets,
+    SPIDER_WRITABLE_FIELDS,
     _spider_item_score,
     _spider_jd_heading_section,
     _spider_jd_relevance_terms,
@@ -8132,6 +8135,120 @@ def jobadder_spider_search():
 @_ja_critical_write_route
 def jobadder_create_candidate():
     return _CVSTUDIO_JOBADDER_WRITE_SERVICE.create_candidate()
+
+@app.route("/jobadder/spider_apply_tags", methods=["POST"])
+@_ja_critical_write_route
+def jobadder_spider_apply_tags():
+    """Fill a blank JobAdder custom field from a reviewed AI Crawler suggestion.
+
+    Every value is checked against this tenant's own option list before it is
+    written, and a field that already holds something is never touched. Both
+    guards are here rather than in the browser, because this is the only thing
+    standing between a model's output and a live candidate record.
+    """
+    data = request.get_json(silent=True) or {}
+    if not _ai_crawler_lock_allowed(data):
+        return _ai_crawler_locked_response()
+    candidate_id = str(data.get("candidate_id") or data.get("candidateId") or "").strip()
+    if not candidate_id:
+        return jsonify({"error": "Missing candidate_id"}), 400
+    requested = data.get("fields")
+    if not isinstance(requested, dict) or not requested:
+        return jsonify({"error": "Missing fields to apply"}), 400
+
+    token = _ja_refresh_access_token(force=False)
+    if not token:
+        info = _ja_public_info()
+        if info.get("needs_reconnect"):
+            return jsonify({
+                "error": "JobAdder connection expired. Reconnect JobAdder in Settings, then try again.",
+                "needs_reconnect": True,
+            }), 401
+        return jsonify({"error": "Connect to JobAdder first"}), 401
+
+    # Read the candidate fresh. The review queue was built earlier in the search,
+    # and somebody may have filled the field in since.
+    try:
+        detail = _spider_fetch_candidate_detail(token, candidate_id)
+    except Exception as exc:
+        return jsonify({"error": "Could not read the candidate from JobAdder: {}".format(exc)}), 502
+    if not isinstance(detail, dict) or not detail:
+        return jsonify({"error": "JobAdder returned no detail for this candidate"}), 404
+
+    skipped = []
+    rejected = []
+    custom_payload = {}
+    applied = {}
+    for field_key, values in requested.items():
+        spec = SPIDER_WRITABLE_FIELDS.get(str(field_key or ""))
+        if spec is None:
+            rejected.append({"field": str(field_key), "reason": "not a writable field"})
+            continue
+        targets, refused = _spider_writable_field_targets(field_key, values)
+        for value in refused:
+            rejected.append({
+                "field": str(field_key),
+                "value": value,
+                "reason": "not an allowed value for this field",
+            })
+        for field_id, canonical_values in targets.items():
+            if not _spider_field_is_blank(detail, field_id, spec.get("expected_labels") or ()):
+                skipped.append({
+                    "field": str(field_key),
+                    "field_id": field_id,
+                    "reason": "already filled in JobAdder; left unchanged",
+                })
+                continue
+            custom_payload[str(field_id)] = list(canonical_values)
+            applied.setdefault(str(field_key), []).extend(canonical_values)
+
+    if not custom_payload:
+        return jsonify({
+            "ok": True,
+            "candidate_id": candidate_id,
+            "applied": {},
+            "skipped": skipped,
+            "rejected": rejected,
+            "message": "Nothing written. Every field was already filled or held a value outside the allowed list.",
+        })
+
+    try:
+        body = json.dumps({"custom": custom_payload}).encode()
+        _status, result = _JOBADDER_CLIENT.request_json(
+            "candidates/{}".format(candidate_id),
+            method="PUT",
+            body=body,
+            headers={"Content-Type": "application/json"},
+            token=token,
+            timeout=15,
+            fallback={},
+            safe_to_retry=False,
+            retries=0,
+        )
+    except urllib.error.HTTPError as e:
+        detail_body = e.read().decode(errors="replace")
+        return jsonify({
+            "error": "JobAdder rejected the update: {}".format(e.code),
+            "detail": detail_body[:600],
+        }), e.code
+    except Exception as e:
+        return jsonify({"error": "JobAdder update failed: {}".format(e)}), 502
+
+    # The queue was built from the pre-write profile, so it is now stale. A
+    # cache that refuses to clear must not fail a write that already succeeded.
+    try:
+        _spider_resume_text_cache_clear()
+    except Exception:  # cleanup-only
+        pass
+    return jsonify({
+        "ok": True,
+        "candidate_id": candidate_id,
+        "applied": applied,
+        "skipped": skipped,
+        "rejected": rejected,
+        "jobadder": result if isinstance(result, dict) else {},
+    })
+
 
 @app.route("/jobadder/update_candidate", methods=["POST"])
 @_ja_critical_write_route
@@ -14626,9 +14743,11 @@ _salary_comparison.init_app(app, url_prefix="/salary-comparison")
 
 _CVSTUDIO_ARCHITECTURE = _finalize_modular_monolith_app(
     app,
-    expected_route_count=118,
+    # 119 once /jobadder/spider_apply_tags joined. The count is sealed on
+    # purpose, so a route may only appear alongside a deliberate bump here.
+    expected_route_count=119,
     expected_route_contract_sha256=(
-        "42768445b8fe97e48688238c02bebf5abce0251befc3d212c2d2b029911f7862"
+        "b73c14533d59b70dc1bc53495d5ddecd92d2a22300ce7ba8a0559606cb8eafaf"
     ),
     expected_before_request_handlers=(
         "_assign_cvstudio_request_id",

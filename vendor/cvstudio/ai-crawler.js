@@ -2847,6 +2847,7 @@ function renderTheSpiderReviewQueue() {
   if (badge) badge.textContent = rows.length ? (rows.length + ' set aside') : '—';
   if (button) button.disabled = !rows.length;
   if (!body) return;
+  setTimeout(updateTheSpiderApplyButton, 0);
   if (!rows.length) {
     body.innerHTML = '<div style="color:var(--text3);font-size:12px;">Nothing set aside. Every candidate the filters dropped had a real mismatch, not a blank field.</div>';
     return;
@@ -2861,7 +2862,17 @@ function renderTheSpiderReviewQueue() {
         var values = row.suggestions[field] || [];
         if (!values.length) return '';
         return '<div style="margin-top:4px;font-size:12px;"><strong>' + esc(THE_SPIDER_REVIEW_FIELD_LABELS[field] || field) + ':</strong> '
-          + values.map(function(value){ return '<span class="spider-query-chip">' + esc(value) + ' <em style="opacity:.7;">from CV</em></span>'; }).join('')
+          + values.map(function(value){
+              // Unticked by default. Saving writes into a live candidate record,
+              // so every value is chosen deliberately rather than inherited.
+              return '<label class="spider-query-chip" style="cursor:pointer;">'
+                + '<input type="checkbox" class="spider-tag-pick"'
+                + ' data-candidate="' + escAttr(String(row.candidate_id)) + '"'
+                + ' data-field="' + escAttr(field) + '"'
+                + ' data-value="' + escAttr(value) + '"'
+                + ' onchange="updateTheSpiderApplyButton()" style="margin-right:5px;">'
+                + esc(value) + ' <em style="opacity:.7;">from CV</em></label>';
+            }).join('')
           + '</div>';
       }).join('');
     }
@@ -2976,4 +2987,91 @@ async function suggestTheSpiderTagsFromCv() {
   } finally {
     if (button) { button.disabled = false; button.textContent = 'Suggest tags from CV'; }
   }
+}
+
+
+// ── Saving a reviewed tag into JobAdder ──────────────────────────────────────
+// The only part of this feature that writes to a live candidate record. The
+// server re-reads the candidate, refuses any value outside the tenant's own
+// option list, and will not touch a field that already holds something. This
+// side collects the ticks and reports back what the server actually did.
+function theSpiderTickedTags() {
+  var picked = {};
+  Array.prototype.forEach.call(document.querySelectorAll('.spider-tag-pick'), function(box){
+    if (!box.checked) return;
+    var id = String(box.getAttribute('data-candidate') || '');
+    var field = String(box.getAttribute('data-field') || '');
+    var value = String(box.getAttribute('data-value') || '');
+    if (!id || !field || !value) return;
+    if (!picked[id]) picked[id] = {};
+    if (!picked[id][field]) picked[id][field] = [];
+    if (picked[id][field].indexOf(value) < 0) picked[id][field].push(value);
+  });
+  return picked;
+}
+
+function theSpiderTickedTagCount(picked) {
+  var total = 0;
+  Object.keys(picked || {}).forEach(function(id){
+    Object.keys(picked[id]).forEach(function(field){ total += picked[id][field].length; });
+  });
+  return total;
+}
+
+function updateTheSpiderApplyButton() {
+  var button = document.getElementById('theSpiderApplyTagsBtn');
+  if (!button) return;
+  var count = theSpiderTickedTagCount(theSpiderTickedTags());
+  button.disabled = !count;
+  button.textContent = count ? ('Save ' + count + ' tag(s) to JobAdder') : 'Save ticked tags to JobAdder';
+}
+
+async function applyTheSpiderTagsToJobAdder() {
+  if (!requireAiCrawlerUnlocked()) return;
+  var picked = theSpiderTickedTags();
+  var ids = Object.keys(picked);
+  var count = theSpiderTickedTagCount(picked);
+  if (!count) { showToast('Tick at least one suggested tag first', 'err'); return;
+  }
+  if (!confirm('Write ' + count + ' tag(s) into ' + ids.length + ' JobAdder candidate record(s)?\n\nOnly fields that are still blank will be changed.')) return;
+  var button = document.getElementById('theSpiderApplyTagsBtn');
+  var badge = document.getElementById('theSpiderReviewBadge');
+  if (button) { button.disabled = true; button.textContent = 'Saving…'; }
+  var written = 0, skipped = 0, failed = [];
+  var byId = {};
+  getTheSpiderReviewQueue().forEach(function(row){ byId[String(row.candidate_id)] = row; });
+  for (var i = 0; i < ids.length; i++) {
+    var id = ids[i];
+    if (badge) badge.textContent = 'Saving ' + (i + 1) + ' of ' + ids.length + '…';
+    try {
+      var r = await fetchWithTimeout('/jobadder/spider_apply_tags', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json','X-AI-Crawler-Code':aiCrawlerLockPayload()},
+        body: JSON.stringify({candidate_id:id, fields:picked[id], crawler_lock_code:aiCrawlerLockPayload()})
+      }, 30000);
+      var d = await r.json().catch(function(){ return {}; });
+      if (!r.ok || d.error) throw new Error(d.error || ('JobAdder save failed: ' + r.status));
+      var row = byId[id];
+      var appliedFields = Object.keys(d.applied || {});
+      appliedFields.forEach(function(field){ written += (d.applied[field] || []).length; });
+      skipped += (d.skipped || []).length + (d.rejected || []).length;
+      if (row) {
+        row.applied = d.applied || {};
+        row.suggestion_note = appliedFields.length
+          ? ('Saved to JobAdder: ' + appliedFields.map(function(field){
+              return (THE_SPIDER_REVIEW_FIELD_LABELS[field] || field) + ' = ' + (d.applied[field] || []).join(', ');
+            }).join('; '))
+          : (d.message || 'Nothing written; the field was already filled.');
+      }
+    } catch (e) {
+      failed.push(id + ': ' + ((e && e.message) || 'failed'));
+      var failedRow = byId[id];
+      if (failedRow) failedRow.suggestion_note = 'Save failed: ' + ((e && e.message) || 'unknown error');
+    }
+  }
+  renderTheSpiderReviewQueue();
+  if (badge) badge.textContent = written + ' written' + (skipped ? (' · ' + skipped + ' left alone') : '');
+  if (failed.length) showToast('Some saves failed: ' + failed[0], 'err');
+  else showToast(written ? ('Wrote ' + written + ' tag(s) to JobAdder') : 'Nothing written; those fields were already filled', written ? 'ok' : 'err');
+  if (button) { button.disabled = true; button.textContent = 'Save ticked tags to JobAdder'; }
 }
