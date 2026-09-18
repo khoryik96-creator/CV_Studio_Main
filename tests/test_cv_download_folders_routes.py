@@ -68,7 +68,7 @@ class CvDownloadFolderRouteTests(unittest.TestCase):
 
     def test_routes_are_guarded_and_have_the_rebaselined_contract(self):
         rules = {rule.rule: rule for rule in app.app.url_map.iter_rules()}
-        self.assertEqual(len(rules), 118)
+        self.assertEqual(len(rules), 119)
         self.assertEqual(
             rules["/downloads/folders"].methods & {"GET", "POST", "DELETE"},
             {"GET", "POST", "DELETE"},

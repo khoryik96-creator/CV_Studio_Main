@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>CV Studio</title>
 <link rel="icon" type="image/png" href="cv_studio_logo.png?v=24.6.79-ui"/>
-<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.410">
-<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.410"></script>
+<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.414">
+<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.414"></script>
 <script>
 /* CV Studio Doctor — built-in diagnostic recorder.
  * Records JS errors, unhandled rejections, failed/slow network calls and
@@ -254,7 +254,7 @@
 <div class="app">
   <div class="header" style="position:relative;">
     <div>
-      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.410 (Offline) by The 郭 Lab</span></h1>
+      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.414 (Offline) by The 郭 Lab</span></h1>
 
     </div>
     <div class="header-tools">
@@ -1144,6 +1144,7 @@
             <div class="spider-output-tabs" id="theSpiderOutputTabs" role="tablist">
               <button type="button" class="spider-output-tab active" id="theSpiderTabNotes" role="tab" aria-selected="true" onclick="setTheSpiderOutputTab('notes')">Sourcing Notes &amp; Scorecard</button>
               <button type="button" class="spider-output-tab" id="theSpiderTabResults" role="tab" aria-selected="false" onclick="setTheSpiderOutputTab('results')">JobAdder Candidate Results</button>
+              <button type="button" class="spider-output-tab" id="theSpiderTabReview" role="tab" aria-selected="false" onclick="setTheSpiderOutputTab('review')">Needs Checking <span id="theSpiderReviewCount" class="spider-badge">0</span></button>
             </div>
             <div class="spider-output spider-output-tab-panel active show" id="theSpiderOutput" data-spider-panel="notes" role="tabpanel">
               <div class="spider-output-head"><div class="spider-output-label">AI Crawler Sourcing Notes &amp; Scorecard</div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;"><button class="sec" id="theSpiderCopyBtn" onclick="copyTheSpiderReport()" style="font-size:12px;display:none;">Copy Report</button><span id="theSpiderBadge" class="spider-badge">JobAdder</span></div></div>
@@ -1152,6 +1153,11 @@
             <div class="spider-output spider-output-tab-panel" id="theSpiderSearchOutput" data-spider-panel="results" role="tabpanel" hidden>
               <div class="spider-output-head"><div class="spider-output-label">JobAdder Candidate Results</div><div class="spider-result-sort-wrap"><label for="theSpiderSort">Sort</label><select id="theSpiderSort" class="spider-result-sort" onchange="sortTheSpiderResults(this.value)"><option value="fit_desc">Job fit: High to low</option><option value="fit_asc">Job fit: Low to high</option><option value="current_salary_desc">Current salary: High to low</option><option value="current_salary_asc">Current salary: Low to high</option><option value="expected_salary_desc">Expected salary: High to low</option><option value="expected_salary_asc">Expected salary: Low to high</option><option value="notice_asc">Notice: Shortest first</option><option value="notice_desc">Notice: Longest first</option><option value="updated_desc">Recently updated</option><option value="name_asc">Name: A to Z</option></select><span id="theSpiderSearchBadge" class="spider-badge">—</span></div></div>
               <div class="spider-body-output" id="theSpiderSearchBody"></div>
+            </div>
+            <div class="spider-output spider-output-tab-panel" id="theSpiderReviewOutput" data-spider-panel="review" role="tabpanel" hidden>
+              <div class="spider-output-head"><div class="spider-output-label">Needs Checking</div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;"><button class="sec" id="theSpiderSuggestTagsBtn" onclick="suggestTheSpiderTagsFromCv()" style="font-size:12px;">Suggest tags from CV</button><button class="sec" id="theSpiderApplyTagsBtn" onclick="applyTheSpiderTagsToJobAdder()" style="font-size:12px;" disabled>Save ticked tags to JobAdder</button><span id="theSpiderReviewBadge" class="spider-badge">—</span></div></div>
+              <div style="font-size:11px;color:var(--text3);line-height:1.5;padding:0 2px 8px;">Dropped only because a JobAdder field was left blank, not because they mismatched. Suggestions are read from the CV. Nothing is saved until you tick it and press Save, and a field that already holds a value is never overwritten.</div>
+              <div class="spider-body-output" id="theSpiderReviewBody"></div>
             </div>
           </div>
         </div>
@@ -2406,33 +2412,33 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
-<script src="/vendor/cvstudio/api-transport.js?v=v24.6.410"></script>
-<script src="/vendor/cvstudio/page-nav.js?v=v24.6.410"></script>
-<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.410"></script>
-<script src="/vendor/cvstudio/create-profile.js?v=v24.6.410"></script>
-<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.410"></script>
-<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.410"></script>
-<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.410"></script>
-<script src="/vendor/cvstudio/company-profile.js?v=v24.6.410"></script>
-<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.410"></script>
-<script src="/vendor/cvstudio/appearance.js?v=v24.6.410"></script>
-<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.410"></script>
-<script src="/vendor/cvstudio/docx-export.js?v=v24.6.410"></script>
-<script src="/vendor/cvstudio/the-owl.js?v=v24.6.410"></script>
-<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.410"></script>
-<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.410"></script>
-<script src="/vendor/cvstudio/settings.js?v=v24.6.410"></script>
-<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.410"></script>
-<script src="/vendor/cvstudio/tab-status.js?v=v24.6.410"></script>
-<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.410"></script>
-<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.410"></script>
-<script src="/vendor/cvstudio/cv-format.js?v=v24.6.410"></script>
-<script src="/vendor/cvstudio/locks.js?v=v24.6.410"></script>
-<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.410"></script>
-<script src="/vendor/cvstudio/ppc.js?v=v24.6.410"></script>
-<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.410"></script>
-<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.410"></script>
-<script src="/vendor/cvstudio/batch-format.js?v=v24.6.410"></script>
+<script src="/vendor/cvstudio/api-transport.js?v=v24.6.414"></script>
+<script src="/vendor/cvstudio/page-nav.js?v=v24.6.414"></script>
+<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.414"></script>
+<script src="/vendor/cvstudio/create-profile.js?v=v24.6.414"></script>
+<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.414"></script>
+<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.414"></script>
+<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.414"></script>
+<script src="/vendor/cvstudio/company-profile.js?v=v24.6.414"></script>
+<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.414"></script>
+<script src="/vendor/cvstudio/appearance.js?v=v24.6.414"></script>
+<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.414"></script>
+<script src="/vendor/cvstudio/docx-export.js?v=v24.6.414"></script>
+<script src="/vendor/cvstudio/the-owl.js?v=v24.6.414"></script>
+<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.414"></script>
+<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.414"></script>
+<script src="/vendor/cvstudio/settings.js?v=v24.6.414"></script>
+<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.414"></script>
+<script src="/vendor/cvstudio/tab-status.js?v=v24.6.414"></script>
+<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.414"></script>
+<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.414"></script>
+<script src="/vendor/cvstudio/cv-format.js?v=v24.6.414"></script>
+<script src="/vendor/cvstudio/locks.js?v=v24.6.414"></script>
+<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.414"></script>
+<script src="/vendor/cvstudio/ppc.js?v=v24.6.414"></script>
+<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.414"></script>
+<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.414"></script>
+<script src="/vendor/cvstudio/batch-format.js?v=v24.6.414"></script>
 <script>
 
 document.addEventListener('DOMContentLoaded', initPageNavPin);
@@ -2450,9 +2456,9 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 
 </script>
-<script src="/vendor/cvstudio/input-file.js?v=v24.6.410"></script>
-<script src="/vendor/cvstudio/stats.js?v=v24.6.410"></script>
-<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.410"></script>
+<script src="/vendor/cvstudio/input-file.js?v=v24.6.414"></script>
+<script src="/vendor/cvstudio/stats.js?v=v24.6.414"></script>
+<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.414"></script>
 <script>
 try { updateSummaryLockUI(); } catch(e) {}
 try { updateCvScoringLockUI(); } catch(e) {}

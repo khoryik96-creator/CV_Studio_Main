@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.410"
+_INSTALL_RECEIPT_VERSION = "v24.6.414"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -346,7 +346,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.410"
+_CVSTUDIO_VERSION = "v24.6.414"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -4127,6 +4127,11 @@ from cvstudio_spider_score import (
     _spider_residential_match,
     _spider_salary_bound,
     _spider_salary_match,
+    _spider_blank_fields_from_states,
+    _spider_custom_write_payload,
+    _spider_field_is_blank,
+    _spider_writable_field_targets,
+    SPIDER_WRITABLE_FIELDS,
     _spider_item_score,
     _spider_jd_heading_section,
     _spider_jd_relevance_terms,
@@ -4218,6 +4223,68 @@ def _spider_fetch_candidate_detail(token, candidate_id):
         raise
     except Exception:
         return None
+
+
+# A custom field's option list is tenant configuration that changes rarely, and a
+# batch save reads the same one once per candidate. Cached briefly so saving
+# twenty-four candidates is one read per field rather than twenty-four.
+_SPIDER_CUSTOM_FIELD_OPTIONS_CACHE = {}
+_SPIDER_CUSTOM_FIELD_OPTIONS_CACHE_LOCK = threading.Lock()
+_SPIDER_CUSTOM_FIELD_OPTIONS_TTL = 300.0
+
+
+def _spider_custom_field_options_cache_clear():
+    with _SPIDER_CUSTOM_FIELD_OPTIONS_CACHE_LOCK:
+        _SPIDER_CUSTOM_FIELD_OPTIONS_CACHE.clear()
+
+
+def _spider_custom_field_options(token, field_id):
+    """This tenant's allowed values for one candidate custom field.
+
+    Returns ``(options, error)``. A write is refused when the list cannot be read,
+    rather than falling back to accepting whatever was asked for: the point of the
+    list is that it is the only thing entitled to vouch for a value.
+
+    Only a successful read is cached. A failure is retried on the next call, so a
+    momentary outage cannot lock writes out for the whole cache window.
+    """
+    try:
+        field_id = int(field_id)
+    except (TypeError, ValueError):
+        return None, "unknown field"
+    if not token:
+        return None, "not connected"
+    cache_key = (_ja_cache_namespace(), field_id)
+    if cache_key[0]:
+        with _SPIDER_CUSTOM_FIELD_OPTIONS_CACHE_LOCK:
+            hit = _SPIDER_CUSTOM_FIELD_OPTIONS_CACHE.get(cache_key)
+            if hit and time.time() - float(hit.get("saved_at") or 0) < _SPIDER_CUSTOM_FIELD_OPTIONS_TTL:
+                return list(hit.get("options") or []), ""
+    try:
+        _status, payload = _JOBADDER_CLIENT.request_json(
+            "candidates/fields/custom/{}".format(field_id),
+            token=token,
+            timeout=8,
+            fallback={},
+        )
+    except Exception as exc:
+        return None, str(exc)[:120]
+    definition = (
+        payload.get("data")
+        if isinstance(payload, dict) and isinstance(payload.get("data"), dict)
+        else payload
+    )
+    values = definition.get("values") if isinstance(definition, dict) else None
+    options = _spider_extract_option_values(values or [])
+    if not options:
+        return None, "field {} has no option list".format(field_id)
+    if cache_key[0]:
+        with _SPIDER_CUSTOM_FIELD_OPTIONS_CACHE_LOCK:
+            _SPIDER_CUSTOM_FIELD_OPTIONS_CACHE[cache_key] = {
+                "options": list(options),
+                "saved_at": time.time(),
+            }
+    return options, ""
 
 
 _SPIDER_RESUME_TEXT_CACHE = {}
@@ -4320,6 +4387,8 @@ def _spider_resume_cache_key(token, candidate_id):
 
 def _spider_resume_text_cache_clear():
     global _SPIDER_PREVIEW_PAYLOAD_CACHE_BYTES
+    # This is the account-transition hook, so tenant configuration goes with it.
+    _spider_custom_field_options_cache_clear()
     with _SPIDER_RESUME_TEXT_CACHE_LOCK:
         _SPIDER_RESUME_TEXT_CACHE.clear()
     with _SPIDER_PREVIEW_PAYLOAD_CACHE_LOCK:
@@ -7299,6 +7368,14 @@ def _spider_native_boolean_jobadder_candidates(token, rule_text, result_pool_lim
     }
 
 
+# The blank-field review queue is a list a person reads, so it is capped well
+# below the result limit rather than growing with the candidate pool.
+# Each queued candidate costs one extra resume read, so this is deliberately
+# close to the resume scoring budget rather than to the result limit.
+_SPIDER_NEEDS_CHECKING_LIMIT = 24
+# Enough CV to name an industry, a skill or a qualification, and small enough
+# that a whole batch fits one AI call.
+_SPIDER_NEEDS_CHECKING_EXCERPT_CHARS = 800
 _SPIDER_SEARCH_PROCESSING_DEADLINE_SECONDS = 330.0
 _SPIDER_SEARCH_ELIGIBILITY_DETAIL_MAX = 80
 _SPIDER_SEARCH_RESUME_MAX = 20
@@ -7553,6 +7630,34 @@ def jobadder_spider_search():
         # already-proven mismatch. Apply every selected eligibility gate before
         # resume scoring, ranking, or return truncation, and reuse fallback detail
         # in Stage 3.
+        # Candidates cut only because a hand-filled JobAdder custom field is blank.
+        # They are not mismatches: nobody ever typed the value in. These are set
+        # aside so the blank can be reviewed against the CV instead of the
+        # candidate disappearing without trace, and the collection happens in the
+        # eligibility pass below because that is where such a candidate is
+        # actually dropped. Ranked results are untouched.
+        needs_checking_pending = []
+        needs_checking_ids = set()
+        needs_checking_truncated = False
+
+        def collect_blank_field_candidate(candidate, states):
+            nonlocal needs_checking_truncated
+            fields = _spider_blank_fields_from_states(states, candidate)
+            if not fields:
+                return
+            candidate_id = _spider_candidate_id(candidate)
+            if not candidate_id or candidate_id in needs_checking_ids:
+                return
+            if len(needs_checking_pending) >= _SPIDER_NEEDS_CHECKING_LIMIT:
+                needs_checking_truncated = True
+                return
+            needs_checking_ids.add(candidate_id)
+            needs_checking_pending.append({
+                "candidate_id": candidate_id,
+                "blank_fields": fields,
+                "candidate": candidate if isinstance(candidate, dict) else {},
+            })
+
         if eligibility_filters_active:
             def eligibility_filter_states(candidate):
                 states = {}
@@ -7684,6 +7789,7 @@ def jobadder_spider_search():
                     eligibility_matched_items.append(candidate)
                 else:
                     custom_filter_excluded_count += 1
+                    collect_blank_field_candidate(candidate, states)
             raw_items = eligibility_matched_items
 
         excluded_count = 0
@@ -7945,6 +8051,50 @@ def jobadder_spider_search():
                     eligibility_detail_candidates,
                 )
             )
+        # The set-aside candidates never reached resume scoring, so their CVs were
+        # never fetched. Read them now, bounded and on the same deadline: without
+        # the CV there is nothing for the review pass to read, and a row that
+        # cannot be helped is not worth showing.
+        needs_checking = []
+        if needs_checking_pending:
+            queue_ids = [row["candidate_id"] for row in needs_checking_pending]
+            queue_resumes = {}
+            if queue_ids and not processing_deadline_reached:
+                queue_results, queue_timed_out = _spider_bounded_parallel(
+                    queue_ids,
+                    lambda cid: _spider_fetch_candidate_resume_text(token, cid),
+                    max_workers=5,
+                    deadline=processing_deadline,
+                )
+                for cid, result in queue_results.items():
+                    if isinstance(result, Exception):
+                        queue_resumes[cid] = {"text": "", "source": "resume text unavailable"}
+                    else:
+                        text, source = result
+                        queue_resumes[cid] = {"text": str(text or ""), "source": str(source or "")}
+                # Deliberately not marked against the search deadline. The ranked
+                # results were final before this pass began, and calling a
+                # complete result set "safe partial results" because an optional
+                # extra read ran long would misreport the search itself. The
+                # queue simply carries less CV text.
+                if queue_timed_out:
+                    needs_checking_truncated = True
+            for row in needs_checking_pending:
+                candidate = row.get("candidate") or {}
+                resume = queue_resumes.get(row["candidate_id"]) or {}
+                resume_text = str(resume.get("text") or "")
+                needs_checking.append({
+                    "candidate_id": row["candidate_id"],
+                    "blank_fields": row["blank_fields"],
+                    "name": _spider_preview_name(row["candidate_id"], candidate),
+                    "card": _spider_card_fields(candidate),
+                    "resume_source": str(resume.get("source") or ""),
+                    "resume_characters": len(resume_text),
+                    # A bounded excerpt, so the browser can ask the AI to read the
+                    # CV without a second round trip per candidate.
+                    "resume_excerpt": re.sub(r"\s+", " ", resume_text).strip()[:_SPIDER_NEEDS_CHECKING_EXCERPT_CHARS],
+                })
+
         if processing_deadline_reached:
             pagination_warnings.append(
                 "CV Studio returned safe partial results after the {}-second processing deadline during {}".format(
@@ -7972,6 +8122,10 @@ def jobadder_spider_search():
             "result_limit": limit,
             "excluded": excluded_count,
             "kept_with_unknown_fields": unknown_count,
+            # Cut only because a hand-filled custom field was blank, not because
+            # anything about them mismatched.
+            "needs_checking_count": len(needs_checking),
+            "needs_checking_truncated": needs_checking_truncated,
             "enriched_candidate_profiles": enriched_count,
             "resume_scored_candidates": resume_scored_count,
             "resume_scoring_budget": resume_budget,
@@ -8054,6 +8208,9 @@ def jobadder_spider_search():
         response_obj = parsed if isinstance(parsed, dict) else {}
         response_obj["query"] = query
         response_obj["items"] = filtered
+        # A separate list, never mixed into items: these did not qualify, they were
+        # never assessed, because the field the filter reads was blank.
+        response_obj["needs_checking"] = needs_checking
         response_obj["filter_summary"] = summary
         return jsonify(response_obj)
     except _SpiderJobAdderReconnectRequired:
@@ -8081,6 +8238,154 @@ def jobadder_spider_search():
 @_ja_critical_write_route
 def jobadder_create_candidate():
     return _CVSTUDIO_JOBADDER_WRITE_SERVICE.create_candidate()
+
+@app.route("/jobadder/spider_apply_tags", methods=["POST"])
+@_ja_critical_write_route
+def jobadder_spider_apply_tags():
+    """Fill a blank JobAdder custom field from a reviewed AI Crawler suggestion.
+
+    Every value is checked against this tenant's own option list before it is
+    written, a field that already holds something is never touched, and every
+    other custom field on the record is carried across unchanged. All three
+    guards are here rather than in the browser, because this is the only thing
+    standing between a model's output and a live candidate record.
+    """
+    data = request.get_json(silent=True) or {}
+    if not _ai_crawler_lock_allowed(data):
+        return _ai_crawler_locked_response()
+    candidate_id = str(data.get("candidate_id") or data.get("candidateId") or "").strip()
+    if not candidate_id:
+        return jsonify({"error": "Missing candidate_id"}), 400
+    requested = data.get("fields")
+    if not isinstance(requested, dict) or not requested:
+        return jsonify({"error": "Missing fields to apply"}), 400
+
+    token = _ja_refresh_access_token(force=False)
+    if not token:
+        info = _ja_public_info()
+        if info.get("needs_reconnect"):
+            return jsonify({
+                "error": "JobAdder connection expired. Reconnect JobAdder in Settings, then try again.",
+                "needs_reconnect": True,
+            }), 401
+        return jsonify({"error": "Connect to JobAdder first"}), 401
+
+    # Read the candidate fresh. The review queue was built earlier in the search,
+    # and somebody may have filled the field in since.
+    try:
+        detail = _spider_fetch_candidate_detail(token, candidate_id)
+    except _SpiderJobAdderReconnectRequired:
+        return jsonify({
+            "error": "JobAdder connection expired. Reconnect JobAdder in Settings, then try again.",
+            "needs_reconnect": True,
+        }), 401
+    except Exception as exc:
+        return jsonify({"error": "Could not read the candidate from JobAdder: {}".format(exc)}), 502
+    if not isinstance(detail, dict) or not detail:
+        return jsonify({"error": "JobAdder returned no detail for this candidate"}), 404
+
+    skipped = []
+    rejected = []
+    values_by_field = {}
+    applied = {}
+    for field_key, values in requested.items():
+        key = str(field_key or "")
+        spec = SPIDER_WRITABLE_FIELDS.get(key)
+        if spec is None:
+            rejected.append({"field": key, "reason": "not a writable field"})
+            continue
+        # The tenant's own option list is the authority for a free-text custom
+        # field. Industry resolves against this module's canonical taxonomy
+        # instead, which also decides which of the two industry fields it is.
+        allowed = None
+        if key != "industry":
+            allowed, options_error = _spider_custom_field_options(token, spec["field_id"])
+            if options_error:
+                rejected.append({
+                    "field": key,
+                    "reason": "could not read the allowed values from JobAdder: {}".format(options_error),
+                })
+                continue
+        targets, refused = _spider_writable_field_targets(key, values, allowed=allowed)
+        for value in refused:
+            rejected.append({
+                "field": key,
+                "value": value,
+                "reason": "not an allowed value for this field",
+            })
+        for field_id, canonical_values in targets.items():
+            if not _spider_field_is_blank(detail, field_id):
+                skipped.append({
+                    "field": key,
+                    "field_id": field_id,
+                    "reason": "already filled in JobAdder; left unchanged",
+                })
+                continue
+            values_by_field[int(field_id)] = list(canonical_values)
+            applied.setdefault(key, []).extend(canonical_values)
+
+    if not values_by_field:
+        return jsonify({
+            "ok": True,
+            "candidate_id": candidate_id,
+            "applied": {},
+            "skipped": skipped,
+            "rejected": rejected,
+            "message": "Nothing written. Every field was already filled or held a value outside the allowed list.",
+        })
+
+    # JobAdder takes the whole custom collection, and a tenant may treat it as a
+    # replacement for everything it holds, so every existing value is carried
+    # across. Without that collection in hand there is nothing to preserve and
+    # the write is refused rather than risking fields nobody looked at.
+    custom_payload, can_write = _spider_custom_write_payload(detail, values_by_field)
+    if not can_write:
+        return jsonify({
+            "error": (
+                "JobAdder did not return this candidate's custom fields, so the write was "
+                "skipped to avoid clearing values it could not see."
+            ),
+            "candidate_id": candidate_id,
+            "applied": {},
+            "skipped": skipped,
+            "rejected": rejected,
+        }), 409
+
+    try:
+        body = json.dumps({"custom": custom_payload}).encode()
+        _status, result = _JOBADDER_CLIENT.request_json(
+            "candidates/{}".format(urllib.parse.quote(str(candidate_id), safe="")),
+            method="PUT",
+            body=body,
+            headers={"Content-Type": "application/json"},
+            token=token,
+            timeout=15,
+            fallback={},
+            safe_to_retry=False,
+            retries=0,
+        )
+    except urllib.error.HTTPError as e:
+        detail_body = e.read().decode(errors="replace")
+        return jsonify({
+            "error": "JobAdder rejected the update: {}".format(e.code),
+            "detail": detail_body[:600],
+        }), e.code
+    except Exception as e:
+        return jsonify({"error": "JobAdder update failed: {}".format(e)}), 502
+
+    # Nothing cached is invalidated by this write. The caches hold resume text and
+    # rendered CV previews, and the CV did not change; candidate detail, which did,
+    # is read fresh on every request and never cached.
+    return jsonify({
+        "ok": True,
+        "candidate_id": candidate_id,
+        "applied": applied,
+        "skipped": skipped,
+        "rejected": rejected,
+        "preserved_custom_field_count": max(0, len(custom_payload) - len(values_by_field)),
+        "jobadder": result if isinstance(result, dict) else {},
+    })
+
 
 @app.route("/jobadder/update_candidate", methods=["POST"])
 @_ja_critical_write_route
@@ -14575,9 +14880,11 @@ _salary_comparison.init_app(app, url_prefix="/salary-comparison")
 
 _CVSTUDIO_ARCHITECTURE = _finalize_modular_monolith_app(
     app,
-    expected_route_count=118,
+    # 119 once /jobadder/spider_apply_tags joined. The count is sealed on
+    # purpose, so a route may only appear alongside a deliberate bump here.
+    expected_route_count=119,
     expected_route_contract_sha256=(
-        "42768445b8fe97e48688238c02bebf5abce0251befc3d212c2d2b029911f7862"
+        "b73c14533d59b70dc1bc53495d5ddecd92d2a22300ce7ba8a0559606cb8eafaf"
     ),
     expected_before_request_handlers=(
         "_assign_cvstudio_request_id",

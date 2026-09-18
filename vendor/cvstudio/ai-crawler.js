@@ -97,16 +97,21 @@ function toggleTheSpiderOwlContext() {
   var btn = document.getElementById('theSpiderUseOwl');
   if (btn) btn.classList.toggle('active');
 }
+var THE_SPIDER_OUTPUT_TABS = [
+  {key:'notes', tab:'theSpiderTabNotes', panel:'theSpiderOutput'},
+  {key:'results', tab:'theSpiderTabResults', panel:'theSpiderSearchOutput'},
+  {key:'review', tab:'theSpiderTabReview', panel:'theSpiderReviewOutput'}
+];
 function setTheSpiderOutputTab(which) {
-  which = which === 'results' ? 'results' : 'notes';
-  var noteTab = document.getElementById('theSpiderTabNotes');
-  var resultTab = document.getElementById('theSpiderTabResults');
-  var notes = document.getElementById('theSpiderOutput');
-  var results = document.getElementById('theSpiderSearchOutput');
-  if (noteTab) { noteTab.classList.toggle('active', which === 'notes'); noteTab.setAttribute('aria-selected', which === 'notes' ? 'true' : 'false'); }
-  if (resultTab) { resultTab.classList.toggle('active', which === 'results'); resultTab.setAttribute('aria-selected', which === 'results' ? 'true' : 'false'); }
-  if (notes) { notes.classList.toggle('active', which === 'notes'); notes.classList.toggle('show', which === 'notes'); notes.hidden = which !== 'notes'; }
-  if (results) { results.classList.toggle('active', which === 'results'); results.classList.toggle('show', which === 'results'); results.hidden = which !== 'results'; }
+  var known = THE_SPIDER_OUTPUT_TABS.some(function(entry){ return entry.key === which; });
+  if (!known) which = 'notes';
+  THE_SPIDER_OUTPUT_TABS.forEach(function(entry){
+    var on = entry.key === which;
+    var tab = document.getElementById(entry.tab);
+    var panel = document.getElementById(entry.panel);
+    if (tab) { tab.classList.toggle('active', on); tab.setAttribute('aria-selected', on ? 'true' : 'false'); }
+    if (panel) { panel.classList.toggle('active', on); panel.classList.toggle('show', on); panel.hidden = !on; }
+  });
 }
 function showTheSpiderPanel(which) {
   setTheSpiderOutputTab(which || 'notes');
@@ -2658,6 +2663,9 @@ async function runTheSpiderJobAdderSearch(opts) {
   showTheSpiderPanel('results');
   if (body) body.innerHTML = '<div style="display:flex;align-items:center;gap:10px;color:var(--text3);"><span class="spinner"></span><span>Sourcing matching JobAdder candidates…</span></div>';
   var all=[]; var errors=[]; var filterSummaries=[]; var reconnectRequired=false;
+  // Candidates the server set aside for a blank JobAdder field. Collected across
+  // every query and kept entirely separate from the ranked results below.
+  var needsChecking=[];
   for (var i=0;i<queries.length;i++) {
     try {
       var r = await fetchWithTimeout('/jobadder/spider_search', {method:'POST', headers:{'Content-Type':'application/json','X-AI-Crawler-Code':aiCrawlerLockPayload()}, body:JSON.stringify({query:queries[i], limit:200, filters:spiderFilters, crawler_lock_code:aiCrawlerLockPayload()})}, 420000);
@@ -2671,6 +2679,7 @@ async function runTheSpiderJobAdderSearch(opts) {
       if (!r.ok || d.error) throw new Error(d.error || ('JobAdder search failed: ' + r.status));
       var items = d.items || d.candidates || (d.data && d.data.items) || [];
       if (d.filter_summary) filterSummaries.push(d.filter_summary);
+      if (Array.isArray(d.needs_checking)) needsChecking = needsChecking.concat(d.needs_checking);
       items.forEach(function(x){ x._spiderQuery = queries[i]; all.push(x); });
     } catch(e) {
       if (window._theSpiderSearchRunSeq !== runId) return;
@@ -2683,6 +2692,7 @@ async function runTheSpiderJobAdderSearch(opts) {
     }
   }
   if (window._theSpiderSearchRunSeq !== runId) return;
+  setTheSpiderReviewQueue(needsChecking);
   var seen={}, dedup=[];
   all.forEach(function(c){
     var id = getTheSpiderCandidateId(c);
@@ -2765,4 +2775,311 @@ function initTheSpiderTabUI() {
   updateTheSpiderCounts();
   updateTheSpiderYearsLabel();
   if (aiCrawlerIsUnlocked()) loadTheSpiderJobAdderOptions();
+}
+
+
+// ── Needs Checking ───────────────────────────────────────────────────────────
+// Candidates the search set aside because a hand-filled JobAdder custom field was
+// blank. They are not mismatches and they are deliberately kept out of the ranked
+// results. Here they can be read against their CV, and the AI can propose the tag
+// the profile is missing, picked from JobAdder's own option list so it cannot
+// invent a value. Nothing here writes to JobAdder.
+var THE_SPIDER_REVIEW_FIELD_LABELS = {
+  industry: 'Industry',
+  it_skills: 'IT Skills',
+  qualifications: 'Professional Qualifications'
+};
+// One AI call covers a batch. Sized so that the prompt and, more importantly, the
+// JSON coming back both fit comfortably: every candidate in a batch needs a full
+// object in the reply, and a reply cut off mid-object parses as nothing at all.
+var THE_SPIDER_REVIEW_BATCH = 8;
+var THE_SPIDER_REVIEW_MAX_TOKENS = 2000;
+
+function getTheSpiderReviewQueue() {
+  if (!Array.isArray(window._theSpiderNeedsChecking)) window._theSpiderNeedsChecking = [];
+  return window._theSpiderNeedsChecking;
+}
+
+function setTheSpiderReviewQueue(rows) {
+  var seen = {}, out = [];
+  (Array.isArray(rows) ? rows : []).forEach(function(row){
+    if (!row || typeof row !== 'object') return;
+    var id = String(row.candidate_id || '').trim();
+    if (!id || seen[id]) return;
+    seen[id] = 1;
+    out.push(row);
+  });
+  window._theSpiderNeedsChecking = out;
+  renderTheSpiderReviewQueue();
+}
+
+// The fixed vocabulary the AI must choose from. Read from the datalists the
+// options loader already filled, so the list is whatever JobAdder actually offers.
+function theSpiderReviewFieldOptions(field) {
+  // Same datalist the filter controls read, named in one place only.
+  var listId = (THE_SPIDER_MULTI_CONFIG[field] || {}).options;
+  var list = listId ? document.getElementById(listId) : null;
+  if (!list) return [];
+  var values = [];
+  Array.prototype.forEach.call(list.querySelectorAll('option'), function(option){
+    var value = String(option.value || option.textContent || '').trim();
+    if (value && values.indexOf(value) < 0) values.push(value);
+  });
+  return values;
+}
+
+function theSpiderReviewRowName(row) {
+  // The search puts the name on the row itself. An earlier draft looked inside
+  // row.card, which only ever holds salary and notice period, so every row read
+  // as a bare id.
+  var name = String((row && row.name) || '').trim();
+  if (name) return name;
+  return 'Candidate ' + String((row && row.candidate_id) || '');
+}
+
+function renderTheSpiderReviewQueue() {
+  var rows = getTheSpiderReviewQueue();
+  var body = document.getElementById('theSpiderReviewBody');
+  var badge = document.getElementById('theSpiderReviewBadge');
+  var count = document.getElementById('theSpiderReviewCount');
+  var button = document.getElementById('theSpiderSuggestTagsBtn');
+  if (count) count.textContent = String(rows.length);
+  if (badge) badge.textContent = rows.length ? (rows.length + ' set aside') : '—';
+  if (button) button.disabled = !rows.length;
+  if (!body) return;
+  setTimeout(updateTheSpiderApplyButton, 0);
+  if (!rows.length) {
+    body.innerHTML = '<div style="color:var(--text3);font-size:12px;">Nothing set aside. Every candidate the filters dropped had a real mismatch, not a blank field.</div>';
+    return;
+  }
+  body.innerHTML = rows.map(function(row){
+    var fields = (row.blank_fields || []).map(function(field){
+      return '<span class="spider-query-chip">' + esc(THE_SPIDER_REVIEW_FIELD_LABELS[field] || field) + ' is blank</span>';
+    }).join('');
+    var suggested = '';
+    if (row.suggestions && typeof row.suggestions === 'object') {
+      suggested = Object.keys(row.suggestions).map(function(field){
+        var values = row.suggestions[field] || [];
+        if (!values.length) return '';
+        return '<div style="margin-top:4px;font-size:12px;"><strong>' + esc(THE_SPIDER_REVIEW_FIELD_LABELS[field] || field) + ':</strong> '
+          + values.map(function(value){
+              // Unticked by default. Saving writes into a live candidate record,
+              // so every value is chosen deliberately rather than inherited.
+              return '<label class="spider-query-chip" style="cursor:pointer;">'
+                + '<input type="checkbox" class="spider-tag-pick"'
+                + ' data-candidate="' + escAttr(String(row.candidate_id)) + '"'
+                + ' data-field="' + escAttr(field) + '"'
+                + ' data-value="' + escAttr(value) + '"'
+                + ' onchange="updateTheSpiderApplyButton()" style="margin-right:5px;">'
+                + esc(value) + ' <em style="opacity:.7;">from CV</em></label>';
+            }).join('')
+          + '</div>';
+      }).join('');
+    }
+    var note = row.suggestion_note ? ('<div style="margin-top:4px;font-size:11px;color:var(--text3);">' + esc(row.suggestion_note) + '</div>') : '';
+    var excerpt = row.resume_excerpt
+      ? ('<div style="margin-top:4px;font-size:11px;color:var(--text3);line-height:1.5;">' + esc(String(row.resume_excerpt).slice(0, 240)) + '…</div>')
+      : '<div style="margin-top:4px;font-size:11px;color:var(--text3);">No CV text was loaded for this candidate.</div>';
+    return '<div style="border-bottom:1px solid var(--line);padding:10px 2px;">'
+      + '<div style="font-weight:600;">' + esc(theSpiderReviewRowName(row)) + '</div>'
+      + '<div style="margin-top:4px;">' + fields + '</div>'
+      + excerpt + suggested + note
+      + '</div>';
+  }).join('');
+}
+
+function theSpiderReviewSuggestionPrompt(batch) {
+  var fields = {};
+  batch.forEach(function(row){
+    (row.blank_fields || []).forEach(function(field){ fields[field] = 1; });
+  });
+  var vocabulary = Object.keys(fields).map(function(field){
+    var options = theSpiderReviewFieldOptions(field);
+    return THE_SPIDER_REVIEW_FIELD_LABELS[field] + ' (field key "' + field + '") allowed values:\n'
+      + (options.length ? options.map(function(value){ return '- ' + value; }).join('\n') : '- (no options loaded; return an empty list)');
+  }).join('\n\n');
+  var candidates = batch.map(function(row){
+    return 'candidate_id: ' + String(row.candidate_id)
+      + '\nblank fields: ' + (row.blank_fields || []).join(', ')
+      + '\nCV excerpt: ' + String(row.resume_excerpt || '(none)');
+  }).join('\n\n---\n\n');
+  return 'You are tagging recruiter records. For each candidate below, read the CV excerpt and pick the values that the blank JobAdder field should hold.\n\n'
+    + 'RULES:\n'
+    + '- Choose ONLY from the allowed values listed. Never invent a value, never reword one.\n'
+    + '- Pick a value only when the CV excerpt gives direct evidence. An excerpt that does not say is an empty list.\n'
+    + '- Do not guess from a job title alone, from a company name alone, or from where somebody lives.\n'
+    + '- At most 3 values per field.\n'
+    + '- Return ONLY JSON, no prose and no markdown fence, shaped exactly:\n'
+    + '{"suggestions":[{"candidate_id":"...","industry":[],"it_skills":[],"qualifications":[]}]}\n\n'
+    + 'ALLOWED VALUES:\n' + vocabulary + '\n\nCANDIDATES:\n' + candidates;
+}
+
+function parseTheSpiderReviewSuggestions(raw) {
+  var text = String(raw || '').trim();
+  if (!text) return [];
+  var fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced) text = fenced[1].trim();
+  var start = text.indexOf('{');
+  var end = text.lastIndexOf('}');
+  if (start < 0 || end <= start) return [];
+  var parsed;
+  try { parsed = JSON.parse(text.slice(start, end + 1)); } catch (e) { return []; }
+  var rows = parsed && Array.isArray(parsed.suggestions) ? parsed.suggestions : [];
+  return rows.filter(function(row){ return row && typeof row === 'object'; });
+}
+
+// Only values the option list actually holds survive. A model that ignores the
+// vocabulary cannot put a made-up tag in front of you.
+function theSpiderReviewAcceptedValues(field, values) {
+  var allowed = theSpiderReviewFieldOptions(field);
+  var lookup = {};
+  allowed.forEach(function(value){ lookup[value.toLowerCase()] = value; });
+  var out = [];
+  (Array.isArray(values) ? values : []).forEach(function(value){
+    var canonical = lookup[String(value || '').trim().toLowerCase()];
+    if (canonical && out.indexOf(canonical) < 0) out.push(canonical);
+  });
+  return out.slice(0, 3);
+}
+
+async function suggestTheSpiderTagsFromCv() {
+  if (!requireAiCrawlerUnlocked()) return;
+  var rows = getTheSpiderReviewQueue().filter(function(row){ return row.resume_excerpt; });
+  var button = document.getElementById('theSpiderSuggestTagsBtn');
+  var badge = document.getElementById('theSpiderReviewBadge');
+  if (!rows.length) { showToast('No CV text loaded for the set-aside candidates', 'err'); return; }
+  var route = aiRoutePayload('the_spider');
+  if (!route || !route.api_key) { showToast('Add an AI key to suggest tags', 'err'); return; }
+  if (button) { button.disabled = true; button.textContent = 'Reading CVs…'; }
+  if (badge) badge.textContent = 'Reading CVs…';
+  var byId = {};
+  getTheSpiderReviewQueue().forEach(function(row){ byId[String(row.candidate_id)] = row; });
+  var tagged = 0;
+  try {
+    for (var start = 0; start < rows.length; start += THE_SPIDER_REVIEW_BATCH) {
+      var batch = rows.slice(start, start + THE_SPIDER_REVIEW_BATCH);
+      var d = await callAIProxy(theSpiderReviewSuggestionPrompt(batch), THE_SPIDER_REVIEW_MAX_TOKENS, false, 0, 'the_spider');
+      var suggestions = parseTheSpiderReviewSuggestions(aiText(d));
+      suggestions.forEach(function(entry){
+        var row = byId[String(entry.candidate_id || '').trim()];
+        if (!row) return;
+        var picked = {};
+        (row.blank_fields || []).forEach(function(field){
+          var values = theSpiderReviewAcceptedValues(field, entry[field]);
+          if (values.length) picked[field] = values;
+        });
+        row.suggestions = picked;
+        row.suggestion_note = Object.keys(picked).length ? '' : 'The CV excerpt does not say.';
+        if (Object.keys(picked).length) tagged += 1;
+      });
+      try {
+        var cost = responseCost(d, route.model, route.provider);
+        statsRecord('AI Crawler — blank field tagging', 'spider', cost, d.model || route.model, '', d.provider || route.provider, statsMetaFromResponse(d, route.model, route.provider));
+      } catch (e) {}
+      // Render as each batch lands. A later batch failing must not throw away
+      // suggestions that are already on the row and already paid for.
+      renderTheSpiderReviewQueue();
+      if (badge) badge.textContent = tagged + ' of ' + rows.length + ' tagged';
+    }
+    showToast(tagged ? ('Suggested tags for ' + tagged + ' candidate(s)') : 'No CV gave clear evidence for a tag', tagged ? 'ok' : 'err');
+  } catch (e) {
+    showToast(
+      tagged
+        ? ('Stopped after ' + tagged + ' tagged: ' + ((e && e.message) || 'unknown error'))
+        : ('Tag suggestion failed: ' + ((e && e.message) || 'unknown error')),
+      'err'
+    );
+  } finally {
+    // Whatever happened, show what was gathered and leave the button usable.
+    renderTheSpiderReviewQueue();
+    if (badge) badge.textContent = tagged + ' of ' + rows.length + ' tagged';
+    if (button) { button.disabled = false; button.textContent = 'Suggest tags from CV'; }
+  }
+}
+
+
+// ── Saving a reviewed tag into JobAdder ──────────────────────────────────────
+// The only part of this feature that writes to a live candidate record. The
+// server re-reads the candidate, refuses any value outside the tenant's own
+// option list, and will not touch a field that already holds something. This
+// side collects the ticks and reports back what the server actually did.
+function theSpiderTickedTags() {
+  var picked = {};
+  Array.prototype.forEach.call(document.querySelectorAll('.spider-tag-pick'), function(box){
+    if (!box.checked) return;
+    var id = String(box.getAttribute('data-candidate') || '');
+    var field = String(box.getAttribute('data-field') || '');
+    var value = String(box.getAttribute('data-value') || '');
+    if (!id || !field || !value) return;
+    if (!picked[id]) picked[id] = {};
+    if (!picked[id][field]) picked[id][field] = [];
+    if (picked[id][field].indexOf(value) < 0) picked[id][field].push(value);
+  });
+  return picked;
+}
+
+function theSpiderTickedTagCount(picked) {
+  var total = 0;
+  Object.keys(picked || {}).forEach(function(id){
+    Object.keys(picked[id]).forEach(function(field){ total += picked[id][field].length; });
+  });
+  return total;
+}
+
+function updateTheSpiderApplyButton() {
+  var button = document.getElementById('theSpiderApplyTagsBtn');
+  if (!button) return;
+  var count = theSpiderTickedTagCount(theSpiderTickedTags());
+  button.disabled = !count;
+  button.textContent = count ? ('Save ' + count + ' tag(s) to JobAdder') : 'Save ticked tags to JobAdder';
+}
+
+async function applyTheSpiderTagsToJobAdder() {
+  if (!requireAiCrawlerUnlocked()) return;
+  var picked = theSpiderTickedTags();
+  var ids = Object.keys(picked);
+  var count = theSpiderTickedTagCount(picked);
+  if (!count) { showToast('Tick at least one suggested tag first', 'err'); return;
+  }
+  if (!confirm('Write ' + count + ' tag(s) into ' + ids.length + ' JobAdder candidate record(s)?\n\nOnly fields that are still blank will be changed.')) return;
+  var button = document.getElementById('theSpiderApplyTagsBtn');
+  var badge = document.getElementById('theSpiderReviewBadge');
+  if (button) { button.disabled = true; button.textContent = 'Saving…'; }
+  var written = 0, skipped = 0, failed = [];
+  var byId = {};
+  getTheSpiderReviewQueue().forEach(function(row){ byId[String(row.candidate_id)] = row; });
+  for (var i = 0; i < ids.length; i++) {
+    var id = ids[i];
+    if (badge) badge.textContent = 'Saving ' + (i + 1) + ' of ' + ids.length + '…';
+    try {
+      var r = await fetchWithTimeout('/jobadder/spider_apply_tags', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json','X-AI-Crawler-Code':aiCrawlerLockPayload()},
+        body: JSON.stringify({candidate_id:id, fields:picked[id], crawler_lock_code:aiCrawlerLockPayload()})
+      }, 30000);
+      var d = await r.json().catch(function(){ return {}; });
+      if (!r.ok || d.error) throw new Error(d.error || ('JobAdder save failed: ' + r.status));
+      var row = byId[id];
+      var appliedFields = Object.keys(d.applied || {});
+      appliedFields.forEach(function(field){ written += (d.applied[field] || []).length; });
+      skipped += (d.skipped || []).length + (d.rejected || []).length;
+      if (row) {
+        row.applied = d.applied || {};
+        row.suggestion_note = appliedFields.length
+          ? ('Saved to JobAdder: ' + appliedFields.map(function(field){
+              return (THE_SPIDER_REVIEW_FIELD_LABELS[field] || field) + ' = ' + (d.applied[field] || []).join(', ');
+            }).join('; '))
+          : (d.message || 'Nothing written; the field was already filled.');
+      }
+    } catch (e) {
+      failed.push(id + ': ' + ((e && e.message) || 'failed'));
+      var failedRow = byId[id];
+      if (failedRow) failedRow.suggestion_note = 'Save failed: ' + ((e && e.message) || 'unknown error');
+    }
+  }
+  renderTheSpiderReviewQueue();
+  if (badge) badge.textContent = written + ' written' + (skipped ? (' · ' + skipped + ' left alone') : '');
+  if (failed.length) showToast('Some saves failed: ' + failed[0], 'err');
+  else showToast(written ? ('Wrote ' + written + ' tag(s) to JobAdder') : 'Nothing written; those fields were already filled', written ? 'ok' : 'err');
+  if (button) { button.disabled = true; button.textContent = 'Save ticked tags to JobAdder'; }
 }
