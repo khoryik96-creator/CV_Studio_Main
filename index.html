@@ -1155,8 +1155,8 @@
               <div class="spider-body-output" id="theSpiderSearchBody"></div>
             </div>
             <div class="spider-output spider-output-tab-panel" id="theSpiderReviewOutput" data-spider-panel="review" role="tabpanel" hidden>
-              <div class="spider-output-head"><div class="spider-output-label">Needs Checking</div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;"><button class="sec" id="theSpiderSuggestTagsBtn" onclick="suggestTheSpiderTagsFromCv()" style="font-size:12px;">Suggest tags from CV</button><span id="theSpiderReviewBadge" class="spider-badge">—</span></div></div>
-              <div style="font-size:11px;color:var(--text3);line-height:1.5;padding:0 2px 8px;">Dropped only because a JobAdder field was left blank, not because they mismatched. Suggestions are read from the CV and are never saved to JobAdder from here.</div>
+              <div class="spider-output-head"><div class="spider-output-label">Needs Checking</div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;"><button class="sec" id="theSpiderSuggestTagsBtn" onclick="suggestTheSpiderTagsFromCv()" style="font-size:12px;">Suggest tags from CV</button><button class="sec" id="theSpiderApplyTagsBtn" onclick="applyTheSpiderTagsToJobAdder()" style="font-size:12px;" disabled>Save ticked tags to JobAdder</button><span id="theSpiderReviewBadge" class="spider-badge">—</span></div></div>
+              <div style="font-size:11px;color:var(--text3);line-height:1.5;padding:0 2px 8px;">Dropped only because a JobAdder field was left blank, not because they mismatched. Suggestions are read from the CV. Nothing is saved until you tick it and press Save, and a field that already holds a value is never overwritten.</div>
               <div class="spider-body-output" id="theSpiderReviewBody"></div>
             </div>
           </div>
