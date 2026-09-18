@@ -156,8 +156,9 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   `codex/pr210-v24.6.403-cv-source-safety` are both completed.
   PR #211 merged v24.6.406 through v24.6.409 as `5b1f2a4`: four source-ownership
   audit findings against v24.6.405, then three rounds of review corrections.
-  Current corrective: `claude/pr157-chatgpt-fix-zke4cy`, v24.6.410, an
-  accented-location fix on the role-qualifier test.
+  PR #212 merged v24.6.410 as `960a086`, closing the source-ownership run.
+  Current work: `claude/ai-crawler-search-refinement`, v24.6.411, the AI Crawler
+  blank-field review queue. This is a feature, not a corrective.
   PRs #193 and #194 merged after all three hosted checks passed.
   PR #189 merged as `2c216c6` on 2026-08-29; PR #185 merged as `b84c36f` on
   2026-09-04. PR #191 merged as `a5bf89d` on 2026-09-05 after all hosted
@@ -299,7 +300,17 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Role-qualifier script fix — v24.6.410, UNMERGED.**
+- **AI Crawler blank-field review queue — v24.6.411, UNMERGED.**
+  Starts at merged master `960a086`. A JobAdder custom field left blank drops a
+  candidate from the search even when their CV names the value. Those candidates
+  are now set aside in a Needs Checking list instead of being discarded, and one
+  AI call per batch proposes the missing tag from JobAdder's own option list.
+  Ranked results are unchanged and nothing writes to JobAdder. See
+  `cv_studio_v24_6_411_spider_blank_field_review_qa_report.md`.
+  Follow-up, not yet started: pushing an approved suggestion back into the
+  JobAdder custom field, which is the part that actually repairs the profile.
+
+- **Role-qualifier script fix — v24.6.410, MERGED via PR #212 as `960a086`.**
   Starts at merged master `5b1f2a4`. An ASCII-only letter class split an accented
   place name, left a lowercase fragment and sent every international location down
   the prose path, so a project went to the newest promotion instead of the role the

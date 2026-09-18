@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.410"
+_INSTALL_RECEIPT_VERSION = "v24.6.411"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -346,7 +346,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.410"
+_CVSTUDIO_VERSION = "v24.6.411"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -4127,6 +4127,7 @@ from cvstudio_spider_score import (
     _spider_residential_match,
     _spider_salary_bound,
     _spider_salary_match,
+    _spider_blank_profile_fields,
     _spider_item_score,
     _spider_jd_heading_section,
     _spider_jd_relevance_terms,
@@ -7299,6 +7300,12 @@ def _spider_native_boolean_jobadder_candidates(token, rule_text, result_pool_lim
     }
 
 
+# The blank-field review queue is a list a person reads, so it is capped well
+# below the result limit rather than growing with the candidate pool.
+_SPIDER_NEEDS_CHECKING_LIMIT = 60
+# Enough CV to name an industry, a skill or a qualification, and small enough
+# that a whole batch fits one AI call.
+_SPIDER_NEEDS_CHECKING_EXCERPT_CHARS = 800
 _SPIDER_SEARCH_PROCESSING_DEADLINE_SECONDS = 330.0
 _SPIDER_SEARCH_ELIGIBILITY_DETAIL_MAX = 80
 _SPIDER_SEARCH_RESUME_MAX = 20
@@ -7692,6 +7699,40 @@ def jobadder_spider_search():
         enriched_count = 0
         resume_scored_count = 0
 
+        # Candidates cut only because a hand-filled JobAdder custom field is blank.
+        # They are not mismatches: nobody ever typed the value in. Ranked results are
+        # untouched, and these are set aside so the blank can be reviewed against the
+        # CV instead of the candidate disappearing without trace. Bounded, because
+        # this is a review queue and not a second result set.
+        needs_checking = []
+        needs_checking_ids = set()
+        needs_checking_truncated = False
+
+        def collect_blank_field_candidate(item, excluded, resume_text, resume_source):
+            nonlocal needs_checking_truncated
+            fields = _spider_blank_profile_fields(excluded)
+            if not fields:
+                return
+            candidate_id = _spider_candidate_id(item)
+            if not candidate_id or candidate_id in needs_checking_ids:
+                return
+            if len(needs_checking) >= _SPIDER_NEEDS_CHECKING_LIMIT:
+                needs_checking_truncated = True
+                return
+            needs_checking_ids.add(candidate_id)
+            needs_checking.append({
+                "candidate_id": candidate_id,
+                "blank_fields": fields,
+                "card": _spider_card_fields(item if isinstance(item, dict) else {}),
+                "resume_source": str(resume_source or ""),
+                "resume_characters": len(str(resume_text or "")),
+                # A bounded excerpt so the browser can ask the AI to read the CV
+                # without a second round trip per candidate. Empty when the
+                # candidate was enriched from profile detail alone, and the client
+                # then falls back to the existing candidate-preview route.
+                "resume_excerpt": re.sub(r"\s+", " ", str(resume_text or "")).strip()[:_SPIDER_NEEDS_CHECKING_EXCERPT_CHARS],
+            })
+
         def build_scored_candidate(base_item, discovery_index, detail=None, resume_text="", resume_source=""):
             scoring_item = base_item
             if isinstance(detail, dict) and detail:
@@ -7718,6 +7759,9 @@ def jobadder_spider_search():
                 hard_passed = []
                 discovery_evidence = []
             if not keep:
+                collect_blank_field_candidate(
+                    scoring_for_fit, excluded, resume_text, resume_source
+                )
                 return None
             if isinstance(scoring_item, dict):
                 out_item = dict(scoring_item)
@@ -7972,6 +8016,10 @@ def jobadder_spider_search():
             "result_limit": limit,
             "excluded": excluded_count,
             "kept_with_unknown_fields": unknown_count,
+            # Cut only because a hand-filled custom field was blank, not because
+            # anything about them mismatched.
+            "needs_checking_count": len(needs_checking),
+            "needs_checking_truncated": needs_checking_truncated,
             "enriched_candidate_profiles": enriched_count,
             "resume_scored_candidates": resume_scored_count,
             "resume_scoring_budget": resume_budget,
@@ -8054,6 +8102,9 @@ def jobadder_spider_search():
         response_obj = parsed if isinstance(parsed, dict) else {}
         response_obj["query"] = query
         response_obj["items"] = filtered
+        # A separate list, never mixed into items: these did not qualify, they were
+        # never assessed, because the field the filter reads was blank.
+        response_obj["needs_checking"] = needs_checking
         response_obj["filter_summary"] = summary
         return jsonify(response_obj)
     except _SpiderJobAdderReconnectRequired:
