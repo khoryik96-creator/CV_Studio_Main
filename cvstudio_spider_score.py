@@ -788,27 +788,46 @@ def _spider_match_fit_percent(candidate, filters, blob_low, discovery_hits):
 #
 # Residential Status is deliberately NOT here. It is a legal status, a CV is not
 # authority for it, and guessing it from one would be both unreliable and unfair.
-_SPIDER_BLANK_FIELD_REASONS = {
-    "industry not visible in JobAdder custom field": "industry",
-    "IT Skills not visible in JobAdder custom field": "it_skills",
-    "Professional Qualifications not visible in JobAdder custom field": "qualifications",
+# Keyed on the gate's own result rather than on the sentence it shows a person.
+# An earlier draft looked the exclusion prose up in a table, which meant rewording
+# a user-facing string would have emptied the review queue with nothing to catch
+# it. The gate name is the stable thing, so that is what this reads.
+_SPIDER_BLANK_FIELD_GATES = {
+    "industry": "industry",
+    "it_skills": "it_skills",
+    "qualifications": "qualifications",
 }
 
+# A gate result that neither matched nor mismatched. After the search has loaded
+# candidate detail for the rows it could not decide, this means the field itself
+# holds nothing.
+_SPIDER_GATE_PASSED = frozenset({"match", "match_missing"})
 
-def _spider_blank_profile_fields(excluded):
+
+def _spider_blank_fields_from_states(states):
     """Field keys whose blank custom field is the ONLY reason a candidate was cut.
 
-    Returns an empty list as soon as any reason is a real mismatch, so a candidate
-    the source actively disqualifies never reaches the review list.
+    ``states`` is the per-gate result map the search builds before ranking, where
+    each key is a gate name and each value that gate's verdict. Returns an empty
+    list as soon as any gate actively disqualified the candidate, or as soon as an
+    undecided gate is one this queue cannot repair, so only candidates whose sole
+    problem is an unfilled writable field reach the review list.
     """
-    reasons = [str(reason or "").strip() for reason in (excluded or [])]
-    reasons = [reason for reason in reasons if reason]
-    if not reasons:
+    if not isinstance(states, dict) or not states:
         return []
     fields = []
-    for reason in reasons:
-        field = _SPIDER_BLANK_FIELD_REASONS.get(reason)
+    for name, status in states.items():
+        text = str(status or "").strip()
+        if text in _SPIDER_GATE_PASSED:
+            continue
+        # A real mismatch, an invalid filter, or anything else decided against
+        # the candidate. Nothing to review.
+        if text != "unknown":
+            return []
+        field = _SPIDER_BLANK_FIELD_GATES.get(str(name or ""))
         if field is None:
+            # Undecided on a gate the CV cannot answer (residential status,
+            # country, salary). Not a blank tag this queue can offer to fill.
             return []
         if field not in fields:
             fields.append(field)
@@ -1214,68 +1233,148 @@ SPIDER_QUALIFICATIONS_FIELD_ID = 7
 # The three fields the review queue can fill, and where each one lives. Industry
 # is the exception: its value decides the field, because a broad category writes
 # to #1 and a sub-category to #2, so it is resolved per value rather than fixed.
+#
+# Residential Status is deliberately absent. It is a legal status, a CV is not
+# authority for it, and a request naming it is refused whole.
 SPIDER_WRITABLE_FIELDS = {
     "it_skills": {
         "label": "IT Skills",
         "field_id": SPIDER_IT_SKILLS_FIELD_ID,
-        "expected_labels": ("IT Skills",),
     },
     "qualifications": {
         "label": "Professional Qualifications",
         "field_id": SPIDER_QUALIFICATIONS_FIELD_ID,
-        "expected_labels": ("Professional Qualifications", "Qualifications"),
     },
     "industry": {
         "label": "Industry",
         "field_id": None,
-        "expected_labels": ("Industry", "Industry Sub-Category"),
     },
 }
 
+# A reviewed suggestion is a handful of short tags. Anything past this is not a
+# tag, and is refused rather than trimmed into the record.
+SPIDER_WRITABLE_MAX_VALUES = 12
+SPIDER_WRITABLE_MAX_VALUE_CHARS = 120
 
-def _spider_writable_field_targets(field_key, values):
+
+def _spider_writable_field_targets(field_key, values, allowed=None):
     """Resolve requested values into ``{field id: [canonical value]}``.
 
-    Returns ``(targets, rejected)``. A value that is not in this tenant's
-    vocabulary is rejected rather than written, so a model that ignored the
-    allowed list cannot reach the profile.
+    Returns ``(targets, rejected)``. ``allowed`` is this tenant's own option list
+    for the field, and a value outside it is rejected rather than written. For
+    Industry the module's canonical taxonomy is the authority instead, because it
+    also decides which of the two industry fields the value belongs to.
+
+    Only a list of values is accepted. A bare string is refused rather than
+    iterated, because iterating one writes a tag per character.
     """
     spec = SPIDER_WRITABLE_FIELDS.get(str(field_key or ""))
     if spec is None:
-        return {}, [str(value) for value in (values or [])]
+        if isinstance(values, (list, tuple)):
+            return {}, [str(value) for value in values]
+        return {}, [str(values)] if values not in (None, "") else []
+    if not isinstance(values, (list, tuple)):
+        return {}, [str(values)] if values not in (None, "") else []
+
+    allowed_keys = None
+    if allowed is not None:
+        allowed_keys = {}
+        for option in allowed:
+            text = re.sub(r"\s+", " ", str(option or "")).strip()
+            if text:
+                allowed_keys.setdefault(text.casefold(), text)
+
     targets = {}
     rejected = []
-    for value in (values or []):
-        text = re.sub(r"\s+", " ", str(value or "")).strip()
+    for value in values[:SPIDER_WRITABLE_MAX_VALUES]:
+        if not isinstance(value, str):
+            rejected.append(str(value))
+            continue
+        text = re.sub(r"\s+", " ", value).strip()
         if not text:
             continue
+        if len(text) > SPIDER_WRITABLE_MAX_VALUE_CHARS:
+            rejected.append(text[:SPIDER_WRITABLE_MAX_VALUE_CHARS])
+            continue
         if field_key == "industry":
-            # The canonical taxonomy in this module is the authority, and it also
-            # decides which of the two industry fields the value belongs to.
             field_id, canonical = _spider_industry_filter_spec(text)
             if field_id is None or not canonical:
                 rejected.append(text)
                 continue
         else:
-            field_id, canonical = spec["field_id"], text
+            field_id = spec["field_id"]
+            if allowed_keys is None:
+                # No option list was supplied, so nothing can vouch for this
+                # value. Refuse rather than write an unverified tag.
+                rejected.append(text)
+                continue
+            canonical = allowed_keys.get(text.casefold())
+            if not canonical:
+                rejected.append(text)
+                continue
         bucket = targets.setdefault(int(field_id), [])
         if canonical not in bucket:
             bucket.append(canonical)
+    if len(values) > SPIDER_WRITABLE_MAX_VALUES:
+        rejected.extend(str(value) for value in values[SPIDER_WRITABLE_MAX_VALUES:])
     return targets, rejected
 
 
-def _spider_field_is_blank(candidate, field_id, expected_labels=()):
+def _spider_field_is_blank(candidate, field_id):
     """Whether this candidate's custom field currently holds nothing.
 
-    The write only ever fills a blank. A field somebody has since filled in is
-    left exactly as they left it.
+    Read by field id alone, exactly as the matching gates read it. An earlier
+    draft also required the field's label to be one this module expected, which
+    the gates never do: a tenant who renamed the field would have had it read as
+    blank here and overwritten, which is the one thing this check exists to stop.
     """
-    values = _spider_industry_custom_values(
-        candidate,
-        int(field_id),
-        expected_labels=tuple(expected_labels or ()),
-    )
-    return not values
+    return not _spider_industry_custom_values(candidate, int(field_id))
+
+
+def _spider_custom_write_payload(candidate, new_values_by_field):
+    """Build JobAdder's ``custom`` collection for an UpdateCandidate write.
+
+    Returns ``(payload, ok)``. JobAdder takes a list of ``{fieldId, value}``, and
+    a tenant may treat that collection as a replacement for everything it holds,
+    so every existing value is carried across and only the named fields change.
+
+    ``ok`` is False when the candidate record did not come with its ``custom``
+    collection: without it there is nothing to preserve, and writing anyway could
+    clear fields nobody looked at. The caller refuses the write instead.
+    """
+    if not isinstance(candidate, dict) or not isinstance(candidate.get("custom"), list):
+        return [], False
+    wanted = {}
+    for field_id, values in (new_values_by_field or {}).items():
+        try:
+            wanted[int(field_id)] = list(values or [])
+        except (TypeError, ValueError):
+            continue
+    payload = []
+    written = set()
+    for item in candidate.get("custom") or []:
+        if not isinstance(item, dict):
+            continue
+        raw_id = None
+        for key in ("fieldId", "fieldID", "customFieldId", "customFieldID", "id"):
+            if item.get(key) not in (None, ""):
+                raw_id = item.get(key)
+                break
+        try:
+            field_id = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        if field_id in wanted:
+            payload.append({"fieldId": field_id, "value": wanted[field_id]})
+            written.add(field_id)
+            continue
+        value = item.get("value")
+        if value is not None:
+            payload.append({"fieldId": field_id, "value": value})
+    for field_id, values in wanted.items():
+        if field_id not in written:
+            payload.append({"fieldId": field_id, "value": values})
+    return payload, True
 
 
 def _spider_it_skills_match(candidate, selected, require_all=False):
