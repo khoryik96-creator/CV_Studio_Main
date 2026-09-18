@@ -40,6 +40,11 @@ finally:
         os.environ["CVSTUDIO_DB_PATH"] = _ORIGINAL_DATABASE_OVERRIDE
 
 
+# A candidate record that was read and holds nothing. Blankness is confirmed
+# against the record, so every case needs one.
+BLANK_RECORD = {"custom": []}
+
+
 class BlankFieldFromGateStateTests(unittest.TestCase):
     """The queue keys on the gate's verdict, not on the sentence it displays."""
 
@@ -51,7 +56,7 @@ class BlankFieldFromGateStateTests(unittest.TestCase):
         ):
             with self.subTest(gate=gate):
                 self.assertEqual(
-                    score._spider_blank_fields_from_states({gate: "unknown"}), [field]
+                    score._spider_blank_fields_from_states({gate: "unknown"}, BLANK_RECORD), [field]
                 )
 
     def test_several_blank_fields_are_all_reported(self):
@@ -60,7 +65,7 @@ class BlankFieldFromGateStateTests(unittest.TestCase):
                 "industry": "unknown",
                 "it_skills": "unknown",
                 "qualifications": "unknown",
-            }),
+            }, BLANK_RECORD),
             ["industry", "it_skills", "qualifications"],
         )
 
@@ -70,7 +75,7 @@ class BlankFieldFromGateStateTests(unittest.TestCase):
                 "industry": "unknown",
                 "country": "match",
                 "salary": "match_missing",
-            }),
+            }, BLANK_RECORD),
             ["industry"],
         )
 
@@ -81,7 +86,7 @@ class BlankFieldFromGateStateTests(unittest.TestCase):
                     score._spider_blank_fields_from_states({
                         "industry": "unknown",
                         "it_skills": status,
-                    }),
+                    }, BLANK_RECORD),
                     [],
                 )
 
@@ -92,7 +97,7 @@ class BlankFieldFromGateStateTests(unittest.TestCase):
             with self.subTest(gate=gate):
                 self.assertEqual(
                     score._spider_blank_fields_from_states(
-                        {"industry": "unknown", gate: "unknown"}
+                        {"industry": "unknown", gate: "unknown"}, BLANK_RECORD
                     ),
                     [],
                 )
@@ -101,15 +106,60 @@ class BlankFieldFromGateStateTests(unittest.TestCase):
         self.assertNotIn("residential", score._SPIDER_BLANK_FIELD_GATES)
         self.assertNotIn("residential", score.SPIDER_WRITABLE_FIELDS)
 
+    def test_an_industry_on_file_is_never_called_blank(self):
+        # The any-mode industry gate collapses "mismatched one selection, empty on
+        # another" into a single unknown. Believing that would offer to tag a
+        # candidate whose industry is on file and simply different, and the save
+        # guard would not catch it because the OTHER industry field really is empty.
+        candidate = {"custom": [{"fieldId": 1, "name": "Industry", "value": ["FMCG"]}]}
+        self.assertEqual(
+            score._spider_blank_fields_from_states({"industry": "unknown"}, candidate), []
+        )
+        # A value in the sub-category field alone counts just the same.
+        candidate = {"custom": [{"fieldId": 2, "name": "Industry Sub-Category",
+                                 "value": ["FSI - Insurance"]}]}
+        self.assertEqual(
+            score._spider_blank_fields_from_states({"industry": "unknown"}, candidate), []
+        )
+
+    def test_a_record_whose_detail_was_never_read_is_not_queued(self):
+        # Undecided gates also mean "never looked". A detail fetch that failed, or
+        # a candidate past the bounded detail sample, has every gate unknown while
+        # its fields may be perfectly well filled in.
+        for candidate in (None, {}, {"candidateId": 7}, {"custom": None}):
+            with self.subTest(candidate=candidate):
+                self.assertEqual(
+                    score._spider_blank_fields_from_states({"industry": "unknown"}, candidate),
+                    [],
+                )
+
+    def test_a_renamed_but_filled_field_is_not_queued(self):
+        # The skills gate requires the field's label, so a renamed field reads as
+        # undecided there. The record still shows a value, and the save guard reads
+        # by id, so queueing this would promise a write that would then be refused.
+        candidate = {"custom": [{"fieldId": 3, "name": "Tech Skills", "value": ["Oracle"]}]}
+        self.assertEqual(
+            score._spider_blank_fields_from_states({"it_skills": "unknown"}, candidate), []
+        )
+
+    def test_a_genuinely_empty_field_still_qualifies(self):
+        candidate = {"custom": [{"fieldId": 4, "name": "Currency", "value": ["SGD"]}]}
+        self.assertEqual(
+            score._spider_blank_fields_from_states({"it_skills": "unknown"}, candidate),
+            ["it_skills"],
+        )
+
     def test_malformed_input_is_empty_rather_than_an_error(self):
         for states in (None, {}, [], "unknown", 0, {"industry": None}):
             with self.subTest(states=states):
-                self.assertEqual(score._spider_blank_fields_from_states(states), [])
+                self.assertEqual(
+                    score._spider_blank_fields_from_states(states, BLANK_RECORD), []
+                )
 
     def test_a_fully_matching_candidate_is_not_a_review_row(self):
         self.assertEqual(
             score._spider_blank_fields_from_states(
-                {"industry": "match", "it_skills": "match_missing"}
+                {"industry": "match", "it_skills": "match_missing"}, BLANK_RECORD
             ),
             [],
         )
@@ -234,6 +284,65 @@ class BlankFieldSearchRouteTests(unittest.TestCase):
         self.assertEqual(
             len(payload["needs_checking"]), app._SPIDER_NEEDS_CHECKING_LIMIT
         )
+        self.assertTrue(payload["filter_summary"]["needs_checking_truncated"])
+
+    def test_a_candidate_with_a_different_industry_is_not_offered_for_tagging(self):
+        # End to end: the recruiter selected a broad industry and a sub-category.
+        # This candidate has a broad industry on file that simply is not the one
+        # selected, and an empty sub-category. The gate collapses that to unknown.
+        # Queueing it would let an AI guess write a sub-category onto a candidate
+        # whose real industry is on record and different.
+        response, _ = self._run(
+            {2: [{"fieldId": 1, "name": "Industry", "value": ["FMCG"]}]},
+            {"role": "Finance",
+             "industry": ["Financial Services", "FSI - Insurance"]},
+        )
+        payload = response.get_json()
+        self.assertEqual(payload["items"], [])
+        self.assertEqual(payload["needs_checking"], [])
+
+    def test_a_candidate_whose_detail_never_loaded_is_not_queued(self):
+        # A failed detail read leaves every gate undecided while the fields may be
+        # filled in. Nothing can be confirmed, so nothing is offered.
+        summaries = [{"candidateId": 2, "firstName": "Ayu", "lastName": "Two",
+                      "summary": "Finance", "_spiderSearchTerms": ["SAP"]}]
+        metadata = {"mode": "plain", "query": "Finance", "returned": 1,
+                    "search": {"reported_total": 1, "warnings": [], "pages": 1}}
+        with mock.patch.object(
+            app, "_ja_refresh_access_token", return_value="fixture-token"
+        ), mock.patch.object(
+            app, "_spider_plain_keyword_jobadder_candidates",
+            return_value=(summaries, metadata),
+        ), mock.patch.object(
+            app, "_spider_fetch_candidate_detail", return_value=None
+        ), mock.patch.object(
+            app, "_spider_fetch_candidate_resume_text", return_value=("CV", "resume")
+        ):
+            response = app.app.test_client().post(
+                "/jobadder/spider_search",
+                json={"query": "Finance", "limit": 10,
+                      "filters": {"role": "Finance", "it_skills": "SAP"}},
+                headers=self._headers(),
+            )
+        self.assertEqual(response.get_json()["needs_checking"], [])
+
+    def test_a_slow_review_queue_does_not_report_the_search_as_partial(self):
+        # The ranked results were final before the queue pass began. Running out
+        # of time on optional extra reads must not relabel them "safe partial".
+        real_parallel = app._spider_bounded_parallel
+        calls = {"n": 0}
+
+        def flaky_parallel(ids, worker, **kwargs):
+            calls["n"] += 1
+            result = real_parallel(ids, worker, **kwargs)
+            # The queue's resume pass is the last one the search makes.
+            return (result[0], True) if calls["n"] > 1 else result
+
+        with mock.patch.object(app, "_spider_bounded_parallel", side_effect=flaky_parallel):
+            response, _ = self._run({1: [], 2: []}, {"role": "Finance", "it_skills": "SAP"})
+        payload = response.get_json()
+        warnings = " ".join(payload.get("warnings") or [])
+        self.assertNotIn("safe partial results", warnings)
         self.assertTrue(payload["filter_summary"]["needs_checking_truncated"])
 
     def test_no_filter_means_no_queue(self):

@@ -792,28 +792,45 @@ def _spider_match_fit_percent(candidate, filters, blob_low, discovery_hits):
 # An earlier draft looked the exclusion prose up in a table, which meant rewording
 # a user-facing string would have emptied the review queue with nothing to catch
 # it. The gate name is the stable thing, so that is what this reads.
+#
+# The gate result alone is not enough, though. "unknown" means the gate could not
+# decide, which covers three different situations: the field really is empty, the
+# candidate record was never loaded, or the gate collapsed a mismatch and an empty
+# field into one verdict. Only the first is a review row, so every candidate is
+# checked against the record itself below.
 _SPIDER_BLANK_FIELD_GATES = {
     "industry": "industry",
     "it_skills": "it_skills",
     "qualifications": "qualifications",
 }
 
-# A gate result that neither matched nor mismatched. After the search has loaded
-# candidate detail for the rows it could not decide, this means the field itself
-# holds nothing.
+# A gate result that neither matched nor mismatched.
 _SPIDER_GATE_PASSED = frozenset({"match", "match_missing"})
 
 
-def _spider_blank_fields_from_states(states):
+def _spider_blank_fields_from_states(states, candidate=None):
     """Field keys whose blank custom field is the ONLY reason a candidate was cut.
 
-    ``states`` is the per-gate result map the search builds before ranking, where
-    each key is a gate name and each value that gate's verdict. Returns an empty
-    list as soon as any gate actively disqualified the candidate, or as soon as an
-    undecided gate is one this queue cannot repair, so only candidates whose sole
-    problem is an unfilled writable field reach the review list.
+    ``states`` is the per-gate result map the search builds before ranking.
+    ``candidate`` is the record those gates read, merged with its detail.
+
+    Returns an empty list as soon as any gate actively disqualified the candidate,
+    or as soon as an undecided gate is one this queue cannot repair. An undecided
+    gate is then only believed when the record itself shows the field empty:
+
+    * The industry gate collapses "mismatched one selection, empty on another"
+      into a single ``unknown``. Trusting that would offer to tag a candidate
+      whose industry is on file and simply different.
+    * A record whose detail was never fetched, because the read failed or the
+      search hit its bounded sample, has every gate undecided while its fields may
+      be perfectly well filled in.
+
+    So a candidate without its ``custom`` collection is never a review row: there
+    is nothing to confirm against, and guessing here writes into a live record.
     """
     if not isinstance(states, dict) or not states:
+        return []
+    if not isinstance(candidate, dict) or not isinstance(candidate.get("custom"), list):
         return []
     fields = []
     for name, status in states.items():
@@ -829,6 +846,11 @@ def _spider_blank_fields_from_states(states):
             # Undecided on a gate the CV cannot answer (residential status,
             # country, salary). Not a blank tag this queue can offer to fill.
             return []
+        # Confirm against the record. Read by field id alone, exactly as the save
+        # guard reads it, so the queue never offers what the save would refuse.
+        for field_id in _SPIDER_BLANK_FIELD_SOURCE_IDS.get(field, ()):
+            if _spider_industry_custom_values(candidate, field_id):
+                return []
         if field not in fields:
             fields.append(field)
     return fields
@@ -1229,6 +1251,15 @@ SPIDER_IT_SKILLS_FIELD_ID = 3
 SPIDER_RESIDENTIAL_STATUS_FIELD_ID = 5
 SPIDER_QUALIFICATIONS_FIELD_ID = 7
 
+# Every custom field a gate consults, so "blank" can be confirmed rather than
+# assumed. Industry spans both fields: a value in either one means the candidate
+# has an industry on file, whatever the gate concluded about the selection.
+_SPIDER_BLANK_FIELD_SOURCE_IDS = {
+    "industry": (1, 2),
+    "it_skills": (SPIDER_IT_SKILLS_FIELD_ID,),
+    "qualifications": (SPIDER_QUALIFICATIONS_FIELD_ID,),
+}
+
 
 # The three fields the review queue can fill, and where each one lives. Industry
 # is the exception: its value decides the field, because a broad category writes
@@ -1323,10 +1354,15 @@ def _spider_writable_field_targets(field_key, values, allowed=None):
 def _spider_field_is_blank(candidate, field_id):
     """Whether this candidate's custom field currently holds nothing.
 
-    Read by field id alone, exactly as the matching gates read it. An earlier
-    draft also required the field's label to be one this module expected, which
-    the gates never do: a tenant who renamed the field would have had it read as
-    blank here and overwritten, which is the one thing this check exists to stop.
+    Read by field id alone. An earlier draft also required the field's label to
+    be one this module expected, so a tenant who renamed the field would have had
+    it read as blank here and overwritten, which is the one thing this check
+    exists to stop.
+
+    The industry gate reads the same way. The IT Skills and Qualifications gates
+    are stricter and also require the label, which can leave them undecided on a
+    renamed field that is actually filled; reading loosely here is deliberate,
+    because between the two the safe answer is the one that refuses to write.
     """
     return not _spider_industry_custom_values(candidate, int(field_id))
 
