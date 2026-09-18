@@ -2976,14 +2976,23 @@ async function suggestTheSpiderTagsFromCv() {
         var cost = responseCost(d, route.model, route.provider);
         statsRecord('AI Crawler — blank field tagging', 'spider', cost, d.model || route.model, '', d.provider || route.provider, statsMetaFromResponse(d, route.model, route.provider));
       } catch (e) {}
+      // Render as each batch lands. A later batch failing must not throw away
+      // suggestions that are already on the row and already paid for.
+      renderTheSpiderReviewQueue();
+      if (badge) badge.textContent = tagged + ' of ' + rows.length + ' tagged';
     }
-    renderTheSpiderReviewQueue();
-    if (badge) badge.textContent = tagged + ' of ' + rows.length + ' tagged';
     showToast(tagged ? ('Suggested tags for ' + tagged + ' candidate(s)') : 'No CV gave clear evidence for a tag', tagged ? 'ok' : 'err');
   } catch (e) {
-    if (badge) badge.textContent = 'Failed';
-    showToast('Tag suggestion failed: ' + ((e && e.message) || 'unknown error'), 'err');
+    showToast(
+      tagged
+        ? ('Stopped after ' + tagged + ' tagged: ' + ((e && e.message) || 'unknown error'))
+        : ('Tag suggestion failed: ' + ((e && e.message) || 'unknown error')),
+      'err'
+    );
   } finally {
+    // Whatever happened, show what was gathered and leave the button usable.
+    renderTheSpiderReviewQueue();
+    if (badge) badge.textContent = tagged + ' of ' + rows.length + ' tagged';
     if (button) { button.disabled = false; button.textContent = 'Suggest tags from CV'; }
   }
 }

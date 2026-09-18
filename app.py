@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.413"
+_INSTALL_RECEIPT_VERSION = "v24.6.414"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -346,7 +346,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.413"
+_CVSTUDIO_VERSION = "v24.6.414"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -4225,12 +4225,28 @@ def _spider_fetch_candidate_detail(token, candidate_id):
         return None
 
 
+# A custom field's option list is tenant configuration that changes rarely, and a
+# batch save reads the same one once per candidate. Cached briefly so saving
+# twenty-four candidates is one read per field rather than twenty-four.
+_SPIDER_CUSTOM_FIELD_OPTIONS_CACHE = {}
+_SPIDER_CUSTOM_FIELD_OPTIONS_CACHE_LOCK = threading.Lock()
+_SPIDER_CUSTOM_FIELD_OPTIONS_TTL = 300.0
+
+
+def _spider_custom_field_options_cache_clear():
+    with _SPIDER_CUSTOM_FIELD_OPTIONS_CACHE_LOCK:
+        _SPIDER_CUSTOM_FIELD_OPTIONS_CACHE.clear()
+
+
 def _spider_custom_field_options(token, field_id):
     """This tenant's allowed values for one candidate custom field.
 
     Returns ``(options, error)``. A write is refused when the list cannot be read,
     rather than falling back to accepting whatever was asked for: the point of the
     list is that it is the only thing entitled to vouch for a value.
+
+    Only a successful read is cached. A failure is retried on the next call, so a
+    momentary outage cannot lock writes out for the whole cache window.
     """
     try:
         field_id = int(field_id)
@@ -4238,6 +4254,12 @@ def _spider_custom_field_options(token, field_id):
         return None, "unknown field"
     if not token:
         return None, "not connected"
+    cache_key = (_ja_cache_namespace(), field_id)
+    if cache_key[0]:
+        with _SPIDER_CUSTOM_FIELD_OPTIONS_CACHE_LOCK:
+            hit = _SPIDER_CUSTOM_FIELD_OPTIONS_CACHE.get(cache_key)
+            if hit and time.time() - float(hit.get("saved_at") or 0) < _SPIDER_CUSTOM_FIELD_OPTIONS_TTL:
+                return list(hit.get("options") or []), ""
     try:
         _status, payload = _JOBADDER_CLIENT.request_json(
             "candidates/fields/custom/{}".format(field_id),
@@ -4256,6 +4278,12 @@ def _spider_custom_field_options(token, field_id):
     options = _spider_extract_option_values(values or [])
     if not options:
         return None, "field {} has no option list".format(field_id)
+    if cache_key[0]:
+        with _SPIDER_CUSTOM_FIELD_OPTIONS_CACHE_LOCK:
+            _SPIDER_CUSTOM_FIELD_OPTIONS_CACHE[cache_key] = {
+                "options": list(options),
+                "saved_at": time.time(),
+            }
     return options, ""
 
 
@@ -4359,6 +4387,8 @@ def _spider_resume_cache_key(token, candidate_id):
 
 def _spider_resume_text_cache_clear():
     global _SPIDER_PREVIEW_PAYLOAD_CACHE_BYTES
+    # This is the account-transition hook, so tenant configuration goes with it.
+    _spider_custom_field_options_cache_clear()
     with _SPIDER_RESUME_TEXT_CACHE_LOCK:
         _SPIDER_RESUME_TEXT_CACHE.clear()
     with _SPIDER_PREVIEW_PAYLOAD_CACHE_LOCK:
@@ -7612,7 +7642,7 @@ def jobadder_spider_search():
 
         def collect_blank_field_candidate(candidate, states):
             nonlocal needs_checking_truncated
-            fields = _spider_blank_fields_from_states(states)
+            fields = _spider_blank_fields_from_states(states, candidate)
             if not fields:
                 return
             candidate_id = _spider_candidate_id(candidate)
@@ -8042,8 +8072,13 @@ def jobadder_spider_search():
                     else:
                         text, source = result
                         queue_resumes[cid] = {"text": str(text or ""), "source": str(source or "")}
+                # Deliberately not marked against the search deadline. The ranked
+                # results were final before this pass began, and calling a
+                # complete result set "safe partial results" because an optional
+                # extra read ran long would misreport the search itself. The
+                # queue simply carries less CV text.
                 if queue_timed_out:
-                    mark_processing_deadline("blank-field review queue")
+                    needs_checking_truncated = True
             for row in needs_checking_pending:
                 candidate = row.get("candidate") or {}
                 resume = queue_resumes.get(row["candidate_id"]) or {}
@@ -8239,6 +8274,11 @@ def jobadder_spider_apply_tags():
     # and somebody may have filled the field in since.
     try:
         detail = _spider_fetch_candidate_detail(token, candidate_id)
+    except _SpiderJobAdderReconnectRequired:
+        return jsonify({
+            "error": "JobAdder connection expired. Reconnect JobAdder in Settings, then try again.",
+            "needs_reconnect": True,
+        }), 401
     except Exception as exc:
         return jsonify({"error": "Could not read the candidate from JobAdder: {}".format(exc)}), 502
     if not isinstance(detail, dict) or not detail:

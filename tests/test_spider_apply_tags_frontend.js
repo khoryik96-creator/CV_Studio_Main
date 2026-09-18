@@ -226,6 +226,32 @@ assert.strictEqual(button.textContent, 'Save 2 tag(s) to JobAdder');
   // The button is left usable again rather than stuck on "Saving…".
   assert.strictEqual(button.textContent, 'Save ticked tags to JobAdder');
 
+  // ── a failing batch does not discard the batches already paid for ──────────
+  // renderTheSpiderReviewQueue used to sit after the whole loop inside the try,
+  // so a throw on the last batch threw away suggestions that were already on the
+  // rows and already billed.
+  const suggestSrc = fnFrom(source, 'suggestTheSpiderTagsFromCv');
+  // Brace-match the batch loop and require the render to sit inside its body.
+  // Merely appearing "before the summary toast" is not enough: moving the call
+  // one line below the loop still satisfies that and still loses the batches.
+  const loopAt = suggestSrc.indexOf('for (var start = 0;');
+  assert.ok(loopAt >= 0, 'batch loop not found');
+  let depth = 0, loopEnd = -1;
+  for (let i = suggestSrc.indexOf('{', loopAt); i < suggestSrc.length; i += 1) {
+    if (suggestSrc[i] === '{') depth += 1;
+    else if (suggestSrc[i] === '}' && --depth === 0) { loopEnd = i; break; }
+  }
+  assert.ok(loopEnd > loopAt, 'batch loop body not delimited');
+  assert.ok(
+    suggestSrc.slice(loopAt, loopEnd).includes('renderTheSpiderReviewQueue()'),
+    'suggestions must be rendered inside the batch loop, not only once the whole run survives'
+  );
+  const finallyBody = suggestSrc.slice(suggestSrc.indexOf('} finally {'));
+  assert.ok(
+    finallyBody.includes('renderTheSpiderReviewQueue()'),
+    'whatever happened, what was gathered must still be shown'
+  );
+
   // ── the page wires the save up ─────────────────────────────────────────────
   const html = fs.readFileSync('index.html', 'utf8');
   assert.ok(html.includes('id="theSpiderApplyTagsBtn"'));

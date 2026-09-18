@@ -28,9 +28,9 @@
 - Current merged source: v24.6.405 (`7f25538`), verified 2026-09-11.
 - PR #189 merged as `2c216c6`; PR #185 merged as `b84c36f`. Neither is an
   active branch claim. PRs #191–#194 are merged with owner approval. Current work is
-  v24.6.411 through v24.6.413 on `claude/ai-crawler-search-refinement`, the AI
+  v24.6.411 through v24.6.414 on `claude/ai-crawler-search-refinement`, the AI
   Crawler blank-field review queue, the save that writes a reviewed tag back into
-  JobAdder, and the corrective that makes both actually work safely.
+  JobAdder, and the two correctives that make both actually work safely.
   PR #210 merged v24.6.403-v24.6.405 as `7f25538`; PR #211 merged
   v24.6.406-v24.6.409 as `5b1f2a4`; PR #212 merged v24.6.410 as `960a086`.
   PR #195 and #203–#209 are merged; #202 is closed as superseded. No new PR/merge requested.
@@ -61,10 +61,11 @@
 - Current stop: the source-ownership run is merged through v24.6.410 (`960a086`, PR #212)
   and confirmed on the owner's real CV. v24.6.411 opens the AI Crawler blank-field
   review queue, v24.6.412 adds the save that writes a reviewed tag into the
-  JobAdder custom field, and v24.6.413 corrects both: as first written the queue
-  never ran and the save could clear unrelated custom fields. All three await
-  owner testing, and the write path in particular is unverified against a live
-  JobAdder tenant. No release or native
+  JobAdder custom field, and v24.6.413 and v24.6.414 correct both: as first
+  written the queue never ran, the save could clear unrelated custom fields, and
+  the queue then offered candidates whose fields were not actually blank. All four
+  await owner testing, and the write path in particular is unverified against a
+  live JobAdder tenant. No release or native
   protected build is produced by this work; protected builds remain manual.
 
 ## v24.6.403-v24.6.405 CV source-safety corrective (merged via PR #210)

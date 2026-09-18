@@ -158,10 +158,11 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   audit findings against v24.6.405, then three rounds of review corrections.
   PR #212 merged v24.6.410 as `960a086`, closing the source-ownership run.
   Current work: `claude/ai-crawler-search-refinement`, v24.6.411 through
-  v24.6.413, the AI Crawler blank-field review queue and the save that writes a
-  reviewed tag back into JobAdder. v24.6.413 is a corrective on the two features
-  below it and must ship with them: as first written the queue never ran at all,
-  and the save could clear a candidate's other custom fields.
+  v24.6.414, the AI Crawler blank-field review queue and the save that writes a
+  reviewed tag back into JobAdder. v24.6.413 and v24.6.414 are correctives on the
+  two features below them and must ship with them: as first written the queue
+  never ran at all, the save could clear a candidate's other custom fields, and
+  the queue then offered candidates whose fields were not actually blank.
   PRs #193 and #194 merged after all three hosted checks passed.
   PR #189 merged as `2c216c6` on 2026-08-29; PR #185 merged as `b84c36f` on
   2026-09-04. PR #191 merged as `a5bf89d` on 2026-09-05 after all hosted
@@ -302,6 +303,19 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   merged page-aware corrective below supersedes those details.
 
 ## 8. Open / deferred work
+
+- **AI Crawler queue-selection corrective — v24.6.414, UNMERGED.**
+  Fixes five findings from two further reviews, all on the selection side. The
+  worst: a gate reporting "unknown" was read as "the field is blank", but that
+  verdict also covers a collapsed mismatch and a record that was never read. A
+  candidate with FMCG on file could be queued as blank and then tagged FSI,
+  because the sub-category field the suggestion resolved to genuinely was empty.
+  Blankness is now confirmed against the record, read by field id exactly as the
+  save guard reads it. Also: a slow queue no longer reports a complete search as
+  partial, an expired connection returns 401 with needs_reconnect instead of a
+  generic 502, a failing AI batch no longer discards the batches already paid for,
+  and the tenant option list is cached rather than re-read once per candidate. See
+  `cv_studio_v24_6_414_spider_queue_selection_corrective.md`.
 
 - **AI Crawler review-queue corrective — v24.6.413, UNMERGED.**
   Fixes thirteen confirmed findings against v24.6.411 and v24.6.412. Two mattered:

@@ -197,6 +197,13 @@ class CustomWritePayloadTests(unittest.TestCase):
 class ApplyTagsRouteTests(unittest.TestCase):
     CANDIDATE_ID = "4242"
 
+    def setUp(self):
+        # The option list is cached across requests on purpose, so each test
+        # starts from a cold cache rather than inheriting the previous one's.
+        app._spider_custom_field_options_cache_clear()
+
+    tearDown = setUp
+
     def _headers(self):
         return {"X-CV-Studio-Request": "1", "X-AI-Crawler-Code": "test"}
 
@@ -392,6 +399,87 @@ class ApplyTagsRouteTests(unittest.TestCase):
                 headers=self._headers(),
             )
         self.assertEqual(response.status_code, 401)
+
+    def test_an_expired_connection_asks_for_a_reconnect_not_a_retry(self):
+        # _spider_fetch_candidate_detail re-raises this deliberately. Swallowing it
+        # into a generic 502 loses the one signal that tells the browser to send
+        # the user to Settings.
+        with mock.patch.object(
+            app, "_ja_refresh_access_token", return_value="fixture-token"
+        ), mock.patch.object(
+            app, "_spider_fetch_candidate_detail",
+            side_effect=app._SpiderJobAdderReconnectRequired("expired"),
+        ):
+            response = app.app.test_client().post(
+                "/jobadder/spider_apply_tags",
+                json={"candidate_id": "4242", "fields": {"it_skills": ["SAP"]}},
+                headers=self._headers(),
+            )
+        self.assertEqual(response.status_code, 401)
+        self.assertTrue(response.get_json()["needs_reconnect"])
+
+    def test_the_option_list_is_read_once_not_once_per_candidate(self):
+        # Saving a batch is one request per candidate. Re-reading the same tenant
+        # option list on every one of them turns 24 saves into 24 extra calls.
+        reads = {"n": 0}
+
+        def counting_request_json(endpoint, **kwargs):
+            if endpoint.startswith("candidates/fields/custom/"):
+                reads["n"] += 1
+                field_id = int(endpoint.rsplit("/", 1)[-1])
+                return 200, {"values": list(TENANT_OPTIONS.get(field_id) or [])}
+            return 200, {"candidateId": 4242}
+
+        with mock.patch.object(
+            app, "_ja_refresh_access_token", return_value="fixture-token"
+        ), mock.patch.object(
+            app, "_spider_fetch_candidate_detail",
+            return_value={"candidateId": 4242, "custom": []},
+        ), mock.patch.object(
+            app._JOBADDER_CLIENT, "request_json", side_effect=counting_request_json
+        ):
+            for _ in range(5):
+                app.app.test_client().post(
+                    "/jobadder/spider_apply_tags",
+                    json={"candidate_id": "4242", "fields": {"it_skills": ["SAP"]}},
+                    headers=self._headers(),
+                )
+        self.assertEqual(reads["n"], 1)
+
+    def test_a_failed_option_read_is_retried_rather_than_cached(self):
+        # Caching a failure would lock writes out for the whole cache window over
+        # one momentary outage.
+        attempts = {"n": 0}
+
+        def failing_then_working(endpoint, **kwargs):
+            if endpoint.startswith("candidates/fields/custom/"):
+                attempts["n"] += 1
+                if attempts["n"] == 1:
+                    raise RuntimeError("JobAdder hiccup")
+                return 200, {"values": ["SAP"]}
+            return 200, {"candidateId": 4242}
+
+        with mock.patch.object(
+            app, "_ja_refresh_access_token", return_value="fixture-token"
+        ), mock.patch.object(
+            app, "_spider_fetch_candidate_detail",
+            return_value={"candidateId": 4242, "custom": []},
+        ), mock.patch.object(
+            app._JOBADDER_CLIENT, "request_json", side_effect=failing_then_working
+        ):
+            first = app.app.test_client().post(
+                "/jobadder/spider_apply_tags",
+                json={"candidate_id": "4242", "fields": {"it_skills": ["SAP"]}},
+                headers=self._headers(),
+            ).get_json()
+            second = app.app.test_client().post(
+                "/jobadder/spider_apply_tags",
+                json={"candidate_id": "4242", "fields": {"it_skills": ["SAP"]}},
+                headers=self._headers(),
+            ).get_json()
+        self.assertEqual(first["applied"], {})
+        self.assertTrue(first["rejected"])
+        self.assertEqual(second["applied"], {"it_skills": ["SAP"]})
 
     def test_a_candidate_jobadder_cannot_return_is_not_written(self):
         response, recorded = self._post(
