@@ -2666,6 +2666,7 @@ async function runTheSpiderJobAdderSearch(opts) {
   // Candidates the server set aside for a blank JobAdder field. Collected across
   // every query and kept entirely separate from the ranked results below.
   var needsChecking=[];
+  var needsCheckingTruncated=false;
   for (var i=0;i<queries.length;i++) {
     try {
       var r = await fetchWithTimeout('/jobadder/spider_search', {method:'POST', headers:{'Content-Type':'application/json','X-AI-Crawler-Code':aiCrawlerLockPayload()}, body:JSON.stringify({query:queries[i], limit:200, filters:spiderFilters, crawler_lock_code:aiCrawlerLockPayload()})}, 420000);
@@ -2679,7 +2680,15 @@ async function runTheSpiderJobAdderSearch(opts) {
       if (!r.ok || d.error) throw new Error(d.error || ('JobAdder search failed: ' + r.status));
       var items = d.items || d.candidates || (d.data && d.data.items) || [];
       if (d.filter_summary) filterSummaries.push(d.filter_summary);
-      if (Array.isArray(d.needs_checking)) needsChecking = needsChecking.concat(d.needs_checking);
+      if (Array.isArray(d.needs_checking) && needsChecking.length < THE_SPIDER_REVIEW_MAX_ROWS) {
+        // The server caps each response, but a run issues several queries. Left
+        // unbounded these add up, and every row costs a CV excerpt on screen and
+        // a share of a paid AI call.
+        needsChecking = needsChecking.concat(
+          d.needs_checking.slice(0, THE_SPIDER_REVIEW_MAX_ROWS - needsChecking.length)
+        );
+      }
+      if (d.filter_summary && (d.filter_summary.needs_checking_truncated || d.filter_summary.needs_checking_incomplete)) needsCheckingTruncated = true;
       items.forEach(function(x){ x._spiderQuery = queries[i]; all.push(x); });
     } catch(e) {
       if (window._theSpiderSearchRunSeq !== runId) return;
@@ -2692,7 +2701,7 @@ async function runTheSpiderJobAdderSearch(opts) {
     }
   }
   if (window._theSpiderSearchRunSeq !== runId) return;
-  setTheSpiderReviewQueue(needsChecking);
+  setTheSpiderReviewQueue(needsChecking, needsCheckingTruncated);
   var seen={}, dedup=[];
   all.forEach(function(c){
     var id = getTheSpiderCandidateId(c);
@@ -2745,6 +2754,7 @@ function clearTheSpiderJobAdderAccountState() {
   if (status) status.textContent = '';
   window._theSpiderLastResults=[];
   window._theSpiderSearchContext=null;
+  clearTheSpiderReviewQueue();
 }
 function clearTheSpider() {
   window._theSpiderSearchRunSeq = (Number(window._theSpiderSearchRunSeq) || 0) + 1;
@@ -2755,6 +2765,7 @@ function clearTheSpider() {
   ['theSpiderJdText','theSpiderCityState','theSpiderMust','theSpiderSalaryMin','theSpiderSalaryMax'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
   clearTheSpiderMultiSelections();
   var yearsMin=document.getElementById('theSpiderYearsMin'); if(yearsMin) yearsMin.value='0'; var yearsMax=document.getElementById('theSpiderYearsMax'); if(yearsMax) yearsMax.value='40'; updateTheSpiderYearsRange();
+  clearTheSpiderReviewQueue();
   var country=document.getElementById('theSpiderCountry'); if(country) country.value='Malaysia';
   var residential=document.getElementById('theSpiderResidential'); if(residential) residential.value='Any';
   var includeMissingSalary=document.getElementById('theSpiderIncludeMissingSalary'); if(includeMissingSalary) includeMissingSalary.checked=true;
@@ -2794,22 +2805,37 @@ var THE_SPIDER_REVIEW_FIELD_LABELS = {
 // object in the reply, and a reply cut off mid-object parses as nothing at all.
 var THE_SPIDER_REVIEW_BATCH = 8;
 var THE_SPIDER_REVIEW_MAX_TOKENS = 2000;
+// A run issues several queries and each response carries its own capped list.
+// This is the ceiling for the whole run, because every row is a CV excerpt held
+// in the browser and a share of a paid AI call.
+var THE_SPIDER_REVIEW_MAX_ROWS = 40;
 
 function getTheSpiderReviewQueue() {
   if (!Array.isArray(window._theSpiderNeedsChecking)) window._theSpiderNeedsChecking = [];
   return window._theSpiderNeedsChecking;
 }
 
-function setTheSpiderReviewQueue(rows) {
+function setTheSpiderReviewQueue(rows, truncated) {
   var seen = {}, out = [];
   (Array.isArray(rows) ? rows : []).forEach(function(row){
     if (!row || typeof row !== 'object') return;
+    if (out.length >= THE_SPIDER_REVIEW_MAX_ROWS) { truncated = true; return; }
     var id = String(row.candidate_id || '').trim();
     if (!id || seen[id]) return;
     seen[id] = 1;
     out.push(row);
   });
   window._theSpiderNeedsChecking = out;
+  window._theSpiderNeedsCheckingTruncated = !!truncated;
+  renderTheSpiderReviewQueue();
+}
+
+// Candidate ids are scoped to the JobAdder account they came from, so a row left
+// behind after sign-out or an account switch could write into a different
+// tenant's record. Everything goes.
+function clearTheSpiderReviewQueue() {
+  window._theSpiderNeedsChecking = [];
+  window._theSpiderNeedsCheckingTruncated = false;
   renderTheSpiderReviewQueue();
 }
 
@@ -2844,15 +2870,29 @@ function renderTheSpiderReviewQueue() {
   var count = document.getElementById('theSpiderReviewCount');
   var button = document.getElementById('theSpiderSuggestTagsBtn');
   if (count) count.textContent = String(rows.length);
-  if (badge) badge.textContent = rows.length ? (rows.length + ' set aside') : '—';
+  if (badge) {
+    badge.textContent = rows.length
+      ? (rows.length + ' set aside' + (window._theSpiderNeedsCheckingTruncated ? ' (more were left out)' : ''))
+      : '—';
+  }
   if (button) button.disabled = !rows.length;
   if (!body) return;
-  setTimeout(updateTheSpiderApplyButton, 0);
+  // Suggestions arrive batch by batch and each batch re-renders, so anything the
+  // recruiter has already ticked has to be carried across rather than reset.
+  var stillTicked = theSpiderTickedTags();
+  setTimeout(function(){ restoreTheSpiderTicks(stillTicked); }, 0);
   if (!rows.length) {
     body.innerHTML = '<div style="color:var(--text3);font-size:12px;">Nothing set aside. Every candidate the filters dropped had a real mismatch, not a blank field.</div>';
     return;
   }
-  body.innerHTML = rows.map(function(row){
+  // The cap is applied silently on both sides otherwise, and a recruiter who is
+  // shown 20 of 200 should know the rest exist rather than assume that is all.
+  var capNote = window._theSpiderNeedsCheckingTruncated
+    ? '<div style="color:var(--text3);font-size:12px;margin-bottom:6px;">Showing the first '
+      + rows.length + '. More candidates were set aside than one review pass covers &mdash; '
+      + 'narrow the search, or run it again once these are saved.</div>'
+    : '';
+  body.innerHTML = capNote + rows.map(function(row){
     var fields = (row.blank_fields || []).map(function(field){
       return '<span class="spider-query-chip">' + esc(THE_SPIDER_REVIEW_FIELD_LABELS[field] || field) + ' is blank</span>';
     }).join('');
@@ -2952,14 +2992,31 @@ async function suggestTheSpiderTagsFromCv() {
   if (!route || !route.api_key) { showToast('Add an AI key to suggest tags', 'err'); return; }
   if (button) { button.disabled = true; button.textContent = 'Reading CVs…'; }
   if (badge) badge.textContent = 'Reading CVs…';
-  var byId = {};
-  getTheSpiderReviewQueue().forEach(function(row){ byId[String(row.candidate_id)] = row; });
   var tagged = 0;
+  var unreadable = 0;
   try {
     for (var start = 0; start < rows.length; start += THE_SPIDER_REVIEW_BATCH) {
       var batch = rows.slice(start, start + THE_SPIDER_REVIEW_BATCH);
+      // Only the candidates this call actually asked about. Keying off the whole
+      // queue lets a reply that echoes some other batch's id attach that
+      // candidate's CV-derived tags to a row the model never saw.
+      var byId = {};
+      batch.forEach(function(row){ byId[String(row.candidate_id)] = row; });
+      // A row answered in an earlier run must not keep its old tick boxes if this
+      // run has nothing to say about it.
+      batch.forEach(function(row){ row.suggestions = null; row.suggestion_note = ''; });
       var d = await callAIProxy(theSpiderReviewSuggestionPrompt(batch), THE_SPIDER_REVIEW_MAX_TOKENS, false, 0, 'the_spider');
-      var suggestions = parseTheSpiderReviewSuggestions(aiText(d));
+      var replyText = aiText(d);
+      var suggestions = parseTheSpiderReviewSuggestions(replyText);
+      if (!suggestions.length && String(replyText || '').trim()) {
+        // The call was paid for and came back, but nothing usable could be read
+        // out of it. That is not the same as the CVs being silent, and saying so
+        // is the difference between "try again" and "these CVs do not say".
+        unreadable += batch.length;
+        batch.forEach(function(row){
+          row.suggestion_note = 'The AI reply could not be read. Try again.';
+        });
+      }
       suggestions.forEach(function(entry){
         var row = byId[String(entry.candidate_id || '').trim()];
         if (!row) return;
@@ -2981,7 +3038,9 @@ async function suggestTheSpiderTagsFromCv() {
       renderTheSpiderReviewQueue();
       if (badge) badge.textContent = tagged + ' of ' + rows.length + ' tagged';
     }
-    showToast(tagged ? ('Suggested tags for ' + tagged + ' candidate(s)') : 'No CV gave clear evidence for a tag', tagged ? 'ok' : 'err');
+    if (tagged) showToast('Suggested tags for ' + tagged + ' candidate(s)', 'ok');
+    else if (unreadable) showToast('The AI reply could not be read for ' + unreadable + ' candidate(s). Try again.', 'err');
+    else showToast('No CV gave clear evidence for a tag', 'err');
   } catch (e) {
     showToast(
       tagged
@@ -3003,6 +3062,19 @@ async function suggestTheSpiderTagsFromCv() {
 // server re-reads the candidate, refuses any value outside the tenant's own
 // option list, and will not touch a field that already holds something. This
 // side collects the ticks and reports back what the server actually did.
+function restoreTheSpiderTicks(picked) {
+  picked = picked || {};
+  Array.prototype.forEach.call(document.querySelectorAll('.spider-tag-pick'), function(box){
+    var id = String(box.getAttribute('data-candidate') || '');
+    var field = String(box.getAttribute('data-field') || '');
+    var value = String(box.getAttribute('data-value') || '');
+    var fields = picked[id];
+    var values = fields && fields[field];
+    if (values && values.indexOf(value) >= 0) box.checked = true;
+  });
+  updateTheSpiderApplyButton();
+}
+
 function theSpiderTickedTags() {
   var picked = {};
   Array.prototype.forEach.call(document.querySelectorAll('.spider-tag-pick'), function(box){

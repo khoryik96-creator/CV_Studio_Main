@@ -343,7 +343,75 @@ class BlankFieldSearchRouteTests(unittest.TestCase):
         payload = response.get_json()
         warnings = " ".join(payload.get("warnings") or [])
         self.assertNotIn("safe partial results", warnings)
-        self.assertTrue(payload["filter_summary"]["needs_checking_truncated"])
+        # "incomplete" is the CV reads running long; "truncated" is the cap
+        # biting. They are different facts and must not share one flag.
+        self.assertTrue(payload["filter_summary"]["needs_checking_incomplete"])
+        self.assertFalse(payload["filter_summary"]["needs_checking_truncated"])
+
+    def test_an_expired_connection_during_the_queue_keeps_the_search(self):
+        # The ranked results were final and already paid for before the queue
+        # started reading CVs. Losing the connection there must cost the queue,
+        # not the search.
+        # Candidate 2 is dropped by the eligibility pass, so the only read of
+        # their CV is the queue's own. Failing just that read isolates the pass.
+        def expire_for_the_queued_candidate(_token, cid):
+            if str(cid) == "2":
+                raise app._SpiderJobAdderReconnectRequired("expired")
+            return ("Ten years running SAP FICO.", "latest resume")
+
+        summaries = [self._summary(1, []), self._summary(2, [])]
+        details = {
+            "1": {"candidateId": 1,
+                  "custom": [{"fieldId": 3, "name": "IT Skills", "value": ["SAP"]}]},
+            "2": {"candidateId": 2, "custom": []},
+        }
+        metadata = {"mode": "plain", "query": "Finance", "returned": 2,
+                    "search": {"reported_total": 2, "warnings": [], "pages": 1}}
+        with mock.patch.object(
+            app, "_ja_refresh_access_token", return_value="fixture-token"
+        ), mock.patch.object(
+            app, "_spider_plain_keyword_jobadder_candidates",
+            return_value=(summaries, metadata),
+        ), mock.patch.object(
+            app, "_spider_fetch_candidate_detail",
+            side_effect=lambda _t, cid: details.get(str(cid)),
+        ), mock.patch.object(
+            app, "_spider_fetch_candidate_resume_text",
+            side_effect=expire_for_the_queued_candidate,
+        ):
+            response = app.app.test_client().post(
+                "/jobadder/spider_search",
+                json={"query": "Finance", "limit": 10,
+                      "filters": {"role": "Finance", "it_skills": "SAP"}},
+                headers=self._headers(),
+            )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()
+        self.assertEqual([item["candidateId"] for item in payload["items"]], [1])
+        self.assertEqual(payload["needs_checking"], [])
+
+    def test_the_queues_own_cv_reads_are_counted_in_the_declared_ceiling(self):
+        # Two searches over the same number of candidates, so detail reads match
+        # and only the queue differs: candidate 2 mismatches in one and is blank
+        # in the other. The declared ceiling has to notice the queue's own reads.
+        filters = {"role": "Finance", "it_skills": "SAP"}
+        match = [{"fieldId": 3, "name": "IT Skills", "value": ["SAP"]}]
+        mismatch = [{"fieldId": 3, "name": "IT Skills", "value": ["Oracle"]}]
+        no_queue = self._run({1: match, 2: mismatch}, filters)[0].get_json()
+        with_queue = self._run({1: match, 2: []}, filters)[0].get_json()
+        self.assertEqual(len(with_queue["needs_checking"]), 1)
+        self.assertEqual(no_queue["needs_checking"], [])
+        # One queued candidate is an attachment listing plus a download.
+        self.assertEqual(
+            with_queue["filter_summary"]["estimated_candidate_api_request_ceiling"]
+            - no_queue["filter_summary"]["estimated_candidate_api_request_ceiling"],
+            2,
+        )
+
+    def test_the_queue_cap_matches_the_resume_budget_it_claims_to_track(self):
+        self.assertEqual(
+            app._SPIDER_NEEDS_CHECKING_LIMIT, app._SPIDER_SEARCH_RESUME_MAX
+        )
 
     def test_no_filter_means_no_queue(self):
         response, _ = self._run({1: [], 2: []}, {"role": "Finance"})

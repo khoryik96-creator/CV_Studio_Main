@@ -1271,16 +1271,29 @@ SPIDER_WRITABLE_FIELDS = {
     "it_skills": {
         "label": "IT Skills",
         "field_id": SPIDER_IT_SKILLS_FIELD_ID,
+        "expected_labels": ("IT Skills",),
     },
     "qualifications": {
         "label": "Professional Qualifications",
         "field_id": SPIDER_QUALIFICATIONS_FIELD_ID,
+        "expected_labels": ("Professional Qualifications", "Qualifications"),
     },
     "industry": {
         "label": "Industry",
         "field_id": None,
     },
 }
+
+# Why a value was refused. A recruiter who hit the value cap needs to hear
+# something different from one whose tag JobAdder does not offer, so these stay
+# distinct all the way out to the response.
+SPIDER_REJECT_NOT_WRITABLE = "not a writable field"
+SPIDER_REJECT_NOT_A_LIST = "expected a list of values"
+SPIDER_REJECT_NOT_A_STRING = "not a text value"
+SPIDER_REJECT_TOO_LONG = "longer than a tag can be"
+SPIDER_REJECT_TOO_MANY = "beyond the number of tags one save may carry"
+SPIDER_REJECT_NO_OPTION_LIST = "the allowed values for this field could not be read"
+SPIDER_REJECT_NOT_ALLOWED = "not an allowed value for this field"
 
 # A reviewed suggestion is a handful of short tags. Anything past this is not a
 # tag, and is refused rather than trimmed into the record.
@@ -1300,12 +1313,18 @@ def _spider_writable_field_targets(field_key, values, allowed=None):
     iterated, because iterating one writes a tag per character.
     """
     spec = SPIDER_WRITABLE_FIELDS.get(str(field_key or ""))
+
+    def refuse(value, reason):
+        return {"value": str(value), "reason": reason}
+
     if spec is None:
         if isinstance(values, (list, tuple)):
-            return {}, [str(value) for value in values]
-        return {}, [str(values)] if values not in (None, "") else []
+            return {}, [refuse(value, SPIDER_REJECT_NOT_WRITABLE) for value in values]
+        return {}, ([refuse(values, SPIDER_REJECT_NOT_WRITABLE)] if values not in (None, "") else [])
     if not isinstance(values, (list, tuple)):
-        return {}, [str(values)] if values not in (None, "") else []
+        # A bare string iterates one character at a time, which would write a tag
+        # per letter. Anything that is not a list of values is refused outright.
+        return {}, ([refuse(values, SPIDER_REJECT_NOT_A_LIST)] if values not in (None, "") else [])
 
     allowed_keys = None
     if allowed is not None:
@@ -1319,35 +1338,38 @@ def _spider_writable_field_targets(field_key, values, allowed=None):
     rejected = []
     for value in values[:SPIDER_WRITABLE_MAX_VALUES]:
         if not isinstance(value, str):
-            rejected.append(str(value))
+            rejected.append(refuse(value, SPIDER_REJECT_NOT_A_STRING))
             continue
         text = re.sub(r"\s+", " ", value).strip()
         if not text:
             continue
         if len(text) > SPIDER_WRITABLE_MAX_VALUE_CHARS:
-            rejected.append(text[:SPIDER_WRITABLE_MAX_VALUE_CHARS])
+            rejected.append(refuse(text[:SPIDER_WRITABLE_MAX_VALUE_CHARS], SPIDER_REJECT_TOO_LONG))
             continue
         if field_key == "industry":
             field_id, canonical = _spider_industry_filter_spec(text)
             if field_id is None or not canonical:
-                rejected.append(text)
+                rejected.append(refuse(text, SPIDER_REJECT_NOT_ALLOWED))
                 continue
         else:
             field_id = spec["field_id"]
             if allowed_keys is None:
                 # No option list was supplied, so nothing can vouch for this
                 # value. Refuse rather than write an unverified tag.
-                rejected.append(text)
+                rejected.append(refuse(text, SPIDER_REJECT_NO_OPTION_LIST))
                 continue
             canonical = allowed_keys.get(text.casefold())
             if not canonical:
-                rejected.append(text)
+                rejected.append(refuse(text, SPIDER_REJECT_NOT_ALLOWED))
                 continue
         bucket = targets.setdefault(int(field_id), [])
         if canonical not in bucket:
             bucket.append(canonical)
     if len(values) > SPIDER_WRITABLE_MAX_VALUES:
-        rejected.extend(str(value) for value in values[SPIDER_WRITABLE_MAX_VALUES:])
+        rejected.extend(
+            refuse(value, SPIDER_REJECT_TOO_MANY)
+            for value in values[SPIDER_WRITABLE_MAX_VALUES:]
+        )
     return targets, rejected
 
 
@@ -1373,6 +1395,13 @@ def _spider_custom_write_payload(candidate, new_values_by_field):
     Returns ``(payload, ok)``. JobAdder takes a list of ``{fieldId, value}``, and
     a tenant may treat that collection as a replacement for everything it holds,
     so every existing value is carried across and only the named fields change.
+
+    New values are written as a list. ``vendor/cvstudio/jobadder-upload.js`` already
+    writes industry fields #1 and #2 that way against this tenant, and the fields
+    this route fills hold several tags at once. Values being preserved keep
+    whatever shape they arrived in, untouched. The equivalent single-value write
+    in ``cvstudio_ja_salary_ai.py`` sends a scalar for Currency; both shapes exist
+    in this repo and the reader here flattens either.
 
     ``ok`` is False when the candidate record did not come with its ``custom``
     collection: without it there is nothing to preserve, and writing anyway could
@@ -1401,8 +1430,12 @@ def _spider_custom_write_payload(candidate, new_values_by_field):
         except (TypeError, ValueError):
             continue
         if field_id in wanted:
-            payload.append({"fieldId": field_id, "value": wanted[field_id]})
-            written.add(field_id)
+            # A record may carry more than one entry for the same field. The new
+            # value replaces the whole field once; appending per entry would send
+            # the same write twice in one body.
+            if field_id not in written:
+                payload.append({"fieldId": field_id, "value": wanted[field_id]})
+                written.add(field_id)
             continue
         value = item.get("value")
         if value is not None:

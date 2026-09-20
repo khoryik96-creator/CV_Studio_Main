@@ -72,13 +72,20 @@ class WritableFieldResolverTests(unittest.TestCase):
                     field, ["totally made up value"], allowed=allowed
                 )
                 self.assertEqual(targets, {})
-                self.assertEqual(rejected, ["totally made up value"])
+                self.assertEqual(
+                    rejected,
+                    [{"value": "totally made up value",
+                      "reason": score.SPIDER_REJECT_NOT_ALLOWED}],
+                )
 
     def test_without_an_option_list_nothing_is_written(self):
         # Nothing can vouch for the value, so the safe answer is to refuse.
         targets, rejected = score._spider_writable_field_targets("it_skills", ["SAP"])
         self.assertEqual(targets, {})
-        self.assertEqual(rejected, ["SAP"])
+        self.assertEqual(
+            rejected,
+            [{"value": "SAP", "reason": score.SPIDER_REJECT_NO_OPTION_LIST}],
+        )
 
     def test_the_tenants_own_spelling_is_what_gets_written(self):
         targets, _ = score._spider_writable_field_targets(
@@ -102,7 +109,11 @@ class WritableFieldResolverTests(unittest.TestCase):
             "industry", ["Financial Services", "Totally Invented Industry"]
         )
         self.assertEqual(targets, {1: ["Financial Services"]})
-        self.assertEqual(rejected, ["Totally Invented Industry"])
+        self.assertEqual(
+            rejected,
+            [{"value": "Totally Invented Industry",
+              "reason": score.SPIDER_REJECT_NOT_ALLOWED}],
+        )
 
     def test_a_bare_string_is_refused_rather_than_spelled_out(self):
         # Iterating a string writes one tag per character.
@@ -110,7 +121,10 @@ class WritableFieldResolverTests(unittest.TestCase):
             "it_skills", "SAP", allowed=TENANT_OPTIONS[score.SPIDER_IT_SKILLS_FIELD_ID]
         )
         self.assertEqual(targets, {})
-        self.assertEqual(rejected, ["SAP"])
+        # And the reason says which of the several refusals this was.
+        self.assertEqual(
+            rejected, [{"value": "SAP", "reason": score.SPIDER_REJECT_NOT_A_LIST}]
+        )
 
     def test_non_list_and_non_string_values_are_refused(self):
         for values in ({"a": 1}, 7, True):
@@ -127,17 +141,23 @@ class WritableFieldResolverTests(unittest.TestCase):
         )
         self.assertEqual(targets, {1: ["Financial Services"]})
         self.assertTrue(rejected)
+        self.assertEqual(rejected[0]["reason"], score.SPIDER_REJECT_TOO_MANY)
         _targets, rejected = score._spider_writable_field_targets(
             "it_skills", ["x" * 400], allowed=["x" * 400]
         )
         self.assertEqual(len(rejected), 1)
+        self.assertEqual(rejected[0]["reason"], score.SPIDER_REJECT_TOO_LONG)
 
     def test_an_unwritable_field_key_is_refused_whole(self):
         for key in ("residential", "residential_status", "salary", "", None):
             with self.subTest(key=key):
                 targets, rejected = score._spider_writable_field_targets(key, ["Local Citizen"])
                 self.assertEqual(targets, {})
-                self.assertEqual(rejected, ["Local Citizen"])
+                self.assertEqual(
+                    rejected,
+                    [{"value": "Local Citizen",
+                      "reason": score.SPIDER_REJECT_NOT_WRITABLE}],
+                )
         self.assertNotIn("residential", score.SPIDER_WRITABLE_FIELDS)
 
     def test_blank_and_filled_fields_are_told_apart_by_field_id(self):
@@ -185,6 +205,23 @@ class CustomWritePayloadTests(unittest.TestCase):
         self.assertEqual(payload[0], {"fieldId": 3, "value": ["SAP"]})
         self.assertIn({"fieldId": 4, "value": ["SGD"]}, payload)
         self.assertEqual(len([row for row in payload if row["fieldId"] == 3]), 1)
+
+    def test_one_field_carried_twice_is_written_once(self):
+        # A record may hold more than one entry for the same field id. The new
+        # value replaces the field once; appending per entry sends the same write
+        # twice in one body and understates what was preserved.
+        candidate = {"custom": [
+            _custom(3, "IT Skills", []),
+            {"fieldId": 3, "name": "IT Skills", "value": None},
+            _custom(4, "Currency", ["SGD"]),
+        ]}
+        payload, ok = score._spider_custom_write_payload(candidate, {3: ["SAP"]})
+        self.assertTrue(ok)
+        self.assertEqual(
+            [row for row in payload if row["fieldId"] == 3],
+            [{"fieldId": 3, "value": ["SAP"]}],
+        )
+        self.assertIn({"fieldId": 4, "value": ["SGD"]}, payload)
 
     def test_a_record_without_its_custom_collection_refuses_the_write(self):
         for candidate in ({}, {"candidateId": 1}, {"custom": None}, {"custom": {}}):
@@ -322,15 +359,72 @@ class ApplyTagsRouteTests(unittest.TestCase):
             {"custom": [{"fieldId": 1, "value": ["Financial Services"]}]},
         )
 
-    def test_an_unreadable_option_list_refuses_the_field(self):
+    def test_an_unreadable_option_list_is_reported_as_a_failure(self):
+        # Nothing was written because JobAdder could not be asked what is
+        # allowed. Reporting that as a normal "already filled or not allowed"
+        # no-op hides an outage behind a sentence about the data.
         response, recorded = self._post(
             {"candidate_id": self.CANDIDATE_ID, "fields": {"it_skills": ["SAP"]}},
             options={},
         )
+        self.assertEqual(response.status_code, 502)
         payload = response.get_json()
         self.assertEqual(payload["applied"], {})
-        self.assertTrue(payload["rejected"])
+        self.assertTrue(payload["retryable"])
+        self.assertIn("Try again", payload["error"])
         self.assertEqual(recorded, {})
+
+    def test_a_repurposed_custom_field_is_never_written_into(self):
+        # A tenant that renamed candidate custom field #3 to something else
+        # entirely would otherwise have that field's own option list accepted as
+        # IT Skills values, and the reviewed tag written into the wrong field.
+        def repurposed(endpoint, **kwargs):
+            if endpoint.startswith("candidates/fields/custom/"):
+                return 200, {"name": "Willing to Relocate", "values": ["Yes", "No"]}
+            return 200, {"candidateId": 4242}
+
+        with mock.patch.object(
+            app, "_ja_refresh_access_token", return_value="fixture-token"
+        ), mock.patch.object(
+            app, "_spider_fetch_candidate_detail",
+            return_value={"candidateId": 4242, "custom": []},
+        ), mock.patch.object(
+            app._JOBADDER_CLIENT, "request_json", side_effect=repurposed
+        ) as request_json:
+            response = app.app.test_client().post(
+                "/jobadder/spider_apply_tags",
+                json={"candidate_id": "4242", "fields": {"it_skills": ["Yes"]}},
+                headers=self._headers(),
+            )
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.get_json()["applied"], {})
+        # Only the option-list read happened; no PUT was attempted.
+        self.assertTrue(all(
+            str(call.args[0]).startswith("candidates/fields/custom/")
+            for call in request_json.call_args_list
+        ))
+
+    def test_the_field_label_is_verified_before_the_option_list_is_trusted(self):
+        app._spider_custom_field_options_cache_clear()
+        with mock.patch.object(
+            app._JOBADDER_CLIENT, "request_json",
+            return_value=(200, {"name": "IT Skills", "values": ["SAP"]}),
+        ):
+            options, error = app._spider_custom_field_options(
+                "fixture-token", 3, expected_labels=("IT Skills",)
+            )
+        self.assertEqual(options, ["SAP"])
+        self.assertEqual(error, "")
+        app._spider_custom_field_options_cache_clear()
+        with mock.patch.object(
+            app._JOBADDER_CLIENT, "request_json",
+            return_value=(200, {"name": "Willing to Relocate", "values": ["Yes"]}),
+        ):
+            options, error = app._spider_custom_field_options(
+                "fixture-token", 3, expected_labels=("IT Skills",)
+            )
+        self.assertIsNone(options)
+        self.assertIn("Willing to Relocate", error)
 
     def test_a_field_that_cannot_be_written_is_refused(self):
         response, recorded = self._post({
@@ -482,11 +576,15 @@ class ApplyTagsRouteTests(unittest.TestCase):
         self.assertEqual(second["applied"], {"it_skills": ["SAP"]})
 
     def test_a_candidate_jobadder_cannot_return_is_not_written(self):
+        # The fetch helper returns None for a timeout, a 5xx and a genuinely
+        # missing candidate alike, so this must stay retryable rather than
+        # telling the user the record does not exist.
         response, recorded = self._post(
             {"candidate_id": self.CANDIDATE_ID, "fields": {"it_skills": ["SAP"]}},
             detail={},
         )
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 502)
+        self.assertIn("try the save again", response.get_json()["error"])
         self.assertEqual(recorded, {})
 
 

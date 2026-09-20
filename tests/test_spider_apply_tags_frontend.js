@@ -252,6 +252,35 @@ assert.strictEqual(button.textContent, 'Save 2 tag(s) to JobAdder');
     'whatever happened, what was gathered must still be shown'
   );
 
+  // ── suggestions are attributed to the batch that was asked about ───────────
+  // Keying off the whole queue lets a reply echoing another batch's candidate_id
+  // attach that candidate's CV-derived tags to a row the model never saw. Every
+  // server guard still passes, because the value is legitimate for *someone*.
+  const suggestFn = fnFrom(source, 'suggestTheSpiderTagsFromCv');
+  assert.ok(
+    /batch\.forEach\(function\(row\)\{ byId\[String\(row\.candidate_id\)\] = row; \}\)/.test(suggestFn),
+    'the id lookup must be built from the current batch, not the whole queue'
+  );
+  assert.ok(
+    !/getTheSpiderReviewQueue\(\)\.forEach\(function\(row\)\{ byId/.test(suggestFn),
+    'the id lookup must not be built from the whole queue'
+  );
+
+  // ── an unreadable reply is not the same as the CVs being silent ────────────
+  assert.ok(
+    suggestFn.includes('could not be read'),
+    'a paid call that came back unparseable must say so'
+  );
+
+  // ── a re-render keeps what the recruiter already ticked ────────────────────
+  // Suggestions land batch by batch and each batch re-renders. Without this the
+  // ticks made while later batches are still running are silently wiped.
+  const renderFn = fnFrom(source, 'renderTheSpiderReviewQueue');
+  assert.ok(
+    renderFn.includes('theSpiderTickedTags()') && renderFn.includes('restoreTheSpiderTicks'),
+    're-rendering must carry the existing ticks across'
+  );
+
   // ── the page wires the save up ─────────────────────────────────────────────
   const html = fs.readFileSync('index.html', 'utf8');
   assert.ok(html.includes('id="theSpiderApplyTagsBtn"'));

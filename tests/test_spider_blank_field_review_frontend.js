@@ -61,6 +61,7 @@ const context = {
 };
 vm.createContext(context);
 [
+  'clearTheSpiderReviewQueue',
   'theSpiderReviewFieldOptions',
   'theSpiderReviewAcceptedValues',
   'parseTheSpiderReviewSuggestions',
@@ -74,6 +75,7 @@ vm.runInContext(
   source.match(/var THE_SPIDER_MULTI_CONFIG = \{[\s\S]*?\};/)[0],
   context
 );
+vm.runInContext(source.match(/var THE_SPIDER_REVIEW_MAX_ROWS = \d+;/)[0], context);
 
 // ── the fixed vocabulary is read from the loaded options ─────────────────────
 assert.deepStrictEqual(
@@ -153,6 +155,38 @@ assert.deepStrictEqual(
 );
 context.setTheSpiderReviewQueue(null);
 assert.deepStrictEqual(plain(context.getTheSpiderReviewQueue()), []);
+
+// ── the run-wide cap bounds the queue, and says when it bit ──────────────────
+// The server caps each response, but a run issues several queries; without this
+// the queue grows with the query count and so does the paid AI spend.
+const many = [];
+for (let i = 0; i < context.THE_SPIDER_REVIEW_MAX_ROWS + 15; i += 1) {
+  many.push({ candidate_id: String(i), blank_fields: ['it_skills'] });
+}
+context.setTheSpiderReviewQueue(many);
+assert.strictEqual(
+  context.getTheSpiderReviewQueue().length,
+  context.THE_SPIDER_REVIEW_MAX_ROWS
+);
+assert.strictEqual(context.window._theSpiderNeedsCheckingTruncated, true);
+
+// ── clearing leaves nothing behind ──────────────────────────────────────────
+// Candidate ids are tenant-scoped, so a row surviving a sign-out could be saved
+// against a different account's record.
+context.clearTheSpiderReviewQueue();
+assert.deepStrictEqual(plain(context.getTheSpiderReviewQueue()), []);
+assert.strictEqual(context.window._theSpiderNeedsCheckingTruncated, false);
+// Both reset paths must call it, or the rows outlive the account they came from.
+// Extract each function body rather than regex across the file: a loose pattern
+// matches the call inside the NEXT function and passes while the fix is gone.
+assert.ok(
+  fnFrom(source, 'clearTheSpiderJobAdderAccountState').includes('clearTheSpiderReviewQueue()'),
+  'sign-out and account switch must clear the review queue'
+);
+assert.ok(
+  fnFrom(source, 'clearTheSpider').includes('clearTheSpiderReviewQueue()'),
+  'the Clear button must clear the review queue'
+);
 
 // ── a row always has something to show a person ──────────────────────────────
 // The name comes from the row, which is where the search puts it. An earlier

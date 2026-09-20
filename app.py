@@ -4138,6 +4138,7 @@ from cvstudio_spider_score import (
     _spider_field_is_blank,
     _spider_writable_field_targets,
     SPIDER_WRITABLE_FIELDS,
+    SPIDER_REJECT_NOT_ALLOWED,
     _spider_item_score,
     _spider_jd_heading_section,
     _spider_jd_relevance_terms,
@@ -4244,12 +4245,17 @@ def _spider_custom_field_options_cache_clear():
         _SPIDER_CUSTOM_FIELD_OPTIONS_CACHE.clear()
 
 
-def _spider_custom_field_options(token, field_id):
+def _spider_custom_field_options(token, field_id, expected_labels=()):
     """This tenant's allowed values for one candidate custom field.
 
     Returns ``(options, error)``. A write is refused when the list cannot be read,
     rather than falling back to accepting whatever was asked for: the point of the
     list is that it is the only thing entitled to vouch for a value.
+
+    ``expected_labels`` is checked against the field's own name, exactly as
+    ``/jobadder/spider_options`` checks it. A tenant that repurposed candidate
+    custom field #3 to something else entirely would otherwise have that field's
+    options accepted as IT Skills values and the reviewed tag written into it.
 
     Only a successful read is cached. A failure is retried on the next call, so a
     momentary outage cannot lock writes out for the whole cache window.
@@ -4260,6 +4266,11 @@ def _spider_custom_field_options(token, field_id):
         return None, "unknown field"
     if not token:
         return None, "not connected"
+    expected_label_keys = {
+        re.sub(r"[^a-z0-9]", "", str(label or "").casefold())
+        for label in (expected_labels or ())
+    }
+    expected_label_keys.discard("")
     cache_key = (_ja_cache_namespace(), field_id)
     if cache_key[0]:
         with _SPIDER_CUSTOM_FIELD_OPTIONS_CACHE_LOCK:
@@ -4280,6 +4291,16 @@ def _spider_custom_field_options(token, field_id):
         if isinstance(payload, dict) and isinstance(payload.get("data"), dict)
         else payload
     )
+    if expected_label_keys:
+        label = str(
+            (definition or {}).get("name")
+            or (definition or {}).get("label")
+            or (definition or {}).get("fieldName")
+            or ""
+        ).strip()
+        label_key = re.sub(r"[^a-z0-9]", "", label.casefold())
+        if label_key and label_key not in expected_label_keys:
+            return None, "field {} is named {!r} on this account".format(field_id, label[:60])
     values = definition.get("values") if isinstance(definition, dict) else None
     options = _spider_extract_option_values(values or [])
     if not options:
@@ -7376,15 +7397,16 @@ def _spider_native_boolean_jobadder_candidates(token, rule_text, result_pool_lim
 
 # The blank-field review queue is a list a person reads, so it is capped well
 # below the result limit rather than growing with the candidate pool.
-# Each queued candidate costs one extra resume read, so this is deliberately
-# close to the resume scoring budget rather than to the result limit.
-_SPIDER_NEEDS_CHECKING_LIMIT = 24
 # Enough CV to name an industry, a skill or a qualification, and small enough
 # that a whole batch fits one AI call.
 _SPIDER_NEEDS_CHECKING_EXCERPT_CHARS = 800
 _SPIDER_SEARCH_PROCESSING_DEADLINE_SECONDS = 330.0
 _SPIDER_SEARCH_ELIGIBILITY_DETAIL_MAX = 80
 _SPIDER_SEARCH_RESUME_MAX = 20
+# Each queued candidate costs one extra resume read on top of the search's own
+# budget, so this matches that budget rather than exceeding it. At 24 it was more
+# than doubling the resume workload of a search while claiming to be close to it.
+_SPIDER_NEEDS_CHECKING_LIMIT = _SPIDER_SEARCH_RESUME_MAX
 _SPIDER_SEARCH_PROFILE_DETAIL_MAX = 100
 
 
@@ -7644,7 +7666,11 @@ def jobadder_spider_search():
         # actually dropped. Ranked results are untouched.
         needs_checking_pending = []
         needs_checking_ids = set()
+        # Cut short because the queue hit its cap: there were more to review.
         needs_checking_truncated = False
+        # Could not finish reading the CVs for the rows it did collect.
+        needs_checking_incomplete = False
+        queue_resume_requests = 0
 
         def collect_blank_field_candidate(candidate, states):
             nonlocal needs_checking_truncated
@@ -7658,10 +7684,14 @@ def jobadder_spider_search():
                 needs_checking_truncated = True
                 return
             needs_checking_ids.add(candidate_id)
+            # Only the name is needed later. Holding the merged record, detail
+            # copy and all, for the rest of the request buys nothing.
             needs_checking_pending.append({
                 "candidate_id": candidate_id,
                 "blank_fields": fields,
-                "candidate": candidate if isinstance(candidate, dict) else {},
+                "name": _spider_preview_name(
+                    candidate_id, candidate if isinstance(candidate, dict) else {}
+                ),
             })
 
         if eligibility_filters_active:
@@ -8066,12 +8096,20 @@ def jobadder_spider_search():
             queue_ids = [row["candidate_id"] for row in needs_checking_pending]
             queue_resumes = {}
             if queue_ids and not processing_deadline_reached:
-                queue_results, queue_timed_out = _spider_bounded_parallel(
-                    queue_ids,
-                    lambda cid: _spider_fetch_candidate_resume_text(token, cid),
-                    max_workers=5,
-                    deadline=processing_deadline,
-                )
+                try:
+                    queue_results, queue_timed_out = _spider_bounded_parallel(
+                        queue_ids,
+                        lambda cid: _spider_fetch_candidate_resume_text(token, cid),
+                        max_workers=5,
+                        deadline=processing_deadline,
+                    )
+                except _SpiderJobAdderReconnectRequired:
+                    # The connection expired during optional extra reads. The
+                    # ranked results were final before this pass began and are
+                    # already paid for, so they are returned and the queue is
+                    # dropped rather than the whole search being thrown away.
+                    queue_results, queue_timed_out = {}, True
+                    needs_checking_pending = []
                 for cid, result in queue_results.items():
                     if isinstance(result, Exception):
                         queue_resumes[cid] = {"text": "", "source": "resume text unavailable"}
@@ -8082,22 +8120,26 @@ def jobadder_spider_search():
                 # results were final before this pass began, and calling a
                 # complete result set "safe partial results" because an optional
                 # extra read ran long would misreport the search itself. The
-                # queue simply carries less CV text.
+                # queue simply carries fewer rows.
                 if queue_timed_out:
-                    needs_checking_truncated = True
+                    needs_checking_incomplete = True
+            queue_resume_requests = len(queue_ids) * 2
             for row in needs_checking_pending:
-                candidate = row.get("candidate") or {}
                 resume = queue_resumes.get(row["candidate_id"]) or {}
                 resume_text = str(resume.get("text") or "")
                 needs_checking.append({
                     "candidate_id": row["candidate_id"],
                     "blank_fields": row["blank_fields"],
-                    "name": _spider_preview_name(row["candidate_id"], candidate),
-                    "card": _spider_card_fields(candidate),
+                    "name": row["name"],
                     "resume_source": str(resume.get("source") or ""),
                     "resume_characters": len(resume_text),
                     # A bounded excerpt, so the browser can ask the AI to read the
-                    # CV without a second round trip per candidate.
+                    # CV without a second round trip per candidate. This is a
+                    # deliberate widening of what the search response carries:
+                    # the review pass exists to read the CV, and the browser
+                    # forwards this excerpt to the configured AI provider. It is
+                    # bounded, and only for candidates the recruiter has been
+                    # shown as needing review.
                     "resume_excerpt": re.sub(r"\s+", " ", resume_text).strip()[:_SPIDER_NEEDS_CHECKING_EXCERPT_CHARS],
                 })
 
@@ -8132,6 +8174,8 @@ def jobadder_spider_search():
             # anything about them mismatched.
             "needs_checking_count": len(needs_checking),
             "needs_checking_truncated": needs_checking_truncated,
+            "needs_checking_incomplete": needs_checking_incomplete,
+            "needs_checking_limit": _SPIDER_NEEDS_CHECKING_LIMIT,
             "enriched_candidate_profiles": enriched_count,
             "resume_scored_candidates": resume_scored_count,
             "resume_scoring_budget": resume_budget,
@@ -8142,7 +8186,13 @@ def jobadder_spider_search():
             "experience_range_backfill_exhausted": experience_backfill_exhausted,
             "detail_only_excluded": detail_excluded_count,
             "ranking_pool": len(preliminary),
-            "estimated_candidate_api_request_ceiling": (resume_budget * 2) + detail_budget + custom_field_detail_requests,
+            "estimated_candidate_api_request_ceiling": (
+                (resume_budget * 2) + detail_budget + custom_field_detail_requests
+                # The review queue reads a CV per set-aside candidate, which is an
+                # attachment listing plus a download. Excluding it understated the
+                # ceiling by up to twice the queue cap.
+                + queue_resume_requests
+            ),
             "industry_filter_active": bool(canonical_industries),
             "industry_filter_field_id": industry_field_id,
             "industry_filter_mode": safe_filters.get("industry_mode"),
@@ -8288,12 +8338,23 @@ def jobadder_spider_apply_tags():
     except Exception as exc:
         return jsonify({"error": "Could not read the candidate from JobAdder: {}".format(exc)}), 502
     if not isinstance(detail, dict) or not detail:
-        return jsonify({"error": "JobAdder returned no detail for this candidate"}), 404
+        # The fetch helper returns None for a timeout, a 5xx and a genuinely
+        # missing candidate alike, so this cannot claim the record does not
+        # exist. 502 keeps it retryable, which is what it usually is.
+        return jsonify({
+            "error": (
+                "JobAdder did not return this candidate. It may be a temporary "
+                "problem; try the save again in a moment."
+            ),
+        }), 502
 
     skipped = []
     rejected = []
     values_by_field = {}
     applied = {}
+    # Fields whose option list could not be read at all. That is an outage, not a
+    # verdict on the value, and must not be reported as a normal no-op.
+    unreadable_fields = []
     for field_key, values in requested.items():
         key = str(field_key or "")
         spec = SPIDER_WRITABLE_FIELDS.get(key)
@@ -8305,19 +8366,23 @@ def jobadder_spider_apply_tags():
         # instead, which also decides which of the two industry fields it is.
         allowed = None
         if key != "industry":
-            allowed, options_error = _spider_custom_field_options(token, spec["field_id"])
+            allowed, options_error = _spider_custom_field_options(
+                token, spec["field_id"], expected_labels=spec.get("expected_labels") or ()
+            )
             if options_error:
                 rejected.append({
                     "field": key,
                     "reason": "could not read the allowed values from JobAdder: {}".format(options_error),
+                    "retryable": True,
                 })
+                unreadable_fields.append(key)
                 continue
         targets, refused = _spider_writable_field_targets(key, values, allowed=allowed)
-        for value in refused:
+        for item in refused:
             rejected.append({
                 "field": key,
-                "value": value,
-                "reason": "not an allowed value for this field",
+                "value": item.get("value"),
+                "reason": item.get("reason") or SPIDER_REJECT_NOT_ALLOWED,
             })
         for field_id, canonical_values in targets.items():
             if not _spider_field_is_blank(detail, field_id):
@@ -8331,6 +8396,21 @@ def jobadder_spider_apply_tags():
             applied.setdefault(key, []).extend(canonical_values)
 
     if not values_by_field:
+        if unreadable_fields and not skipped:
+            # Nothing was written because JobAdder could not be asked what is
+            # allowed. Saying "already filled or not allowed" would hide an
+            # outage behind a sentence about the data.
+            return jsonify({
+                "error": (
+                    "Could not read the allowed values for {} from JobAdder, so nothing "
+                    "was saved. Try again in a moment."
+                ).format(", ".join(unreadable_fields)),
+                "candidate_id": candidate_id,
+                "applied": {},
+                "skipped": skipped,
+                "rejected": rejected,
+                "retryable": True,
+            }), 502
         return jsonify({
             "ok": True,
             "candidate_id": candidate_id,

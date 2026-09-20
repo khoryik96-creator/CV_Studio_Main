@@ -164,7 +164,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   audit findings against v24.6.405, then three rounds of review corrections.
   PR #212 merged v24.6.410 as `960a086`, closing the source-ownership run.
   Current work: `claude/ai-crawler-search-refinement`, v24.6.411 through
-  v24.6.414, the AI Crawler blank-field review queue and the save that writes a
+  v24.6.415, the AI Crawler blank-field review queue and the save that writes a
   reviewed tag back into JobAdder. v24.6.413 and v24.6.414 are correctives on the
   two features below them and must ship with them: as first written the queue
   never ran at all, the save could clear a candidate's other custom fields, and
@@ -309,6 +309,21 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   merged page-aware corrective below supersedes those details.
 
 ## 8. Open / deferred work
+
+- **AI Crawler review-boundary corrective — v24.6.415, UNMERGED.**
+  Nineteen findings from two further reviews, most on the browser side. The one
+  that mattered: neither reset path cleared the review queue, so after a JobAdder
+  sign-out or account switch a stale row could be ticked and written against the
+  new account's token — candidate ids are tenant-scoped, and AGENTS.md makes this
+  invalidation a hard v24.6.243 rule. Also: the options read now verifies the
+  field's label so a repurposed custom field cannot be written into; a reconnect
+  during the queue's CV reads no longer discards a finished search; an option-list
+  outage is reported as an outage rather than a no-op; a transient read failure is
+  502 rather than 404; refusals carry their real reason; the AI id lookup is
+  per-batch so a reply cannot cross-attribute tags; ticks survive the per-batch
+  re-render that v24.6.414 introduced; and the queue is capped for the whole run.
+  Two findings were wrong and are recorded with evidence in the report. See
+  `cv_studio_v24_6_415_spider_review_boundary_corrective.md`.
 
 - **AI Crawler queue-selection corrective — v24.6.414, UNMERGED.**
   Fixes five findings from two further reviews, all on the selection side. The
