@@ -54,7 +54,9 @@ let queue = [];
 let responses = {};
 
 const context = {
-  console, JSON, String, Array, Object, Promise, Error,
+  console, JSON, String, Array, Object, Promise, Error, Number, Math,
+  window: { _theSpiderSearchRunSeq: 1 },
+  clearTheSpiderReviewQueue() { queue = []; },
   document: {
     getElementById(id) { return elements[id] || null; },
     querySelectorAll(selector) {
@@ -83,6 +85,7 @@ const context = {
 };
 vm.createContext(context);
 [
+  'restoreTheSpiderTicks',
   'theSpiderTickedTags',
   'theSpiderTickedTagCount',
   'updateTheSpiderApplyButton',
@@ -90,6 +93,7 @@ vm.createContext(context);
 ].forEach(name => vm.runInContext(fnFrom(source, name), context));
 
 function reset() {
+  context.window._theSpiderSearchRunSeq = 1;
   boxes = [];
   posted = [];
   toasts = [];
@@ -215,6 +219,67 @@ assert.strictEqual(button.textContent, 'Save 2 tag(s) to JobAdder');
   assert.strictEqual(queue[1].suggestion_note, 'Saved to JobAdder: IT Skills = Oracle');
   assert.strictEqual(toasts[toasts.length - 1][1], 'err');
 
+  // ── a finished save stays finished ────────────────────────────────────────
+  // The tick restore is deferred on a timer, so it lands after the save has
+  // disabled the button. Restoring the written values there re-enables it with
+  // the same ticks, one click from a duplicate round of live writes.
+  reset();
+  queue = [{ candidate_id: '1' }];
+  boxes = [box('1', 'it_skills', 'SAP', true)];
+  responses = { '1': { json: { applied: { it_skills: ['SAP'] } } } };
+  await context.applyTheSpiderTagsToJobAdder();
+  assert.strictEqual(button.disabled, true);
+  assert.strictEqual(button.textContent, 'Save ticked tags to JobAdder');
+  // And the render it ran was told not to carry the ticks over.
+  const renderSrc = fnFrom(source, 'renderTheSpiderReviewQueue');
+  assert.ok(
+    /preserveTicks === false/.test(renderSrc),
+    'the render must be able to drop ticks rather than always restoring them'
+  );
+  assert.ok(
+    /renderTheSpiderReviewQueue\(false\)/.test(fnFrom(source, 'applyTheSpiderTagsToJobAdder')),
+    'a completed save must render without restoring the ticks it just wrote'
+  );
+
+  // ── an account change stops the loop mid-batch ────────────────────────────
+  // These candidate ids belong to the account that was connected when the search
+  // ran. Writing the rest of them after a switch points them at another tenant.
+  reset();
+  queue = [{ candidate_id: '1' }, { candidate_id: '2' }, { candidate_id: '3' }];
+  boxes = [
+    box('1', 'it_skills', 'SAP', true),
+    box('2', 'it_skills', 'SAP', true),
+    box('3', 'it_skills', 'SAP', true),
+  ];
+  responses = {
+    '1': { json: { applied: { it_skills: ['SAP'] } } },
+    '2': { json: { applied: { it_skills: ['SAP'] } } },
+    '3': { json: { applied: { it_skills: ['SAP'] } } },
+  };
+  const realFetch = context.fetchWithTimeout;
+  context.fetchWithTimeout = function (url, options) {
+    // The account is replaced while the first write is in flight.
+    context.window._theSpiderSearchRunSeq = 99;
+    return realFetch(url, options);
+  };
+  await context.applyTheSpiderTagsToJobAdder();
+  context.fetchWithTimeout = realFetch;
+  assert.strictEqual(posted.length, 1, 'no further writes after the account changed');
+  assert.strictEqual(toasts[toasts.length - 1][1], 'err');
+  assert.ok(/account changed/i.test(toasts[toasts.length - 1][0]));
+  // The stale rows must not survive the transition either.
+  assert.deepStrictEqual(plain(queue), []);
+
+  // ── a field the server could not use is surfaced, not swallowed ───────────
+  reset();
+  queue = [{ candidate_id: '1' }];
+  boxes = [box('1', 'it_skills', 'SAP', true)];
+  responses = {
+    '1': { json: { applied: { it_skills: ['SAP'] }, unreadable_fields: ['qualifications'] } },
+  };
+  await context.applyTheSpiderTagsToJobAdder();
+  assert.ok(/could not be asked about qualifications/i.test(toasts[toasts.length - 1][0]));
+
   // A thrown request is caught the same way.
   reset();
   queue = [{ candidate_id: '1' }];
@@ -280,6 +345,23 @@ assert.strictEqual(button.textContent, 'Save 2 tag(s) to JobAdder');
     renderFn.includes('theSpiderTickedTags()') && renderFn.includes('restoreTheSpiderTicks'),
     're-rendering must carry the existing ticks across'
   );
+  assert.ok(
+    /renderTheSpiderReviewQueue\(\)/.test(fnFrom(source, 'suggestTheSpiderTagsFromCv')),
+    'the suggestion path must keep ticks while batches are still arriving'
+  );
+  // Both awaiting loops re-check the account, because both act on ids that
+  // belong to the account connected when the search ran.
+  // Mentioning the sequence is not guarding on it: the check has to compare and
+  // leave. An earlier version of this assertion passed with both breaks deleted,
+  // because the captured variable was still there.
+  ['applyTheSpiderTagsToJobAdder', 'suggestTheSpiderTagsFromCv'].forEach(name => {
+    const body = fnFrom(source, name);
+    const guards = (body.match(/!==\s*runId\)\s*\{?\s*(?:abandoned = true;\s*)?break;/g) || []).length;
+    assert.ok(
+      guards >= 2,
+      name + ' must re-check the JobAdder account before and after each await, found ' + guards
+    );
+  });
 
   // ── the page wires the save up ─────────────────────────────────────────────
   const html = fs.readFileSync('index.html', 'utf8');

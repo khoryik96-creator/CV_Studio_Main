@@ -408,6 +408,24 @@ class BlankFieldSearchRouteTests(unittest.TestCase):
             2,
         )
 
+    def test_the_excerpt_reaches_past_the_contact_header(self):
+        # The prompt asks what industry, skills and qualifications the CV shows.
+        # At 800 characters the excerpt was the name, address and phone number,
+        # so a paid batch call reliably came back saying the CV does not say.
+        self.assertGreaterEqual(app._SPIDER_NEEDS_CHECKING_EXCERPT_CHARS, 3000)
+        long_cv = (
+            "Ayu Candidate\n+60 12 000 0000\nKuala Lumpur\n"
+            # Well past 800 characters, comfortably inside 4000.
+            + ("Career summary padding. " * 80)
+            + "Certified: ACCA. Systems: SAP FICO."
+        )
+        response, _ = self._run(
+            {2: []}, {"role": "Finance", "it_skills": "SAP"}, resume_text=long_cv
+        )
+        excerpt = response.get_json()["needs_checking"][0]["resume_excerpt"]
+        self.assertIn("ACCA", excerpt)
+        self.assertIn("SAP FICO", excerpt)
+
     def test_the_queue_cap_matches_the_resume_budget_it_claims_to_track(self):
         self.assertEqual(
             app._SPIDER_NEEDS_CHECKING_LIMIT, app._SPIDER_SEARCH_RESUME_MAX

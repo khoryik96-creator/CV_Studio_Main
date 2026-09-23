@@ -4245,6 +4245,25 @@ def _spider_custom_field_options_cache_clear():
         _SPIDER_CUSTOM_FIELD_OPTIONS_CACHE.clear()
 
 
+# A field whose name does not match is a configuration fact, not a blip. It is
+# marked so the route can answer "this will not work" rather than "try again".
+_SPIDER_FIELD_RENAMED_ERROR = "field {} is named {!r} on this account"
+
+
+# The labels each industry field must actually carry before anything is written
+# into it. Industry values come from a local taxonomy, but the field they land in
+# is JobAdder's and can be repurposed like any other.
+SPIDER_INDUSTRY_FIELD_LABELS = {
+    1: ("Industry",),
+    2: ("Industry Sub-Category", "Industry Subcategory", "Sub-Industry"),
+}
+
+
+def _spider_field_error_is_permanent(error):
+    """Whether a field error will still be true if the user tries again."""
+    return str(error or "").startswith("field ") and " is named " in str(error or "")
+
+
 def _spider_custom_field_options(token, field_id, expected_labels=()):
     """This tenant's allowed values for one candidate custom field.
 
@@ -4299,8 +4318,13 @@ def _spider_custom_field_options(token, field_id, expected_labels=()):
             or ""
         ).strip()
         label_key = re.sub(r"[^a-z0-9]", "", label.casefold())
-        if label_key and label_key not in expected_label_keys:
-            return None, "field {} is named {!r} on this account".format(field_id, label[:60])
+        if label_key not in expected_label_keys:
+            # A positive match, exactly as /jobadder/spider_options requires. An
+            # unnamed definition proves nothing about which field this is, and a
+            # write needs more than the absence of contrary evidence.
+            return None, _SPIDER_FIELD_RENAMED_ERROR.format(
+                field_id, label[:60] or "unnamed"
+            )
     values = definition.get("values") if isinstance(definition, dict) else None
     options = _spider_extract_option_values(values or [])
     if not options:
@@ -7397,9 +7421,11 @@ def _spider_native_boolean_jobadder_candidates(token, rule_text, result_pool_lim
 
 # The blank-field review queue is a list a person reads, so it is capped well
 # below the result limit rather than growing with the candidate pool.
-# Enough CV to name an industry, a skill or a qualification, and small enough
-# that a whole batch fits one AI call.
-_SPIDER_NEEDS_CHECKING_EXCERPT_CHARS = 800
+# Enough CV to name an industry, a skill or a qualification. At 800 this was the
+# contact header and little else, so a paid batch call reliably came back saying
+# the CV does not say. 4000 is what this file already sends for the same kind of
+# question elsewhere.
+_SPIDER_NEEDS_CHECKING_EXCERPT_CHARS = 4000
 _SPIDER_SEARCH_PROCESSING_DEADLINE_SECONDS = 330.0
 _SPIDER_SEARCH_ELIGIBILITY_DETAIL_MAX = 80
 _SPIDER_SEARCH_RESUME_MAX = 20
@@ -8355,6 +8381,9 @@ def jobadder_spider_apply_tags():
     # Fields whose option list could not be read at all. That is an outage, not a
     # verdict on the value, and must not be reported as a normal no-op.
     unreadable_fields = []
+    # Fields this account has renamed or repurposed. Permanent: retrying changes
+    # nothing, and saying "try again in a moment" sends the user in circles.
+    misconfigured_fields = []
     for field_key, values in requested.items():
         key = str(field_key or "")
         spec = SPIDER_WRITABLE_FIELDS.get(key)
@@ -8370,12 +8399,13 @@ def jobadder_spider_apply_tags():
                 token, spec["field_id"], expected_labels=spec.get("expected_labels") or ()
             )
             if options_error:
+                permanent = _spider_field_error_is_permanent(options_error)
                 rejected.append({
                     "field": key,
-                    "reason": "could not read the allowed values from JobAdder: {}".format(options_error),
-                    "retryable": True,
+                    "reason": "could not use this field: {}".format(options_error),
+                    "retryable": not permanent,
                 })
-                unreadable_fields.append(key)
+                (misconfigured_fields if permanent else unreadable_fields).append(key)
                 continue
         targets, refused = _spider_writable_field_targets(key, values, allowed=allowed)
         for item in refused:
@@ -8385,6 +8415,22 @@ def jobadder_spider_apply_tags():
                 "reason": item.get("reason") or SPIDER_REJECT_NOT_ALLOWED,
             })
         for field_id, canonical_values in targets.items():
+            if key == "industry":
+                _options, industry_error = _spider_custom_field_options(
+                    token,
+                    field_id,
+                    expected_labels=SPIDER_INDUSTRY_FIELD_LABELS.get(int(field_id), ()),
+                )
+                if industry_error:
+                    permanent = _spider_field_error_is_permanent(industry_error)
+                    rejected.append({
+                        "field": key,
+                        "field_id": field_id,
+                        "reason": "could not use this field: {}".format(industry_error),
+                        "retryable": not permanent,
+                    })
+                    (misconfigured_fields if permanent else unreadable_fields).append(key)
+                    continue
             if not _spider_field_is_blank(detail, field_id):
                 skipped.append({
                     "field": key,
@@ -8396,15 +8442,27 @@ def jobadder_spider_apply_tags():
             applied.setdefault(key, []).extend(canonical_values)
 
     if not values_by_field:
-        if unreadable_fields and not skipped:
-            # Nothing was written because JobAdder could not be asked what is
-            # allowed. Saying "already filled or not allowed" would hide an
-            # outage behind a sentence about the data.
+        # An unusable field is reported whatever else happened. Gating this on
+        # "nothing else was skipped" meant one already-filled field alongside a
+        # failed option read came back as a cheerful no-op about the data.
+        if misconfigured_fields:
+            return jsonify({
+                "error": (
+                    "JobAdder is not offering {} as the field this tag belongs to on this "
+                    "account, so nothing was saved. This will not fix itself by retrying."
+                ).format(", ".join(dict.fromkeys(misconfigured_fields))),
+                "candidate_id": candidate_id,
+                "applied": {},
+                "skipped": skipped,
+                "rejected": rejected,
+                "retryable": False,
+            }), 409
+        if unreadable_fields:
             return jsonify({
                 "error": (
                     "Could not read the allowed values for {} from JobAdder, so nothing "
                     "was saved. Try again in a moment."
-                ).format(", ".join(unreadable_fields)),
+                ).format(", ".join(dict.fromkeys(unreadable_fields))),
                 "candidate_id": candidate_id,
                 "applied": {},
                 "skipped": skipped,
@@ -8462,7 +8520,7 @@ def jobadder_spider_apply_tags():
     # Nothing cached is invalidated by this write. The caches hold resume text and
     # rendered CV previews, and the CV did not change; candidate detail, which did,
     # is read fresh on every request and never cached.
-    return jsonify({
+    response = {
         "ok": True,
         "candidate_id": candidate_id,
         "applied": applied,
@@ -8470,7 +8528,15 @@ def jobadder_spider_apply_tags():
         "rejected": rejected,
         "preserved_custom_field_count": max(0, len(custom_payload) - len(values_by_field)),
         "jobadder": result if isinstance(result, dict) else {},
-    })
+    }
+    # Something was written, so this is not an error, but a field that could not
+    # be used is still news the recruiter needs rather than a silent omission.
+    if unreadable_fields:
+        response["unreadable_fields"] = list(dict.fromkeys(unreadable_fields))
+        response["retryable"] = True
+    if misconfigured_fields:
+        response["misconfigured_fields"] = list(dict.fromkeys(misconfigured_fields))
+    return jsonify(response)
 
 
 @app.route("/jobadder/update_candidate", methods=["POST"])

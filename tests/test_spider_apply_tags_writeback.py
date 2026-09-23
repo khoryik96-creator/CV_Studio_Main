@@ -44,7 +44,29 @@ def _custom(field_id, name, values):
 TENANT_OPTIONS = {
     score.SPIDER_IT_SKILLS_FIELD_ID: ["SAP", "SAP FICO", "Oracle"],
     score.SPIDER_QUALIFICATIONS_FIELD_ID: ["ACCA", "CPA"],
+    # Industry is verified the same way, because the values come from a local
+    # taxonomy but the field they land in is still JobAdder's.
+    1: ["Financial Services", "FMCG"],
+    2: ["FSI - Insurance"],
 }
+
+# A field definition carries its name, and the route requires that name to match
+# before it writes. A definition with no name proves nothing about which field it
+# is, so the fixtures carry one exactly as JobAdder does.
+TENANT_FIELD_NAMES = {
+    score.SPIDER_IT_SKILLS_FIELD_ID: "IT Skills",
+    score.SPIDER_QUALIFICATIONS_FIELD_ID: "Professional Qualifications",
+    1: "Industry",
+    2: "Industry Sub-Category",
+}
+
+
+def _field_definition(field_id, options=None, name=None):
+    supplied = TENANT_OPTIONS if options is None else options
+    return {
+        "name": TENANT_FIELD_NAMES.get(field_id, "") if name is None else name,
+        "values": list(supplied.get(field_id) or []),
+    }
 
 
 class WritableFieldResolverTests(unittest.TestCase):
@@ -252,8 +274,7 @@ class ApplyTagsRouteTests(unittest.TestCase):
         def fake_request_json(endpoint, **kwargs):
             if endpoint.startswith("candidates/fields/custom/"):
                 field_id = int(endpoint.rsplit("/", 1)[-1])
-                supplied = TENANT_OPTIONS if options is None else options
-                return 200, {"values": list(supplied.get(field_id) or [])}
+                return 200, _field_definition(field_id, options)
             recorded["endpoint"] = endpoint
             recorded["method"] = kwargs.get("method")
             recorded["body"] = kwargs.get("body")
@@ -396,8 +417,11 @@ class ApplyTagsRouteTests(unittest.TestCase):
                 json={"candidate_id": "4242", "fields": {"it_skills": ["Yes"]}},
                 headers=self._headers(),
             )
-        self.assertEqual(response.status_code, 502)
-        self.assertEqual(response.get_json()["applied"], {})
+        # A rename is permanent, so it must not be dressed up as "try again".
+        self.assertEqual(response.status_code, 409)
+        payload = response.get_json()
+        self.assertEqual(payload["applied"], {})
+        self.assertFalse(payload["retryable"])
         # Only the option-list read happened; no PUT was attempted.
         self.assertTrue(all(
             str(call.args[0]).startswith("candidates/fields/custom/")
@@ -426,6 +450,100 @@ class ApplyTagsRouteTests(unittest.TestCase):
         self.assertIsNone(options)
         self.assertIn("Willing to Relocate", error)
 
+    def test_an_outage_is_reported_even_when_another_field_was_skipped(self):
+        # Gating the outage on "nothing else was skipped" meant one already-filled
+        # field alongside a failed option read came back as a cheerful no-op about
+        # the data, hiding a retryable JobAdder problem.
+        detail = {"candidateId": 4242, "custom": [
+            _custom(score.SPIDER_QUALIFICATIONS_FIELD_ID, "Professional Qualifications", ["ACCA"]),
+        ]}
+        response, recorded = self._post(
+            {"candidate_id": self.CANDIDATE_ID,
+             "fields": {"qualifications": ["CPA"], "it_skills": ["SAP"]}},
+            detail=detail,
+            options={score.SPIDER_QUALIFICATIONS_FIELD_ID: ["ACCA", "CPA"]},
+        )
+        self.assertEqual(response.status_code, 502)
+        payload = response.get_json()
+        self.assertTrue(payload["retryable"])
+        self.assertIn("it_skills", payload["error"])
+        self.assertEqual(recorded, {})
+
+    def test_a_partial_write_still_names_the_field_it_could_not_use(self):
+        # Something was written, so this is not an error. It is still news.
+        def half_broken(endpoint, **kwargs):
+            if endpoint.startswith("candidates/fields/custom/"):
+                field_id = int(endpoint.rsplit("/", 1)[-1])
+                if field_id == score.SPIDER_QUALIFICATIONS_FIELD_ID:
+                    raise RuntimeError("JobAdder hiccup")
+                return 200, _field_definition(field_id)
+            return 200, {"candidateId": 4242}
+
+        with mock.patch.object(
+            app, "_ja_refresh_access_token", return_value="fixture-token"
+        ), mock.patch.object(
+            app, "_spider_fetch_candidate_detail",
+            return_value={"candidateId": 4242, "custom": []},
+        ), mock.patch.object(
+            app._JOBADDER_CLIENT, "request_json", side_effect=half_broken
+        ):
+            response = app.app.test_client().post(
+                "/jobadder/spider_apply_tags",
+                json={"candidate_id": "4242",
+                      "fields": {"it_skills": ["SAP"], "qualifications": ["ACCA"]}},
+                headers=self._headers(),
+            )
+        payload = response.get_json()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["applied"], {"it_skills": ["SAP"]})
+        self.assertEqual(payload["unreadable_fields"], ["qualifications"])
+        self.assertTrue(payload["retryable"])
+
+    def test_industry_fields_are_verified_like_every_other_field(self):
+        # Industry values come from a local taxonomy, but fields #1 and #2 are
+        # JobAdder's and can be repurposed exactly like #3 and #7.
+        def repurposed_industry(endpoint, **kwargs):
+            if endpoint.startswith("candidates/fields/custom/"):
+                return 200, {"name": "Preferred Office", "values": ["KL", "Penang"]}
+            return 200, {"candidateId": 4242}
+
+        with mock.patch.object(
+            app, "_ja_refresh_access_token", return_value="fixture-token"
+        ), mock.patch.object(
+            app, "_spider_fetch_candidate_detail",
+            return_value={"candidateId": 4242, "custom": []},
+        ), mock.patch.object(
+            app._JOBADDER_CLIENT, "request_json", side_effect=repurposed_industry
+        ) as request_json:
+            response = app.app.test_client().post(
+                "/jobadder/spider_apply_tags",
+                json={"candidate_id": "4242",
+                      "fields": {"industry": ["Financial Services"]}},
+                headers=self._headers(),
+            )
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.get_json()["applied"], {})
+        self.assertTrue(all(
+            str(call.args[0]).startswith("candidates/fields/custom/")
+            for call in request_json.call_args_list
+        ))
+
+    def test_an_unnamed_field_definition_is_not_taken_on_trust(self):
+        # The read path requires a positive name match. Treating "no name" as
+        # "the right field" is the absence of contrary evidence, not evidence.
+        app._spider_custom_field_options_cache_clear()
+        with mock.patch.object(
+            app._JOBADDER_CLIENT, "request_json",
+            return_value=(200, {"values": ["SAP"]}),
+        ):
+            options, error = app._spider_custom_field_options(
+                "fixture-token", 3, expected_labels=("IT Skills",)
+            )
+        self.assertIsNone(options)
+        self.assertIn("unnamed", error)
+        self.assertTrue(app._spider_field_error_is_permanent(error))
+        self.assertFalse(app._spider_field_error_is_permanent("connection reset"))
+
     def test_a_field_that_cannot_be_written_is_refused(self):
         response, recorded = self._post({
             "candidate_id": self.CANDIDATE_ID,
@@ -452,7 +570,7 @@ class ApplyTagsRouteTests(unittest.TestCase):
             return_value={"candidateId": 4242, "custom": []},
         ) as fetch_detail, mock.patch.object(
             app._JOBADDER_CLIENT, "request_json",
-            return_value=(200, {"values": ["Financial Services"]}),
+            return_value=(200, {"name": "Industry", "values": ["Financial Services"]}),
         ):
             app.app.test_client().post(
                 "/jobadder/spider_apply_tags",
@@ -520,8 +638,7 @@ class ApplyTagsRouteTests(unittest.TestCase):
         def counting_request_json(endpoint, **kwargs):
             if endpoint.startswith("candidates/fields/custom/"):
                 reads["n"] += 1
-                field_id = int(endpoint.rsplit("/", 1)[-1])
-                return 200, {"values": list(TENANT_OPTIONS.get(field_id) or [])}
+                return 200, _field_definition(int(endpoint.rsplit("/", 1)[-1]))
             return 200, {"candidateId": 4242}
 
         with mock.patch.object(
@@ -550,7 +667,7 @@ class ApplyTagsRouteTests(unittest.TestCase):
                 attempts["n"] += 1
                 if attempts["n"] == 1:
                     raise RuntimeError("JobAdder hiccup")
-                return 200, {"values": ["SAP"]}
+                return 200, {"name": "IT Skills", "values": ["SAP"]}
             return 200, {"candidateId": 4242}
 
         with mock.patch.object(

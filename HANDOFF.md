@@ -164,7 +164,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   audit findings against v24.6.405, then three rounds of review corrections.
   PR #212 merged v24.6.410 as `960a086`, closing the source-ownership run.
   Current work: `claude/ai-crawler-search-refinement`, v24.6.411 through
-  v24.6.415, the AI Crawler blank-field review queue and the save that writes a
+  v24.6.416, the AI Crawler blank-field review queue and the save that writes a
   reviewed tag back into JobAdder. v24.6.413 and v24.6.414 are correctives on the
   two features below them and must ship with them: as first written the queue
   never ran at all, the save could clear a candidate's other custom fields, and
@@ -309,6 +309,21 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   merged page-aware corrective below supersedes those details.
 
 ## 8. Open / deferred work
+
+- **AI Crawler save-boundary corrective — v24.6.416, UNMERGED.**
+  Eight findings, three of them regressions introduced by v24.6.415: a completed
+  save re-enabled its own button through the deferred tick restore, one click from
+  a duplicate round of live writes; the run-wide queue cap dropped rows without
+  setting the flag that says so; and the 800-character CV excerpt could not reach
+  the skills and qualifications the prompt asks about. Also: the save loop had no
+  account guard, so a sign-out mid-batch would point this account's candidate ids
+  at another tenant — the v24.6.243 class again, this time on the write path;
+  Industry skipped the field-name verification the other two fields get; an
+  unnamed field definition was taken on trust; an outage hid behind a partial
+  success; and a renamed field was reported as retryable. Behaviour change worth
+  knowing: a tenant that renamed any of the four writable fields is now refused
+  the write rather than having the tag land somewhere unrelated. See
+  `cv_studio_v24_6_416_spider_save_boundary_corrective.md`.
 
 - **AI Crawler review-boundary corrective — v24.6.415, UNMERGED.**
   Nineteen findings from two further reviews, most on the browser side. The one

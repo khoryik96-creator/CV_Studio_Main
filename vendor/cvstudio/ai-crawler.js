@@ -2680,13 +2680,14 @@ async function runTheSpiderJobAdderSearch(opts) {
       if (!r.ok || d.error) throw new Error(d.error || ('JobAdder search failed: ' + r.status));
       var items = d.items || d.candidates || (d.data && d.data.items) || [];
       if (d.filter_summary) filterSummaries.push(d.filter_summary);
-      if (Array.isArray(d.needs_checking) && needsChecking.length < THE_SPIDER_REVIEW_MAX_ROWS) {
+      if (Array.isArray(d.needs_checking) && d.needs_checking.length) {
         // The server caps each response, but a run issues several queries. Left
         // unbounded these add up, and every row costs a CV excerpt on screen and
-        // a share of a paid AI call.
-        needsChecking = needsChecking.concat(
-          d.needs_checking.slice(0, THE_SPIDER_REVIEW_MAX_ROWS - needsChecking.length)
-        );
+        // a share of a paid AI call. Whatever the cap drops is admitted rather
+        // than disappearing between two queries.
+        var room = Math.max(0, THE_SPIDER_REVIEW_MAX_ROWS - needsChecking.length);
+        if (d.needs_checking.length > room) needsCheckingTruncated = true;
+        if (room) needsChecking = needsChecking.concat(d.needs_checking.slice(0, room));
       }
       if (d.filter_summary && (d.filter_summary.needs_checking_truncated || d.filter_summary.needs_checking_incomplete)) needsCheckingTruncated = true;
       items.forEach(function(x){ x._spiderQuery = queries[i]; all.push(x); });
@@ -2863,7 +2864,11 @@ function theSpiderReviewRowName(row) {
   return 'Candidate ' + String((row && row.candidate_id) || '');
 }
 
-function renderTheSpiderReviewQueue() {
+// preserveTicks defaults to true, because suggestions arrive batch by batch and
+// each batch re-renders. After a save it must be false: putting the ticks back
+// re-enables the button with the values already written, one click away from a
+// second round of live writes.
+function renderTheSpiderReviewQueue(preserveTicks) {
   var rows = getTheSpiderReviewQueue();
   var body = document.getElementById('theSpiderReviewBody');
   var badge = document.getElementById('theSpiderReviewBadge');
@@ -2879,7 +2884,7 @@ function renderTheSpiderReviewQueue() {
   if (!body) return;
   // Suggestions arrive batch by batch and each batch re-renders, so anything the
   // recruiter has already ticked has to be carried across rather than reset.
-  var stillTicked = theSpiderTickedTags();
+  var stillTicked = (preserveTicks === false) ? {} : theSpiderTickedTags();
   setTimeout(function(){ restoreTheSpiderTicks(stillTicked); }, 0);
   if (!rows.length) {
     body.innerHTML = '<div style="color:var(--text3);font-size:12px;">Nothing set aside. Every candidate the filters dropped had a real mismatch, not a blank field.</div>';
@@ -2994,8 +2999,13 @@ async function suggestTheSpiderTagsFromCv() {
   if (badge) badge.textContent = 'Reading CVs…';
   var tagged = 0;
   var unreadable = 0;
+  // The rows belong to the account that was connected when the search ran, and
+  // each batch is a paid call. If that account changes, stop: the remaining
+  // batches would be spending money reading CVs nobody is going to save.
+  var runId = Number(window._theSpiderSearchRunSeq) || 0;
   try {
     for (var start = 0; start < rows.length; start += THE_SPIDER_REVIEW_BATCH) {
+      if ((Number(window._theSpiderSearchRunSeq) || 0) !== runId) break;
       var batch = rows.slice(start, start + THE_SPIDER_REVIEW_BATCH);
       // Only the candidates this call actually asked about. Keying off the whole
       // queue lets a reply that echoes some other batch's id attach that
@@ -3006,6 +3016,7 @@ async function suggestTheSpiderTagsFromCv() {
       // run has nothing to say about it.
       batch.forEach(function(row){ row.suggestions = null; row.suggestion_note = ''; });
       var d = await callAIProxy(theSpiderReviewSuggestionPrompt(batch), THE_SPIDER_REVIEW_MAX_TOKENS, false, 0, 'the_spider');
+      if ((Number(window._theSpiderSearchRunSeq) || 0) !== runId) break;
       var replyText = aiText(d);
       var suggestions = parseTheSpiderReviewSuggestions(replyText);
       if (!suggestions.length && String(replyText || '').trim()) {
@@ -3120,7 +3131,15 @@ async function applyTheSpiderTagsToJobAdder() {
   var written = 0, skipped = 0, failed = [];
   var byId = {};
   getTheSpiderReviewQueue().forEach(function(row){ byId[String(row.candidate_id)] = row; });
+  // These ids belong to the JobAdder account that was connected when the search
+  // ran. A sign-out or account switch mid-loop would leave the remaining writes
+  // pointing this account's ids at a different tenant's records, which is the
+  // hazard the queue is cleared for in the first place. The search loop checks
+  // this on every await; so does this one, because this one writes.
+  var runId = Number(window._theSpiderSearchRunSeq) || 0;
+  var abandoned = false;
   for (var i = 0; i < ids.length; i++) {
+    if ((Number(window._theSpiderSearchRunSeq) || 0) !== runId) { abandoned = true; break; }
     var id = ids[i];
     if (badge) badge.textContent = 'Saving ' + (i + 1) + ' of ' + ids.length + '…';
     try {
@@ -3130,6 +3149,7 @@ async function applyTheSpiderTagsToJobAdder() {
         body: JSON.stringify({candidate_id:id, fields:picked[id], crawler_lock_code:aiCrawlerLockPayload()})
       }, 30000);
       var d = await r.json().catch(function(){ return {}; });
+      if ((Number(window._theSpiderSearchRunSeq) || 0) !== runId) { abandoned = true; break; }
       if (!r.ok || d.error) throw new Error(d.error || ('JobAdder save failed: ' + r.status));
       var row = byId[id];
       var appliedFields = Object.keys(d.applied || {});
@@ -3137,6 +3157,11 @@ async function applyTheSpiderTagsToJobAdder() {
       skipped += (d.skipped || []).length + (d.rejected || []).length;
       if (row) {
         row.applied = d.applied || {};
+        row.retry_note = (d.unreadable_fields || []).length
+          ? ('JobAdder could not be asked about ' + (d.unreadable_fields || []).join(', ') + ' — try those again.')
+          : ((d.misconfigured_fields || []).length
+              ? ('This account does not offer ' + (d.misconfigured_fields || []).join(', ') + ' as that field.')
+              : '');
         row.suggestion_note = appliedFields.length
           ? ('Saved to JobAdder: ' + appliedFields.map(function(field){
               return (THE_SPIDER_REVIEW_FIELD_LABELS[field] || field) + ' = ' + (d.applied[field] || []).join(', ');
@@ -3149,9 +3174,25 @@ async function applyTheSpiderTagsToJobAdder() {
       if (failedRow) failedRow.suggestion_note = 'Save failed: ' + ((e && e.message) || 'unknown error');
     }
   }
-  renderTheSpiderReviewQueue();
+  if (abandoned) {
+    // The account changed under us. Whatever was written stands, but nothing
+    // more is sent and the stale rows do not survive the transition.
+    showToast('JobAdder account changed — stopped saving after ' + written + ' tag(s)', 'err');
+    clearTheSpiderReviewQueue();
+    if (button) { button.disabled = true; button.textContent = 'Save ticked tags to JobAdder'; }
+    return;
+  }
+  // Ticks are deliberately not carried across this render. They have been
+  // written; restoring them would re-enable the button holding the same values.
+  renderTheSpiderReviewQueue(false);
   if (badge) badge.textContent = written + ' written' + (skipped ? (' · ' + skipped + ' left alone') : '');
+  var outages = [];
+  Object.keys(byId).forEach(function(key){
+    var note = byId[key] && byId[key].retry_note;
+    if (note && outages.indexOf(note) < 0) outages.push(note);
+  });
   if (failed.length) showToast('Some saves failed: ' + failed[0], 'err');
+  else if (outages.length) showToast(outages[0], 'err');
   else showToast(written ? ('Wrote ' + written + ' tag(s) to JobAdder') : 'Nothing written; those fields were already filled', written ? 'ok' : 'err');
   if (button) { button.disabled = true; button.textContent = 'Save ticked tags to JobAdder'; }
 }

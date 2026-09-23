@@ -170,6 +170,19 @@ assert.strictEqual(
 );
 assert.strictEqual(context.window._theSpiderNeedsCheckingTruncated, true);
 
+// The production path slices before the queue setter ever sees the extra rows,
+// so the setter's own cap can never fire there. What actually protects the user
+// is the search loop admitting what it dropped.
+const searchFn = fnFrom(source, 'runTheSpiderJobAdderSearch');
+assert.ok(
+  /if \(d\.needs_checking\.length > room\) needsCheckingTruncated = true;/.test(searchFn),
+  'rows the run-wide cap drops must set the truncation flag, not vanish'
+);
+assert.ok(
+  /var room = Math\.max\(0, THE_SPIDER_REVIEW_MAX_ROWS - needsChecking\.length\)/.test(searchFn),
+  'the cap must be measured against what is already collected'
+);
+
 // ── clearing leaves nothing behind ──────────────────────────────────────────
 // Candidate ids are tenant-scoped, so a row surviving a sign-out could be saved
 // against a different account's record.
