@@ -65,6 +65,51 @@ _CV_MONTH_WORD = (
 )
 
 
+# A year followed by a month name is the same year-first hazard as "2020-06",
+# just spelled out: "2025 june - current", "2022 march - 2024 august". Providers
+# mis-read it the same way, and this form is common in hand-written table CVs.
+#
+# The year has to come first in the token for this to fire, so "Apr 2019" and
+# "Sept 2024" are untouched. A newline between the two is not crossed, because a
+# year ending one line and a month opening the next are two different dates.
+# The optional leading month is captured, not skipped, so that a year which
+# already CLOSES a month-first date is recognised and left alone: in
+# "Jun 2020 Jun 2021" the 2020 belongs to the first date and the Jun after it
+# opens the second, so there is nothing to reorder.
+_CV_YEAR_FIRST_MONTH_RE = re.compile(
+    r"(" + _CV_MONTH_WORD + r"\.?[ \t\u00a0]+)?"
+    r"\b((?:19|20)\d{2})[ \t\u00a0]+(" + _CV_MONTH_WORD + r")\b",
+    re.I,
+)
+
+
+def _cv_year_first_month_repl(match):
+    """Swap "2025 june" to "june 2025", keeping the source spelling of the month."""
+    if match.group(1):
+        return match.group(0)
+    return "{} {}".format(match.group(3), match.group(2))
+
+
+def _cv_pretranslate_year_first_month_names(text):
+    """Rewrite "YYYY Month" to "Month YYYY" before a provider reads the CV.
+
+    Applied to the whole CV document only, alongside ``_cv_pretranslate_iso_dates``
+    and never inside ``_normalize_cv_date_range``: that field normaliser is
+    mirrored in two JavaScript copies, and a rule added on one side only would
+    break their shared contract.
+
+    Mirrors ``_cv_pretranslate_iso_dates`` for the spelled-out form. A CV that
+    writes its most recent roles year-first and its older ones month-first gets
+    read inconsistently, and the year-first rows are the ones that come back
+    wrong or go missing entirely.
+
+    Only a 19xx/20xx year immediately followed by a month name is touched, so
+    quantities, phone numbers and version strings are not, and the month keeps
+    whatever spelling the source used.
+    """
+    return _CV_YEAR_FIRST_MONTH_RE.sub(_cv_year_first_month_repl, str(text or ""))
+
+
 def _cv_pretranslate_iso_dates(text):
     """Rewrite ISO-style YYYY-MM and YYYY-MM-DD dates to house-style "Mon YYYY".
 

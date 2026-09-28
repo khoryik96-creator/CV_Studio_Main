@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.410"
+_INSTALL_RECEIPT_VERSION = "v24.6.411"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -346,7 +346,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.410"
+_CVSTUDIO_VERSION = "v24.6.411"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -1719,6 +1719,7 @@ from cvstudio_cv_normalize import (
     _cv_date_parts,
     _cv_date_sort_point,
     _cv_pretranslate_iso_dates,
+    _cv_pretranslate_year_first_month_names,
     _cv_lang_alias_re,
     _cv_match_key,
     _cv_parse_backend_timeout_seconds,
@@ -8791,6 +8792,13 @@ def parse_cv():
         # cv_text keeps the model prompt and the downstream table reconciliation
         # consistent.
         cv_text = _cv_pretranslate_iso_dates(cv_text)
+        # The same year-first hazard spelled out with a month name, e.g.
+        # "2025 june - current". A CV that wrote its newest roles that way and its
+        # older ones month-first had the year-first rows come back wrong or missing
+        # altogether, so both forms are normalised before the model reads them.
+        # Document-wide only: the per-field date normaliser is mirrored in two
+        # JavaScript copies and keeps its exact behaviour.
+        cv_text = _cv_pretranslate_year_first_month_names(cv_text)
         parse_timeout_seconds = _cv_parse_backend_timeout_seconds(cv_text)
 
         data = call_llm(llm_provider, api_key, {

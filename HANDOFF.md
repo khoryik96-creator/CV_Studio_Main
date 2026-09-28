@@ -299,6 +299,24 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
+- **Year-first dates and a reported employer shortfall — v24.6.411, UNMERGED.**
+  Starts at merged master `960a086`. A real formatted CV came back missing the
+  candidate's three most recent employers, including his current job, with two
+  education rows rendered as jobs and every employer name replaced by the table
+  cell separator. Extraction was verified perfect and the generator reproduced the
+  reported document line for line from the model's output, so the loss is entirely
+  in what the model returned. The trigger is exact: the three lost employers are
+  the only three whose dates are written year-first ("2025 june - current"), the
+  hazard `_cv_pretranslate_iso_dates` already existed for but only covered in its
+  numeric form. That normalisation now also covers the spelled-out form, document
+  wide and deliberately NOT inside the JS-mirrored `_normalize_cv_date_range`. The
+  fidelity audit, which found zero source employers here because it only reads
+  Dates/Organization/Role tables, now also reads explicit "Company:" labels, so a
+  shortfall is reported rather than shipped. See
+  `cv_studio_v24_6_411_year_first_dates_employer_safety_qa_report.md`.
+  Not fixed and left for a verified change: the education-into-work-experience
+  misclassification, which the audit will now flag as a shortfall.
+
 - **Role-qualifier script fix — v24.6.410, UNMERGED.**
   Starts at merged master `5b1f2a4`. An ASCII-only letter class split an accented
   place name, left a lowercase fragment and sent every international location down

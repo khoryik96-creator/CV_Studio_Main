@@ -66,12 +66,53 @@ _SECTION_STOP_HEADING_RE = re.compile(
 )
 
 
+# A CV that writes its employers as labelled cells -- "Company: Acme Sdn Bhd" --
+# has no Dates/Organization/Role columns for the authoritative-row reader to find,
+# so that reader returns nothing and a shortfall goes unnoticed. The label itself
+# is high-confidence evidence: a line that says "Company:" is naming an employer.
+_LABELLED_COMPANY_RE = re.compile(
+    r"^[ \t]*compan(?:y|ies)[ \t]*[:\-\u2013\u2014][ \t]*(.+)$",
+    re.I | re.M,
+)
+
+# The extractor joins a table row's cells with " | ", so an Industry cell rides
+# along on the same line as the company it sits beside.
+_LABELLED_COMPANY_TRAILER_RE = re.compile(
+    r"\s*\|.*$|\s*\bindustry\b\s*[:\-].*$", re.I
+)
+
+
+def _source_labelled_companies(cv_text):
+    """Employer names the source labels outright with a "Company:" prefix."""
+    names = []
+    for raw in _LABELLED_COMPANY_RE.findall(str(cv_text or "")):
+        name = _LABELLED_COMPANY_TRAILER_RE.sub("", str(raw or ""))
+        name = re.sub(r"\s+", " ", name).strip(" .,;:|-")
+        # A label with nothing after it, or a whole paragraph, is not a name.
+        if name and 2 <= len(name) <= 120:
+            names.append(name)
+    return names
+
+
 def _source_employers(cv_text, parsed=None):
     """Distinct high-confidence employers extracted from the source text."""
     employers = []
     seen = set()
-    for row in _extract_authoritative_work_rows(cv_text, parsed):
-        company = str(row.get("company") or "").strip()
+    candidates = [
+        str(row.get("company") or "").strip()
+        for row in _extract_authoritative_work_rows(cv_text, parsed)
+    ]
+    # Read the labels from the work-history section only. A referees block or a
+    # cover note can also say "Company:", and an employer expected from outside
+    # the work history would be reported missing on a perfectly good parse.
+    # Read the labels from the work-history section only, and only when that
+    # section could actually be located. A referees block or a cover note can also
+    # say "Company:", and an employer expected from outside the work history would
+    # be reported missing on a perfectly good parse. No section, no claim.
+    scoped = _experience_section_text(cv_text)
+    if scoped is not None:
+        candidates.extend(_source_labelled_companies(scoped))
+    for company in candidates:
         key = _cv_match_key(company)
         if not key or key in seen:
             continue
@@ -159,6 +200,17 @@ def evaluate_cv_fidelity(parsed, cv_text):
     parsed_emps = _parsed_employers(parsed)
     missing = [c for c in source_emps if not _employer_is_present(c, parsed_emps)]
 
+    # A parsed company that is punctuation only -- "|", "-", ":" -- is the cell
+    # separator the model picked up instead of the name beside it. The finished CV
+    # shows an empty employer, which looks like a layout fault rather than a
+    # dropped field, so it is named here.
+    unnamed = [
+        str(item.get("date_range") or item.get("company") or "").strip()
+        for item in _flatten_parsed_work_roles(parsed)
+        if str(item.get("company") or "").strip()
+        and not re.search(r"[^\W_]", str(item.get("company") or ""), re.UNICODE)
+    ]
+
     source_bullets = _count_source_bullets(cv_text)
     parsed_bullets = _count_parsed_bullets(parsed)
     bullet_scoped = source_bullets is not None
@@ -174,6 +226,13 @@ def evaluate_cv_fidelity(parsed, cv_text):
             "Employer(s) present in the CV but missing from the parsed result: "
             + ", ".join(missing)
         )
+    if unnamed:
+        warnings.append(
+            "{} work entr{} came back with no employer name -- the separator was "
+            "read instead of the company.".format(
+                len(unnamed), "y" if len(unnamed) == 1 else "ies"
+            )
+        )
     if bullet_shortfall:
         warnings.append(
             "Only {parsed} bullet point(s) were kept out of about {source} found "
@@ -188,6 +247,7 @@ def evaluate_cv_fidelity(parsed, cv_text):
             "source": len(source_emps),
             "parsed": len(parsed_emps),
             "missing": missing,
+            "unnamed": unnamed,
         },
         "bullets": {
             "source_estimate": source_bullets,
