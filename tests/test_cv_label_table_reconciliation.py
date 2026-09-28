@@ -260,12 +260,27 @@ class AuthoritativeRowReaderTests(unittest.TestCase):
             ["WORK EXPERIENCE", "Jun 2025 - Present | Senior Data Engineer"],
         ), [])
 
-    def test_a_punctuation_only_company_is_never_a_row(self):
-        for company in ("|", "-", " | ", "—", "::"):
+    def test_a_separator_is_never_a_company(self):
+        # Master read "| | | Engineer" as the company "| | |": the reported bug.
+        for company in ("|", " | "):
             with self.subTest(company=company):
                 self.assertEqual(self.rows(
                     ["WORK EXPERIENCE", "Jan 2020 - Dec 2021 | " + company + " | Engineer"],
                 ), [])
+
+    def test_a_placeholder_company_is_kept_as_it_always_was(self):
+        # A CV writes "-" in the company column for a career break or freelance
+        # work. That is the source's own content; dropping the row would drop the
+        # whole entry from the rebuilt work history. Master kept these rows.
+        for company in ("-", "\u2014", "\u2013", "::", "N/A"):
+            with self.subTest(company=company):
+                rows = self.rows(
+                    ["WORK EXPERIENCE", "Jan 2020 - Dec 2021 | " + company + " | Engineer"],
+                )
+                self.assertEqual(
+                    [(r["date_range"], r["company"], r["title"]) for r in rows],
+                    [("Jan 2020 to Dec 2021", company, "Engineer")],
+                )
 
     def test_education_rows_are_not_read_as_employment(self):
         self.assertEqual(self.rows([
@@ -347,8 +362,26 @@ class AuthoritativeRowReaderTests(unittest.TestCase):
                     "Jan 2020 - Present | Acme Corp | Senior Engineer",
                     line,
                     "Jan 2018 - Dec 2019 | Northwind University | Lecturer",
+                    # A row naming a qualification is set aside inside an education
+                    # section, so this one is read only if the line above was
+                    # correctly NOT taken as an education heading.
+                    "Jan 2016 - Dec 2017 | Contoso College | Diploma Programme Lecturer",
                 ])
-                self.assertEqual([r["company"] for r in rows], ["Acme Corp", "Northwind University"])
+                self.assertEqual(
+                    [r["company"] for r in rows],
+                    ["Acme Corp", "Northwind University", "Contoso College"],
+                )
+
+    def test_a_capitalised_heading_on_no_list_ends_education(self):
+        # No work word, no list: only the capitalised-heading rule ends the section,
+        # and the work row names a qualification, so without that rule it is lost.
+        rows = self.rows([
+            "EDUCATION",
+            "2003-2006 | Northwind University | Bachelor",
+            "WHERE I HAVE WORKED",
+            "Jan 2020 - Present | Contoso College | Diploma Programme Coordinator",
+        ])
+        self.assertEqual([r["company"] for r in rows], ["Contoso College"])
 
     def test_a_capitalised_heading_ends_education_before_a_school_employer(self):
         rows = self.rows([
@@ -418,6 +451,59 @@ class AuthoritativeRowReaderTests(unittest.TestCase):
             "Jan 2018 - Dec 2019 Beta Holdings Manager",
         ], titles=["Senior Engineer"])
         self.assertEqual([r["company"] for r in rows], ["Acme Corp"])
+
+    def test_an_employer_that_is_a_school_or_foundation_is_kept(self):
+        # A heading on no list leaves the education section open. Only a row that
+        # names a qualification is set aside there; an institution, a foundation,
+        # a Scrum Master or a business analyst ("BA") is a job.
+        rows = self.rows([
+            "EDUCATION",
+            "2003 - 2006 | Northwind University | Bachelor of Science",
+            "Where I Have Worked",
+            "2019 - Present | Acme Foundation | Program Manager",
+            "Jan 2017 - Dec 2018 | Contoso Academy | Trainer",
+            "Jan 2015 - Dec 2016 | Northwind Institute | Scrum Master",
+            "Jan 2013 - Dec 2014 | Fabrikam College | BA",
+        ])
+        self.assertEqual(
+            [r["company"] for r in rows],
+            ["Acme Foundation", "Contoso Academy", "Northwind Institute", "Fabrikam College"],
+        )
+
+    def test_a_title_case_positions_held_ends_education(self):
+        rows = self.rows([
+            "EDUCATION",
+            "2003 - 2006 | Northwind University | Bachelor",
+            "Positions Held",
+            "2019 - Present | Contoso College | Diploma Programme Coordinator",
+        ])
+        self.assertEqual([r["company"] for r in rows], ["Contoso College"])
+
+    def test_every_kind_of_qualification_row_is_still_set_aside(self):
+        for row in ("2001-2002 | Northwind College | Foundation in Science",
+                    "2002-2002 | Contoso Institute | Certificate in Accounting",
+                    "2003-2005 | Contoso Polytechnic | Diploma in IT",
+                    "2006-2008 | Northwind University | Master of Science",
+                    "2006-2008 | Northwind University | MBA",
+                    "2003-2006 | Northwind University | B.A. Economics",
+                    "2000-2001 | Sekolah Menengah Contoh | SPM",
+                    "2003-2006 | Northwind University | CGPA 3.5"):
+            with self.subTest(row=row):
+                # Outside an education section the reader does take this row, so
+                # the empty result below is the education guard at work.
+                self.assertEqual(len(self.rows([row])), 1)
+                self.assertEqual(self.rows(["Education", row]), [])
+
+    def test_an_institution_on_its_own_line_does_not_end_education(self):
+        row = "2003-2006 | Bachelor of Science | Australia"
+        self.assertEqual(len(self.rows([row])), 1)
+        self.assertEqual(self.rows(["EDUCATION", "NORTHWIND UNIVERSITY", row]), [])
+
+    def test_the_readers_and_the_audit_share_one_stop_list(self):
+        from cvstudio_cv_fidelity import _AUDIT_TRAILING_STOP_WORDS, _SECTION_STOP_HEADING_RE
+        self.assertIn("REFEREES", reconcile._WORK_HISTORY_STOP_WORDS)
+        for word in reconcile._WORK_HISTORY_STOP_WORDS + _AUDIT_TRAILING_STOP_WORDS:
+            self.assertIn(word, _SECTION_STOP_HEADING_RE.pattern)
 
     def test_the_audit_and_the_reader_share_one_work_heading(self):
         from cvstudio_cv_fidelity import _EXPERIENCE_HEADING_RE

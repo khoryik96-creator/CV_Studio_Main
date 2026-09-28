@@ -299,7 +299,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Year-first dates and a reported employer shortfall — v24.6.411–v24.6.414, UNMERGED.**
+- **Year-first dates and a reported employer shortfall — v24.6.411–v24.6.415, UNMERGED.**
   Starts at merged master `960a086`. A real formatted CV came back missing the
   candidate's three most recent employers, including his current job, with two
   education rows rendered as jobs and every employer name replaced by the table
@@ -313,7 +313,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   fidelity audit, which found zero source employers here because it only reads
   Dates/Organization/Role tables, now also reads explicit "Company:" labels, so a
   shortfall is reported rather than shipped. See
-  `cv_studio_v24_6_414_year_first_dates_employer_safety_qa_report.md`.
+  `cv_studio_v24_6_415_year_first_dates_employer_safety_qa_report.md`.
   v24.6.412 corrects eight review findings, four of them introduced by v24.6.411
   and two of those actively harmful: the date rewrite matched "YYYY Month" anywhere
   in the document, so it reworded the candidate's own prose ("figures for 2023 may
@@ -347,10 +347,18 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   work-heading pattern. Auto-upload now holds a flagged CV (single and batch, with
   "Upload anyway"), Blind mode names no employer in the warning, and Create
   Profile keeps its warning. Whole-suite replay against v24.6.413: 0 changes
-  outside this work's tests. Still open: the branch's earlier commits contain real
-  employer names from the reported CV, so merge with Squash and merge (or rewrite
-  history, owner's call); label-style rows are reported by the audit but not
-  reconstructed by the reconciler.
+  outside this work's tests. v24.6.415 corrects ten more findings under one rule,
+  since a false warning now holds auto-upload: when unsure, the source check
+  claims nothing. It stops at every referee/personal-details heading form,
+  ignores column-header rows, reports only real separators (not "-" placeholders)
+  as unnamed, starts its label scan at "Working Experience" and similar, and the
+  education guard sets aside only rows naming a qualification. It also reverts a
+  v24.6.413 change that dropped "-" placeholder rows from the rebuilt work
+  history, which master kept. Replay of 404 suite inputs: 0 changes vs master or
+  v24.6.414 outside this work's tests. Still open: the branch's earlier commits
+  contain real employer names from the reported CV, so merge with Squash and
+  merge (or rewrite history, owner's call); label-style rows are reported by the
+  audit but not reconstructed by the reconciler.
 
 - **Role-qualifier script fix — v24.6.410, UNMERGED.**
   Starts at merged master `5b1f2a4`. An ASCII-only letter class split an accented

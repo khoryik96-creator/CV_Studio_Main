@@ -15,6 +15,7 @@ without the candidate's current job.
 """
 
 import os
+import re
 from pathlib import Path
 import tempfile
 import unittest
@@ -303,6 +304,17 @@ class YearFirstMonthNameTests(unittest.TestCase):
                 self.assertEqual(normalize._cv_pretranslate_year_first_month_names(text), text)
 
 
+    def test_month_punctuation_travels_with_the_month(self):
+        for text, expected in (
+            ("2025 Jun. - current", "Jun. 2025 - current"),
+            ("2025 June, - Present", "June, 2025 - Present"),
+            ("2024 Sept. - 2025 Apr.", "Sept. 2024 - Apr. 2025"),
+            ("2025 Jun.- current | Data Engineer", "Jun. 2025- current | Data Engineer"),
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(normalize._cv_pretranslate_year_first_month_names(text), expected)
+
+
 class LabelledCompanyFidelityTests(unittest.TestCase):
     """A CV that labels its employers instead of tabulating them."""
 
@@ -540,6 +552,108 @@ class LabelledCompanyFidelityTests(unittest.TestCase):
         parsed = {"work_experiences": [{"company": "Lumen Bank Sdn Bhd", "roles": [{"title": "Engineer"}]}]}
         report = fidelity.evaluate_cv_fidelity(parsed, source)
         self.assertEqual(report["employers"]["missing"], [])
+
+    def _label_report(self, lines, kept=("Acme Sdn Bhd",)):
+        parsed = {"work_experiences": [
+            {"company": name, "roles": [{"title": "Engineer", "bullets": ["x"]}]} for name in kept
+        ]}
+        return fidelity.evaluate_cv_fidelity(parsed, "\n".join(lines))
+
+    def test_a_reference_or_personal_heading_in_any_form_ends_the_label_scan(self):
+        # The parse always leaves referees out, so a referee's company read as a
+        # source employer is reported missing on a correct parse.
+        for heading in ("REFERENCE CONTACTS", "Professional References", "Character Referees",
+                        "References available upon request", "Referee: Mr Tan",
+                        "REFEREES", "References:", "PERSONAL DETAILS", "Personal Particulars",
+                        "Personal Information", "Other Information"):
+            with self.subTest(heading=heading):
+                report = self._label_report([
+                    "WORK EXPERIENCE", "Company: Acme Sdn Bhd", "Position: Engineer",
+                    heading, "Name: Bob", "Company: Beta Holdings Bhd",
+                ])
+                self.assertEqual(report["employers"]["missing"], [])
+                self.assertTrue(report["ok"])
+
+    def test_a_line_with_a_value_after_its_colon_does_not_end_the_label_scan(self):
+        for line in ("Project: Core banking migration", "Summary of duties:",
+                     "Skills used: Python", "Achievements:", "Key Achievements:"):
+            with self.subTest(line=line):
+                report = self._label_report([
+                    "WORK EXPERIENCE", "Company: Acme Sdn Bhd", "Position: Engineer",
+                    line, "Company: Beta Bhd", "Position: Analyst",
+                ])
+                self.assertEqual(report["employers"]["missing"], ["Beta Bhd"])
+
+    def test_other_names_for_the_work_history_start_the_label_scan(self):
+        for heading in ("WORKING EXPERIENCE", "Working Experience:", "Employment Record",
+                        "Relevant Experience", "EMPLOYMENT", "Previous Employment",
+                        "Positions Held", "Work Experience", "Experience"):
+            with self.subTest(heading=heading):
+                report = self._label_report([heading, "Company: Acme Sdn Bhd", "Company: Beta Bhd"])
+                self.assertEqual(report["employers"]["missing"], ["Beta Bhd"])
+
+    def test_the_bullet_count_keeps_its_own_start(self):
+        # The wider start is for the label scan only. The bullet check still needs
+        # the shared heading, so a CV headed "WORKING EXPERIENCE" is scored exactly
+        # as before: not at all.
+        source = "\n".join(["WORKING EXPERIENCE", "Company: Acme Sdn Bhd"] + ["- duty %d" % i for i in range(10)])
+        report = fidelity.evaluate_cv_fidelity(
+            {"work_experiences": [{"company": "Acme Sdn Bhd", "roles": [{"title": "Engineer"}]}]}, source)
+        self.assertFalse(report["bullets"]["scoped"])
+        self.assertFalse(report["bullets"]["shortfall"])
+
+    def test_the_bullet_count_stops_where_it_always_did(self):
+        # The stop list is now built from the reconciler's shared words plus the
+        # audit's own trailing sections; it must match exactly what it did before.
+        before = re.compile(
+            r"^(?:EDUCATION|ACADEMIC|CERTIFICATION|CERTIFICATIONS|REFERENCE|REFERENCES|"
+            r"REFEREE|REFEREES|"
+            r"SKILLS|TECHNICAL SKILLS|ADDITIONAL INFORMATION|LANGUAGES?|PROJECTS?|"
+            r"INTERESTS?|HOBBIES|PROFILE|SUMMARY|AWARDS?)\b",
+            re.I,
+        )
+        lines = ["Education", "EDUCATIONAL BACKGROUND", "Academic", "Certifications", "Reference",
+                 "References:", "Referee", "REFEREES", "Skills", "Technical Skills", "Additional Information",
+                 "Language", "Languages", "Project", "Projects", "Interest", "Interests", "Hobbies",
+                 "Profile", "Summary of duties:", "Award", "Awards", "Work Experience", "Experience",
+                 "Referencing", "Skillset", "Projected", "Summaries", "Key Skills", "Company: Acme",
+                 "- Education outreach", "Educator", "Awarded best team"]
+        for line in lines:
+            with self.subTest(line=line):
+                self.assertEqual(bool(fidelity._SECTION_STOP_HEADING_RE.match(line)), bool(before.match(line)))
+
+    def test_a_column_header_row_names_no_employer(self):
+        for line in ("Company | Position Held | Duration", "Company Name | Period of Employment",
+                     "Company | Job Description", "Company | Start Date | End Date", "Company | Tenure",
+                     "Company | From | To", "Company | Nature of Business", "Company Name | Designation"):
+            with self.subTest(line=line):
+                self.assertEqual(fidelity._source_labelled_companies(line), [])
+
+    def test_an_employer_containing_a_header_word_is_still_read(self):
+        for name in ("Department of Statistics", "Position Partners Sdn Bhd", "Title Insurance Co",
+                     "Industry Partners Sdn Bhd", "JobStreet Sdn Bhd", "Business Times Bhd"):
+            for line in ("Company: " + name, "Company | " + name):
+                with self.subTest(line=line):
+                    self.assertEqual(fidelity._source_labelled_companies(line), [name])
+
+    def test_a_placeholder_company_is_not_reported(self):
+        # A CV writes "-" for a career break or freelance work; the parse keeping
+        # it is not a separator read as the company.
+        for company in ("-", "\u2014", "\u2013", "--", ".", "N/A"):
+            with self.subTest(company=company):
+                report = fidelity.evaluate_cv_fidelity({"work_experiences": [
+                    {"date_range": "2019 - 2020", "company": company, "roles": [{"title": "Career Break"}]},
+                ]}, "")
+                self.assertEqual(report["employers"]["unnamed"], [])
+                self.assertTrue(report["ok"])
+
+    def test_every_form_of_separator_is_reported(self):
+        for company in ("|", " | ", "||", ":", "\uff1a", "\uff5c", "\u2502"):
+            with self.subTest(company=company):
+                report = fidelity.evaluate_cv_fidelity({"work_experiences": [
+                    {"date_range": "Apr 2019 to Mar 2022", "company": company, "roles": [{"title": "Analyst"}]},
+                ]}, "")
+                self.assertEqual(report["employers"]["unnamed"], ["Apr 2019 to Mar 2022"])
 
     def test_the_audit_is_safe_on_junk(self):
         for parsed in (None, {}, {"work_experiences": None}, {"work_experiences": [None]}):

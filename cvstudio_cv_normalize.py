@@ -125,9 +125,11 @@ _CV_YEAR_FIRST_DATE_LINE_RE = re.compile(
 
 # Within such a line, the year-first halves to turn around. At most two date
 # tokens can reach here, so the left-to-right scan cannot take a year from one
-# date and a month from the next.
+# date and a month from the next. A full stop or comma after the month travels
+# with it -- "2025 Jun." becomes "Jun. 2025", never "Jun 2025." -- which is a
+# month-first form the line pattern above already accepts.
 _CV_YEAR_FIRST_SWAP_RE = re.compile(
-    r"\b(" + _CV_YEAR_TOKEN + r")" + _CV_HSPACE + r"+(" + _CV_MONTH_WORD + r")\b",
+    r"\b(" + _CV_YEAR_TOKEN + r")" + _CV_HSPACE + r"+(" + _CV_MONTH_WORD + r"\b\.?,?)",
     re.I,
 )
 

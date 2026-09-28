@@ -140,11 +140,13 @@ function batchContext(files) {
   assert.ok(!html.includes('cv-parse-warning'));
 }
 {
-  // The batch flow reads the field with its own helper rather than one from
-  // another module: an earlier draft did, and a harness that loads this module
-  // on its own marked every file failed.
-  assert.ok(/bf\.parseWarning = batchParseWarningText\(pData, isBlind\);/.test(batchFormat));
-  assert.ok(!/cvParseWarningText/.test(batchFormat));
+  // One wording for both flows: batch uses the single-CV helper instead of a copy
+  // that could drift and start naming employers in Blind mode. It is called only
+  // when there is a warning, so a run without one needs nothing from cv-format.js
+  // -- a harness that loads batch-format.js alone still runs clean files.
+  assert.ok(/bf\.parseWarning = \(pData && pData\.warning\) \? cvParseWarningText\(pData, isBlind\) : '';/.test(batchFormat));
+  assert.ok(!/function\s+\w*ParseWarningText/.test(batchFormat), 'batch keeps no copy of its own');
+  assert.strictEqual((cvFormat.match(/function cvParseWarningText\(/g) || []).length, 1);
 }
 {
   // The row is rebuilt on every progress update of every other file, and a
@@ -160,7 +162,7 @@ function batchContext(files) {
     degraded_reason: 'fidelity_check'};
   const truncated = {warning: 'This CV was long and the AI response was cut off.',
     degraded_reason: 'truncated_response_bracket_salvage'};
-  for (const [src, name] of [[cvFormat, 'cvParseWarningText'], [batchFormat, 'batchParseWarningText']]) {
+  for (const [src, name] of [[cvFormat, 'cvParseWarningText']]) {
     const context = {String};
     vm.createContext(context);
     vm.runInContext(fnFrom(src, name), context);
@@ -186,7 +188,7 @@ function batchContext(files) {
   assert.strictEqual((flow.match(/uploadToJobAdder\(\)/g) || []).length, 1);
 }
 
-async function batchRun(pData) {
+async function batchRun(pData, mode) {
   const uploads = [];
   const nodes = {};
   const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -213,12 +215,16 @@ async function batchRun(pData) {
     fetchWithTimeout: async url => {
       if (url === '/extract-text') return {json: async () => ({text: 'Synthetic CV'})};
       if (url === '/parse') return {ok: true, json: async () => pData};
+      if (url === '/blind') return {ok: true, json: async () => ({data: {candidate: {name: 'Candidate'}}})};
       return {ok: true, blob: async () => ({serial: 1})};
     },
   };
   vm.createContext(c);
   vm.runInContext(batchFormat, c);
+  // The page loads cv-format.js too; its warning helper is the one batch uses.
+  vm.runInContext(fnFrom(cvFormat, 'cvParseWarningText'), c);
   c.batchSetProgress = () => {}; c.updateBatchSummary = () => {};
+  if (mode) c._batchMode = mode;
   c._batchFiles = [{id: 'f1', file: {name: 'f1.pdf', arrayBuffer: async () => new ArrayBuffer(1)}, status: 'pending'}];
   await c.runBatch();
   return {c, uploads, nodes};
@@ -257,6 +263,21 @@ const batchUploadChecks = (async () => {
     assert.strictEqual(again.uploads.length, 0);
     again.c.renderBatchList();
     assert.ok(!again.nodes.batchFileList.innerHTML.includes('Upload anyway'));
+  }
+  // Blind batch: the row's warning names no employer.
+  {
+    const {c} = await batchRun({data: candidate, degraded_reason: 'fidelity_check',
+      warning: 'Employer(s) present in the CV but missing from the parsed result: Beta Holdings'}, 'blind');
+    const bf = c._batchFiles[0];
+    assert.strictEqual(bf.status, 'done-blind');
+    assert.ok(bf.parseWarning && !bf.parseWarning.includes('Beta'), 'blind batch names no employer');
+    c.renderBatchList();
+  }
+  // Formatting batch keeps the detail.
+  {
+    const {c} = await batchRun({data: candidate, degraded_reason: 'fidelity_check',
+      warning: 'Employer(s) present in the CV but missing from the parsed result: Beta Holdings'});
+    assert.ok(c._batchFiles[0].parseWarning.includes('Beta Holdings'));
   }
 })();
 

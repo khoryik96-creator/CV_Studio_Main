@@ -1,4 +1,4 @@
-# v24.6.411 – v24.6.414 Year-first dates, and a shortfall that should not ship
+# v24.6.411 – v24.6.415 Year-first dates, and a shortfall that should not ship
 
 Branch: `claude/cv-year-first-dates-employer-safety`.
 Base: master `960a0866b357db702e9cc0fdbabdfcc2e60f12ae`, v24.6.410.
@@ -476,3 +476,105 @@ real employer names and the university. A history rewrite was prepared but not
 run: it rewrites published commits, so it is the owner's call. The simplest safe
 path is to merge this PR with **Squash and merge**, which puts only the final,
 clean files on master.
+
+
+---
+
+# v24.6.415 Review corrections
+
+Ten findings on v24.6.414. All ten are fixed. Because v24.6.414 made a flagged CV
+hold JobAdder auto-upload, a false warning now has a real cost, so the rule for
+this round was: **when the source check is unsure, it claims nothing.** A missed
+claim is exactly what master did; a false one holds a correct CV.
+
+## False warnings on correct CVs
+
+- **Referee and personal-details headings.** The label scan read past "REFERENCE
+  CONTACTS", "Professional References", "Character Referees", "Referee: Mr Tan"
+  and "Personal Details", so a referee's "Company:" was reported missing. The
+  parse always leaves referees out, so this warned on every such CV. The scan now
+  stops at any line opening with REFERENCE(S)/REFEREE(S), optionally after one
+  qualifier, at a personal-details heading, and at any heading in the
+  reconciler's own section list (less its work-history headings and
+  "achievements", a sub-heading inside a job). A line with a value after its
+  colon -- "Project: Core banking migration", "Skills used: Python" -- still does
+  not stop it.
+- **Column headers read as employers.** "Company | Position Held | Duration" gave
+  "Position Held"; "Company Name | Period of Employment" gave "Period of
+  Employment". A value made up entirely of column-header words is now ignored.
+  Every word has to be one, so "Department of Statistics", "Position Partners Sdn
+  Bhd" and "Title Insurance Co" are still read.
+- **Placeholder companies reported as unnamed.** A "-" or em dash for a career
+  break or freelance work was reported as a separator read instead of a name.
+  Only a real separator -- the table pipe in its ASCII, full-width and
+  box-drawing forms, or the label colon -- is reported now.
+
+## Missed or dropped employers
+
+- **"Working Experience" and similar headings.** The label scan only started at
+  the shared heading pattern, so a CV headed "WORKING EXPERIENCE", "Employment
+  Record", "Relevant Experience", "Previous Employment" or "Positions Held" was
+  never scanned. The label scan now starts at those too. The bullet count keeps
+  the shared heading alone, so its scope is unchanged, and the reconciler's own
+  start is untouched -- widening it would let the reconciler rebuild the work
+  history of CVs it currently leaves alone.
+- **Work rows dropped inside an education section.** Inside Education, any row
+  containing "school", "academy", "foundation", "institute", "certificate" or a
+  bare "BA"/"MA" was set aside, so "Acme Foundation | Program Manager" after an
+  unlisted heading vanished. Only a row that names a qualification is set aside
+  now: bachelor, master's, diploma, degree, PhD, SPM, CGPA, MBA, "foundation in",
+  "certificate in" and the like. Institution words only stop a line such as
+  "NORTHWIND UNIVERSITY" from being taken as the next section's heading.
+  "Positions", "appointments" and "assignments" now also end the section.
+- **Placeholder rows dropped by the reconciler (found in this round's own
+  checks).** v24.6.413 made the table reader refuse any company cell with no
+  letter or digit. That covered "-" too, and because the reconciler replaces the
+  work history with the rows it reads, a "Jan 2020 - Dec 2021 | - | Engineer" row
+  -- a career break -- disappeared from the output where master kept it. The
+  check is removed. It is no longer needed for the reported bug: every reader
+  now strips the "|" separator, and an empty company is refused as it always was.
+  Rows with "-", an em dash or "N/A" now come out exactly as on master.
+
+## Other
+
+- **Dates:** "2025 Jun. - current" became "Jun 2025. - current". The month's full
+  stop or comma now travels with it: "Jun. 2025 - current".
+- **One warning helper:** batch mode now uses the single-CV helper
+  `cvParseWarningText` instead of a copy, so the Blind-mode wording cannot drift
+  between the two. It is only called when there is a warning, so a batch run
+  without one needs nothing from `cv-format.js`.
+- **Simpler employer matching:** each source employer's direct matches are
+  computed once; the old version recomputed them per employer (quadratic).
+- **Dead code removed:** `_employer_name_variants`, and `_employer_is_present`,
+  which nothing used after the simplification.
+- **One stop list:** the reconciler's work-history stop words are one shared tuple.
+  The bullet count builds its list from it plus its own trailing sections, and
+  the resulting pattern matches exactly the same lines as before (a test pins
+  that). The project-block reader keeps its own list on purpose -- it has to stop
+  at the work-history headings that follow a projects block and must never stop
+  at a PROJECT line -- and says so where it is defined.
+
+## Regression evidence
+
+- **Whole-suite replay:** every distinct input the full suite feeds the table
+  reader, the reconciler, the date rewrite and the source check was captured (404
+  inputs) and replayed through master, v24.6.414 and this version, each loaded on
+  its own. **Against v24.6.414: 0 changed outside this work's own tests. Against
+  master: 0 changed outside this work's own tests** -- the source-check reports
+  are identical apart from the empty `unnamed` field v24.6.411 added.
+- **Real documents:** unchanged from v24.6.414. The reported CV's wrong table rows
+  stay at 0 (master: 9), the source check still finds the same 8 labelled
+  employers, and a correct parse through the real upload and parse routes keeps
+  all 9 employers with no warning.
+- **Mutations:** 16 new ones, one per fix, each confirmed to have changed the
+  file -- all fail the tests. The earlier rounds' mutations were re-run: all
+  still fail the tests. Two earlier guards had lost their own test because this
+  round's narrower education check now covered the same cases; a test was added
+  for each so both are proven independently again. The only earlier mutation
+  that no longer applies is the batch copy of the warning helper, which was
+  removed on purpose.
+- Each new education test first proves the row IS read outside an education
+  section, so its empty result inside one is the guard, not the date format.
+- Full suite **1396 passed, 23 skipped**, plus the two environment-only tests.
+  Node fixtures **25/25**, the existing batch lifecycle test unchanged. Launcher
+  line endings match `origin/master`.

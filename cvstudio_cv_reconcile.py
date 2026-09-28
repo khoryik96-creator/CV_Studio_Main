@@ -1039,6 +1039,8 @@ def _extract_explicit_project_blocks(cv_text):
             blocks.append(current)
         current = None
 
+    # Not _WORK_HISTORY_STOP_WORDS: a projects block ends at the work-history
+    # headings that follow it, and must not end at its own PROJECT lines.
     stop_heading = re.compile(r"^(?:CERTIFICATION|CERTIFICATIONS|EMPLOYMENT HISTORY|WORK HISTORY|CAREER HISTORY|EDUCATION(?: BACKGROUND)?|ACADEMIC|REFERENCE|REFERENCES|SKILLS|TECHNICAL SKILLS|ADDITIONAL INFORMATION)\b", re.I)
     project_section = re.compile(r"\bPROJECT\s+EXPERIENCES?\b", re.I)
     project_marker = re.compile(r"^[✓✔☑]\s*(.+)$")
@@ -1230,9 +1232,28 @@ _WORK_HISTORY_HEADING_RE = re.compile(
     re.I,
 )
 
+# Section headings that end a work history, shared by the readers below and by
+# the fidelity audit's bullet count, so a stop word is added in one place. The
+# audit adds its own trailing sections to this list; see cvstudio_cv_fidelity.
+# The project-block reader keeps a separate list on purpose: it has to stop at the
+# work-history headings that follow a projects block and must never stop at a
+# PROJECT line, so it is not this list.
+_WORK_HISTORY_STOP_WORDS = (
+    "EDUCATION", "ACADEMIC", "CERTIFICATION", "CERTIFICATIONS",
+    "REFERENCE", "REFERENCES", "REFEREE", "REFEREES",
+    "SKILLS", "TECHNICAL SKILLS", "ADDITIONAL INFORMATION", "LANGUAGES?", "PROJECTS?",
+)
+_WORK_HISTORY_STOP_HEADING_RE = re.compile(
+    r"^(?:" + "|".join(_WORK_HISTORY_STOP_WORDS) + r")\b", re.I
+)
+
 # Heading words that close an education section even when the full heading is not
-# in the shared boundary list, e.g. "Employment Record" or "Relevant Experience".
-_WORK_HEADING_WORDS = frozenset({"experience", "experiences", "employment", "career", "work", "job"})
+# in the shared boundary list, e.g. "Employment Record", "Relevant Experience" or
+# "Positions Held".
+_WORK_HEADING_WORDS = frozenset({
+    "experience", "experiences", "employment", "career", "work", "job",
+    "positions", "appointments", "assignments",
+})
 
 # A line that is an education heading and nothing else: "Education", "Educational
 # Background", "Academic Qualifications", "Education & Training". The whole line
@@ -1245,15 +1266,30 @@ _EDUCATION_HEADING_KEY_RE = re.compile(
     r"record|records|training|certification|certifications|achievements))*$"
 )
 
-# What an education row carries and a work row almost never does. Inside an
-# education section only a row that reads as a qualification is set aside, so a
-# work table the section-exit rules below fail to notice is still read.
+# What a qualification row carries and a work row almost never does. Inside an
+# education section only a row that names a qualification is set aside, so a work
+# row is kept even when the section-exit rules below miss its heading.
+#
+# Institution words are deliberately not here. An employer can be a school, a
+# college, an academy, an institute or a foundation, and "Acme Foundation |
+# Program Manager" is a job. Nor is a bare "BA" or "MA": "BA" is also a business
+# analyst. "Foundation" and "certificate" count only as the qualification ("a
+# foundation in science", "a certificate in accounting").
 _EDUCATION_ROW_RE = re.compile(
+    r"\b(?:bachelor'?s?|master'?s|masters|master\s+(?:of|in|degree)|diploma|degree|"
+    r"ph\.?d|doctorate|certificate\s+(?:in|of)|sijil|spm|stpm|igcse|"
+    r"a[ -]levels?|o[ -]levels?|\"o\" level|\"a\" level|"
+    r"foundation\s+(?:in|of|programme|program|studies|year|course)|"
+    r"matriculation|matrikulasi|c?gpa|honours|hons|b\.?sc|m\.?sc|mba|b\.?eng|m\.?eng)\b"
+    r"|\b[bm]\.a\.",
+    re.I,
+)
+
+# An institution named on a line of its own ("NORTHWIND UNIVERSITY") is part of
+# an education section, not the heading of the next one.
+_EDUCATION_INSTITUTION_RE = re.compile(
     r"\b(?:universit(?:y|i|ies)|college|kolej|institute|institut|school|sekolah|"
-    r"academy|akademi|polytechnic|politeknik|bachelor'?s?|masters?|master's|diploma|"
-    r"degree|ph\.?d|doctorate|certificate|sijil|spm|stpm|a[ -]levels?|o[ -]levels?|"
-    r"\"o\" level|\"a\" level|foundation|matriculation|matrikulasi|c?gpa|honours|"
-    r"hons|b\.?sc|m\.?sc|mba|b\.?eng|m\.?eng|b\.?a|m\.?a)\b",
+    r"academy|akademi|polytechnic|politeknik)\b",
     re.I,
 )
 
@@ -1283,8 +1319,10 @@ def _source_line_is_caps_heading(line):
         return False
     if len(text.split()) > 5:
         return False
-    return not _EDUCATION_ROW_RE.search(text) and not _source_heading_is_education(
-        _cv_source_boundary_key(text)
+    return (
+        not _EDUCATION_ROW_RE.search(text)
+        and not _EDUCATION_INSTITUTION_RE.search(text)
+        and not _source_heading_is_education(_cv_source_boundary_key(text))
     )
 
 
@@ -1302,12 +1340,12 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
     lines = [re.sub(r"\s+", " ", str(raw_line or "").strip()) for raw_line in str(cv_text or "").splitlines()]
 
     def add_row(date_cell, company_cell, role_cell):
+        # A company that is only the "|" left behind when a row has no company
+        # column never reaches here: every reader strips the cell separators, and
+        # the empty result is refused below. A deliberate placeholder such as "-"
+        # for a career break is the source's own content and is kept, as it
+        # always was; dropping that row would drop the entry from the output.
         if not date_cell or not company_cell or not role_cell:
-            return None
-        # A company cell holding only punctuation -- the "|" left behind when a
-        # table row has no company column -- names nothing. Accepting it rebuilt
-        # a whole work history with every employer rendered as "|".
-        if not re.search(r"[^\W_]", str(company_cell), re.UNICODE):
             return None
         if len(company_cell) > 120 or len(role_cell) > 160:
             return None
@@ -1395,7 +1433,7 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
 
     in_history = False
     history_heading = _WORK_HISTORY_HEADING_RE
-    stop_heading = re.compile(r"^(?:EDUCATION|ACADEMIC|CERTIFICATION|CERTIFICATIONS|REFERENCE|REFERENCES|REFEREE|REFEREES|SKILLS|TECHNICAL SKILLS|ADDITIONAL INFORMATION|LANGUAGES?|PROJECTS?)\b", re.I)
+    stop_heading = _WORK_HISTORY_STOP_HEADING_RE
     _mon_sub = r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?"
     # Title-first header lines: "<Title> — <Company> <DateRange>" with the date
     # trailing (e.g. "Dispatcher Technical Support — PT. Foo (Bar) Mar 2011 to Feb 2013").

@@ -372,7 +372,10 @@ async function runBatch() {
       var batchLabelLevels = Array.isArray(pData.bullet_levels) ? pData.bullet_levels : null;
       // In a batch each file's toast replaces the last, so the warning is also
       // kept on the file's own row, where it stays until that file is removed.
-      bf.parseWarning = batchParseWarningText(pData, isBlind);
+      // One wording for single and batch runs: cvParseWarningText (cv-format.js)
+      // keeps employer names out of a Blind-mode warning. It is only needed when
+      // there is a warning to word.
+      bf.parseWarning = (pData && pData.warning) ? cvParseWarningText(pData, isBlind) : '';
       if (bf.parseWarning) showToast(bf.file.name + ': ' + bf.parseWarning, 'warn');
       bf.cost += responseCost(pData, route.model, route.provider);
       bf.usage = mergeUsageClient(bf.usage, pData.usage || {});
@@ -612,16 +615,4 @@ async function uploadHeldBatchFile(id) {
   var held = bf._jaHeld;
   bf._jaHeld = null;
   await batchAutoUploadFile(bf, held.blob, held.fname, held.cvData, held.displayName, held.isBlind);
-}
-
-// The /parse warning for a batch row. In Blind mode the source check's warning
-// names no employer, because it lists the company names the blind step hides and
-// the row keeps it on screen beside the blinded result.
-function batchParseWarningText(data, blind) {
-  var text = String((data && data.warning) || '').trim();
-  if (!text) return '';
-  if (blind && data.degraded_reason === 'fidelity_check') {
-    return 'The source check flagged this CV: an employer may be missing or unnamed, or detail may have been dropped. Names are hidden in Blind mode — compare it with the original CV before sending.';
-  }
-  return text;
 }
