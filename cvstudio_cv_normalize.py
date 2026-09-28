@@ -80,8 +80,14 @@ _CV_YEAR_TOKEN = r"(?:19|20)\d{2}"
 _CV_RANGE_SEP = (
     r"(?:[-\u2010-\u2015\u2212]|to|until|till|through)"
 )
-# The right-hand side of an open range.
-_CV_OPEN_END = r"(?:current|present|now|to[ \t]?date|todate|ongoing|date)"
+# The right-hand side of an open range. Every spelling _normalize_cv_date_range
+# reads as Present is listed, including the "till date" / "till now" / "until
+# present" forms that are common on the CVs this pass was written for; the
+# separator alternation above only covers "till" standing in for the dash.
+_CV_OPEN_END = (
+    r"(?:(?:till|until|up[ \t]?to|to)[ \t]?(?:date|now|present|current)"
+    r"|todate|current(?:ly)?|present(?:ly)?|now|ongoing|date)"
+)
 # "2025 june", "2025 June.", "2025 Jun,"
 _CV_YEAR_FIRST_TOKEN = (
     _CV_YEAR_TOKEN + _CV_HSPACE + r"+" + _CV_MONTH_WORD + r"\.?,?"
@@ -94,10 +100,11 @@ _CV_EITHER_DATE_TOKEN = (
     r"(?:" + _CV_YEAR_FIRST_TOKEN + r"|" + _CV_MONTH_FIRST_TOKEN + r")"
 )
 
-# A line that is NOTHING BUT a date or a date range, which is how a table cell
-# arrives once the document has been flattened to text.
+# A cell that is NOTHING BUT a date or a date range. The right-hand side of a
+# range may also be a bare year ("2015 June - 2017"): the left-hand side still has
+# to be a full date token, so a range of two bare years never reaches the swap.
 #
-# Anchoring to the whole line is the point of this pass, not a shortcut. An
+# Anchoring to a whole cell is the point of this pass, not a shortcut. An
 # earlier draft rewrote "YYYY Month" anywhere it appeared and did real damage:
 # "figures for 2023 may be revised" became "figures for may 2023 be revised",
 # "Won the 2024 March tender" was reworded, and a line of several month-first
@@ -105,12 +112,13 @@ _CV_EITHER_DATE_TOKEN = (
 # "august" are ordinary English words and a year can close one date while a
 # month opens the next. Restricting the rewrite to a line that holds only a date
 # removes every one of those, at the cost of leaving a year-first date that is
-# embedded in a longer line alone.
+# embedded in a longer cell alone. A line with no " | " separator is one cell.
 _CV_YEAR_FIRST_DATE_LINE_RE = re.compile(
     r"^" + _CV_HSPACE + r"*"
     + _CV_EITHER_DATE_TOKEN
     + r"(?:" + _CV_HSPACE + r"*" + _CV_RANGE_SEP + _CV_HSPACE + r"*"
-    + r"(?:" + _CV_EITHER_DATE_TOKEN + r"|" + _CV_OPEN_END + r")" + r")?"
+    + r"(?:" + _CV_EITHER_DATE_TOKEN + r"|" + _CV_OPEN_END + r"|"
+    + _CV_YEAR_TOKEN + r"(?![ \t]*" + _CV_MONTH_WORD + r"))" + r")?"
     + _CV_HSPACE + r"*[.,;]?" + _CV_HSPACE + r"*$",
     re.I,
 )
@@ -125,7 +133,7 @@ _CV_YEAR_FIRST_SWAP_RE = re.compile(
 
 
 def _cv_line_is_year_first_date(line):
-    """Whether a line is entirely a date range with at least one year-first half."""
+    """Whether a cell is entirely a date range with at least one year-first half."""
     if not _CV_YEAR_FIRST_DATE_LINE_RE.match(line):
         return False
     # "Jun 2015 - august 2017" is already month-first throughout; there is
@@ -139,7 +147,7 @@ def _cv_year_first_month_repl(match):
 
 
 def _cv_pretranslate_year_first_month_names(text):
-    """Rewrite "YYYY Month" to "Month YYYY" on lines that are only a date.
+    """Rewrite "YYYY Month" to "Month YYYY" in table cells that are only a date.
 
     Applied to the whole CV document only, alongside ``_cv_pretranslate_iso_dates``
     and never inside ``_normalize_cv_date_range``: that field normaliser is
@@ -156,10 +164,11 @@ def _cv_pretranslate_year_first_month_names(text):
     year-first. Prose is never reworded, a cell carrying several dates is never
     reordered, and the month keeps the source spelling.
 
-    An earlier version anchored to the whole line. The upload route joins a table
-    row's cells with " | ", so a date cell never sat alone on its line and that
-    version changed nothing on the CV it was written for. Its tests passed because
-    they fed it a different extractor's output.
+    The anchor is the cell, not the line. v24.6.412 required the whole LINE to
+    be a date, but the upload route joins a table row's cells with " | ", so a
+    date cell never sat alone on its line and that version changed nothing on the
+    CV it was written for. Widening the anchor back to the whole document is not
+    the fix: that is the v24.6.411 version, which reworded prose.
     """
     text = str(text or "")
     if not text:

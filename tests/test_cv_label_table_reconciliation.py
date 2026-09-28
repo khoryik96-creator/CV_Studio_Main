@@ -321,5 +321,108 @@ class AuthoritativeRowReaderTests(unittest.TestCase):
         )
 
 
+    def test_a_role_or_employer_starting_with_education_does_not_hide_work_rows(self):
+        # Only a line that is an education heading and nothing else enters the
+        # section. Starting with the word is not enough.
+        for line in ("Education Consultant", "Academic Coordinator", "Educational Designer",
+                     "Education Queensland", "Education Officer"):
+            with self.subTest(line=line):
+                rows = self.rows([
+                    "WORK EXPERIENCE",
+                    "Jan 2020 - Present | Acme Corp | Senior Engineer",
+                    line,
+                    "Jan 2018 - Dec 2019 | Beta Bhd | Engineer",
+                    "Jan 2016 - Dec 2017 | Gamma Bhd | Engineer",
+                ])
+                self.assertEqual([r["company"] for r in rows], ["Acme Corp", "Beta Bhd", "Gamma Bhd"])
+
+    def test_a_line_starting_with_education_is_not_a_heading_even_before_a_school_employer(self):
+        # A school or university can be the employer. Under a real education
+        # heading its row would be set aside, so the heading test itself has to
+        # reject a job title that only starts with the word.
+        for line in ("Education Consultant", "Academic Coordinator"):
+            with self.subTest(line=line):
+                rows = self.rows([
+                    "WORK EXPERIENCE",
+                    "Jan 2020 - Present | Acme Corp | Senior Engineer",
+                    line,
+                    "Jan 2018 - Dec 2019 | Northwind University | Lecturer",
+                ])
+                self.assertEqual([r["company"] for r in rows], ["Acme Corp", "Northwind University"])
+
+    def test_a_capitalised_heading_ends_education_before_a_school_employer(self):
+        rows = self.rows([
+            "EDUCATION",
+            "2003 - 2006 | Northwind University | Bachelor",
+            "POSITIONS HELD",
+            "Jan 2020 - Present | Contoso College | Lecturer",
+        ])
+        self.assertEqual([r["company"] for r in rows], ["Contoso College"])
+
+    def test_education_headings_in_their_usual_forms_are_recognised(self):
+        for heading in ("Education", "EDUCATION:", "Educational Background",
+                        "Academic Qualifications", "Education & Training", "Education and Training"):
+            with self.subTest(heading=heading):
+                self.assertEqual(self.rows([
+                    heading,
+                    "2003-2006 NORTHWIND UNIVERSITY | Bachelor's Degree | Australia",
+                ]), [])
+
+    def test_a_work_table_after_education_under_any_heading_is_read(self):
+        # Master read these; an earlier draft of the education guard dropped them
+        # because the heading was on no list.
+        for heading in ("POSITIONS HELD", "APPOINTMENTS", "PROFESSIONAL BACKGROUND",
+                        "Positions Held", "Appointments"):
+            with self.subTest(heading=heading):
+                rows = self.rows([
+                    "EDUCATION",
+                    "2003 - 2006 | Northwind University | Bachelor",
+                    heading,
+                    "Jan 2020 - Present | Acme Corp | Engineer",
+                    "Jan 2018 - Dec 2019 | Beta Bhd | Analyst",
+                ])
+                self.assertEqual([r["company"] for r in rows], ["Acme Corp", "Beta Bhd"])
+
+    def test_notes_between_education_rows_do_not_end_the_section(self):
+        rows = self.rows([
+            "Education",
+            "2003-2006 NORTHWIND UNIVERSITY | Bachelor's Degree | Australia",
+            "Major IT and management",
+            "CGPA 2.0 / 4.0",
+            "2002-2002 CONTOSO INSTITUTE | Certificate in computer science | Malaysia",
+            "2000-2001 Sekolah Menengah Contoh | SPM | Malaysia",
+        ])
+        self.assertEqual(rows, [])
+
+    def test_a_company_sharing_the_date_cell_loses_its_separator(self):
+        rows = self.rows(
+            ["WORK EXPERIENCE", "Jan 2020 - Present Acme Corp | Senior Engineer"],
+            titles=["Senior Engineer"],
+        )
+        self.assertEqual([(r["company"], r["title"]) for r in rows], [("Acme Corp", "Senior Engineer")])
+
+    def test_a_generic_title_is_the_whole_last_cell(self):
+        rows = self.rows(["WORK EXPERIENCE", "Jan 2020 - Present Beta Holdings | Data Analyst"])
+        self.assertEqual([(r["company"], r["title"]) for r in rows], [("Beta Holdings", "Data Analyst")])
+
+    def test_a_borderless_row_with_no_cells_is_unchanged(self):
+        # No separator: the whitespace split behaves exactly as it always did.
+        rows = self.rows(["WORK EXPERIENCE", "Jan 2020 - Present Beta Holdings Data Analyst"])
+        self.assertEqual([(r["company"], r["title"]) for r in rows], [("Beta Holdings Data", "Analyst")])
+
+    def test_a_referees_block_ends_the_borderless_work_section(self):
+        rows = self.rows([
+            "WORK EXPERIENCE",
+            "Jan 2020 - Present Acme Corp Senior Engineer",
+            "REFEREES (available on request)",
+            "Jan 2018 - Dec 2019 Beta Holdings Manager",
+        ], titles=["Senior Engineer"])
+        self.assertEqual([r["company"] for r in rows], ["Acme Corp"])
+
+    def test_the_audit_and_the_reader_share_one_work_heading(self):
+        from cvstudio_cv_fidelity import _EXPERIENCE_HEADING_RE
+        self.assertIs(_EXPERIENCE_HEADING_RE, reconcile._WORK_HISTORY_HEADING_RE)
+
+
 if __name__ == "__main__":
     unittest.main()

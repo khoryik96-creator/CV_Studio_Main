@@ -299,7 +299,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Year-first dates and a reported employer shortfall — v24.6.411–v24.6.413, UNMERGED.**
+- **Year-first dates and a reported employer shortfall — v24.6.411–v24.6.414, UNMERGED.**
   Starts at merged master `960a086`. A real formatted CV came back missing the
   candidate's three most recent employers, including his current job, with two
   education rows rendered as jobs and every employer name replaced by the table
@@ -313,7 +313,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   fidelity audit, which found zero source employers here because it only reads
   Dates/Organization/Role tables, now also reads explicit "Company:" labels, so a
   shortfall is reported rather than shipped. See
-  `cv_studio_v24_6_413_year_first_dates_employer_safety_qa_report.md`.
+  `cv_studio_v24_6_414_year_first_dates_employer_safety_qa_report.md`.
   v24.6.412 corrects eight review findings, four of them introduced by v24.6.411
   and two of those actively harmful: the date rewrite matched "YYYY Month" anywhere
   in the document, so it reworded the candidate's own prose ("figures for 2023 may
@@ -337,9 +337,20 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   this CV it returns nothing and the reconciler keeps the parse. Whole-suite
   reconciler differential: 90 calls, 0 outputs changed. The parse warning, which a
   following toast replaced at once, is now a banner above the preview and under a
-  batch row. Still open: JobAdder auto-upload fires on a flagged CV (suggested
-  follow-up), and label-style rows are reported by the audit but not reconstructed
-  by the reconciler.
+  batch row. v24.6.414 corrects ten review findings: the education guard now needs
+  a real heading and only sets aside qualification rows (an earlier draft hid work
+  rows after "Education Consultant" and after an unlisted heading such as
+  POSITIONS HELD); separators are stripped on every borderless shape; the date
+  rewrite covers "Till Date"/"Presently"/bare-year ends; the audit's label scan no
+  longer stops at "Project:" duty lines, reads split label cells and hyphenated
+  names, and a bracketed client cannot stand in for a missing employer; one shared
+  work-heading pattern. Auto-upload now holds a flagged CV (single and batch, with
+  "Upload anyway"), Blind mode names no employer in the warning, and Create
+  Profile keeps its warning. Whole-suite replay against v24.6.413: 0 changes
+  outside this work's tests. Still open: the branch's earlier commits contain real
+  employer names from the reported CV, so merge with Squash and merge (or rewrite
+  history, owner's call); label-style rows are reported by the audit but not
+  reconstructed by the reconciler.
 
 - **Role-qualifier script fix — v24.6.410, UNMERGED.**
   Starts at merged master `5b1f2a4`. An ASCII-only letter class split an accented

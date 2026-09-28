@@ -1,4 +1,4 @@
-# v24.6.411 – v24.6.413 Year-first dates, and a shortfall that should not ship
+# v24.6.411 – v24.6.414 Year-first dates, and a shortfall that should not ship
 
 Branch: `claude/cv-year-first-dates-employer-safety`.
 Base: master `960a0866b357db702e9cc0fdbabdfcc2e60f12ae`, v24.6.410.
@@ -366,3 +366,113 @@ exactly.
   audit still reads those labels and reports a shortfall.
 - The model's parse of the reported CV itself cannot be verified here, because it
   needs a live paid provider call. It has to be confirmed by re-running the CV.
+
+
+---
+
+# v24.6.414 Review corrections
+
+Ten findings across two reviews of v24.6.413. Nine are fixed in code. The tenth,
+real candidate data in the branch's earlier commits, can only be fully fixed by a
+history rewrite or a squash merge, and is left for the owner (see the end).
+
+## The table reader (`_extract_authoritative_work_rows`)
+
+- **An education heading was any short line starting with "education" or
+  "academic".** "Education Consultant", "Academic Coordinator" and "Education
+  Queensland" all switched it on and hid every work row after them. The line now
+  has to BE an education heading: "Education", "Educational Background",
+  "Academic Qualifications", "Education & Training" and similar.
+- **A work table after Education was dropped if its heading was on no list**
+  ("POSITIONS HELD", "APPOINTMENTS", "PROFESSIONAL BACKGROUND") — a regression from
+  master. Two guards now: a short capitalised heading that is not an education
+  line also ends the section, and inside the section only a row that reads as a
+  qualification (university, college, diploma, degree, SPM, CGPA…) is set aside.
+  A title-case "Positions Held" followed by ordinary work rows is read either way.
+- **A company sharing the date cell kept the separator** ("Acme Corp |"), and the
+  generic-title fallback split across it ("Beta Holdings | Data" / "Analyst"). The
+  company is now stripped of separators whichever way the row arrives, and when
+  cells remain the title is the whole last cell. A row with no separator is split
+  exactly as before. The two duplicated title loops are now one helper.
+- **Three copies of the work-history heading pattern** are now one,
+  `_WORK_HISTORY_HEADING_RE`, which the audit imports. The borderless reader's stop
+  list gained REFEREE/REFEREES to match the audit. Unused parameters removed.
+
+## The date rewrite
+
+- **"Till Date", "Till Now", "Presently", "until present" and a bare-year end**
+  ("2015 June – 2017") were not recognised, so those cells stayed year-first —
+  the same current-job case the change exists for. All are now handled. A range
+  of two bare years, and a bare year closing a month-first date, are untouched.
+- **The docstring contradicted the code** about whole-line versus per-cell
+  anchoring. It now states the anchor is the cell, why the line anchor failed, and
+  that widening back to the document is the v24.6.411 version that reworded prose.
+
+## The source check (fidelity audit)
+
+- **The label scan stopped at duty lines** such as "Project: Core banking
+  migration" or "Summary of duties:", because the stop pattern matched any line
+  STARTING with a section word. Labels after the first job were never read and a
+  dropped employer went unreported. The label scan now stops only at a line that
+  is a heading and nothing else. The bullet count keeps its original scope, so
+  its behaviour is unchanged.
+- **A bracketed client could stand in for a missing employer.** "Hays Recruitment
+  (Petronas)" counted as present because the parse kept the candidate's separate
+  Petronas job. A bracketed reading may no longer borrow a parsed employer that
+  another source employer already matches under its own name. A bracketed brand
+  with no rival still counts.
+- **A label and its value in separate cells** ("Company: | Acme", "Company |
+  Acme") were not read. They are now; a table header row ("Company | Position |
+  Duration") is recognised and names no employer.
+- **Hyphenated names were erased.** "Role-Play Studios", "Sector-X Consulting" and
+  "Title-Pro Pty" were stripped to nothing because a bare hyphen after "role",
+  "sector" or "title" was taken as a trailing label. A trailing label now needs a
+  colon or a spaced dash.
+
+## The screen
+
+- **Auto-upload no longer sends a flagged CV.** In the single-CV flow it pauses
+  and says so beside the JobAdder box; the Upload button still sends it once it
+  has been checked. In a batch the row shows "Not uploaded — check the warning"
+  with an "Upload anyway" button, which sends it once. A clean CV auto-uploads
+  exactly as before.
+- **Blind mode no longer shows employer names.** The source check's warning lists
+  the real company names the blind step hides; in Blind mode the banner, the
+  batch row and the toast now say the CV was flagged without naming anyone.
+  Other warnings, such as a truncated parse, are shown unchanged.
+- **Create Profile** now keeps its warning on the file's row, cleared on a re-run.
+  The profile is not held: only name, email and phone come from this parse and
+  the original file is what gets uploaded.
+- **Batch warnings** use role="note" instead of role="alert", so a screen reader
+  does not re-announce them every time another file's progress re-renders the
+  list.
+
+## Regression evidence
+
+- **Whole-suite replay.** Every distinct input the full test suite feeds the table
+  reader, the reconciler, the date rewrite and the source check was captured (300
+  inputs) and replayed through master, v24.6.413 and this version, each loaded
+  on its own. Against v24.6.413: **0 changed outside this work's own tests.**
+  Against master: the reader, reconciler and date rewrite are identical outside
+  this work's own tests, and every source-check report is identical apart from
+  the empty `unnamed` field added in v24.6.411.
+- **Real documents.** Only the reported CV changes (9 wrong rows to 0), as in
+  v24.6.413. Through the real upload and parse routes a correct parse of it keeps
+  all nine employers with no warning.
+- **The new tests fail on v24.6.413** (29 failures) and pass here.
+- **Mutations.** 13 back-end and 8 screen mutations, one per fix, each confirmed
+  to have changed the file: all 21 fail the tests. Three initially survived
+  because another guard covered the same test; a test was added for each so
+  every guard is proven on its own.
+- Full suite: **1379 passed, 23 skipped**, plus the two environment-only tests.
+  Node fixtures: **25/25**. Launcher line endings match `origin/master`.
+
+## Real candidate data in history — owner decision
+
+The current files contain no detail from the reported CV: employer names were
+replaced in v24.6.413, and the remaining university name in a comment and a test
+is replaced here. The branch's earlier commits (v24.6.411–413) still contain four
+real employer names and the university. A history rewrite was prepared but not
+run: it rewrites published commits, so it is the owner's call. The simplest safe
+path is to merge this PR with **Squash and merge**, which puts only the final,
+clean files on master.

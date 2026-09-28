@@ -156,6 +156,7 @@
   .batch-ja-status.uploaded  { color: #2f855a; border: 1px solid #9ae6b4; background: var(--green-light); }
   .batch-ja-status.ja-skip   { color: var(--text3); border: 1px solid var(--border); background: var(--surface); }
   .batch-ja-status.ja-err    { color: var(--red);   border: 1px solid #fed7d7;       background: #fff5f5; }
+  .batch-ja-status.ja-held   { color: #7A5200;     border: 1px solid #E4B84F;       background: #FFF7D6; }
   .batch-ja-email-required {
     width: 220px;
     min-width: 180px;

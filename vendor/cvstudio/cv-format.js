@@ -83,7 +83,7 @@ async function startFormat(blind) {
     // The /parse source check's warning. A toast alone is not enough: the
     // "Parsed! Generating DOCX..." toast below replaces it almost at once, so it
     // is also kept above the preview once that renders.
-    var parseWarning = String((data && data.warning) || '').trim();
+    var parseWarning = cvParseWarningText(data, blind);
     if (parseWarning) showToast(parseWarning, 'warn');
     _runCost += responseCost(data, route.model, route.provider);
     _runUsage = mergeUsageClient(_runUsage, data.usage || {});
@@ -186,9 +186,16 @@ async function startFormat(blind) {
     document.getElementById('btnJA').disabled = !window._jaToken || !parsedEmail.trim();
     var jaConnHint = document.getElementById('jaConnHint');
     if (jaConnHint) jaConnHint.style.display = window._jaToken ? 'none' : 'inline';
-    // Auto-upload if JA connected, auto-upload enabled, and email found
+    // Auto-upload if JA connected, auto-upload enabled, and email found. A CV the
+    // source check flagged is held: uploading it half a second later would send
+    // it before the recruiter could read the warning. The Upload button still
+    // sends it once it has been checked.
     if (window._jaToken && window._jaAutoUpload !== false && parsedEmail.trim()) {
-      setTimeout(function() { uploadToJobAdder(); }, 500);
+      if (parseWarning) {
+        document.getElementById('jaStatus').textContent = '⏸ Auto-upload paused — check the warning above, then upload.';
+      } else {
+        setTimeout(function() { uploadToJobAdder(); }, 500);
+      }
     }
 
   } catch(e) {
@@ -628,6 +635,19 @@ function renderPreview(d) {
 // A persistent notice above the preview. It stays until the next run replaces the
 // output panel. textContent, never innerHTML: the message names employers taken
 // from the uploaded CV.
+// The /parse warning as it should be shown. In Blind mode the source check's
+// warning is replaced with one that names no employer: it lists the real company
+// names the blind step exists to hide, and the banner keeps it beside the blinded
+// preview where a screenshot or screen-share would carry it.
+function cvParseWarningText(data, blind) {
+  var text = String((data && data.warning) || '').trim();
+  if (!text) return '';
+  if (blind && data.degraded_reason === 'fidelity_check') {
+    return 'The source check flagged this CV: an employer may be missing or unnamed, or detail may have been dropped. Names are hidden in Blind mode — compare it with the original CV before sending.';
+  }
+  return text;
+}
+
 function cvShowParseWarningBanner(message) {
   var text = String(message || '').trim();
   if (!text) return;

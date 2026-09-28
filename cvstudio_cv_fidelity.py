@@ -26,6 +26,7 @@ from cvstudio_cv_normalize import (
     _cv_token_overlap_score,
 )
 from cvstudio_cv_reconcile import (
+    _WORK_HISTORY_HEADING_RE,
     _extract_authoritative_work_rows,
     _flatten_parsed_work_roles,
     _role_plain_bullets,
@@ -58,16 +59,30 @@ _SOURCE_BULLET_RE = re.compile(
 _UNSET = object()
 
 
-_EXPERIENCE_HEADING_RE = re.compile(
-    r"^(?:EMPLOYMENT|WORK|CAREER|PROFESSIONAL)\s+(?:HISTORY|EXPERIENCES?)\b"
-    r"|^(?:HISTORY|EXPERIENCES?)\s*:?\s*$",
-    re.I,
-)
+# One definition, owned by the reconciler, so the two stages cannot drift apart.
+_EXPERIENCE_HEADING_RE = _WORK_HISTORY_HEADING_RE
 _SECTION_STOP_HEADING_RE = re.compile(
     r"^(?:EDUCATION|ACADEMIC|CERTIFICATION|CERTIFICATIONS|REFERENCE|REFERENCES|"
     r"REFEREE|REFEREES|"
     r"SKILLS|TECHNICAL SKILLS|ADDITIONAL INFORMATION|LANGUAGES?|PROJECTS?|"
     r"INTERESTS?|HOBBIES|PROFILE|SUMMARY|AWARDS?)\b",
+    re.I,
+)
+
+# Where the labelled-employer scan stops. The bullet check above ends at any line
+# that merely STARTS with a section word, which is right for counting bullets but
+# wrong here: a label-style CV carries "Project: Core banking migration" or
+# "Summary of duties:" inside a job, and ending the scan there left every later
+# "Company:" label unread, so a dropped employer was never reported. This stop
+# must be the whole line -- the heading, an optional qualifier, an optional
+# parenthesis, an optional colon, and nothing else.
+_LABEL_SECTION_STOP_RE = re.compile(
+    r"^\s*(?:EDUCATION(?:AL)?|ACADEMIC|CERTIFICATIONS?|REFERENCES?|REFEREES?|"
+    r"(?:TECHNICAL|KEY|CORE)\s+SKILLS|SKILLS|ADDITIONAL\s+INFORMATION|LANGUAGES?|"
+    r"PROJECTS?|INTERESTS?|HOBBIES|PROFILE|SUMMARY|AWARDS?)"
+    r"(?:\s*(?:&|AND|/)\s*[A-Z]+|\s+(?:BACKGROUND|QUALIFICATIONS?|DETAILS|HISTORY|"
+    r"INFORMATION|TRAINING|ACHIEVEMENTS?))?"
+    r"\s*(?:\([^)]*\))?\s*:?\s*$",
     re.I,
 )
 
@@ -80,19 +95,35 @@ _SECTION_STOP_HEADING_RE = re.compile(
 # extractor joins a table row's cells with " | " and the company is not always the
 # first column.
 #
-# A colon is required. An earlier draft also accepted a bare hyphen, which turned
-# a wrapped sentence beginning "Company-wide rollout of the new platform" into the
-# employer candidate "wide rollout of the new platform" and reported it missing.
+# The value may sit in the label's own cell ("Company: Acme") or, in a two-column
+# label table, in the next one ("Company: | Acme", "Company | Acme"). Without the
+# colon the label has to be the whole cell, so prose cannot read as a label.
+#
+# In the same cell a colon is required. An earlier draft also accepted a bare
+# hyphen, which turned a wrapped sentence beginning "Company-wide rollout of the
+# new platform" into the employer candidate "wide rollout of the new platform".
 _LABELLED_COMPANY_RE = re.compile(
-    r"(?:^|\|)[ \t]*compan(?:y|ies)(?:[ \t]+name)?[ \t]*[:\uff1a][ \t]*([^|\r\n]+)",
+    r"(?:^|\|)[ \t]*compan(?:y|ies)(?:[ \t]+name)?[ \t]*"
+    r"(?:[:\uff1a][ \t]*(?:\|[ \t]*)?|\|[ \t]*)([^|\r\n]+)",
     re.I | re.M,
 )
 
-# An Industry, Position or Duration cell riding along on the same row.
+# An Industry, Position or Duration cell riding along on the same row. The label
+# has to be followed by a colon or a spaced dash; a bare hyphen is part of a name,
+# as in "Role-Play Studios" or "Sector-X Consulting".
 _LABELLED_COMPANY_TRAILER_RE = re.compile(
-    r"\s*\b(?:industry|industries|position|duration|period|role|title|sector)\b\s*[:\uff1a\-].*$",
+    r"\s*\b(?:industry|industries|position|duration|period|role|title|sector)\b"
+    r"(?:\s*[:\uff1a]|\s+[-\u2013\u2014]\s).*$",
     re.I,
 )
+
+# The next column's header, read as a value when the row is a table's header row
+# ("Company | Position | Duration"). A header names no employer.
+_LABEL_TABLE_HEADER_WORDS = frozenset({
+    "industry", "industries", "position", "positions", "duration", "period",
+    "role", "roles", "title", "job title", "designation", "sector", "date",
+    "dates", "location", "department", "salary", "responsibilities",
+})
 
 
 def _source_labelled_companies(cv_text):
@@ -101,6 +132,8 @@ def _source_labelled_companies(cv_text):
     for raw in _LABELLED_COMPANY_RE.findall(str(cv_text or "")):
         name = _LABELLED_COMPANY_TRAILER_RE.sub("", str(raw or ""))
         name = re.sub(r"\s+", " ", name).strip(" .,;:|-")
+        if name.lower().rstrip(":") in _LABEL_TABLE_HEADER_WORDS:
+            continue
         # A label with nothing after it, or a whole paragraph, is not a name.
         if name and 2 <= len(name) <= 120:
             names.append(name)
@@ -111,22 +144,40 @@ def _source_labelled_companies(cv_text):
 # branch location, a trailing department. The parse keeps the employer alone, and
 # the token-overlap score then falls below the match threshold and reports a
 # present employer as missing. These are the shorter readings to also try.
-def _employer_name_variants(company):
-    """The labelled name, plus the shorter readings a parse may legitimately keep."""
+def _employer_name_readings(company):
+    """(own readings, bracketed readings) of a labelled employer name.
+
+    The own readings are the name and its head before a parenthesis, comma or
+    dash. The bracketed readings are what sits inside a parenthesis -- a brand,
+    or the client an agency placed the candidate with. Those are weaker evidence
+    and the caller only accepts them when no other source employer owns the
+    same parsed name.
+    """
     text = re.sub(r"\s+", " ", str(company or "")).strip()
-    variants = [text] if text else []
+    own = [text] if text else []
     for pattern in (r"\s*\(", r"\s*,", r"\s*\u2013", r"\s*\u2014", r"\s+-\s+"):
         head = re.split(pattern, text, maxsplit=1)[0].strip(" .,;:-")
-        if head and head != text and len(head) >= 2:
-            variants.append(head)
-    # The parenthesised brand can be the employer the parse kept instead.
-    inner = re.findall(r"\(([^)]{2,80})\)", text)
-    variants.extend(part.strip(" .,;:-") for part in inner if part.strip(" .,;:-"))
-    out = []
-    for variant in variants:
-        if variant not in out:
-            out.append(variant)
-    return out
+        if head and head != text and len(head) >= 2 and head not in own:
+            own.append(head)
+    bracketed = []
+    for part in re.findall(r"\(([^)]{2,80})\)", text):
+        part = part.strip(" .,;:-")
+        if part and part not in own and part not in bracketed:
+            bracketed.append(part)
+    return own, bracketed
+
+
+def _employer_name_variants(company):
+    """Every reading of a labelled name, own readings first."""
+    own, bracketed = _employer_name_readings(company)
+    return own + bracketed
+
+
+def _employer_name_matches(variant, candidate):
+    key = _cv_match_key(variant)
+    if key and _cv_match_key(candidate) == key:
+        return True
+    return _cv_token_overlap_score(variant, candidate) >= _EMPLOYER_MATCH_OVERLAP
 
 
 def _source_employers(cv_text, parsed=None, section=_UNSET):
@@ -145,7 +196,10 @@ def _source_employers(cv_text, parsed=None, section=_UNSET):
     # section could actually be located. A referees block or a cover note can also
     # say "Company:", and an employer expected from outside the work history would
     # be reported missing on a perfectly good parse. No section, no claim.
-    scoped = _experience_section_text(cv_text) if section is _UNSET else section
+    scoped = (
+        _experience_section_text(cv_text, _LABEL_SECTION_STOP_RE)
+        if section is _UNSET else section
+    )
     if scoped is not None:
         candidates.extend(_source_labelled_companies(scoped))
     for company in candidates:
@@ -171,16 +225,45 @@ def _parsed_employers(parsed):
     return employers
 
 
-def _employer_is_present(company, parsed_employers):
-    """Whether the parse kept this employer, under any reasonable shorter name."""
-    for variant in _employer_name_variants(company) or [company]:
-        key = _cv_match_key(variant)
+def _employer_is_present(company, parsed_employers, claimed=()):
+    """Whether the parse kept this employer, under any reasonable shorter name.
+
+    ``claimed`` holds parsed employers that another source employer already
+    matches under its own name. A bracketed reading cannot borrow one of those:
+    "Hays Recruitment (Petronas)" is not present merely because the parse kept
+    the candidate's separate Petronas job.
+    """
+    own, bracketed = _employer_name_readings(company)
+    for variant in own or [company]:
+        if any(_employer_name_matches(variant, c) for c in parsed_employers):
+            return True
+    for variant in bracketed:
         for candidate in parsed_employers:
-            if key and _cv_match_key(candidate) == key:
-                return True
-            if _cv_token_overlap_score(variant, candidate) >= _EMPLOYER_MATCH_OVERLAP:
+            if candidate in claimed:
+                continue
+            if _employer_name_matches(variant, candidate):
                 return True
     return False
+
+
+def _missing_source_employers(source_emps, parsed_emps):
+    """Source employers the parse did not keep, each parsed name used once."""
+    own_hits = []
+    for company in source_emps:
+        own = _employer_name_readings(company)[0] or [company]
+        own_hits.append({
+            candidate for candidate in parsed_emps
+            if any(_employer_name_matches(variant, candidate) for variant in own)
+        })
+    missing = []
+    for index, company in enumerate(source_emps):
+        claimed = set()
+        for other, hits in enumerate(own_hits):
+            if other != index:
+                claimed |= hits
+        if not _employer_is_present(company, parsed_emps, claimed):
+            missing.append(company)
+    return missing
 
 
 def _count_parsed_bullets(parsed):
@@ -194,7 +277,7 @@ def _count_parsed_bullets(parsed):
     return total
 
 
-def _experience_section_text(cv_text):
+def _experience_section_text(cv_text, stop_re=_SECTION_STOP_HEADING_RE):
     """Text between the experience heading and the next section, or None.
 
     None means no experience heading was found and the section could not be
@@ -211,7 +294,7 @@ def _experience_section_text(cv_text):
         return None
     end = len(lines)
     for j in range(start, len(lines)):
-        if _SECTION_STOP_HEADING_RE.match(lines[j].strip()):
+        if stop_re.match(lines[j].strip()):
             end = j
             break
     return "\n".join(lines[start:end])
@@ -234,11 +317,13 @@ def evaluate_cv_fidelity(parsed, cv_text):
     Returns a plain report dict and never mutates ``parsed``. ``ok`` is True
     when no material structural loss was detected.
     """
-    # Split the document once and share it with every check below.
+    # The bullet count and the label scan end the work history differently; see
+    # _LABEL_SECTION_STOP_RE.
     section = _experience_section_text(cv_text)
-    source_emps = _source_employers(cv_text, parsed, section=section)
+    label_section = _experience_section_text(cv_text, _LABEL_SECTION_STOP_RE)
+    source_emps = _source_employers(cv_text, parsed, section=label_section)
     parsed_emps = _parsed_employers(parsed)
-    missing = [c for c in source_emps if not _employer_is_present(c, parsed_emps)]
+    missing = _missing_source_employers(source_emps, parsed_emps)
 
     # A parsed company that is punctuation only -- "|", "-", ":" -- is the cell
     # separator the model picked up instead of the name beside it. The finished CV

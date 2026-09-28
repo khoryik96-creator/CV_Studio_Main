@@ -277,6 +277,32 @@ class YearFirstMonthNameTests(unittest.TestCase):
                 normalize._cv_pretranslate_year_first_month_names(value)
 
 
+    def test_every_open_ending_the_field_normaliser_knows_is_turned_round(self):
+        for text, expected in (
+            ("2025 June - Till Date", "June 2025 - Till Date"),
+            ("2025 June - Till Now", "June 2025 - Till Now"),
+            ("2024 Sept \u2013 Presently", "Sept 2024 \u2013 Presently"),
+            ("2025 june to present", "june 2025 to present"),
+            ("2019 may - until present", "may 2019 - until present"),
+            ("2025 june - Till Date | Senior Data Engineer", "june 2025 - Till Date | Senior Data Engineer"),
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(normalize._cv_pretranslate_year_first_month_names(text), expected)
+
+    def test_a_range_ending_in_a_bare_year_is_turned_round(self):
+        for text, expected in (
+            ("2015 June \u2013 2017", "June 2015 \u2013 2017"),
+            ("2020 June - 2021", "June 2020 - 2021"),
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(normalize._cv_pretranslate_year_first_month_names(text), expected)
+        # Two bare years carry no month to move, and a bare year closing a
+        # month-first date is left exactly as it is.
+        for text in ("2015 - 2017", "Jan 2018 - 2019", "2015 June \u2013 2017 extra"):
+            with self.subTest(text=text):
+                self.assertEqual(normalize._cv_pretranslate_year_first_month_names(text), text)
+
+
 class LabelledCompanyFidelityTests(unittest.TestCase):
     """A CV that labels its employers instead of tabulating them."""
 
@@ -298,7 +324,7 @@ class LabelledCompanyFidelityTests(unittest.TestCase):
         "Assistant manager data analyst",
         "-Responsible in building data ETL.",
         "Education",
-        "2003-2006 LATROBE UNIVERSITY",
+        "2003-2006 NORTHWIND UNIVERSITY",
     ])
 
     def test_labelled_employers_are_seen_without_a_work_history_table(self):
@@ -459,6 +485,61 @@ class LabelledCompanyFidelityTests(unittest.TestCase):
         self.assertEqual(fidelity._source_labelled_companies("Company:   "), [])
         self.assertEqual(fidelity._source_labelled_companies("Company: |"), [])
         self.assertEqual(fidelity._source_labelled_companies("Company: " + "x" * 200), [])
+
+    def test_a_label_in_its_own_table_cell_is_read(self):
+        for line in ("Company: | Acme Sdn Bhd", "Company | Acme Sdn Bhd", "Company Name | Acme Sdn Bhd"):
+            with self.subTest(line=line):
+                self.assertEqual(fidelity._source_labelled_companies(line), ["Acme Sdn Bhd"])
+
+    def test_a_table_header_row_names_no_employer(self):
+        for line in ("Company | Position | Duration", "Company: | Industry: Finance",
+                     "Company | Designation"):
+            with self.subTest(line=line):
+                self.assertEqual(fidelity._source_labelled_companies(line), [])
+
+    def test_a_hyphenated_employer_name_is_kept(self):
+        for name in ("Role-Play Studios Sdn Bhd", "Sector-X Consulting", "Title-Pro Pty",
+                     "Industry-Plus Bhd", "Period-Correct Films"):
+            with self.subTest(name=name):
+                self.assertEqual(fidelity._source_labelled_companies("Company: " + name), [name])
+
+    def test_a_spaced_dash_trailer_is_still_stripped(self):
+        self.assertEqual(
+            fidelity._source_labelled_companies("Company: Acme Sdn Bhd Industry - Retail"),
+            ["Acme Sdn Bhd"],
+        )
+
+    def test_duty_lines_inside_a_job_do_not_end_the_label_scan(self):
+        source = "\n".join([
+            "WORK EXPERIENCE",
+            "Company: Acme Sdn Bhd",
+            "Position: Engineer",
+            "Project: Core banking migration",
+            "Summary of duties:",
+            "- Built things",
+            "Skills used: Python",
+            "Company: Beta Bhd",
+            "Position: Analyst",
+            "EDUCATION",
+            "Company: Not An Employer",
+        ])
+        parsed = {"work_experiences": [
+            {"company": "Acme Sdn Bhd", "roles": [{"title": "Engineer", "bullets": ["x"]}]},
+        ]}
+        report = fidelity.evaluate_cv_fidelity(parsed, source)
+        self.assertEqual(report["employers"]["missing"], ["Beta Bhd"])
+
+    def test_a_bracketed_client_cannot_stand_in_for_a_separate_employer(self):
+        source = "WORK EXPERIENCE\nCompany: Hays Recruitment (Petronas)\nCompany: Petronas\n"
+        parsed = {"work_experiences": [{"company": "Petronas", "roles": [{"title": "Engineer"}]}]}
+        report = fidelity.evaluate_cv_fidelity(parsed, source)
+        self.assertEqual(report["employers"]["missing"], ["Hays Recruitment (Petronas)"])
+
+    def test_a_bracketed_brand_still_counts_when_nothing_else_claims_it(self):
+        source = "WORK EXPERIENCE\nCompany: Orbix IT outsourcing sdn bhd(lumen bank sdn bhd)\n"
+        parsed = {"work_experiences": [{"company": "Lumen Bank Sdn Bhd", "roles": [{"title": "Engineer"}]}]}
+        report = fidelity.evaluate_cv_fidelity(parsed, source)
+        self.assertEqual(report["employers"]["missing"], [])
 
     def test_the_audit_is_safe_on_junk(self):
         for parsed in (None, {}, {"work_experiences": None}, {"work_experiences": [None]}):

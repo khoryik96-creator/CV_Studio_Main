@@ -65,7 +65,8 @@
   candidate's own prose before being anchored to date-only lines; v24.6.413 finds the
   real cause — the reconciler replaced a correct parse with a wrong table read from
   the source — fixes it, makes the date rewrite reach the model on the real upload
-  path, and keeps the parse warning on screen. All await owner
+  path, and keeps the parse warning on screen; v24.6.414 corrects ten review
+  findings on that work and holds JobAdder auto-upload for a flagged CV. All await owner
   testing. No release or native
   protected build is produced by this work; protected builds remain manual.
 
