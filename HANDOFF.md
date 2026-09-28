@@ -299,7 +299,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Year-first dates and a reported employer shortfall — v24.6.411, UNMERGED.**
+- **Year-first dates and a reported employer shortfall — v24.6.411 + v24.6.412 corrections, UNMERGED.**
   Starts at merged master `960a086`. A real formatted CV came back missing the
   candidate's three most recent employers, including his current job, with two
   education rows rendered as jobs and every employer name replaced by the table
@@ -313,9 +313,21 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   fidelity audit, which found zero source employers here because it only reads
   Dates/Organization/Role tables, now also reads explicit "Company:" labels, so a
   shortfall is reported rather than shipped. See
-  `cv_studio_v24_6_411_year_first_dates_employer_safety_qa_report.md`.
+  `cv_studio_v24_6_412_year_first_dates_employer_safety_qa_report.md`.
+  v24.6.412 corrects eight review findings, four of them introduced by v24.6.411
+  and two of those actively harmful: the date rewrite matched "YYYY Month" anywhere
+  in the document, so it reworded the candidate's own prose ("figures for 2023 may
+  be revised") and scrambled lines carrying several dates. It is now anchored to a
+  line that is entirely a date, which on the reported CV touches exactly 3 lines of
+  173. The audit also warned on correct parses: a REFEREES block was scanned for
+  employers, a labelled name carrying a parenthesised brand failed to match the
+  employer the parse kept, and a hyphenated prose word read as a label. The
+  unnamed-employer report read a key the flattener never emits and counted per role
+  rather than per employer.
   Not fixed and left for a verified change: the education-into-work-experience
-  misclassification, which the audit will now flag as a shortfall.
+  misclassification, which the audit will now flag as a shortfall; and the
+  labelled-employer reader living in the audit only, so a shortfall can be reported
+  but not repaired.
 
 - **Role-qualifier script fix — v24.6.410, UNMERGED.**
   Starts at merged master `5b1f2a4`. An ASCII-only letter class split an accented

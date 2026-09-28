@@ -60,7 +60,10 @@
   confirmed on the owner's real CV. v24.6.410 adds the accented-location fix and
   v24.6.411 normalises year-first dates written with a month name and teaches the
   fidelity audit to see employers in a label-style CV, after a reported output lost
-  the candidate's three most recent employers. Both await owner testing. No release or native
+  the candidate's three most recent employers; v24.6.412 corrects eight review
+  findings on that work, including a date rewrite that had been reworded the
+  candidate's own prose before being anchored to date-only lines. All await owner
+  testing. No release or native
   protected build is produced by this work; protected builds remain manual.
 
 ## v24.6.403-v24.6.405 CV source-safety corrective (merged via PR #210)

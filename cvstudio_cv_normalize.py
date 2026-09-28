@@ -72,26 +72,74 @@ _CV_MONTH_WORD = (
 # The year has to come first in the token for this to fire, so "Apr 2019" and
 # "Sept 2024" are untouched. A newline between the two is not crossed, because a
 # year ending one line and a month opening the next are two different dates.
-# The optional leading month is captured, not skipped, so that a year which
-# already CLOSES a month-first date is recognised and left alone: in
-# "Jun 2020 Jun 2021" the 2020 belongs to the first date and the Jun after it
-# opens the second, so there is nothing to reorder.
-_CV_YEAR_FIRST_MONTH_RE = re.compile(
-    r"(" + _CV_MONTH_WORD + r"\.?[ \t\u00a0]+)?"
-    r"\b((?:19|20)\d{2})[ \t\u00a0]+(" + _CV_MONTH_WORD + r")\b",
+# Horizontal spaces Word and PDF use between a month and its year. The same set
+# the ISO helper and the field normaliser already treat as ordinary date
+# separators, so a figure space or thin space cannot hide a date from this pass.
+_CV_HSPACE = r"[ \t\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]"
+_CV_YEAR_TOKEN = r"(?:19|20)\d{2}"
+_CV_RANGE_SEP = (
+    r"(?:[-\u2010-\u2015\u2212]|to|until|till|through)"
+)
+# The right-hand side of an open range.
+_CV_OPEN_END = r"(?:current|present|now|to[ \t]?date|todate|ongoing|date)"
+# "2025 june", "2025 June.", "2025 Jun,"
+_CV_YEAR_FIRST_TOKEN = (
+    _CV_YEAR_TOKEN + _CV_HSPACE + r"+" + _CV_MONTH_WORD + r"\.?,?"
+)
+# "Jun 2015", "Jun. 2015", "June, 2015", "Jun2015"
+_CV_MONTH_FIRST_TOKEN = (
+    _CV_MONTH_WORD + r"\.?,?" + _CV_HSPACE + r"*" + _CV_YEAR_TOKEN
+)
+_CV_EITHER_DATE_TOKEN = (
+    r"(?:" + _CV_YEAR_FIRST_TOKEN + r"|" + _CV_MONTH_FIRST_TOKEN + r")"
+)
+
+# A line that is NOTHING BUT a date or a date range, which is how a table cell
+# arrives once the document has been flattened to text.
+#
+# Anchoring to the whole line is the point of this pass, not a shortcut. An
+# earlier draft rewrote "YYYY Month" anywhere it appeared and did real damage:
+# "figures for 2023 may be revised" became "figures for may 2023 be revised",
+# "Won the 2024 March tender" was reworded, and a line of several month-first
+# dates had its years and months interleaved, because "may", "march" and
+# "august" are ordinary English words and a year can close one date while a
+# month opens the next. Restricting the rewrite to a line that holds only a date
+# removes every one of those, at the cost of leaving a year-first date that is
+# embedded in a longer line alone.
+_CV_YEAR_FIRST_DATE_LINE_RE = re.compile(
+    r"^" + _CV_HSPACE + r"*"
+    + _CV_EITHER_DATE_TOKEN
+    + r"(?:" + _CV_HSPACE + r"*" + _CV_RANGE_SEP + _CV_HSPACE + r"*"
+    + r"(?:" + _CV_EITHER_DATE_TOKEN + r"|" + _CV_OPEN_END + r")" + r")?"
+    + _CV_HSPACE + r"*[.,;]?" + _CV_HSPACE + r"*$",
+    re.I,
+)
+
+# Within such a line, the year-first halves to turn around. At most two date
+# tokens can reach here, so the left-to-right scan cannot take a year from one
+# date and a month from the next.
+_CV_YEAR_FIRST_SWAP_RE = re.compile(
+    r"\b(" + _CV_YEAR_TOKEN + r")" + _CV_HSPACE + r"+(" + _CV_MONTH_WORD + r")\b",
     re.I,
 )
 
 
+def _cv_line_is_year_first_date(line):
+    """Whether a line is entirely a date range with at least one year-first half."""
+    if not _CV_YEAR_FIRST_DATE_LINE_RE.match(line):
+        return False
+    # "Jun 2015 - august 2017" is already month-first throughout; there is
+    # nothing to turn around and the line must come back byte-identical.
+    return bool(_CV_YEAR_FIRST_SWAP_RE.search(line))
+
+
 def _cv_year_first_month_repl(match):
     """Swap "2025 june" to "june 2025", keeping the source spelling of the month."""
-    if match.group(1):
-        return match.group(0)
-    return "{} {}".format(match.group(3), match.group(2))
+    return "{} {}".format(match.group(2), match.group(1))
 
 
 def _cv_pretranslate_year_first_month_names(text):
-    """Rewrite "YYYY Month" to "Month YYYY" before a provider reads the CV.
+    """Rewrite "YYYY Month" to "Month YYYY" on lines that are only a date.
 
     Applied to the whole CV document only, alongside ``_cv_pretranslate_iso_dates``
     and never inside ``_normalize_cv_date_range``: that field normaliser is
@@ -103,11 +151,21 @@ def _cv_pretranslate_year_first_month_names(text):
     read inconsistently, and the year-first rows are the ones that come back
     wrong or go missing entirely.
 
-    Only a 19xx/20xx year immediately followed by a month name is touched, so
-    quantities, phone numbers and version strings are not, and the month keeps
-    whatever spelling the source used.
+    Only a line holding nothing but a date or date range is touched, and only
+    when part of it is year-first. Prose is never reworded, a line carrying
+    several dates is never reordered, and the month keeps the source spelling.
     """
-    return _CV_YEAR_FIRST_MONTH_RE.sub(_cv_year_first_month_repl, str(text or ""))
+    text = str(text or "")
+    if not text:
+        return text
+    out = []
+    for line in text.splitlines(True):
+        stripped = line.rstrip("\r\n")
+        ending = line[len(stripped):]
+        if _cv_line_is_year_first_date(stripped):
+            stripped = _CV_YEAR_FIRST_SWAP_RE.sub(_cv_year_first_month_repl, stripped)
+        out.append(stripped + ending)
+    return "".join(out)
 
 
 def _cv_pretranslate_iso_dates(text):

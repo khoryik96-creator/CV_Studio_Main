@@ -53,6 +53,11 @@ _SOURCE_BULLET_RE = re.compile(
 # confined to this span: parsed bullets only come from work experience, so a
 # whole-document bullet count would be inflated by bulleted skills / profile /
 # education sections and fire false shortfall warnings.
+# None means "no work-history section found", so it cannot double as "not
+# supplied". This sentinel keeps the two apart.
+_UNSET = object()
+
+
 _EXPERIENCE_HEADING_RE = re.compile(
     r"^(?:EMPLOYMENT|WORK|CAREER|PROFESSIONAL)\s+(?:HISTORY|EXPERIENCES?)\b"
     r"|^(?:HISTORY|EXPERIENCES?)\s*:?\s*$",
@@ -60,6 +65,7 @@ _EXPERIENCE_HEADING_RE = re.compile(
 )
 _SECTION_STOP_HEADING_RE = re.compile(
     r"^(?:EDUCATION|ACADEMIC|CERTIFICATION|CERTIFICATIONS|REFERENCE|REFERENCES|"
+    r"REFEREE|REFEREES|"
     r"SKILLS|TECHNICAL SKILLS|ADDITIONAL INFORMATION|LANGUAGES?|PROJECTS?|"
     r"INTERESTS?|HOBBIES|PROFILE|SUMMARY|AWARDS?)\b",
     re.I,
@@ -70,15 +76,22 @@ _SECTION_STOP_HEADING_RE = re.compile(
 # has no Dates/Organization/Role columns for the authoritative-row reader to find,
 # so that reader returns nothing and a shortfall goes unnoticed. The label itself
 # is high-confidence evidence: a line that says "Company:" is naming an employer.
+# The label may open the line or a pipe-delimited cell within it, because the
+# extractor joins a table row's cells with " | " and the company is not always the
+# first column.
+#
+# A colon is required. An earlier draft also accepted a bare hyphen, which turned
+# a wrapped sentence beginning "Company-wide rollout of the new platform" into the
+# employer candidate "wide rollout of the new platform" and reported it missing.
 _LABELLED_COMPANY_RE = re.compile(
-    r"^[ \t]*compan(?:y|ies)[ \t]*[:\-\u2013\u2014][ \t]*(.+)$",
+    r"(?:^|\|)[ \t]*compan(?:y|ies)(?:[ \t]+name)?[ \t]*[:\uff1a][ \t]*([^|\r\n]+)",
     re.I | re.M,
 )
 
-# The extractor joins a table row's cells with " | ", so an Industry cell rides
-# along on the same line as the company it sits beside.
+# An Industry, Position or Duration cell riding along on the same row.
 _LABELLED_COMPANY_TRAILER_RE = re.compile(
-    r"\s*\|.*$|\s*\bindustry\b\s*[:\-].*$", re.I
+    r"\s*\b(?:industry|industries|position|duration|period|role|title|sector)\b\s*[:\uff1a\-].*$",
+    re.I,
 )
 
 
@@ -94,22 +107,45 @@ def _source_labelled_companies(cv_text):
     return names
 
 
-def _source_employers(cv_text, parsed=None):
-    """Distinct high-confidence employers extracted from the source text."""
+# A labelled name often carries more than the employer: a parenthesised brand, a
+# branch location, a trailing department. The parse keeps the employer alone, and
+# the token-overlap score then falls below the match threshold and reports a
+# present employer as missing. These are the shorter readings to also try.
+def _employer_name_variants(company):
+    """The labelled name, plus the shorter readings a parse may legitimately keep."""
+    text = re.sub(r"\s+", " ", str(company or "")).strip()
+    variants = [text] if text else []
+    for pattern in (r"\s*\(", r"\s*,", r"\s*\u2013", r"\s*\u2014", r"\s+-\s+"):
+        head = re.split(pattern, text, maxsplit=1)[0].strip(" .,;:-")
+        if head and head != text and len(head) >= 2:
+            variants.append(head)
+    # The parenthesised brand can be the employer the parse kept instead.
+    inner = re.findall(r"\(([^)]{2,80})\)", text)
+    variants.extend(part.strip(" .,;:-") for part in inner if part.strip(" .,;:-"))
+    out = []
+    for variant in variants:
+        if variant not in out:
+            out.append(variant)
+    return out
+
+
+def _source_employers(cv_text, parsed=None, section=_UNSET):
+    """Distinct high-confidence employers extracted from the source text.
+
+    ``section`` is the already-split work-history text when the caller has it;
+    splitting the whole document again per check buys nothing on a long CV.
+    """
     employers = []
     seen = set()
     candidates = [
         str(row.get("company") or "").strip()
         for row in _extract_authoritative_work_rows(cv_text, parsed)
     ]
-    # Read the labels from the work-history section only. A referees block or a
-    # cover note can also say "Company:", and an employer expected from outside
-    # the work history would be reported missing on a perfectly good parse.
     # Read the labels from the work-history section only, and only when that
     # section could actually be located. A referees block or a cover note can also
     # say "Company:", and an employer expected from outside the work history would
     # be reported missing on a perfectly good parse. No section, no claim.
-    scoped = _experience_section_text(cv_text)
+    scoped = _experience_section_text(cv_text) if section is _UNSET else section
     if scoped is not None:
         candidates.extend(_source_labelled_companies(scoped))
     for company in candidates:
@@ -136,12 +172,14 @@ def _parsed_employers(parsed):
 
 
 def _employer_is_present(company, parsed_employers):
-    key = _cv_match_key(company)
-    for candidate in parsed_employers:
-        if key and _cv_match_key(candidate) == key:
-            return True
-        if _cv_token_overlap_score(company, candidate) >= _EMPLOYER_MATCH_OVERLAP:
-            return True
+    """Whether the parse kept this employer, under any reasonable shorter name."""
+    for variant in _employer_name_variants(company) or [company]:
+        key = _cv_match_key(variant)
+        for candidate in parsed_employers:
+            if key and _cv_match_key(candidate) == key:
+                return True
+            if _cv_token_overlap_score(variant, candidate) >= _EMPLOYER_MATCH_OVERLAP:
+                return True
     return False
 
 
@@ -179,12 +217,12 @@ def _experience_section_text(cv_text):
     return "\n".join(lines[start:end])
 
 
-def _count_source_bullets(cv_text):
+def _count_source_bullets(cv_text, section=_UNSET):
     """Count source bullet lines within the experience section.
 
     Returns None when the section can't be located (bullet check disabled).
     """
-    section = _experience_section_text(cv_text)
+    section = _experience_section_text(cv_text) if section is _UNSET else section
     if section is None:
         return None
     return sum(1 for line in section.splitlines() if _SOURCE_BULLET_RE.match(line))
@@ -196,7 +234,9 @@ def evaluate_cv_fidelity(parsed, cv_text):
     Returns a plain report dict and never mutates ``parsed``. ``ok`` is True
     when no material structural loss was detected.
     """
-    source_emps = _source_employers(cv_text, parsed)
+    # Split the document once and share it with every check below.
+    section = _experience_section_text(cv_text)
+    source_emps = _source_employers(cv_text, parsed, section=section)
     parsed_emps = _parsed_employers(parsed)
     missing = [c for c in source_emps if not _employer_is_present(c, parsed_emps)]
 
@@ -204,14 +244,32 @@ def evaluate_cv_fidelity(parsed, cv_text):
     # separator the model picked up instead of the name beside it. The finished CV
     # shows an empty employer, which looks like a layout fault rather than a
     # dropped field, so it is named here.
-    unnamed = [
-        str(item.get("date_range") or item.get("company") or "").strip()
-        for item in _flatten_parsed_work_roles(parsed)
-        if str(item.get("company") or "").strip()
-        and not re.search(r"[^\W_]", str(item.get("company") or ""), re.UNICODE)
-    ]
+    #
+    # Walked per work experience, not per flattened role: one employer with three
+    # roles lost one company field, and counting the roles said "3 work entries".
+    # The date range is read from the experience itself, which is where that key
+    # lives -- the flattened rows carry exp_date/role_date instead, so an earlier
+    # draft always fell through to the separator and located nothing.
+    unnamed = []
+    for exp in (parsed or {}).get("work_experiences") or []:
+        if not isinstance(exp, dict):
+            continue
+        company = str(exp.get("company") or "")
+        if not company.strip():
+            continue
+        if re.search(r"[^\W_]", company, re.UNICODE):
+            continue
+        label = str(exp.get("date_range") or "").strip()
+        if not label:
+            roles = exp.get("roles") if isinstance(exp.get("roles"), list) else []
+            for role in roles:
+                if isinstance(role, dict):
+                    label = str(role.get("date_range") or role.get("title") or "").strip()
+                    if label:
+                        break
+        unnamed.append(label or company.strip())
 
-    source_bullets = _count_source_bullets(cv_text)
+    source_bullets = _count_source_bullets(cv_text, section=section)
     parsed_bullets = _count_parsed_bullets(parsed)
     bullet_scoped = source_bullets is not None
     bullet_shortfall = (
@@ -228,9 +286,11 @@ def evaluate_cv_fidelity(parsed, cv_text):
         )
     if unnamed:
         warnings.append(
-            "{} work entr{} came back with no employer name -- the separator was "
-            "read instead of the company.".format(
-                len(unnamed), "y" if len(unnamed) == 1 else "ies"
+            "{} employer{} came back with no name -- the separator was read instead "
+            "of the company ({}).".format(
+                len(unnamed),
+                "" if len(unnamed) == 1 else "s",
+                ", ".join(unnamed[:4]),
             )
         )
     if bullet_shortfall:

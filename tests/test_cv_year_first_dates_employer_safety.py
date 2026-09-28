@@ -107,6 +107,24 @@ class YearFirstMonthNameTests(unittest.TestCase):
                     normalize._cv_pretranslate_year_first_month_names(text), text
                 )
 
+    def test_an_already_month_first_range_comes_back_identical(self):
+        for text in ("Jun 2015 - august  2017", "Apr 2019 - Mar 2022",
+                     "June 2025 - current", "Sept 2024 to April 2025"):
+            with self.subTest(text=text):
+                self.assertEqual(
+                    normalize._cv_pretranslate_year_first_month_names(text), text
+                )
+
+    def test_a_mixed_range_has_only_its_year_first_half_turned_round(self):
+        self.assertEqual(
+            normalize._cv_pretranslate_year_first_month_names("Jun 2015 - 2017 august"),
+            "Jun 2015 - august 2017",
+        )
+        self.assertEqual(
+            normalize._cv_pretranslate_year_first_month_names("2015 june - Aug 2017"),
+            "june 2015 - Aug 2017",
+        )
+
     def test_the_field_level_date_normaliser_is_untouched(self):
         # It is mirrored in two JavaScript copies; a rule added on one side only
         # would break their shared contract.
@@ -122,6 +140,79 @@ class YearFirstMonthNameTests(unittest.TestCase):
         for text in ("2003-2006", "2002-2002", "2000-2001", "2003 - 2006"):
             with self.subTest(text=text):
                 self.assertEqual(normalize._cv_pretranslate_year_first_month_names(text), text)
+
+    def test_only_a_line_that_is_entirely_a_date_is_touched(self):
+        # The rewrite is anchored to the whole line on purpose. An earlier draft
+        # rewrote "YYYY Month" anywhere it appeared and did real damage: it
+        # reworded the candidate's own sentences, and interleaved the years and
+        # months of a line carrying several dates.
+        for text in (
+            "figures for 2023 may be revised",
+            "Since 2021 March, led the migration",
+            "Won the 2024 March tender",
+            "-Built batch pipelines in 2025 june using Airflow",
+            "Revenue doubled between 2019 August and 2021 May",
+            "Company: Acme Sdn Bhd | Industry Banking",
+            "2025 june- current   Senior Data Engineer",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(
+                    normalize._cv_pretranslate_year_first_month_names(text), text
+                )
+
+    def test_a_line_of_several_dates_is_never_reordered(self):
+        # Each of these scrambled under the first draft, because a year can close
+        # one date while a month opens the next.
+        for text in (
+            "Jan 2018 Dec 2019 Jan 2020 Dec 2021",
+            "Jun 2020 Jun 2021 Jun 2022",
+            "Jun 2015   august  2017   Mar 2013   Jun 2015",
+            "2015 - 2018    Jun 2019 - Present",
+            "2003-2006 May 2007 - Dec 2009",
+            "Jun\u20092020 Jun\u20092021",
+            "Jun.2020 Jun.2021",
+            "June, 2020 June, 2021",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(
+                    normalize._cv_pretranslate_year_first_month_names(text), text
+                )
+
+    def test_a_wide_unicode_space_does_not_hide_a_date(self):
+        # Word and PDF use these between a month and its year, and the sibling
+        # helpers already treat them as ordinary date separators.
+        for space in ("\u00a0", "\u1680", "\u2000", "\u2007", "\u2009", "\u202f",
+                      "\u205f", "\u3000"):
+            with self.subTest(space=repr(space)):
+                self.assertEqual(
+                    normalize._cv_pretranslate_year_first_month_names("2025" + space + "June"),
+                    "June 2025",
+                )
+
+    def test_every_line_of_a_document_is_considered_independently(self):
+        document = "\n".join([
+            "Experience",
+            "company: Acme Sdn Bhd | Industry Banking",
+            "2025 june- current",
+            "Senior Data Engineer",
+            "-Delivered the 2024 March release on time",
+            "2022 march - 2024 august",
+        ])
+        out = normalize._cv_pretranslate_year_first_month_names(document)
+        lines = out.splitlines()
+        self.assertEqual(lines[2], "june 2025- current")
+        self.assertEqual(lines[5], "march 2022 - august 2024")
+        # The bullet keeps the candidate's own wording.
+        self.assertEqual(lines[4], "-Delivered the 2024 March release on time")
+        # Line count and every other line are byte-identical.
+        self.assertEqual(len(lines), len(document.splitlines()))
+
+    def test_line_endings_survive(self):
+        for ending in ("\n", "\r\n"):
+            with self.subTest(ending=repr(ending)):
+                text = "2025 june- current" + ending + "next line"
+                out = normalize._cv_pretranslate_year_first_month_names(text)
+                self.assertEqual(out, "june 2025- current" + ending + "next line")
 
     def test_things_that_only_look_like_dates_are_untouched(self):
         for text in (
@@ -230,8 +321,88 @@ class LabelledCompanyFidelityTests(unittest.TestCase):
         ]}
         report = fidelity.evaluate_cv_fidelity(parsed, self.SOURCE)
         self.assertFalse(report["ok"])
+        # One employer, and the entry says which one by its dates -- the flattened
+        # rows carry exp_date/role_date, so reading "date_range" off them located
+        # nothing and always fell through to the separator itself.
+        self.assertEqual(report["employers"]["unnamed"], ["Apr 2019 to Mar 2022"])
+        self.assertIn("came back with no name", fidelity.summarize_fidelity_warning(report))
+        self.assertIn("Apr 2019 to Mar 2022", fidelity.summarize_fidelity_warning(report))
+
+    def test_one_employer_with_several_roles_counts_once(self):
+        # Counted per flattened role, one lost company field read as "3 work
+        # entries came back with no employer name".
+        parsed = {"work_experiences": [
+            {"date_range": "Apr 2019 to Mar 2022", "company": "|", "roles": [
+                {"title": "Analyst"}, {"title": "Senior Analyst"}, {"title": "Manager"},
+            ]},
+        ]}
+        report = fidelity.evaluate_cv_fidelity(parsed, self.SOURCE)
         self.assertEqual(len(report["employers"]["unnamed"]), 1)
-        self.assertIn("no employer name", fidelity.summarize_fidelity_warning(report))
+        self.assertIn("1 employer came back", fidelity.summarize_fidelity_warning(report))
+
+    def test_a_referees_block_is_not_scanned_for_employers(self):
+        # A referees block names employers and job titles. Expecting the referee's
+        # own company warned on a flawless parse.
+        source = "\n".join([
+            "WORK EXPERIENCE",
+            "Company: Acme Sdn Bhd | Industry: Banking",
+            "Jun 2020 - Present",
+            "REFEREES",
+            "Company: Other Firm Sdn Bhd",
+            "Name: A Referee",
+        ])
+        parsed = {"work_experiences": [
+            {"date_range": "Jun 2020 to Present", "company": "Acme Sdn Bhd",
+             "roles": [{"title": "Engineer", "bullets": ["x"]}]},
+        ]}
+        report = fidelity.evaluate_cv_fidelity(parsed, source)
+        self.assertEqual(report["employers"]["missing"], [])
+        self.assertIsNone(fidelity.summarize_fidelity_warning(report))
+
+    def test_a_longer_labelled_name_matches_the_employer_the_parse_kept(self):
+        # The label often carries a parenthesised brand or a branch location that
+        # the parse legitimately drops; token overlap alone scored these as missing.
+        cases = [
+            ("company: Avows IT outsourcing sdn bhd(boost bank sdn bhd)",
+             ["Avows IT Outsourcing Sdn Bhd", "Boost Bank Sdn Bhd",
+              "Avows IT outsourcing sdn bhd(boost bank sdn bhd)"]),
+            ("Company: Acme Engineering Sdn Bhd, Shah Alam, Selangor",
+             ["Acme Engineering Sdn Bhd"]),
+            ("Company: Acme Sdn Bhd - Klang Valley", ["Acme Sdn Bhd"]),
+        ]
+        for label, kept_names in cases:
+            source = "Experience\n" + label + "\nJun 2020 - Present\nEngineer\n"
+            for kept in kept_names:
+                with self.subTest(label=label, kept=kept):
+                    parsed = {"work_experiences": [
+                        {"date_range": "Jun 2020 to Present", "company": kept,
+                         "roles": [{"title": "Engineer", "bullets": ["x"]}]},
+                    ]}
+                    report = fidelity.evaluate_cv_fidelity(parsed, source)
+                    self.assertEqual(report["employers"]["missing"], [])
+
+    def test_a_hyphenated_prose_word_is_not_a_company_label(self):
+        # "Company-wide rollout of ..." produced the employer candidate
+        # "wide rollout of ..." and showed it to the user as a missing employer.
+        for line in (
+            "Company-wide rollout of the new payroll platform for 3000 staff",
+            "Company-paid training in cloud architecture",
+            "Company - wide restructuring programme",
+        ):
+            with self.subTest(line=line):
+                self.assertEqual(fidelity._source_labelled_companies(line), [])
+
+    def test_the_label_is_found_in_a_pipe_row_and_as_company_name(self):
+        self.assertEqual(
+            fidelity._source_labelled_companies(
+                "Position: Engineer | Company: Acme Sdn Bhd | Duration: 2020-2022"
+            ),
+            ["Acme Sdn Bhd"],
+        )
+        self.assertEqual(
+            fidelity._source_labelled_companies("Company Name: Acme Sdn Bhd"),
+            ["Acme Sdn Bhd"],
+        )
 
     def test_a_real_name_is_never_called_a_separator(self):
         for company in ("TNG Digital Sdn Bhd", "RISK-X Sdn Bhd", "3M", "AT&T", "東京商事"):
