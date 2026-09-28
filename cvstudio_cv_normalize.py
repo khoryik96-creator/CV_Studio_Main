@@ -151,9 +151,15 @@ def _cv_pretranslate_year_first_month_names(text):
     read inconsistently, and the year-first rows are the ones that come back
     wrong or go missing entirely.
 
-    Only a line holding nothing but a date or date range is touched, and only
-    when part of it is year-first. Prose is never reworded, a line carrying
-    several dates is never reordered, and the month keeps the source spelling.
+    Only a table cell -- or a line, which is a cell with no separator -- holding
+    nothing but a date or date range is touched, and only when part of it is
+    year-first. Prose is never reworded, a cell carrying several dates is never
+    reordered, and the month keeps the source spelling.
+
+    An earlier version anchored to the whole line. The upload route joins a table
+    row's cells with " | ", so a date cell never sat alone on its line and that
+    version changed nothing on the CV it was written for. Its tests passed because
+    they fed it a different extractor's output.
     """
     text = str(text or "")
     if not text:
@@ -162,10 +168,33 @@ def _cv_pretranslate_year_first_month_names(text):
     for line in text.splitlines(True):
         stripped = line.rstrip("\r\n")
         ending = line[len(stripped):]
-        if _cv_line_is_year_first_date(stripped):
-            stripped = _CV_YEAR_FIRST_SWAP_RE.sub(_cv_year_first_month_repl, stripped)
-        out.append(stripped + ending)
+        out.append(_cv_rewrite_year_first_cells(stripped) + ending)
     return "".join(out)
+
+
+# The upload route flattens each table row into one line, joining its cells with
+# " | ". A date cell therefore does not arrive on a line of its own: it arrives as
+# "2025 june- current | Senior Data Engineer". The rewrite is anchored to a whole
+# CELL for that reason. A line with no separator is a single cell, so a date that
+# does sit alone on its line is handled exactly as before.
+_CV_CELL_SEPARATOR_RE = re.compile(r"(" + _CV_HSPACE + r"*\|" + _CV_HSPACE + r"*)")
+
+
+def _cv_rewrite_year_first_cells(line):
+    """Turn round each cell of a line that is entirely a year-first date."""
+    if "|" not in line:
+        if _cv_line_is_year_first_date(line):
+            return _CV_YEAR_FIRST_SWAP_RE.sub(_cv_year_first_month_repl, line)
+        return line
+    # Splitting on a captured separator keeps every separator in the list, so the
+    # line reassembles byte-for-byte apart from the cells that were rewritten.
+    parts = _CV_CELL_SEPARATOR_RE.split(line)
+    for index in range(0, len(parts), 2):
+        if _cv_line_is_year_first_date(parts[index]):
+            parts[index] = _CV_YEAR_FIRST_SWAP_RE.sub(
+                _cv_year_first_month_repl, parts[index]
+            )
+    return "".join(parts)
 
 
 def _cv_pretranslate_iso_dates(text):

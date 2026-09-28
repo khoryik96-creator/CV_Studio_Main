@@ -1221,6 +1221,33 @@ def _restore_explicit_project_headings(parsed, cv_text):
     return parsed
 
 
+# A heading that opens a work-history section, as the borderless reader below
+# recognises it.
+_WORK_HISTORY_HEADING_RE = re.compile(
+    r"^(?:EMPLOYMENT|WORK|CAREER|PROFESSIONAL)\s+(?:HISTORY|EXPERIENCES?)\b"
+    r"|^(?:HISTORY|EXPERIENCES?)\s*:?\s*$",
+    re.I,
+)
+
+# Heading words that close an education section even when the full heading is not
+# in the shared boundary list, e.g. "Employment Record" or "Relevant Experience".
+_WORK_HEADING_WORDS = frozenset({"experience", "experiences", "employment", "career", "work", "job"})
+
+
+def _source_heading_is_education(key, words):
+    """A short line that is an education section heading and nothing else."""
+    if not words or len(words) > 4:
+        return False
+    return words[0] in {"education", "educational", "academic"}
+
+
+def _source_heading_is_work(key, words):
+    """A short line that reads as a work-history heading."""
+    if not words or len(words) > 4:
+        return False
+    return bool(_WORK_HEADING_WORDS.intersection(words))
+
+
 def _extract_authoritative_work_rows(cv_text, parsed=None):
     """Extract authoritative employment rows from pipe or whitespace tables.
 
@@ -1236,6 +1263,11 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
 
     def add_row(date_cell, company_cell, role_cell):
         if not date_cell or not company_cell or not role_cell:
+            return None
+        # A company cell holding only punctuation -- the "|" left behind when a
+        # table row has no company column -- names nothing. Accepting it rebuilt
+        # a whole work history with every employer rendered as "|".
+        if not re.search(r"[^\W_]", str(company_cell), re.UNICODE):
             return None
         if len(company_cell) > 120 or len(role_cell) > 160:
             return None
@@ -1261,8 +1293,34 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
         return row
 
     # Existing explicit pipe-delimited layout.
+    #
+    # Rows under an explicit Education heading are not employment. A qualification
+    # row has the same three-cell shape -- "2003-2006 LATROBE UNIVERSITY |
+    # Bachelor's Degree | Australia" reads as date, company and role -- and taking
+    # it as work injected the candidate's degree and school into Work Experience as
+    # two jobs. The borderless reader below is already confined to the work-history
+    # section; this reader was not.
+    #
+    # Only explicit headings switch the state, so a work table cannot be swallowed
+    # by guesswork: an education heading enters it, and a work-history heading or
+    # any other recognised section heading leaves it.
+    in_education = False
     for line in lines:
-        if not line or "|" not in line:
+        if not line:
+            continue
+        if "|" not in line:
+            heading_key = _cv_source_boundary_key(line.rstrip(":"))
+            heading_words = heading_key.split()
+            if _source_heading_is_education(heading_key, heading_words):
+                in_education = True
+            elif in_education and (
+                _WORK_HISTORY_HEADING_RE.match(line)
+                or heading_key in _CV_SOURCE_SECTION_BOUNDARY_KEYS
+                or _source_heading_is_work(heading_key, heading_words)
+            ):
+                in_education = False
+            continue
+        if in_education:
             continue
         cells = [c.strip() for c in line.split("|")]
         cells = [c for c in cells if c]
@@ -1454,6 +1512,25 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
             date_cell, rest = dm.group(1).strip(), dm.group(2).strip()
             title_cell = ""
             company_cell = ""
+            if rest.startswith("|"):
+                # The date sat in its own table cell. What follows the separator is
+                # one cell, so the whitespace heuristics below do not apply: the
+                # generic title pattern split "Senior Data Engineer" into a company
+                # "Senior Data" and a title "Engineer", and every company came out
+                # prefixed with "|". Split only on a title the
+                # provider found; if that consumes the whole cell, the row names no
+                # employer -- in a label-style CV it sits on the line above -- and is
+                # left out rather than invented. The company is stripped of cell
+                # separators at both ends, which also covers a three-cell row
+                # reaching this reader alongside the explicit one.
+                for known_title in known_titles:
+                    tm = re.search(r"(?:^|\s)" + re.escape(known_title) + r"\s*$", rest, re.I)
+                    if tm:
+                        title_cell = known_title
+                        company_cell = rest[:tm.start()].strip().strip("|").strip()
+                        break
+                add_row(date_cell, company_cell, title_cell)
+                continue
             for known_title in known_titles:
                 tm = re.search(r"(?:^|\s)" + re.escape(known_title) + r"\s*$", rest, re.I)
                 if tm:

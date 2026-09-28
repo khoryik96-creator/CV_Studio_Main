@@ -62,7 +62,10 @@
   fidelity audit to see employers in a label-style CV, after a reported output lost
   the candidate's three most recent employers; v24.6.412 corrects eight review
   findings on that work, including a date rewrite that had been reworded the
-  candidate's own prose before being anchored to date-only lines. All await owner
+  candidate's own prose before being anchored to date-only lines; v24.6.413 finds the
+  real cause — the reconciler replaced a correct parse with a wrong table read from
+  the source — fixes it, makes the date rewrite reach the model on the real upload
+  path, and keeps the parse warning on screen. All await owner
   testing. No release or native
   protected build is produced by this work; protected builds remain manual.
 

@@ -158,6 +158,9 @@ function renderBatchList() {
       + '<div class="batch-file-info">'
       +   '<div class="batch-file-name">' + esc(bf.file.name) + '</div>'
       +   '<div class="' + statusClass + '">' + esc(statusText) + '</div>'
+      +   (bf.parseWarning && (bf.status === 'done-ok' || bf.status === 'done-blind')
+            ? '<div class="cv-parse-warning batch" role="alert">\u26a0 ' + esc(bf.parseWarning) + '</div>'
+            : '')
       +   progHtml
       + '</div>'
       + timerHtml
@@ -364,7 +367,10 @@ async function runBatch() {
       }
       var cvData = pData.data;
       var batchLabelLevels = Array.isArray(pData.bullet_levels) ? pData.bullet_levels : null;
-      if (pData.warning) showToast(bf.file.name + ': ' + pData.warning, 'info');
+      // In a batch each file's toast replaces the last, so the warning is also
+      // kept on the file's own row, where it stays until that file is removed.
+      bf.parseWarning = String((pData && pData.warning) || '').trim();
+      if (bf.parseWarning) showToast(bf.file.name + ': ' + bf.parseWarning, 'warn');
       bf.cost += responseCost(pData, route.model, route.provider);
       bf.usage = mergeUsageClient(bf.usage, pData.usage || {});
 

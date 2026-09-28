@@ -80,7 +80,11 @@ async function startFormat(blind) {
       recordPaidAiFailure('Single CV parse returned no data', data, route.model, route.provider);
       throw new Error('No data in response');
     }
-    if (data.warning) showToast(data.warning, 'info');
+    // The /parse source check's warning. A toast alone is not enough: the
+    // "Parsed! Generating DOCX..." toast below replaces it almost at once, so it
+    // is also kept above the preview once that renders.
+    var parseWarning = String((data && data.warning) || '').trim();
+    if (parseWarning) showToast(parseWarning, 'warn');
     _runCost += responseCost(data, route.model, route.provider);
     _runUsage = mergeUsageClient(_runUsage, data.usage || {});
     if (withAutomaticSummary) {
@@ -128,6 +132,8 @@ async function startFormat(blind) {
     }
 
     renderPreview(_parsedData);
+    // After the preview, because rendering it replaces the whole output panel.
+    cvShowParseWarningBanner(parseWarning);
     showToast(blind ? 'Blinded! Generating DOCX…' : 'Parsed! Generating DOCX…', 'ok');
 
     // ── Step 2/3: Generate DOCX ───────────────────────────────────────────────
@@ -162,7 +168,10 @@ async function startFormat(blind) {
     var _cname = (_parsedData && _parsedData.candidate && _parsedData.candidate.name) ? _parsedData.candidate.name : 'Unknown';
     window._lastFormatStatsRecordId = statsRecord(_cname, _isBlind ? 'blind' : 'format', _runCost, route.model, '', route.provider, statsMetaFromResponse({usage:_runUsage,cost:_runCost,model:route.model,provider:route.provider}, route.model, route.provider));
     window._lastJaUrl = '';
-    showToast('Done! Click Download DOCX', 'ok');
+    // Finishing on a green "Done!" would tell the recruiter the CV is ready when
+    // the source check has just said it may be incomplete.
+    if (parseWarning) showToast('Done — but read the warning above the preview before sending this CV', 'warn');
+    else showToast('Done! Click Download DOCX', 'ok');
     markTabDone('format', _tabRun);
 
     // ── JobAdder: always show email panel, pre-fill from parsed CV ─────
@@ -614,6 +623,21 @@ function renderPreview(d) {
   }
 
   setOutput(html);
+}
+
+// A persistent notice above the preview. It stays until the next run replaces the
+// output panel. textContent, never innerHTML: the message names employers taken
+// from the uploaded CV.
+function cvShowParseWarningBanner(message) {
+  var text = String(message || '').trim();
+  if (!text) return;
+  var ob = document.getElementById('outputBox');
+  if (!ob) return;
+  var banner = document.createElement('div');
+  banner.className = 'cv-parse-warning';
+  banner.setAttribute('role', 'alert');
+  banner.textContent = '\u26a0 ' + text;
+  ob.insertBefore(banner, ob.firstChild);
 }
 
 function setOutput(html) {

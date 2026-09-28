@@ -1,4 +1,4 @@
-# v24.6.411 / v24.6.412 Year-first dates, and a shortfall that should not ship
+# v24.6.411 – v24.6.413 Year-first dates, and a shortfall that should not ship
 
 Branch: `claude/cv-year-first-dates-employer-safety`.
 Base: master `960a0866b357db702e9cc0fdbabdfcc2e60f12ae`, v24.6.410.
@@ -74,7 +74,7 @@ A fidelity audit already runs on every parse and can mark a result degraded. It
 found **zero** source employers in this CV, so it reported `ok: true` while three
 were missing: it locates employers only through `_extract_authoritative_work_rows`,
 which wants a Dates/Organization/Role table. This CV labels them instead —
-`Company: TNG Digital Sdn Bhd | Industry: Finance`.
+`Company: QRS Digital Sdn Bhd | Industry: Finance`.
 
 The audit now also reads those labels. On the reported CV it finds eight of the
 nine employers and reports the shortfall. Two guards keep it conservative:
@@ -195,8 +195,8 @@ embedded in a longer line is left alone, which is the right trade.
   swallowed the block and the referee's own "Company:" line was reported missing,
   setting `degraded` on a flawless parse. REFEREE/REFEREES added.
 - **A longer labelled name failed to match the employer the parse kept.** The
-  reported CV's own first employer — `company: Avows IT outsourcing sdn bhd(boost
-  bank sdn bhd)` against a parsed `Avows IT Outsourcing Sdn Bhd` — scored 0.6
+  reported CV's own first employer — `company: Orbix IT outsourcing sdn bhd(lumen
+  bank sdn bhd)` against a parsed `Orbix IT Outsourcing Sdn Bhd` — scored 0.6
   against a 0.67 threshold and was reported missing. `_employer_name_variants` now
   also tries the reading before a parenthesis, comma, dash or en/em dash, and the
   parenthesised brand on its own.
@@ -250,3 +250,119 @@ Full suite: **1347 passed, 23 skipped**, plus the two environment-only failures
 this container has always had. Node fixtures: **24/24**. `test_cv_date_parity.py`
 passes with all 1600+ subtests, confirming the Python/JavaScript date contract is
 untouched.
+
+
+---
+
+# v24.6.413 The real cause, and a warning that stays on screen
+
+The owner re-ran the reported CV on v24.6.412. The output was unchanged — three
+newest employers missing, education rows shown as jobs, every employer shown as
+`|` — and no warning appeared. Both earlier versions had been tested against the
+wrong input, and the diagnosis above was wrong about where the fault was.
+
+## v24.6.411 and v24.6.412 changed nothing on the real path
+
+The date tests fed `_extract_docx_text_preserve_tables`. The upload route
+(`/extract-text`) does not use that helper for this document: it joins each table
+row's cells into one line with `" | "`. The date cell therefore reaches the
+rewrite as `2025 june- current | Senior Data Engineer`, which is not a line that is
+entirely a date, so the line-anchored rewrite left all three untouched. The model
+received exactly what it received on master.
+
+**Fixed by anchoring to the cell instead of the line.** A joined row is split on
+its `|` separators and each cell that is entirely a date is rewritten; the other
+cells and the separators are returned byte-for-byte. A line with no `|` behaves
+exactly as in v24.6.412. Driven through the real `/extract-text` and `/parse`
+routes on a synthetic document with the same table shape, the model now receives
+`june 2025- current | Senior Data Engineer`, and exactly 3 of 176 lines differ
+from what the route sent before.
+
+## The AI was not the cause — the app's own reconciliation step was
+
+A perfect, hand-written parse of the reported CV was fed through `/parse` on
+master code. **It came out exactly as broken as the owner's output.** The fault
+was never the model's structured output.
+
+After the model answers, `_reconcile_work_experience_with_authoritative_table`
+rebuilds the work history from the source's own table when it finds one, and
+replaces the model's list with it. On this CV the table it found was wrong in
+three ways, all in `_extract_authoritative_work_rows`:
+
+- **Education rows were read as jobs.** The pipe-table path had no notion of
+  section, so `2014 - 2017 | Diploma …` inside Education became a work row.
+- **The company was the separator.** A row shaped `date | title` has no company
+  cell, and the borderless-table path took the leading `|` as the company.
+- **The year-first rows were dropped** because their dates did not parse, so the
+  rebuilt list simply had no entry for the three newest employers.
+
+That rebuilt list — 9 wrong rows — replaced a correct parse.
+
+Fixed, each narrowly:
+
+- A company cell with no letter or digit in it is rejected, so a row is never
+  kept with `|` as its employer.
+- Rows under an Education / Educational / Academic heading are skipped, until a
+  work-history heading or another known section heading ends that section. A
+  work table after the education table is still read. An employer named
+  "Ministry of Education" inside the work history is still kept.
+- The borderless path strips the separator from both ends of the company before
+  matching the title.
+
+When the reader cannot produce a trustworthy table it now returns nothing, and the
+reconciler steps aside and keeps the model's parse — its established behaviour for
+a CV with no table at all. On the reported CV the reader now returns 0 rows
+instead of 9 wrong ones.
+
+## The warning was shown for a fraction of a second
+
+The fidelity audit did flag the result. The browser showed it as a toast, and the
+very next line showed "Parsed! Generating DOCX…" in the same single toast element,
+so the warning was replaced before it could be read.
+
+It is now also written into a banner at the top of the preview, which stays until
+the next CV is formatted, and the final toast says "Done — but read the warning
+above the preview before sending this CV" instead of "Done!". Batch rows that
+finished with a warning carry the same message under the row. The banner is set
+with `textContent` and the batch row with `esc()`, so the message cannot inject
+markup. Create Profile is deliberately unchanged: it uses the parse only for name,
+email and phone and uploads the original file.
+
+## Regression evidence
+
+- **The new reconciler test fails on master's reconciler** and passes on this one
+  (`tests/test_cv_label_table_reconciliation.py`, 14 tests, synthetic document
+  only — no candidate data).
+- **Whole-suite reconciler differential.** Every call the existing suite makes
+  into the reconciler was recorded and replayed against master and this branch:
+  90 distinct calls, identical inputs, **0 outputs changed**. The only behaviour
+  change is on shapes no existing test covered.
+- **Whole-suite date-rewrite differential.** The only inputs the cell-anchored
+  rewrite changes across the entire suite come from this work's own two test
+  files.
+- **Real documents.** Of the documents available here, only the reported CV's
+  reconciliation changed (9 wrong rows to 0).
+- **Mutations.** Twelve mutations across the three fixes, each verified to have
+  actually changed the file; all twelve fail the suite. One earlier mutation
+  survived because the code it removed was redundant; that code was deleted.
+- One regression was caught and fixed during the work: a shared helper added to
+  `runtime-core.js` broke the batch lifecycle fixture, which loads
+  `batch-format.js` on its own. The helper was removed and the warning is read
+  inline.
+
+Full suite: **1359 passed, 23 skipped**, plus the two environment-only tests this
+container has always had to skip (antiword binary absent, Windows registry
+unavailable). Node fixtures: **25/25**. Launcher line endings match `origin/master`
+exactly.
+
+## Not changed, recommended as a follow-up
+
+- If JobAdder auto-upload is enabled, a CV that finished with a warning is still
+  uploaded automatically. Pausing auto-upload when a warning is present would be a
+  small separate change; it was left alone here so this fix does not alter any
+  upload behaviour.
+- The reconciler does not reconstruct companies from label-style rows
+  (`Company: … | Industry: …`); it steps aside so the model's parse is kept. The
+  audit still reads those labels and reports a shortfall.
+- The model's parse of the reported CV itself cannot be verified here, because it
+  needs a live paid provider call. It has to be confirmed by re-running the CV.

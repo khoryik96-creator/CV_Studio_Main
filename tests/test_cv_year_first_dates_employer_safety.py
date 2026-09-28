@@ -207,6 +207,40 @@ class YearFirstMonthNameTests(unittest.TestCase):
         # Line count and every other line are byte-identical.
         self.assertEqual(len(lines), len(document.splitlines()))
 
+    def test_a_date_cell_in_a_joined_table_row_is_turned_round(self):
+        # The upload route joins a table row's cells with " | ", so a date cell
+        # never sits alone on its line. The line-anchored version of this pass
+        # changed nothing on the CV it was written for; its tests passed because
+        # they fed it a different extractor's output.
+        f = normalize._cv_pretranslate_year_first_month_names
+        self.assertEqual(f("2025 june- current | Senior Data Engineer"),
+                         "june 2025- current | Senior Data Engineer")
+        self.assertEqual(f("2024 sept -2025 April | Data Engineer"),
+                         "sept 2024 -April 2025 | Data Engineer")
+        self.assertEqual(f("2022 march - 2024 august | Senior ETL Data Engineer"),
+                         "march 2022 - august 2024 | Senior ETL Data Engineer")
+        # The date may be any cell, and the separator spacing is preserved.
+        self.assertEqual(f("Senior Data Engineer | 2025 june - current"),
+                         "Senior Data Engineer | june 2025 - current")
+        self.assertEqual(f("2025 june- current | Senior Data Engineer "),
+                         "june 2025- current | Senior Data Engineer ")
+
+    def test_only_a_cell_that_is_entirely_a_date_is_touched(self):
+        f = normalize._cv_pretranslate_year_first_month_names
+        for text in (
+            "Apr 2019 - Mar 2022 | Assistant manager data analyst",
+            "company: Acme Sdn Bhd(Brand Sdn Bhd) | Industry Banking",
+            "2003-2006\tNORTHWIND UNIVERSITY | Bachelor's Degree | Australia",
+            "figures for 2023 may be revised | see appendix",
+            "Won the 2024 March tender | Led a team of 5",
+            "Jan 2018 Dec 2019 | Jan 2020 Dec 2021",
+            "2015 - 2018 | Jun 2019 - Present",
+            "Skills | Java | Python",
+            "a || b", "|", " | ",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(f(text), text)
+
     def test_line_endings_survive(self):
         for ending in ("\n", "\r\n"):
             with self.subTest(ending=repr(ending)):
@@ -250,16 +284,16 @@ class LabelledCompanyFidelityTests(unittest.TestCase):
         "Personal Info",
         "Name: A Candidate",
         "Experience",
-        "company: Avows IT outsourcing sdn bhd(boost bank sdn bhd) | Industry Banking",
+        "company: Orbix IT outsourcing sdn bhd(lumen bank sdn bhd) | Industry Banking",
         "June 2025- current",
         "Senior Data Engineer",
         "-Built batch processing pipelines.",
         "Experience",
-        "Company: Snssoft Sdn Bhd | industry Gaming",
+        "Company: Kelsoft Sdn Bhd | industry Gaming",
         "Sept 2024 -April 2025",
         "Data Engineer",
         "-Designed real-time streaming pipelines.",
-        "Company:TNG Digital Sdn Bhd | Industry:Finance",
+        "Company:QRS Digital Sdn Bhd | Industry:Finance",
         "Apr 2019 - Mar 2022",
         "Assistant manager data analyst",
         "-Responsible in building data ETL.",
@@ -270,14 +304,14 @@ class LabelledCompanyFidelityTests(unittest.TestCase):
     def test_labelled_employers_are_seen_without_a_work_history_table(self):
         found = fidelity._source_employers(self.SOURCE, None)
         self.assertEqual(len(found), 3)
-        self.assertIn("Snssoft Sdn Bhd", found)
-        self.assertIn("TNG Digital Sdn Bhd", found)
+        self.assertIn("Kelsoft Sdn Bhd", found)
+        self.assertIn("QRS Digital Sdn Bhd", found)
 
     def test_the_industry_cell_is_not_read_as_part_of_the_name(self):
         # The extractor joins a table row's cells with " | ".
         self.assertEqual(
-            fidelity._source_labelled_companies("Company:TNG Digital Sdn Bhd | Industry:Finance"),
-            ["TNG Digital Sdn Bhd"],
+            fidelity._source_labelled_companies("Company:QRS Digital Sdn Bhd | Industry:Finance"),
+            ["QRS Digital Sdn Bhd"],
         )
         self.assertEqual(
             fidelity._source_labelled_companies("company: Acme Sdn Bhd Industry: Retail"),
@@ -286,25 +320,25 @@ class LabelledCompanyFidelityTests(unittest.TestCase):
 
     def test_a_missing_employer_is_reported_instead_of_shipped(self):
         parsed = {"work_experiences": [
-            {"date_range": "Apr 2019 to Mar 2022", "company": "TNG Digital Sdn Bhd",
+            {"date_range": "Apr 2019 to Mar 2022", "company": "QRS Digital Sdn Bhd",
              "roles": [{"title": "Assistant Manager Data Analyst", "bullets": ["x"]}]},
         ]}
         report = fidelity.evaluate_cv_fidelity(parsed, self.SOURCE)
         self.assertFalse(report["ok"])
         missing = report["employers"]["missing"]
-        self.assertIn("Snssoft Sdn Bhd", missing)
-        self.assertTrue(any("Avows" in name for name in missing))
+        self.assertIn("Kelsoft Sdn Bhd", missing)
+        self.assertTrue(any("Orbix" in name for name in missing))
         warning = fidelity.summarize_fidelity_warning(report)
         self.assertIn("missing from the parsed result", warning)
 
     def test_a_complete_parse_raises_nothing(self):
         parsed = {"work_experiences": [
             {"date_range": "Jun 2025 to Present",
-             "company": "Avows IT outsourcing sdn bhd(boost bank sdn bhd)",
+             "company": "Orbix IT outsourcing sdn bhd(lumen bank sdn bhd)",
              "roles": [{"title": "Senior Data Engineer", "bullets": ["x"]}]},
-            {"date_range": "Sep 2024 to Apr 2025", "company": "Snssoft Sdn Bhd",
+            {"date_range": "Sep 2024 to Apr 2025", "company": "Kelsoft Sdn Bhd",
              "roles": [{"title": "Data Engineer", "bullets": ["x"]}]},
-            {"date_range": "Apr 2019 to Mar 2022", "company": "TNG Digital Sdn Bhd",
+            {"date_range": "Apr 2019 to Mar 2022", "company": "QRS Digital Sdn Bhd",
              "roles": [{"title": "Assistant Manager Data Analyst", "bullets": ["x"]}]},
         ]}
         report = fidelity.evaluate_cv_fidelity(parsed, self.SOURCE)
@@ -363,9 +397,9 @@ class LabelledCompanyFidelityTests(unittest.TestCase):
         # The label often carries a parenthesised brand or a branch location that
         # the parse legitimately drops; token overlap alone scored these as missing.
         cases = [
-            ("company: Avows IT outsourcing sdn bhd(boost bank sdn bhd)",
-             ["Avows IT Outsourcing Sdn Bhd", "Boost Bank Sdn Bhd",
-              "Avows IT outsourcing sdn bhd(boost bank sdn bhd)"]),
+            ("company: Orbix IT outsourcing sdn bhd(lumen bank sdn bhd)",
+             ["Orbix IT Outsourcing Sdn Bhd", "Lumen Bank Sdn Bhd",
+              "Orbix IT outsourcing sdn bhd(lumen bank sdn bhd)"]),
             ("Company: Acme Engineering Sdn Bhd, Shah Alam, Selangor",
              ["Acme Engineering Sdn Bhd"]),
             ("Company: Acme Sdn Bhd - Klang Valley", ["Acme Sdn Bhd"]),
@@ -405,7 +439,7 @@ class LabelledCompanyFidelityTests(unittest.TestCase):
         )
 
     def test_a_real_name_is_never_called_a_separator(self):
-        for company in ("TNG Digital Sdn Bhd", "RISK-X Sdn Bhd", "3M", "AT&T", "東京商事"):
+        for company in ("QRS Digital Sdn Bhd", "ZETA-X Sdn Bhd", "3M", "AT&T", "東京商事"):
             with self.subTest(company=company):
                 parsed = {"work_experiences": [
                     {"date_range": "Apr 2019 to Mar 2022", "company": company,

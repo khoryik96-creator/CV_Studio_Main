@@ -299,7 +299,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Year-first dates and a reported employer shortfall — v24.6.411 + v24.6.412 corrections, UNMERGED.**
+- **Year-first dates and a reported employer shortfall — v24.6.411–v24.6.413, UNMERGED.**
   Starts at merged master `960a086`. A real formatted CV came back missing the
   candidate's three most recent employers, including his current job, with two
   education rows rendered as jobs and every employer name replaced by the table
@@ -313,7 +313,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   fidelity audit, which found zero source employers here because it only reads
   Dates/Organization/Role tables, now also reads explicit "Company:" labels, so a
   shortfall is reported rather than shipped. See
-  `cv_studio_v24_6_412_year_first_dates_employer_safety_qa_report.md`.
+  `cv_studio_v24_6_413_year_first_dates_employer_safety_qa_report.md`.
   v24.6.412 corrects eight review findings, four of them introduced by v24.6.411
   and two of those actively harmful: the date rewrite matched "YYYY Month" anywhere
   in the document, so it reworded the candidate's own prose ("figures for 2023 may
@@ -324,10 +324,22 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   employer the parse kept, and a hyphenated prose word read as a label. The
   unnamed-employer report read a key the flattener never emits and counted per role
   rather than per employer.
-  Not fixed and left for a verified change: the education-into-work-experience
-  misclassification, which the audit will now flag as a shortfall; and the
-  labelled-employer reader living in the audit only, so a shortfall can be reported
-  but not repaired.
+  **v24.6.413 supersedes the diagnosis above.** The owner's re-test was unchanged
+  and showed no warning. v24.6.411/412 had been tested against
+  `_extract_docx_text_preserve_tables`, but the real `/extract-text` route joins a
+  table row's cells with " | ", so the line-anchored rewrite never fired; it is now
+  anchored to the cell. And the model was not the cause: a perfect parse fed
+  through `/parse` on master came out exactly as broken, because
+  `_extract_authoritative_work_rows` built a wrong table (education rows as jobs,
+  "|" as the company, year-first rows dropped) and the reconciler replaced the
+  parse with it. The reader now rejects a punctuation-only company, skips rows under
+  an Education heading, and strips the separator from the borderless company, so on
+  this CV it returns nothing and the reconciler keeps the parse. Whole-suite
+  reconciler differential: 90 calls, 0 outputs changed. The parse warning, which a
+  following toast replaced at once, is now a banner above the preview and under a
+  batch row. Still open: JobAdder auto-upload fires on a flagged CV (suggested
+  follow-up), and label-style rows are reported by the audit but not reconstructed
+  by the reconciler.
 
 - **Role-qualifier script fix — v24.6.410, UNMERGED.**
   Starts at merged master `5b1f2a4`. An ASCII-only letter class split an accented
