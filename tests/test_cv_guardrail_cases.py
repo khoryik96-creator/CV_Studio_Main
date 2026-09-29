@@ -121,6 +121,15 @@ class SourceRestoreGuardrails(unittest.TestCase):
                     self.assertEqual(entry.get(field), expected)
 
 
+class SummarySalaryGuardrails(unittest.TestCase):
+    def test_summary_salary(self):
+        # The same cases run against the browser copy in
+        # tests/test_cv_summary_salary_parity.js.
+        for case in _cases("summary_salary"):
+            with self.subTest(case=case["id"]):
+                self.assertEqual(normalize._cv_strip_pay_from_summary(case["bullets"]), case["expect"], case["note"])
+
+
 class DateRewriteGuardrails(unittest.TestCase):
     def test_dates(self):
         for case in _cases("date"):

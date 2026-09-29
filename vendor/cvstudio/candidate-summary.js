@@ -42,13 +42,45 @@ function getSummaryFocusPrompt() {
   return map[_summaryFocus] || '';
 }
 function boldSafeSummary(text) { return esc(text || '').replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>'); }
+// ── Salary never reaches the Summary box ────────────────────────────────────
+// A mirror of _cv_strip_pay_from_summary in cvstudio_cv_normalize.py: the same
+// patterns, run against the same "summary_salary" cases in
+// tests/fixtures/cv_guardrail_cases.json. The server applies it again before a
+// Word file is written, so this copy keeps the preview and the copied text clean.
+function cvSentenceStatesPay(sentence) {
+  // Kept inside the function so it can be loaded on its own, like its neighbours.
+  var payWord = /\b(?:salar(?:y|ies)|remunerations?|compensations?|wages?|ctc|take[\s-]?home(?:\s+pay)?|epf|kwsp)\b/i;
+  var payWordWithAmount = /\b(?:bonus(?:es)?|commissions?|allowances?|earn(?:s|ed|ing)?|(?:monthly|annual|basic|base|gross|net|hourly)\s+(?:pay|income))\b/i;
+  var ownPay = /\b(?:expected|expecting|current|present|last[\s-]+drawn|drawn|asking|desired|target|previous|minimum|discuss|negotiat\w*|open\s+to)\s+(?:\w+\s+){0,2}?(?:salar(?:y|ies)|remuneration|compensation|pay|package|ctc|wages?)\b|\b(?:salar(?:y|ies)|remuneration|compensation|pay|package|ctc)\s+(?:expectations?|expected|requirements?|negotiable|range|details?|history|of\s+(?:rm|myr|sgd|usd|\$|s\$|us\$))/i;
+  var headcount = /\d[\d,.]*\+?\s*(?:employees|staff|headcounts?|workers|people|users|clients|customers|candidates|members|records|transactions|accounts|students)\b/gi;
+  var amount = /(?:\bRM|\bMYR|\bSGD|S\$|\bUSD|US\$|\$|€|£|₹|\bINR|\bAUD|A\$|\bHKD|HK\$|\bIDR|\bRp|\bPHP|₱|\bTHB|฿|\bCNY|\bRMB|¥|\bJPY|\bEUR|\bGBP)\s?\d|\d[\d,.]*\s?(?:RM|MYR|SGD|USD|INR|AUD|HKD|IDR|PHP|THB|CNY|RMB|JPY|EUR|GBP)\b|\b\d[\d,.]*\s?k\b|\b\d{1,3}(?:,\d{3})+\b|\b(?!(?:19|20)\d{2}\b)\d{4,}\b|\b\d[\d,.]*\s*(?:per|a|\/)\s*(?:month|mth|annum|year|yr|hour)\b/i;
+  var text = String(sentence || '');
+  if (ownPay.test(text)) return true;
+  var hasAmount = amount.test(text.replace(headcount, ' '));
+  if (!hasAmount) return false;
+  return payWord.test(text) || payWordWithAmount.test(text);
+}
+function cvSummaryStripPay(bullets) {
+  if (!Array.isArray(bullets)) return bullets;
+  var sentenceSplit = /(?<=[.!?])\s+(?=[\x22\x27(*A-Z0-9])/;
+  var kept = [];
+  bullets.forEach(function(bullet){
+    var text = String(bullet == null ? '' : bullet).trim();
+    if (!text) return;
+    var sentences = text.split(sentenceSplit).filter(function(s){ return s.trim(); });
+    var remaining = sentences.filter(function(s){ return !cvSentenceStatesPay(s); });
+    if (remaining.length === sentences.length) kept.push(bullet);
+    else if (remaining.length) kept.push(remaining.map(function(s){ return s.trim(); }).join(' '));
+  });
+  return kept;
+}
 function summaryBulletLines(raw) {
   raw = String(raw || '').replace(/```(?:text|markdown|md)?/gi,'').replace(/```/g,'').trim();
   var lines = raw.split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
   var bulletLines = lines.filter(function(l){ return /^[-•*]\s+/.test(l); });
-  return (bulletLines.length ? bulletLines : lines)
+  return cvSummaryStripPay((bulletLines.length ? bulletLines : lines)
     .map(function(l){ return l.replace(/^[-•*]\s+/, '').trim(); })
-    .filter(Boolean)
+    .filter(Boolean))
     .slice(0, 20);
 }
 function renderSummaryText(raw) {
@@ -211,7 +243,7 @@ function cvSummaryPrompt(cv, modifier, focusNote, anonymize) {
   modifier = modifier || 'normal';
   var modNote = modifier === 'shorter' ? 'Use exactly 4-5 bullet points.' : modifier === 'longer' ? 'Use 8-10 detailed bullet points with useful metrics where available.' : 'Use 6-7 bullet points.';
   var anonymizeRules = anonymize ? '\nANONYMIZATION — REQUIRED:\n- Refer to the candidate only as "the candidate". Do not output the candidate name or gendered candidate pronouns.\n- Do not output email addresses, phone numbers, URLs, personal websites, or precise home addresses.\n- Do not name any employer, client, customer, product brand, university, school, or education institution. Replace them with accurate generic descriptions such as "a leading regional bank", "a global technology company", or "an established university".\n- Preserve supported job titles, responsibilities, technologies, qualifications, dates, metrics and achievements unless a detail itself directly identifies the candidate or organization.\n- Do not rename or neutralize managers, colleagues, clients, referees, or other people; simply avoid unnecessary identifying references to them.\n' : '';
-  return 'You are a senior recruitment consultant. Produce a professional candidate summary.\n\nRULES:\n- Output ONLY bullet points, no intro, no headers.\n- Every bullet starts with "- ".\n- Bold the most important keyword or phrase per bullet using **double asterisks**.\n- Third-person, professional, concise.\n- Do not invent employers, dates, certifications, industries, metrics, or achievements that are not supported by the CV.\n- Keep the candidate marketable but accurate.\n- ' + modNote + '\n' + (focusNote ? ('- ' + focusNote + '\n') : '') + anonymizeRules + '\nCV:\n---\n' + cv + '\n---';
+  return 'You are a senior recruitment consultant. Produce a professional candidate summary.\n\nRULES:\n- Output ONLY bullet points, no intro, no headers.\n- Every bullet starts with "- ".\n- Bold the most important keyword or phrase per bullet using **double asterisks**.\n- Third-person, professional, concise.\n- Do not invent employers, dates, certifications, industries, metrics, or achievements that are not supported by the CV.\n- Never mention the candidate\'s salary or pay in any form: current, last drawn, expected or asking salary, remuneration, compensation, package, bonus, commission, allowances, EPF, or whether pay is negotiable. Leave it out even when the CV states it.\n- Keep the candidate marketable but accurate.\n- ' + modNote + '\n' + (focusNote ? ('- ' + focusNote + '\n') : '') + anonymizeRules + '\nCV:\n---\n' + cv + '\n---';
 }
 function cvSummaryModifierForPreference(preference) {
   return String(preference || '').toLowerCase() === 'detailed' ? 'longer' : 'normal';

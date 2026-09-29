@@ -1954,3 +1954,89 @@ def _cv_project_group_sort_key(block):
     if start:
         return (0, start, int((block or {}).get("source_index") or 0))
     return (1, (9998, 12), int((block or {}).get("source_index") or 0))
+
+
+# ── Salary never reaches the Summary box ─────────────────────────────────────
+# A generated summary is written by a provider from the whole CV, and a CV can
+# state the candidate's current and expected salary. The summary instructions
+# forbid it, but instructions are not a guarantee, so any sentence that states
+# the candidate's pay is removed from every summary bullet before it is shown or
+# written. Mirrored exactly by cvSummaryStripPay in vendor/cvstudio/
+# candidate-summary.js; both are run against the "summary_salary" cases in
+# tests/fixtures/cv_guardrail_cases.json.
+#
+# A pay word alone is not enough -- "expertise in compensation and benefits" or
+# "gained knowledge of salary calculation" is the candidate's work, not their
+# pay. A sentence is removed when a pay word sits beside an amount, or when it
+# speaks of the candidate's own pay: expected, current, last drawn, negotiable.
+_CV_PAY_WORD = (
+    r"(?:salar(?:y|ies)|remunerations?|compensations?|wages?|ctc|"
+    r"take[\s-]?home(?:\s+pay)?|epf|kwsp)"
+)
+_CV_PAY_WORD_RE = re.compile(r"\b" + _CV_PAY_WORD + r"\b", re.I)
+# Words that are about pay only when an amount is beside them.
+_CV_PAY_WORD_WITH_AMOUNT_RE = re.compile(
+    r"\b(?:bonus(?:es)?|commissions?|allowances?|earn(?:s|ed|ing)?|"
+    r"(?:monthly|annual|basic|base|gross|net|hourly)\s+(?:pay|income))\b",
+    re.I,
+)
+# The candidate's own pay, amount or not.
+_CV_OWN_PAY_RE = re.compile(
+    r"\b(?:expected|expecting|current|present|last[\s-]+drawn|drawn|asking|desired|"
+    r"target|previous|minimum|discuss|negotiat\w*|open\s+to)\s+(?:\w+\s+){0,2}?"
+    r"(?:salar(?:y|ies)|remuneration|compensation|pay|package|ctc|wages?)\b"
+    r"|\b(?:salar(?:y|ies)|remuneration|compensation|pay|package|ctc)\s+"
+    r"(?:expectations?|expected|requirements?|negotiable|range|details?|history|"
+    r"of\s+(?:rm|myr|sgd|usd|\$|s\$|us\$))",
+    re.I,
+)
+# A count of people or records beside a figure is not an amount of money:
+# "processed salaries for 1,200 employees".
+_CV_PAY_HEADCOUNT_RE = re.compile(
+    r"\d[\d,.]*\+?\s*(?:employees|staff|headcounts?|workers|people|users|clients|"
+    r"customers|candidates|members|records|transactions|accounts|students)\b",
+    re.I,
+)
+_CV_PAY_AMOUNT_RE = re.compile(
+    r"(?:\bRM|\bMYR|\bSGD|S\$|\bUSD|US\$|\$|€|£|₹|\bINR|\bAUD|A\$|\bHKD|HK\$|\bIDR|\bRp|"
+    r"\bPHP|₱|\bTHB|฿|\bCNY|\bRMB|¥|\bJPY|\bEUR|\bGBP)\s?\d"
+    r"|\d[\d,.]*\s?(?:RM|MYR|SGD|USD|INR|AUD|HKD|IDR|PHP|THB|CNY|RMB|JPY|EUR|GBP)\b"
+    r"|\b\d[\d,.]*\s?k\b"
+    r"|\b\d{1,3}(?:,\d{3})+\b"
+    r"|\b(?!(?:19|20)\d{2}\b)\d{4,}\b"
+    r"|\b\d[\d,.]*\s*(?:per|a|/)\s*(?:month|mth|annum|year|yr|hour)\b",
+    re.I,
+)
+_CV_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+(?=[\"'(*A-Z0-9])")
+
+
+def _cv_sentence_states_pay(sentence):
+    """Whether one sentence states the candidate's pay."""
+    text = str(sentence or "")
+    if _CV_OWN_PAY_RE.search(text):
+        return True
+    has_amount = bool(_CV_PAY_AMOUNT_RE.search(_CV_PAY_HEADCOUNT_RE.sub(" ", text)))
+    if not has_amount:
+        return False
+    return bool(_CV_PAY_WORD_RE.search(text) or _CV_PAY_WORD_WITH_AMOUNT_RE.search(text))
+
+
+def _cv_strip_pay_from_summary(bullets):
+    """Summary bullets with every sentence that states the candidate's pay removed.
+
+    A bullet left with nothing is dropped; the others keep their wording.
+    """
+    if not isinstance(bullets, list):
+        return bullets
+    kept = []
+    for bullet in bullets:
+        text = str(bullet or "").strip()
+        if not text:
+            continue
+        sentences = [s for s in _CV_SENTENCE_SPLIT_RE.split(text) if s.strip()]
+        remaining = [s for s in sentences if not _cv_sentence_states_pay(s)]
+        if len(remaining) == len(sentences):
+            kept.append(bullet)
+        elif remaining:
+            kept.append(" ".join(s.strip() for s in remaining))
+    return kept

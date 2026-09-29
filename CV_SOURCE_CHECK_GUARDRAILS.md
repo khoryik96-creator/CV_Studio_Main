@@ -10,6 +10,9 @@ a real CV or a review finding. **Read it before changing any of these files:**
 - `cvstudio_cv_normalize.py`: `_cv_pretranslate_year_first_month_names` and
   `_recover_education_source_labels`
 - `cvstudio_cv_reconcile.py`: `_restore_labelled_company_qualifiers`
+- `_cv_strip_pay_from_summary` (`cvstudio_cv_normalize.py`) and its mirror
+  `cvSummaryStripPay` (`vendor/cvstudio/candidate-summary.js`): salary in the
+  Summary box
 - `vendor/cvstudio/cv-format.js`, `batch-format.js`, `create-profile.js`: how
   the warning is shown, and the auto-upload hold
 
@@ -193,6 +196,29 @@ Date", "Presently" and bare-year ends are included. A month's full stop or
 comma moves with it: "Jun. 2025". Prose ("figures for 2023 may be revised"),
 month-first dates, bare-year ranges and lines with several dates are never
 touched.
+
+## Summary box
+
+### P1
+**The generated summary never states the candidate's pay.** The AI summary
+instructions forbid it, and every sentence that states it anyway is removed from
+the summary bullets. The browser removes it first (`cvSummaryStripPay`, inside
+`summaryBulletLines`, so the preview and copied text are clean), and the server
+removes it again before any Word file is written (`_cv_strip_pay_from_summary`,
+on both the Format CV and the uploaded-DOCX paths).
+
+A sentence is removed when a pay word sits beside an amount ("Salary: RM
+17,000", "Bonus of USD 3,000 per year"), or when it speaks of the candidate's
+own pay, with or without an amount ("expected salary", "last drawn salary",
+"salary expectations are negotiable", "open to discuss remuneration"). Only that
+sentence goes. The rest of the bullet stays, and a bullet left empty is
+dropped. The candidate's work is not their pay, so these are all kept: "expertise
+in compensation and benefits", "gained knowledge of salary calculation",
+"processed salaries for 1,200 employees", "managed a USD 5 million budget",
+"developed payroll modules".
+
+The two copies must stay identical: the same cases run against both
+(`tests/test_cv_guardrail_cases.py` and `tests/test_cv_summary_salary_parity.js`).
 
 ## Screen (checked by `tests/test_cv_parse_warning_persistence_frontend.js`)
 

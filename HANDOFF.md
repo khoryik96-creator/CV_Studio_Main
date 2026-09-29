@@ -305,7 +305,16 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Year-first dates and a reported employer shortfall — v24.6.411–v24.6.418, UNMERGED.**
+- **Summary box salary guardrail — v24.6.419, UNMERGED.** Starts at merged master
+  `56dca18`. The generated CV Summary never states the candidate's pay: the summary
+  instructions forbid it, and any sentence stating it is removed in the browser
+  (`cvSummaryStripPay` inside `summaryBulletLines`) and again on the server before a
+  Word file is written (`_cv_strip_pay_from_summary`, both `/generate-docx` paths).
+  Rule P1 in `CV_SOURCE_CHECK_GUARDRAILS.md`; the same 35 cases run against both
+  copies. See `cv_studio_v24_6_419_summary_salary_guardrail_qa_report.md`.
+
+- **Year-first dates and a reported employer shortfall — v24.6.411–v24.6.418, MERGED
+  via PR #216 as `56dca18`.**
   Starts at merged master `960a086`. A real formatted CV came back missing the
   candidate's three most recent employers, including his current job, with two
   education rows rendered as jobs and every employer name replaced by the table

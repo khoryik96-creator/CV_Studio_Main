@@ -3205,6 +3205,391 @@
     "major": null
    },
    "note": ""
+  },
+  {
+   "id": "P1-remove-0",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Expected salary RM16,000."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-1",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "**Salary expectation**: negotiable"
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-2",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Current package of RM 15k per month."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-3",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Seeking a role with salary above 10000."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-4",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Open to discuss remuneration."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-5",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Earned RM 12k monthly with bonuses."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-6",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Last drawn salary: 12000"
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-7",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Salary: RM17000"
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-8",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Current salary of MYR 9,500 and expected salary of MYR 12,000."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-9",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Salary expectations are negotiable."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-10",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Asking salary SGD 8k."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-11",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Expects a monthly pay of 7500."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-12",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Bonus of USD 3,000 per year."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-13",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Earns 4,500 a month."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-14",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Take-home pay RM 6,200."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-15",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Total compensation of $180k."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-16",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "EPF contribution of RM 1,200."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-keep-0",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Expertise in compensation and benefits (C&B) for 500 staff."
+   ],
+   "expect": [
+    "Expertise in compensation and benefits (C&B) for 500 staff."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-1",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Gained knowledge of salary calculation in the HR department."
+   ],
+   "expect": [
+    "Gained knowledge of salary calculation in the HR department."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-2",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Processed salaries for 1,200 employees."
+   ],
+   "expect": [
+    "Processed salaries for 1,200 employees."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-3",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Reduced operating costs by RM 2M."
+   ],
+   "expect": [
+    "Reduced operating costs by RM 2M."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-4",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed a USD 5 million budget."
+   ],
+   "expect": [
+    "Managed a USD 5 million budget."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-5",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Earned promotion within 2 years."
+   ],
+   "expect": [
+    "Earned promotion within 2 years."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-6",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Maintained a Pay-slip portal for a retail chain."
+   ],
+   "expect": [
+    "Maintained a Pay-slip portal for a retail chain."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-7",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Holds a Bachelor's Degree since 2006."
+   ],
+   "expect": [
+    "Holds a Bachelor's Degree since 2006."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-8",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Senior Data Engineer with 11+ years of experience."
+   ],
+   "expect": [
+    "Senior Data Engineer with 11+ years of experience."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-9",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Developed payroll modules in PHP."
+   ],
+   "expect": [
+    "Developed payroll modules in PHP."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-10",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Grew annual revenue to RM 40 million."
+   ],
+   "expect": [
+    "Grew annual revenue to RM 40 million."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-11",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Led a team of 12 engineers across 3 countries."
+   ],
+   "expect": [
+    "Led a team of 12 engineers across 3 countries."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-12",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "**Compensation & Benefits** specialist with 8 years in banking."
+   ],
+   "expect": [
+    "**Compensation & Benefits** specialist with 8 years in banking."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-13",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Designed salary benchmarking dashboards for HR."
+   ],
+   "expect": [
+    "Designed salary benchmarking dashboards for HR."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-14",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Led the 2023 salary benchmarking exercise for HR."
+   ],
+   "expect": [
+    "Led the 2023 salary benchmarking exercise for HR."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-sentence",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Senior engineer with 11 years in banking. Expected salary RM16,000. Open to hybrid work."
+   ],
+   "expect": [
+    "Senior engineer with 11 years in banking. Open to hybrid work."
+   ],
+   "note": "only the pay sentence goes"
+  },
+  {
+   "id": "P1-mixed",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Built streaming pipelines.",
+    "Salary: RM 12k",
+    "Led data platform migration."
+   ],
+   "expect": [
+    "Built streaming pipelines.",
+    "Led data platform migration."
+   ],
+   "note": ""
+  },
+  {
+   "id": "P1-empty",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [],
+   "expect": [],
+   "note": ""
   }
  ]
 }
