@@ -102,6 +102,25 @@ class SourceCheckGuardrails(unittest.TestCase):
                 self.assertEqual(bool(report["employers"]["unnamed"]), case["expect_reported"])
 
 
+class SourceRestoreGuardrails(unittest.TestCase):
+    def test_company_restore(self):
+        for case in _cases("company_restore"):
+            with self.subTest(case=case["id"]):
+                parsed = {"candidate": {"current_company": case["company"]},
+                          "work_experiences": [{"company": case["company"]}]}
+                out = reconcile._restore_labelled_company_qualifiers(parsed, "\n".join(case["lines"]))
+                self.assertEqual(out["work_experiences"][0]["company"], case["expect"], case["note"])
+                self.assertEqual(out["candidate"]["current_company"], case["expect"])
+
+    def test_education_restore(self):
+        for case in _cases("education_restore"):
+            with self.subTest(case=case["id"]):
+                entry = dict(case["entry"])
+                normalize._recover_education_source_labels(entry, "\n".join(case["lines"]))
+                for field, expected in case["expect"].items():
+                    self.assertEqual(entry.get(field), expected)
+
+
 class DateRewriteGuardrails(unittest.TestCase):
     def test_dates(self):
         for case in _cases("date"):

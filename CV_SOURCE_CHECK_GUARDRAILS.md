@@ -7,7 +7,9 @@ a real CV or a review finding. **Read it before changing any of these files:**
 - `cvstudio_cv_reconcile.py`: `_extract_authoritative_work_rows` (the work-row
   reader) and the education, separator and heading rules above it
 - `cvstudio_cv_fidelity.py`: the source check (missing and unnamed employers)
-- `cvstudio_cv_normalize.py`: `_cv_pretranslate_year_first_month_names`
+- `cvstudio_cv_normalize.py`: `_cv_pretranslate_year_first_month_names` and
+  `_recover_education_source_labels`
+- `cvstudio_cv_reconcile.py`: `_restore_labelled_company_qualifiers`
 - `vendor/cvstudio/cv-format.js`, `batch-format.js`, `create-profile.js`: how
   the warning is shown, and the auto-upload hold
 
@@ -150,6 +152,37 @@ dash also counts.
 **Only a real separator is an unnamed employer.** A parsed company of "|" or
 ":" is reported. A "-", "—", "." or "N/A" is a deliberate placeholder and is
 not.
+
+## Putting back what the AI dropped
+
+The AI is told to keep all of these, and sometimes still doesn't, so each one is
+also restored from the original CV after the AI answers. The same principle
+applies: only what the source states word for word is restored, and when
+unsure, nothing changes.
+
+### F1
+**A bracket in an employer's name is kept.** Take "company: Acme outsourcing sdn
+bhd(Contoso bank sdn bhd)". If the AI returns "Acme Outsourcing Sdn Bhd", the
+bracket is put back, along with the candidate's Current Company. This only
+happens when the AI's name is exactly the part before the bracket, ignoring
+legal forms such as Sdn Bhd, and only for names the CV labels with "Company:".
+A bracket with figures (a date), a different company, a name that already has
+a bracket, or two different brackets for the same name are all left alone.
+Code: `_restore_labelled_company_qualifiers`.
+
+### F2
+**The CGPA label is kept.** If the AI returns "2.0 / 4.0" and the lines under
+that institution say "CGPA 2.0 / 4.0", the result is "CGPA 2.0 / 4.0". The
+label (CGPA, GPA, CWA, WAM, Grade Point Average) must sit right before the same
+figure. A different figure, another word such as "Result", or two different
+labels change nothing. Code: `_recover_education_source_labels`.
+
+### F3
+**A stated major is kept.** A "Major", "Major:", "Major - ", "Majoring in" or
+"Major | value" line under an institution fills the entry's major. The Word
+file and preview show it as "Major: …" under the degree. A sentence such as
+"Major in the arts club", two different majors, or a line past the next
+qualification or section heading changes nothing.
 
 ## Dates
 

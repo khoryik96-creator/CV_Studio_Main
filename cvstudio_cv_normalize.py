@@ -1414,6 +1414,7 @@ def _normalize_cv_data_for_output(
     for edu in parsed.get("education") or []:
         if not isinstance(edu, dict):
             continue
+        _recover_education_source_labels(edu, source_text)
         recovered_date = _recover_education_date_range(edu, source_text)
         if recovered_date:
             edu["date_range"] = recovered_date
@@ -1750,6 +1751,107 @@ def _sort_work_experiences_reverse_chronological(experiences):
 def _sort_cv_roles_reverse_chronological(roles):
     """Sort dated roles newest-first without moving undated roles."""
     return _sort_cv_dated_items_in_place(roles)
+
+
+# A grade label written before the figure: "CGPA 2.0 / 4.0", "GPA: 3.8/4.0".
+_CV_EDU_GRADE_LABEL = r"(?:C?GPA|CWA|WAM|Grade\s+Point\s+Average)"
+# A major or specialisation stated on its own line or cell under a qualification:
+# "Major: Finance", "Major<tab>Finance", "Major - Finance", "Majoring in Finance".
+# A bare space after "Major" is not a label -- "Major in the arts club" is prose.
+_CV_EDU_MAJOR_RE = re.compile(
+    r"^\s*(?:(?:majors?|speciali[sz]ation)\s*(?:[:\uff1a]|\t|\s[-\u2013]\s)"
+    r"|(?:majoring|majored|speciali[sz]ed)\s+in\s)"
+    r"\s*(?P<value>[^|\r\n]*[^\W\d_][^|\r\n]*?)\s*$",
+    re.I,
+)
+# The label alone in its cell, with the value in the next one: "Major | Finance".
+_CV_EDU_MAJOR_LABEL_CELL_RE = re.compile(r"^\s*(?:majors?|speciali[sz]ation)\s*[:\uff1a]?\s*$", re.I)
+_CV_EDU_BLOCK_YEAR_RE = re.compile(r"\b(?:19|20)\d{2}\b")
+
+
+def _education_source_blocks(education, source_text):
+    """The source lines under each place this qualification's institution appears.
+
+    A block starts at the line naming the institution and runs to the next line
+    carrying a year (the next qualification), a section heading, or six lines,
+    whichever comes first.
+    """
+    needle = re.sub(r"\s+", " ", str(education.get("institution") or "")).strip().lower()
+    if len(needle) < 3:
+        return []
+    lines = str(source_text or "").splitlines()
+    blocks = []
+    for index, line in enumerate(lines):
+        if needle not in re.sub(r"\s+", " ", line).lower():
+            continue
+        block = [line]
+        for following in lines[index + 1:index + 7]:
+            text = following.strip()
+            if not text:
+                continue
+            if _CV_EDU_BLOCK_YEAR_RE.search(text):
+                break
+            if _cv_source_boundary_key(re.sub(r"[\s:]+$", "", text)) in _CV_SOURCE_SECTION_BOUNDARY_KEYS:
+                break
+            block.append(text)
+        blocks.append(block)
+    return blocks
+
+
+def _recover_education_source_labels(education, source_text):
+    """Put back the CGPA label and the major a provider dropped from an entry.
+
+    A provider asked to copy the CGPA "exactly as written" can still return only
+    the figure -- "2.0 / 4.0" from "CGPA 2.0 / 4.0" -- and a "Major" line under a
+    qualification has no field of its own unless one is given. Both are read only
+    from the lines under this entry's institution in the source, and only when
+    every place the institution appears agrees; otherwise nothing is changed.
+    """
+    if not isinstance(education, dict) or not str(source_text or "").strip():
+        return education
+    blocks = _education_source_blocks(education, source_text)
+    if not blocks:
+        return education
+
+    cgpa = str(education.get("cgpa") or "").strip()
+    # Only a value with no grade label of its own: "2.0 / 4.0", "3.5 out of 4.0".
+    if cgpa and not re.search(r"\b" + _CV_EDU_GRADE_LABEL + r"\b", cgpa, re.I):
+        figure = r"\s*".join(re.escape(part) for part in cgpa.split())
+        labels = set()
+        for block in blocks:
+            for line in block:
+                match = re.search(
+                    r"\b(?P<label>" + _CV_EDU_GRADE_LABEL + r")\b\s*[:\uff1a=\-]?\s*" + figure + r"(?![\d.])",
+                    line,
+                    re.I,
+                )
+                if match:
+                    label = re.sub(r"\s+", " ", match.group("label"))
+                    labels.add(label.upper() if " " not in label else label)
+        if len(labels) == 1:
+            education["cgpa"] = "{} {}".format(labels.pop(), cgpa)
+
+    if not str(education.get("major") or "").strip():
+        majors = set()
+        for block in blocks:
+            for line in block:
+                cells = line.split("|")
+                for position, cell in enumerate(cells):
+                    match = _CV_EDU_MAJOR_RE.match(cell)
+                    if match:
+                        majors.add(re.sub(r"\s+", " ", match.group("value")).strip())
+                    elif (
+                        _CV_EDU_MAJOR_LABEL_CELL_RE.match(cell)
+                        and position + 1 < len(cells)
+                        and re.search(r"[^\W\d_]", cells[position + 1])
+                    ):
+                        majors.add(re.sub(r"\s+", " ", cells[position + 1]).strip())
+        # Kept even when the qualification's name already hints at it ("SPM in
+        # Sciences" with "Major: science"): the source states both.
+        if len(majors) == 1:
+            major = majors.pop()
+            education["major"] = major[:1].upper() + major[1:]
+    return education
 
 
 def _recover_education_date_range(education, source_text):

@@ -2716,6 +2716,495 @@
    "text": "2003-2006",
    "expect": "2003-2006",
    "note": ""
+  },
+  {
+   "id": "F1-restore-0",
+   "rule": "F1",
+   "kind": "company_restore",
+   "lines": [
+    "WORK EXPERIENCE",
+    "company: Northwind outsourcing sdn bhd(contoso bank sdn bhd) | Industry Banking"
+   ],
+   "company": "Northwind Outsourcing Sdn Bhd",
+   "expect": "Northwind Outsourcing Sdn Bhd (contoso bank sdn bhd)",
+   "note": ""
+  },
+  {
+   "id": "F1-restore-1",
+   "rule": "F1",
+   "kind": "company_restore",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd (Lumen Bank)"
+   ],
+   "company": "Acme Sdn Bhd",
+   "expect": "Acme Sdn Bhd (Lumen Bank)",
+   "note": ""
+  },
+  {
+   "id": "F1-restore-2",
+   "rule": "F1",
+   "kind": "company_restore",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd (Lumen Bank)"
+   ],
+   "company": "Acme",
+   "expect": "Acme (Lumen Bank)",
+   "note": ""
+  },
+  {
+   "id": "F1-keep-0",
+   "rule": "F1",
+   "kind": "company_restore",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd (2019 - 2021)"
+   ],
+   "company": "Acme Sdn Bhd",
+   "expect": "Acme Sdn Bhd",
+   "note": "when unsure, the parsed name is kept"
+  },
+  {
+   "id": "F1-keep-1",
+   "rule": "F1",
+   "kind": "company_restore",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd (Lumen Bank)"
+   ],
+   "company": "Acme Holdings",
+   "expect": "Acme Holdings",
+   "note": "when unsure, the parsed name is kept"
+  },
+  {
+   "id": "F1-keep-2",
+   "rule": "F1",
+   "kind": "company_restore",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd (Lumen Bank)"
+   ],
+   "company": "Acme Sdn Bhd (Other)",
+   "expect": "Acme Sdn Bhd (Other)",
+   "note": "when unsure, the parsed name is kept"
+  },
+  {
+   "id": "F1-keep-3",
+   "rule": "F1",
+   "kind": "company_restore",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd (Lumen Bank)"
+   ],
+   "company": "Acme (Sdn Bhd)",
+   "expect": "Acme (Sdn Bhd)",
+   "note": "when unsure, the parsed name is kept"
+  },
+  {
+   "id": "F1-keep-4",
+   "rule": "F1",
+   "kind": "company_restore",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd"
+   ],
+   "company": "Acme Sdn Bhd",
+   "expect": "Acme Sdn Bhd",
+   "note": "when unsure, the parsed name is kept"
+  },
+  {
+   "id": "F1-keep-5",
+   "rule": "F1",
+   "kind": "company_restore",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme (Lumen)",
+    "Company: Acme (Other)"
+   ],
+   "company": "Acme",
+   "expect": "Acme",
+   "note": "when unsure, the parsed name is kept"
+  },
+  {
+   "id": "F1-keep-6",
+   "rule": "F1",
+   "kind": "company_restore",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Acme Sdn Bhd (Lumen Bank)"
+   ],
+   "company": "Acme Sdn Bhd",
+   "expect": "Acme Sdn Bhd",
+   "note": "when unsure, the parsed name is kept"
+  },
+  {
+   "id": "F2-0",
+   "rule": "F2",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University | Bachelor",
+    "Major\tIT and management",
+    " \tCGPA\t2.0 / 4.0"
+   ],
+   "entry": {
+    "institution": "Northwind University",
+    "cgpa": "2.0 / 4.0"
+   },
+   "expect": {
+    "cgpa": "CGPA 2.0 / 4.0"
+   },
+   "note": ""
+  },
+  {
+   "id": "F2-1",
+   "rule": "F2",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "GPA: 3.8/4.0"
+   ],
+   "entry": {
+    "institution": "Northwind University",
+    "cgpa": "3.8/4.0"
+   },
+   "expect": {
+    "cgpa": "GPA 3.8/4.0"
+   },
+   "note": ""
+  },
+  {
+   "id": "F2-2",
+   "rule": "F2",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "Grade Point Average: 3.2"
+   ],
+   "entry": {
+    "institution": "Northwind University",
+    "cgpa": "3.2"
+   },
+   "expect": {
+    "cgpa": "Grade Point Average 3.2"
+   },
+   "note": ""
+  },
+  {
+   "id": "F2-3",
+   "rule": "F2",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "CGPA 3.85"
+   ],
+   "entry": {
+    "institution": "Northwind University",
+    "cgpa": "3.8"
+   },
+   "expect": {
+    "cgpa": "3.8"
+   },
+   "note": ""
+  },
+  {
+   "id": "F2-4",
+   "rule": "F2",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "Result 3.5"
+   ],
+   "entry": {
+    "institution": "Northwind University",
+    "cgpa": "3.5"
+   },
+   "expect": {
+    "cgpa": "3.5"
+   },
+   "note": ""
+  },
+  {
+   "id": "F2-5",
+   "rule": "F2",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "CGPA 3.5",
+    "Contoso College 2019",
+    "GPA 3.5"
+   ],
+   "entry": {
+    "institution": "Northwind University",
+    "cgpa": "3.5"
+   },
+   "expect": {
+    "cgpa": "CGPA 3.5"
+   },
+   "note": ""
+  },
+  {
+   "id": "F2-6",
+   "rule": "F2",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "CGPA 3.5"
+   ],
+   "entry": {
+    "institution": "Northwind University",
+    "cgpa": "CGPA 3.5"
+   },
+   "expect": {
+    "cgpa": "CGPA 3.5"
+   },
+   "note": ""
+  },
+  {
+   "id": "F2-7",
+   "rule": "F2",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "CGPA 3.5",
+    "GPA 3.5"
+   ],
+   "entry": {
+    "institution": "Northwind University",
+    "cgpa": "3.5"
+   },
+   "expect": {
+    "cgpa": "3.5"
+   },
+   "note": ""
+  },
+  {
+   "id": "F2-8",
+   "rule": "F2",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "CGPA 3.5 out of 4.0"
+   ],
+   "entry": {
+    "institution": "Northwind University",
+    "cgpa": "3.5 out of 4.0"
+   },
+   "expect": {
+    "cgpa": "CGPA 3.5 out of 4.0"
+   },
+   "note": ""
+  },
+  {
+   "id": "F2-9",
+   "rule": "F2",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "CGPA 3.5 GPA"
+   ],
+   "entry": {
+    "institution": "Northwind University",
+    "cgpa": "3.5 GPA"
+   },
+   "expect": {
+    "cgpa": "3.5 GPA"
+   },
+   "note": ""
+  },
+  {
+   "id": "F3-0",
+   "rule": "F3",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "Major\tIT and management"
+   ],
+   "entry": {
+    "institution": "Northwind University"
+   },
+   "expect": {
+    "major": "IT and management"
+   },
+   "note": ""
+  },
+  {
+   "id": "F3-1",
+   "rule": "F3",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "Major: Finance"
+   ],
+   "entry": {
+    "institution": "Northwind University"
+   },
+   "expect": {
+    "major": "Finance"
+   },
+   "note": ""
+  },
+  {
+   "id": "F3-2",
+   "rule": "F3",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "Major - Finance"
+   ],
+   "entry": {
+    "institution": "Northwind University"
+   },
+   "expect": {
+    "major": "Finance"
+   },
+   "note": ""
+  },
+  {
+   "id": "F3-3",
+   "rule": "F3",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "Majoring in Finance"
+   ],
+   "entry": {
+    "institution": "Northwind University"
+   },
+   "expect": {
+    "major": "Finance"
+   },
+   "note": ""
+  },
+  {
+   "id": "F3-4",
+   "rule": "F3",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "Major | Finance"
+   ],
+   "entry": {
+    "institution": "Northwind University"
+   },
+   "expect": {
+    "major": "Finance"
+   },
+   "note": ""
+  },
+  {
+   "id": "F3-5",
+   "rule": "F3",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University | Bachelor | Major: Finance"
+   ],
+   "entry": {
+    "institution": "Northwind University"
+   },
+   "expect": {
+    "major": "Finance"
+   },
+   "note": ""
+  },
+  {
+   "id": "F3-6",
+   "rule": "F3",
+   "kind": "education_restore",
+   "lines": [
+    "Sekolah Menengah Contoh | SPM in Sciences",
+    " \tMajor\tscience"
+   ],
+   "entry": {
+    "institution": "Sekolah Menengah Contoh"
+   },
+   "expect": {
+    "major": "Science"
+   },
+   "note": ""
+  },
+  {
+   "id": "F3-7",
+   "rule": "F3",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "Major in the arts club"
+   ],
+   "entry": {
+    "institution": "Northwind University"
+   },
+   "expect": {
+    "major": null
+   },
+   "note": ""
+  },
+  {
+   "id": "F3-8",
+   "rule": "F3",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "Major league player"
+   ],
+   "entry": {
+    "institution": "Northwind University"
+   },
+   "expect": {
+    "major": null
+   },
+   "note": ""
+  },
+  {
+   "id": "F3-9",
+   "rule": "F3",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "Major: Finance",
+    "Major: Accounting"
+   ],
+   "entry": {
+    "institution": "Northwind University"
+   },
+   "expect": {
+    "major": null
+   },
+   "note": ""
+  },
+  {
+   "id": "F3-10",
+   "rule": "F3",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "2019",
+    "Major: Finance"
+   ],
+   "entry": {
+    "institution": "Northwind University"
+   },
+   "expect": {
+    "major": null
+   },
+   "note": ""
+  },
+  {
+   "id": "F3-11",
+   "rule": "F3",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "SUMMARY:",
+    "Major: Finance"
+   ],
+   "entry": {
+    "institution": "Northwind University"
+   },
+   "expect": {
+    "major": null
+   },
+   "note": ""
   }
  ]
 }

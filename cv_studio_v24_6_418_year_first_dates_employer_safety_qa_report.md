@@ -1,4 +1,4 @@
-# v24.6.411 – v24.6.417 Year-first dates, and a shortfall that should not ship
+# v24.6.411 – v24.6.418 Year-first dates, and a shortfall that should not ship
 
 Branch: `claude/cv-year-first-dates-employer-safety`.
 Base: master `960a0866b357db702e9cc0fdbabdfcc2e60f12ae`, v24.6.410.
@@ -742,3 +742,79 @@ test before review.
   caught.
 - Full suite **1415 passed, 23 skipped**, plus the two environment-only tests.
   Node **25/25**. Launcher line endings match `origin/master`.
+
+
+---
+
+# v24.6.418 Keep the bracketed employer name, the CGPA label and the majors
+
+The owner re-ran the reported CV on v24.6.417. All nine employers, their dates and
+their names came out right. Three smaller losses remained, all from the
+provider's reading, and the owner asked for all three to be fixed.
+
+## What was lost
+
+1. **The bank in the current employer's name.** The source labels it
+   `company: <outsourcer> sdn bhd(<bank> sdn bhd)`; the provider returned only the
+   part before the bracket, so the CV no longer said which bank the candidate
+   works at.
+2. **The CGPA label.** The source says `CGPA 2.0 / 4.0`; the provider returned
+   `2.0 / 4.0`, and the Word file prints the field as given.
+3. **The majors.** Two qualifications carry a `Major` line in the source.
+   Education had no field for it, so it had nowhere to go.
+
+The instructions already told the provider to keep employer names and the CGPA
+"exactly as written". It didn't, so instructions alone are not enough. Each
+detail is now also restored from the source after the parse, and the
+instructions are clarified too.
+
+## The fix
+
+- **`_restore_labelled_company_qualifiers`** (reconciler, run in `/parse` before the
+  casing pass): when a parsed employer is exactly the part before a bracket in a
+  "Company:"-labelled source name (the same words, ignoring legal forms the
+  instructions let the provider drop), the bracket is appended, and to the
+  candidate's Current Company if it held the same name. A bracket with figures,
+  a different company, a name that already has a bracket, or two different
+  brackets for one name are all left alone.
+- **`_recover_education_source_labels`** (output normaliser, only when the source
+  is available, i.e. in `/parse`): reads the lines under the entry's institution,
+  up to the next line with a year or a section heading. A CGPA with no label of
+  its own gets the source's label when the source writes it right before the
+  same figure. A `Major`, `Major:`, `Major - `, `Majoring in` or `Major | value`
+  line fills a new `major` field. Two different labels or majors, or a sentence
+  such as "Major in the arts club", change nothing.
+- **`major`** is a new education field: in the parse instructions, printed by
+  `generate.js` as "Major: …" under the degree, and shown in the preview.
+- The label reader (`_source_labelled_companies` and its patterns) moved from the
+  fidelity audit into the reconciler, unchanged, so both can use it. The audit
+  imports it from there.
+- No real candidate data was added: the examples in the instructions, comments
+  and tests are synthetic.
+
+## Guardrails
+
+Three new rules, F1–F3, in `CV_SOURCE_CHECK_GUARDRAILS.md`, with 32 new cases
+(240 in all).
+
+## Regression evidence
+
+- **Real CV end to end:** the source through `/extract-text`, `/parse` (the
+  provider's actual losses reproduced) and `/generate-docx`. The Word file shows
+  the outsourcer's name with the bank in brackets as the job heading and Current Company,
+  "CGPA 2.0 / 4.0", and "Major: IT and management" and "Major: Science" under their
+  qualifications. The restored name is recognised by the source check.
+- **Whole suite, recorded:** the two restore steps ran 129 times across the full
+  suite. Outside this branch's own tests they changed nothing. The only other
+  changes were in this branch's own synthetic CV test, whose CV has a "Major"
+  line, and those tests still pass.
+- **Replay:** 600 distinct inputs to the table reader, reconciler, date rewrite
+  and source check: 0 changes against v24.6.417 in any test (moving the label
+  reader changed nothing), and 0 against master outside this work's tests.
+- **Mutations:** every guard in the three restores and the Word "Major" line was
+  broken on purpose and caught. Three guards first survived because another
+  guard covered the same case; a case isolating each was added. One guard was
+  also widened: the CGPA label is now added to any value without a label of its
+  own ("3.5 out of 4.0"), not only a bare figure.
+- Full suite **1424 passed, 23 skipped**, plus the two environment-only tests.
+  Node **25/25**.

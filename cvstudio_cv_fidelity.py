@@ -29,6 +29,11 @@ from cvstudio_cv_normalize import (
 )
 from cvstudio_cv_reconcile import (
     _CV_SEPARATOR_ONLY_RE,
+    _LABELLED_COMPANY_RE,
+    _LABELLED_COMPANY_TRAILER_RE,
+    _LABEL_TABLE_HEADER_WORDS,
+    _looks_like_column_header,
+    _source_labelled_companies,
     _WORK_HISTORY_HEADING_RE,
     _WORK_HISTORY_STOP_WORDS,
     _extract_authoritative_work_rows,
@@ -199,87 +204,6 @@ def _label_scan_stops(line):
     if re.search(r"[:\uff1a]\s*\S", text):
         return False
     return _cv_source_boundary_key(text) in _LABEL_SCAN_BOUNDARY_KEYS
-
-
-# A CV that writes its employers as labelled cells -- "Company: Acme Sdn Bhd" --
-# has no Dates/Organization/Role columns for the authoritative-row reader to find,
-# so that reader returns nothing and a shortfall goes unnoticed. The label itself
-# is high-confidence evidence: a line that says "Company:" is naming an employer.
-# The label may open the line or a pipe-delimited cell within it, because the
-# extractor joins a table row's cells with " | " and the company is not always the
-# first column.
-#
-# The value may sit in the label's own cell ("Company: Acme") or, in a two-column
-# label table, in the next one ("Company: | Acme", "Company | Acme"). Without the
-# colon the label has to be the whole cell, so prose cannot read as a label.
-#
-# In the same cell a colon is required. An earlier draft also accepted a bare
-# hyphen, which turned a wrapped sentence beginning "Company-wide rollout of the
-# new platform" into the employer candidate "wide rollout of the new platform".
-#
-# The two forms are captured separately. Only a value in the NEXT cell can be a
-# column header ("Company | Position Held | Duration"); a value in the label's own
-# cell is always the name.
-_LABELLED_COMPANY_RE = re.compile(
-    r"(?:^|\|)[ \t]*compan(?:y|ies)(?:[ \t]+name)?[ \t]*"
-    r"(?:(?:[:\uff1a][ \t]*)?\|[ \t]*([^|\r\n]+)|[:\uff1a][ \t]*([^|\r\n]+))",
-    re.I | re.M,
-)
-
-# An Industry, Position or Duration cell riding along on the same row. The label
-# has to be followed by a colon or a spaced dash; a bare hyphen is part of a name,
-# as in "Role-Play Studios" or "Sector-X Consulting".
-_LABELLED_COMPANY_TRAILER_RE = re.compile(
-    r"\s*\b(?:industry|industries|position|duration|period|role|title|sector)\b"
-    r"(?:\s*[:\uff1a]|\s+[-\u2013\u2014]\s).*$",
-    re.I,
-)
-
-# The next column's header, read as a value when the row is a table's header row
-# ("Company | Position Held | Duration", "Company Name | Period of Employment").
-# A next-cell value made up entirely of header words names no employer. Every
-# word has to be one, so an employer that merely contains one -- "Department of
-# Statistics", "Position Partners Sdn Bhd", "Title Insurance Co" -- is still read.
-# A value in the label's own cell ("Company: Total") is never tested against this
-# list, so real names made of header words are still read there.
-_LABEL_TABLE_HEADER_WORDS = frozenset({
-    "industry", "industries", "sector", "position", "positions", "held", "title", "titles",
-    "job", "jobs", "designation", "designations", "role", "roles", "rank", "grade", "level",
-    "post", "period", "duration", "tenure", "date", "dates", "from", "to", "start",
-    "started", "end", "ended", "year", "years", "month", "months", "since", "until",
-    "employment", "employed", "department", "division", "location", "country", "city",
-    "state", "address", "salary", "pay", "remuneration", "compensation", "package",
-    "description", "duties", "duty", "responsibilities", "responsibility", "reason",
-    "reasons", "leaving", "left", "name", "company", "companies", "employer", "employers",
-    "organisation", "organization", "organisations", "organizations", "type", "nature",
-    "business", "status", "supervisor", "superior", "reporting", "report", "reports",
-    "manager", "achievements", "remarks", "remark", "notes", "contact", "number",
-    "details", "detail", "information", "info", "total", "experience", "current", "last",
-    "previous", "drawn", "basic", "monthly", "annual", "expected", "notice", "currency",
-})
-_LABEL_HEADER_FILLER_WORDS = frozenset({"of", "and", "the", "for", "in", "at", "no"})
-
-
-def _looks_like_column_header(name):
-    words = [
-        word for word in re.findall(r"[a-z]+", str(name or "").lower())
-        if word not in _LABEL_HEADER_FILLER_WORDS
-    ]
-    return bool(words) and all(word in _LABEL_TABLE_HEADER_WORDS for word in words)
-
-
-def _source_labelled_companies(cv_text):
-    """Employer names the source labels outright with a "Company:" prefix."""
-    names = []
-    for next_cell, own_cell in _LABELLED_COMPANY_RE.findall(str(cv_text or "")):
-        name = _LABELLED_COMPANY_TRAILER_RE.sub("", str(next_cell or own_cell or ""))
-        name = re.sub(r"\s+", " ", name).strip(" .,;:|-")
-        if next_cell and _looks_like_column_header(name):
-            continue
-        # A label with nothing after it, or a whole paragraph, is not a name.
-        if name and 2 <= len(name) <= 120:
-            names.append(name)
-    return names
 
 
 # A labelled name often carries more than the employer: a parenthesised brand, a

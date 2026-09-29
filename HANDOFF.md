@@ -305,7 +305,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Year-first dates and a reported employer shortfall — v24.6.411–v24.6.417, UNMERGED.**
+- **Year-first dates and a reported employer shortfall — v24.6.411–v24.6.418, UNMERGED.**
   Starts at merged master `960a086`. A real formatted CV came back missing the
   candidate's three most recent employers, including his current job, with two
   education rows rendered as jobs and every employer name replaced by the table
@@ -319,7 +319,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   fidelity audit, which found zero source employers here because it only reads
   Dates/Organization/Role tables, now also reads explicit "Company:" labels, so a
   shortfall is reported rather than shipped. See
-  `cv_studio_v24_6_417_year_first_dates_employer_safety_qa_report.md`.
+  `cv_studio_v24_6_418_year_first_dates_employer_safety_qa_report.md`.
   v24.6.412 corrects eight review findings, four of them introduced by v24.6.411
   and two of those actively harmful: the date rewrite matched "YYYY Month" anywhere
   in the document, so it reworded the candidate's own prose ("figures for 2023 may
@@ -370,7 +370,10 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   vs master or v24.6.415 outside this work's tests. v24.6.417 corrects ten more
   and adds `CV_SOURCE_CHECK_GUARDRAILS.md` with a 208-case registry covering every
   review round; it fails 154 cases on master and 20 on v24.6.416, none now.
-  Still open: the branch's earlier commits
+  v24.6.418 restores three details the provider dropped on the owner's re-test,
+  from the source after the parse: a bracketed brand in a labelled employer name,
+  the CGPA label, and "Major" lines (a new education `major` field, printed as
+  "Major: …"). Rules F1–F3 in the guardrails file. Still open: the branch's earlier commits
   contain real employer names from the reported CV, so merge with Squash and
   merge (or rewrite history, owner's call); label-style rows are reported by the
   audit but not reconstructed by the reconciler.

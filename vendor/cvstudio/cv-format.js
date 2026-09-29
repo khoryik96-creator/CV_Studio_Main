@@ -601,6 +601,8 @@ function renderPreview(d) {
     var eduTop = eduDate && eduInst ? (eduDate + ' | ' + eduInst) : (eduInst || eduDate);
     if (eduTop) html += '<div class="preview-edu-date">' + esc(eduTop) + '</div>';
     if (edu.degree && String(edu.degree).trim()) html += '<div class="preview-deg">' + esc(String(edu.degree).trim()) + '</div>';
+    var eduMajor = edu.major || edu.specialisation || edu.specialization || '';
+    if (eduMajor && String(eduMajor).trim()) html += '<div class="preview-deg">Major: ' + esc(String(eduMajor).trim()) + '</div>';
     var eduCgpa = edu.cgpa || edu.gpa || '';
     var eduHonors = edu.honors || edu.honours || edu.awards || edu.distinctions || '';
     var eduDesc = edu.description || edu.thesis || edu.dissertation || edu.project || '';

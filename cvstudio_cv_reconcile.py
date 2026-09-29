@@ -24,6 +24,7 @@ from cvstudio_cv_normalize import (
     _cv_source_boundary_key,
     _cv_text_similarity,
     _cv_token_overlap_score,
+    _cv_token_set,
     _normalize_cv_date_range,
     _smart_title_text,
 )
@@ -1404,6 +1405,150 @@ def _source_line_is_caps_heading(line):
         and not _EDUCATION_INSTITUTION_RE.search(text)
         and not _source_heading_is_education(_cv_source_boundary_key(text))
     )
+
+
+# Read by the fidelity audit's employer check and by the restore step below.
+#
+# A CV that writes its employers as labelled cells -- "Company: Acme Sdn Bhd" --
+# has no Dates/Organization/Role columns for the authoritative-row reader to find,
+# so that reader returns nothing and a shortfall goes unnoticed. The label itself
+# is high-confidence evidence: a line that says "Company:" is naming an employer.
+# The label may open the line or a pipe-delimited cell within it, because the
+# extractor joins a table row's cells with " | " and the company is not always the
+# first column.
+#
+# The value may sit in the label's own cell ("Company: Acme") or, in a two-column
+# label table, in the next one ("Company: | Acme", "Company | Acme"). Without the
+# colon the label has to be the whole cell, so prose cannot read as a label.
+#
+# In the same cell a colon is required. An earlier draft also accepted a bare
+# hyphen, which turned a wrapped sentence beginning "Company-wide rollout of the
+# new platform" into the employer candidate "wide rollout of the new platform".
+#
+# The two forms are captured separately. Only a value in the NEXT cell can be a
+# column header ("Company | Position Held | Duration"); a value in the label's own
+# cell is always the name.
+_LABELLED_COMPANY_RE = re.compile(
+    r"(?:^|\|)[ \t]*compan(?:y|ies)(?:[ \t]+name)?[ \t]*"
+    r"(?:(?:[:\uff1a][ \t]*)?\|[ \t]*([^|\r\n]+)|[:\uff1a][ \t]*([^|\r\n]+))",
+    re.I | re.M,
+)
+
+# An Industry, Position or Duration cell riding along on the same row. The label
+# has to be followed by a colon or a spaced dash; a bare hyphen is part of a name,
+# as in "Role-Play Studios" or "Sector-X Consulting".
+_LABELLED_COMPANY_TRAILER_RE = re.compile(
+    r"\s*\b(?:industry|industries|position|duration|period|role|title|sector)\b"
+    r"(?:\s*[:\uff1a]|\s+[-\u2013\u2014]\s).*$",
+    re.I,
+)
+
+# The next column's header, read as a value when the row is a table's header row
+# ("Company | Position Held | Duration", "Company Name | Period of Employment").
+# A next-cell value made up entirely of header words names no employer. Every
+# word has to be one, so an employer that merely contains one -- "Department of
+# Statistics", "Position Partners Sdn Bhd", "Title Insurance Co" -- is still read.
+# A value in the label's own cell ("Company: Total") is never tested against this
+# list, so real names made of header words are still read there.
+_LABEL_TABLE_HEADER_WORDS = frozenset({
+    "industry", "industries", "sector", "position", "positions", "held", "title", "titles",
+    "job", "jobs", "designation", "designations", "role", "roles", "rank", "grade", "level",
+    "post", "period", "duration", "tenure", "date", "dates", "from", "to", "start",
+    "started", "end", "ended", "year", "years", "month", "months", "since", "until",
+    "employment", "employed", "department", "division", "location", "country", "city",
+    "state", "address", "salary", "pay", "remuneration", "compensation", "package",
+    "description", "duties", "duty", "responsibilities", "responsibility", "reason",
+    "reasons", "leaving", "left", "name", "company", "companies", "employer", "employers",
+    "organisation", "organization", "organisations", "organizations", "type", "nature",
+    "business", "status", "supervisor", "superior", "reporting", "report", "reports",
+    "manager", "achievements", "remarks", "remark", "notes", "contact", "number",
+    "details", "detail", "information", "info", "total", "experience", "current", "last",
+    "previous", "drawn", "basic", "monthly", "annual", "expected", "notice", "currency",
+})
+_LABEL_HEADER_FILLER_WORDS = frozenset({"of", "and", "the", "for", "in", "at", "no"})
+
+
+def _looks_like_column_header(name):
+    words = [
+        word for word in re.findall(r"[a-z]+", str(name or "").lower())
+        if word not in _LABEL_HEADER_FILLER_WORDS
+    ]
+    return bool(words) and all(word in _LABEL_TABLE_HEADER_WORDS for word in words)
+
+
+def _source_labelled_companies(cv_text):
+    """Employer names the source labels outright with a "Company:" prefix."""
+    names = []
+    for next_cell, own_cell in _LABELLED_COMPANY_RE.findall(str(cv_text or "")):
+        name = _LABELLED_COMPANY_TRAILER_RE.sub("", str(next_cell or own_cell or ""))
+        name = re.sub(r"\s+", " ", name).strip(" .,;:|-")
+        if next_cell and _looks_like_column_header(name):
+            continue
+        # A label with nothing after it, or a whole paragraph, is not a name.
+        if name and 2 <= len(name) <= 120:
+            names.append(name)
+    return names
+
+
+# A bracket that belongs to the employer's name: a brand, a parent or a trading
+# name, such as "Acme Outsourcing Sdn Bhd (Contoso Bank Sdn Bhd)". Letters only:
+# a bracket holding figures is a date or a phone number, never part of a name.
+_COMPANY_NAME_BRACKET_RE = re.compile(r"^(?P<head>[^()]+?)\s*\((?P<inner>[^()0-9]*[^\W\d_][^()0-9]*)\)\s*$")
+
+
+def _restore_labelled_company_qualifiers(parsed, cv_text):
+    """Put back a bracketed part of an employer name the provider dropped.
+
+    The parse instructions say to keep employer names as written, but a provider
+    can still shorten "Company: Acme outsourcing sdn bhd(contoso bank sdn bhd)"
+    to "Acme Outsourcing Sdn Bhd", losing the bank the candidate actually
+    works for. Only a name the source labels with "Company:" is used, and only
+    when the parsed employer is exactly the part before the bracket -- the same
+    words, ignoring legal forms such as Sdn Bhd, which the instructions allow the
+    provider to drop. The provider's own casing is kept for that part; the bracket
+    is added from the source. Nothing else is changed, and a parsed name that
+    already carries a bracket is left alone.
+    """
+    if not isinstance(parsed, dict) or not str(cv_text or "").strip():
+        return parsed
+    restorable = {}
+    for label in _source_labelled_companies(cv_text):
+        match = _COMPANY_NAME_BRACKET_RE.match(label)
+        if not match:
+            continue
+        head_tokens = frozenset(_cv_token_set(match.group("head")))
+        if not head_tokens:
+            continue
+        inner = re.sub(r"\s+", " ", match.group("inner")).strip()
+        # Two different brackets on the same name are ambiguous: restore neither.
+        if restorable.get(head_tokens, inner) != inner:
+            restorable[head_tokens] = None
+        else:
+            restorable[head_tokens] = inner
+    if not any(restorable.values()):
+        return parsed
+
+    def restored(company):
+        text = str(company or "").strip()
+        if not text or "(" in text:
+            return None
+        inner = restorable.get(frozenset(_cv_token_set(text)))
+        return "{} ({})".format(text, inner) if inner else None
+
+    changed = {}
+    for exp in parsed.get("work_experiences") or []:
+        if not isinstance(exp, dict):
+            continue
+        full = restored(exp.get("company"))
+        if full:
+            changed[str(exp.get("company")).strip()] = full
+            exp["company"] = full
+    cand = parsed.get("candidate")
+    if isinstance(cand, dict):
+        current = str(cand.get("current_company") or "").strip()
+        if current in changed:
+            cand["current_company"] = changed[current]
+    return parsed
 
 
 def _extract_authoritative_work_rows(cv_text, parsed=None):
