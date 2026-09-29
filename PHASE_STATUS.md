@@ -57,8 +57,21 @@
   `fbdf0e7`; PR #187 merged v24.6.369 as `2f345b7`; PR #188 merged v24.6.370
   as `b52b5b0`.
 - Current stop: v24.6.409 source-ownership fixes are merged as `5b1f2a4` via PR #211 and
-  confirmed on the owner's real CV. v24.6.410 adds the accented-location fix and awaits
-  owner testing. No release or native
+  confirmed on the owner's real CV. v24.6.410 adds the accented-location fix and
+  v24.6.411 normalises year-first dates written with a month name and teaches the
+  fidelity audit to see employers in a label-style CV, after a reported output lost
+  the candidate's three most recent employers; v24.6.412 corrects eight review
+  findings on that work, including a date rewrite that had been reworded the
+  candidate's own prose before being anchored to date-only lines; v24.6.413 finds the
+  real cause — the reconciler replaced a correct parse with a wrong table read from
+  the source — fixes it, makes the date rewrite reach the model on the real upload
+  path, and keeps the parse warning on screen; v24.6.414 corrects ten review
+  findings on that work and holds JobAdder auto-upload for a flagged CV; v24.6.415
+  corrects ten more, removing false warnings and a dropped-placeholder regression;
+  v24.6.416 corrects ten further findings, four of them regressions from v24.6.415;
+  v24.6.417 corrects ten more and adds the CV_SOURCE_CHECK_GUARDRAILS.md case registry;
+  v24.6.418 keeps a bracketed employer brand, the CGPA label and education majors. All await owner
+  testing. No release or native
   protected build is produced by this work; protected builds remain manual.
 
 ## v24.6.403-v24.6.405 CV source-safety corrective (merged via PR #210)

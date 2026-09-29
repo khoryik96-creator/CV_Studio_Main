@@ -80,7 +80,11 @@ async function startFormat(blind) {
       recordPaidAiFailure('Single CV parse returned no data', data, route.model, route.provider);
       throw new Error('No data in response');
     }
-    if (data.warning) showToast(data.warning, 'info');
+    // The /parse source check's warning. A toast alone is not enough: the
+    // "Parsed! Generating DOCX..." toast below replaces it almost at once, so it
+    // is also kept above the preview once that renders.
+    var parseWarning = cvParseWarningText(data, blind);
+    if (parseWarning) showToast(parseWarning, 'warn');
     _runCost += responseCost(data, route.model, route.provider);
     _runUsage = mergeUsageClient(_runUsage, data.usage || {});
     if (withAutomaticSummary) {
@@ -128,6 +132,8 @@ async function startFormat(blind) {
     }
 
     renderPreview(_parsedData);
+    // After the preview, because rendering it replaces the whole output panel.
+    cvShowParseWarningBanner(parseWarning);
     showToast(blind ? 'Blinded! Generating DOCX…' : 'Parsed! Generating DOCX…', 'ok');
 
     // ── Step 2/3: Generate DOCX ───────────────────────────────────────────────
@@ -162,7 +168,10 @@ async function startFormat(blind) {
     var _cname = (_parsedData && _parsedData.candidate && _parsedData.candidate.name) ? _parsedData.candidate.name : 'Unknown';
     window._lastFormatStatsRecordId = statsRecord(_cname, _isBlind ? 'blind' : 'format', _runCost, route.model, '', route.provider, statsMetaFromResponse({usage:_runUsage,cost:_runCost,model:route.model,provider:route.provider}, route.model, route.provider));
     window._lastJaUrl = '';
-    showToast('Done! Click Download DOCX', 'ok');
+    // Finishing on a green "Done!" would tell the recruiter the CV is ready when
+    // the source check has just said it may be incomplete.
+    if (parseWarning) showToast('Done — but read the warning above the preview before sending this CV', 'warn');
+    else showToast('Done! Click Download DOCX', 'ok');
     markTabDone('format', _tabRun);
 
     // ── JobAdder: always show email panel, pre-fill from parsed CV ─────
@@ -177,9 +186,16 @@ async function startFormat(blind) {
     document.getElementById('btnJA').disabled = !window._jaToken || !parsedEmail.trim();
     var jaConnHint = document.getElementById('jaConnHint');
     if (jaConnHint) jaConnHint.style.display = window._jaToken ? 'none' : 'inline';
-    // Auto-upload if JA connected, auto-upload enabled, and email found
+    // Auto-upload if JA connected, auto-upload enabled, and email found. A CV the
+    // source check flagged is held: uploading it half a second later would send
+    // it before the recruiter could read the warning. The Upload button still
+    // sends it once it has been checked.
     if (window._jaToken && window._jaAutoUpload !== false && parsedEmail.trim()) {
-      setTimeout(function() { uploadToJobAdder(); }, 500);
+      if (parseWarning) {
+        document.getElementById('jaStatus').textContent = '⏸ Auto-upload paused — check the warning above, then upload.';
+      } else {
+        setTimeout(function() { uploadToJobAdder(); }, 500);
+      }
     }
 
   } catch(e) {
@@ -585,6 +601,8 @@ function renderPreview(d) {
     var eduTop = eduDate && eduInst ? (eduDate + ' | ' + eduInst) : (eduInst || eduDate);
     if (eduTop) html += '<div class="preview-edu-date">' + esc(eduTop) + '</div>';
     if (edu.degree && String(edu.degree).trim()) html += '<div class="preview-deg">' + esc(String(edu.degree).trim()) + '</div>';
+    var eduMajor = edu.major || edu.specialisation || edu.specialization || '';
+    if (eduMajor && String(eduMajor).trim()) html += '<div class="preview-deg">Major: ' + esc(String(eduMajor).trim()) + '</div>';
     var eduCgpa = edu.cgpa || edu.gpa || '';
     var eduHonors = edu.honors || edu.honours || edu.awards || edu.distinctions || '';
     var eduDesc = edu.description || edu.thesis || edu.dissertation || edu.project || '';
@@ -614,6 +632,34 @@ function renderPreview(d) {
   }
 
   setOutput(html);
+}
+
+// A persistent notice above the preview. It stays until the next run replaces the
+// output panel. textContent, never innerHTML: the message names employers taken
+// from the uploaded CV.
+// The /parse warning as it should be shown. In Blind mode the source check's
+// warning is replaced with one that names no employer: it lists the real company
+// names the blind step exists to hide, and the banner keeps it beside the blinded
+// preview where a screenshot or screen-share would carry it.
+function cvParseWarningText(data, blind) {
+  var text = String((data && data.warning) || '').trim();
+  if (!text) return '';
+  if (blind && data.degraded_reason === 'fidelity_check') {
+    return 'The source check flagged this CV: an employer may be missing or unnamed, or detail may have been dropped. Names are hidden in Blind mode — compare it with the original CV before sending.';
+  }
+  return text;
+}
+
+function cvShowParseWarningBanner(message) {
+  var text = String(message || '').trim();
+  if (!text) return;
+  var ob = document.getElementById('outputBox');
+  if (!ob) return;
+  var banner = document.createElement('div');
+  banner.className = 'cv-parse-warning';
+  banner.setAttribute('role', 'alert');
+  banner.textContent = '\u26a0 ' + text;
+  ob.insertBefore(banner, ob.firstChild);
 }
 
 function setOutput(html) {

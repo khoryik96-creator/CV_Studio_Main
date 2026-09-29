@@ -1,0 +1,3210 @@
+{
+ "_about": "Every behaviour the CV source-reading rules must keep. See CV_SOURCE_CHECK_GUARDRAILS.md. Add a case for every new rule or review finding; never delete one without the owner's agreement.",
+ "cases": [
+  {
+   "id": "R1-sep-0",
+   "rule": "R1",
+   "kind": "rows",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Jan 2020 - Dec 2021 | | | Engineer"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "separator-only company refused"
+  },
+  {
+   "id": "R1-sep-1",
+   "rule": "R1",
+   "kind": "rows",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Jan 2020 - Dec 2021 |  |  | Engineer"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "separator-only company refused"
+  },
+  {
+   "id": "R1-sep-2",
+   "rule": "R1",
+   "kind": "rows",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Jan 2020 - Dec 2021 | :: | Engineer"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "separator-only company refused"
+  },
+  {
+   "id": "R1-sep-3",
+   "rule": "R1",
+   "kind": "rows",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Jan 2020 - Dec 2021 | : | Engineer"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "separator-only company refused"
+  },
+  {
+   "id": "R1-sep-4",
+   "rule": "R1",
+   "kind": "rows",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Jan 2020 - Dec 2021 | │ | Engineer"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "separator-only company refused"
+  },
+  {
+   "id": "R1-sep-5",
+   "rule": "R1",
+   "kind": "rows",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Jan 2020 - Dec 2021 | ｜ | Engineer"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "separator-only company refused"
+  },
+  {
+   "id": "R1-sep-borderless-0",
+   "rule": "R1",
+   "kind": "rows",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Mar 2019 - Feb 2020 : Senior Engineer"
+   ],
+   "titles": [
+    "Senior Engineer"
+   ],
+   "expect_companies": [],
+   "note": "round 5: only ASCII | is stripped"
+  },
+  {
+   "id": "R1-sep-borderless-1",
+   "rule": "R1",
+   "kind": "rows",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Mar 2020 - Feb 2021 │ Senior Engineer"
+   ],
+   "titles": [
+    "Senior Engineer"
+   ],
+   "expect_companies": [],
+   "note": "round 5: only ASCII | is stripped"
+  },
+  {
+   "id": "R1-sep-borderless-2",
+   "rule": "R1",
+   "kind": "rows",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Mar 2021 - Feb 2022 ｜ Senior Engineer"
+   ],
+   "titles": [
+    "Senior Engineer"
+   ],
+   "expect_companies": [],
+   "note": "round 5: only ASCII | is stripped"
+  },
+  {
+   "id": "R1-placeholder-0",
+   "rule": "R1",
+   "kind": "rows",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Jan 2020 - Dec 2021 | - | Engineer"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "-"
+   ],
+   "note": "career-break placeholder kept, as master does"
+  },
+  {
+   "id": "R1-placeholder-1",
+   "rule": "R1",
+   "kind": "rows",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Jan 2020 - Dec 2021 | — | Engineer"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "—"
+   ],
+   "note": "career-break placeholder kept, as master does"
+  },
+  {
+   "id": "R1-placeholder-2",
+   "rule": "R1",
+   "kind": "rows",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Jan 2020 - Dec 2021 | – | Engineer"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "–"
+   ],
+   "note": "career-break placeholder kept, as master does"
+  },
+  {
+   "id": "R1-placeholder-3",
+   "rule": "R1",
+   "kind": "rows",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Jan 2020 - Dec 2021 | -- | Engineer"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "--"
+   ],
+   "note": "career-break placeholder kept, as master does"
+  },
+  {
+   "id": "R1-placeholder-4",
+   "rule": "R1",
+   "kind": "rows",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Jan 2020 - Dec 2021 | N/A | Engineer"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "N/A"
+   ],
+   "note": "career-break placeholder kept, as master does"
+  },
+  {
+   "id": "R1-placeholder-5",
+   "rule": "R1",
+   "kind": "rows",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Jan 2020 - Dec 2021 | . | Engineer"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "."
+   ],
+   "note": "career-break placeholder kept, as master does"
+  },
+  {
+   "id": "R2-not-heading-0",
+   "rule": "R2",
+   "kind": "rows",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Jan 2020 - Present | Acme Corp | Senior Engineer",
+    "Education Consultant",
+    "Jan 2018 - Dec 2019 | Beta Bhd | Engineer",
+    "Jan 2016 - Dec 2017 | Contoso College | Diploma Programme Lecturer"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Acme Corp",
+    "Beta Bhd",
+    "Contoso College"
+   ],
+   "note": ""
+  },
+  {
+   "id": "R2-not-heading-1",
+   "rule": "R2",
+   "kind": "rows",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Jan 2020 - Present | Acme Corp | Senior Engineer",
+    "Academic Coordinator",
+    "Jan 2018 - Dec 2019 | Beta Bhd | Engineer",
+    "Jan 2016 - Dec 2017 | Contoso College | Diploma Programme Lecturer"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Acme Corp",
+    "Beta Bhd",
+    "Contoso College"
+   ],
+   "note": ""
+  },
+  {
+   "id": "R2-not-heading-2",
+   "rule": "R2",
+   "kind": "rows",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Jan 2020 - Present | Acme Corp | Senior Engineer",
+    "Educational Designer",
+    "Jan 2018 - Dec 2019 | Beta Bhd | Engineer",
+    "Jan 2016 - Dec 2017 | Contoso College | Diploma Programme Lecturer"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Acme Corp",
+    "Beta Bhd",
+    "Contoso College"
+   ],
+   "note": ""
+  },
+  {
+   "id": "R2-not-heading-3",
+   "rule": "R2",
+   "kind": "rows",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Jan 2020 - Present | Acme Corp | Senior Engineer",
+    "Education Queensland",
+    "Jan 2018 - Dec 2019 | Beta Bhd | Engineer",
+    "Jan 2016 - Dec 2017 | Contoso College | Diploma Programme Lecturer"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Acme Corp",
+    "Beta Bhd",
+    "Contoso College"
+   ],
+   "note": ""
+  },
+  {
+   "id": "R2-not-heading-4",
+   "rule": "R2",
+   "kind": "rows",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Jan 2020 - Present | Acme Corp | Senior Engineer",
+    "Education Officer",
+    "Jan 2018 - Dec 2019 | Beta Bhd | Engineer",
+    "Jan 2016 - Dec 2017 | Contoso College | Diploma Programme Lecturer"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Acme Corp",
+    "Beta Bhd",
+    "Contoso College"
+   ],
+   "note": ""
+  },
+  {
+   "id": "R2-heading-0",
+   "rule": "R2",
+   "kind": "rows",
+   "lines": [
+    "Education",
+    "2003-2006 NORTHWIND UNIVERSITY | Bachelor's Degree | Australia"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": ""
+  },
+  {
+   "id": "R2-heading-1",
+   "rule": "R2",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION:",
+    "2003-2006 NORTHWIND UNIVERSITY | Bachelor's Degree | Australia"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": ""
+  },
+  {
+   "id": "R2-heading-2",
+   "rule": "R2",
+   "kind": "rows",
+   "lines": [
+    "Educational Background",
+    "2003-2006 NORTHWIND UNIVERSITY | Bachelor's Degree | Australia"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": ""
+  },
+  {
+   "id": "R2-heading-3",
+   "rule": "R2",
+   "kind": "rows",
+   "lines": [
+    "Academic Qualifications",
+    "2003-2006 NORTHWIND UNIVERSITY | Bachelor's Degree | Australia"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": ""
+  },
+  {
+   "id": "R2-heading-4",
+   "rule": "R2",
+   "kind": "rows",
+   "lines": [
+    "Education & Training",
+    "2003-2006 NORTHWIND UNIVERSITY | Bachelor's Degree | Australia"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": ""
+  },
+  {
+   "id": "R2-heading-5",
+   "rule": "R2",
+   "kind": "rows",
+   "lines": [
+    "Education and Training",
+    "2003-2006 NORTHWIND UNIVERSITY | Bachelor's Degree | Australia"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": ""
+  },
+  {
+   "id": "R3-exit-0",
+   "rule": "R3",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "2003-2006 | Northwind University | Bachelor of Science",
+    "WORK EXPERIENCE",
+    "Jan 2020 - Present | Contoso College | Diploma Programme Coordinator"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso College"
+   ],
+   "note": ""
+  },
+  {
+   "id": "R3-exit-1",
+   "rule": "R3",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "2003-2006 | Northwind University | Bachelor of Science",
+    "Employment Record",
+    "Jan 2020 - Present | Contoso College | Diploma Programme Coordinator"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso College"
+   ],
+   "note": ""
+  },
+  {
+   "id": "R3-exit-2",
+   "rule": "R3",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "2003-2006 | Northwind University | Bachelor of Science",
+    "Relevant Experience",
+    "Jan 2020 - Present | Contoso College | Diploma Programme Coordinator"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso College"
+   ],
+   "note": ""
+  },
+  {
+   "id": "R3-exit-3",
+   "rule": "R3",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "2003-2006 | Northwind University | Bachelor of Science",
+    "Job History",
+    "Jan 2020 - Present | Contoso College | Diploma Programme Coordinator"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso College"
+   ],
+   "note": ""
+  },
+  {
+   "id": "R3-exit-4",
+   "rule": "R3",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "2003-2006 | Northwind University | Bachelor of Science",
+    "Positions Held",
+    "Jan 2020 - Present | Contoso College | Diploma Programme Coordinator"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso College"
+   ],
+   "note": ""
+  },
+  {
+   "id": "R3-exit-5",
+   "rule": "R3",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "2003-2006 | Northwind University | Bachelor of Science",
+    "POSITIONS HELD",
+    "Jan 2020 - Present | Contoso College | Diploma Programme Coordinator"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso College"
+   ],
+   "note": ""
+  },
+  {
+   "id": "R3-exit-6",
+   "rule": "R3",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "2003-2006 | Northwind University | Bachelor of Science",
+    "Appointments",
+    "Jan 2020 - Present | Contoso College | Diploma Programme Coordinator"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso College"
+   ],
+   "note": ""
+  },
+  {
+   "id": "R3-exit-7",
+   "rule": "R3",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "2003-2006 | Northwind University | Bachelor of Science",
+    "Assignments",
+    "Jan 2020 - Present | Contoso College | Diploma Programme Coordinator"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso College"
+   ],
+   "note": ""
+  },
+  {
+   "id": "R3-exit-8",
+   "rule": "R3",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "2003-2006 | Northwind University | Bachelor of Science",
+    "Academic Appointments",
+    "Jan 2020 - Present | Contoso College | Diploma Programme Coordinator"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso College"
+   ],
+   "note": ""
+  },
+  {
+   "id": "R3-exit-9",
+   "rule": "R3",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "2003-2006 | Northwind University | Bachelor of Science",
+    "Professional Appointments",
+    "Jan 2020 - Present | Contoso College | Diploma Programme Coordinator"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso College"
+   ],
+   "note": ""
+  },
+  {
+   "id": "R3-exit-10",
+   "rule": "R3",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "2003-2006 | Northwind University | Bachelor of Science",
+    "WHERE I HAVE WORKED",
+    "Jan 2020 - Present | Contoso College | Diploma Programme Coordinator"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso College"
+   ],
+   "note": ""
+  },
+  {
+   "id": "R3-exit-11",
+   "rule": "R3",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "2003-2006 | Northwind University | Bachelor of Science",
+    "APPOINTMENTS",
+    "Jan 2020 - Present | Contoso College | Diploma Programme Coordinator"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso College"
+   ],
+   "note": ""
+  },
+  {
+   "id": "R3-exit-12",
+   "rule": "R3",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "2003-2006 | Northwind University | Bachelor of Science",
+    "PROFESSIONAL BACKGROUND",
+    "Jan 2020 - Present | Contoso College | Diploma Programme Coordinator"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso College"
+   ],
+   "note": ""
+  },
+  {
+   "id": "R3-academic-appointments",
+   "rule": "R3",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "2003-2006 | Northwind University | Bachelor of Science",
+    "Academic Appointments",
+    "Jan 2015 - Dec 2020 | Contoso University | Postdoctoral Fellow"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso University"
+   ],
+   "note": "round 5"
+  },
+  {
+   "id": "R3-stay-0",
+   "rule": "R3",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "Leadership Positions",
+    "Jan 2014 - Dec 2018 | Anna University | Bachelor of Engineering"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": ""
+  },
+  {
+   "id": "R3-stay-1",
+   "rule": "R3",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "LEADERSHIP POSITIONS",
+    "Jan 2014 - Dec 2018 | Anna University | Bachelor of Engineering"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": ""
+  },
+  {
+   "id": "R3-stay-2",
+   "rule": "R3",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "Key Assignments",
+    "Jan 2014 - Dec 2018 | Anna University | Bachelor of Engineering"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": ""
+  },
+  {
+   "id": "R3-stay-3",
+   "rule": "R3",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "KEY ASSIGNMENTS",
+    "Jan 2014 - Dec 2018 | Anna University | Bachelor of Engineering"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": ""
+  },
+  {
+   "id": "R3-stay-4",
+   "rule": "R3",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "Student Appointments",
+    "Jan 2014 - Dec 2018 | Anna University | Bachelor of Engineering"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": ""
+  },
+  {
+   "id": "R3-stay-5",
+   "rule": "R3",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "CO-CURRICULAR ACTIVITIES",
+    "Jan 2014 - Dec 2018 | Anna University | Bachelor of Engineering"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": ""
+  },
+  {
+   "id": "R3-stay-6",
+   "rule": "R3",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "Major IT and management",
+    "Jan 2014 - Dec 2018 | Anna University | Bachelor of Engineering"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": ""
+  },
+  {
+   "id": "R3-stay-7",
+   "rule": "R3",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "CGPA 2.0 / 4.0",
+    "Jan 2014 - Dec 2018 | Anna University | Bachelor of Engineering"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": ""
+  },
+  {
+   "id": "R3-stay-8",
+   "rule": "R3",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "NORTHWIND UNIVERSITY",
+    "Jan 2014 - Dec 2018 | Anna University | Bachelor of Engineering"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": ""
+  },
+  {
+   "id": "R4-aside-0",
+   "rule": "R4",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "Jan 2014 - Dec 2018 | Anna University | B.Tech Computer Science"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "the row alone, outside Education, is read (checked by the runner)"
+  },
+  {
+   "id": "R4-aside-1",
+   "rule": "R4",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "Jan 2014 - Dec 2018 | University of Malaya | B.A Economics"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "the row alone, outside Education, is read (checked by the runner)"
+  },
+  {
+   "id": "R4-aside-2",
+   "rule": "R4",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "Jan 2014 - Dec 2018 | Delhi University | LLB"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "the row alone, outside Education, is read (checked by the runner)"
+  },
+  {
+   "id": "R4-aside-3",
+   "rule": "R4",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "Jan 2008 - Dec 2012 | Sekolah Menengah Kebangsaan Contoh | Kuala Lumpur"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "the row alone, outside Education, is read (checked by the runner)"
+  },
+  {
+   "id": "R4-aside-4",
+   "rule": "R4",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "Jan 2013 - Dec 2014 | Fabrikam College | BA"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "the row alone, outside Education, is read (checked by the runner)"
+  },
+  {
+   "id": "R4-aside-5",
+   "rule": "R4",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "Jan 2014 - Dec 2016 | Fabrikam Community College | Associate of Arts"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "the row alone, outside Education, is read (checked by the runner)"
+  },
+  {
+   "id": "R4-aside-6",
+   "rule": "R4",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "Jan 2012 - Dec 2014 | Chartered Institute of Management Accountants | CIMA"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "the row alone, outside Education, is read (checked by the runner)"
+  },
+  {
+   "id": "R4-aside-7",
+   "rule": "R4",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "Jan 2014 - Dec 2018 | Northwind Online | B.Tech Computer Science"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "the row alone, outside Education, is read (checked by the runner)"
+  },
+  {
+   "id": "R4-aside-8",
+   "rule": "R4",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "Jan 2014 - Dec 2018 | Contoso Learning | LLB"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "the row alone, outside Education, is read (checked by the runner)"
+  },
+  {
+   "id": "R4-aside-9",
+   "rule": "R4",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "Jan 2012 - Dec 2014 | Contoso Learning | CIMA"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "the row alone, outside Education, is read (checked by the runner)"
+  },
+  {
+   "id": "R4-aside-10",
+   "rule": "R4",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "Jan 2012 - Dec 2014 | Contoso Learning | ACCA"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "the row alone, outside Education, is read (checked by the runner)"
+  },
+  {
+   "id": "R4-aside-11",
+   "rule": "R4",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "Jan 2014 - Dec 2016 | Contoso Learning | Associate of Arts"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "the row alone, outside Education, is read (checked by the runner)"
+  },
+  {
+   "id": "R4-aside-12",
+   "rule": "R4",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "2001-2002 | Northwind College | Foundation in Science"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "the row alone, outside Education, is read (checked by the runner)"
+  },
+  {
+   "id": "R4-aside-13",
+   "rule": "R4",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "2002-2002 | Contoso Institute | Certificate in Accounting"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "the row alone, outside Education, is read (checked by the runner)"
+  },
+  {
+   "id": "R4-aside-14",
+   "rule": "R4",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "2003-2005 | Contoso Polytechnic | Diploma in IT"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "the row alone, outside Education, is read (checked by the runner)"
+  },
+  {
+   "id": "R4-aside-15",
+   "rule": "R4",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "2006-2008 | Northwind University | MBA"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "the row alone, outside Education, is read (checked by the runner)"
+  },
+  {
+   "id": "R4-aside-16",
+   "rule": "R4",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "2000-2001 | Sekolah Menengah Contoh | SPM"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "the row alone, outside Education, is read (checked by the runner)"
+  },
+  {
+   "id": "R4-aside-17",
+   "rule": "R4",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "2003-2006 | Northwind University | CGPA 3.5"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "the row alone, outside Education, is read (checked by the runner)"
+  },
+  {
+   "id": "R4-institution-name-0",
+   "rule": "R4",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "Jan 2010 - Dec 2012 | Institute of Chartered Accountants | Kuala Lumpur"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "a job word in the institution's own name is not a job"
+  },
+  {
+   "id": "R4-institution-name-1",
+   "rule": "R4",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "Jan 2010 - Dec 2012 | Head Start College | Kuala Lumpur"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "a job word in the institution's own name is not a job"
+  },
+  {
+   "id": "R4-institution-name-2",
+   "rule": "R4",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "Jan 2010 - Dec 2012 | Northwind Institute of Engineers | Malaysia"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "a job word in the institution's own name is not a job"
+  },
+  {
+   "id": "R4-job-0",
+   "rule": "R4",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "Jan 2017 - Dec 2018 | Contoso Academy | Trainer"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso Academy"
+   ],
+   "note": ""
+  },
+  {
+   "id": "R4-job-1",
+   "rule": "R4",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "Jan 2017 - Dec 2018 | Northwind University | Research Assistant"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Northwind University"
+   ],
+   "note": ""
+  },
+  {
+   "id": "R4-job-2",
+   "rule": "R4",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "Jan 2015 - Dec 2020 | Contoso University | Research Fellow"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso University"
+   ],
+   "note": ""
+  },
+  {
+   "id": "R4-job-3",
+   "rule": "R4",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "Jan 2013 - Dec 2014 | Contoso University | Visiting Scholar"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso University"
+   ],
+   "note": ""
+  },
+  {
+   "id": "R4-job-4",
+   "rule": "R4",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "Jan 2012 - Dec 2013 | Contoso University | Demonstrator"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso University"
+   ],
+   "note": ""
+  },
+  {
+   "id": "R4-job-5",
+   "rule": "R4",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "2019 - Present | Acme Foundation | Program Manager"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Acme Foundation"
+   ],
+   "note": ""
+  },
+  {
+   "id": "R4-job-6",
+   "rule": "R4",
+   "kind": "rows",
+   "lines": [
+    "EDUCATION",
+    "Jan 2015 - Dec 2016 | Northwind Institute | Scrum Master"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Northwind Institute"
+   ],
+   "note": ""
+  },
+  {
+   "id": "R5-date-title",
+   "rule": "R5",
+   "kind": "rows",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Apr 2019 - Mar 2022 | Assistant manager data analyst"
+   ],
+   "titles": [
+    "Assistant manager data analyst"
+   ],
+   "expect_companies": [],
+   "note": ""
+  },
+  {
+   "id": "R5-shared-cell",
+   "rule": "R5",
+   "kind": "rows",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Jan 2020 - Present Acme Corp | Senior Engineer"
+   ],
+   "titles": [
+    "Senior Engineer"
+   ],
+   "expect_companies": [
+    "Acme Corp"
+   ],
+   "note": ""
+  },
+  {
+   "id": "R5-last-cell-title",
+   "rule": "R5",
+   "kind": "rows",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Jan 2020 - Present Beta Holdings | Data Analyst"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Beta Holdings"
+   ],
+   "note": ""
+  },
+  {
+   "id": "R5-no-cells-unchanged",
+   "rule": "R5",
+   "kind": "rows",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Jan 2020 - Present Beta Holdings Data Analyst"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Beta Holdings Data"
+   ],
+   "note": ""
+  },
+  {
+   "id": "R5-no-guessing-in-cell",
+   "rule": "R5",
+   "kind": "rows",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Jun 2025 - Present | Senior Data Engineer"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": ""
+  },
+  {
+   "id": "R5-referees-end",
+   "rule": "R5",
+   "kind": "rows",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Jan 2020 - Present Acme Corp Senior Engineer",
+    "REFEREES (available on request)",
+    "Jan 2018 - Dec 2019 Beta Holdings Manager"
+   ],
+   "titles": [
+    "Senior Engineer"
+   ],
+   "expect_companies": [
+    "Acme Corp"
+   ],
+   "note": ""
+  },
+  {
+   "id": "R6-ministry",
+   "rule": "R6",
+   "kind": "rows",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Jan 2020 - Dec 2021 | Ministry of Education | Officer",
+    "Jan 2018 - Dec 2019 | Northwind University | Lecturer"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Ministry of Education",
+    "Northwind University"
+   ],
+   "note": ""
+  },
+  {
+   "id": "R6-no-heading-table",
+   "rule": "R6",
+   "kind": "rows",
+   "lines": [
+    "Jan 2020 - Dec 2021 | Acme Sdn Bhd | Engineer",
+    "Jan 2018 - Dec 2019 | Contoso Sdn Bhd | Analyst"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Acme Sdn Bhd",
+    "Contoso Sdn Bhd"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A1-0",
+   "rule": "A1",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "Position: Engineer",
+    "REFERENCE CONTACTS",
+    "Name: Bob",
+    "Company: Beta Holdings Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [],
+   "note": ""
+  },
+  {
+   "id": "A1-1",
+   "rule": "A1",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "Position: Engineer",
+    "Professional References",
+    "Name: Bob",
+    "Company: Beta Holdings Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [],
+   "note": ""
+  },
+  {
+   "id": "A1-2",
+   "rule": "A1",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "Position: Engineer",
+    "Character Referees",
+    "Name: Bob",
+    "Company: Beta Holdings Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [],
+   "note": ""
+  },
+  {
+   "id": "A1-3",
+   "rule": "A1",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "Position: Engineer",
+    "References available upon request",
+    "Name: Bob",
+    "Company: Beta Holdings Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [],
+   "note": ""
+  },
+  {
+   "id": "A1-4",
+   "rule": "A1",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "Position: Engineer",
+    "Referee: Mr Tan",
+    "Name: Bob",
+    "Company: Beta Holdings Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [],
+   "note": ""
+  },
+  {
+   "id": "A1-5",
+   "rule": "A1",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "Position: Engineer",
+    "Referee #1",
+    "Name: Bob",
+    "Company: Beta Holdings Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [],
+   "note": ""
+  },
+  {
+   "id": "A1-6",
+   "rule": "A1",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "Position: Engineer",
+    "Reference No. 1",
+    "Name: Bob",
+    "Company: Beta Holdings Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [],
+   "note": ""
+  },
+  {
+   "id": "A1-7",
+   "rule": "A1",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "Position: Engineer",
+    "REFEREES",
+    "Name: Bob",
+    "Company: Beta Holdings Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [],
+   "note": ""
+  },
+  {
+   "id": "A1-8",
+   "rule": "A1",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "Position: Engineer",
+    "References:",
+    "Name: Bob",
+    "Company: Beta Holdings Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [],
+   "note": ""
+  },
+  {
+   "id": "A1-9",
+   "rule": "A1",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "Position: Engineer",
+    "PERSONAL DETAILS",
+    "Name: Bob",
+    "Company: Beta Holdings Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [],
+   "note": ""
+  },
+  {
+   "id": "A1-10",
+   "rule": "A1",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "Position: Engineer",
+    "Personal Particulars",
+    "Name: Bob",
+    "Company: Beta Holdings Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [],
+   "note": ""
+  },
+  {
+   "id": "A1-11",
+   "rule": "A1",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "Position: Engineer",
+    "Personal Information",
+    "Name: Bob",
+    "Company: Beta Holdings Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [],
+   "note": ""
+  },
+  {
+   "id": "A1-12",
+   "rule": "A1",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "Position: Engineer",
+    "Other Information",
+    "Name: Bob",
+    "Company: Beta Holdings Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [],
+   "note": ""
+  },
+  {
+   "id": "A2-0",
+   "rule": "A2",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "Position: Engineer",
+    "Project: Core banking migration",
+    "Company: Beta Bhd",
+    "Position: Analyst"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [
+    "Beta Bhd"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A2-1",
+   "rule": "A2",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "Position: Engineer",
+    "Summary of duties:",
+    "Company: Beta Bhd",
+    "Position: Analyst"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [
+    "Beta Bhd"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A2-2",
+   "rule": "A2",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "Position: Engineer",
+    "Skills used: Python",
+    "Company: Beta Bhd",
+    "Position: Analyst"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [
+    "Beta Bhd"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A2-3",
+   "rule": "A2",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "Position: Engineer",
+    "Achievements:",
+    "Company: Beta Bhd",
+    "Position: Analyst"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [
+    "Beta Bhd"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A2-4",
+   "rule": "A2",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "Position: Engineer",
+    "Key Achievements:",
+    "Company: Beta Bhd",
+    "Position: Analyst"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [
+    "Beta Bhd"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A2-5",
+   "rule": "A2",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "Position: Engineer",
+    "Training: 2019",
+    "Company: Beta Bhd",
+    "Position: Analyst"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [
+    "Beta Bhd"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A2-6",
+   "rule": "A2",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "Position: Engineer",
+    "Languages: 3",
+    "Company: Beta Bhd",
+    "Position: Analyst"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [
+    "Beta Bhd"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A2-7",
+   "rule": "A2",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "Position: Engineer",
+    "Reference No: 4411",
+    "Company: Beta Bhd",
+    "Position: Analyst"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [
+    "Beta Bhd"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A2-8",
+   "rule": "A2",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "Position: Engineer",
+    "Reference Number: A-12",
+    "Company: Beta Bhd",
+    "Position: Analyst"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [
+    "Beta Bhd"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A2-9",
+   "rule": "A2",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "Position: Engineer",
+    "Certifications: AWS SAA",
+    "Company: Beta Bhd",
+    "Position: Analyst"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [
+    "Beta Bhd"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A2-10",
+   "rule": "A2",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "Position: Engineer",
+    "Courses: Training",
+    "Company: Beta Bhd",
+    "Position: Analyst"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [
+    "Beta Bhd"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A2-11",
+   "rule": "A2",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "Position: Engineer",
+    "Awards: Achievements",
+    "Company: Beta Bhd",
+    "Position: Analyst"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [
+    "Beta Bhd"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A3-0",
+   "rule": "A3",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "Training",
+    "Company: Beta Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [],
+   "note": ""
+  },
+  {
+   "id": "A3-1",
+   "rule": "A3",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "Languages:",
+    "Company: Beta Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [],
+   "note": ""
+  },
+  {
+   "id": "A3-2",
+   "rule": "A3",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "Awards",
+    "Company: Beta Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [],
+   "note": ""
+  },
+  {
+   "id": "A3-3",
+   "rule": "A3",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "Hobbies & Interests",
+    "Company: Beta Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [],
+   "note": ""
+  },
+  {
+   "id": "A3-4",
+   "rule": "A3",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "AWARDS 2021",
+    "Company: Beta Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [],
+   "note": ""
+  },
+  {
+   "id": "A3-5",
+   "rule": "A3",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "EDUCATION",
+    "Company: Beta Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [],
+   "note": ""
+  },
+  {
+   "id": "A4-0",
+   "rule": "A4",
+   "kind": "missing",
+   "lines": [
+    "WORKING EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "Company: Beta Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [
+    "Beta Bhd"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A4-1",
+   "rule": "A4",
+   "kind": "missing",
+   "lines": [
+    "Working Experience:",
+    "Company: Acme Sdn Bhd",
+    "Company: Beta Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [
+    "Beta Bhd"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A4-2",
+   "rule": "A4",
+   "kind": "missing",
+   "lines": [
+    "Employment Record",
+    "Company: Acme Sdn Bhd",
+    "Company: Beta Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [
+    "Beta Bhd"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A4-3",
+   "rule": "A4",
+   "kind": "missing",
+   "lines": [
+    "Relevant Experience",
+    "Company: Acme Sdn Bhd",
+    "Company: Beta Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [
+    "Beta Bhd"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A4-4",
+   "rule": "A4",
+   "kind": "missing",
+   "lines": [
+    "EMPLOYMENT",
+    "Company: Acme Sdn Bhd",
+    "Company: Beta Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [
+    "Beta Bhd"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A4-5",
+   "rule": "A4",
+   "kind": "missing",
+   "lines": [
+    "Previous Employment",
+    "Company: Acme Sdn Bhd",
+    "Company: Beta Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [
+    "Beta Bhd"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A4-6",
+   "rule": "A4",
+   "kind": "missing",
+   "lines": [
+    "Positions Held",
+    "Company: Acme Sdn Bhd",
+    "Company: Beta Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [
+    "Beta Bhd"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A4-7",
+   "rule": "A4",
+   "kind": "missing",
+   "lines": [
+    "Work Experience",
+    "Company: Acme Sdn Bhd",
+    "Company: Beta Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [
+    "Beta Bhd"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A4-8",
+   "rule": "A4",
+   "kind": "missing",
+   "lines": [
+    "Experience",
+    "Company: Acme Sdn Bhd",
+    "Company: Beta Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [
+    "Beta Bhd"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A4-9",
+   "rule": "A4",
+   "kind": "missing",
+   "lines": [
+    "CAREER BACKGROUND",
+    "Company: Acme Sdn Bhd",
+    "Company: Beta Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [
+    "Beta Bhd"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A4-10",
+   "rule": "A4",
+   "kind": "missing",
+   "lines": [
+    "Professional Background",
+    "Company: Acme Sdn Bhd",
+    "Company: Beta Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [
+    "Beta Bhd"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A5-early-profile",
+   "rule": "A5",
+   "kind": "missing",
+   "lines": [
+    "PROFESSIONAL BACKGROUND",
+    "Ten years in banking.",
+    "KEY SKILLS",
+    "Python",
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "Company: Beta Holdings",
+    "EDUCATION"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [
+    "Beta Holdings"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A5-two-spans",
+   "rule": "A5",
+   "kind": "missing",
+   "lines": [
+    "Employment History",
+    "Company: Acme Sdn Bhd",
+    "Skills",
+    "Python",
+    "Previous Employment",
+    "Company: Beta Holdings",
+    "References",
+    "Company: Gamma Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [
+    "Beta Holdings"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A6-prose-restart",
+   "rule": "A6",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "REFERENCES",
+    "Mr Tan, Director",
+    "Work experience with the candidate: 3 years",
+    "Company: Gamma Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [],
+   "note": ""
+  },
+  {
+   "id": "A6-prose-after-section",
+   "rule": "A6",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "ADDITIONAL INFORMATION",
+    "Work experience in banking: 10 years",
+    "Company: Gamma Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [],
+   "note": "a prose line is not a heading, even after an ordinary section"
+  },
+  {
+   "id": "A6-heading-after-section",
+   "rule": "A6",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "SKILLS",
+    "Python",
+    "Work Experience",
+    "Company: Gamma Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [
+    "Gamma Bhd"
+   ],
+   "note": "a real heading does reopen after an ordinary section"
+  },
+  {
+   "id": "A6-heading-after-referees",
+   "rule": "A6",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd",
+    "REFERENCES",
+    "Mr Tan",
+    "WORK EXPERIENCE",
+    "Company: Gamma Bhd"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [],
+   "note": "nothing after a referees heading is work history"
+  },
+  {
+   "id": "A7-no-section",
+   "rule": "A7",
+   "kind": "missing",
+   "lines": [
+    "Referees",
+    "Company: Some Other Firm",
+    "Name: A Referee"
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [],
+   "note": ""
+  },
+  {
+   "id": "A7-no-section-2",
+   "rule": "A7",
+   "kind": "missing",
+   "lines": [
+    "Profile",
+    "Company: Contoso Consulting",
+    "Summary text."
+   ],
+   "kept": [
+    "Acme Sdn Bhd"
+   ],
+   "expect_missing": [],
+   "note": ""
+  },
+  {
+   "id": "A8-0",
+   "rule": "A8",
+   "kind": "labels",
+   "line": "Company | Position Held | Duration",
+   "expect": [],
+   "note": ""
+  },
+  {
+   "id": "A8-1",
+   "rule": "A8",
+   "kind": "labels",
+   "line": "Company Name | Period of Employment",
+   "expect": [],
+   "note": ""
+  },
+  {
+   "id": "A8-2",
+   "rule": "A8",
+   "kind": "labels",
+   "line": "Company | Total Experience | Position",
+   "expect": [],
+   "note": ""
+  },
+  {
+   "id": "A8-3",
+   "rule": "A8",
+   "kind": "labels",
+   "line": "Company Name | State | Country",
+   "expect": [],
+   "note": ""
+  },
+  {
+   "id": "A8-4",
+   "rule": "A8",
+   "kind": "labels",
+   "line": "Company | Job Description",
+   "expect": [],
+   "note": ""
+  },
+  {
+   "id": "A8-5",
+   "rule": "A8",
+   "kind": "labels",
+   "line": "Company | Start Date | End Date",
+   "expect": [],
+   "note": ""
+  },
+  {
+   "id": "A8-6",
+   "rule": "A8",
+   "kind": "labels",
+   "line": "Company | Tenure",
+   "expect": [],
+   "note": ""
+  },
+  {
+   "id": "A8-7",
+   "rule": "A8",
+   "kind": "labels",
+   "line": "Company | From | To",
+   "expect": [],
+   "note": ""
+  },
+  {
+   "id": "A8-8",
+   "rule": "A8",
+   "kind": "labels",
+   "line": "Company | Nature of Business",
+   "expect": [],
+   "note": ""
+  },
+  {
+   "id": "A8-9",
+   "rule": "A8",
+   "kind": "labels",
+   "line": "Company Name | Designation",
+   "expect": [],
+   "note": ""
+  },
+  {
+   "id": "A8-10",
+   "rule": "A8",
+   "kind": "labels",
+   "line": "Company | Position | Duration",
+   "expect": [],
+   "note": ""
+  },
+  {
+   "id": "A8-11",
+   "rule": "A8",
+   "kind": "labels",
+   "line": "Company: | Industry: Finance",
+   "expect": [],
+   "note": ""
+  },
+  {
+   "id": "A8-12",
+   "rule": "A8",
+   "kind": "labels",
+   "line": "Company | Department of Information",
+   "expect": [],
+   "note": ""
+  },
+  {
+   "id": "A9-0",
+   "rule": "A9",
+   "kind": "labels",
+   "line": "Company: Total",
+   "expect": [
+    "Total"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A9-1",
+   "rule": "A9",
+   "kind": "labels",
+   "line": "Company: Department of State",
+   "expect": [
+    "Department of State"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A9-2",
+   "rule": "A9",
+   "kind": "labels",
+   "line": "Company: Department of Information",
+   "expect": [
+    "Department of Information"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A9-3",
+   "rule": "A9",
+   "kind": "labels",
+   "line": "Company: Position Held",
+   "expect": [
+    "Position Held"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A9-4",
+   "rule": "A9",
+   "kind": "labels",
+   "line": "Company: | Acme Sdn Bhd",
+   "expect": [
+    "Acme Sdn Bhd"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A9-5",
+   "rule": "A9",
+   "kind": "labels",
+   "line": "Company | Acme Sdn Bhd",
+   "expect": [
+    "Acme Sdn Bhd"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A9-6",
+   "rule": "A9",
+   "kind": "labels",
+   "line": "Company Name | Acme Sdn Bhd",
+   "expect": [
+    "Acme Sdn Bhd"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A9-7",
+   "rule": "A9",
+   "kind": "labels",
+   "line": "Company | Department of Statistics",
+   "expect": [
+    "Department of Statistics"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A9-8",
+   "rule": "A9",
+   "kind": "labels",
+   "line": "Company | Position Partners Sdn Bhd",
+   "expect": [
+    "Position Partners Sdn Bhd"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A9-9",
+   "rule": "A9",
+   "kind": "labels",
+   "line": "Company: Role-Play Studios Sdn Bhd",
+   "expect": [
+    "Role-Play Studios Sdn Bhd"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A9-10",
+   "rule": "A9",
+   "kind": "labels",
+   "line": "Company: Sector-X Consulting",
+   "expect": [
+    "Sector-X Consulting"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A9-11",
+   "rule": "A9",
+   "kind": "labels",
+   "line": "Company: Title-Pro Pty",
+   "expect": [
+    "Title-Pro Pty"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A9-12",
+   "rule": "A9",
+   "kind": "labels",
+   "line": "Company: Acme Sdn Bhd | Industry: Finance",
+   "expect": [
+    "Acme Sdn Bhd"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A9-13",
+   "rule": "A9",
+   "kind": "labels",
+   "line": "Company: Acme Sdn Bhd Industry - Retail",
+   "expect": [
+    "Acme Sdn Bhd"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A9-14",
+   "rule": "A9",
+   "kind": "labels",
+   "line": "Company: Acme Sdn Bhd Industry: Retail",
+   "expect": [
+    "Acme Sdn Bhd"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A9-15",
+   "rule": "A9",
+   "kind": "labels",
+   "line": "Company Name: Acme Sdn Bhd",
+   "expect": [
+    "Acme Sdn Bhd"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A9-16",
+   "rule": "A9",
+   "kind": "labels",
+   "line": "Company-wide rollout of the platform",
+   "expect": [],
+   "note": ""
+  },
+  {
+   "id": "A9-17",
+   "rule": "A9",
+   "kind": "labels",
+   "line": "Company:",
+   "expect": [],
+   "note": ""
+  },
+  {
+   "id": "A9-18",
+   "rule": "A9",
+   "kind": "labels",
+   "line": "Company: |",
+   "expect": [],
+   "note": ""
+  },
+  {
+   "id": "A10-client-not-stand-in",
+   "rule": "A10",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Hays Recruitment (Petronas)",
+    "Company: Petronas"
+   ],
+   "kept": [
+    "Petronas"
+   ],
+   "expect_missing": [
+    "Hays Recruitment (Petronas)"
+   ],
+   "note": ""
+  },
+  {
+   "id": "A10-brand-counts",
+   "rule": "A10",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Orbix IT outsourcing sdn bhd(lumen bank sdn bhd)"
+   ],
+   "kept": [
+    "Lumen Bank Sdn Bhd"
+   ],
+   "expect_missing": [],
+   "note": ""
+  },
+  {
+   "id": "A10-head-counts",
+   "rule": "A10",
+   "kind": "missing",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Engineering Sdn Bhd, Shah Alam, Selangor"
+   ],
+   "kept": [
+    "Acme Engineering Sdn Bhd"
+   ],
+   "expect_missing": [],
+   "note": ""
+  },
+  {
+   "id": "A11-sep-0",
+   "rule": "A11",
+   "kind": "unnamed",
+   "company": "|",
+   "expect_reported": true,
+   "note": ""
+  },
+  {
+   "id": "A11-sep-1",
+   "rule": "A11",
+   "kind": "unnamed",
+   "company": " | ",
+   "expect_reported": true,
+   "note": ""
+  },
+  {
+   "id": "A11-sep-2",
+   "rule": "A11",
+   "kind": "unnamed",
+   "company": "||",
+   "expect_reported": true,
+   "note": ""
+  },
+  {
+   "id": "A11-sep-3",
+   "rule": "A11",
+   "kind": "unnamed",
+   "company": ":",
+   "expect_reported": true,
+   "note": ""
+  },
+  {
+   "id": "A11-sep-4",
+   "rule": "A11",
+   "kind": "unnamed",
+   "company": "：",
+   "expect_reported": true,
+   "note": ""
+  },
+  {
+   "id": "A11-sep-5",
+   "rule": "A11",
+   "kind": "unnamed",
+   "company": "｜",
+   "expect_reported": true,
+   "note": ""
+  },
+  {
+   "id": "A11-sep-6",
+   "rule": "A11",
+   "kind": "unnamed",
+   "company": "│",
+   "expect_reported": true,
+   "note": ""
+  },
+  {
+   "id": "A11-placeholder-0",
+   "rule": "A11",
+   "kind": "unnamed",
+   "company": "-",
+   "expect_reported": false,
+   "note": ""
+  },
+  {
+   "id": "A11-placeholder-1",
+   "rule": "A11",
+   "kind": "unnamed",
+   "company": "—",
+   "expect_reported": false,
+   "note": ""
+  },
+  {
+   "id": "A11-placeholder-2",
+   "rule": "A11",
+   "kind": "unnamed",
+   "company": "–",
+   "expect_reported": false,
+   "note": ""
+  },
+  {
+   "id": "A11-placeholder-3",
+   "rule": "A11",
+   "kind": "unnamed",
+   "company": "--",
+   "expect_reported": false,
+   "note": ""
+  },
+  {
+   "id": "A11-placeholder-4",
+   "rule": "A11",
+   "kind": "unnamed",
+   "company": ".",
+   "expect_reported": false,
+   "note": ""
+  },
+  {
+   "id": "A11-placeholder-5",
+   "rule": "A11",
+   "kind": "unnamed",
+   "company": "N/A",
+   "expect_reported": false,
+   "note": ""
+  },
+  {
+   "id": "A11-placeholder-6",
+   "rule": "A11",
+   "kind": "unnamed",
+   "company": "Acme",
+   "expect_reported": false,
+   "note": ""
+  },
+  {
+   "id": "D1-swap-0",
+   "rule": "D1",
+   "kind": "date",
+   "text": "2025 june- current",
+   "expect": "june 2025- current",
+   "note": ""
+  },
+  {
+   "id": "D1-swap-1",
+   "rule": "D1",
+   "kind": "date",
+   "text": "2024 sept -2025 April",
+   "expect": "sept 2024 -April 2025",
+   "note": ""
+  },
+  {
+   "id": "D1-swap-2",
+   "rule": "D1",
+   "kind": "date",
+   "text": "2022 march - 2024 august",
+   "expect": "march 2022 - august 2024",
+   "note": ""
+  },
+  {
+   "id": "D1-swap-3",
+   "rule": "D1",
+   "kind": "date",
+   "text": "2025 june- current | Senior Data Engineer",
+   "expect": "june 2025- current | Senior Data Engineer",
+   "note": ""
+  },
+  {
+   "id": "D1-swap-4",
+   "rule": "D1",
+   "kind": "date",
+   "text": "2025 June - Till Date",
+   "expect": "June 2025 - Till Date",
+   "note": ""
+  },
+  {
+   "id": "D1-swap-5",
+   "rule": "D1",
+   "kind": "date",
+   "text": "2025 June - Till Now",
+   "expect": "June 2025 - Till Now",
+   "note": ""
+  },
+  {
+   "id": "D1-swap-6",
+   "rule": "D1",
+   "kind": "date",
+   "text": "2024 Sept – Presently",
+   "expect": "Sept 2024 – Presently",
+   "note": ""
+  },
+  {
+   "id": "D1-swap-7",
+   "rule": "D1",
+   "kind": "date",
+   "text": "2019 may - until present",
+   "expect": "may 2019 - until present",
+   "note": ""
+  },
+  {
+   "id": "D1-swap-8",
+   "rule": "D1",
+   "kind": "date",
+   "text": "2015 June – 2017",
+   "expect": "June 2015 – 2017",
+   "note": ""
+  },
+  {
+   "id": "D1-swap-9",
+   "rule": "D1",
+   "kind": "date",
+   "text": "2025 Jun. - current",
+   "expect": "Jun. 2025 - current",
+   "note": ""
+  },
+  {
+   "id": "D1-swap-10",
+   "rule": "D1",
+   "kind": "date",
+   "text": "2025 June, - Present",
+   "expect": "June, 2025 - Present",
+   "note": ""
+  },
+  {
+   "id": "D1-swap-11",
+   "rule": "D1",
+   "kind": "date",
+   "text": "2024 Sept. - 2025 Apr.",
+   "expect": "Sept. 2024 - Apr. 2025",
+   "note": ""
+  },
+  {
+   "id": "D1-keep-0",
+   "rule": "D1",
+   "kind": "date",
+   "text": "Apr 2019 - Mar 2022",
+   "expect": "Apr 2019 - Mar 2022",
+   "note": ""
+  },
+  {
+   "id": "D1-keep-1",
+   "rule": "D1",
+   "kind": "date",
+   "text": "Jun 2015 - august  2017",
+   "expect": "Jun 2015 - august  2017",
+   "note": ""
+  },
+  {
+   "id": "D1-keep-2",
+   "rule": "D1",
+   "kind": "date",
+   "text": "2015 - 2017",
+   "expect": "2015 - 2017",
+   "note": ""
+  },
+  {
+   "id": "D1-keep-3",
+   "rule": "D1",
+   "kind": "date",
+   "text": "Jan 2018 - 2019",
+   "expect": "Jan 2018 - 2019",
+   "note": ""
+  },
+  {
+   "id": "D1-keep-4",
+   "rule": "D1",
+   "kind": "date",
+   "text": "figures for 2023 may be revised",
+   "expect": "figures for 2023 may be revised",
+   "note": ""
+  },
+  {
+   "id": "D1-keep-5",
+   "rule": "D1",
+   "kind": "date",
+   "text": "Won the 2024 March tender",
+   "expect": "Won the 2024 March tender",
+   "note": ""
+  },
+  {
+   "id": "D1-keep-6",
+   "rule": "D1",
+   "kind": "date",
+   "text": "Jan 2018 Dec 2019 Jan 2020 Dec 2021",
+   "expect": "Jan 2018 Dec 2019 Jan 2020 Dec 2021",
+   "note": ""
+  },
+  {
+   "id": "D1-keep-7",
+   "rule": "D1",
+   "kind": "date",
+   "text": "Jun 2020 Jun 2021",
+   "expect": "Jun 2020 Jun 2021",
+   "note": ""
+  },
+  {
+   "id": "D1-keep-8",
+   "rule": "D1",
+   "kind": "date",
+   "text": "2015 June – 2017 extra",
+   "expect": "2015 June – 2017 extra",
+   "note": ""
+  },
+  {
+   "id": "D1-keep-9",
+   "rule": "D1",
+   "kind": "date",
+   "text": "MSSQL 2014",
+   "expect": "MSSQL 2014",
+   "note": ""
+  },
+  {
+   "id": "D1-keep-10",
+   "rule": "D1",
+   "kind": "date",
+   "text": "CGPA 2.0 / 4.0",
+   "expect": "CGPA 2.0 / 4.0",
+   "note": ""
+  },
+  {
+   "id": "D1-keep-11",
+   "rule": "D1",
+   "kind": "date",
+   "text": "2003-2006",
+   "expect": "2003-2006",
+   "note": ""
+  },
+  {
+   "id": "F1-restore-0",
+   "rule": "F1",
+   "kind": "company_restore",
+   "lines": [
+    "WORK EXPERIENCE",
+    "company: Northwind outsourcing sdn bhd(contoso bank sdn bhd) | Industry Banking"
+   ],
+   "company": "Northwind Outsourcing Sdn Bhd",
+   "expect": "Northwind Outsourcing Sdn Bhd (contoso bank sdn bhd)",
+   "note": ""
+  },
+  {
+   "id": "F1-restore-1",
+   "rule": "F1",
+   "kind": "company_restore",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd (Lumen Bank)"
+   ],
+   "company": "Acme Sdn Bhd",
+   "expect": "Acme Sdn Bhd (Lumen Bank)",
+   "note": ""
+  },
+  {
+   "id": "F1-restore-2",
+   "rule": "F1",
+   "kind": "company_restore",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd (Lumen Bank)"
+   ],
+   "company": "Acme",
+   "expect": "Acme (Lumen Bank)",
+   "note": ""
+  },
+  {
+   "id": "F1-keep-0",
+   "rule": "F1",
+   "kind": "company_restore",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd (2019 - 2021)"
+   ],
+   "company": "Acme Sdn Bhd",
+   "expect": "Acme Sdn Bhd",
+   "note": "when unsure, the parsed name is kept"
+  },
+  {
+   "id": "F1-keep-1",
+   "rule": "F1",
+   "kind": "company_restore",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd (Lumen Bank)"
+   ],
+   "company": "Acme Holdings",
+   "expect": "Acme Holdings",
+   "note": "when unsure, the parsed name is kept"
+  },
+  {
+   "id": "F1-keep-2",
+   "rule": "F1",
+   "kind": "company_restore",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd (Lumen Bank)"
+   ],
+   "company": "Acme Sdn Bhd (Other)",
+   "expect": "Acme Sdn Bhd (Other)",
+   "note": "when unsure, the parsed name is kept"
+  },
+  {
+   "id": "F1-keep-3",
+   "rule": "F1",
+   "kind": "company_restore",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd (Lumen Bank)"
+   ],
+   "company": "Acme (Sdn Bhd)",
+   "expect": "Acme (Sdn Bhd)",
+   "note": "when unsure, the parsed name is kept"
+  },
+  {
+   "id": "F1-keep-4",
+   "rule": "F1",
+   "kind": "company_restore",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme Sdn Bhd"
+   ],
+   "company": "Acme Sdn Bhd",
+   "expect": "Acme Sdn Bhd",
+   "note": "when unsure, the parsed name is kept"
+  },
+  {
+   "id": "F1-keep-5",
+   "rule": "F1",
+   "kind": "company_restore",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Company: Acme (Lumen)",
+    "Company: Acme (Other)"
+   ],
+   "company": "Acme",
+   "expect": "Acme",
+   "note": "when unsure, the parsed name is kept"
+  },
+  {
+   "id": "F1-keep-6",
+   "rule": "F1",
+   "kind": "company_restore",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Acme Sdn Bhd (Lumen Bank)"
+   ],
+   "company": "Acme Sdn Bhd",
+   "expect": "Acme Sdn Bhd",
+   "note": "when unsure, the parsed name is kept"
+  },
+  {
+   "id": "F2-0",
+   "rule": "F2",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University | Bachelor",
+    "Major\tIT and management",
+    " \tCGPA\t2.0 / 4.0"
+   ],
+   "entry": {
+    "institution": "Northwind University",
+    "cgpa": "2.0 / 4.0"
+   },
+   "expect": {
+    "cgpa": "CGPA 2.0 / 4.0"
+   },
+   "note": ""
+  },
+  {
+   "id": "F2-1",
+   "rule": "F2",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "GPA: 3.8/4.0"
+   ],
+   "entry": {
+    "institution": "Northwind University",
+    "cgpa": "3.8/4.0"
+   },
+   "expect": {
+    "cgpa": "GPA 3.8/4.0"
+   },
+   "note": ""
+  },
+  {
+   "id": "F2-2",
+   "rule": "F2",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "Grade Point Average: 3.2"
+   ],
+   "entry": {
+    "institution": "Northwind University",
+    "cgpa": "3.2"
+   },
+   "expect": {
+    "cgpa": "Grade Point Average 3.2"
+   },
+   "note": ""
+  },
+  {
+   "id": "F2-3",
+   "rule": "F2",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "CGPA 3.85"
+   ],
+   "entry": {
+    "institution": "Northwind University",
+    "cgpa": "3.8"
+   },
+   "expect": {
+    "cgpa": "3.8"
+   },
+   "note": ""
+  },
+  {
+   "id": "F2-4",
+   "rule": "F2",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "Result 3.5"
+   ],
+   "entry": {
+    "institution": "Northwind University",
+    "cgpa": "3.5"
+   },
+   "expect": {
+    "cgpa": "3.5"
+   },
+   "note": ""
+  },
+  {
+   "id": "F2-5",
+   "rule": "F2",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "CGPA 3.5",
+    "Contoso College 2019",
+    "GPA 3.5"
+   ],
+   "entry": {
+    "institution": "Northwind University",
+    "cgpa": "3.5"
+   },
+   "expect": {
+    "cgpa": "CGPA 3.5"
+   },
+   "note": ""
+  },
+  {
+   "id": "F2-6",
+   "rule": "F2",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "CGPA 3.5"
+   ],
+   "entry": {
+    "institution": "Northwind University",
+    "cgpa": "CGPA 3.5"
+   },
+   "expect": {
+    "cgpa": "CGPA 3.5"
+   },
+   "note": ""
+  },
+  {
+   "id": "F2-7",
+   "rule": "F2",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "CGPA 3.5",
+    "GPA 3.5"
+   ],
+   "entry": {
+    "institution": "Northwind University",
+    "cgpa": "3.5"
+   },
+   "expect": {
+    "cgpa": "3.5"
+   },
+   "note": ""
+  },
+  {
+   "id": "F2-8",
+   "rule": "F2",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "CGPA 3.5 out of 4.0"
+   ],
+   "entry": {
+    "institution": "Northwind University",
+    "cgpa": "3.5 out of 4.0"
+   },
+   "expect": {
+    "cgpa": "CGPA 3.5 out of 4.0"
+   },
+   "note": ""
+  },
+  {
+   "id": "F2-9",
+   "rule": "F2",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "CGPA 3.5 GPA"
+   ],
+   "entry": {
+    "institution": "Northwind University",
+    "cgpa": "3.5 GPA"
+   },
+   "expect": {
+    "cgpa": "3.5 GPA"
+   },
+   "note": ""
+  },
+  {
+   "id": "F3-0",
+   "rule": "F3",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "Major\tIT and management"
+   ],
+   "entry": {
+    "institution": "Northwind University"
+   },
+   "expect": {
+    "major": "IT and management"
+   },
+   "note": ""
+  },
+  {
+   "id": "F3-1",
+   "rule": "F3",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "Major: Finance"
+   ],
+   "entry": {
+    "institution": "Northwind University"
+   },
+   "expect": {
+    "major": "Finance"
+   },
+   "note": ""
+  },
+  {
+   "id": "F3-2",
+   "rule": "F3",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "Major - Finance"
+   ],
+   "entry": {
+    "institution": "Northwind University"
+   },
+   "expect": {
+    "major": "Finance"
+   },
+   "note": ""
+  },
+  {
+   "id": "F3-3",
+   "rule": "F3",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "Majoring in Finance"
+   ],
+   "entry": {
+    "institution": "Northwind University"
+   },
+   "expect": {
+    "major": "Finance"
+   },
+   "note": ""
+  },
+  {
+   "id": "F3-4",
+   "rule": "F3",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "Major | Finance"
+   ],
+   "entry": {
+    "institution": "Northwind University"
+   },
+   "expect": {
+    "major": "Finance"
+   },
+   "note": ""
+  },
+  {
+   "id": "F3-5",
+   "rule": "F3",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University | Bachelor | Major: Finance"
+   ],
+   "entry": {
+    "institution": "Northwind University"
+   },
+   "expect": {
+    "major": "Finance"
+   },
+   "note": ""
+  },
+  {
+   "id": "F3-6",
+   "rule": "F3",
+   "kind": "education_restore",
+   "lines": [
+    "Sekolah Menengah Contoh | SPM in Sciences",
+    " \tMajor\tscience"
+   ],
+   "entry": {
+    "institution": "Sekolah Menengah Contoh"
+   },
+   "expect": {
+    "major": "Science"
+   },
+   "note": ""
+  },
+  {
+   "id": "F3-7",
+   "rule": "F3",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "Major in the arts club"
+   ],
+   "entry": {
+    "institution": "Northwind University"
+   },
+   "expect": {
+    "major": null
+   },
+   "note": ""
+  },
+  {
+   "id": "F3-8",
+   "rule": "F3",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "Major league player"
+   ],
+   "entry": {
+    "institution": "Northwind University"
+   },
+   "expect": {
+    "major": null
+   },
+   "note": ""
+  },
+  {
+   "id": "F3-9",
+   "rule": "F3",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "Major: Finance",
+    "Major: Accounting"
+   ],
+   "entry": {
+    "institution": "Northwind University"
+   },
+   "expect": {
+    "major": null
+   },
+   "note": ""
+  },
+  {
+   "id": "F3-10",
+   "rule": "F3",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "2019",
+    "Major: Finance"
+   ],
+   "entry": {
+    "institution": "Northwind University"
+   },
+   "expect": {
+    "major": null
+   },
+   "note": ""
+  },
+  {
+   "id": "F3-11",
+   "rule": "F3",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University",
+    "SUMMARY:",
+    "Major: Finance"
+   ],
+   "entry": {
+    "institution": "Northwind University"
+   },
+   "expect": {
+    "major": null
+   },
+   "note": ""
+  }
+ ]
+}

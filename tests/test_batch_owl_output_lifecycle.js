@@ -32,6 +32,7 @@ async function batchLifecycle() {
     getCvSummaryBoxAutoFit:()=>true, getCvAutoCorrectLanguage:()=>false,
     normalizeUsageClient:()=>({}), mergeUsageClient:()=>({}), responseCost:()=>0,
     cvRequireCompleteExtraction(){}, cvParseIsLong:()=>false, cvParseTimeoutMs:()=>1000,
+    cvParseWarningText:data=>String((data&&data.warning)||'').trim(),
     CV_EXTRACT_TEXT_TIMEOUT_MS:1000, cvMergeLevelLists:()=>[],
     recordPaidAiFailure(){}, normalizeAiProviderError:s=>s,
     extractNameFromFilename:()=>'', toTitleCase:s=>s, statsRecord:()=>1, statsMetaFromResponse:()=>({}),

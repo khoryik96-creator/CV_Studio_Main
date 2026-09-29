@@ -144,6 +144,12 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   `_resolve_request_api_key(...)` — **never send provider keys to the browser.**
 - Paid AI routes must be listed in `_AI_SPEND_EXACT_PATHS` so they require the
   AI-spend browser-session token.
+- **CV source-reading rules have a rulebook.** Before changing the work-row
+  reader, the source check (fidelity audit) or the year-first date rewrite, read
+  `CV_SOURCE_CHECK_GUARDRAILS.md`. Every rule's cases live in
+  `tests/fixtures/cv_guardrail_cases.json` and run in
+  `tests/test_cv_guardrail_cases.py`: add a case before changing a rule, and
+  never edit or delete an existing case without the owner's agreement.
 
 ## 7. Recently completed (already on `master`)
 
@@ -298,6 +304,79 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   merged page-aware corrective below supersedes those details.
 
 ## 8. Open / deferred work
+
+- **Year-first dates and a reported employer shortfall — v24.6.411–v24.6.418, UNMERGED.**
+  Starts at merged master `960a086`. A real formatted CV came back missing the
+  candidate's three most recent employers, including his current job, with two
+  education rows rendered as jobs and every employer name replaced by the table
+  cell separator. Extraction was verified perfect and the generator reproduced the
+  reported document line for line from the model's output, so the loss is entirely
+  in what the model returned. The trigger is exact: the three lost employers are
+  the only three whose dates are written year-first ("2025 june - current"), the
+  hazard `_cv_pretranslate_iso_dates` already existed for but only covered in its
+  numeric form. That normalisation now also covers the spelled-out form, document
+  wide and deliberately NOT inside the JS-mirrored `_normalize_cv_date_range`. The
+  fidelity audit, which found zero source employers here because it only reads
+  Dates/Organization/Role tables, now also reads explicit "Company:" labels, so a
+  shortfall is reported rather than shipped. See
+  `cv_studio_v24_6_418_year_first_dates_employer_safety_qa_report.md`.
+  v24.6.412 corrects eight review findings, four of them introduced by v24.6.411
+  and two of those actively harmful: the date rewrite matched "YYYY Month" anywhere
+  in the document, so it reworded the candidate's own prose ("figures for 2023 may
+  be revised") and scrambled lines carrying several dates. It is now anchored to a
+  line that is entirely a date, which on the reported CV touches exactly 3 lines of
+  173. The audit also warned on correct parses: a REFEREES block was scanned for
+  employers, a labelled name carrying a parenthesised brand failed to match the
+  employer the parse kept, and a hyphenated prose word read as a label. The
+  unnamed-employer report read a key the flattener never emits and counted per role
+  rather than per employer.
+  **v24.6.413 supersedes the diagnosis above.** The owner's re-test was unchanged
+  and showed no warning. v24.6.411/412 had been tested against
+  `_extract_docx_text_preserve_tables`, but the real `/extract-text` route joins a
+  table row's cells with " | ", so the line-anchored rewrite never fired; it is now
+  anchored to the cell. And the model was not the cause: a perfect parse fed
+  through `/parse` on master came out exactly as broken, because
+  `_extract_authoritative_work_rows` built a wrong table (education rows as jobs,
+  "|" as the company, year-first rows dropped) and the reconciler replaced the
+  parse with it. The reader now rejects a punctuation-only company, skips rows under
+  an Education heading, and strips the separator from the borderless company, so on
+  this CV it returns nothing and the reconciler keeps the parse. Whole-suite
+  reconciler differential: 90 calls, 0 outputs changed. The parse warning, which a
+  following toast replaced at once, is now a banner above the preview and under a
+  batch row. v24.6.414 corrects ten review findings: the education guard now needs
+  a real heading and only sets aside qualification rows (an earlier draft hid work
+  rows after "Education Consultant" and after an unlisted heading such as
+  POSITIONS HELD); separators are stripped on every borderless shape; the date
+  rewrite covers "Till Date"/"Presently"/bare-year ends; the audit's label scan no
+  longer stops at "Project:" duty lines, reads split label cells and hyphenated
+  names, and a bracketed client cannot stand in for a missing employer; one shared
+  work-heading pattern. Auto-upload now holds a flagged CV (single and batch, with
+  "Upload anyway"), Blind mode names no employer in the warning, and Create
+  Profile keeps its warning. Whole-suite replay against v24.6.413: 0 changes
+  outside this work's tests. v24.6.415 corrects ten more findings under one rule,
+  since a false warning now holds auto-upload: when unsure, the source check
+  claims nothing. It stops at every referee/personal-details heading form,
+  ignores column-header rows, reports only real separators (not "-" placeholders)
+  as unnamed, starts its label scan at "Working Experience" and similar, and the
+  education guard sets aside only rows naming a qualification. It also reverts a
+  v24.6.413 change that dropped "-" placeholder rows from the rebuilt work
+  history, which master kept. Replay of 404 suite inputs: 0 changes vs master or
+  v24.6.414 outside this work's tests. v24.6.416 corrects ten more, four of them
+  regressions from v24.6.415's narrowing: institution rows under Education are
+  set aside again unless they name a job, separator-only companies (":", "│")
+  are refused again while "-" placeholders stay, "Leadership Positions" no
+  longer ends Education, and the label scan reads every work-history span
+  instead of the first heading it finds. Replay of 473 suite inputs: 0 changes
+  vs master or v24.6.415 outside this work's tests. v24.6.417 corrects ten more
+  and adds `CV_SOURCE_CHECK_GUARDRAILS.md` with a 208-case registry covering every
+  review round; it fails 154 cases on master and 20 on v24.6.416, none now.
+  v24.6.418 restores three details the provider dropped on the owner's re-test,
+  from the source after the parse: a bracketed brand in a labelled employer name,
+  the CGPA label, and "Major" lines (a new education `major` field, printed as
+  "Major: …"). Rules F1–F3 in the guardrails file. Still open: the branch's earlier commits
+  contain real employer names from the reported CV, so merge with Squash and
+  merge (or rewrite history, owner's call); label-style rows are reported by the
+  audit but not reconstructed by the reconciler.
 
 - **Role-qualifier script fix — v24.6.410, UNMERGED.**
   Starts at merged master `5b1f2a4`. An ASCII-only letter class split an accented

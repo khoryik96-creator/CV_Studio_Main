@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.410"
+_INSTALL_RECEIPT_VERSION = "v24.6.418"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -346,7 +346,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.410"
+_CVSTUDIO_VERSION = "v24.6.418"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -1409,7 +1409,8 @@ Output: JSON object matching this exact schema (no variations):
       "date_range": "YYYY to YYYY or empty",
       "institution": "Institution Name",
       "degree": "Degree Name",
-      "cgpa": "CGPA/GPA exactly as written in the source CV (e.g. \"CGPA 4.0\", \"GPA 3.8/4.0\"), or empty string if not mentioned",
+      "cgpa": "CGPA/GPA exactly as written in the source CV INCLUDING its label (e.g. \"CGPA 4.0\", \"GPA 3.8/4.0\"), or empty string if not mentioned",
+      "major": "Major/specialisation for this qualification exactly as written in the source CV (e.g. from a \"Major: Finance\" line), or empty string if not mentioned",
       "honors": "Academic distinctions for this qualification exactly as written -- e.g. First Class Honours, Magna Cum Laude, Dean's List, academic scholarships/awards -- comma-separated if more than one, or empty string if none mentioned",
       "description": "Thesis title and/or project/dissertation description for this qualification, copied VERBATIM from the source CV with no rewording, shortening, or paraphrasing -- or empty string if the source CV does not mention one"
     }
@@ -1456,7 +1457,7 @@ RULES:
 - Work experience date ranges must use exactly this style: "Mon YYYY to Mon YYYY" or "Mon YYYY to Present". When the source states only one year, preserve it as exactly "YYYY"; never expand it to "YYYY to YYYY". Convert "Till Date", "Current", hyphens/dashes, and ALL-CAPS months into this style (e.g. "OCT 2022 - Till Date" → "Oct 2022 to Present").
 - DATE ACCURACY: transcribe every start and end month/year EXACTLY as written in the source. Never shift, round, guess, or invent a month or year. Only "Present"/"Current"/"Till date" (or no end at all) may become "to Present" — a stated end date such as a specific month/year is NEVER rewritten as "Present".
 - Work experience company names and role titles must not be returned in ALL CAPS unless they are genuine acronyms (e.g. COGNIZANT → Cognizant, DATA ECONOMY → Data Economy, WOLTERS KLUWER → Wolters Kluwer, but CGI/AWS/SQL/SAP stay uppercase).
-- EMPLOYER NAME FIDELITY: return each employer name as written in the source. Do not invent, swap, translate, expand an abbreviation, contract a full name, or borrow a name from a different role/company. You may drop a trailing legal form (Sdn Bhd, Pte Ltd, PT, Tbk, Inc, LLC) and fix casing, but the core name must match the source exactly. Never output a company name that does not appear in the CV.
+- EMPLOYER NAME FIDELITY: return each employer name as written in the source, including any bracketed brand or parent name (e.g. "Acme Outsourcing Sdn Bhd (Contoso Bank Sdn Bhd)" stays whole). Do not invent, swap, translate, expand an abbreviation, contract a full name, or borrow a name from a different role/company. You may drop a trailing legal form (Sdn Bhd, Pte Ltd, PT, Tbk, Inc, LLC) and fix casing, but the core name must match the source exactly. Never output a company name that does not appear in the CV.
 - ROLE TITLE FIDELITY: return each role title exactly as written in the source. Do not paraphrase, generalise, "clean up", shorten, or invent a title (e.g. do NOT turn "Dispatcher Technical Support" into "Customer Care Consultant", or "Senior Linux System Administrator" into "Senior Systems Administrator"). Keep every qualifier the source states (Linux, Non-Wintel, AVP, etc.).
 - candidate.is_employed: set to true ONLY if the candidate has a role that explicitly says "Present", "Current", "Till date", "To date", or similar — AND that role is a full-time, permanent, contract, or consulting role with a company (not freelance or self-employed). If ALL roles have a definite end date (e.g. "Dec 2025", "Feb 2025"), set is_employed to false even if the end date is very recent. If the only "Present" role is freelance or self-employment, set is_employed to false.
 - candidate.current_company: populate this from the most recent employer when the source states one.
@@ -1465,7 +1466,7 @@ RULES:
 - reason_for_leaving: only if stated in input, else empty string ""
 - summary_bullets: always empty array []
 - bullets: preserve original wording exactly, no paraphrasing. If a role has named sub-sections or categories within it (e.g. "Key responsibilities", "Key achievements", "Data Engineering", "Database", or "Regional Finance Oversight:"), represent each as a JSON object, never as JSON serialized inside a string: { "heading": "...", "bullets": ["did x", "did y"], "kind": "section" }. Plain bullets with no sub-section go in as plain strings. Mix freely — e.g. ["plain bullet", { "heading": "Data Engineering", "bullets": ["did x", "did y"], "kind": "section" }, "another plain bullet"]
-- education[].cgpa, education[].honors, and education[].description: do NOT omit these even though they are easy to skip. If the source CV states a CGPA/GPA for a qualification, it MUST be captured in that entry's "cgpa" field exactly as written. If the source CV mentions academic distinctions -- First Class Honours, cum laude variants, Dean's List, academic scholarships/awards, or similar -- for that qualification, it MUST be captured in "honors" exactly as written. If the source CV includes a thesis title, dissertation topic, or a description of a capstone/major project for that qualification, it MUST be captured in "description" — copied verbatim, not summarized or shortened, even if it is several sentences long.
+- education[].cgpa, education[].honors, and education[].description: do NOT omit these even though they are easy to skip. If the source CV states a CGPA/GPA for a qualification, it MUST be captured in that entry's "cgpa" field exactly as written, keeping its label (write "CGPA 2.0 / 4.0", never just "2.0 / 4.0"). If the source states a major or specialisation for a qualification (e.g. a "Major" line under it), capture it in that entry's "major" field. If the source CV mentions academic distinctions -- First Class Honours, cum laude variants, Dean's List, academic scholarships/awards, or similar -- for that qualification, it MUST be captured in "honors" exactly as written. If the source CV includes a thesis title, dissertation topic, or a description of a capstone/major project for that qualification, it MUST be captured in "description" — copied verbatim, not summarized or shortened, even if it is several sentences long.
 - All text: fix spelling/typos silently, preserve everything else
 - Missing fields: use empty string "" or empty array []
 - JSON MUST be valid and properly formatted
@@ -1719,6 +1720,7 @@ from cvstudio_cv_normalize import (
     _cv_date_parts,
     _cv_date_sort_point,
     _cv_pretranslate_iso_dates,
+    _cv_pretranslate_year_first_month_names,
     _cv_lang_alias_re,
     _cv_match_key,
     _cv_parse_backend_timeout_seconds,
@@ -1771,6 +1773,7 @@ from cvstudio_cv_reconcile import (
     _flatten_parsed_work_roles,
     _score_authoritative_row_match,
     _reconcile_work_experience_with_authoritative_table,
+    _restore_labelled_company_qualifiers,
 )
 from cvstudio_cv_fidelity import (
     evaluate_cv_fidelity,
@@ -8791,6 +8794,13 @@ def parse_cv():
         # cv_text keeps the model prompt and the downstream table reconciliation
         # consistent.
         cv_text = _cv_pretranslate_iso_dates(cv_text)
+        # The same year-first hazard spelled out with a month name, e.g.
+        # "2025 june - current". A CV that wrote its newest roles that way and its
+        # older ones month-first had the year-first rows come back wrong or missing
+        # altogether, so both forms are normalised before the model reads them.
+        # Document-wide only: the per-field date normaliser is mirrored in two
+        # JavaScript copies and keeps its exact behaviour.
+        cv_text = _cv_pretranslate_year_first_month_names(cv_text)
         parse_timeout_seconds = _cv_parse_backend_timeout_seconds(cv_text)
 
         data = call_llm(llm_provider, api_key, {
@@ -9033,6 +9043,10 @@ def parse_cv():
         # A referees block is third-party contact data, so it never reaches the
         # formatted CV even when the model maps it as a skills category.
         parsed = _drop_reference_sections(parsed)
+        # A bracketed brand the provider dropped from a labelled employer name --
+        # "Acme Outsourcing Sdn Bhd (Contoso Bank Sdn Bhd)" -- is put back from the
+        # source, before the casing pass below.
+        parsed = _restore_labelled_company_qualifiers(parsed, cv_text)
         # Outline-label nesting must be read from the raw bullet text, so infer it
         # BEFORE _normalize_cv_structured_content strips the labels, and return it
         # to the client to carry to /generate-docx.

@@ -57,6 +57,9 @@ function renderJACreateList() {
     } else {
       statusHtml = esc(item.statusText || 'Pending');
     }
+    if (item.parseWarning) {
+      statusHtml += '<span class="cv-parse-warning batch" role="note" style="display:block;">\u26a0 ' + esc(item.parseWarning) + '</span>';
+    }
     var sourceMeta = item._oneNoteRowIndex !== undefined ? ('<span style="display:block;font-size:10px;color:var(--text3);margin-top:2px;">From OneNote · ' + esc(item._forcedEmail || '') + '</span>') : '';
     return '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;">'
       + '<span style="font-size:13px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📋 ' + esc(item.file.name) + sourceMeta + '</span>'
@@ -287,6 +290,7 @@ async function runJACreateAll() {
     }
 
     item.status = 'processing'; item.statusText = '⏳ Extracting CV…'; item.jaClass = 'show uploading';
+    item.parseWarning = '';
     renderJACreateList();
 
     try {
@@ -315,7 +319,12 @@ async function runJACreateAll() {
         recordPaidAiFailure('JobAdder Create Profile parse failed', parsed, jaRoute.model, jaRoute.provider);
         throw new Error(normalizeAiProviderError(parsed.error || ('Parse failed: ' + parseRes.status), jaRoute));
       }
-      if (parsed.warning) showToast(parsed.warning, 'info');
+      // Kept on the file's row as well: the status updates that follow replace a
+      // toast almost at once. Only name, email and phone are taken from this
+      // parse and the original file is what gets uploaded, so the profile is not
+      // held -- but the recruiter should still know the parse was flagged.
+      item.parseWarning = String(parsed.warning || '').trim();
+      if (item.parseWarning) showToast(item.parseWarning, 'warn');
       var cand = (parsed && parsed.data && parsed.data.candidate) ? parsed.data.candidate : {};
       cand = applyJACreateContactFallback(cand, cvText);
       item._parsedCand = cand;

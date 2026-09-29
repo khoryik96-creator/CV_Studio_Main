@@ -745,6 +745,11 @@ function makeEducationSection(education) {
     xml += para(run(datePrefix + edu.institution, { bold: true, color: '000000', size: 24 }), LEFT_ALIGNMENT_XML);
     // Degree on second line (bold, same style as institution)
     xml += para(run(edu.degree, { bold: true, color: '000000', size: 24 }), LEFT_ALIGNMENT_XML);
+    // Major, if the source states one, on its own plain line under the degree
+    const major = edu.major || edu.specialisation || edu.specialization || '';
+    if (major && String(major).trim()) {
+      xml += para(run('Major: ' + String(major).trim(), { color: '000000', size: 24 }), LEFT_ALIGNMENT_XML);
+    }
     // Canonical field names are cgpa/honors/description. Also accept a few
     // safe fallback names so content never silently disappears if the AI
     // parser ever drifts from the exact schema.

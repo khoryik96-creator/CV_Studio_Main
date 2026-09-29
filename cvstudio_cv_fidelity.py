@@ -22,10 +22,20 @@ so "source truth" is defined in exactly one place.
 import re
 
 from cvstudio_cv_normalize import (
+    _CV_SOURCE_SECTION_BOUNDARY_KEYS,
     _cv_match_key,
+    _cv_source_boundary_key,
     _cv_token_overlap_score,
 )
 from cvstudio_cv_reconcile import (
+    _CV_SEPARATOR_ONLY_RE,
+    _LABELLED_COMPANY_RE,
+    _LABELLED_COMPANY_TRAILER_RE,
+    _LABEL_TABLE_HEADER_WORDS,
+    _looks_like_column_header,
+    _source_labelled_companies,
+    _WORK_HISTORY_HEADING_RE,
+    _WORK_HISTORY_STOP_WORDS,
     _extract_authoritative_work_rows,
     _flatten_parsed_work_roles,
     _role_plain_bullets,
@@ -53,25 +63,203 @@ _SOURCE_BULLET_RE = re.compile(
 # confined to this span: parsed bullets only come from work experience, so a
 # whole-document bullet count would be inflated by bulleted skills / profile /
 # education sections and fire false shortfall warnings.
-_EXPERIENCE_HEADING_RE = re.compile(
-    r"^(?:EMPLOYMENT|WORK|CAREER|PROFESSIONAL)\s+(?:HISTORY|EXPERIENCES?)\b"
-    r"|^(?:HISTORY|EXPERIENCES?)\s*:?\s*$",
-    re.I,
-)
+# None means "no work-history section found", so it cannot double as "not
+# supplied". This sentinel keeps the two apart.
+_UNSET = object()
+
+
+# One definition, owned by the reconciler, so the two stages cannot drift apart.
+_EXPERIENCE_HEADING_RE = _WORK_HISTORY_HEADING_RE
+
+# The bullet count's stops: the reconciler's shared work-history stop words, plus
+# trailing sections that carry bullets of their own. The reconciler's readers end
+# at those sections too, but as whole headings, through its section-boundary
+# list. The bullet count needs them as prefixes, so a bulleted "Interests &
+# Hobbies" after the work history is not counted as duties; the reconciler must
+# not, because a line such as "Summary of role:" inside a job would then end its
+# work history and drop the rows after it. So these extra words live here only.
+_AUDIT_TRAILING_STOP_WORDS = ("INTERESTS?", "HOBBIES", "PROFILE", "SUMMARY", "AWARDS?")
 _SECTION_STOP_HEADING_RE = re.compile(
-    r"^(?:EDUCATION|ACADEMIC|CERTIFICATION|CERTIFICATIONS|REFERENCE|REFERENCES|"
-    r"SKILLS|TECHNICAL SKILLS|ADDITIONAL INFORMATION|LANGUAGES?|PROJECTS?|"
-    r"INTERESTS?|HOBBIES|PROFILE|SUMMARY|AWARDS?)\b",
+    r"^(?:" + "|".join(_WORK_HISTORY_STOP_WORDS + _AUDIT_TRAILING_STOP_WORDS) + r")\b",
     re.I,
 )
 
+# Where the labelled-employer scan starts: the shared work-history heading, or a
+# line that is one of the other names CVs give it -- "Working Experience",
+# "Employment Record", "Relevant Experience". Only the label scan starts here; the
+# bullet count keeps the shared heading alone, so its scope does not change.
+#
+# "Professional Background" and "Career Background" are profile headings as often
+# as work headings. A profile carries no "Company:" labels, and every span is
+# read (see _label_scan_section), so starting there costs nothing and a CV whose
+# only work heading is one of them is still checked.
+_LABEL_SCAN_START_RE = re.compile(
+    r"^\s*(?:(?:WORK(?:ING)?|EMPLOYMENT|CAREER|PROFESSIONAL|RELEVANT|PREVIOUS|PAST|JOB|INDUSTRY)"
+    r"\s+(?:EXPERIENCES?|HISTORY|RECORDS?)"
+    r"|(?:PROFESSIONAL|CAREER|EMPLOYMENT)\s+BACKGROUND|EMPLOYMENT\s+DETAILS"
+    r"|(?:PREVIOUS|PAST)\s+EMPLOYMENTS?|EMPLOYMENT|POSITIONS\s+HELD)"
+    r"\s*(?:\([^)]*\))?\s*:?\s*$",
+    re.I,
+)
 
-def _source_employers(cv_text, parsed=None):
-    """Distinct high-confidence employers extracted from the source text."""
+# Where the labelled-employer scan stops. The bullet check above ends at any line
+# that merely STARTS with a section word, which is right for counting bullets but
+# wrong here: a label-style CV carries "Project: Core banking migration" or
+# "Summary of duties:" inside a job, and ending the scan there left every later
+# "Company:" label unread, so a dropped employer was never reported. A stop is
+# therefore a heading line -- see _label_scan_stops -- and this pattern is one of
+# its forms: the heading, an optional qualifier, an optional parenthesis, an
+# optional colon, and nothing else.
+_LABEL_SECTION_STOP_RE = re.compile(
+    r"^\s*(?:EDUCATION(?:AL)?|ACADEMIC|CERTIFICATIONS?|REFERENCES?|REFEREES?|"
+    r"(?:TECHNICAL|KEY|CORE)\s+SKILLS|SKILLS|ADDITIONAL\s+INFORMATION|LANGUAGES?|"
+    r"PROJECTS?|INTERESTS?|HOBBIES|PROFILE|SUMMARY|AWARDS?)"
+    r"(?:\s*(?:&|AND|/)\s*[A-Z]+|\s+(?:BACKGROUND|QUALIFICATIONS?|DETAILS|HISTORY|"
+    r"INFORMATION|TRAINING|ACHIEVEMENTS?))?"
+    r"\s*(?:\([^)]*\))?\s*:?\s*$",
+    re.I,
+)
+
+# A referees block names other people's employers, and the parse leaves it out,
+# so reading on into it reports a referee's "Company:" as a missing employer.
+# These headings come in more shapes than the pattern above holds -- "REFERENCE
+# CONTACTS", "Professional References", "Referee: Mr Tan" -- so any line that
+# opens with the word, optionally after one qualifier, ends the scan -- except a
+# labelled reference NUMBER inside a job ("Reference No: 4411", "Reference
+# Number: A-12"), which is part of that job. The label needs its colon: a
+# numbered referee heading such as "Referee #1" or "Reference No. 1" has none,
+# and still ends the scan.
+_LABEL_SCAN_REFERENCE_RE = re.compile(
+    r"^\s*(?:(?:PROFESSIONAL|CHARACTER|PERSONAL|EMPLOYMENT|EMPLOYER|WORK|BUSINESS|CAREER|"
+    r"ACADEMIC|FORMER|PREVIOUS|KEY)\s+)?(?:REFERENCES?|REFEREES?)\b"
+    r"(?!\s*(?:no\b\.?|nos\b\.?|number|num\b\.?|code|id\b|#)[^:\uff1a\r\n]*[:\uff1a])",
+    re.I,
+)
+_LABEL_SCAN_PERSONAL_RE = re.compile(
+    r"^\s*PERSONAL\s+(?:DETAILS|PARTICULARS|INFORMATION|INFO|DATA|PROFILE|BACKGROUND)"
+    r"\s*:?\s*$",
+    re.I,
+)
+
+# The reconciler's own section list also ends the scan, less its work-history
+# headings -- the reported CV repeats "Experience" above every employer -- and
+# "achievements", which is also a sub-heading inside a job.
+_LABEL_SCAN_BOUNDARY_KEYS = frozenset(
+    key for key in _CV_SOURCE_SECTION_BOUNDARY_KEYS
+    if key not in {
+        "work experience", "working experience", "professional experience",
+        "employment history", "career history", "achievements",
+    }
+)
+
+
+def _label_scan_starts(line):
+    return bool(_EXPERIENCE_HEADING_RE.match(line) or _LABEL_SCAN_START_RE.match(line))
+
+
+def _label_scan_restarts(line):
+    """A later work-history heading that opens another span.
+
+    Stricter than the first start: the shared heading pattern matches a PREFIX,
+    so prose inside a referees block -- "Work experience with the candidate: 3
+    years" -- would reopen the scan into the referees' own "Company:" lines. A
+    restart has to be a heading: no value after a colon, and a few words at most.
+    """
+    text = str(line or "").strip()
+    if _LABEL_SCAN_START_RE.match(text):
+        return True
+    return (
+        bool(_EXPERIENCE_HEADING_RE.match(text))
+        and not re.search(r"[:\uff1a]\s*\S", text)
+        and len(text.split()) <= 4
+    )
+
+
+def _label_scan_ends(line):
+    """A referees or personal-details heading: nothing after it is work history."""
+    text = str(line or "").strip()
+    return bool(_LABEL_SCAN_REFERENCE_RE.match(text) or _LABEL_SCAN_PERSONAL_RE.match(text))
+
+
+def _label_scan_stops(line):
+    """Whether a line is a heading that ends the labelled-employer scan.
+
+    Stopping early can only leave a label unread, which is what happened before
+    this scan existed; reading past a heading can report someone else's employer
+    as missing. So every heading form stops it, and only a heading does: a line
+    with a value after its colon, such as "Project: Core banking migration", is
+    part of the job. Referee and personal-details headings are not tested here:
+    _label_scan_ends catches them first and ends the whole walk.
+    """
+    text = str(line or "").strip()
+    if not text:
+        return False
+    if _LABEL_SECTION_STOP_RE.match(text):
+        return True
+    # The section list is compared on letters alone, so a line carrying a value
+    # -- "Training: 2019", "Languages: 3" -- would read as the bare heading. A
+    # heading has nothing after its colon. Figures alone do not rule a heading
+    # out: "AWARDS 2021" still ends the scan, because reading on into another
+    # section is what reports a false missing employer.
+    if re.search(r"[:\uff1a]\s*\S", text):
+        return False
+    return _cv_source_boundary_key(text) in _LABEL_SCAN_BOUNDARY_KEYS
+
+
+# A labelled name often carries more than the employer: a parenthesised brand, a
+# branch location, a trailing department. The parse keeps the employer alone, and
+# the token-overlap score then falls below the match threshold and reports a
+# present employer as missing. These are the shorter readings to also try.
+def _employer_name_readings(company):
+    """(own readings, bracketed readings) of a labelled employer name.
+
+    The own readings are the name and its head before a parenthesis, comma or
+    dash. The bracketed readings are what sits inside a parenthesis -- a brand,
+    or the client an agency placed the candidate with. Those are weaker evidence
+    and the caller only accepts them when no other source employer owns the
+    same parsed name.
+    """
+    text = re.sub(r"\s+", " ", str(company or "")).strip()
+    own = [text] if text else []
+    for pattern in (r"\s*\(", r"\s*,", r"\s*\u2013", r"\s*\u2014", r"\s+-\s+"):
+        head = re.split(pattern, text, maxsplit=1)[0].strip(" .,;:-")
+        if head and head != text and len(head) >= 2 and head not in own:
+            own.append(head)
+    bracketed = []
+    for part in re.findall(r"\(([^)]{2,80})\)", text):
+        part = part.strip(" .,;:-")
+        if part and part not in own and part not in bracketed:
+            bracketed.append(part)
+    return own, bracketed
+
+
+def _employer_name_matches(variant, candidate):
+    key = _cv_match_key(variant)
+    if key and _cv_match_key(candidate) == key:
+        return True
+    return _cv_token_overlap_score(variant, candidate) >= _EMPLOYER_MATCH_OVERLAP
+
+
+def _source_employers(cv_text, parsed=None, section=_UNSET):
+    """Distinct high-confidence employers extracted from the source text.
+
+    ``section`` is the already-split work-history text when the caller has it;
+    splitting the whole document again per check buys nothing on a long CV.
+    """
     employers = []
     seen = set()
-    for row in _extract_authoritative_work_rows(cv_text, parsed):
-        company = str(row.get("company") or "").strip()
+    candidates = [
+        str(row.get("company") or "").strip()
+        for row in _extract_authoritative_work_rows(cv_text, parsed)
+    ]
+    # Read the labels from the work-history section only, and only when that
+    # section could actually be located. A referees block or a cover note can also
+    # say "Company:", and an employer expected from outside the work history would
+    # be reported missing on a perfectly good parse. No section, no claim.
+    scoped = _label_scan_section(cv_text) if section is _UNSET else section
+    if scoped is not None:
+        candidates.extend(_source_labelled_companies(scoped))
+    for company in candidates:
         key = _cv_match_key(company)
         if not key or key in seen:
             continue
@@ -94,14 +282,42 @@ def _parsed_employers(parsed):
     return employers
 
 
-def _employer_is_present(company, parsed_employers):
-    key = _cv_match_key(company)
-    for candidate in parsed_employers:
-        if key and _cv_match_key(candidate) == key:
-            return True
-        if _cv_token_overlap_score(company, candidate) >= _EMPLOYER_MATCH_OVERLAP:
-            return True
-    return False
+def _own_name_hits(company, parsed_employers):
+    """Parsed employers that match this labelled name, or its head, directly."""
+    own = _employer_name_readings(company)[0] or [company]
+    return {
+        candidate for candidate in parsed_employers
+        if any(_employer_name_matches(variant, candidate) for variant in own)
+    }
+
+
+def _missing_source_employers(source_emps, parsed_emps):
+    """Source employers the parse did not keep under any reasonable name.
+
+    A bracketed reading -- a brand, or the client an agency placed the candidate
+    with -- is weaker evidence than the name itself. It may only match a parsed
+    employer that no source employer claims under its own name: "Hays Recruitment
+    (Petronas)" is not present merely because the parse kept the candidate's
+    separate Petronas job.
+    """
+    own_hits = [_own_name_hits(company, parsed_emps) for company in source_emps]
+    # Only consulted for an employer with no own hits, so every name in here was
+    # claimed by some other source employer.
+    claimed = set().union(*own_hits)
+    missing = []
+    for company, hits in zip(source_emps, own_hits):
+        if hits:
+            continue
+        bracketed = _employer_name_readings(company)[1]
+        if any(
+            _employer_name_matches(variant, candidate)
+            for variant in bracketed
+            for candidate in parsed_emps
+            if candidate not in claimed
+        ):
+            continue
+        missing.append(company)
+    return missing
 
 
 def _count_parsed_bullets(parsed):
@@ -115,6 +331,39 @@ def _count_parsed_bullets(parsed):
     return total
 
 
+def _section_spans(cv_text, starts, stops, restarts=None, ends=None):
+    """Spans of lines from a start heading to the next stop, as lists of lines.
+
+    The one walker for both the bullet count and the labelled-employer scan. The
+    heading line itself is not part of a span. With no ``restarts`` only the first
+    span is returned. With ``restarts`` a later heading opens another span, and an
+    ``ends`` line closes the current one and stops the walk for good.
+    """
+    spans = []
+    current = None
+    for line in str(cv_text or "").splitlines():
+        text = line.strip()
+        if current is None:
+            opens = restarts if (spans and restarts) else starts
+            if not spans or restarts:
+                if opens(text):
+                    current = []
+            continue
+        if ends and ends(text):
+            spans.append(current)
+            return spans
+        if stops(text):
+            spans.append(current)
+            current = None
+            if not restarts:
+                return spans
+            continue
+        current.append(line)
+    if current is not None:
+        spans.append(current)
+    return spans
+
+
 def _experience_section_text(cv_text):
     """Text between the experience heading and the next section, or None.
 
@@ -122,31 +371,40 @@ def _experience_section_text(cv_text):
     scoped -- the caller then skips the bullet check rather than risk a false
     positive from bullets elsewhere in the document.
     """
-    lines = str(cv_text or "").splitlines()
-    start = None
-    for i, line in enumerate(lines):
-        if _EXPERIENCE_HEADING_RE.match(line.strip()):
-            start = i + 1
-            break
-    if start is None:
+    spans = _section_spans(cv_text, _EXPERIENCE_HEADING_RE.match, _SECTION_STOP_HEADING_RE.match)
+    return "\n".join(spans[0]) if spans else None
+
+
+def _label_scan_section(cv_text):
+    """The work-history text the labelled-employer scan reads, or None.
+
+    Every work-history span is read, not only the first: a heading earlier in the
+    CV that also reads as a work-history start must not leave the real work
+    history unread. A referees or personal-details heading ends the walk.
+    """
+    spans = _section_spans(
+        cv_text, _label_scan_starts, _label_scan_stops,
+        restarts=_label_scan_restarts, ends=_label_scan_ends,
+    )
+    if not spans:
         return None
-    end = len(lines)
-    for j in range(start, len(lines)):
-        if _SECTION_STOP_HEADING_RE.match(lines[j].strip()):
-            end = j
-            break
-    return "\n".join(lines[start:end])
+    return "\n".join("\n".join(span) for span in spans)
 
 
-def _count_source_bullets(cv_text):
+def _count_source_bullets(cv_text, section=_UNSET):
     """Count source bullet lines within the experience section.
 
     Returns None when the section can't be located (bullet check disabled).
     """
-    section = _experience_section_text(cv_text)
+    section = _experience_section_text(cv_text) if section is _UNSET else section
     if section is None:
         return None
     return sum(1 for line in section.splitlines() if _SOURCE_BULLET_RE.match(line))
+
+
+# A parsed company that is nothing but a cell separator. One definition, shared
+# with the table reader; see _CV_SEPARATOR_ONLY_RE.
+_SEPARATOR_ONLY_COMPANY_RE = _CV_SEPARATOR_ONLY_RE
 
 
 def evaluate_cv_fidelity(parsed, cv_text):
@@ -155,11 +413,44 @@ def evaluate_cv_fidelity(parsed, cv_text):
     Returns a plain report dict and never mutates ``parsed``. ``ok`` is True
     when no material structural loss was detected.
     """
-    source_emps = _source_employers(cv_text, parsed)
+    # The bullet count and the label scan bound the work history differently; see
+    # _label_scan_starts and _label_scan_stops.
+    section = _experience_section_text(cv_text)
+    label_section = _label_scan_section(cv_text)
+    source_emps = _source_employers(cv_text, parsed, section=label_section)
     parsed_emps = _parsed_employers(parsed)
-    missing = [c for c in source_emps if not _employer_is_present(c, parsed_emps)]
+    missing = _missing_source_employers(source_emps, parsed_emps)
 
-    source_bullets = _count_source_bullets(cv_text)
+    # A parsed company that is only a separator -- "|", ":" and their wide forms --
+    # is the cell separator the model picked up instead of the name beside it. The
+    # finished CV shows an empty employer, which looks like a layout fault rather
+    # than a dropped field, so it is named here. A "-" or "N/A" is NOT reported: a
+    # CV writes those on purpose for a career break, and reporting them held a
+    # correct CV's auto-upload.
+    #
+    # Walked per work experience, not per flattened role: one employer with three
+    # roles lost one company field, and counting the roles said "3 work entries".
+    # The date range is read from the experience itself, which is where that key
+    # lives -- the flattened rows carry exp_date/role_date instead, so an earlier
+    # draft always fell through to the separator and located nothing.
+    unnamed = []
+    for exp in (parsed or {}).get("work_experiences") or []:
+        if not isinstance(exp, dict):
+            continue
+        company = str(exp.get("company") or "")
+        if not _SEPARATOR_ONLY_COMPANY_RE.match(company):
+            continue
+        label = str(exp.get("date_range") or "").strip()
+        if not label:
+            roles = exp.get("roles") if isinstance(exp.get("roles"), list) else []
+            for role in roles:
+                if isinstance(role, dict):
+                    label = str(role.get("date_range") or role.get("title") or "").strip()
+                    if label:
+                        break
+        unnamed.append(label or company.strip())
+
+    source_bullets = _count_source_bullets(cv_text, section=section)
     parsed_bullets = _count_parsed_bullets(parsed)
     bullet_scoped = source_bullets is not None
     bullet_shortfall = (
@@ -173,6 +464,15 @@ def evaluate_cv_fidelity(parsed, cv_text):
         warnings.append(
             "Employer(s) present in the CV but missing from the parsed result: "
             + ", ".join(missing)
+        )
+    if unnamed:
+        warnings.append(
+            "{} employer{} came back with no name -- the separator was read instead "
+            "of the company ({}).".format(
+                len(unnamed),
+                "" if len(unnamed) == 1 else "s",
+                ", ".join(unnamed[:4]),
+            )
         )
     if bullet_shortfall:
         warnings.append(
@@ -188,6 +488,7 @@ def evaluate_cv_fidelity(parsed, cv_text):
             "source": len(source_emps),
             "parsed": len(parsed_emps),
             "missing": missing,
+            "unnamed": unnamed,
         },
         "bullets": {
             "source_estimate": source_bullets,

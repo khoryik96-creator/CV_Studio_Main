@@ -65,6 +65,149 @@ _CV_MONTH_WORD = (
 )
 
 
+# A year followed by a month name is the same year-first hazard as "2020-06",
+# just spelled out: "2025 june - current", "2022 march - 2024 august". Providers
+# mis-read it the same way, and this form is common in hand-written table CVs.
+#
+# The year has to come first in the token for this to fire, so "Apr 2019" and
+# "Sept 2024" are untouched. A newline between the two is not crossed, because a
+# year ending one line and a month opening the next are two different dates.
+# Horizontal spaces Word and PDF use between a month and its year. The same set
+# the ISO helper and the field normaliser already treat as ordinary date
+# separators, so a figure space or thin space cannot hide a date from this pass.
+_CV_HSPACE = r"[ \t\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]"
+_CV_YEAR_TOKEN = r"(?:19|20)\d{2}"
+_CV_RANGE_SEP = (
+    r"(?:[-\u2010-\u2015\u2212]|to|until|till|through)"
+)
+# The right-hand side of an open range. Every spelling _normalize_cv_date_range
+# reads as Present is listed, including the "till date" / "till now" / "until
+# present" forms that are common on the CVs this pass was written for; the
+# separator alternation above only covers "till" standing in for the dash.
+_CV_OPEN_END = (
+    r"(?:(?:till|until|up[ \t]?to|to)[ \t]?(?:date|now|present|current)"
+    r"|todate|current(?:ly)?|present(?:ly)?|now|ongoing|date)"
+)
+# "2025 june", "2025 June.", "2025 Jun,"
+_CV_YEAR_FIRST_TOKEN = (
+    _CV_YEAR_TOKEN + _CV_HSPACE + r"+" + _CV_MONTH_WORD + r"\.?,?"
+)
+# "Jun 2015", "Jun. 2015", "June, 2015", "Jun2015"
+_CV_MONTH_FIRST_TOKEN = (
+    _CV_MONTH_WORD + r"\.?,?" + _CV_HSPACE + r"*" + _CV_YEAR_TOKEN
+)
+_CV_EITHER_DATE_TOKEN = (
+    r"(?:" + _CV_YEAR_FIRST_TOKEN + r"|" + _CV_MONTH_FIRST_TOKEN + r")"
+)
+
+# A cell that is NOTHING BUT a date or a date range. The right-hand side of a
+# range may also be a bare year ("2015 June - 2017"): the left-hand side still has
+# to be a full date token, so a range of two bare years never reaches the swap.
+#
+# Anchoring to a whole cell is the point of this pass, not a shortcut. An
+# earlier draft rewrote "YYYY Month" anywhere it appeared and did real damage:
+# "figures for 2023 may be revised" became "figures for may 2023 be revised",
+# "Won the 2024 March tender" was reworded, and a line of several month-first
+# dates had its years and months interleaved, because "may", "march" and
+# "august" are ordinary English words and a year can close one date while a
+# month opens the next. Restricting the rewrite to a line that holds only a date
+# removes every one of those, at the cost of leaving a year-first date that is
+# embedded in a longer cell alone. A line with no " | " separator is one cell.
+_CV_YEAR_FIRST_DATE_LINE_RE = re.compile(
+    r"^" + _CV_HSPACE + r"*"
+    + _CV_EITHER_DATE_TOKEN
+    + r"(?:" + _CV_HSPACE + r"*" + _CV_RANGE_SEP + _CV_HSPACE + r"*"
+    + r"(?:" + _CV_EITHER_DATE_TOKEN + r"|" + _CV_OPEN_END + r"|"
+    + _CV_YEAR_TOKEN + r"(?![ \t]*" + _CV_MONTH_WORD + r"))" + r")?"
+    + _CV_HSPACE + r"*[.,;]?" + _CV_HSPACE + r"*$",
+    re.I,
+)
+
+# Within such a line, the year-first halves to turn around. At most two date
+# tokens can reach here, so the left-to-right scan cannot take a year from one
+# date and a month from the next. A full stop or comma after the month travels
+# with it -- "2025 Jun." becomes "Jun. 2025", never "Jun 2025." -- which is a
+# month-first form the line pattern above already accepts.
+_CV_YEAR_FIRST_SWAP_RE = re.compile(
+    r"\b(" + _CV_YEAR_TOKEN + r")" + _CV_HSPACE + r"+(" + _CV_MONTH_WORD + r"\b\.?,?)",
+    re.I,
+)
+
+
+def _cv_line_is_year_first_date(line):
+    """Whether a cell is entirely a date range with at least one year-first half."""
+    if not _CV_YEAR_FIRST_DATE_LINE_RE.match(line):
+        return False
+    # "Jun 2015 - august 2017" is already month-first throughout; there is
+    # nothing to turn around and the line must come back byte-identical.
+    return bool(_CV_YEAR_FIRST_SWAP_RE.search(line))
+
+
+def _cv_year_first_month_repl(match):
+    """Swap "2025 june" to "june 2025", keeping the source spelling of the month."""
+    return "{} {}".format(match.group(2), match.group(1))
+
+
+def _cv_pretranslate_year_first_month_names(text):
+    """Rewrite "YYYY Month" to "Month YYYY" in table cells that are only a date.
+
+    Applied to the whole CV document only, alongside ``_cv_pretranslate_iso_dates``
+    and never inside ``_normalize_cv_date_range``: that field normaliser is
+    mirrored in two JavaScript copies, and a rule added on one side only would
+    break their shared contract.
+
+    Mirrors ``_cv_pretranslate_iso_dates`` for the spelled-out form. A CV that
+    writes its most recent roles year-first and its older ones month-first gets
+    read inconsistently, and the year-first rows are the ones that come back
+    wrong or go missing entirely.
+
+    Only a table cell -- or a line, which is a cell with no separator -- holding
+    nothing but a date or date range is touched, and only when part of it is
+    year-first. Prose is never reworded, a cell carrying several dates is never
+    reordered, and the month keeps the source spelling.
+
+    The anchor is the cell, not the line. v24.6.412 required the whole LINE to
+    be a date, but the upload route joins a table row's cells with " | ", so a
+    date cell never sat alone on its line and that version changed nothing on the
+    CV it was written for. Widening the anchor back to the whole document is not
+    the fix: that is the v24.6.411 version, which reworded prose.
+    """
+    text = str(text or "")
+    if not text:
+        return text
+    out = []
+    for line in text.splitlines(True):
+        stripped = line.rstrip("\r\n")
+        ending = line[len(stripped):]
+        out.append(_cv_rewrite_year_first_cells(stripped) + ending)
+    return "".join(out)
+
+
+# The upload route flattens each table row into one line, joining its cells with
+# " | ". A date cell therefore does not arrive on a line of its own: it arrives as
+# "2025 june- current | Senior Data Engineer". The rewrite is anchored to a whole
+# CELL for that reason. A line with no separator is a single cell, so a date that
+# does sit alone on its line is handled exactly as before.
+_CV_CELL_SEPARATOR_RE = re.compile(r"(" + _CV_HSPACE + r"*\|" + _CV_HSPACE + r"*)")
+
+
+def _cv_rewrite_year_first_cells(line):
+    """Turn round each cell of a line that is entirely a year-first date."""
+    if "|" not in line:
+        if _cv_line_is_year_first_date(line):
+            return _CV_YEAR_FIRST_SWAP_RE.sub(_cv_year_first_month_repl, line)
+        return line
+    # Splitting on a captured separator keeps every separator in the list, so the
+    # line reassembles byte-for-byte apart from the cells that were rewritten.
+    parts = _CV_CELL_SEPARATOR_RE.split(line)
+    for index in range(0, len(parts), 2):
+        if _cv_line_is_year_first_date(parts[index]):
+            parts[index] = _CV_YEAR_FIRST_SWAP_RE.sub(
+                _cv_year_first_month_repl, parts[index]
+            )
+    return "".join(parts)
+
+
 def _cv_pretranslate_iso_dates(text):
     """Rewrite ISO-style YYYY-MM and YYYY-MM-DD dates to house-style "Mon YYYY".
 
@@ -1271,6 +1414,7 @@ def _normalize_cv_data_for_output(
     for edu in parsed.get("education") or []:
         if not isinstance(edu, dict):
             continue
+        _recover_education_source_labels(edu, source_text)
         recovered_date = _recover_education_date_range(edu, source_text)
         if recovered_date:
             edu["date_range"] = recovered_date
@@ -1607,6 +1751,107 @@ def _sort_work_experiences_reverse_chronological(experiences):
 def _sort_cv_roles_reverse_chronological(roles):
     """Sort dated roles newest-first without moving undated roles."""
     return _sort_cv_dated_items_in_place(roles)
+
+
+# A grade label written before the figure: "CGPA 2.0 / 4.0", "GPA: 3.8/4.0".
+_CV_EDU_GRADE_LABEL = r"(?:C?GPA|CWA|WAM|Grade\s+Point\s+Average)"
+# A major or specialisation stated on its own line or cell under a qualification:
+# "Major: Finance", "Major<tab>Finance", "Major - Finance", "Majoring in Finance".
+# A bare space after "Major" is not a label -- "Major in the arts club" is prose.
+_CV_EDU_MAJOR_RE = re.compile(
+    r"^\s*(?:(?:majors?|speciali[sz]ation)\s*(?:[:\uff1a]|\t|\s[-\u2013]\s)"
+    r"|(?:majoring|majored|speciali[sz]ed)\s+in\s)"
+    r"\s*(?P<value>[^|\r\n]*[^\W\d_][^|\r\n]*?)\s*$",
+    re.I,
+)
+# The label alone in its cell, with the value in the next one: "Major | Finance".
+_CV_EDU_MAJOR_LABEL_CELL_RE = re.compile(r"^\s*(?:majors?|speciali[sz]ation)\s*[:\uff1a]?\s*$", re.I)
+_CV_EDU_BLOCK_YEAR_RE = re.compile(r"\b(?:19|20)\d{2}\b")
+
+
+def _education_source_blocks(education, source_text):
+    """The source lines under each place this qualification's institution appears.
+
+    A block starts at the line naming the institution and runs to the next line
+    carrying a year (the next qualification), a section heading, or six lines,
+    whichever comes first.
+    """
+    needle = re.sub(r"\s+", " ", str(education.get("institution") or "")).strip().lower()
+    if len(needle) < 3:
+        return []
+    lines = str(source_text or "").splitlines()
+    blocks = []
+    for index, line in enumerate(lines):
+        if needle not in re.sub(r"\s+", " ", line).lower():
+            continue
+        block = [line]
+        for following in lines[index + 1:index + 7]:
+            text = following.strip()
+            if not text:
+                continue
+            if _CV_EDU_BLOCK_YEAR_RE.search(text):
+                break
+            if _cv_source_boundary_key(re.sub(r"[\s:]+$", "", text)) in _CV_SOURCE_SECTION_BOUNDARY_KEYS:
+                break
+            block.append(text)
+        blocks.append(block)
+    return blocks
+
+
+def _recover_education_source_labels(education, source_text):
+    """Put back the CGPA label and the major a provider dropped from an entry.
+
+    A provider asked to copy the CGPA "exactly as written" can still return only
+    the figure -- "2.0 / 4.0" from "CGPA 2.0 / 4.0" -- and a "Major" line under a
+    qualification has no field of its own unless one is given. Both are read only
+    from the lines under this entry's institution in the source, and only when
+    every place the institution appears agrees; otherwise nothing is changed.
+    """
+    if not isinstance(education, dict) or not str(source_text or "").strip():
+        return education
+    blocks = _education_source_blocks(education, source_text)
+    if not blocks:
+        return education
+
+    cgpa = str(education.get("cgpa") or "").strip()
+    # Only a value with no grade label of its own: "2.0 / 4.0", "3.5 out of 4.0".
+    if cgpa and not re.search(r"\b" + _CV_EDU_GRADE_LABEL + r"\b", cgpa, re.I):
+        figure = r"\s*".join(re.escape(part) for part in cgpa.split())
+        labels = set()
+        for block in blocks:
+            for line in block:
+                match = re.search(
+                    r"\b(?P<label>" + _CV_EDU_GRADE_LABEL + r")\b\s*[:\uff1a=\-]?\s*" + figure + r"(?![\d.])",
+                    line,
+                    re.I,
+                )
+                if match:
+                    label = re.sub(r"\s+", " ", match.group("label"))
+                    labels.add(label.upper() if " " not in label else label)
+        if len(labels) == 1:
+            education["cgpa"] = "{} {}".format(labels.pop(), cgpa)
+
+    if not str(education.get("major") or "").strip():
+        majors = set()
+        for block in blocks:
+            for line in block:
+                cells = line.split("|")
+                for position, cell in enumerate(cells):
+                    match = _CV_EDU_MAJOR_RE.match(cell)
+                    if match:
+                        majors.add(re.sub(r"\s+", " ", match.group("value")).strip())
+                    elif (
+                        _CV_EDU_MAJOR_LABEL_CELL_RE.match(cell)
+                        and position + 1 < len(cells)
+                        and re.search(r"[^\W\d_]", cells[position + 1])
+                    ):
+                        majors.add(re.sub(r"\s+", " ", cells[position + 1]).strip())
+        # Kept even when the qualification's name already hints at it ("SPM in
+        # Sciences" with "Major: science"): the source states both.
+        if len(majors) == 1:
+            major = majors.pop()
+            education["major"] = major[:1].upper() + major[1:]
+    return education
 
 
 def _recover_education_date_range(education, source_text):

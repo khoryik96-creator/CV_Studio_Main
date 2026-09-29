@@ -24,6 +24,7 @@ from cvstudio_cv_normalize import (
     _cv_source_boundary_key,
     _cv_text_similarity,
     _cv_token_overlap_score,
+    _cv_token_set,
     _normalize_cv_date_range,
     _smart_title_text,
 )
@@ -1039,6 +1040,8 @@ def _extract_explicit_project_blocks(cv_text):
             blocks.append(current)
         current = None
 
+    # Not _WORK_HISTORY_STOP_WORDS: a projects block ends at the work-history
+    # headings that follow it, and must not end at its own PROJECT lines.
     stop_heading = re.compile(r"^(?:CERTIFICATION|CERTIFICATIONS|EMPLOYMENT HISTORY|WORK HISTORY|CAREER HISTORY|EDUCATION(?: BACKGROUND)?|ACADEMIC|REFERENCE|REFERENCES|SKILLS|TECHNICAL SKILLS|ADDITIONAL INFORMATION)\b", re.I)
     project_section = re.compile(r"\bPROJECT\s+EXPERIENCES?\b", re.I)
     project_marker = re.compile(r"^[✓✔☑]\s*(.+)$")
@@ -1221,6 +1224,333 @@ def _restore_explicit_project_headings(parsed, cv_text):
     return parsed
 
 
+# A heading that opens a work-history section. The borderless reader below and
+# the fidelity audit both use this one definition, so the two stages cannot
+# disagree about where a work history begins.
+_WORK_HISTORY_HEADING_RE = re.compile(
+    r"^(?:EMPLOYMENT|WORK|CAREER|PROFESSIONAL)\s+(?:HISTORY|EXPERIENCES?)\b"
+    r"|^(?:HISTORY|EXPERIENCES?)\s*:?\s*$",
+    re.I,
+)
+
+# Section headings that end a work history, shared by the readers below and by
+# the fidelity audit's bullet count, so a stop word is added in one place. The
+# audit adds its own trailing sections to this list; see cvstudio_cv_fidelity.
+# The project-block reader keeps a separate list on purpose: it has to stop at the
+# work-history headings that follow a projects block and must never stop at a
+# PROJECT line, so it is not this list.
+_WORK_HISTORY_STOP_WORDS = (
+    "EDUCATION", "ACADEMIC", "CERTIFICATION", "CERTIFICATIONS",
+    "REFERENCE", "REFERENCES", "REFEREE", "REFEREES",
+    "SKILLS", "TECHNICAL SKILLS", "ADDITIONAL INFORMATION", "LANGUAGES?", "PROJECTS?",
+)
+_WORK_HISTORY_STOP_HEADING_RE = re.compile(
+    r"^(?:" + "|".join(_WORK_HISTORY_STOP_WORDS) + r")\b", re.I
+)
+
+# Heading words that close an education section even when the full heading is not
+# in the shared boundary list, e.g. "Employment Record" or "Relevant Experience".
+_WORK_HEADING_WORDS = frozenset({"experience", "experiences", "employment", "career", "work", "job"})
+
+# Whole headings that also close it. "Positions", "appointments" and
+# "assignments" only count as the entire heading: inside an education section
+# "Leadership Positions" or "Student Appointments" is part of the education, and
+# ending the section there read the degree rows after it as jobs.
+_WORK_HEADING_KEYS = frozenset({
+    "positions held", "positions", "appointments", "appointments held",
+    "assignments", "work assignments", "posts held",
+    "academic appointments", "professional appointments", "research appointments",
+    "teaching appointments", "academic positions", "professional positions",
+    "research positions", "teaching positions", "academic posts", "posts",
+})
+
+# Words that name a part of an education section -- "LEADERSHIP POSITIONS",
+# "CO-CURRICULAR ACTIVITIES", "THESIS". A capitalised line carrying one is not the
+# heading of the next section, unless it is a whole work heading listed above.
+_EDUCATION_SUBSECTION_WORDS = frozenset({
+    "leadership", "positions", "position", "appointments", "assignments",
+    "activities", "activity", "extracurricular", "curricular", "co", "societies",
+    "society", "clubs", "club", "involvement", "achievements", "achievement",
+    "honours", "honors", "scholarships", "scholarship", "thesis", "dissertation",
+    "coursework", "courses", "modules", "subjects", "major", "minor", "electives",
+    "projects", "project", "student", "exchange",
+})
+
+# A line that is an education heading and nothing else: "Education", "Educational
+# Background", "Academic Qualifications", "Education & Training". The whole line
+# has to be the heading. A job title, an employer or a duty that merely starts
+# with the word -- "Education Consultant", "Academic Coordinator", "Education
+# Queensland" -- is not one, and treating it as one hid every work row after it.
+_EDUCATION_HEADING_KEY_RE = re.compile(
+    r"^(?:education|educational|academic)"
+    r"(?: (?:background|qualification|qualifications|history|details|profile|"
+    r"record|records|training|certification|certifications|achievements))*$"
+)
+
+# What a qualification row carries and a work row almost never does. Inside an
+# education section a row naming one is always set aside.
+#
+# A bare "BA" or "MA" is not here: "BA" is also a business analyst. "Foundation"
+# and "certificate" count only as the qualification ("a foundation in science",
+# "a certificate in accounting"), because "Acme Foundation" is an employer.
+_EDUCATION_ROW_RE = re.compile(
+    r"\b(?:bachelor'?s?|master'?s|masters|master\s+(?:of|in|degree)|diploma|degree|"
+    r"ph\.?d|doctorate|certificate\s+(?:in|of)|sijil|spm|stpm|igcse|"
+    r"a[ -]levels?|o[ -]levels?|\"o\" level|\"a\" level|"
+    r"foundation\s+(?:in|of|programme|program|studies|year|course)|"
+    r"matriculation|matrikulasi|c?gpa|honours|hons|b\.?sc|m\.?sc|mba|bba|b\.?eng|m\.?eng|"
+    r"b\.?tech|m\.?tech|b\.?com|m\.?com|llb|llm|b\.?ed|m\.?ed|b\.?pharm|mbbs|"
+    r"associate'?s?\s+(?:of|in|degree)|acca|cima)\b"
+    r"|\b[bm]\.a\b\.?",
+    re.I,
+)
+
+# An institution. A row naming one inside an education section is set aside too
+# -- "Northwind University | B.Tech", "Sekolah Menengah Contoh | Kuala Lumpur" --
+# unless it also names a job, because an employer can be a school, a college or
+# an academy: "Contoso Academy | Trainer" is a job. On a line of its own
+# ("NORTHWIND UNIVERSITY") it is part of the education, never the heading of the
+# next section.
+_EDUCATION_INSTITUTION_RE = re.compile(
+    r"\b(?:universit(?:y|i|ies)|college|kolej|institute|institut|school|sekolah|"
+    r"academy|akademi|polytechnic|politeknik)\b",
+    re.I,
+)
+
+# Job-title words, shared by the borderless reader's generic title pattern and
+# the education rule below, so a title word added for one reaches the other.
+_CV_TITLE_PREFIX_WORDS = (
+    r"Senior|Sr\.?|Junior|Jr\.?|Lead|Principal|Assistant|Associate|Deputy|Group|"
+    r"Regional|Country|General|Chief|Vice|Executive"
+)
+_CV_TITLE_WORDS = (
+    r"Manager|Director|Head|Associate|Consultant|Analyst|Engineer|Developer|Architect|"
+    r"Specialist|Executive|Officer|Administrator|Coordinator|Supervisor|Partner|"
+    r"President|Intern|Trainee|Accountant|Recruiter|Designer|Scientist|Technician|"
+    r"Controller|Planner|Support"
+)
+
+# A job title in the TITLE cell of a row: the shared title words, plus the ones an
+# education employer uses. Only the last cell is read, because institution and
+# qualification names carry these words too -- "Chartered Institute of Management
+# Accountants", "Head Start College".
+_WORK_ROLE_WORD_RE = re.compile(
+    r"\b(?:" + _CV_TITLE_WORDS + r"|lecturer|teacher|tutor|trainer|instructor|professor|"
+    r"researcher|counsell?or|librarian|registrar|dean|principal|assistant|clerk|"
+    r"secretary|programmer|scrum master|chef|nurse|fellow|postdoc|postdoctoral|scholar|"
+    r"demonstrator|staff|faculty)s?\b",
+    re.I,
+)
+
+
+def _education_row_is_set_aside(line):
+    """Whether a table row inside an education section is a qualification.
+
+    A row naming a qualification always is. A row naming an institution is too,
+    unless its title cell names a job: "Contoso Academy | Trainer" is a job,
+    "Anna University | B.Tech" and "Sekolah Menengah | Kuala Lumpur" are not.
+    """
+    if _EDUCATION_ROW_RE.search(line):
+        return True
+    if not _EDUCATION_INSTITUTION_RE.search(line):
+        return False
+    cells = [cell.strip() for cell in str(line).split("|") if cell.strip()]
+    title_cell = cells[-1] if len(cells) > 1 else ""
+    return not _WORK_ROLE_WORD_RE.search(title_cell)
+
+
+# A company that is nothing but a cell separator: the table pipe the extractor
+# joins cells with, in its ASCII, full-width and box-drawing forms, or a label
+# colon. It is the separator read instead of the name beside it. A dash, a dot or
+# "N/A" is different: a CV writes those on purpose for a career break or freelance
+# work. Shared with the fidelity audit so the two agree on what a separator is.
+_CV_SEPARATOR_CHARS = "|\uff5c\u2502\u00a6:\uff1a"
+_CV_SEPARATOR_ONLY_RE = re.compile(
+    r"^\s*[" + _CV_SEPARATOR_CHARS + r"][\s" + _CV_SEPARATOR_CHARS + r"]*$"
+)
+
+
+def _source_heading_is_education(key):
+    """A line whose boundary key is an education heading and nothing else."""
+    return bool(key) and bool(_EDUCATION_HEADING_KEY_RE.match(key))
+
+
+def _source_heading_is_work(words):
+    """A short line that reads as a work-history heading."""
+    if not words or len(words) > 4:
+        return False
+    if " ".join(words) in _WORK_HEADING_KEYS:
+        return True
+    return bool(_WORK_HEADING_WORDS.intersection(words))
+
+
+def _source_line_is_caps_heading(line):
+    """A short line in capitals that is not an education line, e.g. POSITIONS HELD.
+
+    CVs name their work section in more ways than any list holds -- "POSITIONS
+    HELD", "APPOINTMENTS", "PROFESSIONAL BACKGROUND" -- so any short capitalised
+    heading that does not read as education also ends an education section.
+    """
+    text = str(line or "").strip().rstrip(":").strip()
+    letters = re.sub(r"[^A-Za-z]", "", text)
+    if len(letters) < 4 or text.upper() != text or re.search(r"\d", text):
+        return False
+    if len(text.split()) > 5:
+        return False
+    key = _cv_source_boundary_key(text)
+    if key not in _WORK_HEADING_KEYS and _EDUCATION_SUBSECTION_WORDS.intersection(key.split()):
+        return False
+    return (
+        not _EDUCATION_ROW_RE.search(text)
+        and not _EDUCATION_INSTITUTION_RE.search(text)
+        and not _source_heading_is_education(_cv_source_boundary_key(text))
+    )
+
+
+# Read by the fidelity audit's employer check and by the restore step below.
+#
+# A CV that writes its employers as labelled cells -- "Company: Acme Sdn Bhd" --
+# has no Dates/Organization/Role columns for the authoritative-row reader to find,
+# so that reader returns nothing and a shortfall goes unnoticed. The label itself
+# is high-confidence evidence: a line that says "Company:" is naming an employer.
+# The label may open the line or a pipe-delimited cell within it, because the
+# extractor joins a table row's cells with " | " and the company is not always the
+# first column.
+#
+# The value may sit in the label's own cell ("Company: Acme") or, in a two-column
+# label table, in the next one ("Company: | Acme", "Company | Acme"). Without the
+# colon the label has to be the whole cell, so prose cannot read as a label.
+#
+# In the same cell a colon is required. An earlier draft also accepted a bare
+# hyphen, which turned a wrapped sentence beginning "Company-wide rollout of the
+# new platform" into the employer candidate "wide rollout of the new platform".
+#
+# The two forms are captured separately. Only a value in the NEXT cell can be a
+# column header ("Company | Position Held | Duration"); a value in the label's own
+# cell is always the name.
+_LABELLED_COMPANY_RE = re.compile(
+    r"(?:^|\|)[ \t]*compan(?:y|ies)(?:[ \t]+name)?[ \t]*"
+    r"(?:(?:[:\uff1a][ \t]*)?\|[ \t]*([^|\r\n]+)|[:\uff1a][ \t]*([^|\r\n]+))",
+    re.I | re.M,
+)
+
+# An Industry, Position or Duration cell riding along on the same row. The label
+# has to be followed by a colon or a spaced dash; a bare hyphen is part of a name,
+# as in "Role-Play Studios" or "Sector-X Consulting".
+_LABELLED_COMPANY_TRAILER_RE = re.compile(
+    r"\s*\b(?:industry|industries|position|duration|period|role|title|sector)\b"
+    r"(?:\s*[:\uff1a]|\s+[-\u2013\u2014]\s).*$",
+    re.I,
+)
+
+# The next column's header, read as a value when the row is a table's header row
+# ("Company | Position Held | Duration", "Company Name | Period of Employment").
+# A next-cell value made up entirely of header words names no employer. Every
+# word has to be one, so an employer that merely contains one -- "Department of
+# Statistics", "Position Partners Sdn Bhd", "Title Insurance Co" -- is still read.
+# A value in the label's own cell ("Company: Total") is never tested against this
+# list, so real names made of header words are still read there.
+_LABEL_TABLE_HEADER_WORDS = frozenset({
+    "industry", "industries", "sector", "position", "positions", "held", "title", "titles",
+    "job", "jobs", "designation", "designations", "role", "roles", "rank", "grade", "level",
+    "post", "period", "duration", "tenure", "date", "dates", "from", "to", "start",
+    "started", "end", "ended", "year", "years", "month", "months", "since", "until",
+    "employment", "employed", "department", "division", "location", "country", "city",
+    "state", "address", "salary", "pay", "remuneration", "compensation", "package",
+    "description", "duties", "duty", "responsibilities", "responsibility", "reason",
+    "reasons", "leaving", "left", "name", "company", "companies", "employer", "employers",
+    "organisation", "organization", "organisations", "organizations", "type", "nature",
+    "business", "status", "supervisor", "superior", "reporting", "report", "reports",
+    "manager", "achievements", "remarks", "remark", "notes", "contact", "number",
+    "details", "detail", "information", "info", "total", "experience", "current", "last",
+    "previous", "drawn", "basic", "monthly", "annual", "expected", "notice", "currency",
+})
+_LABEL_HEADER_FILLER_WORDS = frozenset({"of", "and", "the", "for", "in", "at", "no"})
+
+
+def _looks_like_column_header(name):
+    words = [
+        word for word in re.findall(r"[a-z]+", str(name or "").lower())
+        if word not in _LABEL_HEADER_FILLER_WORDS
+    ]
+    return bool(words) and all(word in _LABEL_TABLE_HEADER_WORDS for word in words)
+
+
+def _source_labelled_companies(cv_text):
+    """Employer names the source labels outright with a "Company:" prefix."""
+    names = []
+    for next_cell, own_cell in _LABELLED_COMPANY_RE.findall(str(cv_text or "")):
+        name = _LABELLED_COMPANY_TRAILER_RE.sub("", str(next_cell or own_cell or ""))
+        name = re.sub(r"\s+", " ", name).strip(" .,;:|-")
+        if next_cell and _looks_like_column_header(name):
+            continue
+        # A label with nothing after it, or a whole paragraph, is not a name.
+        if name and 2 <= len(name) <= 120:
+            names.append(name)
+    return names
+
+
+# A bracket that belongs to the employer's name: a brand, a parent or a trading
+# name, such as "Acme Outsourcing Sdn Bhd (Contoso Bank Sdn Bhd)". Letters only:
+# a bracket holding figures is a date or a phone number, never part of a name.
+_COMPANY_NAME_BRACKET_RE = re.compile(r"^(?P<head>[^()]+?)\s*\((?P<inner>[^()0-9]*[^\W\d_][^()0-9]*)\)\s*$")
+
+
+def _restore_labelled_company_qualifiers(parsed, cv_text):
+    """Put back a bracketed part of an employer name the provider dropped.
+
+    The parse instructions say to keep employer names as written, but a provider
+    can still shorten "Company: Acme outsourcing sdn bhd(contoso bank sdn bhd)"
+    to "Acme Outsourcing Sdn Bhd", losing the bank the candidate actually
+    works for. Only a name the source labels with "Company:" is used, and only
+    when the parsed employer is exactly the part before the bracket -- the same
+    words, ignoring legal forms such as Sdn Bhd, which the instructions allow the
+    provider to drop. The provider's own casing is kept for that part; the bracket
+    is added from the source. Nothing else is changed, and a parsed name that
+    already carries a bracket is left alone.
+    """
+    if not isinstance(parsed, dict) or not str(cv_text or "").strip():
+        return parsed
+    restorable = {}
+    for label in _source_labelled_companies(cv_text):
+        match = _COMPANY_NAME_BRACKET_RE.match(label)
+        if not match:
+            continue
+        head_tokens = frozenset(_cv_token_set(match.group("head")))
+        if not head_tokens:
+            continue
+        inner = re.sub(r"\s+", " ", match.group("inner")).strip()
+        # Two different brackets on the same name are ambiguous: restore neither.
+        if restorable.get(head_tokens, inner) != inner:
+            restorable[head_tokens] = None
+        else:
+            restorable[head_tokens] = inner
+    if not any(restorable.values()):
+        return parsed
+
+    def restored(company):
+        text = str(company or "").strip()
+        if not text or "(" in text:
+            return None
+        inner = restorable.get(frozenset(_cv_token_set(text)))
+        return "{} ({})".format(text, inner) if inner else None
+
+    changed = {}
+    for exp in parsed.get("work_experiences") or []:
+        if not isinstance(exp, dict):
+            continue
+        full = restored(exp.get("company"))
+        if full:
+            changed[str(exp.get("company")).strip()] = full
+            exp["company"] = full
+    cand = parsed.get("candidate")
+    if isinstance(cand, dict):
+        current = str(cand.get("current_company") or "").strip()
+        if current in changed:
+            cand["current_company"] = changed[current]
+    return parsed
+
+
 def _extract_authoritative_work_rows(cv_text, parsed=None):
     """Extract authoritative employment rows from pipe or whitespace tables.
 
@@ -1236,6 +1566,13 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
 
     def add_row(date_cell, company_cell, role_cell):
         if not date_cell or not company_cell or not role_cell:
+            return None
+        # A company that is only a separator -- the "|" left behind when a row has
+        # no company column, or ":", "│", "｜" -- names nothing. Accepting it
+        # rebuilt a whole work history with every employer rendered as "|". A
+        # placeholder such as "-" for a career break is the source's own content
+        # and is kept, as it always was; refusing it dropped the entry.
+        if _CV_SEPARATOR_ONLY_RE.match(str(company_cell)):
             return None
         if len(company_cell) > 120 or len(role_cell) > 160:
             return None
@@ -1261,8 +1598,37 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
         return row
 
     # Existing explicit pipe-delimited layout.
+    #
+    # Rows under an explicit Education heading are not employment. A qualification
+    # row has the same three-cell shape -- "2003-2006 NORTHWIND UNIVERSITY |
+    # Bachelor's Degree | Australia" reads as date, company and role -- and taking
+    # it as work injected the candidate's degree and school into Work Experience as
+    # two jobs. The borderless reader below is already confined to the work-history
+    # section; this reader was not.
+    #
+    # Two guards keep a work table from being swallowed. Only a line that is an
+    # education heading and nothing else enters the section; a work-history
+    # heading, any other recognised section heading or a short capitalised
+    # heading leaves it. And inside the section only a row that reads as a
+    # qualification is set aside, so a work table under a heading nobody listed
+    # -- "Positions Held" in title case, say -- is still read.
+    in_education = False
     for line in lines:
-        if not line or "|" not in line:
+        if not line:
+            continue
+        if "|" not in line:
+            heading_key = _cv_source_boundary_key(line.rstrip(":"))
+            if _source_heading_is_education(heading_key):
+                in_education = True
+            elif in_education and (
+                _WORK_HISTORY_HEADING_RE.match(line)
+                or heading_key in _CV_SOURCE_SECTION_BOUNDARY_KEYS
+                or _source_heading_is_work(heading_key.split())
+                or _source_line_is_caps_heading(line)
+            ):
+                in_education = False
+            continue
+        if in_education and _education_row_is_set_aside(line):
             continue
         cells = [c.strip() for c in line.split("|")]
         cells = [c for c in cells if c]
@@ -1293,12 +1659,8 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
     known_titles.sort(key=len, reverse=True)
 
     in_history = False
-    history_heading = re.compile(
-        r"^(?:EMPLOYMENT|WORK|CAREER|PROFESSIONAL)\s+(?:HISTORY|EXPERIENCES?)\b"
-        r"|^(?:HISTORY|EXPERIENCES?)\s*:?\s*$",
-        re.I,
-    )
-    stop_heading = re.compile(r"^(?:EDUCATION|ACADEMIC|CERTIFICATION|CERTIFICATIONS|REFERENCE|REFERENCES|SKILLS|TECHNICAL SKILLS|ADDITIONAL INFORMATION|LANGUAGES?|PROJECTS?)\b", re.I)
+    history_heading = _WORK_HISTORY_HEADING_RE
+    stop_heading = _WORK_HISTORY_STOP_HEADING_RE
     _mon_sub = r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?"
     # Title-first header lines: "<Title> — <Company> <DateRange>" with the date
     # trailing (e.g. "Dispatcher Technical Support — PT. Foo (Bar) Mar 2011 to Feb 2013").
@@ -1315,7 +1677,7 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
         re.I,
     )
     generic_title = re.compile(
-        r"\b((?:(?:Senior|Sr\.?|Junior|Jr\.?|Lead|Principal|Assistant|Associate|Deputy|Group|Regional|Country|General|Chief|Vice|Executive)\s+)*(?:Manager|Director|Head|Associate|Consultant|Analyst|Engineer|Developer|Architect|Specialist|Executive|Officer|Administrator|Coordinator|Supervisor|Partner|President|Intern|Trainee|Accountant|Recruiter|Designer|Scientist|Technician|Controller|Planner|Support)(?:\s+[A-Za-z0-9/&+.-]+){0,4})$",
+        r"\b((?:(?:" + _CV_TITLE_PREFIX_WORDS + r")\s+)*(?:" + _CV_TITLE_WORDS + r")(?:\s+[A-Za-z0-9/&+.-]+){0,4})$",
         re.I,
     )
 
@@ -1419,6 +1781,41 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
             return False
         return bool(title_first_split.match(str(line)[:tail.start()].strip()))
 
+    def _strip_cell_separators(text):
+        return str(text or "").strip().strip("|").strip()
+
+    def _known_title_split(rest):
+        """(company, title) split on a title the provider found, or ("", "").
+
+        The company is stripped of cell separators at both ends, whether the date
+        sat in its own cell ("| Acme | Engineer") or shared one with the company
+        ("Acme Corp | Senior Engineer").
+        """
+        for known_title in known_titles:
+            tm = re.search(r"(?:^|\s)" + re.escape(known_title) + r"\s*$", rest, re.I)
+            if tm:
+                return _strip_cell_separators(rest[:tm.start()]), known_title
+        return "", ""
+
+    def _generic_title_split(rest):
+        """(company, title) split on the generic job-title shape, or ("", "").
+
+        When the rest of the row still holds cells, the title is the whole last
+        cell: a cell is one value, so "Beta Holdings | Data Analyst" is the
+        company "Beta Holdings" and the title "Data Analyst", never the company
+        "Beta Holdings | Data" and the title "Analyst".
+        """
+        if "|" in rest:
+            head, _, last = rest.rpartition("|")
+            last = last.strip()
+            if last and generic_title.search(last):
+                return _strip_cell_separators(head), last
+            return "", ""
+        gm = generic_title.search(rest)
+        if gm:
+            return rest[:gm.start()].strip(), gm.group(1).strip()
+        return "", ""
+
     # ``ACHIEVEMENTS:`` is role-local only when employment clearly continues
     # with another dated job header. At the end of Work Experience it is a
     # top-level CV section and must not be absorbed into the last role.
@@ -1452,19 +1849,20 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
         dm = date_prefix.match(line)
         if dm:
             date_cell, rest = dm.group(1).strip(), dm.group(2).strip()
-            title_cell = ""
-            company_cell = ""
-            for known_title in known_titles:
-                tm = re.search(r"(?:^|\s)" + re.escape(known_title) + r"\s*$", rest, re.I)
-                if tm:
-                    title_cell = known_title
-                    company_cell = rest[:tm.start()].strip()
-                    break
+            if rest.startswith("|"):
+                # The date sat in its own table cell. What follows the separator is
+                # one cell, so the whitespace heuristics below do not apply: the
+                # generic title pattern split "Senior Data Engineer" into a company
+                # "Senior Data" and a title "Engineer", and every company came out
+                # prefixed with "|". Split only on a title the provider found; if
+                # that consumes the whole cell, the row names no employer -- in a
+                # label-style CV it sits on the line above -- and is left out
+                # rather than invented.
+                add_row(date_cell, *_known_title_split(rest))
+                continue
+            company_cell, title_cell = _known_title_split(rest)
             if not title_cell:
-                gm = generic_title.search(rest)
-                if gm:
-                    title_cell = gm.group(1).strip()
-                    company_cell = rest[:gm.start()].strip()
+                company_cell, title_cell = _generic_title_split(rest)
             add_row(date_cell, company_cell, title_cell)
             continue
 
