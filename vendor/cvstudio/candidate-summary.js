@@ -164,6 +164,9 @@ async function applySummaryToUploadedDocx() {
     var summaryName = base + (window._summaryGeneratedAnonymized === true ? ' - Anonymized Summary.docx' : ' - Summary.docx');
     var result = await cvStudioSaveDownloadBlob(blob, summaryName, 'summary');
     cvStudioShowDownloadResult(result, 'Summary output');
+    // After the saved message, so it is the one left on screen.
+    var payRemoved = response.headers && response.headers.get ? response.headers.get('X-CV-Summary-Pay-Removed') : null;
+    if (payRemoved) showToast(cvSummaryPayNote(payRemoved, false), 'warn');
   } catch(e) {
     showToast('DOCX Summary failed: ' + (e.message || 'Unknown error'), 'err');
   } finally {

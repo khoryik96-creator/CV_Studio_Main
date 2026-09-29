@@ -6631,12 +6631,8 @@
      "text": "Salary RM 9,000. Strong leader."
     }
    ],
-   "expect": [
-    {
-     "text": "Salary RM 9,000. Strong leader."
-    }
-   ],
-   "note": "only the pay goes: sentence ends after bold and figures, no stray **, non-text items untouched"
+   "expect": [],
+   "note": "a non-text item is never edited; it is dropped whole when its text states pay, because the Word file writes it as text (expectation changed in v24.6.423 on review, owner-approved)"
   },
   {
    "id": "P1-mixed-r7-8",
@@ -6649,6 +6645,26 @@
     "Built pipelines."
    ],
    "note": "only the pay goes: sentence ends after bold and figures, no stray **, non-text items untouched"
+  },
+  {
+   "id": "P1-mixed-r7-9",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    {
+     "text": "Strong leader."
+    },
+    7,
+    true
+   ],
+   "expect": [
+    {
+     "text": "Strong leader."
+    },
+    7,
+    true
+   ],
+   "note": "a non-text item is never edited; it is dropped whole when its text states pay, because the Word file writes it as text (expectation changed in v24.6.423 on review, owner-approved)"
   },
   {
    "id": "P1-isolate-r7-0",
@@ -6853,6 +6869,600 @@
    "note": "the sentence before the pay sentence stays"
   },
   {
+   "id": "P1-remove-r8-0",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Current: RM 9,000; Expected: RM 11,000"
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r8-1",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Salary RM 9,000 (basic); RM 1,500 allowances"
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r8-2",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Current salary RM 9,000; plus 2 months bonus"
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r8-3",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Total package RM 150k across base, bonus and allowances"
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r8-4",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Currently drawing SGD 8,500/month across base and allowances"
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r8-5",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Salary of RM 9,000 for the team lead role"
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r8-6",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "The candidate is paid RM 9,000 monthly"
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r8-7",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Seeking RM 12k for the next role"
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r8-8",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Asking for RM 10k"
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r8-9",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Receives RM 9,000 monthly"
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r8-10",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "On a package of RM 150k"
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r8-11",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Current: RM 9,000"
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r8-12",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "He is paid RM 8,000 a month."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r8-13",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "They are paid RM 9,000 a month."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r8-14",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Makes RM 9k a month."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r8-15",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Gets RM 7,000 monthly."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r8-16",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "His salary is RM 14k."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r8-17",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Their salary is RM 9,000."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r8-18",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Her salary: RM 12,000."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r8-19",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Present: MYR 8,000."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r8-20",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Previous salary RM 7,500."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r8-21",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Expected salary RM 11k; negotiable."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r8-22",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Current salary RM 9,000; EPF 11%."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r8-23",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Salary RM 9k; with 2 months bonus."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r8-0",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Expert in PHP 8 salary and HR systems"
+   ],
+   "expect": [
+    "Expert in PHP 8 salary and HR systems"
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r8-1",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Specialist in Form 16 salary tax compliance"
+   ],
+   "expect": [
+    "Specialist in Form 16 salary tax compliance"
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r8-2",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Recruiter who negotiated their salary of RM 15k for placed engineers"
+   ],
+   "expect": [
+    "Recruiter who negotiated their salary of RM 15k for placed engineers"
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r8-3",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed total compensation of $12M for 300 staff across APAC"
+   ],
+   "expect": [
+    "Managed total compensation of $12M for 300 staff across APAC"
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r8-4",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Led compensation across the group and 3 regions."
+   ],
+   "expect": [
+    "Led compensation across the group and 3 regions."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r8-5",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Built PHP 7 payroll modules."
+   ],
+   "expect": [
+    "Built PHP 7 payroll modules."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r8-6",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Performed salary tax filings under Form 16 for 900 staff."
+   ],
+   "expect": [
+    "Performed salary tax filings under Form 16 for 900 staff."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r8-7",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Implemented RM 16 platform upgrades."
+   ],
+   "expect": [
+    "Implemented RM 16 platform upgrades."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r8-8",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Negotiated their packages with 20 clients."
+   ],
+   "expect": [
+    "Negotiated their packages with 20 clients."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r8-9",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Seeking funding of RM 5M for the startup."
+   ],
+   "expect": [
+    "Seeking funding of RM 5M for the startup."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r8-10",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Received RM 2M in grants annually."
+   ],
+   "expect": [
+    "Received RM 2M in grants annually."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r8-11",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Holds CPA; led audits for 30 clients."
+   ],
+   "expect": [
+    "Holds CPA; led audits for 30 clients."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r8-12",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Built pipelines; led a team of 8."
+   ],
+   "expect": [
+    "Built pipelines; led a team of 8."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r8-13",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Grew revenue to RM 5M; managed 20 staff."
+   ],
+   "expect": [
+    "Grew revenue to RM 5M; managed 20 staff."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r8-14",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Notice period 1 month; available immediately."
+   ],
+   "expect": [
+    "Notice period 1 month; available immediately."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r8-15",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Advised the team lead on salary bands."
+   ],
+   "expect": [
+    "Advised the team lead on salary bands."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-mixed-r8-0",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Proficient in Python and C. Expected salary RM 9k."
+   ],
+   "expect": [
+    "Proficient in Python and C."
+   ],
+   "note": "a fact before a pay sentence stays; a pay clause takes its pay continuation with it; a non-text item with pay is dropped whole"
+  },
+  {
+   "id": "P1-mixed-r8-1",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Based in the U.S. Expected salary USD 90k."
+   ],
+   "expect": [
+    "Based in the U.S."
+   ],
+   "note": "a fact before a pay sentence stays; a pay clause takes its pay continuation with it; a non-text item with pay is dropped whole"
+  },
+  {
+   "id": "P1-mixed-r8-2",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Worked at Acme Co. Expected salary RM 9,000."
+   ],
+   "expect": [
+    "Worked at Acme Co."
+   ],
+   "note": "a fact before a pay sentence stays; a pay clause takes its pay continuation with it; a non-text item with pay is dropped whole"
+  },
+  {
+   "id": "P1-mixed-r8-3",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Holds a B.Sc. Computer Science degree; expected salary RM8k."
+   ],
+   "expect": [
+    "Holds a B.Sc. Computer Science degree."
+   ],
+   "note": "a fact before a pay sentence stays; a pay clause takes its pay continuation with it; a non-text item with pay is dropped whole"
+  },
+  {
+   "id": "P1-mixed-r8-4",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Promoted to Sr. Manager with current salary RM12k."
+   ],
+   "expect": [],
+   "note": "a fact before a pay sentence stays; a pay clause takes its pay continuation with it; a non-text item with pay is dropped whole"
+  },
+  {
+   "id": "P1-mixed-r8-5",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Joined in Sept. 2024 as Lead Engineer."
+   ],
+   "expect": [
+    "Joined in Sept. 2024 as Lead Engineer."
+   ],
+   "note": "a fact before a pay sentence stays; a pay clause takes its pay continuation with it; a non-text item with pay is dropped whole"
+  },
+  {
+   "id": "P1-mixed-r8-6",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Notice period 1 month; expected salary RM 9k."
+   ],
+   "expect": [
+    "Notice period 1 month."
+   ],
+   "note": "a fact before a pay sentence stays; a pay clause takes its pay continuation with it; a non-text item with pay is dropped whole"
+  },
+  {
+   "id": "P1-mixed-r8-7",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Grew revenue to RM 5M; expected salary RM 9k."
+   ],
+   "expect": [
+    "Grew revenue to RM 5M."
+   ],
+   "note": "a fact before a pay sentence stays; a pay clause takes its pay continuation with it; a non-text item with pay is dropped whole"
+  },
+  {
+   "id": "P1-mixed-r8-8",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Grade A. Expected salary RM 9k."
+   ],
+   "expect": [
+    "Grade A."
+   ],
+   "note": "a fact before a pay sentence stays; a pay clause takes its pay continuation with it; a non-text item with pay is dropped whole"
+  },
+  {
+   "id": "P1-mixed-r8-9",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    {
+     "text": "Expected salary RM 9k"
+    },
+    [
+     "Salary RM 9,000"
+    ],
+    {
+     "text": "Led teams."
+    }
+   ],
+   "expect": [
+    {
+     "text": "Led teams."
+    }
+   ],
+   "note": "a fact before a pay sentence stays; a pay clause takes its pay continuation with it; a non-text item with pay is dropped whole"
+  },
+  {
+   "id": "P1-asking-lpa",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Asking for 12 LPA."
+   ],
+   "expect": [],
+   "note": "'for 12 LPA' is an amount, not a headcount"
+  },
+  {
+   "id": "P1-currency-word-boundary-0",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Expert in Norm 3000 salary engine."
+   ],
+   "expect": [
+    "Expert in Norm 3000 salary engine."
+   ],
+   "note": "'rm' inside a word is not a currency"
+  },
+  {
+   "id": "P1-currency-word-boundary-1",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Specialist in Alarm 5000 salary integration."
+   ],
+   "expect": [
+    "Specialist in Alarm 5000 salary integration."
+   ],
+   "note": "'rm' inside a word is not a currency"
+  },
+  {
    "id": "P1-notice-clause",
    "rule": "P1",
    "kind": "summary_salary",
@@ -7021,6 +7631,15 @@
    "expect": "1) Led a team of 5.",
    "removed": 1,
    "note": "the number stays on the line"
+  },
+  {
+   "id": "P1-text-count-sentences",
+   "rule": "P1",
+   "kind": "summary_salary_text",
+   "text": "- Current salary RM 9k; expected RM 11k.\n- Built pipelines.",
+   "expect": "- Built pipelines.",
+   "removed": 1,
+   "note": "the count is of sentences, not clauses"
   },
   {
    "id": "P1-text-only-pay",

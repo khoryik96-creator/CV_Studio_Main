@@ -375,8 +375,9 @@ async function runBatch() {
       // Worded by cvParseWarningText (cv-format.js, loaded before this file), so
       // single and batch runs share one rule for what Blind mode may show.
       bf.parseWarning = cvParseWarningText(pData, isBlind);
-      // Pay removed from the Summary box is kept on the row and holds auto-upload.
-      if (pData.summary_pay_removed) bf.parseWarning = cvJoinWarnings(bf.parseWarning, cvSummaryPayNote(pData.summary_pay_removed, false));
+      // Pay removed from the Summary box is kept on the row and holds auto-upload,
+      // when that parsed summary is the one used rather than an automatic one.
+      if (pData.summary_pay_removed && !withBatchSummary) bf.parseWarning = cvJoinWarnings(bf.parseWarning, cvSummaryPayNote(pData.summary_pay_removed, false));
       if (bf.parseWarning) showToast(bf.file.name + ': ' + bf.parseWarning, 'warn');
       bf.cost += responseCost(pData, route.model, route.provider);
       bf.usage = mergeUsageClient(bf.usage, pData.usage || {});

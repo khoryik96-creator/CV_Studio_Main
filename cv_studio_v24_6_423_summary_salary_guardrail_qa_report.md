@@ -1,4 +1,4 @@
-# v24.6.419 – v24.6.422 Salary never reaches the Summary box
+# v24.6.419 – v24.6.423 Salary never reaches the Summary box
 
 Branch: `claude/pr157-chatgpt-fix-zke4cy`, from merged master `56dca18` (v24.6.418).
 
@@ -299,4 +299,60 @@ candidate's **own** pay?
 still be misread. The design limits the damage: a removal is always visible and
 holds auto-upload, so a mistake is seen before the CV is sent, and the export
 is never blocked. Every new phrasing found goes into the generated lists.
+
+## v24.6.423: ten findings from one more review
+
+**Pay that still got through**
+- **Clauses:** a clause next to a pay clause went through on its own ("Current:
+  RM 9,000; Expected: RM 11,000", "…; RM 1,500 allowances", "…; plus 2 months
+  bonus"). In a sentence that states pay, a clause carrying an amount or
+  continuing the pay now goes with it, unless it describes work. "Current: RM
+  9,000" is also caught by itself now.
+- **Look-alike work phrases:** "across base, bonus and allowances", "for the
+  team lead role" and "for 12 LPA" were read as work. They are pay.
+- **New ways of stating pay:**
+  - "The candidate / he / she is paid RM 9,000", "They are paid RM 9,000";
+  - "Receives / Makes / Gets RM 9,000 monthly";
+  - "Seeking RM 12k", "Asking for RM 10k";
+  - "On a package of RM 150k".
+- **Non-text summary items** skipped the filter, but the Word file writes them
+  as text. One that states pay is now dropped whole. It is never edited.
+
+**Real content that was removed**
+- **Short sentences before pay:** "Proficient in Python and C.", "Based in the
+  U.S." and "Worked at Acme Co." were lost with the pay sentence after them. A
+  single letter, a dotted token, "Co." or a month now ends a sentence when the
+  next sentence states pay on its own. "Sr.", "Dr.", "Sdn." and a leading list
+  number never do.
+- **Currency inside words:** "PHP 8" and "Form 16" were read as money. A letter
+  code must now be a word of its own, followed by three or more figures or a
+  unit.
+- **"their salary":** "negotiated their salary of RM 15k for placed engineers"
+  was removed. "his", "her" and "their" alone no longer prove it's the
+  candidate's own pay, and someone else's pay the candidate worked on is work.
+  "His salary is RM 14k" is still removed.
+
+**Warnings**
+- **Uploaded-DOCX path:** it now sends the same removal header, and the page
+  warns after the saved message. It still says so when nothing is left, since
+  filling the Summary is its only job. The formatted CV is never refused.
+- **Stale parse note:** the parse's note no longer shows, or pauses
+  auto-upload, when that summary was replaced by a linked or automatic one.
+- **Count:** it is now of sentences, not clauses.
+
+**Regression evidence**
+- **Cases:** 55 new P1 cases, including every review example, for 399 in all.
+  One existing case changed on purpose. The non-text item that stated pay used
+  to be kept as it was; it is now dropped whole, which is what the review
+  asked for. Its note records this, and no other case changed.
+- **Generated test:** new families for own-pay verbs, pay continuations,
+  currency look-alikes, and facts before a pay sentence (11 facts x 3 pay
+  sentences).
+- **Old rule vs new rule** on every non-test sentence in the repository (29,670
+  strings): 7 differ, and all are this review's examples.
+- **Whole-suite recording:** the filter changed nothing outside the salary tests.
+- **Deliberate breaks:** 22 of 22 caught, after adding two word-boundary cases
+  and correcting two break scripts.
+- **Full suite:** 1446 passed, 23 skipped, plus the known environment-only
+  tests. **Node:** 27/27.
 

@@ -96,6 +96,25 @@ class SummarySalaryDocxTests(unittest.TestCase):
         self.assertIn("Built streaming pipelines on Apache Flink.", xml)
         self.assertIn("Expertise in compensation and benefits reporting for 500 staff.", xml)
 
+    def test_the_uploaded_docx_path_reports_what_it_removed(self):
+        source = self._format(["Placeholder summary."])
+        response = self.client.post(
+            "/generate-docx",
+            data={"source_docx": (io.BytesIO(source), "CV.docx"),
+                  "summary_bullets": json.dumps(["Built pipelines.", "Current salary RM 9k; expected RM 11k."])},
+            content_type="multipart/form-data", headers={"Origin": "http://127.0.0.1:5000"},
+        )
+        self.assertEqual(response.status_code, 200)
+        # One sentence, counted once however many clauses it had.
+        self.assertEqual(response.headers.get("X-CV-Summary-Pay-Removed"), "1")
+        clean = self.client.post(
+            "/generate-docx",
+            data={"source_docx": (io.BytesIO(source), "CV.docx"), "summary_bullets": json.dumps(["Built pipelines."])},
+            content_type="multipart/form-data", headers={"Origin": "http://127.0.0.1:5000"},
+        )
+        self.assertEqual(clean.status_code, 200)
+        self.assertNotIn("X-CV-Summary-Pay-Removed", clean.headers)
+
     def test_a_summary_without_pay_is_written_unchanged(self):
         clean = ["**Senior Data Engineer** with 11 years in banking.", "Built streaming pipelines."]
         self.assertEqual(app._cv_strip_pay_from_summary(list(clean)), clean)

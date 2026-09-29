@@ -50,6 +50,35 @@ class GeneratedSalaryGuardrails(unittest.TestCase):
         ]
         self.assertEqual(missed[:10], [])
 
+    def test_other_ways_of_stating_own_pay_are_removed(self):
+        with_period = ["The candidate is paid {a}{p}.", "He is paid {a}{p}.", "They are paid {a}{p}.",
+                       "Receives {a}{p}.", "Makes {a}{p}.", "Gets {a}{p}.", "Currently drawing {a}{p} across base and allowances."]
+        any_period = ["Seeking {a}.", "Asking for {a}.", "Current: {a}.", "On a package of {a}.",
+                      "Total package {a} across base, bonus and allowances.", "Salary of {a} for the team lead role."]
+        texts = [t.format(a=a, p=p) for t, a, p in itertools.product(with_period, AMOUNTS[:8], PERIODS[1:])]
+        texts += [t.format(a=a) for t, a in itertools.product(any_period, AMOUNTS[:8])]
+        # A pay statement's other clauses go with it.
+        texts += [f"Current salary {a}; {tail}." for a, tail in itertools.product(
+            AMOUNTS[:8], ["plus 2 months bonus", "RM 1,500 allowances", "excluding EPF", "negotiable", "expected RM 12k"])]
+        missed = [text for text in texts if normalize._cv_strip_pay_from_summary([text]) != []]
+        self.assertEqual(missed[:10], [])
+
+    def test_words_that_look_like_currency_are_not_money(self):
+        kept = [f"{verb} {thing} {figure} {rest}." for verb, thing, figure, rest in itertools.product(
+            ["Expert in", "Built", "Maintained"], ["PHP", "Form", "Charms", "Perms"], ["7", "8", "16", "80"],
+            ["salary and HR systems", "salary tax compliance", "payroll modules"])]
+        dropped = [text for text in kept if normalize._cv_strip_pay_from_summary([text]) != [text]]
+        self.assertEqual(dropped[:10], [])
+
+    def test_a_fact_before_a_pay_sentence_stays(self):
+        facts = ["Proficient in Python and C.", "Based in the U.S.", "Worked at Acme Co.", "Grade A.",
+                 "Worked at Acme Sdn Bhd.", "Joined Contoso Ltd.", "Manages a team of 8.", "Improved margin by 5.5%.",
+                 "Skilled in SQL etc.", "Holds a B.Sc.", "Joined in Sept."]
+        pay = ["Expected salary RM 9k.", "Current salary RM 12,000.", "Last drawn salary MYR 8,500."]
+        for fact, statement in itertools.product(facts, pay):
+            with self.subTest(fact=fact, pay=statement):
+                self.assertEqual(normalize._cv_strip_pay_from_summary([fact + " " + statement]), [fact])
+
     def test_pay_related_work_is_kept(self):
         dropped = [
             text for text in (

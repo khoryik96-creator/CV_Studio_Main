@@ -1971,33 +1971,37 @@ def _cv_project_group_sort_key(block):
 # (HR, payroll, recruitment, sales), so a sentence is removed only on a clear sign
 # that it states the candidate's OWN pay:
 #   * "my"/"candidate's" or current/expected/asking/last-drawn before a pay word
-#     and an amount -- "Expected salary RM16,000", "current salary of MYR 9,500".
-#     Nothing overrides this;
+#     and an amount -- "Expected salary RM16,000", "current salary of MYR 9,500" --
+#     "on a package of RM 150k", or "the candidate is paid RM 9,000". Nothing
+#     overrides this; "his/her/their" alone does not count, as a recruiter
+#     "negotiated their salary";
 #   * otherwise a pay word and an amount, in either order ("Salary: RM 17,000",
 #     "RM16,000 salary"), earnings or a bonus per period, lakhs per annum, or
 #     "Last drawn RM 9,000" -- unless the sentence describes work: it opens with a
 #     work verb ("Managed total compensation of $12M"), or it names the
 #     organisation's money or people ("budget", "for 300 staff", "across APAC",
-#     "Head of Compensation from 2019");
+#     "Head of Compensation from 2019"), or it is someone else's pay the candidate
+#     worked on ("negotiated their salary of RM 15k");
 #   * pay talk with no amount -- "salary expectations are negotiable",
 #     "Salary: negotiable" -- unless it is someone else's ("advised clients on
 #     expected salary ranges", "salary expectations of new hires").
 #
 # Matching runs on an NFKC-normalised copy without Markdown emphasis, so
 # "**Salary:** RM 17,000" reads as "Salary: RM 17,000" and full-width digits read
-# as ordinary digits; digits in other scripts count as digits too. A currency
-# code needs no word boundary before it, so a neighbouring character such as "月薪"
-# does not hide "RM8000". The kept text is the original.
+# as ordinary digits; digits in other scripts count as digits too. A letter
+# currency code must not follow a Latin letter ("Form 16" holds no "RM 16"), but a
+# neighbouring character such as "月薪" does not hide "RM8000". The kept text is
+# the original.
 _CV_PAY_TERM = (
     r"(?:salar(?:y|ies)|remuneration|total\s+compensation|compensation|ctc|"
     r"take[\s-]?home(?:\s+pay)?|epf(?:\s+contributions?)?|kwsp(?:\s+contributions?)?|"
     r"(?:monthly|annual|basic|base|gross|net|current|expected|last[\s-]+drawn|total)\s+(?:pay|package)|"
     r"(?:salary|pay|remuneration)\s+package)"
 )
-_CV_PAY_CURRENCY = (
-    r"(?:rm|myr|sgd|s\$|usd|us\$|\$|€|£|₹|inr|rs\.?|aud|a\$|hkd|hk\$|idr|rp|php|₱|thb|฿|"
-    r"cny|rmb|¥|jpy|eur|gbp)"
-)
+# Letter codes are words: "Form 16" holds no "RM 16" and "PHP 8" is a language.
+_CV_PAY_CURRENCY_CODE = r"(?:rm|myr|sgd|usd|inr|rs\.?|aud|hkd|idr|rp|php|thb|cny|rmb|jpy|eur|gbp)"
+_CV_PAY_CURRENCY_SYMBOL = r"(?:s\$|us\$|a\$|hk\$|\$|€|£|₹|₱|฿|¥)"
+_CV_PAY_CURRENCY = r"(?:" + _CV_PAY_CURRENCY_CODE + r"|" + _CV_PAY_CURRENCY_SYMBOL + r")"
 _CV_PAY_CURRENCY_WORD = (
     r"(?:ringgit|dollars?|rupees?|pesos?|baht|yuan|yen|euros?|pounds?|dirhams?|riyals?|rupiah)"
 )
@@ -2008,8 +2012,12 @@ _CV_PAY_PERIOD = (
 )
 # An amount with a currency or a unit.
 # A figure never starts inside another one: "2016" holds no "016".
+# A letter code needs a word boundary before it -- a neighbouring non-Latin
+# character such as "月薪" still counts as one -- and an amount with three or more
+# figures or a unit after it ("RM 9,000", "RM9k"), so "PHP 8" is not money.
 _CV_PAY_AMOUNT_MARKED = (
-    r"(?:" + _CV_PAY_CURRENCY + r"\s?\d[\d,.]*(?:\s?" + _CV_PAY_UNIT + r")?\b"
+    r"(?:(?:(?<![a-z])" + _CV_PAY_CURRENCY_CODE + r"(?=\s?(?:\d[\d,.]{2,}|\d[\d,.]*\s?" + _CV_PAY_UNIT + r"\b))"
+    r"|" + _CV_PAY_CURRENCY_SYMBOL + r")\s?\d[\d,.]*(?:\s?" + _CV_PAY_UNIT + r")?\b"
     r"|(?<![\d.,])\d[\d,.]*\s?" + _CV_PAY_UNIT + r"\b"
     r"|(?<![\d.,])\d[\d,.]*\s?" + _CV_PAY_CURRENCY + r"(?![a-z])"
     r"|(?<![\d.,])\d[\d,.]*\s?" + _CV_PAY_CURRENCY_WORD + r"\b)"
@@ -2064,11 +2072,17 @@ _CV_PAY_ORG_MONEY = (
 # Clearly the candidate's own: "my" / "candidate's", or current, expected, asking or
 # last-drawn, before a pay word and an amount. Nothing around it overrides this.
 _CV_PAY_OWN_RE = re.compile(
-    r"\b(?:(?:my|his|her|their|(?:the\s+)?candidate['\u2019]s)\s+"
+    r"\b(?:(?:my|(?:the\s+)?candidate['\u2019]s)\s+"
     r"(?:(?:current|present|expected|asking|desired|last[\s-]+drawn|previous)\s+)?"
     r"|(?:current|present|expected|expecting|asking|desired|last[\s-]+drawn|previous)\s+)"
     r"(?:(?:monthly|annual|basic|base|gross|net|total|take[\s-]?home)\s+)?"
-    + _CV_PAY_WORD + r"\b(?:" + _CV_PAY_CONNECTOR + r"){0,4}\s*" + _CV_PAY_AMOUNT,
+    + _CV_PAY_WORD + r"\b(?:" + _CV_PAY_CONNECTOR + r"){0,4}\s*" + _CV_PAY_AMOUNT
+    # "On a package of RM 150k".
+    + r"|\bon\s+an?\s+(?:(?:annual|monthly|total|base|basic|gross|current)\s+)?"
+      r"(?:salary|package|pay|ctc)\s+of\s+" + _CV_PAY_AMOUNT_MARKED
+    # "The candidate is paid RM 9,000 monthly".
+    + r"|\b(?:(?:the\s+)?candidate|he|she|i)\s+(?:is|am|was|gets|got)\s+(?:currently\s+)?paid\b"
+      r"[^;]{0,20}?" + _CV_PAY_AMOUNT_MARKED,
     re.I,
 )
 # A pay word and an amount, and the other ways of stating pay, which a sentence
@@ -2078,9 +2092,10 @@ _CV_PAY_AMOUNT_RE = re.compile(
     r"\b" + _CV_PAY_TERM + r"\b(?:" + _CV_PAY_CONNECTOR + r"){0,4}\s*" + _CV_PAY_AMOUNT
     # An amount, then a pay term -- but not the organisation's money.
     + r"|" + _CV_PAY_AMOUNT_MARKED + r"\s+(?:[a-z]+\s+){0,2}?" + _CV_PAY_TERM + r"\b" + _CV_PAY_ORG_MONEY
-    # "Last drawn RM 9,000", "Expected: RM 9,000", "Asking RM 9,000".
-    + r"|\b(?:expected|expecting|asking|desired|last[\s-]+drawn)\b(?:" + _CV_PAY_CONNECTOR + r"){0,3}\s*"
-      + _CV_PAY_AMOUNT_MARKED
+    # "Last drawn RM 9,000", "Expected: RM 9,000", "Asking for RM 10k",
+    # "Seeking RM 12k", "Current: RM 9,000".
+    + r"|\b(?:expected|expecting|asking(?:\s+for)?|seeking|desired|last[\s-]+drawn|current|present|previous)\b"
+      r"(?:" + _CV_PAY_CONNECTOR + r"){0,3}\s*" + _CV_PAY_AMOUNT_MARKED
     # "RM 9,000 expected", "RM 9,000 negotiable".
     + r"|" + _CV_PAY_AMOUNT_MARKED + r"\s+(?:expected|asking|last[\s-]+drawn|negotiable)\b"
     # A clause that is only an amount per period: "RM 9,000 / month".
@@ -2096,8 +2111,11 @@ _CV_PAY_AMOUNT_RE = re.compile(
       + _CV_PAY_PERIOD
     # "Paid RM 7k/mo.", "Making RM 9k a month": only opening the clause and right
     # before the amount, so "paid social spend" and "decision-making" are work.
-    + r"|^\W*(?:(?:currently|now)\s+)?(?:paid|making)\s+(?:about\s+|around\s+|approx(?:imately|\.)?\s*)?"
+    + r"|^\W*(?:(?:currently|now)\s+)?(?:paid|making|makes|receiv(?:es|ed|ing)|gets|getting)\s+"
+      r"(?:about\s+|around\s+|approx(?:imately|\.)?\s*)?"
       r"(?:" + _CV_PAY_AMOUNT_MARKED + r"|(?<![\d.,])\d{1,3}(?:,\d{3})+\b|(?<![\d.,])(?!(?:19|20)\d{2}\b)\d{3,}\b)\s*" + _CV_PAY_PERIOD
+    # "They are paid RM 9,000 a month" (a gender-neutral summary).
+    + r"|\bthey\s+(?:are|were)\s+(?:currently\s+)?paid\b[^;]{0,20}?" + _CV_PAY_AMOUNT_MARKED
     # A bonus, commission or allowance per period.
     + r"|\b(?:bonus(?:es)?|commissions?|allowances?)\s*(?:of|:)?\s*" + _CV_PAY_AMOUNT_MARKED
       + r"\s*" + _CV_PAY_PERIOD,
@@ -2107,14 +2125,24 @@ _CV_PAY_AMOUNT_RE = re.compile(
 # sentence: the figure describes work, not the candidate's pay.
 _CV_PAY_WORK_RE = re.compile(
     r"\b(?:budgets?|costs?|spend(?:ing)?|expenses?|revenue|turnover|profits?|margins?|"
-    r"savings?|portfolio|aum|premiums?|procurement|billings?|fees|"
-    r"across|"
+    r"savings?|portfolio|aum|premiums?|procurement|billings?|fees|funding|grants?|investments?|"
+    r"across(?!\s+(?:(?:the|all|his|her|their|my)\s+)?(?:base|basic|bonus(?:es)?|allowances?|salary|"
+    r"pay|fixed|variable|cash|benefits?|components?|stipends?|commissions?)\b)|"
     r"for\s+(?:the\s+|our\s+|a\s+)?(?:firm|company|group|bank|business|"
     r"organi[sz]ation|clients?|region|department|division|unit)|"
     r"(?:in|of)\s+new\s+business|in\s+(?:revenue|fees|billings?)|"
-    r"for\s+\d[\d,.]*\+?\s*(?:k\s+)?(?!(?:months?|years?|yrs?|weeks?|days?|hours?)\b)[a-z]+|"
+    r"for\s+\d[\d,.]*\+?\s*(?:k\s+)?(?!(?:months?|years?|yrs?|weeks?|days?|hours?|lpa|lakhs?|crores?|"
+    r"mil|million|k|m)\b)[a-z]+|"
     r"(?:to|for|across)\s+(?:the\s+|all\s+|our\s+)?(?:[a-z]+\s+){0,2}"
-    r"(?:teams?|staff|employees|agents|workers|members|people|drivers|vendors|suppliers))\b",
+    r"(?:teams?|staff|employees|agents|workers|members|people|drivers|vendors|suppliers)"
+    r"(?!\s+(?:lead|leader|manager|head|role|position|job|member)\b))\b",
+    re.I,
+)
+# Someone else's pay the candidate worked on: "negotiated their salary of RM 15k".
+_CV_PAY_OTHERS_PAY_RE = re.compile(
+    r"\b(?:negotiat|benchmark|review|align|increas|rais|adjust|approv|determin|structur|manag|"
+    r"handl|process|secur|set)\w*\s+(?:their|his|her|the|its)\s+(?:[a-z]+\s+)?"
+    r"(?:salar(?:y|ies)|pay|compensation|packages?|remuneration)\b",
     re.I,
 )
 # A clause that opens with a work verb describes work: "Managed total
@@ -2250,9 +2278,16 @@ def _cv_pay_talk_is_candidates(text, match):
 # sentence can end with -- "Sdn Bhd.", "Ltd.", "etc." -- are not listed, so
 # "Worked at Acme Sdn Bhd. Expected salary RM 9k." loses only its second sentence.
 _CV_ABBREVIATIONS = frozenset({
-    "mr", "mrs", "ms", "dr", "sr", "jr", "st", "no", "nos", "vs", "co", "corp", "sdn",
-    "approx", "est", "prof", "rs", "fig", "vol", "jan", "feb", "mar", "apr", "jun", "jul",
-    "aug", "sep", "sept", "oct", "nov", "dec",
+    "mr", "mrs", "ms", "dr", "sr", "jr", "st", "no", "nos", "vs", "sdn", "approx", "est",
+    "prof", "rs", "fig", "vol",
+})
+# A stop that may or may not end a sentence -- after "Co.", a month, a single
+# letter ("Python and C.") or a dotted token ("the U.S.") -- ends one only when
+# the next sentence states the candidate's pay on its own, so a fact before a pay
+# sentence is never lost with it.
+_CV_AMBIGUOUS_ABBREVIATIONS = frozenset({
+    "co", "corp", "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "sept", "oct",
+    "nov", "dec",
 })
 # Dotted abbreviations that end a pay sentence: "RM 9k p.a. Built pipelines."
 _CV_SENTENCE_ENDING_DOTTED = frozenset({"p.a", "p.m"})
@@ -2273,10 +2308,16 @@ def _cv_split_sentences(text):
         # is all there is, as in a list number ("1. Built ...").
         is_number = bool(_CV_NUMBER_TOKEN_RE.fullmatch(token)) and len(words) > 1
         lowered = token.lower()
-        if lowered in _CV_SENTENCE_ENDING_DOTTED:
+        if lowered in _CV_SENTENCE_ENDING_DOTTED or is_number:
             pass
-        elif not is_number and (len(token) <= 1 or "." in token or lowered in _CV_ABBREVIATIONS):
+        elif lowered in _CV_ABBREVIATIONS or _CV_NUMBER_TOKEN_RE.fullmatch(token):
+            # A list number on its own ("1. Built ...") never ends a sentence.
             continue
+        elif len(token) <= 1 or "." in token or lowered in _CV_AMBIGUOUS_ABBREVIATIONS:
+            following = _CV_SENTENCE_END_RE.search(text, match.end())
+            next_sentence = text[match.end():following.end() if following else len(text)]
+            if not _cv_states_candidate_pay(next_sentence.split(";")[0]):
+                continue
         pieces.append(text[start:match.end()].strip())
         start = match.end()
     tail = text[start:].strip()
@@ -2301,7 +2342,11 @@ def _cv_states_candidate_pay(text):
     matchable = _CV_PAY_MARKUP_RE.sub("", matchable).strip()
     if _CV_PAY_OWN_RE.search(matchable):
         return True
-    describes_work = _CV_PAY_WORK_RE.search(matchable) or _cv_pay_opens_with_work_verb(matchable)
+    describes_work = (
+        _CV_PAY_WORK_RE.search(matchable)
+        or _CV_PAY_OTHERS_PAY_RE.search(matchable)
+        or _cv_pay_opens_with_work_verb(matchable)
+    )
     if not describes_work and any(
         not _CV_PAY_DATED_YEAR_RE.search(match.group(0))
         for match in _CV_PAY_AMOUNT_RE.finditer(matchable)
@@ -2323,20 +2368,46 @@ def _cv_balance_bold(text):
     return re.sub(r"\s{2,}", " ", (text[:at] + text[at + 2:])).strip()
 
 
+# In a sentence that states pay, another clause is part of the same statement when
+# it carries an amount or continues the pay ("RM 1,500 allowances", "plus 2 months
+# bonus"), unless it describes work.
+_CV_PAY_CONTINUATION_RE = re.compile(
+    r"^\W*(?:plus|excluding|excl\.?|including|incl\.?|exclusive|inclusive|with|and|or|expected|"
+    r"current|present|previous|last[\s-]+drawn|asking|negotiable|basic|bonus(?:es)?|allowances?|"
+    r"commissions?|epf|kwsp|nett?|gross|ctc|package)\b|" + _CV_PAY_AMOUNT_MARKED,
+    re.I,
+)
+
+
+def _cv_pay_continues(clause):
+    """Whether a clause next to a pay clause belongs to the same pay statement."""
+    matchable = _CV_PAY_MARKUP_RE.sub("", unicodedata.normalize("NFKC", clause)).strip()
+    if not _CV_PAY_CONTINUATION_RE.search(matchable):
+        return False
+    return not (
+        _CV_PAY_WORK_RE.search(matchable)
+        or _CV_PAY_OTHERS_PAY_RE.search(matchable)
+        or _cv_pay_opens_with_work_verb(matchable)
+    )
+
+
 def _cv_strip_pay_from_prose(text):
-    """(text without its pay statements, number removed).
+    """(text without its pay statements, number of sentences that stated pay).
 
     Sentences are kept or removed whole, and so are the clauses of a sentence
-    joined by semicolons, so the rest of a bullet reads as written.
+    joined by semicolons, so the rest of a bullet reads as written. A clause that
+    carries on the pay statement goes with it.
     """
     removed = 0
     kept_sentences = []
     for sentence in _cv_split_sentences(str(text or "").strip()):
         clauses = [c.strip() for c in sentence.split(";") if c.strip()]
         pay = [_cv_states_candidate_pay(c) for c in clauses]
+        if any(pay):
+            pay = [is_pay or _cv_pay_continues(c) for c, is_pay in zip(clauses, pay)]
         kept = [c for c, is_pay in zip(clauses, pay) if not is_pay]
-        dropped = sum(pay)
-        removed += dropped
+        dropped = any(pay)
+        removed += 1 if dropped else 0
         if not dropped:
             kept_sentences.append(sentence)
         elif kept:
@@ -2353,7 +2424,8 @@ def _cv_strip_pay_from_summary_counted(bullets):
     """(summary bullets with the candidate's pay removed, number of statements removed).
 
     A bullet left with nothing is dropped; a bullet without pay is returned as it
-    was, and so is an item that is not text.
+    was. An item that is not text is never edited: the Word file writes it as text,
+    so it is dropped whole when that text states pay, and kept as it was otherwise.
     """
     if not isinstance(bullets, list):
         return bullets, 0
@@ -2363,7 +2435,10 @@ def _cv_strip_pay_from_summary_counted(bullets):
         if bullet is None:
             continue
         if not isinstance(bullet, str):
-            kept.append(bullet)
+            if _cv_strip_pay_from_prose(str(bullet))[1]:
+                removed_total += 1
+            else:
+                kept.append(bullet)
             continue
         text = bullet.strip()
         if not text:

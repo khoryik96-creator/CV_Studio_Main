@@ -92,7 +92,7 @@ async function formattingSummary(response) {
 }
 
 // ── the batch flow, with synthetic responses ───────────────────────────────
-async function batchRun(responses) {
+async function batchRun(responses, withSummary) {
   const uploads = [], nodes = {};
   const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const c = {String, Array, Object, JSON, Math, Promise, Number, console,
@@ -108,6 +108,8 @@ async function batchRun(responses) {
     aiRoutePayload: () => ({api_key: 'synthetic-key', provider: 'mock'}),
     getCvTextAlignment: () => 'left', getCvBlindCandidateGenderNeutralization: () => false,
     getCvSummaryBoxAutoFit: () => true, getCvAutoCorrectLanguage: () => false,
+    getCvSummaryDetailPreference: () => 'concise',
+    requestFormattingSummary: async () => responses.summary,
     normalizeUsageClient: () => ({}), mergeUsageClient: () => ({}), responseCost: () => 0,
     cvRequireCompleteExtraction() {}, cvParseIsLong: () => false, cvParseTimeoutMs: () => 1000,
     CV_EXTRACT_TEXT_TIMEOUT_MS: 1000, cvMergeLevelLists: () => [], recordPaidAiFailure() {},
@@ -129,6 +131,7 @@ async function batchRun(responses) {
   vm.runInContext(fnFrom(cvFormat, 'cvParseWarningText') + fnFrom(source, 'cvSummaryPayNote') +
     fnFrom(source, 'cvJoinWarnings'), c);
   c.batchSetProgress = () => {}; c.updateBatchSummary = () => {};
+  if (withSummary) nodes.batchSummaryToggle = {checked: true, value: '', dataset: {}, style: {}, classList: {add() {}, remove() {}, contains() { return false; }}};
   if (responses.mode) c._batchMode = responses.mode;
   c._batchFiles = [{id: 'f1', file: {name: 'f1.pdf', arrayBuffer: async () => new ArrayBuffer(1)}, status: 'pending'}];
   await c.runBatch();
@@ -195,6 +198,20 @@ async function batchRun(responses) {
     assert.ok(nodes.batchFileList.innerHTML.includes('about the candidate&#39;s pay') ||
       nodes.batchFileList.innerHTML.includes("about the candidate's pay"), label + ' row shows it');
   }
+  // The parse's note is dropped when the automatic summary replaces that summary;
+  // the automatic summary's own note is kept.
+  {
+    const {c, uploads} = await batchRun({parse: {data: candidate, summary_pay_removed: 1},
+      summary: {bullets: ['Built pipelines.'], cost: 0, usage: {}, pay_removed: 0}}, true);
+    assert.strictEqual(c._batchFiles[0].parseWarning, '', 'the replaced summary is not reported');
+    assert.strictEqual(uploads.length, 1, 'and does not hold the upload');
+  }
+  {
+    const {c, uploads} = await batchRun({parse: {data: candidate},
+      summary: {bullets: [], cost: 0, usage: {}, pay_removed: 2, pay_only: true}}, true);
+    assert.strictEqual(c._batchFiles[0].parseWarning, "The CV Summary only described the candidate's pay, so the Summary box was left empty.");
+    assert.strictEqual(uploads.length, 0);
+  }
   // A source-check warning and a pay note are both kept.
   {
     const {c} = await batchRun({parse: {data: candidate, warning: 'Employer(s) missing: Beta', summary_pay_removed: 1}});
@@ -206,7 +223,8 @@ async function batchRun(responses) {
   // summary's note comes from the result, pay-only or not.
   {
     const flow = cvFormat.slice(cvFormat.indexOf('async function startFormat('), cvFormat.indexOf('function toTitleCase('));
-    assert.ok(/if \(data\.summary_pay_removed\) parseWarning = cvJoinWarnings\(parseWarning, cvSummaryPayNote\(data\.summary_pay_removed, false\)\);\n\s*if \(parseWarning\) showToast\(parseWarning, 'warn'\);/.test(flow));
+    // The parse's note only when that parsed summary is the one used.
+    assert.ok(/if \(data\.summary_pay_removed && !linkedSummaryBullets\.length && !withAutomaticSummary\) parseWarning = cvJoinWarnings\(parseWarning, cvSummaryPayNote\(data\.summary_pay_removed, false\)\);\n\s*if \(parseWarning\) showToast\(parseWarning, 'warn'\);/.test(flow));
     assert.ok(/_parsedData\.summary_bullets = summaryResult\.bullets\.slice\(\);\n\s*if \(summaryResult\.pay_removed\) parseWarning = cvJoinWarnings\(parseWarning, cvSummaryPayNote\(summaryResult\.pay_removed, summaryResult\.pay_only\)\);\n\s*_runCost \+= summaryResult\.cost;/.test(flow));
     assert.ok(/if \(bData\.summary_pay_removed\) parseWarning = cvJoinWarnings/.test(flow));
     // All of it before the banner and the auto-upload decision.
@@ -233,5 +251,11 @@ async function batchRun(responses) {
   assert.ok(/var payNote = cvSummaryPayNote\(d\.summary_pay_removed, false\);/.test(generate));
   assert.ok(/renderSummaryText\(raw\) \+ \(payNote \? '<div class="cv-parse-warning" role="note">\\u26a0 ' \+ esc\(payNote\) \+ '<\/div>' : ''\)/.test(generate));
   assert.ok(/if \(payNote\) showToast\(payNote, 'warn'\);/.test(generate));
+  // The uploaded-DOCX path: its report is shown after the saved message.
+  const apply = fnFrom(source, 'applySummaryToUploadedDocx');
+  const saved = apply.indexOf("cvStudioShowDownloadResult(result, 'Summary output');");
+  const note = apply.indexOf("if (payRemoved) showToast(cvSummaryPayNote(payRemoved, false), 'warn');");
+  assert.ok(saved > 0 && note > saved);
+  assert.ok(/var payRemoved = response\.headers && response\.headers\.get \? response\.headers\.get\('X-CV-Summary-Pay-Removed'\) : null;/.test(apply));
   console.log('CV Summary pay filter frontend passed');
 })().catch(error => { console.error(error); process.exit(1); });

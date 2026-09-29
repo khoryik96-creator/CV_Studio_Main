@@ -217,14 +217,21 @@ There is no browser copy.
 (HR, payroll, recruitment, sales). So a sentence is removed only on a clear
 sign that it states the candidate's **own** pay:
 
-1. **Always removed.** "my" or "candidate's", or current / expected / asking /
-   last-drawn / previous, before a pay word and an amount. Examples: "Expected
-   salary RM16,000", "Led a team of 8 on a current salary of RM 12k". Nothing
-   overrides this.
+1. **Always removed.** This covers:
+   - "my" or "candidate's", or current / expected / asking / last-drawn /
+     previous, before a pay word and an amount ("Expected salary RM16,000",
+     "Led a team of 8 on a current salary of RM 12k");
+   - "On a package of RM 150k";
+   - "The candidate / he / she is paid RM 9,000".
+
+   Nothing overrides these. "his", "her" and "their" alone aren't enough,
+   because a recruiter "negotiated their salary".
 2. **Removed unless the sentence describes work.** This covers:
    - a pay word and an amount in either order ("Salary: RM 17,000", "RM16,000
      salary");
-   - "Last drawn RM 9,000", "RM 9,000 expected";
+   - "Last drawn RM 9,000", "RM 9,000 expected", "Asking for RM 10k", "Seeking
+     RM 12k", "Current: RM 9,000";
+   - "Receives / Makes / Gets RM 9,000 monthly", and "They are paid RM 9,000";
    - a clause that is only an amount per period ("RM 9,000 / month");
    - earnings, a bonus, commission or allowance per period;
    - lakhs per annum.
@@ -236,7 +243,14 @@ sign that it states the candidate's **own** pay:
      summary opens with ("Seasoned");
    - it names the organisation's money ("budget", "costs", "revenue", "AUM");
    - it names who the money is for ("for 300 staff", "to the sales team", "for
-     the group", "across APAC").
+     the group", "across APAC");
+   - it is someone else's pay the candidate worked on ("negotiated their salary
+     of RM 15k").
+
+   Some phrases look like these but are still pay:
+   - "across base, bonus and allowances" (the parts of one's own pay);
+   - "for the team lead role" (a role, not people);
+   - "for 12 LPA" (an amount, not a headcount).
 
    A year after "from" or "since" is a date, not an amount ("Head of
    Compensation from 2019").
@@ -255,7 +269,9 @@ sign that it states the candidate's **own** pay:
    "For the next role" is the candidate's own move, and is removed.
 
 **Amounts.** An amount has a currency ("RM", "$", "ringgit") or a unit ("k",
-"LPA"). A plain figure counts only directly after a pay word, with three or more
+"LPA"). A letter code such as "RM" or "PHP" must be a word of its own, followed
+by three or more figures or a unit. So "Form 16", "Norm 3000" and "PHP 8" are
+not money. A plain figure counts only directly after a pay word, with three or more
 digits, and only where it ends the sentence or is followed by a pay period,
 currency or pay word. A year-like figure is held to that strictly. A figure
 never starts inside another one ("2016" holds no "016").
@@ -266,13 +282,22 @@ ends are handled as follows:
 - A sentence ends after closing Markdown emphasis ("**Expected salary RM 9k.**
   Available"), and after a figure ("a team of 8.", "by 5.5%.").
 - It also ends after "Sdn Bhd.", "Ltd.", "etc." and "p.a.".
-- "Sr.", "Co.", "Sdn.", "Sept." and "B.Sc." never end one.
+- "Sr.", "Dr.", "Sdn." and a list number ("1.") never end one.
+- A single letter, a dotted token ("U.S.", "B.Sc."), "Co." or a month ends a
+  sentence only when the next sentence states pay on its own. So "Worked at
+  Acme Co. Expected salary RM 9k." keeps "Worked at Acme Co.", and "Joined
+  Acme Co. Ltd. in 2019." stays whole.
+- In a sentence that states pay, another clause goes with it when it carries an
+  amount or continues the pay ("RM 1,500 allowances", "plus 2 months bonus"),
+  unless it describes work.
 
 After a removal:
 
 - A "**" left without its partner is dropped.
 - A bullet left empty is dropped.
-- A bullet that isn't text is returned untouched.
+- A bullet that isn't text is never edited. The Word file writes it as text,
+  so it is dropped whole when that text states pay.
+- The count is of sentences, not clauses.
 - In provider text, "-", "*", "•" and numbered ("1.", "2)") lines are list lines.
   If every list line was pay, an intro such as "Here is the summary:" is
   dropped too.
@@ -286,15 +311,19 @@ random combinations with bold and semicolons.
 
 - **Format and Batch:** the note joins the source-check warning. It stays above
   the preview and on the batch row, and holds JobAdder auto-upload the same way
-  (S1, S2).
+  (S1, S2). The parse's note counts only when that parsed summary is the one
+  used, not one replaced by a linked or automatic summary.
 - **Summary tab:** the note is shown under the summary.
 - **Pay-only summary:**
   - Format and Batch carry on with an empty Summary box, and count the
     summary's cost.
   - The Summary tab says "only described the candidate's pay" and records the
     paid call as a summary, not a failed one.
-  - The uploaded-DOCX route says the same.
-- **`/generate-docx` (JSON):** it never refuses the whole CV over its summary.
+  - The uploaded-DOCX route says the same. Its only job is filling the
+    Summary, so with nothing left it has nothing to write. When it removes
+    only part, it sends the same header, and the page warns.
+- **`/generate-docx` (JSON), the formatted CV:** it never refuses the whole CV
+  over its summary.
 
 Matching runs on an NFKC-normalised copy with Markdown emphasis removed, so
 "**Salary:** RM 17,000" is caught. Full-width digits count as ordinary digits,

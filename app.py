@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.422"
+_INSTALL_RECEIPT_VERSION = "v24.6.423"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -346,7 +346,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.422"
+_CVSTUDIO_VERSION = "v24.6.423"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -12090,12 +12090,17 @@ def generate_docx():
             except ValueError as exc:
                 return jsonify({"error": str(exc)}), _document_validation_status(exc)
             stem = re.sub(r"(?i)\.docx$", "", os.path.basename(source_docx.filename)).strip() or "Hyppies CV"
-            return send_file(
+            response = send_file(
                 io.BytesIO(document_bytes),
                 as_attachment=True,
                 download_name=stem + " - Summary.docx",
                 mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             )
+            # Pay removed on this path is reported like on the other one.
+            summary_pay_removed = _cv_strip_pay_from_summary_counted(summary_bullets)[1]
+            if summary_pay_removed:
+                response.headers["X-CV-Summary-Pay-Removed"] = str(summary_pay_removed)
+            return response
 
         body = request.get_json(force=True, silent=True)
         if not body:

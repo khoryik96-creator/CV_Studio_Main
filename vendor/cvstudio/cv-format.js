@@ -85,8 +85,9 @@ async function startFormat(blind) {
     // is also kept above the preview once that renders.
     var parseWarning = cvParseWarningText(data, blind);
     // Pay removed from the Summary box is kept on screen like the source check,
-    // and holds auto-upload the same way.
-    if (data.summary_pay_removed) parseWarning = cvJoinWarnings(parseWarning, cvSummaryPayNote(data.summary_pay_removed, false));
+    // and holds auto-upload the same way -- only when that parsed summary is the
+    // one used, not replaced by a linked or an automatic summary.
+    if (data.summary_pay_removed && !linkedSummaryBullets.length && !withAutomaticSummary) parseWarning = cvJoinWarnings(parseWarning, cvSummaryPayNote(data.summary_pay_removed, false));
     if (parseWarning) showToast(parseWarning, 'warn');
     _runCost += responseCost(data, route.model, route.provider);
     _runUsage = mergeUsageClient(_runUsage, data.usage || {});
