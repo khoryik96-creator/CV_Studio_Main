@@ -179,6 +179,36 @@ class SummarySalaryDocxTests(unittest.TestCase):
         # The preview the browser gets is the summary the Word file will carry.
         self.assertEqual(response.get_json()["data"]["summary_bullets"], ["Data engineer with 11 years in banking."])
 
+    def test_a_format_summary_that_was_only_pay_says_so(self):
+        # The JSON path refuses it as the uploaded-DOCX path does, rather than
+        # leaving the box silently empty.
+        response = self.client.post(
+            "/generate-docx", json={"data": _cv(["**Salary:** RM 17,000 per month.", "Expected salary RM 9k."])},
+            headers=HEADERS,
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("only stated the candidate's pay", response.get_json()["error"])
+        # No summary at all is written exactly as before.
+        self.assertEqual(self.client.post("/generate-docx", json={"data": _cv([])}, headers=HEADERS).status_code, 200)
+
+    def test_the_parsed_summary_is_filtered_so_the_preview_matches_the_word_file(self):
+        parsed = _cv(["Data engineer with 11 years in banking.", "Current salary of **RM 12,000** per month."])
+
+        def fake_call(provider, key, payload):
+            return {"content": [{"type": "text", "text": json.dumps(parsed)}], "usage": {}}
+
+        with mock.patch.object(app, "_resolve_request_api_key", return_value="<fixture-credential>"), \
+                mock.patch.object(app, "_ai_spend_session_allowed", return_value=True), \
+                mock.patch.object(app, "call_llm", side_effect=fake_call):
+            response = self.client.post("/parse", json={"cv_text": "Test Candidate\nData engineer."}, headers=HEADERS)
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(response.get_json()["data"]["summary_bullets"], ["Data engineer with 11 years in banking."])
+
+    def test_an_intro_line_is_not_left_as_the_summary(self):
+        out = self._generate_ai("Here is the summary:\n- Expected salary RM 9k", strip_candidate_pay=True)
+        self.assertEqual(out["content"], [{"type": "text", "text": ""}])
+        self.assertEqual(out["summary_pay_removed"], 1)
+
     def test_the_summary_instructions_forbid_pay(self):
         source = (ROOT / "vendor" / "cvstudio" / "candidate-summary.js").read_text(encoding="utf-8")
         self.assertIn("Never mention the candidate\\'s salary or pay in any form", source)

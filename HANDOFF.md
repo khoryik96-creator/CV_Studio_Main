@@ -305,14 +305,16 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Summary box salary guardrail — v24.6.419–v24.6.420, UNMERGED.** Starts at merged
+- **Summary box salary guardrail — v24.6.419–v24.6.421, UNMERGED.** Starts at merged
   master `56dca18`. The generated CV Summary never states the candidate's pay: the
   summary instructions forbid it, and one server filter (`_cv_strip_pay_from_summary`)
   removes any statement of it -- in `/generate-ai` when the CV Summary callers send
   `strip_candidate_pay: true`, in `/blind` for a promoted source summary, and in both
-  `/generate-docx` paths as a last net. There is no browser copy. Only the candidate's
-  own pay is removed; HR/C&B work is kept. Rule P1 in `CV_SOURCE_CHECK_GUARDRAILS.md`
-  (73 cases). See `cv_studio_v24_6_420_summary_salary_guardrail_qa_report.md`.
+  `/generate-docx` paths as a last net; `/parse` filters too so the preview matches.
+  There is no browser copy. Only the candidate's own pay is removed; HR/C&B work,
+  years and budgets are kept. A pay-only summary never aborts a format run and its
+  cost is always counted. Rule P1 in `CV_SOURCE_CHECK_GUARDRAILS.md` (108 cases). See
+  `cv_studio_v24_6_421_summary_salary_guardrail_qa_report.md`.
 
 - **Year-first dates and a reported employer shortfall — v24.6.411–v24.6.418, MERGED
   via PR #216 as `56dca18`.**

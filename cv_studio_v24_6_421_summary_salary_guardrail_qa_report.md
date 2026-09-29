@@ -1,4 +1,4 @@
-# v24.6.419 – v24.6.420 Salary never reaches the Summary box
+# v24.6.419 – v24.6.421 Salary never reaches the Summary box
 
 Branch: `claude/pr157-chatgpt-fix-zke4cy`, from merged master `56dca18` (v24.6.418).
 
@@ -146,3 +146,73 @@ scripts.
   other-script digits through.
 - Full suite **1435 passed, 23 skipped**, plus the two environment-only tests.
   Node **26/26**. Launcher line endings match `origin/master`.
+
+## v24.6.421 — ten further review findings
+
+**Missed pay, now removed**
+- **Markdown bold.** The summary is told to bold key phrases, and "**Salary:** RM
+  17,000 per month." or "salary of **RM 17,000**" got through. Matching now runs on
+  a copy without emphasis markers. The kept text is unchanged.
+- **Other ways of writing a period.** "RM 15k/month", "/mo", "/mth" and "/yr" were
+  missed, and so was "earning approx. RM 8,000 per month", where the full stop in
+  "approx." ended the search. The text is already one sentence or clause, so a
+  full stop inside it is an abbreviation.
+
+**Work that was wrongly removed, now kept**
+- **Years.** "Led compensation from 2018 to 2022", "between 2019 and 2021" and
+  "compensation - 2019 redesign project" were removed.
+  - A plain figure after a pay term now counts only when it ends the sentence, or
+    is followed by a pay period, a currency or a pay word such as "net" or
+    "excluding".
+  - A year-like figure is held to that strictly. Any other plain figure may also
+    be followed by a comma or "and".
+  - "Salary 2000." is still removed.
+- **Other people's pay.** "Advised on salary expectations of new hires" and
+  "Salary expectations were benchmarked for 40 roles" were removed. Pay talk with
+  no amount is now someone else's, and kept, when:
+  - it is followed by "of", "for", "across", "among" or "from";
+  - it is followed by a reporting verb ("were benchmarked");
+  - it is followed by a work noun ("data", "dashboards");
+  - it follows other people's possessive or a work verb.
+
+  "Candidate's salary expectations are negotiable" (Blind wording) is still
+  removed.
+- **The organisation's money.** Examples: "RM 5M salary and benefits budget", "RM
+  2M in salary and overtime costs", "2k salary records", "total package of 1,500
+  SKUs". The budget and cost check now looks up to three words ahead, and knows
+  records, slips, runs, claims and similar words.
+
+**No silent loss, no lost cost**
+- **Format and Batch.** A pay-only automatic summary no longer aborts the run and
+  throws away the paid parse. The run carries on with an empty Summary box, a
+  warning explains why, and the summary's cost is counted with the run.
+- **Summary tab.** A pay-only answer's cost is recorded as a summary before the
+  message is shown.
+- **An intro line left over.** "Here is the summary:" followed by a single pay
+  bullet no longer becomes the summary. If every bullet line was pay, the server
+  returns empty text.
+- **The preview.** `/parse` filters the summary as well, so the preview matches
+  the Word file.
+- **`/generate-docx` (JSON).** A summary that was all pay is now refused with the
+  same message as the uploaded-DOCX path, instead of an empty box.
+
+**Tidy-ups**
+- Each clause is evaluated once, not twice.
+- `/generate-ai` shares one helper for joining and replacing the provider's text,
+  used by both the anonymised summary and the pay filter.
+
+**Regression evidence**
+- **Cases.** 35 new P1 cases, one for every example in the review, including
+  three text-level cases. The case file only gained lines: no existing case was
+  changed.
+- **Old rule against new rule** on every sentence in the repository's code, tests,
+  fixtures and docs (29,705 strings). 27 differ, and every one is a review
+  example.
+- **Whole-suite recording.** The filter ran 142 times and changed nothing outside
+  the two salary test files.
+- **Mutations.** Eleven were made, one per fix (markup, periods, year guard,
+  after/before context, budget look-ahead, plain-figure tail, intro-only, abbreviation
+  stop, `/parse` hook, JSON refusal). All eleven were caught.
+- **Full suite:** 1438 passed, 23 skipped, plus the two known environment-only
+  test groups. **Node:** 27/27.
+

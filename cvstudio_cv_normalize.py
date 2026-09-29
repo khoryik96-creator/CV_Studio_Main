@@ -1976,12 +1976,15 @@ def _cv_project_group_sort_key(block):
 #     allowance per period.
 # A pay word on its own is the candidate's work, not their pay, and is kept:
 # "negotiated compensation packages for 40 hires", "salary range benchmarking",
-# "payroll salary processing", "minimum wage compliance".
+# "payroll salary processing", "minimum wage compliance", "led compensation from
+# 2018 to 2022", "advised on salary expectations of new hires", "managed RM 5M
+# salary and benefits budget".
 #
-# Matching runs on an NFKC-normalised copy, so full-width digits read as
-# ordinary digits; digits in other scripts count as digits too. A currency code
-# needs no word boundary before it, so a neighbouring character such as "月薪" does
-# not hide "RM8000". The kept text is the original.
+# Matching runs on an NFKC-normalised copy without Markdown emphasis, so
+# "**Salary:** RM 17,000" reads as "Salary: RM 17,000" and full-width digits read
+# as ordinary digits; digits in other scripts count as digits too. A currency
+# code needs no word boundary before it, so a neighbouring character such as "月薪"
+# does not hide "RM8000". The kept text is the original.
 _CV_PAY_TERM = (
     r"(?:salar(?:y|ies)|remuneration|total\s+compensation|compensation|ctc|"
     r"take[\s-]?home(?:\s+pay)?|epf(?:\s+contributions?)?|kwsp(?:\s+contributions?)?|"
@@ -1993,16 +1996,15 @@ _CV_PAY_CURRENCY = (
     r"cny|rmb|¥|jpy|eur|gbp)"
 )
 _CV_PAY_UNIT = r"(?:k|mil|million|m|lakhs?|lpa|crores?)"
+_CV_PAY_PERIOD = (
+    r"(?:per\s+(?:month|mth|annum|year|hour)|a\s+(?:month|year)|monthly|annually|yearly|"
+    r"p\.?\s?a\b\.?|p\.?\s?m\b\.?|/\s?(?:month|mth|mo|m|annum|year|yr|y|a|hour|hr|h)\b)"
+)
 # An amount with a currency or a unit.
 _CV_PAY_AMOUNT_MARKED = (
     r"(?:" + _CV_PAY_CURRENCY + r"\s?\d[\d,.]*(?:\s?" + _CV_PAY_UNIT + r")?\b"
     r"|\d[\d,.]*\s?" + _CV_PAY_UNIT + r"\b"
     r"|\d[\d,.]*\s?" + _CV_PAY_CURRENCY + r"(?![a-z]))"
-)
-# Directly after a pay term, a plain figure is an amount too -- "Salary 2000" --
-# but only with three or more digits, so "compensation of 40 hires" is not one.
-_CV_PAY_AMOUNT_AFTER_TERM = (
-    r"(?:" + _CV_PAY_AMOUNT_MARKED + r"|\d{1,3}(?:,\d{3})+\b|\d{3,}(?:\.\d+)?\b)"
 )
 # A figure counting people or things is not money.
 _CV_PAY_NOT_MONEY = (
@@ -2010,43 +2012,95 @@ _CV_PAY_NOT_MONEY = (
     r"candidates|members|records|transactions|accounts|students|executives|hires|"
     r"expatriates|plants|sites|branches|stores|units|countries|projects)\b)"
 )
+# What may follow a plain figure (no currency, no unit) for it to read as pay:
+# the end of the clause, a pay period, a currency, or a pay qualifier. "Salary
+# 2000" and "Salary of 5,000 per month" qualify; "total package of 1,500 SKUs" does
+# not.
+_CV_PAY_PLAIN_TAIL = (
+    r"(?:[.!?)\]\"'*]*\s*$|\s*" + _CV_PAY_PERIOD + r"|\s*" + _CV_PAY_CURRENCY + r"(?![a-z])"
+    r"|\s*" + _CV_PAY_UNIT + r"\b|\s*\+|\s+(?:net|nett|gross|only|negotiable|basic|plus|"
+    r"excluding|including|inclusive|exclusive|before|after)\b)"
+)
+# A plain figure that looks like a year ("compensation from 2018 to 2022") is an
+# amount only where the tail says so; any other plain figure also before a comma,
+# a semicolon or "and".
+_CV_PAY_AMOUNT_PLAIN = (
+    r"(?:(?:19|20)\d{2}\b(?=" + _CV_PAY_PLAIN_TAIL + r")"
+    r"|(?!(?:19|20)\d{2}\b)(?:\d{1,3}(?:,\d{3})+|\d{3,}(?:\.\d+)?)\b"
+    r"(?=" + _CV_PAY_PLAIN_TAIL + r"|\s*[,;]|\s+(?:and|with)\b))"
+)
 _CV_PAY_CONNECTOR = (
-    r"(?:\s*[:=\-\u2013~]\s*|\s+(?:of|is|was|at|around|about|approx(?:imately|\.)?|circa|"
+    r"(?:\s*[:=\-–~]\s*|\s+(?:of|is|was|at|around|about|approx(?:imately|\.)?|circa|"
     r"currently|now|expected|expectations?|requirements?|above|below|over|under|up\s+to|"
     r"at\s+least|min(?:imum)?\.?|max(?:imum)?\.?|between|from|range|in\s+the\s+range\s+of)\b\s*)"
 )
-_CV_PAY_PERIOD = (
-    r"(?:per\s+(?:month|annum|year|hour)|a\s+(?:month|year)|monthly|annually|yearly|p\.?\s?a\b\.?|"
-    r"p\.?\s?m\b\.?)"
+# The organisation's money, not the candidate's pay: "RM 5M salary and benefits
+# budget", "RM 2M in salary and overtime costs", "2k salary records".
+_CV_PAY_ORG_MONEY = (
+    r"(?!(?:\s+[a-z&]+){0,3}?\s+(?:costs?|budgets?|expenses?|spend(?:ing)?|bills?|savings?|"
+    r"payments?|processing|disbursements?|increments?|reviews?|structures?|bands?|surveys?|"
+    r"data|framework|administration|records?|slips?|runs?|liabilit(?:y|ies)|accruals?|"
+    r"provisions?|claims?|funds?|pools?|forecasts?|reports?|audits?)\b)"
 )
-_CV_PAY_STATEMENT_RE = re.compile(
+_CV_PAY_AMOUNT_RE = re.compile(
     # A pay term, then an amount.
     r"\b" + _CV_PAY_TERM + r"\b(?:" + _CV_PAY_CONNECTOR + r"){0,3}\s*"
-    + _CV_PAY_AMOUNT_AFTER_TERM + _CV_PAY_NOT_MONEY
-    # An amount, then a pay term -- but not the organisation's money: "saved RM 2M
-    # in salary costs" is a saving, not the candidate's pay.
-    + r"|" + _CV_PAY_AMOUNT_MARKED + r"\s+(?:[a-z]+\s+){0,2}?" + _CV_PAY_TERM + r"\b"
-      r"(?!\s+(?:costs?|budgets?|expenses?|spend(?:ing)?|bills?|savings?|payments?|processing|"
-      r"disbursements?|increments?|reviews?|structures?|bands?|surveys?|data|framework|administration)\b)"
-    # Pay talk with no amount.
-    + r"|\b(?:expected|expecting|asking|desired|last[\s-]+drawn)\s+"
-      r"(?:monthly\s+|annual\s+|basic\s+|take[\s-]?home\s+)?"
-      r"(?:salar(?:y|ies)|remuneration|ctc|pay|package|compensation)\b"
-    + r"|\b(?:salar(?:y|ies)|remuneration|ctc|compensation|pay|package)\s+"
-      r"(?:expectations?|requirements?)\b"
-    + r"|\b(?:salar(?:y|ies)|remuneration|ctc|compensation|pay|package)\s+(?:is\s+|are\s+)?negotiable\b"
-    + r"|\bnegotiable\s+(?:salar(?:y|ies)|remuneration|ctc|pay|package)\b"
-    + r"|\b(?:open|willing)\s+to\s+(?:discuss|negotiate)\s+(?:the\s+|my\s+|his\s+|her\s+|their\s+)?"
-      r"(?:salar(?:y|ies)|remuneration|ctc|pay|package|compensation)\b"
+    r"(?:" + _CV_PAY_AMOUNT_MARKED + _CV_PAY_NOT_MONEY + r"|" + _CV_PAY_AMOUNT_PLAIN + r")"
+    # An amount, then a pay term -- but not the organisation's money.
+    + r"|" + _CV_PAY_AMOUNT_MARKED + r"\s+(?:[a-z]+\s+){0,2}?" + _CV_PAY_TERM + r"\b" + _CV_PAY_ORG_MONEY
     # Lakhs per annum.
     + r"|\b\d[\d.,]*\s?(?:lpa|lakhs?\s+(?:per\s+annum|p\.?\s?a\b))"
-    # Earnings, or a bonus, commission or allowance, per period.
-    + r"|\b(?:earn(?:s|ed|ing)?|draw(?:s|ing)?|paid|making)\b[^.;]{0,40}?"
+    # Earnings, or a bonus, commission or allowance, per period. The text is
+    # already one sentence or clause, so a full stop inside it ("approx.") is an
+    # abbreviation, not an end.
+    + r"|\b(?:earn(?:s|ed|ing)?|draw(?:s|ing)?|paid|making)\b[^;]{0,40}?"
       r"(?:" + _CV_PAY_AMOUNT_MARKED + r"|\d{1,3}(?:,\d{3})+\b|\d{3,}\b)\s*" + _CV_PAY_PERIOD
     + r"|\b(?:bonus(?:es)?|commissions?|allowances?)\s*(?:of|:)?\s*" + _CV_PAY_AMOUNT_MARKED
       + r"\s*" + _CV_PAY_PERIOD,
     re.I,
 )
+# Pay talk with no amount. It is the candidate's own only when nothing around it
+# says it is someone else's: see _cv_pay_talk_is_candidates.
+_CV_PAY_TALK_RE = re.compile(
+    r"\b(?:expected|expecting|asking|desired|last[\s-]+drawn)\s+"
+    r"(?:monthly\s+|annual\s+|basic\s+|take[\s-]?home\s+)?"
+    r"(?:salar(?:y|ies)|remuneration|ctc|pay|package|compensation)\b"
+    r"|\b(?:salar(?:y|ies)|remuneration|ctc|compensation|pay|package)\s+(?:expectations?|requirements?)\b"
+    r"|\b(?:salar(?:y|ies)|remuneration|ctc|compensation|pay|package)\s+(?:is\s+|are\s+)?negotiable\b"
+    r"|\bnegotiable\s+(?:salar(?:y|ies)|remuneration|ctc|pay|package)\b"
+    r"|\b(?:open|willing)\s+to\s+(?:discuss|negotiate)\s+(?:the\s+|my\s+|his\s+|her\s+|their\s+)?"
+    r"(?:salar(?:y|ies)|remuneration|ctc|pay|package|compensation)\b",
+    re.I,
+)
+# After the pay talk: "... of new hires", "... were benchmarked", "... data".
+_CV_PAY_TALK_OTHERS_AFTER_RE = re.compile(
+    r"\s+(?:of|for|across|among|from|(?:were|was|are|is|been|being)\s+[a-z]+ed|"
+    r"benchmark\w*|surveys?|data|analysis|analytics|framework|polic(?:y|ies)|guidelines?|"
+    r"trends?|modell?ing|models?|costs?|budgets?|management|process(?:es|ing)?|dashboards?|"
+    r"reports?|tools?|templates?|matri(?:x|ces))\b",
+    re.I,
+)
+# Before it: whose expectations, or the work done on them -- "candidates' salary
+# expectations", "Advised on salary expectations".
+_CV_PAY_TALK_OTHERS_BEFORE_RE = re.compile(
+    r"(?:\b(?:candidates|applicants|hires|employees|staff|talent|clients|teams?|workers|"
+    r"members|people|executives|expatriates|new\s+joiners)['’]?"
+    r"|\b(?:manag(?:e|ed|es|ing)|advis(?:e|ed|es|ing)(?:\s+on)?|handl(?:e|ed|es|ing)|"
+    r"align(?:ed|s|ing)?|negotiat(?:e|ed|es|ing)|benchmark(?:ed|s|ing)?|assess(?:ed|es|ing)?|"
+    r"gather(?:ed|s|ing)?|captur(?:e|ed|es|ing)|collect(?:ed|s|ing)?|understand(?:s|ing)?|"
+    r"understood|discuss(?:ed|es|ing)?|balanc(?:e|ed|es|ing)|match(?:ed|es|ing)?|"
+    r"clarif(?:y|ied|ies|ying)|review(?:ed|s|ing)?|evaluat(?:e|ed|es|ing)|analy[sz](?:e|ed|es|ing)|"
+    r"survey(?:ed|s|ing)?|track(?:ed|s|ing)?)(?:\s+on)?(?:\s+(?:the|their|all|market))?)\s+$",
+    re.I,
+)
+
+
+def _cv_pay_talk_is_candidates(text, match):
+    """Whether pay talk with no amount is about the candidate's own pay."""
+    if _CV_PAY_TALK_OTHERS_AFTER_RE.match(text, match.end()):
+        return False
+    return not _CV_PAY_TALK_OTHERS_BEFORE_RE.search(text[:match.start()])
+
 
 # Abbreviations whose full stop does not end a sentence.
 _CV_ABBREVIATIONS = frozenset({
@@ -2074,10 +2128,21 @@ def _cv_split_sentences(text):
     return pieces
 
 
+# Markdown emphasis the summary may carry ("**Salary:** RM 17,000"), removed from
+# the copy that is matched, never from the text that is kept.
+_CV_PAY_MARKUP_RE = re.compile(r"[*`]+|__")
+
+
 def _cv_states_candidate_pay(text):
     """Whether a sentence or clause states the candidate's pay."""
     matchable = unicodedata.normalize("NFKC", str(text or ""))
-    return bool(_CV_PAY_STATEMENT_RE.search(matchable))
+    matchable = _CV_PAY_MARKUP_RE.sub("", matchable).strip()
+    if _CV_PAY_AMOUNT_RE.search(matchable):
+        return True
+    return any(
+        _cv_pay_talk_is_candidates(matchable, match)
+        for match in _CV_PAY_TALK_RE.finditer(matchable)
+    )
 
 
 def _cv_strip_pay_from_prose(text):
@@ -2089,9 +2154,10 @@ def _cv_strip_pay_from_prose(text):
     removed = 0
     kept_sentences = []
     for sentence in _cv_split_sentences(str(text or "").strip()):
-        clauses = [c.strip() for c in sentence.split(";")]
-        kept = [c for c in clauses if c and not _cv_states_candidate_pay(c)]
-        dropped = sum(1 for c in clauses if c and _cv_states_candidate_pay(c))
+        clauses = [c.strip() for c in sentence.split(";") if c.strip()]
+        pay = [_cv_states_candidate_pay(c) for c in clauses]
+        kept = [c for c, is_pay in zip(clauses, pay) if not is_pay]
+        dropped = sum(pay)
         removed += dropped
         if not dropped:
             kept_sentences.append(sentence)
@@ -2133,19 +2199,29 @@ def _cv_strip_pay_from_summary_text(raw):
 
     Works line by line on the provider's own text, keeping each line's bullet
     marker, so the browser parses the result exactly as it parses any summary.
+    When every bullet line was pay, what is left -- an intro such as "Here is the
+    summary:" -- is not a summary, and the browser would read it as one, so the
+    result is empty.
     """
     lines = []
     removed_total = 0
+    had_bullets = kept_bullets = False
     for line in str(raw or "").split("\n"):
         match = _CV_SUMMARY_LINE_RE.match(line)
         marker, body, trailing = match.group(1), match.group(2), match.group(3)
         if not body.strip():
             lines.append(line)
             continue
+        is_bullet = bool(marker.strip())
+        had_bullets = had_bullets or is_bullet
         stripped, removed = _cv_strip_pay_from_prose(body)
         removed_total += removed
         if not removed:
             lines.append(line)
+            kept_bullets = kept_bullets or is_bullet
         elif stripped:
             lines.append(marker + stripped + trailing)
+            kept_bullets = kept_bullets or is_bullet
+    if removed_total and had_bullets and not kept_bullets:
+        return "", removed_total
     return "\n".join(lines), removed_total

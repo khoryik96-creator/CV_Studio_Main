@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.420"
+_INSTALL_RECEIPT_VERSION = "v24.6.421"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -346,7 +346,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.420"
+_CVSTUDIO_VERSION = "v24.6.421"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -9055,6 +9055,10 @@ def parse_cv():
         bullet_levels = _infer_label_bullet_levels(parsed)
         parsed = _normalize_cv_structured_content(parsed)
         parsed = _normalize_cv_data_for_output(parsed, cv_text)
+        # Salary never reaches the Summary box, so the preview shows what the
+        # Word file will carry.
+        if isinstance(parsed, dict) and isinstance(parsed.get("summary_bullets"), list):
+            parsed["summary_bullets"] = _cv_strip_pay_from_summary(parsed["summary_bullets"])
         out = {"ok": True, "data": parsed, "usage": usage, "model": model, "provider": llm_provider, "bullet_levels": bullet_levels}
         out.update(_llm_response_cost_fields(model, usage, llm_provider))
         # ── Fidelity audit — observational, never mutates `parsed`. Attaches a
@@ -9127,6 +9131,22 @@ def parse_cv():
             attempted=bool(locals().get("api_key") and locals().get("cv_text")),
         ))
         return jsonify(out), 500
+
+
+def _generated_ai_text(data):
+    """The provider's text, joined across its content blocks."""
+    return "".join(
+        str(block.get("text") or "")
+        for block in data.get("content", [])
+        if isinstance(block, dict)
+    )
+
+
+def _with_generated_ai_text(data, text):
+    """A copy of the provider response whose content is this one text block."""
+    data = dict(data)
+    data["content"] = [{"type": "text", "text": text}]
+    return data
 
 
 @app.route("/generate-ai", methods=["POST"])
@@ -9212,17 +9232,11 @@ def generate_ai():
         usage = data.get("usage", {})
         if anonymized_summary:
             try:
-                raw_summary = "".join(
-                    str(block.get("text") or "")
-                    for block in data.get("content", [])
-                    if isinstance(block, dict)
-                )
                 safe_summary = _blind_finalize_generated_summary_text(
-                    raw_summary,
+                    _generated_ai_text(data),
                     summary_source_text,
                 )
-                data = dict(data)
-                data["content"] = [{"type": "text", "text": safe_summary}]
+                data = _with_generated_ai_text(data, safe_summary)
             except ValueError as exc:
                 out = {
                     "error": str(exc),
@@ -9242,15 +9256,9 @@ def generate_ai():
                 return jsonify(out), 500
         pay_removed = 0
         if strip_candidate_pay:
-            summary_text = "".join(
-                str(block.get("text") or "")
-                for block in data.get("content", [])
-                if isinstance(block, dict)
-            )
-            filtered_text, pay_removed = _cv_strip_pay_from_summary_text(summary_text)
+            filtered_text, pay_removed = _cv_strip_pay_from_summary_text(_generated_ai_text(data))
             if pay_removed:
-                data = dict(data)
-                data["content"] = [{"type": "text", "text": filtered_text}]
+                data = _with_generated_ai_text(data, filtered_text)
         out = {"ok": True, "content": data.get("content", []), "usage": usage, "model": model, "provider": llm_provider}
         if strip_candidate_pay:
             out["summary_pay_removed"] = pay_removed
@@ -11925,6 +11933,12 @@ def _summary_docx_block(bullets, bookmark_id, numbering_id, compact_label=False)
     return label + "".join(paragraphs)
 
 
+_CV_SUMMARY_ONLY_PAY_ERROR = (
+    "The CV Summary only stated the candidate's pay, which is never written "
+    "into a CV. Generate the summary again."
+)
+
+
 def _insert_summary_into_docx_bytes(
     file_bytes,
     summary_bullets,
@@ -11935,10 +11949,7 @@ def _insert_summary_into_docx_bytes(
     bullets = _summary_docx_bullets(_cv_strip_pay_from_summary(summary_bullets))
     if not bullets:
         if _summary_docx_bullets(summary_bullets):
-            raise ValueError(
-                "The CV Summary only stated the candidate's pay, which is never written "
-                "into a CV. Generate the summary again."
-            )
+            raise ValueError(_CV_SUMMARY_ONLY_PAY_ERROR)
         raise ValueError("No CV Summary bullets provided")
     try:
         _validate_zip_payload(file_bytes, "DOCX document")
@@ -12101,8 +12112,13 @@ def generate_docx():
             cv_data, preserve_work_order=True
         )
         # Salary never reaches the Summary box, whichever route the bullets took.
+        # A summary that was nothing but pay is refused, as on the uploaded-DOCX
+        # path, rather than leaving the box silently empty.
         if isinstance(cv_data.get("summary_bullets"), list):
-            cv_data["summary_bullets"] = _cv_strip_pay_from_summary(cv_data["summary_bullets"])
+            summary_bullets = cv_data["summary_bullets"]
+            cv_data["summary_bullets"] = _cv_strip_pay_from_summary(summary_bullets)
+            if _summary_docx_bullets(summary_bullets) and not _summary_docx_bullets(cv_data["summary_bullets"]):
+                return jsonify({"error": _CV_SUMMARY_ONLY_PAY_ERROR}), 400
         cv_data["_document_alignment"] = _normalize_cv_text_alignment(body.get("alignment"))
         cv_data["_summary_box_autofit"] = _summary_box_autofit_enabled(
             body.get("summary_box_autofit")

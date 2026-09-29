@@ -3891,6 +3891,356 @@
    "note": "work, not the candidate's pay"
   },
   {
+   "id": "P1-remove-r6-0",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "**Salary:** RM 17,000 per month."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r6-1",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Current salary of **RM 17,000** per month."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r6-2",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Currently earning RM 15k/month."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r6-3",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Earning approx. RM 8,000 per month."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r6-4",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "__Expected salary__ RM 9k."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r6-5",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Earns 4,500/mth."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r6-6",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Paid RM 7k/mo."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r6-7",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Salary: 2019."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r6-8",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Salary of 5,000 per month."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r6-9",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Salary 5000, negotiable."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r6-10",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Current salary 8500 excluding bonus."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r6-11",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Take-home pay of 3200 monthly."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r6-12",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Candidate's salary expectations are negotiable."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r6-13",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "His salary expectations are negotiable."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r6-14",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Expected RM 9k salary and willing to relocate."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r6-15",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Last drawn salary was confidential."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r6-16",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "My salary expectation is flexible."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r6-0",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Led compensation from 2018 to 2022 across APAC."
+   ],
+   "expect": [
+    "Led compensation from 2018 to 2022 across APAC."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r6-1",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed compensation between 2019 and 2021."
+   ],
+   "expect": [
+    "Managed compensation between 2019 and 2021."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r6-2",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Ran compensation - 2019 redesign project."
+   ],
+   "expect": [
+    "Ran compensation - 2019 redesign project."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r6-3",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Advised on salary expectations of new hires."
+   ],
+   "expect": [
+    "Advised on salary expectations of new hires."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r6-4",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Salary expectations were benchmarked for 40 roles."
+   ],
+   "expect": [
+    "Salary expectations were benchmarked for 40 roles."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r6-5",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed RM 5M salary and benefits budget."
+   ],
+   "expect": [
+    "Managed RM 5M salary and benefits budget."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r6-6",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Saved RM 2M in salary and overtime costs."
+   ],
+   "expect": [
+    "Saved RM 2M in salary and overtime costs."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r6-7",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Processed 2k salary records monthly."
+   ],
+   "expect": [
+    "Processed 2k salary records monthly."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r6-8",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed a total package of 1,500 SKUs."
+   ],
+   "expect": [
+    "Managed a total package of 1,500 SKUs."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r6-9",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed candidates' salary expectations during offers."
+   ],
+   "expect": [
+    "Managed candidates' salary expectations during offers."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r6-10",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Aligned salary expectations across 3 regions."
+   ],
+   "expect": [
+    "Aligned salary expectations across 3 regions."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r6-11",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Built salary expectations dashboards."
+   ],
+   "expect": [
+    "Built salary expectations dashboards."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r6-12",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Compensation review in 2019."
+   ],
+   "expect": [
+    "Compensation review in 2019."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r6-13",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Led the salary 2020 review."
+   ],
+   "expect": [
+    "Led the salary 2020 review."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r6-14",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed compensation for 2,000 staff."
+   ],
+   "expect": [
+    "Managed compensation for 2,000 staff."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
    "id": "P1-sentence",
    "rule": "P1",
    "kind": "summary_salary",
@@ -3993,6 +4343,33 @@
    "expect": "- Built pipelines.\n- Led a team of 12.",
    "removed": 0,
    "note": ""
+  },
+  {
+   "id": "P1-text-intro-left",
+   "rule": "P1",
+   "kind": "summary_salary_text",
+   "text": "Here is the summary:\n- Expected salary RM 9k",
+   "expect": "",
+   "removed": 1,
+   "note": "an intro line left alone is not a summary"
+  },
+  {
+   "id": "P1-text-intro-kept",
+   "rule": "P1",
+   "kind": "summary_salary_text",
+   "text": "Here is the summary:\n- Expected salary RM 9k\n- Built pipelines.",
+   "expect": "Here is the summary:\n- Built pipelines.",
+   "removed": 1,
+   "note": "with a bullet left, the intro stays as the browser always read it"
+  },
+  {
+   "id": "P1-text-prose",
+   "rule": "P1",
+   "kind": "summary_salary_text",
+   "text": "Expected salary RM 9k. Built pipelines.",
+   "expect": "Built pipelines.",
+   "removed": 1,
+   "note": "prose without bullets keeps what is not pay"
   },
   {
    "id": "P1-text-only-pay",

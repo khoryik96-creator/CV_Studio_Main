@@ -208,6 +208,7 @@ in `cvstudio_cv_normalize.py`, run where each summary is made:
   the preview, the Summary tab and copied text match the Word file.
 - `/blind`, on a source About / Summary section promoted into the box, before
   the provider sees it.
+- `/parse`, so the preview shows what the Word file will carry.
 - `/generate-docx`, on both of its paths, as a last net.
 
 There is no browser copy.
@@ -219,25 +220,55 @@ Only a statement of the candidate's **own** pay is removed:
 - pay talk with no amount: "expected salary", "salary expectations", "salary is
   negotiable", "open to discuss remuneration";
 - an amount in lakhs per annum, or earnings, bonus, commission or allowance per
-  period.
+  period, including "/month", "/mo" and "/yr" ("earning RM 15k/month",
+  "earning approx. RM 8,000 per month").
 
 A pay word on its own is the candidate's work and is kept, for example
 "negotiated compensation packages for 40 hires", "salary range benchmarking",
 "payroll salary processing", "minimum wage compliance", "saved RM 2M in salary
-costs", "managed allowances for 3,000 expatriates". A plain figure directly
-after a pay term counts only with three or more digits, and never when it
-counts people.
+and overtime costs", "managed RM 5M salary and benefits budget", "processed 2k
+salary records", "managed allowances for 3,000 expatriates".
+
+- **Plain figures.** A figure with no currency or unit, directly after a pay
+  term, counts only with three or more digits. It must also end the sentence, or
+  be followed by a pay period, a currency or a word such as "net" or
+  "excluding". So "Salary 2000." counts, but "total package of 1,500 SKUs"
+  doesn't.
+- **Years.** A figure that looks like a year counts only in that position too, so
+  "led compensation from 2018 to 2022" and "compensation - 2019 redesign
+  project" are kept.
+- **Pay talk with no amount** ("salary expectations", "expected salary") is
+  someone else's when:
+  - it is followed by "of", "for", "across", "among" or "from";
+  - it is followed by a reporting verb, such as "were benchmarked";
+  - it is followed by a work noun, such as "data" or "dashboards";
+  - it follows other people's possessive ("candidates'", "new hires'"), or a
+    work verb ("advised on", "managed", "aligned").
+
+  Then it is kept. "Candidate's salary expectations are negotiable" (the Blind
+  CV's own wording) is removed.
 
 Removal is by sentence, and by semicolon clause within a sentence.
 Abbreviations such as "Sr." or "B.Sc." don't end a sentence, so no fragment is
-left. A bullet left empty is dropped. When every line was pay, the page says so
-("only described the candidate's pay"). It isn't recorded as a failed paid
-call, and the uploaded-DOCX route says the same rather than "No CV Summary
-bullets".
+left. A bullet left empty is dropped. If every bullet line of the provider's
+text was pay, an intro line such as "Here is the summary:" is dropped too, so
+it can't become the summary.
 
-Matching runs on an NFKC-normalised copy, so full-width digits count as
-ordinary digits. Digits in other scripts count too, and a neighbouring
-non-Latin character doesn't hide an amount.
+When every line was pay:
+
+- **Summary tab:** the page says so ("only described the candidate's pay"). The
+  paid call is recorded like any summary, not as a failed one.
+- **Format and Batch:** the run carries on with an empty Summary box. A warning
+  says why, and the summary's cost is counted with the run.
+- **`/generate-docx`, both paths:** it refuses with "only stated the
+  candidate's pay", rather than "No CV Summary bullets" or a silently empty box.
+
+`/parse` filters the summary too, so the preview always matches the Word file.
+
+Matching runs on an NFKC-normalised copy with Markdown emphasis removed, so
+"**Salary:** RM 17,000" is caught. Full-width digits count as ordinary digits,
+digits in other scripts count too, and a neighbouring non-Latin character
+doesn't hide an amount.
 
 ## Screen (checked by `tests/test_cv_parse_warning_persistence_frontend.js`)
 

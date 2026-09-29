@@ -238,9 +238,19 @@ async function requestFormattingSummary(raw, route, detailPreference) {
   }
   var rawSummary = aiText(data);
   var bullets = summaryBulletLines(rawSummary);
-  // The server removed every line as the candidate's pay. The call succeeded, so
-  // this is not a provider failure and is not recorded as one.
-  if (!bullets.length && data.summary_pay_removed > 0) throw new Error('The CV Summary only described the candidate\'s pay, which is never included. Generate it again for a new summary.');
+  // The server removed every line as the candidate's pay. The call succeeded and
+  // is paid for, so the run carries on with an empty Summary box and its cost is
+  // counted with the run; it is not a provider failure.
+  if (!bullets.length && data.summary_pay_removed > 0) {
+    showToast('CV Summary left empty: it only described the candidate\'s pay, which is never included.', 'warn');
+    return {
+      bullets:[],
+      cost:responseCost(data, route.model, route.provider),
+      usage:data.usage || {},
+      data:data,
+      pay_only:true
+    };
+  }
   if (!bullets.length) {
     recordPaidAiFailure('CV Summary during formatting returned empty output', data, route.model, route.provider);
     throw new Error('Empty CV Summary returned');
@@ -286,8 +296,12 @@ async function generateSummary(modifier) {
       throw new Error(normalizeAiProviderError(d.error || ('API error ' + r.status), route));
     }
     var raw = aiText(d);
-    // Every line was the candidate's pay: not a provider failure, not recorded as one.
-    if (!summaryBulletLines(raw).length && d.summary_pay_removed > 0) throw new Error('The CV Summary only described the candidate\'s pay, which is never included. Generate it again for a new summary.');
+    // Every line was the candidate's pay: not a provider failure, not recorded as
+    // one, but the call was paid for, so its cost is recorded like any summary.
+    if (!summaryBulletLines(raw).length && d.summary_pay_removed > 0) {
+      statsRecord((anonymize ? 'Anonymized CV Summary — ' : 'CV Summary — ') + getSummaryFocusLabel(), 'summary', responseCost(d, route.model, route.provider), d.model || route.model, '', d.provider || route.provider, statsMetaFromResponse(d, route.model, route.provider));
+      throw new Error('The CV Summary only described the candidate\'s pay, which is never included. Generate it again for a new summary.');
+    }
     if (!raw) {
       recordPaidAiFailure('CV Summary returned empty output', d, route.model, route.provider);
       throw new Error('Empty summary returned');
