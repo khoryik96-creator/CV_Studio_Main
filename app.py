@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.421"
+_INSTALL_RECEIPT_VERSION = "v24.6.422"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -346,7 +346,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.421"
+_CVSTUDIO_VERSION = "v24.6.422"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -1722,6 +1722,7 @@ from cvstudio_cv_normalize import (
     _cv_pretranslate_iso_dates,
     _cv_pretranslate_year_first_month_names,
     _cv_strip_pay_from_summary,
+    _cv_strip_pay_from_summary_counted,
     _cv_strip_pay_from_summary_text,
     _cv_lang_alias_re,
     _cv_match_key,
@@ -9056,10 +9057,15 @@ def parse_cv():
         parsed = _normalize_cv_structured_content(parsed)
         parsed = _normalize_cv_data_for_output(parsed, cv_text)
         # Salary never reaches the Summary box, so the preview shows what the
-        # Word file will carry.
+        # Word file will carry. A removal is reported so the page can say so.
+        summary_pay_removed = 0
         if isinstance(parsed, dict) and isinstance(parsed.get("summary_bullets"), list):
-            parsed["summary_bullets"] = _cv_strip_pay_from_summary(parsed["summary_bullets"])
+            parsed["summary_bullets"], summary_pay_removed = _cv_strip_pay_from_summary_counted(
+                parsed["summary_bullets"]
+            )
         out = {"ok": True, "data": parsed, "usage": usage, "model": model, "provider": llm_provider, "bullet_levels": bullet_levels}
+        if summary_pay_removed:
+            out["summary_pay_removed"] = summary_pay_removed
         out.update(_llm_response_cost_fields(model, usage, llm_provider))
         # ── Fidelity audit — observational, never mutates `parsed`. Attaches a
         # report always; only escalates to the degraded/warning fields when the
@@ -12112,13 +12118,13 @@ def generate_docx():
             cv_data, preserve_work_order=True
         )
         # Salary never reaches the Summary box, whichever route the bullets took.
-        # A summary that was nothing but pay is refused, as on the uploaded-DOCX
-        # path, rather than leaving the box silently empty.
+        # The whole CV is still written -- a summary is one part of it -- and the
+        # removal is reported in a response header, so the page can say so.
+        summary_pay_removed = 0
         if isinstance(cv_data.get("summary_bullets"), list):
-            summary_bullets = cv_data["summary_bullets"]
-            cv_data["summary_bullets"] = _cv_strip_pay_from_summary(summary_bullets)
-            if _summary_docx_bullets(summary_bullets) and not _summary_docx_bullets(cv_data["summary_bullets"]):
-                return jsonify({"error": _CV_SUMMARY_ONLY_PAY_ERROR}), 400
+            cv_data["summary_bullets"], summary_pay_removed = _cv_strip_pay_from_summary_counted(
+                cv_data["summary_bullets"]
+            )
         cv_data["_document_alignment"] = _normalize_cv_text_alignment(body.get("alignment"))
         cv_data["_summary_box_autofit"] = _summary_box_autofit_enabled(
             body.get("summary_box_autofit")
@@ -12159,12 +12165,15 @@ def generate_docx():
             document_bytes = handle.read()
         _validate_generated_docx_bytes(document_bytes)
 
-        return send_file(
+        response = send_file(
             io.BytesIO(document_bytes),
             as_attachment=True,
             download_name="Hyppies_CV_Formatted.docx",
             mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         )
+        if summary_pay_removed:
+            response.headers["X-CV-Summary-Pay-Removed"] = str(summary_pay_removed)
+        return response
 
     except Exception as e:
         traceback.print_exc()
@@ -14221,8 +14230,11 @@ def blind_cv():
         # A source About / Summary section promoted into the box can state the
         # candidate's pay. It is removed before the provider sees it, so the
         # blinded preview and the Word file carry the same summary.
+        summary_pay_removed = 0
         if isinstance(cv_data, dict) and isinstance(cv_data.get("summary_bullets"), list):
-            cv_data["summary_bullets"] = _cv_strip_pay_from_summary(cv_data["summary_bullets"])
+            cv_data["summary_bullets"], summary_pay_removed = _cv_strip_pay_from_summary_counted(
+                cv_data["summary_bullets"]
+            )
         model   = body.get("model") or "claude-sonnet-4-6"
         llm_provider = (body.get("provider") or "anthropic").strip().lower()
         neutralize_candidate_gender = body.get("neutralize_candidate_gender") is True
@@ -14284,6 +14296,8 @@ def blind_cv():
         blinded = _normalize_cv_structured_content(blinded)
 
         out = {"ok": True, "data": blinded, "usage": usage, "model": model, "provider": llm_provider}
+        if summary_pay_removed:
+            out["summary_pay_removed"] = summary_pay_removed
         out.update(_llm_response_cost_fields(model, usage, llm_provider))
         return jsonify(out)
 

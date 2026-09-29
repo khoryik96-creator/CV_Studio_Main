@@ -84,6 +84,9 @@ async function startFormat(blind) {
     // "Parsed! Generating DOCX..." toast below replaces it almost at once, so it
     // is also kept above the preview once that renders.
     var parseWarning = cvParseWarningText(data, blind);
+    // Pay removed from the Summary box is kept on screen like the source check,
+    // and holds auto-upload the same way.
+    if (data.summary_pay_removed) parseWarning = cvJoinWarnings(parseWarning, cvSummaryPayNote(data.summary_pay_removed, false));
     if (parseWarning) showToast(parseWarning, 'warn');
     _runCost += responseCost(data, route.model, route.provider);
     _runUsage = mergeUsageClient(_runUsage, data.usage || {});
@@ -92,6 +95,7 @@ async function startFormat(blind) {
       setOutput('<div style="color:var(--text3);font-style:italic;padding:20px;">Generating source-grounded CV Summary…</div>');
       var summaryResult = await requestFormattingSummary(raw, automaticSummaryRoute, singleSummaryDetail);
       _parsedData.summary_bullets = summaryResult.bullets.slice();
+      if (summaryResult.pay_removed) parseWarning = cvJoinWarnings(parseWarning, cvSummaryPayNote(summaryResult.pay_removed, summaryResult.pay_only));
       _runCost += summaryResult.cost;
       _runUsage = mergeUsageClient(_runUsage, summaryResult.usage);
     }
@@ -128,6 +132,7 @@ async function startFormat(blind) {
       }
       _runCost += responseCost(bData, route.model, route.provider);
       _runUsage = mergeUsageClient(_runUsage, bData.usage || {});
+      if (bData.summary_pay_removed) parseWarning = cvJoinWarnings(parseWarning, cvSummaryPayNote(bData.summary_pay_removed, false));
       document.getElementById('blindBadge').style.display = 'inline-flex';
     }
 
@@ -153,6 +158,13 @@ async function startFormat(blind) {
     }
     var blob = await res2.blob();
     clearInterval(_fakeInterval3);
+    // The Word file's own last net can remove pay the preview still showed.
+    var docxPayRemoved = res2.headers && res2.headers.get ? res2.headers.get('X-CV-Summary-Pay-Removed') : null;
+    if (docxPayRemoved) {
+      var docxPayNote = cvSummaryPayNote(docxPayRemoved, false);
+      parseWarning = cvJoinWarnings(parseWarning, docxPayNote);
+      cvShowParseWarningBanner(docxPayNote);
+    }
     window._docxBlob = blob;
     window._originalBlob  = null; // reset — set below if file was uploaded
     window._isBlind  = blind;

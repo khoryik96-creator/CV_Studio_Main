@@ -176,19 +176,27 @@ class SummarySalaryDocxTests(unittest.TestCase):
             response = self.client.post("/blind", json={"cv_data": cv, "provider": "anthropic"}, headers=HEADERS)
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         self.assertEqual(seen["summary"], ["Data engineer with 11 years in banking."])
-        # The preview the browser gets is the summary the Word file will carry.
+        # The preview the browser gets is the summary the Word file will carry,
+        # and the removal is reported.
         self.assertEqual(response.get_json()["data"]["summary_bullets"], ["Data engineer with 11 years in banking."])
+        self.assertEqual(response.get_json()["summary_pay_removed"], 1)
 
-    def test_a_format_summary_that_was_only_pay_says_so(self):
-        # The JSON path refuses it as the uploaded-DOCX path does, rather than
-        # leaving the box silently empty.
+    def test_a_format_summary_that_was_only_pay_still_writes_the_cv(self):
+        # The summary is one part of the CV: the Word file is still written, with
+        # an empty box, and the removal is reported so the page can say so.
         response = self.client.post(
             "/generate-docx", json={"data": _cv(["**Salary:** RM 17,000 per month.", "Expected salary RM 9k."])},
             headers=HEADERS,
         )
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("only stated the candidate's pay", response.get_json()["error"])
-        # No summary at all is written exactly as before.
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers.get("X-CV-Summary-Pay-Removed"), "2")
+        xml = _document_xml(response.data)
+        self.assertNotIn("RM 17,000", xml)
+        self.assertNotIn("RM 9k", xml)
+        # Nothing removed, nothing reported.
+        clean = self.client.post("/generate-docx", json={"data": _cv(["Built pipelines."])}, headers=HEADERS)
+        self.assertEqual(clean.status_code, 200)
+        self.assertNotIn("X-CV-Summary-Pay-Removed", clean.headers)
         self.assertEqual(self.client.post("/generate-docx", json={"data": _cv([])}, headers=HEADERS).status_code, 200)
 
     def test_the_parsed_summary_is_filtered_so_the_preview_matches_the_word_file(self):
@@ -203,11 +211,28 @@ class SummarySalaryDocxTests(unittest.TestCase):
             response = self.client.post("/parse", json={"cv_text": "Test Candidate\nData engineer."}, headers=HEADERS)
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         self.assertEqual(response.get_json()["data"]["summary_bullets"], ["Data engineer with 11 years in banking."])
+        self.assertEqual(response.get_json()["summary_pay_removed"], 1)
+
+    def test_a_parse_with_nothing_removed_reports_nothing(self):
+        parsed = _cv(["Data engineer with 11 years in banking."])
+
+        def fake_call(provider, key, payload):
+            return {"content": [{"type": "text", "text": json.dumps(parsed)}], "usage": {}}
+
+        with mock.patch.object(app, "_resolve_request_api_key", return_value="<fixture-credential>"), \
+                mock.patch.object(app, "_ai_spend_session_allowed", return_value=True), \
+                mock.patch.object(app, "call_llm", side_effect=fake_call):
+            response = self.client.post("/parse", json={"cv_text": "Test Candidate\nData engineer."}, headers=HEADERS)
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("summary_pay_removed", response.get_json())
 
     def test_an_intro_line_is_not_left_as_the_summary(self):
-        out = self._generate_ai("Here is the summary:\n- Expected salary RM 9k", strip_candidate_pay=True)
-        self.assertEqual(out["content"], [{"type": "text", "text": ""}])
-        self.assertEqual(out["summary_pay_removed"], 1)
+        for raw in ("Here is the summary:\n- Expected salary RM 9k",
+                    "Here is the summary:\n1. Salary: RM 9,000\n2. Expected salary RM 10k"):
+            with self.subTest(raw=raw):
+                out = self._generate_ai(raw, strip_candidate_pay=True)
+                self.assertEqual(out["content"], [{"type": "text", "text": ""}])
+                self.assertGreater(out["summary_pay_removed"], 0)
 
     def test_the_summary_instructions_forbid_pay(self):
         source = (ROOT / "vendor" / "cvstudio" / "candidate-summary.js").read_text(encoding="utf-8")

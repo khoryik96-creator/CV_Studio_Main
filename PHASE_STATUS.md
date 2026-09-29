@@ -71,7 +71,7 @@
   v24.6.416 corrects ten further findings, four of them regressions from v24.6.415;
   v24.6.417 corrects ten more and adds the CV_SOURCE_CHECK_GUARDRAILS.md case registry;
   v24.6.418 keeps a bracketed employer brand, the CGPA label and education majors.
-  v24.6.411–418 are merged via PR #216 as `56dca18`. v24.6.419–421 keep the
+  v24.6.411–418 are merged via PR #216 as `56dca18`. v24.6.419–422 keep the
   candidate's pay out of the generated Summary box with one server filter and await
   owner testing. No release or native
   protected build is produced by this work; protected builds remain manual.

@@ -36,6 +36,9 @@ runs all of them on every test run.
    not the case. Only the owner can agree to change or delete a case.
 3. Run the whole-suite replay (see the v24.6.416 QA report) and confirm nothing
    outside the new cases changed against master.
+4. For P1, `tests/test_cv_summary_salary_generated.py` also runs thousands of
+   generated sentences. Add a new way of stating pay, or a new kind of pay-related
+   work, to its lists rather than only a single case.
 
 ## The one principle
 
@@ -204,66 +207,94 @@ instructions forbid it, and there is one filter, `_cv_strip_pay_from_summary`
 in `cvstudio_cv_normalize.py`, run where each summary is made:
 
 - `/generate-ai`, for the two CV Summary callers, which send
-  `strip_candidate_pay: true`. The browser only ever receives filtered text, so
-  the preview, the Summary tab and copied text match the Word file.
-- `/blind`, on a source About / Summary section promoted into the box, before
-  the provider sees it.
-- `/parse`, so the preview shows what the Word file will carry.
+  `strip_candidate_pay: true`. The browser only ever receives filtered text.
+- `/parse` and `/blind`, so the preview shows what the Word file will carry.
 - `/generate-docx`, on both of its paths, as a last net.
 
 There is no browser copy.
 
-Only a statement of the candidate's **own** pay is removed:
-- a pay term followed by an amount: "Salary: RM 17,000", "Salary 2000", "CTC of
-  12 LPA", "total compensation of $180k";
-- an amount followed by a pay term: "RM16,000 expected salary";
-- pay talk with no amount: "expected salary", "salary expectations", "salary is
-  negotiable", "open to discuss remuneration";
-- an amount in lakhs per annum, or earnings, bonus, commission or allowance per
-  period, including "/month", "/mo" and "/yr" ("earning RM 15k/month",
-  "earning approx. RM 8,000 per month").
+**A summary is also the candidate's work, and much of that work is about pay**
+(HR, payroll, recruitment, sales). So a sentence is removed only on a clear
+sign that it states the candidate's **own** pay:
 
-A pay word on its own is the candidate's work and is kept, for example
-"negotiated compensation packages for 40 hires", "salary range benchmarking",
-"payroll salary processing", "minimum wage compliance", "saved RM 2M in salary
-and overtime costs", "managed RM 5M salary and benefits budget", "processed 2k
-salary records", "managed allowances for 3,000 expatriates".
+1. **Always removed.** "my" or "candidate's", or current / expected / asking /
+   last-drawn / previous, before a pay word and an amount. Examples: "Expected
+   salary RM16,000", "Led a team of 8 on a current salary of RM 12k". Nothing
+   overrides this.
+2. **Removed unless the sentence describes work.** This covers:
+   - a pay word and an amount in either order ("Salary: RM 17,000", "RM16,000
+     salary");
+   - "Last drawn RM 9,000", "RM 9,000 expected";
+   - a clause that is only an amount per period ("RM 9,000 / month");
+   - earnings, a bonus, commission or allowance per period;
+   - lakhs per annum.
 
-- **Plain figures.** A figure with no currency or unit, directly after a pay
-  term, counts only with three or more digits. It must also end the sentence, or
-  be followed by a pay period, a currency or a word such as "net" or
-  "excluding". So "Salary 2000." counts, but "total package of 1,500 SKUs"
-  doesn't.
-- **Years.** A figure that looks like a year counts only in that position too, so
-  "led compensation from 2018 to 2022" and "compensation - 2019 redesign
-  project" are kept.
-- **Pay talk with no amount** ("salary expectations", "expected salary") is
-  someone else's when:
-  - it is followed by "of", "for", "across", "among" or "from";
-  - it is followed by a reporting verb, such as "were benchmarked";
-  - it is followed by a work noun, such as "data" or "dashboards";
-  - it follows other people's possessive ("candidates'", "new hires'"), or a
-    work verb ("advised on", "managed", "aligned").
+   A sentence describes work when:
+   - it opens with a work verb from an explicit list ("Managed total
+     compensation of $12M", "Placed 40 executives averaging $180k"). The list
+     leaves out "earned", "drew", "paid" and "made", and the adjectives a
+     summary opens with ("Seasoned");
+   - it names the organisation's money ("budget", "costs", "revenue", "AUM");
+   - it names who the money is for ("for 300 staff", "to the sales team", "for
+     the group", "across APAC").
 
-  Then it is kept. "Candidate's salary expectations are negotiable" (the Blind
-  CV's own wording) is removed.
+   A year after "from" or "since" is a date, not an amount ("Head of
+   Compensation from 2019").
+3. **Pay talk with no amount that only a candidate says of their own pay** is
+   removed, unless the sentence opens with a work verb. Examples: "Salary:
+   negotiable", "salary is negotiable", "open to discuss remuneration".
+4. **Pay talk that can be about anyone** ("expected salary", "salary
+   expectations") is removed unless something says it's someone else's. That
+   means any of:
+   - "of", "for" or "across" after it;
+   - a reporting verb after it ("were benchmarked");
+   - a work noun after it ("ranges", "dashboards");
+   - a work verb at the start;
+   - another group's possessive before it ("candidates'").
 
-Removal is by sentence, and by semicolon clause within a sentence.
-Abbreviations such as "Sr." or "B.Sc." don't end a sentence, so no fragment is
-left. A bullet left empty is dropped. If every bullet line of the provider's
-text was pay, an intro line such as "Here is the summary:" is dropped too, so
-it can't become the summary.
+   "For the next role" is the candidate's own move, and is removed.
 
-When every line was pay:
+**Amounts.** An amount has a currency ("RM", "$", "ringgit") or a unit ("k",
+"LPA"). A plain figure counts only directly after a pay word, with three or more
+digits, and only where it ends the sentence or is followed by a pay period,
+currency or pay word. A year-like figure is held to that strictly. A figure
+never starts inside another one ("2016" holds no "016").
 
-- **Summary tab:** the page says so ("only described the candidate's pay"). The
-  paid call is recorded like any summary, not as a failed one.
-- **Format and Batch:** the run carries on with an empty Summary box. A warning
-  says why, and the summary's cost is counted with the run.
-- **`/generate-docx`, both paths:** it refuses with "only stated the
-  candidate's pay", rather than "No CV Summary bullets" or a silently empty box.
+**Removal** is by sentence, and by semicolon clause within a sentence. Sentence
+ends are handled as follows:
 
-`/parse` filters the summary too, so the preview always matches the Word file.
+- A sentence ends after closing Markdown emphasis ("**Expected salary RM 9k.**
+  Available"), and after a figure ("a team of 8.", "by 5.5%.").
+- It also ends after "Sdn Bhd.", "Ltd.", "etc." and "p.a.".
+- "Sr.", "Co.", "Sdn.", "Sept." and "B.Sc." never end one.
+
+After a removal:
+
+- A "**" left without its partner is dropped.
+- A bullet left empty is dropped.
+- A bullet that isn't text is returned untouched.
+- In provider text, "-", "*", "•" and numbered ("1.", "2)") lines are list lines.
+  If every list line was pay, an intro such as "Here is the summary:" is
+  dropped too.
+
+Filtering again changes nothing. This is checked on 12,728 inputs, including
+random combinations with bold and semicolons.
+
+**Every removal is shown.** `/parse` and `/blind` return `summary_pay_removed`,
+`/generate-ai` always does when asked, and `/generate-docx` sends
+`X-CV-Summary-Pay-Removed`. What the page does with it:
+
+- **Format and Batch:** the note joins the source-check warning. It stays above
+  the preview and on the batch row, and holds JobAdder auto-upload the same way
+  (S1, S2).
+- **Summary tab:** the note is shown under the summary.
+- **Pay-only summary:**
+  - Format and Batch carry on with an empty Summary box, and count the
+    summary's cost.
+  - The Summary tab says "only described the candidate's pay" and records the
+    paid call as a summary, not a failed one.
+  - The uploaded-DOCX route says the same.
+- **`/generate-docx` (JSON):** it never refuses the whole CV over its summary.
 
 Matching runs on an NFKC-normalised copy with Markdown emphasis removed, so
 "**Salary:** RM 17,000" is caught. Full-width digits count as ordinary digits,

@@ -216,6 +216,18 @@ function cvSummaryPrompt(cv, modifier, focusNote, anonymize) {
 function cvSummaryModifierForPreference(preference) {
   return String(preference || '').toLowerCase() === 'detailed' ? 'longer' : 'normal';
 }
+// The server removes the candidate's pay from a summary and says how much it
+// removed. The page always says so: the box may be emptier than expected, and a
+// removal nobody sees could hide a mistake.
+function cvSummaryPayNote(removed, emptied) {
+  var count = Number(removed) || 0;
+  if (count <= 0) return '';
+  if (emptied) return 'The CV Summary only described the candidate\'s pay, so the Summary box was left empty.';
+  return 'Removed ' + count + ' sentence' + (count === 1 ? '' : 's') + ' about the candidate\'s pay from the CV Summary. Check the Summary before sending.';
+}
+function cvJoinWarnings(first, second) {
+  return [String(first || '').trim(), String(second || '').trim()].filter(Boolean).join(' ');
+}
 async function requestFormattingSummary(raw, route, detailPreference) {
   var response = await fetchWithTimeout('/generate-ai', {
     method:'POST',
@@ -240,15 +252,16 @@ async function requestFormattingSummary(raw, route, detailPreference) {
   var bullets = summaryBulletLines(rawSummary);
   // The server removed every line as the candidate's pay. The call succeeded and
   // is paid for, so the run carries on with an empty Summary box and its cost is
-  // counted with the run; it is not a provider failure.
+  // counted with the run; it is not a provider failure. The caller keeps the
+  // warning on screen (cvSummaryPayNote).
   if (!bullets.length && data.summary_pay_removed > 0) {
-    showToast('CV Summary left empty: it only described the candidate\'s pay, which is never included.', 'warn');
     return {
       bullets:[],
       cost:responseCost(data, route.model, route.provider),
       usage:data.usage || {},
       data:data,
-      pay_only:true
+      pay_only:true,
+      pay_removed:data.summary_pay_removed
     };
   }
   if (!bullets.length) {
@@ -259,7 +272,8 @@ async function requestFormattingSummary(raw, route, detailPreference) {
     bullets:bullets,
     cost:responseCost(data, route.model, route.provider),
     usage:data.usage || {},
-    data:data
+    data:data,
+    pay_removed:data.summary_pay_removed || 0
   };
 }
 async function generateSummary(modifier) {
@@ -310,14 +324,17 @@ async function generateSummary(modifier) {
     window._summaryGeneratedSource = cv;
     window._summaryGeneratedAnonymized = anonymize;
     if (!window._summaryGeneratedBullets.length) throw new Error('Empty summary returned');
-    if (output) output.innerHTML = renderSummaryText(raw);
+    var payNote = cvSummaryPayNote(d.summary_pay_removed, false);
+    if (output) output.innerHTML = renderSummaryText(raw) + (payNote ? '<div class="cv-parse-warning" role="note">\u26a0 ' + esc(payNote) + '</div>' : '');
     updateSummaryOutputTitle();
     if (formatBtn) formatBtn.disabled = !ta || String(ta.value || '').trim() !== cv;
     updateSummaryApplyDocxButton();
     var usage = normalizeUsageClient(d.usage || {}); var cost = responseCost(d, route.model, route.provider);
     if (costEl) costEl.textContent = (cost > 0 ? ('$' + cost.toFixed(4) + ' · ') : '') + ((usage.input_tokens || 0) + (usage.output_tokens || 0)).toLocaleString() + ' tokens · ' + providerLabel(d.provider || route.provider, d.model || route.model);
     statsRecord((anonymize ? 'Anonymized CV Summary — ' : 'CV Summary — ') + getSummaryFocusLabel(), 'summary', cost, d.model || route.model, '', d.provider || route.provider, statsMetaFromResponse(d, route.model, route.provider));
-    markTabDone('summary', run); showToast(anonymize ? 'Anonymized CV Summary generated' : 'CV Summary generated', 'ok');
+    markTabDone('summary', run);
+    if (payNote) showToast(payNote, 'warn');
+    else showToast(anonymize ? 'Anonymized CV Summary generated' : 'CV Summary generated', 'ok');
   } catch(e) {
     if (output) output.innerHTML = '<div style="color:var(--red);font-size:13px;line-height:1.5;">⚠ ' + esc(e.message || 'CV Summary failed') + '</div>';
     markTabFailed('summary', run); showToast('CV Summary failed: ' + (e.message || 'Unknown error').split('\n')[0], 'err');

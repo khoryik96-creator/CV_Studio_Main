@@ -1,4 +1,4 @@
-# v24.6.419 – v24.6.421 Salary never reaches the Summary box
+# v24.6.419 – v24.6.422 Salary never reaches the Summary box
 
 Branch: `claude/pr157-chatgpt-fix-zke4cy`, from merged master `56dca18` (v24.6.418).
 
@@ -215,4 +215,88 @@ scripts.
   stop, `/parse` hook, JSON refusal). All eleven were caught.
 - **Full suite:** 1438 passed, 23 skipped, plus the two known environment-only
   test groups. **Node:** 27/27.
+
+## v24.6.422: twenty findings from two more reviews
+
+Most of the findings came from one cause. The rule removed any sentence with a
+pay word and an amount, but a summary also describes the candidate's work, and
+much of that work is about pay (HR, payroll, recruitment, sales). The rule was
+rebuilt around one question: is there a clear sign that this is the
+candidate's **own** pay?
+
+**The rule**
+- **Always removed:** "my" or "candidate's", or current / expected / asking /
+  last-drawn / previous, before a pay word and an amount.
+- **Removed unless the sentence describes work:** a pay word and an amount, and
+  the other ways of stating pay. A sentence describes work when:
+  - it opens with a work verb from an explicit list, so "Managed", "Placed" or
+    "Oversaw" count but "Seasoned" and "Earned" don't;
+  - it names the organisation's money ("budget", "AUM", "procurement");
+  - it names the people the money is for ("for 300 staff", "to the sales team",
+    "for the group", "across APAC").
+- **Dates:** a year after "from" or "since" is a date ("Head of Compensation
+  from 2019").
+- **Words that no longer count as pay:** "Paid" and "making" count only at the
+  start and right before the amount, so "paid social spend" and
+  "decision-making" are work. "Package requirements" is no longer pay talk.
+  "Drawing up" is not drawing pay.
+- **Newly caught:**
+  - "Last drawn RM 9,000", "Asking RM 9,000", "Expected: RM 9,000";
+  - "RM 9,000 expected", "RM 9,000 / month";
+  - "Salary: negotiable", "Salary - negotiable", "Salary: 5,500 ringgit";
+  - "Current salary (basic): RM 6,500", "Expected salary for this role: RM 9k";
+  - "Salary cut to RM 5k", "Current salary approx. RM 9,000". The last one was
+    missed before because of a word-boundary quirk after the full stop.
+
+**Sentences and formatting**
+- **Sentence ends** are now found:
+  - after closing bold ("**Expected salary RM 9k.** Available");
+  - after a figure ("a team of 8.", "by 5.5%.", "GPA of 3.8.");
+  - after "Sdn Bhd.", "Ltd.", "etc." and "p.a.".
+
+  The sentence before the pay sentence is no longer lost with it.
+- A "**" left without its partner by a removal is dropped.
+- A summary item that isn't text is returned untouched, instead of as a piece
+  of its Python form.
+- **Numbered provider lists** ("1.", "2)") are list lines. An intro line left
+  after every numbered item was pay no longer becomes the summary.
+
+**Nothing silent, nothing blocked**
+- **Every removal is shown.** `/parse` and `/blind` return
+  `summary_pay_removed`, and `/generate-docx` sends `X-CV-Summary-Pay-Removed`.
+  - In Format and Batch, the note joins the source-check warning: above the
+    preview, on the batch row, and holding JobAdder auto-upload.
+  - The Summary tab shows it under the summary.
+  - The same applies to a pay-only automatic summary, which previously showed
+    only a toast that was replaced at once.
+- **`/generate-docx` (JSON)** no longer refuses the whole CV over a summary that
+  was only pay.
+
+**Regression evidence**
+- **Guardrail cases:** rule P1 has 344 cases. The case file only gained lines;
+  no existing case was changed.
+- **New test file** `tests/test_cv_summary_salary_generated.py`:
+  - 15,488 generated ways of stating one's own pay are all removed;
+  - 6,400 generated pieces of pay-related work are all kept;
+  - over every case plus 2,000 random combinations with bold and semicolons,
+    running the filter again changes nothing, the provider-text and bullet paths
+    agree, and no lone "**" is left.
+- **Old rule vs new rule** on every sentence in the repository (29,993 strings):
+  16 differ, and every one is a review example or an intended fix.
+- **Whole-suite recording:** all three filter entry points were watched (697
+  calls), and nothing changed outside the salary test files.
+- **Deliberate breaks:** 37 in total, covering every rule part, the splitter,
+  the numbered lines, the bold balance, the non-text items, the route reports,
+  the header, and the page's warning, hold and cost handling. All were caught.
+  Six needed a new isolating case first, and one exposed a real bug: "for
+  the next role" never counted as the candidate's own. That is fixed.
+- **Existing page tests** are unchanged. The new warning code only runs when
+  pay was actually removed, so every existing flow behaves exactly as before.
+- **Full suite:** 1442 passed, 23 skipped, plus the known environment-only
+  tests. **Node:** 27/27.
+
+**What this can't promise.** No text rule can be perfect. A new phrasing may
+still be misread. The design limits the damage: a removal is always visible and
+holds auto-upload, so a mistake is seen before the CV is sent, and the export
+is never blocked. Every new phrasing found goes into the generated lists.
 
