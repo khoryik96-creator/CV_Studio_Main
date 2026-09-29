@@ -67,7 +67,8 @@
   the source — fixes it, makes the date rewrite reach the model on the real upload
   path, and keeps the parse warning on screen; v24.6.414 corrects ten review
   findings on that work and holds JobAdder auto-upload for a flagged CV; v24.6.415
-  corrects ten more, removing false warnings and a dropped-placeholder regression. All await owner
+  corrects ten more, removing false warnings and a dropped-placeholder regression;
+  v24.6.416 corrects ten further findings, four of them regressions from v24.6.415. All await owner
   testing. No release or native
   protected build is produced by this work; protected builds remain manual.
 

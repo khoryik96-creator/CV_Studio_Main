@@ -1248,11 +1248,16 @@ _WORK_HISTORY_STOP_HEADING_RE = re.compile(
 )
 
 # Heading words that close an education section even when the full heading is not
-# in the shared boundary list, e.g. "Employment Record", "Relevant Experience" or
-# "Positions Held".
-_WORK_HEADING_WORDS = frozenset({
-    "experience", "experiences", "employment", "career", "work", "job",
-    "positions", "appointments", "assignments",
+# in the shared boundary list, e.g. "Employment Record" or "Relevant Experience".
+_WORK_HEADING_WORDS = frozenset({"experience", "experiences", "employment", "career", "work", "job"})
+
+# Whole headings that also close it. "Positions", "appointments" and
+# "assignments" only count as the entire heading: inside an education section
+# "Leadership Positions" or "Student Appointments" is part of the education, and
+# ending the section there read the degree rows after it as jobs.
+_WORK_HEADING_KEYS = frozenset({
+    "positions held", "positions", "appointments", "appointments held",
+    "assignments", "work assignments", "posts held",
 })
 
 # A line that is an education heading and nothing else: "Education", "Educational
@@ -1267,30 +1272,62 @@ _EDUCATION_HEADING_KEY_RE = re.compile(
 )
 
 # What a qualification row carries and a work row almost never does. Inside an
-# education section only a row that names a qualification is set aside, so a work
-# row is kept even when the section-exit rules below miss its heading.
+# education section a row naming one is always set aside.
 #
-# Institution words are deliberately not here. An employer can be a school, a
-# college, an academy, an institute or a foundation, and "Acme Foundation |
-# Program Manager" is a job. Nor is a bare "BA" or "MA": "BA" is also a business
-# analyst. "Foundation" and "certificate" count only as the qualification ("a
-# foundation in science", "a certificate in accounting").
+# A bare "BA" or "MA" is not here: "BA" is also a business analyst. "Foundation"
+# and "certificate" count only as the qualification ("a foundation in science",
+# "a certificate in accounting"), because "Acme Foundation" is an employer.
 _EDUCATION_ROW_RE = re.compile(
     r"\b(?:bachelor'?s?|master'?s|masters|master\s+(?:of|in|degree)|diploma|degree|"
     r"ph\.?d|doctorate|certificate\s+(?:in|of)|sijil|spm|stpm|igcse|"
     r"a[ -]levels?|o[ -]levels?|\"o\" level|\"a\" level|"
     r"foundation\s+(?:in|of|programme|program|studies|year|course)|"
-    r"matriculation|matrikulasi|c?gpa|honours|hons|b\.?sc|m\.?sc|mba|b\.?eng|m\.?eng)\b"
-    r"|\b[bm]\.a\.",
+    r"matriculation|matrikulasi|c?gpa|honours|hons|b\.?sc|m\.?sc|mba|bba|b\.?eng|m\.?eng|"
+    r"b\.?tech|m\.?tech|b\.?com|m\.?com|llb|llm|b\.?ed|m\.?ed|b\.?pharm|mbbs)\b"
+    r"|\b[bm]\.a\b\.?",
     re.I,
 )
 
-# An institution named on a line of its own ("NORTHWIND UNIVERSITY") is part of
-# an education section, not the heading of the next one.
+# An institution. A row naming one inside an education section is set aside too
+# -- "Northwind University | B.Tech", "Sekolah Menengah Contoh | Kuala Lumpur" --
+# unless it also names a job, because an employer can be a school, a college or
+# an academy: "Contoso Academy | Trainer" is a job. On a line of its own
+# ("NORTHWIND UNIVERSITY") it is part of the education, never the heading of the
+# next section.
 _EDUCATION_INSTITUTION_RE = re.compile(
     r"\b(?:universit(?:y|i|ies)|college|kolej|institute|institut|school|sekolah|"
     r"academy|akademi|polytechnic|politeknik)\b",
     re.I,
+)
+
+# A job title in a row: the generic title words the borderless reader uses, plus
+# the ones an education employer uses.
+_WORK_ROLE_WORD_RE = re.compile(
+    r"\b(?:manager|director|head|associate|consultant|analyst|engineer|developer|"
+    r"architect|specialist|executive|officer|administrator|coordinator|supervisor|"
+    r"partner|president|intern|trainee|accountant|recruiter|designer|scientist|"
+    r"technician|controller|planner|lecturer|teacher|tutor|trainer|instructor|"
+    r"professor|researcher|counsell?or|librarian|registrar|dean|principal|"
+    r"assistant|clerk|secretary|programmer|scrum master|chef|nurse)s?\b",
+    re.I,
+)
+
+
+def _education_row_is_set_aside(line):
+    """Whether a table row inside an education section is a qualification."""
+    if _EDUCATION_ROW_RE.search(line):
+        return True
+    return bool(_EDUCATION_INSTITUTION_RE.search(line)) and not _WORK_ROLE_WORD_RE.search(line)
+
+
+# A company that is nothing but a cell separator: the table pipe the extractor
+# joins cells with, in its ASCII, full-width and box-drawing forms, or a label
+# colon. It is the separator read instead of the name beside it. A dash, a dot or
+# "N/A" is different: a CV writes those on purpose for a career break or freelance
+# work. Shared with the fidelity audit so the two agree on what a separator is.
+_CV_SEPARATOR_CHARS = "|\uff5c\u2502\u00a6:\uff1a"
+_CV_SEPARATOR_ONLY_RE = re.compile(
+    r"^\s*[" + _CV_SEPARATOR_CHARS + r"][\s" + _CV_SEPARATOR_CHARS + r"]*$"
 )
 
 
@@ -1303,6 +1340,8 @@ def _source_heading_is_work(words):
     """A short line that reads as a work-history heading."""
     if not words or len(words) > 4:
         return False
+    if " ".join(words) in _WORK_HEADING_KEYS:
+        return True
     return bool(_WORK_HEADING_WORDS.intersection(words))
 
 
@@ -1340,12 +1379,14 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
     lines = [re.sub(r"\s+", " ", str(raw_line or "").strip()) for raw_line in str(cv_text or "").splitlines()]
 
     def add_row(date_cell, company_cell, role_cell):
-        # A company that is only the "|" left behind when a row has no company
-        # column never reaches here: every reader strips the cell separators, and
-        # the empty result is refused below. A deliberate placeholder such as "-"
-        # for a career break is the source's own content and is kept, as it
-        # always was; dropping that row would drop the entry from the output.
         if not date_cell or not company_cell or not role_cell:
+            return None
+        # A company that is only a separator -- the "|" left behind when a row has
+        # no company column, or ":", "│", "｜" -- names nothing. Accepting it
+        # rebuilt a whole work history with every employer rendered as "|". A
+        # placeholder such as "-" for a career break is the source's own content
+        # and is kept, as it always was; refusing it dropped the entry.
+        if _CV_SEPARATOR_ONLY_RE.match(str(company_cell)):
             return None
         if len(company_cell) > 120 or len(role_cell) > 160:
             return None
@@ -1401,7 +1442,7 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
             ):
                 in_education = False
             continue
-        if in_education and _EDUCATION_ROW_RE.search(line):
+        if in_education and _education_row_is_set_aside(line):
             continue
         cells = [c.strip() for c in line.split("|")]
         cells = [c for c in cells if c]

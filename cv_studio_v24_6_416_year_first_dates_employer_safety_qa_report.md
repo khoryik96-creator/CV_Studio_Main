@@ -1,4 +1,4 @@
-# v24.6.411 – v24.6.415 Year-first dates, and a shortfall that should not ship
+# v24.6.411 – v24.6.416 Year-first dates, and a shortfall that should not ship
 
 Branch: `claude/cv-year-first-dates-employer-safety`.
 Base: master `960a0866b357db702e9cc0fdbabdfcc2e60f12ae`, v24.6.410.
@@ -578,3 +578,82 @@ claim is exactly what master did; a false one holds a correct CV.
 - Full suite **1396 passed, 23 skipped**, plus the two environment-only tests.
   Node fixtures **25/25**, the existing batch lifecycle test unchanged. Launcher
   line endings match `origin/master`.
+
+
+---
+
+# v24.6.416 Review corrections
+
+Ten findings on v24.6.415. All ten are fixed. Four were regressions against
+v24.6.414 introduced by v24.6.415's own narrowing; those are corrected without
+bringing back the problems v24.6.415 fixed.
+
+## Table reader
+
+- **Education rows read as jobs (regression).** v24.6.415 set aside only rows
+  naming a listed qualification, so "Anna University | B.Tech", "University of
+  Malaya | B.A Economics", "Delhi University | LLB" and "Sekolah Menengah … |
+  Kuala Lumpur" under Education became work rows. Now a row is set aside if it
+  names a qualification (B.Tech, M.Tech, B.Com, BBA, LLB, LLM, B.Ed, MBBS and
+  "B.A" without the trailing dot added), or names an institution without naming
+  a job. "Contoso Academy | Trainer" and "Acme Foundation | Program Manager" are
+  still kept; "Fabrikam College | BA" under Education is now read as a degree.
+- **Separator-only companies accepted (regression).** Removing the guard in
+  v24.6.415 let ":", "│" and "｜" through, because only the ASCII "|" is stripped
+  from a cell. `add_row` now refuses a company that is only separator characters,
+  using one pattern shared with the source check. A "-", em dash or "N/A"
+  career-break row is still kept exactly as master keeps it. The comment that
+  claimed separators never reached `add_row` is gone.
+- **"Leadership Positions" inside Education ended it (regression).**
+  "Positions", "appointments" and "assignments" now end an education section only
+  as the whole heading ("Positions Held", "Appointments").
+
+## Source check
+
+- **An early "Professional Background" heading hid the work history
+  (regression).** The label scan started at the first matching heading, often
+  the profile near the top, and stopped at the next section. It now reads every
+  span from a work-history heading to the next stop, and "Professional
+  Background" / "Career Background" no longer start a scan; with no work-history
+  heading at all it still claims nothing.
+- **Value lines ended the scan.** "Training: 2019", "Languages: 3" and "Reference
+  No: 4411" matched a heading once letters alone were compared. A line with a
+  value after its colon no longer matches the section list, and "Reference
+  No/Number/Code/ID" is excluded from the referee rule. Figures alone do not
+  rule a heading out: "AWARDS 2021" still ends the scan, because reading on into
+  another section is what reports a false missing employer.
+- **Real employer names read as column headers.** A value is now treated as a
+  header only when it sits in the next cell ("Company | Position Held"), never in
+  the label's own cell ("Company: Department of Information"), and "state",
+  "total", "information" and "info" are out of the header words.
+- The stale comment that still listed "-" as a reported separator, and a dead
+  substitution before the section-key comparison, are removed.
+
+## Screen
+
+- **Batch mode no longer depends on `cv-format.js` being loaded.** It uses the
+  single-CV wording when that helper exists; loaded on its own, a warned file
+  still finishes (no ReferenceError), is still held from auto-upload, and in
+  Blind mode shows a notice that names no one. The Blind-mode rule itself lives
+  only in `cvParseWarningText`.
+
+## Regression evidence
+
+- **Whole-suite replay:** 473 distinct inputs the full suite feeds the table
+  reader, reconciler, date rewrite and source check, replayed through master,
+  v24.6.415 and this version: **0 changed outside this work's own tests against
+  either**, the source-check report identical to master apart from the empty
+  `unnamed` field.
+- **Real documents:** unchanged from v24.6.415 — the reported CV's wrong rows stay
+  at 0 (master 9), the source check finds the same 8 employers, and a correct
+  parse keeps all 9 with no warning.
+- **The new tests fail on v24.6.415** (28 failures) and pass here.
+- **Mutations:** every fix this round broken on purpose and confirmed caught,
+  including the batch fallback. Three initially survived because another guard
+  covered the same test (degree words, the background heading, the value-line
+  rule); an isolating test was added for each. A fourth showed the "no figures"
+  half of the value-line rule had no test; on review it was also wrong for
+  "AWARDS 2021", so it was removed rather than tested. Every earlier round's
+  mutations were re-run: none survive.
+- Full suite **1408 passed, 23 skipped**, plus the two environment-only tests.
+  Node **25/25**. Launcher line endings match `origin/master`.

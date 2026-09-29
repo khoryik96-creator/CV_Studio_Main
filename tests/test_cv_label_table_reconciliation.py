@@ -262,17 +262,28 @@ class AuthoritativeRowReaderTests(unittest.TestCase):
 
     def test_a_separator_is_never_a_company(self):
         # Master read "| | | Engineer" as the company "| | |": the reported bug.
-        for company in ("|", " | "):
+        for company in ("|", " | ", "::", ":", "\u2502", "\uff5c"):
             with self.subTest(company=company):
                 self.assertEqual(self.rows(
                     ["WORK EXPERIENCE", "Jan 2020 - Dec 2021 | " + company + " | Engineer"],
                 ), [])
 
+    def test_a_separator_other_than_the_pipe_is_never_a_company(self):
+        # Only the ASCII "|" is stripped from a cell, so a colon or a box-drawing
+        # separator reached add_row intact and became the employer.
+        rows = self.rows([
+            "WORK EXPERIENCE",
+            "Mar 2019 - Feb 2020 : Senior Engineer",
+            "Mar 2020 - Feb 2021 \u2502 Senior Engineer",
+            "Mar 2021 - Feb 2022 \uff5c Senior Engineer",
+        ], titles=["Senior Engineer"])
+        self.assertEqual(rows, [])
+
     def test_a_placeholder_company_is_kept_as_it_always_was(self):
         # A CV writes "-" in the company column for a career break or freelance
         # work. That is the source's own content; dropping the row would drop the
         # whole entry from the rebuilt work history. Master kept these rows.
-        for company in ("-", "\u2014", "\u2013", "::", "N/A"):
+        for company in ("-", "\u2014", "\u2013", "--", "N/A", "."):
             with self.subTest(company=company):
                 rows = self.rows(
                     ["WORK EXPERIENCE", "Jan 2020 - Dec 2021 | " + company + " | Engineer"],
@@ -463,11 +474,10 @@ class AuthoritativeRowReaderTests(unittest.TestCase):
             "2019 - Present | Acme Foundation | Program Manager",
             "Jan 2017 - Dec 2018 | Contoso Academy | Trainer",
             "Jan 2015 - Dec 2016 | Northwind Institute | Scrum Master",
-            "Jan 2013 - Dec 2014 | Fabrikam College | BA",
         ])
         self.assertEqual(
             [r["company"] for r in rows],
-            ["Acme Foundation", "Contoso Academy", "Northwind Institute", "Fabrikam College"],
+            ["Acme Foundation", "Contoso Academy", "Northwind Institute"],
         )
 
     def test_a_title_case_positions_held_ends_education(self):
@@ -493,6 +503,59 @@ class AuthoritativeRowReaderTests(unittest.TestCase):
                 # the empty result below is the education guard at work.
                 self.assertEqual(len(self.rows([row])), 1)
                 self.assertEqual(self.rows(["Education", row]), [])
+
+    def test_an_institution_row_without_a_job_is_education(self):
+        # A school row need not name a qualification word the list holds. Only a
+        # job title in the row makes an institution an employer.
+        for row in ("Jan 2014 - Dec 2018 | Anna University | B.Tech Computer Science",
+                    "Jan 2014 - Dec 2018 | University of Malaya | B.A Economics",
+                    "Jan 2014 - Dec 2018 | Delhi University | LLB",
+                    "Jan 2008 - Dec 2012 | Sekolah Menengah Kebangsaan Contoh | Kuala Lumpur",
+                    "Jan 2013 - Dec 2014 | Fabrikam College | BA",
+                    "Jan 2013 - Dec 2014 | Fabrikam College | Kuala Lumpur"):
+            with self.subTest(row=row):
+                self.assertEqual(len(self.rows([row])), 1)
+                self.assertEqual(self.rows(["EDUCATION", row]), [])
+
+    def test_a_degree_row_is_set_aside_even_without_an_institution(self):
+        for row in ("Jan 2014 - Dec 2018 | Northwind Online | B.Tech Computer Science",
+                    "Jan 2014 - Dec 2018 | Contoso Learning | LLB",
+                    "Jan 2014 - Dec 2018 | Contoso Learning | B.Com",
+                    "Jan 2014 - Dec 2018 | Contoso Learning | MBBS"):
+            with self.subTest(row=row):
+                self.assertEqual(len(self.rows([row])), 1)
+                self.assertEqual(self.rows(["EDUCATION", row]), [])
+
+    def test_an_institution_row_naming_a_job_is_kept_inside_education(self):
+        for row, company in (("Jan 2017 - Dec 2018 | Contoso Academy | Trainer", "Contoso Academy"),
+                             ("Jan 2017 - Dec 2018 | Northwind University | Research Assistant",
+                              "Northwind University")):
+            with self.subTest(row=row):
+                self.assertEqual([r["company"] for r in self.rows(["EDUCATION", row])], [company])
+
+    def test_a_line_mentioning_positions_inside_education_does_not_end_it(self):
+        # "Positions", "appointments" and "assignments" end the section only as the
+        # whole heading.
+        for line in ("Leadership Positions", "Key Assignments", "Student Appointments"):
+            with self.subTest(line=line):
+                self.assertEqual(self.rows([
+                    "EDUCATION",
+                    line,
+                    "Jan 2014 - Dec 2018 | Anna University | Bachelor of Engineering",
+                ]), [])
+        for line in ("Positions Held", "Appointments", "Assignments"):
+            with self.subTest(line=line):
+                rows = self.rows([
+                    "EDUCATION",
+                    "2003-2006 | Northwind University | Bachelor",
+                    line,
+                    "Jan 2020 - Present | Acme Corp | Engineer",
+                ])
+                self.assertEqual([r["company"] for r in rows], ["Acme Corp"])
+
+    def test_the_audit_and_the_reader_share_one_separator_rule(self):
+        from cvstudio_cv_fidelity import _SEPARATOR_ONLY_COMPANY_RE
+        self.assertIs(_SEPARATOR_ONLY_COMPANY_RE, reconcile._CV_SEPARATOR_ONLY_RE)
 
     def test_an_institution_on_its_own_line_does_not_end_education(self):
         row = "2003-2006 | Bachelor of Science | Australia"

@@ -299,7 +299,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Year-first dates and a reported employer shortfall — v24.6.411–v24.6.415, UNMERGED.**
+- **Year-first dates and a reported employer shortfall — v24.6.411–v24.6.416, UNMERGED.**
   Starts at merged master `960a086`. A real formatted CV came back missing the
   candidate's three most recent employers, including his current job, with two
   education rows rendered as jobs and every employer name replaced by the table
@@ -313,7 +313,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   fidelity audit, which found zero source employers here because it only reads
   Dates/Organization/Role tables, now also reads explicit "Company:" labels, so a
   shortfall is reported rather than shipped. See
-  `cv_studio_v24_6_415_year_first_dates_employer_safety_qa_report.md`.
+  `cv_studio_v24_6_416_year_first_dates_employer_safety_qa_report.md`.
   v24.6.412 corrects eight review findings, four of them introduced by v24.6.411
   and two of those actively harmful: the date rewrite matched "YYYY Month" anywhere
   in the document, so it reworded the candidate's own prose ("figures for 2023 may
@@ -355,7 +355,13 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   education guard sets aside only rows naming a qualification. It also reverts a
   v24.6.413 change that dropped "-" placeholder rows from the rebuilt work
   history, which master kept. Replay of 404 suite inputs: 0 changes vs master or
-  v24.6.414 outside this work's tests. Still open: the branch's earlier commits
+  v24.6.414 outside this work's tests. v24.6.416 corrects ten more, four of them
+  regressions from v24.6.415's narrowing: institution rows under Education are
+  set aside again unless they name a job, separator-only companies (":", "│")
+  are refused again while "-" placeholders stay, "Leadership Positions" no
+  longer ends Education, and the label scan reads every work-history span
+  instead of the first heading it finds. Replay of 473 suite inputs: 0 changes
+  vs master or v24.6.415 outside this work's tests. Still open: the branch's earlier commits
   contain real employer names from the reported CV, so merge with Squash and
   merge (or rewrite history, owner's call); label-style rows are reported by the
   audit but not reconstructed by the reconciler.

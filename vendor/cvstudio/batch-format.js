@@ -372,10 +372,7 @@ async function runBatch() {
       var batchLabelLevels = Array.isArray(pData.bullet_levels) ? pData.bullet_levels : null;
       // In a batch each file's toast replaces the last, so the warning is also
       // kept on the file's own row, where it stays until that file is removed.
-      // One wording for single and batch runs: cvParseWarningText (cv-format.js)
-      // keeps employer names out of a Blind-mode warning. It is only needed when
-      // there is a warning to word.
-      bf.parseWarning = (pData && pData.warning) ? cvParseWarningText(pData, isBlind) : '';
+      bf.parseWarning = batchParseWarningText(pData, isBlind);
       if (bf.parseWarning) showToast(bf.file.name + ': ' + bf.parseWarning, 'warn');
       bf.cost += responseCost(pData, route.model, route.provider);
       bf.usage = mergeUsageClient(bf.usage, pData.usage || {});
@@ -615,4 +612,16 @@ async function uploadHeldBatchFile(id) {
   var held = bf._jaHeld;
   bf._jaHeld = null;
   await batchAutoUploadFile(bf, held.blob, held.fname, held.cvData, held.displayName, held.isBlind);
+}
+
+// The /parse warning for a batch row. The wording is cvParseWarningText's
+// (cv-format.js), so single and batch runs cannot drift apart on what Blind mode
+// may show. If that module is not loaded the row still finishes: the warning is
+// kept as it is, or in Blind mode replaced by a notice that names no one, since
+// the source check's warning can list the employers the blind step hides.
+function batchParseWarningText(data, blind) {
+  if (typeof cvParseWarningText === 'function') return cvParseWarningText(data, blind);
+  var text = String((data && data.warning) || '').trim();
+  if (!text) return '';
+  return blind ? 'The source check flagged this CV. Compare it with the original CV before sending.' : text;
 }

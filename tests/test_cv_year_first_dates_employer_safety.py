@@ -655,6 +655,62 @@ class LabelledCompanyFidelityTests(unittest.TestCase):
                 ]}, "")
                 self.assertEqual(report["employers"]["unnamed"], ["Apr 2019 to Mar 2022"])
 
+    def test_a_value_line_inside_a_job_does_not_end_the_label_scan(self):
+        # The section list is compared on letters alone, so these read as the bare
+        # headings "Training", "Languages" and a referees heading.
+        # The last two have no figures, and their letters alone spell a heading on
+        # the section list ("courses training", "awards achievements"): only the
+        # value after the colon marks them as part of the job.
+        for line in ("Training: 2019", "Languages: 3", "Reference No: 4411",
+                     "Reference Number: A-12", "Ref. Code: X7", "Certifications: AWS SAA",
+                     "Courses: Training", "Awards: Achievements"):
+            with self.subTest(line=line):
+                report = self._label_report([
+                    "WORK EXPERIENCE", "Company: Acme Sdn Bhd", line, "Company: Beta Bhd",
+                ])
+                self.assertEqual(report["employers"]["missing"], ["Beta Bhd"])
+
+    def test_a_bare_heading_still_ends_the_label_scan(self):
+        for line in ("Training", "Languages:", "Awards", "Hobbies & Interests", "AWARDS 2021"):
+            with self.subTest(line=line):
+                report = self._label_report([
+                    "WORK EXPERIENCE", "Company: Acme Sdn Bhd", line, "Company: Beta Bhd",
+                ])
+                self.assertEqual(report["employers"]["missing"], [])
+
+    def test_an_early_background_heading_does_not_hide_the_work_history(self):
+        report = self._label_report([
+            "PROFESSIONAL BACKGROUND", "Ten years in banking.", "KEY SKILLS", "Python",
+            "WORK EXPERIENCE", "Company: Acme Sdn Bhd", "Company: Beta Holdings", "EDUCATION",
+        ])
+        self.assertEqual(report["employers"]["missing"], ["Beta Holdings"])
+
+    def test_a_background_heading_alone_starts_no_label_scan(self):
+        # "Career Background" is a profile heading as often as a work heading. With
+        # no work-history heading the scan makes no claim at all.
+        for heading in ("Career Background", "PROFESSIONAL BACKGROUND"):
+            with self.subTest(heading=heading):
+                report = self._label_report([heading, "Company: Contoso Consulting", "Summary text."])
+                self.assertEqual(report["employers"]["missing"], [])
+                self.assertEqual(report["employers"]["source"], 0)
+
+    def test_every_work_history_span_is_read(self):
+        # A second work-history heading after another section is read too.
+        report = self._label_report([
+            "Employment History", "Company: Acme Sdn Bhd", "Skills", "Python",
+            "Previous Employment", "Company: Beta Holdings", "References", "Company: Gamma Bhd",
+        ])
+        self.assertEqual(report["employers"]["missing"], ["Beta Holdings"])
+
+    def test_a_name_in_the_label_cell_is_never_a_column_header(self):
+        for name in ("Department of Information", "Department of State", "Total",
+                     "Department of Statistics"):
+            for line in ("Company: " + name, "Company | " + name):
+                with self.subTest(line=line):
+                    self.assertEqual(fidelity._source_labelled_companies(line), [name])
+        # Header words in the label's own cell are still a name.
+        self.assertEqual(fidelity._source_labelled_companies("Company: Position Held"), ["Position Held"])
+
     def test_the_audit_is_safe_on_junk(self):
         for parsed in (None, {}, {"work_experiences": None}, {"work_experiences": [None]}):
             with self.subTest(parsed=parsed):

@@ -144,9 +144,23 @@ function batchContext(files) {
   // that could drift and start naming employers in Blind mode. It is called only
   // when there is a warning, so a run without one needs nothing from cv-format.js
   // -- a harness that loads batch-format.js alone still runs clean files.
-  assert.ok(/bf\.parseWarning = \(pData && pData\.warning\) \? cvParseWarningText\(pData, isBlind\) : '';/.test(batchFormat));
-  assert.ok(!/function\s+\w*ParseWarningText/.test(batchFormat), 'batch keeps no copy of its own');
+  assert.ok(/bf\.parseWarning = batchParseWarningText\(pData, isBlind\);/.test(batchFormat));
+  const wrapper = fnFrom(batchFormat, 'batchParseWarningText');
+  assert.ok(/if \(typeof cvParseWarningText === 'function'\) return cvParseWarningText\(data, blind\);/.test(wrapper),
+    'batch defers to the single-CV wording when it is loaded');
+  assert.ok(!/fidelity_check/.test(wrapper), 'batch keeps no copy of the Blind-mode rule');
   assert.strictEqual((cvFormat.match(/function cvParseWarningText\(/g) || []).length, 1);
+  // Loaded on its own, the wrapper still words a warning and never names anyone
+  // in Blind mode.
+  const alone = {String};
+  vm.createContext(alone);
+  vm.runInContext(wrapper, alone);
+  const named = {warning: 'Employer(s) missing: Beta Holdings', degraded_reason: 'fidelity_check'};
+  assert.strictEqual(alone.batchParseWarningText(named, false), named.warning);
+  const blindAlone = alone.batchParseWarningText(named, true);
+  assert.ok(blindAlone && !blindAlone.includes('Beta'));
+  assert.strictEqual(alone.batchParseWarningText({}, true), '');
+  assert.strictEqual(alone.batchParseWarningText(null, false), '');
 }
 {
   // The row is rebuilt on every progress update of every other file, and a
@@ -188,7 +202,7 @@ function batchContext(files) {
   assert.strictEqual((flow.match(/uploadToJobAdder\(\)/g) || []).length, 1);
 }
 
-async function batchRun(pData, mode) {
+async function batchRun(pData, mode, withoutCvFormat) {
   const uploads = [];
   const nodes = {};
   const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -222,7 +236,7 @@ async function batchRun(pData, mode) {
   vm.createContext(c);
   vm.runInContext(batchFormat, c);
   // The page loads cv-format.js too; its warning helper is the one batch uses.
-  vm.runInContext(fnFrom(cvFormat, 'cvParseWarningText'), c);
+  if (!withoutCvFormat) vm.runInContext(fnFrom(cvFormat, 'cvParseWarningText'), c);
   c.batchSetProgress = () => {}; c.updateBatchSummary = () => {};
   if (mode) c._batchMode = mode;
   c._batchFiles = [{id: 'f1', file: {name: 'f1.pdf', arrayBuffer: async () => new ArrayBuffer(1)}, status: 'pending'}];
@@ -272,6 +286,16 @@ const batchUploadChecks = (async () => {
     assert.strictEqual(bf.status, 'done-blind');
     assert.ok(bf.parseWarning && !bf.parseWarning.includes('Beta'), 'blind batch names no employer');
     c.renderBatchList();
+  }
+  // batch-format.js loaded on its own: a warned file still finishes, is still
+  // held from auto-upload, and in Blind mode names no one.
+  {
+    const {c, uploads} = await batchRun({data: candidate, degraded_reason: 'fidelity_check',
+      warning: 'Employer(s) present in the CV but missing from the parsed result: Beta Holdings'}, 'blind', true);
+    const bf = c._batchFiles[0];
+    assert.strictEqual(bf.status, 'done-blind', 'no ReferenceError marks the file failed');
+    assert.ok(bf.parseWarning && !bf.parseWarning.includes('Beta'));
+    assert.strictEqual(uploads.length, 0);
   }
   // Formatting batch keeps the detail.
   {

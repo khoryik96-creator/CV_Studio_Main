@@ -28,6 +28,7 @@ from cvstudio_cv_normalize import (
     _cv_token_overlap_score,
 )
 from cvstudio_cv_reconcile import (
+    _CV_SEPARATOR_ONLY_RE,
     _WORK_HISTORY_HEADING_RE,
     _WORK_HISTORY_STOP_WORDS,
     _extract_authoritative_work_rows,
@@ -82,10 +83,13 @@ _SECTION_STOP_HEADING_RE = re.compile(
 # line that is one of the other names CVs give it -- "Working Experience",
 # "Employment Record", "Relevant Experience". Only the label scan starts here; the
 # bullet count keeps the shared heading alone, so its scope does not change.
+#
+# "Professional Background" and "Career Background" are not here: CVs use them
+# for the profile summary near the top as often as for the work history.
 _LABEL_SCAN_START_RE = re.compile(
     r"^\s*(?:(?:WORK(?:ING)?|EMPLOYMENT|CAREER|PROFESSIONAL|RELEVANT|PREVIOUS|PAST|JOB|INDUSTRY)"
     r"\s+(?:EXPERIENCES?|HISTORY|RECORDS?)"
-    r"|(?:PROFESSIONAL|CAREER|EMPLOYMENT)\s+BACKGROUND|EMPLOYMENT\s+DETAILS"
+    r"|EMPLOYMENT\s+BACKGROUND|EMPLOYMENT\s+DETAILS"
     r"|(?:PREVIOUS|PAST)\s+EMPLOYMENTS?|EMPLOYMENT|POSITIONS\s+HELD)"
     r"\s*(?:\([^)]*\))?\s*:?\s*$",
     re.I,
@@ -113,10 +117,13 @@ _LABEL_SECTION_STOP_RE = re.compile(
 # so reading on into it reports a referee's "Company:" as a missing employer.
 # These headings come in more shapes than the pattern above holds -- "REFERENCE
 # CONTACTS", "Professional References", "Referee: Mr Tan" -- so any line that
-# opens with the word, optionally after one qualifier, ends the scan.
+# opens with the word, optionally after one qualifier, ends the scan -- except a
+# reference NUMBER inside a job ("Reference No: 4411", "Ref. Code: X"), which is
+# part of that job.
 _LABEL_SCAN_REFERENCE_RE = re.compile(
     r"^\s*(?:(?:PROFESSIONAL|CHARACTER|PERSONAL|EMPLOYMENT|EMPLOYER|WORK|BUSINESS|CAREER|"
-    r"ACADEMIC|FORMER|PREVIOUS|KEY)\s+)?(?:REFERENCES?|REFEREES?)\b",
+    r"ACADEMIC|FORMER|PREVIOUS|KEY)\s+)?(?:REFERENCES?|REFEREES?)\b"
+    r"(?!\s*(?:no\b|nos\b|number|num\b|code|id\b|#))",
     re.I,
 )
 _LABEL_SCAN_PERSONAL_RE = re.compile(
@@ -159,7 +166,14 @@ def _label_scan_stops(line):
         or _LABEL_SCAN_PERSONAL_RE.match(text)
     ):
         return True
-    return _cv_source_boundary_key(re.sub(r"[\s:]+$", "", text)) in _LABEL_SCAN_BOUNDARY_KEYS
+    # The section list is compared on letters alone, so a line carrying a value
+    # -- "Training: 2019", "Languages: 3" -- would read as the bare heading. A
+    # heading has nothing after its colon. Figures alone do not rule a heading
+    # out: "AWARDS 2021" still ends the scan, because reading on into another
+    # section is what reports a false missing employer.
+    if re.search(r"[:\uff1a]\s*\S", text):
+        return False
+    return _cv_source_boundary_key(text) in _LABEL_SCAN_BOUNDARY_KEYS
 
 
 # A CV that writes its employers as labelled cells -- "Company: Acme Sdn Bhd" --
@@ -177,9 +191,13 @@ def _label_scan_stops(line):
 # In the same cell a colon is required. An earlier draft also accepted a bare
 # hyphen, which turned a wrapped sentence beginning "Company-wide rollout of the
 # new platform" into the employer candidate "wide rollout of the new platform".
+#
+# The two forms are captured separately. Only a value in the NEXT cell can be a
+# column header ("Company | Position Held | Duration"); a value in the label's own
+# cell is always the name.
 _LABELLED_COMPANY_RE = re.compile(
     r"(?:^|\|)[ \t]*compan(?:y|ies)(?:[ \t]+name)?[ \t]*"
-    r"(?:[:\uff1a][ \t]*(?:\|[ \t]*)?|\|[ \t]*)([^|\r\n]+)",
+    r"(?:(?:[:\uff1a][ \t]*)?\|[ \t]*([^|\r\n]+)|[:\uff1a][ \t]*([^|\r\n]+))",
     re.I | re.M,
 )
 
@@ -194,22 +212,24 @@ _LABELLED_COMPANY_TRAILER_RE = re.compile(
 
 # The next column's header, read as a value when the row is a table's header row
 # ("Company | Position Held | Duration", "Company Name | Period of Employment").
-# A value made up entirely of header words names no employer. Every word has to
-# be one, so an employer that merely contains one -- "Department of Statistics",
-# "Position Partners Sdn Bhd", "Title Insurance Co" -- is still read.
+# A next-cell value made up entirely of header words names no employer. Every
+# word has to be one, so an employer that merely contains one -- "Department of
+# Statistics", "Position Partners Sdn Bhd", "Title Insurance Co" -- is still read.
+# Words that make up real employer names on their own -- "Total", "Department of
+# State", "Department of Information" -- are deliberately not in the list.
 _LABEL_TABLE_HEADER_WORDS = frozenset({
     "industry", "industries", "sector", "position", "positions", "held", "title", "titles",
     "job", "jobs", "designation", "designations", "role", "roles", "rank", "grade", "level",
     "post", "period", "duration", "tenure", "date", "dates", "from", "to", "start",
     "started", "end", "ended", "year", "years", "month", "months", "since", "until",
     "employment", "employed", "department", "division", "location", "country", "city",
-    "state", "address", "salary", "pay", "remuneration", "compensation", "package",
+    "address", "salary", "pay", "remuneration", "compensation", "package",
     "description", "duties", "duty", "responsibilities", "responsibility", "reason",
     "reasons", "leaving", "left", "name", "company", "companies", "employer", "employers",
     "organisation", "organization", "organisations", "organizations", "type", "nature",
     "business", "status", "supervisor", "superior", "reporting", "report", "reports",
     "manager", "achievements", "remarks", "remark", "notes", "contact", "number",
-    "details", "detail", "information", "info", "total", "experience", "current", "last",
+    "details", "detail", "experience", "current", "last",
     "previous", "drawn", "basic", "monthly", "annual", "expected", "notice", "currency",
 })
 _LABEL_HEADER_FILLER_WORDS = frozenset({"of", "and", "the", "for", "in", "at", "no"})
@@ -226,10 +246,10 @@ def _looks_like_column_header(name):
 def _source_labelled_companies(cv_text):
     """Employer names the source labels outright with a "Company:" prefix."""
     names = []
-    for raw in _LABELLED_COMPANY_RE.findall(str(cv_text or "")):
-        name = _LABELLED_COMPANY_TRAILER_RE.sub("", str(raw or ""))
+    for next_cell, own_cell in _LABELLED_COMPANY_RE.findall(str(cv_text or "")):
+        name = _LABELLED_COMPANY_TRAILER_RE.sub("", str(next_cell or own_cell or ""))
         name = re.sub(r"\s+", " ", name).strip(" .,;:|-")
-        if _looks_like_column_header(name):
+        if next_cell and _looks_like_column_header(name):
             continue
         # A label with nothing after it, or a whole paragraph, is not a name.
         if name and 2 <= len(name) <= 120:
@@ -390,8 +410,31 @@ def _experience_section_text(cv_text, stops=None, starts=None):
 
 
 def _label_scan_section(cv_text):
-    """The work-history text the labelled-employer scan reads, or None."""
-    return _experience_section_text(cv_text, stops=_label_scan_stops, starts=_label_scan_starts)
+    """The work-history text the labelled-employer scan reads, or None.
+
+    Every span from a start heading to the next stop is read, not only the first.
+    A heading earlier in the CV that also reads as a work-history start must not
+    leave the real work history unread.
+    """
+    spans = []
+    current = None
+    for line in str(cv_text or "").splitlines():
+        text = line.strip()
+        if _label_scan_starts(text):
+            if current is None:
+                current = []
+            continue
+        if current is not None and _label_scan_stops(text):
+            spans.append(current)
+            current = None
+            continue
+        if current is not None:
+            current.append(line)
+    if current is not None:
+        spans.append(current)
+    if not spans:
+        return None
+    return "\n".join("\n".join(span) for span in spans)
 
 
 def _count_source_bullets(cv_text, section=_UNSET):
@@ -405,15 +448,9 @@ def _count_source_bullets(cv_text, section=_UNSET):
     return sum(1 for line in section.splitlines() if _SOURCE_BULLET_RE.match(line))
 
 
-# A parsed company that is nothing but a cell separator -- the table pipe the
-# extractor joins cells with, in its ASCII, full-width and box-drawing forms, or
-# the label colon -- is the separator read instead of the name beside it. A dash,
-# a dot or "N/A" is different: a CV writes those on purpose for a career break or
-# freelance work, and the parse keeping one is not a fault.
-_SEPARATOR_CHARS = "|\uff5c\u2502\u00a6:\uff1a"
-_SEPARATOR_ONLY_COMPANY_RE = re.compile(
-    r"^\s*[" + _SEPARATOR_CHARS + r"](?:[\s" + _SEPARATOR_CHARS + r"]*)$"
-)
+# A parsed company that is nothing but a cell separator. One definition, shared
+# with the table reader; see _CV_SEPARATOR_ONLY_RE.
+_SEPARATOR_ONLY_COMPANY_RE = _CV_SEPARATOR_ONLY_RE
 
 
 def evaluate_cv_fidelity(parsed, cv_text):
@@ -430,10 +467,12 @@ def evaluate_cv_fidelity(parsed, cv_text):
     parsed_emps = _parsed_employers(parsed)
     missing = _missing_source_employers(source_emps, parsed_emps)
 
-    # A parsed company that is punctuation only -- "|", "-", ":" -- is the cell
-    # separator the model picked up instead of the name beside it. The finished CV
-    # shows an empty employer, which looks like a layout fault rather than a
-    # dropped field, so it is named here.
+    # A parsed company that is only a separator -- "|", ":" and their wide forms --
+    # is the cell separator the model picked up instead of the name beside it. The
+    # finished CV shows an empty employer, which looks like a layout fault rather
+    # than a dropped field, so it is named here. A "-" or "N/A" is NOT reported: a
+    # CV writes those on purpose for a career break, and reporting them held a
+    # correct CV's auto-upload.
     #
     # Walked per work experience, not per flattened role: one employer with three
     # roles lost one company field, and counting the roles said "3 work entries".
