@@ -3377,6 +3377,136 @@
    "note": "states the candidate's pay"
   },
   {
+   "id": "P1-remove-17",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Drawing a CTC of 12 LPA."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-18",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Salary 2000."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-19",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Salary RM８０００."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-20",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "月薪RM8000 salary"
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-21",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "RM16,000 expected salary."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-22",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Expecting 18 LPA."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-23",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "12 LPA CTC."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-24",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Promoted to Sr. Manager with current salary RM12k."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-25",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Salary is negotiable."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-26",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Willing to negotiate the salary."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-27",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Negotiable salary."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-28",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Asking salary on request."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-29",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Salary ٢٠٠٠٠."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
    "id": "P1-keep-0",
    "rule": "P1",
    "kind": "summary_salary",
@@ -3557,6 +3687,210 @@
    "note": "work, not the candidate's pay"
   },
   {
+   "id": "P1-keep-15",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Negotiated compensation packages for 40 executive hires."
+   ],
+   "expect": [
+    "Negotiated compensation packages for 40 executive hires."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-16",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Ensured compliance with minimum wage legislation."
+   ],
+   "expect": [
+    "Ensured compliance with minimum wage legislation."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-17",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Owned salary range benchmarking across business units."
+   ],
+   "expect": [
+    "Owned salary range benchmarking across business units."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-18",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Redesigned the current compensation structure for the group."
+   ],
+   "expect": [
+    "Redesigned the current compensation structure for the group."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-19",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Delivered the current release package to 3 clients."
+   ],
+   "expect": [
+    "Delivered the current release package to 3 clients."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-20",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Previous pay history audits for 12 plants."
+   ],
+   "expect": [
+    "Previous pay history audits for 12 plants."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-21",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Maintained ISO 9001 certification and payroll salary processing."
+   ],
+   "expect": [
+    "Maintained ISO 9001 certification and payroll salary processing."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-22",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Earned recognition for scaling the platform to 10k users."
+   ],
+   "expect": [
+    "Earned recognition for scaling the platform to 10k users."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-23",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed allowances for 3000 expatriates."
+   ],
+   "expect": [
+    "Managed allowances for 3000 expatriates."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-24",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Grew commissions revenue to RM2,000,000 for the bank."
+   ],
+   "expect": [
+    "Grew commissions revenue to RM2,000,000 for the bank."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-25",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Negotiated compensation of 400 executives."
+   ],
+   "expect": [
+    "Negotiated compensation of 400 executives."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-26",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Saved RM 2M in salary costs."
+   ],
+   "expect": [
+    "Saved RM 2M in salary costs."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-27",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Cut RM 500k from the salary budget."
+   ],
+   "expect": [
+    "Cut RM 500k from the salary budget."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-28",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Designed target compensation plans for sales teams."
+   ],
+   "expect": [
+    "Designed target compensation plans for sales teams."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-29",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Promoted to Sr. Manager at a regional bank."
+   ],
+   "expect": [
+    "Promoted to Sr. Manager at a regional bank."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-30",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Holds a B.Sc. in Computer Science."
+   ],
+   "expect": [
+    "Holds a B.Sc. in Computer Science."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-31",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Negotiated compensation of 40 senior roles."
+   ],
+   "expect": [
+    "Negotiated compensation of 40 senior roles."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
    "id": "P1-sentence",
    "rule": "P1",
    "kind": "summary_salary",
@@ -3567,6 +3901,41 @@
     "Senior engineer with 11 years in banking. Open to hybrid work."
    ],
    "note": "only the pay sentence goes"
+  },
+  {
+   "id": "P1-clause",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Holds a B.Sc. Computer Science degree; expected salary RM8k."
+   ],
+   "expect": [
+    "Holds a B.Sc. Computer Science degree."
+   ],
+   "note": "a semicolon clause goes, the abbreviation does not split the sentence"
+  },
+  {
+   "id": "P1-clauses-all",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Current salary of MYR 12,000; salary expectations are negotiable."
+   ],
+   "expect": [],
+   "note": "both clauses are pay"
+  },
+  {
+   "id": "P1-abbreviation",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Promoted to Sr. Manager with current salary RM12k.",
+    "Joined in Sept. 2024 as Lead Engineer."
+   ],
+   "expect": [
+    "Joined in Sept. 2024 as Lead Engineer."
+   ],
+   "note": "no fragment such as 'Promoted to Sr.' is left"
   },
   {
    "id": "P1-mixed",
@@ -3584,12 +3953,55 @@
    "note": ""
   },
   {
+   "id": "P1-non-string",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    0,
+    false,
+    null,
+    ""
+   ],
+   "expect": [
+    0,
+    false
+   ],
+   "note": "non-text items are kept as they were; empty ones dropped"
+  },
+  {
    "id": "P1-empty",
    "rule": "P1",
    "kind": "summary_salary",
    "bullets": [],
    "expect": [],
    "note": ""
+  },
+  {
+   "id": "P1-text-lines",
+   "rule": "P1",
+   "kind": "summary_salary_text",
+   "text": "- **Senior engineer** with 11 years.\n- Expected salary RM16,000.\n* Built pipelines. Salary: RM 8k.\n\nNot a bullet line.",
+   "expect": "- **Senior engineer** with 11 years.\n* Built pipelines.\n\nNot a bullet line.",
+   "removed": 2,
+   "note": "line markers and other lines are kept"
+  },
+  {
+   "id": "P1-text-clean",
+   "rule": "P1",
+   "kind": "summary_salary_text",
+   "text": "- Built pipelines.\n- Led a team of 12.",
+   "expect": "- Built pipelines.\n- Led a team of 12.",
+   "removed": 0,
+   "note": ""
+  },
+  {
+   "id": "P1-text-only-pay",
+   "rule": "P1",
+   "kind": "summary_salary_text",
+   "text": "- Expected salary RM16,000.\n- Salary: RM 8k.",
+   "expect": "",
+   "removed": 2,
+   "note": "every line is pay"
   }
  ]
 }

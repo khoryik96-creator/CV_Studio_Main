@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.419"
+_INSTALL_RECEIPT_VERSION = "v24.6.420"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -346,7 +346,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.419"
+_CVSTUDIO_VERSION = "v24.6.420"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -1722,6 +1722,7 @@ from cvstudio_cv_normalize import (
     _cv_pretranslate_iso_dates,
     _cv_pretranslate_year_first_month_names,
     _cv_strip_pay_from_summary,
+    _cv_strip_pay_from_summary_text,
     _cv_lang_alias_re,
     _cv_match_key,
     _cv_parse_backend_timeout_seconds,
@@ -9143,6 +9144,10 @@ def generate_ai():
             return _ai_crawler_locked_response()
         anonymized_summary = feature == "summary_anonymized"
         summary_source_text = str(body.get("source_cv_text") or "")
+        # The CV Summary callers ask for the candidate's pay to be removed from the
+        # provider's text here, the one place it is filtered, before the browser
+        # shows it or it reaches a Summary box.
+        strip_candidate_pay = body.get("strip_candidate_pay") is True
 
         api_key = _resolve_request_api_key(body, "main")
         prompt = (body.get("prompt") or "").strip()
@@ -9235,7 +9240,20 @@ def generate_ai():
                     attempted=True,
                 ))
                 return jsonify(out), 500
+        pay_removed = 0
+        if strip_candidate_pay:
+            summary_text = "".join(
+                str(block.get("text") or "")
+                for block in data.get("content", [])
+                if isinstance(block, dict)
+            )
+            filtered_text, pay_removed = _cv_strip_pay_from_summary_text(summary_text)
+            if pay_removed:
+                data = dict(data)
+                data["content"] = [{"type": "text", "text": filtered_text}]
         out = {"ok": True, "content": data.get("content", []), "usage": usage, "model": model, "provider": llm_provider}
+        if strip_candidate_pay:
+            out["summary_pay_removed"] = pay_removed
         if warning:
             out["warning"] = warning
         out.update(_llm_response_cost_fields(model, usage, llm_provider))
@@ -11916,6 +11934,11 @@ def _insert_summary_into_docx_bytes(
     # Salary never reaches the Summary box, whichever route the bullets took.
     bullets = _summary_docx_bullets(_cv_strip_pay_from_summary(summary_bullets))
     if not bullets:
+        if _summary_docx_bullets(summary_bullets):
+            raise ValueError(
+                "The CV Summary only stated the candidate's pay, which is never written "
+                "into a CV. Generate the summary again."
+            )
         raise ValueError("No CV Summary bullets provided")
     try:
         _validate_zip_payload(file_bytes, "DOCX document")
@@ -14179,6 +14202,11 @@ def blind_cv():
 
         api_key = _resolve_request_api_key(body, "main")
         cv_data = _blind_prepare_summary_bullets(body.get("cv_data"))
+        # A source About / Summary section promoted into the box can state the
+        # candidate's pay. It is removed before the provider sees it, so the
+        # blinded preview and the Word file carry the same summary.
+        if isinstance(cv_data, dict) and isinstance(cv_data.get("summary_bullets"), list):
+            cv_data["summary_bullets"] = _cv_strip_pay_from_summary(cv_data["summary_bullets"])
         model   = body.get("model") or "claude-sonnet-4-6"
         llm_provider = (body.get("provider") or "anthropic").strip().lower()
         neutralize_candidate_gender = body.get("neutralize_candidate_gender") is True

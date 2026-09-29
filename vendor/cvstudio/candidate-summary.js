@@ -42,45 +42,13 @@ function getSummaryFocusPrompt() {
   return map[_summaryFocus] || '';
 }
 function boldSafeSummary(text) { return esc(text || '').replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>'); }
-// ── Salary never reaches the Summary box ────────────────────────────────────
-// A mirror of _cv_strip_pay_from_summary in cvstudio_cv_normalize.py: the same
-// patterns, run against the same "summary_salary" cases in
-// tests/fixtures/cv_guardrail_cases.json. The server applies it again before a
-// Word file is written, so this copy keeps the preview and the copied text clean.
-function cvSentenceStatesPay(sentence) {
-  // Kept inside the function so it can be loaded on its own, like its neighbours.
-  var payWord = /\b(?:salar(?:y|ies)|remunerations?|compensations?|wages?|ctc|take[\s-]?home(?:\s+pay)?|epf|kwsp)\b/i;
-  var payWordWithAmount = /\b(?:bonus(?:es)?|commissions?|allowances?|earn(?:s|ed|ing)?|(?:monthly|annual|basic|base|gross|net|hourly)\s+(?:pay|income))\b/i;
-  var ownPay = /\b(?:expected|expecting|current|present|last[\s-]+drawn|drawn|asking|desired|target|previous|minimum|discuss|negotiat\w*|open\s+to)\s+(?:\w+\s+){0,2}?(?:salar(?:y|ies)|remuneration|compensation|pay|package|ctc|wages?)\b|\b(?:salar(?:y|ies)|remuneration|compensation|pay|package|ctc)\s+(?:expectations?|expected|requirements?|negotiable|range|details?|history|of\s+(?:rm|myr|sgd|usd|\$|s\$|us\$))/i;
-  var headcount = /\d[\d,.]*\+?\s*(?:employees|staff|headcounts?|workers|people|users|clients|customers|candidates|members|records|transactions|accounts|students)\b/gi;
-  var amount = /(?:\bRM|\bMYR|\bSGD|S\$|\bUSD|US\$|\$|€|£|₹|\bINR|\bAUD|A\$|\bHKD|HK\$|\bIDR|\bRp|\bPHP|₱|\bTHB|฿|\bCNY|\bRMB|¥|\bJPY|\bEUR|\bGBP)\s?\d|\d[\d,.]*\s?(?:RM|MYR|SGD|USD|INR|AUD|HKD|IDR|PHP|THB|CNY|RMB|JPY|EUR|GBP)\b|\b\d[\d,.]*\s?k\b|\b\d{1,3}(?:,\d{3})+\b|\b(?!(?:19|20)\d{2}\b)\d{4,}\b|\b\d[\d,.]*\s*(?:per|a|\/)\s*(?:month|mth|annum|year|yr|hour)\b/i;
-  var text = String(sentence || '');
-  if (ownPay.test(text)) return true;
-  var hasAmount = amount.test(text.replace(headcount, ' '));
-  if (!hasAmount) return false;
-  return payWord.test(text) || payWordWithAmount.test(text);
-}
-function cvSummaryStripPay(bullets) {
-  if (!Array.isArray(bullets)) return bullets;
-  var sentenceSplit = /(?<=[.!?])\s+(?=[\x22\x27(*A-Z0-9])/;
-  var kept = [];
-  bullets.forEach(function(bullet){
-    var text = String(bullet == null ? '' : bullet).trim();
-    if (!text) return;
-    var sentences = text.split(sentenceSplit).filter(function(s){ return s.trim(); });
-    var remaining = sentences.filter(function(s){ return !cvSentenceStatesPay(s); });
-    if (remaining.length === sentences.length) kept.push(bullet);
-    else if (remaining.length) kept.push(remaining.map(function(s){ return s.trim(); }).join(' '));
-  });
-  return kept;
-}
 function summaryBulletLines(raw) {
   raw = String(raw || '').replace(/```(?:text|markdown|md)?/gi,'').replace(/```/g,'').trim();
   var lines = raw.split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
   var bulletLines = lines.filter(function(l){ return /^[-•*]\s+/.test(l); });
-  return cvSummaryStripPay((bulletLines.length ? bulletLines : lines)
+  return (bulletLines.length ? bulletLines : lines)
     .map(function(l){ return l.replace(/^[-•*]\s+/, '').trim(); })
-    .filter(Boolean))
+    .filter(Boolean)
     .slice(0, 20);
 }
 function renderSummaryText(raw) {
@@ -259,7 +227,8 @@ async function requestFormattingSummary(raw, route, detailPreference) {
       model:route.model,
       prompt:cvSummaryPrompt(raw, cvSummaryModifierForPreference(detailPreference), ''),
       max_tokens:1000,
-      use_tools:false
+      use_tools:false,
+      strip_candidate_pay:true
     })
   }, 180000);
   var data = await response.json().catch(function(){ return {}; });
@@ -269,6 +238,9 @@ async function requestFormattingSummary(raw, route, detailPreference) {
   }
   var rawSummary = aiText(data);
   var bullets = summaryBulletLines(rawSummary);
+  // The server removed every line as the candidate's pay. The call succeeded, so
+  // this is not a provider failure and is not recorded as one.
+  if (!bullets.length && data.summary_pay_removed > 0) throw new Error('The CV Summary only described the candidate\'s pay, which is never included. Generate it again for a new summary.');
   if (!bullets.length) {
     recordPaidAiFailure('CV Summary during formatting returned empty output', data, route.model, route.provider);
     throw new Error('Empty CV Summary returned');
@@ -302,7 +274,7 @@ async function generateSummary(modifier) {
   if (output) { output.style.display = 'block'; output.innerHTML = '<div style="display:flex;align-items:center;gap:10px;color:var(--text3);"><span class="spinner"></span><span>Generating summary with ' + esc(route.display) + '…</span></div>'; }
   if (placeholder) placeholder.style.display = 'none'; if (btn) btn.disabled = true; updateSummaryRouteBadge();
   try {
-    var summaryRequest = { api_key: route.api_key, api_key_slot: route.api_key_slot, provider: route.provider, model: route.model, prompt: prompt, max_tokens: modifier === 'longer' ? 1600 : 1000, use_tools:false };
+    var summaryRequest = { api_key: route.api_key, api_key_slot: route.api_key_slot, provider: route.provider, model: route.model, prompt: prompt, max_tokens: modifier === 'longer' ? 1600 : 1000, use_tools:false, strip_candidate_pay:true };
     if (anonymize) {
       summaryRequest.feature = 'summary_anonymized';
       summaryRequest.source_cv_text = cv;
@@ -314,6 +286,8 @@ async function generateSummary(modifier) {
       throw new Error(normalizeAiProviderError(d.error || ('API error ' + r.status), route));
     }
     var raw = aiText(d);
+    // Every line was the candidate's pay: not a provider failure, not recorded as one.
+    if (!summaryBulletLines(raw).length && d.summary_pay_removed > 0) throw new Error('The CV Summary only described the candidate\'s pay, which is never included. Generate it again for a new summary.');
     if (!raw) {
       recordPaidAiFailure('CV Summary returned empty output', d, route.model, route.provider);
       throw new Error('Empty summary returned');

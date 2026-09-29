@@ -123,11 +123,17 @@ class SourceRestoreGuardrails(unittest.TestCase):
 
 class SummarySalaryGuardrails(unittest.TestCase):
     def test_summary_salary(self):
-        # The same cases run against the browser copy in
-        # tests/test_cv_summary_salary_parity.js.
         for case in _cases("summary_salary"):
             with self.subTest(case=case["id"]):
                 self.assertEqual(normalize._cv_strip_pay_from_summary(case["bullets"]), case["expect"], case["note"])
+
+    def test_summary_salary_text(self):
+        # The provider's raw summary text, as /generate-ai filters it.
+        for case in _cases("summary_salary_text"):
+            with self.subTest(case=case["id"]):
+                text, removed = normalize._cv_strip_pay_from_summary_text(case["text"])
+                self.assertEqual(text, case["expect"], case["note"])
+                self.assertEqual(removed, case["removed"])
 
 
 class DateRewriteGuardrails(unittest.TestCase):

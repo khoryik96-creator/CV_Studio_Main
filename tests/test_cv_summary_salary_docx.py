@@ -1,12 +1,13 @@
-"""The candidate's pay never reaches the Summary box of a Word file.
+"""The candidate's pay never reaches the generated Summary box.
 
 A generated summary is written from the whole CV, and a CV can state the
-candidate's current and expected salary. The browser already removes pay
-sentences from the summary it shows (tests/test_cv_summary_salary_parity.js);
-the server removes them again on both routes that write the box, so no summary
-that bypassed the page -- or was generated before this rule existed -- can put a
-salary in a CV sent to a client. The rule itself is pinned by the "summary_salary"
-cases in tests/fixtures/cv_guardrail_cases.json. All data is synthetic.
+candidate's current and expected salary. The one filter
+(_cv_strip_pay_from_summary in cvstudio_cv_normalize.py) runs where each summary
+is made -- /generate-ai for the CV Summary callers, /blind for a promoted source
+summary -- so the preview shows exactly what the Word file will carry, and
+/generate-docx runs it again on both of its paths as a last net. The rule itself
+is pinned by the "summary_salary" cases in tests/fixtures/cv_guardrail_cases.json.
+All data is synthetic.
 """
 
 import io
@@ -15,6 +16,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 import zipfile
 
 from owner_build_tools.build_protected import write_test_receipt
@@ -99,6 +101,83 @@ class SummarySalaryDocxTests(unittest.TestCase):
         self.assertEqual(app._cv_strip_pay_from_summary(list(clean)), clean)
         xml = _document_xml(self._format(clean))
         self.assertIn("Built streaming pipelines.", xml)
+
+    def test_a_summary_that_was_only_pay_says_so(self):
+        source = self._format(["Placeholder summary."])
+        response = self.client.post(
+            "/generate-docx",
+            data={"source_docx": (io.BytesIO(source), "CV.docx"),
+                  "summary_bullets": json.dumps(["Expected salary RM16,000.", "Salary: RM 12k"])},
+            content_type="multipart/form-data", headers={"Origin": "http://127.0.0.1:5000"},
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("only stated the candidate's pay", response.get_json()["error"])
+        # An empty request keeps its original message.
+        empty = self.client.post(
+            "/generate-docx",
+            data={"source_docx": (io.BytesIO(source), "CV.docx"), "summary_bullets": "[]"},
+            content_type="multipart/form-data", headers={"Origin": "http://127.0.0.1:5000"},
+        )
+        self.assertEqual(empty.get_json()["error"], "No CV Summary bullets provided")
+
+    def _generate_ai(self, text, **extra):
+        body = {"prompt": "fixture prompt", "provider": "anthropic"}
+        body.update(extra)
+        with mock.patch.object(app, "_resolve_request_api_key", return_value="<fixture-credential>"), \
+                mock.patch.object(app, "_ai_spend_session_allowed", return_value=True), \
+                mock.patch.object(app, "call_llm", return_value={
+                    "content": [{"type": "text", "text": text}], "usage": {}}):
+            response = self.client.post("/generate-ai", json=body, headers=HEADERS)
+        self.assertEqual(response.status_code, 200)
+        return response.get_json()
+
+    def test_generate_ai_filters_the_summary_when_asked(self):
+        raw = "- **Senior engineer** with 11 years.\n- Expected salary RM16,000.\n- Built pipelines."
+        out = self._generate_ai(raw, strip_candidate_pay=True)
+        self.assertEqual(out["content"][0]["text"], "- **Senior engineer** with 11 years.\n- Built pipelines.")
+        self.assertEqual(out["summary_pay_removed"], 1)
+        # A clean summary is returned exactly as the provider wrote it.
+        clean = self._generate_ai("- Built pipelines.", strip_candidate_pay=True)
+        self.assertEqual(clean["content"], [{"type": "text", "text": "- Built pipelines."}])
+        self.assertEqual(clean["summary_pay_removed"], 0)
+
+    def test_generate_ai_is_unchanged_for_every_other_caller(self):
+        # Blind JD, Company Profile and the rest do not ask, so nothing changes.
+        raw = "Offered salary RM16,000 for the role."
+        out = self._generate_ai(raw)
+        self.assertEqual(out["content"][0]["text"], raw)
+        self.assertNotIn("summary_pay_removed", out)
+        out = self._generate_ai(raw, strip_candidate_pay="yes")
+        self.assertEqual(out["content"][0]["text"], raw)
+
+    def test_the_anonymized_summary_is_filtered_too(self):
+        out = self._generate_ai(
+            "- Built pipelines.\n- Expected salary RM16,000.",
+            strip_candidate_pay=True, feature="summary_anonymized",
+            source_cv_text="Test Candidate\nSalary Expectations: 16000",
+        )
+        self.assertNotIn("RM16,000", out["content"][0]["text"])
+        self.assertIn("Built pipelines.", out["content"][0]["text"])
+
+    def test_the_blind_summary_is_filtered_before_the_provider_sees_it(self):
+        seen = {}
+
+        def fake_call(provider, key, payload):
+            sent = json.loads(payload["messages"][0]["content"].split("\n\n", 1)[1])
+            seen["summary"] = sent.get("summary_bullets")
+            return {"content": [{"type": "text", "text": json.dumps(sent)}], "usage": {}}
+
+        cv = _cv([])
+        cv["skills"] = [{"category": "Summary",
+                         "items": "Data engineer with 11 years in banking.\nSeeking a role with salary above 10000."}]
+        with mock.patch.object(app, "_resolve_request_api_key", return_value="<fixture-credential>"), \
+                mock.patch.object(app, "_ai_spend_session_allowed", return_value=True), \
+                mock.patch.object(app, "call_llm", side_effect=fake_call):
+            response = self.client.post("/blind", json={"cv_data": cv, "provider": "anthropic"}, headers=HEADERS)
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(seen["summary"], ["Data engineer with 11 years in banking."])
+        # The preview the browser gets is the summary the Word file will carry.
+        self.assertEqual(response.get_json()["data"]["summary_bullets"], ["Data engineer with 11 years in banking."])
 
     def test_the_summary_instructions_forbid_pay(self):
         source = (ROOT / "vendor" / "cvstudio" / "candidate-summary.js").read_text(encoding="utf-8")

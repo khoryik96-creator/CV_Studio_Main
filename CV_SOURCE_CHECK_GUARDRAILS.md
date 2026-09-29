@@ -10,9 +10,8 @@ a real CV or a review finding. **Read it before changing any of these files:**
 - `cvstudio_cv_normalize.py`: `_cv_pretranslate_year_first_month_names` and
   `_recover_education_source_labels`
 - `cvstudio_cv_reconcile.py`: `_restore_labelled_company_qualifiers`
-- `_cv_strip_pay_from_summary` (`cvstudio_cv_normalize.py`) and its mirror
-  `cvSummaryStripPay` (`vendor/cvstudio/candidate-summary.js`): salary in the
-  Summary box
+- `_cv_strip_pay_from_summary` (`cvstudio_cv_normalize.py`): salary in the
+  generated Summary box
 - `vendor/cvstudio/cv-format.js`, `batch-format.js`, `create-profile.js`: how
   the warning is shown, and the auto-upload hold
 
@@ -200,25 +199,45 @@ touched.
 ## Summary box
 
 ### P1
-**The generated summary never states the candidate's pay.** The AI summary
-instructions forbid it, and every sentence that states it anyway is removed from
-the summary bullets. The browser removes it first (`cvSummaryStripPay`, inside
-`summaryBulletLines`, so the preview and copied text are clean), and the server
-removes it again before any Word file is written (`_cv_strip_pay_from_summary`,
-on both the Format CV and the uploaded-DOCX paths).
+**The generated summary never states the candidate's pay.** The CV Summary
+instructions forbid it, and there is one filter, `_cv_strip_pay_from_summary`
+in `cvstudio_cv_normalize.py`, run where each summary is made:
 
-A sentence is removed when a pay word sits beside an amount ("Salary: RM
-17,000", "Bonus of USD 3,000 per year"), or when it speaks of the candidate's
-own pay, with or without an amount ("expected salary", "last drawn salary",
-"salary expectations are negotiable", "open to discuss remuneration"). Only that
-sentence goes. The rest of the bullet stays, and a bullet left empty is
-dropped. The candidate's work is not their pay, so these are all kept: "expertise
-in compensation and benefits", "gained knowledge of salary calculation",
-"processed salaries for 1,200 employees", "managed a USD 5 million budget",
-"developed payroll modules".
+- `/generate-ai`, for the two CV Summary callers, which send
+  `strip_candidate_pay: true`. The browser only ever receives filtered text, so
+  the preview, the Summary tab and copied text match the Word file.
+- `/blind`, on a source About / Summary section promoted into the box, before
+  the provider sees it.
+- `/generate-docx`, on both of its paths, as a last net.
 
-The two copies must stay identical: the same cases run against both
-(`tests/test_cv_guardrail_cases.py` and `tests/test_cv_summary_salary_parity.js`).
+There is no browser copy.
+
+Only a statement of the candidate's **own** pay is removed:
+- a pay term followed by an amount: "Salary: RM 17,000", "Salary 2000", "CTC of
+  12 LPA", "total compensation of $180k";
+- an amount followed by a pay term: "RM16,000 expected salary";
+- pay talk with no amount: "expected salary", "salary expectations", "salary is
+  negotiable", "open to discuss remuneration";
+- an amount in lakhs per annum, or earnings, bonus, commission or allowance per
+  period.
+
+A pay word on its own is the candidate's work and is kept, for example
+"negotiated compensation packages for 40 hires", "salary range benchmarking",
+"payroll salary processing", "minimum wage compliance", "saved RM 2M in salary
+costs", "managed allowances for 3,000 expatriates". A plain figure directly
+after a pay term counts only with three or more digits, and never when it
+counts people.
+
+Removal is by sentence, and by semicolon clause within a sentence.
+Abbreviations such as "Sr." or "B.Sc." don't end a sentence, so no fragment is
+left. A bullet left empty is dropped. When every line was pay, the page says so
+("only described the candidate's pay"). It isn't recorded as a failed paid
+call, and the uploaded-DOCX route says the same rather than "No CV Summary
+bullets".
+
+Matching runs on an NFKC-normalised copy, so full-width digits count as
+ordinary digits. Digits in other scripts count too, and a neighbouring
+non-Latin character doesn't hide an amount.
 
 ## Screen (checked by `tests/test_cv_parse_warning_persistence_frontend.js`)
 
