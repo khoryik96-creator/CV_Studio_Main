@@ -115,6 +115,23 @@ class SummarySalaryDocxTests(unittest.TestCase):
         self.assertEqual(clean.status_code, 200)
         self.assertNotIn("X-CV-Summary-Pay-Removed", clean.headers)
 
+    def test_the_upload_helper_filters_once_and_keeps_its_old_shape(self):
+        source = self._format(["Placeholder summary."])
+        calls = []
+        real = app._cv_strip_pay_from_summary_counted
+
+        def counted(bullets):
+            calls.append(1)
+            return real(bullets)
+
+        with mock.patch.object(app, "_cv_strip_pay_from_summary_counted", side_effect=counted):
+            document, removed = app._insert_summary_into_docx_bytes_counted(
+                source, ["Built pipelines.", "Expected salary RM 9k."])
+        self.assertEqual((len(calls), removed), (1, 1))
+        self.assertNotIn("RM 9k", _document_xml(document))
+        # The original helper still returns the document alone.
+        self.assertIsInstance(app._insert_summary_into_docx_bytes(source, ["Built pipelines."]), bytes)
+
     def test_a_summary_without_pay_is_written_unchanged(self):
         clean = ["**Senior Data Engineer** with 11 years in banking.", "Built streaming pipelines."]
         self.assertEqual(app._cv_strip_pay_from_summary(list(clean)), clean)

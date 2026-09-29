@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.423"
+_INSTALL_RECEIPT_VERSION = "v24.6.424"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -346,7 +346,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.423"
+_CVSTUDIO_VERSION = "v24.6.424"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -11945,14 +11945,18 @@ _CV_SUMMARY_ONLY_PAY_ERROR = (
 )
 
 
-def _insert_summary_into_docx_bytes(
+def _insert_summary_into_docx_bytes_counted(
     file_bytes,
     summary_bullets,
     summary_box_autofit=True,
 ):
-    """Fill/insert the dedicated Summary placeholder in an uploaded DOCX."""
+    """(uploaded DOCX with its Summary placeholder filled, pay statements removed).
+
+    The pay filter runs once; the count it returns is the one the route reports.
+    """
     # Salary never reaches the Summary box, whichever route the bullets took.
-    bullets = _summary_docx_bullets(_cv_strip_pay_from_summary(summary_bullets))
+    filtered, pay_removed = _cv_strip_pay_from_summary_counted(summary_bullets)
+    bullets = _summary_docx_bullets(filtered)
     if not bullets:
         if _summary_docx_bullets(summary_bullets):
             raise ValueError(_CV_SUMMARY_ONLY_PAY_ERROR)
@@ -12046,7 +12050,16 @@ def _insert_summary_into_docx_bytes(
         raise ValueError("The uploaded file is not a valid DOCX document") from exc
     except UnicodeDecodeError as exc:
         raise ValueError("The DOCX XML is not valid UTF-8") from exc
-    return output.getvalue()
+    return output.getvalue(), pay_removed
+
+
+def _insert_summary_into_docx_bytes(
+    file_bytes,
+    summary_bullets,
+    summary_box_autofit=True,
+):
+    """Fill/insert the dedicated Summary placeholder in an uploaded DOCX."""
+    return _insert_summary_into_docx_bytes_counted(file_bytes, summary_bullets, summary_box_autofit)[0]
 
 
 def _validate_generated_docx_bytes(document_bytes):
@@ -12082,7 +12095,7 @@ def generate_docx():
             except (TypeError, ValueError):
                 return jsonify({"error": "Invalid CV Summary bullets"}), 400
             try:
-                document_bytes = _insert_summary_into_docx_bytes(
+                document_bytes, summary_pay_removed = _insert_summary_into_docx_bytes_counted(
                     source_docx.read(),
                     summary_bullets,
                     request.form.get("summary_box_autofit"),
@@ -12097,7 +12110,6 @@ def generate_docx():
                 mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             )
             # Pay removed on this path is reported like on the other one.
-            summary_pay_removed = _cv_strip_pay_from_summary_counted(summary_bullets)[1]
             if summary_pay_removed:
                 response.headers["X-CV-Summary-Pay-Removed"] = str(summary_pay_removed)
             return response

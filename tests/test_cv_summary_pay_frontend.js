@@ -257,5 +257,45 @@ async function batchRun(responses, withSummary) {
   const note = apply.indexOf("if (payRemoved) showToast(cvSummaryPayNote(payRemoved, false), 'warn');");
   assert.ok(saved > 0 && note > saved);
   assert.ok(/var payRemoved = response\.headers && response\.headers\.get \? response\.headers\.get\('X-CV-Summary-Pay-Removed'\) : null;/.test(apply));
+  // Run for real: a pay-only regeneration unlinks the summary linked earlier for
+  // formatting this CV, and leaves another CV's link alone.
+  async function summaryTab(draftCv) {
+    const nodes = {}, stats = [], cleared = [];
+    const node = id => nodes[id] || (nodes[id] = {value: '', checked: false, disabled: false, style: {}, textContent: '', innerHTML: ''});
+    node('summaryCvText').value = 'SYNTHETIC CV';
+    const c = {String, Array, JSON, Error, Number, console,
+      window: {_formatSummaryDraft: {cv_text: draftCv, bullets: ['Earlier summary.']}},
+      document: {getElementById: node},
+      requireSummaryUnlocked: () => true, aiRoutePayload: () => ({api_key: 'k', provider: 'mock', model: 'm', display: 'Mock'}),
+      getSummaryFocusPrompt: () => '', getSummaryAnonymizationEnabled: () => false, cvSummaryPrompt: () => 'prompt',
+      updateSummaryOutputTitle() {}, updateSummaryApplyDocxButton() {}, updateSummaryRouteBadge() {},
+      markTabRunning: () => 1, markTabDone() {}, markTabFailed() {}, showToast() {}, esc: s => String(s),
+      fetchWithTimeout: async () => ({ok: true, json: async () => ({content: [{type: 'text', text: ''}], summary_pay_removed: 2, usage: {}})}),
+      aiText: d => (d.content || []).map(b => b.text || '').join(''), recordPaidAiFailure() {},
+      normalizeAiProviderError: s => s, responseCost: () => 0.1, statsRecord: (...a) => stats.push(a),
+      statsMetaFromResponse: () => ({}), getSummaryFocusLabel: () => 'General',
+      normalizeUsageClient: u => u, providerLabel: () => 'Mock',
+      clearFormatSummaryDraft() { cleared.push(1); c.window._formatSummaryDraft = null; },
+    };
+    vm.createContext(c);
+    vm.runInContext(fnFrom(source, 'summaryBulletLines') + fnFrom(source, 'generateSummary'), c);
+    await c.generateSummary('shorter');
+    return {c, nodes, stats, cleared};
+  }
+  {
+    const {c, nodes, stats, cleared} = await summaryTab('SYNTHETIC CV');
+    assert.strictEqual(cleared.length, 1);
+    assert.strictEqual(c.window._formatSummaryDraft, null);
+    assert.deepStrictEqual(plain(c.window._summaryGeneratedBullets), []);
+    assert.strictEqual(c.window._summaryGeneratedSource, '');
+    assert.ok(nodes.summaryOutput.innerHTML.includes('no longer linked'));
+    assert.strictEqual(stats.length, 1, 'the paid call is recorded');
+  }
+  {
+    const {c, nodes, cleared} = await summaryTab('ANOTHER CV');
+    assert.strictEqual(cleared.length, 0);
+    assert.ok(c.window._formatSummaryDraft);
+    assert.ok(!nodes.summaryOutput.innerHTML.includes('no longer linked'));
+  }
   console.log('CV Summary pay filter frontend passed');
 })().catch(error => { console.error(error); process.exit(1); });

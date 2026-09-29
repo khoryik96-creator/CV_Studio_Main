@@ -1,4 +1,4 @@
-# v24.6.419 – v24.6.423 Salary never reaches the Summary box
+# v24.6.419 – v24.6.424 Salary never reaches the Summary box
 
 Branch: `claude/pr157-chatgpt-fix-zke4cy`, from merged master `56dca18` (v24.6.418).
 
@@ -354,5 +354,77 @@ is never blocked. Every new phrasing found goes into the generated lists.
 - **Deliberate breaks:** 22 of 22 caught, after adding two word-boundary cases
   and correcting two break scripts.
 - **Full suite:** 1446 passed, 23 skipped, plus the known environment-only
+  tests. **Node:** 27/27.
+
+## v24.6.424: ten findings from one more review
+
+**Real bugs**
+- **Slowness.** The lakhs pattern rescanned every run of digits, so a
+  20,000-character line of "1," took about 3 seconds, and longer ones took
+  minutes. It could hang the uploaded-DOCX request. The pattern now starts only
+  at the start of a figure: about 0.08 seconds on the same input, and under 0.1
+  seconds on 12 hostile inputs. A new test holds it under 2 seconds. The old
+  code fails that test and the new code passes.
+- **Stale linked summary.** The Summary tab already cleared its own summary
+  before regenerating. A pay-only regeneration now also unlinks a summary linked
+  earlier for formatting the same CV, and says so. A link for another CV is
+  left alone.
+- **Clauses too far away.** A clause after the pay clause goes with it only
+  when it comes right after and carries the pay on. "with", "and" and "or" count
+  only when the clause names pay. So "…; led HR at Acme; and holds a CIPD
+  qualification" keeps both facts.
+- **Comma and no-space stops.**
+  - "Expected salary RM 9k, CIPD-certified HR leader…" keeps the fact.
+  - "Salary RM 9,000.Led HR team." keeps "Led HR team.".
+  - A comma remainder must read as its own phrase (capitalised), with no pay
+    words and no money that isn't work. So "Current salary RM 9k, managing 10
+    staff" still leaves nothing, as its existing case requires.
+- **Upload path.** It ran the filter twice. It now runs once, and the header
+  count comes from that same run.
+
+**Recruiter and HR work kept**
+- **Roles a recruiter fills:** "Executive search consultant placing C-suite
+  leaders with compensation above USD 500k", "placements with salaries up to RM
+  30k" and "Tech recruiter for roles with a CTC of 30 LPA" are kept. "Recruiter
+  earning RM 9k monthly" is still removed.
+- **"Current" with a work verb and scale:** "Restructured current compensation
+  of RM 12M for 300 staff" is kept. "Led a team of 8 on a current salary of RM
+  12k" is still removed.
+- **Pay talk in recruiting work:** "expected salary negotiations", "exceeds
+  budget bands" and "salary requirements vary by client" are kept.
+
+**Pay newly caught**
+- **Labels:** "Package: RM 150,000", "Pay: RM 9k", "Income - RM 9,000".
+- **Other pay words:** "Expected wage RM 3,000", "Current monthly income of RM
+  9,000".
+- **Qualifiers and verbs:** "Gross RM 9,000/month", "Candidate's current role
+  pays RM 9k".
+- **Looking and seeking:** "Looking for RM 12,000 monthly", "Seeking a senior
+  role with RM 12k monthly".
+
+**Found by my own checks, not the review**
+- **Two problems from the repository-wide comparison:**
+  - a comma part holding money could be kept;
+  - a bare amount right before a pay clause ("RM 9,000; Expected: RM 11,000")
+    was no longer removed.
+
+  Both are fixed. The money check spares work, so "Grew revenue to RM 5M,
+  expected salary RM 9k" keeps its revenue.
+- **Headcounts:** "Paid wages of RM 3M to 900 workers" was wrongly removed,
+  because a headcount written as a number wasn't recognised. Fixed.
+- **Duplicate pattern:** one pattern duplicated another and couldn't be tested
+  on its own, so it was removed.
+
+**Regression evidence**
+- **Cases:** 49 new P1 cases, for 448 in total. No existing case changed; the
+  case file only gained lines.
+- **Generated test:** new families for more own-pay labels and verbs, and for
+  recruiters describing roles, plus the speed test.
+- **Old rule vs new rule** on every non-test sentence in the repository (29,802
+  strings): 10 differ, and all are this review's examples or intended fixes.
+- **Whole-suite recording:** the filter changed nothing outside the salary tests.
+- **Deliberate breaks:** 24 of 24 caught, after adding isolating cases and
+  removing the one duplicate pattern.
+- **Full suite:** 1450 passed, 23 skipped, plus the known environment-only
   tests. **Node:** 27/27.
 

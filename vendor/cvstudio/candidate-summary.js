@@ -317,7 +317,11 @@ async function generateSummary(modifier) {
     // one, but the call was paid for, so its cost is recorded like any summary.
     if (!summaryBulletLines(raw).length && d.summary_pay_removed > 0) {
       statsRecord((anonymize ? 'Anonymized CV Summary — ' : 'CV Summary — ') + getSummaryFocusLabel(), 'summary', responseCost(d, route.model, route.provider), d.model || route.model, '', d.provider || route.provider, statsMetaFromResponse(d, route.model, route.provider));
-      throw new Error('The CV Summary only described the candidate\'s pay, which is never included. Generate it again for a new summary.');
+      // A summary linked earlier for formatting this CV is unlinked too, so
+      // formatting cannot quietly use a summary that is not the latest result.
+      var unlinked = !!(window._formatSummaryDraft && String(window._formatSummaryDraft.cv_text || '').trim() === cv);
+      if (unlinked) clearFormatSummaryDraft();
+      throw new Error('The CV Summary only described the candidate\'s pay, which is never included. Generate it again for a new summary.' + (unlinked ? ' The summary linked earlier for formatting is no longer linked.' : ''));
     }
     if (!raw) {
       recordPaidAiFailure('CV Summary returned empty output', d, route.model, route.provider);

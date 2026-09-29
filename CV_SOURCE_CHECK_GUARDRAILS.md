@@ -218,19 +218,28 @@ There is no browser copy.
 sign that it states the candidate's **own** pay:
 
 1. **Always removed.** This covers:
-   - "my" or "candidate's", or current / expected / asking / last-drawn /
-     previous, before a pay word and an amount ("Expected salary RM16,000",
-     "Led a team of 8 on a current salary of RM 12k");
+   - "my" or "candidate's", or expected / asking / last-drawn, before a pay
+     word ("salary", "package", "wage", "income"…) and an amount ("Expected
+     salary RM16,000", "Expected wage RM 3,000");
    - "On a package of RM 150k";
    - "The candidate / he / she is paid RM 9,000".
 
    Nothing overrides these. "his", "her" and "their" alone aren't enough,
    because a recruiter "negotiated their salary".
+
+   "Current", "present" or "previous" before a pay word and an amount is also
+   removed ("Led a team of 8 on a current salary of RM 12k"). The one exception
+   is a clause that opens with a work verb and names the organisation's money
+   or people ("Restructured current compensation of RM 12M for 300 staff").
 2. **Removed unless the sentence describes work.** This covers:
    - a pay word and an amount in either order ("Salary: RM 17,000", "RM16,000
      salary");
    - "Last drawn RM 9,000", "RM 9,000 expected", "Asking for RM 10k", "Seeking
-     RM 12k", "Current: RM 9,000";
+     RM 12k", "Looking for RM 12,000", "Seeking a senior role with RM 12k
+     monthly", "Current: RM 9,000";
+   - a label and an amount: "Package: RM 150,000", "Pay: RM 9k", "Income - RM
+     9,000"; "Monthly income RM 9,000"; "current role pays RM 9k";
+   - "Gross / Nett RM 9,000 / month";
    - "Receives / Makes / Gets RM 9,000 monthly", and "They are paid RM 9,000";
    - a clause that is only an amount per period ("RM 9,000 / month");
    - earnings, a bonus, commission or allowance per period;
@@ -245,7 +254,11 @@ sign that it states the candidate's **own** pay:
    - it names who the money is for ("for 300 staff", "to the sales team", "for
      the group", "across APAC");
    - it is someone else's pay the candidate worked on ("negotiated their salary
-     of RM 15k").
+     of RM 15k");
+   - it is a recruiter describing the roles they fill ("placing C-suite leaders
+     with compensation above USD 500k", "Tech recruiter for roles with a CTC of
+     30 LPA"). This doesn't apply when the clause says it's the candidate's
+     own ("Recruiter earning RM 9k monthly").
 
    Some phrases look like these but are still pay:
    - "across base, bonus and allowances" (the parts of one's own pay);
@@ -287,9 +300,26 @@ ends are handled as follows:
   sentence only when the next sentence states pay on its own. So "Worked at
   Acme Co. Expected salary RM 9k." keeps "Worked at Acme Co.", and "Joined
   Acme Co. Ltd. in 2019." stays whole.
-- In a sentence that states pay, another clause goes with it when it carries an
-  amount or continues the pay ("RM 1,500 allowances", "plus 2 months bonus"),
-  unless it describes work.
+- It also ends at a full stop with no space before a capitalised word
+  ("Salary RM 9,000.Led HR team.").
+- **Clauses next to a pay clause.** In a sentence that states pay, the clause
+  right after the pay clause goes with it when it:
+  - carries an amount;
+  - starts with a pay continuation ("plus 2 months bonus", "negotiable");
+  - or starts with "with", "and" or "or" and names pay ("with 2 months
+    bonus").
+
+  The clause right before goes with it only when it is just an amount ("RM
+  9,000; Expected: RM 11,000"). A clause further away, or one that describes
+  work, stays: "Expected salary RM 9k; led HR at Acme; and holds a CIPD
+  qualification" keeps both facts.
+- **Comma parts.** Within a pay clause, a comma-separated part that isn't pay
+  stays when it reads as its own phrase, starts with a capital, and holds no
+  pay words and no money that isn't work.
+  - "Expected salary RM 9k, CIPD-certified HR leader" keeps "CIPD-certified HR
+    leader".
+  - "Grew revenue to RM 5M, expected salary RM 9k" keeps its revenue.
+  - "Current salary RM 9k, managing 10 staff" leaves nothing.
 
 After a removal:
 
@@ -302,7 +332,9 @@ After a removal:
   If every list line was pay, an intro such as "Here is the summary:" is
   dropped too.
 
-Filtering again changes nothing. This is checked on 12,728 inputs, including
+Filtering again changes nothing, and hostile input can't slow it down. A
+20,000-character line of digits and commas used to take about 3 seconds, and
+now takes about 0.08 seconds. A test holds it under 2 seconds. This is checked on 12,728 inputs, including
 random combinations with bold and semicolons.
 
 **Every removal is shown.** `/parse` and `/blind` return `summary_pay_removed`,
@@ -321,7 +353,10 @@ random combinations with bold and semicolons.
     paid call as a summary, not a failed one.
   - The uploaded-DOCX route says the same. Its only job is filling the
     Summary, so with nothing left it has nothing to write. When it removes
-    only part, it sends the same header, and the page warns.
+    only part, it sends the same header, and the page warns. The filter runs
+    once there, so the header and the file always agree.
+  - A pay-only regeneration on the Summary tab also unlinks a summary linked
+    earlier for formatting that CV, and says so.
 - **`/generate-docx` (JSON), the formatted CV:** it never refuses the whole CV
   over its summary.
 

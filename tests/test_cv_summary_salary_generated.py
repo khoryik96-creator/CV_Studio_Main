@@ -14,6 +14,7 @@ import itertools
 import json
 from pathlib import Path
 import random
+import time
 import unittest
 
 import cvstudio_cv_normalize as normalize
@@ -78,6 +79,34 @@ class GeneratedSalaryGuardrails(unittest.TestCase):
         for fact, statement in itertools.product(facts, pay):
             with self.subTest(fact=fact, pay=statement):
                 self.assertEqual(normalize._cv_strip_pay_from_summary([fact + " " + statement]), [fact])
+
+    def test_more_labels_and_verbs_for_own_pay_are_removed(self):
+        texts = [t.format(a=a, p=p) for t, a, p in itertools.product(
+            ["Package: {a}{p}.", "Pay: {a}{p}.", "Income: {a}{p}.", "Expected wage {a}{p}.",
+             "Current monthly income of {a}{p}.", "Gross {a}/month.", "Nett {a} per month.",
+             "Candidate's current role pays {a}{p}.", "Looking for {a}{p}.", "Seeking a senior role with {a}{p}.",
+             "Recruiter earning {a} monthly."], AMOUNTS[:8], ["", " per month", " per annum"])]
+        missed = [text for text in texts if normalize._cv_strip_pay_from_summary([text]) != []]
+        self.assertEqual(missed[:10], [])
+
+    def test_recruiters_describing_the_roles_they_fill_are_kept(self):
+        kept = [f"{who} {what} {amount}." for who, what, amount in itertools.product(
+            ["Executive search consultant placing C-suite leaders", "Recruitment consultant specialising in placements",
+             "Tech recruiter for roles", "Headhunter filling mandates", "Talent acquisition lead for vacancies"],
+            ["with compensation above", "with salaries up to", "with a CTC of", "with packages above"],
+            ["USD 500k", "RM 30k", "30 LPA", "SGD 250k"])]
+        dropped = [text for text in kept if normalize._cv_strip_pay_from_summary([text]) != [text]]
+        self.assertEqual(dropped[:10], [])
+
+    def test_the_filter_stays_fast_on_hostile_input(self):
+        # A long pasted or crafted line must not hang a request.
+        for text in ["1," * 10000, "1." * 10000, "9" * 20000, "RM " * 7000, "1,1.1 " * 4000, "$" * 20000,
+                     "RM1" * 7000, "Earning " + "a" * 20000 + " RM 9k monthly", ("x" * 50 + ", ") * 400]:
+            with self.subTest(text=text[:20]):
+                started = time.perf_counter()
+                normalize._cv_strip_pay_from_summary([text])
+                normalize._cv_strip_pay_from_summary_text("- " + text)
+                self.assertLess(time.perf_counter() - started, 2.0)
 
     def test_pay_related_work_is_kept(self):
         dropped = [
