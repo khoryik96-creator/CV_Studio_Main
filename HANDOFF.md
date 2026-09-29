@@ -144,6 +144,12 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   `_resolve_request_api_key(...)` — **never send provider keys to the browser.**
 - Paid AI routes must be listed in `_AI_SPEND_EXACT_PATHS` so they require the
   AI-spend browser-session token.
+- **CV source-reading rules have a rulebook.** Before changing the work-row
+  reader, the source check (fidelity audit) or the year-first date rewrite, read
+  `CV_SOURCE_CHECK_GUARDRAILS.md`. Every rule's cases live in
+  `tests/fixtures/cv_guardrail_cases.json` and run in
+  `tests/test_cv_guardrail_cases.py`: add a case before changing a rule, and
+  never edit or delete an existing case without the owner's agreement.
 
 ## 7. Recently completed (already on `master`)
 
@@ -299,7 +305,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Year-first dates and a reported employer shortfall — v24.6.411–v24.6.416, UNMERGED.**
+- **Year-first dates and a reported employer shortfall — v24.6.411–v24.6.417, UNMERGED.**
   Starts at merged master `960a086`. A real formatted CV came back missing the
   candidate's three most recent employers, including his current job, with two
   education rows rendered as jobs and every employer name replaced by the table
@@ -313,7 +319,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   fidelity audit, which found zero source employers here because it only reads
   Dates/Organization/Role tables, now also reads explicit "Company:" labels, so a
   shortfall is reported rather than shipped. See
-  `cv_studio_v24_6_416_year_first_dates_employer_safety_qa_report.md`.
+  `cv_studio_v24_6_417_year_first_dates_employer_safety_qa_report.md`.
   v24.6.412 corrects eight review findings, four of them introduced by v24.6.411
   and two of those actively harmful: the date rewrite matched "YYYY Month" anywhere
   in the document, so it reworded the candidate's own prose ("figures for 2023 may
@@ -361,7 +367,10 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   are refused again while "-" placeholders stay, "Leadership Positions" no
   longer ends Education, and the label scan reads every work-history span
   instead of the first heading it finds. Replay of 473 suite inputs: 0 changes
-  vs master or v24.6.415 outside this work's tests. Still open: the branch's earlier commits
+  vs master or v24.6.415 outside this work's tests. v24.6.417 corrects ten more
+  and adds `CV_SOURCE_CHECK_GUARDRAILS.md` with a 208-case registry covering every
+  review round; it fails 154 cases on master and 20 on v24.6.416, none now.
+  Still open: the branch's earlier commits
   contain real employer names from the reported CV, so merge with Squash and
   merge (or rewrite history, owner's call); label-style rows are reported by the
   audit but not reconstructed by the reconciler.

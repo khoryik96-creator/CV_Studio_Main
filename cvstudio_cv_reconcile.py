@@ -1258,6 +1258,21 @@ _WORK_HEADING_WORDS = frozenset({"experience", "experiences", "employment", "car
 _WORK_HEADING_KEYS = frozenset({
     "positions held", "positions", "appointments", "appointments held",
     "assignments", "work assignments", "posts held",
+    "academic appointments", "professional appointments", "research appointments",
+    "teaching appointments", "academic positions", "professional positions",
+    "research positions", "teaching positions", "academic posts", "posts",
+})
+
+# Words that name a part of an education section -- "LEADERSHIP POSITIONS",
+# "CO-CURRICULAR ACTIVITIES", "THESIS". A capitalised line carrying one is not the
+# heading of the next section, unless it is a whole work heading listed above.
+_EDUCATION_SUBSECTION_WORDS = frozenset({
+    "leadership", "positions", "position", "appointments", "assignments",
+    "activities", "activity", "extracurricular", "curricular", "co", "societies",
+    "society", "clubs", "club", "involvement", "achievements", "achievement",
+    "honours", "honors", "scholarships", "scholarship", "thesis", "dissertation",
+    "coursework", "courses", "modules", "subjects", "major", "minor", "electives",
+    "projects", "project", "student", "exchange",
 })
 
 # A line that is an education heading and nothing else: "Education", "Educational
@@ -1283,7 +1298,8 @@ _EDUCATION_ROW_RE = re.compile(
     r"a[ -]levels?|o[ -]levels?|\"o\" level|\"a\" level|"
     r"foundation\s+(?:in|of|programme|program|studies|year|course)|"
     r"matriculation|matrikulasi|c?gpa|honours|hons|b\.?sc|m\.?sc|mba|bba|b\.?eng|m\.?eng|"
-    r"b\.?tech|m\.?tech|b\.?com|m\.?com|llb|llm|b\.?ed|m\.?ed|b\.?pharm|mbbs)\b"
+    r"b\.?tech|m\.?tech|b\.?com|m\.?com|llb|llm|b\.?ed|m\.?ed|b\.?pharm|mbbs|"
+    r"associate'?s?\s+(?:of|in|degree)|acca|cima)\b"
     r"|\b[bm]\.a\b\.?",
     re.I,
 )
@@ -1300,24 +1316,46 @@ _EDUCATION_INSTITUTION_RE = re.compile(
     re.I,
 )
 
-# A job title in a row: the generic title words the borderless reader uses, plus
-# the ones an education employer uses.
+# Job-title words, shared by the borderless reader's generic title pattern and
+# the education rule below, so a title word added for one reaches the other.
+_CV_TITLE_PREFIX_WORDS = (
+    r"Senior|Sr\.?|Junior|Jr\.?|Lead|Principal|Assistant|Associate|Deputy|Group|"
+    r"Regional|Country|General|Chief|Vice|Executive"
+)
+_CV_TITLE_WORDS = (
+    r"Manager|Director|Head|Associate|Consultant|Analyst|Engineer|Developer|Architect|"
+    r"Specialist|Executive|Officer|Administrator|Coordinator|Supervisor|Partner|"
+    r"President|Intern|Trainee|Accountant|Recruiter|Designer|Scientist|Technician|"
+    r"Controller|Planner|Support"
+)
+
+# A job title in the TITLE cell of a row: the shared title words, plus the ones an
+# education employer uses. Only the last cell is read, because institution and
+# qualification names carry these words too -- "Chartered Institute of Management
+# Accountants", "Head Start College".
 _WORK_ROLE_WORD_RE = re.compile(
-    r"\b(?:manager|director|head|associate|consultant|analyst|engineer|developer|"
-    r"architect|specialist|executive|officer|administrator|coordinator|supervisor|"
-    r"partner|president|intern|trainee|accountant|recruiter|designer|scientist|"
-    r"technician|controller|planner|lecturer|teacher|tutor|trainer|instructor|"
-    r"professor|researcher|counsell?or|librarian|registrar|dean|principal|"
-    r"assistant|clerk|secretary|programmer|scrum master|chef|nurse)s?\b",
+    r"\b(?:" + _CV_TITLE_WORDS + r"|lecturer|teacher|tutor|trainer|instructor|professor|"
+    r"researcher|counsell?or|librarian|registrar|dean|principal|assistant|clerk|"
+    r"secretary|programmer|scrum master|chef|nurse|fellow|postdoc|postdoctoral|scholar|"
+    r"demonstrator|staff|faculty)s?\b",
     re.I,
 )
 
 
 def _education_row_is_set_aside(line):
-    """Whether a table row inside an education section is a qualification."""
+    """Whether a table row inside an education section is a qualification.
+
+    A row naming a qualification always is. A row naming an institution is too,
+    unless its title cell names a job: "Contoso Academy | Trainer" is a job,
+    "Anna University | B.Tech" and "Sekolah Menengah | Kuala Lumpur" are not.
+    """
     if _EDUCATION_ROW_RE.search(line):
         return True
-    return bool(_EDUCATION_INSTITUTION_RE.search(line)) and not _WORK_ROLE_WORD_RE.search(line)
+    if not _EDUCATION_INSTITUTION_RE.search(line):
+        return False
+    cells = [cell.strip() for cell in str(line).split("|") if cell.strip()]
+    title_cell = cells[-1] if len(cells) > 1 else ""
+    return not _WORK_ROLE_WORD_RE.search(title_cell)
 
 
 # A company that is nothing but a cell separator: the table pipe the extractor
@@ -1357,6 +1395,9 @@ def _source_line_is_caps_heading(line):
     if len(letters) < 4 or text.upper() != text or re.search(r"\d", text):
         return False
     if len(text.split()) > 5:
+        return False
+    key = _cv_source_boundary_key(text)
+    if key not in _WORK_HEADING_KEYS and _EDUCATION_SUBSECTION_WORDS.intersection(key.split()):
         return False
     return (
         not _EDUCATION_ROW_RE.search(text)
@@ -1491,7 +1532,7 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
         re.I,
     )
     generic_title = re.compile(
-        r"\b((?:(?:Senior|Sr\.?|Junior|Jr\.?|Lead|Principal|Assistant|Associate|Deputy|Group|Regional|Country|General|Chief|Vice|Executive)\s+)*(?:Manager|Director|Head|Associate|Consultant|Analyst|Engineer|Developer|Architect|Specialist|Executive|Officer|Administrator|Coordinator|Supervisor|Partner|President|Intern|Trainee|Accountant|Recruiter|Designer|Scientist|Technician|Controller|Planner|Support)(?:\s+[A-Za-z0-9/&+.-]+){0,4})$",
+        r"\b((?:(?:" + _CV_TITLE_PREFIX_WORDS + r")\s+)*(?:" + _CV_TITLE_WORDS + r")(?:\s+[A-Za-z0-9/&+.-]+){0,4})$",
         re.I,
     )
 

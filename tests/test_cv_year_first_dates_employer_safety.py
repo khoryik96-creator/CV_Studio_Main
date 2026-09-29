@@ -685,14 +685,13 @@ class LabelledCompanyFidelityTests(unittest.TestCase):
         ])
         self.assertEqual(report["employers"]["missing"], ["Beta Holdings"])
 
-    def test_a_background_heading_alone_starts_no_label_scan(self):
-        # "Career Background" is a profile heading as often as a work heading. With
-        # no work-history heading the scan makes no claim at all.
+    def test_a_background_heading_starts_the_label_scan(self):
+        # Every span is read, so an early profile under this heading costs nothing,
+        # and a CV whose only work heading it is is still checked.
         for heading in ("Career Background", "PROFESSIONAL BACKGROUND"):
             with self.subTest(heading=heading):
-                report = self._label_report([heading, "Company: Contoso Consulting", "Summary text."])
-                self.assertEqual(report["employers"]["missing"], [])
-                self.assertEqual(report["employers"]["source"], 0)
+                report = self._label_report([heading, "Company: Acme Sdn Bhd", "Company: Beta Bhd"])
+                self.assertEqual(report["employers"]["missing"], ["Beta Bhd"])
 
     def test_every_work_history_span_is_read(self):
         # A second work-history heading after another section is read too.
@@ -704,12 +703,17 @@ class LabelledCompanyFidelityTests(unittest.TestCase):
 
     def test_a_name_in_the_label_cell_is_never_a_column_header(self):
         for name in ("Department of Information", "Department of State", "Total",
-                     "Department of Statistics"):
-            for line in ("Company: " + name, "Company | " + name):
-                with self.subTest(line=line):
-                    self.assertEqual(fidelity._source_labelled_companies(line), [name])
-        # Header words in the label's own cell are still a name.
-        self.assertEqual(fidelity._source_labelled_companies("Company: Position Held"), ["Position Held"])
+                     "Department of Statistics", "Position Held"):
+            with self.subTest(name=name):
+                self.assertEqual(fidelity._source_labelled_companies("Company: " + name), [name])
+        # In the next cell, a value made only of header words is the next column's
+        # heading; a real name that merely contains one is still read.
+        for line in ("Company | Total Experience | Position", "Company Name | State | Country",
+                     "Company | Total"):
+            with self.subTest(line=line):
+                self.assertEqual(fidelity._source_labelled_companies(line), [])
+        self.assertEqual(fidelity._source_labelled_companies("Company | Department of Statistics"),
+                         ["Department of Statistics"])
 
     def test_the_audit_is_safe_on_junk(self):
         for parsed in (None, {}, {"work_experiences": None}, {"work_experiences": [None]}):

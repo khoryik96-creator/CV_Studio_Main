@@ -84,12 +84,14 @@ _SECTION_STOP_HEADING_RE = re.compile(
 # "Employment Record", "Relevant Experience". Only the label scan starts here; the
 # bullet count keeps the shared heading alone, so its scope does not change.
 #
-# "Professional Background" and "Career Background" are not here: CVs use them
-# for the profile summary near the top as often as for the work history.
+# "Professional Background" and "Career Background" are profile headings as often
+# as work headings. A profile carries no "Company:" labels, and every span is
+# read (see _label_scan_section), so starting there costs nothing and a CV whose
+# only work heading is one of them is still checked.
 _LABEL_SCAN_START_RE = re.compile(
     r"^\s*(?:(?:WORK(?:ING)?|EMPLOYMENT|CAREER|PROFESSIONAL|RELEVANT|PREVIOUS|PAST|JOB|INDUSTRY)"
     r"\s+(?:EXPERIENCES?|HISTORY|RECORDS?)"
-    r"|EMPLOYMENT\s+BACKGROUND|EMPLOYMENT\s+DETAILS"
+    r"|(?:PROFESSIONAL|CAREER|EMPLOYMENT)\s+BACKGROUND|EMPLOYMENT\s+DETAILS"
     r"|(?:PREVIOUS|PAST)\s+EMPLOYMENTS?|EMPLOYMENT|POSITIONS\s+HELD)"
     r"\s*(?:\([^)]*\))?\s*:?\s*$",
     re.I,
@@ -118,12 +120,14 @@ _LABEL_SECTION_STOP_RE = re.compile(
 # These headings come in more shapes than the pattern above holds -- "REFERENCE
 # CONTACTS", "Professional References", "Referee: Mr Tan" -- so any line that
 # opens with the word, optionally after one qualifier, ends the scan -- except a
-# reference NUMBER inside a job ("Reference No: 4411", "Ref. Code: X"), which is
-# part of that job.
+# labelled reference NUMBER inside a job ("Reference No: 4411", "Reference
+# Number: A-12"), which is part of that job. The label needs its colon: a
+# numbered referee heading such as "Referee #1" or "Reference No. 1" has none,
+# and still ends the scan.
 _LABEL_SCAN_REFERENCE_RE = re.compile(
     r"^\s*(?:(?:PROFESSIONAL|CHARACTER|PERSONAL|EMPLOYMENT|EMPLOYER|WORK|BUSINESS|CAREER|"
     r"ACADEMIC|FORMER|PREVIOUS|KEY)\s+)?(?:REFERENCES?|REFEREES?)\b"
-    r"(?!\s*(?:no\b|nos\b|number|num\b|code|id\b|#))",
+    r"(?!\s*(?:no\b\.?|nos\b\.?|number|num\b\.?|code|id\b|#)[^:\uff1a\r\n]*[:\uff1a])",
     re.I,
 )
 _LABEL_SCAN_PERSONAL_RE = re.compile(
@@ -148,6 +152,30 @@ def _label_scan_starts(line):
     return bool(_EXPERIENCE_HEADING_RE.match(line) or _LABEL_SCAN_START_RE.match(line))
 
 
+def _label_scan_restarts(line):
+    """A later work-history heading that opens another span.
+
+    Stricter than the first start: the shared heading pattern matches a PREFIX,
+    so prose inside a referees block -- "Work experience with the candidate: 3
+    years" -- would reopen the scan into the referees' own "Company:" lines. A
+    restart has to be a heading: no value after a colon, and a few words at most.
+    """
+    text = str(line or "").strip()
+    if _LABEL_SCAN_START_RE.match(text):
+        return True
+    return (
+        bool(_EXPERIENCE_HEADING_RE.match(text))
+        and not re.search(r"[:\uff1a]\s*\S", text)
+        and len(text.split()) <= 4
+    )
+
+
+def _label_scan_ends(line):
+    """A referees or personal-details heading: nothing after it is work history."""
+    text = str(line or "").strip()
+    return bool(_LABEL_SCAN_REFERENCE_RE.match(text) or _LABEL_SCAN_PERSONAL_RE.match(text))
+
+
 def _label_scan_stops(line):
     """Whether a line is a heading that ends the labelled-employer scan.
 
@@ -155,16 +183,13 @@ def _label_scan_stops(line):
     this scan existed; reading past a heading can report someone else's employer
     as missing. So every heading form stops it, and only a heading does: a line
     with a value after its colon, such as "Project: Core banking migration", is
-    part of the job.
+    part of the job. Referee and personal-details headings are not tested here:
+    _label_scan_ends catches them first and ends the whole walk.
     """
     text = str(line or "").strip()
     if not text:
         return False
-    if (
-        _LABEL_SECTION_STOP_RE.match(text)
-        or _LABEL_SCAN_REFERENCE_RE.match(text)
-        or _LABEL_SCAN_PERSONAL_RE.match(text)
-    ):
+    if _LABEL_SECTION_STOP_RE.match(text):
         return True
     # The section list is compared on letters alone, so a line carrying a value
     # -- "Training: 2019", "Languages: 3" -- would read as the bare heading. A
@@ -215,21 +240,21 @@ _LABELLED_COMPANY_TRAILER_RE = re.compile(
 # A next-cell value made up entirely of header words names no employer. Every
 # word has to be one, so an employer that merely contains one -- "Department of
 # Statistics", "Position Partners Sdn Bhd", "Title Insurance Co" -- is still read.
-# Words that make up real employer names on their own -- "Total", "Department of
-# State", "Department of Information" -- are deliberately not in the list.
+# A value in the label's own cell ("Company: Total") is never tested against this
+# list, so real names made of header words are still read there.
 _LABEL_TABLE_HEADER_WORDS = frozenset({
     "industry", "industries", "sector", "position", "positions", "held", "title", "titles",
     "job", "jobs", "designation", "designations", "role", "roles", "rank", "grade", "level",
     "post", "period", "duration", "tenure", "date", "dates", "from", "to", "start",
     "started", "end", "ended", "year", "years", "month", "months", "since", "until",
     "employment", "employed", "department", "division", "location", "country", "city",
-    "address", "salary", "pay", "remuneration", "compensation", "package",
+    "state", "address", "salary", "pay", "remuneration", "compensation", "package",
     "description", "duties", "duty", "responsibilities", "responsibility", "reason",
     "reasons", "leaving", "left", "name", "company", "companies", "employer", "employers",
     "organisation", "organization", "organisations", "organizations", "type", "nature",
     "business", "status", "supervisor", "superior", "reporting", "report", "reports",
     "manager", "achievements", "remarks", "remark", "notes", "contact", "number",
-    "details", "detail", "experience", "current", "last",
+    "details", "detail", "information", "info", "total", "experience", "current", "last",
     "previous", "drawn", "basic", "monthly", "annual", "expected", "notice", "currency",
 })
 _LABEL_HEADER_FILLER_WORDS = frozenset({"of", "and", "the", "for", "in", "at", "no"})
@@ -382,56 +407,61 @@ def _count_parsed_bullets(parsed):
     return total
 
 
-def _experience_section_text(cv_text, stops=None, starts=None):
-    """Text between the experience heading and the next section, or None.
+def _section_spans(cv_text, starts, stops, restarts=None, ends=None):
+    """Spans of lines from a start heading to the next stop, as lists of lines.
 
-    None means no experience heading was found and the section could not be
-    scoped -- the caller then skips the bullet check rather than risk a false
-    positive from bullets elsewhere in the document. ``starts`` and ``stops`` are
-    line tests; by default they are the shared heading and the bullet count's stop
-    list.
-    """
-    starts = starts or _EXPERIENCE_HEADING_RE.match
-    stops = stops or _SECTION_STOP_HEADING_RE.match
-    lines = str(cv_text or "").splitlines()
-    start = None
-    for i, line in enumerate(lines):
-        if starts(line.strip()):
-            start = i + 1
-            break
-    if start is None:
-        return None
-    end = len(lines)
-    for j in range(start, len(lines)):
-        if stops(lines[j].strip()):
-            end = j
-            break
-    return "\n".join(lines[start:end])
-
-
-def _label_scan_section(cv_text):
-    """The work-history text the labelled-employer scan reads, or None.
-
-    Every span from a start heading to the next stop is read, not only the first.
-    A heading earlier in the CV that also reads as a work-history start must not
-    leave the real work history unread.
+    The one walker for both the bullet count and the labelled-employer scan. The
+    heading line itself is not part of a span. With no ``restarts`` only the first
+    span is returned. With ``restarts`` a later heading opens another span, and an
+    ``ends`` line closes the current one and stops the walk for good.
     """
     spans = []
     current = None
     for line in str(cv_text or "").splitlines():
         text = line.strip()
-        if _label_scan_starts(text):
-            if current is None:
-                current = []
+        if current is None:
+            opens = restarts if (spans and restarts) else starts
+            if not spans or restarts:
+                if opens(text):
+                    current = []
             continue
-        if current is not None and _label_scan_stops(text):
+        if ends and ends(text):
+            spans.append(current)
+            return spans
+        if stops(text):
             spans.append(current)
             current = None
+            if not restarts:
+                return spans
             continue
-        if current is not None:
-            current.append(line)
+        current.append(line)
     if current is not None:
         spans.append(current)
+    return spans
+
+
+def _experience_section_text(cv_text):
+    """Text between the experience heading and the next section, or None.
+
+    None means no experience heading was found and the section could not be
+    scoped -- the caller then skips the bullet check rather than risk a false
+    positive from bullets elsewhere in the document.
+    """
+    spans = _section_spans(cv_text, _EXPERIENCE_HEADING_RE.match, _SECTION_STOP_HEADING_RE.match)
+    return "\n".join(spans[0]) if spans else None
+
+
+def _label_scan_section(cv_text):
+    """The work-history text the labelled-employer scan reads, or None.
+
+    Every work-history span is read, not only the first: a heading earlier in the
+    CV that also reads as a work-history start must not leave the real work
+    history unread. A referees or personal-details heading ends the walk.
+    """
+    spans = _section_spans(
+        cv_text, _label_scan_starts, _label_scan_stops,
+        restarts=_label_scan_restarts, ends=_label_scan_ends,
+    )
     if not spans:
         return None
     return "\n".join("\n".join(span) for span in spans)

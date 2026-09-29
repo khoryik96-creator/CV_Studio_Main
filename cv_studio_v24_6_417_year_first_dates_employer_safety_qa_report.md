@@ -1,4 +1,4 @@
-# v24.6.411 – v24.6.416 Year-first dates, and a shortfall that should not ship
+# v24.6.411 – v24.6.417 Year-first dates, and a shortfall that should not ship
 
 Branch: `claude/cv-year-first-dates-employer-safety`.
 Base: master `960a0866b357db702e9cc0fdbabdfcc2e60f12ae`, v24.6.410.
@@ -656,4 +656,89 @@ bringing back the problems v24.6.415 fixed.
   "AWARDS 2021", so it was removed rather than tested. Every earlier round's
   mutations were re-run: none survive.
 - Full suite **1408 passed, 23 skipped**, plus the two environment-only tests.
+  Node **25/25**. Launcher line endings match `origin/master`.
+
+
+---
+
+# v24.6.417 Review corrections, and a guardrail registry
+
+Ten findings on v24.6.416, all fixed. Five were cases v24.6.416 broke, and the
+owner asked why every round kept producing new ones. This version also adds the
+answer: a written rulebook and one test that runs every case from every round.
+
+## Why each round found new bugs
+
+These rules guess a CV's structure from plain text, and every rule has two ways
+to be wrong. Tightening one to stop a false warning usually loosens it somewhere
+else. Each round was checked against every case written down so far, and all of
+them passed. The new findings were almost all cases that had never been written
+down: "Academic Appointments" as a heading, "Referee #1", a "Total Experience"
+column. Checking against the existing tests could not catch a case nobody had
+written.
+
+## The registry
+
+- **`CV_SOURCE_CHECK_GUARDRAILS.md`**: every rule in plain language: what it
+  does, why, and the principle behind all of them. When unsure, the table
+  reader returns fewer rows (the AI's reading is kept) and the source check
+  reports nothing (auto-upload isn't held). It also sets out how to change a
+  rule: add the case first, and never edit or delete an existing case without
+  the owner's agreement.
+- **`tests/fixtures/cv_guardrail_cases.json`**: 208 cases, every scenario from
+  all five review rounds plus the reported CV's own shapes, each tied to a rule.
+- **`tests/test_cv_guardrail_cases.py`**: runs all of them, and fails if a case
+  cites a rule the rulebook doesn't describe, or a described rule has no case.
+
+Run against earlier versions, the registry fails **154 cases on master, 77 on
+v24.6.414, 34 on v24.6.415 and 20 on v24.6.416**, and none on this version. Had it
+existed from the start, every regression in this series would have failed a
+test before review.
+
+## The ten fixes
+
+- **Academic jobs dropped as education.** "Academic Appointments", "Professional
+  Appointments", "Research Positions" and similar now end an education section
+  as whole headings. Fellow, Postdoctoral, Scholar, Demonstrator, Staff and
+  Faculty count as job titles.
+- **"Referee #1" and "Reference No. 1" no longer read on.** The exception for a
+  reference number inside a job now needs its colon ("Reference No: 4411").
+- **No reopening inside referees.** A later span only opens at a real heading (no
+  value after a colon, a few words at most), and nothing after a referees or
+  personal-details heading is read at all.
+- **Header words restored.** "Total Experience", "State" and "Information" are
+  column headings again in the next cell. The label's own cell is never tested,
+  so "Company: Total" is still a name.
+- **"LEADERSHIP POSITIONS" in capitals** no longer ends Education. A capitalised
+  line naming part of an education section (positions, activities, thesis,
+  societies…) isn't taken as the next heading.
+- **"Career / Professional Background" start the scan again.** Since every span
+  is read, an early profile under them costs nothing.
+- **Institution names carrying job words.** The job word is read from the title
+  cell only, so "Institute of Chartered Accountants | Kuala Lumpur" stays
+  education. "Associate of Arts", CIMA and ACCA are qualifications.
+- **One job-title list.** The borderless reader's title pattern and the education
+  rule share one list; the resulting pattern is character-for-character the
+  same as before.
+- **One section walker.** The bullet count and the label scan use one walker, and
+  the bullet count's section is identical to master's.
+- **No second copy of the Blind-mode rule.** Batch calls `cvParseWarningText`
+  directly, as it already calls other page helpers. The page loads
+  `cv-format.js` before `batch-format.js`, and a test pins that order. The batch
+  test harness stubs the helper like its other page globals.
+
+## Regression evidence
+
+- **Whole-suite replay:** 586 distinct inputs replayed through master, v24.6.416
+  and this version: **0 changed outside this work's own tests against either.**
+- **Real documents:** unchanged — the reported CV's wrong rows stay at 0 (master
+  9), the same 8 employers are found, a correct parse keeps all 9 with no
+  warning.
+- **Mutations:** every fix this round broken on purpose and caught. Four
+  initially survived because another rule covered the same case; a registry case
+  isolating each was added. Re-running earlier rounds' mutations exposed a
+  duplicate referee check left dead by this round's walker; it was removed so
+  each rule is checked in one place, and removing either remaining check is
+  caught.
+- Full suite **1415 passed, 23 skipped**, plus the two environment-only tests.
   Node **25/25**. Launcher line endings match `origin/master`.

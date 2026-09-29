@@ -68,7 +68,8 @@
   path, and keeps the parse warning on screen; v24.6.414 corrects ten review
   findings on that work and holds JobAdder auto-upload for a flagged CV; v24.6.415
   corrects ten more, removing false warnings and a dropped-placeholder regression;
-  v24.6.416 corrects ten further findings, four of them regressions from v24.6.415. All await owner
+  v24.6.416 corrects ten further findings, four of them regressions from v24.6.415;
+  v24.6.417 corrects ten more and adds the CV_SOURCE_CHECK_GUARDRAILS.md case registry. All await owner
   testing. No release or native
   protected build is produced by this work; protected builds remain manual.
 
