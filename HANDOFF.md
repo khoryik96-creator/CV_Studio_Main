@@ -305,7 +305,17 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Title above "Company | Place | Dates" rows — v24.6.427, UNMERGED.** Starts at
+- **Title-above rows follow-up — v24.6.428, UNMERGED.** Starts at merged master
+  `01688bb` (v24.6.427). Post-merge review fixes to rule R7: after a place row the
+  reader is unsure of, the next job's bullets no longer join the previous job (and
+  a title-shaped line glued just before it makes that job's source bullets
+  unsure, so the AI's are kept); titles with "and", officer acronyms (CEO, VP,
+  GM) and words such as chairman, counsel and buyer are read as titles; city
+  names with joining words ("Rio de Janeiro") are places. See
+  `cv_studio_v24_6_428_title_above_followup_qa_report.md`.
+
+- **Title above "Company | Place | Dates" rows — v24.6.427, MERGED via PR #218 as
+  `01688bb`.** Starts at
   merged master `bb3b606` (v24.6.425). A reported CV wrote each job as a title line
   with "<Employer> | <City, Country> | <dates>" beneath it. The work-row reader took
   the place as the company, glued each next job's title onto the previous job's last

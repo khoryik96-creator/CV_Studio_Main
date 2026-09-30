@@ -1412,6 +1412,10 @@ _CV_ORGANISATION_WORD_RE = re.compile(
     re.I,
 )
 _CV_WORK_MODE_KEYS = frozenset({"remote", "hybrid", "onsite", "wfh", "workfromhome"})
+_CV_PLACE_JOINING_WORDS = frozenset({
+    "de", "da", "do", "dos", "das", "del", "della", "di", "du", "la", "le", "les",
+    "van", "von", "der", "den", "al", "el", "upon", "sur", "am",
+})
 
 
 def _cv_cell_is_place(text, strict=False):
@@ -1437,13 +1441,17 @@ def _cv_cell_is_place(text, strict=False):
         return False
     if keys[0] in _CV_PLACE_KEYS:
         return True
-    # An unlisted first part counts only beside a listed place, as a city name.
+    # An unlisted first part counts only beside a listed place, as a city name:
+    # capitalised words, with joining words such as "de" among them ("Rio de
+    # Janeiro").
+    words = parts[0].split()
     return (
         not strict
         and len(parts) > 1
         and all(
-            word[:1].isupper() and re.fullmatch(r"[^\W\d_][^\W\d_'.\-]*", word)
-            for word in parts[0].split()
+            re.fullmatch(r"[^\W\d_][^\W\d_'.\-]*", word)
+            and (word[:1].isupper() or word.lower() in _CV_PLACE_JOINING_WORDS)
+            for word in words
         )
     )
 
@@ -1785,7 +1793,13 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
 
     # Words that make a short line a job title, beyond the shared title words.
     title_above_word = re.compile(
-        r"\b(?:co-?)?founders?\b|\bowners?\b|\blead\b|\bfreelancer?\b|\bproprietor\b",
+        r"\b(?:co-?)?founders?\b|\bowners?\b|\blead\b|\bfreelancer?\b|\bproprietor\b|"
+        r"\b(?:chair(?:man|woman|person)?|counsel|representative|buyer|merchandiser|cashier|"
+        r"agent|advis[eo]r|editor|producer|pharmacist|physician|doctor|lawyer|attorney|"
+        r"solicitor|auditor|treasurer|surveyor|estimator|inspector|operator|salesperson|"
+        r"promoter|ambassador|strategist|economist|statistician|writer|copywriter|"
+        r"journalist|photographer|therapist|pilot|captain)s?\b|"
+        r"\b(?:CEO|CFO|COO|CTO|CIO|CMO|CHRO|CPO|CRO|CISO|CDO|VP|SVP|EVP|AVP|GM|MD)\b",
         re.I,
     )
 
@@ -1795,7 +1809,7 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
     title_above_prose_start = re.compile(
         r"^(?:[A-Z][a-z]+(?:ing|ed)|Led|Ran|Built|Drove|Grew|Helped)\s+"
         r"(?:to|the|a|an|with|for|on|in|into|across|under|through|by|at|from|alongside|"
-        r"and|all|our|his|her|their|its|over|within)\b",
+        r"all|our|his|her|their|its|over|within)\b",
     )
 
     # A line ending in one of these is a sub-heading ("EXECUTIVE EXPERIENCE",
@@ -1822,7 +1836,20 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
         if above < 0:
             return None
         text = lines[above]
-        if (
+        if not _line_is_title_shaped(text):
+            return None
+        pieces = [text] + re.split(r"\s+[—–-]\s+", text)
+        if not (
+            any(_dash_side_is_role_title(piece) for piece in pieces)
+            or _WORK_ROLE_WORD_RE.search(text)
+            or title_above_word.search(text)
+        ):
+            return None
+        return above
+
+    def _line_is_title_shaped(text):
+        """A short capitalised line that is not a bullet, date, heading or sentence."""
+        return not (
             len(text) > 90
             or len(text.split()) > 12
             or "|" in text
@@ -1834,16 +1861,7 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
             or history_heading.match(text)
             or stop_heading.match(text)
             or _is_cv_section_boundary(text)
-        ):
-            return None
-        pieces = [text] + re.split(r"\s+[—–-]\s+", text)
-        if not (
-            any(_dash_side_is_role_title(piece) for piece in pieces)
-            or _WORK_ROLE_WORD_RE.search(text)
-            or title_above_word.search(text)
-        ):
-            return None
-        return above
+        )
 
     def _place_cell_row_parts(head, line_index):
         """(company, title, title line index) for a row ending in a place cell.
@@ -2195,12 +2213,24 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
         # A line that structurally resembles a one-year job header but failed
         # the grounding rules is neither a job nor a wrapped continuation of
         # the preceding duty. Flush the real duty and discard the unsafe line.
-        if _rejected_single_year_header_shape(line):
-            flush_source_bullet()
-            continue
-        # Likewise a place row the reader was unsure of (R7): it starts a job the
-        # AI keeps, so it is not part of the previous job's last duty.
+        # A place row the reader was unsure of (R7) starts a job the
+        # AI keeps, so it is not part of the previous job's last duty, and the
+        # bullets after it belong to that job, not to the previous one. When the
+        # line glued onto the last duty just before it is shaped like a title,
+        # the previous job's source bullets are unsure too, and the AI's are kept.
         if _place_row_line_parts(line, line_index) == ():
+            glued_title = False
+            if active_bullet and active_row is not None:
+                above = line_index - 1
+                while above >= 0 and not lines[above]:
+                    above -= 1
+                glued_title = above >= 0 and _line_is_title_shaped(lines[above])
+            flush_source_bullet()
+            if glued_title:
+                active_row.pop("source_bullets", None)
+            active_row = None
+            continue
+        if _rejected_single_year_header_shape(line):
             flush_source_bullet()
             continue
 

@@ -75,7 +75,9 @@
   candidate's pay out of the generated Summary box with one server filter and are
   merged via PR #217 as `bb3b606`. v24.6.427 reads a job title above an
   "Employer | Place | Dates" row (rule R7), keeps a dash-joined employer whole and
-  restores a stated graduation year (rule F4); it awaits owner testing. No release or native
+  restores a stated graduation year (rule F4); it is merged via PR #218 as
+  `01688bb`. v24.6.428 fixes the post-merge review findings on rule R7 and awaits
+  owner testing. No release or native
   protected build is produced by this work; protected builds remain manual.
 
 ## v24.6.403-v24.6.405 CV source-safety corrective (merged via PR #210)
