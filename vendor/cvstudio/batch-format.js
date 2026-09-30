@@ -375,6 +375,9 @@ async function runBatch() {
       // Worded by cvParseWarningText (cv-format.js, loaded before this file), so
       // single and batch runs share one rule for what Blind mode may show.
       bf.parseWarning = cvParseWarningText(pData, isBlind);
+      // Pay removed from the Summary box is kept on the row and holds auto-upload,
+      // when that parsed summary is the one used rather than an automatic one.
+      if (pData.summary_pay_removed && !withBatchSummary) bf.parseWarning = cvJoinWarnings(bf.parseWarning, cvSummaryPayNote(pData.summary_pay_removed, false));
       if (bf.parseWarning) showToast(bf.file.name + ': ' + bf.parseWarning, 'warn');
       bf.cost += responseCost(pData, route.model, route.provider);
       bf.usage = mergeUsageClient(bf.usage, pData.usage || {});
@@ -383,6 +386,7 @@ async function runBatch() {
         batchSetProgress(bf, pcts[2], 'Filling Summary placeholder with ' + batchSummaryRoute.provider_label + '…', makeSteps(2));
         var batchSummaryResult = await requestFormattingSummary(rawText, batchSummaryRoute, batchSummaryDetail);
         cvData.summary_bullets = batchSummaryResult.bullets.slice();
+        if (batchSummaryResult.pay_removed) bf.parseWarning = cvJoinWarnings(bf.parseWarning, cvSummaryPayNote(batchSummaryResult.pay_removed, batchSummaryResult.pay_only));
         bf.cost += batchSummaryResult.cost;
         bf.usage = mergeUsageClient(bf.usage, batchSummaryResult.usage);
       }
@@ -404,6 +408,7 @@ async function runBatch() {
           throw new Error('Blind: ' + normalizeAiProviderError(bData.error || ('API error ' + bRes.status), route));
         }
         cvData = bData.data;
+        if (bData.summary_pay_removed) bf.parseWarning = cvJoinWarnings(bf.parseWarning, cvSummaryPayNote(bData.summary_pay_removed, false));
         bf.cost += responseCost(bData, route.model, route.provider);
         bf.usage = mergeUsageClient(bf.usage, bData.usage || {});
       }
@@ -414,6 +419,8 @@ async function runBatch() {
       var dRes = await fetchWithTimeout('/generate-docx', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data: cvData, alignment: batchDocumentAlignment, summary_box_autofit: getCvSummaryBoxAutoFit(), bullet_levels: cvMergeLevelLists(batchExtractLevels, batchLabelLevels) }) }, 60000);
       if (!dRes.ok) { var err2 = await dRes.json(); throw new Error('DOCX: ' + (err2.error||'Failed')); }
       var blob = await dRes.blob();
+      var docxPayRemoved = dRes.headers && dRes.headers.get ? dRes.headers.get('X-CV-Summary-Pay-Removed') : null;
+      if (docxPayRemoved) bf.parseWarning = cvJoinWarnings(bf.parseWarning, cvSummaryPayNote(docxPayRemoved, false));
 
       // Build filename using real name saved before blind
       var displayName = realBatchName

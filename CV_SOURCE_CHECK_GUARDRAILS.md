@@ -10,6 +10,8 @@ a real CV or a review finding. **Read it before changing any of these files:**
 - `cvstudio_cv_normalize.py`: `_cv_pretranslate_year_first_month_names` and
   `_recover_education_source_labels`
 - `cvstudio_cv_reconcile.py`: `_restore_labelled_company_qualifiers`
+- `_cv_strip_pay_from_summary` (`cvstudio_cv_normalize.py`): salary in the
+  generated Summary box
 - `vendor/cvstudio/cv-format.js`, `batch-format.js`, `create-profile.js`: how
   the warning is shown, and the auto-upload hold
 
@@ -27,6 +29,9 @@ runs all of them on every test run.
 
 ## How to change these rules
 
+Every change, including every fix for a review finding, goes through all six
+steps. Skipping one is how earlier rounds broke things.
+
 1. **Add the new case first**, to `cv_guardrail_cases.json`, under an existing
    rule or a new one described here. Watch it fail.
 2. Make the change. **Every existing case must still pass.** If one fails, the
@@ -34,6 +39,15 @@ runs all of them on every test run.
    not the case. Only the owner can agree to change or delete a case.
 3. Run the whole-suite replay (see the v24.6.416 QA report) and confirm nothing
    outside the new cases changed against master.
+4. For P1, `tests/test_cv_summary_salary_generated.py` also runs thousands of
+   generated sentences, and a speed limit on hostile input. Add a new way of
+   stating pay, a new kind of pay-related work, or a new slow input shape to its
+   lists rather than only a single case.
+5. **Compare the old and new rule** on every sentence in the repository's code,
+   tests and docs. Every difference must be a new case or an intended fix; any
+   other difference is a regression to fix first.
+6. **Break each fix on purpose** and confirm a test fails. A break that no test
+   notices means that part has no case of its own; add one.
 
 ## The one principle
 
@@ -193,6 +207,200 @@ Date", "Presently" and bare-year ends are included. A month's full stop or
 comma moves with it: "Jun. 2025". Prose ("figures for 2023 may be revised"),
 month-first dates, bare-year ranges and lines with several dates are never
 touched.
+
+## Summary box
+
+### P1
+**The generated summary never states the candidate's pay.** The CV Summary
+instructions forbid it, and there is one filter, `_cv_strip_pay_from_summary`
+in `cvstudio_cv_normalize.py`, run where each summary is made:
+
+- `/generate-ai`, for the two CV Summary callers, which send
+  `strip_candidate_pay: true`. The browser only ever receives filtered text.
+- `/parse` and `/blind`, so the preview shows what the Word file will carry.
+- `/generate-docx`, on both of its paths, as a last net.
+
+There is no browser copy.
+
+**A summary is also the candidate's work, and much of that work is about pay**
+(HR, payroll, recruitment, sales). So a sentence is removed only on a clear
+sign that it states the candidate's **own** pay:
+
+1. **Always removed.** This covers:
+   - "my" or "candidate's", or expected / asking / last-drawn, before a pay
+     word ("salary", "package", "wage", "income"…) and an amount ("Expected
+     salary RM16,000", "Expected wage RM 3,000");
+   - "On a package of RM 150k";
+   - "The candidate / he / she is paid RM 9,000".
+
+   Nothing overrides these. "his", "her" and "their" alone aren't enough,
+   because a recruiter "negotiated their salary".
+
+   "Current", "present" or "previous" before a pay word and an amount is also
+   removed ("Led a team of 8 on a current salary of RM 12k"). The one exception
+   is a clause that opens with a work verb and names the organisation's money
+   or people ("Restructured current compensation of RM 12M for 300 staff").
+2. **Removed unless the words around the amount describe work.** This covers:
+   - a pay word and an amount in either order ("Salary: RM 17,000", "RM16,000
+     salary");
+   - "Last drawn RM 9,000", "RM 9,000 expected", "Asking for RM 10k", "Seeking
+     RM 12k", "Looking for RM 12,000", "Seeking a senior role with RM 12k
+     monthly", "Current: RM 9,000";
+   - a label and an amount: "Package: RM 150,000", "Pay: RM 9k", "Income - RM
+     9,000"; "Monthly income RM 9,000"; "current role pays RM 9k";
+   - "Gross / Nett RM 9,000 / month";
+   - "Receives / Makes / Gets RM 9,000 monthly", and "They are paid RM 9,000";
+   - "Earning RM 9k", "Takes home RM 7,000 monthly", "earning RM 300k in
+     commission annually";
+   - more connectors: "Salary per month: RM 9,000", "Salary in 2024 was RM
+     9,000", "Salary currently stands at RM 9,000", "Salary drawn:", "Salary
+     history:", "package worth RM 200k";
+   - "Monthly gross RM 9,000", "Current base of USD 120,000", "Basic RM 7,000 +
+     allowance RM 1,000", and a space in the figure ("RM 9 000");
+   - a clause that is only an amount per period ("RM 9,000 / month");
+   - earnings, a bonus, commission or allowance per period;
+   - lakhs per annum.
+
+   **Only the words around the amount count.** That means its own comma part,
+   no more than 300 characters either side. A work word elsewhere in the
+   sentence doesn't hide the pay:
+   - "Heads the revenue team, salary RM 20k" keeps only "Heads the revenue
+     team".
+   - In "Sales manager across APAC with salary of USD 150,000", the part is cut
+     at the word that attaches the pay ("with", "earning", "on a"), so it is pay.
+   - One pay attached with "with" is the person's own, whatever work the
+     sentence opened with ("Leads a budget of RM 5M with salary RM 20k").
+   - A range or plural is other people's: "with average salaries of RM 15k",
+     "with total compensation up to $250k".
+
+   The words around an amount describe work when:
+   - its part opens with a work verb from an explicit list ("Managed total
+     compensation of $12M", "Placed 40 executives averaging $180k"). The list
+     leaves out "earned", "drew", "paid" and "made", and the adjectives a
+     summary opens with ("Seasoned");
+   - a work verb comes just before the pay phrase ("Seasoned payroll specialist
+     handling salaries of RM 2M monthly");
+   - it names the organisation's money ("budget", "costs", "revenue", "AUM");
+   - it names who the money is for ("for 300 staff", "to the sales team", "for
+     the group", "across APAC");
+   - it is someone else's pay the candidate worked on ("negotiated their salary
+     of RM 15k");
+   - it is a recruiter describing the roles they fill ("placing C-suite leaders
+     with compensation above USD 500k", "Tech recruiter for roles with a CTC of
+     30 LPA"). This doesn't apply when the clause says it's the candidate's
+     own ("Recruiter earning RM 9k monthly").
+
+   Some phrases look like these but are still pay:
+   - "across base, bonus and allowances" (the parts of one's own pay);
+   - "for the team lead role" (a role, not people);
+   - "for 12 LPA" (an amount, not a headcount).
+
+   A year after "from" or "since" is a date, not an amount ("Head of
+   Compensation from 2019").
+3. **Pay talk with no amount that only a candidate says of their own pay** is
+   removed, unless the sentence opens with a work verb. Examples: "Salary:
+   negotiable", "salary is negotiable", "open to discuss remuneration".
+4. **Pay talk that can be about anyone** ("expected salary", "salary
+   expectations") is removed unless something says it's someone else's. That
+   means any of:
+   - "of", "for" or "across" after it;
+   - a reporting verb after it ("were benchmarked");
+   - a work noun after it ("ranges", "dashboards");
+   - a work verb at the start;
+   - another group's possessive before it ("candidates'").
+
+   "For the next role" is the candidate's own move, and is removed.
+
+**Amounts.** An amount has a currency ("RM", "$", "ringgit") or a unit ("k",
+"LPA"). A letter code such as "RM" or "PHP" must be a word of its own, followed
+by three or more figures or a unit. So "Form 16", "Norm 3000" and "PHP 8" are
+not money. A plain figure counts only directly after a pay word, with three or more
+digits, and only where it ends the sentence or is followed by a pay period,
+currency or pay word. A year-like figure is held to that strictly. A figure
+never starts inside another one ("2016" holds no "016").
+
+**Removal** is by sentence, and by semicolon clause within a sentence. Sentence
+ends are handled as follows:
+
+- A sentence ends after closing Markdown emphasis ("**Expected salary RM 9k.**
+  Available"), and after a figure ("a team of 8.", "by 5.5%.").
+- It also ends after "Sdn Bhd.", "Ltd.", "etc." and "p.a.".
+- "Sr.", "Dr.", "Sdn." and a list number ("1.") never end one.
+- A single letter, a dotted token ("U.S.", "B.Sc."), "Co." or a month ends a
+  sentence only when the next sentence states pay on its own. So "Worked at
+  Acme Co. Expected salary RM 9k." keeps "Worked at Acme Co.", and "Joined
+  Acme Co. Ltd. in 2019." stays whole.
+- It also ends at a full stop with no space before a capitalised word
+  ("Salary RM 9,000.Led HR team."). Kept sentences keep the spacing they had,
+  so "booking.Com" stays whole.
+- A stop before a lowercase word ends a sentence only when the next sentence
+  states pay ("Head of Payroll. salary RM 15k." keeps "Head of Payroll.").
+- **Clauses next to a pay clause.** In a sentence that states pay, the clause
+  right after the pay clause goes with it when it:
+  - carries an amount;
+  - starts with a pay continuation ("plus 2 months bonus", "negotiable");
+  - or starts with "with", "and" or "or" and names pay ("with 2 months
+    bonus").
+
+  The clause right before goes with it only when it is just an amount ("RM
+  9,000; Expected: RM 11,000"). A clause further away, or one that describes
+  work, stays: "Expected salary RM 9k; led HR at Acme; and holds a CIPD
+  qualification" keeps both facts.
+- **Comma parts.** Within a pay clause, a comma-separated part that isn't pay
+  stays when it reads as its own phrase, starts with a capital, and holds no
+  pay words and no money that isn't work.
+  - "Expected salary RM 9k, CIPD-certified HR leader" keeps "CIPD-certified HR
+    leader".
+  - "Grew revenue to RM 5M, expected salary RM 9k" keeps its revenue.
+  - "Current salary RM 9k, managing 10 staff" leaves nothing.
+
+After a removal:
+
+- A "**" left without its partner is dropped.
+- A bullet left empty is dropped.
+- A bullet that isn't text is never edited. The Word file writes it as text,
+  so it is dropped whole when that text states pay.
+- The count is of sentences, not clauses.
+- In provider text, "-", "*", "•" and numbered ("1.", "2)") lines are list lines.
+  If every list line was pay, an intro such as "Here is the summary:" is
+  dropped too.
+
+Filtering again changes nothing, and hostile input can't slow it down. Reading
+is linear: a run of stops is looked at once, the word before a stop is found by
+walking back only as far as needed, and the words around an amount are read
+within a fixed window. The Word paths filter only what the file can use (60
+bullets of 20,000 characters). Every known slow shape, such as long runs of
+digits, dots, abbreviations or pay phrases, stays under 2 seconds in a test. This is checked on 12,728 inputs, including
+random combinations with bold and semicolons.
+
+**Every removal is shown.** `/parse` and `/blind` return `summary_pay_removed`,
+`/generate-ai` always does when asked, and `/generate-docx` sends
+`X-CV-Summary-Pay-Removed`. What the page does with it:
+
+- **Format and Batch:** the note joins the source-check warning. It stays above
+  the preview and on the batch row, and holds JobAdder auto-upload the same way
+  (S1, S2). The parse's note counts only when that parsed summary is the one
+  used, not one replaced by a linked or automatic summary.
+- **Summary tab:** the note is shown under the summary.
+- **Pay-only summary:**
+  - Format and Batch carry on with an empty Summary box, and count the
+    summary's cost.
+  - The Summary tab says "only described the candidate's pay" and records the
+    paid call as a summary, not a failed one.
+  - The uploaded-DOCX route says the same. Its only job is filling the
+    Summary, so with nothing left it has nothing to write. When it removes
+    only part, it sends the same header, and the page warns. The filter runs
+    once there, so the header and the file always agree.
+  - A pay-only regeneration on the Summary tab also unlinks a summary linked
+    earlier for formatting that CV. It says so as a warning: the tab isn't
+    marked failed, because the paid call succeeded.
+- **`/generate-docx` (JSON), the formatted CV:** it never refuses the whole CV
+  over its summary.
+
+Matching runs on an NFKC-normalised copy with Markdown emphasis removed, so
+"**Salary:** RM 17,000" is caught. Full-width digits count as ordinary digits,
+digits in other scripts count too, and a neighbouring non-Latin character
+doesn't hide an amount.
 
 ## Screen (checked by `tests/test_cv_parse_warning_persistence_frontend.js`)
 

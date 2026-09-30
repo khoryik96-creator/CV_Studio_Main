@@ -164,6 +164,9 @@ async function applySummaryToUploadedDocx() {
     var summaryName = base + (window._summaryGeneratedAnonymized === true ? ' - Anonymized Summary.docx' : ' - Summary.docx');
     var result = await cvStudioSaveDownloadBlob(blob, summaryName, 'summary');
     cvStudioShowDownloadResult(result, 'Summary output');
+    // After the saved message, so it is the one left on screen.
+    var payRemoved = response.headers && response.headers.get ? response.headers.get('X-CV-Summary-Pay-Removed') : null;
+    if (payRemoved) showToast(cvSummaryPayNote(payRemoved, false), 'warn');
   } catch(e) {
     showToast('DOCX Summary failed: ' + (e.message || 'Unknown error'), 'err');
   } finally {
@@ -211,10 +214,22 @@ function cvSummaryPrompt(cv, modifier, focusNote, anonymize) {
   modifier = modifier || 'normal';
   var modNote = modifier === 'shorter' ? 'Use exactly 4-5 bullet points.' : modifier === 'longer' ? 'Use 8-10 detailed bullet points with useful metrics where available.' : 'Use 6-7 bullet points.';
   var anonymizeRules = anonymize ? '\nANONYMIZATION — REQUIRED:\n- Refer to the candidate only as "the candidate". Do not output the candidate name or gendered candidate pronouns.\n- Do not output email addresses, phone numbers, URLs, personal websites, or precise home addresses.\n- Do not name any employer, client, customer, product brand, university, school, or education institution. Replace them with accurate generic descriptions such as "a leading regional bank", "a global technology company", or "an established university".\n- Preserve supported job titles, responsibilities, technologies, qualifications, dates, metrics and achievements unless a detail itself directly identifies the candidate or organization.\n- Do not rename or neutralize managers, colleagues, clients, referees, or other people; simply avoid unnecessary identifying references to them.\n' : '';
-  return 'You are a senior recruitment consultant. Produce a professional candidate summary.\n\nRULES:\n- Output ONLY bullet points, no intro, no headers.\n- Every bullet starts with "- ".\n- Bold the most important keyword or phrase per bullet using **double asterisks**.\n- Third-person, professional, concise.\n- Do not invent employers, dates, certifications, industries, metrics, or achievements that are not supported by the CV.\n- Keep the candidate marketable but accurate.\n- ' + modNote + '\n' + (focusNote ? ('- ' + focusNote + '\n') : '') + anonymizeRules + '\nCV:\n---\n' + cv + '\n---';
+  return 'You are a senior recruitment consultant. Produce a professional candidate summary.\n\nRULES:\n- Output ONLY bullet points, no intro, no headers.\n- Every bullet starts with "- ".\n- Bold the most important keyword or phrase per bullet using **double asterisks**.\n- Third-person, professional, concise.\n- Do not invent employers, dates, certifications, industries, metrics, or achievements that are not supported by the CV.\n- Never mention the candidate\'s salary or pay in any form: current, last drawn, expected or asking salary, remuneration, compensation, package, bonus, commission, allowances, EPF, or whether pay is negotiable. Leave it out even when the CV states it.\n- Keep the candidate marketable but accurate.\n- ' + modNote + '\n' + (focusNote ? ('- ' + focusNote + '\n') : '') + anonymizeRules + '\nCV:\n---\n' + cv + '\n---';
 }
 function cvSummaryModifierForPreference(preference) {
   return String(preference || '').toLowerCase() === 'detailed' ? 'longer' : 'normal';
+}
+// The server removes the candidate's pay from a summary and says how much it
+// removed. The page always says so: the box may be emptier than expected, and a
+// removal nobody sees could hide a mistake.
+function cvSummaryPayNote(removed, emptied) {
+  var count = Number(removed) || 0;
+  if (count <= 0) return '';
+  if (emptied) return 'The CV Summary only described the candidate\'s pay, so the Summary box was left empty.';
+  return 'Removed ' + count + ' sentence' + (count === 1 ? '' : 's') + ' about the candidate\'s pay from the CV Summary. Check the Summary before sending.';
+}
+function cvJoinWarnings(first, second) {
+  return [String(first || '').trim(), String(second || '').trim()].filter(Boolean).join(' ');
 }
 async function requestFormattingSummary(raw, route, detailPreference) {
   var response = await fetchWithTimeout('/generate-ai', {
@@ -227,7 +242,8 @@ async function requestFormattingSummary(raw, route, detailPreference) {
       model:route.model,
       prompt:cvSummaryPrompt(raw, cvSummaryModifierForPreference(detailPreference), ''),
       max_tokens:1000,
-      use_tools:false
+      use_tools:false,
+      strip_candidate_pay:true
     })
   }, 180000);
   var data = await response.json().catch(function(){ return {}; });
@@ -237,6 +253,20 @@ async function requestFormattingSummary(raw, route, detailPreference) {
   }
   var rawSummary = aiText(data);
   var bullets = summaryBulletLines(rawSummary);
+  // The server removed every line as the candidate's pay. The call succeeded and
+  // is paid for, so the run carries on with an empty Summary box and its cost is
+  // counted with the run; it is not a provider failure. The caller keeps the
+  // warning on screen (cvSummaryPayNote).
+  if (!bullets.length && data.summary_pay_removed > 0) {
+    return {
+      bullets:[],
+      cost:responseCost(data, route.model, route.provider),
+      usage:data.usage || {},
+      data:data,
+      pay_only:true,
+      pay_removed:data.summary_pay_removed
+    };
+  }
   if (!bullets.length) {
     recordPaidAiFailure('CV Summary during formatting returned empty output', data, route.model, route.provider);
     throw new Error('Empty CV Summary returned');
@@ -245,7 +275,8 @@ async function requestFormattingSummary(raw, route, detailPreference) {
     bullets:bullets,
     cost:responseCost(data, route.model, route.provider),
     usage:data.usage || {},
-    data:data
+    data:data,
+    pay_removed:data.summary_pay_removed || 0
   };
 }
 async function generateSummary(modifier) {
@@ -270,7 +301,7 @@ async function generateSummary(modifier) {
   if (output) { output.style.display = 'block'; output.innerHTML = '<div style="display:flex;align-items:center;gap:10px;color:var(--text3);"><span class="spinner"></span><span>Generating summary with ' + esc(route.display) + '…</span></div>'; }
   if (placeholder) placeholder.style.display = 'none'; if (btn) btn.disabled = true; updateSummaryRouteBadge();
   try {
-    var summaryRequest = { api_key: route.api_key, api_key_slot: route.api_key_slot, provider: route.provider, model: route.model, prompt: prompt, max_tokens: modifier === 'longer' ? 1600 : 1000, use_tools:false };
+    var summaryRequest = { api_key: route.api_key, api_key_slot: route.api_key_slot, provider: route.provider, model: route.model, prompt: prompt, max_tokens: modifier === 'longer' ? 1600 : 1000, use_tools:false, strip_candidate_pay:true };
     if (anonymize) {
       summaryRequest.feature = 'summary_anonymized';
       summaryRequest.source_cv_text = cv;
@@ -282,6 +313,21 @@ async function generateSummary(modifier) {
       throw new Error(normalizeAiProviderError(d.error || ('API error ' + r.status), route));
     }
     var raw = aiText(d);
+    // Every line was the candidate's pay: the call succeeded and was paid for, so
+    // its cost is recorded like any summary and the tab is not marked failed; the
+    // page says what happened as a warning, not as a provider failure.
+    if (!summaryBulletLines(raw).length && d.summary_pay_removed > 0) {
+      statsRecord((anonymize ? 'Anonymized CV Summary — ' : 'CV Summary — ') + getSummaryFocusLabel(), 'summary', responseCost(d, route.model, route.provider), d.model || route.model, '', d.provider || route.provider, statsMetaFromResponse(d, route.model, route.provider));
+      // A summary linked earlier for formatting this CV is unlinked too, so
+      // formatting cannot quietly use a summary that is not the latest result.
+      var unlinked = !!(window._formatSummaryDraft && String(window._formatSummaryDraft.cv_text || '').trim() === cv);
+      if (unlinked) clearFormatSummaryDraft();
+      var payOnlyNote = 'The CV Summary only described the candidate\'s pay, which is never included. Generate it again for a new summary.' + (unlinked ? ' The summary linked earlier for formatting is no longer linked.' : '');
+      if (output) output.innerHTML = '<div class="cv-parse-warning" role="note">\u26a0 ' + esc(payOnlyNote) + '</div>';
+      markTabDone('summary', run);
+      showToast(payOnlyNote, 'warn');
+      return;
+    }
     if (!raw) {
       recordPaidAiFailure('CV Summary returned empty output', d, route.model, route.provider);
       throw new Error('Empty summary returned');
@@ -290,14 +336,17 @@ async function generateSummary(modifier) {
     window._summaryGeneratedSource = cv;
     window._summaryGeneratedAnonymized = anonymize;
     if (!window._summaryGeneratedBullets.length) throw new Error('Empty summary returned');
-    if (output) output.innerHTML = renderSummaryText(raw);
+    var payNote = cvSummaryPayNote(d.summary_pay_removed, false);
+    if (output) output.innerHTML = renderSummaryText(raw) + (payNote ? '<div class="cv-parse-warning" role="note">\u26a0 ' + esc(payNote) + '</div>' : '');
     updateSummaryOutputTitle();
     if (formatBtn) formatBtn.disabled = !ta || String(ta.value || '').trim() !== cv;
     updateSummaryApplyDocxButton();
     var usage = normalizeUsageClient(d.usage || {}); var cost = responseCost(d, route.model, route.provider);
     if (costEl) costEl.textContent = (cost > 0 ? ('$' + cost.toFixed(4) + ' · ') : '') + ((usage.input_tokens || 0) + (usage.output_tokens || 0)).toLocaleString() + ' tokens · ' + providerLabel(d.provider || route.provider, d.model || route.model);
     statsRecord((anonymize ? 'Anonymized CV Summary — ' : 'CV Summary — ') + getSummaryFocusLabel(), 'summary', cost, d.model || route.model, '', d.provider || route.provider, statsMetaFromResponse(d, route.model, route.provider));
-    markTabDone('summary', run); showToast(anonymize ? 'Anonymized CV Summary generated' : 'CV Summary generated', 'ok');
+    markTabDone('summary', run);
+    if (payNote) showToast(payNote, 'warn');
+    else showToast(anonymize ? 'Anonymized CV Summary generated' : 'CV Summary generated', 'ok');
   } catch(e) {
     if (output) output.innerHTML = '<div style="color:var(--red);font-size:13px;line-height:1.5;">⚠ ' + esc(e.message || 'CV Summary failed') + '</div>';
     markTabFailed('summary', run); showToast('CV Summary failed: ' + (e.message || 'Unknown error').split('\n')[0], 'err');

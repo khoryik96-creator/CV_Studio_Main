@@ -305,7 +305,27 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Year-first dates and a reported employer shortfall — v24.6.411–v24.6.418, UNMERGED.**
+- **Summary box salary guardrail — v24.6.419–v24.6.425, UNMERGED.** Starts at merged
+  master `56dca18`. The generated CV Summary never states the candidate's pay: the
+  summary instructions forbid it, and one server filter (`_cv_strip_pay_from_summary`)
+  removes any statement of it -- in `/generate-ai` when the CV Summary callers send
+  `strip_candidate_pay: true`, in `/blind` for a promoted source summary, and in both
+  `/generate-docx` paths as a last net; `/parse` filters too so the preview matches.
+  There is no browser copy. A sentence is removed only on a clear sign it states the
+  candidate's own pay; a sentence describing work (a work verb, the organisation's
+  money, the people it is for) is kept. Every removal is reported and kept on screen
+  with the source-check warning, holding JobAdder auto-upload; the formatted CV is
+  never refused over its summary. Rule P1 in `CV_SOURCE_CHECK_GUARDRAILS.md` (485
+  cases) plus `tests/test_cv_summary_salary_generated.py` (generated own-pay, work,
+  currency-lookalike and fact-before-pay sentences, and repeat/consistency/bold
+  checks, plus a speed limit on hostile input). See
+  `cv_studio_v24_6_425_summary_salary_guardrail_qa_report.md`. Whether a pay phrase is
+  work is judged from the words around the amount, not the whole sentence. Any
+  change to these rules follows the six steps in the rulebook's "How to change
+  these rules".
+
+- **Year-first dates and a reported employer shortfall — v24.6.411–v24.6.418, MERGED
+  via PR #216 as `56dca18`.**
   Starts at merged master `960a086`. A real formatted CV came back missing the
   candidate's three most recent employers, including his current job, with two
   education rows rendered as jobs and every employer name replaced by the table
