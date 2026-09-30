@@ -66,6 +66,10 @@ class WorkRowReaderGuardrails(unittest.TestCase):
             with self.subTest(case=case["id"]):
                 rows = _rows(case["lines"], case["titles"])
                 self.assertEqual([r["company"] for r in rows], case["expect_companies"], case["note"])
+                if "expect_titles" in case:
+                    self.assertEqual([r["title"] for r in rows], case["expect_titles"], case["note"])
+                if "expect_bullets" in case:
+                    self.assertEqual([r.get("source_bullets", []) for r in rows], case["expect_bullets"], case["note"])
 
     def test_set_aside_rows_are_read_outside_education(self):
         # A row set aside inside Education must be one the reader otherwise takes,

@@ -72,8 +72,10 @@
   v24.6.417 corrects ten more and adds the CV_SOURCE_CHECK_GUARDRAILS.md case registry;
   v24.6.418 keeps a bracketed employer brand, the CGPA label and education majors.
   v24.6.411–418 are merged via PR #216 as `56dca18`. v24.6.419–425 keep the
-  candidate's pay out of the generated Summary box with one server filter and await
-  owner testing. No release or native
+  candidate's pay out of the generated Summary box with one server filter and are
+  merged via PR #217 as `bb3b606`. v24.6.427 reads a job title above an
+  "Employer | Place | Dates" row (rule R7), keeps a dash-joined employer whole and
+  restores a stated graduation year (rule F4); it awaits owner testing. No release or native
   protected build is produced by this work; protected builds remain manual.
 
 ## v24.6.403-v24.6.405 CV source-safety corrective (merged via PR #210)

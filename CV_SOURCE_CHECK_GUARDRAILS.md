@@ -108,6 +108,34 @@ section.
 Education" and a university as an employer inside the work history are kept. A
 three-column table with no heading at all is read exactly as it always was.
 
+### R7
+**A place is never a company; the line above names the job.** In "Acme
+Holdings | Kuala Lumpur, Malaysia | Apr 2019 – Dec 2024" the last cell before
+the dates is a place, so the employer is the cell before it, whole, dash and
+all ("Contoso Media – Northwind Books"). The job title is the short line
+directly above: it starts with a capital, names a job, and is not a bullet, a
+date, a heading, a sub-heading ending in "Experience", "Roles" or "Positions",
+a sentence ending in a full stop, or a wrapped duty such as "Reporting to
+General Manager" (a verb form followed by a linking word; "Managing Director"
+is still a title). That line starts the next
+job, so it is never glued onto the previous job's last bullet. With the title
+on the same line ("Engineer – Acme | Singapore", "Engineer | Acme | Singapore")
+the place is dropped and the rest is read as before.
+
+A place is a country, state or large city on the list in
+`_CV_PLACE_KEYS`, "City, Country" (any capitalised city name, accents included:
+"São Paulo, Brazil") or "Remote". A cell with an organisation
+word is an employer: "Singapore Airlines", "Acme Sdn Bhd, Malaysia".
+
+When unsure, no row: no title above, a job title where the employer should
+be, or a title above as well as a job word inside a dash-joined cell
+("Contoso – Executive Search"). An unsure row is left out, never glued onto
+the bullet above it. A company that is only a known place, from any reader, is
+refused. Words that are also an employer's whole name ("Sea", "Global") are not
+on the list. A cell that is only loosely a place (an unlisted name before a
+country, such as "Contoso, Kuala Lumpur") after a job title, or with no clear
+title, is read exactly as before.
+
 ## Source check (missing and unnamed employers)
 
 ### A1
@@ -197,6 +225,16 @@ labels change nothing. Code: `_recover_education_source_labels`.
 file and preview show it as "Major: …" under the degree. A sentence such as
 "Major in the arts club", two different majors, or a line past the next
 qualification or section heading changes nothing.
+
+### F4
+**A stated graduation year is kept.** If the AI leaves an entry's date empty
+and the line naming its institution says "graduated 2007", "graduated in June
+2007", "Graduation: 2007" or "Class of 2007", that is the date. When the same
+school is named for two qualifications, only the line naming this degree
+counts; if the entry names a degree and no line names it, nothing is restored.
+A date the AI gave is never replaced. A year on a later line, two
+different years, another year on the same line, "graduates of …" or a year
+that doesn't follow the word directly change nothing. Code: `_recover_education_source_labels`.
 
 ## Dates
 

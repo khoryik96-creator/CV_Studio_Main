@@ -1369,6 +1369,84 @@ _CV_SEPARATOR_ONLY_RE = re.compile(
     r"^\s*[" + _CV_SEPARATOR_CHARS + r"][\s" + _CV_SEPARATOR_CHARS + r"]*$"
 )
 
+# Places a CV writes in a row's location cell: countries, states and large
+# cities. "Acme Holdings | Kuala Lumpur, Malaysia | Apr 2019 - Dec 2024" names
+# the employer first and the place second; reading the place as the company
+# printed a whole work history under "Kuala Lumpur, Malaysia". A word that is also
+# an employer's whole name ("Sea", "Global") is left off.
+_CV_PLACE_KEYS = frozenset(_cv_match_key(value) for value in (
+    # Countries and regions
+    "Malaysia", "Singapore", "Indonesia", "Brunei", "Thailand", "Vietnam", "Viet Nam",
+    "Philippines", "Cambodia", "Myanmar", "Laos", "Timor-Leste", "China", "Hong Kong",
+    "Hong Kong SAR", "Macau", "Taiwan", "Japan", "Korea", "South Korea", "India",
+    "Pakistan", "Bangladesh", "Sri Lanka", "Nepal", "Maldives", "Australia",
+    "New Zealand", "UAE", "United Arab Emirates", "Saudi Arabia", "KSA", "Qatar",
+    "Bahrain", "Kuwait", "Oman", "Egypt", "Turkey", "South Africa", "Nigeria", "Kenya",
+    "UK", "United Kingdom", "England", "Scotland", "Ireland", "Germany", "France",
+    "Netherlands", "Belgium", "Switzerland", "Austria", "Spain", "Portugal", "Italy",
+    "Sweden", "Norway", "Denmark", "Finland", "Poland", "US", "USA", "United States",
+    "Canada", "Mexico", "Brazil", "APAC", "Asia", "Asia Pacific",
+    "Southeast Asia", "South East Asia", "ASEAN", "EMEA", "Europe", "Middle East",
+    # Malaysian states and territories
+    "Selangor", "Johor", "Penang", "Pulau Pinang", "Perak", "Kedah", "Kelantan",
+    "Terengganu", "Pahang", "Melaka", "Malacca", "Negeri Sembilan", "Sarawak", "Sabah",
+    "Perlis", "Labuan", "Putrajaya", "WP Kuala Lumpur",
+    # Cities
+    "Kuala Lumpur", "KL", "Petaling Jaya", "Shah Alam", "Subang Jaya", "Cyberjaya",
+    "Klang", "Johor Bahru", "Georgetown", "George Town", "Ipoh", "Kuching",
+    "Kota Kinabalu", "Seremban", "Jakarta", "Surabaya", "Bandung", "Medan", "Batam",
+    "Bali", "Bangkok", "Manila", "Makati", "Cebu", "Hanoi", "Ho Chi Minh City",
+    "Phnom Penh", "Yangon", "Shanghai", "Beijing", "Shenzhen", "Guangzhou", "Tokyo",
+    "Seoul", "Taipei", "Mumbai", "Delhi", "New Delhi", "Bangalore", "Bengaluru",
+    "Chennai", "Hyderabad", "Pune", "Gurgaon", "Gurugram", "Noida", "Kolkata",
+    "Sydney", "Melbourne", "Brisbane", "Perth", "Auckland", "Dubai", "Abu Dhabi",
+    "Riyadh", "Doha", "London", "Dublin", "Paris", "Amsterdam", "Frankfurt",
+    "Zurich", "New York", "San Francisco", "Toronto",
+))
+# A place's own words never include these; an employer's often do.
+_CV_ORGANISATION_WORD_RE = re.compile(
+    r"\b(?:sdn|bhd|berhad|ltd|limited|inc|llc|llp|plc|pte|pvt|pt|tbk|corp|corporation|"
+    r"co|company|group|holdings?|bank|universit(?:y|i)|college|school|institute|academy|"
+    r"services?|solutions?|consulting|technolog(?:y|ies)|systems|partners|agency|studio|"
+    r"media|foundation|ministry|department|airlines?|hotels?|hospital|capital)\b",
+    re.I,
+)
+_CV_WORK_MODE_KEYS = frozenset({"remote", "hybrid", "onsite", "wfh", "workfromhome"})
+
+
+def _cv_cell_is_place(text, strict=False):
+    """Is this table cell a place and nothing else?
+
+    "Singapore", "Kuala Lumpur, Malaysia", "Petaling Jaya, Selangor" and "Remote"
+    are. Every part after the first must be a known place. Unless ``strict`` is
+    set, the first part may be a city the list does not name, written as capitalised
+    words before a listed place ("Semarang, Indonesia"). No part carries an
+    organisation word, so "Singapore Airlines" and "Acme Sdn Bhd, Malaysia" are
+    employers.
+    """
+    cell = re.sub(r"\s+", " ", str(text or "")).strip().strip(".").strip()
+    if not cell or len(cell) > 60 or re.search(r"\d", cell) or _CV_ORGANISATION_WORD_RE.search(cell):
+        return False
+    parts = [part.strip() for part in re.split(r"\s*[,/]\s*", cell)]
+    if not all(parts) or len(parts) > 3 or any(len(part.split()) > 3 for part in parts):
+        return False
+    keys = [_cv_match_key(part) for part in parts]
+    if keys[0] in _CV_WORK_MODE_KEYS:
+        return all(key in _CV_PLACE_KEYS or key in _CV_WORK_MODE_KEYS for key in keys[1:])
+    if not all(key in _CV_PLACE_KEYS for key in keys[1:]):
+        return False
+    if keys[0] in _CV_PLACE_KEYS:
+        return True
+    # An unlisted first part counts only beside a listed place, as a city name.
+    return (
+        not strict
+        and len(parts) > 1
+        and all(
+            word[:1].isupper() and re.fullmatch(r"[^\W\d_][^\W\d_'.\-]*", word)
+            for word in parts[0].split()
+        )
+    )
+
 
 def _source_heading_is_education(key):
     """A line whose boundary key is an education heading and nothing else."""
@@ -1574,6 +1652,11 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
         # and is kept, as it always was; refusing it dropped the entry.
         if _CV_SEPARATOR_ONLY_RE.match(str(company_cell)):
             return None
+        # A company that is only a place ("Kuala Lumpur, Malaysia") is the row's
+        # location cell read in the wrong column. Leaving the row out keeps the
+        # AI's reading; keeping it printed the place as every employer.
+        if _cv_cell_is_place(company_cell, strict=True):
+            return None
         if len(company_cell) > 120 or len(role_cell) > 160:
             return None
         date_norm = _normalize_cv_date_range(date_cell)
@@ -1700,8 +1783,130 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
                 return True
         return bool(generic_title.search(cleaned))
 
+    # Words that make a short line a job title, beyond the shared title words.
+    title_above_word = re.compile(
+        r"\b(?:co-?)?founders?\b|\bowners?\b|\blead\b|\bfreelancer?\b|\bproprietor\b",
+        re.I,
+    )
+
+    # A duty wrapped onto its own line: "Reporting to General Manager",
+    # "Supporting the Regional Manager", "Worked with the Finance Director". A verb
+    # form followed by a linking word is prose; "Managing Director" is not.
+    title_above_prose_start = re.compile(
+        r"^(?:[A-Z][a-z]+(?:ing|ed)|Led|Ran|Built|Drove|Grew|Helped)\s+"
+        r"(?:to|the|a|an|with|for|on|in|into|across|under|through|by|at|from|alongside|"
+        r"and|all|our|his|her|their|its|over|within)\b",
+    )
+
+    # A line ending in one of these is a sub-heading ("EXECUTIVE EXPERIENCE",
+    # "Consultant Roles"), not a job title.
+    title_above_heading_end = re.compile(
+        r"\b(?:experiences?|history|roles|positions|appointments|assignments|background|"
+        r"career|employment|highlights|summary)$",
+        re.I,
+    )
+
+    def _title_line_above(line_index):
+        """Index of the job-title line directly above a header row, or None.
+
+        It is the nearest non-empty line: short, starting with a capital, not a
+        bullet, a date, a heading or sub-heading, a sentence (no closing full
+        stop, comma, semicolon or colon) or a wrapped duty ("Reporting to ..."),
+        and naming a job.
+        """
+        if line_index is None:
+            return None
+        above = line_index - 1
+        while above >= 0 and not lines[above]:
+            above -= 1
+        if above < 0:
+            return None
+        text = lines[above]
+        if (
+            len(text) > 90
+            or len(text.split()) > 12
+            or "|" in text
+            or not re.match(r"[A-Z]", text)
+            or re.search(r"[.,;:]$", text)
+            or re.search(r"\b(?:19|20)\d{2}\b", text)
+            or title_above_heading_end.search(text)
+            or title_above_prose_start.match(text)
+            or history_heading.match(text)
+            or stop_heading.match(text)
+            or _is_cv_section_boundary(text)
+        ):
+            return None
+        pieces = [text] + re.split(r"\s+[—–-]\s+", text)
+        if not (
+            any(_dash_side_is_role_title(piece) for piece in pieces)
+            or _WORK_ROLE_WORD_RE.search(text)
+            or title_above_word.search(text)
+        ):
+            return None
+        return above
+
+    def _place_cell_row_parts(head, line_index):
+        """(company, title, title line index) for a row ending in a place cell.
+
+        "Acme Holdings | Kuala Lumpur, Malaysia | <dates>" names the employer, then
+        the place; the job title is the line above. The employer is the whole cell,
+        dash and all ("Contoso Media – Northwind Books"). With the title on the same
+        line ("Engineer – Acme | Singapore", "Engineer | Acme | Singapore") the
+        place is dropped and the rest read as usual.
+
+        None when the row has no place cell. An empty tuple when it has one but the
+        job is unclear -- no title above, or a job title where the employer should
+        be -- so no row is made and the AI's reading is kept. A job title before a
+        cell that is only loosely a place ("Engineer | Contoso, Kuala Lumpur") is
+        read as before: that cell may be the employer.
+        """
+        cells = [cell.strip() for cell in head.split("|")]
+        cells = [cell for cell in cells if cell]
+        if len(cells) < 2 or not _cv_cell_is_place(cells[-1]):
+            return None
+        known_place = _cv_cell_is_place(cells[-1], strict=True)
+        rest = cells[:-1]
+        if len(rest) > 1:
+            left, right = rest[0], " | ".join(rest[1:])
+            left_is_title = _dash_side_is_role_title(left)
+            right_is_title = _dash_side_is_role_title(right)
+            if right_is_title and not left_is_title:
+                return left, right, None
+            if left_is_title and not right_is_title:
+                return right, left, None
+            return () if known_place else None
+        cell = rest[0]
+        title_index = _title_line_above(line_index)
+        dash = re.match(r"^(?P<left>.+?)\s*[—–]\s*(?P<right>.+)$", cell) or re.match(
+            r"^(?P<left>.+?)\s+-\s+(?P<right>.+)$", cell
+        )
+        if dash:
+            left, right = dash.group("left").strip(), dash.group("right").strip()
+            left_is_title = _dash_side_is_role_title(left)
+            right_is_title = _dash_side_is_role_title(right)
+            if left_is_title != right_is_title:
+                # A title on this line and another above it: which one names the
+                # job is unclear ("Contoso – Executive Search" is an employer).
+                if title_index is not None:
+                    return ()
+                return (right, left, None) if left_is_title else (left, right, None)
+        if _dash_side_is_role_title(cell):
+            return () if known_place else None
+        if title_index is None:
+            return ()
+        return cell, lines[title_index], title_index
+
+    def _place_row_line_parts(line, line_index):
+        """``_place_cell_row_parts`` for a whole line with a trailing date or year."""
+        if "|" not in line:
+            return None
+        tail = title_first_date_at_end.search(line) or title_first_single_year_at_end.search(line)
+        if tail is None:
+            return None
+        return _place_cell_row_parts(line[:tail.start()].strip(), line_index)
+
     def _title_first_row_parts(
-        line, *, allow_single_year=False, allow_unmatched_single_year=False
+        line, *, allow_single_year=False, allow_unmatched_single_year=False, line_index=None
     ):
         tail = title_first_date_at_end.search(line)
         single_year = False
@@ -1711,6 +1916,11 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
         if tail is None:
             return None
         head = line[:tail.start()].strip()
+        place_parts = _place_cell_row_parts(head, line_index)
+        if place_parts is not None:
+            if not place_parts:
+                return None
+            return tail.group(1).strip(), place_parts[0], place_parts[1]
         split = title_first_split.match(head)
         if not split:
             return None
@@ -1823,10 +2033,13 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
     for heading_index, heading_line in enumerate(lines):
         if not _role_local_work_heading(heading_line):
             continue
-        for following_line in lines[heading_index + 1:]:
+        for following_index in range(heading_index + 1, len(lines)):
+            following_line = lines[following_index]
             if stop_heading.match(following_line) or _is_cv_section_boundary(following_line):
                 break
-            if date_prefix.match(following_line) or _title_first_row_parts(following_line):
+            if date_prefix.match(following_line) or _title_first_row_parts(
+                following_line, line_index=following_index
+            ):
                 role_local_heading_indices.add(heading_index)
                 break
 
@@ -1871,7 +2084,7 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
         # is the role title so the employer and title are not swapped (which would
         # also blank the matched bullets during reconciliation). Strip any stray
         # pipe the trailing-date capture leaves behind.
-        parts = _title_first_row_parts(line)
+        parts = _title_first_row_parts(line, line_index=line_index)
         if parts:
             add_row(*parts)
 
@@ -1894,6 +2107,15 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
     active_row = None
     active_bullet = ""
     pending_section_heading = ""
+
+    # The job-title lines that sit above a "Company | Place | <dates>" row. Each
+    # starts the next job, so it is never glued onto the previous job's last
+    # bullet as a wrapped line.
+    title_line_indices = set()
+    for header_index, header_line in enumerate(lines):
+        place_parts = _place_row_line_parts(header_line, header_index)
+        if place_parts and place_parts[2] is not None:
+            title_line_indices.add(place_parts[2])
 
     def flush_source_bullet():
         nonlocal active_bullet
@@ -1923,6 +2145,9 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
         if not in_history:
             continue
         if active_row is not None and line_index in role_local_heading_indices:
+            flush_source_bullet()
+            continue
+        if line_index in title_line_indices:
             flush_source_bullet()
             continue
         if work_group_heading.fullmatch(line):
@@ -1957,6 +2182,7 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
             line,
             allow_single_year=True,
             allow_unmatched_single_year="|" in line,
+            line_index=line_index,
         )
         if parts:
             flush_source_bullet()
@@ -1970,6 +2196,11 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
         # the grounding rules is neither a job nor a wrapped continuation of
         # the preceding duty. Flush the real duty and discard the unsafe line.
         if _rejected_single_year_header_shape(line):
+            flush_source_bullet()
+            continue
+        # Likewise a place row the reader was unsure of (R7): it starts a job the
+        # AI keeps, so it is not part of the previous job's last duty.
+        if _place_row_line_parts(line, line_index) == ():
             flush_source_bullet()
             continue
 

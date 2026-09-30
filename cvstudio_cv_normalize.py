@@ -1768,6 +1768,15 @@ _CV_EDU_MAJOR_RE = re.compile(
 # The label alone in its cell, with the value in the next one: "Major | Finance".
 _CV_EDU_MAJOR_LABEL_CELL_RE = re.compile(r"^\s*(?:majors?|speciali[sz]ation)\s*[:\uff1a]?\s*$", re.I)
 _CV_EDU_BLOCK_YEAR_RE = re.compile(r"\b(?:19|20)\d{2}\b")
+# "graduated 2007", "graduated in June 2007", "Graduation: 2007", "Class of 2007".
+# The year has to follow the word directly: "graduated students ... in 2019" is not
+# a graduation date.
+_CV_EDU_GRADUATED_RE = re.compile(
+    r"\b(?:graduated|graduation(?:\s+(?:year|date))?|class\s+of)\b\s*(?:[:：\-–]\s*)?(?:in\s+|on\s+)?"
+    r"(?P<when>(?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|"
+    r"Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+)?(?:19|20)\d{2})\b",
+    re.I,
+)
 
 
 def _education_source_blocks(education, source_text):
@@ -1852,6 +1861,26 @@ def _recover_education_source_labels(education, source_text):
         if len(majors) == 1:
             major = majors.pop()
             education["major"] = major[:1].upper() + major[1:]
+
+    if not str(education.get("date_range") or "").strip():
+        # "Master of Management – Northwind Business School, graduated 2007." Only
+        # the institution's own line is read, and when the entry has a degree, only
+        # a line naming it: a school's line for another qualification carries that
+        # qualification's year.
+        own_lines = [block[0] for block in blocks]
+        degree_tokens = _cv_token_set(education.get("degree"))
+        if degree_tokens:
+            own_lines = [line for line in own_lines if degree_tokens <= _cv_token_set(line)]
+        years = set()
+        unsure = False
+        for line in own_lines:
+            found = [re.sub(r"\s+", " ", m.group("when")).strip() for m in _CV_EDU_GRADUATED_RE.finditer(line)]
+            years.update(found)
+            # Another year on the line may be this qualification's: unsure.
+            if found and set(_CV_EDU_BLOCK_YEAR_RE.findall(line)) != {when[-4:] for when in found}:
+                unsure = True
+        if len(years) == 1 and not unsure:
+            education["date_range"] = years.pop()
     return education
 
 
