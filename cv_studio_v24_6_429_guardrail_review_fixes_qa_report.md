@@ -79,6 +79,16 @@ These local Windows fixture/resolver mismatches are not silently treated as
 passing. Launcher runtime selection and exact-package security checks were not
 weakened to satisfy them.
 
+GitHub's branch-push response also flagged two existing open Dependabot alerts
+for pinned `adm-zip`: [declared-size memory allocation / denial of service
+(high)](https://github.com/khoryik96-creator/CV_Studio_Main/security/dependabot/2)
+and [symlink-following extraction / file overwrite
+(moderate)](https://github.com/khoryik96-creator/CV_Studio_Main/security/dependabot/1).
+Both were confirmed read-only through the repository's alerts API. These are
+dependency alerts, not a reproduced exploit of a CV Studio route in this audit.
+Dependency changes and their protected-package compatibility check remain a
+separate follow-up; this corrective does not resolve or dismiss the alerts.
+
 ## Boundaries and limits
 
 No work-row/reconciliation algorithm, DOCX layout/bullet renderer, route,
