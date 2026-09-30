@@ -310,6 +310,15 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
+- **AI Crawler blank-field review and tag save — rebased as v24.6.426, UNMERGED
+  (PR #214).** The six commits below (v24.6.411–v24.6.416) were written on master
+  `960a086` and rebased unchanged onto master `bb3b606`. Their version labels are
+  kept in history, but merged work has since used v24.6.411–v24.6.425, so the
+  rebased branch ships as v24.6.426. Only version numbers and these status notes
+  were resolved during the rebase; the crawler code, tests and route change
+  (118 → 119, `/jobadder/spider_apply_tags`) are line-for-line what was reviewed.
+  See `cv_studio_v24_6_426_spider_rebase_note.md`.
+
 - **AI Crawler save-boundary corrective — v24.6.416, UNMERGED.**
   Eight findings, three of them regressions introduced by v24.6.415: a completed
   save re-enabled its own button through the deferred tick restore, one click from

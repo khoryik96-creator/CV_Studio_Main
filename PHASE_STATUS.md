@@ -76,7 +76,7 @@
   v24.6.411–418 are merged via PR #216 as `56dca18`. v24.6.419–425 keep the
   candidate's pay out of the generated Summary box with one server filter and are
   merged via PR #217 as `bb3b606`. The AI Crawler blank-field review queue (PR #214,
-  rebased onto that master) awaits owner testing. No release or native
+  v24.6.411–416 rebased onto that master as v24.6.426) awaits owner testing. No release or native
   protected build is produced by this work; protected builds remain manual.
 
 ## v24.6.403-v24.6.405 CV source-safety corrective (merged via PR #210)
