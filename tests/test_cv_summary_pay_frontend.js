@@ -246,8 +246,11 @@ async function batchRun(responses, withSummary) {
   const emptyRecord = generate.indexOf("recordPaidAiFailure('CV Summary returned empty output'");
   assert.ok(payCheck > 0 && emptyRecord > payCheck, 'pay-only is decided before the empty-output record');
   assert.ok(/statsRecord\([^;]*'summary', responseCost\(d, route\.model, route\.provider\)/.test(payBranch), 'the paid call is recorded');
-  assert.ok(payBranch.indexOf('statsRecord(') < payBranch.indexOf('throw new Error'));
+  // Not a failure: no throw, no failed-call record; the tab is done and warns.
+  assert.ok(!/throw new Error/.test(payBranch));
   assert.ok(!/recordPaidAiFailure/.test(payBranch));
+  assert.ok(payBranch.indexOf('statsRecord(') < payBranch.indexOf("markTabDone('summary', run);"));
+  assert.ok(/showToast\(payOnlyNote, 'warn'\);\n\s*return;/.test(payBranch));
   assert.ok(/var payNote = cvSummaryPayNote\(d\.summary_pay_removed, false\);/.test(generate));
   assert.ok(/renderSummaryText\(raw\) \+ \(payNote \? '<div class="cv-parse-warning" role="note">\\u26a0 ' \+ esc\(payNote\) \+ '<\/div>' : ''\)/.test(generate));
   assert.ok(/if \(payNote\) showToast\(payNote, 'warn'\);/.test(generate));
@@ -260,7 +263,7 @@ async function batchRun(responses, withSummary) {
   // Run for real: a pay-only regeneration unlinks the summary linked earlier for
   // formatting this CV, and leaves another CV's link alone.
   async function summaryTab(draftCv) {
-    const nodes = {}, stats = [], cleared = [];
+    const nodes = {}, stats = [], cleared = [], tabs = [], toasts = [];
     const node = id => nodes[id] || (nodes[id] = {value: '', checked: false, disabled: false, style: {}, textContent: '', innerHTML: ''});
     node('summaryCvText').value = 'SYNTHETIC CV';
     const c = {String, Array, JSON, Error, Number, console,
@@ -269,7 +272,8 @@ async function batchRun(responses, withSummary) {
       requireSummaryUnlocked: () => true, aiRoutePayload: () => ({api_key: 'k', provider: 'mock', model: 'm', display: 'Mock'}),
       getSummaryFocusPrompt: () => '', getSummaryAnonymizationEnabled: () => false, cvSummaryPrompt: () => 'prompt',
       updateSummaryOutputTitle() {}, updateSummaryApplyDocxButton() {}, updateSummaryRouteBadge() {},
-      markTabRunning: () => 1, markTabDone() {}, markTabFailed() {}, showToast() {}, esc: s => String(s),
+      markTabRunning: () => 1, markTabDone: () => tabs.push('done'), markTabFailed: () => tabs.push('failed'),
+      showToast: (...args) => toasts.push(args), esc: s => String(s),
       fetchWithTimeout: async () => ({ok: true, json: async () => ({content: [{type: 'text', text: ''}], summary_pay_removed: 2, usage: {}})}),
       aiText: d => (d.content || []).map(b => b.text || '').join(''), recordPaidAiFailure() {},
       normalizeAiProviderError: s => s, responseCost: () => 0.1, statsRecord: (...a) => stats.push(a),
@@ -280,10 +284,16 @@ async function batchRun(responses, withSummary) {
     vm.createContext(c);
     vm.runInContext(fnFrom(source, 'summaryBulletLines') + fnFrom(source, 'generateSummary'), c);
     await c.generateSummary('shorter');
-    return {c, nodes, stats, cleared};
+    return {c, nodes, stats, cleared, tabs, toasts};
   }
   {
-    const {c, nodes, stats, cleared} = await summaryTab('SYNTHETIC CV');
+    const {c, nodes, stats, cleared, tabs, toasts} = await summaryTab('SYNTHETIC CV');
+    // A paid call that succeeded: the tab is done, not failed, and the note is a
+    // warning shown in the panel, not a red provider error.
+    assert.deepStrictEqual(tabs, ['done']);
+    assert.ok(toasts.length === 1 && toasts[0][1] === 'warn' && /only described the candidate's pay/.test(toasts[0][0]));
+    assert.ok(nodes.summaryOutput.innerHTML.includes('cv-parse-warning'));
+    assert.ok(!nodes.summaryOutput.innerHTML.includes('var(--red)'));
     assert.strictEqual(cleared.length, 1);
     assert.strictEqual(c.window._formatSummaryDraft, null);
     assert.deepStrictEqual(plain(c.window._summaryGeneratedBullets), []);

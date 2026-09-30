@@ -7997,6 +7997,410 @@
    "note": "pins one part of the rule on its own"
   },
   {
+   "id": "P1-remove-r10-0",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Sales manager across APAC with salary of USD 150,000."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r10-1",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Salary per month: RM 9,000."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r10-2",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Salary in 2024 was RM 9,000."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r10-3",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Salary currently stands at RM 9,000."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r10-4",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Salary drawn: RM 9,000."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r10-5",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Salary history: RM 5k (2019), RM 7k (2021)."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r10-6",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Salary RM 9 000."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r10-7",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Earning RM 9k."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r10-8",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Currently earning 9K."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r10-9",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Takes home RM 7,000 monthly."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r10-10",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Monthly gross RM 9,000."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r10-11",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Current base of USD 120,000 plus bonus."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r10-12",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Basic RM 7,000 + allowance RM 1,000."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r10-13",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Remuneration package worth RM 200k annually."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-remove-r10-14",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Top performer earning RM 300k in commission annually."
+   ],
+   "expect": [],
+   "note": "states the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r10-0",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed total compensation of $12M for 300 staff across APAC"
+   ],
+   "expect": [
+    "Managed total compensation of $12M for 300 staff across APAC"
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r10-1",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Placed 120 candidates in 2023 with average salaries of RM 15k."
+   ],
+   "expect": [
+    "Placed 120 candidates in 2023 with average salaries of RM 15k."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r10-2",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Recruitment consultant specialising in placements with salaries up to RM 30k."
+   ],
+   "expect": [
+    "Recruitment consultant specialising in placements with salaries up to RM 30k."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r10-3",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Handled salary-negotiable offers for 40 hires."
+   ],
+   "expect": [
+    "Handled salary-negotiable offers for 40 hires."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r10-4",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Seasoned payroll specialist handling salaries of RM 2M monthly."
+   ],
+   "expect": [
+    "Seasoned payroll specialist handling salaries of RM 2M monthly."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r10-5",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Expected salary guidance provided to 40 hiring managers."
+   ],
+   "expect": [
+    "Expected salary guidance provided to 40 hiring managers."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-keep-r10-6",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Launched the booking.Com integration and grew sales 40%."
+   ],
+   "expect": [
+    "Launched the booking.Com integration and grew sales 40%."
+   ],
+   "note": "work, not the candidate's pay"
+  },
+  {
+   "id": "P1-mixed-r10-0",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Heads the revenue team, salary RM 20k."
+   ],
+   "expect": [
+    "Heads the revenue team."
+   ],
+   "note": "work is judged around the amount; kept text keeps its own spacing; a lowercase pay sentence ends the one before"
+  },
+  {
+   "id": "P1-mixed-r10-1",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Finance Manager for the group, earning RM 12,000 monthly."
+   ],
+   "expect": [
+    "Finance Manager for the group."
+   ],
+   "note": "work is judged around the amount; kept text keeps its own spacing; a lowercase pay sentence ends the one before"
+  },
+  {
+   "id": "P1-mixed-r10-2",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed hiring, salary is negotiable."
+   ],
+   "expect": [
+    "Managed hiring."
+   ],
+   "note": "work is judged around the amount; kept text keeps its own spacing; a lowercase pay sentence ends the one before"
+  },
+  {
+   "id": "P1-mixed-r10-3",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Launched the booking.Com integration and grew sales 40%. Expected salary RM 9k."
+   ],
+   "expect": [
+    "Launched the booking.Com integration and grew sales 40%."
+   ],
+   "note": "work is judged around the amount; kept text keeps its own spacing; a lowercase pay sentence ends the one before"
+  },
+  {
+   "id": "P1-mixed-r10-4",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Built v2.Released in 2021. Expected salary RM 9k."
+   ],
+   "expect": [
+    "Built v2.Released in 2021."
+   ],
+   "note": "work is judged around the amount; kept text keeps its own spacing; a lowercase pay sentence ends the one before"
+  },
+  {
+   "id": "P1-mixed-r10-5",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Led HR.  Built teams. Expected salary RM 9k."
+   ],
+   "expect": [
+    "Led HR.  Built teams."
+   ],
+   "note": "work is judged around the amount; kept text keeps its own spacing; a lowercase pay sentence ends the one before"
+  },
+  {
+   "id": "P1-mixed-r10-6",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Head of Payroll. salary RM 15k."
+   ],
+   "expect": [
+    "Head of Payroll."
+   ],
+   "note": "work is judged around the amount; kept text keeps its own spacing; a lowercase pay sentence ends the one before"
+  },
+  {
+   "id": "P1-mixed-r10-7",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Promoted to Sr. manager with current salary RM 12k."
+   ],
+   "expect": [],
+   "note": "work is judged around the amount; kept text keeps its own spacing; a lowercase pay sentence ends the one before"
+  },
+  {
+   "id": "P1-mixed-r10-8",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Earning approx. RM 8,000 per month."
+   ],
+   "expect": [],
+   "note": "work is judged around the amount; kept text keeps its own spacing; a lowercase pay sentence ends the one before"
+  },
+  {
+   "id": "P1-isolate-r10-0",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Leads a budget of RM 5M with salary RM 20k."
+   ],
+   "expect": [],
+   "note": "one pay attached with 'with' is own; a range, or a recruiter's roles, is others'"
+  },
+  {
+   "id": "P1-isolate-r10-1",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed hiring for 40 staff with a salary of RM 12,000 monthly."
+   ],
+   "expect": [],
+   "note": "one pay attached with 'with' is own; a range, or a recruiter's roles, is others'"
+  },
+  {
+   "id": "P1-isolate-r10-2",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Executive search consultant placing C-suite leaders with a CTC of USD 500k."
+   ],
+   "expect": [
+    "Executive search consultant placing C-suite leaders with a CTC of USD 500k."
+   ],
+   "note": "one pay attached with 'with' is own; a range, or a recruiter's roles, is others'"
+  },
+  {
+   "id": "P1-isolate-r10-3",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Recruited 200 engineers with total compensation up to $250k."
+   ],
+   "expect": [
+    "Recruited 200 engineers with total compensation up to $250k."
+   ],
+   "note": "one pay attached with 'with' is own; a range, or a recruiter's roles, is others'"
+  },
+  {
+   "id": "P1-isolate-r10b-0",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Restructured teams for 300 staff, current base of USD 120,000."
+   ],
+   "expect": [
+    "Restructured teams for 300 staff."
+   ],
+   "note": "pins one part of the rule on its own"
+  },
+  {
+   "id": "P1-isolate-r10b-1",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "The candidate takes home RM 7,000 monthly."
+   ],
+   "expect": [],
+   "note": "pins one part of the rule on its own"
+  },
+  {
    "id": "P1-notice-clause",
    "rule": "P1",
    "kind": "summary_salary",

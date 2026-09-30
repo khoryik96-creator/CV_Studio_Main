@@ -313,15 +313,20 @@ async function generateSummary(modifier) {
       throw new Error(normalizeAiProviderError(d.error || ('API error ' + r.status), route));
     }
     var raw = aiText(d);
-    // Every line was the candidate's pay: not a provider failure, not recorded as
-    // one, but the call was paid for, so its cost is recorded like any summary.
+    // Every line was the candidate's pay: the call succeeded and was paid for, so
+    // its cost is recorded like any summary and the tab is not marked failed; the
+    // page says what happened as a warning, not as a provider failure.
     if (!summaryBulletLines(raw).length && d.summary_pay_removed > 0) {
       statsRecord((anonymize ? 'Anonymized CV Summary — ' : 'CV Summary — ') + getSummaryFocusLabel(), 'summary', responseCost(d, route.model, route.provider), d.model || route.model, '', d.provider || route.provider, statsMetaFromResponse(d, route.model, route.provider));
       // A summary linked earlier for formatting this CV is unlinked too, so
       // formatting cannot quietly use a summary that is not the latest result.
       var unlinked = !!(window._formatSummaryDraft && String(window._formatSummaryDraft.cv_text || '').trim() === cv);
       if (unlinked) clearFormatSummaryDraft();
-      throw new Error('The CV Summary only described the candidate\'s pay, which is never included. Generate it again for a new summary.' + (unlinked ? ' The summary linked earlier for formatting is no longer linked.' : ''));
+      var payOnlyNote = 'The CV Summary only described the candidate\'s pay, which is never included. Generate it again for a new summary.' + (unlinked ? ' The summary linked earlier for formatting is no longer linked.' : '');
+      if (output) output.innerHTML = '<div class="cv-parse-warning" role="note">\u26a0 ' + esc(payOnlyNote) + '</div>';
+      markTabDone('summary', run);
+      showToast(payOnlyNote, 'warn');
+      return;
     }
     if (!raw) {
       recordPaidAiFailure('CV Summary returned empty output', d, route.model, route.provider);

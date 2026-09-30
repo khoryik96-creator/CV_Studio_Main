@@ -1978,9 +1978,10 @@ def _cv_project_group_sort_key(block):
 #     opens with a work verb and names the organisation's money or people;
 #   * otherwise a pay word and an amount, in either order ("Salary: RM 17,000",
 #     "RM16,000 salary"), earnings or a bonus per period, lakhs per annum, or
-#     "Last drawn RM 9,000" -- unless the sentence describes work: it opens with a
-#     work verb ("Managed total compensation of $12M"), or it names the
-#     organisation's money or people ("budget", "for 300 staff", "across APAC",
+#     "Last drawn RM 9,000" -- unless the words AROUND THE AMOUNT describe work
+#     (_cv_pay_is_work_around): its comma part opens with a work verb ("Managed
+#     total compensation of $12M"), or it names the organisation's money or
+#     people ("budget", "for 300 staff", "across APAC",
 #     "Head of Compensation from 2019"), it is someone else's pay the candidate
 #     worked on ("negotiated their salary of RM 15k"), or a recruiter describes
 #     the roles they fill ("placements with salaries up to RM 30k");
@@ -1998,7 +1999,7 @@ _CV_PAY_TERM = (
     r"(?:salar(?:y|ies)|remuneration|total\s+compensation|compensation|ctc|"
     r"take[\s-]?home(?:\s+pay)?|epf(?:\s+contributions?)?|kwsp(?:\s+contributions?)?|"
     r"(?:monthly|annual|basic|base|gross|net|current|expected|last[\s-]+drawn|total)\s+(?:pay|package|income|wages?)|"
-    r"(?:salary|pay|remuneration)\s+package|wages?)"
+    r"(?:salary|pay|remuneration)\s+package|wages?|(?:monthly|annual|yearly)\s+(?:gross|nett?|basic))"
 )
 # Letter codes are words: "Form 16" holds no "RM 16" and "PHP 8" is a language.
 _CV_PAY_CURRENCY_CODE = r"(?:rm|myr|sgd|usd|inr|rs\.?|aud|hkd|idr|rp|php|thb|cny|rmb|jpy|eur|gbp)"
@@ -2018,8 +2019,9 @@ _CV_PAY_PERIOD = (
 # character such as "月薪" still counts as one -- and an amount with three or more
 # figures or a unit after it ("RM 9,000", "RM9k"), so "PHP 8" is not money.
 _CV_PAY_AMOUNT_MARKED = (
-    r"(?:(?:(?<![a-z])" + _CV_PAY_CURRENCY_CODE + r"(?=\s?(?:\d[\d,.]{2,}|\d[\d,.]*\s?" + _CV_PAY_UNIT + r"\b))"
-    r"|" + _CV_PAY_CURRENCY_SYMBOL + r")\s?\d[\d,.]*(?:\s?" + _CV_PAY_UNIT + r")?\b"
+    r"(?:(?:(?<![a-z])" + _CV_PAY_CURRENCY_CODE
+    + r"(?=\s?(?:\d[\d,.]{2,}|\d{1,3}(?:[ \u00a0]\d{3})+\b|\d[\d,.]*\s?" + _CV_PAY_UNIT + r"\b))"
+    r"|" + _CV_PAY_CURRENCY_SYMBOL + r")\s?(?:\d{1,3}(?:[ \u00a0]\d{3})+\b|\d[\d,.]*(?:\s?" + _CV_PAY_UNIT + r")?\b)"
     r"|(?<![\d.,])\d[\d,.]*\s?" + _CV_PAY_UNIT + r"\b"
     r"|(?<![\d.,])\d[\d,.]*\s?" + _CV_PAY_CURRENCY + r"(?![a-z])"
     r"|(?<![\d.,])\d[\d,.]*\s?" + _CV_PAY_CURRENCY_WORD + r"\b)"
@@ -2056,12 +2058,13 @@ _CV_PAY_OWN_ROLE = (
 _CV_PAY_CONNECTOR = (
     r"(?:\s*[:=\-\u2013~]\s*|\s*\([^()]{1,20}\)\s*|\s+" + _CV_PAY_OWN_ROLE + r"\b\s*"
     r"|\s+(?:(?:was\s+|were\s+)?(?:cut|raised|increased|revised|adjusted|reduced|rose)\s+to"
+    r"|per\s+(?:month|mth|annum|year)|in\s+(?:19|20)\d{2}|stands?\s+at|stood\s+at|drawn|history|worth"
     r"|of|is|was|at|around|about|approx(?:imately)?|circa|"
     r"currently|now|expected|expectations?|requirements?|above|below|over|under|up\s+to|"
     r"at\s+least|min(?:imum)?|max(?:imum)?|between|from|range|in\s+the\s+range\s+of)\b\.?\s*)"
 )
 _CV_PAY_WORD = (
-    r"(?:salar(?:y|ies)|pay|package|remuneration|ctc|compensation|wages?|income|earnings|"
+    r"(?:salar(?:y|ies)|pay|package|remuneration|ctc|compensation|wages?|income|earnings|base|basic|"
     r"take[\s-]?home(?:\s+pay)?)"
 )
 # The organisation's money, not the candidate's pay: "RM 5M salary and benefits
@@ -2113,6 +2116,8 @@ _CV_PAY_AMOUNT_RE = re.compile(
     + r"|\b(?:seeking|looking\s+for|targeting)\b[^;]{0,40}?" + _CV_PAY_AMOUNT_MARKED
     # "Package: RM 150,000", "Pay: RM 9k", "Income - RM 9,000".
     + r"|^\W*(?:package|pay|wages?|income|earnings|ctc)\s*[:=\-\u2013]\s*" + _CV_PAY_AMOUNT_MARKED
+    # "Basic RM 7,000 + allowance RM 1,000", "Gross salary: RM 9,000".
+    + r"|^\W*(?:basic|base|gross|nett?)(?:\s+(?:salary|pay))?\s*[:=\-\u2013]?\s*" + _CV_PAY_AMOUNT_MARKED
     # "Candidate's current role pays RM 9k".
     + r"|\b(?:role|job|position|employer)\s+pays\s+(?:about\s+|around\s+|approx(?:imately|\.)?\s*)?"
       + _CV_PAY_AMOUNT_MARKED
@@ -2128,9 +2133,12 @@ _CV_PAY_AMOUNT_RE = re.compile(
     # Earnings per period. The text is already one sentence or clause, so a full
     # stop inside it ("approx.") is an abbreviation, not an end. "Drawing up" is
     # not drawing pay.
-    + r"|\b(?:earn(?:s|ed|ing)?|draw(?:s|ing)?|drew)\b(?!\s+up\b)"
+    + r"|\b(?:earn(?:s|ed|ing)?|draw(?:s|ing)?|drew|takes?\s+home|taking\s+home|took\s+home)\b(?!\s+up\b)"
       r"[^;]{0,40}?(?:" + _CV_PAY_AMOUNT_MARKED + r"|(?<![\d.,])\d{1,3}(?:,\d{3})+\b|(?<![\d.,])(?!(?:19|20)\d{2}\b)\d{3,}\b)\s*"
-      + _CV_PAY_PERIOD
+      r"(?:(?:in|of)\s+(?:commissions?|bonus(?:es)?|incentives?|salary|pay)\s+)?" + _CV_PAY_PERIOD
+    # "Earning RM 9k.", "Currently earning 9K.": earnings opening the clause.
+    + r"|^\W*(?:(?:currently|now)\s+)?(?:earning|earns|drawing|draws|taking\s+home|takes\s+home)\s+"
+      r"(?:about\s+|around\s+|approx(?:imately|\.)?\s*)?" + _CV_PAY_AMOUNT_MARKED
     # "Paid RM 7k/mo.", "Making RM 9k a month": only opening the clause and right
     # before the amount, so "paid social spend" and "decision-making" are work.
     + r"|^\W*(?:(?:currently|now)\s+)?(?:paid|making|makes|receiv(?:es|ed|ing)|gets|getting)\s+"
@@ -2274,7 +2282,8 @@ _CV_PAY_TALK_OTHERS_AFTER_RE = re.compile(
     r"\s+(?:of|(?!" + _CV_PAY_OWN_ROLE + r"\b)for|across|among|from|under|"
     r"(?:were|was|are|is|been|being)\s+[a-z]+ed|increments?|increases?|adjustments?|movements?|"
     r"reviews?|structures?|planning|plans?|negotiations?|negotiating|exceed\w*|var(?:y|ies|ied)|gaps?|"
-    r"mismatch\w*|conversations?|discussions?|queries|questions|alignment|"
+    r"mismatch\w*|conversations?|discussions?|queries|questions|alignment|guidance|advice|advisory|"
+    r"counsel\w*|coaching|insights?|"
     r"benchmark\w*|surveys?|data|analysis|analytics|framework|polic(?:y|ies)|guidelines?|"
     r"trends?|modell?ing|models?|costs?|budgets?|management|process(?:es|ing)?|dashboards?|"
     r"reports?|tools?|templates?|matri(?:x|ces)|ranges?|bands?|scales?|grades?)\b",
@@ -2305,9 +2314,10 @@ def _cv_pay_talk_is_candidates(text, match):
     """Whether pay talk with no amount is about the candidate's own pay."""
     if _CV_PAY_TALK_OTHERS_AFTER_RE.match(text, match.end()):
         return False
-    if _cv_pay_opens_with_work_verb(text):
+    begin, finish = _cv_pay_segment(text, match.start())
+    if _cv_pay_opens_with_work_verb(text[begin:finish]):
         return False
-    return not _CV_PAY_TALK_OTHERS_BEFORE_RE.search(text[:match.start()])
+    return not _CV_PAY_TALK_OTHERS_BEFORE_RE.search(text[begin:match.start()])
 
 
 # Abbreviations whose full stop does not end a sentence: they come before a name
@@ -2329,45 +2339,157 @@ _CV_AMBIGUOUS_ABBREVIATIONS = frozenset({
 # Dotted abbreviations that end a pay sentence: "RM 9k p.a. Built pipelines."
 _CV_SENTENCE_ENDING_DOTTED = frozenset({"p.a", "p.m"})
 # A sentence ends at . ! or ?, after any closing quote, bracket or Markdown
-# emphasis ("**Expected salary RM 9k.** Available"), before the next sentence.
+# emphasis ("**Expected salary RM 9k.** Available"), before the next sentence; or
+# at a stop with no space before a capitalised word ("RM 9,000.Led"). A run of
+# stops is looked at once, from its start, so a long run of dots cannot slow it.
+# Before a lowercase word the stop is "weak": it ends a sentence only when the
+# next one states pay ("Head of Payroll. salary RM 15k.").
 _CV_SENTENCE_END_RE = re.compile(
-    r"[.!?]+[\"')\]*_]*\s+(?=[\"'(*_A-Z0-9])|(?<=[a-z0-9]{2})[.!?](?=[A-Z][a-z]{2,})"
+    r"(?<![.!?])[.!?]+[\"')\]*_]*\s+(?=(?P<upper>[\"'(*_A-Z0-9])|(?P<lower>[a-z]))"
+    r"|(?<=[a-z0-9]{2})[.!?](?=[A-Z][a-z]{2,})"
 )
 _CV_NUMBER_TOKEN_RE = re.compile(r"[\d.,%]+")
 
 
-def _cv_split_sentences(text):
-    """Split prose into sentences without breaking at "Sr." or "B.Sc."."""
-    pieces = []
+def _cv_token_before(text, start, stop):
+    """(the word right before `stop`, whether another word comes before it).
+
+    Walks back from `stop` only as far as it needs to, so the splitter stays
+    linear however many abbreviations a line holds.
+    """
+    index = stop
+    while index > start and not text[index - 1].isspace():
+        index -= 1
+    token = text[index:stop]
+    while index > start and text[index - 1].isspace():
+        index -= 1
+    return token, index > start
+
+
+def _cv_split_sentence_spans(text):
+    """(start, end) of each sentence, without breaking at "Sr." or "B.Sc."."""
+    spans = []
     start = 0
     for match in _CV_SENTENCE_END_RE.finditer(text):
-        words = text[start:match.start()].split()
-        token = (words or [""])[-1].strip("(*_\"'")
+        token, more_before = _cv_token_before(text, start, match.start())
+        token = token.strip("(*_\"'")
         # A figure ends a sentence ("a team of 8.", "margin by 5.5%."), unless it
         # is all there is, as in a list number ("1. Built ...").
-        is_number = bool(_CV_NUMBER_TOKEN_RE.fullmatch(token)) and len(words) > 1
+        is_number = bool(_CV_NUMBER_TOKEN_RE.fullmatch(token)) and more_before
         lowered = token.lower()
-        if lowered in _CV_SENTENCE_ENDING_DOTTED or is_number:
-            pass
-        elif lowered in _CV_ABBREVIATIONS or _CV_NUMBER_TOKEN_RE.fullmatch(token):
-            # A list number on its own ("1. Built ...") never ends a sentence.
+        weak = bool(match.group("lower"))
+        ambiguous = weak or (
+            not (lowered in _CV_SENTENCE_ENDING_DOTTED or is_number)
+            and (len(token) <= 1 or "." in token or lowered in _CV_AMBIGUOUS_ABBREVIATIONS)
+        )
+        if lowered in _CV_ABBREVIATIONS or (not is_number and _CV_NUMBER_TOKEN_RE.fullmatch(token)):
+            # "Sr. Manager"; a list number on its own ("1. Built ...").
             continue
-        elif len(token) <= 1 or "." in token or lowered in _CV_AMBIGUOUS_ABBREVIATIONS:
+        if ambiguous:
             following = _CV_SENTENCE_END_RE.search(text, match.end())
             next_sentence = text[match.end():following.end() if following else len(text)]
             if not _cv_states_candidate_pay(next_sentence.split(";")[0]):
                 continue
-        pieces.append(text[start:match.end()].strip())
+        spans.append((start, match.end()))
         start = match.end()
-    tail = text[start:].strip()
-    if tail:
-        pieces.append(tail)
-    return pieces
+    spans.append((start, len(text)))
+    trimmed = []
+    for begin, finish in spans:
+        piece = text[begin:finish]
+        if piece.strip():
+            lead = len(piece) - len(piece.lstrip())
+            trimmed.append((begin + lead, begin + len(piece.rstrip())))
+    return trimmed
+
+
+def _cv_split_sentences(text):
+    """Split prose into sentences without breaking at "Sr." or "B.Sc."."""
+    return [text[begin:finish] for begin, finish in _cv_split_sentence_spans(text)]
 
 
 # Markdown emphasis the summary may carry ("**Salary:** RM 17,000"), removed from
 # the copy that is matched, never from the text that is kept.
 _CV_PAY_MARKUP_RE = re.compile(r"[*`]+|__")
+
+
+def _cv_pay_matchable(text):
+    """The copy of a clause that is matched: NFKC, without Markdown emphasis."""
+    return _CV_PAY_MARKUP_RE.sub("", unicodedata.normalize("NFKC", str(text or ""))).strip()
+
+
+def _cv_pay_part_is_work(matchable):
+    """Whether a whole clause or part describes work (the organisation's money or
+    people, someone else's pay, or a work verb opening it)."""
+    return bool(
+        _CV_PAY_WORK_RE.search(matchable)
+        or _CV_PAY_OTHERS_PAY_RE.search(matchable)
+        or _cv_pay_opens_with_work_verb(matchable)
+    )
+
+
+# Where the words about a pay phrase begin: the start of its comma part, or a word
+# that attaches pay to someone ("with", "earning", "on a").
+_CV_PAY_ATTACH_RE = re.compile(r"\b(?:with|earning|drawing|while|whilst|on\s+an?|at\s+an?)\b", re.I)
+_CV_PAY_WORD_RE = re.compile(r"[A-Za-z]+(?:['\u2019-][A-Za-z]+)*")
+# One pay attached to the person: "with salary RM 20k", "with a salary of", "earning"
+# -- unlike "with average salaries of RM 15k", "with packages above" or a range
+# ("with total compensation up to $250k").
+_CV_PAY_OWN_ATTACH_RE = re.compile(
+    r"(?:with|on|at)\s+(?:an?\s+|my\s+)?(?:(?:monthly|annual|basic|base|gross|nett?|total|current)\s+)?"
+    r"(?:salary|pay|package|ctc|remuneration|compensation|wage|income)\b(?!\s+(?:of|for)\s+(?:the\s+)?"
+    r"(?:\d|team|staff|employees|workers|hires|candidates))"
+    # A range is other people's: "with total compensation up to $250k".
+    r"(?!\s+(?:up\s+to|above|over|below|under|averaging|ranging|between|from|starting|of\s+up\s+to)\b)"
+    r"|earning\b|drawing\b",
+    re.I,
+)
+
+
+# How far either side of a pay phrase its words are read. A clause is a sentence
+# part, so this is far more than real text needs; it keeps the reading of a very
+# long pasted line linear however many pay phrases it holds.
+_CV_PAY_CONTEXT_CHARS = 300
+
+
+def _cv_pay_segment(text, position):
+    """(start, end) of the comma part of `text` holding `position`, read no
+    further than _CV_PAY_CONTEXT_CHARS either side."""
+    low = max(0, position - _CV_PAY_CONTEXT_CHARS)
+    high = min(len(text), position + _CV_PAY_CONTEXT_CHARS)
+    comma = text.rfind(",", low, position)
+    after = text.find(",", position, high)
+    return (comma + 1 if comma >= 0 else low), (after if after >= 0 else high)
+
+
+def _cv_pay_is_work_around(text, position):
+    """Whether the words around the pay phrase at `position` describe work.
+
+    Only its own comma part counts, so "Heads the revenue team, salary RM 20k"
+    is pay. A part opening with a work verb is work ("Placed 120 candidates with
+    average salaries of RM 15k"); otherwise the part is cut at the word that
+    attaches the pay to someone, so "Sales manager across APAC with salary of USD
+    150,000" is pay. A work verb just before the pay phrase is work too
+    ("Seasoned payroll specialist handling salaries of RM 2M").
+    """
+    begin, finish = _cv_pay_segment(text, position)
+    segment = text[begin:finish]
+    offset = position - begin
+    cut = 0
+    for attach in _CV_PAY_ATTACH_RE.finditer(segment, 0, offset + 1):
+        cut = attach.start()
+    local = segment[cut:]
+    if _CV_PAY_RECRUITER_RE.search(segment) and not _CV_PAY_OWN_VERB_RE.search(segment):
+        return True
+    # "Leads a budget of RM 5M with salary RM 20k": one pay attached to the person
+    # is theirs, whatever work the sentence opened with.
+    if cut and _CV_PAY_OWN_ATTACH_RE.match(local):
+        return False
+    if _cv_pay_opens_with_work_verb(segment) or _CV_PAY_OTHERS_PAY_RE.search(segment):
+        return True
+    if _CV_PAY_WORK_RE.search(local):
+        return True
+    before = _CV_PAY_WORD_RE.findall(segment[cut:offset])[-3:]
+    return any(word.lower() in _CV_PAY_WORK_VERBS for word in before)
 
 
 # A plain year after "from", "since" and the like is a date, not an amount:
@@ -2376,28 +2498,35 @@ _CV_PAY_DATED_YEAR_RE = re.compile(r"\b(?:from|since|between|until|till|in)\s+(?
 
 
 def _cv_states_candidate_pay(text):
-    """Whether a sentence or clause states the candidate's pay."""
-    matchable = unicodedata.normalize("NFKC", str(text or ""))
-    matchable = _CV_PAY_MARKUP_RE.sub("", matchable).strip()
+    """Whether a sentence or clause states the candidate's pay.
+
+    Whether a pay phrase is work is judged from the words around it, not from
+    anywhere in the clause (_cv_pay_is_work_around).
+    """
+    matchable = _cv_pay_matchable(text)
     if _CV_PAY_OWN_RE.search(matchable):
         return True
-    opens_with_work = _cv_pay_opens_with_work_verb(matchable)
-    names_work = _CV_PAY_WORK_RE.search(matchable)
-    if _CV_PAY_OWN_CURRENT_RE.search(matchable) and not (opens_with_work and names_work):
-        return True
-    describes_work = (
-        names_work
-        or _CV_PAY_OTHERS_PAY_RE.search(matchable)
-        or opens_with_work
-        or (_CV_PAY_RECRUITER_RE.search(matchable) and not _CV_PAY_OWN_VERB_RE.search(matchable))
-    )
-    if not describes_work and any(
-        not _CV_PAY_DATED_YEAR_RE.search(match.group(0))
-        for match in _CV_PAY_AMOUNT_RE.finditer(matchable)
-    ):
-        return True
-    if _CV_PAY_OWN_TALK_RE.search(matchable) and not _cv_pay_opens_with_work_verb(matchable):
-        return True
+    for match in _CV_PAY_OWN_CURRENT_RE.finditer(matchable):
+        begin, finish = _cv_pay_segment(matchable, match.start())
+        segment = matchable[begin:finish]
+        if not (_cv_pay_opens_with_work_verb(segment) and _CV_PAY_WORK_RE.search(segment)):
+            return True
+    # Every place a pay phrase starts is judged, including one inside a longer
+    # match: "RM 5M with salary" must not hide "salary RM 20k".
+    position = 0
+    while True:
+        match = _CV_PAY_AMOUNT_RE.search(matchable, position)
+        if not match:
+            break
+        position = match.start() + 1
+        if _CV_PAY_DATED_YEAR_RE.search(match.group(0)):
+            continue
+        if not _cv_pay_is_work_around(matchable, match.start()):
+            return True
+    for match in _CV_PAY_OWN_TALK_RE.finditer(matchable):
+        begin, finish = _cv_pay_segment(matchable, match.start())
+        if not _cv_pay_opens_with_work_verb(matchable[begin:finish]):
+            return True
     return any(
         _cv_pay_talk_is_candidates(matchable, match)
         for match in _CV_PAY_TALK_RE.finditer(matchable)
@@ -2432,14 +2561,13 @@ _CV_PAY_FRAGMENT_RE = re.compile(
 )
 
 
+_CV_PAY_AMOUNT_MARKED_RE = re.compile(_CV_PAY_AMOUNT_MARKED, re.I)
+
+
 def _cv_pay_amount_only(part):
     """Whether a part right before a pay part is just more of it: "RM 9,000"."""
-    matchable = _CV_PAY_MARKUP_RE.sub("", unicodedata.normalize("NFKC", part)).strip()
-    return bool(re.search(_CV_PAY_AMOUNT_MARKED, matchable, re.I)) and not (
-        _CV_PAY_WORK_RE.search(matchable)
-        or _CV_PAY_OTHERS_PAY_RE.search(matchable)
-        or _cv_pay_opens_with_work_verb(matchable)
-    )
+    matchable = _cv_pay_matchable(part)
+    return bool(_CV_PAY_AMOUNT_MARKED_RE.search(matchable)) and not _cv_pay_part_is_work(matchable)
 
 
 def _cv_mark_continuations(parts, flags):
@@ -2490,14 +2618,8 @@ def _cv_pay_clause_remainder(clause):
 
 def _cv_pay_continues(clause):
     """Whether a clause next to a pay clause belongs to the same pay statement."""
-    matchable = _CV_PAY_MARKUP_RE.sub("", unicodedata.normalize("NFKC", clause)).strip()
-    if not _CV_PAY_CONTINUATION_RE.search(matchable):
-        return False
-    return not (
-        _CV_PAY_WORK_RE.search(matchable)
-        or _CV_PAY_OTHERS_PAY_RE.search(matchable)
-        or _cv_pay_opens_with_work_verb(matchable)
-    )
+    matchable = _cv_pay_matchable(clause)
+    return bool(_CV_PAY_CONTINUATION_RE.search(matchable)) and not _cv_pay_part_is_work(matchable)
 
 
 def _cv_strip_pay_from_prose(text):
@@ -2508,8 +2630,13 @@ def _cv_strip_pay_from_prose(text):
     carries on the pay statement goes with it.
     """
     removed = 0
-    kept_sentences = []
-    for sentence in _cv_split_sentences(str(text or "").strip()):
+    source = str(text or "").strip()
+    # Kept sentences are joined with the spacing they had ("booking.Com" stays
+    # whole); a space stands in only where a removed sentence was between them.
+    result = ""
+    previous_end = None
+    for begin, finish in _cv_split_sentence_spans(source):
+        sentence = source[begin:finish]
         clauses = [c.strip() for c in sentence.split(";") if c.strip()]
         states_pay = [_cv_states_candidate_pay(c) for c in clauses]
         pay = _cv_mark_continuations(clauses, states_pay) if any(states_pay) else states_pay
@@ -2524,14 +2651,19 @@ def _cv_strip_pay_from_prose(text):
         dropped = any(pay)
         removed += 1 if dropped else 0
         if not dropped:
-            kept_sentences.append(sentence)
+            piece = sentence
         elif kept:
-            joined = "; ".join(kept)
+            piece = "; ".join(kept)
             ending = re.search(r"[.!?][\"')\]]*$", sentence)
-            if ending and not re.search(r"[.!?][\"')\]]*$", joined):
-                joined += ending.group(0)
-            kept_sentences.append(joined)
-    result = " ".join(kept_sentences)
+            if ending and not re.search(r"[.!?][\"')\]]*$", piece):
+                piece += ending.group(0)
+        else:
+            previous_end = None
+            continue
+        if result:
+            result += source[previous_end:begin] if previous_end is not None else " "
+        result += piece
+        previous_end = finish
     return (_cv_balance_bold(result) if removed else result), removed
 
 

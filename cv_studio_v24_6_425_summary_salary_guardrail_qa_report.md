@@ -1,4 +1,4 @@
-# v24.6.419 – v24.6.424 Salary never reaches the Summary box
+# v24.6.419 – v24.6.425 Salary never reaches the Summary box
 
 Branch: `claude/pr157-chatgpt-fix-zke4cy`, from merged master `56dca18` (v24.6.418).
 
@@ -427,4 +427,85 @@ is never blocked. Every new phrasing found goes into the generated lists.
   removing the one duplicate pattern.
 - **Full suite:** 1450 passed, 23 skipped, plus the known environment-only
   tests. **Node:** 27/27.
+
+## v24.6.425: ten findings from one more review, by the guardrail process
+
+The owner asked for the guardrail process to be followed strictly. Each step, as
+done this round:
+
+1. **Cases first.** All review examples were written as cases (probe set 10) and
+   run on v24.6.424: all 24 failed, as they should.
+2. **Every existing case kept passing.** When a change broke one, the change was
+   rethought, not the case. Two existing cases caught a first attempt ("with
+   compensation above" and "with total compensation up to" are other people's
+   pay ranges), and the rule was corrected.
+3. **Whole-suite recording.** The filter changed nothing outside the salary
+   tests.
+4. **Generated sentences.** New families: pay after a work word elsewhere in the
+   sentence, more ways of stating pay, and new slow shapes. The first new family
+   caught a real leak at once: "Leads a budget of RM 5M with salary RM 20k" was
+   kept. It is fixed.
+5. **Old rule vs new rule** on every sentence in the repository (29,946
+   strings): 11 differ. Seven are review examples. The other four are fragments
+   of the docs, lists of quoted examples cut mid-sentence. For instance, "total
+   package of 1,500" is cut before "SKUs"; the full sentences are unchanged.
+6. **Deliberate breaks:** 26 of 26 caught. Three needed a case of their own
+   first.
+
+**The main fix: work is judged around the amount**
+- A work word anywhere in the sentence used to switch the filter off for the
+  whole sentence. So "Heads the revenue team, salary RM 20k", "Sales manager
+  across APAC with salary of USD 150,000" and "Finance Manager for the group,
+  earning RM 12,000 monthly" all kept the salary.
+- Now only the amount's own comma part counts, cut at the word that attaches the
+  pay ("with", "earning", "on a"), within 300 characters.
+- One pay attached with "with" is the person's own. A range or plural ("with
+  average salaries", "up to", "above") is other people's.
+- Where a comma separates them, the fact stays and the pay goes: "Heads the
+  revenue team."
+- A work verb just before the pay phrase counts as work ("Seasoned payroll
+  specialist handling salaries of RM 2M monthly").
+- Every place a pay phrase starts is judged, so "RM 5M with salary" can't hide
+  "salary RM 20k".
+
+**Pay newly caught**
+- **Connectors:** "Salary per month: RM 9,000", "Salary in 2024 was …", "Salary
+  currently stands at …", "Salary drawn: …", "Salary history: …".
+- **Figures and verbs:** "RM 9 000" (a space in the figure), "Earning RM 9k",
+  "Currently earning 9K", "Takes home RM 7,000 monthly".
+- **Pay words:** "Monthly gross RM 9,000", "Current base of USD 120,000 plus
+  bonus", "Basic RM 7,000 + allowance RM 1,000", "Remuneration package worth RM
+  200k annually", "earning RM 300k in commission annually".
+
+**Speed**
+- **Runs of stops:** 20,000 dots took 6.1 seconds and grew with the square of
+  the length. 100,000 now take 0.17 seconds, because a run of stops is looked at
+  once.
+- **Repeated abbreviations:** these grew with the square of the length. The word
+  before a stop is now found by walking back only as far as needed.
+- **Found this round:** many pay phrases in one clause took 23 to 91 seconds,
+  because the new check re-read the whole clause per phrase. It now reads a fixed
+  window: 1.85 seconds for 100,000 characters, growing linearly.
+- **Input cap:** the Word paths filter only what the file can use (60 bullets of
+  20,000 characters).
+
+**Other fixes**
+- **Kept text is written exactly:** kept sentences keep their own spacing, so
+  "booking.Com" and double spaces survive when another sentence is removed.
+- **Lowercase pay sentence:** "Head of Payroll. salary RM 15k." keeps "Head of
+  Payroll.".
+- **Recruiter work:** "Expected salary guidance provided to 40 hiring managers"
+  is kept.
+- **Summary tab:** a pay-only regeneration is shown as a warning, and the tab is
+  marked done, not failed. The paid call succeeded and is recorded as a summary.
+- **Tidy-up:** one "is this work" helper and one text-normalising helper replace
+  three copies; the amount pattern is compiled once.
+
+**Regression evidence**
+- **Cases:** 37 new P1 cases, for 485 in all. No existing case changed; the case
+  file only gained lines.
+- **Full suite:** 1453 passed, 23 skipped, plus the known environment-only
+  tests. **Node:** 27/27.
+- **Earlier checks:** every earlier probe set and all 21,888 earlier generated
+  sentences give the same results as before.
 

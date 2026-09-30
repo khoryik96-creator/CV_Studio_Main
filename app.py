@@ -23,7 +23,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.424"
+_INSTALL_RECEIPT_VERSION = "v24.6.425"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -346,7 +346,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.424"
+_CVSTUDIO_VERSION = "v24.6.425"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -11939,6 +11939,23 @@ def _summary_docx_block(bullets, bookmark_id, numbering_id, compact_label=False)
     return label + "".join(paragraphs)
 
 
+# The Word file uses at most 20 Summary bullets of 2,000 characters, so the pay
+# filter never needs to read more than this; an oversized request cannot make it
+# work through text that is thrown away.
+_CV_SUMMARY_FILTER_MAX_ITEMS = 60
+_CV_SUMMARY_FILTER_MAX_CHARS = 20000
+
+
+def _bounded_summary_bullets(value):
+    """The part of a summary list the Word file can use, before it is filtered."""
+    if not isinstance(value, list):
+        return value
+    return [
+        item[:_CV_SUMMARY_FILTER_MAX_CHARS] if isinstance(item, str) else item
+        for item in value[:_CV_SUMMARY_FILTER_MAX_ITEMS]
+    ]
+
+
 _CV_SUMMARY_ONLY_PAY_ERROR = (
     "The CV Summary only stated the candidate's pay, which is never written "
     "into a CV. Generate the summary again."
@@ -11955,6 +11972,7 @@ def _insert_summary_into_docx_bytes_counted(
     The pay filter runs once; the count it returns is the one the route reports.
     """
     # Salary never reaches the Summary box, whichever route the bullets took.
+    summary_bullets = _bounded_summary_bullets(summary_bullets)
     filtered, pay_removed = _cv_strip_pay_from_summary_counted(summary_bullets)
     bullets = _summary_docx_bullets(filtered)
     if not bullets:
@@ -12140,7 +12158,7 @@ def generate_docx():
         summary_pay_removed = 0
         if isinstance(cv_data.get("summary_bullets"), list):
             cv_data["summary_bullets"], summary_pay_removed = _cv_strip_pay_from_summary_counted(
-                cv_data["summary_bullets"]
+                _bounded_summary_bullets(cv_data["summary_bullets"])
             )
         cv_data["_document_alignment"] = _normalize_cv_text_alignment(body.get("alignment"))
         cv_data["_summary_box_autofit"] = _summary_box_autofit_enabled(

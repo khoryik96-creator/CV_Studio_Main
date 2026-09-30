@@ -132,6 +132,31 @@ class SummarySalaryDocxTests(unittest.TestCase):
         # The original helper still returns the document alone.
         self.assertIsInstance(app._insert_summary_into_docx_bytes(source, ["Built pipelines."]), bytes)
 
+    def test_the_filter_reads_only_what_the_word_file_can_use(self):
+        seen = []
+        real = app._cv_strip_pay_from_summary_counted
+
+        def counted(bullets):
+            seen.append(bullets)
+            return real(bullets)
+
+        huge = ["Built pipelines. " * 5000] + ["Led a team."] * 500
+        with mock.patch.object(app, "_cv_strip_pay_from_summary_counted", side_effect=counted):
+            response = self.client.post("/generate-docx", json={"data": _cv(huge)}, headers=HEADERS)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(seen[-1]), app._CV_SUMMARY_FILTER_MAX_ITEMS)
+        self.assertLessEqual(max(len(item) for item in seen[-1]), app._CV_SUMMARY_FILTER_MAX_CHARS)
+        # The uploaded-DOCX path reads no more than that either.
+        source = self._format(["Placeholder summary."])
+        with mock.patch.object(app, "_cv_strip_pay_from_summary_counted", side_effect=counted):
+            app._insert_summary_into_docx_bytes_counted(source, huge)
+        self.assertEqual(len(seen[-1]), app._CV_SUMMARY_FILTER_MAX_ITEMS)
+        self.assertLessEqual(max(len(item) for item in seen[-1]), app._CV_SUMMARY_FILTER_MAX_CHARS)
+        # A normal summary is passed through untouched.
+        normal = ["Built pipelines.", "Led a team."]
+        self.assertEqual(app._bounded_summary_bullets(normal), normal)
+        self.assertEqual(app._bounded_summary_bullets([0, None, "x"]), [0, None, "x"])
+
     def test_a_summary_without_pay_is_written_unchanged(self):
         clean = ["**Senior Data Engineer** with 11 years in banking.", "Built streaming pipelines."]
         self.assertEqual(app._cv_strip_pay_from_summary(list(clean)), clean)

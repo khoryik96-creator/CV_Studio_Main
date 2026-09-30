@@ -98,10 +98,38 @@ class GeneratedSalaryGuardrails(unittest.TestCase):
         dropped = [text for text in kept if normalize._cv_strip_pay_from_summary([text]) != [text]]
         self.assertEqual(dropped[:10], [])
 
+    def test_work_elsewhere_in_the_sentence_does_not_hide_pay(self):
+        # Work is judged around the amount, so a work word in another part of the
+        # sentence does not keep the candidate's pay.
+        texts = [f"{fact}{joiner}{pay}." for fact, joiner, pay in itertools.product(
+            ["Heads the revenue team", "Sales manager across APAC", "Finance Manager for the group",
+             "Leads a budget of RM 5M", "Managed hiring for 40 staff"],
+            [", ", " with "],
+            ["salary RM 20k", "salary of USD 150,000", "a salary of RM 12,000 monthly"])]
+        texts += [f"{fact}, earning {a} monthly." for fact, a in itertools.product(
+            ["Finance Manager for the group", "Heads the revenue team"], AMOUNTS[:8])]
+        leaked = [text for text in texts if any(
+            a in "".join(normalize._cv_strip_pay_from_summary([text])) for a in AMOUNTS + ["USD 150,000", "RM 20k", "RM 12,000"])]
+        self.assertEqual(leaked[:10], [])
+
+    def test_still_more_ways_of_stating_own_pay_are_removed(self):
+        texts = [t.format(a=a) for t, a in itertools.product(
+            ["Salary per month: {a}.", "Salary in 2024 was {a}.", "Salary currently stands at {a}.", "Salary drawn: {a}.",
+             "Earning {a}.", "Currently earning {a}.", "Takes home {a} monthly.", "Monthly gross {a}.",
+             "Current base of {a} plus bonus.", "Basic {a} + allowance RM 1,000.", "Remuneration package worth {a} annually.",
+             "Top performer earning {a} in commission annually."], AMOUNTS[:8])]
+        texts += ["Salary RM 9 000.", "Salary: MYR 12 500 per month.", "Salary history: RM 5k (2019), RM 7k (2021)."]
+        missed = [text for text in texts if normalize._cv_strip_pay_from_summary([text]) != []]
+        self.assertEqual(missed[:10], [])
+
     def test_the_filter_stays_fast_on_hostile_input(self):
         # A long pasted or crafted line must not hang a request.
         for text in ["1," * 10000, "1." * 10000, "9" * 20000, "RM " * 7000, "1,1.1 " * 4000, "$" * 20000,
-                     "RM1" * 7000, "Earning " + "a" * 20000 + " RM 9k monthly", ("x" * 50 + ", ") * 400]:
+                     "RM1" * 7000, "Earning " + "a" * 20000 + " RM 9k monthly", ("x" * 50 + ", ") * 400,
+                     "." * 40000, "!?" * 20000, "Sr. " * 20000, "A. " * 20000, "e.g. " * 20000,
+                     # many pay phrases in one long clause, each judged by the words around it
+                     "Managed salary RM 9k with " * 1000, "Led total compensation of RM 2M for 3 staff and " * 600,
+                     "expected salary of new hires and " * 1000]:
             with self.subTest(text=text[:20]):
                 started = time.perf_counter()
                 normalize._cv_strip_pay_from_summary([text])
