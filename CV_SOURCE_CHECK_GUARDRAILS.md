@@ -231,6 +231,12 @@ file and preview show it as "Major: …" under the degree. A sentence such as
 "Major in the arts club", two different majors, or a line past the next
 qualification or section heading changes nothing.
 
+If the institution appears for several qualifications, the major and grade
+label must come from the one block uniquely identified by the entry's degree
+and/or stated year. Conflicting or missing identifying evidence changes
+nothing. A master's major never fills the bachelor's entry just because the
+school is the same; an existing major is never overwritten.
+
 ### F4
 **A stated graduation year is kept.** If the AI leaves an entry's date empty
 and the line naming its institution says "graduated 2007", "graduated in June
@@ -264,6 +270,14 @@ in `cvstudio_cv_normalize.py`, run where each summary is made:
 - `/generate-docx`, on both of its paths, as a last net.
 
 There is no browser copy.
+
+Explicit earnings such as "Earnings of RM 18,000 monthly", "Monthly earnings
+of RM 18,000" and "Her earnings are RM 18,000 monthly" count as pay. So does
+"The candidate receives RM 18,000 per month"; receipts explicitly for business
+and company earnings remain work. Payroll achievements with an explicit
+recipient such as "salary of RM 12,000 for each employee" or "per employee"
+remain intact. That recipient must be in the pay phrase's own comma part, and
+cannot be a job-role description or override an explicit own-pay statement.
 
 **A summary is also the candidate's work, and much of that work is about pay**
 (HR, payroll, recruitment, sales). So a sentence is removed only on a clear
@@ -444,6 +458,16 @@ Matching runs on an NFKC-normalised copy with Markdown emphasis removed, so
 "**Salary:** RM 17,000" is caught. Full-width digits count as ordinary digits,
 digits in other scripts count too, and a neighbouring non-Latin character
 doesn't hide an amount.
+
+## Test-state safety
+
+Pure source-reading tests need no installation receipt. Tests importing the
+application must create any test receipt and local data inside temporary state,
+never in the owner's installed folder or per-user receipt location. Restore all
+environment overrides after import. `tests/test_cv_test_state_isolation.py`
+collects each affected test in its own interpreter and verifies that a pretend
+owner receipt and data paths are unchanged. On Windows this also protects the
+folder-bound authorization used by INSTALL/UPDATE.
 
 ## Screen (checked by `tests/test_cv_parse_warning_persistence_frontend.js`)
 

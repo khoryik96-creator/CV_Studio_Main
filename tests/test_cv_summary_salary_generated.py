@@ -129,12 +129,41 @@ class GeneratedSalaryGuardrails(unittest.TestCase):
                      "." * 40000, "!?" * 20000, "Sr. " * 20000, "A. " * 20000, "e.g. " * 20000,
                      # many pay phrases in one long clause, each judged by the words around it
                      "Managed salary RM 9k with " * 1000, "Led total compensation of RM 2M for 3 staff and " * 600,
-                     "expected salary of new hires and " * 1000]:
+                     "expected salary of new hires and " * 1000,
+                     "Managed payroll with salary RM 9k for each employee and " * 600,
+                     "earnings of " * 3000, "The candidate receives " * 1500]:
             with self.subTest(text=text[:20]):
                 started = time.perf_counter()
                 normalize._cv_strip_pay_from_summary([text])
                 normalize._cv_strip_pay_from_summary_text("- " + text)
                 self.assertLess(time.perf_counter() - started, 2.0)
+
+    def test_explicit_earnings_and_candidate_receipts_are_removed(self):
+        templates = ["Earnings of {a}{p}.", "Monthly earnings of {a}.", "Her earnings are {a}{p}.",
+                     "His earnings are {a}{p}.", "The candidate receives {a}{p}.",
+                     "She receives {a}{p}.", "He makes {a}{p}.", "The candidate gets {a}{p}.",
+                     "Recruiter with earnings of {a}{p}."]
+        missed = [text for text in (t.format(a=a, p=p) for t, a, p in
+                  itertools.product(templates, AMOUNTS[:8], PERIODS[1:]))
+                  if normalize._cv_strip_pay_from_summary([text]) != []]
+        self.assertEqual(missed[:10], [])
+
+    def test_pay_for_explicit_employee_recipients_stays(self):
+        templates = ["Managed payroll with salary of {a} for each employee.",
+                     "Processed payroll with a salary of {a} per employee.",
+                     "Administered payroll with salary of {a} for a worker.",
+                     "Reviewed payroll with salary of {a} for every employee."]
+        dropped = [text for text in (t.format(a=a) for t, a in itertools.product(templates, AMOUNTS[:8]))
+                   if normalize._cv_strip_pay_from_summary([text]) != [text]]
+        self.assertEqual(dropped[:10], [])
+
+    def test_explicit_business_earnings_and_receipts_stay(self):
+        templates = ["Company earnings of {a} monthly.", "Business earnings of {a} monthly.",
+                     "The candidate receives {a} per month in client fees.",
+                     "She receives {a} monthly in revenue."]
+        dropped = [text for text in (t.format(a=a) for t, a in itertools.product(templates, AMOUNTS[:8]))
+                   if normalize._cv_strip_pay_from_summary([text]) != [text]]
+        self.assertEqual(dropped[:10], [])
 
     def test_pay_related_work_is_kept(self):
         dropped = [

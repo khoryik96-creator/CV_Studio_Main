@@ -4,6 +4,14 @@
 
 ## Release state
 
+- Latest audited merged source (2026-09-30): v24.6.428, `cb0bcae` (#219).
+- Current corrective work: v24.6.429 on
+  `codex/pr220-v24.6.429-guardrail-review-fixes` (PR number provisional), not
+  merged. Scope is test-receipt isolation, qualification-specific education
+  label restoration and summary pay-filter corrections. Routes, schemas,
+  credentials, work-row reconciliation and DOCX layout are unchanged. Older
+  dated release/claim notes below are historical, not the current master state.
+
 - Approved baseline: v24.6.217
 - Current source baseline: see the repository-root `VERSION` file (single source
   of truth). The specific numbers that used to be pinned here — e.g. "v24.6.252",

@@ -10025,6 +10025,477 @@
     "Senior Engineer"
    ],
    "note": "a city name with a joining word is a place"
+  },
+  {
+   "id": "F3-repeated-school-bachelor",
+   "rule": "F3",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Northwind University",
+    "degree": "Bachelor of Business",
+    "date_range": "2018"
+   },
+   "lines": [
+    "2018 Northwind University | Bachelor of Business",
+    "2022 Northwind University | Master of Science",
+    "Major: Data Science"
+   ],
+   "expect": {
+    "major": null
+   },
+   "note": "a master's major must not appear on a bachelor's degree at the same school"
+  },
+  {
+   "id": "F3-repeated-school-master",
+   "rule": "F3",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Northwind University",
+    "degree": "Master of Science",
+    "date_range": "2022"
+   },
+   "lines": [
+    "2018 Northwind University | Bachelor of Business",
+    "2022 Northwind University | Master of Science",
+    "Major: Data Science"
+   ],
+   "expect": {
+    "major": "Data Science"
+   },
+   "note": "restore the major only to its own qualification"
+  },
+  {
+   "id": "F3-repeated-school-two-majors",
+   "rule": "F3",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Northwind University",
+    "degree": "Bachelor of Business",
+    "date_range": "2018"
+   },
+   "lines": [
+    "2018 Northwind University | Bachelor of Business",
+    "Major: Finance",
+    "2022 Northwind University | Master of Science",
+    "Major: Data Science"
+   ],
+   "expect": {
+    "major": "Finance"
+   },
+   "note": "different qualifications can each have their own major"
+  },
+  {
+   "id": "F3-repeated-school-degree-next-line",
+   "rule": "F3",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Northwind University",
+    "degree": "Master of Science",
+    "date_range": "2022"
+   },
+   "lines": [
+    "2018 Northwind University",
+    "Bachelor of Business",
+    "Major: Finance",
+    "2022 Northwind University",
+    "Master of Science",
+    "Major: Data Science"
+   ],
+   "expect": {
+    "major": "Data Science"
+   },
+   "note": "the qualification may be stated on the following line"
+  },
+  {
+   "id": "F3-repeated-school-same-degree-year",
+   "rule": "F3",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Northwind University",
+    "degree": "Bachelor of Science",
+    "date_range": "2018"
+   },
+   "lines": [
+    "2018 Northwind University | Bachelor of Science",
+    "Major: Chemistry",
+    "2022 Northwind University | Bachelor of Science",
+    "Major: Data Science"
+   ],
+   "expect": {
+    "major": "Chemistry"
+   },
+   "note": "a stated year disambiguates repeated qualifications"
+  },
+  {
+   "id": "F3-repeated-school-missing-evidence",
+   "rule": "F3",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Northwind University"
+   },
+   "lines": [
+    "2018 Northwind University | Bachelor of Business",
+    "2022 Northwind University | Master of Science",
+    "Major: Data Science"
+   ],
+   "expect": {
+    "major": null
+   },
+   "note": "without a degree or date identifying an entry, do not guess"
+  },
+  {
+   "id": "F3-repeated-school-date-only",
+   "rule": "F3",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Northwind University",
+    "date_range": "2018"
+   },
+   "lines": [
+    "2018 Northwind University",
+    "2022 Northwind University",
+    "Major: Data Science"
+   ],
+   "expect": {
+    "major": null
+   },
+   "note": "the year identifies the earlier block with no major"
+  },
+  {
+   "id": "F3-repeated-school-degree-only",
+   "rule": "F3",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Northwind University",
+    "degree": "Master of Science"
+   },
+   "lines": [
+    "2018 Northwind University | Bachelor of Business",
+    "2022 Northwind University | Master of Science",
+    "Major: Data Science"
+   ],
+   "expect": {
+    "major": "Data Science"
+   },
+   "note": "a unique degree is enough when the provider omitted the date"
+  },
+  {
+   "id": "F3-repeated-school-conflicting-date",
+   "rule": "F3",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Northwind University",
+    "degree": "Bachelor of Business",
+    "date_range": "2022"
+   },
+   "lines": [
+    "2018 Northwind University | Bachelor of Business",
+    "2022 Northwind University | Master of Science",
+    "Major: Data Science"
+   ],
+   "expect": {
+    "major": null
+   },
+   "note": "conflicting qualification and date evidence must not restore a major"
+  },
+  {
+   "id": "F3-repeated-school-existing-major",
+   "rule": "F3",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Northwind University",
+    "degree": "Bachelor of Business",
+    "major": "Business Studies"
+   },
+   "lines": [
+    "2018 Northwind University | Bachelor of Business",
+    "2022 Northwind University | Master of Science",
+    "Major: Data Science"
+   ],
+   "expect": {
+    "major": "Business Studies"
+   },
+   "note": "never overwrite a major already present"
+  },
+  {
+   "id": "F2-repeated-school-grade-label",
+   "rule": "F2",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Northwind University",
+    "degree": "Bachelor of Business",
+    "date_range": "2018",
+    "cgpa": "3.5 / 4.0"
+   },
+   "lines": [
+    "2018 Northwind University | Bachelor of Business",
+    "2022 Northwind University | Master of Science",
+    "GPA 3.5 / 4.0"
+   ],
+   "expect": {
+    "cgpa": "3.5 / 4.0"
+   },
+   "note": "a grade label also belongs to its own qualification"
+  },
+  {
+   "id": "P1-payroll-salary-each-employee",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed payroll with salary of RM 12,000 for each employee."
+   ],
+   "expect": [
+    "Managed payroll with salary of RM 12,000 for each employee."
+   ],
+   "note": "explicit employee recipients make this payroll work, not personal pay"
+  },
+  {
+   "id": "P1-payroll-salary-per-employee",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed payroll with salary of RM 12,000 per employee."
+   ],
+   "expect": [
+    "Managed payroll with salary of RM 12,000 per employee."
+   ],
+   "note": "per employee is not the candidate's salary"
+  },
+  {
+   "id": "P1-payroll-salary-single-worker",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Administered payroll with a salary of RM 8,000 for a worker."
+   ],
+   "expect": [
+    "Administered payroll with a salary of RM 8,000 for a worker."
+   ],
+   "note": "a singular explicit recipient is still another person"
+  },
+  {
+   "id": "P1-payroll-personal-salary-still-removed",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed payroll with salary of RM 12,000 for the team lead role."
+   ],
+   "expect": [],
+   "note": "a role is the candidate's own salary, not an employee recipient"
+  },
+  {
+   "id": "P1-payroll-personal-salary-other-sentence",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed payroll for each employee. Salary of RM 12,000 monthly."
+   ],
+   "expect": [
+    "Managed payroll for each employee."
+   ],
+   "note": "another sentence's employees must not shelter personal pay"
+  },
+  {
+   "id": "P1-payroll-personal-salary-other-comma",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed payroll with salary of RM 12,000 monthly, for each employee improved reporting."
+   ],
+   "expect": [],
+   "note": "a separate comma clause must not shelter the candidate's pay"
+  },
+  {
+   "id": "P1-earnings-of-amount",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Earnings of RM 18,000 monthly."
+   ],
+   "expect": [],
+   "note": "earnings with an amount are candidate pay even without a colon"
+  },
+  {
+   "id": "P1-monthly-earnings-of-amount",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Monthly earnings of RM 18,000."
+   ],
+   "expect": [],
+   "note": "a pay period can precede earnings"
+  },
+  {
+   "id": "P1-her-earnings-are",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Her earnings are RM 18,000 monthly."
+   ],
+   "expect": [],
+   "note": "an explicit personal earnings statement must not leak"
+  },
+  {
+   "id": "P1-candidate-receives",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "The candidate receives RM 18,000 per month."
+   ],
+   "expect": [],
+   "note": "a candidate subject can precede the receives-pay statement"
+  },
+  {
+   "id": "P1-company-earnings-kept",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Analysed company earnings of RM 18,000 monthly."
+   ],
+   "expect": [
+    "Analysed company earnings of RM 18,000 monthly."
+   ],
+   "note": "the company's earnings remain work achievements"
+  },
+  {
+   "id": "P1-company-receives-kept",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "The company receives RM 18,000 per month."
+   ],
+   "expect": [
+    "The company receives RM 18,000 per month."
+   ],
+   "note": "a company is not the candidate"
+  },
+  {
+   "id": "P1-candidate-receives-business-kept",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "The candidate receives RM 18,000 per month in client fees."
+   ],
+   "expect": [
+    "The candidate receives RM 18,000 per month in client fees."
+   ],
+   "note": "explicit business receipts are not personal salary"
+  },
+  {
+   "id": "P1-recruiter-earnings-personal",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Recruiter with earnings of RM 18,000 monthly."
+   ],
+   "expect": [],
+   "note": "a recruiter job title must not shelter explicit personal earnings"
+  },
+  {
+   "id": "P1-earnings-no-amount-kept",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Built an earnings dashboard."
+   ],
+   "expect": [
+    "Built an earnings dashboard."
+   ],
+   "note": "earnings as work without a personal amount are retained"
+  },
+  {
+   "id": "P1-candidate-receives-nonpay-kept",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "The candidate receives client requirements monthly."
+   ],
+   "expect": [
+    "The candidate receives client requirements monthly."
+   ],
+   "note": "receives without a monetary amount is not pay"
+  },
+  {
+   "id": "P1-payroll-recipient-other-amount",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed payroll with salary of RM 12,000 monthly and salary of RM 8,000 per employee."
+   ],
+   "expect": [],
+   "note": "a recipient for a different amount does not hide the first personal salary"
+  },
+  {
+   "id": "P1-company-earnings-label-kept",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Company earnings of RM 18,000 monthly."
+   ],
+   "expect": [
+    "Company earnings of RM 18,000 monthly."
+   ],
+   "note": "an explicit company's earnings label is not candidate pay"
+  },
+  {
+   "id": "P1-business-earnings-label-kept",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Business earnings of RM 18,000 monthly."
+   ],
+   "expect": [
+    "Business earnings of RM 18,000 monthly."
+   ],
+   "note": "an explicit business earnings label is not candidate pay"
+  },
+  {
+   "id": "P1-candidate-salary-from-company",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "The candidate receives RM 18,000 per month from the company."
+   ],
+   "expect": [],
+   "note": "a company paying the candidate still describes candidate salary"
+  },
+  {
+   "id": "F3-repeated-degree-ambiguous-one-major",
+   "rule": "F3",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Northwind University",
+    "degree": "Bachelor of Science"
+   },
+   "lines": [
+    "2018 Northwind University | Bachelor of Science",
+    "2022 Northwind University | Bachelor of Science",
+    "Major: Data Science"
+   ],
+   "expect": {
+    "major": null
+   },
+   "note": "a repeated degree without a identifying date has no unique major block"
+  },
+  {
+   "id": "P1-payroll-recipient-before-own-pay",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed payroll with salary of RM 8,000 per employee and salary of RM 12,000 monthly."
+   ],
+   "expect": [],
+   "note": "the first amount's recipient does not shelter a later personal salary"
+  },
+  {
+   "id": "P1-payroll-recipient-before-own-pay-no-comma",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed payroll with salary of RM 8k per employee and salary of RM 12k monthly."
+   ],
+   "expect": [],
+   "note": "a recipient for one amount must not shelter the later personal amount in the same comma part"
   }
  ]
 }

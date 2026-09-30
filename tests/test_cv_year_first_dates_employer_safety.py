@@ -14,30 +14,15 @@ Dates/Organization/Role table, so a shortfall is reported instead of shipping a 
 without the candidate's current job.
 """
 
-import os
 import re
 from pathlib import Path
-import tempfile
 import unittest
 
-from owner_build_tools.build_protected import write_test_receipt
-
-
 ROOT = Path(__file__).resolve().parents[1]
-_MODULE_TEMPORARY = tempfile.TemporaryDirectory(prefix="cvstudio-cv-yearfirst-")
-_ORIGINAL_DATABASE_OVERRIDE = os.environ.get("CVSTUDIO_DB_PATH")
-os.environ["CVSTUDIO_DB_PATH"] = str(
-    Path(_MODULE_TEMPORARY.name) / "state" / "cv_studio.sqlite3"
-)
-write_test_receipt(ROOT)
-try:
-    import cvstudio_cv_fidelity as fidelity
-    import cvstudio_cv_normalize as normalize
-finally:
-    if _ORIGINAL_DATABASE_OVERRIDE is None:
-        os.environ.pop("CVSTUDIO_DB_PATH", None)
-    else:
-        os.environ["CVSTUDIO_DB_PATH"] = _ORIGINAL_DATABASE_OVERRIDE
+
+# Pure source readers must not write an owner's installation receipt.
+import cvstudio_cv_fidelity as fidelity
+import cvstudio_cv_normalize as normalize
 
 
 # The three date cells from the CV that lost its three most recent employers,

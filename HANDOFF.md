@@ -45,6 +45,19 @@ behavior-preserving and hold the route SHA constant.
 
 ## 3. CI and local verification
 
+For formatting corrections, follow `CV_SOURCE_CHECK_GUARDRAILS.md` before
+editing a heuristic. Preserve existing fixture expectations; add a failing
+case, replay against master, run generated/hostile-input tests and deliberately
+break the new guards to prove their tests catch them.
+
+Never call `write_test_receipt(ROOT)` against the owner's real per-user state.
+Pure CV helper tests need no receipt. App-import tests must isolate the receipt,
+SQLite, job journal, salary data and credential paths in temporary state; the
+v24.6.429 collection tests verify the affected modules individually. For a full
+local suite, set temporary LOCALAPPDATA/APPDATA and all CVSTUDIO state/database/
+journal and SALARY_COMPARISON_DATA_DIR overrides before test collection. Tests
+must not authorize the test checkout by replacing the installed owner's receipt.
+
 Regression CI is configured for pull requests and the exact commit pushed to
 `master`; runner provisioning can still fail when the account's Actions
 spending limit is exhausted, so the complete local gate remains mandatory. The

@@ -14,28 +14,16 @@ breaks a behaviour that was deliberately chosen.
 """
 
 import json
-import os
 from pathlib import Path
 import re
-import tempfile
 import unittest
 
-from owner_build_tools.build_protected import write_test_receipt
-
 ROOT = Path(__file__).resolve().parents[1]
-_MODULE_TEMPORARY = tempfile.TemporaryDirectory(prefix="cvstudio-cv-guardrails-")
-_ORIGINAL_DATABASE_OVERRIDE = os.environ.get("CVSTUDIO_DB_PATH")
-os.environ["CVSTUDIO_DB_PATH"] = str(Path(_MODULE_TEMPORARY.name) / "state" / "cv_studio.sqlite3")
-write_test_receipt(ROOT)
-try:
-    import cvstudio_cv_fidelity as fidelity
-    import cvstudio_cv_normalize as normalize
-    import cvstudio_cv_reconcile as reconcile
-finally:
-    if _ORIGINAL_DATABASE_OVERRIDE is None:
-        os.environ.pop("CVSTUDIO_DB_PATH", None)
-    else:
-        os.environ["CVSTUDIO_DB_PATH"] = _ORIGINAL_DATABASE_OVERRIDE
+
+# These are pure modules: no installation receipt or application state needed.
+import cvstudio_cv_fidelity as fidelity
+import cvstudio_cv_normalize as normalize
+import cvstudio_cv_reconcile as reconcile
 
 CASES = json.loads((ROOT / "tests" / "fixtures" / "cv_guardrail_cases.json").read_text(encoding="utf-8"))["cases"]
 GUARDRAILS_DOC = (ROOT / "CV_SOURCE_CHECK_GUARDRAILS.md").read_text(encoding="utf-8")
