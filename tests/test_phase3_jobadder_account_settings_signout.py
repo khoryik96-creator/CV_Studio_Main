@@ -105,7 +105,7 @@ class JobAdderAccountSettingsSignOutTests(unittest.TestCase):
 
     def test_route_inventory_adds_only_sign_out_to_exact_v246241_contract(self):
         routes = {rule.rule: rule for rule in app.app.url_map.iter_rules()}
-        self.assertEqual(len(routes), 118)
+        self.assertEqual(len(routes), 119)
         self.assertIn("/jobadder/sign_out", routes)
         sign_out = routes["/jobadder/sign_out"]
         self.assertEqual(sign_out.endpoint, "jobadder_sign_out")
@@ -122,9 +122,13 @@ class JobAdderAccountSettingsSignOutTests(unittest.TestCase):
             if rule.rule.startswith("/salary-comparison")
         }
         _download_routes = {"/downloads/folders", "/downloads/save"}
+        # Later additions are excluded for the same reason sign-out and downloads
+        # are: this assertion exists to prove the v24.6.241 base contract is
+        # otherwise untouched, not to freeze the route surface for good.
+        _later_routes = {"/jobadder/spider_apply_tags"}
         self.assertEqual(
             self._route_contract(
-                exclude={"/jobadder/sign_out"} | _salary_routes | _download_routes
+                exclude={"/jobadder/sign_out"} | _salary_routes | _download_routes | _later_routes
             ),
             (107, _V246241_ROUTE_CONTRACT_SHA256),
         )

@@ -162,8 +162,13 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   `codex/pr210-v24.6.403-cv-source-safety` are both completed.
   PR #211 merged v24.6.406 through v24.6.409 as `5b1f2a4`: four source-ownership
   audit findings against v24.6.405, then three rounds of review corrections.
-  Current corrective: `claude/pr157-chatgpt-fix-zke4cy`, v24.6.410, an
-  accented-location fix on the role-qualifier test.
+  PR #212 merged v24.6.410 as `960a086`, closing the source-ownership run.
+  Current work: `claude/ai-crawler-search-refinement`, v24.6.411 through
+  v24.6.416, the AI Crawler blank-field review queue and the save that writes a
+  reviewed tag back into JobAdder. v24.6.413 and v24.6.414 are correctives on the
+  two features below them and must ship with them: as first written the queue
+  never ran at all, the save could clear a candidate's other custom fields, and
+  the queue then offered candidates whose fields were not actually blank.
   PRs #193 and #194 merged after all three hosted checks passed.
   PR #189 merged as `2c216c6` on 2026-08-29; PR #185 merged as `b84c36f` on
   2026-09-04. PR #191 merged as `a5bf89d` on 2026-09-05 after all hosted
@@ -305,8 +310,93 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Summary box salary guardrail — v24.6.419–v24.6.425, UNMERGED.** Starts at merged
-  master `56dca18`. The generated CV Summary never states the candidate's pay: the
+- **AI Crawler blank-field review and tag save — rebased as v24.6.426, UNMERGED
+  (PR #214).** The six commits below (v24.6.411–v24.6.416) were written on master
+  `960a086` and rebased unchanged onto master `bb3b606`. Their version labels are
+  kept in history, but merged work has since used v24.6.411–v24.6.425, so the
+  rebased branch ships as v24.6.426. Only version numbers and these status notes
+  were resolved during the rebase; the crawler code, tests and route change
+  (118 → 119, `/jobadder/spider_apply_tags`) are line-for-line what was reviewed.
+  See `cv_studio_v24_6_426_spider_rebase_note.md`.
+
+- **AI Crawler save-boundary corrective — v24.6.416, UNMERGED.**
+  Eight findings, three of them regressions introduced by v24.6.415: a completed
+  save re-enabled its own button through the deferred tick restore, one click from
+  a duplicate round of live writes; the run-wide queue cap dropped rows without
+  setting the flag that says so; and the 800-character CV excerpt could not reach
+  the skills and qualifications the prompt asks about. Also: the save loop had no
+  account guard, so a sign-out mid-batch would point this account's candidate ids
+  at another tenant — the v24.6.243 class again, this time on the write path;
+  Industry skipped the field-name verification the other two fields get; an
+  unnamed field definition was taken on trust; an outage hid behind a partial
+  success; and a renamed field was reported as retryable. Behaviour change worth
+  knowing: a tenant that renamed any of the four writable fields is now refused
+  the write rather than having the tag land somewhere unrelated. See
+  `cv_studio_v24_6_416_spider_save_boundary_corrective.md`.
+
+- **AI Crawler review-boundary corrective — v24.6.415, UNMERGED.**
+  Nineteen findings from two further reviews, most on the browser side. The one
+  that mattered: neither reset path cleared the review queue, so after a JobAdder
+  sign-out or account switch a stale row could be ticked and written against the
+  new account's token — candidate ids are tenant-scoped, and AGENTS.md makes this
+  invalidation a hard v24.6.243 rule. Also: the options read now verifies the
+  field's label so a repurposed custom field cannot be written into; a reconnect
+  during the queue's CV reads no longer discards a finished search; an option-list
+  outage is reported as an outage rather than a no-op; a transient read failure is
+  502 rather than 404; refusals carry their real reason; the AI id lookup is
+  per-batch so a reply cannot cross-attribute tags; ticks survive the per-batch
+  re-render that v24.6.414 introduced; and the queue is capped for the whole run.
+  Two findings were wrong and are recorded with evidence in the report. See
+  `cv_studio_v24_6_415_spider_review_boundary_corrective.md`.
+
+- **AI Crawler queue-selection corrective — v24.6.414, UNMERGED.**
+  Fixes five findings from two further reviews, all on the selection side. The
+  worst: a gate reporting "unknown" was read as "the field is blank", but that
+  verdict also covers a collapsed mismatch and a record that was never read. A
+  candidate with FMCG on file could be queued as blank and then tagged FSI,
+  because the sub-category field the suggestion resolved to genuinely was empty.
+  Blankness is now confirmed against the record, read by field id exactly as the
+  save guard reads it. Also: a slow queue no longer reports a complete search as
+  partial, an expired connection returns 401 with needs_reconnect instead of a
+  generic 502, a failing AI batch no longer discards the batches already paid for,
+  and the tenant option list is cached rather than re-read once per candidate. See
+  `cv_studio_v24_6_414_spider_queue_selection_corrective.md`.
+
+- **AI Crawler review-queue corrective — v24.6.413, UNMERGED.**
+  Fixes thirteen confirmed findings against v24.6.411 and v24.6.412. Two mattered:
+  the queue was collected inside the scorer, which never sees candidates the
+  eligibility pass has already dropped, so the feature returned an empty queue on
+  every search; and the save sent only the field it was filling, in the wrong
+  shape, which on a tenant treating UpdateCandidate.custom as replacement-like
+  would clear the record's other custom fields. Also: no vocabulary check existed
+  for IT Skills or Qualifications, a bare string wrote one tag per character, every
+  row displayed a bare id, a renamed field read as blank, the id was unescaped, and
+  a write cleared caches nothing had invalidated. The search route is now covered
+  end to end, which is the only level at which the first fault was visible. See
+  `cv_studio_v24_6_413_spider_review_corrective.md`.
+
+- **AI Crawler reviewed-tag save — v24.6.412, UNMERGED.**
+  Sits on v24.6.411 below. Ticking a suggestion now writes it into the JobAdder
+  custom field, which is the part that actually repairs the profile. New guarded
+  route `/jobadder/spider_apply_tags`: the candidate is re-read before every
+  write, only a field that is still blank is ever filled, and every value is
+  checked against the tenant's own option list on the server as well as in the
+  browser. Only Industry, IT Skills and Professional Qualifications are writable;
+  Residential Status is deliberately not. The sealed route count moved 118 → 119
+  with the digest recomputed in the same commit. See
+  `cv_studio_v24_6_412_spider_apply_tags_qa_report.md`.
+
+- **AI Crawler blank-field review queue — v24.6.411, UNMERGED (PR #214).**
+  Starts at merged master `960a086`. A JobAdder custom field left blank drops a
+  candidate from the search even when their CV names the value. Those candidates
+  are now set aside in a Needs Checking list instead of being discarded, and one
+  AI call per batch proposes the missing tag from JobAdder's own option list.
+  Ranked results are unchanged and nothing writes to JobAdder at this version.
+  See `cv_studio_v24_6_411_spider_blank_field_review_qa_report.md`. The follow-up
+  it named is v24.6.412 above.
+
+- **Summary box salary guardrail — v24.6.419–v24.6.425, MERGED via PR #217 as
+  `bb3b606`.** Starts at merged master `56dca18`. The generated CV Summary never states the candidate's pay: the
   summary instructions forbid it, and one server filter (`_cv_strip_pay_from_summary`)
   removes any statement of it -- in `/generate-ai` when the CV Summary callers send
   `strip_candidate_pay: true`, in `/blind` for a promoted source summary, and in both
@@ -398,7 +488,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   merge (or rewrite history, owner's call); label-style rows are reported by the
   audit but not reconstructed by the reconciler.
 
-- **Role-qualifier script fix — v24.6.410, UNMERGED.**
+- **Role-qualifier script fix — v24.6.410, MERGED via PR #212 as `960a086`.**
   Starts at merged master `5b1f2a4`. An ASCII-only letter class split an accented
   place name, left a lowercase fragment and sent every international location down
   the prose path, so a project went to the newest promotion instead of the role the

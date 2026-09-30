@@ -21,7 +21,7 @@ from owner_build_tools.build_protected import write_test_receipt
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_ROUTE_CONTRACT_SHA256 = (
-    "42768445b8fe97e48688238c02bebf5abce0251befc3d212c2d2b029911f7862"
+    "b73c14533d59b70dc1bc53495d5ddecd92d2a22300ce7ba8a0559606cb8eafaf"
 )
 EXPECTED_GUARDS = (
     "_assign_cvstudio_request_id",
@@ -198,7 +198,7 @@ class Phase7AModularMonolithFoundationTests(unittest.TestCase):
         state = app.app.extensions[ARCHITECTURE_EXTENSION_KEY]
         self.assertIs(state, app._CVSTUDIO_ARCHITECTURE)
         self.assertTrue(state.finalized)
-        self.assertEqual(state.route_count, 118)
+        self.assertEqual(state.route_count, 119)
         self.assertEqual(
             state.route_contract_sha256, EXPECTED_ROUTE_CONTRACT_SHA256
         )

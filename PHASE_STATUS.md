@@ -28,9 +28,11 @@
 - Current merged source: v24.6.405 (`7f25538`), verified 2026-09-11.
 - PR #189 merged as `2c216c6`; PR #185 merged as `b84c36f`. Neither is an
   active branch claim. PRs #191–#194 are merged with owner approval. Current work is
-  v24.6.410 on `claude/pr157-chatgpt-fix-zke4cy`, the accented-location fix.
+  v24.6.411 through v24.6.416 on `claude/ai-crawler-search-refinement`, the AI
+  Crawler blank-field review queue, the save that writes a reviewed tag back into
+  JobAdder, and the four correctives that make both actually work safely.
   PR #210 merged v24.6.403-v24.6.405 as `7f25538`; PR #211 merged
-  v24.6.406-v24.6.409 as `5b1f2a4`.
+  v24.6.406-v24.6.409 as `5b1f2a4`; PR #212 merged v24.6.410 as `960a086`.
   PR #195 and #203–#209 are merged; #202 is closed as superseded. No new PR/merge requested.
 - Completed private owner/source release: v24.6.243 (Windows x64 only)
 - Status: PR #155 merged the v24.6.340 HTML-highlight corrective as `a25bf5b`.
@@ -72,8 +74,9 @@
   v24.6.417 corrects ten more and adds the CV_SOURCE_CHECK_GUARDRAILS.md case registry;
   v24.6.418 keeps a bracketed employer brand, the CGPA label and education majors.
   v24.6.411–418 are merged via PR #216 as `56dca18`. v24.6.419–425 keep the
-  candidate's pay out of the generated Summary box with one server filter and await
-  owner testing. No release or native
+  candidate's pay out of the generated Summary box with one server filter and are
+  merged via PR #217 as `bb3b606`. The AI Crawler blank-field review queue (PR #214,
+  v24.6.411–416 rebased onto that master as v24.6.426) awaits owner testing. No release or native
   protected build is produced by this work; protected builds remain manual.
 
 ## v24.6.403-v24.6.405 CV source-safety corrective (merged via PR #210)
