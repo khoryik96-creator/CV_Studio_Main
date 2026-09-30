@@ -9727,6 +9727,304 @@
    "titles": [],
    "expect_companies": [],
    "note": "a line with a year is not a title"
+  },
+  {
+   "id": "R7-title-word-0",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Marketing and Communications Manager",
+    "Contoso Holdings | Singapore | Jan 2019 – Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso Holdings"
+   ],
+   "expect_titles": [
+    "Marketing and Communications Manager"
+   ],
+   "note": "a common job title above the row"
+  },
+  {
+   "id": "R7-title-word-1",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Training and Development Manager",
+    "Contoso Holdings | Singapore | Jan 2019 – Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso Holdings"
+   ],
+   "expect_titles": [
+    "Training and Development Manager"
+   ],
+   "note": "a common job title above the row"
+  },
+  {
+   "id": "R7-title-word-2",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Accounting and Finance Executive",
+    "Contoso Holdings | Singapore | Jan 2019 – Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso Holdings"
+   ],
+   "expect_titles": [
+    "Accounting and Finance Executive"
+   ],
+   "note": "a common job title above the row"
+  },
+  {
+   "id": "R7-title-word-3",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "CEO",
+    "Contoso Holdings | Singapore | Jan 2019 – Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso Holdings"
+   ],
+   "expect_titles": [
+    "CEO"
+   ],
+   "note": "a common job title above the row"
+  },
+  {
+   "id": "R7-title-word-4",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "VP Sales",
+    "Contoso Holdings | Singapore | Jan 2019 – Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso Holdings"
+   ],
+   "expect_titles": [
+    "VP Sales"
+   ],
+   "note": "a common job title above the row"
+  },
+  {
+   "id": "R7-title-word-5",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Country GM",
+    "Contoso Holdings | Singapore | Jan 2019 – Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso Holdings"
+   ],
+   "expect_titles": [
+    "Country GM"
+   ],
+   "note": "a common job title above the row"
+  },
+  {
+   "id": "R7-title-word-6",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Chairman",
+    "Contoso Holdings | Singapore | Jan 2019 – Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso Holdings"
+   ],
+   "expect_titles": [
+    "Chairman"
+   ],
+   "note": "a common job title above the row"
+  },
+  {
+   "id": "R7-title-word-7",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Legal Counsel",
+    "Contoso Holdings | Singapore | Jan 2019 – Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso Holdings"
+   ],
+   "expect_titles": [
+    "Legal Counsel"
+   ],
+   "note": "a common job title above the row"
+  },
+  {
+   "id": "R7-title-word-8",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Sales Representative",
+    "Contoso Holdings | Singapore | Jan 2019 – Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso Holdings"
+   ],
+   "expect_titles": [
+    "Sales Representative"
+   ],
+   "note": "a common job title above the row"
+  },
+  {
+   "id": "R7-title-word-9",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Senior Buyer",
+    "Contoso Holdings | Singapore | Jan 2019 – Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso Holdings"
+   ],
+   "expect_titles": [
+    "Senior Buyer"
+   ],
+   "note": "a common job title above the row"
+  },
+  {
+   "id": "R7-title-word-10",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "CFO and Company Secretary",
+    "Contoso Holdings | Singapore | Jan 2019 – Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso Holdings"
+   ],
+   "expect_titles": [
+    "CFO and Company Secretary"
+   ],
+   "note": "a common job title above the row"
+  },
+  {
+   "id": "R7-unsure-row-bullets-not-leaked",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Senior Engineer",
+    "Acme Holdings | Singapore | Jan 2021 – Present",
+    "• Led the migration.",
+    "Northwind Retail Group",
+    "Contoso | Singapore | Jan 2018 – Dec 2020",
+    "• Ran campaigns."
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Acme Holdings"
+   ],
+   "expect_titles": [
+    "Senior Engineer"
+   ],
+   "expect_bullets": [
+    []
+   ],
+   "note": "after an unsure row, the next job's bullets never join the previous job, and a title-shaped line glued onto its last bullet makes that job's source bullets unsure"
+  },
+  {
+   "id": "R7-unsure-row-then-clear-row",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Senior Engineer",
+    "Acme Holdings | Singapore | Jan 2021 – Present",
+    "• Led the migration.",
+    "Northwind Retail Group",
+    "Contoso | Singapore | Jan 2018 – Dec 2020",
+    "• Ran campaigns.",
+    "Software Engineer",
+    "Fabrikam | Singapore | Jan 2015 – Dec 2017",
+    "• Wrote services."
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Acme Holdings",
+    "Fabrikam"
+   ],
+   "expect_titles": [
+    "Senior Engineer",
+    "Software Engineer"
+   ],
+   "expect_bullets": [
+    [],
+    [
+     "Wrote services."
+    ]
+   ],
+   "note": "a clear row after an unsure one keeps only its own bullets"
+  },
+  {
+   "id": "R7-unsure-row-title-shaped-wrap",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Senior Engineer",
+    "Acme Holdings | Singapore | Jan 2021 – Present",
+    "• Led the migration for",
+    "Singapore and Malaysia",
+    "Contoso | Singapore | Jan 2018 – Dec 2020"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Acme Holdings"
+   ],
+   "expect_titles": [
+    "Senior Engineer"
+   ],
+   "expect_bullets": [
+    []
+   ],
+   "note": "a title-shaped line glued before an unsure row: the job's source bullets are unsure"
+  },
+  {
+   "id": "R7-city-particle",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Senior Engineer",
+    "Acme Holdings | Rio de Janeiro, Brazil | Jan 2019 – Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Acme Holdings"
+   ],
+   "expect_titles": [
+    "Senior Engineer"
+   ],
+   "note": "a city name with a joining word is a place"
   }
  ]
 }
