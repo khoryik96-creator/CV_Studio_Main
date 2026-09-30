@@ -1372,7 +1372,8 @@ _CV_SEPARATOR_ONLY_RE = re.compile(
 # Places a CV writes in a row's location cell: countries, states and large
 # cities. "Acme Holdings | Kuala Lumpur, Malaysia | Apr 2019 - Dec 2024" names
 # the employer first and the place second; reading the place as the company
-# printed a whole work history under "Kuala Lumpur, Malaysia".
+# printed a whole work history under "Kuala Lumpur, Malaysia". A word that is also
+# an employer's whole name ("Sea", "Global") is left off.
 _CV_PLACE_KEYS = frozenset(_cv_match_key(value) for value in (
     # Countries and regions
     "Malaysia", "Singapore", "Indonesia", "Brunei", "Thailand", "Vietnam", "Viet Nam",
@@ -1384,9 +1385,8 @@ _CV_PLACE_KEYS = frozenset(_cv_match_key(value) for value in (
     "UK", "United Kingdom", "England", "Scotland", "Ireland", "Germany", "France",
     "Netherlands", "Belgium", "Switzerland", "Austria", "Spain", "Portugal", "Italy",
     "Sweden", "Norway", "Denmark", "Finland", "Poland", "US", "USA", "United States",
-    "Canada", "Mexico", "Brazil", "APAC", "Asia", "Asia Pacific", "SEA",
+    "Canada", "Mexico", "Brazil", "APAC", "Asia", "Asia Pacific",
     "Southeast Asia", "South East Asia", "ASEAN", "EMEA", "Europe", "Middle East",
-    "Global",
     # Malaysian states and territories
     "Selangor", "Johor", "Penang", "Pulau Pinang", "Perak", "Kedah", "Kelantan",
     "Terengganu", "Pahang", "Melaka", "Malacca", "Negeri Sembilan", "Sarawak", "Sabah",
@@ -1842,12 +1842,15 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
 
         None when the row has no place cell. An empty tuple when it has one but the
         job is unclear -- no title above, or a job title where the employer should
-        be -- so no row is made and the AI's reading is kept.
+        be -- so no row is made and the AI's reading is kept. A job title before a
+        cell that is only loosely a place ("Engineer | Contoso, Kuala Lumpur") is
+        read as before: that cell may be the employer.
         """
         cells = [cell.strip() for cell in head.split("|")]
         cells = [cell for cell in cells if cell]
         if len(cells) < 2 or not _cv_cell_is_place(cells[-1]):
             return None
+        known_place = _cv_cell_is_place(cells[-1], strict=True)
         rest = cells[:-1]
         if len(rest) > 1:
             left, right = rest[0], " | ".join(rest[1:])
@@ -1857,8 +1860,9 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
                 return left, right, None
             if left_is_title and not right_is_title:
                 return right, left, None
-            return ()
+            return () if known_place else None
         cell = rest[0]
+        title_index = _title_line_above(line_index)
         dash = re.match(r"^(?P<left>.+?)\s*[—–]\s*(?P<right>.+)$", cell) or re.match(
             r"^(?P<left>.+?)\s+-\s+(?P<right>.+)$", cell
         )
@@ -1867,13 +1871,25 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
             left_is_title = _dash_side_is_role_title(left)
             right_is_title = _dash_side_is_role_title(right)
             if left_is_title != right_is_title:
+                # A title on this line and another above it: which one names the
+                # job is unclear ("Contoso – Executive Search" is an employer).
+                if title_index is not None:
+                    return ()
                 return (right, left, None) if left_is_title else (left, right, None)
         if _dash_side_is_role_title(cell):
-            return ()
-        title_index = _title_line_above(line_index)
+            return () if known_place else None
         if title_index is None:
             return ()
         return cell, lines[title_index], title_index
+
+    def _place_row_line_parts(line, line_index):
+        """``_place_cell_row_parts`` for a whole line with a trailing date or year."""
+        if "|" not in line:
+            return None
+        tail = title_first_date_at_end.search(line) or title_first_single_year_at_end.search(line)
+        if tail is None:
+            return None
+        return _place_cell_row_parts(line[:tail.start()].strip(), line_index)
 
     def _title_first_row_parts(
         line, *, allow_single_year=False, allow_unmatched_single_year=False, line_index=None
@@ -2083,12 +2099,7 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
     # bullet as a wrapped line.
     title_line_indices = set()
     for header_index, header_line in enumerate(lines):
-        if "|" not in header_line:
-            continue
-        tail = title_first_date_at_end.search(header_line) or title_first_single_year_at_end.search(header_line)
-        if tail is None:
-            continue
-        place_parts = _place_cell_row_parts(header_line[:tail.start()].strip(), header_index)
+        place_parts = _place_row_line_parts(header_line, header_index)
         if place_parts and place_parts[2] is not None:
             title_line_indices.add(place_parts[2])
 
@@ -2171,6 +2182,11 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
         # the grounding rules is neither a job nor a wrapped continuation of
         # the preceding duty. Flush the real duty and discard the unsafe line.
         if _rejected_single_year_header_shape(line):
+            flush_source_bullet()
+            continue
+        # Likewise a place row the reader was unsure of (R7): it starts a job the
+        # AI keeps, so it is not part of the previous job's last duty.
+        if _place_row_line_parts(line, line_index) == ():
             flush_source_bullet()
             continue
 

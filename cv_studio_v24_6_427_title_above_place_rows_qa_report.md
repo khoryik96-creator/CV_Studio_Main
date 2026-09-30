@@ -65,7 +65,7 @@ directly all change nothing.
 ## The six steps
 
 1. **Cases first.** 47 new cases in `tests/fixtures/cv_guardrail_cases.json`: 35
-   for R7 and 12 for F4. The rows test now also checks titles and bullets when a
+   for R7 and 12 for F4 (55 after the review round below). The rows test now also checks titles and bullets when a
    case gives them. On master, 37 of the 47 fail. The other 10 pin behaviour
    that must not change: a row without a place, an employer with a country after
    it (in both readers), and the seven F4 cases where nothing is restored. The new
@@ -74,23 +74,46 @@ directly all change nothing.
    and pass now.
 2. **Existing cases.** All earlier cases pass unchanged.
 3. **Whole-suite replay.** Every call during the full suite was recorded on the
-   old and new code: 361 reader calls, 26 reconciler calls, 79 education
-   restores and 107 final normalize calls. 45 outputs differ. 37 are new cases
+   old and new code: 366 reader calls, 26 reconciler calls, 80 education
+   restores and 107 final normalize calls. 48 outputs differ. 40 are new cases
    and 8 are the new end-to-end test. None of the 107 normalize outputs shared
    with master changed.
 4. (P1 only; not affected.)
-5. **Old vs new on the repository.** The reader ran on 2,320 windows of 50 lines
+5. **Old vs new on the repository.** The reader ran on 2,336 windows of 50 lines
    taken from every tracked text file. The education restore ran on every
-   repository line that mentions graduating. Every difference (28 windows, 11
-   lines) comes from the new cases, or from the new code comment that quotes a
-   case.
-6. **Deliberate breaks.** 26 breaks were tried, one for each guard. The first
-   round let 7 through. For each of those a case of its own was added, and one
+   repository line that mentions graduating. Every difference (33 windows, 15
+   lines) comes from the new cases, the new test, this report, or the new code
+   comment that quotes a case.
+6. **Deliberate breaks.** 32 breaks were tried, one for each guard, including
+   the review fixes. The first round let 7 through. For each of those a case of its own was added, and one
    gap was fixed: a sub-heading such as "EXECUTIVE EXPERIENCE" had been read as
-   a title. After that, 25 of the 26 are caught. The remaining one reads the
+   a title. After that, and after the review round, 31 of the 32 are caught.
+   The remaining one reads the
    whole education block instead of the institution's line. It cannot change
    the result, because a block ends at the first line with a year, so the later
    lines never hold one.
+
+## Code review round (same version)
+
+A review of the first commit on this branch found five problems. Each got a case
+first, and each case failed against that commit.
+
+1. **"Sea" was on the place list.** "Sea" is a regional employer's whole name, so
+   a "Sea | Singapore" row was refused. "Sea" and "Global" are removed from
+   the list.
+2. **A title followed by "Contoso, Kuala Lumpur" lost its row.** That cell only
+   loosely counts as a place, so it may be the employer. After a job title, or
+   with no clear title, it is now read exactly as on master.
+3. **"Contoso – Executive Search" with a title above was split into a company
+   and a title.** A title above plus a job word inside the dash-joined cell is
+   now unsure, so no row is made.
+4. **An unsure place row ending in "Present" was glued onto the bullet above.**
+   It is now left out, like the unsure one-year rows before it.
+5. **A graduation year could be pinned to the wrong qualification.** This
+   happened when another year sat on the same line. That line is now unsure.
+
+Two more "read as before" cases pin the loose-place fallback, so breaking it is
+caught. After this round there are 55 new cases: 42 for R7 and 13 for F4.
 
 ## Reported CV, locally
 

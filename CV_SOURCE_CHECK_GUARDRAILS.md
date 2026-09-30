@@ -124,8 +124,14 @@ A place is a country, state or large city on the list in
 `_CV_PLACE_KEYS`, "City, Country" or "Remote". A cell with an organisation
 word is an employer: "Singapore Airlines", "Acme Sdn Bhd, Malaysia".
 
-When unsure, no row: no title above, or a job title where the employer should
-be. A company that is only a known place, from any reader, is refused.
+When unsure, no row: no title above, a job title where the employer should
+be, or a title above as well as a job word inside a dash-joined cell
+("Contoso – Executive Search"). An unsure row is left out, never glued onto
+the bullet above it. A company that is only a known place, from any reader, is
+refused. Words that are also an employer's whole name ("Sea", "Global") are not
+on the list. A cell that is only loosely a place (an unlisted name before a
+country, such as "Contoso, Kuala Lumpur") after a job title, or with no clear
+title, is read exactly as before.
 
 ## Source check (missing and unnamed employers)
 
@@ -223,8 +229,8 @@ and the line naming its institution says "graduated 2007", "graduated in June
 2007", "Graduation: 2007" or "Class of 2007", that is the date. When the same
 school is named for two qualifications, only the line naming this degree
 counts. A date the AI gave is never replaced. A year on a later line, two
-different years, "graduates of …" or a year that doesn't follow the word
-directly change nothing. Code: `_recover_education_source_labels`.
+different years, another year on the same line, "graduates of …" or a year
+that doesn't follow the word directly change nothing. Code: `_recover_education_source_labels`.
 
 ## Dates
 

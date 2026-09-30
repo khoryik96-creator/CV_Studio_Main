@@ -9427,6 +9427,138 @@
     "Account Director"
    ],
    "note": "a city the list does not name, before a listed country, is a place"
+  },
+  {
+   "id": "R7-unsure-row-not-glued",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Senior Engineer",
+    "Acme Holdings | Singapore | Jan 2021 – Present",
+    "• Led the migration.",
+    "Contoso | Singapore | Jan 2018 – Present"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Acme Holdings"
+   ],
+   "expect_titles": [
+    "Senior Engineer"
+   ],
+   "expect_bullets": [
+    [
+     "Led the migration."
+    ]
+   ],
+   "note": "a place row the reader is unsure of is left out, never glued onto the bullet above"
+  },
+  {
+   "id": "R7-title-then-company-city",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Senior Engineer | Contoso, Kuala Lumpur | Jan 2019 – Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso, Kuala Lumpur"
+   ],
+   "expect_titles": [
+    "Senior Engineer"
+   ],
+   "note": "a company-and-city cell after a title is read as before"
+  },
+  {
+   "id": "R7-dash-company-with-job-word",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Senior Recruiter",
+    "Contoso – Executive Search | Singapore | Jan 2019 – Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "a title above and a job word inside the dash-joined cell: unsure, so no row"
+  },
+  {
+   "id": "R7-sea-employer",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Software Engineer",
+    "Sea | Singapore | Jan 2019 – Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "SEA"
+   ],
+   "expect_titles": [
+    "Software Engineer"
+   ],
+   "note": "an employer called Sea is not a place (short names are capitalised as before)"
+  },
+  {
+   "id": "R7-global-employer-table",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Jan 2020 - Dec 2021 | Global | Engineer"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Global"
+   ],
+   "note": "a word that can name a region is not refused as a company"
+  },
+  {
+   "id": "F4-other-year-on-line",
+   "rule": "F4",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind Business School – Bachelor of Arts (graduated 2003), Master of Management (2007)"
+   ],
+   "entry": {
+    "institution": "Northwind Business School",
+    "degree": "Master of Management"
+   },
+   "expect": {
+    "date_range": null
+   },
+   "note": "another year on the same line: unsure, nothing"
+  },
+  {
+   "id": "R7-organisation-in-last-cell",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Senior Engineer",
+    "Contoso | Northwind Group, Malaysia | Jan 2019 – Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Northwind Group, Malaysia"
+   ],
+   "note": "a last cell with an organisation word is not a place; the row is read as before"
+  },
+  {
+   "id": "R7-cells-loose-place",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Acme Holdings | Retail Division | Northwind, Malaysia | Jan 2019 – Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Retail Division | Northwind, Malaysia"
+   ],
+   "note": "with only a loose place and no clear title, the row is read as before"
   }
  ]
 }

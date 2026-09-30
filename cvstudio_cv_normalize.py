@@ -1872,10 +1872,14 @@ def _recover_education_source_labels(education, source_text):
             degree_lines = [line for line in own_lines if degree in re.sub(r"\s+", " ", line).lower()]
             own_lines = degree_lines or own_lines
         years = set()
+        unsure = False
         for line in own_lines:
-            for match in _CV_EDU_GRADUATED_RE.finditer(line):
-                years.add(re.sub(r"\s+", " ", match.group("when")).strip())
-        if len(years) == 1:
+            found = [re.sub(r"\s+", " ", m.group("when")).strip() for m in _CV_EDU_GRADUATED_RE.finditer(line)]
+            years.update(found)
+            # Another year on the line may be this qualification's: unsure.
+            if found and set(_CV_EDU_BLOCK_YEAR_RE.findall(line)) != {when[-4:] for when in found}:
+                unsure = True
+        if len(years) == 1 and not unsure:
             education["date_range"] = years.pop()
     return education
 
