@@ -115,6 +115,35 @@ first, and each case failed against that commit.
 Two more "read as before" cases pin the loose-place fallback, so breaking it is
 caught. After this round there are 55 new cases: 42 for R7 and 13 for F4.
 
+## Pull-request review round (same version)
+
+The automated reviewer on PR #218 left four comments. Each got a case first.
+
+1. **Accented city names** ("São Paulo, Brazil", "Québec, Canada") were not
+   recognised as places, so the old split still made the city the company.
+   The city check now accepts any capitalised letters.
+2. **A wrapped duty** such as "Reporting to General Manager" or "Supporting the
+   Regional Manager" above a place row was taken as the next job's title. A
+   verb form followed by a linking word is now prose. "Managing Director" is
+   still a title.
+3. **A graduation year could go to the wrong degree.** When the entry named a
+   degree that no source line named, a year for another qualification at the
+   same school was used. Now nothing is restored. (Case F4-class-of had to
+   change: its source line now names the degree it restores.)
+4. **"Engineer | Contoso, Malaysia"** was already read as on master after the
+   code-review round. The reviewer's exact example is now a case.
+
+Two more cases give the full-stop and year checks a case of their own, since
+the new wrapped-duty check also covers their earlier examples. After this
+round there are 65 new cases: 50 for R7 and 15 for F4.
+
+- **Whole-suite replay:** 54 outputs differ, all on new cases (46) or the new
+  end-to-end test (8).
+- **Repository comparison:** 2,346 windows and 30 lines. Every difference is
+  in the new cases, the new test, this report or the new code comment.
+- **Deliberate breaks:** 35 of 36 are caught. The one left is the education
+  block break described above.
+
 ## Reported CV, locally
 
 The real extraction replayed with the corrected code gives the following. It was

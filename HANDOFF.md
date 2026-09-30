@@ -314,7 +314,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   company; the short job-title line directly above names the job and is never glued;
   the employer stays whole; when unsure, no row, and a company that is only a known
   place is refused from any reader. Rule F4 puts back a stated "graduated 2007"
-  year when the AI left the education date empty. 55 new cases plus
+  year when the AI left the education date empty. 65 new cases plus
   `tests/test_cv_title_above_place_rows.py` through `/parse` and `/generate-docx`.
   See `cv_studio_v24_6_427_title_above_place_rows_qa_report.md`. (v24.6.426 is used
   by the unmerged PR #214 crawler branch.)

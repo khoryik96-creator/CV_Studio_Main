@@ -1864,13 +1864,13 @@ def _recover_education_source_labels(education, source_text):
 
     if not str(education.get("date_range") or "").strip():
         # "Master of Management – Northwind Business School, graduated 2007." Only
-        # the institution's own line is read. When the same school names another
-        # qualification too, only the line naming this degree counts.
+        # the institution's own line is read, and when the entry has a degree, only
+        # a line naming it: a school's line for another qualification carries that
+        # qualification's year.
         own_lines = [block[0] for block in blocks]
-        degree = re.sub(r"\s+", " ", str(education.get("degree") or "")).strip().lower()
-        if degree:
-            degree_lines = [line for line in own_lines if degree in re.sub(r"\s+", " ", line).lower()]
-            own_lines = degree_lines or own_lines
+        degree_tokens = _cv_token_set(education.get("degree"))
+        if degree_tokens:
+            own_lines = [line for line in own_lines if degree_tokens <= _cv_token_set(line)]
         years = set()
         unsure = False
         for line in own_lines:

@@ -9101,7 +9101,7 @@
    "rule": "F4",
    "kind": "education_restore",
    "lines": [
-    "Northwind Business School, Class of 2007"
+    "Master of Management, Northwind Business School, Class of 2007"
    ],
    "entry": {
     "institution": "Northwind Business School",
@@ -9110,7 +9110,7 @@
    "expect": {
     "date_range": "2007"
    },
-   "note": "class of YYYY"
+   "note": "class of YYYY, on the line naming this degree"
   },
   {
    "id": "F4-keeps-date",
@@ -9559,6 +9559,174 @@
     "Retail Division | Northwind, Malaysia"
    ],
    "note": "with only a loose place and no clear title, the row is read as before"
+  },
+  {
+   "id": "R7-accented-city",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Senior Engineer",
+    "Acme Holdings | São Paulo, Brazil | Jan 2019 – Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Acme Holdings"
+   ],
+   "expect_titles": [
+    "Senior Engineer"
+   ],
+   "note": "a city name with accents is a place"
+  },
+  {
+   "id": "R7-accented-city-2",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Senior Engineer",
+    "Acme Holdings | Québec, Canada | Jan 2019 – Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Acme Holdings"
+   ],
+   "expect_titles": [
+    "Senior Engineer"
+   ],
+   "note": "a city name with accents is a place"
+  },
+  {
+   "id": "R7-reporting-line-above",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Senior Engineer",
+    "Acme Holdings | Singapore | Jan 2021 – Present",
+    "• Led the migration,",
+    "Reporting to General Manager",
+    "Contoso | Singapore | Jan 2018 – Dec 2020"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Acme Holdings"
+   ],
+   "expect_titles": [
+    "Senior Engineer"
+   ],
+   "expect_bullets": [
+    [
+     "Led the migration, Reporting to General Manager"
+    ]
+   ],
+   "note": "a wrapped 'Reporting to ...' line is prose, not a title, and stays in its bullet"
+  },
+  {
+   "id": "R7-supporting-line-above",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Supporting the Regional Manager",
+    "Contoso | Singapore | Jan 2018 – Dec 2020"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "a verb phrase is not a title"
+  },
+  {
+   "id": "R7-managing-director-above",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Managing Director",
+    "Contoso | Singapore | Jan 2018 – Dec 2020"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso"
+   ],
+   "expect_titles": [
+    "Managing Director"
+   ],
+   "note": "a title may start with an -ing word"
+  },
+  {
+   "id": "R7-title-then-company-country",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Engineer | Contoso, Malaysia | Jan 2020 - Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso, Malaysia"
+   ],
+   "expect_titles": [
+    "Engineer"
+   ],
+   "note": "a title-first row with a country-suffixed employer is read as before"
+  },
+  {
+   "id": "F4-degree-not-named",
+   "rule": "F4",
+   "kind": "education_restore",
+   "lines": [
+    "BSc Economics – Northwind University, graduated 2007"
+   ],
+   "entry": {
+    "institution": "Northwind University",
+    "degree": "MSc Economics"
+   },
+   "expect": {
+    "date_range": null
+   },
+   "note": "no line names this degree: the year may be another qualification's"
+  },
+  {
+   "id": "F4-no-degree-given",
+   "rule": "F4",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind University, graduated 2007"
+   ],
+   "entry": {
+    "institution": "Northwind University",
+    "degree": ""
+   },
+   "expect": {
+    "date_range": "2007"
+   },
+   "note": "with no degree to match, the institution's line is read"
+  },
+  {
+   "id": "R7-full-stop-title-like",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Regional Manager for three markets.",
+    "Contoso | Singapore | Jan 2019 – Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "a line ending in a full stop is a sentence, even when it names a job"
+  },
+  {
+   "id": "R7-year-in-title-like",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Senior Manager since 2019",
+    "Contoso | Singapore | Jan 2019 – Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "a line with a year is not a title"
   }
  ]
 }

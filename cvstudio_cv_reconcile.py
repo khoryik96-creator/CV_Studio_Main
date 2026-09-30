@@ -1441,7 +1441,10 @@ def _cv_cell_is_place(text, strict=False):
     return (
         not strict
         and len(parts) > 1
-        and all(re.fullmatch(r"[A-Z][A-Za-z'.\-]*", word) for word in parts[0].split())
+        and all(
+            word[:1].isupper() and re.fullmatch(r"[^\W\d_][^\W\d_'.\-]*", word)
+            for word in parts[0].split()
+        )
     )
 
 
@@ -1786,6 +1789,15 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
         re.I,
     )
 
+    # A duty wrapped onto its own line: "Reporting to General Manager",
+    # "Supporting the Regional Manager", "Worked with the Finance Director". A verb
+    # form followed by a linking word is prose; "Managing Director" is not.
+    title_above_prose_start = re.compile(
+        r"^(?:[A-Z][a-z]+(?:ing|ed)|Led|Ran|Built|Drove|Grew|Helped)\s+"
+        r"(?:to|the|a|an|with|for|on|in|into|across|under|through|by|at|from|alongside|"
+        r"and|all|our|his|her|their|its|over|within)\b",
+    )
+
     # A line ending in one of these is a sub-heading ("EXECUTIVE EXPERIENCE",
     # "Consultant Roles"), not a job title.
     title_above_heading_end = re.compile(
@@ -1798,8 +1810,9 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
         """Index of the job-title line directly above a header row, or None.
 
         It is the nearest non-empty line: short, starting with a capital, not a
-        bullet, a date, a heading or sub-heading or a sentence (no closing full
-        stop, comma, semicolon or colon), and naming a job.
+        bullet, a date, a heading or sub-heading, a sentence (no closing full
+        stop, comma, semicolon or colon) or a wrapped duty ("Reporting to ..."),
+        and naming a job.
         """
         if line_index is None:
             return None
@@ -1817,6 +1830,7 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
             or re.search(r"[.,;:]$", text)
             or re.search(r"\b(?:19|20)\d{2}\b", text)
             or title_above_heading_end.search(text)
+            or title_above_prose_start.match(text)
             or history_heading.match(text)
             or stop_heading.match(text)
             or _is_cv_section_boundary(text)
