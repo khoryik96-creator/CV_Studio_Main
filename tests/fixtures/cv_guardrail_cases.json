@@ -8587,6 +8587,846 @@
    "expect": "",
    "removed": 2,
    "note": "every line is pay"
+  },
+  {
+   "id": "R7-title-above-full",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Independent Consultant",
+    "Self-employed | Kuala Lumpur, Malaysia | Jun 2025 – Present",
+    "Providing fractional marketing leadership to consumer businesses in Malaysia,",
+    "covering brand strategy and channel development.",
+    "General Manager – Head of Consumer Electronics",
+    "Acme Holdings | Kuala Lumpur, Malaysia | Apr 2019 – Dec 2024",
+    "Led a 12-member marketing team with 3 manager level direct reports.",
+    "• Led the companywide brand programme, reporting",
+    "to the President Director and a cross-functional team.",
+    "• Improved margin by 3% across categories.",
+    "Product Marketing Manager – Audio and Imaging",
+    "Acme Holdings | Kuala Lumpur, Malaysia | Apr 2014 – Mar 2019",
+    "Additional role: Marketing Communication Manager | Jun 2016 – Mar 2019",
+    "• Led integrated marketing programmes across the portfolio.",
+    "• Built the creative community programme.",
+    "Supervisor – Sales and Marketing",
+    "Acme Holdings | Kuala Lumpur, Malaysia | Jul 2007 – Mar 2014",
+    "• Managed modern trade sales.",
+    "Marketing Manager",
+    "Contoso Media – Northwind Books| Kuala Lumpur, Malaysia | Aug 2002 – Apr 2007",
+    "Progressed from retail operations to managing marketing programmes.",
+    "ENTREPRENEURIAL EXPERIENCE",
+    "Co-Founder and Strategic Lead",
+    "Fabrikam Studio – Tailspin Film School | Kuala Lumpur, Malaysia | 2025 – Present",
+    "Co-founded a vocational education business.",
+    "EDUCATION",
+    "• Master of Management – Northwind Business School, graduated 2007."
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Self-employed",
+    "Acme Holdings",
+    "Acme Holdings",
+    "Acme Holdings",
+    "Contoso Media – Northwind Books",
+    "Fabrikam Studio – Tailspin Film School"
+   ],
+   "expect_titles": [
+    "Independent Consultant",
+    "General Manager – Head of Consumer Electronics",
+    "Product Marketing Manager – Audio and Imaging",
+    "Supervisor – Sales and Marketing",
+    "Marketing Manager",
+    "Co-Founder and Strategic Lead"
+   ],
+   "expect_bullets": [
+    [],
+    [
+     "Led the companywide brand programme, reporting to the President Director and a cross-functional team.",
+     "Improved margin by 3% across categories."
+    ],
+    [
+     "Led integrated marketing programmes across the portfolio.",
+     "Built the creative community programme."
+    ],
+    [
+     "Managed modern trade sales."
+    ],
+    [],
+    []
+   ],
+   "note": "a place cell is not the company; the short line above names the job; a dash-joined employer stays whole"
+  },
+  {
+   "id": "R7-title-above-one",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Senior Engineer",
+    "Acme Holdings | Jakarta, Indonesia | Apr 2019 – Dec 2024",
+    "• Built pipelines."
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Acme Holdings"
+   ],
+   "expect_titles": [
+    "Senior Engineer"
+   ],
+   "expect_bullets": [
+    [
+     "Built pipelines."
+    ]
+   ],
+   "note": "the simplest title-above row"
+  },
+  {
+   "id": "R7-no-glue",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Senior Engineer",
+    "Acme Holdings | Singapore | Jan 2021 – Present",
+    "• Built pipelines for the",
+    "finance team.",
+    "Data Engineer",
+    "Contoso | Singapore | Jan 2018 – Dec 2020",
+    "• Wrote reports."
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Acme Holdings",
+    "Contoso"
+   ],
+   "expect_titles": [
+    "Senior Engineer",
+    "Data Engineer"
+   ],
+   "expect_bullets": [
+    [
+     "Built pipelines for the finance team."
+    ],
+    [
+     "Wrote reports."
+    ]
+   ],
+   "note": "the next job's title is not glued onto the last bullet"
+  },
+  {
+   "id": "R7-no-space-before-pipe",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Marketing Manager",
+    "Contoso Media – Northwind Books| Kuala Lumpur, Malaysia | Aug 2002 – Apr 2007"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso Media – Northwind Books"
+   ],
+   "expect_titles": [
+    "Marketing Manager"
+   ],
+   "note": "no space before the pipe; the dash stays inside the employer"
+  },
+  {
+   "id": "R7-place-alone",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Account Director",
+    "Contoso | Singapore | 2019 – 2021"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso"
+   ],
+   "expect_titles": [
+    "Account Director"
+   ],
+   "note": "a country on its own is a place"
+  },
+  {
+   "id": "R7-city-state",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Account Director",
+    "Contoso | Petaling Jaya, Selangor | Mar 2019 – Jun 2021"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso"
+   ],
+   "expect_titles": [
+    "Account Director"
+   ],
+   "note": "city and state is a place"
+  },
+  {
+   "id": "R7-remote",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Account Director",
+    "Contoso | Remote | Mar 2019 – Jun 2021"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso"
+   ],
+   "expect_titles": [
+    "Account Director"
+   ],
+   "note": "Remote is a place cell"
+  },
+  {
+   "id": "R7-company-named-after-place",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Cabin Crew Supervisor",
+    "Singapore Airlines | Singapore | Mar 2019 – Jun 2021"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Singapore Airlines"
+   ],
+   "expect_titles": [
+    "Cabin Crew Supervisor"
+   ],
+   "note": "a place word inside an employer's name does not make it a place"
+  },
+  {
+   "id": "R7-founder-title",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Co-Founder",
+    "Fabrikam Studio | Jakarta, Indonesia | 2025 – Present"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Fabrikam Studio"
+   ],
+   "expect_titles": [
+    "Co-Founder"
+   ],
+   "note": "founder is a job"
+  },
+  {
+   "id": "R7-one-line-dash",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Senior Engineer – Acme Holdings | Singapore | Jan 2019 – Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Acme Holdings"
+   ],
+   "expect_titles": [
+    "Senior Engineer"
+   ],
+   "note": "title and company on one line, then the place"
+  },
+  {
+   "id": "R7-one-line-cells",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Senior Engineer | Acme Holdings | Jakarta, Indonesia | Jan 2019 – Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Acme Holdings"
+   ],
+   "expect_titles": [
+    "Senior Engineer"
+   ],
+   "note": "title, company and place in their own cells; the place is dropped"
+  },
+  {
+   "id": "R7-no-title-above",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Acme Holdings | Kuala Lumpur, Malaysia | Apr 2019 – Dec 2024",
+    "• Built pipelines."
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "no job title above: unsure, so no row"
+  },
+  {
+   "id": "R7-prose-above",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "• Improved margin by 3% across all categories.",
+    "Acme Holdings | Kuala Lumpur, Malaysia | Apr 2019 – Dec 2024"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "a bullet above is not a title"
+  },
+  {
+   "id": "R7-sentence-above",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Senior Engineer",
+    "Acme Holdings | Singapore | Jan 2021 – Present",
+    "• Led the migration,",
+    "reporting to the Chief Technology Officer.",
+    "Contoso | Singapore | Jan 2018 – Dec 2020"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Acme Holdings"
+   ],
+   "expect_titles": [
+    "Senior Engineer"
+   ],
+   "expect_bullets": [
+    [
+     "Led the migration, reporting to the Chief Technology Officer."
+    ]
+   ],
+   "note": "a wrapped bullet ending in a full stop is not a title, and stays part of its bullet"
+  },
+  {
+   "id": "R7-lowercase-above",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Senior Engineer",
+    "Acme Holdings | Singapore | Jan 2021 – Present",
+    "• Led the migration for the",
+    "finance manager",
+    "Contoso | Singapore | Jan 2018 – Dec 2020"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Acme Holdings"
+   ],
+   "expect_titles": [
+    "Senior Engineer"
+   ],
+   "expect_bullets": [
+    [
+     "Led the migration for the finance manager"
+    ]
+   ],
+   "note": "a lowercase wrapped line is not a title"
+  },
+  {
+   "id": "R7-heading-above",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Contoso | Singapore | Jan 2018 – Dec 2020"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "the section heading is not a title"
+  },
+  {
+   "id": "R7-title-in-head",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Acme Holdings",
+    "Senior Engineer | Kuala Lumpur, Malaysia | Jan 2019 – Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "a job title before the place means the company is elsewhere: unsure, so no row"
+  },
+  {
+   "id": "R7-not-a-title-above",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Northwind Retail Group",
+    "Contoso | Kuala Lumpur, Malaysia | Jan 2019 – Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "a line above with no job word is not taken as a title"
+  },
+  {
+   "id": "R7-place-company-dash",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Senior Engineer — Kuala Lumpur, Malaysia Jan 2019 – Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "a company that is only a place is refused"
+  },
+  {
+   "id": "R7-place-company-table",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Jan 2020 - Dec 2021 | Singapore | Engineer"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "a place in the company column is refused"
+  },
+  {
+   "id": "R7-company-with-country",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Engineer | Acme Sdn Bhd, Malaysia | Jan 2019 – Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Acme Sdn Bhd, Malaysia"
+   ],
+   "expect_titles": [
+    "Engineer"
+   ],
+   "note": "an employer with a country after it is still an employer, read as before"
+  },
+  {
+   "id": "R7-dash-company-no-place",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Senior Engineer — Acme Holdings Apr 2019 – Dec 2024"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Acme Holdings"
+   ],
+   "expect_titles": [
+    "Senior Engineer"
+   ],
+   "note": "a row without a place is read exactly as before"
+  },
+  {
+   "id": "R7-single-year",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Intern",
+    "Contoso | Kuala Lumpur, Malaysia | 2021"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso"
+   ],
+   "expect_titles": [
+    "Intern"
+   ],
+   "note": "a one-year row with the title above"
+  },
+  {
+   "id": "F4-graduated",
+   "rule": "F4",
+   "kind": "education_restore",
+   "lines": [
+    "• Master of Management – Northwind Business School, graduated 2007."
+   ],
+   "entry": {
+    "institution": "Northwind Business School",
+    "degree": "Master of Management"
+   },
+   "expect": {
+    "date_range": "2007"
+   },
+   "note": "graduated YYYY on the institution's line fills an empty date"
+  },
+  {
+   "id": "F4-graduated-in-month",
+   "rule": "F4",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind Business School – Master of Management (graduated in June 2007)"
+   ],
+   "entry": {
+    "institution": "Northwind Business School",
+    "degree": "Master of Management"
+   },
+   "expect": {
+    "date_range": "June 2007"
+   },
+   "note": "a month is kept"
+  },
+  {
+   "id": "F4-graduation-label",
+   "rule": "F4",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind Business School | Master of Management | Graduation: 2007"
+   ],
+   "entry": {
+    "institution": "Northwind Business School",
+    "degree": "Master of Management"
+   },
+   "expect": {
+    "date_range": "2007"
+   },
+   "note": "a graduation label"
+  },
+  {
+   "id": "F4-class-of",
+   "rule": "F4",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind Business School, Class of 2007"
+   ],
+   "entry": {
+    "institution": "Northwind Business School",
+    "degree": "Master of Management"
+   },
+   "expect": {
+    "date_range": "2007"
+   },
+   "note": "class of YYYY"
+  },
+  {
+   "id": "F4-keeps-date",
+   "rule": "F4",
+   "kind": "education_restore",
+   "lines": [
+    "• Master of Management – Northwind Business School, graduated 2007."
+   ],
+   "entry": {
+    "institution": "Northwind Business School",
+    "degree": "Master of Management",
+    "date_range": "2005 to 2007"
+   },
+   "expect": {
+    "date_range": "2005 to 2007"
+   },
+   "note": "a date the AI gave is never replaced"
+  },
+  {
+   "id": "F4-next-line",
+   "rule": "F4",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind Business School",
+    "Graduated 2007"
+   ],
+   "entry": {
+    "institution": "Northwind Business School",
+    "degree": "Master of Management"
+   },
+   "expect": {
+    "date_range": null
+   },
+   "note": "only the institution's own line is read"
+  },
+  {
+   "id": "F4-two-years",
+   "rule": "F4",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind Business School, graduated 2007",
+    "Northwind Business School, graduated 2009"
+   ],
+   "entry": {
+    "institution": "Northwind Business School",
+    "degree": "Master of Management"
+   },
+   "expect": {
+    "date_range": null
+   },
+   "note": "two different years: nothing"
+  },
+  {
+   "id": "F4-two-on-a-line",
+   "rule": "F4",
+   "kind": "education_restore",
+   "lines": [
+    "Master of Management – Northwind Business School, graduated 2007; Diploma – Northwind Business School, graduated 2003"
+   ],
+   "entry": {
+    "institution": "Northwind Business School",
+    "degree": "Master of Management"
+   },
+   "expect": {
+    "date_range": null
+   },
+   "note": "two years on one line: nothing"
+  },
+  {
+   "id": "F4-same-school-by-degree",
+   "rule": "F4",
+   "kind": "education_restore",
+   "lines": [
+    "Bachelor of Arts – Northwind Business School, graduated 2003",
+    "Master of Management – Northwind Business School, graduated 2007"
+   ],
+   "entry": {
+    "institution": "Northwind Business School",
+    "degree": "Master of Management"
+   },
+   "expect": {
+    "date_range": "2007"
+   },
+   "note": "the same school twice: the line naming this degree decides"
+  },
+  {
+   "id": "F4-graduates-prose",
+   "rule": "F4",
+   "kind": "education_restore",
+   "lines": [
+    "Mentored graduates of Northwind Business School since 2015"
+   ],
+   "entry": {
+    "institution": "Northwind Business School",
+    "degree": "Master of Management"
+   },
+   "expect": {
+    "date_range": null
+   },
+   "note": "graduates is not graduated"
+  },
+  {
+   "id": "F4-graduated-students",
+   "rule": "F4",
+   "kind": "education_restore",
+   "lines": [
+    "Hired graduated students from Northwind Business School in 2019"
+   ],
+   "entry": {
+    "institution": "Northwind Business School",
+    "degree": "Master of Management"
+   },
+   "expect": {
+    "date_range": null
+   },
+   "note": "the year must follow the word"
+  },
+  {
+   "id": "F4-no-year",
+   "rule": "F4",
+   "kind": "education_restore",
+   "lines": [
+    "Northwind Business School, graduated with distinction"
+   ],
+   "entry": {
+    "institution": "Northwind Business School",
+    "degree": "Master of Management"
+   },
+   "expect": {
+    "date_range": null
+   },
+   "note": "no year: nothing"
+  },
+  {
+   "id": "R7-company-comma-country-table",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Jan 2020 - Dec 2021 | Contoso, Malaysia | Engineer"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso, Malaysia"
+   ],
+   "note": "only a company that is wholly a known place is refused; an unlisted name before a country is kept"
+  },
+  {
+   "id": "R7-year-above",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Promoted to Senior Manager in 2019",
+    "Contoso | Singapore | Jan 2019 – Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "a line with a year is not a title"
+  },
+  {
+   "id": "R7-long-line-above",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Worked closely with the regional sales manager and the country team across three busy markets",
+    "Contoso | Singapore | Jan 2019 – Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "a long line is not a title"
+  },
+  {
+   "id": "R7-pipe-above",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Senior Engineer | Team Lead",
+    "Contoso | Singapore | Jan 2019 – Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "a line with cells is not a title"
+  },
+  {
+   "id": "R7-single-year-no-glue",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Senior Engineer",
+    "Acme Holdings | Singapore | 2022 – Present",
+    "• Built pipelines.",
+    "Intern",
+    "Contoso | Singapore | 2021"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Acme Holdings",
+    "Contoso"
+   ],
+   "expect_titles": [
+    "Senior Engineer",
+    "Intern"
+   ],
+   "expect_bullets": [
+    [
+     "Built pipelines."
+    ],
+    []
+   ],
+   "note": "the title above a one-year row is not glued either"
+  },
+  {
+   "id": "R7-full-stop-above",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Reported to the Regional Manager.",
+    "Contoso | Singapore | Jan 2019 – Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "a sentence ending in a full stop is not a title"
+  },
+  {
+   "id": "R7-heading-with-job-word",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "WORK EXPERIENCE – CONSULTANT",
+    "Contoso | Singapore | Jan 2019 – Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "a work-history heading is not a title, even with a job word in it"
+  },
+  {
+   "id": "R7-subheading-above",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Senior Engineer",
+    "Acme Holdings | Singapore | 2019 – 2021",
+    "• Built pipelines.",
+    "EXECUTIVE EXPERIENCE",
+    "Contoso | Singapore | Jan 2016 – Dec 2018"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Acme Holdings"
+   ],
+   "expect_titles": [
+    "Senior Engineer"
+   ],
+   "note": "a sub-heading ending in Experience, Roles or Positions is not a title"
+  },
+  {
+   "id": "R7-subheading-roles",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Consultant Roles",
+    "Contoso | Singapore | Jan 2016 – Dec 2018"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "Consultant Roles is a sub-heading"
+  },
+  {
+   "id": "R7-company-above-title-word",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Contoso Executive Search",
+    "Senior Recruiter | Kuala Lumpur, Malaysia | Jan 2019 – Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "a job title before the place: unsure even when the line above has a job word"
+  },
+  {
+   "id": "R7-cells-unclear",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Acme Holdings | Retail Division | Singapore | Jan 2019 – Dec 2021"
+   ],
+   "titles": [],
+   "expect_companies": [],
+   "note": "cells before the place with no clear title: unsure, so no row"
+  },
+  {
+   "id": "R7-unlisted-city",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Account Director",
+    "Contoso | Semarang, Indonesia | Mar 2019 – Jun 2021"
+   ],
+   "titles": [],
+   "expect_companies": [
+    "Contoso"
+   ],
+   "expect_titles": [
+    "Account Director"
+   ],
+   "note": "a city the list does not name, before a listed country, is a place"
   }
  ]
 }

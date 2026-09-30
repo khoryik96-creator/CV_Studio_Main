@@ -305,7 +305,22 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Summary box salary guardrail — v24.6.419–v24.6.425, UNMERGED.** Starts at merged
+- **Title above "Company | Place | Dates" rows — v24.6.427, UNMERGED.** Starts at
+  merged master `bb3b606` (v24.6.425). A reported CV wrote each job as a title line
+  with "<Employer> | <City, Country> | <dates>" beneath it. The work-row reader took
+  the place as the company, glued each next job's title onto the previous job's last
+  bullet and split "<Employer> – <Brand>" at the dash, so even a correct AI parse came
+  out under "Kuala Lumpur, Malaysia"-style employers. Rule R7: a place cell is never a
+  company; the short job-title line directly above names the job and is never glued;
+  the employer stays whole; when unsure, no row, and a company that is only a known
+  place is refused from any reader. Rule F4 puts back a stated "graduated 2007"
+  year when the AI left the education date empty. 47 new cases plus
+  `tests/test_cv_title_above_place_rows.py` through `/parse` and `/generate-docx`.
+  See `cv_studio_v24_6_427_title_above_place_rows_qa_report.md`. (v24.6.426 is used
+  by the unmerged PR #214 crawler branch.)
+
+- **Summary box salary guardrail — v24.6.419–v24.6.425, MERGED via PR #217 as
+  `bb3b606`.** Starts at merged
   master `56dca18`. The generated CV Summary never states the candidate's pay: the
   summary instructions forbid it, and one server filter (`_cv_strip_pay_from_summary`)
   removes any statement of it -- in `/generate-ai` when the CV Summary callers send

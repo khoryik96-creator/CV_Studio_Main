@@ -108,6 +108,25 @@ section.
 Education" and a university as an employer inside the work history are kept. A
 three-column table with no heading at all is read exactly as it always was.
 
+### R7
+**A place is never a company; the line above names the job.** In "Acme
+Holdings | Kuala Lumpur, Malaysia | Apr 2019 – Dec 2024" the last cell before
+the dates is a place, so the employer is the cell before it, whole, dash and
+all ("Contoso Media – Northwind Books"). The job title is the short line
+directly above: it starts with a capital, names a job, and is not a bullet, a
+date, a heading, a sub-heading ending in "Experience", "Roles" or "Positions",
+or a sentence ending in a full stop. That line starts the next
+job, so it is never glued onto the previous job's last bullet. With the title
+on the same line ("Engineer – Acme | Singapore", "Engineer | Acme | Singapore")
+the place is dropped and the rest is read as before.
+
+A place is a country, state or large city on the list in
+`_CV_PLACE_KEYS`, "City, Country" or "Remote". A cell with an organisation
+word is an employer: "Singapore Airlines", "Acme Sdn Bhd, Malaysia".
+
+When unsure, no row: no title above, or a job title where the employer should
+be. A company that is only a known place, from any reader, is refused.
+
 ## Source check (missing and unnamed employers)
 
 ### A1
@@ -197,6 +216,15 @@ labels change nothing. Code: `_recover_education_source_labels`.
 file and preview show it as "Major: …" under the degree. A sentence such as
 "Major in the arts club", two different majors, or a line past the next
 qualification or section heading changes nothing.
+
+### F4
+**A stated graduation year is kept.** If the AI leaves an entry's date empty
+and the line naming its institution says "graduated 2007", "graduated in June
+2007", "Graduation: 2007" or "Class of 2007", that is the date. When the same
+school is named for two qualifications, only the line naming this degree
+counts. A date the AI gave is never replaced. A year on a later line, two
+different years, "graduates of …" or a year that doesn't follow the word
+directly change nothing. Code: `_recover_education_source_labels`.
 
 ## Dates
 

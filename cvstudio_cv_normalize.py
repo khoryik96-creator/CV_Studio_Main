@@ -1768,6 +1768,15 @@ _CV_EDU_MAJOR_RE = re.compile(
 # The label alone in its cell, with the value in the next one: "Major | Finance".
 _CV_EDU_MAJOR_LABEL_CELL_RE = re.compile(r"^\s*(?:majors?|speciali[sz]ation)\s*[:\uff1a]?\s*$", re.I)
 _CV_EDU_BLOCK_YEAR_RE = re.compile(r"\b(?:19|20)\d{2}\b")
+# "graduated 2007", "graduated in June 2007", "Graduation: 2007", "Class of 2007".
+# The year has to follow the word directly: "graduated students ... in 2019" is not
+# a graduation date.
+_CV_EDU_GRADUATED_RE = re.compile(
+    r"\b(?:graduated|graduation(?:\s+(?:year|date))?|class\s+of)\b\s*(?:[:：\-–]\s*)?(?:in\s+|on\s+)?"
+    r"(?P<when>(?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|"
+    r"Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+)?(?:19|20)\d{2})\b",
+    re.I,
+)
 
 
 def _education_source_blocks(education, source_text):
@@ -1852,6 +1861,22 @@ def _recover_education_source_labels(education, source_text):
         if len(majors) == 1:
             major = majors.pop()
             education["major"] = major[:1].upper() + major[1:]
+
+    if not str(education.get("date_range") or "").strip():
+        # "Master of Management – Northwind Business School, graduated 2007." Only
+        # the institution's own line is read. When the same school names another
+        # qualification too, only the line naming this degree counts.
+        own_lines = [block[0] for block in blocks]
+        degree = re.sub(r"\s+", " ", str(education.get("degree") or "")).strip().lower()
+        if degree:
+            degree_lines = [line for line in own_lines if degree in re.sub(r"\s+", " ", line).lower()]
+            own_lines = degree_lines or own_lines
+        years = set()
+        for line in own_lines:
+            for match in _CV_EDU_GRADUATED_RE.finditer(line):
+                years.add(re.sub(r"\s+", " ", match.group("when")).strip())
+        if len(years) == 1:
+            education["date_range"] = years.pop()
     return education
 
 
