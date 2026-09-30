@@ -10496,6 +10496,875 @@
    ],
    "expect": [],
    "note": "a recipient for one amount must not shelter the later personal amount in the same comma part"
+  },
+  {
+   "id": "R7-adverb-prose-0",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Finance Analyst",
+    "Reporting directly to the Finance Director",
+    "Beta Holdings | Singapore | Jan 2018 - Dec 2021"
+   ],
+   "titles": [
+    "Finance Analyst"
+   ],
+   "expect_companies": [],
+   "note": "A reporting/working phrase with intervening adverbs is prose, not the job title."
+  },
+  {
+   "id": "R7-adverb-prose-1",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Finance Analyst",
+    "Working closely with the Managing Director",
+    "Beta Holdings | Singapore | Jan 2018 - Dec 2021"
+   ],
+   "titles": [
+    "Finance Analyst"
+   ],
+   "expect_companies": [],
+   "note": "A reporting/working phrase with intervening adverbs is prose, not the job title."
+  },
+  {
+   "id": "R7-adverb-prose-2",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Finance Analyst",
+    "Reporting functionally to the Finance Director",
+    "Beta Holdings | Singapore | Jan 2018 - Dec 2021"
+   ],
+   "titles": [
+    "Finance Analyst"
+   ],
+   "expect_companies": [],
+   "note": "A reporting/working phrase with intervening adverbs is prose, not the job title."
+  },
+  {
+   "id": "R7-adverb-prose-3",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Finance Analyst",
+    "Working very closely with the Managing Director",
+    "Beta Holdings | Singapore | Jan 2018 - Dec 2021"
+   ],
+   "titles": [
+    "Finance Analyst"
+   ],
+   "expect_companies": [],
+   "note": "A reporting/working phrase with intervening adverbs is prose, not the job title."
+  },
+  {
+   "id": "R7-incomplete-rebuild-keeps-uncertain-job",
+   "rule": "R7",
+   "kind": "work_reconcile",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Senior Engineer",
+    "Acme Holdings | Singapore | Jan 2022 - Present",
+    "• Built systems.",
+    "Analyst",
+    "Beta Holdings | Singapore | Jan 2020 - Dec 2021",
+    "• Managed forecasts.",
+    "Manager",
+    "Gamma Holdings | Singapore | Jan 2018 - Dec 2019",
+    "• Led projects.",
+    "Recruiter",
+    "Contoso - Executive Search | Singapore | Jan 2016 - Dec 2017",
+    "• Filled senior vacancies."
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Acme Holdings",
+      "date_range": "Jan 2022 to Present",
+      "roles": [
+       {
+        "title": "Senior Engineer",
+        "date_range": "Jan 2022 to Present",
+        "bullets": [
+         "Built systems."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Beta Holdings",
+      "date_range": "Jan 2020 to Dec 2021",
+      "roles": [
+       {
+        "title": "Analyst",
+        "date_range": "Jan 2020 to Dec 2021",
+        "bullets": [
+         "Managed forecasts."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Singapore",
+      "date_range": "Jan 2018 to Dec 2019",
+      "roles": [
+       {
+        "title": "Operations Lead",
+        "date_range": "Jan 2018 to Dec 2019",
+        "bullets": [
+         "Led projects."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Contoso - Executive Search",
+      "date_range": "Jan 2016 to Dec 2017",
+      "roles": [
+       {
+        "title": "Recruiter",
+        "date_range": "Jan 2016 to Dec 2017",
+        "bullets": [
+         "Filled senior vacancies."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Acme Holdings",
+      "date_range": "Jan 2022 to Present",
+      "roles": [
+       {
+        "title": "Senior Engineer",
+        "date_range": "Jan 2022 to Present",
+        "bullets": [
+         "Built systems."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Beta Holdings",
+      "date_range": "Jan 2020 to Dec 2021",
+      "roles": [
+       {
+        "title": "Analyst",
+        "date_range": "Jan 2020 to Dec 2021",
+        "bullets": [
+         "Managed forecasts."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Singapore",
+      "date_range": "Jan 2018 to Dec 2019",
+      "roles": [
+       {
+        "title": "Operations Lead",
+        "date_range": "Jan 2018 to Dec 2019",
+        "bullets": [
+         "Led projects."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Contoso - Executive Search",
+      "date_range": "Jan 2016 to Dec 2017",
+      "roles": [
+       {
+        "title": "Recruiter",
+        "date_range": "Jan 2016 to Dec 2017",
+        "bullets": [
+         "Filled senior vacancies."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "note": "An uncertain source header makes the skeleton incomplete even when another provider entry needs correction."
+  },
+  {
+   "id": "R7-incomplete-rebuild-uncertain-shape-0",
+   "rule": "R7",
+   "kind": "work_reconcile",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Senior Engineer",
+    "Acme Holdings | Singapore | Jan 2022 - Present",
+    "• Built systems.",
+    "Analyst",
+    "Beta Holdings | Singapore | Jan 2020 - Dec 2021",
+    "• Managed forecasts.",
+    "Manager",
+    "Gamma Holdings | Singapore | Jan 2018 - Dec 2019",
+    "• Led projects.",
+    "Recruiter",
+    "Contoso - Executive Search | Singapore | Jan 2016 - Dec 2017",
+    "• Filled senior vacancies.",
+    "chief happiness ninja",
+    "Contoso Holdings | Singapore | Jan 2016 - Dec 2017",
+    "• Filled senior vacancies."
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Acme Holdings",
+      "date_range": "Jan 2022 to Present",
+      "roles": [
+       {
+        "title": "Senior Engineer",
+        "date_range": "Jan 2022 to Present",
+        "bullets": [
+         "Built systems."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Beta Holdings",
+      "date_range": "Jan 2020 to Dec 2021",
+      "roles": [
+       {
+        "title": "Analyst",
+        "date_range": "Jan 2020 to Dec 2021",
+        "bullets": [
+         "Managed forecasts."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Singapore",
+      "date_range": "Jan 2018 to Dec 2019",
+      "roles": [
+       {
+        "title": "Operations Lead",
+        "date_range": "Jan 2018 to Dec 2019",
+        "bullets": [
+         "Led projects."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Contoso Holdings",
+      "date_range": "Jan 2016 to Dec 2017",
+      "roles": [
+       {
+        "title": "chief happiness ninja",
+        "date_range": "Jan 2016 to Dec 2017",
+        "bullets": [
+         "Filled senior vacancies."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Acme Holdings",
+      "date_range": "Jan 2022 to Present",
+      "roles": [
+       {
+        "title": "Senior Engineer",
+        "date_range": "Jan 2022 to Present",
+        "bullets": [
+         "Built systems."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Beta Holdings",
+      "date_range": "Jan 2020 to Dec 2021",
+      "roles": [
+       {
+        "title": "Analyst",
+        "date_range": "Jan 2020 to Dec 2021",
+        "bullets": [
+         "Managed forecasts."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Singapore",
+      "date_range": "Jan 2018 to Dec 2019",
+      "roles": [
+       {
+        "title": "Operations Lead",
+        "date_range": "Jan 2018 to Dec 2019",
+        "bullets": [
+         "Led projects."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Contoso Holdings",
+      "date_range": "Jan 2016 to Dec 2017",
+      "roles": [
+       {
+        "title": "chief happiness ninja",
+        "date_range": "Jan 2016 to Dec 2017",
+        "bullets": [
+         "Filled senior vacancies."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "note": "An incomplete source skeleton must not delete a correctly parsed uncertain entry."
+  },
+  {
+   "id": "R7-incomplete-rebuild-uncertain-shape-1",
+   "rule": "R7",
+   "kind": "work_reconcile",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Senior Engineer",
+    "Acme Holdings | Singapore | Jan 2022 - Present",
+    "• Built systems.",
+    "Analyst",
+    "Beta Holdings | Singapore | Jan 2020 - Dec 2021",
+    "• Managed forecasts.",
+    "Manager",
+    "Gamma Holdings | Singapore | Jan 2018 - Dec 2019",
+    "• Led projects.",
+    "Recruiter",
+    "Contoso - Executive Search | Singapore | Jan 2016 - Dec 2017",
+    "• Filled senior vacancies.",
+    "Finance Analyst.",
+    "Contoso Holdings | Singapore | Jan 2016 - Dec 2017",
+    "• Filled senior vacancies."
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Acme Holdings",
+      "date_range": "Jan 2022 to Present",
+      "roles": [
+       {
+        "title": "Senior Engineer",
+        "date_range": "Jan 2022 to Present",
+        "bullets": [
+         "Built systems."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Beta Holdings",
+      "date_range": "Jan 2020 to Dec 2021",
+      "roles": [
+       {
+        "title": "Analyst",
+        "date_range": "Jan 2020 to Dec 2021",
+        "bullets": [
+         "Managed forecasts."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Singapore",
+      "date_range": "Jan 2018 to Dec 2019",
+      "roles": [
+       {
+        "title": "Operations Lead",
+        "date_range": "Jan 2018 to Dec 2019",
+        "bullets": [
+         "Led projects."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Contoso Holdings",
+      "date_range": "Jan 2016 to Dec 2017",
+      "roles": [
+       {
+        "title": "Finance Analyst.",
+        "date_range": "Jan 2016 to Dec 2017",
+        "bullets": [
+         "Filled senior vacancies."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Acme Holdings",
+      "date_range": "Jan 2022 to Present",
+      "roles": [
+       {
+        "title": "Senior Engineer",
+        "date_range": "Jan 2022 to Present",
+        "bullets": [
+         "Built systems."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Beta Holdings",
+      "date_range": "Jan 2020 to Dec 2021",
+      "roles": [
+       {
+        "title": "Analyst",
+        "date_range": "Jan 2020 to Dec 2021",
+        "bullets": [
+         "Managed forecasts."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Singapore",
+      "date_range": "Jan 2018 to Dec 2019",
+      "roles": [
+       {
+        "title": "Operations Lead",
+        "date_range": "Jan 2018 to Dec 2019",
+        "bullets": [
+         "Led projects."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Contoso Holdings",
+      "date_range": "Jan 2016 to Dec 2017",
+      "roles": [
+       {
+        "title": "Finance Analyst.",
+        "date_range": "Jan 2016 to Dec 2017",
+        "bullets": [
+         "Filled senior vacancies."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "note": "An incomplete source skeleton must not delete a correctly parsed uncertain entry."
+  },
+  {
+   "id": "R7-incomplete-rebuild-uncertain-shape-2",
+   "rule": "R7",
+   "kind": "work_reconcile",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Senior Engineer",
+    "Acme Holdings | Singapore | Jan 2022 - Present",
+    "• Built systems.",
+    "Analyst",
+    "Beta Holdings | Singapore | Jan 2020 - Dec 2021",
+    "• Managed forecasts.",
+    "Manager",
+    "Gamma Holdings | Singapore | Jan 2018 - Dec 2019",
+    "• Led projects.",
+    "Recruiter",
+    "Contoso - Executive Search | Singapore | Jan 2016 - Dec 2017",
+    "• Filled senior vacancies.",
+    "Finance Analyst",
+    "Reporting directly to the Finance Director",
+    "Contoso Holdings | Singapore | Jan 2016 - Dec 2017",
+    "• Filled senior vacancies."
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Acme Holdings",
+      "date_range": "Jan 2022 to Present",
+      "roles": [
+       {
+        "title": "Senior Engineer",
+        "date_range": "Jan 2022 to Present",
+        "bullets": [
+         "Built systems."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Beta Holdings",
+      "date_range": "Jan 2020 to Dec 2021",
+      "roles": [
+       {
+        "title": "Analyst",
+        "date_range": "Jan 2020 to Dec 2021",
+        "bullets": [
+         "Managed forecasts."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Singapore",
+      "date_range": "Jan 2018 to Dec 2019",
+      "roles": [
+       {
+        "title": "Operations Lead",
+        "date_range": "Jan 2018 to Dec 2019",
+        "bullets": [
+         "Led projects."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Contoso Holdings",
+      "date_range": "Jan 2016 to Dec 2017",
+      "roles": [
+       {
+        "title": "Finance Analyst",
+        "date_range": "Jan 2016 to Dec 2017",
+        "bullets": [
+         "Filled senior vacancies."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Acme Holdings",
+      "date_range": "Jan 2022 to Present",
+      "roles": [
+       {
+        "title": "Senior Engineer",
+        "date_range": "Jan 2022 to Present",
+        "bullets": [
+         "Built systems."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Beta Holdings",
+      "date_range": "Jan 2020 to Dec 2021",
+      "roles": [
+       {
+        "title": "Analyst",
+        "date_range": "Jan 2020 to Dec 2021",
+        "bullets": [
+         "Managed forecasts."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Singapore",
+      "date_range": "Jan 2018 to Dec 2019",
+      "roles": [
+       {
+        "title": "Operations Lead",
+        "date_range": "Jan 2018 to Dec 2019",
+        "bullets": [
+         "Led projects."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Contoso Holdings",
+      "date_range": "Jan 2016 to Dec 2017",
+      "roles": [
+       {
+        "title": "Finance Analyst",
+        "date_range": "Jan 2016 to Dec 2017",
+        "bullets": [
+         "Filled senior vacancies."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "note": "An incomplete source skeleton must not delete a correctly parsed uncertain entry."
+  },
+  {
+   "id": "F4-qualification-segment-0-other",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "degree": "Bachelor of Science",
+    "institution": "Contoso University",
+    "date_range": ""
+   },
+   "lines": [
+    "Bachelor of Science - Contoso University; Master of Science - Northwind University, graduated 2015."
+   ],
+   "expect": {
+    "date_range": ""
+   },
+   "note": "Graduation belongs to the qualification's own segment, not another degree on the extracted line."
+  },
+  {
+   "id": "F4-qualification-segment-0-own",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "degree": "Master of Science",
+    "institution": "Northwind University",
+    "date_range": ""
+   },
+   "lines": [
+    "Bachelor of Science - Contoso University; Master of Science - Northwind University, graduated 2015."
+   ],
+   "expect": {
+    "date_range": "2015"
+   },
+   "note": "Graduation belongs to the qualification's own segment, not another degree on the extracted line."
+  },
+  {
+   "id": "F4-qualification-segment-1-other",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "degree": "Bachelor of Science",
+    "institution": "Contoso University",
+    "date_range": ""
+   },
+   "lines": [
+    "Bachelor of Science - Contoso University | Master of Science - Northwind University, graduated 2015."
+   ],
+   "expect": {
+    "date_range": ""
+   },
+   "note": "Graduation belongs to the qualification's own segment, not another degree on the extracted line."
+  },
+  {
+   "id": "F4-qualification-segment-1-own",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "degree": "Master of Science",
+    "institution": "Northwind University",
+    "date_range": ""
+   },
+   "lines": [
+    "Bachelor of Science - Contoso University | Master of Science - Northwind University, graduated 2015."
+   ],
+   "expect": {
+    "date_range": "2015"
+   },
+   "note": "Graduation belongs to the qualification's own segment, not another degree on the extracted line."
+  },
+  {
+   "id": "F4-segment-control-0",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "degree": "Bachelor of Science",
+    "institution": "Contoso University",
+    "date_range": ""
+   },
+   "lines": [
+    "Bachelor of Science | Contoso University | Graduation: 2015"
+   ],
+   "expect": {
+    "date_range": "2015"
+   },
+   "note": "Single-qualification field separators retain their date; another qualification cannot lend its year."
+  },
+  {
+   "id": "F4-segment-control-1",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "degree": "Bachelor of Science",
+    "institution": "Contoso University",
+    "date_range": ""
+   },
+   "lines": [
+    "Bachelor of Science - Contoso University; Graduation: 2015"
+   ],
+   "expect": {
+    "date_range": "2015"
+   },
+   "note": "Single-qualification field separators retain their date; another qualification cannot lend its year."
+  },
+  {
+   "id": "F4-segment-control-2",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "degree": "Bachelor of Science",
+    "institution": "Contoso University",
+    "date_range": ""
+   },
+   "lines": [
+    "Contoso University - Bachelor of Science; Northwind University - Master of Science, graduated 2015."
+   ],
+   "expect": {
+    "date_range": ""
+   },
+   "note": "Single-qualification field separators retain their date; another qualification cannot lend its year."
+  },
+  {
+   "id": "F4-segment-control-3",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "degree": "Bachelor of Science",
+    "institution": "Contoso University",
+    "date_range": ""
+   },
+   "lines": [
+    "Bachelor of Science - Contoso University; Master of Science - Contoso University, graduated 2015."
+   ],
+   "expect": {
+    "date_range": ""
+   },
+   "note": "Single-qualification field separators retain their date; another qualification cannot lend its year."
+  },
+  {
+   "id": "F4-institution-name-not-a-degree-0",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "degree": "Bachelor of Science",
+    "institution": "The Master's University",
+    "date_range": ""
+   },
+   "lines": [
+    "Bachelor of Science | The Master's University | Graduation: 2015"
+   ],
+   "expect": {
+    "date_range": "2015"
+   },
+   "note": "An institution containing Master is a field, not a second qualification."
+  },
+  {
+   "id": "F4-institution-name-not-a-degree-1",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "degree": "Bachelor of Science",
+    "institution": "Master University",
+    "date_range": ""
+   },
+   "lines": [
+    "Bachelor of Science | Master University | Graduation: 2015"
+   ],
+   "expect": {
+    "date_range": "2015"
+   },
+   "note": "An institution containing Master is a field, not a second qualification."
+  },
+  {
+   "id": "F4-same-degree-two-schools-0",
+   "rule": "F4",
+   "kind": "education_restore",
+   "lines": [
+    "Bachelor of Science - Contoso University; Bachelor of Science - Northwind University, graduated 2015."
+   ],
+   "entry": {
+    "institution": "Contoso University",
+    "degree": "Bachelor of Science",
+    "date_range": ""
+   },
+   "expect": {
+    "date_range": ""
+   },
+   "note": "Qualification segment selection must use both institution and degree, and remain unique."
+  },
+  {
+   "id": "F4-same-degree-two-schools-1",
+   "rule": "F4",
+   "kind": "education_restore",
+   "lines": [
+    "Bachelor of Science - Contoso University; Bachelor of Science - Northwind University, graduated 2015."
+   ],
+   "entry": {
+    "institution": "Northwind University",
+    "degree": "Bachelor of Science",
+    "date_range": ""
+   },
+   "expect": {
+    "date_range": "2015"
+   },
+   "note": "Qualification segment selection must use both institution and degree, and remain unique."
+  },
+  {
+   "id": "F4-same-school-own-masters-year",
+   "rule": "F4",
+   "kind": "education_restore",
+   "lines": [
+    "Bachelor of Science - Contoso University; Master of Science - Contoso University, graduated 2015."
+   ],
+   "entry": {
+    "institution": "Contoso University",
+    "degree": "Master of Science",
+    "date_range": ""
+   },
+   "expect": {
+    "date_range": "2015"
+   },
+   "note": "Qualification segment selection must use both institution and degree, and remain unique."
+  },
+  {
+   "id": "F4-identical-qualifications-ambiguous",
+   "rule": "F4",
+   "kind": "education_restore",
+   "lines": [
+    "Bachelor of Science - Contoso University, graduated 2015; Bachelor of Science - Contoso University."
+   ],
+   "entry": {
+    "institution": "Contoso University",
+    "degree": "Bachelor of Science",
+    "date_range": ""
+   },
+   "expect": {
+    "date_range": ""
+   },
+   "note": "Qualification segment selection must use both institution and degree, and remain unique."
+  },
+  {
+   "id": "F4-multiple-qualifications-no-degree",
+   "rule": "F4",
+   "kind": "education_restore",
+   "lines": [
+    "Bachelor of Science - Contoso University, graduated 2015; Master of Science - Contoso University."
+   ],
+   "entry": {
+    "institution": "Contoso University",
+    "degree": "",
+    "date_range": ""
+   },
+   "expect": {
+    "date_range": ""
+   },
+   "note": "Qualification segment selection must use both institution and degree, and remain unique."
   }
  ]
 }

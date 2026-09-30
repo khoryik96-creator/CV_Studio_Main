@@ -12,6 +12,7 @@ Driven through the real /parse and /generate-docx routes, with only the provider
 call replaced. All names are synthetic.
 """
 
+import copy
 import io
 import json
 import os
@@ -202,6 +203,81 @@ class TitleAbovePlaceRowTests(unittest.TestCase):
         self.assertNotIn(PLACE, [e["company"] for e in data["work_experiences"]])
         self.assertNotEqual(data["candidate"]["current_company"], PLACE)
         self.assertEqual(data["work_experiences"][0]["company"], "Self-employed")
+
+    def test_reporting_prose_never_replaces_the_title_in_word(self):
+        for phrase in ("Reporting directly to the Finance Director",
+                       "Working closely with the Managing Director"):
+            with self.subTest(phrase=phrase):
+                source = "\n".join([
+                    "TEST CANDIDATE", "PROFESSIONAL EXPERIENCE", "Senior Engineer",
+                    "Acme Holdings | Singapore | Jan 2022 - Present", "• Built systems.",
+                    "Finance Analyst", phrase,
+                    "Beta Holdings | Singapore | Jan 2018 - Dec 2021", "• Managed forecasts.",
+                ])
+                parsed = _provider_parse()
+                parsed["work_experiences"] = [
+                    {"company": "Acme Holdings", "date_range": "Jan 2022 to Present",
+                     "roles": [_role("Senior Engineer", ["Built systems."])]},
+                    {"company": "Beta Holdings", "date_range": "Jan 2018 to Dec 2021",
+                     "roles": [_role("Finance Analyst", ["Managed forecasts."])]},
+                ]
+                data = self._parse(parsed, source)["data"]
+                self.assertEqual(data["work_experiences"][1]["roles"][0]["title"], "Finance Analyst")
+                lines = self._docx_lines(data)
+                self.assertIn("Finance Analyst", lines)
+                self.assertNotIn(phrase, lines)
+                self.assertIn("Built systems.", lines)
+
+    def test_uncertain_history_does_not_delete_a_job_or_its_duties_in_word(self):
+        cases = json.loads((ROOT / "tests/fixtures/cv_guardrail_cases.json").read_text(encoding="utf-8"))["cases"]
+        case = next(c for c in cases if c["id"] == "R7-incomplete-rebuild-keeps-uncertain-job")
+        parsed = _provider_parse()
+        parsed["work_experiences"] = copy.deepcopy(case["parsed"]["work_experiences"])
+        data = self._parse(parsed, "\n".join(case["lines"]))["data"]
+        self.assertEqual(len(data["work_experiences"]), 4)
+        self.assertIn("Contoso - Executive Search", [e["company"] for e in data["work_experiences"]])
+        lines = self._docx_lines(data)
+        self.assertIn("Filled senior vacancies.", lines)
+        self.assertIn("Led projects.", lines)
+
+    def test_shared_line_graduation_year_stays_with_its_degree_in_word(self):
+        source = SOURCE.split("EDUCATION\n")[0] + (
+            "EDUCATION\nBachelor of Science - Contoso University; "
+            "Master of Science - Northwind University, graduated 2015."
+        )
+        parsed = _provider_parse()
+        parsed["education"] = [
+            {"institution": "Contoso University", "degree": "Bachelor of Science", "date_range": ""},
+            {"institution": "Northwind University", "degree": "Master of Science", "date_range": ""},
+        ]
+        data = self._parse(parsed, source)["data"]
+        self.assertEqual({e["institution"]: e["date_range"] for e in data["education"]},
+                         {"Contoso University": "", "Northwind University": "2015"})
+        lines = self._docx_lines(data)
+        self.assertIn("2015 | Northwind University", lines)
+        self.assertIn("Contoso University", lines)
+        self.assertNotIn("2015 | Contoso University", lines)
+
+    def test_complete_work_rows_still_correct_provider_drift(self):
+        source = "\n".join([
+            "TEST CANDIDATE", "PROFESSIONAL EXPERIENCE", "Senior Engineer",
+            "Acme Holdings | Singapore | Jan 2022 - Present", "• Built systems.",
+            "Analyst", "Beta Holdings | Singapore | Jan 2018 - Dec 2021", "• Managed forecasts.",
+            "EDUCATION", "An uncertain line below is not a work row.",
+            "Contoso Holdings | Singapore | Jan 2010 - Dec 2011",
+        ])
+        parsed = _provider_parse()
+        parsed["work_experiences"] = [
+            {"company": "Acme Holdings", "date_range": "Jan 2022 to Present",
+             "roles": [_role("Senior Engineer", ["Built systems."])]},
+            {"company": "Singapore", "date_range": "Jan 2018 to Dec 2021",
+             "roles": [_role("Operations Lead", ["Managed forecasts."])]},
+        ]
+        data = self._parse(parsed, source)["data"]
+        self.assertEqual([e["company"] for e in data["work_experiences"]],
+                         ["Acme Holdings", "Beta Holdings"])
+        self.assertEqual(data["work_experiences"][1]["roles"][0]["title"], "Analyst")
+        self.assertIn("Managed forecasts.", self._docx_lines(data))
 
 
 if __name__ == "__main__":

@@ -116,7 +116,8 @@ all ("Contoso Media – Northwind Books"). The job title is the short line
 directly above: it starts with a capital, names a job, and is not a bullet, a
 date, a heading, a sub-heading ending in "Experience", "Roles" or "Positions",
 a sentence ending in a full stop, or a wrapped duty such as "Reporting to
-General Manager" (a verb form followed by a linking word; "Managing Director"
+General Manager" (a verb form followed by a linking word, including intervening
+adverbs such as "Reporting directly to" and "Working very closely with"; "Managing Director"
 and "Marketing and Communications Manager" are still titles). Job words include
 the shared title words plus founder, owner, lead, chairman, counsel,
 representative, buyer and similar, and CEO, CFO, VP, GM, MD and other
@@ -140,6 +141,13 @@ refused. Words that are also an employer's whole name ("Sea", "Global") are not
 on the list. A cell that is only loosely a place (an unlisted name before a
 country, such as "Contoso, Kuala Lumpur") after a job title, or with no clear
 title, is read exactly as before.
+
+A refused place header makes the history incomplete. Reconciliation keeps the
+entire provider history instead of rebuilding from just the remaining rows,
+even when another provider entry needs correcting. A four-job history must not
+become three jobs because one employer such as "Contoso - Executive Search" is
+uncertain. Complete source histories still correct provider drift normally;
+uncertain lines outside Work Experience do not disable that correction.
 
 ## Source check (missing and unnamed employers)
 
@@ -246,6 +254,13 @@ counts; if the entry names a degree and no line names it, nothing is restored.
 A date the AI gave is never replaced. A year on a later line, two
 different years, another year on the same line, "graduates of …" or a year
 that doesn't follow the word directly change nothing. Code: `_recover_education_source_labels`.
+
+When extraction joins qualifications on one line, a semicolon or pipe followed
+by a new qualification starts a separate graduation span. Both the institution
+and degree must uniquely identify the span. The master's year cannot date the
+bachelor's entry. Ordinary degree/institution/Graduation field separators stay
+joined, and an institution such as "The Master's University" is not a new degree.
+The existing two-different-years-on-one-line ambiguity rule still applies.
 
 ## Dates
 

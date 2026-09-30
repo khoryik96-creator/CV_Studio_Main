@@ -1768,6 +1768,14 @@ _CV_EDU_MAJOR_RE = re.compile(
 # The label alone in its cell, with the value in the next one: "Major | Finance".
 _CV_EDU_MAJOR_LABEL_CELL_RE = re.compile(r"^\s*(?:majors?|speciali[sz]ation)\s*[:\uff1a]?\s*$", re.I)
 _CV_EDU_BLOCK_YEAR_RE = re.compile(r"\b(?:19|20)\d{2}\b")
+# A new qualification after a field separator starts its own graduation span.
+# Ordinary fields (institution, grade, Graduation: ...) remain with the degree.
+_CV_EDU_QUALIFICATION_RE = re.compile(
+    r"\b(?:(?:bachelor(?:s|['’]s)?|master(?:s|['’]s)?|doctor(?:ate)?|diploma|certificate)"
+    r"(?=\s+(?:of|in|degree|science|arts|business|engineering|management|commerce|law)\b"
+    r"|\s*[-–—:]|$)|associate\s+of|[BM]\.?(?:Sc|Eng|Tech|BA|Com)\.?|MBA|Ph\.?D\.?)\b",
+    re.I,
+)
 # "graduated 2007", "graduated in June 2007", "Graduation: 2007", "Class of 2007".
 # The year has to follow the word directly: "graduated students ... in 2019" is not
 # a graduation date.
@@ -1882,8 +1890,33 @@ def _recover_education_source_labels(education, source_text):
         # the institution's own line is read, and when the entry has a degree, only
         # a line naming it: a school's line for another qualification carries that
         # qualification's year.
-        own_lines = [block[0] for block in blocks]
         degree_tokens = _cv_token_set(education.get("degree"))
+        institution = re.sub(r"\s+", " ", str(education.get("institution") or "")).strip().lower()
+        own_lines = []
+        for block in blocks:
+            line = block[0]
+            # Retain the established whole-line ambiguity guard, even when its
+            # two years occur in different qualification segments.
+            if len(set(_CV_EDU_BLOCK_YEAR_RE.findall(line))) > 1:
+                continue
+            parts = re.split(r"\s*[;|]\s*", line)
+            groups = [parts[0]]
+            for part in parts[1:]:
+                if (_CV_EDU_QUALIFICATION_RE.search(part)
+                        and _CV_EDU_QUALIFICATION_RE.search(groups[-1])):
+                    groups.append(part)
+                else:
+                    groups[-1] += " | " + part
+            if len(groups) == 1:
+                own_lines.append(line)
+                continue
+            # A year in the master's segment cannot date the bachelor's entry,
+            # even when PDF extraction placed both schools on one physical line.
+            matches = [group for group in groups
+                       if institution in re.sub(r"\s+", " ", group).lower()
+                       and (not degree_tokens or degree_tokens <= _cv_token_set(group))]
+            if len(matches) == 1:
+                own_lines.append(matches[0])
         if degree_tokens:
             own_lines = [line for line in own_lines if degree_tokens <= _cv_token_set(line)]
         years = set()

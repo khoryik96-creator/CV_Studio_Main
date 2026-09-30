@@ -13,6 +13,7 @@ a change pass without the owner's agreement: a failing case here means the chang
 breaks a behaviour that was deliberately chosen.
 """
 
+import copy
 import json
 from pathlib import Path
 import re
@@ -49,6 +50,14 @@ class GuardrailRegistryTests(unittest.TestCase):
 
 
 class WorkRowReaderGuardrails(unittest.TestCase):
+    def test_incomplete_work_reconciliation_keeps_the_provider_history(self):
+        for case in _cases("work_reconcile"):
+            with self.subTest(case=case["id"]):
+                result = reconcile._reconcile_work_experience_with_authoritative_table(
+                    copy.deepcopy(case["parsed"]), "\n".join(case["lines"])
+                )
+                self.assertEqual(result, case["expect"], case["note"])
+
     def test_rows(self):
         for case in _cases("rows"):
             with self.subTest(case=case["id"]):

@@ -5,11 +5,13 @@
 ## Release state
 
 - Latest audited merged source (2026-09-30): v24.6.428, `cb0bcae` (#219).
-- Current corrective work: v24.6.429 on
-  `codex/pr220-v24.6.429-guardrail-review-fixes` (PR number provisional), not
-  merged. Scope is test-receipt isolation, qualification-specific education
-  label restoration and summary pay-filter corrections. Routes, schemas,
-  credentials, work-row reconciliation and DOCX layout are unchanged. Older
+- Current corrective work: v24.6.430 on
+  `codex/pr220-v24.6.430-cv-structure-safety` (PR number provisional), not
+  merged. Includes the unmerged v24.6.429 test-state, education-label and summary
+  pay fixes. Follow-up scope: incomplete work histories retain uncertain jobs;
+  reporting/working prose with adverbs cannot replace titles; graduation years
+  stay in their own qualification segment. Routes, schemas, credentials and
+  DOCX layout are unchanged. Older
   dated release/claim notes below are historical, not the current master state.
 
 - Approved baseline: v24.6.217

@@ -1637,7 +1637,7 @@ def _restore_labelled_company_qualifiers(parsed, cv_text):
     return parsed
 
 
-def _extract_authoritative_work_rows(cv_text, parsed=None):
+def _extract_authoritative_work_rows(cv_text, parsed=None, *, _uncertain_rows=None):
     """Extract authoritative employment rows from pipe or whitespace tables.
 
     PDF extraction frequently removes visible table borders. The earlier parser only
@@ -1645,6 +1645,8 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
     `Oct 2022 - Present EY Technology Solutions Sdn Bhd Manager` were missed.
     This extension is deliberately confined to an explicit Employment/Work History
     section and uses parsed role titles as safe split anchors.
+    The optional private collector tells reconciliation when an explicit place
+    header was refused. Such a history is incomplete, not an authoritative table.
     """
     rows = []
     seen = set()
@@ -1808,6 +1810,7 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
     # form followed by a linking word is prose; "Managing Director" is not.
     title_above_prose_start = re.compile(
         r"^(?:[A-Z][a-z]+(?:ing|ed)|Led|Ran|Built|Drove|Grew|Helped)\s+"
+        r"(?:(?:[A-Za-z]+ly|very|more|less|quite)\s+){0,3}"
         r"(?:to|the|a|an|with|for|on|in|into|across|under|through|by|at|from|alongside|"
         r"all|our|his|her|their|its|over|within)\b",
     )
@@ -2219,6 +2222,8 @@ def _extract_authoritative_work_rows(cv_text, parsed=None):
         # line glued onto the last duty just before it is shaped like a title,
         # the previous job's source bullets are unsure too, and the AI's are kept.
         if _place_row_line_parts(line, line_index) == ():
+            if _uncertain_rows is not None:
+                _uncertain_rows.append(line_index)
             glued_title = False
             if active_bullet and active_row is not None:
                 above = line_index - 1
@@ -2324,8 +2329,12 @@ def _reconcile_work_experience_with_authoritative_table(parsed, cv_text):
     """
     if not isinstance(parsed, dict):
         return parsed
-    rows = _extract_authoritative_work_rows(cv_text, parsed)
-    if len(rows) < 2:
+    uncertain_rows = []
+    rows = _extract_authoritative_work_rows(cv_text, parsed, _uncertain_rows=uncertain_rows)
+    # Refused place headers still name source jobs. A different provider mistake
+    # does not make the remaining rows a complete skeleton: rebuilding would
+    # delete the uncertain job and its duties. Preserve the full parse instead.
+    if len(rows) < 2 or uncertain_rows:
         return parsed
     current_exps = parsed.get("work_experiences") or []
     if not isinstance(current_exps, list) or not current_exps:
