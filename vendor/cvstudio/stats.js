@@ -309,6 +309,7 @@ function renderStats() {
     var dateStr = d.toLocaleDateString('en-MY', { day:'2-digit', month:'short', year:'numeric' });
     var timeStr = d.toLocaleTimeString('en-MY', { hour:'2-digit', minute:'2-digit' });
     var badge = r.mode === 'blind'   ? '<span class="stats-badge blind">Blind</span>'
+           : r.mode === 'format_review' ? '<span class="stats-badge format">CV Review</span>'
            : r.mode === 'create'   ? '<span class="stats-badge" style="background:#e9d8fd;color:#553c9a;border-radius:20px;padding:1px 8px;font-size:11px;font-weight:500;">Create</span>'
            : r.mode === 'appraiser' ? '<span class="stats-badge" style="background:#eef2ff;color:#3730a3;border-radius:20px;padding:1px 8px;font-size:11px;font-weight:500;">CV Scoring</span>'
            : r.mode === 'owl'      ? '<span class="stats-badge" style="background:#fff7ed;color:#9a3412;border-radius:20px;padding:1px 8px;font-size:11px;font-weight:500;">The Owl</span>'

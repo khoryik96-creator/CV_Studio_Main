@@ -4,10 +4,9 @@
 
 ## Release state
 
-- Latest audited merged source (2026-09-30): v24.6.428, `cb0bcae` (#219).
-- Current corrective work: v24.6.433, PR #220, on
-  `codex/pr220-v24.6.431-qualification-pay-guards` (existing PR head retained).
-  Owner authorized merge once gates pass; GitHub is authoritative for its status.
+- Latest verified merged source (2026-10-01): v24.6.433, `efe42f21` (#220).
+  The merged tree matches tested head `9665d75`; all three hosted gates passed.
+  `codex/pr220-v24.6.431-qualification-pay-guards` is a completed branch.
   Includes the v24.6.429 test-state, education-label and summary
   pay fixes. Follow-up scope: incomplete work histories retain uncertain jobs;
   reporting/working prose with adverbs cannot replace titles; graduation years
@@ -19,6 +18,18 @@
   Routes, schemas, credentials and
   DOCX layout are unchanged. Older
   dated release/claim notes below are historical, not the current master state.
+
+- Current owner-approved source work: v24.6.434, branch
+  `codex/v24.6.434-formatting-review`, from exact master `efe42f21`.
+  Off-by-default AI review toggle on normal single Format CV; source-backed
+  suggestions, manual Apply fix/Undo and verified Word regeneration. Existing
+  providers/cost gates, routes, guards, schemas and deterministic rules remain.
+  Local full comparison: 1,517 passed, four skipped, 6,864 subtests; the same six
+  failures reproduced before implementation (three updater environment fixtures,
+  three opt-in native OLE recovery fixtures). All 27 frontend suites pass.
+  Source-only preview: loopback 5069, verified v24.6.434 with isolated state.
+  No PR, merge, release, protected compilation, live AI or JobAdder write.
+  See `cv_studio_v24_6_434_ai_formatting_review_qa_report.md` for evidence/limits.
 
 - Approved baseline: v24.6.217
 - Current source baseline: see the repository-root `VERSION` file (single source

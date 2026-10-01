@@ -17,6 +17,7 @@ MODULES = (
     "test_cv_summary_salary_docx", "test_cv_source_detail_restore",
     "test_cv_label_table_reconciliation", "test_cv_title_above_place_rows",
     "test_cv_download_folders_routes",
+    "test_cv_format_review",
 )
 
 

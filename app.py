@@ -5,6 +5,7 @@ Run: python app.py  (source build) or python app.pyc (source-removed build)
 Then open: http://localhost:5000
 """
 import time as _boot_time
+import unicodedata
 _BOOT_T0 = _boot_time.time()
 
 # ── Machine-bound installer receipt gate ────────────────────────────
@@ -23,7 +24,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.433"
+_INSTALL_RECEIPT_VERSION = "v24.6.434"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -346,7 +347,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.433"
+_CVSTUDIO_VERSION = "v24.6.434"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -1226,6 +1227,7 @@ def _origin_is_local(value):
 # already running as the same OS user.
 _AI_SPEND_SESSION_COOKIE = "cvstudio_ai_spend_session"
 _AI_SPEND_SESSION_TOKEN = secrets.token_urlsafe(32)
+_CV_FORMAT_REVIEW_SIGNING_KEY = secrets.token_bytes(32)
 _AI_SPEND_EXACT_PATHS = frozenset({
     "/test",
     "/parse",
@@ -1781,6 +1783,13 @@ from cvstudio_cv_reconcile import (
 from cvstudio_cv_fidelity import (
     evaluate_cv_fidelity,
     summarize_fidelity_warning,
+    build_cv_format_review_prompt,
+    validate_cv_format_review,
+    seal_cv_format_review,
+    apply_cv_format_review,
+    cv_review_required_text,
+    seal_cv_review_output,
+    verify_cv_review_output,
 )
 
 
@@ -9155,6 +9164,19 @@ def _with_generated_ai_text(data, text):
     return data
 
 
+def _cv_format_review_output_data(data):
+    """The existing JSON export's content passes, on a private copy."""
+    from copy import deepcopy
+    output = _drop_reference_sections(deepcopy(data))
+    output = _normalize_cv_structured_content(output)
+    output = _normalize_cv_data_for_output(output, preserve_work_order=True)
+    if isinstance(output.get("summary_bullets"), list):
+        output["summary_bullets"] = _cv_strip_pay_from_summary(
+            _bounded_summary_bullets(output["summary_bullets"])
+        )
+    return output
+
+
 @app.route("/generate-ai", methods=["POST"])
 def generate_ai():
     """Generic Anthropic proxy for non-CV tools such as Blind JD and Company Profile.
@@ -9168,6 +9190,35 @@ def generate_ai():
         feature = str(body.get("feature") or "").strip().lower()
         if feature == "the_spider" and not _ai_crawler_lock_allowed(body):
             return _ai_crawler_locked_response()
+        review_requested = feature == "cv_format_review"
+        review_base = None
+        if feature in {"cv_format_review", "cv_format_review_apply"}:
+            try:
+                if body.get("blind") is True:
+                    raise ValueError("Formatting review currently supports normal Format CV only.")
+                review_source = body.get("source_cv_text")
+                build_cv_format_review_prompt(review_source, body.get("cv_data"))
+                if feature == "cv_format_review_apply":
+                    corrected = apply_cv_format_review(
+                        review_source, body["cv_data"], body.get("review"),
+                        body.get("issue_id"), _CV_FORMAT_REVIEW_SIGNING_KEY,
+                    )
+                    corrected = _cv_format_review_output_data(corrected)
+                    # A correction must survive the established export passes.
+                    # Repeating them also seals idempotence before any old output
+                    # is replaced in the browser.
+                    if (corrected == _cv_format_review_output_data(body["cv_data"])
+                            or corrected != _cv_format_review_output_data(corrected)):
+                        raise ValueError("The correction did not survive formatting. Your existing CV is unchanged.")
+                    selected = next(item for item in body["review"]["issues"] if item["id"] == body["issue_id"])
+                    return jsonify({"ok": True, "data": corrected,
+                                    "format_review_applied": seal_cv_review_output(
+                                        corrected, _CV_FORMAT_REVIEW_SIGNING_KEY, cv_review_required_text(selected["operation"]))})
+                review_base = _cv_format_review_output_data(body["cv_data"])
+                review_prompt = build_cv_format_review_prompt(review_source, review_base)
+            except (ValueError, TypeError, KeyError, AttributeError, IndexError) as exc:
+                message = str(exc) if isinstance(exc, ValueError) else "The CV data could not be checked. Your existing CV is unchanged."
+                return jsonify({"error": message}), 409 if feature == "cv_format_review_apply" else 400
         anonymized_summary = feature == "summary_anonymized"
         summary_source_text = str(body.get("source_cv_text") or "")
         # The CV Summary callers ask for the candidate's pay to be removed from the
@@ -9182,6 +9233,10 @@ def generate_ai():
         max_tokens = int(body.get("max_tokens") or 4000)
         use_tools = bool(body.get("use_tools"))
         max_uses = int(body.get("max_uses") or 3)
+        if review_requested:
+            prompt = review_prompt
+            max_tokens = 4000
+            use_tools = False
 
         if not api_key:
             return jsonify({"error": "API key required"}), 400
@@ -9266,6 +9321,20 @@ def generate_ai():
             if pay_removed:
                 data = _with_generated_ai_text(data, filtered_text)
         out = {"ok": True, "content": data.get("content", []), "usage": usage, "model": model, "provider": llm_provider}
+        if review_requested:
+            review = validate_cv_format_review(_generated_ai_text(data), review_source, review_base)
+            try:
+                out["format_review"] = seal_cv_format_review(
+                    review, review_source, review_base, _CV_FORMAT_REVIEW_SIGNING_KEY,
+                )
+            except ValueError:
+                # A bounded but oversized review envelope must not discard the
+                # completed provider call's usage/cost or trigger a replay.
+                out["format_review"] = seal_cv_format_review(
+                    {"status": "unavailable", "issues": [], "message": "The AI suggestions were too large to verify. Your existing CV is unchanged."},
+                    review_source, review_base, _CV_FORMAT_REVIEW_SIGNING_KEY,
+                )
+            out["format_review_base"] = review_base
         if strip_candidate_pay:
             out["summary_pay_removed"] = pay_removed
         if warning:
@@ -12160,6 +12229,9 @@ def generate_docx():
             cv_data["summary_bullets"], summary_pay_removed = _cv_strip_pay_from_summary_counted(
                 _bounded_summary_bullets(cv_data["summary_bullets"])
             )
+        if "format_review_applied" in body and not verify_cv_review_output(
+                cv_data, body["format_review_applied"], _CV_FORMAT_REVIEW_SIGNING_KEY):
+            return jsonify({"error": "The approved correction changed during formatting. Your existing CV is unchanged."}), 409
         cv_data["_document_alignment"] = _normalize_cv_text_alignment(body.get("alignment"))
         cv_data["_summary_box_autofit"] = _summary_box_autofit_enabled(
             body.get("summary_box_autofit")
@@ -12200,6 +12272,18 @@ def generate_docx():
             document_bytes = handle.read()
         _validate_generated_docx_bytes(document_bytes)
 
+        if "format_review_applied" in body:
+            # Read paragraphs with adjacent runs joined, preserving their actual
+            # text. The signed correction must survive the renderer too.
+            with zipfile.ZipFile(io.BytesIO(document_bytes), "r") as archive:
+                document_root = ET.fromstring(archive.read("word/document.xml"))
+            word_ns = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+            rendered_text = " ".join("".join(node.text or "" for node in paragraph.iter(word_ns + "t"))
+                                     for paragraph in document_root.iter(word_ns + "p"))
+            rendered_text = " ".join(unicodedata.normalize("NFC", rendered_text).split()).casefold()
+            if any(word not in rendered_text for word in body["format_review_applied"]["required_text"]):
+                return jsonify({"error": "The correction did not appear in the Word file. Your existing CV is unchanged."}), 409
+
         response = send_file(
             io.BytesIO(document_bytes),
             as_attachment=True,
@@ -12208,6 +12292,8 @@ def generate_docx():
         )
         if summary_pay_removed:
             response.headers["X-CV-Summary-Pay-Removed"] = str(summary_pay_removed)
+        if "format_review_applied" in body:
+            response.headers["X-CV-Format-Review-Applied"] = "1"
         return response
 
     except Exception as e:

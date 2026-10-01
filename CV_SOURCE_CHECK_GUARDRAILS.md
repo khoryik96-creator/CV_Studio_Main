@@ -499,6 +499,30 @@ Matching runs on an NFKC-normalised copy with Markdown emphasis removed, so
 digits in other scripts count too, and a neighbouring non-Latin character
 doesn't hide an amount.
 
+## Optional AI formatting review
+
+The v24.6.434 review is an additional source-content check, enabled only by the
+unchecked toggle on normal single Format CV. It does not change these
+deterministic rules or inspect visual Word layout. Review suggestions are text
+with an original quote, never automatic edits. Unsupported/uncertain changes
+stay manual. Allowed corrections are bounded job/qualification restoration,
+exact duty restoration/movement and employer/title/qualification/date fields.
+No deletions, identity, summary, skills or hidden fields are permitted.
+
+Apply requires the signed review to match this exact source and formatted data,
+with exact previous fields, unique non-referee evidence and all new words in the
+same quote. It runs no AI call. Existing output passes still run; a changed proof
+or missing correction text in the generated Word document rejects replacement.
+The browser swaps preview/file only after both stages succeed, restores the
+previous pair on Undo and ignores responses belonging to old input. Failed
+checks preserve the completed file. Issues/unavailable reviews hold JobAdder
+auto-upload; apply/undo/recheck never automatically upload. Explicit Check again
+is labelled as another AI call and its cost is recorded separately.
+
+`tests/test_cv_format_review.py` and `tests/test_cv_format_review_frontend.js`
+exercise these boundaries with simulated providers and synthetic CVs. The
+existing 899 registry expectations remain unchanged.
+
 ## Test-state safety
 
 Pure source-reading tests need no installation receipt. Tests importing the

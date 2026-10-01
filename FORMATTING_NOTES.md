@@ -7,6 +7,15 @@ formatted DOCX). For everything else (server, versioning, JobAdder, etc.) see
 CV Studio is a Flask app the owner runs locally at `localhost:5000`, using
 DeepSeek for AI. Current version is tracked in the repo-root `VERSION` file.
 
+An optional AI formatting review now follows the ordinary single-CV export when
+its toggle is on (off by default). It compares structured output with original
+text for content mistakes; it does not inspect visual Word layout. Suggestions
+show their source quote and require manual Apply fix. Existing formatting passes
+still run, and the approved correction must survive the actual Word renderer
+before the preview/download is replaced. Undo restores the exact previous pair.
+Blind and batch workflows remain unchanged. Details and safety limits are in
+`CV_SOURCE_CHECK_GUARDRAILS.md` and the v24.6.434 QA report.
+
 ## The pipeline (source doc → formatted DOCX)
 
 1. **`/extract-text`** (`app.py`) — pulls raw text from the upload: `pdfplumber`
