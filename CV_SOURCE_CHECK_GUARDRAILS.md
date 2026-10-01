@@ -245,6 +245,11 @@ and/or stated year. Conflicting or missing identifying evidence changes
 nothing. A master's major never fills the bachelor's entry just because the
 school is the same; an existing major is never overwritten.
 
+A degree heading immediately above its institution identifies that block too.
+Once a block has a degree, the next degree heading belongs to the next block,
+not to the previous school's major or grade. A degree below its school is still
+supported; blank lines do not change the attachment.
+
 ### F4
 **A stated graduation year is kept.** If the AI leaves an entry's date empty
 and the line naming its institution says "graduated 2007", "graduated in June
@@ -261,6 +266,11 @@ and degree must uniquely identify the span. The master's year cannot date the
 bachelor's entry. Ordinary degree/institution/Graduation field separators stay
 joined, and an institution such as "The Master's University" is not a new degree.
 The existing two-different-years-on-one-line ambiguity rule still applies.
+
+University-first spans keep the university with the following degree, including
+pipe-only combined lines: "Contoso University | Bachelor of Science | Northwind
+University | Master of Science | Graduation: 2015" dates only the master's.
+Degree-first and single-qualification field layouts retain their existing rules.
 
 ## Dates
 
@@ -293,6 +303,11 @@ and company earnings remain work. Payroll achievements with an explicit
 recipient such as "salary of RM 12,000 for each employee" or "per employee"
 remain intact. That recipient must be in the pay phrase's own comma part, and
 cannot be a job-role description or override an explicit own-pay statement.
+Short job-title modifiers count too: "for the employee relations manager role"
+is a role, not a payroll recipient, including hyphenated and possessive forms.
+An unprefixed amount such as "12 LPA" follows the same rule. Relative or action
+clauses describing actual recipients ("each employee who works in a support
+role", "every worker assigned to a construction job") remain payroll work.
 
 **A summary is also the candidate's work, and much of that work is about pay**
 (HR, payroll, recruitment, sales). So a sentence is removed only on a clear

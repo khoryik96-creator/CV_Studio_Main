@@ -279,6 +279,57 @@ class TitleAbovePlaceRowTests(unittest.TestCase):
         self.assertEqual(data["work_experiences"][1]["roles"][0]["title"], "Analyst")
         self.assertIn("Managed forecasts.", self._docx_lines(data))
 
+    def test_degree_above_school_keeps_its_own_major_and_grade_in_word(self):
+        source = SOURCE.split("EDUCATION\n")[0] + "EDUCATION\n" + "\n".join([
+            "Bachelor of Science", "Contoso University | 2010", "Major: Physics", "GPA 3.8 / 4.0",
+            "Master of Science", "Contoso University | 2015", "Major: Finance", "CGPA 3.8 / 4.0",
+        ])
+        parsed = _provider_parse()
+        parsed["education"] = [
+            {"institution": "Contoso University", "degree": "Bachelor of Science",
+             "date_range": "2010", "cgpa": "3.8 / 4.0"},
+            {"institution": "Contoso University", "degree": "Master of Science",
+             "date_range": "", "cgpa": "3.8 / 4.0"},
+        ]
+        data = self._parse(parsed, source)["data"]
+        by_degree = {entry["degree"]: entry for entry in data["education"]}
+        self.assertEqual(by_degree["Bachelor of Science"]["major"], "Physics")
+        self.assertEqual(by_degree["Master of Science"]["major"], "Finance")
+        self.assertEqual(by_degree["Master of Science"]["cgpa"], "CGPA 3.8 / 4.0")
+        lines = self._docx_lines(data)
+        self.assertEqual(lines[lines.index("Master of Science") + 1], "Major: Finance")
+
+    def test_institution_first_qualifications_keep_the_masters_year_in_word(self):
+        for separator in ("; ", " | "):
+            with self.subTest(separator=separator):
+                source = SOURCE.split("EDUCATION\n")[0] + (
+                    "EDUCATION\nContoso University | Bachelor of Science" + separator
+                    + "Northwind University | Master of Science | Graduation: 2015"
+                )
+                parsed = _provider_parse()
+                parsed["education"] = [
+                    {"institution": "Contoso University", "degree": "Bachelor of Science", "date_range": ""},
+                    {"institution": "Northwind University", "degree": "Master of Science", "date_range": ""},
+                ]
+                data = self._parse(parsed, source)["data"]
+                self.assertEqual({entry["institution"]: entry["date_range"] for entry in data["education"]},
+                                 {"Contoso University": "", "Northwind University": "2015"})
+                lines = self._docx_lines(data)
+                self.assertIn("2015 | Northwind University", lines)
+                self.assertNotIn("2015 | Contoso University", lines)
+
+    def test_employee_job_role_pay_never_reaches_the_summary_or_word(self):
+        parsed = _provider_parse()
+        work = "Managed payroll with salary of RM 8k for each employee."
+        own_pay = "Led HR with salary of RM 12k for the employee relations manager role."
+        parsed["summary_bullets"] = [work, own_pay, "Built the HR function."]
+        response = self._parse(parsed)
+        self.assertEqual(response["data"]["summary_bullets"], [work, "Built the HR function."])
+        self.assertEqual(response["summary_pay_removed"], 1)
+        lines = self._docx_lines(response["data"])
+        self.assertIn(work, lines)
+        self.assertNotIn(own_pay, lines)
+
 
 if __name__ == "__main__":
     unittest.main()

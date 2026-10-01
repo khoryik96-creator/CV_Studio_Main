@@ -1787,7 +1787,7 @@ _CV_EDU_GRADUATED_RE = re.compile(
 )
 
 
-def _education_source_blocks(education, source_text):
+def _education_source_blocks(education, source_text, *, for_labels=False):
     """The source lines under each place this qualification's institution appears.
 
     A block starts at the line naming the institution and runs to the next line
@@ -1799,10 +1799,23 @@ def _education_source_blocks(education, source_text):
         return []
     lines = str(source_text or "").splitlines()
     blocks = []
+    previous = ""
     for index, line in enumerate(lines):
+        preceding = previous
+        if line.strip():
+            previous = line.strip()
         if needle not in re.sub(r"\s+", " ", line).lower():
             continue
         block = [line]
+        has_degree = bool(_CV_EDU_QUALIFICATION_RE.search(line))
+        if for_labels:
+            # A degree can precede its school. Keep the institution at block[0]
+            # for date matching, but include the immediately preceding heading
+            # as identity evidence, never another school's line or ordinary prose.
+            if (needle not in re.sub(r"\s+", " ", preceding).lower()
+                    and _CV_EDU_QUALIFICATION_RE.match(_strip_leading_bullet_marker(preceding))):
+                block.append(preceding)
+                has_degree = True
         for following in lines[index + 1:index + 7]:
             text = following.strip()
             if not text:
@@ -1811,9 +1824,50 @@ def _education_source_blocks(education, source_text):
                 break
             if _cv_source_boundary_key(re.sub(r"[\s:]+$", "", text)) in _CV_SOURCE_SECTION_BOUNDARY_KEYS:
                 break
+            if for_labels and _CV_EDU_QUALIFICATION_RE.match(_strip_leading_bullet_marker(text)):
+                # The first degree below a school belongs to it; once identified,
+                # the next degree heading starts a different qualification.
+                if has_degree:
+                    break
+                has_degree = True
             block.append(text)
         blocks.append(block)
     return blocks
+
+
+def _education_qualification_spans(line):
+    """Keep a university-first prefix with its own degree across field separators."""
+    segments = []
+    for part in re.split(r"\s*;\s*", line):
+        if (segments and _CV_EDU_QUALIFICATION_RE.search(part)
+                and _CV_EDU_QUALIFICATION_RE.search(segments[-1])):
+            segments.append(part)
+        elif segments:
+            segments[-1] += " | " + part
+        else:
+            segments.append(part)
+    spans = []
+    for segment in segments:
+        cells = re.split(r"\s*\|\s*", segment)
+        institution_first = (len(cells) > 1 and not _CV_EDU_QUALIFICATION_RE.search(cells[0])
+                             and bool(_CV_EDU_QUALIFICATION_RE.search(cells[1])))
+        groups = [[cells[0]]]
+        for cell in cells[1:]:
+            if (_CV_EDU_QUALIFICATION_RE.search(cell)
+                    and _CV_EDU_QUALIFICATION_RE.search(" | ".join(groups[-1]))):
+                prefix = []
+                previous = groups[-1][-1]
+                if (institution_first and len(groups[-1]) > 1
+                        and not _CV_EDU_QUALIFICATION_RE.search(previous)
+                        and not _CV_EDU_BLOCK_YEAR_RE.search(previous)
+                        and not re.search(r"[:：=]|\b(?:graduated|graduation|class|major|" + _CV_EDU_GRADE_LABEL + r")\b", previous, re.I)
+                        and re.search(r"[^\W\d_]", previous)):
+                    prefix.append(groups[-1].pop())
+                groups.append(prefix + [cell])
+            else:
+                groups[-1].append(cell)
+        spans.extend(" | ".join(group) for group in groups)
+    return spans
 
 
 def _recover_education_source_labels(education, source_text):
@@ -1838,9 +1892,10 @@ def _recover_education_source_labels(education, source_text):
     # A single school block retains the established restoration behaviour.
     label_blocks = blocks
     if len(blocks) > 1:
+        label_blocks = _education_source_blocks(education, source_text, for_labels=True)
         degree_tokens = _cv_token_set(education.get("degree"))
         years = set(_CV_EDU_BLOCK_YEAR_RE.findall(str(education.get("date_range") or "")))
-        matches = [block for block in blocks
+        matches = [block for block in label_blocks
                    if (degree_tokens or years)
                    and (not degree_tokens or degree_tokens <= _cv_token_set("\n".join(block)))
                    and (not years or years <= set(_CV_EDU_BLOCK_YEAR_RE.findall(block[0])))]
@@ -1899,14 +1954,7 @@ def _recover_education_source_labels(education, source_text):
             # two years occur in different qualification segments.
             if len(set(_CV_EDU_BLOCK_YEAR_RE.findall(line))) > 1:
                 continue
-            parts = re.split(r"\s*[;|]\s*", line)
-            groups = [parts[0]]
-            for part in parts[1:]:
-                if (_CV_EDU_QUALIFICATION_RE.search(part)
-                        and _CV_EDU_QUALIFICATION_RE.search(groups[-1])):
-                    groups.append(part)
-                else:
-                    groups[-1] += " | " + part
+            groups = _education_qualification_spans(line)
             if len(groups) == 1:
                 own_lines.append(line)
                 continue
@@ -2538,15 +2586,23 @@ _CV_PAY_OWN_ATTACH_RE = re.compile(
 # Explicit recipients of the amount are payroll work, including one employee.
 # Keep this local to the pay phrase, and reject job-title continuations such as
 # "for the team leader role". Words in another comma/sentence cannot shelter pay.
-_CV_PAY_EMPLOYEE_RECIPIENT_RE = re.compile(
+_CV_PAY_EMPLOYEE_PHRASE = (
     r"(?:(?:with|on|at)\s+(?:an?\s+)?)?"
     r"(?:salary|pay|package|ctc|remuneration|compensation|wage|income)\b"
     r"(?:" + _CV_PAY_CONNECTOR + r"){0,4}\s*" + _CV_PAY_AMOUNT
     + r"(?:\s*" + _CV_PAY_PERIOD + r")?\s+"
     r"(?:per\s+|for\s+(?:(?:each|every|an?|the)\s+)?)(?:employee|worker)\b"
-    r"(?!\s+(?:role|position|job|of\s+the\s+candidate)\b)",
-    re.I,
 )
+_CV_PAY_EMPLOYEE_JOB_TITLE = (
+    # A short nominal title is not a payroll recipient: "employee relations
+    # manager role". Relative/action clauses stay work: "employee who works in
+    # a support role", "worker assigned to a construction job".
+    r"(?:['’]s)?(?:\s+|-)(?:(?!(?:who|that|which|a|an|the|in|on|to|for|with|at)\b)"
+    r"[A-Za-z][A-Za-z-]{0,39}\s+){0,5}(?:role|position|job)\b"
+)
+_CV_PAY_EMPLOYEE_RECIPIENT_RE = re.compile(
+    _CV_PAY_EMPLOYEE_PHRASE + r"(?!\s+of\s+the\s+candidate\b)(?!" + _CV_PAY_EMPLOYEE_JOB_TITLE + r")", re.I)
+_CV_PAY_EMPLOYEE_ROLE_RE = re.compile(_CV_PAY_EMPLOYEE_PHRASE + _CV_PAY_EMPLOYEE_JOB_TITLE, re.I)
 
 
 # How far either side of a pay phrase its words are read. A clause is a sentence
@@ -2583,7 +2639,8 @@ def _cv_pay_is_work_around(text, position):
         cut = attach.start()
     local = segment[cut:]
     opens_work = _cv_pay_opens_with_work_verb(segment)
-    own_attachment = bool(cut and _CV_PAY_OWN_ATTACH_RE.match(local))
+    own_attachment = bool(cut and (_CV_PAY_OWN_ATTACH_RE.match(local)
+                                  or _CV_PAY_EMPLOYEE_ROLE_RE.match(local)))
     # This already-unambiguous work case needs no recruiter/context scans.
     if opens_work and not own_attachment:
         return True

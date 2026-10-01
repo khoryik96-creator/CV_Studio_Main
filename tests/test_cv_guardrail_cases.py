@@ -17,6 +17,7 @@ import copy
 import json
 from pathlib import Path
 import re
+import time
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -112,6 +113,14 @@ class SourceRestoreGuardrails(unittest.TestCase):
                 out = reconcile._restore_labelled_company_qualifiers(parsed, "\n".join(case["lines"]))
                 self.assertEqual(out["work_experiences"][0]["company"], case["expect"], case["note"])
                 self.assertEqual(out["candidate"]["current_company"], case["expect"])
+
+    def test_degree_above_school_scan_stays_fast_on_repeated_input(self):
+        source = "Bachelor of Science\nContoso University\nMajor: Physics\n" * 20000
+        started = time.perf_counter()
+        blocks = normalize._education_source_blocks({"institution": "Contoso University"}, source, for_labels=True)
+        self.assertEqual(len(blocks), 20000)
+        self.assertEqual(blocks[0], ["Contoso University", "Bachelor of Science", "Major: Physics"])
+        self.assertLess(time.perf_counter() - started, 2.0)
 
     def test_education_restore(self):
         for case in _cases("education_restore"):

@@ -131,6 +131,8 @@ class GeneratedSalaryGuardrails(unittest.TestCase):
                      "Managed salary RM 9k with " * 1000, "Led total compensation of RM 2M for 3 staff and " * 600,
                      "expected salary of new hires and " * 1000,
                      "Managed payroll with salary RM 9k for each employee and " * 600,
+                     "Managed HR with salary RM 9k for the employee relations manager role and " * 600,
+                     "Managed payroll with salary RM 9k for each employee " + "support " * 10000,
                      "earnings of " * 3000, "The candidate receives " * 1500]:
             with self.subTest(text=text[:20]):
                 started = time.perf_counter()
@@ -163,6 +165,23 @@ class GeneratedSalaryGuardrails(unittest.TestCase):
                      "She receives {a} monthly in revenue."]
         dropped = [text for text in (t.format(a=a) for t, a in itertools.product(templates, AMOUNTS[:8]))
                    if normalize._cv_strip_pay_from_summary([text]) != [text]]
+        self.assertEqual(dropped[:10], [])
+
+    def test_employee_role_pay_is_removed_but_real_recipients_stay(self):
+        roles = ["employee relations manager role", "employee engagement role",
+                 "worker support manager position", "employee-relations manager role",
+                 "employee's liaison role", "employee health and safety manager role"]
+        missed = [text for text in (
+            f"{verb} HR with salary of {amount} for the {role}."
+            for verb, amount, role in itertools.product(WORK_VERBS[:6], AMOUNTS[:8], roles)
+        ) if normalize._cv_strip_pay_from_summary([text]) != []]
+        self.assertEqual(missed[:10], [])
+        recipients = ["each employee", "every worker", "each employee working on a client project",
+                      "every worker assigned to a construction job", "each employee who works in a support role"]
+        dropped = [text for text in (
+            f"{verb} payroll with salary of {amount} for {recipient}."
+            for verb, amount, recipient in itertools.product(WORK_VERBS[:6], AMOUNTS[:8], recipients)
+        ) if normalize._cv_strip_pay_from_summary([text]) != [text]]
         self.assertEqual(dropped[:10], [])
 
     def test_pay_related_work_is_kept(self):

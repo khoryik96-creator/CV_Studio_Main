@@ -11365,6 +11365,466 @@
     "date_range": ""
    },
    "note": "Qualification segment selection must use both institution and degree, and remain unique."
+  },
+  {
+   "id": "F3-degree-above-school-bachelor",
+   "rule": "F3",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Contoso University",
+    "degree": "Bachelor of Science",
+    "date_range": "2010",
+    "cgpa": "3.8 / 4.0"
+   },
+   "lines": [
+    "EDUCATION",
+    "Bachelor of Science",
+    "Contoso University | 2010",
+    "Major: Physics",
+    "GPA 3.8 / 4.0",
+    "Master of Science",
+    "Contoso University | 2015",
+    "Major: Finance",
+    "CGPA 3.8 / 4.0"
+   ],
+   "expect": {
+    "major": "Physics",
+    "cgpa": "GPA 3.8 / 4.0"
+   },
+   "note": "A degree heading above its institution belongs to that qualification, not the preceding block."
+  },
+  {
+   "id": "F3-degree-above-school-master-undated",
+   "rule": "F3",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Contoso University",
+    "degree": "Master of Science",
+    "date_range": "",
+    "cgpa": "3.8 / 4.0"
+   },
+   "lines": [
+    "EDUCATION",
+    "Bachelor of Science",
+    "Contoso University | 2010",
+    "Major: Physics",
+    "GPA 3.8 / 4.0",
+    "Master of Science",
+    "Contoso University | 2015",
+    "Major: Finance",
+    "CGPA 3.8 / 4.0"
+   ],
+   "expect": {
+    "major": "Finance",
+    "cgpa": "CGPA 3.8 / 4.0"
+   },
+   "note": "A degree heading above its institution belongs to that qualification, not the preceding block."
+  },
+  {
+   "id": "F3-degree-above-school-master-dated",
+   "rule": "F3",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Contoso University",
+    "degree": "Master of Science",
+    "date_range": "2015",
+    "cgpa": "3.8 / 4.0"
+   },
+   "lines": [
+    "EDUCATION",
+    "Bachelor of Science",
+    "Contoso University | 2010",
+    "Major: Physics",
+    "GPA 3.8 / 4.0",
+    "Master of Science",
+    "Contoso University | 2015",
+    "Major: Finance",
+    "CGPA 3.8 / 4.0"
+   ],
+   "expect": {
+    "major": "Finance",
+    "cgpa": "CGPA 3.8 / 4.0"
+   },
+   "note": "A degree heading above its institution belongs to that qualification, not the preceding block."
+  },
+  {
+   "id": "F3-degree-above-school-blanks",
+   "rule": "F3",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Contoso University",
+    "degree": "Master of Science",
+    "date_range": ""
+   },
+   "lines": [
+    "EDUCATION",
+    "Bachelor of Science",
+    "Contoso University | 2010",
+    "Major: Physics",
+    "Master of Science",
+    "",
+    "Contoso University | 2015",
+    "Major: Finance"
+   ],
+   "expect": {
+    "major": "Finance"
+   },
+   "note": "Blank lines do not assign the next degree heading to the previous school block."
+  },
+  {
+   "id": "F3-degree-above-school-existing-major",
+   "rule": "F3",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Contoso University",
+    "degree": "Master of Science",
+    "date_range": "",
+    "major": "Business Studies"
+   },
+   "lines": [
+    "EDUCATION",
+    "Bachelor of Science",
+    "Contoso University | 2010",
+    "Major: Physics",
+    "GPA 3.8 / 4.0",
+    "Master of Science",
+    "Contoso University | 2015",
+    "Major: Finance",
+    "CGPA 3.8 / 4.0"
+   ],
+   "expect": {
+    "major": "Business Studies"
+   },
+   "note": "A source recovery must not replace an existing major."
+  },
+  {
+   "id": "F3-degree-above-school-no-identity",
+   "rule": "F3",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Contoso University"
+   },
+   "lines": [
+    "EDUCATION",
+    "Bachelor of Science",
+    "Contoso University | 2010",
+    "Major: Physics",
+    "GPA 3.8 / 4.0",
+    "Master of Science",
+    "Contoso University | 2015",
+    "Major: Finance",
+    "CGPA 3.8 / 4.0"
+   ],
+   "expect": {
+    "major": null
+   },
+   "note": "Two degrees at one school still require identifying evidence."
+  },
+  {
+   "id": "F4-institution-first-multiple-0-bachelor",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Contoso University",
+    "degree": "Bachelor of Science",
+    "date_range": ""
+   },
+   "lines": [
+    "Contoso University | Bachelor of Science; Northwind University | Master of Science | Graduation: 2015"
+   ],
+   "expect": {
+    "date_range": ""
+   },
+   "note": "Institution-first qualifications retain their own school and graduation year."
+  },
+  {
+   "id": "F4-institution-first-multiple-0-master",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Northwind University",
+    "degree": "Master of Science",
+    "date_range": ""
+   },
+   "lines": [
+    "Contoso University | Bachelor of Science; Northwind University | Master of Science | Graduation: 2015"
+   ],
+   "expect": {
+    "date_range": "2015"
+   },
+   "note": "Institution-first qualifications retain their own school and graduation year."
+  },
+  {
+   "id": "F4-institution-first-multiple-1-bachelor",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Contoso University",
+    "degree": "Bachelor of Science",
+    "date_range": ""
+   },
+   "lines": [
+    "Contoso University | Bachelor of Science | Northwind University | Master of Science | Graduation: 2015"
+   ],
+   "expect": {
+    "date_range": ""
+   },
+   "note": "Institution-first qualifications retain their own school and graduation year."
+  },
+  {
+   "id": "F4-institution-first-multiple-1-master",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Northwind University",
+    "degree": "Master of Science",
+    "date_range": ""
+   },
+   "lines": [
+    "Contoso University | Bachelor of Science | Northwind University | Master of Science | Graduation: 2015"
+   ],
+   "expect": {
+    "date_range": "2015"
+   },
+   "note": "Institution-first qualifications retain their own school and graduation year."
+  },
+  {
+   "id": "F4-institution-first-multiple-2-bachelor",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Contoso University",
+    "degree": "Bachelor of Science",
+    "date_range": ""
+   },
+   "lines": [
+    "Contoso University | Bachelor of Science; Contoso University | Master of Science | Graduation: 2015"
+   ],
+   "expect": {
+    "date_range": ""
+   },
+   "note": "Institution-first qualifications retain their own school and graduation year."
+  },
+  {
+   "id": "F4-institution-first-multiple-2-master",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Contoso University",
+    "degree": "Master of Science",
+    "date_range": ""
+   },
+   "lines": [
+    "Contoso University | Bachelor of Science; Contoso University | Master of Science | Graduation: 2015"
+   ],
+   "expect": {
+    "date_range": "2015"
+   },
+   "note": "Institution-first qualifications retain their own school and graduation year."
+  },
+  {
+   "id": "F4-institution-first-multiple-3-bachelor",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Contoso University",
+    "degree": "Bachelor of Science",
+    "date_range": ""
+   },
+   "lines": [
+    "Contoso University | Bachelor of Science | Contoso University | Master of Science | Graduation: 2015"
+   ],
+   "expect": {
+    "date_range": ""
+   },
+   "note": "Institution-first qualifications retain their own school and graduation year."
+  },
+  {
+   "id": "F4-institution-first-multiple-3-master",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Contoso University",
+    "degree": "Master of Science",
+    "date_range": ""
+   },
+   "lines": [
+    "Contoso University | Bachelor of Science | Contoso University | Master of Science | Graduation: 2015"
+   ],
+   "expect": {
+    "date_range": "2015"
+   },
+   "note": "Institution-first qualifications retain their own school and graduation year."
+  },
+  {
+   "id": "F4-degree-first-field-control",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Contoso University",
+    "degree": "Bachelor of Science",
+    "date_range": ""
+   },
+   "lines": [
+    "Bachelor of Science | Contoso University | Graduation: 2015; Master of Science | Northwind University"
+   ],
+   "expect": {
+    "date_range": "2015"
+   },
+   "note": "Degree-first field layouts must retain the year before the next qualification."
+  },
+  {
+   "id": "F4-institution-first-field-control",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Contoso University",
+    "degree": "Bachelor of Science",
+    "date_range": ""
+   },
+   "lines": [
+    "Contoso University | Bachelor of Science | Graduation: 2015"
+   ],
+   "expect": {
+    "date_range": "2015"
+   },
+   "note": "A single institution-first qualification remains unchanged."
+  },
+  {
+   "id": "P1-recipient-job-title-0",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Led HR with salary of RM 12k for the employee relations manager role."
+   ],
+   "expect": [],
+   "note": "A role description after employee/worker is not a payroll recipient."
+  },
+  {
+   "id": "P1-recipient-job-title-1",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Led HR with salary of RM 12k for the employee engagement role."
+   ],
+   "expect": [],
+   "note": "A role description after employee/worker is not a payroll recipient."
+  },
+  {
+   "id": "P1-recipient-job-title-2",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Led HR with salary of RM 12k for the worker support manager position."
+   ],
+   "expect": [],
+   "note": "A role description after employee/worker is not a payroll recipient."
+  },
+  {
+   "id": "P1-recipient-job-title-3",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Led HR with salary of RM 12k for the employee-relations manager role."
+   ],
+   "expect": [],
+   "note": "A role description after employee/worker is not a payroll recipient."
+  },
+  {
+   "id": "P1-recipient-job-title-4",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Led HR with salary of RM 12k for the employee's liaison role."
+   ],
+   "expect": [],
+   "note": "A role description after employee/worker is not a payroll recipient."
+  },
+  {
+   "id": "P1-recipient-job-title-5",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Led HR with salary of RM 12k for the employee health and safety manager role."
+   ],
+   "expect": [],
+   "note": "A role description after employee/worker is not a payroll recipient."
+  },
+  {
+   "id": "P1-recipient-work-control-0",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed payroll with salary of RM 12k for each employee."
+   ],
+   "expect": [
+    "Managed payroll with salary of RM 12k for each employee."
+   ],
+   "note": "Explicit employee recipients remain work, including their relative clauses."
+  },
+  {
+   "id": "P1-recipient-work-control-1",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed payroll with salary of RM 12k for every worker."
+   ],
+   "expect": [
+    "Managed payroll with salary of RM 12k for every worker."
+   ],
+   "note": "Explicit employee recipients remain work, including their relative clauses."
+  },
+  {
+   "id": "P1-recipient-work-control-2",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed payroll with salary of RM 12k for each employee working on a client project."
+   ],
+   "expect": [
+    "Managed payroll with salary of RM 12k for each employee working on a client project."
+   ],
+   "note": "Explicit employee recipients remain work, including their relative clauses."
+  },
+  {
+   "id": "P1-recipient-work-control-3",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed payroll with salary of RM 12k for every worker assigned to a construction job."
+   ],
+   "expect": [
+    "Managed payroll with salary of RM 12k for every worker assigned to a construction job."
+   ],
+   "note": "Explicit employee recipients remain work, including their relative clauses."
+  },
+  {
+   "id": "P1-recipient-work-control-4",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed payroll with salary of RM 12k for each employee who works in a support role."
+   ],
+   "expect": [
+    "Managed payroll with salary of RM 12k for each employee who works in a support role."
+   ],
+   "note": "Explicit employee recipients remain work, including their relative clauses."
+  },
+  {
+   "id": "P1-recipient-job-title-lpa",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": ["Managed HR with salary of 12 LPA for the employee relations manager role."],
+   "expect": [],
+   "note": "An amount without a currency prefix is still candidate pay when attached to a job title."
+  },
+  {
+   "id": "P1-recipient-work-lpa",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": ["Managed payroll with salary of 12 LPA for each employee who works in a support role."],
+   "expect": ["Managed payroll with salary of 12 LPA for each employee who works in a support role."],
+   "note": "Unprefixed amounts for actual employee recipients remain payroll work."
   }
  ]
 }

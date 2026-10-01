@@ -318,19 +318,23 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **CV guardrail corrective — v24.6.429–430, UNMERGED.**
-  Branch `codex/pr220-v24.6.430-cv-structure-safety` (PR number provisional),
+- **CV guardrail corrective — v24.6.429–431, UNMERGED.**
+  Branch `codex/pr220-v24.6.431-qualification-pay-guards` (PR number provisional),
   based on merged master `cb0bcae`. v429 isolates test receipts/state, binds
   education major/grade labels to their qualification, keeps employee-pay work
   achievements and filters explicit candidate earnings. v430 preserves the
   entire provider history when an R7 place header is uncertain, rejects
   reporting/working phrases with intervening adverbs as titles, and binds a
-  graduation year to its own uniquely identified qualification segment.
+  graduation year to its own uniquely identified qualification segment. v431
+  binds a degree heading above the school to that qualification's major/grade,
+  keeps university-first prefixes in their own graduation span, and rejects
+  employee/worker job-title continuations as payroll recipients. Real recipients
+  with relative/action clauses remain work, including unprefixed LPA amounts.
   Existing fixture expectations are unchanged; new cases and real parse/Word
   regressions protect all three follow-up findings. No routes, schemas,
   dependencies, credentials, live AI calls or Word layout changes. Protected
   compilation remains manual; no PR or merge without owner direction. See
-  `cv_studio_v24_6_430_cv_structure_safety_qa_report.md` for the full gate,
+  `cv_studio_v24_6_431_qualification_pay_guards_qa_report.md` for the full gate,
   differential/corpus/mutation evidence and existing updater fixture limits.
 
 - **Title-above rows follow-up — v24.6.428, MERGED via PR #219 as `cb0bcae`.** Starts at merged master
