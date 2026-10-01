@@ -17,6 +17,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 import xml.etree.ElementTree as ET
 import zipfile
 
@@ -24,16 +25,19 @@ from owner_build_tools.build_protected import write_test_receipt
 
 ROOT = Path(__file__).resolve().parents[1]
 _MODULE_TEMPORARY = tempfile.TemporaryDirectory(prefix="cvstudio-source-detail-")
-_ORIGINAL_DATABASE_OVERRIDE = os.environ.get("CVSTUDIO_DB_PATH")
-os.environ["CVSTUDIO_DB_PATH"] = str(Path(_MODULE_TEMPORARY.name) / "state" / "cv_studio.sqlite3")
-write_test_receipt(ROOT)
-try:
+with mock.patch.dict(os.environ, {
+    "LOCALAPPDATA": _MODULE_TEMPORARY.name, "APPDATA": _MODULE_TEMPORARY.name,
+    "CVSTUDIO_DB_PATH": str(Path(_MODULE_TEMPORARY.name) / "state" / "cv_studio.sqlite3"),
+    "CVSTUDIO_STATE_DIR": str(Path(_MODULE_TEMPORARY.name) / "state"),
+    "CVSTUDIO_JOB_STATE_PATH": str(Path(_MODULE_TEMPORARY.name) / "jobs.json"),
+    "SALARY_COMPARISON_DATA_DIR": str(Path(_MODULE_TEMPORARY.name) / "salary"),
+}), mock.patch("pathlib.Path.home", return_value=Path(_MODULE_TEMPORARY.name)), \
+        mock.patch("os.path.expanduser", side_effect=lambda path: (
+            str(Path(_MODULE_TEMPORARY.name) / path[2:]) if path.startswith("~/") else path)):
+    write_test_receipt(ROOT, environment={
+        "HOME": _MODULE_TEMPORARY.name, "LOCALAPPDATA": _MODULE_TEMPORARY.name,
+    })
     import app
-finally:
-    if _ORIGINAL_DATABASE_OVERRIDE is None:
-        os.environ.pop("CVSTUDIO_DB_PATH", None)
-    else:
-        os.environ["CVSTUDIO_DB_PATH"] = _ORIGINAL_DATABASE_OVERRIDE
 
 HEADERS = {"Origin": "http://127.0.0.1:5000", "X-CV-Studio-Request": "1"}
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
@@ -176,6 +180,24 @@ class SourceDetailRestoreTests(unittest.TestCase):
     def test_an_entry_without_a_major_prints_no_major_line(self):
         lines = self._docx_text(_provider_parse())
         self.assertFalse([line for line in lines if line.startswith("Major:")])
+
+    def test_two_degrees_at_one_school_keep_their_own_major_in_word(self):
+        parsed = _provider_parse()
+        parsed["education"] = [
+            {"institution": "Northwind University", "degree": "Bachelor of Business", "date_range": "2018"},
+            {"institution": "Northwind University", "degree": "Master of Science", "date_range": "2022"},
+        ]
+        source = SOURCE.split("Education")[0] + "\nEducation\n" + "\n".join([
+            "2018 Northwind University | Bachelor of Business",
+            "2022 Northwind University | Master of Science", "Major: Data Science",
+        ])
+        data = self._parse(parsed, source=source)["data"]
+        by_degree = {entry["degree"]: entry for entry in data["education"]}
+        self.assertNotIn("major", by_degree["Bachelor of Business"])
+        self.assertEqual(by_degree["Master of Science"]["major"], "Data Science")
+        lines = self._docx_text(data)
+        self.assertEqual(lines.count("Major: Data Science"), 1)
+        self.assertEqual(lines[lines.index("Master of Science") + 1], "Major: Data Science")
 
 
 if __name__ == "__main__":

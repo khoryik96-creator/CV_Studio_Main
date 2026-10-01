@@ -129,12 +129,88 @@ class GeneratedSalaryGuardrails(unittest.TestCase):
                      "." * 40000, "!?" * 20000, "Sr. " * 20000, "A. " * 20000, "e.g. " * 20000,
                      # many pay phrases in one long clause, each judged by the words around it
                      "Managed salary RM 9k with " * 1000, "Led total compensation of RM 2M for 3 staff and " * 600,
-                     "expected salary of new hires and " * 1000]:
+                     "expected salary of new hires and " * 1000,
+                     "Managed payroll with salary RM 9k for each employee and " * 600,
+                     "Managed HR with salary RM 9k for the employee relations manager role and " * 600,
+                     "Managed payroll with salary RM 9k for each employee " + "support " * 10000,
+                     "earnings of " * 3000, "The candidate receives " * 1500,
+                     "Led HR and the candidate receives " * 1500,
+                     "Analysed performance and her earnings are " * 1500]:
             with self.subTest(text=text[:20]):
                 started = time.perf_counter()
                 normalize._cv_strip_pay_from_summary([text])
                 normalize._cv_strip_pay_from_summary_text("- " + text)
                 self.assertLess(time.perf_counter() - started, 2.0)
+
+    def test_explicit_earnings_and_candidate_receipts_are_removed(self):
+        templates = ["Earnings of {a}{p}.", "Monthly earnings of {a}.", "Her earnings are {a}{p}.",
+                     "His earnings are {a}{p}.", "The candidate receives {a}{p}.",
+                     "She receives {a}{p}.", "He makes {a}{p}.", "The candidate gets {a}{p}.",
+                     "Recruiter with earnings of {a}{p}."]
+        missed = [text for text in (t.format(a=a, p=p) for t, a, p in
+                  itertools.product(templates, AMOUNTS[:8], PERIODS[1:]))
+                  if normalize._cv_strip_pay_from_summary([text]) != []]
+        self.assertEqual(missed[:10], [])
+
+    def test_pay_for_explicit_employee_recipients_stays(self):
+        templates = ["Managed payroll with salary of {a} for each employee.",
+                     "Processed payroll with a salary of {a} per employee.",
+                     "Administered payroll with salary of {a} for a worker.",
+                     "Reviewed payroll with salary of {a} for every employee."]
+        dropped = [text for text in (t.format(a=a) for t, a in itertools.product(templates, AMOUNTS[:8]))
+                   if normalize._cv_strip_pay_from_summary([text]) != [text]]
+        self.assertEqual(dropped[:10], [])
+
+    def test_explicit_business_earnings_and_receipts_stay(self):
+        templates = ["Company earnings of {a} monthly.", "Business earnings of {a} monthly.",
+                     "The candidate receives {a} per month in client fees.",
+                     "She receives {a} monthly in revenue."]
+        dropped = [text for text in (t.format(a=a) for t, a in itertools.product(templates, AMOUNTS[:8]))
+                   if normalize._cv_strip_pay_from_summary([text]) != [text]]
+        self.assertEqual(dropped[:10], [])
+
+    def test_work_openings_cannot_hide_explicit_candidate_pay(self):
+        subjects = ["the candidate receives", "she receives", "he makes", "the candidate gets",
+                    "her earnings are", "his monthly earnings are", "my earnings are",
+                    "the candidate's earnings are"]
+        missed = [text for text in (
+            f"{verb} performance {joiner} {subject} {amount}{period}."
+            for verb, joiner, subject, amount, period in itertools.product(
+                WORK_VERBS[:6], ["and", "but", "while"], subjects, AMOUNTS[:8], PERIODS[1:])
+        ) if normalize._cv_strip_pay_from_summary([text]) != []]
+        self.assertEqual(missed[:10], [])
+
+    def test_work_openings_keep_business_and_other_party_pay(self):
+        templates = ["{v} performance and company earnings are {a}{p}.",
+                     "{v} performance and business earnings of {a}{p}.",
+                     "{v} sales and the candidate receives {a}{p} in client fees.",
+                     "{v} funding and she receives {a}{p} for grants.",
+                     "{v} her earnings of {a}{p} for the client.",
+                     "{v} payroll and each employee receives {a}{p}.",
+                     "{v} payroll for 400 employees and they receive {a}{p}.",
+                     "{v} portfolio companies and their earnings are {a}{p}."]
+        dropped = [text for text in (
+            t.format(v=v, a=a, p=p) for t, v, a, p in itertools.product(
+                templates, WORK_VERBS[:6], AMOUNTS[:8], PERIODS[1:])
+        ) if normalize._cv_strip_pay_from_summary([text]) != [text]]
+        self.assertEqual(dropped[:10], [])
+
+    def test_employee_role_pay_is_removed_but_real_recipients_stay(self):
+        roles = ["employee relations manager role", "employee engagement role",
+                 "worker support manager position", "employee-relations manager role",
+                 "employee's liaison role", "employee health and safety manager role"]
+        missed = [text for text in (
+            f"{verb} HR with salary of {amount} for the {role}."
+            for verb, amount, role in itertools.product(WORK_VERBS[:6], AMOUNTS[:8], roles)
+        ) if normalize._cv_strip_pay_from_summary([text]) != []]
+        self.assertEqual(missed[:10], [])
+        recipients = ["each employee", "every worker", "each employee working on a client project",
+                      "every worker assigned to a construction job", "each employee who works in a support role"]
+        dropped = [text for text in (
+            f"{verb} payroll with salary of {amount} for {recipient}."
+            for verb, amount, recipient in itertools.product(WORK_VERBS[:6], AMOUNTS[:8], recipients)
+        ) if normalize._cv_strip_pay_from_summary([text]) != [text]]
+        self.assertEqual(dropped[:10], [])
 
     def test_pay_related_work_is_kept(self):
         dropped = [

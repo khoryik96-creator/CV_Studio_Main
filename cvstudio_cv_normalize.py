@@ -1768,6 +1768,14 @@ _CV_EDU_MAJOR_RE = re.compile(
 # The label alone in its cell, with the value in the next one: "Major | Finance".
 _CV_EDU_MAJOR_LABEL_CELL_RE = re.compile(r"^\s*(?:majors?|speciali[sz]ation)\s*[:\uff1a]?\s*$", re.I)
 _CV_EDU_BLOCK_YEAR_RE = re.compile(r"\b(?:19|20)\d{2}\b")
+# A new qualification after a field separator starts its own graduation span.
+# Ordinary fields (institution, grade, Graduation: ...) remain with the degree.
+_CV_EDU_QUALIFICATION_RE = re.compile(
+    r"\b(?:(?:bachelor(?:s|['’]s)?|master(?:s|['’]s)?|doctor(?:ate)?|diploma|certificate)"
+    r"(?=\s+(?:of|in|degree|science|arts|business|engineering|management|commerce|law)\b"
+    r"|\s*[-–—:]|$)|associate\s+of|[BM]\.?(?:Sc|Eng|Tech|BA|Com)\.?|MBA|Ph\.?D\.?)\b",
+    re.I,
+)
 # "graduated 2007", "graduated in June 2007", "Graduation: 2007", "Class of 2007".
 # The year has to follow the word directly: "graduated students ... in 2019" is not
 # a graduation date.
@@ -1779,7 +1787,7 @@ _CV_EDU_GRADUATED_RE = re.compile(
 )
 
 
-def _education_source_blocks(education, source_text):
+def _education_source_blocks(education, source_text, *, for_labels=False):
     """The source lines under each place this qualification's institution appears.
 
     A block starts at the line naming the institution and runs to the next line
@@ -1791,10 +1799,23 @@ def _education_source_blocks(education, source_text):
         return []
     lines = str(source_text or "").splitlines()
     blocks = []
+    previous = ""
     for index, line in enumerate(lines):
+        preceding = previous
+        if line.strip():
+            previous = line.strip()
         if needle not in re.sub(r"\s+", " ", line).lower():
             continue
         block = [line]
+        has_degree = bool(_CV_EDU_QUALIFICATION_RE.search(line))
+        if for_labels:
+            # A degree can precede its school. Keep the institution at block[0]
+            # for date matching, but include the immediately preceding heading
+            # as identity evidence, never another school's line or ordinary prose.
+            if (needle not in re.sub(r"\s+", " ", preceding).lower()
+                    and _CV_EDU_QUALIFICATION_RE.match(_strip_leading_bullet_marker(preceding))):
+                block.append(preceding)
+                has_degree = True
         for following in lines[index + 1:index + 7]:
             text = following.strip()
             if not text:
@@ -1803,9 +1824,50 @@ def _education_source_blocks(education, source_text):
                 break
             if _cv_source_boundary_key(re.sub(r"[\s:]+$", "", text)) in _CV_SOURCE_SECTION_BOUNDARY_KEYS:
                 break
+            if for_labels and _CV_EDU_QUALIFICATION_RE.match(_strip_leading_bullet_marker(text)):
+                # The first degree below a school belongs to it; once identified,
+                # the next degree heading starts a different qualification.
+                if has_degree:
+                    break
+                has_degree = True
             block.append(text)
         blocks.append(block)
     return blocks
+
+
+def _education_qualification_spans(line):
+    """Keep a university-first prefix with its own degree across field separators."""
+    segments = []
+    for part in re.split(r"\s*;\s*", line):
+        if (segments and _CV_EDU_QUALIFICATION_RE.search(part)
+                and _CV_EDU_QUALIFICATION_RE.search(segments[-1])):
+            segments.append(part)
+        elif segments:
+            segments[-1] += " | " + part
+        else:
+            segments.append(part)
+    spans = []
+    for segment in segments:
+        cells = re.split(r"\s*\|\s*", segment)
+        institution_first = (len(cells) > 1 and not _CV_EDU_QUALIFICATION_RE.search(cells[0])
+                             and bool(_CV_EDU_QUALIFICATION_RE.search(cells[1])))
+        groups = [[cells[0]]]
+        for cell in cells[1:]:
+            if (_CV_EDU_QUALIFICATION_RE.search(cell)
+                    and _CV_EDU_QUALIFICATION_RE.search(" | ".join(groups[-1]))):
+                prefix = []
+                previous = groups[-1][-1]
+                if (institution_first and len(groups[-1]) > 1
+                        and not _CV_EDU_QUALIFICATION_RE.search(previous)
+                        and not _CV_EDU_BLOCK_YEAR_RE.search(previous)
+                        and not re.search(r"[:：=]|\b(?:graduated|graduation|class|major|" + _CV_EDU_GRADE_LABEL + r")\b", previous, re.I)
+                        and re.search(r"[^\W\d_]", previous)):
+                    prefix.append(groups[-1].pop())
+                groups.append(prefix + [cell])
+            else:
+                groups[-1].append(cell)
+        spans.extend(" | ".join(group) for group in groups)
+    return spans
 
 
 def _recover_education_source_labels(education, source_text):
@@ -1814,8 +1876,9 @@ def _recover_education_source_labels(education, source_text):
     A provider asked to copy the CGPA "exactly as written" can still return only
     the figure -- "2.0 / 4.0" from "CGPA 2.0 / 4.0" -- and a "Major" line under a
     qualification has no field of its own unless one is given. Both are read only
-    from the lines under this entry's institution in the source, and only when
-    every place the institution appears agrees; otherwise nothing is changed.
+    from the lines under this entry's institution in the source. Repeated
+    institutions need a uniquely identified qualification block; conflicting
+    or missing evidence leaves the labels unchanged.
     """
     if not isinstance(education, dict) or not str(source_text or "").strip():
         return education
@@ -1823,12 +1886,27 @@ def _recover_education_source_labels(education, source_text):
     if not blocks:
         return education
 
+    # A repeated school is not a shared qualification. Use a unique block
+    # grounded in this entry's degree/date for its labels; never copy a master's
+    # major or grade label onto a bachelor's degree at the same university.
+    # A single school block retains the established restoration behaviour.
+    label_blocks = blocks
+    if len(blocks) > 1:
+        label_blocks = _education_source_blocks(education, source_text, for_labels=True)
+        degree_tokens = _cv_token_set(education.get("degree"))
+        years = set(_CV_EDU_BLOCK_YEAR_RE.findall(str(education.get("date_range") or "")))
+        matches = [block for block in label_blocks
+                   if (degree_tokens or years)
+                   and (not degree_tokens or degree_tokens <= _cv_token_set("\n".join(block)))
+                   and (not years or years <= set(_CV_EDU_BLOCK_YEAR_RE.findall(block[0])))]
+        label_blocks = matches if len(matches) == 1 else []
+
     cgpa = str(education.get("cgpa") or "").strip()
     # Only a value with no grade label of its own: "2.0 / 4.0", "3.5 out of 4.0".
     if cgpa and not re.search(r"\b" + _CV_EDU_GRADE_LABEL + r"\b", cgpa, re.I):
         figure = r"\s*".join(re.escape(part) for part in cgpa.split())
         labels = set()
-        for block in blocks:
+        for block in label_blocks:
             for line in block:
                 match = re.search(
                     r"\b(?P<label>" + _CV_EDU_GRADE_LABEL + r")\b\s*[:\uff1a=\-]?\s*" + figure + r"(?![\d.])",
@@ -1843,7 +1921,7 @@ def _recover_education_source_labels(education, source_text):
 
     if not str(education.get("major") or "").strip():
         majors = set()
-        for block in blocks:
+        for block in label_blocks:
             for line in block:
                 cells = line.split("|")
                 for position, cell in enumerate(cells):
@@ -1867,8 +1945,26 @@ def _recover_education_source_labels(education, source_text):
         # the institution's own line is read, and when the entry has a degree, only
         # a line naming it: a school's line for another qualification carries that
         # qualification's year.
-        own_lines = [block[0] for block in blocks]
         degree_tokens = _cv_token_set(education.get("degree"))
+        institution = re.sub(r"\s+", " ", str(education.get("institution") or "")).strip().lower()
+        own_lines = []
+        for block in blocks:
+            line = block[0]
+            # Retain the established whole-line ambiguity guard, even when its
+            # two years occur in different qualification segments.
+            if len(set(_CV_EDU_BLOCK_YEAR_RE.findall(line))) > 1:
+                continue
+            groups = _education_qualification_spans(line)
+            if len(groups) == 1:
+                own_lines.append(line)
+                continue
+            # A year in the master's segment cannot date the bachelor's entry,
+            # even when PDF extraction placed both schools on one physical line.
+            matches = [group for group in groups
+                       if institution in re.sub(r"\s+", " ", group).lower()
+                       and (not degree_tokens or degree_tokens <= _cv_token_set(group))]
+            if len(matches) == 1:
+                own_lines.append(matches[0])
         if degree_tokens:
             own_lines = [line for line in own_lines if degree_tokens <= _cv_token_set(line)]
         years = set()
@@ -2180,6 +2276,37 @@ _CV_PAY_AMOUNT_RE = re.compile(
       + r"\s*" + _CV_PAY_PERIOD,
     re.I,
 )
+# These additional formats get one pass, not another alternative in the
+# overlapping amount-search loop: many pay phrases on a pasted line stay fast.
+_CV_PAY_ADDITIONAL_AMOUNT_RE = re.compile(
+    r"\b(?:(?:monthly|annual|yearly|gross|net|total)\s+)?earnings\s+(?:of|are|is)\s+"
+    + _CV_PAY_AMOUNT_MARKED
+    + r"|\b(?:(?:the\s+)?candidate|he|she|i|they)\s+(?:receiv(?:es|e|ed)|makes?|gets?|getting)\s+"
+    r"(?:about\s+|around\s+|approx(?:imately|\.)?\s*)?" + _CV_PAY_AMOUNT_MARKED + r"\s*" + _CV_PAY_PERIOD
+    + r"(?!\s+(?:in|for)\s+(?:client\s+)?(?:fees|revenue|billings?|funding|grants?|investments?)\b)",
+    re.I,
+)
+# An independent personal-pay clause is not a work achievement just because
+# the sentence opens with "Led". Require its own subject at a clause opening;
+# "Analysed her earnings ... for the client" remains a work-verb object.
+_CV_PAY_SUBJECT_CLAUSE_RE = re.compile(
+    r"(?:^\W*|\b(?:and|but|while|whereas)\s+)(?:"
+    # "They/their" can refer to employees or companies in a work sentence;
+    # leave those ambiguous subjects to the established contextual matchers.
+    r"(?:(?:the\s+)?candidate|he|she|i)\s+(?:receiv(?:es|e|ed)|makes?|gets?|getting)\s+"
+    r"(?:about\s+|around\s+|approx(?:imately|\.)?\s*)?" + _CV_PAY_AMOUNT_MARKED + r"\s*" + _CV_PAY_PERIOD
+    # A period abbreviation can backtrack before its final dot ("p.a.").
+    # Business qualifiers must still apply to that complete period.
+    + r"(?!\.?\s+(?:in|for)\s+(?:client\s+)?(?:fees|revenue|billings?|funding|grants?|investments?)\b)"
+    + r"|(?:my|his|her|(?:the\s+)?candidate['\u2019]s)\s+"
+      r"(?:(?:monthly|annual|yearly|gross|net|total)\s+)?earnings\s+(?:of|are|is)\s+"
+      + _CV_PAY_AMOUNT_MARKED + r")",
+    re.I,
+)
+_CV_PAY_ORG_EARNINGS_RE = re.compile(
+    r"\b(?:company|business|corporate|group|firm|bank|client|portfolio)\s+"
+    r"(?:(?:monthly|annual|yearly|gross|net|total)\s+)?earnings\b", re.I,
+)
 # Money or people that are the organisation's, or a job title or date, in the same
 # sentence: the figure describes work, not the candidate's pay.
 _CV_PAY_WORK_RE = re.compile(
@@ -2465,13 +2592,34 @@ _CV_PAY_WORD_RE = re.compile(r"[A-Za-z]+(?:['\u2019-][A-Za-z]+)*")
 # ("with total compensation up to $250k").
 _CV_PAY_OWN_ATTACH_RE = re.compile(
     r"(?:with|on|at)\s+(?:an?\s+|my\s+)?(?:(?:monthly|annual|basic|base|gross|nett?|total|current)\s+)?"
-    r"(?:salary|pay|package|ctc|remuneration|compensation|wage|income)\b(?!\s+(?:of|for)\s+(?:the\s+)?"
+    r"(?:salary|pay|package|ctc|remuneration|compensation|wage|income|earnings)\b(?!\s+(?:of|for)\s+(?:the\s+)?"
     r"(?:\d|team|staff|employees|workers|hires|candidates))"
     # A range is other people's: "with total compensation up to $250k".
     r"(?!\s+(?:up\s+to|above|over|below|under|averaging|ranging|between|from|starting|of\s+up\s+to)\b)"
     r"|earning\b|drawing\b",
     re.I,
 )
+
+# Explicit recipients of the amount are payroll work, including one employee.
+# Keep this local to the pay phrase, and reject job-title continuations such as
+# "for the team leader role". Words in another comma/sentence cannot shelter pay.
+_CV_PAY_EMPLOYEE_PHRASE = (
+    r"(?:(?:with|on|at)\s+(?:an?\s+)?)?"
+    r"(?:salary|pay|package|ctc|remuneration|compensation|wage|income)\b"
+    r"(?:" + _CV_PAY_CONNECTOR + r"){0,4}\s*" + _CV_PAY_AMOUNT
+    + r"(?:\s*" + _CV_PAY_PERIOD + r")?\s+"
+    r"(?:per\s+|for\s+(?:(?:each|every|an?|the)\s+)?)(?:employee|worker)\b"
+)
+_CV_PAY_EMPLOYEE_JOB_TITLE = (
+    # A short nominal title is not a payroll recipient: "employee relations
+    # manager role". Relative/action clauses stay work: "employee who works in
+    # a support role", "worker assigned to a construction job".
+    r"(?:['’]s)?(?:\s+|-)(?:(?!(?:who|that|which|a|an|the|in|on|to|for|with|at)\b)"
+    r"[A-Za-z][A-Za-z-]{0,39}\s+){0,5}(?:role|position|job)\b"
+)
+_CV_PAY_EMPLOYEE_RECIPIENT_RE = re.compile(
+    _CV_PAY_EMPLOYEE_PHRASE + r"(?!\s+of\s+the\s+candidate\b)(?!" + _CV_PAY_EMPLOYEE_JOB_TITLE + r")", re.I)
+_CV_PAY_EMPLOYEE_ROLE_RE = re.compile(_CV_PAY_EMPLOYEE_PHRASE + _CV_PAY_EMPLOYEE_JOB_TITLE, re.I)
 
 
 # How far either side of a pay phrase its words are read. A clause is a sentence
@@ -2507,15 +2655,30 @@ def _cv_pay_is_work_around(text, position):
     for attach in _CV_PAY_ATTACH_RE.finditer(segment, 0, offset + 1):
         cut = attach.start()
     local = segment[cut:]
+    opens_work = _cv_pay_opens_with_work_verb(segment)
+    own_attachment = bool(cut and (_CV_PAY_OWN_ATTACH_RE.match(local)
+                                  or _CV_PAY_EMPLOYEE_ROLE_RE.match(local)))
+    # This already-unambiguous work case needs no recruiter/context scans.
+    if opens_work and not own_attachment:
+        return True
     if _CV_PAY_RECRUITER_RE.search(segment) and not _CV_PAY_OWN_VERB_RE.search(segment):
         return True
     # "Leads a budget of RM 5M with salary RM 20k": one pay attached to the person
     # is theirs, whatever work the sentence opened with.
-    if cut and _CV_PAY_OWN_ATTACH_RE.match(local):
+    if own_attachment:
+        # Match from the attachment across the exact amount: its thousands
+        # comma is not a clause break, but a real comma before "for" still is.
+        if opens_work:
+            recipient_text = text[begin + cut:begin + cut + _CV_PAY_CONTEXT_CHARS]
+            recipient = _CV_PAY_EMPLOYEE_RECIPIENT_RE.match(recipient_text)
+            if recipient and position - begin - cut < recipient.end():
+                return True
         return False
-    if _cv_pay_opens_with_work_verb(segment) or _CV_PAY_OTHERS_PAY_RE.search(segment):
+    if _CV_PAY_OTHERS_PAY_RE.search(segment):
         return True
     if _CV_PAY_WORK_RE.search(local):
+        return True
+    if "earnings" in local.lower() and _CV_PAY_ORG_EARNINGS_RE.search(local):
         return True
     before = _CV_PAY_WORD_RE.findall(segment[cut:offset])[-3:]
     return any(word.lower() in _CV_PAY_WORK_VERBS for word in before)
@@ -2524,6 +2687,13 @@ def _cv_pay_is_work_around(text, position):
 # A plain year after "from", "since" and the like is a date, not an amount:
 # "Head of Compensation from 2019".
 _CV_PAY_DATED_YEAR_RE = re.compile(r"\b(?:from|since|between|until|till|in)\s+(?:19|20)\d{2}\W*$", re.I)
+# Every amount form needs a digit; the no-amount forms need a pay word. Avoid
+# running all matchers on every short fragment in a long abbreviation chain.
+_CV_PAY_POSSIBLE_RE = re.compile(
+    r"\d|salar|pay|package|remuneration|ctc|compensation|wage|income|earning|"
+    r"base|basic|bonus|commission|allowance", re.I,
+)
+_CV_PAY_TERM_START_RE = re.compile(_CV_PAY_TERM + r"\b", re.I)
 
 
 def _cv_states_candidate_pay(text):
@@ -2533,13 +2703,20 @@ def _cv_states_candidate_pay(text):
     anywhere in the clause (_cv_pay_is_work_around).
     """
     matchable = _cv_pay_matchable(text)
-    if _CV_PAY_OWN_RE.search(matchable):
+    if not _CV_PAY_POSSIBLE_RE.search(matchable):
+        return False
+    if _CV_PAY_OWN_RE.search(matchable) or _CV_PAY_SUBJECT_CLAUSE_RE.search(matchable):
         return True
     for match in _CV_PAY_OWN_CURRENT_RE.finditer(matchable):
         begin, finish = _cv_pay_segment(matchable, match.start())
         segment = matchable[begin:finish]
         if not (_cv_pay_opens_with_work_verb(segment) and _CV_PAY_WORK_RE.search(segment)):
             return True
+    lowered = matchable.lower()
+    if any(word in lowered for word in ("earnings", "receiv", "make", "get")):
+        for match in _CV_PAY_ADDITIONAL_AMOUNT_RE.finditer(matchable):
+            if not _cv_pay_is_work_around(matchable, match.start()):
+                return True
     # Every place a pay phrase starts is judged, including one inside a longer
     # match: "RM 5M with salary" must not hide "salary RM 20k".
     position = 0
@@ -2552,6 +2729,11 @@ def _cv_states_candidate_pay(text):
             continue
         if not _cv_pay_is_work_around(matchable, match.start()):
             return True
+        # A leading pay term's direct amount has no inner pay phrase to visit.
+        # Reverse matches ("RM 5M with salary") still restart one character on,
+        # so they cannot hide the embedded "salary RM 20k".
+        if _CV_PAY_TERM_START_RE.match(matchable, match.start()):
+            position = match.end()
     for match in _CV_PAY_OWN_TALK_RE.finditer(matchable):
         begin, finish = _cv_pay_segment(matchable, match.start())
         if not _cv_pay_opens_with_work_verb(matchable[begin:finish]):

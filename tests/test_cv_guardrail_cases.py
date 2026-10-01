@@ -13,29 +13,19 @@ a change pass without the owner's agreement: a failing case here means the chang
 breaks a behaviour that was deliberately chosen.
 """
 
+import copy
 import json
-import os
 from pathlib import Path
 import re
-import tempfile
+import time
 import unittest
 
-from owner_build_tools.build_protected import write_test_receipt
-
 ROOT = Path(__file__).resolve().parents[1]
-_MODULE_TEMPORARY = tempfile.TemporaryDirectory(prefix="cvstudio-cv-guardrails-")
-_ORIGINAL_DATABASE_OVERRIDE = os.environ.get("CVSTUDIO_DB_PATH")
-os.environ["CVSTUDIO_DB_PATH"] = str(Path(_MODULE_TEMPORARY.name) / "state" / "cv_studio.sqlite3")
-write_test_receipt(ROOT)
-try:
-    import cvstudio_cv_fidelity as fidelity
-    import cvstudio_cv_normalize as normalize
-    import cvstudio_cv_reconcile as reconcile
-finally:
-    if _ORIGINAL_DATABASE_OVERRIDE is None:
-        os.environ.pop("CVSTUDIO_DB_PATH", None)
-    else:
-        os.environ["CVSTUDIO_DB_PATH"] = _ORIGINAL_DATABASE_OVERRIDE
+
+# These are pure modules: no installation receipt or application state needed.
+import cvstudio_cv_fidelity as fidelity
+import cvstudio_cv_normalize as normalize
+import cvstudio_cv_reconcile as reconcile
 
 CASES = json.loads((ROOT / "tests" / "fixtures" / "cv_guardrail_cases.json").read_text(encoding="utf-8"))["cases"]
 GUARDRAILS_DOC = (ROOT / "CV_SOURCE_CHECK_GUARDRAILS.md").read_text(encoding="utf-8")
@@ -61,6 +51,14 @@ class GuardrailRegistryTests(unittest.TestCase):
 
 
 class WorkRowReaderGuardrails(unittest.TestCase):
+    def test_incomplete_work_reconciliation_keeps_the_provider_history(self):
+        for case in _cases("work_reconcile"):
+            with self.subTest(case=case["id"]):
+                result = reconcile._reconcile_work_experience_with_authoritative_table(
+                    copy.deepcopy(case["parsed"]), "\n".join(case["lines"])
+                )
+                self.assertEqual(result, case["expect"], case["note"])
+
     def test_rows(self):
         for case in _cases("rows"):
             with self.subTest(case=case["id"]):
@@ -115,6 +113,14 @@ class SourceRestoreGuardrails(unittest.TestCase):
                 out = reconcile._restore_labelled_company_qualifiers(parsed, "\n".join(case["lines"]))
                 self.assertEqual(out["work_experiences"][0]["company"], case["expect"], case["note"])
                 self.assertEqual(out["candidate"]["current_company"], case["expect"])
+
+    def test_degree_above_school_scan_stays_fast_on_repeated_input(self):
+        source = "Bachelor of Science\nContoso University\nMajor: Physics\n" * 20000
+        started = time.perf_counter()
+        blocks = normalize._education_source_blocks({"institution": "Contoso University"}, source, for_labels=True)
+        self.assertEqual(len(blocks), 20000)
+        self.assertEqual(blocks[0], ["Contoso University", "Bachelor of Science", "Major: Physics"])
+        self.assertLess(time.perf_counter() - started, 2.0)
 
     def test_education_restore(self):
         for case in _cases("education_restore"):

@@ -23,16 +23,19 @@ from owner_build_tools.build_protected import write_test_receipt
 
 ROOT = Path(__file__).resolve().parents[1]
 _MODULE_TEMPORARY = tempfile.TemporaryDirectory(prefix="cvstudio-summary-salary-")
-_ORIGINAL_DATABASE_OVERRIDE = os.environ.get("CVSTUDIO_DB_PATH")
-os.environ["CVSTUDIO_DB_PATH"] = str(Path(_MODULE_TEMPORARY.name) / "state" / "cv_studio.sqlite3")
-write_test_receipt(ROOT)
-try:
+with mock.patch.dict(os.environ, {
+    "LOCALAPPDATA": _MODULE_TEMPORARY.name, "APPDATA": _MODULE_TEMPORARY.name,
+    "CVSTUDIO_DB_PATH": str(Path(_MODULE_TEMPORARY.name) / "state" / "cv_studio.sqlite3"),
+    "CVSTUDIO_STATE_DIR": str(Path(_MODULE_TEMPORARY.name) / "state"),
+    "CVSTUDIO_JOB_STATE_PATH": str(Path(_MODULE_TEMPORARY.name) / "jobs.json"),
+    "SALARY_COMPARISON_DATA_DIR": str(Path(_MODULE_TEMPORARY.name) / "salary"),
+}), mock.patch("pathlib.Path.home", return_value=Path(_MODULE_TEMPORARY.name)), \
+        mock.patch("os.path.expanduser", side_effect=lambda path: (
+            str(Path(_MODULE_TEMPORARY.name) / path[2:]) if path.startswith("~/") else path)):
+    write_test_receipt(ROOT, environment={
+        "HOME": _MODULE_TEMPORARY.name, "LOCALAPPDATA": _MODULE_TEMPORARY.name,
+    })
     import app
-finally:
-    if _ORIGINAL_DATABASE_OVERRIDE is None:
-        os.environ.pop("CVSTUDIO_DB_PATH", None)
-    else:
-        os.environ["CVSTUDIO_DB_PATH"] = _ORIGINAL_DATABASE_OVERRIDE
 
 HEADERS = {"Origin": "http://127.0.0.1:5000", "X-CV-Studio-Request": "1"}
 
@@ -81,6 +84,28 @@ class SummarySalaryDocxTests(unittest.TestCase):
         self.assertIn("Senior Data Engineer", xml)
         self.assertIn("Built streaming pipelines on Apache Flink.", xml)
         self.assertIn("Expertise in compensation and benefits reporting for 500 staff.", xml)
+
+    def test_explicit_earnings_leave_but_employee_pay_achievement_stays(self):
+        work = "Managed payroll with salary of RM 12,000 for each employee."
+        xml = _document_xml(self._format([work, "Earnings of RM 18,000 monthly.",
+                                        "The candidate receives RM 18,000 per month."]))
+        self.assertIn(work, xml)
+        self.assertNotIn("18,000", xml)
+
+    def test_work_opening_pay_is_removed_in_provider_summary_and_word(self):
+        work = "Analysed company earnings of RM 24,000 monthly."
+        pay = ["Led HR and the candidate receives RM 18,000 per month.",
+               "Analysed performance and her earnings are RM 18,000 monthly."]
+        out = self._generate_ai("\n".join("- " + text for text in [work] + pay),
+                                strip_candidate_pay=True)
+        self.assertEqual(out["summary_pay_removed"], 2)
+        self.assertIn(work, out["content"][0]["text"])
+        self.assertNotIn("18,000", out["content"][0]["text"])
+        response = self.client.post("/generate-docx", json={"data": _cv([work] + pay)}, headers=HEADERS)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["X-CV-Summary-Pay-Removed"], "2")
+        self.assertIn(work, _document_xml(response.data))
+        self.assertNotIn("18,000", _document_xml(response.data))
 
     def test_the_uploaded_docx_summary_path_never_writes_pay(self):
         source = self._format(["Placeholder summary."])

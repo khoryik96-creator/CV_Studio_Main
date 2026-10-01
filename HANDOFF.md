@@ -45,6 +45,22 @@ behavior-preserving and hold the route SHA constant.
 
 ## 3. CI and local verification
 
+For formatting corrections, follow `CV_SOURCE_CHECK_GUARDRAILS.md` before
+editing a heuristic. Preserve existing fixture expectations; add a failing
+case, replay against master, run generated/hostile-input tests and deliberately
+break the new guards to prove their tests catch them.
+
+Never call `write_test_receipt(ROOT)` against the owner's real per-user state.
+Pure CV helper tests need no receipt. App-import tests must isolate the receipt,
+SQLite, job journal, salary data and credential paths in temporary state; the
+v24.6.429 collection tests verify the affected modules individually. For a full
+local suite, set temporary LOCALAPPDATA/APPDATA and all CVSTUDIO state/database/
+journal and SALARY_COMPARISON_DATA_DIR overrides before test collection. Tests
+must not authorize the test checkout by replacing the installed owner's receipt.
+Pass an explicit temporary HOME/LOCALAPPDATA mapping to receipt creation too:
+the builder's non-Windows selector trusts inherited HOME, not a mocked Path.home.
+The collection safety gate exercises that selector before any write.
+
 Regression CI is configured for pull requests and the exact commit pushed to
 `master`; runner provisioning can still fail when the account's Actions
 spending limit is exhausted, so the complete local gate remains mandatory. The
@@ -305,7 +321,32 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Title-above rows follow-up — v24.6.428, UNMERGED.** Starts at merged master
+- **CV guardrail corrective — v24.6.429–433, PR #220.**
+  Branch `codex/pr220-v24.6.431-qualification-pay-guards` (existing PR head retained),
+  based on merged master `cb0bcae`. v429 isolates test receipts/state, binds
+  education major/grade labels to their qualification, keeps employee-pay work
+  achievements and filters explicit candidate earnings. v430 preserves the
+  entire provider history when an R7 place header is uncertain, rejects
+  reporting/working phrases with intervening adverbs as titles, and binds a
+  graduation year to its own uniquely identified qualification segment. v431
+  binds a degree heading above the school to that qualification's major/grade,
+  keeps university-first prefixes in their own graduation span, and rejects
+  employee/worker job-title continuations as payroll recipients. Real recipients
+  with relative/action clauses remain work, including unprefixed LPA amounts.
+  v432 addresses PR220's review: independent candidate receipt/earnings clauses
+  cannot hide behind an opening work verb; app-import fixtures pass an explicit
+  temporary receipt environment, safe for the non-Windows HOME selector too.
+  v433 narrows the new subject override: work-clause plural pronouns may refer
+  to employee/company pay, so they retain the established contextual handling.
+  Existing fixture expectations are unchanged; new cases and real parse/Word
+  regressions protect all three follow-up findings. No routes, schemas,
+  dependencies, credentials, live AI calls or Word layout changes. Protected
+  compilation remains manual. The owner authorized fixes and merge after gates
+  pass; consult GitHub for current merge status. See
+  `cv_studio_v24_6_433_plural_subject_safety_qa_report.md` for the latest gate,
+  differential/corpus/mutation evidence and existing updater fixture limits.
+
+- **Title-above rows follow-up — v24.6.428, MERGED via PR #219 as `cb0bcae`.** Starts at merged master
   `01688bb` (v24.6.427). Post-merge review fixes to rule R7: after a place row the
   reader is unsure of, the next job's bullets no longer join the previous job (and
   a title-shaped line glued just before it makes that job's source bullets

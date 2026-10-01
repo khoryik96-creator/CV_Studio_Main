@@ -10025,6 +10025,1870 @@
     "Senior Engineer"
    ],
    "note": "a city name with a joining word is a place"
+  },
+  {
+   "id": "F3-repeated-school-bachelor",
+   "rule": "F3",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Northwind University",
+    "degree": "Bachelor of Business",
+    "date_range": "2018"
+   },
+   "lines": [
+    "2018 Northwind University | Bachelor of Business",
+    "2022 Northwind University | Master of Science",
+    "Major: Data Science"
+   ],
+   "expect": {
+    "major": null
+   },
+   "note": "a master's major must not appear on a bachelor's degree at the same school"
+  },
+  {
+   "id": "F3-repeated-school-master",
+   "rule": "F3",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Northwind University",
+    "degree": "Master of Science",
+    "date_range": "2022"
+   },
+   "lines": [
+    "2018 Northwind University | Bachelor of Business",
+    "2022 Northwind University | Master of Science",
+    "Major: Data Science"
+   ],
+   "expect": {
+    "major": "Data Science"
+   },
+   "note": "restore the major only to its own qualification"
+  },
+  {
+   "id": "F3-repeated-school-two-majors",
+   "rule": "F3",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Northwind University",
+    "degree": "Bachelor of Business",
+    "date_range": "2018"
+   },
+   "lines": [
+    "2018 Northwind University | Bachelor of Business",
+    "Major: Finance",
+    "2022 Northwind University | Master of Science",
+    "Major: Data Science"
+   ],
+   "expect": {
+    "major": "Finance"
+   },
+   "note": "different qualifications can each have their own major"
+  },
+  {
+   "id": "F3-repeated-school-degree-next-line",
+   "rule": "F3",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Northwind University",
+    "degree": "Master of Science",
+    "date_range": "2022"
+   },
+   "lines": [
+    "2018 Northwind University",
+    "Bachelor of Business",
+    "Major: Finance",
+    "2022 Northwind University",
+    "Master of Science",
+    "Major: Data Science"
+   ],
+   "expect": {
+    "major": "Data Science"
+   },
+   "note": "the qualification may be stated on the following line"
+  },
+  {
+   "id": "F3-repeated-school-same-degree-year",
+   "rule": "F3",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Northwind University",
+    "degree": "Bachelor of Science",
+    "date_range": "2018"
+   },
+   "lines": [
+    "2018 Northwind University | Bachelor of Science",
+    "Major: Chemistry",
+    "2022 Northwind University | Bachelor of Science",
+    "Major: Data Science"
+   ],
+   "expect": {
+    "major": "Chemistry"
+   },
+   "note": "a stated year disambiguates repeated qualifications"
+  },
+  {
+   "id": "F3-repeated-school-missing-evidence",
+   "rule": "F3",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Northwind University"
+   },
+   "lines": [
+    "2018 Northwind University | Bachelor of Business",
+    "2022 Northwind University | Master of Science",
+    "Major: Data Science"
+   ],
+   "expect": {
+    "major": null
+   },
+   "note": "without a degree or date identifying an entry, do not guess"
+  },
+  {
+   "id": "F3-repeated-school-date-only",
+   "rule": "F3",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Northwind University",
+    "date_range": "2018"
+   },
+   "lines": [
+    "2018 Northwind University",
+    "2022 Northwind University",
+    "Major: Data Science"
+   ],
+   "expect": {
+    "major": null
+   },
+   "note": "the year identifies the earlier block with no major"
+  },
+  {
+   "id": "F3-repeated-school-degree-only",
+   "rule": "F3",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Northwind University",
+    "degree": "Master of Science"
+   },
+   "lines": [
+    "2018 Northwind University | Bachelor of Business",
+    "2022 Northwind University | Master of Science",
+    "Major: Data Science"
+   ],
+   "expect": {
+    "major": "Data Science"
+   },
+   "note": "a unique degree is enough when the provider omitted the date"
+  },
+  {
+   "id": "F3-repeated-school-conflicting-date",
+   "rule": "F3",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Northwind University",
+    "degree": "Bachelor of Business",
+    "date_range": "2022"
+   },
+   "lines": [
+    "2018 Northwind University | Bachelor of Business",
+    "2022 Northwind University | Master of Science",
+    "Major: Data Science"
+   ],
+   "expect": {
+    "major": null
+   },
+   "note": "conflicting qualification and date evidence must not restore a major"
+  },
+  {
+   "id": "F3-repeated-school-existing-major",
+   "rule": "F3",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Northwind University",
+    "degree": "Bachelor of Business",
+    "major": "Business Studies"
+   },
+   "lines": [
+    "2018 Northwind University | Bachelor of Business",
+    "2022 Northwind University | Master of Science",
+    "Major: Data Science"
+   ],
+   "expect": {
+    "major": "Business Studies"
+   },
+   "note": "never overwrite a major already present"
+  },
+  {
+   "id": "F2-repeated-school-grade-label",
+   "rule": "F2",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Northwind University",
+    "degree": "Bachelor of Business",
+    "date_range": "2018",
+    "cgpa": "3.5 / 4.0"
+   },
+   "lines": [
+    "2018 Northwind University | Bachelor of Business",
+    "2022 Northwind University | Master of Science",
+    "GPA 3.5 / 4.0"
+   ],
+   "expect": {
+    "cgpa": "3.5 / 4.0"
+   },
+   "note": "a grade label also belongs to its own qualification"
+  },
+  {
+   "id": "P1-payroll-salary-each-employee",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed payroll with salary of RM 12,000 for each employee."
+   ],
+   "expect": [
+    "Managed payroll with salary of RM 12,000 for each employee."
+   ],
+   "note": "explicit employee recipients make this payroll work, not personal pay"
+  },
+  {
+   "id": "P1-payroll-salary-per-employee",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed payroll with salary of RM 12,000 per employee."
+   ],
+   "expect": [
+    "Managed payroll with salary of RM 12,000 per employee."
+   ],
+   "note": "per employee is not the candidate's salary"
+  },
+  {
+   "id": "P1-payroll-salary-single-worker",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Administered payroll with a salary of RM 8,000 for a worker."
+   ],
+   "expect": [
+    "Administered payroll with a salary of RM 8,000 for a worker."
+   ],
+   "note": "a singular explicit recipient is still another person"
+  },
+  {
+   "id": "P1-payroll-personal-salary-still-removed",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed payroll with salary of RM 12,000 for the team lead role."
+   ],
+   "expect": [],
+   "note": "a role is the candidate's own salary, not an employee recipient"
+  },
+  {
+   "id": "P1-payroll-personal-salary-other-sentence",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed payroll for each employee. Salary of RM 12,000 monthly."
+   ],
+   "expect": [
+    "Managed payroll for each employee."
+   ],
+   "note": "another sentence's employees must not shelter personal pay"
+  },
+  {
+   "id": "P1-payroll-personal-salary-other-comma",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed payroll with salary of RM 12,000 monthly, for each employee improved reporting."
+   ],
+   "expect": [],
+   "note": "a separate comma clause must not shelter the candidate's pay"
+  },
+  {
+   "id": "P1-earnings-of-amount",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Earnings of RM 18,000 monthly."
+   ],
+   "expect": [],
+   "note": "earnings with an amount are candidate pay even without a colon"
+  },
+  {
+   "id": "P1-monthly-earnings-of-amount",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Monthly earnings of RM 18,000."
+   ],
+   "expect": [],
+   "note": "a pay period can precede earnings"
+  },
+  {
+   "id": "P1-her-earnings-are",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Her earnings are RM 18,000 monthly."
+   ],
+   "expect": [],
+   "note": "an explicit personal earnings statement must not leak"
+  },
+  {
+   "id": "P1-candidate-receives",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "The candidate receives RM 18,000 per month."
+   ],
+   "expect": [],
+   "note": "a candidate subject can precede the receives-pay statement"
+  },
+  {
+   "id": "P1-company-earnings-kept",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Analysed company earnings of RM 18,000 monthly."
+   ],
+   "expect": [
+    "Analysed company earnings of RM 18,000 monthly."
+   ],
+   "note": "the company's earnings remain work achievements"
+  },
+  {
+   "id": "P1-company-receives-kept",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "The company receives RM 18,000 per month."
+   ],
+   "expect": [
+    "The company receives RM 18,000 per month."
+   ],
+   "note": "a company is not the candidate"
+  },
+  {
+   "id": "P1-candidate-receives-business-kept",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "The candidate receives RM 18,000 per month in client fees."
+   ],
+   "expect": [
+    "The candidate receives RM 18,000 per month in client fees."
+   ],
+   "note": "explicit business receipts are not personal salary"
+  },
+  {
+   "id": "P1-recruiter-earnings-personal",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Recruiter with earnings of RM 18,000 monthly."
+   ],
+   "expect": [],
+   "note": "a recruiter job title must not shelter explicit personal earnings"
+  },
+  {
+   "id": "P1-earnings-no-amount-kept",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Built an earnings dashboard."
+   ],
+   "expect": [
+    "Built an earnings dashboard."
+   ],
+   "note": "earnings as work without a personal amount are retained"
+  },
+  {
+   "id": "P1-candidate-receives-nonpay-kept",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "The candidate receives client requirements monthly."
+   ],
+   "expect": [
+    "The candidate receives client requirements monthly."
+   ],
+   "note": "receives without a monetary amount is not pay"
+  },
+  {
+   "id": "P1-payroll-recipient-other-amount",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed payroll with salary of RM 12,000 monthly and salary of RM 8,000 per employee."
+   ],
+   "expect": [],
+   "note": "a recipient for a different amount does not hide the first personal salary"
+  },
+  {
+   "id": "P1-company-earnings-label-kept",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Company earnings of RM 18,000 monthly."
+   ],
+   "expect": [
+    "Company earnings of RM 18,000 monthly."
+   ],
+   "note": "an explicit company's earnings label is not candidate pay"
+  },
+  {
+   "id": "P1-business-earnings-label-kept",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Business earnings of RM 18,000 monthly."
+   ],
+   "expect": [
+    "Business earnings of RM 18,000 monthly."
+   ],
+   "note": "an explicit business earnings label is not candidate pay"
+  },
+  {
+   "id": "P1-candidate-salary-from-company",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "The candidate receives RM 18,000 per month from the company."
+   ],
+   "expect": [],
+   "note": "a company paying the candidate still describes candidate salary"
+  },
+  {
+   "id": "F3-repeated-degree-ambiguous-one-major",
+   "rule": "F3",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Northwind University",
+    "degree": "Bachelor of Science"
+   },
+   "lines": [
+    "2018 Northwind University | Bachelor of Science",
+    "2022 Northwind University | Bachelor of Science",
+    "Major: Data Science"
+   ],
+   "expect": {
+    "major": null
+   },
+   "note": "a repeated degree without a identifying date has no unique major block"
+  },
+  {
+   "id": "P1-payroll-recipient-before-own-pay",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed payroll with salary of RM 8,000 per employee and salary of RM 12,000 monthly."
+   ],
+   "expect": [],
+   "note": "the first amount's recipient does not shelter a later personal salary"
+  },
+  {
+   "id": "P1-payroll-recipient-before-own-pay-no-comma",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed payroll with salary of RM 8k per employee and salary of RM 12k monthly."
+   ],
+   "expect": [],
+   "note": "a recipient for one amount must not shelter the later personal amount in the same comma part"
+  },
+  {
+   "id": "R7-adverb-prose-0",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Finance Analyst",
+    "Reporting directly to the Finance Director",
+    "Beta Holdings | Singapore | Jan 2018 - Dec 2021"
+   ],
+   "titles": [
+    "Finance Analyst"
+   ],
+   "expect_companies": [],
+   "note": "A reporting/working phrase with intervening adverbs is prose, not the job title."
+  },
+  {
+   "id": "R7-adverb-prose-1",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Finance Analyst",
+    "Working closely with the Managing Director",
+    "Beta Holdings | Singapore | Jan 2018 - Dec 2021"
+   ],
+   "titles": [
+    "Finance Analyst"
+   ],
+   "expect_companies": [],
+   "note": "A reporting/working phrase with intervening adverbs is prose, not the job title."
+  },
+  {
+   "id": "R7-adverb-prose-2",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Finance Analyst",
+    "Reporting functionally to the Finance Director",
+    "Beta Holdings | Singapore | Jan 2018 - Dec 2021"
+   ],
+   "titles": [
+    "Finance Analyst"
+   ],
+   "expect_companies": [],
+   "note": "A reporting/working phrase with intervening adverbs is prose, not the job title."
+  },
+  {
+   "id": "R7-adverb-prose-3",
+   "rule": "R7",
+   "kind": "rows",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Finance Analyst",
+    "Working very closely with the Managing Director",
+    "Beta Holdings | Singapore | Jan 2018 - Dec 2021"
+   ],
+   "titles": [
+    "Finance Analyst"
+   ],
+   "expect_companies": [],
+   "note": "A reporting/working phrase with intervening adverbs is prose, not the job title."
+  },
+  {
+   "id": "R7-incomplete-rebuild-keeps-uncertain-job",
+   "rule": "R7",
+   "kind": "work_reconcile",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Senior Engineer",
+    "Acme Holdings | Singapore | Jan 2022 - Present",
+    "• Built systems.",
+    "Analyst",
+    "Beta Holdings | Singapore | Jan 2020 - Dec 2021",
+    "• Managed forecasts.",
+    "Manager",
+    "Gamma Holdings | Singapore | Jan 2018 - Dec 2019",
+    "• Led projects.",
+    "Recruiter",
+    "Contoso - Executive Search | Singapore | Jan 2016 - Dec 2017",
+    "• Filled senior vacancies."
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Acme Holdings",
+      "date_range": "Jan 2022 to Present",
+      "roles": [
+       {
+        "title": "Senior Engineer",
+        "date_range": "Jan 2022 to Present",
+        "bullets": [
+         "Built systems."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Beta Holdings",
+      "date_range": "Jan 2020 to Dec 2021",
+      "roles": [
+       {
+        "title": "Analyst",
+        "date_range": "Jan 2020 to Dec 2021",
+        "bullets": [
+         "Managed forecasts."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Singapore",
+      "date_range": "Jan 2018 to Dec 2019",
+      "roles": [
+       {
+        "title": "Operations Lead",
+        "date_range": "Jan 2018 to Dec 2019",
+        "bullets": [
+         "Led projects."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Contoso - Executive Search",
+      "date_range": "Jan 2016 to Dec 2017",
+      "roles": [
+       {
+        "title": "Recruiter",
+        "date_range": "Jan 2016 to Dec 2017",
+        "bullets": [
+         "Filled senior vacancies."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Acme Holdings",
+      "date_range": "Jan 2022 to Present",
+      "roles": [
+       {
+        "title": "Senior Engineer",
+        "date_range": "Jan 2022 to Present",
+        "bullets": [
+         "Built systems."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Beta Holdings",
+      "date_range": "Jan 2020 to Dec 2021",
+      "roles": [
+       {
+        "title": "Analyst",
+        "date_range": "Jan 2020 to Dec 2021",
+        "bullets": [
+         "Managed forecasts."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Singapore",
+      "date_range": "Jan 2018 to Dec 2019",
+      "roles": [
+       {
+        "title": "Operations Lead",
+        "date_range": "Jan 2018 to Dec 2019",
+        "bullets": [
+         "Led projects."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Contoso - Executive Search",
+      "date_range": "Jan 2016 to Dec 2017",
+      "roles": [
+       {
+        "title": "Recruiter",
+        "date_range": "Jan 2016 to Dec 2017",
+        "bullets": [
+         "Filled senior vacancies."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "note": "An uncertain source header makes the skeleton incomplete even when another provider entry needs correction."
+  },
+  {
+   "id": "R7-incomplete-rebuild-uncertain-shape-0",
+   "rule": "R7",
+   "kind": "work_reconcile",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Senior Engineer",
+    "Acme Holdings | Singapore | Jan 2022 - Present",
+    "• Built systems.",
+    "Analyst",
+    "Beta Holdings | Singapore | Jan 2020 - Dec 2021",
+    "• Managed forecasts.",
+    "Manager",
+    "Gamma Holdings | Singapore | Jan 2018 - Dec 2019",
+    "• Led projects.",
+    "Recruiter",
+    "Contoso - Executive Search | Singapore | Jan 2016 - Dec 2017",
+    "• Filled senior vacancies.",
+    "chief happiness ninja",
+    "Contoso Holdings | Singapore | Jan 2016 - Dec 2017",
+    "• Filled senior vacancies."
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Acme Holdings",
+      "date_range": "Jan 2022 to Present",
+      "roles": [
+       {
+        "title": "Senior Engineer",
+        "date_range": "Jan 2022 to Present",
+        "bullets": [
+         "Built systems."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Beta Holdings",
+      "date_range": "Jan 2020 to Dec 2021",
+      "roles": [
+       {
+        "title": "Analyst",
+        "date_range": "Jan 2020 to Dec 2021",
+        "bullets": [
+         "Managed forecasts."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Singapore",
+      "date_range": "Jan 2018 to Dec 2019",
+      "roles": [
+       {
+        "title": "Operations Lead",
+        "date_range": "Jan 2018 to Dec 2019",
+        "bullets": [
+         "Led projects."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Contoso Holdings",
+      "date_range": "Jan 2016 to Dec 2017",
+      "roles": [
+       {
+        "title": "chief happiness ninja",
+        "date_range": "Jan 2016 to Dec 2017",
+        "bullets": [
+         "Filled senior vacancies."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Acme Holdings",
+      "date_range": "Jan 2022 to Present",
+      "roles": [
+       {
+        "title": "Senior Engineer",
+        "date_range": "Jan 2022 to Present",
+        "bullets": [
+         "Built systems."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Beta Holdings",
+      "date_range": "Jan 2020 to Dec 2021",
+      "roles": [
+       {
+        "title": "Analyst",
+        "date_range": "Jan 2020 to Dec 2021",
+        "bullets": [
+         "Managed forecasts."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Singapore",
+      "date_range": "Jan 2018 to Dec 2019",
+      "roles": [
+       {
+        "title": "Operations Lead",
+        "date_range": "Jan 2018 to Dec 2019",
+        "bullets": [
+         "Led projects."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Contoso Holdings",
+      "date_range": "Jan 2016 to Dec 2017",
+      "roles": [
+       {
+        "title": "chief happiness ninja",
+        "date_range": "Jan 2016 to Dec 2017",
+        "bullets": [
+         "Filled senior vacancies."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "note": "An incomplete source skeleton must not delete a correctly parsed uncertain entry."
+  },
+  {
+   "id": "R7-incomplete-rebuild-uncertain-shape-1",
+   "rule": "R7",
+   "kind": "work_reconcile",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Senior Engineer",
+    "Acme Holdings | Singapore | Jan 2022 - Present",
+    "• Built systems.",
+    "Analyst",
+    "Beta Holdings | Singapore | Jan 2020 - Dec 2021",
+    "• Managed forecasts.",
+    "Manager",
+    "Gamma Holdings | Singapore | Jan 2018 - Dec 2019",
+    "• Led projects.",
+    "Recruiter",
+    "Contoso - Executive Search | Singapore | Jan 2016 - Dec 2017",
+    "• Filled senior vacancies.",
+    "Finance Analyst.",
+    "Contoso Holdings | Singapore | Jan 2016 - Dec 2017",
+    "• Filled senior vacancies."
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Acme Holdings",
+      "date_range": "Jan 2022 to Present",
+      "roles": [
+       {
+        "title": "Senior Engineer",
+        "date_range": "Jan 2022 to Present",
+        "bullets": [
+         "Built systems."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Beta Holdings",
+      "date_range": "Jan 2020 to Dec 2021",
+      "roles": [
+       {
+        "title": "Analyst",
+        "date_range": "Jan 2020 to Dec 2021",
+        "bullets": [
+         "Managed forecasts."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Singapore",
+      "date_range": "Jan 2018 to Dec 2019",
+      "roles": [
+       {
+        "title": "Operations Lead",
+        "date_range": "Jan 2018 to Dec 2019",
+        "bullets": [
+         "Led projects."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Contoso Holdings",
+      "date_range": "Jan 2016 to Dec 2017",
+      "roles": [
+       {
+        "title": "Finance Analyst.",
+        "date_range": "Jan 2016 to Dec 2017",
+        "bullets": [
+         "Filled senior vacancies."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Acme Holdings",
+      "date_range": "Jan 2022 to Present",
+      "roles": [
+       {
+        "title": "Senior Engineer",
+        "date_range": "Jan 2022 to Present",
+        "bullets": [
+         "Built systems."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Beta Holdings",
+      "date_range": "Jan 2020 to Dec 2021",
+      "roles": [
+       {
+        "title": "Analyst",
+        "date_range": "Jan 2020 to Dec 2021",
+        "bullets": [
+         "Managed forecasts."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Singapore",
+      "date_range": "Jan 2018 to Dec 2019",
+      "roles": [
+       {
+        "title": "Operations Lead",
+        "date_range": "Jan 2018 to Dec 2019",
+        "bullets": [
+         "Led projects."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Contoso Holdings",
+      "date_range": "Jan 2016 to Dec 2017",
+      "roles": [
+       {
+        "title": "Finance Analyst.",
+        "date_range": "Jan 2016 to Dec 2017",
+        "bullets": [
+         "Filled senior vacancies."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "note": "An incomplete source skeleton must not delete a correctly parsed uncertain entry."
+  },
+  {
+   "id": "R7-incomplete-rebuild-uncertain-shape-2",
+   "rule": "R7",
+   "kind": "work_reconcile",
+   "lines": [
+    "PROFESSIONAL EXPERIENCE",
+    "Senior Engineer",
+    "Acme Holdings | Singapore | Jan 2022 - Present",
+    "• Built systems.",
+    "Analyst",
+    "Beta Holdings | Singapore | Jan 2020 - Dec 2021",
+    "• Managed forecasts.",
+    "Manager",
+    "Gamma Holdings | Singapore | Jan 2018 - Dec 2019",
+    "• Led projects.",
+    "Recruiter",
+    "Contoso - Executive Search | Singapore | Jan 2016 - Dec 2017",
+    "• Filled senior vacancies.",
+    "Finance Analyst",
+    "Reporting directly to the Finance Director",
+    "Contoso Holdings | Singapore | Jan 2016 - Dec 2017",
+    "• Filled senior vacancies."
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Acme Holdings",
+      "date_range": "Jan 2022 to Present",
+      "roles": [
+       {
+        "title": "Senior Engineer",
+        "date_range": "Jan 2022 to Present",
+        "bullets": [
+         "Built systems."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Beta Holdings",
+      "date_range": "Jan 2020 to Dec 2021",
+      "roles": [
+       {
+        "title": "Analyst",
+        "date_range": "Jan 2020 to Dec 2021",
+        "bullets": [
+         "Managed forecasts."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Singapore",
+      "date_range": "Jan 2018 to Dec 2019",
+      "roles": [
+       {
+        "title": "Operations Lead",
+        "date_range": "Jan 2018 to Dec 2019",
+        "bullets": [
+         "Led projects."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Contoso Holdings",
+      "date_range": "Jan 2016 to Dec 2017",
+      "roles": [
+       {
+        "title": "Finance Analyst",
+        "date_range": "Jan 2016 to Dec 2017",
+        "bullets": [
+         "Filled senior vacancies."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Acme Holdings",
+      "date_range": "Jan 2022 to Present",
+      "roles": [
+       {
+        "title": "Senior Engineer",
+        "date_range": "Jan 2022 to Present",
+        "bullets": [
+         "Built systems."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Beta Holdings",
+      "date_range": "Jan 2020 to Dec 2021",
+      "roles": [
+       {
+        "title": "Analyst",
+        "date_range": "Jan 2020 to Dec 2021",
+        "bullets": [
+         "Managed forecasts."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Singapore",
+      "date_range": "Jan 2018 to Dec 2019",
+      "roles": [
+       {
+        "title": "Operations Lead",
+        "date_range": "Jan 2018 to Dec 2019",
+        "bullets": [
+         "Led projects."
+        ]
+       }
+      ]
+     },
+     {
+      "company": "Contoso Holdings",
+      "date_range": "Jan 2016 to Dec 2017",
+      "roles": [
+       {
+        "title": "Finance Analyst",
+        "date_range": "Jan 2016 to Dec 2017",
+        "bullets": [
+         "Filled senior vacancies."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "note": "An incomplete source skeleton must not delete a correctly parsed uncertain entry."
+  },
+  {
+   "id": "F4-qualification-segment-0-other",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "degree": "Bachelor of Science",
+    "institution": "Contoso University",
+    "date_range": ""
+   },
+   "lines": [
+    "Bachelor of Science - Contoso University; Master of Science - Northwind University, graduated 2015."
+   ],
+   "expect": {
+    "date_range": ""
+   },
+   "note": "Graduation belongs to the qualification's own segment, not another degree on the extracted line."
+  },
+  {
+   "id": "F4-qualification-segment-0-own",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "degree": "Master of Science",
+    "institution": "Northwind University",
+    "date_range": ""
+   },
+   "lines": [
+    "Bachelor of Science - Contoso University; Master of Science - Northwind University, graduated 2015."
+   ],
+   "expect": {
+    "date_range": "2015"
+   },
+   "note": "Graduation belongs to the qualification's own segment, not another degree on the extracted line."
+  },
+  {
+   "id": "F4-qualification-segment-1-other",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "degree": "Bachelor of Science",
+    "institution": "Contoso University",
+    "date_range": ""
+   },
+   "lines": [
+    "Bachelor of Science - Contoso University | Master of Science - Northwind University, graduated 2015."
+   ],
+   "expect": {
+    "date_range": ""
+   },
+   "note": "Graduation belongs to the qualification's own segment, not another degree on the extracted line."
+  },
+  {
+   "id": "F4-qualification-segment-1-own",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "degree": "Master of Science",
+    "institution": "Northwind University",
+    "date_range": ""
+   },
+   "lines": [
+    "Bachelor of Science - Contoso University | Master of Science - Northwind University, graduated 2015."
+   ],
+   "expect": {
+    "date_range": "2015"
+   },
+   "note": "Graduation belongs to the qualification's own segment, not another degree on the extracted line."
+  },
+  {
+   "id": "F4-segment-control-0",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "degree": "Bachelor of Science",
+    "institution": "Contoso University",
+    "date_range": ""
+   },
+   "lines": [
+    "Bachelor of Science | Contoso University | Graduation: 2015"
+   ],
+   "expect": {
+    "date_range": "2015"
+   },
+   "note": "Single-qualification field separators retain their date; another qualification cannot lend its year."
+  },
+  {
+   "id": "F4-segment-control-1",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "degree": "Bachelor of Science",
+    "institution": "Contoso University",
+    "date_range": ""
+   },
+   "lines": [
+    "Bachelor of Science - Contoso University; Graduation: 2015"
+   ],
+   "expect": {
+    "date_range": "2015"
+   },
+   "note": "Single-qualification field separators retain their date; another qualification cannot lend its year."
+  },
+  {
+   "id": "F4-segment-control-2",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "degree": "Bachelor of Science",
+    "institution": "Contoso University",
+    "date_range": ""
+   },
+   "lines": [
+    "Contoso University - Bachelor of Science; Northwind University - Master of Science, graduated 2015."
+   ],
+   "expect": {
+    "date_range": ""
+   },
+   "note": "Single-qualification field separators retain their date; another qualification cannot lend its year."
+  },
+  {
+   "id": "F4-segment-control-3",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "degree": "Bachelor of Science",
+    "institution": "Contoso University",
+    "date_range": ""
+   },
+   "lines": [
+    "Bachelor of Science - Contoso University; Master of Science - Contoso University, graduated 2015."
+   ],
+   "expect": {
+    "date_range": ""
+   },
+   "note": "Single-qualification field separators retain their date; another qualification cannot lend its year."
+  },
+  {
+   "id": "F4-institution-name-not-a-degree-0",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "degree": "Bachelor of Science",
+    "institution": "The Master's University",
+    "date_range": ""
+   },
+   "lines": [
+    "Bachelor of Science | The Master's University | Graduation: 2015"
+   ],
+   "expect": {
+    "date_range": "2015"
+   },
+   "note": "An institution containing Master is a field, not a second qualification."
+  },
+  {
+   "id": "F4-institution-name-not-a-degree-1",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "degree": "Bachelor of Science",
+    "institution": "Master University",
+    "date_range": ""
+   },
+   "lines": [
+    "Bachelor of Science | Master University | Graduation: 2015"
+   ],
+   "expect": {
+    "date_range": "2015"
+   },
+   "note": "An institution containing Master is a field, not a second qualification."
+  },
+  {
+   "id": "F4-same-degree-two-schools-0",
+   "rule": "F4",
+   "kind": "education_restore",
+   "lines": [
+    "Bachelor of Science - Contoso University; Bachelor of Science - Northwind University, graduated 2015."
+   ],
+   "entry": {
+    "institution": "Contoso University",
+    "degree": "Bachelor of Science",
+    "date_range": ""
+   },
+   "expect": {
+    "date_range": ""
+   },
+   "note": "Qualification segment selection must use both institution and degree, and remain unique."
+  },
+  {
+   "id": "F4-same-degree-two-schools-1",
+   "rule": "F4",
+   "kind": "education_restore",
+   "lines": [
+    "Bachelor of Science - Contoso University; Bachelor of Science - Northwind University, graduated 2015."
+   ],
+   "entry": {
+    "institution": "Northwind University",
+    "degree": "Bachelor of Science",
+    "date_range": ""
+   },
+   "expect": {
+    "date_range": "2015"
+   },
+   "note": "Qualification segment selection must use both institution and degree, and remain unique."
+  },
+  {
+   "id": "F4-same-school-own-masters-year",
+   "rule": "F4",
+   "kind": "education_restore",
+   "lines": [
+    "Bachelor of Science - Contoso University; Master of Science - Contoso University, graduated 2015."
+   ],
+   "entry": {
+    "institution": "Contoso University",
+    "degree": "Master of Science",
+    "date_range": ""
+   },
+   "expect": {
+    "date_range": "2015"
+   },
+   "note": "Qualification segment selection must use both institution and degree, and remain unique."
+  },
+  {
+   "id": "F4-identical-qualifications-ambiguous",
+   "rule": "F4",
+   "kind": "education_restore",
+   "lines": [
+    "Bachelor of Science - Contoso University, graduated 2015; Bachelor of Science - Contoso University."
+   ],
+   "entry": {
+    "institution": "Contoso University",
+    "degree": "Bachelor of Science",
+    "date_range": ""
+   },
+   "expect": {
+    "date_range": ""
+   },
+   "note": "Qualification segment selection must use both institution and degree, and remain unique."
+  },
+  {
+   "id": "F4-multiple-qualifications-no-degree",
+   "rule": "F4",
+   "kind": "education_restore",
+   "lines": [
+    "Bachelor of Science - Contoso University, graduated 2015; Master of Science - Contoso University."
+   ],
+   "entry": {
+    "institution": "Contoso University",
+    "degree": "",
+    "date_range": ""
+   },
+   "expect": {
+    "date_range": ""
+   },
+   "note": "Qualification segment selection must use both institution and degree, and remain unique."
+  },
+  {
+   "id": "F3-degree-above-school-bachelor",
+   "rule": "F3",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Contoso University",
+    "degree": "Bachelor of Science",
+    "date_range": "2010",
+    "cgpa": "3.8 / 4.0"
+   },
+   "lines": [
+    "EDUCATION",
+    "Bachelor of Science",
+    "Contoso University | 2010",
+    "Major: Physics",
+    "GPA 3.8 / 4.0",
+    "Master of Science",
+    "Contoso University | 2015",
+    "Major: Finance",
+    "CGPA 3.8 / 4.0"
+   ],
+   "expect": {
+    "major": "Physics",
+    "cgpa": "GPA 3.8 / 4.0"
+   },
+   "note": "A degree heading above its institution belongs to that qualification, not the preceding block."
+  },
+  {
+   "id": "F3-degree-above-school-master-undated",
+   "rule": "F3",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Contoso University",
+    "degree": "Master of Science",
+    "date_range": "",
+    "cgpa": "3.8 / 4.0"
+   },
+   "lines": [
+    "EDUCATION",
+    "Bachelor of Science",
+    "Contoso University | 2010",
+    "Major: Physics",
+    "GPA 3.8 / 4.0",
+    "Master of Science",
+    "Contoso University | 2015",
+    "Major: Finance",
+    "CGPA 3.8 / 4.0"
+   ],
+   "expect": {
+    "major": "Finance",
+    "cgpa": "CGPA 3.8 / 4.0"
+   },
+   "note": "A degree heading above its institution belongs to that qualification, not the preceding block."
+  },
+  {
+   "id": "F3-degree-above-school-master-dated",
+   "rule": "F3",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Contoso University",
+    "degree": "Master of Science",
+    "date_range": "2015",
+    "cgpa": "3.8 / 4.0"
+   },
+   "lines": [
+    "EDUCATION",
+    "Bachelor of Science",
+    "Contoso University | 2010",
+    "Major: Physics",
+    "GPA 3.8 / 4.0",
+    "Master of Science",
+    "Contoso University | 2015",
+    "Major: Finance",
+    "CGPA 3.8 / 4.0"
+   ],
+   "expect": {
+    "major": "Finance",
+    "cgpa": "CGPA 3.8 / 4.0"
+   },
+   "note": "A degree heading above its institution belongs to that qualification, not the preceding block."
+  },
+  {
+   "id": "F3-degree-above-school-blanks",
+   "rule": "F3",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Contoso University",
+    "degree": "Master of Science",
+    "date_range": ""
+   },
+   "lines": [
+    "EDUCATION",
+    "Bachelor of Science",
+    "Contoso University | 2010",
+    "Major: Physics",
+    "Master of Science",
+    "",
+    "Contoso University | 2015",
+    "Major: Finance"
+   ],
+   "expect": {
+    "major": "Finance"
+   },
+   "note": "Blank lines do not assign the next degree heading to the previous school block."
+  },
+  {
+   "id": "F3-degree-above-school-existing-major",
+   "rule": "F3",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Contoso University",
+    "degree": "Master of Science",
+    "date_range": "",
+    "major": "Business Studies"
+   },
+   "lines": [
+    "EDUCATION",
+    "Bachelor of Science",
+    "Contoso University | 2010",
+    "Major: Physics",
+    "GPA 3.8 / 4.0",
+    "Master of Science",
+    "Contoso University | 2015",
+    "Major: Finance",
+    "CGPA 3.8 / 4.0"
+   ],
+   "expect": {
+    "major": "Business Studies"
+   },
+   "note": "A source recovery must not replace an existing major."
+  },
+  {
+   "id": "F3-degree-above-school-no-identity",
+   "rule": "F3",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Contoso University"
+   },
+   "lines": [
+    "EDUCATION",
+    "Bachelor of Science",
+    "Contoso University | 2010",
+    "Major: Physics",
+    "GPA 3.8 / 4.0",
+    "Master of Science",
+    "Contoso University | 2015",
+    "Major: Finance",
+    "CGPA 3.8 / 4.0"
+   ],
+   "expect": {
+    "major": null
+   },
+   "note": "Two degrees at one school still require identifying evidence."
+  },
+  {
+   "id": "F4-institution-first-multiple-0-bachelor",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Contoso University",
+    "degree": "Bachelor of Science",
+    "date_range": ""
+   },
+   "lines": [
+    "Contoso University | Bachelor of Science; Northwind University | Master of Science | Graduation: 2015"
+   ],
+   "expect": {
+    "date_range": ""
+   },
+   "note": "Institution-first qualifications retain their own school and graduation year."
+  },
+  {
+   "id": "F4-institution-first-multiple-0-master",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Northwind University",
+    "degree": "Master of Science",
+    "date_range": ""
+   },
+   "lines": [
+    "Contoso University | Bachelor of Science; Northwind University | Master of Science | Graduation: 2015"
+   ],
+   "expect": {
+    "date_range": "2015"
+   },
+   "note": "Institution-first qualifications retain their own school and graduation year."
+  },
+  {
+   "id": "F4-institution-first-multiple-1-bachelor",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Contoso University",
+    "degree": "Bachelor of Science",
+    "date_range": ""
+   },
+   "lines": [
+    "Contoso University | Bachelor of Science | Northwind University | Master of Science | Graduation: 2015"
+   ],
+   "expect": {
+    "date_range": ""
+   },
+   "note": "Institution-first qualifications retain their own school and graduation year."
+  },
+  {
+   "id": "F4-institution-first-multiple-1-master",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Northwind University",
+    "degree": "Master of Science",
+    "date_range": ""
+   },
+   "lines": [
+    "Contoso University | Bachelor of Science | Northwind University | Master of Science | Graduation: 2015"
+   ],
+   "expect": {
+    "date_range": "2015"
+   },
+   "note": "Institution-first qualifications retain their own school and graduation year."
+  },
+  {
+   "id": "F4-institution-first-multiple-2-bachelor",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Contoso University",
+    "degree": "Bachelor of Science",
+    "date_range": ""
+   },
+   "lines": [
+    "Contoso University | Bachelor of Science; Contoso University | Master of Science | Graduation: 2015"
+   ],
+   "expect": {
+    "date_range": ""
+   },
+   "note": "Institution-first qualifications retain their own school and graduation year."
+  },
+  {
+   "id": "F4-institution-first-multiple-2-master",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Contoso University",
+    "degree": "Master of Science",
+    "date_range": ""
+   },
+   "lines": [
+    "Contoso University | Bachelor of Science; Contoso University | Master of Science | Graduation: 2015"
+   ],
+   "expect": {
+    "date_range": "2015"
+   },
+   "note": "Institution-first qualifications retain their own school and graduation year."
+  },
+  {
+   "id": "F4-institution-first-multiple-3-bachelor",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Contoso University",
+    "degree": "Bachelor of Science",
+    "date_range": ""
+   },
+   "lines": [
+    "Contoso University | Bachelor of Science | Contoso University | Master of Science | Graduation: 2015"
+   ],
+   "expect": {
+    "date_range": ""
+   },
+   "note": "Institution-first qualifications retain their own school and graduation year."
+  },
+  {
+   "id": "F4-institution-first-multiple-3-master",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Contoso University",
+    "degree": "Master of Science",
+    "date_range": ""
+   },
+   "lines": [
+    "Contoso University | Bachelor of Science | Contoso University | Master of Science | Graduation: 2015"
+   ],
+   "expect": {
+    "date_range": "2015"
+   },
+   "note": "Institution-first qualifications retain their own school and graduation year."
+  },
+  {
+   "id": "F4-degree-first-field-control",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Contoso University",
+    "degree": "Bachelor of Science",
+    "date_range": ""
+   },
+   "lines": [
+    "Bachelor of Science | Contoso University | Graduation: 2015; Master of Science | Northwind University"
+   ],
+   "expect": {
+    "date_range": "2015"
+   },
+   "note": "Degree-first field layouts must retain the year before the next qualification."
+  },
+  {
+   "id": "F4-institution-first-field-control",
+   "rule": "F4",
+   "kind": "education_restore",
+   "entry": {
+    "institution": "Contoso University",
+    "degree": "Bachelor of Science",
+    "date_range": ""
+   },
+   "lines": [
+    "Contoso University | Bachelor of Science | Graduation: 2015"
+   ],
+   "expect": {
+    "date_range": "2015"
+   },
+   "note": "A single institution-first qualification remains unchanged."
+  },
+  {
+   "id": "P1-recipient-job-title-0",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Led HR with salary of RM 12k for the employee relations manager role."
+   ],
+   "expect": [],
+   "note": "A role description after employee/worker is not a payroll recipient."
+  },
+  {
+   "id": "P1-recipient-job-title-1",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Led HR with salary of RM 12k for the employee engagement role."
+   ],
+   "expect": [],
+   "note": "A role description after employee/worker is not a payroll recipient."
+  },
+  {
+   "id": "P1-recipient-job-title-2",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Led HR with salary of RM 12k for the worker support manager position."
+   ],
+   "expect": [],
+   "note": "A role description after employee/worker is not a payroll recipient."
+  },
+  {
+   "id": "P1-recipient-job-title-3",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Led HR with salary of RM 12k for the employee-relations manager role."
+   ],
+   "expect": [],
+   "note": "A role description after employee/worker is not a payroll recipient."
+  },
+  {
+   "id": "P1-recipient-job-title-4",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Led HR with salary of RM 12k for the employee's liaison role."
+   ],
+   "expect": [],
+   "note": "A role description after employee/worker is not a payroll recipient."
+  },
+  {
+   "id": "P1-recipient-job-title-5",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Led HR with salary of RM 12k for the employee health and safety manager role."
+   ],
+   "expect": [],
+   "note": "A role description after employee/worker is not a payroll recipient."
+  },
+  {
+   "id": "P1-recipient-work-control-0",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed payroll with salary of RM 12k for each employee."
+   ],
+   "expect": [
+    "Managed payroll with salary of RM 12k for each employee."
+   ],
+   "note": "Explicit employee recipients remain work, including their relative clauses."
+  },
+  {
+   "id": "P1-recipient-work-control-1",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed payroll with salary of RM 12k for every worker."
+   ],
+   "expect": [
+    "Managed payroll with salary of RM 12k for every worker."
+   ],
+   "note": "Explicit employee recipients remain work, including their relative clauses."
+  },
+  {
+   "id": "P1-recipient-work-control-2",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed payroll with salary of RM 12k for each employee working on a client project."
+   ],
+   "expect": [
+    "Managed payroll with salary of RM 12k for each employee working on a client project."
+   ],
+   "note": "Explicit employee recipients remain work, including their relative clauses."
+  },
+  {
+   "id": "P1-recipient-work-control-3",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed payroll with salary of RM 12k for every worker assigned to a construction job."
+   ],
+   "expect": [
+    "Managed payroll with salary of RM 12k for every worker assigned to a construction job."
+   ],
+   "note": "Explicit employee recipients remain work, including their relative clauses."
+  },
+  {
+   "id": "P1-recipient-work-control-4",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": [
+    "Managed payroll with salary of RM 12k for each employee who works in a support role."
+   ],
+   "expect": [
+    "Managed payroll with salary of RM 12k for each employee who works in a support role."
+   ],
+   "note": "Explicit employee recipients remain work, including their relative clauses."
+  },
+  {
+   "id": "P1-recipient-job-title-lpa",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": ["Managed HR with salary of 12 LPA for the employee relations manager role."],
+   "expect": [],
+   "note": "An amount without a currency prefix is still candidate pay when attached to a job title."
+  },
+  {
+   "id": "P1-recipient-work-lpa",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": ["Managed payroll with salary of 12 LPA for each employee who works in a support role."],
+   "expect": ["Managed payroll with salary of 12 LPA for each employee who works in a support role."],
+   "note": "Unprefixed amounts for actual employee recipients remain payroll work."
+  },
+  {
+   "id": "P1-work-opening-candidate-receipts",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": ["Led HR and the candidate receives RM 18,000 per month."],
+   "expect": [],
+   "note": "A work-opening sentence cannot hide an explicit candidate-pay clause."
+  },
+  {
+   "id": "P1-work-opening-own-earnings",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": ["Analysed performance and her earnings are RM 18,000 monthly."],
+   "expect": [],
+   "note": "A separate personal-earnings clause overrides the opening work verb."
+  },
+  {
+   "id": "P1-work-opening-business-receipts-control",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": ["Led sales and the candidate receives RM 18,000 per month in client fees."],
+   "expect": ["Led sales and the candidate receives RM 18,000 per month in client fees."],
+   "note": "Explicit business receipts remain work, not candidate salary."
+  },
+  {
+   "id": "P1-work-opening-company-earnings-control",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": ["Analysed performance and company earnings are RM 18,000 monthly."],
+   "expect": ["Analysed performance and company earnings are RM 18,000 monthly."],
+   "note": "Company earnings are still work."
+  },
+  {
+   "id": "P1-work-opening-other-party-control",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": ["Analysed her earnings of RM 18,000 monthly for the client."],
+   "expect": ["Analysed her earnings of RM 18,000 monthly for the client."],
+   "note": "A possessive object of a work verb is not an independent candidate-pay subject."
+  },
+  {
+   "id": "P1-work-opening-abbreviated-business-period-control",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": ["Managed sales and the candidate receives RM 9,000 p.a. in client fees."],
+   "expect": ["Managed sales and the candidate receives RM 9,000 p.a. in client fees."],
+   "note": "An annual abbreviation cannot hide the explicit business-receipts qualifier."
+  },
+  {
+   "id": "P1-work-opening-plural-employees-control",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": ["Managed payroll for 400 employees and they receive RM 9,000 monthly."],
+   "expect": ["Managed payroll for 400 employees and they receive RM 9,000 monthly."],
+   "note": "Plural pronouns in work clauses can refer to employees, not the candidate."
+  },
+  {
+   "id": "P1-work-opening-plural-companies-control",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": ["Led portfolio companies and their earnings are RM 18,000 monthly."],
+   "expect": ["Led portfolio companies and their earnings are RM 18,000 monthly."],
+   "note": "A work-clause plural possessive can refer to company earnings."
   }
  ]
 }
