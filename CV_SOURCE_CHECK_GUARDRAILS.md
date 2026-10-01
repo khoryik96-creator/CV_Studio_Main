@@ -309,6 +309,13 @@ An unprefixed amount such as "12 LPA" follows the same rule. Relative or action
 clauses describing actual recipients ("each employee who works in a support
 role", "every worker assigned to a construction job") remain payroll work.
 
+An independent personal-pay subject after "and", "but", "while" or "whereas"
+still states pay even if the sentence opens with a work verb: "Led HR and the
+candidate receives RM 18,000 per month", "Analysed performance and her earnings
+are RM 18,000 monthly". A possessive used as the work verb's object, such as
+"Analysed her earnings ... for the client", remains work. Explicit business
+receipts remain work even after an abbreviated period ("p.a. in client fees").
+
 **A summary is also the candidate's work, and much of that work is about pay**
 (HR, payroll, recruitment, sales). So a sentence is removed only on a clear
 sign that it states the candidate's **own** pay:
@@ -496,8 +503,12 @@ application must create any test receipt and local data inside temporary state,
 never in the owner's installed folder or per-user receipt location. Restore all
 environment overrides after import. `tests/test_cv_test_state_isolation.py`
 collects each affected test in its own interpreter and verifies that a pretend
-owner receipt and data paths are unchanged. On Windows this also protects the
-folder-bound authorization used by INSTALL/UPDATE.
+owner receipt and data paths are unchanged. Receipt creation receives its own
+explicit temporary HOME/LOCALAPPDATA mapping; mocking Path.home alone cannot
+override a HOME inherited by the builder on non-Windows hosts. The collection
+test checks that non-Windows selector before any receipt write, without changing
+the real process HOME or os.name. On Windows this also protects the folder-bound
+authorization used by INSTALL/UPDATE.
 
 ## Screen (checked by `tests/test_cv_parse_warning_persistence_frontend.js`)
 

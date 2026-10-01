@@ -11825,6 +11825,54 @@
    "bullets": ["Managed payroll with salary of 12 LPA for each employee who works in a support role."],
    "expect": ["Managed payroll with salary of 12 LPA for each employee who works in a support role."],
    "note": "Unprefixed amounts for actual employee recipients remain payroll work."
+  },
+  {
+   "id": "P1-work-opening-candidate-receipts",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": ["Led HR and the candidate receives RM 18,000 per month."],
+   "expect": [],
+   "note": "A work-opening sentence cannot hide an explicit candidate-pay clause."
+  },
+  {
+   "id": "P1-work-opening-own-earnings",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": ["Analysed performance and her earnings are RM 18,000 monthly."],
+   "expect": [],
+   "note": "A separate personal-earnings clause overrides the opening work verb."
+  },
+  {
+   "id": "P1-work-opening-business-receipts-control",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": ["Led sales and the candidate receives RM 18,000 per month in client fees."],
+   "expect": ["Led sales and the candidate receives RM 18,000 per month in client fees."],
+   "note": "Explicit business receipts remain work, not candidate salary."
+  },
+  {
+   "id": "P1-work-opening-company-earnings-control",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": ["Analysed performance and company earnings are RM 18,000 monthly."],
+   "expect": ["Analysed performance and company earnings are RM 18,000 monthly."],
+   "note": "Company earnings are still work."
+  },
+  {
+   "id": "P1-work-opening-other-party-control",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": ["Analysed her earnings of RM 18,000 monthly for the client."],
+   "expect": ["Analysed her earnings of RM 18,000 monthly for the client."],
+   "note": "A possessive object of a work verb is not an independent candidate-pay subject."
+  },
+  {
+   "id": "P1-work-opening-abbreviated-business-period-control",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": ["Managed sales and the candidate receives RM 9,000 p.a. in client fees."],
+   "expect": ["Managed sales and the candidate receives RM 9,000 p.a. in client fees."],
+   "note": "An annual abbreviation cannot hide the explicit business-receipts qualifier."
   }
  ]
 }

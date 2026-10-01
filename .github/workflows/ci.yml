@@ -175,3 +175,4 @@ jobs:
           print(validate_antiword_runtime(root, '${{ matrix.target }}'))
           print(validate_tesseract_runtime(root))
           PY
+          python -m unittest tests.test_cv_test_state_isolation

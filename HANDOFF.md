@@ -57,6 +57,9 @@ v24.6.429 collection tests verify the affected modules individually. For a full
 local suite, set temporary LOCALAPPDATA/APPDATA and all CVSTUDIO state/database/
 journal and SALARY_COMPARISON_DATA_DIR overrides before test collection. Tests
 must not authorize the test checkout by replacing the installed owner's receipt.
+Pass an explicit temporary HOME/LOCALAPPDATA mapping to receipt creation too:
+the builder's non-Windows selector trusts inherited HOME, not a mocked Path.home.
+The collection safety gate exercises that selector before any write.
 
 Regression CI is configured for pull requests and the exact commit pushed to
 `master`; runner provisioning can still fail when the account's Actions
@@ -318,8 +321,8 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **CV guardrail corrective — v24.6.429–431, UNMERGED.**
-  Branch `codex/pr220-v24.6.431-qualification-pay-guards` (PR number provisional),
+- **CV guardrail corrective — v24.6.429–432, PR #220.**
+  Branch `codex/pr220-v24.6.431-qualification-pay-guards` (existing PR head retained),
   based on merged master `cb0bcae`. v429 isolates test receipts/state, binds
   education major/grade labels to their qualification, keeps employee-pay work
   achievements and filters explicit candidate earnings. v430 preserves the
@@ -330,11 +333,15 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   keeps university-first prefixes in their own graduation span, and rejects
   employee/worker job-title continuations as payroll recipients. Real recipients
   with relative/action clauses remain work, including unprefixed LPA amounts.
+  v432 addresses PR220's review: independent candidate receipt/earnings clauses
+  cannot hide behind an opening work verb; app-import fixtures pass an explicit
+  temporary receipt environment, safe for the non-Windows HOME selector too.
   Existing fixture expectations are unchanged; new cases and real parse/Word
   regressions protect all three follow-up findings. No routes, schemas,
   dependencies, credentials, live AI calls or Word layout changes. Protected
-  compilation remains manual; no PR or merge without owner direction. See
-  `cv_studio_v24_6_431_qualification_pay_guards_qa_report.md` for the full gate,
+  compilation remains manual. The owner authorized fixes and merge after gates
+  pass; consult GitHub for current merge status. See
+  `cv_studio_v24_6_432_pr220_review_corrective_qa_report.md` for the latest gate,
   differential/corpus/mutation evidence and existing updater fixture limits.
 
 - **Title-above rows follow-up — v24.6.428, MERGED via PR #219 as `cb0bcae`.** Starts at merged master

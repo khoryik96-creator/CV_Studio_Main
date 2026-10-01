@@ -133,7 +133,9 @@ class GeneratedSalaryGuardrails(unittest.TestCase):
                      "Managed payroll with salary RM 9k for each employee and " * 600,
                      "Managed HR with salary RM 9k for the employee relations manager role and " * 600,
                      "Managed payroll with salary RM 9k for each employee " + "support " * 10000,
-                     "earnings of " * 3000, "The candidate receives " * 1500]:
+                     "earnings of " * 3000, "The candidate receives " * 1500,
+                     "Led HR and the candidate receives " * 1500,
+                     "Analysed performance and her earnings are " * 1500]:
             with self.subTest(text=text[:20]):
                 started = time.perf_counter()
                 normalize._cv_strip_pay_from_summary([text])
@@ -165,6 +167,30 @@ class GeneratedSalaryGuardrails(unittest.TestCase):
                      "She receives {a} monthly in revenue."]
         dropped = [text for text in (t.format(a=a) for t, a in itertools.product(templates, AMOUNTS[:8]))
                    if normalize._cv_strip_pay_from_summary([text]) != [text]]
+        self.assertEqual(dropped[:10], [])
+
+    def test_work_openings_cannot_hide_explicit_candidate_pay(self):
+        subjects = ["the candidate receives", "she receives", "he makes", "they get",
+                    "her earnings are", "his monthly earnings are", "my earnings are",
+                    "the candidate's earnings are"]
+        missed = [text for text in (
+            f"{verb} performance {joiner} {subject} {amount}{period}."
+            for verb, joiner, subject, amount, period in itertools.product(
+                WORK_VERBS[:6], ["and", "but", "while"], subjects, AMOUNTS[:8], PERIODS[1:])
+        ) if normalize._cv_strip_pay_from_summary([text]) != []]
+        self.assertEqual(missed[:10], [])
+
+    def test_work_openings_keep_business_and_other_party_pay(self):
+        templates = ["{v} performance and company earnings are {a}{p}.",
+                     "{v} performance and business earnings of {a}{p}.",
+                     "{v} sales and the candidate receives {a}{p} in client fees.",
+                     "{v} funding and she receives {a}{p} for grants.",
+                     "{v} her earnings of {a}{p} for the client.",
+                     "{v} payroll and each employee receives {a}{p}."]
+        dropped = [text for text in (
+            t.format(v=v, a=a, p=p) for t, v, a, p in itertools.product(
+                templates, WORK_VERBS[:6], AMOUNTS[:8], PERIODS[1:])
+        ) if normalize._cv_strip_pay_from_summary([text]) != [text]]
         self.assertEqual(dropped[:10], [])
 
     def test_employee_role_pay_is_removed_but_real_recipients_stay(self):

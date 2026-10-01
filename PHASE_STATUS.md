@@ -5,14 +5,16 @@
 ## Release state
 
 - Latest audited merged source (2026-09-30): v24.6.428, `cb0bcae` (#219).
-- Current corrective work: v24.6.431 on
-  `codex/pr220-v24.6.431-qualification-pay-guards` (PR number provisional), not
-  merged. Includes the unmerged v24.6.429 test-state, education-label and summary
+- Current corrective work: v24.6.432, PR #220, on
+  `codex/pr220-v24.6.431-qualification-pay-guards` (existing PR head retained).
+  Owner authorized merge once gates pass; GitHub is authoritative for its status.
+  Includes the v24.6.429 test-state, education-label and summary
   pay fixes. Follow-up scope: incomplete work histories retain uncertain jobs;
   reporting/working prose with adverbs cannot replace titles; graduation years
   stay in their own qualification segment. v431 corrects degree-above-school
   major/grade attachment, university-first combined graduation spans and
   employee/worker job-title salary phrases, preserving real payroll work.
+  v432 closes PR220's candidate-pay clause and non-Windows test-receipt findings.
   Routes, schemas, credentials and
   DOCX layout are unchanged. Older
   dated release/claim notes below are historical, not the current master state.

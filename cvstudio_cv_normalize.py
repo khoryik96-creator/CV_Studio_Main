@@ -2286,6 +2286,21 @@ _CV_PAY_ADDITIONAL_AMOUNT_RE = re.compile(
     + r"(?!\s+(?:in|for)\s+(?:client\s+)?(?:fees|revenue|billings?|funding|grants?|investments?)\b)",
     re.I,
 )
+# An independent personal-pay clause is not a work achievement just because
+# the sentence opens with "Led". Require its own subject at a clause opening;
+# "Analysed her earnings ... for the client" remains a work-verb object.
+_CV_PAY_SUBJECT_CLAUSE_RE = re.compile(
+    r"(?:^\W*|\b(?:and|but|while|whereas)\s+)(?:"
+    r"(?:(?:the\s+)?candidate|he|she|i|they)\s+(?:receiv(?:es|e|ed)|makes?|gets?|getting)\s+"
+    r"(?:about\s+|around\s+|approx(?:imately|\.)?\s*)?" + _CV_PAY_AMOUNT_MARKED + r"\s*" + _CV_PAY_PERIOD
+    # A period abbreviation can backtrack before its final dot ("p.a.").
+    # Business qualifiers must still apply to that complete period.
+    + r"(?!\.?\s+(?:in|for)\s+(?:client\s+)?(?:fees|revenue|billings?|funding|grants?|investments?)\b)"
+    + r"|(?:my|his|her|their|(?:the\s+)?candidate['\u2019]s)\s+"
+      r"(?:(?:monthly|annual|yearly|gross|net|total)\s+)?earnings\s+(?:of|are|is)\s+"
+      + _CV_PAY_AMOUNT_MARKED + r")",
+    re.I,
+)
 _CV_PAY_ORG_EARNINGS_RE = re.compile(
     r"\b(?:company|business|corporate|group|firm|bank|client|portfolio)\s+"
     r"(?:(?:monthly|annual|yearly|gross|net|total)\s+)?earnings\b", re.I,
@@ -2688,7 +2703,7 @@ def _cv_states_candidate_pay(text):
     matchable = _cv_pay_matchable(text)
     if not _CV_PAY_POSSIBLE_RE.search(matchable):
         return False
-    if _CV_PAY_OWN_RE.search(matchable):
+    if _CV_PAY_OWN_RE.search(matchable) or _CV_PAY_SUBJECT_CLAUSE_RE.search(matchable):
         return True
     for match in _CV_PAY_OWN_CURRENT_RE.finditer(matchable):
         begin, finish = _cv_pay_segment(matchable, match.start())

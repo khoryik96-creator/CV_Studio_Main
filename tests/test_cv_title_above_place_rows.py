@@ -36,7 +36,9 @@ with mock.patch.dict(os.environ, {
 }), mock.patch("pathlib.Path.home", return_value=Path(_MODULE_TEMPORARY.name)), \
         mock.patch("os.path.expanduser", side_effect=lambda path: (
             str(Path(_MODULE_TEMPORARY.name) / path[2:]) if path.startswith("~/") else path)):
-    write_test_receipt(ROOT)
+    write_test_receipt(ROOT, environment={
+        "HOME": _MODULE_TEMPORARY.name, "LOCALAPPDATA": _MODULE_TEMPORARY.name,
+    })
     import app
 
 HEADERS = {"Origin": "http://127.0.0.1:5000", "X-CV-Studio-Request": "1"}
