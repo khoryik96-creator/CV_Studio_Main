@@ -11873,6 +11873,22 @@
    "bullets": ["Managed sales and the candidate receives RM 9,000 p.a. in client fees."],
    "expect": ["Managed sales and the candidate receives RM 9,000 p.a. in client fees."],
    "note": "An annual abbreviation cannot hide the explicit business-receipts qualifier."
+  },
+  {
+   "id": "P1-work-opening-plural-employees-control",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": ["Managed payroll for 400 employees and they receive RM 9,000 monthly."],
+   "expect": ["Managed payroll for 400 employees and they receive RM 9,000 monthly."],
+   "note": "Plural pronouns in work clauses can refer to employees, not the candidate."
+  },
+  {
+   "id": "P1-work-opening-plural-companies-control",
+   "rule": "P1",
+   "kind": "summary_salary",
+   "bullets": ["Led portfolio companies and their earnings are RM 18,000 monthly."],
+   "expect": ["Led portfolio companies and their earnings are RM 18,000 monthly."],
+   "note": "A work-clause plural possessive can refer to company earnings."
   }
  ]
 }

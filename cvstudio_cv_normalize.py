@@ -2291,12 +2291,14 @@ _CV_PAY_ADDITIONAL_AMOUNT_RE = re.compile(
 # "Analysed her earnings ... for the client" remains a work-verb object.
 _CV_PAY_SUBJECT_CLAUSE_RE = re.compile(
     r"(?:^\W*|\b(?:and|but|while|whereas)\s+)(?:"
-    r"(?:(?:the\s+)?candidate|he|she|i|they)\s+(?:receiv(?:es|e|ed)|makes?|gets?|getting)\s+"
+    # "They/their" can refer to employees or companies in a work sentence;
+    # leave those ambiguous subjects to the established contextual matchers.
+    r"(?:(?:the\s+)?candidate|he|she|i)\s+(?:receiv(?:es|e|ed)|makes?|gets?|getting)\s+"
     r"(?:about\s+|around\s+|approx(?:imately|\.)?\s*)?" + _CV_PAY_AMOUNT_MARKED + r"\s*" + _CV_PAY_PERIOD
     # A period abbreviation can backtrack before its final dot ("p.a.").
     # Business qualifiers must still apply to that complete period.
     + r"(?!\.?\s+(?:in|for)\s+(?:client\s+)?(?:fees|revenue|billings?|funding|grants?|investments?)\b)"
-    + r"|(?:my|his|her|their|(?:the\s+)?candidate['\u2019]s)\s+"
+    + r"|(?:my|his|her|(?:the\s+)?candidate['\u2019]s)\s+"
       r"(?:(?:monthly|annual|yearly|gross|net|total)\s+)?earnings\s+(?:of|are|is)\s+"
       + _CV_PAY_AMOUNT_MARKED + r")",
     re.I,

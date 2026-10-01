@@ -321,7 +321,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **CV guardrail corrective — v24.6.429–432, PR #220.**
+- **CV guardrail corrective — v24.6.429–433, PR #220.**
   Branch `codex/pr220-v24.6.431-qualification-pay-guards` (existing PR head retained),
   based on merged master `cb0bcae`. v429 isolates test receipts/state, binds
   education major/grade labels to their qualification, keeps employee-pay work
@@ -336,12 +336,14 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   v432 addresses PR220's review: independent candidate receipt/earnings clauses
   cannot hide behind an opening work verb; app-import fixtures pass an explicit
   temporary receipt environment, safe for the non-Windows HOME selector too.
+  v433 narrows the new subject override: work-clause plural pronouns may refer
+  to employee/company pay, so they retain the established contextual handling.
   Existing fixture expectations are unchanged; new cases and real parse/Word
   regressions protect all three follow-up findings. No routes, schemas,
   dependencies, credentials, live AI calls or Word layout changes. Protected
   compilation remains manual. The owner authorized fixes and merge after gates
   pass; consult GitHub for current merge status. See
-  `cv_studio_v24_6_432_pr220_review_corrective_qa_report.md` for the latest gate,
+  `cv_studio_v24_6_433_plural_subject_safety_qa_report.md` for the latest gate,
   differential/corpus/mutation evidence and existing updater fixture limits.
 
 - **Title-above rows follow-up — v24.6.428, MERGED via PR #219 as `cb0bcae`.** Starts at merged master

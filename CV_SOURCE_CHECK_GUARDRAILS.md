@@ -315,6 +315,9 @@ candidate receives RM 18,000 per month", "Analysed performance and her earnings
 are RM 18,000 monthly". A possessive used as the work verb's object, such as
 "Analysed her earnings ... for the client", remains work. Explicit business
 receipts remain work even after an abbreviated period ("p.a. in client fees").
+Plural subjects ("they receive", "their earnings") in work-opening sentences
+can refer to employees or companies, so they retain the existing contextual
+handling instead of unconditionally overriding the work exception.
 
 **A summary is also the candidate's work, and much of that work is about pay**
 (HR, payroll, recruitment, sales). So a sentence is removed only on a clear

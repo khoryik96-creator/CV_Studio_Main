@@ -170,7 +170,7 @@ class GeneratedSalaryGuardrails(unittest.TestCase):
         self.assertEqual(dropped[:10], [])
 
     def test_work_openings_cannot_hide_explicit_candidate_pay(self):
-        subjects = ["the candidate receives", "she receives", "he makes", "they get",
+        subjects = ["the candidate receives", "she receives", "he makes", "the candidate gets",
                     "her earnings are", "his monthly earnings are", "my earnings are",
                     "the candidate's earnings are"]
         missed = [text for text in (
@@ -186,7 +186,9 @@ class GeneratedSalaryGuardrails(unittest.TestCase):
                      "{v} sales and the candidate receives {a}{p} in client fees.",
                      "{v} funding and she receives {a}{p} for grants.",
                      "{v} her earnings of {a}{p} for the client.",
-                     "{v} payroll and each employee receives {a}{p}."]
+                     "{v} payroll and each employee receives {a}{p}.",
+                     "{v} payroll for 400 employees and they receive {a}{p}.",
+                     "{v} portfolio companies and their earnings are {a}{p}."]
         dropped = [text for text in (
             t.format(v=v, a=a, p=p) for t, v, a, p in itertools.product(
                 templates, WORK_VERBS[:6], AMOUNTS[:8], PERIODS[1:])
