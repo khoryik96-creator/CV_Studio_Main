@@ -72,10 +72,56 @@ class OcrDateRecheckTests(unittest.TestCase):
         self.assertEqual(safety._ocr_repair_header_dates(BAD, [changed, changed]), BAD)
 
     def test_extra_scans_stop_after_two_suspect_pages(self):
-        result, renderer, provider = self.run_ocr([BAD, GOOD, GOOD, BAD, GOOD, GOOD, BAD], pages=(1, 2, 3))
+        result, renderer, provider = self.run_ocr([BAD, BAD, BAD, GOOD, GOOD, GOOD, GOOD], pages=(1, 2, 3))
         self.assertEqual(result, {1: GOOD, 2: GOOD, 3: BAD})
         self.assertEqual(provider.image_to_string.call_count, 7)
         self.assertEqual(renderer.call_count, 7)
+        self.assertEqual([call.kwargs["dpi"] for call in renderer.call_args_list], [220, 220, 220, 150, 160, 150, 160])
+
+    def test_primary_pages_finish_before_optional_rechecks_use_remaining_time(self):
+        elapsed = [0]
+        images = []
+        def render(*args, **kwargs):
+            image = self.Image()
+            images.append(image)
+            elapsed[0] += 40
+            return [image]
+        result, renderer, _ = self.run_ocr([BAD, BAD, BAD, GOOD, GOOD], render=render,
+            clock=lambda: elapsed[0], pages=(1, 2, 3))
+        self.assertEqual(result, {1: BAD, 2: BAD, 3: BAD})
+        self.assertEqual([call.kwargs["dpi"] for call in renderer.call_args_list[:3]], [220, 220, 220])
+        self.assertEqual([call.kwargs["first_page"] for call in renderer.call_args_list[:3]], [1, 2, 3])
+        self.assertTrue(all(image.closed for image in images))
+
+    def test_optional_failure_after_primary_pages_keeps_the_complete_document(self):
+        result, renderer, _ = self.run_ocr([BAD, BAD, GOOD, TimeoutError("optional deadline")], pages=(1, 2, 3))
+        self.assertEqual(result, {1: BAD, 2: BAD, 3: GOOD})
+        self.assertEqual([call.kwargs["dpi"] for call in renderer.call_args_list[:3]], [220, 220, 220])
+
+    def test_month_omissions_do_not_count_as_january_or_december_agreement(self):
+        primary = BAD.replace("Aug", "Jan").replace("May", "Dec")
+        corrected = primary.replace("2017", "2011")
+        for alternate in (corrected.replace("Jan ", ""), corrected.replace("Dec ", ""),
+                          corrected.replace("Jan ", "").replace("Dec ", "")):
+            for alternatives in ([alternate, alternate], [corrected, alternate]):
+                with self.subTest(alternatives=alternatives):
+                    self.assertEqual(safety._ocr_repair_header_dates(primary, alternatives), primary)
+
+    def test_explicit_months_cannot_be_added_to_year_only_primary_consensus(self):
+        primary = "Analyst\nContoso Systems | 2017 - 2015\n"
+        for alternate in ("Analyst\nContoso Systems | Jan 2011 - 2015\n",
+                          "Analyst\nContoso Systems | 2011 - Dec 2015\n"):
+            with self.subTest(alternate=alternate):
+                self.assertEqual(safety._ocr_repair_header_dates(primary, [alternate, alternate]), primary)
+
+    def test_equivalent_full_month_names_and_year_only_ranges_still_agree(self):
+        primary = BAD.replace("Aug", "Jan").replace("May", "Dec")
+        corrected = primary.replace("2017", "2011")
+        self.assertEqual(safety._ocr_repair_header_dates(primary,
+            [corrected.replace("Jan", "January").replace("Dec", "December"), corrected]), corrected)
+        primary = "Analyst\nContoso Systems | 2017 - 2015\n"
+        corrected = primary.replace("2017", "2011")
+        self.assertEqual(safety._ocr_repair_header_dates(primary, [corrected, corrected]), corrected)
 
     def test_optional_scans_share_the_primary_deadline_and_have_short_timeouts(self):
         result, renderer, provider = self.run_ocr([BAD, GOOD, GOOD], clock=lambda: 0)

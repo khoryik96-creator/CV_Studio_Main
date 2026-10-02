@@ -17,8 +17,10 @@ import copy
 import json
 from pathlib import Path
 import re
+import threading
 import time
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -148,6 +150,35 @@ class SummarySalaryGuardrails(unittest.TestCase):
 
 
 class DateRewriteGuardrails(unittest.TestCase):
+    def test_primary_ocr_precedes_optional_scans(self):
+        for case in _cases("ocr_schedule"):
+            with self.subTest(case=case["id"]):
+                elapsed = [0]
+                images = []
+                class Image:
+                    size = (200, 200)
+                    def close(self):
+                        self.closed = True
+                def render(*args, **kwargs):
+                    elapsed[0] += case["render_seconds"]
+                    image = Image()
+                    images.append(image)
+                    return [image]
+                renderer = mock.Mock(side_effect=render)
+                provider = mock.Mock()
+                provider.image_to_string.side_effect = case["texts"]
+                semaphore = threading.BoundedSemaphore(1)
+                with mock.patch.object(document_safety, "rendered_pdf_page_is_visually_blank", return_value=False):
+                    result = document_safety.ocr_pdf_pages_pagewise(b"synthetic", provider,
+                        pdf_page_count=lambda _: 3, render_pdf_page_images=renderer, ocr_semaphore=semaphore,
+                        max_ocr_pages=30, max_image_pixels=40000, deadline_seconds=180,
+                        monotonic=lambda: elapsed[0])
+                self.assertEqual(result, {i + 1: text for i, text in enumerate(case["expect"])}, case["note"])
+                self.assertEqual([call.kwargs["dpi"] for call in renderer.call_args_list[:3]], [220, 220, 220])
+                self.assertTrue(all(image.closed for image in images))
+                self.assertTrue(semaphore.acquire(blocking=False))
+                semaphore.release()
+
     def test_ocr_date_recheck(self):
         for case in _cases("ocr_date_recheck"):
             with self.subTest(case=case["id"]):

@@ -8,7 +8,7 @@
   Tested head `93c4971` has the same tree; all three hosted gates passed.
   `codex/v24.6.435-batch-format-review` is complete.
 
-- Current owner-authorized source work: v24.6.436,
+- Current owner-authorized source work: v24.6.437,
   `codex/v24.6.436-review-date-corrections`, from exact `cf48a558`.
   Omit already-satisfied source-backed AI review suggestions; preserve warnings
   for missing details and conflicting candidate headers. Unique two-line work
@@ -16,7 +16,11 @@
   header dates receive bounded local 150/160-DPI consensus checks that change
   only a proven one-digit start year. Existing 899 guardrail expectations stay
   unchanged. No live AI, owner receipt/data change, route/schema change or
-  protected build. See the v436 QA report for final validation and limits.
+  protected build. The v437 review corrective rejects repeated pairs across
+  other supported header layouts, finishes primary OCR before optional reads,
+  and requires actual month presence/value agreement. The existing 905 cases
+  remain unchanged; ten new registry cases cover the review findings. See the
+  v436/v437 QA reports for validation and limits.
 
 - Previous verified merged baseline (2026-10-01): v24.6.433, `efe42f21` (#220).
   The merged tree matches tested head `9665d75`; all three hosted gates passed.

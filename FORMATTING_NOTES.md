@@ -33,6 +33,12 @@ text intact. After parsing, unique exact title-above `Employer | Dates` headers
 can restore only an existing job/role's dates. Neither pass guesses dates or
 rebuilds incomplete histories. Rules D2/D3 and the v436 QA report cover this.
 
+The v24.6.437 review corrective counts repeated employer/title headers across
+all supported layouts before recovering a date. Mandatory OCR pages finish
+before optional rechecks, which retain completed pages if time runs out.
+Missing months cannot establish agreement with explicit January/December dates.
+All previous formatting and review expectations remain; see the v437 QA report.
+
 ## The pipeline (source doc → formatted DOCX)
 
 1. **`/extract-text`** (`app.py`) — pulls raw text from the upload: `pdfplumber`

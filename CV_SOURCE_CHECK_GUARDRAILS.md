@@ -585,6 +585,9 @@ parsed role and one source header; dates must be a complete chronological range.
 No job, duty, header or order is rebuilt. A single-role job keeps dates on the
 employer; a multi-role job restores only the matched role date. Ambiguous repeats,
 unrelated sections, trailing prose and conflicting single-role dates stay unchanged.
+Uniqueness includes the other supported source layouts: a matching table,
+borderless or title/company/date header blocks the two-line repair, even when
+its dates are identical. Count these as additional sightings before changing dates.
 
 ### D3
 
@@ -595,4 +598,7 @@ change into a chronological range. Only that year is replaced in the primary OCR
 text. Other OCR content stays intact. Rechecks share the original semaphore, pixel
 limit and document deadline, each render/read has at most ten seconds, and an
 optional failure retains successful primary text. Normal chronological dates do
-not trigger extra OCR.
+not trigger extra OCR. Complete every selected primary page before optional
+rechecks use the remaining deadline. Optional exhaustion cannot discard those
+primary pages. Consensus requires matching month presence as well as normalized
+month values; chronology's January/December defaults are not observed evidence.

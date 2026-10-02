@@ -12029,6 +12029,338 @@
    ],
    "expect": "Technical Specialist\nContoso Systems | Aug 2017 - May 2015\nKept original duty.\nTechnical Specialist\nContoso Systems | Aug 2017 - May 2015\nKept original duty.\n",
    "note": "Repeated title/employer source headers cannot uniquely identify the date."
+  },
+  {
+   "id": "D2-mixed-layout-repeat-title-first",
+   "rule": "D2",
+   "kind": "work_reconcile",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Analyst",
+    "Contoso Systems | 2011 - 2015",
+    "Analyst | Contoso Systems | 2020 - 2024"
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Contoso Systems",
+      "date_range": "2020 to 2024",
+      "roles": [
+       {
+        "title": "Analyst",
+        "bullets": [
+         "Kept original duty."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Contoso Systems",
+      "date_range": "2020 to 2024",
+      "roles": [
+       {
+        "title": "Analyst",
+        "bullets": [
+         "Kept original duty."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "note": "Another supported layout names the same employer/title; do not overwrite one stint from an ambiguous pair."
+  },
+  {
+   "id": "D2-mixed-layout-repeat-company-first",
+   "rule": "D2",
+   "kind": "work_reconcile",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Analyst",
+    "Contoso Systems | 2011 - 2015",
+    "Contoso Systems | Analyst | 2020 - 2024"
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Contoso Systems",
+      "date_range": "2020 to 2024",
+      "roles": [
+       {
+        "title": "Analyst",
+        "bullets": [
+         "Kept original duty."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Contoso Systems",
+      "date_range": "2020 to 2024",
+      "roles": [
+       {
+        "title": "Analyst",
+        "bullets": [
+         "Kept original duty."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "note": "Another supported layout names the same employer/title; do not overwrite one stint from an ambiguous pair."
+  },
+  {
+   "id": "D2-mixed-layout-repeat-date-first",
+   "rule": "D2",
+   "kind": "work_reconcile",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Analyst",
+    "Contoso Systems | 2011 - 2015",
+    "2020 - 2024 | Contoso Systems | Analyst"
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Contoso Systems",
+      "date_range": "2020 to 2024",
+      "roles": [
+       {
+        "title": "Analyst",
+        "bullets": [
+         "Kept original duty."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Contoso Systems",
+      "date_range": "2020 to 2024",
+      "roles": [
+       {
+        "title": "Analyst",
+        "bullets": [
+         "Kept original duty."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "note": "Another supported layout names the same employer/title; do not overwrite one stint from an ambiguous pair."
+  },
+  {
+   "id": "D2-mixed-layout-repeat-borderless",
+   "rule": "D2",
+   "kind": "work_reconcile",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Analyst",
+    "Contoso Systems | 2011 - 2015",
+    "2020 - 2024 Contoso Systems Analyst"
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Contoso Systems",
+      "date_range": "2020 to 2024",
+      "roles": [
+       {
+        "title": "Analyst",
+        "bullets": [
+         "Kept original duty."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Contoso Systems",
+      "date_range": "2020 to 2024",
+      "roles": [
+       {
+        "title": "Analyst",
+        "bullets": [
+         "Kept original duty."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "note": "Another supported layout names the same employer/title; do not overwrite one stint from an ambiguous pair."
+  },
+  {
+   "id": "D2-mixed-layout-repeat-place",
+   "rule": "D2",
+   "kind": "work_reconcile",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Analyst",
+    "Contoso Systems | 2011 - 2015",
+    "Analyst",
+    "Contoso Systems | Singapore | 2020 - 2024"
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Contoso Systems",
+      "date_range": "2020 to 2024",
+      "roles": [
+       {
+        "title": "Analyst",
+        "bullets": [
+         "Kept original duty."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Contoso Systems",
+      "date_range": "2020 to 2024",
+      "roles": [
+       {
+        "title": "Analyst",
+        "bullets": [
+         "Kept original duty."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "note": "Another supported layout names the same employer/title; do not overwrite one stint from an ambiguous pair."
+  },
+  {
+   "id": "D2-mixed-layout-repeat-identical-dates",
+   "rule": "D2",
+   "kind": "work_reconcile",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Analyst",
+    "Contoso Systems | 2011 - 2015",
+    "Analyst | Contoso Systems | 2011 - 2015"
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Contoso Systems",
+      "date_range": "2020 to 2024",
+      "roles": [
+       {
+        "title": "Analyst",
+        "bullets": [
+         "Kept original duty."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Contoso Systems",
+      "date_range": "2020 to 2024",
+      "roles": [
+       {
+        "title": "Analyst",
+        "bullets": [
+         "Kept original duty."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "note": "Another supported layout names the same employer/title; do not overwrite one stint from an ambiguous pair."
+  },
+  {
+   "id": "D3-missing-month-start",
+   "rule": "D3",
+   "kind": "ocr_date_recheck",
+   "primary": "Analyst\nContoso Systems | Jan 2017 - Dec 2015\nKept original duty.\n",
+   "alternatives": [
+    "Analyst\nContoso Systems | 2011 - Dec 2015\nKept original duty.\n",
+    "Analyst\nContoso Systems | 2011 - Dec 2015\nKept original duty.\n"
+   ],
+   "expect": "Analyst\nContoso Systems | Jan 2017 - Dec 2015\nKept original duty.\n",
+   "note": "An absent month does not prove the explicitly stated January or December month."
+  },
+  {
+   "id": "D3-missing-month-end",
+   "rule": "D3",
+   "kind": "ocr_date_recheck",
+   "primary": "Analyst\nContoso Systems | Jan 2017 - Dec 2015\nKept original duty.\n",
+   "alternatives": [
+    "Analyst\nContoso Systems | Jan 2011 - 2015\nKept original duty.\n",
+    "Analyst\nContoso Systems | Jan 2011 - 2015\nKept original duty.\n"
+   ],
+   "expect": "Analyst\nContoso Systems | Jan 2017 - Dec 2015\nKept original duty.\n",
+   "note": "An absent month does not prove the explicitly stated January or December month."
+  },
+  {
+   "id": "D3-missing-month-both",
+   "rule": "D3",
+   "kind": "ocr_date_recheck",
+   "primary": "Analyst\nContoso Systems | Jan 2017 - Dec 2015\nKept original duty.\n",
+   "alternatives": [
+    "Analyst\nContoso Systems | 2011 - 2015\nKept original duty.\n",
+    "Analyst\nContoso Systems | 2011 - 2015\nKept original duty.\n"
+   ],
+   "expect": "Analyst\nContoso Systems | Jan 2017 - Dec 2015\nKept original duty.\n",
+   "note": "An absent month does not prove the explicitly stated January or December month."
+  },
+  {
+   "id": "D3-primary-pages-before-optional",
+   "rule": "D3",
+   "kind": "ocr_schedule",
+   "render_seconds": 40,
+   "texts": [
+    "Analyst\nContoso Systems | Jan 2017 - Dec 2015\n",
+    "Analyst\nContoso Systems | Jan 2017 - Dec 2015\n",
+    "Analyst\nContoso Systems | Jan 2017 - Dec 2015\n",
+    "Analyst\nContoso Systems | Jan 2011 - Dec 2015\n",
+    "Analyst\nContoso Systems | Jan 2011 - Dec 2015\n"
+   ],
+   "expect": [
+    "Analyst\nContoso Systems | Jan 2017 - Dec 2015\n",
+    "Analyst\nContoso Systems | Jan 2017 - Dec 2015\n",
+    "Analyst\nContoso Systems | Jan 2017 - Dec 2015\n"
+   ],
+   "note": "All three primary pages complete in 120 seconds; optional exhaustion cannot discard them."
   }
  ]
 }

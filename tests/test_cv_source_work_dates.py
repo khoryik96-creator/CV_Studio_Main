@@ -61,6 +61,32 @@ class SourceWorkDateTests(unittest.TestCase):
         data["work_experiences"][0]["roles"][0]["date_range"] = "2012 to 2014"
         self.assertEqual(self.reconcile("WORK EXPERIENCE\nTechnical Specialist\nContoso Systems | Aug 2011 - May 2015", data), data)
 
+    def test_repeated_stints_in_other_supported_layouts_do_not_overwrite_dates(self):
+        data = cv(title="Analyst", date="2020 to 2024")
+        for header in (
+            "Analyst | Contoso Systems | 2020 - 2024",
+            "Contoso Systems | Analyst | 2020 - 2024",
+            "2020 - 2024 | Contoso Systems | Analyst",
+            "2020 - 2024 Contoso Systems Analyst",
+            "Analyst\nContoso Systems | Singapore | 2020 - 2024",
+        ):
+            source = "WORK EXPERIENCE\nAnalyst\nContoso Systems | 2011 - 2015\n" + header
+            with self.subTest(header=header):
+                self.assertEqual(self.reconcile(source, data), data)
+                self.assertEqual(_restore_work_dates_from_source_headers(copy.deepcopy(data), source), data)
+
+    def test_another_layout_blocks_recovery_even_when_its_dates_are_identical(self):
+        data = cv(title="Analyst", date="2020 to 2024")
+        source = "WORK EXPERIENCE\nAnalyst\nContoso Systems | 2011 - 2015\nAnalyst | Contoso Systems | 2011 - 2015"
+        self.assertEqual(self.reconcile(source, data), data)
+
+    def test_generated_mixed_layout_repeats_preserve_every_field(self):
+        for year in range(1980, 2020):
+            data = cv(company=f"Contoso Systems {year}", title="Analyst", date=f"{year + 10} to {year + 14}")
+            source = f"WORK EXPERIENCE\nAnalyst\nContoso Systems {year} | {year} - {year + 4}\nAnalyst | Contoso Systems {year} | {year + 10} - {year + 14}"
+            with self.subTest(year=year):
+                self.assertEqual(self.reconcile(source, data), data)
+
     def test_generated_headers_keep_every_other_field_and_are_idempotent(self):
         for year in range(1980, 2025):
             data = cv(company=f"Contoso Systems {year}", date=f"Aug {year + 6} to May {year + 4}")

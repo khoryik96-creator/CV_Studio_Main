@@ -76,7 +76,11 @@ def _ocr_repair_header_dates(primary, alternatives):
         new_years = [row[1]["start_year"] for row in readings]
         old_year = original["start_year"]
         if (new_years[0] != new_years[1] or sum(a != b for a, b in zip(old_year, new_years[0])) != 1
-                or any(row[2] > row[3] or row[2][1] != start[1] or row[3] != end for row in readings)):
+                or any(row[2] > row[3] or row[2][1] != start[1] or row[3] != end for row in readings)
+                # January/December defaults only order ranges; missing months
+                # cannot establish agreement with explicitly observed months.
+                or any((row[1][field] or "")[:3].casefold() != (original[field] or "")[:3].casefold()
+                       for row in readings for field in ("start_month", "end_month"))):
             continue
         before, after = original.span("start_year")
         lines[index] = lines[index][:before] + new_years[0] + lines[index][after:]
@@ -397,6 +401,10 @@ def ocr_pdf_pages_pagewise(
                         rendered_image.close()
                     except Exception:
                         pass
+
+        # Complete every mandatory page before optional date scans consume any
+        # of the shared deadline. Optional exhaustion retains the whole result.
+        for page_number in selected_pages:
             primary = results.get(page_number, "")
             if (date_recheck_pages < 2 and _ocr_has_reversed_header_date(primary)
                     and monotonic() - started < deadline_seconds - 20):

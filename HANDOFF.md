@@ -325,7 +325,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Resolved review/date corrective — v24.6.436, owner-authorized source work.**
+- **Resolved review/date corrective — v24.6.437, owner-authorized source work.**
   Branch `codex/v24.6.436-review-date-corrections` starts at exact merged master
   `cf48a558` / v435. Already-satisfied source-backed review suggestions are
   omitted only when all proposed details exist at the same role/qualification;
@@ -340,6 +340,12 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   Existing 899 registry cases are unchanged; new source/consensus controls and
   review/real Word regressions are recorded in the v436 QA report. No owner
   installation change, protected build, new route/schema or JobAdder write.
+  The v437 review corrective also blocks date recovery when another supported
+  layout names the same pair (including identical dates), completes mandatory
+  OCR pages before optional reads, and requires matching observed month
+  presence/value. All 905 v436 registry cases remain unchanged; ten new cases
+  and focused timing/generated controls cover the three review findings.
+  See the v437 QA report for corrective validation.
   Push this owned branch after gates; open a PR only at the owner's request.
 
 - **Optional AI formatting review — v24.6.435, PR #221, MERGED as `cf48a558`.**
