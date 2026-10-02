@@ -4,6 +4,26 @@
 
 ## Release state
 
+- Current verified merged baseline (2026-10-02): v24.6.435, `cf48a558` (#221).
+  Tested head `93c4971` has the same tree; all three hosted gates passed.
+  `codex/v24.6.435-batch-format-review` is complete.
+
+- Current owner-authorized source work: v24.6.437,
+  `codex/v24.6.436-review-date-corrections`, from exact `cf48a558`.
+  Omit already-satisfied source-backed AI review suggestions; preserve warnings
+  for missing details and conflicting candidate headers. Unique two-line work
+  headers restore existing dates without replacing jobs/duties. Reversed scanned
+  header dates receive bounded local 150/160-DPI consensus checks that change
+  only a proven one-digit start year. Existing 899 guardrail expectations stay
+  unchanged. No live AI, owner receipt/data change, route/schema change or
+  protected build. The v437 review corrective rejects repeated pairs across
+  other supported header layouts, finishes primary OCR before optional reads,
+  and requires actual month presence/value agreement. The existing 905 cases
+  remain unchanged; ten new registry cases cover the review findings. See the
+  v436/v437 QA reports for validation and limits.
+  Owner explicitly authorized a PR and merge on 2026-10-02; awaiting the exact
+  head's hosted gates. Final merge/check identities are recorded in issue #35.
+
 - Previous verified merged baseline (2026-10-01): v24.6.433, `efe42f21` (#220).
   The merged tree matches tested head `9665d75`; all three hosted gates passed.
   `codex/pr220-v24.6.431-qualification-pay-guards` is a completed branch.
@@ -19,7 +39,7 @@
   DOCX layout are unchanged. Older
   dated release/claim notes below are historical, not the current master state.
 
-- Current owner-approved source work: v24.6.435, branch
+- Completed owner-approved source work: v24.6.435, branch
   `codex/v24.6.435-batch-format-review`, from pushed unmerged v434 `c86b2f7`
   (base exact master `efe42f21`). One saved off-by-default AI review choice in
   Settings → General Settings for normal single and batch CVs; one extra check

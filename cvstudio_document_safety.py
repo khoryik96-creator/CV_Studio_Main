@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import re
 import time
 from typing import Any, Callable
 import zipfile
@@ -18,6 +19,72 @@ OCR_TOTAL_DEADLINE_SECONDS = 180
 OCR_PAGE_RENDER_TIMEOUT_SECONDS = 45
 OCR_PAGE_TEXT_TIMEOUT_SECONDS = 35
 ALLOWED_IMAGE_FORMATS = frozenset({"BMP", "JPEG", "PNG", "TIFF", "WEBP"})
+
+
+_OCR_MONTH = r"Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?"
+_OCR_DATE_HEADER = re.compile(
+    r"^(?P<company>[^|\r\n]{2,120}?)\s*\|\s*"
+    r"(?:(?P<start_month>" + _OCR_MONTH + r")\.?\s+)?(?P<start_year>(?:19|20)\d{2})"
+    r"\s*(?:to|[-–—])\s*(?:(?P<end_month>" + _OCR_MONTH + r")\.?\s+)?"
+    r"(?P<end_year>(?:19|20)\d{2})\s*$", re.I,
+)
+_OCR_MONTH_NUMBERS = {month: index + 1 for index, month in enumerate(
+    ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"))}
+
+
+def _ocr_date_headers(text):
+    """Unique title / employer|date evidence, with offsets into original lines."""
+    headers = {}
+    previous = ""
+    for index, raw in enumerate(text.splitlines(keepends=True)):
+        line = raw.rstrip("\r\n")
+        if not line.strip():
+            continue
+        match = _OCR_DATE_HEADER.fullmatch(line) if len(line) <= 300 else None
+        if (match and 2 <= len(previous) <= 160 and len(previous.split()) <= 24
+                and previous[0].isalnum() and not previous.endswith((".", ",", ";", ":"))):
+            key = (" ".join(previous.split()).casefold(), " ".join(match["company"].split()).casefold())
+            start = (int(match["start_year"]), _OCR_MONTH_NUMBERS.get((match["start_month"] or "")[:3].lower(), 1))
+            end = (int(match["end_year"]), _OCR_MONTH_NUMBERS.get((match["end_month"] or "")[:3].lower(), 12))
+            headers.setdefault(key, []).append((index, match, start, end))
+        previous = line.strip()
+    return headers
+
+
+def _ocr_has_reversed_header_date(text):
+    return any(len(rows) == 1 and rows[0][2] > rows[0][3] for rows in _ocr_date_headers(text).values())
+
+
+def _ocr_repair_header_dates(primary, alternatives):
+    """Two alternate scans must agree on a one-digit start-year correction.
+
+    Preserve primary text byte for byte except that digit. The employer/title,
+    start month and complete end date must agree in all three readings. No
+    endpoint swapping, guesses or wholesale alternate-page replacement.
+    """
+    if len(alternatives) != 2:
+        return primary
+    alternate_headers = [_ocr_date_headers(text) for text in alternatives]
+    lines = primary.splitlines(keepends=True)
+    for key, rows in _ocr_date_headers(primary).items():
+        if len(rows) != 1 or rows[0][2] <= rows[0][3]:
+            continue
+        if any(len(headers.get(key, [])) != 1 for headers in alternate_headers):
+            continue
+        index, original, start, end = rows[0]
+        readings = [headers[key][0] for headers in alternate_headers]
+        new_years = [row[1]["start_year"] for row in readings]
+        old_year = original["start_year"]
+        if (new_years[0] != new_years[1] or sum(a != b for a, b in zip(old_year, new_years[0])) != 1
+                or any(row[2] > row[3] or row[2][1] != start[1] or row[3] != end for row in readings)
+                # January/December defaults only order ranges; missing months
+                # cannot establish agreement with explicitly observed months.
+                or any((row[1][field] or "")[:3].casefold() != (original[field] or "")[:3].casefold()
+                       for row in readings for field in ("start_month", "end_month"))):
+            continue
+        before, after = original.span("start_year")
+        lines[index] = lines[index][:before] + new_years[0] + lines[index][after:]
+    return "".join(lines)
 
 
 class PdfOcrPageResults(dict):
@@ -289,6 +356,7 @@ def ocr_pdf_pages_pagewise(
         )
     started = monotonic()
     results = PdfOcrPageResults()
+    date_recheck_pages = 0
 
     def remaining_timeout(limit: int) -> int:
         remaining = float(deadline_seconds) - (monotonic() - started)
@@ -333,6 +401,41 @@ def ocr_pdf_pages_pagewise(
                         rendered_image.close()
                     except Exception:
                         pass
+
+        # Complete every mandatory page before optional date scans consume any
+        # of the shared deadline. Optional exhaustion retains the whole result.
+        for page_number in selected_pages:
+            primary = results.get(page_number, "")
+            if (date_recheck_pages < 2 and _ocr_has_reversed_header_date(primary)
+                    and monotonic() - started < deadline_seconds - 20):
+                date_recheck_pages += 1
+                alternatives = []
+                # Optional local reads share the existing semaphore/deadline.
+                # Their failure must not discard already successful OCR.
+                try:
+                    for alternate_dpi in (150, 160):
+                        alternate_images = render_pdf_page_images(
+                            file_bytes, dpi=alternate_dpi, poppler_path=poppler_path,
+                            first_page=page_number, last_page=page_number,
+                            timeout=remaining_timeout(10),
+                        )
+                        try:
+                            if len(alternate_images) != 1 or alternate_images[0].size[0] * alternate_images[0].size[1] > max_image_pixels:
+                                break
+                            alternatives.append(pytesseract.image_to_string(
+                                alternate_images[0], lang="eng", timeout=remaining_timeout(10)))
+                        finally:
+                            for alternate_image in alternate_images:
+                                try:
+                                    alternate_image.close()
+                                except Exception:
+                                    # cleanup-only: release all other alternate images.
+                                    pass
+                    if monotonic() - started <= deadline_seconds:
+                        results[page_number] = _ocr_repair_header_dates(primary, alternatives)
+                except Exception:
+                    # best-effort: optional recheck cannot discard primary OCR.
+                    pass
         return results
     finally:
         ocr_semaphore.release()
