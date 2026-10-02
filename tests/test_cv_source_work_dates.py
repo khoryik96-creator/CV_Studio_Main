@@ -138,6 +138,31 @@ class SourceWorkDateTests(unittest.TestCase):
         self.assertEqual(_restore_work_dates_from_source_headers(copy.deepcopy(data), source), data)
         self.assertLess(time.perf_counter() - started, 3.0)
 
+    def test_many_unrelated_sections_keep_dates_when_unique_recovery_cannot_be_bounded(self):
+        data = cv(title="SR Engineer", date="2020 to 2024")
+        source = "WORK EXPERIENCE\nSR Engineer\nContoso Systems | 2011 - 2015\n" + (
+            "EDUCATION\nFabrikam University\nWORK EXPERIENCE\nAnalyst | Northwind Systems | 2020 - 2024\n" * 20000)
+        started = time.perf_counter()
+        self.assertEqual(_restore_work_dates_from_source_headers(copy.deepcopy(data), source), data)
+        self.assertLess(time.perf_counter() - started, 3.0)
+
+    def test_unread_late_repeat_cannot_allow_recovery(self):
+        data = cv(title="SR Engineer", date="2020 to 2024")
+        source = "WORK EXPERIENCE\nSR Engineer\nContoso Systems | 2011 - 2015\n" + (
+            "EDUCATION\nFabrikam University\nWORK EXPERIENCE\nAnalyst | Northwind Systems | 2020 - 2024\n" * 20000)
+        source += "EDUCATION\nFabrikam University\nWORK EXPERIENCE\nSR Engineer | Contoso Systems | 2020 - 2024"
+        started = time.perf_counter()
+        self.assertEqual(_restore_work_dates_from_source_headers(copy.deepcopy(data), source), data)
+        self.assertLess(time.perf_counter() - started, 3.0)
+
+    def test_unique_recovery_survives_many_ordinary_unrelated_sections(self):
+        data = cv(title="SR Engineer", date="2020 to 2024")
+        expected = copy.deepcopy(data)
+        expected["work_experiences"][0]["date_range"] = "2011 to 2015"
+        source = "WORK EXPERIENCE\nSR Engineer\nContoso Systems | 2011 - 2015\n" + (
+            "EDUCATION\nFabrikam University\nWORK EXPERIENCE\nAnalyst | Northwind Systems | 2020 - 2024\n" * 32)
+        self.assertEqual(_restore_work_dates_from_source_headers(copy.deepcopy(data), source), expected)
+
     def test_generated_mixed_layout_repeats_preserve_every_field(self):
         for year in range(1980, 2020):
             data = cv(company=f"Contoso Systems {year}", title="Analyst", date=f"{year + 10} to {year + 14}")

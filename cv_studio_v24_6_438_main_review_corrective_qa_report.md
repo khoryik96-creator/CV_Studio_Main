@@ -89,3 +89,41 @@ outputs are identical; **zero unexpected differences**.
 The source preview was restarted with its existing temporary state. HTTP 200,
 v24.6.438 and the listener's exact preview runner/root were verified on
 loopback5071. The installed owner app and receipt were left untouched.
+
+## PR #223 follow-up: bounded later-section reads
+
+The owner subsequently authorized merging v438. The first exact-head hosted
+run passed all three gates (Windows: 1,584 passed, four skipped, 7,120 subtests),
+but automatic review identified an unbounded optional parser loop when many
+later work sections contained unrelated jobs. Merge waited for this correction.
+
+Optional recovery now refuses a source containing more than 64 later explicit
+work sections before starting additional parser calls. Such a source cannot
+establish uniqueness within the budget, so every original date stays intact.
+This does not truncate the authoritative reader or accept an incomplete scan.
+Ordinary histories with 32 unrelated sections still recover unique dates.
+
+One registry case and three focused tests were added before the code change.
+The new registry case and two hostile-input tests failed on the prior code;
+the late-duplicate input took 6.21 seconds. All 923 pre-follow-up registry case
+objects and expectations remain unchanged (924 total; nine added since master).
+Both 20,000-section inputs now retain every field and finish in 0.78 seconds
+locally, below the three-second limit. Removing the budget or accepting a
+partial scan both produce behavioral test failures in temporary source copies.
+
+Final local verification after the follow-up:
+
+- Focused dates/review/registry/version: 55 passed, 1,149 subtests.
+- Full isolated suite: 1,584 passed, four skipped, three documented updater
+  environment cases deselected, 7,121 subtests, in 207.38 seconds.
+- All 29 frontend suites, syntax/consistency/version, source preflight and
+  the 24-assertion source smoke passed again.
+- Whole-suite capture: 1,165 distinct serialized inputs. Final master replay:
+  3,369 inputs and 1,102 potential date/pipe fragments; 61 prevented date
+  overwrites, 12 restored manual warnings, zero unexpected differences.
+  Existing authoritative reader and OCR outputs remain identical.
+
+The final pushed head must pass all three hosted gates before squash merge.
+Issue #35 records final tested/merge identities and hosted results. Owner
+installation/receipt, protected packaging and paid/live providers remain
+untouched.

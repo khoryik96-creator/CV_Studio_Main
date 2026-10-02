@@ -14,8 +14,9 @@
   The date ambiguity guard uses consistent house-style identities and every
   explicit work section, while authoritative row outputs remain unchanged.
   Already-present first-job additions stay manual when the rendered current
-  header conflicts. Existing 915 registry cases are preserved; eight appended
-  cases and focused/generated/performance controls cover the three findings.
+  header conflicts. Optional recovery is bounded to 64 later work sections;
+  larger sources retain original dates. Existing 915 cases are preserved; nine
+  appended cases and focused/generated/performance controls cover the findings.
   No owner installation/receipt, paid-call, route/schema or protected-build
   change. See the v438 QA report. Owner authorized the PR and merge on
   2026-10-02; await all three exact-head hosted gates before squash merge.

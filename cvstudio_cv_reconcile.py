@@ -2396,6 +2396,11 @@ def _restore_work_dates_from_source_headers(parsed, cv_text, *, _source_rows=Non
                 if len(dates) == 1 and dates[0] and len(targets[key]) == 1}
     if not eligible:
         return parsed
+    # Bound optional parser calls before starting them. Unread sections could
+    # still contain a matching stint, so retain dates when uniqueness cannot
+    # be established within at most 64 later explicit work sections.
+    if len(history_starts) > 65:
+        return parsed
     source_rows = (_extract_authoritative_work_rows(cv_text, parsed)
                    if _source_rows is None else _source_rows)
     other_pairs = {header_identity(row.get("company"), row.get("title")) for row in source_rows}

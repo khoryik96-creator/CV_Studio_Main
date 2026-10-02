@@ -590,6 +590,9 @@ borderless or title/company/date header blocks the two-line repair, even when
 its dates are identical. Count these as additional sightings before changing dates.
 Apply the same house-style identity normalization on both sides of this guard,
 and include every explicit work section, including those after other CV sections.
+Optional recovery reads at most 64 later explicit work sections. If the source
+contains more, uniqueness is unproven: keep every original date instead of
+running an unbounded sequence of parser calls or accepting a partial scan.
 
 ### D3
 

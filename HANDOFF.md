@@ -332,7 +332,9 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   later explicit work sections without changing authoritative row outputs,
   and matching first-job additions keep conflicting rendered current headers
   manual. Header comparison uses rendered company/title style and newest role
-  order. Existing 915 registry expectations remain unchanged; eight new cases
+  order. Optional date recovery is bounded to 64 later work sections; larger
+  sources retain their original dates. Existing 915 registry expectations
+  remain unchanged; nine new cases
   and generated/hostile-input controls cover the findings. See the v438 QA
   report for validation. No owner installation/receipt change, paid/live call,
   route/schema change or protected build. Owner explicitly authorized the PR

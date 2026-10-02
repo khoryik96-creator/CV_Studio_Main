@@ -42,7 +42,9 @@ All previous formatting and review expectations remain; see the v437 QA report.
 The v24.6.438 main-review corrective compares normalized house-style identities
 only when blocking ambiguous date recovery; date matching itself stays exact.
 It checks later explicit work sections separately and preserves the existing
-table reader's outputs. A matching first-job addition remains a manual warning
+table reader's outputs. Optional recovery is limited to 64 later work sections;
+a larger source keeps its original dates because uniqueness is unproven.
+A matching first-job addition remains a manual warning
 when current headers conflict with its rendered company/latest role. Consistent
 headers, older jobs and qualifications retain their resolved filtering. See
 rules D2/D4 and the v438 QA report.
