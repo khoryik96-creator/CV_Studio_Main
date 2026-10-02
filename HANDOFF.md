@@ -169,9 +169,10 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 7. Recently completed (already on `master`)
 
-- **Current merged baseline, checked 2026-10-01: v24.6.433, `efe42f21`.**
-  PR #220 is merged; its tree equals tested head `9665d75`. Its completed branch
-  must not be reused. Earlier dated baseline/claim notes below are historical.
+- **Current merged baseline, checked 2026-10-02: v24.6.435, `cf48a558`.**
+  PR #221 is merged; its tree equals tested head `93c4971`. All three hosted
+  gates passed. Its completed branch must not be reused. Earlier dated
+  baseline/claim notes below are historical.
   The prior v24.6.402 baseline was `6a454d7`:
   PR #203 merged the complete PR #202 changes plus date-parity corrections;
   PR #202 is closed as superseded. Both old branches are completed.
@@ -324,7 +325,24 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Optional AI formatting review — v24.6.435, PR #221.**
+- **Resolved review/date corrective — v24.6.436, owner-authorized source work.**
+  Branch `codex/v24.6.436-review-date-corrections` starts at exact merged master
+  `cf48a558` / v435. Already-satisfied source-backed review suggestions are
+  omitted only when all proposed details exist at the same role/qualification;
+  unknown suggestions and current-header conflicts remain manual. The prompt
+  reviews final output and treats date abbreviations/separators as house style.
+  A unique title-above `Employer | Dates` source header restores only dates on
+  an existing job/role, without rebuilding an incomplete work history (D2).
+  Reversed OCR header dates get bounded 150/160-DPI consensus reads (D3); both
+  must prove the same one-digit start-year correction. Other OCR text, original
+  deadlines, semaphore and pixel limits remain. The supplied scanned PDF was
+  reproduced through the real document helper without any paid/provider calls.
+  Existing 899 registry cases are unchanged; new source/consensus controls and
+  review/real Word regressions are recorded in the v436 QA report. No owner
+  installation change, protected build, new route/schema or JobAdder write.
+  Push this owned branch after gates; open a PR only at the owner's request.
+
+- **Optional AI formatting review — v24.6.435, PR #221, MERGED as `cf48a558`.**
   Owner approved extending v434 to Batch Format and moving the toggle into
   Settings → General Settings. Branch `codex/v24.6.435-batch-format-review`
   starts from pushed, unmerged v434 `c86b2f7`, whose base is exact master

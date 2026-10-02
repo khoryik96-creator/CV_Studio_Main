@@ -141,7 +141,7 @@ class ReviewValidationTests(unittest.TestCase):
                 value = marker + "Built reporting dashboards."
                 body = {"issues": [{"message": "Restore duty", "source_quote": value,
                     "operation": {"op": "add", "path": "/work_experiences/0/roles/0/bullets/-", "value": value}}]}
-                self.assertFalse(self.review(body, source=SOURCE + "\n" + value)["issues"][0]["can_apply"])
+                self.assertEqual(self.review(body, source=SOURCE + "\n" + value)["issues"], [])
 
     def test_added_entries_use_normalized_identity_even_with_different_details(self):
         job = {"company": "CONTOSO SYSTEMS", "date_range": "January 2021 - Present",
@@ -157,7 +157,7 @@ class ReviewValidationTests(unittest.TestCase):
                 body = {"issues": [{"message": "Restore entry", "source_quote": quote,
                                   "operation": {"op": "add", "path": path, "value": value}}]}
                 source = SOURCE if path.startswith("/education") else SOURCE + "\n" + quote
-                self.assertFalse(self.review(body, source=source, data=data)["issues"][0]["can_apply"])
+                self.assertEqual(self.review(body, source=source, data=data)["issues"], [])
 
     def test_moved_duty_cannot_duplicate_the_destination_after_normalization(self):
         data = cv()
@@ -302,6 +302,30 @@ class ReviewRouteTests(unittest.TestCase):
         for text in ("Northwind Services", "Led regional operations.", "Contoso Systems", "Built reporting dashboards."):
             self.assertIn(text, xml)
         self.assertEqual(generated.headers["X-CV-Format-Review-Applied"], "1")
+
+    def test_review_omits_an_already_fixed_date_from_the_final_output(self):
+        answer = {"issues": [{"message": "Correct the dates", "source_quote":
+            "Contoso Systems | Analyst | Jan 2021 - Present", "operation": {
+                "op": "replace", "path": "/work_experiences/0/date_range",
+                "before": "Jan 2020 to Present", "value": "Jan 2021 - Present"}}]}
+        reviewed = self.request_review(answer)
+        self.assertEqual(reviewed["format_review"]["status"], "reviewed")
+        self.assertEqual(reviewed["format_review"]["issues"], [])
+
+    def test_source_date_repair_reaches_real_word_export_without_an_ai_review_call(self):
+        data = cv()
+        data["work_experiences"][0]["date_range"] = "Aug 2017 to May 2015"
+        source = "WORK EXPERIENCES\nAnalyst\nContoso Systems | Aug 2011 - May 2015\nBuilt reporting dashboards."
+        fixed = app._reconcile_work_experience_with_authoritative_table(data, source)
+        with mock.patch.object(app, "call_llm") as call:
+            exported = self.client.post("/generate-docx", json={"data": fixed}, headers=HEADERS)
+        self.assertEqual(exported.status_code, 200, exported.get_json())
+        call.assert_not_called()
+        with zipfile.ZipFile(io.BytesIO(exported.data)) as archive:
+            xml = archive.read("word/document.xml").decode("utf-8")
+        self.assertIn("Aug 2011 to May 2015", xml)
+        self.assertNotIn("Aug 2017", xml)
+        self.assertIn("Built reporting dashboards.", xml)
 
     def test_export_rejects_changes_after_approval_and_does_not_run_node(self):
         review = self.request_review()

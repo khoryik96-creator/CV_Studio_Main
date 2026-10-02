@@ -507,7 +507,11 @@ Settings → General Settings. Normal single and batch CVs each add one check
 using their workflow's selected provider; a batch snapshots the choice once.
 Blind CV is excluded. The non-secret setting uses the existing schema-10
 durable-settings and local-backup allowlists. It does not change these
-deterministic rules or inspect visual Word layout. Review suggestions are text
+deterministic rules or inspect visual Word layout. Already-satisfied, supported
+source-backed suggestions are omitted from the final review. Matching entry
+identity alone is insufficient: all suggested duties/result fields must already
+be present at the same role/qualification. Unsupported or unverified suggestions
+remain manual. House style is not a content error. Review suggestions are text
 with an original quote, never automatic edits. Unsupported/uncertain changes
 stay manual. Allowed corrections are bounded job/qualification restoration,
 exact duty restoration/movement and employer/title/qualification/date fields.
@@ -572,3 +576,23 @@ These aren't data-driven, but the JavaScript test above pins each one.
   `cv-format.js` loads before `batch-format.js`.
 - **S4**: Warnings are inserted as text, never as HTML. Batch warnings use
   role="note", so screen readers don't re-announce them on every refresh.
+
+### D2
+
+An exact title line followed by `Employer | Dates` inside Work Experience may
+restore that existing job's dates. Both employer and title must identify one
+parsed role and one source header; dates must be a complete chronological range.
+No job, duty, header or order is rebuilt. A single-role job keeps dates on the
+employer; a multi-role job restores only the matched role date. Ambiguous repeats,
+unrelated sections, trailing prose and conflicting single-role dates stay unchanged.
+
+### D3
+
+A backwards date in a scanned `Title / Employer | Dates` header triggers at most
+two local alternate reads (150/160 DPI), on at most two pages. Both must uniquely
+agree on the same employer/title, start month, end date and one-digit start-year
+change into a chronological range. Only that year is replaced in the primary OCR
+text. Other OCR content stays intact. Rechecks share the original semaphore, pixel
+limit and document deadline, each render/read has at most ten seconds, and an
+optional failure retains successful primary text. Normal chronological dates do
+not trigger extra OCR.

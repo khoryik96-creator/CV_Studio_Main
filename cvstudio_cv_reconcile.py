@@ -2320,6 +2320,85 @@ def _score_authoritative_row_match(row, item):
     return score
 
 
+def _restore_work_dates_from_source_headers(parsed, cv_text):
+    """Repair dates from exact title / employer|dates headers, without a skeleton.
+
+    This two-line layout is not a complete table: unrecognized or undated jobs
+    must survive. Only a unique existing employer/title pair and unique source
+    header can supply dates. No fuzzy matching or endpoint swapping is allowed.
+    """
+    def identity(value):
+        return " ".join(unicodedata.normalize("NFC", str(value or "")).split()).casefold()
+
+    targets = {}
+    for item in _flatten_parsed_work_roles(parsed):
+        key = (identity(item["company"]), identity(item["title"]))
+        if all(key):
+            targets.setdefault(key, []).append(item)
+    if not targets:
+        return parsed
+
+    month = r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?"
+    point = r"(?:" + month + r"\s+)?(?:19|20)\d{2}"
+    date_cell = re.compile(point + r"\s*(?:to|[-–—])\s*(?:" + point + r"|Present|Current|Till\s*Date|To\s*Date)", re.I)
+    evidence = {}
+    in_history = False
+    previous = ""
+    for raw in str(cv_text or "").splitlines():
+        line = " ".join(raw.split())
+        if not line:
+            continue
+        if _WORK_HISTORY_HEADING_RE.match(line):
+            in_history, previous = True, ""
+            continue
+        # Share established section boundaries, including letter-spaced headings.
+        heading = _cv_source_boundary_key(line.rstrip(":"))
+        letters = re.match(r"^(?:[A-Za-z]\s+){3,}[A-Za-z]\b", line)
+        compact = re.sub(r"\s+", "", letters.group()).lower() if letters else ""
+        boundary = heading in _CV_SOURCE_SECTION_BOUNDARY_KEYS or (compact and any(
+            compact == re.sub(r"[^a-z]", "", key) for key in _CV_SOURCE_SECTION_BOUNDARY_KEYS))
+        local_heading = heading in {"achievements", "responsibilities"} and (
+            line.endswith(":") or line.lower().startswith("key "))
+        if (_WORK_HISTORY_STOP_HEADING_RE.match(line) or _reads_as_referees_heading_line(line)
+                or (boundary and not local_heading)):
+            in_history, previous = False, ""
+            continue
+        if in_history and line.count("|") == 1 and 0 < len(previous) <= 160 and len(previous.split()) <= 24:
+            company, dates = (cell.strip() for cell in line.split("|"))
+            key = (identity(company), identity(previous))
+            if key in targets:
+                # Count ambiguous/reversed source headers too; a second one must
+                # not let the first masquerade as a uniquely identified stint.
+                if key in evidence:
+                    # Two sightings already prove ambiguity; retain bounded state.
+                    evidence[key] = ["", ""]
+                else:
+                    normalized = _normalize_cv_date_range(dates) if date_cell.fullmatch(dates) else ""
+                    start, end = _cv_date_parts(normalized)
+                    chronological = start and end and _cv_date_sort_point(start) <= _cv_date_sort_point(end, end=True)
+                    evidence[key] = [normalized if chronological else ""]
+        previous = line
+
+    for key, dates in evidence.items():
+        matches = targets[key]
+        if len(dates) != 1 or not dates[0] or len(matches) != 1:
+            continue
+        item = matches[0]
+        exp = parsed["work_experiences"][item["exp_i"]]
+        role = item["role"]
+        if len(exp.get("roles") or []) == 1:
+            role_date = role.get("date_range") or ""
+            exp_date = exp.get("date_range") or ""
+            if role_date and exp_date and _normalize_cv_date_range(role_date) != _normalize_cv_date_range(exp_date):
+                continue
+            exp["date_range"] = dates[0]
+            if role_date:
+                role["date_range"] = dates[0]
+        else:
+            role["date_range"] = dates[0]
+    return parsed
+
+
 def _reconcile_work_experience_with_authoritative_table(parsed, cv_text):
     """Use a source work-history table as a deterministic skeleton when present.
 
@@ -2329,6 +2408,7 @@ def _reconcile_work_experience_with_authoritative_table(parsed, cv_text):
     """
     if not isinstance(parsed, dict):
         return parsed
+    parsed = _restore_work_dates_from_source_headers(parsed, cv_text)
     uncertain_rows = []
     rows = _extract_authoritative_work_rows(cv_text, parsed, _uncertain_rows=uncertain_rows)
     # Refused place headers still name source jobs. A different provider mistake

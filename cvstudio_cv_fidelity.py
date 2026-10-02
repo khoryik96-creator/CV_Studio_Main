@@ -597,6 +597,11 @@ the candidate, or claim that visual Word layout has been checked.
 Flag only a clear missing job/duty/qualification, misplaced duty, or wrong
 employer/title/qualification/date supported by the original. Intended omissions
 of referees, contact redaction and personal salary from the Summary are not bugs.
+Review the final FORMATTED_CV, not an earlier parse. Do not report a detail that
+is already present or corrected. House style (capitalization, bullet markers,
+whitespace, abbreviated months and 'to' instead of a date dash) is not an error.
+When the job/qualification already exists, suggest its missing field or duty
+instead of adding the same entry again. Report actual date values, not style.
 When uncertain, preserve content and flag for manual inspection; do not guess.
 Return ONLY JSON: {"issues": [{"message": "Plain explanation", "source_quote":
 "A short exact, uniquely occurring quote from the original proving the issue",
@@ -715,6 +720,85 @@ def _cv_review_duplicate_entry(value, existing, education=False):
     return False
 
 
+def _cv_review_same_field(current, proposed, key):
+    if not isinstance(current, str) or not isinstance(proposed, str):
+        return False
+    if key == "date_range":
+        current, proposed = _normalize_cv_date_range(current), _normalize_cv_date_range(proposed)
+    return _cv_review_words(current).casefold() == _cv_review_words(proposed).casefold()
+
+
+def _cv_review_present_duties(role):
+    return {_cv_review_duty_identity(text).casefold() for text in _role_plain_bullets(role)}
+
+
+def _cv_review_entry_present(value, existing, education=False):
+    """Identity alone is insufficient: every proposed detail must already exist."""
+    field = "education" if education else "work_experiences"
+    def normalized(entry):
+        return _normalize_cv_data_for_output(
+            {"candidate": {}, "work_experiences": [], "education": [], field: [copy.deepcopy(entry)]},
+            preserve_work_order=True,
+        )[field][0]
+    proposed = normalized(value)
+    for entry in existing:
+        if not isinstance(entry, dict):
+            continue
+        current = normalized(entry)
+        if any(not _cv_review_same_field(current.get(key, ""), text, key)
+               for key, text in proposed.items() if key != "roles" and isinstance(text, str) and text):
+            continue
+        if education:
+            return True
+        # Preserve duty ownership: the same text at a different role is not fixed.
+        for role in proposed.get("roles") or []:
+            matches = [other for other in current.get("roles") or []
+                       if isinstance(other, dict) and all(_cv_review_same_field(
+                           other.get(key, ""), role.get(key, ""), key) for key in ("title", "date_range"))]
+            duties = _cv_review_present_duties(role)
+            if not any(duties <= _cv_review_present_duties(other) for other in matches):
+                break
+        else:
+            return True
+    return False
+
+
+def _cv_review_already_resolved(data, operation, quote):
+    """Omit only supported, source-verified corrections satisfied by this CV."""
+    if not isinstance(operation, dict) or set(operation) - {"op", "path", "from", "before", "value"}:
+        return False
+    op, path, value = operation.get("op"), operation.get("path"), operation.get("value")
+    if not isinstance(path, str):
+        return False
+    if op == "replace" and _CV_REVIEW_SCALAR_PATH.fullmatch(path) and isinstance(operation.get("before"), str):
+        parent, key = _cv_review_parent(data, path)
+        _cv_review_grounded(value, quote)
+        header_field = {"/work_experiences/0/company": "current_company",
+                        "/work_experiences/0/roles/0/title": "current_position"}.get(path)
+        candidate = data.get("candidate")
+        if header_field and isinstance(candidate, dict) and candidate.get(header_field) and not _cv_review_same_field(
+                candidate[header_field], value, key):
+            return False
+        return _cv_review_same_field(parent.get(key, ""), value, key)
+    if op == "add" and _CV_REVIEW_ADD_PATH.fullmatch(path):
+        parent, key = _cv_review_parent(data, path)
+        if not isinstance(parent, list) or (key != "-" and int(key) > len(parent)):
+            return False
+        education = path.startswith("/education/")
+        entry = education or path.count("/") == 2
+        if entry:
+            _cv_review_entry(value, education)
+        elif not isinstance(value, str):
+            return False
+        _cv_review_grounded(value, quote)
+        return (_cv_review_entry_present(value, parent, education) if entry else
+                _cv_review_duty_identity(value).casefold() in {
+                    _cv_review_duty_identity(item).casefold() for item in parent if isinstance(item, str)})
+    # A move remains a real error when the duty still exists at its old employer,
+    # even if a duplicate is already present at the requested destination.
+    return False
+
+
 def _cv_review_operate(data, operation, quote):
     if not isinstance(operation, dict) or set(operation) - {"op", "path", "from", "before", "value"}:
         raise ValueError("This suggestion needs manual inspection.")
@@ -815,6 +899,8 @@ def validate_cv_format_review(text, source, data):
             quote = _cv_review_words(item["source_quote"])
             if len(quote) < 10 or source_words.count(quote) != 1 or quote not in outside_words:
                 raise ValueError("The source evidence is missing, repeated or belongs to referees.")
+            if _cv_review_already_resolved(data, issue["operation"], quote):
+                continue
             _cv_review_operate(copy.deepcopy(data), issue["operation"], quote)
             issue["can_apply"] = True
         except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:

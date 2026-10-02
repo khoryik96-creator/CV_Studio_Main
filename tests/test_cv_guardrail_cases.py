@@ -26,6 +26,7 @@ ROOT = Path(__file__).resolve().parents[1]
 import cvstudio_cv_fidelity as fidelity
 import cvstudio_cv_normalize as normalize
 import cvstudio_cv_reconcile as reconcile
+import cvstudio_document_safety as document_safety
 
 CASES = json.loads((ROOT / "tests" / "fixtures" / "cv_guardrail_cases.json").read_text(encoding="utf-8"))["cases"]
 GUARDRAILS_DOC = (ROOT / "CV_SOURCE_CHECK_GUARDRAILS.md").read_text(encoding="utf-8")
@@ -147,6 +148,12 @@ class SummarySalaryGuardrails(unittest.TestCase):
 
 
 class DateRewriteGuardrails(unittest.TestCase):
+    def test_ocr_date_recheck(self):
+        for case in _cases("ocr_date_recheck"):
+            with self.subTest(case=case["id"]):
+                self.assertEqual(document_safety._ocr_repair_header_dates(
+                    case["primary"], case["alternatives"]), case["expect"], case["note"])
+
     def test_dates(self):
         for case in _cases("date"):
             with self.subTest(case=case["id"]):

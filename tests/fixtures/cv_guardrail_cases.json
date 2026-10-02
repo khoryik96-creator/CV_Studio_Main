@@ -11889,6 +11889,146 @@
    "bullets": ["Led portfolio companies and their earnings are RM 18,000 monthly."],
    "expect": ["Led portfolio companies and their earnings are RM 18,000 monthly."],
    "note": "A work-clause plural possessive can refer to company earnings."
+  },
+  {
+   "id": "D2-title-above-employer-source-date",
+   "rule": "D2",
+   "kind": "work_reconcile",
+   "lines": [
+    "WORK EXPERIENCES",
+    "Technical Specialist",
+    "Contoso Systems | Aug 2011 - May 2015"
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Contoso Systems",
+      "date_range": "Aug 2017 to May 2015",
+      "roles": [
+       {
+        "title": "Technical Specialist",
+        "bullets": [
+         "Kept original duty."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Contoso Systems",
+      "date_range": "Aug 2011 to May 2015",
+      "roles": [
+       {
+        "title": "Technical Specialist",
+        "bullets": [
+         "Kept original duty."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "note": "Exact employer/title headers correct a provider year without rebuilding or inventing dates."
+  },
+  {
+   "id": "D2-source-duplicate-date-control",
+   "rule": "D2",
+   "kind": "work_reconcile",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Technical Specialist",
+    "Contoso Systems | Aug 2011 - May 2015",
+    "Technical Specialist",
+    "Contoso Systems | Aug 2012 - May 2015"
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Contoso Systems",
+      "date_range": "Aug 2017 to May 2015",
+      "roles": [
+       {
+        "title": "Technical Specialist",
+        "bullets": [
+         "Kept original duty."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Contoso Systems",
+      "date_range": "Aug 2017 to May 2015",
+      "roles": [
+       {
+        "title": "Technical Specialist",
+        "bullets": [
+         "Kept original duty."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "note": "Repeated employer/title pairs do not identify one source stint."
+  },
+  {
+   "id": "D3-ocr-two-reading-year-correction",
+   "rule": "D3",
+   "kind": "ocr_date_recheck",
+   "primary": "Technical Specialist\nContoso Systems | Aug 2017 - May 2015\nKept original duty.\n",
+   "alternatives": [
+    "Technical Specialist\nContoso Systems | Aug 2011 - May 2015\nOther OCR words.\n",
+    "Technical Specialist\nContoso Systems | Aug 2011 - May 2015\nKept original duty.\n"
+   ],
+   "expect": "Technical Specialist\nContoso Systems | Aug 2011 - May 2015\nKept original duty.\n",
+   "note": "Two agreeing scans repair only the one year digit; alternate duty text never replaces primary OCR."
+  },
+  {
+   "id": "D3-ocr-disagreement-control",
+   "rule": "D3",
+   "kind": "ocr_date_recheck",
+   "primary": "Technical Specialist\nContoso Systems | Aug 2017 - May 2015\nKept original duty.\n",
+   "alternatives": [
+    "Technical Specialist\nContoso Systems | Aug 2011 - May 2015\nKept original duty.\n",
+    "Technical Specialist\nContoso Systems | Aug 2012 - May 2015\nKept original duty.\n"
+   ],
+   "expect": "Technical Specialist\nContoso Systems | Aug 2017 - May 2015\nKept original duty.\n",
+   "note": "No OCR date guess when alternate readings disagree."
+  },
+  {
+   "id": "D3-ocr-other-endpoint-control",
+   "rule": "D3",
+   "kind": "ocr_date_recheck",
+   "primary": "Technical Specialist\nContoso Systems | Aug 2017 - May 2015\nKept original duty.\n",
+   "alternatives": [
+    "Technical Specialist\nContoso Systems | Aug 2011 - May 2016\nKept original duty.\n",
+    "Technical Specialist\nContoso Systems | Aug 2011 - May 2016\nKept original duty.\n"
+   ],
+   "expect": "Technical Specialist\nContoso Systems | Aug 2017 - May 2015\nKept original duty.\n",
+   "note": "End date changes are outside the one-start-year repair."
+  },
+  {
+   "id": "D3-ocr-repeated-stint-control",
+   "rule": "D3",
+   "kind": "ocr_date_recheck",
+   "primary": "Technical Specialist\nContoso Systems | Aug 2017 - May 2015\nKept original duty.\nTechnical Specialist\nContoso Systems | Aug 2017 - May 2015\nKept original duty.\n",
+   "alternatives": [
+    "Technical Specialist\nContoso Systems | Aug 2011 - May 2015\nKept original duty.\nTechnical Specialist\nContoso Systems | Aug 2011 - May 2015\nKept original duty.\n",
+    "Technical Specialist\nContoso Systems | Aug 2011 - May 2015\nKept original duty.\nTechnical Specialist\nContoso Systems | Aug 2011 - May 2015\nKept original duty.\n"
+   ],
+   "expect": "Technical Specialist\nContoso Systems | Aug 2017 - May 2015\nKept original duty.\nTechnical Specialist\nContoso Systems | Aug 2017 - May 2015\nKept original duty.\n",
+   "note": "Repeated title/employer source headers cannot uniquely identify the date."
   }
  ]
 }

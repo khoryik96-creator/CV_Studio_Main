@@ -23,6 +23,16 @@ the finished file. Costs remain accounted; explicit Check again adds another
 paid call. Blind CV is excluded. Details and safety limits are in
 `CV_SOURCE_CHECK_GUARDRAILS.md` and the v24.6.435 QA report.
 
+The v24.6.436 corrective compares review suggestions with the final formatted
+data and omits supported suggestions already satisfied there. Matching an entry
+alone does not hide missing duties, result fields or conflicting current headers.
+Date separators/month abbreviations are house style, not content errors.
+Before parsing, reversed scanned header dates can receive two bounded local
+OCR readings; both must agree on a one-digit year correction, leaving all other
+text intact. After parsing, unique exact title-above `Employer | Dates` headers
+can restore only an existing job/role's dates. Neither pass guesses dates or
+rebuilds incomplete histories. Rules D2/D3 and the v436 QA report cover this.
+
 ## The pipeline (source doc → formatted DOCX)
 
 1. **`/extract-text`** (`app.py`) — pulls raw text from the upload: `pdfplumber`
