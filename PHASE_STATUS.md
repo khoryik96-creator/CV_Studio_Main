@@ -21,6 +21,8 @@
   and requires actual month presence/value agreement. The existing 905 cases
   remain unchanged; ten new registry cases cover the review findings. See the
   v436/v437 QA reports for validation and limits.
+  Owner explicitly authorized a PR and merge on 2026-10-02; awaiting the exact
+  head's hosted gates. Final merge/check identities are recorded in issue #35.
 
 - Previous verified merged baseline (2026-10-01): v24.6.433, `efe42f21` (#220).
   The merged tree matches tested head `9665d75`; all three hosted gates passed.

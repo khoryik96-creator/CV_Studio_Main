@@ -346,7 +346,10 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   presence/value. All 905 v436 registry cases remain unchanged; ten new cases
   and focused timing/generated controls cover the three review findings.
   See the v437 QA report for corrective validation.
-  Push this owned branch after gates; open a PR only at the owner's request.
+  Owner explicitly authorized a PR and merge on 2026-10-02. Await the exact
+  head's hosted regression/native dependency gates before squash merge; final
+  merge identity and checks are recorded in issue #35. Keep owner installation
+  updates and protected packaging separate.
 
 - **Optional AI formatting review — v24.6.435, PR #221, MERGED as `cf48a558`.**
   Owner approved extending v434 to Batch Format and moving the toggle into
