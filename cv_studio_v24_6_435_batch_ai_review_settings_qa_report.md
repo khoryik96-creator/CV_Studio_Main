@@ -108,3 +108,24 @@ Manual review remains necessary; uncertain corrections stay manual. No real paid
 provider behavior, live upload or fresh native macOS/protected-package testing is
 claimed. Runtime/test helpers, logs, node_modules junction and screenshot are not
 tracked source or release artifacts.
+
+## Owner-authorized merge follow-up — PR #221, 2026-10-02
+
+The owner subsequently requested merge. PR #221 covers both v434 and v435 against
+exact master `efe42f21`, with all initial QA evidence preserved above.
+Initial hosted run `36959163421` at `4a8cf8a` passed Windows unfiltered: **1,525
+passed, four skipped, 6,864 subtests**, all frontend fixtures, source smoke,
+syntax and consistency. Both genuine Mac runners verified functional native
+Antiword/Tesseract, then failed collection of `test_cv_format_review`: its receipt
+writer used the temporary directory, but the app's `expanduser` read still used
+the runner's home. This was a test fixture defect, not a native dependency or
+product behavior change.
+
+Added an isolation assertion for the app's non-Windows receipt read path before
+any receipt write. It failed on Windows for precisely the same new module,
+demonstrating that the cross-platform defect is now locally caught. The review
+fixture now uses the same scoped `os.path.expanduser` mock as existing isolated
+app fixtures. Focused correction gate: **27 passed, 15 subtests** (state isolation,
+review suite and version). No app/feature/dependency/version change was required.
+Final hosted checks on PR #221 and the coordination log carry final-head and
+merge evidence; no failed Mac check is bypassed.

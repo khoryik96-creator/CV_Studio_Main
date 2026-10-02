@@ -38,7 +38,13 @@
   Source-only preview: loopback 5070, verified v24.6.435 with isolated state.
   Settings default off, save/reload and normal-batch/Blind notice checks verified
   through the browser; no owner credentials copied. v434 preview is preserved.
-  No PR, merge, release, protected compilation, live AI or JobAdder write.
+  Owner authorized merge through PR #221. Its initial Windows hosted gate passed
+  unfiltered: 1,525 tests, four skipped, 6,864 subtests. Both Mac gates exposed a
+  new test fixture's receipt lookup outside its temporary home; the fixture now
+  mocks the same expanded path as existing tests, and the isolation guard checks
+  this on Windows too before writing. Focused follow-up: 27 passed / 15 subtests.
+  Final hosted checks/issue #35 carry the exact merge state. No release, protected
+  compilation, live AI or JobAdder write.
   See `cv_studio_v24_6_435_batch_ai_review_settings_qa_report.md` for evidence/limits.
 
 - Approved baseline: v24.6.217

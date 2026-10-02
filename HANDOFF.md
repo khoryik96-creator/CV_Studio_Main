@@ -324,7 +324,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Optional AI formatting review — v24.6.435, source branch only.**
+- **Optional AI formatting review — v24.6.435, PR #221.**
   Owner approved extending v434 to Batch Format and moving the toggle into
   Settings → General Settings. Branch `codex/v24.6.435-batch-format-review`
   starts from pushed, unmerged v434 `c86b2f7`, whose base is exact master
@@ -343,12 +343,19 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   and backup/hydration allowlists; failed saves warn and apply to the page only.
   No visual Word-layout claim, new routes/schemas/dependencies, provider replay,
   paid/live calls or protected build. Preview on loopback 5070 has isolated state
-  and no copied owner credentials; the v434 preview on 5069 is preserved. No PR
-  or merge requested. See `cv_studio_v24_6_435_batch_ai_review_settings_qa_report.md`.
+  and no copied owner credentials; the v434 preview on 5069 is preserved. Owner
+  authorized merge through PR #221. See
+  `cv_studio_v24_6_435_batch_ai_review_settings_qa_report.md`; the PR's final hosted
+  checks and issue #35 record the exact merge state.
   Final local gate: 1,522 passed, four skipped, 6,864 subtests; three exact updater
   environment fixtures deselected after the unfiltered run and same failures on
   v434. The prior v434 report's three native OLE recovery failures now pass on
   both checkouts without a code change.
+  Initial PR221 hosted Windows gate passed unfiltered (1,525 tests), while both
+  Mac gates caught the new review fixture's unmocked `expanduser` receipt read.
+  Its temporary-path mock is now aligned with existing isolated fixtures; the
+  collection guard checks the non-Windows read path before any receipt write on
+  every host. Focused follow-up: 27 passed / 15 subtests. No product code changed.
 
 - **CV guardrail corrective — v24.6.429–433, PR #220, MERGED as `efe42f21`.**
   Branch `codex/pr220-v24.6.431-qualification-pay-guards` (existing PR head retained),

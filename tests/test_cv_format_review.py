@@ -25,7 +25,9 @@ with mock.patch.dict(os.environ, {
     "CVSTUDIO_DB_PATH": str(Path(_STATE.name) / "state" / "cv.sqlite3"),
     "CVSTUDIO_JOB_STATE_PATH": str(Path(_STATE.name) / "jobs.json"),
     "SALARY_COMPARISON_DATA_DIR": str(Path(_STATE.name) / "salary"),
-}), mock.patch("pathlib.Path.home", return_value=Path(_STATE.name)):
+}), mock.patch("pathlib.Path.home", return_value=Path(_STATE.name)), \
+        mock.patch("os.path.expanduser", side_effect=lambda path: (
+            str(Path(_STATE.name) / path[2:]) if path.startswith("~/") else path)):
     write_test_receipt(ROOT, environment={"HOME": _STATE.name, "LOCALAPPDATA": _STATE.name})
     import app
 
