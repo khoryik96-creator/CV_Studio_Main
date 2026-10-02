@@ -9,7 +9,7 @@ const source = fs.readFileSync(path.join(root, 'vendor/cvstudio/cv-format.js'), 
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const toggle = html.match(/<input[^>]*id="cvFormattingReviewToggle"[^>]*>/);
 assert.ok(toggle, 'the user can switch the additional AI check on and off');
-assert.ok(!/\bchecked\b/.test(toggle[0]), 'no added paid call by default');
+assert.ok(!/\schecked(?:\s|=|\/?>)/.test(toggle[0]), 'no added paid call by default');
 const original = {candidate: {name: 'Synthetic Candidate', email: 'synthetic@example.test'},
   work_experiences: [{company: 'Contoso', roles: [{title: 'Analyst', bullets: ['Built reports.']}]}],
   education: [], skills: [], certifications: []};
@@ -44,6 +44,7 @@ function harness(options = {}) {
     aiRoutePayload: () => ({api_key: 'synthetic', api_key_slot: 'main_deepseek', provider: 'deepseek', model: 'deepseek-chat'}),
     formatSummaryBulletsFor: () => [], applyFormatSummaryBullets: data => data,
     getCvBlindCandidateGenderNeutralization: () => false, getCvAutoCorrectLanguage: () => false,
+    getCvFormattingReview: () => options.on === true,
     getCvTextAlignment: () => 'left', getCvSummaryBoxAutoFit: () => true,
     cvParseIsLong: () => false, cvParseTimeoutMs: () => 1000,
     normalizeUsageClient: () => ({}), mergeUsageClient: (a,b) => ({api_calls: (a.api_calls || 0) + (b.api_calls || 0)}),
@@ -107,6 +108,8 @@ async function run() {
     assert.ok(h.calls[h.calls.length - 1].body.format_review_applied);
     assert.strictEqual(h.uploads.length, 0, 'applying never uploads automatically');
     assert.strictEqual(h.c._runCost, 3, 'applying and rebuilding spend no AI cost');
+    assert.ok(descendants(h.nodes.cvFormattingReviewPanel).some(node => node.textContent === 'Undo fix' && !node.disabled),
+      'the existing single-CV Undo action remains usable after an apply');
     h.c.cvUndoFormattingReview();
     assert.deepStrictEqual(clone(h.c._parsedData), original, 'undo restores exact previous content');
     assert.strictEqual(h.c.window._docxBlob, originalBlob, 'undo restores the exact original file');
@@ -133,6 +136,8 @@ async function run() {
     assert.strictEqual(h.nodes.btnFormat.disabled, false);
     assert.strictEqual(h.c.window._cvFormattingReview.busy, false);
     assert.strictEqual(h.nodes.costPill.textContent, 'Est. cost: $5.0000');
+    assert.ok(descendants(h.nodes.cvFormattingReviewPanel).some(node => node.textContent === 'Apply fix' && !node.disabled),
+      'the existing single-CV actions remain usable after a recheck');
   }
   for (const failure of [{exportFailure: true}, {missingApprovalHeader: true}, {previewFailure: true}]) {
     const h = harness(Object.assign({on: true}, failure));

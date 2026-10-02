@@ -394,7 +394,7 @@ async function batchModeContract() {
     cvStudioPrepareDownloadDestination:async (kind)=>({kind,configured:true,folder:{path:'C:\\Formatted'},handle:{native:true}}),
     showToast(message,level){toasts.push({message,level});},setTimeout(fn){fn();},
   };
-  loadFunctions(context,['cvStudioShowDownloadResult','downloadSingleBatchFile','downloadBatchZip']);
+  loadFunctions(context,['cvStudioShowDownloadResult','downloadSingleBatchFile','downloadBatchZip','batchFormattingReviewBusy']);
   await context.downloadSingleBatchFile('formatted-row');
   assert.strictEqual(saveCalls[0].kind,'formatted');
   saveCalls.length=0;
@@ -418,7 +418,7 @@ async function downloadCallerOutcomesContract() {
     async cvStudioPrepareDownloadDestination(){return {configured:true,handle:{native:true}};},
     showToast(message,level){toasts.push({message,level});},
   };
-  loadFunctions(context,['cvStudioShowDownloadResult','downloadDocx','downloadDocxImpl','downloadSingleBatchFile','downloadBatchZip']);
+  loadFunctions(context,['cvStudioShowDownloadResult','downloadDocx','downloadDocxImpl','downloadSingleBatchFile','downloadBatchZip','batchFormattingReviewBusy']);
   for (const run of [()=>context.downloadDocx(),()=>context.downloadSingleBatchFile('row')]) {
     await run();
     assert.strictEqual(toasts.at(-1).level,'warn');

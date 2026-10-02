@@ -755,6 +755,44 @@ function setCvAutoCorrectLanguage(enabled, silent) {
 })();
 document.addEventListener('DOMContentLoaded', renderCvAutoCorrectLanguageSetting);
 
+// Optional additional source-content review for normal single and batch CVs.
+var CV_FORMATTING_REVIEW_STORE = 'cvstudio_formatting_review_v1';
+window._cvFormattingReviewEnabled = false;
+function getCvFormattingReview() {
+  return window._cvFormattingReviewEnabled === true;
+}
+function renderCvFormattingReviewSetting() {
+  var enabled = getCvFormattingReview();
+  var checkbox = document.getElementById('cvFormattingReviewToggle');
+  var label = document.getElementById('cvFormattingReviewLabel');
+  if (checkbox) checkbox.checked = enabled;
+  if (label) label.textContent = enabled ? 'On' : 'Off';
+  ['cvSingleFormattingReviewNotice', 'cvBatchFormattingReviewNotice'].forEach(function(id) {
+    var node = document.getElementById(id);
+    if (node) node.style.display = enabled && (id !== 'cvBatchFormattingReviewNotice' || typeof _batchMode === 'undefined' || _batchMode !== 'blind') ? 'block' : 'none';
+  });
+}
+function setCvFormattingReview(enabled, silent) {
+  window._cvFormattingReviewEnabled = enabled === true;
+  try {
+    Promise.resolve(cvStudioDurableSettingSet(CV_FORMATTING_REVIEW_STORE, getCvFormattingReview() ? 'true' : 'false')).then(function(saved) {
+      if (saved === false) showToast('AI review choice could not be saved. It applies to this page only.', 'warn');
+    }).catch(function() {
+      showToast('AI review choice could not be saved. It applies to this page only.', 'warn');
+    });
+  } catch (e) { showToast('AI review choice could not be saved. It applies to this page only.', 'warn'); }
+  renderCvFormattingReviewSetting();
+  if (!silent) showToast(getCvFormattingReview() ? 'AI review on: one extra check per normal single or batch CV. Fixes remain manual.' : 'AI formatting review off.', 'ok');
+  return getCvFormattingReview();
+}
+(function restoreCvFormattingReview() {
+  var stored = null;
+  try { stored = localStorage.getItem(CV_FORMATTING_REVIEW_STORE); } catch (e) {}
+  window._cvFormattingReviewEnabled = stored === 'true';
+  setTimeout(renderCvFormattingReviewSetting, 0);
+})();
+document.addEventListener('DOMContentLoaded', renderCvFormattingReviewSetting);
+
 // ── Word export format (.doc / .docx) ────────────────────────────
 // Storage getter/setter (wordExportFormat / setWordExportFormat) live in
 // hyppies-export.js; this only drives the Settings segmented toggle.

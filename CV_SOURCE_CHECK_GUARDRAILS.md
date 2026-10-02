@@ -501,8 +501,12 @@ doesn't hide an amount.
 
 ## Optional AI formatting review
 
-The v24.6.434 review is an additional source-content check, enabled only by the
-unchecked toggle on normal single Format CV. It does not change these
+The review introduced in v24.6.434 and extended in v24.6.435 is an additional
+source-content check, enabled only by the saved off-by-default toggle in
+Settings → General Settings. Normal single and batch CVs each add one check
+using their workflow's selected provider; a batch snapshots the choice once.
+Blind CV is excluded. The non-secret setting uses the existing schema-10
+durable-settings and local-backup allowlists. It does not change these
 deterministic rules or inspect visual Word layout. Review suggestions are text
 with an original quote, never automatic edits. Unsupported/uncertain changes
 stay manual. Allowed corrections are bounded job/qualification restoration,
@@ -520,7 +524,16 @@ auto-upload; apply/undo/recheck never automatically upload. Explicit Check again
 is labelled as another AI call and its cost is recorded separately.
 
 `tests/test_cv_format_review.py` and `tests/test_cv_format_review_frontend.js`
-exercise these boundaries with simulated providers and synthetic CVs. The
+exercise these boundaries with simulated providers and synthetic CVs. Batch
+actions additionally bind the row object, original file/source, exact data/blob
+pair and unique row/output ID. Apply/Undo replace that row's download registry
+and held-upload data/blob together; duplicate filenames cannot choose a row.
+Removed/changed rows cannot receive late corrections. Active review/fix blocks
+overlapping manual checks and stale downloads/uploads; active JobAdder upload
+blocks review actions. Existing output alignment, auto-fit and bullet levels
+are captured per row. Completed unusable/stale paid checks retain their costs;
+checks never retry automatically. See the batch, Settings frontend and durable
+setting tests, plus the v435 QA report and temporary-copy mutation evidence. The
 existing 899 registry expectations remain unchanged.
 
 ## Test-state safety

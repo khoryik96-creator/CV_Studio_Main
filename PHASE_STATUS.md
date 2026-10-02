@@ -19,17 +19,27 @@
   DOCX layout are unchanged. Older
   dated release/claim notes below are historical, not the current master state.
 
-- Current owner-approved source work: v24.6.434, branch
-  `codex/v24.6.434-formatting-review`, from exact master `efe42f21`.
-  Off-by-default AI review toggle on normal single Format CV; source-backed
-  suggestions, manual Apply fix/Undo and verified Word regeneration. Existing
-  providers/cost gates, routes, guards, schemas and deterministic rules remain.
-  Local full comparison: 1,517 passed, four skipped, 6,864 subtests; the same six
-  failures reproduced before implementation (three updater environment fixtures,
-  three opt-in native OLE recovery fixtures). All 27 frontend suites pass.
-  Source-only preview: loopback 5069, verified v24.6.434 with isolated state.
+- Current owner-approved source work: v24.6.435, branch
+  `codex/v24.6.435-batch-format-review`, from pushed unmerged v434 `c86b2f7`
+  (base exact master `efe42f21`). One saved off-by-default AI review choice in
+  Settings → General Settings for normal single and batch CVs; one extra check
+  per CV with its workflow's selected provider. Batch shows per-file quoted
+  suggestions and manual Apply/Undo/Check again; corrected downloads and held
+  uploads stay paired. Blind remains excluded; output options stay captured.
+  Existing providers/cost gates, routes, guards, schemas and deterministic rules
+  remain. Non-secret choice uses existing schema-10 setting/backup allowlists.
+  Unfiltered local run: 1,522 passed, four skipped, 6,864 subtests, three updater
+  environment failures also reproduced on v434. The three native OLE fixtures
+  recorded as failed in the prior v434 report now pass on both checkouts without
+  code changes. Final gate with only those exact three updater fixtures excluded:
+  1,522 passed, four skipped, 6,864 subtests. All 29 frontend suites and 22 focused
+  deliberate mutations pass. Source smoke: 24 assertions; syntax, consistency,
+  owner-source preflight and Windows Antiword/Tesseract functional checks pass.
+  Source-only preview: loopback 5070, verified v24.6.435 with isolated state.
+  Settings default off, save/reload and normal-batch/Blind notice checks verified
+  through the browser; no owner credentials copied. v434 preview is preserved.
   No PR, merge, release, protected compilation, live AI or JobAdder write.
-  See `cv_studio_v24_6_434_ai_formatting_review_qa_report.md` for evidence/limits.
+  See `cv_studio_v24_6_435_batch_ai_review_settings_qa_report.md` for evidence/limits.
 
 - Approved baseline: v24.6.217
 - Current source baseline: see the repository-root `VERSION` file (single source

@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>CV Studio</title>
 <link rel="icon" type="image/png" href="cv_studio_logo.png?v=24.6.79-ui"/>
-<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.434">
-<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.434"></script>
+<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.435">
+<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.435"></script>
 <script>
 /* CV Studio Doctor — built-in diagnostic recorder.
  * Records JS errors, unhandled rejections, failed/slow network calls and
@@ -254,7 +254,7 @@
 <div class="app">
   <div class="header" style="position:relative;">
     <div>
-      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.434 (Offline) by The 郭 Lab</span></h1>
+      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.435 (Offline) by The 郭 Lab</span></h1>
 
     </div>
     <div class="header-tools">
@@ -620,6 +620,18 @@
             <input type="checkbox" id="cvAutoCorrectLanguageToggle" onchange="setCvAutoCorrectLanguage(this.checked)"
               style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent);">
             <span id="cvAutoCorrectLanguageLabel" style="font-size:12px;color:var(--text2);min-width:24px;">Off</span>
+          </label>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;padding-top:8px;border-top:1px solid var(--border);">
+          <div style="min-width:0;">
+            <div style="font-size:13px;color:var(--text1);">AI formatting review</div>
+            <div style="font-size:10.5px;color:var(--text3);line-height:1.4;margin-top:2px;">Checks normal single and batch CVs against the original text after formatting. Adds one extra AI call per CV, using that workflow's selected provider. Suggestions show the original quote; you choose Apply fix or Undo. Blind CV is excluded. Off by default.</div>
+          </div>
+          <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;flex:0 0 auto;">
+            <input type="checkbox" id="cvFormattingReviewToggle" onchange="setCvFormattingReview(this.checked)"
+              style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent);">
+            <span id="cvFormattingReviewLabel" style="font-size:12px;color:var(--text2);min-width:24px;">Off</span>
           </label>
         </div>
 
@@ -1239,11 +1251,7 @@
           <input type="checkbox" id="singleSummaryToggle" /> Generate CV Summary
           <span style="color:var(--text3);font-weight:400;">(normal Format CV only; fills the Summary placeholder)</span>
         </label>
-        <label class="lead-quick-toggle" style="margin-top:10px;display:flex;">
-          <input type="checkbox" id="cvFormattingReviewToggle" /> AI formatting review
-          <span style="color:var(--text3);font-weight:400;">(normal single CV only; one extra AI call)</span>
-        </label>
-        <div style="font-size:11px;color:var(--text3);margin-top:4px;">When on, checks CV content against the original. Suggested fixes wait for your approval. Uses the provider selected above.</div>
+        <div id="cvSingleFormattingReviewNotice" style="display:none;font-size:11px;color:var(--text3);margin-top:8px;">AI formatting review is on for normal Format CV (one extra AI call). Change it in Settings → General Settings.</div>
 
         <div class="btn-row" style="margin-top:10px;">
           <button class="primary" id="btnFormat" onclick="startFormat(false)">Format CV &rarr;</button>
@@ -1307,6 +1315,7 @@
       </div>
 
       <div class="ai-quick-panel" id="batchAiQuickPanel" style="margin:10px 0 12px;">
+        <div id="cvBatchFormattingReviewNotice" style="display:none;font-size:11px;color:var(--text3);margin-bottom:8px;">AI formatting review is on (one extra AI call per CV). Change it in Settings → General Settings.</div>
         <div class="ai-quick-copy">
           <div class="ai-quick-title">AI provider for this Batch</div>
           <div class="ai-quick-hint" id="batchAiQuickHint">Uses the saved API key and model from Settings.</div>
@@ -2412,33 +2421,33 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
-<script src="/vendor/cvstudio/api-transport.js?v=v24.6.434"></script>
-<script src="/vendor/cvstudio/page-nav.js?v=v24.6.434"></script>
-<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.434"></script>
-<script src="/vendor/cvstudio/create-profile.js?v=v24.6.434"></script>
-<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.434"></script>
-<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.434"></script>
-<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.434"></script>
-<script src="/vendor/cvstudio/company-profile.js?v=v24.6.434"></script>
-<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.434"></script>
-<script src="/vendor/cvstudio/appearance.js?v=v24.6.434"></script>
-<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.434"></script>
-<script src="/vendor/cvstudio/docx-export.js?v=v24.6.434"></script>
-<script src="/vendor/cvstudio/the-owl.js?v=v24.6.434"></script>
-<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.434"></script>
-<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.434"></script>
-<script src="/vendor/cvstudio/settings.js?v=v24.6.434"></script>
-<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.434"></script>
-<script src="/vendor/cvstudio/tab-status.js?v=v24.6.434"></script>
-<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.434"></script>
-<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.434"></script>
-<script src="/vendor/cvstudio/cv-format.js?v=v24.6.434"></script>
-<script src="/vendor/cvstudio/locks.js?v=v24.6.434"></script>
-<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.434"></script>
-<script src="/vendor/cvstudio/ppc.js?v=v24.6.434"></script>
-<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.434"></script>
-<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.434"></script>
-<script src="/vendor/cvstudio/batch-format.js?v=v24.6.434"></script>
+<script src="/vendor/cvstudio/api-transport.js?v=v24.6.435"></script>
+<script src="/vendor/cvstudio/page-nav.js?v=v24.6.435"></script>
+<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.435"></script>
+<script src="/vendor/cvstudio/create-profile.js?v=v24.6.435"></script>
+<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.435"></script>
+<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.435"></script>
+<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.435"></script>
+<script src="/vendor/cvstudio/company-profile.js?v=v24.6.435"></script>
+<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.435"></script>
+<script src="/vendor/cvstudio/appearance.js?v=v24.6.435"></script>
+<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.435"></script>
+<script src="/vendor/cvstudio/docx-export.js?v=v24.6.435"></script>
+<script src="/vendor/cvstudio/the-owl.js?v=v24.6.435"></script>
+<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.435"></script>
+<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.435"></script>
+<script src="/vendor/cvstudio/settings.js?v=v24.6.435"></script>
+<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.435"></script>
+<script src="/vendor/cvstudio/tab-status.js?v=v24.6.435"></script>
+<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.435"></script>
+<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.435"></script>
+<script src="/vendor/cvstudio/cv-format.js?v=v24.6.435"></script>
+<script src="/vendor/cvstudio/locks.js?v=v24.6.435"></script>
+<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.435"></script>
+<script src="/vendor/cvstudio/ppc.js?v=v24.6.435"></script>
+<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.435"></script>
+<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.435"></script>
+<script src="/vendor/cvstudio/batch-format.js?v=v24.6.435"></script>
 <script>
 
 document.addEventListener('DOMContentLoaded', initPageNavPin);
@@ -2456,9 +2465,9 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 
 </script>
-<script src="/vendor/cvstudio/input-file.js?v=v24.6.434"></script>
-<script src="/vendor/cvstudio/stats.js?v=v24.6.434"></script>
-<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.434"></script>
+<script src="/vendor/cvstudio/input-file.js?v=v24.6.435"></script>
+<script src="/vendor/cvstudio/stats.js?v=v24.6.435"></script>
+<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.435"></script>
 <script>
 try { updateSummaryLockUI(); } catch(e) {}
 try { updateCvScoringLockUI(); } catch(e) {}

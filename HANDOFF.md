@@ -324,19 +324,31 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Optional AI formatting review — v24.6.434, source branch only.**
-  Owner approved an off-by-default toggle for the extra review call, with manual
-  Apply fix and Undo. Branch `codex/v24.6.434-formatting-review` starts from exact
-  master `efe42f21` / v24.6.433. Single normal Format CV only; Blind and batch are
-  unchanged. Uses the existing selected single-CV provider/key and cost gates.
+- **Optional AI formatting review — v24.6.435, source branch only.**
+  Owner approved extending v434 to Batch Format and moving the toggle into
+  Settings → General Settings. Branch `codex/v24.6.435-batch-format-review`
+  starts from pushed, unmerged v434 `c86b2f7`, whose base is exact master
+  `efe42f21` / v24.6.433. One saved off-by-default choice controls normal single
+  and batch CVs; Blind remains excluded. Each CV adds one review using its
+  workflow's selected provider/key and existing cost gates. Batch captures the
+  choice once per run, shows each CV's original quotes and manual Apply/Undo/
+  Check again, and updates only that row's download and held-upload pair.
   Original-text quotes, restricted operations, signed source/data-bound tickets,
   normal export passes and actual Word text retention guard every correction.
   Uncertain suggestions stay manual; failed/stale checks retain the current CV.
-  No visual Word-layout claim. No new routes, schemas, saved settings,
-  dependencies, provider replay, paid/live calls or protected build. Preview on
-  loopback 5069 has isolated state and no copied owner credentials. No PR or
-  merge requested. See `cv_studio_v24_6_434_ai_formatting_review_qa_report.md`,
-  including six reproduced baseline-local failures and the bounded first scope.
+  Completed paid checks remain in accounting, including unusable or detached
+  results. Findings, unavailable/stale checks and applied fixes hold automatic
+  uploads; Apply/Undo/Check again never upload automatically. Saved non-secret
+  key `cvstudio_formatting_review_v1` uses the existing schema-10 durable setting
+  and backup/hydration allowlists; failed saves warn and apply to the page only.
+  No visual Word-layout claim, new routes/schemas/dependencies, provider replay,
+  paid/live calls or protected build. Preview on loopback 5070 has isolated state
+  and no copied owner credentials; the v434 preview on 5069 is preserved. No PR
+  or merge requested. See `cv_studio_v24_6_435_batch_ai_review_settings_qa_report.md`.
+  Final local gate: 1,522 passed, four skipped, 6,864 subtests; three exact updater
+  environment fixtures deselected after the unfiltered run and same failures on
+  v434. The prior v434 report's three native OLE recovery failures now pass on
+  both checkouts without a code change.
 
 - **CV guardrail corrective — v24.6.429–433, PR #220, MERGED as `efe42f21`.**
   Branch `codex/pr220-v24.6.431-qualification-pay-guards` (existing PR head retained),

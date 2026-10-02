@@ -43,7 +43,7 @@ function syncBatchRunButton() {
   if (_batchRunning && !batchHasProcessingRows()) {
     resetStaleBatchRunState();
   }
-  btn.disabled = _batchRunning || !batchHasPendingRows();
+  btn.disabled = _batchRunning || batchFormattingReviewBusy() || !batchHasPendingRows();
 }
 
 function setBatchMode(mode) {
@@ -55,6 +55,7 @@ function setBatchMode(mode) {
     summaryToggle.disabled = mode === 'blind';
     summaryToggle.title = mode === 'blind' ? 'CV Summary generation is available for Format All only' : '';
   }
+  if (typeof renderCvFormattingReviewSetting === 'function') renderCvFormattingReviewSetting();
 }
 
 function handleBatchFileSelect(files) {
@@ -115,6 +116,7 @@ function renderBatchList() {
       jaHtml = '<span class="batch-ja-status show ja-skip" id="ja-' + bf.id + '" title="No email was detected in this CV. Enter one to upload it to JobAdder.">'
         + '<input type="email" class="batch-ja-email-required" placeholder="Enter email for JobAdder" aria-label="Enter candidate email for JobAdder" value="' + escAttr(bf._manualEmail || '') + '" '
         + 'onchange="setBatchManualEmail(this,\'' + bf.id + '\')" '
+        + (bf._formattingReview && bf._formattingReview.busy ? 'disabled ' : '')
         + 'onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}" '
         + 'onclick="event.stopPropagation()" />'
         + '</span>';
@@ -124,13 +126,13 @@ function renderBatchList() {
     } else {
       jaHtml = '<span class="batch-ja-status ' + (bf.jaClass || '') + '" id="ja-' + bf.id + '">' + esc(bf.jaStatus || '') + '</span>';
     }
-    if (bf._jaHeld && window._jaToken) {
+    if (bf._jaHeld && window._jaToken && !(bf._formattingReview && bf._formattingReview.busy)) {
       jaHtml += '<button class="batch-file-dl" type="button" onclick="uploadHeldBatchFile(\'' + bf.id + '\')" title="Upload this CV to JobAdder after checking the warning">☁ Upload anyway</button>';
     }
     var removeBtn = bf.status !== 'processing'
       ? '<button class="batch-file-remove" onclick="removeBatchFile(\'' + bf.id + '\')" title="Remove">✕</button>'
       : '';
-    var dlBtn = (bf.status === 'done-ok' || bf.status === 'done-blind')
+    var dlBtn = (bf.status === 'done-ok' || bf.status === 'done-blind') && !(bf._formattingReview && bf._formattingReview.busy)
       ? '<button class="batch-file-dl" onclick="downloadSingleBatchFile(\'' + bf.id + '\')" title="Download">⬇ Download</button>'
         + '<button class="batch-file-dl" type="button" onclick="openBatchOutputFolder(\'' + bf.id + '\')" title="Open configured output folder" aria-label="Open configured output folder">📂</button>'
       : '';
@@ -165,6 +167,7 @@ function renderBatchList() {
             ? '<div class="cv-parse-warning batch" role="note">\u26a0 ' + esc(bf.parseWarning) + '</div>'
             : '')
       +   progHtml
+      +   (bf._formattingReview ? '<div id="cvBatchFormattingReview-' + escAttr(bf.id) + '" role="region" aria-label="AI formatting review for ' + escAttr(bf.file.name) + '" style="margin-top:10px;padding:10px;border:1px solid var(--border);border-radius:8px;"></div>' : '')
       + '</div>'
       + timerHtml
       + jaHtml
@@ -173,6 +176,7 @@ function renderBatchList() {
       + removeBtn
       + '</div>';
   }).join('');
+  _batchFiles.forEach(batchRenderFormattingReview);
 }
 
 function removeBatchFile(id) {
@@ -247,6 +251,7 @@ function batchSetProgress(bf, pct, stepLabel, steps) {
 }
 
 async function runBatch() {
+  if (batchFormattingReviewBusy()) { showToast('Wait for the current AI review or fix to finish before starting another batch.', 'info'); return; }
   if (_batchRunning) {
     if (batchHasProcessingRows()) return;
     // Recover from an interrupted earlier attempt that left the latch/button
@@ -257,6 +262,7 @@ async function runBatch() {
   var key = route.api_key;
   if (!key) { showToast('Save an API key for Batch Format route', 'err'); return; }
   var batchIsBlind = _batchMode === 'blind';
+  var withBatchFormattingReview = !batchIsBlind && typeof getCvFormattingReview === 'function' && getCvFormattingReview();
   var batchSummaryToggle = document.getElementById('batchSummaryToggle');
   var withBatchSummary = !batchIsBlind && !!(batchSummaryToggle && batchSummaryToggle.checked);
   var batchSummaryRoute = withBatchSummary ? aiRoutePayload('summary') : null;
@@ -312,6 +318,7 @@ async function runBatch() {
     var defs = isBlind
       ? ['Extract', 'Parse', 'Blind', 'Generate DOCX']
       : (withBatchSummary ? ['Extract', 'Parse', 'Summary', 'Generate DOCX'] : ['Extract', 'Parse', 'Generate DOCX']);
+    if (withBatchFormattingReview) defs.push('AI review');
     return defs.map(function(label, i) {
       return {
         label: label,
@@ -416,7 +423,8 @@ async function runBatch() {
       // ── Step 3: Generate DOCX ─────────────────────────────────────────────
       var docxStepIdx = isBlind || withBatchSummary ? 3 : 2;
       batchSetProgress(bf, pcts[docxStepIdx], 'Generating DOCX…', makeSteps(docxStepIdx));
-      var dRes = await fetchWithTimeout('/generate-docx', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data: cvData, alignment: batchDocumentAlignment, summary_box_autofit: getCvSummaryBoxAutoFit(), bullet_levels: cvMergeLevelLists(batchExtractLevels, batchLabelLevels) }) }, 60000);
+      var batchExportPayload = { data: cvData, alignment: batchDocumentAlignment, summary_box_autofit: getCvSummaryBoxAutoFit(), bullet_levels: cvMergeLevelLists(batchExtractLevels, batchLabelLevels) };
+      var dRes = await fetchWithTimeout('/generate-docx', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(batchExportPayload) }, 60000);
       if (!dRes.ok) { var err2 = await dRes.json(); throw new Error('DOCX: ' + (err2.error||'Failed')); }
       var blob = await dRes.blob();
       var docxPayRemoved = dRes.headers && dRes.headers.get ? dRes.headers.get('X-CV-Summary-Pay-Removed') : null;
@@ -433,9 +441,18 @@ async function runBatch() {
       bf.downloadKind = isBlind ? 'blind' : 'formatted';
       bf.progPct  = donePct;
       bf.progSteps = makeSteps(99); // all done
-      bf.status   = isBlind ? 'done-blind' : 'done-ok';
       _batchBlobs.push({ id: bf.id, filename: fname, blob: blob, kind: bf.downloadKind });
       bf._docxBlob = blob; // store for manual email upload
+      if (withBatchFormattingReview) {
+        bf._reviewSource = rawText;
+        bf._reviewDisplayName = displayName;
+        bf._reviewExportOptions = {alignment: batchExportPayload.alignment, summary_box_autofit: batchExportPayload.summary_box_autofit, bullet_levels: batchExportPayload.bullet_levels};
+        batchSetProgress(bf, 94, 'Checking formatting against the original CV…', makeSteps(docxStepIdx + 1));
+        await batchRunFormattingReview(bf, route, false);
+      }
+      bf.progPct = donePct;
+      bf.progSteps = makeSteps(99);
+      bf.status = isBlind ? 'done-blind' : 'done-ok';
       // Record to stats
       bf._statsRecordId = statsRecord(displayName, isBlind ? 'blind' : 'format', bf.cost, route.model, '', route.provider, statsMetaFromResponse({usage:bf.usage,cost:bf.cost,model:route.model,provider:route.provider}, route.model, route.provider)); // exact row URL is attached after upload
 
@@ -490,6 +507,7 @@ async function runBatch() {
   var batchElapsed = ((Date.now() - _batchStartTime) / 1000).toFixed(1);
   if (_batchTimerEl) _batchTimerEl.textContent = batchElapsed + 's ✓';
   syncBatchRunButton();
+  if (withBatchFormattingReview) renderBatchList();
 
   if (okCount > 0) {
     document.getElementById('btnBatchDownload').disabled = false;
@@ -501,9 +519,184 @@ async function runBatch() {
   }
 }
 
+// Review state is tied to the row object, original file/source and exact output pair.
+function batchFormattingReviewBusy() {
+  return _batchFiles.some(function(bf) { return !!(bf._formattingReview && bf._formattingReview.busy); });
+}
+function batchReviewIsCurrent(bf, state) {
+  var items = _batchBlobs.filter(function(entry) { return entry.id === bf.id; });
+  if (items.length !== 1 || _batchFiles.filter(function(row) { return row.id === bf.id; }).length !== 1) return false;
+  var item = items[0];
+  return _batchFiles.indexOf(bf) >= 0 && bf._formattingReview === state &&
+    bf.file === state.file && bf.downloadKind === 'formatted' &&
+    bf._reviewSource === state.source && JSON.stringify(bf.cvData) === state.snapshot &&
+    bf._docxBlob === state.blob && item && item.blob === state.blob;
+}
+function batchReviewCanAct(bf) {
+  return bf && bf.status === 'done-ok' && !_batchRunning && !batchFormattingReviewBusy() &&
+    !/\buploading\b/.test(bf.jaClass || '') && bf._formattingReview &&
+    batchReviewIsCurrent(bf, bf._formattingReview);
+}
+function batchSyncReviewControls() {
+  syncBatchRunButton();
+  var button = document.getElementById('btnBatchDownload');
+  if (button) button.disabled = _batchRunning || batchFormattingReviewBusy() || !_batchBlobs.length;
+}
+function batchRenderFormattingReview(bf) {
+  var state = bf._formattingReview;
+  var panel = document.getElementById('cvBatchFormattingReview-' + bf.id);
+  if (!state || !panel) return;
+  cvBuildFormattingReviewPanel(panel, state, state.message, {
+    apply: function(issueId) { batchApplyFormattingReview(bf.id, issueId); },
+    undo: function() { batchUndoFormattingReview(bf.id); },
+    again: function() { batchCheckFormattingReviewAgain(bf.id); },
+    disabled: !batchReviewCanAct(bf)
+  });
+}
+function batchRecordReviewCost(bf, data, route, cost, usage) {
+  statsRecord((data.candidate || {}).name || 'Unknown', 'format_review', cost, route.model, '', route.provider,
+    statsMetaFromResponse({usage: usage, cost: cost, model: route.model, provider: route.provider}, route.model, route.provider));
+}
+async function batchRunFormattingReview(bf, route, recheck) {
+  var previous = bf._formattingReview;
+  var data = JSON.parse(JSON.stringify(bf.cvData));
+  var state = {file: bf.file, source: bf._reviewSource, snapshot: JSON.stringify(data), blob: bf._docxBlob,
+    warning: previous ? previous.warning : (bf.parseWarning || ''), review: null, base: null,
+    undo: previous && previous.undo, busy: true, message: 'Checking against the original CV…'};
+  bf._formattingReview = state;
+  renderBatchList(); batchSyncReviewControls();
+  try {
+    var response = await fetchWithTimeout('/generate-ai', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({feature: 'cv_format_review', source_cv_text: state.source, cv_data: data,
+        api_key: route.api_key, api_key_slot: route.api_key_slot, model: route.model, provider: route.provider})}, cvParseTimeoutMs(state.source));
+    var result;
+    try { result = JSON.parse(await response.text()); } catch (e) { throw new Error('The review did not return a readable answer.'); }
+    if (!response.ok || result.error) {
+      recordPaidAiFailure('Batch CV formatting review failed', result, route.model, route.provider);
+      throw new Error(normalizeAiProviderError(result.error || 'Review failed', route));
+    }
+    var cost = responseCost(result, route.model, route.provider), usage = result.usage || {};
+    if (!batchReviewIsCurrent(bf, state)) {
+      batchRecordReviewCost(bf, data, route, cost, usage);
+      if (_batchFiles.indexOf(bf) >= 0 && bf._formattingReview === state) {
+        state.message = 'This CV changed during the check. Compare the completed Word file with the original before sending.';
+        bf.parseWarning = cvJoinWarnings(state.warning, 'AI formatting review is out of date. Check this file before sending.');
+      }
+      return;
+    }
+    // Account before rendering/validating the envelope; a completed paid call
+    // remains visible even if its review cannot be used.
+    bf.cost += cost; bf.usage = mergeUsageClient(bf.usage, usage);
+    if (recheck) batchRecordReviewCost(bf, data, route, cost, usage);
+    var review = result.format_review;
+    if (!review || !Array.isArray(review.issues) || !['reviewed', 'unavailable'].includes(review.status) || !result.format_review_base) {
+      review = {status: 'unavailable', issues: [], message: 'The review answer could not be verified. Your completed Word file is unchanged.'};
+    }
+    state.review = review; state.base = result.format_review_base; state.message = '';
+    var warning = review.status === 'unavailable' ? 'AI formatting review was unavailable. Compare this CV with the original before sending.' :
+      (review.issues.length ? 'AI formatting review found possible mistakes. Read this file’s suggestions before sending.' : '');
+    bf.parseWarning = cvJoinWarnings(state.warning, warning);
+  } catch (e) {
+    if (_batchFiles.indexOf(bf) >= 0 && bf._formattingReview === state) {
+      state.review = null;
+      state.message = 'The AI check could not finish. Your completed Word file is still available. ' + (e.message || 'Check the original before sending.');
+      bf.parseWarning = cvJoinWarnings(state.warning, 'AI formatting review could not finish. Compare this CV with the original before sending.');
+    }
+  } finally {
+    state.busy = false;
+    if (_batchFiles.indexOf(bf) >= 0 && bf._formattingReview === state) renderBatchList();
+    batchSyncReviewControls(); updateBatchSummary();
+  }
+}
+function batchReviewPreviousOutput(bf, state) {
+  return {data: JSON.parse(state.snapshot), blob: state.blob, warning: bf.parseWarning,
+    held: bf._jaHeld, jaStatus: bf.jaStatus, jaClass: bf.jaClass};
+}
+function batchPublishReviewOutput(bf, state, data, blob) {
+  var item = _batchBlobs.find(function(entry) { return entry.id === bf.id; });
+  if (!item || !batchReviewIsCurrent(bf, state)) throw new Error('This CV is no longer available.');
+  var snapshot = JSON.stringify(data);
+  bf.cvData = data; bf._docxBlob = blob; item.blob = blob;
+  state.snapshot = snapshot; state.blob = blob;
+  bf.parseWarning = cvJoinWarnings(state.warning, 'AI review correction: check this Word file before uploading manually.');
+  if (bf._jaHeld || window._jaToken) {
+    bf._jaHeld = {blob: blob, fname: bf.filename, cvData: data, displayName: bf._reviewDisplayName, isBlind: false};
+    bf.jaStatus = '⏸ Not uploaded — check this Word file'; bf.jaClass = 'show ja-held';
+  }
+}
+function batchRestoreReviewOutput(bf, state, previous) {
+  var item = _batchBlobs.find(function(entry) { return entry.id === bf.id; });
+  if (!item || _batchFiles.indexOf(bf) < 0 || bf._formattingReview !== state) return;
+  bf.cvData = previous.data; bf._docxBlob = previous.blob; item.blob = previous.blob;
+  bf.parseWarning = previous.warning; bf._jaHeld = previous.held;
+  bf.jaStatus = previous.jaStatus; bf.jaClass = previous.jaClass;
+  state.snapshot = JSON.stringify(previous.data); state.blob = previous.blob;
+}
+async function batchApplyFormattingReview(id, issueId) {
+  var bf = _batchFiles.find(function(row) { return row.id === id; });
+  if (!batchReviewCanAct(bf) || !bf._formattingReview.review) {
+    showToast('Wait for current work to finish, or check this CV again if its suggestion is out of date.', 'warn'); return;
+  }
+  var state = bf._formattingReview;
+  var issue = state.review.issues.find(function(entry) { return entry.id === issueId && entry.can_apply === true; });
+  if (!issue) return;
+  var previous = batchReviewPreviousOutput(bf, state), oldUndo = state.undo;
+  state.busy = true; state.message = 'Applying the selected fix and rebuilding this Word file…';
+  renderBatchList(); batchSyncReviewControls();
+  try {
+    var response = await fetchWithTimeout('/generate-ai', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({feature: 'cv_format_review_apply', source_cv_text: state.source,
+        cv_data: state.base, review: state.review, issue_id: issueId})}, 60000);
+    var result = JSON.parse(await response.text());
+    if (!response.ok || result.error || !result.data || !result.format_review_applied) throw new Error(result.error || 'The fix could not be verified.');
+    if (!batchReviewIsCurrent(bf, state)) return;
+    var generated = await fetchWithTimeout('/generate-docx', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(Object.assign({data: result.data, format_review_applied: result.format_review_applied}, bf._reviewExportOptions))}, 60000);
+    if (!generated.ok) throw new Error('The corrected Word file could not be generated.');
+    if (!generated.headers || generated.headers.get('X-CV-Format-Review-Applied') !== '1') throw new Error('The corrected Word file could not be verified.');
+    var blob = await generated.blob();
+    if (!batchReviewIsCurrent(bf, state)) return;
+    batchPublishReviewOutput(bf, state, result.data, blob);
+    state.undo = previous; state.review = null;
+    state.message = 'Fix applied to this Word file. Download it to check before sending. Other suggestions need a new check.';
+    renderBatchList();
+    showToast('Fix applied to this batch CV’s Word file', 'ok');
+  } catch (e) {
+    if (_batchFiles.indexOf(bf) >= 0 && bf._formattingReview === state) {
+      if (state.undo === previous) { batchRestoreReviewOutput(bf, state, previous); state.undo = oldUndo; }
+      state.review = null;
+      state.message = 'The fix was not applied. Your previous Word file is unchanged. ' + (e.message || 'Please check again.');
+      renderBatchList();
+      showToast('Fix not applied — previous Word file retained', 'warn');
+    }
+  } finally {
+    state.busy = false;
+    if (_batchFiles.indexOf(bf) >= 0 && bf._formattingReview === state) renderBatchList();
+    batchSyncReviewControls();
+  }
+}
+function batchUndoFormattingReview(id) {
+  var bf = _batchFiles.find(function(row) { return row.id === id; });
+  if (!batchReviewCanAct(bf) || !bf._formattingReview.undo) return;
+  var state = bf._formattingReview;
+  batchRestoreReviewOutput(bf, state, state.undo);
+  state.undo = null; state.review = null;
+  state.message = 'Previous Word file restored. Check again before applying another suggestion.';
+  renderBatchList();
+}
+async function batchCheckFormattingReviewAgain(id) {
+  var bf = _batchFiles.find(function(row) { return row.id === id; });
+  if (!batchReviewCanAct(bf)) { showToast('Wait for current work to finish, or format the current CV before checking it.', 'warn'); return; }
+  var route = aiRoutePayload('cv_batch');
+  if (!route.api_key) { showToast('Save an API key for Batch Format first', 'err'); return; }
+  await batchRunFormattingReview(bf, route, true);
+}
+
+
 async function downloadSingleBatchFile(id) {
   var bf = _batchFiles.find(function(f) { return f.id === id; });
   if (!bf || !bf.filename) { showToast('File not ready', 'err'); return; }
+  if (bf._formattingReview && bf._formattingReview.busy) { showToast('Wait for this CV review or fix to finish before downloading.', 'info'); return; }
   var item = _batchBlobs.find(function(b) { return b.id === bf.id; });
   if (!item) { showToast('File not found in memory', 'err'); return; }
   var kind = item.kind || bf.downloadKind || (bf.status === 'done-blind' ? 'blind' : 'formatted');
@@ -536,6 +729,7 @@ async function openBatchOutputFolderImpl(id) {
 }
 
 async function downloadBatchZip() {
+  if (batchFormattingReviewBusy()) { showToast('Wait for the current CV review or fix to finish before downloading all files.', 'info'); return; }
   if (_batchBlobs.length === 0) { showToast('No processed files to download', 'err'); return; }
   // Snapshot the selected outputs; later runs/removals cannot change this save.
   var items = _batchBlobs.slice();
@@ -618,6 +812,7 @@ async function batchAutoUploadFile(bf, blob, fname, cvData, displayName, isBlind
 async function uploadHeldBatchFile(id) {
   var bf = _batchFiles.find(function(x){ return x.id === id; });
   if (!bf || !bf._jaHeld || !window._jaToken) return;
+  if (bf._formattingReview && bf._formattingReview.busy) { showToast('Wait for this CV review or fix to finish before uploading.', 'info'); return; }
   var held = bf._jaHeld;
   bf._jaHeld = null;
   await batchAutoUploadFile(bf, held.blob, held.fname, held.cvData, held.displayName, held.isBlind);

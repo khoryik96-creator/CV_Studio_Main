@@ -18,8 +18,7 @@ async function startFormat(blind) {
   var automaticSummaryRoute = withAutomaticSummary ? aiRoutePayload('summary') : null;
   if (withAutomaticSummary && !automaticSummaryRoute.api_key) { showToast('Save an API key for the CV Summary route or turn off Generate CV Summary', 'err'); return; }
   var singleSummaryDetail = withAutomaticSummary ? getCvSummaryDetailPreference('single') : 'concise';
-  var reviewToggle = document.getElementById('cvFormattingReviewToggle');
-  var withFormattingReview = !blind && !!(reviewToggle && reviewToggle.checked);
+  var withFormattingReview = !blind && typeof getCvFormattingReview === 'function' && getCvFormattingReview();
   cvResetFormattingReview();
   var reviewSequence = window._cvFormattingReviewSequence;
 
@@ -288,10 +287,10 @@ function cvReviewText(parent, tag, text) {
   node.style.whiteSpace = 'pre-wrap'; node.style.overflowWrap = 'anywhere';
   parent.appendChild(node); return node;
 }
-function cvReviewButton(parent, label, handler) {
+function cvReviewButton(parent, label, handler, disabled) {
   var button = document.createElement('button');
   button.type = 'button'; button.className = 'sec'; button.textContent = label;
-  button.style.marginRight = '8px'; button.onclick = handler;
+  button.style.marginRight = '8px'; button.onclick = handler; button.disabled = !!disabled;
   parent.appendChild(button);
 }
 function cvReviewValueText(value) {
@@ -308,6 +307,10 @@ function cvReviewValueText(value) {
 function cvRenderFormattingReview(state, message) {
   var panel = document.getElementById('cvFormattingReviewPanel');
   if (!panel) return;
+  cvBuildFormattingReviewPanel(panel, state, message, {apply: cvApplyFormattingReview,
+    undo: cvUndoFormattingReview, again: cvCheckFormattingReviewAgain});
+}
+function cvBuildFormattingReviewPanel(panel, state, message, handlers) {
   panel.replaceChildren(); panel.style.display = 'block';
   cvReviewText(panel, 'strong', 'AI formatting review');
   cvReviewText(panel, 'p', message || (state.review && state.review.message) || 'Checking against the original CV…');
@@ -325,12 +328,12 @@ function cvRenderFormattingReview(state, message) {
         cvReviewText(block, 'p', 'Move to ' + entry.company + ' — ' + entry.roles[Number(parts[4])].title + ': ' + operation.before);
       }
       else cvReviewText(block, 'p', 'Restore:\n' + cvReviewValueText(operation.value));
-      cvReviewButton(block, 'Apply fix', function() { cvApplyFormattingReview(issue.id); });
+      cvReviewButton(block, 'Apply fix', function() { handlers.apply(issue.id); }, handlers.disabled);
     } else cvReviewText(block, 'p', issue.reason || 'Please inspect this manually; no automatic fix is available.');
     panel.appendChild(block);
   });
-  if (state.undo) cvReviewButton(panel, 'Undo fix', cvUndoFormattingReview);
-  if (state.review || state.undo || message) cvReviewButton(panel, 'Check again (extra AI call)', cvCheckFormattingReviewAgain);
+  if (state.undo) cvReviewButton(panel, 'Undo fix', handlers.undo, handlers.disabled);
+  if (state.review || state.undo || message) cvReviewButton(panel, 'Check again (extra AI call)', handlers.again, handlers.disabled);
 }
 async function cvRunFormattingReview(source, data, route, warning) {
   var previous = window._cvFormattingReview;
