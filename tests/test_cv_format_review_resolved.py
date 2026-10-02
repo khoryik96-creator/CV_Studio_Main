@@ -82,6 +82,62 @@ class ResolvedReviewTests(unittest.TestCase):
         self.assertEqual(len(review["issues"]), 1)
         self.assertFalse(review["issues"][0]["can_apply"])
 
+    def test_matching_first_job_addition_keeps_conflicting_current_headers_manual(self):
+        for headers in ({"current_company": "Different employer"}, {"current_position": "Different position"},
+                        {"current_company": "Different employer", "current_position": "Different position"}):
+            for path in ("/work_experiences/-", "/work_experiences/0", "/work_experiences/1"):
+                data = cv()
+                data["candidate"] = headers
+                operation = {"op": "add", "path": path, "value": copy.deepcopy(data["work_experiences"][0])}
+                operation["value"]["date_range"] = "January 2021 - Present"
+                with self.subTest(headers=headers, path=path):
+                    review = self.review([issue(operation)], data)
+                    self.assertEqual(len(review["issues"]), 1)
+                    self.assertFalse(review["issues"][0]["can_apply"])
+                    self.assertNotEqual(review["message"], "No clear content mistake was found.")
+
+    def test_matching_first_job_with_consistent_or_absent_headers_is_still_resolved(self):
+        for headers in ({}, {"current_company": "", "current_position": ""},
+                        {"current_company": "CONTOSO SYSTEMS", "current_position": "ANALYST"}):
+            data = cv()
+            data["candidate"] = headers
+            value = copy.deepcopy(data["work_experiences"][0])
+            value["date_range"] = "January 2021 - Present"
+            with self.subTest(headers=headers):
+                self.assertEqual(self.review([issue({"op": "add", "path": "/work_experiences/-",
+                    "value": value})], data)["issues"], [])
+
+    def test_header_check_uses_rendered_title_style_and_latest_role(self):
+        data = cv()
+        data["candidate"] = {"current_company": "CONTOSO SYSTEMS", "current_position": "SR Engineer"}
+        data["work_experiences"][0]["roles"] = [
+            {"title": "Analyst", "date_range": "2021 to 2022", "bullets": []},
+            {"title": "SR Engineer", "date_range": "2023 to Present", "bullets": []}]
+        source = SOURCE + "\nSR Engineer\n2021 to 2022\n2023 to Present"
+        value = copy.deepcopy(data["work_experiences"][0])
+        value["date_range"] = "January 2021 - Present"
+        self.assertEqual(self.review([issue({"op": "add", "path": "/work_experiences/-", "value": value}, source)],
+            data, source)["issues"], [])
+        # A subset proposing an older role still checks the actual latest role.
+        value["roles"] = value["roles"][:1]
+        self.assertEqual(self.review([issue({"op": "add", "path": "/work_experiences/-", "value": value}, source)],
+            data, source)["issues"], [])
+        data["candidate"]["current_position"] = "Analyst"
+        review = self.review([issue({"op": "add", "path": "/work_experiences/-", "value": value}, source)], data, source)
+        self.assertEqual(len(review["issues"]), 1)
+        self.assertFalse(review["issues"][0]["can_apply"])
+
+    def test_older_job_and_education_duplicates_do_not_check_current_headers(self):
+        data = cv()
+        data["candidate"] = {"current_company": "Different employer", "current_position": "Different position"}
+        older = {"company": "Northwind Systems", "date_range": "2017 to 2020", "roles": [{"title": "Engineer", "bullets": []}]}
+        data["work_experiences"].append(older)
+        source = SOURCE + "\nNorthwind Systems\n2017 to 2020\nEngineer"
+        for path, value in (("/work_experiences/-", older), ("/education/-", data["education"][0])):
+            with self.subTest(path=path):
+                self.assertEqual(self.review([issue({"op": "add", "path": path, "value": value}, source)],
+                    data, source)["issues"], [])
+
     def test_matching_job_does_not_hide_a_duty_missing_from_its_correct_role(self):
         data = cv()
         data["work_experiences"][0]["roles"].append({"title": "Manager", "bullets": []})

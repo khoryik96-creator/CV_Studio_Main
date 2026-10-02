@@ -4,11 +4,29 @@
 
 ## Release state
 
-- Current verified merged baseline (2026-10-02): v24.6.435, `cf48a558` (#221).
+- Current verified merged baseline (2026-10-02): v24.6.437, `f55a049` (#222).
+  Tested head `92bb3f4` has the same tree `9d9703a`; all three hosted gates
+  passed. Unfiltered Windows: 1,572 passed, four skipped, 7,038 subtests.
+  `codex/v24.6.436-review-date-corrections` is complete.
+
+- Current owner-authorized source work: v24.6.438,
+  `codex/v24.6.438-main-review-corrections`, from exact `f55a049`.
+  The date ambiguity guard uses consistent house-style identities and every
+  explicit work section, while authoritative row outputs remain unchanged.
+  Already-present first-job additions stay manual when the rendered current
+  header conflicts. Optional recovery is bounded to 64 later work sections;
+  larger sources retain original dates. Existing 915 cases are preserved; nine
+  appended cases and focused/generated/performance controls cover the findings.
+  No owner installation/receipt, paid-call, route/schema or protected-build
+  change. See the v438 QA report. Owner authorized the PR and merge on
+  2026-10-02; await all three exact-head hosted gates before squash merge.
+  Final merge/check identities will be recorded in issue #35.
+
+- Previous verified merged baseline (2026-10-02): v24.6.435, `cf48a558` (#221).
   Tested head `93c4971` has the same tree; all three hosted gates passed.
   `codex/v24.6.435-batch-format-review` is complete.
 
-- Current owner-authorized source work: v24.6.437,
+- Completed owner-authorized source work: v24.6.437, merged via PR #222,
   `codex/v24.6.436-review-date-corrections`, from exact `cf48a558`.
   Omit already-satisfied source-backed AI review suggestions; preserve warnings
   for missing details and conflicting candidate headers. Unique two-line work
@@ -21,8 +39,8 @@
   and requires actual month presence/value agreement. The existing 905 cases
   remain unchanged; ten new registry cases cover the review findings. See the
   v436/v437 QA reports for validation and limits.
-  Owner explicitly authorized a PR and merge on 2026-10-02; awaiting the exact
-  head's hosted gates. Final merge/check identities are recorded in issue #35.
+  Owner authorized merge on 2026-10-02; all exact-head hosted gates passed.
+  Final merge/check identities are recorded in issue #35.
 
 - Previous verified merged baseline (2026-10-01): v24.6.433, `efe42f21` (#220).
   The merged tree matches tested head `9665d75`; all three hosted gates passed.

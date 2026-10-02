@@ -12361,6 +12361,753 @@
     "Analyst\nContoso Systems | Jan 2017 - Dec 2015\n"
    ],
    "note": "All three primary pages complete in 120 seconds; optional exhaustion cannot discard them."
+  },
+  {
+   "id": "D2-normalized-all-section-repeat-sr",
+   "rule": "D2",
+   "kind": "work_reconcile",
+   "lines": [
+    "WORK EXPERIENCE",
+    "SR Engineer",
+    "Contoso Systems | 2011 - 2015",
+    "SR Engineer | Contoso Systems | 2020 - 2024"
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Contoso Systems",
+      "date_range": "2020 to 2024",
+      "roles": [
+       {
+        "title": "SR Engineer",
+        "bullets": [
+         "Kept original duty."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Contoso Systems",
+      "date_range": "2020 to 2024",
+      "roles": [
+       {
+        "title": "SR Engineer",
+        "bullets": [
+         "Kept original duty."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "note": "House-style normalization or a later work section cannot hide an additional matching stint."
+  },
+  {
+   "id": "D2-normalized-all-section-repeat-jr",
+   "rule": "D2",
+   "kind": "work_reconcile",
+   "lines": [
+    "WORK EXPERIENCE",
+    "JR Engineer",
+    "Contoso Systems | 2011 - 2015",
+    "JR Engineer | Contoso Systems | 2020 - 2024"
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Contoso Systems",
+      "date_range": "2020 to 2024",
+      "roles": [
+       {
+        "title": "JR Engineer",
+        "bullets": [
+         "Kept original duty."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Contoso Systems",
+      "date_range": "2020 to 2024",
+      "roles": [
+       {
+        "title": "JR Engineer",
+        "bullets": [
+         "Kept original duty."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "note": "House-style normalization or a later work section cannot hide an additional matching stint."
+  },
+  {
+   "id": "D2-normalized-all-section-repeat-company-style",
+   "rule": "D2",
+   "kind": "work_reconcile",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Analyst",
+    "CONTOSO SYSTEMS SDN BHD | 2011 - 2015",
+    "Analyst | CONTOSO SYSTEMS SDN BHD | 2020 - 2024"
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "CONTOSO SYSTEMS SDN BHD",
+      "date_range": "2020 to 2024",
+      "roles": [
+       {
+        "title": "Analyst",
+        "bullets": [
+         "Kept original duty."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "CONTOSO SYSTEMS SDN BHD",
+      "date_range": "2020 to 2024",
+      "roles": [
+       {
+        "title": "Analyst",
+        "bullets": [
+         "Kept original duty."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "note": "House-style normalization or a later work section cannot hide an additional matching stint."
+  },
+  {
+   "id": "D2-normalized-all-section-repeat-later-section",
+   "rule": "D2",
+   "kind": "work_reconcile",
+   "lines": [
+    "WORK EXPERIENCE",
+    "Analyst",
+    "Contoso Systems | 2011 - 2015",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Contoso Systems | 2020 - 2024"
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Contoso Systems",
+      "date_range": "2020 to 2024",
+      "roles": [
+       {
+        "title": "Analyst",
+        "bullets": [
+         "Kept original duty."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Contoso Systems",
+      "date_range": "2020 to 2024",
+      "roles": [
+       {
+        "title": "Analyst",
+        "bullets": [
+         "Kept original duty."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "note": "House-style normalization or a later work section cannot hide an additional matching stint."
+  },
+  {
+   "id": "D2-normalized-all-section-repeat-later-section-sr",
+   "rule": "D2",
+   "kind": "work_reconcile",
+   "lines": [
+    "WORK EXPERIENCE",
+    "SR Engineer",
+    "Contoso Systems | 2011 - 2015",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "SR Engineer | Contoso Systems | 2020 - 2024"
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Contoso Systems",
+      "date_range": "2020 to 2024",
+      "roles": [
+       {
+        "title": "SR Engineer",
+        "bullets": [
+         "Kept original duty."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Contoso Systems",
+      "date_range": "2020 to 2024",
+      "roles": [
+       {
+        "title": "SR Engineer",
+        "bullets": [
+         "Kept original duty."
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "note": "House-style normalization or a later work section cannot hide an additional matching stint."
+  },
+  {
+   "id": "D4-existing-first-job-company-conflict",
+   "rule": "D4",
+   "kind": "format_review",
+   "source": "WORK EXPERIENCE\nContoso Systems | Analyst | January 2021 - Present\nBuilt reporting dashboards.",
+   "parsed": {
+    "candidate": {
+     "current_company": "Different employer"
+    },
+    "work_experiences": [
+     {
+      "company": "Contoso Systems",
+      "date_range": "Jan 2021 to Present",
+      "roles": [
+       {
+        "title": "Analyst",
+        "bullets": [
+         "Built reporting dashboards."
+        ]
+       }
+      ]
+     }
+    ],
+    "education": []
+   },
+   "operation": {
+    "op": "add",
+    "path": "/work_experiences/-",
+    "value": {
+     "company": "Contoso Systems",
+     "date_range": "January 2021 - Present",
+     "roles": [
+      {
+       "title": "Analyst",
+       "bullets": [
+        "Built reporting dashboards."
+       ]
+      }
+     ]
+    }
+   },
+   "expect_issue_count": 1,
+   "expect_can_apply": false,
+   "note": "A present first job is resolved only when the rendered current header does not contradict it."
+  },
+  {
+   "id": "D4-existing-first-job-position-conflict",
+   "rule": "D4",
+   "kind": "format_review",
+   "source": "WORK EXPERIENCE\nContoso Systems | Analyst | January 2021 - Present\nBuilt reporting dashboards.",
+   "parsed": {
+    "candidate": {
+     "current_position": "Different position"
+    },
+    "work_experiences": [
+     {
+      "company": "Contoso Systems",
+      "date_range": "Jan 2021 to Present",
+      "roles": [
+       {
+        "title": "Analyst",
+        "bullets": [
+         "Built reporting dashboards."
+        ]
+       }
+      ]
+     }
+    ],
+    "education": []
+   },
+   "operation": {
+    "op": "add",
+    "path": "/work_experiences/-",
+    "value": {
+     "company": "Contoso Systems",
+     "date_range": "January 2021 - Present",
+     "roles": [
+      {
+       "title": "Analyst",
+       "bullets": [
+        "Built reporting dashboards."
+       ]
+      }
+     ]
+    }
+   },
+   "expect_issue_count": 1,
+   "expect_can_apply": false,
+   "note": "A present first job is resolved only when the rendered current header does not contradict it."
+  },
+  {
+   "id": "D4-existing-first-job-consistent",
+   "rule": "D4",
+   "kind": "format_review",
+   "source": "WORK EXPERIENCE\nContoso Systems | Analyst | January 2021 - Present\nBuilt reporting dashboards.",
+   "parsed": {
+    "candidate": {
+     "current_company": "CONTOSO SYSTEMS",
+     "current_position": "ANALYST"
+    },
+    "work_experiences": [
+     {
+      "company": "Contoso Systems",
+      "date_range": "Jan 2021 to Present",
+      "roles": [
+       {
+        "title": "Analyst",
+        "bullets": [
+         "Built reporting dashboards."
+        ]
+       }
+      ]
+     }
+    ],
+    "education": []
+   },
+   "operation": {
+    "op": "add",
+    "path": "/work_experiences/-",
+    "value": {
+     "company": "Contoso Systems",
+     "date_range": "January 2021 - Present",
+     "roles": [
+      {
+       "title": "Analyst",
+       "bullets": [
+        "Built reporting dashboards."
+       ]
+      }
+     ]
+    }
+   },
+   "expect_issue_count": 0,
+   "expect_can_apply": false,
+   "note": "A present first job is resolved only when the rendered current header does not contradict it."
+  },
+  {
+   "id": "D2-bounded-later-work-ambiguity-scan",
+   "rule": "D2",
+   "kind": "work_reconcile",
+   "lines": [
+    "WORK EXPERIENCE",
+    "SR Engineer",
+    "Contoso Systems | 2011 - 2015",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024",
+    "EDUCATION",
+    "Fabrikam University",
+    "WORK EXPERIENCE",
+    "Analyst | Northwind Systems | 2020 - 2024"
+   ],
+   "parsed": {
+    "candidate": {
+     "current_company": "Contoso Systems",
+     "current_position": "SR Engineer"
+    },
+    "work_experiences": [
+     {
+      "company": "Contoso Systems",
+      "date_range": "2020 to 2024",
+      "roles": [
+       {
+        "title": "SR Engineer",
+        "date_range": "",
+        "bullets": [
+         "Kept original duty."
+        ]
+       }
+      ]
+     }
+    ],
+    "education": []
+   },
+   "expect": {
+    "candidate": {
+     "current_company": "Contoso Systems",
+     "current_position": "SR Engineer"
+    },
+    "work_experiences": [
+     {
+      "company": "Contoso Systems",
+      "date_range": "2020 to 2024",
+      "roles": [
+       {
+        "title": "SR Engineer",
+        "date_range": "",
+        "bullets": [
+         "Kept original duty."
+        ]
+       }
+      ]
+     }
+    ],
+    "education": []
+   },
+   "note": "An optional later-section scan that exhausts its budget cannot establish uniqueness; preserve every original field."
   }
  ]
 }

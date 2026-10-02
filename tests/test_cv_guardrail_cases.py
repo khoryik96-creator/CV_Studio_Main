@@ -82,6 +82,17 @@ class WorkRowReaderGuardrails(unittest.TestCase):
 
 
 class SourceCheckGuardrails(unittest.TestCase):
+    def test_resolved_review_keeps_header_conflicts_visible(self):
+        for case in _cases("format_review"):
+            with self.subTest(case=case["id"]):
+                review = fidelity.validate_cv_format_review(json.dumps({"issues": [{
+                    "message": "Check the source job.", "source_quote": case["source"], "operation": case["operation"]}]}),
+                    case["source"], copy.deepcopy(case["parsed"]))
+                self.assertEqual(review["status"], "reviewed")
+                self.assertEqual(len(review["issues"]), case["expect_issue_count"], case["note"])
+                for issue in review["issues"]:
+                    self.assertEqual(issue["can_apply"], case["expect_can_apply"])
+
     def test_missing_employers(self):
         for case in _cases("missing"):
             with self.subTest(case=case["id"]):

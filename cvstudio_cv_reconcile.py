@@ -2330,6 +2330,12 @@ def _restore_work_dates_from_source_headers(parsed, cv_text, *, _source_rows=Non
     def identity(value):
         return " ".join(unicodedata.normalize("NFC", str(value or "")).split()).casefold()
 
+    def header_identity(company, title):
+        # The row reader already applies these house-style transformations.
+        # Use them on both sides of the ambiguity guard, never for date matching.
+        return (identity(_smart_title_text(company, company=True)),
+                identity(_smart_title_text(title, title=True)))
+
     targets = {}
     for item in _flatten_parsed_work_roles(parsed):
         key = (identity(item["company"]), identity(item["title"]))
@@ -2344,11 +2350,14 @@ def _restore_work_dates_from_source_headers(parsed, cv_text, *, _source_rows=Non
     evidence = {}
     in_history = False
     previous = ""
-    for raw in str(cv_text or "").splitlines():
+    source_lines = str(cv_text or "").splitlines()
+    history_starts = []
+    for line_index, raw in enumerate(source_lines):
         line = " ".join(raw.split())
         if not line:
             continue
         if _WORK_HISTORY_HEADING_RE.match(line):
+            history_starts.append(line_index)
             in_history, previous = True, ""
             continue
         # Share established section boundaries, including letter-spaced headings.
@@ -2387,12 +2396,29 @@ def _restore_work_dates_from_source_headers(parsed, cv_text, *, _source_rows=Non
                 if len(dates) == 1 and dates[0] and len(targets[key]) == 1}
     if not eligible:
         return parsed
+    # Bound optional parser calls before starting them. Unread sections could
+    # still contain a matching stint, so retain dates when uniqueness cannot
+    # be established within at most 64 later explicit work sections.
+    if len(history_starts) > 65:
+        return parsed
     source_rows = (_extract_authoritative_work_rows(cv_text, parsed)
                    if _source_rows is None else _source_rows)
-    other_pairs = {(identity(row.get("company")), identity(row.get("title"))) for row in source_rows}
+    other_pairs = {header_identity(row.get("company"), row.get("title")) for row in source_rows}
+    target_pairs = {key: header_identity(targets[key][0]["company"], targets[key][0]["title"])
+                    for key in eligible}
+    pending = set(target_pairs.values()) - other_pairs
+    # The established table reader stops at its first section boundary. Inspect
+    # later work sections separately for ambiguity, without changing its rows
+    # or turning an incomplete history into an authoritative table skeleton.
+    for start, end in zip(history_starts[1:], history_starts[2:] + [len(source_lines)]):
+        if not pending:
+            break
+        section_rows = _extract_authoritative_work_rows("\n".join(source_lines[start:end]), parsed)
+        other_pairs.update(header_identity(row.get("company"), row.get("title")) for row in section_rows)
+        pending.difference_update(other_pairs)
     for key, dates in evidence.items():
         matches = targets[key]
-        if key not in eligible or key in other_pairs:
+        if key not in eligible or target_pairs[key] in other_pairs:
             continue
         item = matches[0]
         exp = parsed["work_experiences"][item["exp_i"]]
