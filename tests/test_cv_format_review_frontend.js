@@ -85,6 +85,9 @@ function harness(options = {}) {
 }
 function descendants(node) { return [node, ...node.children.flatMap(descendants)]; }
 async function run() {
+  const display = harness();
+  assert.strictEqual(display.c.cvReviewValueText({institution:'School',degree:'Degree',cgpa:'CGPA 3.5 / 4.0',honors:'First Class Honors'}),
+    'School\nDegree\nCGPA 3.5 / 4.0\nFirst Class Honors', 'canonical qualification results are visible before Apply');
   for (const blind of [false, true]) {
     const h = harness({on: blind});
     await h.c.startFormat(blind);

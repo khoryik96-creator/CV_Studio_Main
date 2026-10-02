@@ -35,6 +35,7 @@ from cvstudio_cv_normalize import (
     _strip_leading_bullet_marker,
     _cv_source_boundary_key,
     _cv_token_overlap_score,
+    _normalize_cv_data_for_output,
 )
 from cvstudio_cv_reconcile import (
     _reference_section_spans,
@@ -536,7 +537,7 @@ _CV_REVIEW_TTL = 1800
 _CV_REVIEW_SCALAR_PATH = re.compile(
     r"/(?:work_experiences/(?:0|[1-9]\d{0,2})/(?:company|date_range)|"
     r"work_experiences/(?:0|[1-9]\d{0,2})/roles/(?:0|[1-9]\d{0,2})/(?:title|date_range)|"
-    r"education/(?:0|[1-9]\d{0,2})/(?:institution|degree|date_range|major|grade))\Z"
+    r"education/(?:0|[1-9]\d{0,2})/(?:institution|degree|date_range|major|cgpa|honors))\Z"
 )
 _CV_REVIEW_BULLET_PATH = re.compile(
     r"/work_experiences/(?:0|[1-9]\d{0,2})/roles/(?:0|[1-9]\d{0,2})/bullets/(?:0|[1-9]\d{0,2})\Z"
@@ -608,10 +609,13 @@ or replaced string must occur verbatim inside that issue's source_quote.
 Supported operations:
 - add a missing job or education entry at /work_experiences/N or /education/N
   (N is the insertion index; '-' appends); allowed education fields are
-  institution, degree, date_range, major, grade. Do not duplicate existing entries.
+  institution, degree, date_range, major, cgpa, honors. Do not use grade or
+  duplicate existing entries; these canonical result fields are rendered in Word.
 - add an exact missing duty at /work_experiences/N/roles/N/bullets/-.
 - replace company/date_range, role title/date_range, or education institution,
-  degree/date_range/major/grade. Include 'before' equal to the current field.
+  degree/date_range/major/cgpa/honors. Include 'before' equal to the current field.
+  If the current/last company or position header would disagree with a first-job
+  correction, flag it for manual inspection; never edit candidate fields.
 - move an existing plain duty: op='move', from='/work_experiences/N/roles/N/bullets/N',
   path='/work_experiences/N/roles/N/bullets/-', before=the exact current duty.
   Quote must also include the destination employer and title.
@@ -654,7 +658,7 @@ def _cv_review_grounded(value, quote):
 def _cv_review_entry(value, education=False):
     if not isinstance(value, dict):
         raise ValueError("The proposed entry is unsupported.")
-    allowed = {"institution", "degree", "date_range", "major", "grade"} if education else {"company", "date_range", "roles", "section_heading"}
+    allowed = {"institution", "degree", "date_range", "major", "cgpa", "honors"} if education else {"company", "date_range", "roles", "section_heading"}
     if set(value) - allowed:
         raise ValueError("The proposed entry contains unsupported fields.")
     if education:
@@ -677,6 +681,40 @@ def _cv_review_entry(value, education=False):
                 raise ValueError("The proposed role is unsupported.")
 
 
+def _cv_review_duty_identity(value):
+    return _cv_review_words(_strip_leading_bullet_marker(value)) if isinstance(value, str) else None
+
+
+def _cv_review_entry_identity(value, education=False):
+    if not isinstance(value, dict):
+        return None
+    field = "education" if education else "work_experiences"
+    output = _normalize_cv_data_for_output(
+        {"candidate": {}, "work_experiences": [], "education": [], field: [copy.deepcopy(value)]},
+        preserve_work_order=True,
+    )[field][0]
+    def text(name, entry=output):
+        return _cv_review_words(str(entry.get(name) or "")).casefold()
+    if education:
+        return (text("institution"), text("degree"), text("date_range"))
+    return (text("company"), text("date_range"), frozenset(
+        (text("title", role), text("date_range", role))
+        for role in output.get("roles") or [] if isinstance(role, dict)))
+
+
+def _cv_review_duplicate_entry(value, existing, education=False):
+    identity = _cv_review_entry_identity(value, education)
+    for entry in existing:
+        other = _cv_review_entry_identity(entry, education)
+        if identity is None or other is None:
+            continue
+        if education and identity == other:
+            return True
+        if not education and identity[:2] == other[:2] and identity[2] <= other[2]:
+            return True
+    return False
+
+
 def _cv_review_operate(data, operation, quote):
     if not isinstance(operation, dict) or set(operation) - {"op", "path", "from", "before", "value"}:
         raise ValueError("This suggestion needs manual inspection.")
@@ -690,6 +728,14 @@ def _cv_review_operate(data, operation, quote):
         if not isinstance(before, str) or operation.get("before") != before or not isinstance(value, str) or value == before:
             raise ValueError("The current field does not match this suggestion.")
         _cv_review_grounded(value, quote)
+        header_field = {"/work_experiences/0/company": "current_company",
+                        "/work_experiences/0/roles/0/title": "current_position"}.get(path)
+        candidate = data.get("candidate")
+        if header_field and isinstance(candidate, dict):
+            header = candidate.get(header_field)
+            if header and (not isinstance(header, str) or
+                           _cv_review_words(header).casefold() != _cv_review_words(value).casefold()):
+                raise ValueError("The current/last CV header would disagree with this correction; inspect both manually.")
         parent[key] = value
     elif op == "add" and _CV_REVIEW_ADD_PATH.fullmatch(path):
         parent, key = _cv_review_parent(data, path)
@@ -706,7 +752,10 @@ def _cv_review_operate(data, operation, quote):
         elif not isinstance(value, str):
             raise ValueError("Only an exact plain duty can be added here.")
         _cv_review_grounded(value, quote)
-        if value in parent:
+        entry = path.startswith("/education/") or path.count("/") == 2
+        duplicate = (_cv_review_duplicate_entry(value, parent, path.startswith("/education/")) if entry else
+                     any(_cv_review_duty_identity(value) == _cv_review_duty_identity(item) for item in parent))
+        if duplicate:
             raise ValueError("That entry is already present.")
         parent.insert(index, copy.deepcopy(value))
     elif op == "move" and _CV_REVIEW_ADD_PATH.fullmatch(path) and path.endswith("/bullets/-"):
@@ -718,7 +767,8 @@ def _cv_review_operate(data, operation, quote):
         if previous is target or not isinstance(target, list) or len(target) >= 150:
             raise ValueError("The destination duty list is unavailable.")
         value = previous[int(index)]
-        if not isinstance(value, str) or operation.get("before") != value or value in target:
+        if (not isinstance(value, str) or operation.get("before") != value or
+                any(_cv_review_duty_identity(value) == _cv_review_duty_identity(item) for item in target)):
             raise ValueError("The current duty does not match this suggestion.")
         _cv_review_grounded(value, quote)
         parts = path.split("/")

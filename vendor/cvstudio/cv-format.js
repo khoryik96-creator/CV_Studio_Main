@@ -297,7 +297,7 @@ function cvReviewValueText(value) {
   if (typeof value === 'string') return value;
   if (!value || typeof value !== 'object') return '';
   var lines = [];
-  ['company', 'institution', 'degree', 'title', 'date_range', 'major', 'grade', 'section_heading'].forEach(function(key) {
+  ['company', 'institution', 'degree', 'title', 'date_range', 'major', 'cgpa', 'honors', 'section_heading'].forEach(function(key) {
     if (typeof value[key] === 'string') lines.push(value[key]);
   });
   if (Array.isArray(value.roles)) value.roles.forEach(function(role) { lines.push(cvReviewValueText(role)); });

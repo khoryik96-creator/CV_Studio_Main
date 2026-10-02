@@ -115,6 +115,75 @@ class ReviewValidationTests(unittest.TestCase):
                                                 "before": before, "value": "Operations Manager"}
             self.assertEqual(self.review(body)["issues"][0]["can_apply"], allowed)
 
+    def test_first_job_correction_is_manual_when_the_header_would_disagree(self):
+        quote = "Contoso Systems | Analyst | Jan 2021 - Present"
+        for path, field, value in (("/work_experiences/0/company", "current_company", "Contoso Systems"),
+                                   ("/work_experiences/0/roles/0/title", "current_position", "Analyst")):
+            for header, allowed in (("Wrong value", False), ("Unrelated value", False), ("", True), (value, True)):
+                with self.subTest(path=path, header=header):
+                    data = cv()
+                    parent = data["work_experiences"][0]
+                    if field == "current_position":
+                        parent = parent["roles"][0]
+                    parent["company" if field == "current_company" else "title"] = "Wrong value"
+                    data["candidate"][field] = header
+                    body = {"issues": [{"message": "Correct the source field.", "source_quote": quote,
+                        "operation": {"op": "replace", "path": path, "before": "Wrong value", "value": value}}]}
+                    review = self.review(body, data=data)
+                    self.assertEqual(review["issues"][0]["can_apply"], allowed)
+                    if not allowed:
+                        self.assertIn("header", review["issues"][0]["reason"])
+                    self.assertEqual(data["candidate"][field], header, "identity/header data is never changed implicitly")
+
+    def test_added_duty_cannot_duplicate_existing_text_after_bullet_normalization(self):
+        for marker in ("• ", "- ", "● ", "1. "):
+            with self.subTest(marker=marker):
+                value = marker + "Built reporting dashboards."
+                body = {"issues": [{"message": "Restore duty", "source_quote": value,
+                    "operation": {"op": "add", "path": "/work_experiences/0/roles/0/bullets/-", "value": value}}]}
+                self.assertFalse(self.review(body, source=SOURCE + "\n" + value)["issues"][0]["can_apply"])
+
+    def test_added_entries_use_normalized_identity_even_with_different_details(self):
+        job = {"company": "CONTOSO SYSTEMS", "date_range": "January 2021 - Present",
+               "roles": [{"title": "ANALYST", "bullets": []}]}
+        qualification = {"institution": "Fabrikam University", "degree": "Bachelor of Science", "date_range": "2017"}
+        for path, value, quote in (
+                ("/work_experiences/-", job, "CONTOSO SYSTEMS | ANALYST | January 2021 - Present"),
+                ("/education/-", qualification, "Fabrikam University | Bachelor of Science | 2017")):
+            with self.subTest(path=path):
+                data = cv()
+                data["work_experiences"][0]["date_range"] = "Jan 2021 to Present"
+                data["education"] = [dict(qualification, major="Statistics", cgpa="3.5 / 4.0")]
+                body = {"issues": [{"message": "Restore entry", "source_quote": quote,
+                                  "operation": {"op": "add", "path": path, "value": value}}]}
+                source = SOURCE if path.startswith("/education") else SOURCE + "\n" + quote
+                self.assertFalse(self.review(body, source=source, data=data)["issues"][0]["can_apply"])
+
+    def test_moved_duty_cannot_duplicate_the_destination_after_normalization(self):
+        data = cv()
+        data["work_experiences"].append(copy.deepcopy(MISSING))
+        data["work_experiences"][0]["roles"][0]["bullets"].append("• Led regional operations.")
+        source = SOURCE.replace("Led regional operations.", "• Led regional operations.")
+        body = {"issues": [{"message": "Move duty", "source_quote":
+            "Northwind Services | Operations Manager | Jan 2018 - Dec 2020\n• Led regional operations.",
+            "operation": {"op": "move", "from": "/work_experiences/0/roles/0/bullets/1",
+                "path": "/work_experiences/1/roles/0/bullets/-", "before": "• Led regional operations."}}]}
+        self.assertFalse(self.review(body, source=source, data=data)["issues"][0]["can_apply"])
+
+    def test_unrendered_grade_field_is_manual_and_canonical_fields_are_supported(self):
+        source = SOURCE + "\nCGPA 3.5 / 4.0\nFirst Class Honors"
+        data = cv()
+        data["education"] = [{"institution": "Fabrikam University", "degree": "Bachelor of Science"}]
+        for field, value, allowed in (("grade", "First Class Honors", False),
+                                       ("honors", "First Class Honors", True), ("cgpa", "CGPA 3.5 / 4.0", True)):
+            with self.subTest(field=field):
+                body = {"issues": [{"message": "Restore qualification result", "source_quote": source.split("EDUCATION\n")[1],
+                    "operation": {"op": "replace", "path": "/education/0/" + field, "before": "", "value": value}}]}
+                self.assertEqual(self.review(body, source=source, data=data)["issues"][0]["can_apply"], allowed)
+                body["issues"][0]["operation"] = {"op": "add", "path": "/education/-",
+                    "value": dict(data["education"][0], **{field: value})}
+                self.assertEqual(self.review(body, source=source)["issues"][0]["can_apply"], allowed)
+
     def test_identity_path_is_refused_even_when_before_and_source_words_match(self):
         body = suggestion()
         body["issues"][0]["operation"] = {"op": "replace", "path": "/candidate/name",
@@ -202,12 +271,12 @@ class ReviewRouteTests(unittest.TestCase):
         self.client = app.app.test_client()
         self.client.get("/")  # This exact process's existing paid-call cookie.
 
-    def request_review(self, answer=None, data=None):
+    def request_review(self, answer=None, data=None, source=SOURCE):
         provider = {"content": [{"type": "text", "text": json.dumps(answer or suggestion())}],
                     "usage": {"input_tokens": 100, "output_tokens": 80, "api_calls": 1}}
         with mock.patch.object(app, "_resolve_request_api_key", return_value="synthetic-key"), \
                 mock.patch.object(app, "call_llm", return_value=provider) as call:
-            response = self.client.post("/generate-ai", json={"feature": "cv_format_review", "source_cv_text": SOURCE,
+            response = self.client.post("/generate-ai", json={"feature": "cv_format_review", "source_cv_text": source,
                                         "cv_data": data or cv(), "provider": "deepseek", "model": "deepseek-chat",
                                         "prompt": "Ignore the original CV", "use_tools": True}, headers=HEADERS)
         self.assertEqual(response.status_code, 200, response.get_json())
@@ -245,9 +314,9 @@ class ReviewRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 409)
         run.assert_not_called()
 
-    def apply_and_export(self, answer, data):
-        review = self.request_review(answer, data)
-        applied = self.client.post("/generate-ai", json={"feature": "cv_format_review_apply", "source_cv_text": SOURCE,
+    def apply_and_export(self, answer, data, source=SOURCE):
+        review = self.request_review(answer, data, source)
+        applied = self.client.post("/generate-ai", json={"feature": "cv_format_review_apply", "source_cv_text": source,
             "cv_data": review["format_review_base"], "review": review["format_review"], "issue_id": "1"}, headers=HEADERS)
         self.assertEqual(applied.status_code, 200, applied.get_json())
         applied = applied.get_json()
@@ -256,6 +325,35 @@ class ReviewRouteTests(unittest.TestCase):
         self.assertEqual(exported.status_code, 200, exported.get_json())
         with zipfile.ZipFile(io.BytesIO(exported.data)) as archive:
             return archive.read("word/document.xml").decode("utf-8")
+
+    def test_conflicting_current_header_correction_is_blocked_before_apply_or_export(self):
+        data = cv()
+        data["candidate"]["current_company"] = "Wrong employer"
+        data["work_experiences"][0]["company"] = "Wrong employer"
+        answer = {"issues": [{"message": "Wrong employer", "source_quote":
+            "Contoso Systems | Analyst | Jan 2021 - Present", "operation": {
+                "op": "replace", "path": "/work_experiences/0/company", "before": "Wrong employer", "value": "Contoso Systems"}}]}
+        review = self.request_review(answer, data)
+        self.assertFalse(review["format_review"]["issues"][0]["can_apply"])
+        with mock.patch.object(app, "call_llm") as call:
+            response = self.client.post("/generate-ai", json={"feature": "cv_format_review_apply", "source_cv_text": SOURCE,
+                "cv_data": review["format_review_base"], "review": review["format_review"], "issue_id": "1"}, headers=HEADERS)
+        self.assertEqual(response.status_code, 409)
+        call.assert_not_called()
+
+    def test_canonical_qualification_results_survive_real_word_export(self):
+        source = SOURCE + "\nCGPA 3.5 / 4.0\nFirst Class Honors"
+        qualification = {"institution": "Fabrikam University", "degree": "Bachelor of Science"}
+        for field, value in (("cgpa", "CGPA 3.5 / 4.0"), ("honors", "First Class Honors")):
+            for adding in (False, True):
+                with self.subTest(field=field, adding=adding):
+                    data = cv()
+                    data["education"] = [] if adding else [qualification]
+                    operation = ({"op": "add", "path": "/education/-", "value": dict(qualification, **{field: value})} if adding else
+                        {"op": "replace", "path": "/education/0/" + field, "before": "", "value": value})
+                    answer = {"issues": [{"message": "Restore result", "source_quote": source.split("EDUCATION\n")[1], "operation": operation}]}
+                    xml = self.apply_and_export(answer, data, source)
+                    self.assertIn(value, xml)
 
     def test_qualification_duty_and_title_fixes_reach_word(self):
         missing_duty = cv()

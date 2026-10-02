@@ -129,3 +129,43 @@ app fixtures. Focused correction gate: **27 passed, 15 subtests** (state isolati
 review suite and version). No app/feature/dependency/version change was required.
 Final hosted checks on PR #221 and the coordination log carry final-head and
 merge evidence; no failed Mac check is bypassed.
+
+## PR221 source-review corrections — 2026-10-02
+
+Hosted run `36959663047` at receipt-only head `3d135e1` passed all three gates:
+complete Windows regression and genuine macOS Intel/Apple Silicon native
+dependency verification. These checks precede the product corrections below;
+the final PR head must pass them again before merge.
+
+The automated review identified three actionable issues. New failing regression
+cases confirmed all three before bounded corrections:
+
+- First-job employer/title replacement could leave an incorrect nonempty
+  CURRENT/LAST header. Such conflicting suggestions now stay manual, including
+  a header unrelated to the old value. Blank/fallback or already-correct headers
+  remain supported. Candidate/identity fields are never implicitly changed.
+- Raw equality allowed duties with leading bullet markers to duplicate existing
+  rendered duties. Added and moved duties now compare the existing normalized
+  bullet text. Job/qualification additions compare the existing normalized
+  identity, including equivalent dates/case and different detail fields.
+- The schema accepted `grade` even though Word does not render it. Both prompt
+  and validator now use the existing rendered `cgpa` and `honors` fields; `grade`
+  stays manual. Shared suggestion display includes both canonical fields.
+
+Focused isolated gate: **34 passed, 36 subtests** (review, state isolation and
+version). Real review/apply/Word export tests exercise both added and replaced
+CGPA/honors, and the signed conflicting-header case cannot be applied. All **29
+frontend suites** passed. **Five additional temporary-copy mutations** were
+caught for header conflicts, normalized duties, entry identity, replacement
+grade and added grade; live code was not mutated. Source preflight, all tracked
+language checks, consistency, whitespace and the **24-assertion** isolated live
+source smoke passed after these corrections. Existing deterministic helper
+implementations, Word renderer/template and all 899 registry expectations are
+unchanged; only the optional review boundary reuses output normalization.
+
+Final corrected local complete gate: **1,529 passed, four skipped, three
+deselected, 6,885 subtests passed**, excluding only the exact three previously
+reproduced updater environment failures above. All new cases pass. Final hosted
+unfiltered check/head/merge evidence is recorded in PR221/issue #35; merge waits
+for all three gates at the exact final head. No live provider call, credential
+copy, JobAdder write, protected build or release was performed.

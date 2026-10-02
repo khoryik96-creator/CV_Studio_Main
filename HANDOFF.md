@@ -347,7 +347,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   authorized merge through PR #221. See
   `cv_studio_v24_6_435_batch_ai_review_settings_qa_report.md`; the PR's final hosted
   checks and issue #35 record the exact merge state.
-  Final local gate: 1,522 passed, four skipped, 6,864 subtests; three exact updater
+  Initial local gate: 1,522 passed, four skipped, 6,864 subtests; three exact updater
   environment fixtures deselected after the unfiltered run and same failures on
   v434. The prior v434 report's three native OLE recovery failures now pass on
   both checkouts without a code change.
@@ -355,7 +355,16 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   Mac gates caught the new review fixture's unmocked `expanduser` receipt read.
   Its temporary-path mock is now aligned with existing isolated fixtures; the
   collection guard checks the non-Windows read path before any receipt write on
-  every host. Focused follow-up: 27 passed / 15 subtests. No product code changed.
+  every host. Receipt-only follow-up: 27 passed / 15 subtests.
+  PR221 review subsequently identified contradictory current/last headers,
+  duplicates after output normalization and unrendered qualification `grade`.
+  Conflicting first-job corrections now stay manual; additions/moved duties use
+  existing normalized identity; qualifications use rendered `cgpa`/`honors`.
+  Candidate fields, existing normalize/reconcile helpers and Word renderer stay
+  unchanged. Correction gate: 34 tests / 36 subtests, all 29 frontend suites and
+  five temporary-copy boundary mutations. Corrected local full gate: 1,529 passed,
+  four skipped, three exact updater fixtures deselected, 6,885 subtests. See the
+  v435 QA follow-up; final hosted head/merge evidence is in PR221 and issue #35.
 
 - **CV guardrail corrective — v24.6.429–433, PR #220, MERGED as `efe42f21`.**
   Branch `codex/pr220-v24.6.431-qualification-pay-guards` (existing PR head retained),

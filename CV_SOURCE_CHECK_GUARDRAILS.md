@@ -513,6 +513,13 @@ stay manual. Allowed corrections are bounded job/qualification restoration,
 exact duty restoration/movement and employer/title/qualification/date fields.
 No deletions, identity, summary, skills or hidden fields are permitted.
 
+First-job company/title corrections stay manual if the nonempty current/last
+header would disagree; review never silently changes candidate fields. Added or
+moved duties are compared after the existing bullet-marker normalization. Job
+and qualification additions compare normalized identity, so different details
+cannot duplicate the same entry. Supported qualification result fields are the
+existing rendered `cgpa` and `honors`; unrendered `grade` corrections stay manual.
+
 Apply requires the signed review to match this exact source and formatted data,
 with exact previous fields, unique non-referee evidence and all new words in the
 same quote. It runs no AI call. Existing output passes still run; a changed proof

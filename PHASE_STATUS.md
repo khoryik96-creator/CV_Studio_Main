@@ -4,7 +4,7 @@
 
 ## Release state
 
-- Latest verified merged source (2026-10-01): v24.6.433, `efe42f21` (#220).
+- Previous verified merged baseline (2026-10-01): v24.6.433, `efe42f21` (#220).
   The merged tree matches tested head `9665d75`; all three hosted gates passed.
   `codex/pr220-v24.6.431-qualification-pay-guards` is a completed branch.
   Includes the v24.6.429 test-state, education-label and summary
@@ -28,7 +28,7 @@
   uploads stay paired. Blind remains excluded; output options stay captured.
   Existing providers/cost gates, routes, guards, schemas and deterministic rules
   remain. Non-secret choice uses existing schema-10 setting/backup allowlists.
-  Unfiltered local run: 1,522 passed, four skipped, 6,864 subtests, three updater
+  Initial unfiltered local run: 1,522 passed, four skipped, 6,864 subtests, three updater
   environment failures also reproduced on v434. The three native OLE fixtures
   recorded as failed in the prior v434 report now pass on both checkouts without
   code changes. Final gate with only those exact three updater fixtures excluded:
@@ -43,6 +43,14 @@
   new test fixture's receipt lookup outside its temporary home; the fixture now
   mocks the same expanded path as existing tests, and the isolation guard checks
   this on Windows too before writing. Focused follow-up: 27 passed / 15 subtests.
+  PR221's three source-review findings are corrected: conflicting current/last
+  header replacements stay manual; additions/moved duties use normalized
+  duplicate checks; qualification results use rendered `cgpa`/`honors` instead
+  of unrendered `grade`. Candidate fields and the existing output helpers and
+  renderer stay unchanged. Focused correction gate: 34 tests / 36 subtests,
+  all 29 frontend suites and five isolated boundary mutations. Corrected local
+  full gate: 1,529 passed, four skipped, three exact updater fixtures deselected,
+  6,885 subtests. See the v435 QA follow-up for evidence.
   Final hosted checks/issue #35 carry the exact merge state. No release, protected
   compilation, live AI or JobAdder write.
   See `cv_studio_v24_6_435_batch_ai_review_settings_qa_report.md` for evidence/limits.
