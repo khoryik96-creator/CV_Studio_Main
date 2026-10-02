@@ -335,8 +335,10 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   order. Existing 915 registry expectations remain unchanged; eight new cases
   and generated/hostile-input controls cover the findings. See the v438 QA
   report for validation. No owner installation/receipt change, paid/live call,
-  route/schema change or protected build. Commit/push after gates; a new PR or
-  merge requires the owner's request.
+  route/schema change or protected build. Owner explicitly authorized the PR
+  and merge on 2026-10-02. Wait for all three exact-head hosted gates before
+  squash merge; record final merge/check identities in issue #35. Owner
+  installation and protected packaging remain separate work.
 
 - **Resolved review/date corrective — v24.6.437, PR #222, MERGED as `f55a049`.**
   Branch `codex/v24.6.436-review-date-corrections` starts at exact merged master

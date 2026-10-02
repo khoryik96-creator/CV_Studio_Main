@@ -17,7 +17,9 @@
   header conflicts. Existing 915 registry cases are preserved; eight appended
   cases and focused/generated/performance controls cover the three findings.
   No owner installation/receipt, paid-call, route/schema or protected-build
-  change. See the v438 QA report; no new PR or merge requested.
+  change. See the v438 QA report. Owner authorized the PR and merge on
+  2026-10-02; await all three exact-head hosted gates before squash merge.
+  Final merge/check identities will be recorded in issue #35.
 
 - Previous verified merged baseline (2026-10-02): v24.6.435, `cf48a558` (#221).
   Tested head `93c4971` has the same tree; all three hosted gates passed.
