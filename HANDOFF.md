@@ -325,7 +325,20 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Resolved review/date corrective — v24.6.437, owner-authorized source work.**
+- **Main-review corrective — v24.6.438, owner-authorized source work.**
+  New branch `codex/v24.6.438-main-review-corrections` starts at exact merged
+  master `f55a049` / v437. All three main-review findings are corrected: the
+  ambiguity guard compares the same house-style identities, separately checks
+  later explicit work sections without changing authoritative row outputs,
+  and matching first-job additions keep conflicting rendered current headers
+  manual. Header comparison uses rendered company/title style and newest role
+  order. Existing 915 registry expectations remain unchanged; eight new cases
+  and generated/hostile-input controls cover the findings. See the v438 QA
+  report for validation. No owner installation/receipt change, paid/live call,
+  route/schema change or protected build. Commit/push after gates; a new PR or
+  merge requires the owner's request.
+
+- **Resolved review/date corrective — v24.6.437, PR #222, MERGED as `f55a049`.**
   Branch `codex/v24.6.436-review-date-corrections` starts at exact merged master
   `cf48a558` / v435. Already-satisfied source-backed review suggestions are
   omitted only when all proposed details exist at the same role/qualification;
@@ -346,10 +359,11 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   presence/value. All 905 v436 registry cases remain unchanged; ten new cases
   and focused timing/generated controls cover the three review findings.
   See the v437 QA report for corrective validation.
-  Owner explicitly authorized a PR and merge on 2026-10-02. Await the exact
-  head's hosted regression/native dependency gates before squash merge; final
-  merge identity and checks are recorded in issue #35. Keep owner installation
-  updates and protected packaging separate.
+  Owner authorized merge on 2026-10-02. Hosted run `37002824842` passed all
+  three gates; unfiltered Windows suite: 1,572 passed, four skipped and 7,038
+  subtests. The merged tree equals tested head `92bb3f4` (`9d9703a`). Final
+  merge/check identities are in issue #35. Owner installation updates and
+  protected packaging remain separate.
 
 - **Optional AI formatting review — v24.6.435, PR #221, MERGED as `cf48a558`.**
   Owner approved extending v434 to Batch Format and moving the toggle into

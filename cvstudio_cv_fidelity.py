@@ -791,6 +791,23 @@ def _cv_review_already_resolved(data, operation, quote):
         elif not isinstance(value, str):
             return False
         _cv_review_grounded(value, quote)
+        if entry and not education and parent and _cv_review_entry_present(value, parent[:1]):
+            # Presence of the first job does not prove its current/last header
+            # is correct. Compare actual rendered style and newest role order.
+            view = _normalize_cv_data_for_output({
+                "candidate": copy.deepcopy(data.get("candidate") or {}),
+                "work_experiences": [copy.deepcopy(parent[0])], "education": []},
+                preserve_work_order=True)
+            candidate = view.get("candidate")
+            current = view["work_experiences"][0]
+            roles = current.get("roles") or []
+            title = roles[0].get("title", "") if roles else ""
+            if isinstance(candidate, dict) and any(candidate.get(header) and not _cv_review_same_field(
+                    candidate[header], body, field) for header, body, field in (
+                        ("current_company", current.get("company", ""), "company"),
+                        ("current_position", title, "title"))):
+                return False
+            return True
         return (_cv_review_entry_present(value, parent, education) if entry else
                 _cv_review_duty_identity(value).casefold() in {
                     _cv_review_duty_identity(item).casefold() for item in parent if isinstance(item, str)})

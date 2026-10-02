@@ -588,6 +588,8 @@ unrelated sections, trailing prose and conflicting single-role dates stay unchan
 Uniqueness includes the other supported source layouts: a matching table,
 borderless or title/company/date header blocks the two-line repair, even when
 its dates are identical. Count these as additional sightings before changing dates.
+Apply the same house-style identity normalization on both sides of this guard,
+and include every explicit work section, including those after other CV sections.
 
 ### D3
 
@@ -602,3 +604,11 @@ not trigger extra OCR. Complete every selected primary page before optional
 rechecks use the remaining deadline. Optional exhaustion cannot discard those
 primary pages. Consensus requires matching month presence as well as normalized
 month values; chronology's January/December defaults are not observed evidence.
+
+### D4
+
+An add-job suggestion matching the existing first job stays manual when a
+populated current employer/position conflicts with that job's rendered header.
+Compare the rendered company/title style and the latest rendered role. Absent
+or consistent headers still permit already-present suggestions to be omitted;
+older-job and qualification matches do not use the first-job header check.

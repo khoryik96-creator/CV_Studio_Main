@@ -80,6 +80,64 @@ class SourceWorkDateTests(unittest.TestCase):
         source = "WORK EXPERIENCE\nAnalyst\nContoso Systems | 2011 - 2015\nAnalyst | Contoso Systems | 2011 - 2015"
         self.assertEqual(self.reconcile(source, data), data)
 
+    def test_house_style_titles_and_employers_cannot_hide_a_repeated_stint(self):
+        for company, title in (("Contoso Systems", "SR Engineer"), ("Contoso Systems", "JR Engineer"),
+                               ("Contoso Systems", "SR ENGINEER"), ("CONTOSO SYSTEMS SDN BHD", "Analyst"),
+                               ("iFAST SDN BHD", "SR Engineer")):
+            data = cv(company=company, title=title, date="2020 to 2024")
+            source = f"WORK EXPERIENCE\n{title}\n{company} | 2011 - 2015\n{title} | {company} | 2020 - 2024"
+            with self.subTest(company=company, title=title):
+                self.assertEqual(self.reconcile(source, data), data)
+                self.assertEqual(_restore_work_dates_from_source_headers(copy.deepcopy(data), source), data)
+
+    def test_repeated_pairs_in_later_work_sections_do_not_supply_unique_dates(self):
+        data = cv(title="Analyst", date="2020 to 2024")
+        for boundary in ("EDUCATION\nFabrikam University", "SKILLS\nPython", "LANGUAGES\nEnglish",
+                         "REFERENCES\nAvailable on request"):
+            for header in ("Analyst | Contoso Systems | 2020 - 2024",
+                           "2020 - 2024 Contoso Systems Analyst",
+                           "Analyst\nContoso Systems | Singapore | 2020 - 2024"):
+                source = "WORK EXPERIENCE\nAnalyst\nContoso Systems | 2011 - 2015\n" + boundary + "\nWORK EXPERIENCE\n" + header
+                with self.subTest(boundary=boundary, header=header):
+                    self.assertEqual(self.reconcile(source, data), data)
+                    self.assertEqual(_restore_work_dates_from_source_headers(copy.deepcopy(data), source), data)
+
+    def test_normalized_repeated_pair_is_found_in_a_third_work_section(self):
+        data = cv(title="SR Engineer", date="2020 to 2024")
+        source = "WORK EXPERIENCE\nSR Engineer\nContoso Systems | 2011 - 2015\nEDUCATION\nFabrikam University\nWORK EXPERIENCE\nAnalyst | Northwind Systems | 2016 - 2019\nSKILLS\nPython\nWORK EXPERIENCE\nSR Engineer | Contoso Systems | 2020 - 2024"
+        self.assertEqual(self.reconcile(source, data), data)
+
+    def test_unique_abbreviated_title_still_recovers_its_own_dates(self):
+        data = cv(title="SR Engineer")
+        expected = copy.deepcopy(data)
+        expected["work_experiences"][0]["date_range"] = "Aug 2011 to May 2015"
+        self.assertEqual(self.reconcile("WORK EXPERIENCE\nSR Engineer\nContoso Systems | Aug 2011 - May 2015", data), expected)
+
+    def test_later_unrelated_work_and_non_work_headers_do_not_block_unique_recovery(self):
+        data = cv(title="SR Engineer")
+        expected = copy.deepcopy(data)
+        expected["work_experiences"][0]["date_range"] = "Aug 2011 to May 2015"
+        first = "WORK EXPERIENCE\nSR Engineer\nContoso Systems | Aug 2011 - May 2015\n"
+        for later in ("EDUCATION\nFabrikam University\nWORK EXPERIENCE\nAnalyst | Northwind Systems | 2020 - 2024",
+                      "EDUCATION\nFabrikam University\nWORK EXPERIENCE\nSenior Engineer | Contoso Systems | 2020 - 2024",
+                      "REFERENCES\nSR Engineer | Contoso Systems | 2020 - 2024"):
+            with self.subTest(later=later):
+                self.assertEqual(self.reconcile(first + later, data), expected)
+
+    def test_generated_abbreviated_repeats_across_sections_keep_every_field(self):
+        for year in range(1980, 2020):
+            data = cv(title="JR Engineer", date=f"{year + 10} to {year + 14}")
+            source = f"WORK EXPERIENCE\nJR Engineer\nContoso Systems | {year} - {year + 4}\nEDUCATION\nFabrikam University\nWORK EXPERIENCE\nJR Engineer | Contoso Systems | {year + 10} - {year + 14}"
+            with self.subTest(year=year):
+                self.assertEqual(self.reconcile(source, data), data)
+
+    def test_many_sections_stop_work_once_the_pair_is_ambiguous(self):
+        data = cv(title="SR Engineer", date="2020 to 2024")
+        source = "WORK EXPERIENCE\nSR Engineer\nContoso Systems | 2011 - 2015\nEDUCATION\nFabrikam University\nWORK EXPERIENCE\nSR Engineer | Contoso Systems | 2020 - 2024\n" + "EDUCATION\nFabrikam University\nWORK EXPERIENCE\nUndated job\n" * 20000
+        started = time.perf_counter()
+        self.assertEqual(_restore_work_dates_from_source_headers(copy.deepcopy(data), source), data)
+        self.assertLess(time.perf_counter() - started, 3.0)
+
     def test_generated_mixed_layout_repeats_preserve_every_field(self):
         for year in range(1980, 2020):
             data = cv(company=f"Contoso Systems {year}", title="Analyst", date=f"{year + 10} to {year + 14}")

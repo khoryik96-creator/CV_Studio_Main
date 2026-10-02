@@ -39,6 +39,14 @@ before optional rechecks, which retain completed pages if time runs out.
 Missing months cannot establish agreement with explicit January/December dates.
 All previous formatting and review expectations remain; see the v437 QA report.
 
+The v24.6.438 main-review corrective compares normalized house-style identities
+only when blocking ambiguous date recovery; date matching itself stays exact.
+It checks later explicit work sections separately and preserves the existing
+table reader's outputs. A matching first-job addition remains a manual warning
+when current headers conflict with its rendered company/latest role. Consistent
+headers, older jobs and qualifications retain their resolved filtering. See
+rules D2/D4 and the v438 QA report.
+
 ## The pipeline (source doc → formatted DOCX)
 
 1. **`/extract-text`** (`app.py`) — pulls raw text from the upload: `pdfplumber`
