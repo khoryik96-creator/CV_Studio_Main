@@ -56,6 +56,7 @@ function renderJAUploadList() {
 
 function setBatchManualEmail(el, id) {
   var b = _batchFiles.find(function(x){ return x.id === id; });
+  if (b && b._formattingReview && b._formattingReview.busy) { showToast('Wait for this CV review or fix to finish before uploading.', 'info'); return; }
   if (b && el.value.trim()) {
     b._manualEmail = el.value.trim();
     b.jaStatus = '☁ Uploading…';

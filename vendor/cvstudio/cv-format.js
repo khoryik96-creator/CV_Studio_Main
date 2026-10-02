@@ -18,6 +18,9 @@ async function startFormat(blind) {
   var automaticSummaryRoute = withAutomaticSummary ? aiRoutePayload('summary') : null;
   if (withAutomaticSummary && !automaticSummaryRoute.api_key) { showToast('Save an API key for the CV Summary route or turn off Generate CV Summary', 'err'); return; }
   var singleSummaryDetail = withAutomaticSummary ? getCvSummaryDetailPreference('single') : 'concise';
+  var withFormattingReview = !blind && typeof getCvFormattingReview === 'function' && getCvFormattingReview();
+  cvResetFormattingReview();
+  var reviewSequence = window._cvFormattingReviewSequence;
 
   var _tabRun = markTabRunning('format');
   document.getElementById('btnFormat').disabled = true;
@@ -169,6 +172,29 @@ async function startFormat(blind) {
     window._docxBlob = blob;
     window._originalBlob  = null; // reset — set below if file was uploaded
     window._isBlind  = blind;
+    if (withFormattingReview) {
+      setProgress(94, 'Checking formatting against the original CV…', docxStep + 1, totalSteps + 1);
+      var formattingReview = await cvRunFormattingReview(raw, _parsedData, route, parseWarning);
+      if (formattingReview.stale) {
+        // Editing the input leaves the completed file available, while clearing
+        // or starting a different run owns its own controls.
+        if (window._cvFormattingReview && window._cvFormattingReview.sequence === reviewSequence &&
+            window._cvFormattingReviewSequence === reviewSequence) {
+          document.getElementById('btnFormat').disabled = false;
+          document.getElementById('btnBlind').disabled = false;
+          document.getElementById('btnDocx').disabled = !window._docxBlob;
+          stopTimer(); hideProgress();
+          cvRenderFormattingReview(window._cvFormattingReview, 'The input changed during this check. Format the current CV before checking it again.');
+        }
+        return;
+      }
+      _runCost += formattingReview.cost;
+      _runUsage = mergeUsageClient(_runUsage, formattingReview.usage);
+      if (formattingReview.warning) {
+        parseWarning = cvJoinWarnings(parseWarning, formattingReview.warning);
+        cvShowParseWarningBanner(formattingReview.warning);
+      }
+    }
     document.getElementById('btnDocx').disabled = false;
     setProgress(100, 'Done! Click Download DOCX ✓', totalSteps + 1, totalSteps);
     stopTimer();
@@ -226,6 +252,206 @@ async function startFormat(blind) {
 
   document.getElementById('btnFormat').disabled = false;
   document.getElementById('btnBlind').disabled  = false;
+}
+
+function cvReviewCurrentSource() {
+  return _activeInputTab === 'upload' ? String(_extractedText || '') : String(document.getElementById('cvInput').value || '').trim();
+}
+function cvReviewIsCurrent(state) {
+  return !!state && window._cvFormattingReview === state && !window._isBlind &&
+    state.sequence === window._cvFormattingReviewSequence && state.source === cvReviewCurrentSource() &&
+    state.snapshot === JSON.stringify(_parsedData) && state.blob === window._docxBlob;
+}
+function cvReviewBusy(state, busy) {
+  var ids = ['btnFormat', 'btnBlind', 'btnDocx', 'btnJA'];
+  if (busy) {
+    state.controls = {};
+    ids.forEach(function(id) { var node = document.getElementById(id); if (node) { state.controls[id] = node.disabled; node.disabled = true; } });
+  } else if (state.controls) {
+    ids.forEach(function(id) { var node = document.getElementById(id); if (node) node.disabled = state.controls[id]; });
+    state.controls = null;
+  }
+  state.busy = busy;
+}
+function cvResetFormattingReview() {
+  var previous = window._cvFormattingReview;
+  if (previous && previous.busy) cvReviewBusy(previous, false);
+  window._cvFormattingReviewSequence = (window._cvFormattingReviewSequence || 0) + 1;
+  window._cvFormattingReview = null;
+  var panel = document.getElementById('cvFormattingReviewPanel');
+  if (panel) { panel.textContent = ''; panel.style.display = 'none'; }
+}
+function cvReviewText(parent, tag, text) {
+  var node = document.createElement(tag);
+  node.textContent = String(text || '');
+  node.style.whiteSpace = 'pre-wrap'; node.style.overflowWrap = 'anywhere';
+  parent.appendChild(node); return node;
+}
+function cvReviewButton(parent, label, handler, disabled) {
+  var button = document.createElement('button');
+  button.type = 'button'; button.className = 'sec'; button.textContent = label;
+  button.style.marginRight = '8px'; button.onclick = handler; button.disabled = !!disabled;
+  parent.appendChild(button);
+}
+function cvReviewValueText(value) {
+  if (typeof value === 'string') return value;
+  if (!value || typeof value !== 'object') return '';
+  var lines = [];
+  ['company', 'institution', 'degree', 'title', 'date_range', 'major', 'cgpa', 'honors', 'section_heading'].forEach(function(key) {
+    if (typeof value[key] === 'string') lines.push(value[key]);
+  });
+  if (Array.isArray(value.roles)) value.roles.forEach(function(role) { lines.push(cvReviewValueText(role)); });
+  if (Array.isArray(value.bullets)) value.bullets.forEach(function(bullet) { if (typeof bullet === 'string') lines.push('• ' + bullet); });
+  return lines.join('\n');
+}
+function cvRenderFormattingReview(state, message) {
+  var panel = document.getElementById('cvFormattingReviewPanel');
+  if (!panel) return;
+  cvBuildFormattingReviewPanel(panel, state, message, {apply: cvApplyFormattingReview,
+    undo: cvUndoFormattingReview, again: cvCheckFormattingReviewAgain});
+}
+function cvBuildFormattingReviewPanel(panel, state, message, handlers) {
+  panel.replaceChildren(); panel.style.display = 'block';
+  cvReviewText(panel, 'strong', 'AI formatting review');
+  cvReviewText(panel, 'p', message || (state.review && state.review.message) || 'Checking against the original CV…');
+  if (state.review && Array.isArray(state.review.issues)) state.review.issues.forEach(function(issue) {
+    var block = document.createElement('div');
+    block.style.borderTop = '1px solid var(--border)'; block.style.paddingTop = '10px'; block.style.marginTop = '10px';
+    cvReviewText(block, 'strong', issue.message);
+    cvReviewText(block, 'p', 'From the original CV:'); cvReviewText(block, 'blockquote', issue.source_quote);
+    var operation = issue.operation;
+    if (issue.can_apply === true && operation) {
+      cvReviewText(block, 'p', 'Suggested fix:');
+      if (operation.op === 'replace') cvReviewText(block, 'p', String(operation.before || '(empty)') + ' → ' + cvReviewValueText(operation.value));
+      else if (operation.op === 'move') {
+        var parts = operation.path.split('/'), entry = state.base.work_experiences[Number(parts[2])];
+        cvReviewText(block, 'p', 'Move to ' + entry.company + ' — ' + entry.roles[Number(parts[4])].title + ': ' + operation.before);
+      }
+      else cvReviewText(block, 'p', 'Restore:\n' + cvReviewValueText(operation.value));
+      cvReviewButton(block, 'Apply fix', function() { handlers.apply(issue.id); }, handlers.disabled);
+    } else cvReviewText(block, 'p', issue.reason || 'Please inspect this manually; no automatic fix is available.');
+    panel.appendChild(block);
+  });
+  if (state.undo) cvReviewButton(panel, 'Undo fix', handlers.undo, handlers.disabled);
+  if (state.review || state.undo || message) cvReviewButton(panel, 'Check again (extra AI call)', handlers.again, handlers.disabled);
+}
+async function cvRunFormattingReview(source, data, route, warning) {
+  var previous = window._cvFormattingReview;
+  var state = {source: source, snapshot: JSON.stringify(data), blob: window._docxBlob,
+    sequence: window._cvFormattingReviewSequence, warning: warning || '', review: null, base: null,
+    busy: !!(previous && previous.busy), controls: previous && previous.controls};
+  window._cvFormattingReview = state;
+  cvRenderFormattingReview(state);
+  try {
+    var response = await fetchWithTimeout('/generate-ai', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({feature: 'cv_format_review', source_cv_text: source, cv_data: data,
+        api_key: route.api_key, api_key_slot: route.api_key_slot, model: route.model, provider: route.provider})}, cvParseTimeoutMs(source));
+    var text = await response.text(), result;
+    try { result = JSON.parse(text); } catch (e) { throw new Error('The review did not return a readable answer.'); }
+    if (!response.ok || result.error) {
+      recordPaidAiFailure('CV formatting review failed', result, route.model, route.provider);
+      throw new Error(normalizeAiProviderError(result.error || 'Review failed', route));
+    }
+    var reviewCost = responseCost(result, route.model, route.provider), reviewUsage = result.usage || {};
+    if (!cvReviewIsCurrent(state)) {
+      // The completed paid check belongs in history even when the input was
+      // cleared or replaced. It must not alter the new CV's running total.
+      statsRecord((data.candidate || {}).name || 'Unknown', 'format_review', reviewCost, route.model, '', route.provider,
+        statsMetaFromResponse({usage: reviewUsage, cost: reviewCost, model: route.model, provider: route.provider}, route.model, route.provider));
+      return {stale: true};
+    }
+    var review = result.format_review;
+    if (!review || !Array.isArray(review.issues) || !['reviewed', 'unavailable'].includes(review.status) || !result.format_review_base) {
+      review = {status: 'unavailable', issues: [], message: 'The review answer could not be verified. Your existing CV is unchanged.'};
+    }
+    state.review = review; state.base = result.format_review_base;
+    cvRenderFormattingReview(state);
+    return {accounted: true, cost: reviewCost, usage: reviewUsage,
+      warning: review.status === 'unavailable' ? 'AI formatting review was unavailable. Compare this CV with the original before sending.' :
+        (review.issues.length ? 'AI formatting review found possible mistakes. Read its suggestions before sending this CV.' : '')};
+  } catch (e) {
+    if (!cvReviewIsCurrent(state)) return {stale: true};
+    cvRenderFormattingReview(state, 'The AI check could not finish. Your completed CV is still available. ' + (e.message || 'Check the original before sending.'));
+    return {cost: 0, usage: {}, warning: 'AI formatting review could not finish. Compare this CV with the original before sending.'};
+  }
+}
+async function cvApplyFormattingReview(issueId) {
+  var state = window._cvFormattingReview;
+  if (!cvReviewIsCurrent(state) || state.busy || !state.review) { showToast('This suggestion is out of date. Check the current CV again.', 'warn'); return; }
+  var issue = state.review.issues.find(function(item) { return item.id === issueId && item.can_apply === true; });
+  if (!issue) return;
+  var beforeApply = {data: JSON.parse(state.snapshot), blob: state.blob};
+  cvReviewBusy(state, true);
+  cvRenderFormattingReview(Object.assign({}, state, {review: null}), 'Applying the selected fix and rebuilding the Word file…');
+  try {
+    var response = await fetchWithTimeout('/generate-ai', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({feature: 'cv_format_review_apply', source_cv_text: state.source,
+        cv_data: state.base, review: state.review, issue_id: issueId})}, 60000);
+    var result = JSON.parse(await response.text());
+    if (!response.ok || result.error || !result.data || !result.format_review_applied) throw new Error(result.error || 'The fix could not be verified.');
+    if (!cvReviewIsCurrent(state)) return;
+    var reviewSummaryAutoFit = getCvSummaryBoxAutoFit();
+    var generated = await fetchWithTimeout('/generate-docx', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({data: result.data, format_review_applied: result.format_review_applied,
+        alignment: getCvTextAlignment(), summary_box_autofit: reviewSummaryAutoFit,
+        bullet_levels: cvMergeLevelLists(_extractedBulletLevels, _labelBulletLevels)})}, 60000);
+    if (!generated.ok) throw new Error('The corrected Word file could not be generated.');
+    if (!generated.headers || generated.headers.get('X-CV-Format-Review-Applied') !== '1') throw new Error('The corrected Word file could not be verified.');
+    var blob = await generated.blob();
+    if (!cvReviewIsCurrent(state)) return;
+    state.undo = beforeApply;
+    _parsedData = result.data; window._docxBlob = blob;
+    state.snapshot = JSON.stringify(_parsedData); state.blob = blob; state.review = null;
+    renderPreview(JSON.parse(state.snapshot)); cvShowParseWarningBanner(state.warning);
+    cvRenderFormattingReview(state, 'Fix applied. Check the corrected preview before sending. Other suggestions need a new check.');
+    var jaStatus = document.getElementById('jaStatus');
+    if (jaStatus) jaStatus.textContent = 'Fix applied — check the corrected preview, then upload manually.';
+    showToast('Fix applied to the preview and Word file', 'ok');
+  } catch (e) {
+    if (cvReviewIsCurrent(state)) {
+      if (state.undo === beforeApply) {
+        _parsedData = beforeApply.data; window._docxBlob = beforeApply.blob;
+        state.snapshot = JSON.stringify(_parsedData); state.blob = beforeApply.blob; state.undo = null;
+        try { renderPreview(JSON.parse(state.snapshot)); cvShowParseWarningBanner(state.warning); } catch (restoreError) {}
+      }
+      state.review = null;
+      cvRenderFormattingReview(state, 'The fix was not applied. Your previous CV is unchanged. ' + (e.message || 'Please check again.'));
+      showToast('Fix not applied — previous CV retained', 'warn');
+    }
+  } finally {
+    if (window._cvFormattingReview === state) cvReviewBusy(state, false);
+  }
+}
+function cvUndoFormattingReview() {
+  var state = window._cvFormattingReview;
+  if (!cvReviewIsCurrent(state) || state.busy || !state.undo) return;
+  _parsedData = state.undo.data; window._docxBlob = state.undo.blob;
+  state.snapshot = JSON.stringify(_parsedData); state.blob = window._docxBlob; state.undo = null;
+  renderPreview(JSON.parse(state.snapshot)); cvShowParseWarningBanner(state.warning);
+  cvRenderFormattingReview(state, 'Previous CV restored. Check again before applying another suggestion.');
+}
+async function cvCheckFormattingReviewAgain() {
+  var state = window._cvFormattingReview;
+  if (!cvReviewIsCurrent(state) || state.busy) { showToast('Format the current CV before checking it.', 'warn'); return; }
+  var route = aiRoutePayload('cv_single');
+  if (!route.api_key) { showToast('Save an API key for Single CV Formatting first', 'err'); return; }
+  cvReviewBusy(state, true);
+  try {
+    var result = await cvRunFormattingReview(state.source, _parsedData, route, state.warning);
+    if (!result.stale) {
+      _runCost += result.cost; _runUsage = mergeUsageClient(_runUsage, result.usage);
+      var pill = document.getElementById('costPill');
+      pill.textContent = 'Est. cost: ' + (_runCost < 0.001 ? '<$0.001' : '$' + _runCost.toFixed(4));
+      pill.className = 'cost-pill show';
+      if (result.accounted) statsRecord((_parsedData.candidate || {}).name || 'Unknown', 'format_review', result.cost, route.model, '', route.provider,
+        statsMetaFromResponse({usage: result.usage, cost: result.cost, model: route.model, provider: route.provider}, route.model, route.provider));
+      renderPreview(JSON.parse(JSON.stringify(_parsedData)));
+      cvShowParseWarningBanner(cvJoinWarnings(state.warning, result.warning));
+    }
+  } finally {
+    var current = window._cvFormattingReview;
+    if (current && current.sequence === state.sequence && current.blob === state.blob) cvReviewBusy(current, false);
+  }
 }
 
 function toTitleCase(str) {
@@ -711,6 +937,13 @@ async function downloadDocxImpl() {
 }
 
 function clearInput() {
+  var cancelledReview = !!window._cvFormattingReview;
+  cvResetFormattingReview();
+  if (cancelledReview) {
+    document.getElementById('btnFormat').disabled = false;
+    document.getElementById('btnBlind').disabled = false;
+    stopTimer();
+  }
   clearTabRunState('format');
   clearFormatSummaryDraft();
   // Clear text input

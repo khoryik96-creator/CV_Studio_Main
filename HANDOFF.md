@@ -169,7 +169,10 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 7. Recently completed (already on `master`)
 
-- **Current merged baseline, checked 2026-09-10: v24.6.402, `6a454d7`.**
+- **Current merged baseline, checked 2026-10-01: v24.6.433, `efe42f21`.**
+  PR #220 is merged; its tree equals tested head `9665d75`. Its completed branch
+  must not be reused. Earlier dated baseline/claim notes below are historical.
+  The prior v24.6.402 baseline was `6a454d7`:
   PR #203 merged the complete PR #202 changes plus date-parity corrections;
   PR #202 is closed as superseded. Both old branches are completed.
   PR #204 merged v24.6.396; PRs #205–#209 merged Claude's work-history and
@@ -321,7 +324,49 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **CV guardrail corrective — v24.6.429–433, PR #220.**
+- **Optional AI formatting review — v24.6.435, PR #221.**
+  Owner approved extending v434 to Batch Format and moving the toggle into
+  Settings → General Settings. Branch `codex/v24.6.435-batch-format-review`
+  starts from pushed, unmerged v434 `c86b2f7`, whose base is exact master
+  `efe42f21` / v24.6.433. One saved off-by-default choice controls normal single
+  and batch CVs; Blind remains excluded. Each CV adds one review using its
+  workflow's selected provider/key and existing cost gates. Batch captures the
+  choice once per run, shows each CV's original quotes and manual Apply/Undo/
+  Check again, and updates only that row's download and held-upload pair.
+  Original-text quotes, restricted operations, signed source/data-bound tickets,
+  normal export passes and actual Word text retention guard every correction.
+  Uncertain suggestions stay manual; failed/stale checks retain the current CV.
+  Completed paid checks remain in accounting, including unusable or detached
+  results. Findings, unavailable/stale checks and applied fixes hold automatic
+  uploads; Apply/Undo/Check again never upload automatically. Saved non-secret
+  key `cvstudio_formatting_review_v1` uses the existing schema-10 durable setting
+  and backup/hydration allowlists; failed saves warn and apply to the page only.
+  No visual Word-layout claim, new routes/schemas/dependencies, provider replay,
+  paid/live calls or protected build. Preview on loopback 5070 has isolated state
+  and no copied owner credentials; the v434 preview on 5069 is preserved. Owner
+  authorized merge through PR #221. See
+  `cv_studio_v24_6_435_batch_ai_review_settings_qa_report.md`; the PR's final hosted
+  checks and issue #35 record the exact merge state.
+  Initial local gate: 1,522 passed, four skipped, 6,864 subtests; three exact updater
+  environment fixtures deselected after the unfiltered run and same failures on
+  v434. The prior v434 report's three native OLE recovery failures now pass on
+  both checkouts without a code change.
+  Initial PR221 hosted Windows gate passed unfiltered (1,525 tests), while both
+  Mac gates caught the new review fixture's unmocked `expanduser` receipt read.
+  Its temporary-path mock is now aligned with existing isolated fixtures; the
+  collection guard checks the non-Windows read path before any receipt write on
+  every host. Receipt-only follow-up: 27 passed / 15 subtests.
+  PR221 review subsequently identified contradictory current/last headers,
+  duplicates after output normalization and unrendered qualification `grade`.
+  Conflicting first-job corrections now stay manual; additions/moved duties use
+  existing normalized identity; qualifications use rendered `cgpa`/`honors`.
+  Candidate fields, existing normalize/reconcile helpers and Word renderer stay
+  unchanged. Correction gate: 34 tests / 36 subtests, all 29 frontend suites and
+  five temporary-copy boundary mutations. Corrected local full gate: 1,529 passed,
+  four skipped, three exact updater fixtures deselected, 6,885 subtests. See the
+  v435 QA follow-up; final hosted head/merge evidence is in PR221 and issue #35.
+
+- **CV guardrail corrective — v24.6.429–433, PR #220, MERGED as `efe42f21`.**
   Branch `codex/pr220-v24.6.431-qualification-pay-guards` (existing PR head retained),
   based on merged master `cb0bcae`. v429 isolates test receipts/state, binds
   education major/grade labels to their qualification, keeps employee-pay work
@@ -342,7 +387,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   regressions protect all three follow-up findings. No routes, schemas,
   dependencies, credentials, live AI calls or Word layout changes. Protected
   compilation remains manual. The owner authorized fixes and merge after gates
-  pass; consult GitHub for current merge status. See
+  pass; it merged with all three hosted gates passing. Its branch is complete. See
   `cv_studio_v24_6_433_plural_subject_safety_qa_report.md` for the latest gate,
   differential/corpus/mutation evidence and existing updater fixture limits.
 

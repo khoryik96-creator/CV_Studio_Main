@@ -17,6 +17,7 @@ MODULES = (
     "test_cv_summary_salary_docx", "test_cv_source_detail_restore",
     "test_cv_label_table_reconciliation", "test_cv_title_above_place_rows",
     "test_cv_download_folders_routes",
+    "test_cv_format_review",
 )
 
 
@@ -56,6 +57,8 @@ def checked_write(root, environment=None):
     assert home.is_dir() and not home.is_relative_to(owner.resolve()), 'receipt uses owner state'
     # macOS temp paths can be aliases of /private/var; compare resolved paths.
     assert target.resolve() == home / '.guo_lab_cv_studio' / 'install_receipt.json', 'non-Windows receipt drift'
+    lookup = Path(os.path.expanduser('~/.guo_lab_cv_studio/install_receipt.json')).resolve()
+    assert lookup == target.resolve(), 'app receipt lookup inherited owner home'
     calls.append(target)
     return original_write(root, environment)
 builder.write_test_receipt = checked_write
