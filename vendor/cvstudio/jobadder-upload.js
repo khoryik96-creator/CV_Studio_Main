@@ -72,6 +72,7 @@ function jaSafeTenantLabel(info) {
 function renderJAConnectionState(info) {
   info = info || {};
   var connected = !!info.connected;
+  var connectionChanged = !!window._jaToken !== connected;
   var reconnect = !!info.needs_reconnect;
   window._jaToken = connected;
   var login = document.getElementById('btnJALogin');
@@ -122,6 +123,7 @@ function renderJAConnectionState(info) {
   if (signOutBtn) signOutBtn.disabled = !connected && !reconnect;
   updateJAUploadConnStatus();
   updateJACreateConnStatus();
+  if (connectionChanged && typeof renderBatchList === 'function') renderBatchList();
 }
 
 function openJobAdderSettings(message) {
@@ -224,7 +226,7 @@ async function jobAdderLogin() {
       var d=await r.json().catch(function(){return {};});
       if (!r.ok) { clearInterval(poll); if(popup)popup.close(); showToast(d.error||'JobAdder login failed','err'); return; }
       if (d.connected) {
-        clearInterval(poll); if(popup)popup.close(); window._jaToken=true;
+        clearInterval(poll); if(popup)popup.close();
         applyJAPublicInfo(d);
         var secretField = document.getElementById('settingsJobAdderClientSecret');
         if (secretField) secretField.value = '';
@@ -519,7 +521,15 @@ async function jaUploadCV(candidateId, blob, fname) {
 
 // ── Batch JobAdder upload helper ─────────────────────────────────────
 async function batchUploadToJobAdder(blob, fname, email, cvData, originalBlob, originalFname) {
-  var searchData  = await jaSearchCandidate(email);
+  var searchData;
+  try {
+    searchData = await jaSearchCandidate(email);
+  } catch(searchError) {
+    // The candidate lookup is read-only; no create/update/upload has begun.
+    if (!searchError || typeof searchError !== 'object') searchError = new Error(String(searchError || 'Candidate lookup failed'));
+    searchError.jobAdderWriteNotStarted = true;
+    throw searchError;
+  }
   var candidates  = searchData.items || [];
   var candidateId = null;
 

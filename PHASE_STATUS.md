@@ -4,12 +4,32 @@
 
 ## Release state
 
-- Current verified merged baseline (2026-10-02): v24.6.437, `f55a049` (#222).
+- Current verified merged baseline (2026-10-13): v24.6.438, `a40bf63` (#223).
+  Tested head `bf698dd` has the same tree `7575085`; all three hosted gates
+  passed. Unfiltered Windows: 1,587 passed, four skipped, 7,121 subtests.
+  `codex/v24.6.438-main-review-corrections` is complete.
+
+- Current owner-authorized source work: v24.6.441,
+  `codex/v24.6.439-batch-jobadder-link`, from exact `a40bf63`.
+  Batch rows show why uploading was skipped and retain a manual upload action.
+  Reconnection refreshes those actions without an automatic write. Successful
+  uploads keep each row's candidate link and exact dashboard record, including
+  duplicate filenames and manual email entry. Source/review upload holds remain.
+  The review corrective lets the shared renderer set the connection marker
+  during OAuth completion; the real login callback now refreshes held rows.
+  Pending/rejected login and unchanged refresh controls remain covered.
+  The PR-review corrective retains a manual retry only for a proven pre-write
+  local file-read or read-only lookup failure. Ambiguous writes stay non-retryable.
+  No owner installation/receipt, paid/live provider, route/schema or protected
+  build change. Owner authorized the PR and merge on 2026-10-13. Await all three
+  exact-head hosted gates before squash merge; final identities go in issue #35.
+
+- Previous verified merged baseline (2026-10-02): v24.6.437, `f55a049` (#222).
   Tested head `92bb3f4` has the same tree `9d9703a`; all three hosted gates
   passed. Unfiltered Windows: 1,572 passed, four skipped, 7,038 subtests.
   `codex/v24.6.436-review-date-corrections` is complete.
 
-- Current owner-authorized source work: v24.6.438,
+- Completed owner-authorized source work: v24.6.438, merged via PR #223,
   `codex/v24.6.438-main-review-corrections`, from exact `f55a049`.
   The date ambiguity guard uses consistent house-style identities and every
   explicit work section, while authoritative row outputs remain unchanged.
@@ -19,8 +39,8 @@
   appended cases and focused/generated/performance controls cover the findings.
   No owner installation/receipt, paid-call, route/schema or protected-build
   change. See the v438 QA report. Owner authorized the PR and merge on
-  2026-10-02; await all three exact-head hosted gates before squash merge.
-  Final merge/check identities will be recorded in issue #35.
+  2026-10-02; all three exact-head hosted gates passed before squash merge.
+  Final merge/check identities are recorded in issue #35.
 
 - Previous verified merged baseline (2026-10-02): v24.6.435, `cf48a558` (#221).
   Tested head `93c4971` has the same tree; all three hosted gates passed.

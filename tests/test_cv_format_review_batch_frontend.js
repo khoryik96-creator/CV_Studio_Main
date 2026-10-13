@@ -11,7 +11,7 @@ const sources = ['cv-format.js', 'batch-format.js', 'fcv-upload.js'].map(name =>
 function descendants(node) { return [node, ...node.children.flatMap(descendants)]; }
 function deferred() { let release; const promise = new Promise(resolve => {release=resolve;}); return {promise,release}; }
 function harness(options={}) {
-  const nodes={}, calls=[], stats=[], uploads=[], downloads=[];
+  const nodes={}, calls=[], stats=[], uploads=[], downloads=[], links=[];
   function element(tag='div') {
     const node={tagName:tag, children:[], style:{}, value:'', checked:false, disabled:false,
       textContent:'', className:'', dataset:{}, classList:{add(){},remove(){},contains(){return false;}},
@@ -32,7 +32,7 @@ function harness(options={}) {
     'batchTotalCost','batchSummary','batchTimer','batchTabFormat','batchTabBlind','batchSummaryToggle','cvInput'];
   core.forEach(id=>nodes[id]=element());
   const c={console,String,Object,Array,JSON,Math,Date,Promise,Blob,ArrayBuffer,
-    window:{_jaToken:options.noToken?'':'synthetic',_jaAutoUpload:true},
+    window:{_jaToken:options.noToken?'':'synthetic',_jaAutoUpload:!options.autoUploadOff},
     document:{getElementById:id=>nodes[id]||null,createElement:element,addEventListener(){}},
     FormData:class {append(key,value){this[key]=value;}},
     setInterval:()=>1,clearInterval(){},setTimeout:()=>1,clearTimeout(){},
@@ -53,7 +53,10 @@ function harness(options={}) {
     showToast(){},markTabRunning:()=>1,markTabDone(){},markTabFailed(){},clearTabRunState(){},
     cvStudioSaveDownloadBlob:async(blob,name)=>{downloads.push({blob,name});return {};},cvStudioShowDownloadResult(){},
     cvStudioPrepareDownloadDestination:async()=>({handle:{},configured:true,directoryName:'Synthetic'}),
-    batchUploadToJobAdder:async(blob,name,email,data)=>{uploads.push({blob,data:clone(data)});return '';},
+    batchUploadToJobAdder:async(blob,name,email,data)=>{uploads.push({blob,data:clone(data)});return options.realUpload?'candidate-'+uploads.length:'';},
+    jaProfileUrlAsync:async id=>'https://example.invalid/candidates/'+id+'?tab=3',
+    statsAttachJobAdderUrl:(...args)=>links.push(args),
+    jaSafeTenantLabel:()=>'',ppcSetConnected(){},updateJACreateConnStatus(){},
     fetchWithTimeout:async(url,init)=>{
       const body=url==='/extract-text'?init.body:JSON.parse(init.body);
       calls.push({url,body});
@@ -85,17 +88,173 @@ function harness(options={}) {
             operation:{op:'replace',path:'/work_experiences/0/roles/0/title',before:'Analyst',value:'Manager'}}]}})};
     }};
   vm.createContext(c);vm.runInContext(sources,c);
-  c.batchAutoUploadFile=async(bf,blob,name,data)=>{uploads.push({id:bf.id,blob,data:clone(data)});};
+  const jaSource=fs.readFileSync(path.join(root,'vendor/cvstudio/jobadder-upload.js'),'utf8');
+  vm.runInContext(jaSource.slice(jaSource.indexOf('function renderJAConnectionState('),
+    jaSource.indexOf('function openJobAdderSettings(')),c);
+  if(!options.realUpload)c.batchAutoUploadFile=async(bf,blob,name,data)=>{uploads.push({id:bf.id,blob,data:clone(data)});};
   for(const [index,name] of ['One','Two'].entries()){
     const file={name:'same.txt',source:name+' | Manager\nBuilt reports.',level:index+3,arrayBuffer:async()=>new ArrayBuffer(0)};
     const fixture={candidate:{name:'Synthetic Candidate'},work_experiences:[{company:name,roles:[{title:'Analyst',bullets:['Built reports.']}]}],
       education:[],skills:[],certifications:[]};
     c._batchFiles.push({id:'bf_'+index,file,fixture,status:'pending',cvData:null,cost:0});
   }
-  return {c,nodes,calls,stats,uploads,downloads,options};
+  return {c,nodes,calls,stats,uploads,downloads,links,options};
 }
 const reviewCalls=h=>h.calls.filter(call=>call.body.feature==='cv_format_review');
 async function run(){
+  for(const [failure,manualEmail] of [['file',false],['lookup',false],['write',false],['create',false],['lookup',true],['write',true],['create',true]]){
+    const f=harness({realUpload:true,autoUploadOff:true});
+    if(!manualEmail)f.c._batchFiles.forEach(row=>row.fixture.candidate.email='synthetic@example.invalid');
+    await f.c.runBatch();
+    const row=f.c._batchFiles[0],blob=row._docxBlob,data=row.cvData;
+    let failing=true,reads=0,writes=0;
+    const jaSource=fs.readFileSync(path.join(root,'vendor/cvstudio/jobadder-upload.js'),'utf8');
+    vm.runInContext(jaSource.slice(jaSource.indexOf('async function batchUploadToJobAdder('),
+      jaSource.indexOf('function showJADialog(')),f.c);
+    row.file.arrayBuffer=async()=>{reads++;if(failing&&failure==='file')throw Error('Synthetic file read failed');return new ArrayBuffer(0);};
+    f.c.jaSearchCandidate=async email=>{assert.strictEqual(email,'synthetic@example.invalid');if(failing&&failure==='lookup')throw Error('Synthetic lookup failed');
+      return {items:failure==='create'?[]:[{candidateId:'synthetic-candidate'}]};};
+    f.c.buildIndustryCustomFields=()=>null;
+    f.c.jaCreateCandidate=async()=>{writes++;throw Error('Synthetic ambiguous create failure');};
+    f.c.jaUploadCV=async()=>{writes++;if(failing&&failure==='write')throw Error('Synthetic ambiguous upload failure');};
+    await f.c.uploadHeldBatchFile(row.id);
+    if(manualEmail){
+      row.cvData.candidate.email='different@example.invalid';
+      f.c.setBatchManualEmail({value:'synthetic@example.invalid'},row.id);
+      for(let i=0;i<30&&row.jaClass!=='show ja-err';i++)await Promise.resolve();
+    }
+    assert.strictEqual(row._docxBlob,blob);assert.strictEqual(row.cvData,data);
+    assert.ok(f.nodes.batchFileList.innerHTML.includes('Upload failed'),'failure stays visible');
+    if(failure==='file'||failure==='lookup'){
+      assert.strictEqual(writes,0);
+      assert.ok(row._jaHeld,'a proven pre-write failure retains an explicit retry');
+      assert.strictEqual(row._jaHeld.blob,blob);assert.strictEqual(row._jaHeld.cvData,data);
+      assert.ok(f.nodes.batchFileList.innerHTML.includes('Retry upload'));
+      const calls=f.calls.length;
+      failing=false;await f.c.uploadHeldBatchFile(row.id);
+      assert.strictEqual(writes,1,'only the explicit retry performs a write');
+      assert.ok(row.jaStatus.includes('/candidates/synthetic-candidate?tab=3'));
+      assert.strictEqual(f.calls.length,calls,'retry never repeats paid formatting');
+      assert.ok(!row._jaHeld);
+    }else{
+      assert.strictEqual(writes,1);
+      assert.ok(!row._jaHeld,'an ambiguous write cannot expose a retry');
+      assert.ok(!f.nodes.batchFileList.innerHTML.includes('Retry upload'));
+      const priorReads=reads;await f.c.uploadHeldBatchFile(row.id);
+      assert.strictEqual(reads,priorReads);assert.strictEqual(writes,1,'ambiguous writes are never replayed');
+    }
+  }
+  // Exercise the real login/poll callback, not just the connection renderer:
+  // it must reveal held rows without uploading or rebuilding their files.
+  for(const {warning=false,failed=false} of [{},{warning:true},{failed:true}]){
+    const f=harness({realUpload:true,noToken:true,on:warning,autoUploadOff:true});
+    f.c._batchFiles.forEach(row=>row.fixture.candidate.email='synthetic@example.invalid');
+    await f.c.runBatch();
+    const rows=f.c._batchFiles.map(row=>({row,blob:row._docxBlob,data:row.cvData,held:row._jaHeld}));
+    let poll,closed=0,attempts=0,renders=0;
+    const render=f.c.renderBatchList;f.c.renderBatchList=()=>{renders++;render();};
+    const fetchWithTimeout=f.c.fetchWithTimeout;
+    f.c.fetchWithTimeout=async(url,init)=>{
+      if(url==='/jobadder/store_creds')return {ok:true,json:async()=>({login_session_id:'synthetic-session',state:'synthetic-state'})};
+      if(url==='/jobadder/poll_token'){
+        attempts++;
+        if(attempts===1)return {status:202};
+        if(failed)return {ok:false,status:401,json:async()=>({error:'Synthetic login rejected'})};
+        return {ok:true,status:200,json:async()=>({connected:true})};
+      }
+      return fetchWithTimeout(url,init);
+    };
+    Object.assign(f.c,{URLSearchParams,JA_AUTH_URL:'https://example.invalid/authorize',
+      JA_REDIRECT_URI:'https://example.invalid/callback',JA_SCOPES:'synthetic',
+      getJAClientId:()=> 'synthetic-client',getJAClientSecret:()=> '',hasJASavedSecretFor:()=>true,
+      applyJAPublicInfo(){},localStorage:{setItem(){},removeItem(){}},
+      fetch:async()=>({json:async()=>({items:[]})}),
+      refreshIntegrationDiagnostics:()=>f.c.renderJAConnectionState({connected:true}),
+      setInterval:callback=>{poll=callback;return 1;}});
+    f.c.window.open=()=>({close(){closed++;}});
+    const jaSource=fs.readFileSync(path.join(root,'vendor/cvstudio/jobadder-upload.js'),'utf8');
+    vm.runInContext(jaSource.slice(jaSource.indexOf('async function jobAdderLogin('),
+      jaSource.indexOf('function clearJALocalAccountState(')),f.c);
+    await f.c.jobAdderLogin();assert.strictEqual(typeof poll,'function');
+    await poll();assert.strictEqual(!!f.c.window._jaToken,false);
+    assert.strictEqual(renders,0,'pending login cannot expose upload controls');
+    await poll();
+    if(failed){
+      assert.strictEqual(!!f.c.window._jaToken,false);
+      assert.strictEqual(closed,1);
+      assert.strictEqual(renders,0,'rejected login cannot reveal upload controls');
+      assert.ok(!f.nodes.batchFileList.innerHTML.includes('uploadHeldBatchFile'));
+      assert.strictEqual(f.uploads.length,0);
+      continue;
+    }
+    assert.strictEqual(f.c.window._jaToken,true);
+    assert.strictEqual(closed,1);
+    assert.strictEqual(renders,1,'successful OAuth refreshes held rows exactly once');
+    assert.ok(!f.nodes.batchFileList.innerHTML.includes('connect to JobAdder'));
+    assert.ok(f.nodes.batchFileList.innerHTML.includes(warning?'Upload anyway':'Upload to JobAdder'));
+    assert.strictEqual(f.uploads.length,0,'connecting never replays held uploads');
+    assert.strictEqual(f.c.window._jaAutoUpload,false,'connecting preserves auto-upload preference');
+    for(const previous of rows){
+      assert.strictEqual(previous.row._docxBlob,previous.blob);
+      assert.strictEqual(previous.row.cvData,previous.data);
+      assert.strictEqual(previous.row._jaHeld,previous.held);
+    }
+    f.c.renderJAConnectionState({connected:true});
+    assert.strictEqual(renders,1,'unchanged status refreshes must not reset row inputs');
+    f.c.renderJAConnectionState({connected:false});
+    assert.ok(!f.nodes.batchFileList.innerHTML.includes('uploadHeldBatchFile'));
+    assert.strictEqual(f.uploads.length,0,'disconnecting never uploads');
+  }
+  // A skipped upload must stay visible and actionable, rather than losing
+  // both the candidate link and the way to upload a completed batch CV.
+  for(const options of [{autoUploadOff:true},{noToken:true}]){
+    const f=harness({...options,realUpload:true});
+    f.c._batchFiles.forEach(row=>row.fixture.candidate.email='synthetic@example.invalid');
+    await f.c.runBatch();
+    assert.strictEqual(f.uploads.length,0,'skipped automatic uploads make no remote writes');
+    assert.ok(f.c._batchFiles.every(row=>row.jaStatus&&row._jaHeld),
+      'each finished row explains why it has no JobAdder link and retains its upload');
+    assert.ok(f.nodes.batchFileList.innerHTML.includes(options.noToken?'connect to JobAdder':'auto-upload is off'));
+    if(options.noToken){
+      assert.ok(!f.nodes.batchFileList.innerHTML.includes('uploadHeldBatchFile'));
+      await f.c.uploadHeldBatchFile('bf_0');assert.strictEqual(f.uploads.length,0);
+      f.c.renderJAConnectionState({connected:true});
+      assert.ok(!f.nodes.batchFileList.innerHTML.includes('connect to JobAdder'),
+        'connecting refreshes completed rows without reformatting or auto-uploading');
+      assert.strictEqual(f.uploads.length,0);
+    }
+    assert.ok(f.nodes.batchFileList.innerHTML.includes('Upload to JobAdder'));
+    const [first,second]=f.c._batchFiles;
+    await f.c.uploadHeldBatchFile(first.id);
+    assert.strictEqual(f.uploads[0].blob,first._docxBlob);
+    assert.ok(first.jaStatus.includes('/candidates/candidate-1?tab=3'));
+    assert.ok(!second.jaStatus.includes('/candidates/'),'duplicate filenames cannot borrow another row\'s link');
+    f.c.renderBatchList();assert.ok(f.nodes.batchFileList.innerHTML.includes('/candidates/candidate-1?tab=3'));
+    assert.strictEqual(f.links[0][0],first._statsRecordId,'dashboard URL belongs to this exact record');
+    await f.c.uploadHeldBatchFile(first.id);assert.strictEqual(f.uploads.length,1,'no automatic replay');
+    await f.c.uploadHeldBatchFile(second.id);
+    assert.ok(second.jaStatus.includes('/candidates/candidate-2?tab=3'));
+    assert.strictEqual(f.links[1][0],second._statsRecordId);
+  }
+  {
+    const f=harness({realUpload:true});
+    f.c._batchFiles.forEach(row=>row.fixture.candidate.email='synthetic@example.invalid');
+    await f.c.runBatch();assert.strictEqual(f.uploads.length,2,'connected auto-upload still works');
+    assert.ok(f.c._batchFiles.every(row=>row.jaStatus.includes('/candidates/')));
+    assert.strictEqual(f.links.length,2);
+  }
+  {
+    const f=harness({realUpload:true,autoUploadOff:true});await f.c.runBatch();
+    const row=f.c._batchFiles[0];
+    await f.c.uploadHeldBatchFile(row.id);
+    assert.ok(f.nodes.batchFileList.innerHTML.includes('Enter email for JobAdder'));
+    assert.strictEqual(f.uploads.length,0,'a missing email never starts an upload');
+    f.c.setBatchManualEmail({value:'synthetic@example.invalid'},row.id);
+    for(let i=0;i<20&&!row.jaStatus.includes('/candidates/');i++)await Promise.resolve();
+    assert.strictEqual(f.uploads.length,1);
+    assert.ok(row.jaStatus.includes('/candidates/candidate-1?tab=3'));
+    assert.strictEqual(f.links[0][0],row._statsRecordId);
+  }
   // Red first: the enabled real batch must review every completed normal CV.
   const first=harness({on:true});await first.c.runBatch();
   assert.strictEqual(reviewCalls(first).length,2,'one extra review for each batch CV');
