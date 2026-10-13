@@ -339,7 +339,9 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   assignment so the shared renderer detects the transition. Real callback
   regressions cover pending/rejected login, warning holds, preferences, exact
   retained files and repeated connected refreshes. See the v439/v440 QA reports.
-  Commit/push after local gates; a new PR or merge requires the owner's request.
+  Owner authorized the PR and merge on 2026-10-13. Wait for all three exact-head
+  hosted gates before squash merge; record final merge/check identities in
+  issue #35. Owner installation and protected packaging remain separate work.
 
 - **Resolved main-review corrective — v24.6.438, PR #223, MERGED as `a40bf63`.**
   New branch `codex/v24.6.438-main-review-corrections` starts at exact merged

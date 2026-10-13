@@ -19,7 +19,8 @@
   during OAuth completion; the real login callback now refreshes held rows.
   Pending/rejected login and unchanged refresh controls remain covered.
   No owner installation/receipt, paid/live provider, route/schema or protected
-  build change. No new PR or merge requested.
+  build change. Owner authorized the PR and merge on 2026-10-13. Await all three
+  exact-head hosted gates before squash merge; final identities go in issue #35.
 
 - Previous verified merged baseline (2026-10-02): v24.6.437, `f55a049` (#222).
   Tested head `92bb3f4` has the same tree `9d9703a`; all three hosted gates
