@@ -9,7 +9,7 @@
   passed. Unfiltered Windows: 1,587 passed, four skipped, 7,121 subtests.
   `codex/v24.6.438-main-review-corrections` is complete.
 
-- Current owner-authorized source work: v24.6.440,
+- Current owner-authorized source work: v24.6.441,
   `codex/v24.6.439-batch-jobadder-link`, from exact `a40bf63`.
   Batch rows show why uploading was skipped and retain a manual upload action.
   Reconnection refreshes those actions without an automatic write. Successful
@@ -18,6 +18,8 @@
   The review corrective lets the shared renderer set the connection marker
   during OAuth completion; the real login callback now refreshes held rows.
   Pending/rejected login and unchanged refresh controls remain covered.
+  The PR-review corrective retains a manual retry only for a proven pre-write
+  local file-read or read-only lookup failure. Ambiguous writes stay non-retryable.
   No owner installation/receipt, paid/live provider, route/schema or protected
   build change. Owner authorized the PR and merge on 2026-10-13. Await all three
   exact-head hosted gates before squash merge; final identities go in issue #35.

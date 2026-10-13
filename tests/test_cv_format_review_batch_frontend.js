@@ -102,6 +102,48 @@ function harness(options={}) {
 }
 const reviewCalls=h=>h.calls.filter(call=>call.body.feature==='cv_format_review');
 async function run(){
+  for(const [failure,manualEmail] of [['file',false],['lookup',false],['write',false],['create',false],['lookup',true],['write',true],['create',true]]){
+    const f=harness({realUpload:true,autoUploadOff:true});
+    if(!manualEmail)f.c._batchFiles.forEach(row=>row.fixture.candidate.email='synthetic@example.invalid');
+    await f.c.runBatch();
+    const row=f.c._batchFiles[0],blob=row._docxBlob,data=row.cvData;
+    let failing=true,reads=0,writes=0;
+    const jaSource=fs.readFileSync(path.join(root,'vendor/cvstudio/jobadder-upload.js'),'utf8');
+    vm.runInContext(jaSource.slice(jaSource.indexOf('async function batchUploadToJobAdder('),
+      jaSource.indexOf('function showJADialog(')),f.c);
+    row.file.arrayBuffer=async()=>{reads++;if(failing&&failure==='file')throw Error('Synthetic file read failed');return new ArrayBuffer(0);};
+    f.c.jaSearchCandidate=async email=>{assert.strictEqual(email,'synthetic@example.invalid');if(failing&&failure==='lookup')throw Error('Synthetic lookup failed');
+      return {items:failure==='create'?[]:[{candidateId:'synthetic-candidate'}]};};
+    f.c.buildIndustryCustomFields=()=>null;
+    f.c.jaCreateCandidate=async()=>{writes++;throw Error('Synthetic ambiguous create failure');};
+    f.c.jaUploadCV=async()=>{writes++;if(failing&&failure==='write')throw Error('Synthetic ambiguous upload failure');};
+    await f.c.uploadHeldBatchFile(row.id);
+    if(manualEmail){
+      row.cvData.candidate.email='different@example.invalid';
+      f.c.setBatchManualEmail({value:'synthetic@example.invalid'},row.id);
+      for(let i=0;i<30&&row.jaClass!=='show ja-err';i++)await Promise.resolve();
+    }
+    assert.strictEqual(row._docxBlob,blob);assert.strictEqual(row.cvData,data);
+    assert.ok(f.nodes.batchFileList.innerHTML.includes('Upload failed'),'failure stays visible');
+    if(failure==='file'||failure==='lookup'){
+      assert.strictEqual(writes,0);
+      assert.ok(row._jaHeld,'a proven pre-write failure retains an explicit retry');
+      assert.strictEqual(row._jaHeld.blob,blob);assert.strictEqual(row._jaHeld.cvData,data);
+      assert.ok(f.nodes.batchFileList.innerHTML.includes('Retry upload'));
+      const calls=f.calls.length;
+      failing=false;await f.c.uploadHeldBatchFile(row.id);
+      assert.strictEqual(writes,1,'only the explicit retry performs a write');
+      assert.ok(row.jaStatus.includes('/candidates/synthetic-candidate?tab=3'));
+      assert.strictEqual(f.calls.length,calls,'retry never repeats paid formatting');
+      assert.ok(!row._jaHeld);
+    }else{
+      assert.strictEqual(writes,1);
+      assert.ok(!row._jaHeld,'an ambiguous write cannot expose a retry');
+      assert.ok(!f.nodes.batchFileList.innerHTML.includes('Retry upload'));
+      const priorReads=reads;await f.c.uploadHeldBatchFile(row.id);
+      assert.strictEqual(reads,priorReads);assert.strictEqual(writes,1,'ambiguous writes are never replayed');
+    }
+  }
   // Exercise the real login/poll callback, not just the connection renderer:
   // it must reveal held rows without uploading or rebuilding their files.
   for(const {warning=false,failed=false} of [{},{warning:true},{failed:true}]){

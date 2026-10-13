@@ -521,7 +521,15 @@ async function jaUploadCV(candidateId, blob, fname) {
 
 // ── Batch JobAdder upload helper ─────────────────────────────────────
 async function batchUploadToJobAdder(blob, fname, email, cvData, originalBlob, originalFname) {
-  var searchData  = await jaSearchCandidate(email);
+  var searchData;
+  try {
+    searchData = await jaSearchCandidate(email);
+  } catch(searchError) {
+    // The candidate lookup is read-only; no create/update/upload has begun.
+    if (!searchError || typeof searchError !== 'object') searchError = new Error(String(searchError || 'Candidate lookup failed'));
+    searchError.jobAdderWriteNotStarted = true;
+    throw searchError;
+  }
   var candidates  = searchData.items || [];
   var candidateId = null;
 

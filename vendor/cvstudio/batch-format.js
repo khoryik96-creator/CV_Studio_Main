@@ -111,7 +111,7 @@ function renderBatchList() {
       ? '<span class="' + timerClass + '" id="t-' + bf.id + '">' + timerVal + '</span>'
       : '<span class="batch-file-timer" id="t-' + bf.id + '"></span>';
     var jaStatus = bf.jaStatus || '';
-    if (bf._jaHeld) {
+    if (bf._jaHeld && bf.jaClass !== 'show ja-err') {
       jaStatus = !window._jaToken ? '☁ Not uploaded — connect to JobAdder'
         : bf.parseWarning ? '⏸ Not uploaded — check the warning'
         : window._jaAutoUpload === false ? '⏸ Not uploaded — auto-upload is off'
@@ -134,7 +134,7 @@ function renderBatchList() {
       jaHtml = '<span class="batch-ja-status ' + (bf.jaClass || '') + '" id="ja-' + bf.id + '">' + esc(jaStatus) + '</span>';
     }
     if (bf._jaHeld && window._jaToken && !(bf._formattingReview && bf._formattingReview.busy)) {
-      jaHtml += '<button class="batch-file-dl" type="button" onclick="uploadHeldBatchFile(\'' + bf.id + '\')" title="Upload this CV to JobAdder' + (bf.parseWarning ? ' after checking the warning' : '') + '">☁ ' + (bf.parseWarning ? 'Upload anyway' : 'Upload to JobAdder') + '</button>';
+      jaHtml += '<button class="batch-file-dl" type="button" onclick="uploadHeldBatchFile(\'' + bf.id + '\')" title="Upload this CV to JobAdder' + (bf.parseWarning ? ' after checking the warning' : '') + '">☁ ' + (bf.jaClass === 'show ja-err' ? 'Retry upload' : bf.parseWarning ? 'Upload anyway' : 'Upload to JobAdder') + '</button>';
     }
     var removeBtn = bf.status !== 'processing'
       ? '<button class="batch-file-remove" onclick="removeBatchFile(\'' + bf.id + '\')" title="Remove">✕</button>'
@@ -774,11 +774,11 @@ async function downloadBatchZip() {
 }
 
 // Upload one finished batch CV to JobAdder, as auto-upload does after the run.
-async function batchAutoUploadFile(bf, blob, fname, cvData, displayName, isBlind) {
+async function batchAutoUploadFile(bf, blob, fname, cvData, displayName, isBlind, emailOverride) {
   renderBatchList(); // ensure DOM is fresh before looking up jaEl
   var jaEl = document.getElementById('ja-' + bf.id);
-  var jaEmail = (cvData && cvData.candidate && cvData.candidate.email)
-    ? cvData.candidate.email : (bf._manualEmail || '');
+  var jaEmail = emailOverride || ((cvData && cvData.candidate && cvData.candidate.email)
+    ? cvData.candidate.email : (bf._manualEmail || ''));
   if (!jaEmail) {
     // No email found — render editable input via renderBatchList
     bf.jaStatus = '📧 Enter email';
@@ -789,9 +789,12 @@ async function batchAutoUploadFile(bf, blob, fname, cvData, displayName, isBlind
     renderBatchList(); // re-render so jaEl is fresh and shows uploading state
     jaEl = document.getElementById('ja-' + bf.id);
     bf.jaClass = 'show uploading'; if (jaEl) { jaEl.textContent = '☁ Uploading…'; jaEl.className = 'batch-ja-status show uploading'; }
+    var beforeJobAdderUpload = true;
     try {
       var bfOrigAB = await bf.file.arrayBuffer();
-      var jaCanId = await batchUploadToJobAdder(blob, fname, jaEmail, cvData, new Blob([bfOrigAB]), bf.file.name);
+      var originalBlob = new Blob([bfOrigAB]);
+      beforeJobAdderUpload = false;
+      var jaCanId = await batchUploadToJobAdder(blob, fname, jaEmail, cvData, originalBlob, bf.file.name);
       var jaLink = jaCanId ? await jaProfileUrlAsync(jaCanId) : '';
       bf.jaStatus = jaLink
         ? '✅ <a href="' + escAttr(jaLink) + '" target="_blank" rel="noopener noreferrer" style="color:#2f855a;font-weight:700;text-decoration:underline;">View ↗</a>'
@@ -801,6 +804,11 @@ async function batchAutoUploadFile(bf, blob, fname, cvData, displayName, isBlind
       // Attach the URL to this exact Batch Format dashboard row.
       if (jaLink) statsAttachJobAdderUrl(bf._statsRecordId, jaLink, displayName, [isBlind ? 'blind' : 'format']);
     } catch(jaErr) {
+      // Restore an explicit retry only when no JobAdder write could have
+      // started. Never infer this from a timeout or generic upload error.
+      if (beforeJobAdderUpload || (jaErr && jaErr.jobAdderWriteNotStarted === true)) {
+        bf._jaHeld = {blob:blob, fname:fname, cvData:cvData, displayName:displayName, isBlind:isBlind, email:jaEmail};
+      }
       var errShort = (jaErr.message || 'Unknown error').split('|')[0].trim().substring(0, 50);
       bf.jaStatus = '❌ Upload failed';
       bf.jaClass  = 'show ja-err';
@@ -821,5 +829,5 @@ async function uploadHeldBatchFile(id) {
   if (bf._formattingReview && bf._formattingReview.busy) { showToast('Wait for this CV review or fix to finish before uploading.', 'info'); return; }
   var held = bf._jaHeld;
   bf._jaHeld = null;
-  await batchAutoUploadFile(bf, held.blob, held.fname, held.cvData, held.displayName, held.isBlind);
+  await batchAutoUploadFile(bf, held.blob, held.fname, held.cvData, held.displayName, held.isBlind, held.email);
 }

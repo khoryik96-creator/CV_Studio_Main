@@ -64,26 +64,9 @@ function setBatchManualEmail(el, id) {
     renderBatchList();
     // Trigger upload now that we have an email
     if (window._jaToken && b.cvData && b._docxBlob) {
-      (async function() {
-        try {
-          var origAB = await b.file.arrayBuffer();
-          var jaCanId = await batchUploadToJobAdder(b._docxBlob, b.filename, b._manualEmail, b.cvData, new Blob([origAB]), b.file.name);
-          b.jaStatus = '✅ Uploaded';
-          b.jaClass  = 'show uploaded';
-          var jaLink = jaCanId ? await jaProfileUrlAsync(jaCanId) : '';
-          if (jaLink) {
-            b.jaStatus = '✅ <a href="' + escAttr(jaLink) + '" target="_blank" rel="noopener noreferrer" style="color:#2f855a;font-weight:700;text-decoration:underline;">View ↗</a>';
-            var batchStatsName = (b.cvData && b.cvData.candidate && b.cvData.candidate.name) || b.file.name.replace(/\.[^.]+$/, '');
-            statsAttachJobAdderUrl(b._statsRecordId, jaLink, batchStatsName, ['format','blind']);
-          }
-          renderBatchList();
-        } catch(e) {
-          b.jaStatus = '❌ Upload failed';
-          b.jaClass  = 'show ja-err';
-          renderBatchList();
-          showToast('JA upload failed: ' + (e.message||'').split('|')[0].trim(), 'err');
-        }
-      })();
+      var batchStatsName = (b.cvData.candidate && b.cvData.candidate.name) || b.file.name.replace(/\.[^.]+$/, '');
+      batchAutoUploadFile(b, b._docxBlob, b.filename, b.cvData, batchStatsName,
+        b.downloadKind === 'blind' || b.status === 'done-blind', b._manualEmail);
     }
   }
 }
