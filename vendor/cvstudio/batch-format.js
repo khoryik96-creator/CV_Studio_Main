@@ -110,6 +110,13 @@ function renderBatchList() {
     var timerHtml = (isDone || isProc)
       ? '<span class="' + timerClass + '" id="t-' + bf.id + '">' + timerVal + '</span>'
       : '<span class="batch-file-timer" id="t-' + bf.id + '"></span>';
+    var jaStatus = bf.jaStatus || '';
+    if (bf._jaHeld) {
+      jaStatus = !window._jaToken ? '☁ Not uploaded — connect to JobAdder'
+        : bf.parseWarning ? '⏸ Not uploaded — check the warning'
+        : window._jaAutoUpload === false ? '⏸ Not uploaded — auto-upload is off'
+        : '⏸ Not uploaded — ready to upload';
+    }
     var jaHtml;
     if (bf.jaClass === 'show ja-skip') {
       // Render editable email input inline
@@ -120,14 +127,14 @@ function renderBatchList() {
         + 'onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}" '
         + 'onclick="event.stopPropagation()" />'
         + '</span>';
-    } else if (bf.jaStatus && bf.jaStatus.startsWith('✅')) {
+    } else if (jaStatus.startsWith('✅')) {
       // Link — use innerHTML-safe version stored on bf
-      jaHtml = '<span class="batch-ja-status ' + (bf.jaClass || '') + '" id="ja-' + bf.id + '">' + bf.jaStatus + '</span>';
+      jaHtml = '<span class="batch-ja-status ' + (bf.jaClass || '') + '" id="ja-' + bf.id + '">' + jaStatus + '</span>';
     } else {
-      jaHtml = '<span class="batch-ja-status ' + (bf.jaClass || '') + '" id="ja-' + bf.id + '">' + esc(bf.jaStatus || '') + '</span>';
+      jaHtml = '<span class="batch-ja-status ' + (bf.jaClass || '') + '" id="ja-' + bf.id + '">' + esc(jaStatus) + '</span>';
     }
     if (bf._jaHeld && window._jaToken && !(bf._formattingReview && bf._formattingReview.busy)) {
-      jaHtml += '<button class="batch-file-dl" type="button" onclick="uploadHeldBatchFile(\'' + bf.id + '\')" title="Upload this CV to JobAdder after checking the warning">☁ Upload anyway</button>';
+      jaHtml += '<button class="batch-file-dl" type="button" onclick="uploadHeldBatchFile(\'' + bf.id + '\')" title="Upload this CV to JobAdder' + (bf.parseWarning ? ' after checking the warning' : '') + '">☁ ' + (bf.parseWarning ? 'Upload anyway' : 'Upload to JobAdder') + '</button>';
     }
     var removeBtn = bf.status !== 'processing'
       ? '<button class="batch-file-remove" onclick="removeBatchFile(\'' + bf.id + '\')" title="Remove">✕</button>'
@@ -457,18 +464,17 @@ async function runBatch() {
       bf._statsRecordId = statsRecord(displayName, isBlind ? 'blind' : 'format', bf.cost, route.model, '', route.provider, statsMetaFromResponse({usage:bf.usage,cost:bf.cost,model:route.model,provider:route.provider}, route.model, route.provider)); // exact row URL is attached after upload
 
       // ── JobAdder auto-upload ──────────────────────────────────────
-      if (window._jaToken && window._jaAutoUpload !== false) {
-        if (bf.parseWarning) {
-          // The source check flagged this CV. Auto-upload would send it to the
-          // candidate's JobAdder profile before anyone has read the warning, so
-          // it is held; the row offers "Upload anyway" once it has been checked.
-          bf._jaHeld = { blob: blob, fname: fname, cvData: cvData, displayName: displayName, isBlind: isBlind };
-          bf.jaStatus = '⏸ Not uploaded — check the warning';
-          bf.jaClass  = 'show ja-held';
-          renderBatchList();
-        } else {
-          await batchAutoUploadFile(bf, blob, fname, cvData, displayName, isBlind);
-        }
+      if (!window._jaToken || window._jaAutoUpload === false || bf.parseWarning) {
+        // Keep every completed file actionable when automatic upload is
+        // skipped. Source warnings still require an explicit Upload anyway.
+        bf._jaHeld = { blob: blob, fname: fname, cvData: cvData, displayName: displayName, isBlind: isBlind };
+        bf.jaStatus = !window._jaToken ? '☁ Not uploaded — connect to JobAdder'
+          : bf.parseWarning ? '⏸ Not uploaded — check the warning'
+          : '⏸ Not uploaded — auto-upload is off';
+        bf.jaClass  = 'show ja-held';
+        renderBatchList();
+      } else {
+        await batchAutoUploadFile(bf, blob, fname, cvData, displayName, isBlind);
       }
 
     } catch(e) {

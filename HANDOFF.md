@@ -325,7 +325,19 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Main-review corrective — v24.6.438, owner-authorized source work.**
+- **Batch JobAdder status/link corrective — v24.6.439 source work.**
+  Branch `codex/v24.6.439-batch-jobadder-link` starts at exact merged master
+  `a40bf63` / v438. Batch completion previously left no status or manual upload
+  action when auto-upload was off or JobAdder was disconnected. Each completed
+  row now retains its exact upload payload and explains the skipped upload;
+  connected clean rows offer Upload to JobAdder, while warnings retain Upload
+  anyway. Connection changes refresh completed rows without uploading them.
+  Successful uploads retain each row's candidate link and exact dashboard URL,
+  including duplicate filenames and manual email entry. No paid/live call,
+  owner installation/receipt change, route/schema change or protected build.
+  Commit/push after local gates; a new PR or merge requires the owner's request.
+
+- **Resolved main-review corrective — v24.6.438, PR #223, MERGED as `a40bf63`.**
   New branch `codex/v24.6.438-main-review-corrections` starts at exact merged
   master `f55a049` / v437. All three main-review findings are corrected: the
   ambiguity guard compares the same house-style identities, separately checks
@@ -338,8 +350,8 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   and generated/hostile-input controls cover the findings. See the v438 QA
   report for validation. No owner installation/receipt change, paid/live call,
   route/schema change or protected build. Owner explicitly authorized the PR
-  and merge on 2026-10-02. Wait for all three exact-head hosted gates before
-  squash merge; record final merge/check identities in issue #35. Owner
+  and merge on 2026-10-02. All three exact-head hosted gates passed before
+  squash merge; final merge/check identities are recorded in issue #35. Owner
   installation and protected packaging remain separate work.
 
 - **Resolved review/date corrective — v24.6.437, PR #222, MERGED as `f55a049`.**

@@ -72,6 +72,7 @@ function jaSafeTenantLabel(info) {
 function renderJAConnectionState(info) {
   info = info || {};
   var connected = !!info.connected;
+  var connectionChanged = !!window._jaToken !== connected;
   var reconnect = !!info.needs_reconnect;
   window._jaToken = connected;
   var login = document.getElementById('btnJALogin');
@@ -122,6 +123,7 @@ function renderJAConnectionState(info) {
   if (signOutBtn) signOutBtn.disabled = !connected && !reconnect;
   updateJAUploadConnStatus();
   updateJACreateConnStatus();
+  if (connectionChanged && typeof renderBatchList === 'function') renderBatchList();
 }
 
 function openJobAdderSettings(message) {
