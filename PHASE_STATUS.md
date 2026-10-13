@@ -9,12 +9,15 @@
   passed. Unfiltered Windows: 1,587 passed, four skipped, 7,121 subtests.
   `codex/v24.6.438-main-review-corrections` is complete.
 
-- Current owner-authorized source work: v24.6.439,
+- Current owner-authorized source work: v24.6.440,
   `codex/v24.6.439-batch-jobadder-link`, from exact `a40bf63`.
   Batch rows show why uploading was skipped and retain a manual upload action.
   Reconnection refreshes those actions without an automatic write. Successful
   uploads keep each row's candidate link and exact dashboard record, including
   duplicate filenames and manual email entry. Source/review upload holds remain.
+  The review corrective lets the shared renderer set the connection marker
+  during OAuth completion; the real login callback now refreshes held rows.
+  Pending/rejected login and unchanged refresh controls remain covered.
   No owner installation/receipt, paid/live provider, route/schema or protected
   build change. No new PR or merge requested.
 

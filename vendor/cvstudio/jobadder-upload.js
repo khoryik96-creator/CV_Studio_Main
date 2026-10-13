@@ -226,7 +226,7 @@ async function jobAdderLogin() {
       var d=await r.json().catch(function(){return {};});
       if (!r.ok) { clearInterval(poll); if(popup)popup.close(); showToast(d.error||'JobAdder login failed','err'); return; }
       if (d.connected) {
-        clearInterval(poll); if(popup)popup.close(); window._jaToken=true;
+        clearInterval(poll); if(popup)popup.close();
         applyJAPublicInfo(d);
         var secretField = document.getElementById('settingsJobAdderClientSecret');
         if (secretField) secretField.value = '';

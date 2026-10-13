@@ -102,6 +102,67 @@ function harness(options={}) {
 }
 const reviewCalls=h=>h.calls.filter(call=>call.body.feature==='cv_format_review');
 async function run(){
+  // Exercise the real login/poll callback, not just the connection renderer:
+  // it must reveal held rows without uploading or rebuilding their files.
+  for(const {warning=false,failed=false} of [{},{warning:true},{failed:true}]){
+    const f=harness({realUpload:true,noToken:true,on:warning,autoUploadOff:true});
+    f.c._batchFiles.forEach(row=>row.fixture.candidate.email='synthetic@example.invalid');
+    await f.c.runBatch();
+    const rows=f.c._batchFiles.map(row=>({row,blob:row._docxBlob,data:row.cvData,held:row._jaHeld}));
+    let poll,closed=0,attempts=0,renders=0;
+    const render=f.c.renderBatchList;f.c.renderBatchList=()=>{renders++;render();};
+    const fetchWithTimeout=f.c.fetchWithTimeout;
+    f.c.fetchWithTimeout=async(url,init)=>{
+      if(url==='/jobadder/store_creds')return {ok:true,json:async()=>({login_session_id:'synthetic-session',state:'synthetic-state'})};
+      if(url==='/jobadder/poll_token'){
+        attempts++;
+        if(attempts===1)return {status:202};
+        if(failed)return {ok:false,status:401,json:async()=>({error:'Synthetic login rejected'})};
+        return {ok:true,status:200,json:async()=>({connected:true})};
+      }
+      return fetchWithTimeout(url,init);
+    };
+    Object.assign(f.c,{URLSearchParams,JA_AUTH_URL:'https://example.invalid/authorize',
+      JA_REDIRECT_URI:'https://example.invalid/callback',JA_SCOPES:'synthetic',
+      getJAClientId:()=> 'synthetic-client',getJAClientSecret:()=> '',hasJASavedSecretFor:()=>true,
+      applyJAPublicInfo(){},localStorage:{setItem(){},removeItem(){}},
+      fetch:async()=>({json:async()=>({items:[]})}),
+      refreshIntegrationDiagnostics:()=>f.c.renderJAConnectionState({connected:true}),
+      setInterval:callback=>{poll=callback;return 1;}});
+    f.c.window.open=()=>({close(){closed++;}});
+    const jaSource=fs.readFileSync(path.join(root,'vendor/cvstudio/jobadder-upload.js'),'utf8');
+    vm.runInContext(jaSource.slice(jaSource.indexOf('async function jobAdderLogin('),
+      jaSource.indexOf('function clearJALocalAccountState(')),f.c);
+    await f.c.jobAdderLogin();assert.strictEqual(typeof poll,'function');
+    await poll();assert.strictEqual(!!f.c.window._jaToken,false);
+    assert.strictEqual(renders,0,'pending login cannot expose upload controls');
+    await poll();
+    if(failed){
+      assert.strictEqual(!!f.c.window._jaToken,false);
+      assert.strictEqual(closed,1);
+      assert.strictEqual(renders,0,'rejected login cannot reveal upload controls');
+      assert.ok(!f.nodes.batchFileList.innerHTML.includes('uploadHeldBatchFile'));
+      assert.strictEqual(f.uploads.length,0);
+      continue;
+    }
+    assert.strictEqual(f.c.window._jaToken,true);
+    assert.strictEqual(closed,1);
+    assert.strictEqual(renders,1,'successful OAuth refreshes held rows exactly once');
+    assert.ok(!f.nodes.batchFileList.innerHTML.includes('connect to JobAdder'));
+    assert.ok(f.nodes.batchFileList.innerHTML.includes(warning?'Upload anyway':'Upload to JobAdder'));
+    assert.strictEqual(f.uploads.length,0,'connecting never replays held uploads');
+    assert.strictEqual(f.c.window._jaAutoUpload,false,'connecting preserves auto-upload preference');
+    for(const previous of rows){
+      assert.strictEqual(previous.row._docxBlob,previous.blob);
+      assert.strictEqual(previous.row.cvData,previous.data);
+      assert.strictEqual(previous.row._jaHeld,previous.held);
+    }
+    f.c.renderJAConnectionState({connected:true});
+    assert.strictEqual(renders,1,'unchanged status refreshes must not reset row inputs');
+    f.c.renderJAConnectionState({connected:false});
+    assert.ok(!f.nodes.batchFileList.innerHTML.includes('uploadHeldBatchFile'));
+    assert.strictEqual(f.uploads.length,0,'disconnecting never uploads');
+  }
   // A skipped upload must stay visible and actionable, rather than losing
   // both the candidate link and the way to upload a completed batch CV.
   for(const options of [{autoUploadOff:true},{noToken:true}]){

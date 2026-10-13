@@ -325,7 +325,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
 
 ## 8. Open / deferred work
 
-- **Batch JobAdder status/link corrective — v24.6.439 source work.**
+- **Batch JobAdder status/link corrective — v24.6.440 source work.**
   Branch `codex/v24.6.439-batch-jobadder-link` starts at exact merged master
   `a40bf63` / v438. Batch completion previously left no status or manual upload
   action when auto-upload was off or JobAdder was disconnected. Each completed
@@ -335,6 +335,10 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   Successful uploads retain each row's candidate link and exact dashboard URL,
   including duplicate filenames and manual email entry. No paid/live call,
   owner installation/receipt change, route/schema change or protected build.
+  The v440 review corrective removes OAuth's premature connection-marker
+  assignment so the shared renderer detects the transition. Real callback
+  regressions cover pending/rejected login, warning holds, preferences, exact
+  retained files and repeated connected refreshes. See the v439/v440 QA reports.
   Commit/push after local gates; a new PR or merge requires the owner's request.
 
 - **Resolved main-review corrective — v24.6.438, PR #223, MERGED as `a40bf63`.**
