@@ -94,6 +94,35 @@ def _provider_parse(**overrides):
 
 
 class SourceDetailRestoreTests(unittest.TestCase):
+    def test_contribution_company_and_year_labels_reach_word_as_headings(self):
+        source = "\n".join([
+            "Contribution towards Projects / Taskforce", "Northwind", "2020",
+            "-2 Annual awards.", "2019", "- Led a project.", "Education",
+        ])
+        parsed = {
+            "candidate": {"name": "Test Candidate"},
+            "work_experiences": [{"company": "Northwind Bank", "roles": [
+                {"title": "Analyst", "bullets": ["Reviewed controls."]}]}],
+            "skills": [{"category": "Contribution towards Projects / Taskforce",
+                        "items": ["Northwind", "2020", "2 Annual awards.",
+                                  "2019", "Led a project."]}],
+        }
+        data = self._parse(parsed, source)["data"]
+        self.assertEqual(data["skills"][0]["item_headings"], ["Northwind", "2020", "2019"])
+        response = self.client.post("/generate-docx", json={"data": data}, headers=HEADERS)
+        self.assertEqual(response.status_code, 200)
+        with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
+            root = ET.fromstring(archive.read("word/document.xml"))
+        paragraphs = {"".join(t.text or "" for t in p.iter(W + "t")): p
+                      for p in root.iter(W + "p")}
+        for label in ["Northwind", "2020", "2019"]:
+            p = paragraphs[label]
+            self.assertIsNone(p.find("./" + W + "pPr/" + W + "numPr"))
+            self.assertIsNotNone(p.find("./" + W + "r/" + W + "rPr/" + W + "b"))
+        for duty in ["2 Annual awards.", "Led a project."]:
+            self.assertIsNotNone(paragraphs[duty].find("./" + W + "pPr/" + W + "numPr"))
+        self.assertNotIn("Skills:", paragraphs)
+
     def setUp(self):
         self.client = app.app.test_client()
 

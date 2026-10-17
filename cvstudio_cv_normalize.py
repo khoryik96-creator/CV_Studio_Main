@@ -1029,6 +1029,81 @@ def _extract_recoverable_cv_source_sections(source_text):
     return {category: items for category, items in recovered.items() if items}
 
 
+def _restore_cv_contribution_headings(parsed, source_text):
+    """Annotate existing labels only when the contribution source proves them.
+
+    Preserve category/items and wording; optional labels control layout only.
+    """
+    category_key = "contribution towards projects taskforce"
+    skills = [s for s in parsed.get("skills") or [] if isinstance(s, dict)
+              and _cv_source_section_key(s.get("category")) == category_key]
+    if not skills or not source_text or len(source_text) > 1000000:
+        return parsed
+    lines = [line.strip() for line in str(source_text).splitlines() if line.strip()]
+    if len(lines) > 12000 or len(parsed.get("work_experiences") or []) > 256:
+        return parsed
+    starts = [i for i, line in enumerate(lines)
+              if _cv_source_section_key(line) == category_key]
+    if len(starts) != 1:
+        return parsed
+    employers = [_cv_source_item_key(exp.get("company"))
+                 for exp in parsed.get("work_experiences") or []
+                 if isinstance(exp, dict) and exp.get("company")]
+    section = []
+    for line in lines[starts[0] + 1:]:
+        if _cv_source_boundary_key(line) in _CV_SOURCE_SECTION_BOUNDARY_KEYS:
+            break
+        if line != "## RESTRICTED ##":
+            section.append(line)
+    year_re = re.compile(r"(?:19|20)\d{2}(?:\s*[-–—]\s*(?:19|20)\d{2})?")
+    def marked(line):
+        # PDF text can join the dash to an award count: ``-2 Annual awards``.
+        # This establishes layout only; never rewrite negative numeric content.
+        return (_strip_leading_bullet_marker(line).strip() != line
+                or bool(re.match(r"^-\d+\s+[A-Za-z]", line)))
+
+    heading_keys = set()
+    current_employer = False
+    for i, line in enumerate(section):
+        # A marked name/year is an achievement, not a heading.
+        if marked(line):
+            continue
+        key = _cv_source_item_key(line)
+        employer = len(key) >= 4 and any(
+            name == key or name.startswith(key + " ") for name in employers
+        )
+        if (employer and i + 2 < len(section)
+                and year_re.fullmatch(section[i + 1])
+                and marked(section[i + 2])):
+            heading_keys.add(key)
+            current_employer = True
+        elif (current_employer and year_re.fullmatch(line)
+              and i + 1 < len(section)
+              and marked(section[i + 1])):
+            heading_keys.add(key)
+    # A label repeated as an achievement cannot be identified safely when the
+    # provider retained only one copy. Leave that ambiguous item bulleted.
+    source_counts = {}
+    for line in section:
+        key = _cv_source_item_key(line)
+        if key in heading_keys:
+            source_counts[key] = source_counts.get(key, 0) + 1
+    heading_keys = {key for key in heading_keys if source_counts[key] == 1}
+    for skill in skills:
+        raw = skill.get("items") or []
+        values = raw if isinstance(raw, list) else str(raw).splitlines()
+        items = [str(value).strip() for value in values if str(value).strip()]
+        keys = [_cv_source_item_key(value) for value in items]
+        counts = {}
+        for key in keys:
+            counts[key] = counts.get(key, 0) + 1
+        headings = [value for value, key in zip(items, keys)
+                    if key in heading_keys and counts[key] == 1]
+        if headings:
+            skill["item_headings"] = headings
+    return parsed
+
+
 def _recover_cv_source_additional_sections(parsed, source_text):
     """Restore exact project/training lists and remove duplicated training certs."""
     recovered = _extract_recoverable_cv_source_sections(source_text)
@@ -1371,6 +1446,7 @@ def _normalize_cv_data_for_output(
         )
     )
     parsed = _normalize_cv_structured_content(parsed)
+    parsed = _restore_cv_contribution_headings(parsed, source_text)
     parsed = _recover_cv_source_additional_sections(parsed, source_text)
     parsed = _recover_cv_source_skill_item_punctuation(parsed, source_text)
     parsed = _remove_ungrounded_cv_github_links(parsed, source_text)

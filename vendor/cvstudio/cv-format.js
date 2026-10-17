@@ -772,7 +772,11 @@ function cvSkillPreviewHtml(skill) {
       ? '<div class="preview-skill-cat"><strong>' + esc(category) + ':</strong></div>'
       : '';
     lines.forEach(function(line){
-      listHtml += '<div class="preview-bullet">' + esc(line) + '</div>';
+      var isHeading = Array.isArray(skill.item_headings) && skill.item_headings.indexOf(line) >= 0 &&
+        lines.indexOf(line) === lines.lastIndexOf(line);
+      listHtml += isHeading
+        ? '<div class="preview-skill-cat"><strong>' + esc(line) + '</strong></div>'
+        : '<div class="preview-bullet">' + esc(line) + '</div>';
     });
     return listHtml;
   }
@@ -864,7 +868,11 @@ function renderPreview(d) {
 
   // Skills
   if ((d.skills || []).length > 0) {
-    html += '<div class="preview-section">SKILLS</div>';
+    var contributionOnly = d.skills.every(function(s){
+      return /^contribution towards projects\s*\/\s*taskforce\s*:?$/i.test(String(s.category || '').trim()) &&
+        Array.isArray(s.item_headings) && s.item_headings.length > 0;
+    });
+    if (!contributionOnly) html += '<div class="preview-section">SKILLS</div>';
     for (var s of d.skills) {
       html += cvSkillPreviewHtml(s);
     }

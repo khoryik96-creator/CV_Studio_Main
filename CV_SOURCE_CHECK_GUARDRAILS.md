@@ -61,6 +61,20 @@ steps. Skipping one is how earlier rounds broke things.
   now holds the CV back from JobAdder auto-upload. A missed warning is what
   master always did.
 
+### C1
+**Contribution labels remain headings.** Within a uniquely identified
+`Contribution towards Projects / Taskforce` source section, an unbulleted
+employer label followed by a plain year and a marked achievement establishes
+the group. The employer must match a work-history employer (a shorter prefix
+such as `Northwind` for `Northwind Bank` is allowed). Later plain years followed
+by marked achievements belong to that employer. Only unique source labels
+matching unique existing items receive optional `item_headings` metadata; item text/order and legacy
+items shape stay intact. Marked employer/year achievements, ordinary skills,
+ambiguous duplicate sections/items and source-free data remain unchanged.
+Preview and Word render those labels in bold without bullets, with the same
+achievement bullets beneath them. A contribution-only section needs no Skills
+wrapper. No missing prose is invented or recovered by this rule.
+
 ## Work-row reader
 
 ### R1

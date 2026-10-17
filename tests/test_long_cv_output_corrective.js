@@ -415,6 +415,22 @@ assert.strictEqual((recoveredSkillPreview.match(/class="preview-bullet"/g) || []
 assert.ok(!recoveredSkillPreview.includes('Firewall Upgrade, Network Redesign'));
 assert.ok(recoveredSkillPreview.indexOf('Firewall Upgrade') < recoveredSkillPreview.indexOf('Network Redesign'));
 
+const contributionPreview = context.cvSkillPreviewHtml({
+  category: 'Contribution towards Projects / Taskforce',
+  items: ['Northwind', '2020', 'Won a team award.', '2019', 'Led a project.'],
+  item_headings: ['Northwind', '2020', '2019'],
+});
+assert.ok(contributionPreview.includes('<strong>Northwind</strong>'));
+assert.ok(contributionPreview.includes('<strong>2020</strong>'));
+assert.ok(contributionPreview.includes('<strong>2019</strong>'));
+assert.strictEqual((contributionPreview.match(/class="preview-bullet"/g) || []).length, 2);
+const duplicateContribution = context.cvSkillPreviewHtml({
+  items: ['Northwind', 'Northwind', 'Won an award.'], item_headings: ['Northwind'],
+});
+assert.strictEqual((duplicateContribution.match(/class="preview-bullet"/g) || []).length, 3);
+const plainYears = context.cvSkillPreviewHtml({items: ['2020', '2019']});
+assert.strictEqual((plainYears.match(/class="preview-bullet"/g) || []).length, 2);
+
 context.updateCvScoringLockUI();
 assert.strictEqual(tab.innerHTML, 'Locked');
 promptValue = '1111';

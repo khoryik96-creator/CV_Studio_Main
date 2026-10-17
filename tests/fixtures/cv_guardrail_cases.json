@@ -13108,6 +13108,957 @@
     "education": []
    },
    "note": "An optional later-section scan that exhausts its budget cannot establish uniqueness; preserve every original field."
+  },
+  {
+   "id": "C1-group-company-years",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won a team award.",
+    "Contoso",
+    "2017-2018",
+    "- Organised internal training.",
+    "2016",
+    "- Led a process project.",
+    "Education",
+    "2014",
+    "- A qualification."
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won a team award.",
+       "Contoso",
+       "2017-2018",
+       "Organised internal training.",
+       "2016",
+       "Led a process project."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won a team award.",
+      "Contoso",
+      "2017-2018",
+      "Organised internal training.",
+      "2016",
+      "Led a process project."
+     ],
+     "item_headings": [
+      "Northwind",
+      "2020",
+      "Contoso",
+      "2017-2018",
+      "2016"
+     ]
+    }
+   ],
+   "note": "group-company-years"
+  },
+  {
+   "id": "C1-newline-items",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won a team award.",
+    "Contoso",
+    "2017-2018",
+    "- Organised internal training.",
+    "2016",
+    "- Led a process project.",
+    "Education",
+    "2014",
+    "- A qualification."
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": "Northwind\n2020\nWon a team award.\nContoso\n2017-2018\nOrganised internal training.\n2016\nLed a process project."
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": "Northwind\n2020\nWon a team award.\nContoso\n2017-2018\nOrganised internal training.\n2016\nLed a process project.",
+     "item_headings": [
+      "Northwind",
+      "2020",
+      "Contoso",
+      "2017-2018",
+      "2016"
+     ]
+    }
+   ],
+   "note": "newline-items"
+  },
+  {
+   "id": "C1-no-source",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won a team award.",
+       "Contoso",
+       "2017-2018",
+       "Organised internal training.",
+       "2016",
+       "Led a process project."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won a team award.",
+      "Contoso",
+      "2017-2018",
+      "Organised internal training.",
+      "2016",
+      "Led a process project."
+     ]
+    }
+   ],
+   "note": "no-source"
+  },
+  {
+   "id": "C1-ordinary-skills",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won a team award.",
+    "Contoso",
+    "2017-2018",
+    "- Organised internal training.",
+    "2016",
+    "- Led a process project.",
+    "Education",
+    "2014",
+    "- A qualification."
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Skills",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won a team award.",
+       "Contoso",
+       "2017-2018",
+       "Organised internal training.",
+       "2016",
+       "Led a process project."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Skills",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won a team award.",
+      "Contoso",
+      "2017-2018",
+      "Organised internal training.",
+      "2016",
+      "Led a process project."
+     ]
+    }
+   ],
+   "note": "ordinary-skills"
+  },
+  {
+   "id": "C1-marked-labels-are-achievements",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "- Northwind",
+    "- 2020",
+    "- Won a team award.",
+    "- Contoso",
+    "- 2017-2018",
+    "- Organised internal training.",
+    "- 2016",
+    "- Led a process project.",
+    "Education",
+    "2014",
+    "- A qualification."
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won a team award.",
+       "Contoso",
+       "2017-2018",
+       "Organised internal training.",
+       "2016",
+       "Led a process project."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won a team award.",
+      "Contoso",
+      "2017-2018",
+      "Organised internal training.",
+      "2016",
+      "Led a process project."
+     ]
+    }
+   ],
+   "note": "marked-labels-are-achievements"
+  },
+  {
+   "id": "C1-duplicate-source-section",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won a team award.",
+    "Contoso",
+    "2017-2018",
+    "- Organised internal training.",
+    "2016",
+    "- Led a process project.",
+    "Education",
+    "2014",
+    "- A qualification.",
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won a team award.",
+    "Contoso",
+    "2017-2018",
+    "- Organised internal training.",
+    "2016",
+    "- Led a process project.",
+    "Education",
+    "2014",
+    "- A qualification."
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won a team award.",
+       "Contoso",
+       "2017-2018",
+       "Organised internal training.",
+       "2016",
+       "Led a process project."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won a team award.",
+      "Contoso",
+      "2017-2018",
+      "Organised internal training.",
+      "2016",
+      "Led a process project."
+     ]
+    }
+   ],
+   "note": "duplicate-source-section"
+  },
+  {
+   "id": "C1-unknown-employers",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won a team award.",
+    "Contoso",
+    "2017-2018",
+    "- Organised internal training.",
+    "2016",
+    "- Led a process project.",
+    "Education",
+    "2014",
+    "- A qualification."
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won a team award.",
+       "Contoso",
+       "2017-2018",
+       "Organised internal training.",
+       "2016",
+       "Led a process project."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won a team award.",
+      "Contoso",
+      "2017-2018",
+      "Organised internal training.",
+      "2016",
+      "Led a process project."
+     ]
+    }
+   ],
+   "note": "unknown-employers"
+  },
+  {
+   "id": "C1-duplicate-employer-item",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won a team award.",
+    "Contoso",
+    "2017-2018",
+    "- Organised internal training.",
+    "2016",
+    "- Led a process project.",
+    "Education",
+    "2014",
+    "- A qualification."
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won a team award.",
+       "Contoso",
+       "2017-2018",
+       "Organised internal training.",
+       "2016",
+       "Led a process project.",
+       "Northwind"
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won a team award.",
+      "Contoso",
+      "2017-2018",
+      "Organised internal training.",
+      "2016",
+      "Led a process project.",
+      "Northwind"
+     ],
+     "item_headings": [
+      "2020",
+      "Contoso",
+      "2017-2018",
+      "2016"
+     ]
+    }
+   ],
+   "note": "duplicate-employer-item"
+  },
+  {
+   "id": "C1-award-count-markers",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "-2 Annual awards.",
+    "Contoso",
+    "2017-2018",
+    "-4 Team awards.",
+    "2016",
+    "- Led a process project.",
+    "Education",
+    "2014",
+    "- A qualification."
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won a team award.",
+       "Contoso",
+       "2017-2018",
+       "Organised internal training.",
+       "2016",
+       "Led a process project."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won a team award.",
+      "Contoso",
+      "2017-2018",
+      "Organised internal training.",
+      "2016",
+      "Led a process project."
+     ],
+     "item_headings": [
+      "Northwind",
+      "2020",
+      "Contoso",
+      "2017-2018",
+      "2016"
+     ]
+    }
+   ],
+   "note": "PDF joins the dash to an achievement count; preserve the company/year group without globally stripping negative numeric prose."
+  },
+  {
+   "id": "C1-marked-employer",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "- Northwind",
+    "2020",
+    "- Won a team award.",
+    "Contoso",
+    "2017-2018",
+    "- Organised internal training.",
+    "2016",
+    "- Led a process project.",
+    "Education",
+    "2014",
+    "- A qualification."
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won a team award.",
+       "Contoso",
+       "2017-2018",
+       "Organised internal training.",
+       "2016",
+       "Led a process project."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won a team award.",
+      "Contoso",
+      "2017-2018",
+      "Organised internal training.",
+      "2016",
+      "Led a process project."
+     ],
+     "item_headings": [
+      "Contoso",
+      "2017-2018",
+      "2016"
+     ]
+    }
+   ],
+   "note": "marked-employer"
+  },
+  {
+   "id": "C1-unmarked-prose",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "Won a team award.",
+    "Contoso",
+    "2017-2018",
+    "Organised internal training.",
+    "2016",
+    "Led a process project.",
+    "Education",
+    "2014",
+    "- A qualification."
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won a team award.",
+       "Contoso",
+       "2017-2018",
+       "Organised internal training.",
+       "2016",
+       "Led a process project."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won a team award.",
+      "Contoso",
+      "2017-2018",
+      "Organised internal training.",
+      "2016",
+      "Led a process project."
+     ]
+    }
+   ],
+   "note": "unmarked-prose"
+  },
+  {
+   "id": "C1-stop-at-education",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won a team award.",
+    "Education",
+    "Contoso",
+    "2017-2018",
+    "- Organised internal training.",
+    "2016",
+    "- Led a process project.",
+    "Education",
+    "2014",
+    "- A qualification."
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won a team award.",
+       "Contoso",
+       "2017-2018",
+       "Organised internal training.",
+       "2016",
+       "Led a process project."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won a team award.",
+      "Contoso",
+      "2017-2018",
+      "Organised internal training.",
+      "2016",
+      "Led a process project."
+     ],
+     "item_headings": [
+      "Northwind",
+      "2020"
+     ]
+    }
+   ],
+   "note": "stop-at-education"
+  },
+  {
+   "id": "C1-year-outside-group",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "2020",
+    "- Won a team award.",
+    "Education"
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won a team award.",
+       "Contoso",
+       "2017-2018",
+       "Organised internal training.",
+       "2016",
+       "Led a process project."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won a team award.",
+      "Contoso",
+      "2017-2018",
+      "Organised internal training.",
+      "2016",
+      "Led a process project."
+     ]
+    }
+   ],
+   "note": "year-outside-group"
+  },
+  {
+   "id": "C1-unrelated-work-employer",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won a team award.",
+    "Contoso",
+    "2017-2018",
+    "- Organised internal training.",
+    "2016",
+    "- Led a process project.",
+    "Education",
+    "2014",
+    "- A qualification."
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Fabrikam Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won a team award.",
+       "Contoso",
+       "2017-2018",
+       "Organised internal training.",
+       "2016",
+       "Led a process project."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won a team award.",
+      "Contoso",
+      "2017-2018",
+      "Organised internal training.",
+      "2016",
+      "Led a process project."
+     ]
+    }
+   ],
+   "note": "A source label must match a work-history employer; an unrelated known employer is insufficient."
+  },
+  {
+   "id": "C1-source-heading-also-marked-achievement",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won a team award.",
+    "-2020",
+    "Contoso",
+    "2017-2018",
+    "- Organised internal training.",
+    "2016",
+    "- Led a process project.",
+    "Education",
+    "2014",
+    "- A qualification."
+   ],
+   "parsed": {
+    "candidate": {},
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won a team award.",
+       "Contoso",
+       "2017-2018",
+       "Organised internal training.",
+       "2016",
+       "Led a process project."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won a team award.",
+      "Contoso",
+      "2017-2018",
+      "Organised internal training.",
+      "2016",
+      "Led a process project."
+     ],
+     "item_headings": [
+      "Northwind",
+      "Contoso",
+      "2017-2018",
+      "2016"
+     ]
+    }
+   ],
+   "note": "If the same label is also a marked source achievement and the provider kept only one copy, its identity is ambiguous; retain its bullet."
   }
  ]
 }

@@ -119,6 +119,36 @@ class SourceCheckGuardrails(unittest.TestCase):
 
 
 class SourceRestoreGuardrails(unittest.TestCase):
+    def test_contribution_headings(self):
+        for case in _cases("contribution_headings"):
+            with self.subTest(case=case["id"]):
+                result = normalize._normalize_cv_data_for_output(
+                    copy.deepcopy(case["parsed"]), "\n".join(case["lines"])
+                )
+                self.assertEqual(result["skills"], case["expect"], case["note"])
+
+    def test_contribution_layout_preserves_generated_items_and_is_idempotent(self):
+        for index in range(200):
+            year = str(1980 + index % 45)
+            company = "Northwind " + str(index)
+            items = [company, year, "2 Annual awards.", "Led a project."]
+            parsed = {"work_experiences": [{"company": company + " Bank"}],
+                      "skills": [{"category": "Contribution towards Projects / Taskforce", "items": items[:]}]}
+            source = "\n".join(["Contribution towards Projects / Taskforce", company, year,
+                                "-2 Annual awards.", "- Led a project.", "Education"])
+            result = normalize._restore_cv_contribution_headings(parsed, source)
+            self.assertEqual(result["skills"][0]["items"], items)
+            self.assertEqual(result["skills"][0]["item_headings"], [company, year])
+            self.assertEqual(normalize._restore_cv_contribution_headings(copy.deepcopy(result), source), result)
+
+    def test_contribution_optional_scan_is_bounded(self):
+        case = _cases("contribution_headings")[0]
+        for source in ["x" * 1000001, "line\n" * 12001]:
+            parsed = copy.deepcopy(case["parsed"])
+            started = time.perf_counter()
+            self.assertEqual(normalize._restore_cv_contribution_headings(parsed, source), case["parsed"])
+            self.assertLess(time.perf_counter() - started, 1)
+
     def test_company_restore(self):
         for case in _cases("company_restore"):
             with self.subTest(case=case["id"]):

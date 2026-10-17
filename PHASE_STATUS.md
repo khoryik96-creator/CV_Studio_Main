@@ -4,12 +4,26 @@
 
 ## Release state
 
-- Current verified merged baseline (2026-10-13): v24.6.438, `a40bf63` (#223).
-  Tested head `bf698dd` has the same tree `7575085`; all three hosted gates
+- Current verified merged baseline (2026-10-13): v24.6.441, `fcaedae` (#227).
+  Tested head `fc4ed7b` has the same tree `3e146d8`; all three hosted gates
   passed. Unfiltered Windows: 1,587 passed, four skipped, 7,121 subtests.
-  `codex/v24.6.438-main-review-corrections` is complete.
+  `codex/v24.6.439-batch-jobadder-link` is complete.
 
-- Current owner-authorized source work: v24.6.441,
+- Current owner-authorized source work (2026-10-17): v24.6.442,
+  `codex/v24.6.442-contribution-grouping`, from exact `fcaedae`.
+  Contribution company/year labels are source-confirmed headings rather than
+  achievement bullets, in preview and Word. Optional `item_headings` retains
+  existing category/items fields, item order and wording. Ordinary skills,
+  marked achievements, ambiguous input and source-free legacy data keep their
+  existing behavior. A contribution-only list has no redundant Skills wrapper.
+  Synthetic controls preserve all 924 existing source cases. No paid/live calls,
+  owner installation/receipt, route/schema or protected-build changes.
+  Final local gate: 1,588 passed, four skipped, three documented environment
+  exclusions; 7,136 subtests and all 29 frontend suites passed. Exact-master
+  replay covers 160 inputs with only the intended heading metadata changes.
+  Stop after local verification and the owned branch checkpoint; no PR/merge.
+
+- Completed owner-authorized source work: v24.6.441,
   `codex/v24.6.439-batch-jobadder-link`, from exact `a40bf63`.
   Batch rows show why uploading was skipped and retain a manual upload action.
   Reconnection refreshes those actions without an automatic write. Successful
@@ -21,8 +35,8 @@
   The PR-review corrective retains a manual retry only for a proven pre-write
   local file-read or read-only lookup failure. Ambiguous writes stay non-retryable.
   No owner installation/receipt, paid/live provider, route/schema or protected
-  build change. Owner authorized the PR and merge on 2026-10-13. Await all three
-  exact-head hosted gates before squash merge; final identities go in issue #35.
+  build change. Owner authorized the PR and merge on 2026-10-13. All three
+  exact-head hosted gates passed before squash merge; final identities are in issue #35.
 
 - Previous verified merged baseline (2026-10-02): v24.6.437, `f55a049` (#222).
   Tested head `92bb3f4` has the same tree `9d9703a`; all three hosted gates
