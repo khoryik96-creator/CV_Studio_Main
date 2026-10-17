@@ -12,6 +12,7 @@ call replaced. All names are synthetic.
 """
 
 import io
+import copy
 import json
 import os
 from pathlib import Path
@@ -94,6 +95,52 @@ def _provider_parse(**overrides):
 
 
 class SourceDetailRestoreTests(unittest.TestCase):
+    def test_contribution_rendering_handles_emphasis_category_and_line_breaks(self):
+        category = "Contribution towards Projects / Taskforce"
+        source = "\n".join([category, "Northwind", "2020", "- Won an award.", "Education"])
+        for label, cat, items in [
+            ("emphasis", category, ["**Northwind**", "**2020**", "Won an award."]),
+            ("ampersand", "Contribution towards Projects & Taskforce", ["Northwind", "2020", "Won an award."]),
+            ("carriage-return", category, "Northwind\r2020\rWon an award."),
+            ("unicode-separator", category, "Northwind\u20282020\u2028Won an award."),
+        ]:
+            with self.subTest(label=label):
+                parsed = {"candidate": {"name": "Test Candidate"},
+                          "work_experiences": [{"company": "Northwind Bank", "roles": []}],
+                          "skills": [{"category": cat, "items": items}]}
+                data = self._parse(parsed, source)["data"]
+                text = self._docx_text(data)
+                self.assertIn("Northwind", text)
+                self.assertIn("2020", text)
+                self.assertIn("Won an award.", text)
+                self.assertNotIn("**Northwind**", text)
+                self.assertNotIn("Skills:", text)
+
+    def test_blind_route_rebuilds_contribution_hints_from_blinded_items(self):
+        category = "Contribution towards Projects / Taskforce"
+        source = "\n".join([category, "Northwind", "2020", "- Won an award.", "Education"])
+        parsed = {"candidate": {"name": "Test Candidate"},
+                  "work_experiences": [{"company": "Northwind Bank", "roles": []}],
+                  "skills": [{"category": category, "items": ["Northwind", "2020", "Won an award."]}]}
+        data = self._parse(parsed, source)["data"]
+        reply = copy.deepcopy(data)
+        reply["candidate"] = {"name": "Candidate", "current_company": "Leading Bank"}
+        reply["work_experiences"][0]["company"] = "Leading Bank"
+        reply["skills"][0]["items"][0] = "Leading Bank"
+        # Deliberately keep the model's stale source name in its formatting hint.
+        with mock.patch.object(app, "_resolve_request_api_key", return_value="fixture-key"), \
+                mock.patch.object(app, "_ai_spend_session_allowed", return_value=True), \
+                mock.patch.object(app, "call_llm", return_value={
+                    "content": [{"text": json.dumps(reply)}], "usage": {}}):
+            response = self.client.post("/blind", json={"cv_data": data}, headers=HEADERS)
+        self.assertEqual(response.status_code, 200)
+        blinded = response.get_json()["data"]
+        self.assertNotIn("Northwind", json.dumps(blinded))
+        self.assertEqual(blinded["skills"][0]["item_headings"], ["Leading Bank", "2020"])
+        text = self._docx_text(blinded)
+        self.assertIn("Leading Bank", text)
+        self.assertNotIn("Northwind", "\n".join(text))
+
     def test_duplicate_contribution_labels_across_entries_keep_word_bullets(self):
         category = "Contribution towards Projects / Taskforce"
         source = "\n".join([category, "Northwind", "2020", "- Won an award.",

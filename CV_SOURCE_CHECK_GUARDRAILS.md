@@ -79,6 +79,23 @@ Preview and Word render those labels in bold without bullets, with the same
 achievement bullets beneath them. A contribution-only section needs no Skills
 wrapper. No missing prose is invented or recovered by this rule.
 
+Unknown unmarked labels immediately before a year end the previous employer's
+ownership. A wrapped duty can continue only when the joined marked source text
+matches an existing complete item; uncertain continuation stays unannotated.
+The contribution scan also stops at the recoverable project/training sections
+and unmarked Awards & Recognition headings. Marked achievements keep their
+meaning. Additional-item line separators are normalized consistently for
+preview and Word; heading emphasis markers are rendered as formatting.
+
+### C2
+**Blind headings contain only blinded visible text.** Discard provider-supplied
+`item_headings`, which can echo real source labels. Rebuild this layout hint
+only for corresponding contribution groups with matching category, item count,
+unchanged years and unchanged non-heading anchors. Take every rebuilt value
+from the provider's visible items, never from source text. Changed order,
+missing/rewritten items or ambiguous structure receives no heading metadata.
+The provider's content and representation remain intact.
+
 ## Work-row reader
 
 ### R1

@@ -896,7 +896,7 @@ def _strip_cv_additional_bullet_markers(items, always_bulleted=False):
     item remains ordinary prose and therefore keeps any visible source marker.
     """
     structured = isinstance(items, list)
-    values = items if structured else re.split(r"(?:\r?\n)+", str(items or ""))
+    values = items if structured else str(items or "").splitlines()
     nonempty = [value for value in values if str(value or "").strip()]
     if not always_bulleted and len(nonempty) <= 1:
         return items
@@ -1049,9 +1049,27 @@ def _restore_cv_contribution_headings(parsed, source_text):
     employers = [_cv_source_item_key(exp.get("company"))
                  for exp in parsed.get("work_experiences") or []
                  if isinstance(exp, dict) and exp.get("company")]
+    item_groups = []
+    counts = {}
+    for skill in skills:
+        raw = skill.get("items") or []
+        values = raw if isinstance(raw, list) else str(raw).splitlines()
+        items = [str(value).strip() for value in values if str(value).strip()]
+        keys = [_cv_source_item_key(value) for value in items]
+        item_groups.append((skill, items, keys))
+        for key in keys:
+            counts[key] = counts.get(key, 0) + 1
+    additional_boundaries = set(_CV_RECOVERABLE_SOURCE_SECTIONS) | {"awards recognition"}
     section = []
     for line in lines[starts[0] + 1:]:
-        if _cv_source_boundary_key(line) in _CV_SOURCE_SECTION_BOUNDARY_KEYS:
+        boundary = _cv_source_boundary_key(line)
+        unmarked = _strip_leading_bullet_marker(line).strip() == line
+        letters = [char for char in line if char.isalpha()]
+        emphasized = (bool(letters) and all(char.isupper() for char in letters)) or line.endswith(":")
+        numbered = bool(re.match(r"^(?:\(\d{1,3}\)|\d{1,3}[.)])\s*", line))
+        if (boundary in _CV_SOURCE_SECTION_BOUNDARY_KEYS
+                or (boundary in additional_boundaries
+                    and (unmarked or emphasized or numbered))):
             break
         if line != "## RESTRICTED ##":
             section.append(line)
@@ -1064,9 +1082,12 @@ def _restore_cv_contribution_headings(parsed, source_text):
 
     heading_keys = set()
     current_employer = False
+    bullet_parts, bullet_chars, continuation_checks = [], 0, 0
     for i, line in enumerate(section):
         # A marked name/year is an achievement, not a heading.
         if marked(line):
+            bullet_parts = [line] if len(line) <= 8192 else []
+            bullet_chars = len(line)
             continue
         key = _cv_source_item_key(line)
         employer = len(key) >= 4 and any(
@@ -1077,10 +1098,34 @@ def _restore_cv_contribution_headings(parsed, source_text):
                 and marked(section[i + 2])):
             heading_keys.add(key)
             current_employer = True
+            bullet_parts, bullet_chars = [], 0
+        elif i + 1 < len(section) and year_re.fullmatch(section[i + 1]):
+            # An unknown employer must not lend its year to the previous one.
+            # Preserve genuine wrapping only when a complete parsed item is an
+            # exact suffix of the joined marked source (including inline lists).
+            continued = False
+            if (current_employer and bullet_parts and key not in counts and len(counts) <= 4096
+                    and bullet_chars + len(line) <= 8192 and continuation_checks < 64):
+                continuation_checks += 1
+                joined = _cv_source_item_key(" ".join(bullet_parts + [line]))
+                continued = any(
+                    item_key.endswith(" " + key)
+                    and (joined == item_key or joined.endswith(" " + item_key))
+                    for item_key in counts
+                )
+            if not continued:
+                current_employer = False
         elif (current_employer and year_re.fullmatch(line)
               and i + 1 < len(section)
               and marked(section[i + 1])):
             heading_keys.add(key)
+            bullet_parts, bullet_chars = [], 0
+        if bullet_parts:
+            bullet_chars += len(line) + 1
+            if bullet_chars <= 8192:
+                bullet_parts.append(line)
+            else:
+                bullet_parts = []
     # A label repeated as an achievement cannot be identified safely when the
     # provider retained only one copy. Leave that ambiguous item bulleted.
     source_counts = {}
@@ -1091,16 +1136,6 @@ def _restore_cv_contribution_headings(parsed, source_text):
     heading_keys = {key for key in heading_keys if source_counts[key] == 1}
     # Providers may split one contribution list into several entries. A label
     # must be unique across that entire list, not merely inside each entry.
-    item_groups = []
-    counts = {}
-    for skill in skills:
-        raw = skill.get("items") or []
-        values = raw if isinstance(raw, list) else str(raw).splitlines()
-        items = [str(value).strip() for value in values if str(value).strip()]
-        keys = [_cv_source_item_key(value) for value in items]
-        item_groups.append((skill, items, keys))
-        for key in keys:
-            counts[key] = counts.get(key, 0) + 1
     for skill, items, keys in item_groups:
         headings = [value for value, key in zip(items, keys)
                     if key in heading_keys and counts[key] == 1]

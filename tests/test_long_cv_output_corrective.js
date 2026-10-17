@@ -437,6 +437,29 @@ const splitContributionPreview = [
 assert.strictEqual((splitContributionPreview.match(/class="preview-bullet">Northwind</g) || []).length, 2);
 assert.ok(splitContributionPreview.includes('<strong>2020</strong>'));
 assert.ok(splitContributionPreview.includes('<strong>2019</strong>'));
+const emphasizedHeading = context.cvSkillPreviewHtml({
+  items: ['**Northwind**', '**2020**', 'Won an award.'], item_headings: ['**Northwind**', '**2020**'],
+});
+assert.ok(emphasizedHeading.includes('<strong>Northwind</strong>'));
+assert.ok(!emphasizedHeading.includes('**Northwind**'));
+for (const separator of ['\r', '\r\n', '\u2028', '\u0085', '\v', '\f']) {
+  const preview = context.cvSkillPreviewHtml({
+    items: ['Northwind', '2020', 'Won an award.'].join(separator), item_headings: ['Northwind', '2020'],
+  });
+  assert.ok(preview.includes('<strong>Northwind</strong>'));
+  assert.strictEqual((preview.match(/class="preview-bullet"/g) || []).length, 1);
+}
+let contributionOutput = '';
+Object.assign(context, {toTitleCase: value => String(value || ''), cvSmartText: value => String(value || ''),
+  cvNormalizeLanguages: value => String(value || ''), setOutput: value => { contributionOutput = value; }});
+vm.runInContext(fn('renderPreview'), context);
+for (const category of ['Contribution towards Projects / Taskforce', 'Contribution towards Projects & Taskforce']) {
+  context.renderPreview({certifications: ['A certification'], skills: [{category,
+    items: ['Northwind', '2020', 'Won an award.'], item_headings: ['Northwind', '2020']}]});
+  assert.ok(contributionOutput.includes('<div class="preview-section">ADDITIONAL INFORMATION</div>'));
+  assert.ok(!contributionOutput.includes('<div class="preview-section">SKILLS</div>'));
+  assert.ok(contributionOutput.indexOf('ADDITIONAL INFORMATION') > contributionOutput.indexOf('CERTIFICATIONS'));
+}
 
 context.updateCvScoringLockUI();
 assert.strictEqual(tab.innerHTML, 'Locked');

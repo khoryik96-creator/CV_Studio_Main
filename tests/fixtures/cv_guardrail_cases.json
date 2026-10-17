@@ -14561,6 +14561,1573 @@
     }
    ],
    "note": "cross entry marker normalization"
+  },
+  {
+   "id": "C1-unknown-owner-year",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won an award.",
+    "Unmatched Bank",
+    "2019",
+    "- Led a project.",
+    "Education"
+   ],
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won an award.",
+       "Unmatched Bank",
+       "2019",
+       "Led a project."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won an award.",
+      "Unmatched Bank",
+      "2019",
+      "Led a project."
+     ],
+     "item_headings": [
+      "Northwind",
+      "2020"
+     ]
+    }
+   ],
+   "note": "unknown owner year"
+  },
+  {
+   "id": "C1-omitted-unknown-owner-year",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won an award.",
+    "Unmatched Bank",
+    "2019",
+    "- Led a project.",
+    "Education"
+   ],
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won an award.",
+       "2019",
+       "Led a project."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won an award.",
+      "2019",
+      "Led a project."
+     ],
+     "item_headings": [
+      "Northwind",
+      "2020"
+     ]
+    }
+   ],
+   "note": "omitted unknown owner year"
+  },
+  {
+   "id": "C1-lowercase-unknown-owner-year",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won an award.",
+    "unmatched bank",
+    "2019",
+    "- Led a project.",
+    "Education"
+   ],
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won an award.",
+       "unmatched bank",
+       "2019",
+       "Led a project."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won an award.",
+      "unmatched bank",
+      "2019",
+      "Led a project."
+     ],
+     "item_headings": [
+      "Northwind",
+      "2020"
+     ]
+    }
+   ],
+   "note": "lowercase unknown owner year"
+  },
+  {
+   "id": "C1-known-owner-after-unknown",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won an award.",
+    "Unmatched Bank",
+    "2019",
+    "- Led a project.",
+    "Contoso",
+    "2018",
+    "- Reviewed controls.",
+    "Education"
+   ],
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won an award.",
+       "Unmatched Bank",
+       "2019",
+       "Led a project.",
+       "Contoso",
+       "2018",
+       "Reviewed controls."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won an award.",
+      "Unmatched Bank",
+      "2019",
+      "Led a project.",
+      "Contoso",
+      "2018",
+      "Reviewed controls."
+     ],
+     "item_headings": [
+      "Northwind",
+      "2020",
+      "Contoso",
+      "2018"
+     ]
+    }
+   ],
+   "note": "known owner after unknown"
+  },
+  {
+   "id": "C1-verified-wrapped-duty-before-year",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Delivered controls",
+    "across the region",
+    "2019",
+    "- Led a project.",
+    "Education"
+   ],
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Delivered controls across the region",
+       "2019",
+       "Led a project."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Delivered controls across the region",
+      "2019",
+      "Led a project."
+     ],
+     "item_headings": [
+      "Northwind",
+      "2020",
+      "2019"
+     ]
+    }
+   ],
+   "note": "verified wrapped duty before year"
+  },
+  {
+   "id": "C1-verified-inline-split-duty-before-year",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won an award. -Delivered controls",
+    "across the region",
+    "2019",
+    "- Led a project.",
+    "Education"
+   ],
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won an award.",
+       "Delivered controls across the region",
+       "2019",
+       "Led a project."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won an award.",
+      "Delivered controls across the region",
+      "2019",
+      "Led a project."
+     ],
+     "item_headings": [
+      "Northwind",
+      "2020",
+      "2019"
+     ]
+    }
+   ],
+   "note": "verified inline split duty before year"
+  },
+  {
+   "id": "C1-unverified-wrap-before-year",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Delivered controls",
+    "Ambiguous Label",
+    "2019",
+    "- Led a project.",
+    "Education"
+   ],
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Rewritten duty.",
+       "2019",
+       "Led a project."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Rewritten duty.",
+      "2019",
+      "Led a project."
+     ],
+     "item_headings": [
+      "Northwind",
+      "2020"
+     ]
+    }
+   ],
+   "note": "unverified wrap before year"
+  },
+  {
+   "id": "C1-stop-bracketed-training",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won an award.",
+    "[Participated Training Programme]",
+    "2019",
+    "- Led a project."
+   ],
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won an award.",
+       "2019",
+       "Led a project."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won an award.",
+      "2019",
+      "Led a project."
+     ],
+     "item_headings": [
+      "Northwind",
+      "2020"
+     ]
+    },
+    {
+     "category": "Participated Training Programme",
+     "items": [
+      "2019",
+      "Led a project."
+     ]
+    }
+   ],
+   "note": "stop bracketed training"
+  },
+  {
+   "id": "C1-stop-awards-recognition",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won an award.",
+    "Awards & Recognition",
+    "2019",
+    "- Led a project."
+   ],
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won an award.",
+       "2019",
+       "Led a project."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won an award.",
+      "2019",
+      "Led a project."
+     ],
+     "item_headings": [
+      "Northwind",
+      "2020"
+     ]
+    }
+   ],
+   "note": "stop awards recognition"
+  },
+  {
+   "id": "C1-stop-awards-and-recognition",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won an award.",
+    "Awards AND Recognition",
+    "2019",
+    "- Led a project."
+   ],
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won an award.",
+       "2019",
+       "Led a project."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won an award.",
+      "2019",
+      "Led a project."
+     ],
+     "item_headings": [
+      "Northwind",
+      "2020"
+     ]
+    }
+   ],
+   "note": "stop awards and recognition"
+  },
+  {
+   "id": "C1-later-training-duplicate-label",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won an award.",
+    "[Participated Training Programme]",
+    "Northwind",
+    "2019",
+    "- Attended training."
+   ],
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won an award."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won an award."
+     ],
+     "item_headings": [
+      "Northwind",
+      "2020"
+     ]
+    },
+    {
+     "category": "Participated Training Programme",
+     "items": [
+      "Northwind",
+      "2019",
+      "Attended training."
+     ]
+    }
+   ],
+   "note": "later training duplicate label"
+  },
+  {
+   "id": "C1-marked-awards-label-is-achievement",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won an award.",
+    "- Awards & Recognition",
+    "2019",
+    "- Led a project.",
+    "Education"
+   ],
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won an award.",
+       "Awards & Recognition",
+       "2019",
+       "Led a project."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won an award.",
+      "Awards & Recognition",
+      "2019",
+      "Led a project."
+     ],
+     "item_headings": [
+      "Northwind",
+      "2020",
+      "2019"
+     ]
+    }
+   ],
+   "note": "marked awards label is achievement"
+  },
+  {
+   "id": "C1-items-carriage-return",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won an award.",
+    "Education"
+   ],
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": "Northwind\r2020\rWon an award."
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": "Northwind\n2020\nWon an award.",
+     "item_headings": [
+      "Northwind",
+      "2020"
+     ]
+    }
+   ],
+   "note": "items carriage return"
+  },
+  {
+   "id": "C1-items-unicode-line-separator",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won an award.",
+    "Education"
+   ],
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": "Northwind\u20282020\u2028Won an award."
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": "Northwind\n2020\nWon an award.",
+     "item_headings": [
+      "Northwind",
+      "2020"
+     ]
+    }
+   ],
+   "note": "items unicode line separator"
+  },
+  {
+   "id": "C1-markdown-heading-labels",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won an award.",
+    "Education"
+   ],
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "**Northwind**",
+       "**2020**",
+       "Won an award."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "**Northwind**",
+      "**2020**",
+      "Won an award."
+     ],
+     "item_headings": [
+      "**Northwind**",
+      "**2020**"
+     ]
+    }
+   ],
+   "note": "markdown heading labels"
+  },
+  {
+   "id": "C1-ampersand-category",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won an award.",
+    "Education"
+   ],
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects & Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won an award."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects & Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won an award."
+     ],
+     "item_headings": [
+      "Northwind",
+      "2020"
+     ]
+    }
+   ],
+   "note": "ampersand category"
+  },
+  {
+   "id": "C2-stale-source-name",
+   "rule": "C2",
+   "kind": "blind_contribution_headings",
+   "original": {
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won an award."
+      ],
+      "item_headings": [
+       "Northwind",
+       "2020"
+      ]
+     }
+    ]
+   },
+   "reply": {
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Leading Bank",
+       "2020",
+       "Won an award."
+      ],
+      "item_headings": [
+       "Northwind",
+       "2020"
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Leading Bank",
+       "2020",
+       "Won an award."
+      ],
+      "item_headings": [
+       "Leading Bank",
+       "2020"
+      ]
+     }
+    ]
+   },
+   "note": "stale source name"
+  },
+  {
+   "id": "C2-provider-drops-hints",
+   "rule": "C2",
+   "kind": "blind_contribution_headings",
+   "original": {
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won an award."
+      ],
+      "item_headings": [
+       "Northwind",
+       "2020"
+      ]
+     }
+    ]
+   },
+   "reply": {
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Leading Bank",
+       "2020",
+       "Won an award."
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Leading Bank",
+       "2020",
+       "Won an award."
+      ],
+      "item_headings": [
+       "Leading Bank",
+       "2020"
+      ]
+     }
+    ]
+   },
+   "note": "provider drops hints"
+  },
+  {
+   "id": "C2-count-mismatch",
+   "rule": "C2",
+   "kind": "blind_contribution_headings",
+   "original": {
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won an award."
+      ],
+      "item_headings": [
+       "Northwind",
+       "2020"
+      ]
+     }
+    ]
+   },
+   "reply": {
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Leading Bank",
+       "Won an award."
+      ],
+      "item_headings": [
+       "Northwind",
+       "2020"
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Leading Bank",
+       "Won an award."
+      ]
+     }
+    ]
+   },
+   "note": "count mismatch"
+  },
+  {
+   "id": "C2-reordered-items",
+   "rule": "C2",
+   "kind": "blind_contribution_headings",
+   "original": {
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won an award."
+      ],
+      "item_headings": [
+       "Northwind",
+       "2020"
+      ]
+     }
+    ]
+   },
+   "reply": {
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Won an award.",
+       "2020",
+       "Leading Bank"
+      ],
+      "item_headings": [
+       "Northwind",
+       "2020"
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Won an award.",
+       "2020",
+       "Leading Bank"
+      ]
+     }
+    ]
+   },
+   "note": "reordered items"
+  },
+  {
+   "id": "C2-changed-anchor",
+   "rule": "C2",
+   "kind": "blind_contribution_headings",
+   "original": {
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won an award."
+      ],
+      "item_headings": [
+       "Northwind",
+       "2020"
+      ]
+     }
+    ]
+   },
+   "reply": {
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Leading Bank",
+       "2020",
+       "Rewritten duty."
+      ],
+      "item_headings": [
+       "Northwind",
+       "2020"
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Leading Bank",
+       "2020",
+       "Rewritten duty."
+      ]
+     }
+    ]
+   },
+   "note": "changed anchor"
+  },
+  {
+   "id": "C2-changed-category",
+   "rule": "C2",
+   "kind": "blind_contribution_headings",
+   "original": {
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won an award."
+      ],
+      "item_headings": [
+       "Northwind",
+       "2020"
+      ]
+     }
+    ]
+   },
+   "reply": {
+    "skills": [
+     {
+      "category": "Tools",
+      "items": [
+       "Leading Bank",
+       "2020",
+       "Won an award."
+      ],
+      "item_headings": [
+       "Northwind",
+       "2020"
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "skills": [
+     {
+      "category": "Tools",
+      "items": [
+       "Leading Bank",
+       "2020",
+       "Won an award."
+      ]
+     }
+    ]
+   },
+   "note": "changed category"
+  },
+  {
+   "id": "C2-invented-metadata",
+   "rule": "C2",
+   "kind": "blind_contribution_headings",
+   "original": {
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won an award."
+      ]
+     }
+    ]
+   },
+   "reply": {
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Leading Bank",
+       "2020",
+       "Won an award."
+      ],
+      "item_headings": [
+       "Northwind",
+       "2020"
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Leading Bank",
+       "2020",
+       "Won an award."
+      ]
+     }
+    ]
+   },
+   "note": "invented metadata"
+  },
+  {
+   "id": "C2-newline-items",
+   "rule": "C2",
+   "kind": "blind_contribution_headings",
+   "original": {
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won an award."
+      ],
+      "item_headings": [
+       "Northwind",
+       "2020"
+      ]
+     }
+    ]
+   },
+   "reply": {
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": "Leading Bank\r2020\rWon an award.",
+      "item_headings": [
+       "Northwind",
+       "2020"
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": "Leading Bank\r2020\rWon an award.",
+      "item_headings": [
+       "Leading Bank",
+       "2020"
+      ]
+     }
+    ]
+   },
+   "note": "newline items"
+  },
+  {
+   "id": "C2-missing-group",
+   "rule": "C2",
+   "kind": "blind_contribution_headings",
+   "original": {
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won an award."
+      ],
+      "item_headings": [
+       "Northwind",
+       "2020"
+      ]
+     },
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won an award."
+      ],
+      "item_headings": [
+       "Northwind",
+       "2020"
+      ]
+     }
+    ]
+   },
+   "reply": {
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Leading Bank",
+       "2020",
+       "Won an award."
+      ],
+      "item_headings": [
+       "Northwind",
+       "2020"
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Leading Bank",
+       "2020",
+       "Won an award."
+      ]
+     }
+    ]
+   },
+   "note": "missing group"
+  },
+  {
+   "id": "C1-emphasized-marked-section",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won an award.",
+    "- AWARDS & RECOGNITION:",
+    "2019",
+    "- Led a project."
+   ],
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won an award.",
+       "2019",
+       "Led a project."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won an award.",
+      "2019",
+      "Led a project."
+     ],
+     "item_headings": [
+      "Northwind",
+      "2020"
+     ]
+    }
+   ],
+   "note": "emphasized-marked-section"
+  },
+  {
+   "id": "C1-numbered-section",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won an award.",
+    "1. Awards & Recognition",
+    "2019",
+    "- Led a project."
+   ],
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won an award.",
+       "2019",
+       "Led a project."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won an award.",
+      "2019",
+      "Led a project."
+     ],
+     "item_headings": [
+      "Northwind",
+      "2020"
+     ]
+    }
+   ],
+   "note": "numbered-section"
+  },
+  {
+   "id": "C2-blinded-label-collision",
+   "rule": "C2",
+   "kind": "blind_contribution_headings",
+   "original": {
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won an award.",
+       "Contoso",
+       "2019",
+       "Led a project."
+      ],
+      "item_headings": [
+       "Northwind",
+       "2020",
+       "Contoso",
+       "2019"
+      ]
+     }
+    ]
+   },
+   "reply": {
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Leading Bank",
+       "2020",
+       "Won an award.",
+       "Leading Bank",
+       "2019",
+       "Led a project."
+      ],
+      "item_headings": [
+       "Northwind",
+       "2020",
+       "Contoso",
+       "2019"
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Leading Bank",
+       "2020",
+       "Won an award.",
+       "Leading Bank",
+       "2019",
+       "Led a project."
+      ],
+      "item_headings": [
+       "2020",
+       "2019"
+      ]
+     }
+    ]
+   },
+   "note": "An anonymized label collision is ambiguous; only unique returned labels can remain heading hints."
+  },
+  {
+   "id": "C2-changed-year-anchor",
+   "rule": "C2",
+   "kind": "blind_contribution_headings",
+   "original": {
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won an award."
+      ],
+      "item_headings": [
+       "Northwind",
+       "2020"
+      ]
+     }
+    ]
+   },
+   "reply": {
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Leading Bank",
+       "2021",
+       "Won an award."
+      ],
+      "item_headings": [
+       "Northwind",
+       "2020"
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Leading Bank",
+       "2021",
+       "Won an award."
+      ]
+     }
+    ]
+   },
+   "note": "A changed year cannot establish item correspondence; discard stale layout hints."
   }
  ]
 }

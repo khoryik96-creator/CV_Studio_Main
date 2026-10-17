@@ -29,6 +29,7 @@ import cvstudio_cv_fidelity as fidelity
 import cvstudio_cv_normalize as normalize
 import cvstudio_cv_reconcile as reconcile
 import cvstudio_document_safety as document_safety
+import cvstudio_blind_mask as blind_mask
 
 CASES = json.loads((ROOT / "tests" / "fixtures" / "cv_guardrail_cases.json").read_text(encoding="utf-8"))["cases"]
 GUARDRAILS_DOC = (ROOT / "CV_SOURCE_CHECK_GUARDRAILS.md").read_text(encoding="utf-8")
@@ -119,6 +120,35 @@ class SourceCheckGuardrails(unittest.TestCase):
 
 
 class SourceRestoreGuardrails(unittest.TestCase):
+    def test_generated_blind_contribution_hints_stay_with_returned_text(self):
+        category = "Contribution towards Projects / Taskforce"
+        for index in range(100):
+            original = {"skills": [{"category": category,
+                "items": ["Northwind " + str(index), "2020", "Won an award."],
+                "item_headings": ["Northwind " + str(index), "2020"]}]}
+            reply = copy.deepcopy(original)
+            label = "Leading Bank " + str(index)
+            reply["skills"][0]["items"][0] = label
+            result = blind_mask._blind_restore_cv_bullet_structure(reply, original)
+            self.assertEqual(result["skills"][0]["item_headings"], [label, "2020"])
+            self.assertNotIn("Northwind", json.dumps(result))
+            self.assertEqual(reply["skills"][0]["item_headings"], original["skills"][0]["item_headings"])
+
+    def test_additional_item_separators_keep_same_words_and_shape(self):
+        for separator in ["\r", "\r\n", "\n", "\v", "\f", "\x1c", "\x1d", "\x1e", "\x85", "\u2028", "\u2029"]:
+            items = separator.join(["Northwind", "2020", "Won an award."])
+            self.assertEqual(normalize._strip_cv_additional_bullet_markers(items),
+                             "Northwind\n2020\nWon an award.")
+
+    def test_blind_contribution_headings_use_only_returned_text(self):
+        for case in _cases("blind_contribution_headings"):
+            with self.subTest(case=case["id"]):
+                original, reply = copy.deepcopy(case["original"]), copy.deepcopy(case["reply"])
+                result = blind_mask._blind_restore_cv_bullet_structure(reply, original)
+                self.assertEqual(result, case["expect"], case["note"])
+                self.assertEqual(original, case["original"])
+                self.assertEqual(reply, case["reply"])
+
     def test_contribution_headings(self):
         for case in _cases("contribution_headings"):
             with self.subTest(case=case["id"]):

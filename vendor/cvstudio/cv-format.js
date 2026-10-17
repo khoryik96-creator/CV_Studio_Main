@@ -610,7 +610,7 @@ function cvStripLeadingBulletMarker(value) {
 
 function cvStripAdditionalBulletMarkers(items, alwaysBulleted) {
   var structured = Array.isArray(items);
-  var values = structured ? items : String(items || '').split(/(?:\r?\n)+/);
+  var values = structured ? items : String(items || '').split(/[\n\r\v\f\x1c-\x1e\x85\u2028\u2029]+/);
   var nonempty = values.filter(function(value){ return String(value || '').trim(); });
   if (!alwaysBulleted && nonempty.length <= 1) return items;
   var cleaned = nonempty.map(function(value){
@@ -745,7 +745,7 @@ function cvNormalizeStructuredData(data) {
     var rawItems = value.items || '';
     var lines = Array.isArray(rawItems)
       ? rawItems.map(function(line){ return String(line || '').trim(); }).filter(Boolean)
-      : String(rawItems).split(/\r?\n/).map(function(line){ return line.trim(); }).filter(Boolean);
+      : String(rawItems).split(/[\n\r\v\f\x1c-\x1e\x85\u2028\u2029]+/).map(function(line){ return line.trim(); }).filter(Boolean);
     return lines.length > 0;
   }).map(function(value){
     value.items = cvStripAdditionalBulletMarkers(value.items || '', false);
@@ -760,7 +760,7 @@ function cvSkillPreviewHtml(skill) {
   var rawItems = skill.items || '';
   var lines = Array.isArray(rawItems)
     ? rawItems.map(function(value){ return String(value || '').trim(); }).filter(Boolean)
-    : String(rawItems).split(/\r?\n/).map(function(value){ return value.trim(); }).filter(Boolean);
+    : String(rawItems).split(/[\n\r\v\f\x1c-\x1e\x85\u2028\u2029]+/).map(function(value){ return value.trim(); }).filter(Boolean);
   if (lines.length > 1) {
     lines = lines.map(function(value){ return cvStripLeadingBulletMarker(value).trim(); }).filter(Boolean);
   }
@@ -775,7 +775,7 @@ function cvSkillPreviewHtml(skill) {
       var isHeading = Array.isArray(skill.item_headings) && skill.item_headings.indexOf(line) >= 0 &&
         lines.indexOf(line) === lines.lastIndexOf(line);
       listHtml += isHeading
-        ? '<div class="preview-skill-cat"><strong>' + esc(line) + '</strong></div>'
+        ? '<div class="preview-skill-cat"><strong>' + esc(line.replace(/\*\*([^*]+)\*\*/g, '$1')) + '</strong></div>'
         : '<div class="preview-bullet">' + esc(line) + '</div>';
     });
     return listHtml;
@@ -869,10 +869,10 @@ function renderPreview(d) {
   // Skills
   if ((d.skills || []).length > 0) {
     var contributionOnly = d.skills.every(function(s){
-      return /^contribution towards projects\s*\/\s*taskforce\s*:?$/i.test(String(s.category || '').trim()) &&
+      return String(s.category || '').toLowerCase().replace(/[^a-z]+/g, ' ').trim() === 'contribution towards projects taskforce' &&
         Array.isArray(s.item_headings) && s.item_headings.length > 0;
     });
-    if (!contributionOnly) html += '<div class="preview-section">SKILLS</div>';
+    html += '<div class="preview-section">' + (contributionOnly ? 'ADDITIONAL INFORMATION' : 'SKILLS') + '</div>';
     for (var s of d.skills) {
       html += cvSkillPreviewHtml(s);
     }

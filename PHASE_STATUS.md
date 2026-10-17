@@ -9,23 +9,28 @@
   passed. Unfiltered Windows: 1,587 passed, four skipped, 7,121 subtests.
   `codex/v24.6.439-batch-jobadder-link` is complete.
 
-- Current owner-authorized source work (2026-10-17): v24.6.443,
+- Current owner-authorized source work (2026-10-17): v24.6.444,
   `codex/v24.6.442-contribution-grouping`, from exact `fcaedae`.
   Contribution company/year labels are source-confirmed headings rather than
   achievement bullets, in preview and Word. Optional `item_headings` retains
   existing category/items fields, item order and wording. Ordinary skills,
-  marked achievements, ambiguous input and source-free legacy data keep their
-  existing behavior. A contribution-only list has no redundant Skills wrapper.
+  marked achievements and ambiguous input retain their safe fallback; trusted
+  source-free heading metadata remains usable. A contribution-only list has no
+  redundant Skills wrapper and retains its Additional Information preview title.
   The independent-review corrective checks label uniqueness across every
   matching contribution entry and removes stale annotations on source-backed
   re-checks. Unrelated skills are excluded; source-free export retains metadata.
-  Synthetic controls preserve all 924 existing source cases. No paid/live calls,
+  The external-review corrective stops unknown employers inheriting years,
+  respects later source sections and verified wrapped duties, rebuilds Blind CV
+  hints from returned visible text, and aligns emphasis/category/line-separator
+  rendering across preview and Word. All 947 previous source cases are preserved.
+  No paid/live calls,
   owner installation/receipt, route/schema or protected-build changes.
-  Final local gate: 1,591 passed, four skipped, three documented environment
-  exclusions; 7,144 subtests and all 29 frontend suites passed. Exact-master
-  and pre-correction replays cover 170 inputs with only heading-metadata deltas.
-  All 939 earlier cases are preserved; eight corrective cases are appended.
-  Evidence is recorded in the v24.6.443 QA report.
+  Final local gate: 1,596 passed, four skipped, three documented environment
+  exclusions; 7,177 subtests and all 29 frontend suites passed. Exact-master
+  and pre-correction replays cover 324 inputs with only intended layout deltas.
+  Twenty-nine corrective cases are appended (976 total). Evidence is in the
+  v24.6.444 QA report.
   Stop after local verification and the owned branch checkpoint; no PR/merge.
 
 - Completed owner-authorized source work: v24.6.441,
