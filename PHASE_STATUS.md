@@ -9,18 +9,23 @@
   passed. Unfiltered Windows: 1,587 passed, four skipped, 7,121 subtests.
   `codex/v24.6.439-batch-jobadder-link` is complete.
 
-- Current owner-authorized source work (2026-10-17): v24.6.442,
+- Current owner-authorized source work (2026-10-17): v24.6.443,
   `codex/v24.6.442-contribution-grouping`, from exact `fcaedae`.
   Contribution company/year labels are source-confirmed headings rather than
   achievement bullets, in preview and Word. Optional `item_headings` retains
   existing category/items fields, item order and wording. Ordinary skills,
   marked achievements, ambiguous input and source-free legacy data keep their
   existing behavior. A contribution-only list has no redundant Skills wrapper.
+  The independent-review corrective checks label uniqueness across every
+  matching contribution entry and removes stale annotations on source-backed
+  re-checks. Unrelated skills are excluded; source-free export retains metadata.
   Synthetic controls preserve all 924 existing source cases. No paid/live calls,
   owner installation/receipt, route/schema or protected-build changes.
-  Final local gate: 1,588 passed, four skipped, three documented environment
-  exclusions; 7,136 subtests and all 29 frontend suites passed. Exact-master
-  replay covers 160 inputs with only the intended heading metadata changes.
+  Final local gate: 1,591 passed, four skipped, three documented environment
+  exclusions; 7,144 subtests and all 29 frontend suites passed. Exact-master
+  and pre-correction replays cover 170 inputs with only heading-metadata deltas.
+  All 939 earlier cases are preserved; eight corrective cases are appended.
+  Evidence is recorded in the v24.6.443 QA report.
   Stop after local verification and the owned branch checkpoint; no PR/merge.
 
 - Completed owner-authorized source work: v24.6.441,

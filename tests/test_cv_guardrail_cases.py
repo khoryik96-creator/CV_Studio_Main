@@ -149,6 +149,37 @@ class SourceRestoreGuardrails(unittest.TestCase):
             self.assertEqual(normalize._restore_cv_contribution_headings(parsed, source), case["parsed"])
             self.assertLess(time.perf_counter() - started, 1)
 
+    def test_contribution_duplicates_across_generated_entries(self):
+        category = "Contribution towards Projects / Taskforce"
+        for index in range(100):
+            company = "Northwind " + str(index)
+            years = [str(1980 + index % 40), str(1981 + index % 40)]
+            skills = [
+                {"category": category, "items": [company, years[0], "Won an award."],
+                 "item_headings": [company, years[0]]},
+                {"category": category, "items": [company.upper(), years[1], "Led a project."],
+                 "item_headings": [company.upper(), years[1]]},
+            ]
+            parsed = {"work_experiences": [{"company": company + " Bank"}], "skills": skills}
+            source = "\n".join([category, company, years[0], "- Won an award.",
+                                years[1], "- Led a project.", "Education"])
+            original_items = [s["items"][:] for s in skills]
+            result = normalize._restore_cv_contribution_headings(parsed, source)
+            self.assertEqual([s["items"] for s in result["skills"]], original_items)
+            self.assertEqual([s["item_headings"] for s in result["skills"]], [[y] for y in years])
+            self.assertEqual(normalize._restore_cv_contribution_headings(copy.deepcopy(result), source), result)
+
+    def test_contribution_many_duplicate_entries_are_bounded(self):
+        category = "Contribution towards Projects / Taskforce"
+        parsed = {"work_experiences": [{"company": "Northwind Bank"}],
+                  "skills": [{"category": category, "items": ["Northwind", "2020", "Won an award."]}
+                             for _ in range(4000)]}
+        started = time.perf_counter()
+        result = normalize._restore_cv_contribution_headings(
+            parsed, "\n".join([category, "Northwind", "2020", "- Won an award.", "Education"]))
+        self.assertTrue(all("item_headings" not in s for s in result["skills"]))
+        self.assertLess(time.perf_counter() - started, 2)
+
     def test_company_restore(self):
         for case in _cases("company_restore"):
             with self.subTest(case=case["id"]):

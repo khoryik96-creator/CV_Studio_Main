@@ -68,8 +68,12 @@ employer label followed by a plain year and a marked achievement establishes
 the group. The employer must match a work-history employer (a shorter prefix
 such as `Northwind` for `Northwind Bank` is allowed). Later plain years followed
 by marked achievements belong to that employer. Only unique source labels
-matching unique existing items receive optional `item_headings` metadata; item text/order and legacy
-items shape stay intact. Marked employer/year achievements, ordinary skills,
+matching unique existing items receive optional `item_headings` metadata. Item
+uniqueness is checked across all matching contribution entries, using the same
+normalized label keys; unrelated skills groups are excluded. With a valid source,
+re-checks remove stale annotations for labels that become ambiguous. Source-free
+export retains already-confirmed metadata. Item text/order and legacy items
+shape stay intact. Marked employer/year achievements, ordinary skills,
 ambiguous duplicate sections/items and source-free data remain unchanged.
 Preview and Word render those labels in bold without bullets, with the same
 achievement bullets beneath them. A contribution-only section needs no Skills

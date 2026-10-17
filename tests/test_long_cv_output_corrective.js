@@ -430,6 +430,13 @@ const duplicateContribution = context.cvSkillPreviewHtml({
 assert.strictEqual((duplicateContribution.match(/class="preview-bullet"/g) || []).length, 3);
 const plainYears = context.cvSkillPreviewHtml({items: ['2020', '2019']});
 assert.strictEqual((plainYears.match(/class="preview-bullet"/g) || []).length, 2);
+const splitContributionPreview = [
+  {items: ['Northwind', '2020', 'Won an award.'], item_headings: ['2020']},
+  {items: ['Northwind', '2019', 'Led a project.'], item_headings: ['2019']},
+].map(skill => context.cvSkillPreviewHtml(skill)).join('');
+assert.strictEqual((splitContributionPreview.match(/class="preview-bullet">Northwind</g) || []).length, 2);
+assert.ok(splitContributionPreview.includes('<strong>2020</strong>'));
+assert.ok(splitContributionPreview.includes('<strong>2019</strong>'));
 
 context.updateCvScoringLockUI();
 assert.strictEqual(tab.innerHTML, 'Locked');

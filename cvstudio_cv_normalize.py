@@ -1089,18 +1089,27 @@ def _restore_cv_contribution_headings(parsed, source_text):
         if key in heading_keys:
             source_counts[key] = source_counts.get(key, 0) + 1
     heading_keys = {key for key in heading_keys if source_counts[key] == 1}
+    # Providers may split one contribution list into several entries. A label
+    # must be unique across that entire list, not merely inside each entry.
+    item_groups = []
+    counts = {}
     for skill in skills:
         raw = skill.get("items") or []
         values = raw if isinstance(raw, list) else str(raw).splitlines()
         items = [str(value).strip() for value in values if str(value).strip()]
         keys = [_cv_source_item_key(value) for value in items]
-        counts = {}
+        item_groups.append((skill, items, keys))
         for key in keys:
             counts[key] = counts.get(key, 0) + 1
+    for skill, items, keys in item_groups:
         headings = [value for value, key in zip(items, keys)
                     if key in heading_keys and counts[key] == 1]
         if headings:
             skill["item_headings"] = headings
+        else:
+            # Re-checks must also undo an earlier annotation that became
+            # ambiguous. Source-free export returns before this repair.
+            skill.pop("item_headings", None)
     return parsed
 
 

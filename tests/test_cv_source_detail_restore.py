@@ -94,6 +94,36 @@ def _provider_parse(**overrides):
 
 
 class SourceDetailRestoreTests(unittest.TestCase):
+    def test_duplicate_contribution_labels_across_entries_keep_word_bullets(self):
+        category = "Contribution towards Projects / Taskforce"
+        source = "\n".join([category, "Northwind", "2020", "- Won an award.",
+                            "2019", "- Led a project.", "Education"])
+        parsed = {
+            "candidate": {"name": "Test Candidate"},
+            "work_experiences": [{"company": "Northwind Bank", "roles": [
+                {"title": "Analyst", "bullets": ["Reviewed controls."]}]}],
+            "skills": [
+                {"category": category, "items": ["Northwind", "2020", "Won an award."]},
+                {"category": category, "items": ["Northwind", "2019", "Led a project."]},
+            ],
+        }
+        data = self._parse(parsed, source)["data"]
+        self.assertEqual([s["item_headings"] for s in data["skills"]], [["2020"], ["2019"]])
+        response = self.client.post("/generate-docx", json={"data": data}, headers=HEADERS)
+        self.assertEqual(response.status_code, 200)
+        with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
+            root = ET.fromstring(archive.read("word/document.xml"))
+        paragraphs = [("".join(t.text or "" for t in p.iter(W + "t")), p)
+                      for p in root.iter(W + "p")]
+        labels = [p for text, p in paragraphs if text == "Northwind"]
+        self.assertEqual(len(labels), 2)
+        for p in labels:
+            self.assertIsNotNone(p.find("./" + W + "pPr/" + W + "numPr"))
+        for year in ["2020", "2019"]:
+            p = next(p for text, p in paragraphs if text == year)
+            self.assertIsNone(p.find("./" + W + "pPr/" + W + "numPr"))
+            self.assertIsNotNone(p.find("./" + W + "r/" + W + "rPr/" + W + "b"))
+
     def test_contribution_company_and_year_labels_reach_word_as_headings(self):
         source = "\n".join([
             "Contribution towards Projects / Taskforce", "Northwind", "2020",
