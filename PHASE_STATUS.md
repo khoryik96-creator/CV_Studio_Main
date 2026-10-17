@@ -9,7 +9,7 @@
   passed. Unfiltered Windows: 1,587 passed, four skipped, 7,121 subtests.
   `codex/v24.6.439-batch-jobadder-link` is complete.
 
-- Current owner-authorized source work (2026-10-17): v24.6.444,
+- Current owner-authorized source work (2026-10-17): v24.6.445,
   `codex/v24.6.442-contribution-grouping`, from exact `fcaedae`.
   Contribution company/year labels are source-confirmed headings rather than
   achievement bullets, in preview and Word. Optional `item_headings` retains
@@ -23,15 +23,18 @@
   The external-review corrective stops unknown employers inheriting years,
   respects later source sections and verified wrapped duties, rebuilds Blind CV
   hints from returned visible text, and aligns emphasis/category/line-separator
-  rendering across preview and Word. All 947 previous source cases are preserved.
+  rendering across preview and Word. The PR-review corrective preserves ordinary
+  marked achievements whose text equals a generic section name; real unmarked,
+  numbered or strongly emphasized section boundaries still stop the scan.
+  All 976 previous source cases are preserved; nine appended (985 total).
   No paid/live calls,
   owner installation/receipt, route/schema or protected-build changes.
-  Final local gate: 1,596 passed, four skipped, three documented environment
-  exclusions; 7,177 subtests and all 29 frontend suites passed. Exact-master
-  and pre-correction replays cover 324 inputs with only intended layout deltas.
-  Twenty-nine corrective cases are appended (976 total). Evidence is in the
-  v24.6.444 QA report.
-  Stop after local verification and the owned branch checkpoint; no PR/merge.
+  Final local gate: 1,597 passed, four skipped, three documented environment
+  exclusions; 7,599 subtests and all 29 frontend suites passed. Exact-master
+  and pre-correction replays cover 333 inputs with only intended layout deltas.
+  Evidence is in the v24.6.445 QA report, supplementing the v442–v444 reports.
+  Owner authorized PR/merge on 2026-10-17. PR #228 awaits fresh exact-head
+  hosted checks; final merge/check identities will be recorded in issue #35.
 
 - Completed owner-authorized source work: v24.6.441,
   `codex/v24.6.439-batch-jobadder-link`, from exact `a40bf63`.

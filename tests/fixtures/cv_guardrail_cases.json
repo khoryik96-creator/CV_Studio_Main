@@ -16128,6 +16128,627 @@
     ]
    },
    "note": "A changed year cannot establish item correspondence; discard stale layout hints."
+  },
+  {
+   "id": "C1-generic-boundary-awards-dash",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won an award.",
+    "- Awards",
+    "2019",
+    "- Led a project.",
+    "Contoso",
+    "2018",
+    "- Delivered improvements.",
+    "References"
+   ],
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won an award.",
+       "Awards",
+       "2019",
+       "Led a project.",
+       "Contoso",
+       "2018",
+       "Delivered improvements."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won an award.",
+      "Awards",
+      "2019",
+      "Led a project.",
+      "Contoso",
+      "2018",
+      "Delivered improvements."
+     ],
+     "item_headings": [
+      "Northwind",
+      "2020",
+      "2019",
+      "Contoso",
+      "2018"
+     ]
+    }
+   ],
+   "note": "An ordinary marked achievement keeps later groups; an unmarked section ends them."
+  },
+  {
+   "id": "C1-generic-boundary-awards-bullet",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won an award.",
+    "\u2022 Awards",
+    "2019",
+    "- Led a project.",
+    "Contoso",
+    "2018",
+    "- Delivered improvements.",
+    "References"
+   ],
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won an award.",
+       "Awards",
+       "2019",
+       "Led a project.",
+       "Contoso",
+       "2018",
+       "Delivered improvements."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won an award.",
+      "Awards",
+      "2019",
+      "Led a project.",
+      "Contoso",
+      "2018",
+      "Delivered improvements."
+     ],
+     "item_headings": [
+      "Northwind",
+      "2020",
+      "2019",
+      "Contoso",
+      "2018"
+     ]
+    }
+   ],
+   "note": "An ordinary marked achievement keeps later groups; an unmarked section ends them."
+  },
+  {
+   "id": "C1-generic-boundary-awards-unmarked",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won an award.",
+    "Awards",
+    "2019",
+    "- Led a project.",
+    "Contoso",
+    "2018",
+    "- Delivered improvements.",
+    "References"
+   ],
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won an award.",
+       "Awards",
+       "2019",
+       "Led a project.",
+       "Contoso",
+       "2018",
+       "Delivered improvements."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won an award.",
+      "Awards",
+      "2019",
+      "Led a project.",
+      "Contoso",
+      "2018",
+      "Delivered improvements."
+     ],
+     "item_headings": [
+      "Northwind",
+      "2020"
+     ]
+    }
+   ],
+   "note": "An ordinary marked achievement keeps later groups; an unmarked section ends them."
+  },
+  {
+   "id": "C1-generic-boundary-training-dash",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won an award.",
+    "- Training",
+    "2019",
+    "- Led a project.",
+    "Contoso",
+    "2018",
+    "- Delivered improvements.",
+    "References"
+   ],
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won an award.",
+       "Training",
+       "2019",
+       "Led a project.",
+       "Contoso",
+       "2018",
+       "Delivered improvements."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won an award.",
+      "Training",
+      "2019",
+      "Led a project.",
+      "Contoso",
+      "2018",
+      "Delivered improvements."
+     ],
+     "item_headings": [
+      "Northwind",
+      "2020",
+      "2019",
+      "Contoso",
+      "2018"
+     ]
+    }
+   ],
+   "note": "An ordinary marked achievement keeps later groups; an unmarked section ends them."
+  },
+  {
+   "id": "C1-generic-boundary-training-bullet",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won an award.",
+    "\u2022 Training",
+    "2019",
+    "- Led a project.",
+    "Contoso",
+    "2018",
+    "- Delivered improvements.",
+    "References"
+   ],
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won an award.",
+       "Training",
+       "2019",
+       "Led a project.",
+       "Contoso",
+       "2018",
+       "Delivered improvements."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won an award.",
+      "Training",
+      "2019",
+      "Led a project.",
+      "Contoso",
+      "2018",
+      "Delivered improvements."
+     ],
+     "item_headings": [
+      "Northwind",
+      "2020",
+      "2019",
+      "Contoso",
+      "2018"
+     ]
+    }
+   ],
+   "note": "An ordinary marked achievement keeps later groups; an unmarked section ends them."
+  },
+  {
+   "id": "C1-generic-boundary-training-unmarked",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won an award.",
+    "Training",
+    "2019",
+    "- Led a project.",
+    "Contoso",
+    "2018",
+    "- Delivered improvements.",
+    "References"
+   ],
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won an award.",
+       "Training",
+       "2019",
+       "Led a project.",
+       "Contoso",
+       "2018",
+       "Delivered improvements."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won an award.",
+      "Training",
+      "2019",
+      "Led a project.",
+      "Contoso",
+      "2018",
+      "Delivered improvements."
+     ],
+     "item_headings": [
+      "Northwind",
+      "2020"
+     ]
+    }
+   ],
+   "note": "An ordinary marked achievement keeps later groups; an unmarked section ends them."
+  },
+  {
+   "id": "C1-generic-boundary-education-dash",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won an award.",
+    "- Education",
+    "2019",
+    "- Led a project.",
+    "Contoso",
+    "2018",
+    "- Delivered improvements.",
+    "References"
+   ],
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won an award.",
+       "Education",
+       "2019",
+       "Led a project.",
+       "Contoso",
+       "2018",
+       "Delivered improvements."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won an award.",
+      "Education",
+      "2019",
+      "Led a project.",
+      "Contoso",
+      "2018",
+      "Delivered improvements."
+     ],
+     "item_headings": [
+      "Northwind",
+      "2020",
+      "2019",
+      "Contoso",
+      "2018"
+     ]
+    }
+   ],
+   "note": "An ordinary marked achievement keeps later groups; an unmarked section ends them."
+  },
+  {
+   "id": "C1-generic-boundary-education-bullet",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won an award.",
+    "\u2022 Education",
+    "2019",
+    "- Led a project.",
+    "Contoso",
+    "2018",
+    "- Delivered improvements.",
+    "References"
+   ],
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won an award.",
+       "Education",
+       "2019",
+       "Led a project.",
+       "Contoso",
+       "2018",
+       "Delivered improvements."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won an award.",
+      "Education",
+      "2019",
+      "Led a project.",
+      "Contoso",
+      "2018",
+      "Delivered improvements."
+     ],
+     "item_headings": [
+      "Northwind",
+      "2020",
+      "2019",
+      "Contoso",
+      "2018"
+     ]
+    }
+   ],
+   "note": "An ordinary marked achievement keeps later groups; an unmarked section ends them."
+  },
+  {
+   "id": "C1-generic-boundary-education-unmarked",
+   "rule": "C1",
+   "kind": "contribution_headings",
+   "lines": [
+    "Contribution towards Projects / Taskforce",
+    "Northwind",
+    "2020",
+    "- Won an award.",
+    "Education",
+    "2019",
+    "- Led a project.",
+    "Contoso",
+    "2018",
+    "- Delivered improvements.",
+    "References"
+   ],
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Bank",
+      "roles": []
+     },
+     {
+      "company": "Contoso Bank",
+      "roles": []
+     }
+    ],
+    "skills": [
+     {
+      "category": "Contribution towards Projects / Taskforce",
+      "items": [
+       "Northwind",
+       "2020",
+       "Won an award.",
+       "Education",
+       "2019",
+       "Led a project.",
+       "Contoso",
+       "2018",
+       "Delivered improvements."
+      ]
+     }
+    ]
+   },
+   "expect": [
+    {
+     "category": "Contribution towards Projects / Taskforce",
+     "items": [
+      "Northwind",
+      "2020",
+      "Won an award.",
+      "Education",
+      "2019",
+      "Led a project.",
+      "Contoso",
+      "2018",
+      "Delivered improvements."
+     ],
+     "item_headings": [
+      "Northwind",
+      "2020"
+     ]
+    }
+   ],
+   "note": "An ordinary marked achievement keeps later groups; an unmarked section ends them."
   }
  ]
 }

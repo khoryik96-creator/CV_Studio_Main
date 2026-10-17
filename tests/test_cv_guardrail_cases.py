@@ -157,6 +157,34 @@ class SourceRestoreGuardrails(unittest.TestCase):
                 )
                 self.assertEqual(result["skills"], case["expect"], case["note"])
 
+    def test_contribution_generic_boundaries_respect_achievement_markers(self):
+        category = "Contribution towards Projects / Taskforce"
+        for boundary in sorted(normalize._CV_SOURCE_SECTION_BOUNDARY_KEYS):
+            word = boundary.title()
+            for label, marked_word, stop in [
+                ("dash", "- " + word, False),
+                ("bullet", "• " + word, False),
+                ("asterisk", "* " + word, False),
+                ("plain", word, True),
+                ("numbered", "1. " + word, True),
+                ("uppercase", "- " + word.upper(), True),
+                ("colon", "- " + word + ":", True),
+            ]:
+                with self.subTest(boundary=boundary, marker=label):
+                    items = ["Northwind", "2020", "Won an award.", word, "2019",
+                             "Led a project.", "Contoso", "2018", "Delivered improvements."]
+                    parsed = {"work_experiences": [{"company": "Northwind Bank"},
+                                                   {"company": "Contoso Bank"}],
+                              "skills": [{"category": category, "items": items[:]}]}
+                    source = "\n".join([category, "Northwind", "2020", "- Won an award.",
+                                        marked_word, "2019", "- Led a project.", "Contoso",
+                                        "2018", "- Delivered improvements.", "References"])
+                    result = normalize._restore_cv_contribution_headings(parsed, source)
+                    expected = ["Northwind", "2020"] if stop else [
+                        "Northwind", "2020", "2019", "Contoso", "2018"]
+                    self.assertEqual(result["skills"][0]["item_headings"], expected)
+                    self.assertEqual(result["skills"][0]["items"], items)
+
     def test_contribution_layout_preserves_generated_items_and_is_idempotent(self):
         for index in range(200):
             year = str(1980 + index % 45)

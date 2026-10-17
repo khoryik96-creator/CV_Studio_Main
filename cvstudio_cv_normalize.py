@@ -1067,9 +1067,8 @@ def _restore_cv_contribution_headings(parsed, source_text):
         letters = [char for char in line if char.isalpha()]
         emphasized = (bool(letters) and all(char.isupper() for char in letters)) or line.endswith(":")
         numbered = bool(re.match(r"^(?:\(\d{1,3}\)|\d{1,3}[.)])\s*", line))
-        if (boundary in _CV_SOURCE_SECTION_BOUNDARY_KEYS
-                or (boundary in additional_boundaries
-                    and (unmarked or emphasized or numbered))):
+        if ((boundary in _CV_SOURCE_SECTION_BOUNDARY_KEYS or boundary in additional_boundaries)
+                and (unmarked or emphasized or numbered)):
             break
         if line != "## RESTRICTED ##":
             section.append(line)

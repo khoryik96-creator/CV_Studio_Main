@@ -83,9 +83,12 @@ Unknown unmarked labels immediately before a year end the previous employer's
 ownership. A wrapped duty can continue only when the joined marked source text
 matches an existing complete item; uncertain continuation stays unannotated.
 The contribution scan also stops at the recoverable project/training sections
-and unmarked Awards & Recognition headings. Marked achievements keep their
-meaning. Additional-item line separators are normalized consistently for
-preview and Word; heading emphasis markers are rendered as formatting.
+and unmarked Awards & Recognition headings. Ordinary marked achievements keep
+their meaning even when their text matches a generic section name such as
+Awards, Training or Education. Unmarked, numbered, uppercase or colon-emphasized
+section headings still end the scan. Additional-item line separators are
+normalized consistently for preview and Word; heading emphasis markers are
+rendered as formatting.
 
 ### C2
 **Blind headings contain only blinded visible text.** Discard provider-supplied
