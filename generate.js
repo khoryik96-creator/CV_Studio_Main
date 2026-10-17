@@ -781,7 +781,7 @@ function skillItemLines(skill) {
   const rawItems = (skill && skill.items) || '';
   return Array.isArray(rawItems)
     ? rawItems.map(line => String(line).trim()).filter(line => line.length > 0)
-    : String(rawItems).split(/\n/).map(line => line.trim()).filter(line => line.length > 0);
+    : String(rawItems).split(/[\n\r\v\f\x1c-\x1e\x85\u2028\u2029]+/).map(line => line.trim()).filter(line => line.length > 0);
 }
 
 function makeAdditionalSection(certs, skills) {
@@ -805,8 +805,13 @@ function makeAdditionalSection(certs, skills) {
   }
 
   if (skills.length > 0) {
-    xml += boldBlackPara('Skills:', 24);
-    xml += emptyPara();
+    const contributionOnly = skills.every(s =>
+      String(s.category || '').toLowerCase().replace(/[^a-z]+/g, ' ').trim() === 'contribution towards projects taskforce' &&
+      Array.isArray(s.item_headings) && s.item_headings.length > 0);
+    if (!contributionOnly) {
+      xml += boldBlackPara('Skills:', 24);
+      xml += emptyPara();
+    }
     for (const s of skills) {
       // Category label on its own bold line
       const category = String(s.category || '').trim();
@@ -815,8 +820,10 @@ function makeAdditionalSection(certs, skills) {
       const lines = skillItemLines(s);
       if (!lines.length) continue;
       if (lines.length > 1) {
+        const headings = Array.isArray(s.item_headings) ? s.item_headings : [];
         for (const line of lines) {
-          xml += bulletPara(line, LEFT_ALIGNMENT_XML);
+          const isHeading = headings.includes(line) && lines.indexOf(line) === lines.lastIndexOf(line);
+          xml += isHeading ? boldBlackPara(line.replace(/\*\*([^*]+)\*\*/g, '$1'), 24) : bulletPara(line, LEFT_ALIGNMENT_XML);
         }
       } else {
         xml += para(run(lines[0], { color: '000000', size: 24 }), LEFT_ALIGNMENT_XML);

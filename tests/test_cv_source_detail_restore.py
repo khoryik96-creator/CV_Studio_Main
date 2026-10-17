@@ -12,6 +12,7 @@ call replaced. All names are synthetic.
 """
 
 import io
+import copy
 import json
 import os
 from pathlib import Path
@@ -94,6 +95,111 @@ def _provider_parse(**overrides):
 
 
 class SourceDetailRestoreTests(unittest.TestCase):
+    def test_contribution_rendering_handles_emphasis_category_and_line_breaks(self):
+        category = "Contribution towards Projects / Taskforce"
+        source = "\n".join([category, "Northwind", "2020", "- Won an award.", "Education"])
+        for label, cat, items in [
+            ("emphasis", category, ["**Northwind**", "**2020**", "Won an award."]),
+            ("ampersand", "Contribution towards Projects & Taskforce", ["Northwind", "2020", "Won an award."]),
+            ("carriage-return", category, "Northwind\r2020\rWon an award."),
+            ("unicode-separator", category, "Northwind\u20282020\u2028Won an award."),
+        ]:
+            with self.subTest(label=label):
+                parsed = {"candidate": {"name": "Test Candidate"},
+                          "work_experiences": [{"company": "Northwind Bank", "roles": []}],
+                          "skills": [{"category": cat, "items": items}]}
+                data = self._parse(parsed, source)["data"]
+                text = self._docx_text(data)
+                self.assertIn("Northwind", text)
+                self.assertIn("2020", text)
+                self.assertIn("Won an award.", text)
+                self.assertNotIn("**Northwind**", text)
+                self.assertNotIn("Skills:", text)
+
+    def test_blind_route_rebuilds_contribution_hints_from_blinded_items(self):
+        category = "Contribution towards Projects / Taskforce"
+        source = "\n".join([category, "Northwind", "2020", "- Won an award.", "Education"])
+        parsed = {"candidate": {"name": "Test Candidate"},
+                  "work_experiences": [{"company": "Northwind Bank", "roles": []}],
+                  "skills": [{"category": category, "items": ["Northwind", "2020", "Won an award."]}]}
+        data = self._parse(parsed, source)["data"]
+        reply = copy.deepcopy(data)
+        reply["candidate"] = {"name": "Candidate", "current_company": "Leading Bank"}
+        reply["work_experiences"][0]["company"] = "Leading Bank"
+        reply["skills"][0]["items"][0] = "Leading Bank"
+        # Deliberately keep the model's stale source name in its formatting hint.
+        with mock.patch.object(app, "_resolve_request_api_key", return_value="fixture-key"), \
+                mock.patch.object(app, "_ai_spend_session_allowed", return_value=True), \
+                mock.patch.object(app, "call_llm", return_value={
+                    "content": [{"text": json.dumps(reply)}], "usage": {}}):
+            response = self.client.post("/blind", json={"cv_data": data}, headers=HEADERS)
+        self.assertEqual(response.status_code, 200)
+        blinded = response.get_json()["data"]
+        self.assertNotIn("Northwind", json.dumps(blinded))
+        self.assertEqual(blinded["skills"][0]["item_headings"], ["Leading Bank", "2020"])
+        text = self._docx_text(blinded)
+        self.assertIn("Leading Bank", text)
+        self.assertNotIn("Northwind", "\n".join(text))
+
+    def test_duplicate_contribution_labels_across_entries_keep_word_bullets(self):
+        category = "Contribution towards Projects / Taskforce"
+        source = "\n".join([category, "Northwind", "2020", "- Won an award.",
+                            "2019", "- Led a project.", "Education"])
+        parsed = {
+            "candidate": {"name": "Test Candidate"},
+            "work_experiences": [{"company": "Northwind Bank", "roles": [
+                {"title": "Analyst", "bullets": ["Reviewed controls."]}]}],
+            "skills": [
+                {"category": category, "items": ["Northwind", "2020", "Won an award."]},
+                {"category": category, "items": ["Northwind", "2019", "Led a project."]},
+            ],
+        }
+        data = self._parse(parsed, source)["data"]
+        self.assertEqual([s["item_headings"] for s in data["skills"]], [["2020"], ["2019"]])
+        response = self.client.post("/generate-docx", json={"data": data}, headers=HEADERS)
+        self.assertEqual(response.status_code, 200)
+        with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
+            root = ET.fromstring(archive.read("word/document.xml"))
+        paragraphs = [("".join(t.text or "" for t in p.iter(W + "t")), p)
+                      for p in root.iter(W + "p")]
+        labels = [p for text, p in paragraphs if text == "Northwind"]
+        self.assertEqual(len(labels), 2)
+        for p in labels:
+            self.assertIsNotNone(p.find("./" + W + "pPr/" + W + "numPr"))
+        for year in ["2020", "2019"]:
+            p = next(p for text, p in paragraphs if text == year)
+            self.assertIsNone(p.find("./" + W + "pPr/" + W + "numPr"))
+            self.assertIsNotNone(p.find("./" + W + "r/" + W + "rPr/" + W + "b"))
+
+    def test_contribution_company_and_year_labels_reach_word_as_headings(self):
+        source = "\n".join([
+            "Contribution towards Projects / Taskforce", "Northwind", "2020",
+            "-2 Annual awards.", "2019", "- Led a project.", "Education",
+        ])
+        parsed = {
+            "candidate": {"name": "Test Candidate"},
+            "work_experiences": [{"company": "Northwind Bank", "roles": [
+                {"title": "Analyst", "bullets": ["Reviewed controls."]}]}],
+            "skills": [{"category": "Contribution towards Projects / Taskforce",
+                        "items": ["Northwind", "2020", "2 Annual awards.",
+                                  "2019", "Led a project."]}],
+        }
+        data = self._parse(parsed, source)["data"]
+        self.assertEqual(data["skills"][0]["item_headings"], ["Northwind", "2020", "2019"])
+        response = self.client.post("/generate-docx", json={"data": data}, headers=HEADERS)
+        self.assertEqual(response.status_code, 200)
+        with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
+            root = ET.fromstring(archive.read("word/document.xml"))
+        paragraphs = {"".join(t.text or "" for t in p.iter(W + "t")): p
+                      for p in root.iter(W + "p")}
+        for label in ["Northwind", "2020", "2019"]:
+            p = paragraphs[label]
+            self.assertIsNone(p.find("./" + W + "pPr/" + W + "numPr"))
+            self.assertIsNotNone(p.find("./" + W + "r/" + W + "rPr/" + W + "b"))
+        for duty in ["2 Annual awards.", "Led a project."]:
+            self.assertIsNotNone(paragraphs[duty].find("./" + W + "pPr/" + W + "numPr"))
+        self.assertNotIn("Skills:", paragraphs)
+
     def setUp(self):
         self.client = app.app.test_client()
 

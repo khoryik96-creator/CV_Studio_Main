@@ -4,12 +4,39 @@
 
 ## Release state
 
-- Current verified merged baseline (2026-10-13): v24.6.438, `a40bf63` (#223).
-  Tested head `bf698dd` has the same tree `7575085`; all three hosted gates
+- Current verified merged baseline (2026-10-13): v24.6.441, `fcaedae` (#227).
+  Tested head `fc4ed7b` has the same tree `3e146d8`; all three hosted gates
   passed. Unfiltered Windows: 1,587 passed, four skipped, 7,121 subtests.
-  `codex/v24.6.438-main-review-corrections` is complete.
+  `codex/v24.6.439-batch-jobadder-link` is complete.
 
-- Current owner-authorized source work: v24.6.441,
+- Current owner-authorized source work (2026-10-17): v24.6.445,
+  `codex/v24.6.442-contribution-grouping`, from exact `fcaedae`.
+  Contribution company/year labels are source-confirmed headings rather than
+  achievement bullets, in preview and Word. Optional `item_headings` retains
+  existing category/items fields, item order and wording. Ordinary skills,
+  marked achievements and ambiguous input retain their safe fallback; trusted
+  source-free heading metadata remains usable. A contribution-only list has no
+  redundant Skills wrapper and retains its Additional Information preview title.
+  The independent-review corrective checks label uniqueness across every
+  matching contribution entry and removes stale annotations on source-backed
+  re-checks. Unrelated skills are excluded; source-free export retains metadata.
+  The external-review corrective stops unknown employers inheriting years,
+  respects later source sections and verified wrapped duties, rebuilds Blind CV
+  hints from returned visible text, and aligns emphasis/category/line-separator
+  rendering across preview and Word. The PR-review corrective preserves ordinary
+  marked achievements whose text equals a generic section name; real unmarked,
+  numbered or strongly emphasized section boundaries still stop the scan.
+  All 976 previous source cases are preserved; nine appended (985 total).
+  No paid/live calls,
+  owner installation/receipt, route/schema or protected-build changes.
+  Final local gate: 1,597 passed, four skipped, three documented environment
+  exclusions; 7,599 subtests and all 29 frontend suites passed. Exact-master
+  and pre-correction replays cover 333 inputs with only intended layout deltas.
+  Evidence is in the v24.6.445 QA report, supplementing the v442–v444 reports.
+  Owner authorized PR/merge on 2026-10-17. PR #228 awaits fresh exact-head
+  hosted checks; final merge/check identities will be recorded in issue #35.
+
+- Completed owner-authorized source work: v24.6.441,
   `codex/v24.6.439-batch-jobadder-link`, from exact `a40bf63`.
   Batch rows show why uploading was skipped and retain a manual upload action.
   Reconnection refreshes those actions without an automatic write. Successful
@@ -21,8 +48,8 @@
   The PR-review corrective retains a manual retry only for a proven pre-write
   local file-read or read-only lookup failure. Ambiguous writes stay non-retryable.
   No owner installation/receipt, paid/live provider, route/schema or protected
-  build change. Owner authorized the PR and merge on 2026-10-13. Await all three
-  exact-head hosted gates before squash merge; final identities go in issue #35.
+  build change. Owner authorized the PR and merge on 2026-10-13. All three
+  exact-head hosted gates passed before squash merge; final identities are in issue #35.
 
 - Previous verified merged baseline (2026-10-02): v24.6.437, `f55a049` (#222).
   Tested head `92bb3f4` has the same tree `9d9703a`; all three hosted gates

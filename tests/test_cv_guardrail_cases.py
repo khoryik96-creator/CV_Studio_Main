@@ -29,6 +29,7 @@ import cvstudio_cv_fidelity as fidelity
 import cvstudio_cv_normalize as normalize
 import cvstudio_cv_reconcile as reconcile
 import cvstudio_document_safety as document_safety
+import cvstudio_blind_mask as blind_mask
 
 CASES = json.loads((ROOT / "tests" / "fixtures" / "cv_guardrail_cases.json").read_text(encoding="utf-8"))["cases"]
 GUARDRAILS_DOC = (ROOT / "CV_SOURCE_CHECK_GUARDRAILS.md").read_text(encoding="utf-8")
@@ -119,6 +120,124 @@ class SourceCheckGuardrails(unittest.TestCase):
 
 
 class SourceRestoreGuardrails(unittest.TestCase):
+    def test_generated_blind_contribution_hints_stay_with_returned_text(self):
+        category = "Contribution towards Projects / Taskforce"
+        for index in range(100):
+            original = {"skills": [{"category": category,
+                "items": ["Northwind " + str(index), "2020", "Won an award."],
+                "item_headings": ["Northwind " + str(index), "2020"]}]}
+            reply = copy.deepcopy(original)
+            label = "Leading Bank " + str(index)
+            reply["skills"][0]["items"][0] = label
+            result = blind_mask._blind_restore_cv_bullet_structure(reply, original)
+            self.assertEqual(result["skills"][0]["item_headings"], [label, "2020"])
+            self.assertNotIn("Northwind", json.dumps(result))
+            self.assertEqual(reply["skills"][0]["item_headings"], original["skills"][0]["item_headings"])
+
+    def test_additional_item_separators_keep_same_words_and_shape(self):
+        for separator in ["\r", "\r\n", "\n", "\v", "\f", "\x1c", "\x1d", "\x1e", "\x85", "\u2028", "\u2029"]:
+            items = separator.join(["Northwind", "2020", "Won an award."])
+            self.assertEqual(normalize._strip_cv_additional_bullet_markers(items),
+                             "Northwind\n2020\nWon an award.")
+
+    def test_blind_contribution_headings_use_only_returned_text(self):
+        for case in _cases("blind_contribution_headings"):
+            with self.subTest(case=case["id"]):
+                original, reply = copy.deepcopy(case["original"]), copy.deepcopy(case["reply"])
+                result = blind_mask._blind_restore_cv_bullet_structure(reply, original)
+                self.assertEqual(result, case["expect"], case["note"])
+                self.assertEqual(original, case["original"])
+                self.assertEqual(reply, case["reply"])
+
+    def test_contribution_headings(self):
+        for case in _cases("contribution_headings"):
+            with self.subTest(case=case["id"]):
+                result = normalize._normalize_cv_data_for_output(
+                    copy.deepcopy(case["parsed"]), "\n".join(case["lines"])
+                )
+                self.assertEqual(result["skills"], case["expect"], case["note"])
+
+    def test_contribution_generic_boundaries_respect_achievement_markers(self):
+        category = "Contribution towards Projects / Taskforce"
+        for boundary in sorted(normalize._CV_SOURCE_SECTION_BOUNDARY_KEYS):
+            word = boundary.title()
+            for label, marked_word, stop in [
+                ("dash", "- " + word, False),
+                ("bullet", "• " + word, False),
+                ("asterisk", "* " + word, False),
+                ("plain", word, True),
+                ("numbered", "1. " + word, True),
+                ("uppercase", "- " + word.upper(), True),
+                ("colon", "- " + word + ":", True),
+            ]:
+                with self.subTest(boundary=boundary, marker=label):
+                    items = ["Northwind", "2020", "Won an award.", word, "2019",
+                             "Led a project.", "Contoso", "2018", "Delivered improvements."]
+                    parsed = {"work_experiences": [{"company": "Northwind Bank"},
+                                                   {"company": "Contoso Bank"}],
+                              "skills": [{"category": category, "items": items[:]}]}
+                    source = "\n".join([category, "Northwind", "2020", "- Won an award.",
+                                        marked_word, "2019", "- Led a project.", "Contoso",
+                                        "2018", "- Delivered improvements.", "References"])
+                    result = normalize._restore_cv_contribution_headings(parsed, source)
+                    expected = ["Northwind", "2020"] if stop else [
+                        "Northwind", "2020", "2019", "Contoso", "2018"]
+                    self.assertEqual(result["skills"][0]["item_headings"], expected)
+                    self.assertEqual(result["skills"][0]["items"], items)
+
+    def test_contribution_layout_preserves_generated_items_and_is_idempotent(self):
+        for index in range(200):
+            year = str(1980 + index % 45)
+            company = "Northwind " + str(index)
+            items = [company, year, "2 Annual awards.", "Led a project."]
+            parsed = {"work_experiences": [{"company": company + " Bank"}],
+                      "skills": [{"category": "Contribution towards Projects / Taskforce", "items": items[:]}]}
+            source = "\n".join(["Contribution towards Projects / Taskforce", company, year,
+                                "-2 Annual awards.", "- Led a project.", "Education"])
+            result = normalize._restore_cv_contribution_headings(parsed, source)
+            self.assertEqual(result["skills"][0]["items"], items)
+            self.assertEqual(result["skills"][0]["item_headings"], [company, year])
+            self.assertEqual(normalize._restore_cv_contribution_headings(copy.deepcopy(result), source), result)
+
+    def test_contribution_optional_scan_is_bounded(self):
+        case = _cases("contribution_headings")[0]
+        for source in ["x" * 1000001, "line\n" * 12001]:
+            parsed = copy.deepcopy(case["parsed"])
+            started = time.perf_counter()
+            self.assertEqual(normalize._restore_cv_contribution_headings(parsed, source), case["parsed"])
+            self.assertLess(time.perf_counter() - started, 1)
+
+    def test_contribution_duplicates_across_generated_entries(self):
+        category = "Contribution towards Projects / Taskforce"
+        for index in range(100):
+            company = "Northwind " + str(index)
+            years = [str(1980 + index % 40), str(1981 + index % 40)]
+            skills = [
+                {"category": category, "items": [company, years[0], "Won an award."],
+                 "item_headings": [company, years[0]]},
+                {"category": category, "items": [company.upper(), years[1], "Led a project."],
+                 "item_headings": [company.upper(), years[1]]},
+            ]
+            parsed = {"work_experiences": [{"company": company + " Bank"}], "skills": skills}
+            source = "\n".join([category, company, years[0], "- Won an award.",
+                                years[1], "- Led a project.", "Education"])
+            original_items = [s["items"][:] for s in skills]
+            result = normalize._restore_cv_contribution_headings(parsed, source)
+            self.assertEqual([s["items"] for s in result["skills"]], original_items)
+            self.assertEqual([s["item_headings"] for s in result["skills"]], [[y] for y in years])
+            self.assertEqual(normalize._restore_cv_contribution_headings(copy.deepcopy(result), source), result)
+
+    def test_contribution_many_duplicate_entries_are_bounded(self):
+        category = "Contribution towards Projects / Taskforce"
+        parsed = {"work_experiences": [{"company": "Northwind Bank"}],
+                  "skills": [{"category": category, "items": ["Northwind", "2020", "Won an award."]}
+                             for _ in range(4000)]}
+        started = time.perf_counter()
+        result = normalize._restore_cv_contribution_headings(
+            parsed, "\n".join([category, "Northwind", "2020", "- Won an award.", "Education"]))
+        self.assertTrue(all("item_headings" not in s for s in result["skills"]))
+        self.assertLess(time.perf_counter() - started, 2)
+
     def test_company_restore(self):
         for case in _cases("company_restore"):
             with self.subTest(case=case["id"]):

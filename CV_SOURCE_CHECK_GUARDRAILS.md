@@ -61,6 +61,44 @@ steps. Skipping one is how earlier rounds broke things.
   now holds the CV back from JobAdder auto-upload. A missed warning is what
   master always did.
 
+### C1
+**Contribution labels remain headings.** Within a uniquely identified
+`Contribution towards Projects / Taskforce` source section, an unbulleted
+employer label followed by a plain year and a marked achievement establishes
+the group. The employer must match a work-history employer (a shorter prefix
+such as `Northwind` for `Northwind Bank` is allowed). Later plain years followed
+by marked achievements belong to that employer. Only unique source labels
+matching unique existing items receive optional `item_headings` metadata. Item
+uniqueness is checked across all matching contribution entries, using the same
+normalized label keys; unrelated skills groups are excluded. With a valid source,
+re-checks remove stale annotations for labels that become ambiguous. Source-free
+export retains already-confirmed metadata. Item text/order and legacy items
+shape stay intact. Marked employer/year achievements, ordinary skills,
+ambiguous duplicate sections/items and source-free data remain unchanged.
+Preview and Word render those labels in bold without bullets, with the same
+achievement bullets beneath them. A contribution-only section needs no Skills
+wrapper. No missing prose is invented or recovered by this rule.
+
+Unknown unmarked labels immediately before a year end the previous employer's
+ownership. A wrapped duty can continue only when the joined marked source text
+matches an existing complete item; uncertain continuation stays unannotated.
+The contribution scan also stops at the recoverable project/training sections
+and unmarked Awards & Recognition headings. Ordinary marked achievements keep
+their meaning even when their text matches a generic section name such as
+Awards, Training or Education. Unmarked, numbered, uppercase or colon-emphasized
+section headings still end the scan. Additional-item line separators are
+normalized consistently for preview and Word; heading emphasis markers are
+rendered as formatting.
+
+### C2
+**Blind headings contain only blinded visible text.** Discard provider-supplied
+`item_headings`, which can echo real source labels. Rebuild this layout hint
+only for corresponding contribution groups with matching category, item count,
+unchanged years and unchanged non-heading anchors. Take every rebuilt value
+from the provider's visible items, never from source text. Changed order,
+missing/rewritten items or ambiguous structure receives no heading metadata.
+The provider's content and representation remain intact.
+
 ## Work-row reader
 
 ### R1

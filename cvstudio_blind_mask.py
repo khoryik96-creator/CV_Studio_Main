@@ -1307,6 +1307,64 @@ def _blind_rebuild_role_bullets(template_items, blinded_items):
     return rebuilt if cursor == len(replacement) else None
 
 
+def _blind_restore_cv_skill_headings(repaired, original_cv):
+    """Rebuild layout hints from visible blinded items, never source wording."""
+    output = repaired.get("skills")
+    if not isinstance(output, list):
+        return
+    # The provider can copy an unblinded label in this redundant field even
+    # when it correctly masks the visible items. Never trust that echo.
+    for skill in output:
+        if isinstance(skill, dict):
+            skill.pop("item_headings", None)
+    source = original_cv.get("skills")
+    if not isinstance(source, list) or len(source) != len(output):
+        return
+
+    def key(value):
+        return re.sub(r"[^a-z]+", " ", str(value or "").lower()).strip()
+
+    def lines(skill):
+        items = skill.get("items") or []
+        if isinstance(items, str):
+            items = items.splitlines()
+        if not isinstance(items, list) or any(not isinstance(s, str) for s in items):
+            return []
+        return [s.strip() for s in items if s.strip()]
+
+    for original, blinded in zip(source, output):
+        if not isinstance(original, dict) or not isinstance(blinded, dict):
+            continue
+        category = key(original.get("category"))
+        if (category != "contribution towards projects taskforce"
+                or key(blinded.get("category")) != category):
+            continue
+        hints = original.get("item_headings")
+        if not isinstance(hints, list) or not hints:
+            continue
+        hints = {value for value in hints if isinstance(value, str)}
+        before, after = lines(original), lines(blinded)
+        if not before or len(before) != len(after):
+            continue
+        occurrences, output_occurrences = {}, {}
+        for value in before:
+            occurrences[value] = occurrences.get(value, 0) + 1
+        for value in after:
+            output_occurrences[value] = output_occurrences.get(value, 0) + 1
+        positions = {i for i, value in enumerate(before)
+                     if value in hints and occurrences[value] == 1}
+        if not positions:
+            continue
+        # Years and all non-heading items anchor the correspondence. If the
+        # model reordered/rewrote them, leave the returned items unannotated.
+        if any(before[i] != after[i] for i in range(len(before))
+               if i not in positions or not re.search(r"[A-Za-z]", before[i])):
+            continue
+        headings = [after[i] for i in sorted(positions) if output_occurrences[after[i]] == 1]
+        if headings:
+            blinded["item_headings"] = headings
+
+
 def _blind_restore_cv_bullet_structure(blinded, original_cv):
     """Restore role section/list containers when the model only flattened them.
 
@@ -1318,6 +1376,7 @@ def _blind_restore_cv_bullet_structure(blinded, original_cv):
         return blinded
     # Copy only the provider response.  No source object is ever copied into it.
     repaired = copy.deepcopy(blinded)
+    _blind_restore_cv_skill_headings(repaired, original_cv)
     original_experiences = original_cv.get("work_experiences") or []
     blinded_experiences = repaired.get("work_experiences") or []
     if not isinstance(original_experiences, list) or not isinstance(
