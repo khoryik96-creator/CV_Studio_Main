@@ -10,8 +10,8 @@ sourcer and the locked historical Lead Finder.
   location and description load directly, including in the in-app browser.
   **Fill from link** retries the read. Existing manual entries are preserved.
   Review the details before saving; manual entry remains available.
-- Optional fields: contact person, location, notes, status, follow-up date and
-  a retained job-description excerpt. Contact is always manual and optional;
+- Optional fields: contact person, location, posting date, notes, status,
+  follow-up date and retained job-description text. Contact is always manual and optional;
   status starts as New and follow-up dates are never inferred from the ad.
   Follow-ups due are shown in the module;
   this is not a scheduled notification or outreach service.
@@ -20,6 +20,15 @@ sourcer and the locked historical Lead Finder.
   tabs → Read job ad**. Review the fields before saving. Manual entry works
   without the companion. Public reads need no extension; neither path uses AI
   or incurs provider charges.
+- **Date posted** fills only when the same job supplies valid exact date
+  metadata. Source calendar dates are preserved across time zones; relative
+  ages are not converted into guessed dates. It can also be entered manually.
+  Older leads and ads without exact metadata show **Posted: Not available**.
+- Expand **View more — job ad content** on a saved lead to read its captured
+  description without reopening LinkedIn or making a network call. The draft
+  has the same expandable section with editable text. Captured excerpts are
+  labelled, and missing descriptions explain how to add one. Content is plain
+  text, bounded to 20,000 characters; the original LinkedIn link remains available.
 - Search saved leads, filter by status or due date, and edit/view details.
   Re-saving the same LinkedIn job preserves the existing record and notes.
   Close a lead with the Closed status; there is no destructive delete action.
@@ -27,6 +36,8 @@ sourcer and the locked historical Lead Finder.
   Job Leads JSON. **Restore missing leads** validates the entire file before
   adding missing job IDs in one transaction; existing records are never replaced.
   This dedicated backup is separate from Settings' legacy local-data backup.
+  Posting dates are included in CSV, and JSON backup/restore also retains the
+  description excerpt marker. Legacy records/backups need no schema migration.
 
 ## Boundaries
 

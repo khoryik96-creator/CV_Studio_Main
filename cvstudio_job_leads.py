@@ -18,7 +18,7 @@ STATUSES = {"new": "New", "to_contact": "To contact", "contacted": "Contacted",
             "follow_up": "Following up", "won": "Won", "closed": "Closed"}
 FIELDS = {"url": 2048, "company": 200, "role": 240, "contact": 400,
           "location": 240, "notes": 10000, "description": 20000,
-          "status": 20, "follow_up": 10}
+          "status": 20, "follow_up": 10, "date_posted": 10}
 MAX_RECORDS = 5000
 MAX_BYTES = 8 * 1024 * 1024
 APPLICATION_ID = 0x43564A4C
@@ -69,12 +69,17 @@ def clean_record(raw):
         raise JobLeadsError("Enter both the company and role before saving.")
     if result["status"] not in STATUSES:
         raise JobLeadsError("Choose a valid lead status.")
-    if result["follow_up"]:
-        try:
-            if date.fromisoformat(result["follow_up"]).isoformat() != result["follow_up"]:
-                raise ValueError()
-        except ValueError:
-            raise JobLeadsError("Choose a valid follow-up date.") from None
+    for key, label in [("follow_up", "follow-up date"), ("date_posted", "posting date")]:
+        if result[key]:
+            try:
+                if date.fromisoformat(result[key]).isoformat() != result[key]:
+                    raise ValueError()
+            except ValueError:
+                raise JobLeadsError("Choose a valid " + label + ".") from None
+    truncated = raw.get("description_truncated", False)
+    if type(truncated) is not bool:
+        raise JobLeadsError("The job description excerpt marker is invalid.")
+    result["description_truncated"] = truncated
     return result
 
 

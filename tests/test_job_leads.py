@@ -45,6 +45,33 @@ def test_persists_reopens_duplicate_keeps_notes_and_filters_unknown_fields(store
     assert "api_key" not in saved and "synthetic-secret" not in store.path.read_bytes().decode("latin1")
 
 
+def test_posted_date_and_description_survive_save_reopen_backup_restore(store,tmp_path):
+    content='Responsibilities\nBuild partnerships.\nManage regional reporting.'
+    saved=store.save({**RECORD,'date_posted':'2026-10-02','description':content,'description_truncated':True})['record']
+    assert JobLeadsStore(store.path).list()==[saved]
+    other=JobLeadsStore(tmp_path/'restored.sqlite3')
+    other.restore(store.backup())
+    record=other.list()[0]
+    assert record['date_posted']=='2026-10-02' and record['description']==content and record['description_truncated'] is True
+
+
+def test_legacy_rows_without_new_fields_load_without_schema_change(store):
+    saved=store.save(RECORD)['record']
+    raw={key:value for key,value in saved.items() if key not in {'date_posted','description_truncated'}}
+    with sqlite3.connect(store.path) as connection:
+        connection.execute('UPDATE leads SET payload=? WHERE id=?',(json.dumps(raw),saved['id']))
+    result=JobLeadsStore(store.path).list()[0]
+    assert result['date_posted']=='' and result['description_truncated'] is False
+    with sqlite3.connect(store.path) as connection:
+        assert connection.execute('PRAGMA user_version').fetchone()[0]==1
+
+
+@pytest.mark.parametrize('patch',[{'date_posted':'2026-02-30'},{'date_posted':'2 weeks ago'},{'date_posted':'20261002'},{'date_posted':None},{'description_truncated':'false'},{'description_truncated':1}])
+def test_invalid_posted_dates_and_excerpt_markers_reject_before_writing(store,patch):
+    with pytest.raises(JobLeadsError):store.save({**RECORD,**patch})
+    assert not store.path.exists()
+
+
 def test_revision_conflict_preserves_latest_edit(store):
     original = store.save(RECORD)["record"]
     changed = store.save({**original, "notes":"Changed in another window"})["record"]

@@ -4,6 +4,20 @@
 
 ## Release state
 
+- Current owner-authorized source work (2026-10-19): v24.6.450,
+  `codex/v24.6.450-job-ad-details`, from local v449 `087fa36`.
+  Job Leads retains optional exact posting dates and exposes saved description
+  text through View more. Public/companion readers accept same-job exact date
+  metadata, preserving the source calendar day; missing/relative dates remain
+  unknown. Optional manual dates, legacy rows, excerpt markers, CSV and backup/
+  restore are covered without changing routes or schemas. The real in-app
+  preview opened an existing saved ad's description; synthetic UI confirmed
+  known/unknown dates and missing content. Full isolated local: 1,689 passed,
+  four skipped, three documented updater exclusions, 7,599 subtests. All 33
+  frontend suites, source preflight and 24-assertion smoke pass. See the v450
+  QA report. Preview 5074 preserves isolated persistent state. No paid call,
+  owner installation update, push, PR or merge.
+
 - Current owner-authorized corrective (2026-10-19): v24.6.449,
   `codex/v24.6.449-job-link-public-read`, from local v448 `94fbe8c`.
   Live inspection reproduced the empty form: the owner used the in-app browser,

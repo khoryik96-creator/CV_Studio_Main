@@ -10,6 +10,7 @@ from cvstudio_job_leads import JobLeadsError
 
 URL = 'https://www.linkedin.com/jobs/view/1234567890'
 POSTING = {'@type':'JobPosting', 'identifier':{'@type':'PropertyValue','value':'1234567890'},
+           'datePosted':'2026-10-02T23:30:00-04:00',
            'title':'Senior Finance Consultant', 'hiringOrganization':{'name':'Example Company'},
            'jobLocation':{'address':{'addressLocality':'Kuala Lumpur','addressCountry':{'name':'Malaysia'}}},
            'description':'<p>Build partnerships.</p><ul><li>Manage reporting.</li></ul>'}
@@ -36,7 +37,18 @@ def test_structured_job_fields_are_grounded_and_contacts_are_never_filled():
     assert value['company']=='Example Company' and value['role']=='Senior Finance Consultant'
     assert value['location']=='Kuala Lumpur, Malaysia'
     assert value['description']=='Build partnerships.\nManage reporting.'
-    assert set(value)=={'url','company','role','location','description','description_truncated'}
+    assert value['date_posted']=='2026-10-02'
+    assert set(value)=={'url','company','role','location','date_posted','description','description_truncated'}
+
+
+@pytest.mark.parametrize('value,expected', [
+    ('2026-10-02','2026-10-02'), ('2026-10-02T00:15:00+08:00','2026-10-02'),
+    ('2026-10-02T23:30:00-04:00','2026-10-02'), ('2026-10-02T12:30:00.123Z','2026-10-02'),
+    ('2024-02-29','2024-02-29'), ('2026-02-29',''), ('2026-02-30',''),
+    ('2026-10-02T25:00:00Z',''), ('2 weeks ago',''), ('20261002',''),
+    (None,''), (1234,''), (['2026-10-02'],''), ('','')])
+def test_posting_date_preserves_source_calendar_without_guessing(value,expected):
+    assert parse_public_job(html({**POSTING,'datePosted':value}),URL)['date_posted']==expected
 
 
 def test_graph_and_recommendations_choose_only_the_requested_job():
@@ -57,9 +69,11 @@ def test_mismatched_or_ambiguous_metadata_is_not_guessed(posting,canonical):
 
 
 def test_canonical_topcard_fallback_excludes_search_and_recommendations():
-    body=f'<link rel="canonical" href="{URL}"><h1>Wrong search heading</h1><section class="top-card-layout"><h1 class="top-card-layout__title">Correct Role</h1><a class="topcard__org-name-link">Correct Company</a><span class="topcard__flavor--bullet">Penang</span></section><div class="description__text">Correct description</div>'
+    body=f'<link rel="canonical" href="{URL}"><h1>Wrong search heading</h1><section class="top-card-layout"><h1 class="top-card-layout__title">Correct Role</h1><a class="topcard__org-name-link">Correct Company</a><span class="topcard__flavor--bullet">Penang</span><time itemprop="datePosted" datetime="2026-10-02"></time></section><div class="description__text">Correct description</div>'
     value=parse_public_job(body.encode(),URL)
     assert (value['role'],value['company'],value['location'])==('Correct Role','Correct Company','Penang')
+    assert value['date_posted']=='2026-10-02'
+    assert parse_public_job(body.replace('datetime="2026-10-02"','datetime="2 weeks ago"').encode(),URL)['date_posted']==''
     with pytest.raises(JobLeadsError):parse_public_job(body.replace('rel="canonical"','rel="alternate"').encode(),URL)
 
 

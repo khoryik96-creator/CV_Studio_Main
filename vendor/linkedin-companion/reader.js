@@ -139,8 +139,15 @@
     const descriptionNode = first('#job-details, .jobs-description__content, .description__text') ||
       [...document.querySelectorAll('.description__text')].find(visible);
     const description = visible(descriptionNode) ? String(descriptionNode.innerText || '').trim() : '';
+    const posted = panel.querySelector('time[itemprop="datePosted"], meta[itemprop="datePosted"], time[data-test-job-posted-date]');
+    const rawDate = posted?.getAttribute('datetime') || posted?.getAttribute('content') || '';
+    let datePosted = '';
+    if (/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2})?)?$/.test(rawDate)) {
+      const day = rawDate.slice(0,10), value = new Date(rawDate), calendar = new Date(day + 'T00:00:00Z');
+      if (Number.isFinite(value.getTime()) && Number.isFinite(calendar.getTime()) && calendar.toISOString().slice(0,10) === day && (rawDate.length === 10 || Number(rawDate.slice(11,13)) < 24)) datePosted = day;
+    }
     if (!role || !company) throw Error('The company or role has not loaded. Paste the details into Job Leads.');
-    return {url, role, company, location:locationText, description:description.slice(0, 20000), description_truncated:description.length > 20000};
+    return {url, role, company, location:locationText, date_posted:datePosted, description:description.slice(0, 20000), description_truncated:description.length > 20000};
   }
   globalThis.SourcerReader = {readSearch, next, search, readProfile, profileURL, readJob};
 })();

@@ -1471,6 +1471,10 @@
 .job-lead-status { border-radius:20px; padding:4px 10px; background:var(--surface2); border:1px solid var(--border); }
 .job-lead-due { color:var(--accent); font-weight:600; }
 .job-lead-notes { white-space:pre-wrap; font-size:13px; line-height:1.6; }
+.job-lead-ad { border-top:1px solid var(--border); margin-top:14px; padding-top:12px; }
+.job-lead-ad summary { cursor:pointer; color:var(--accent); font-size:13px; font-weight:600; }
+.job-lead-ad-content { white-space:pre-wrap; line-height:1.65; font-size:13px; margin-top:12px; max-height:440px; overflow:auto; padding:12px; border-radius:8px; background:var(--surface2); }
+#jobLeadsdescription { height:320px !important; max-height:60vh; }
 .job-lead-card .job-leads-actions { justify-content:space-between; margin-top:16px; font-size:13px; }
 .job-leads-pagination { justify-content:flex-end; font-size:12px; color:var(--text3); }
 .job-leads-pagination span { margin-right:auto; }

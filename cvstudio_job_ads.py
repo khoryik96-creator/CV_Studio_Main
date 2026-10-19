@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 import re
 import threading
 import time
@@ -13,6 +14,19 @@ import requests
 from cvstudio_job_leads import JobLeadsError, job_url
 
 MAX_HTML_BYTES = 4 * 1024 * 1024
+
+
+def _posted_date(value):
+    """Keep the source's calendar date; never infer it from relative age."""
+    if not isinstance(value, str) or len(value) > 40:
+        return ''
+    value = value.strip()
+    if not re.fullmatch(r'\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2})?)?', value):
+        return ''
+    try:
+        return datetime.fromisoformat(value.replace('Z', '+00:00')).date().isoformat()
+    except ValueError:
+        return ''
 
 
 def _without_credentials(request):
@@ -117,6 +131,7 @@ def parse_public_job(html, expected_url):
             words = _description(posting.get('description'))
             candidates.append({'url':expected, 'company':company, 'role':role,
                                'location':_location(posting.get('jobLocation')),
+                               'date_posted':_posted_date(posting.get('datePosted')),
                                'description':words[:20000], 'description_truncated':len(words) > 20000})
     if candidates:
         if len({(row['company'], row['role']) for row in candidates}) != 1:
@@ -130,10 +145,12 @@ def parse_public_job(html, expected_url):
         company = card.select_one('.topcard__org-name-link')
         location = card.select_one('.topcard__flavor--bullet')
         description = soup.select_one('.description__text')
+        posted = card.select_one('time[itemprop="datePosted"], meta[itemprop="datePosted"], time[data-test-job-posted-date]')
         if role and company:
             words = _description(str(description)) if description else ''
             return {'url':expected, 'role':_text(str(role),240), 'company':_text(str(company),200),
                     'location':_text(str(location),240) if location else '',
+                    'date_posted':_posted_date(posted.get('datetime') or posted.get('content')) if posted else '',
                     'description':words[:20000], 'description_truncated':len(words)>20000}
     raise _unavailable()
 
