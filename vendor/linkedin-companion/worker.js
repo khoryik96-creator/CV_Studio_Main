@@ -1,4 +1,4 @@
-let connection = null, owned = new Map(), nextCount = 0, profileCount = 0;
+let connection = null, owned = new Map(), nextCount = 0, profileCount = 0, jobCapture = null;
 function local(value) {
   try { const u = new URL(value); return u.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(u.hostname) && u.pathname === '/'; }
   catch { return false; }
@@ -28,6 +28,17 @@ chrome.action.onClicked.addListener(async tab => {
 });
 chrome.tabs.onRemoved.addListener(id => { if (connection?.tabId === id) connection = null; owned.delete(id); });
 chrome.tabs.onUpdated.addListener((id, change) => { if (id === connection?.tabId && change.status === 'loading') connection = null; });
+async function readJobTab(bound, id, expected) {
+  const tab = await chrome.tabs.get(id);
+  if (connection !== bound || bound.run || jobURL(tab.url) !== expected || tab.status !== 'complete') throw Error('The selected job changed or has not loaded.');
+  await chrome.scripting.executeScript({target:{tabId:id}, files:['reader.js']});
+  if (connection !== bound || bound.run) throw Error('The companion connection changed.');
+  const [{result}] = await chrome.scripting.executeScript({target:{tabId:id},
+    func: url => globalThis.SourcerReader.readJob(url), args:[expected]});
+  const current = await chrome.tabs.get(id);
+  if (connection !== bound || bound.run || jobURL(current.url) !== expected || result?.url !== expected) throw Error('The selected job changed while reading.');
+  return result;
+}
 async function handle(message, sender) {
   if (!connection || sender.tab?.id !== connection.tabId || sender.documentId !== connection.documentId || !local(sender.url)) {
     throw Error('In Chrome, open CV Studio and click the companion toolbar icon to connect this tab.');
@@ -37,31 +48,48 @@ async function handle(message, sender) {
     const tabs = await chrome.tabs.query({url: 'https://www.linkedin.com/*'});
     return tabs.filter(tab => jobURL(tab.url)).map(tab => ({id:tab.id, url:jobURL(tab.url), title:String(tab.title || 'LinkedIn job').slice(0, 160)}));
   }
-  if (message.action === 'jobRead') {
-    const bound = connection, expected = jobURL(args.expected_url);
-    if (connection.run) throw Error('Stop the sourcing run before reading a job ad.');
-    const tab = await chrome.tabs.get(args.tab_id);
-    if (!expected || jobURL(tab.url) !== expected || tab.status !== 'complete' || connection !== bound) throw Error('The selected job changed or has not loaded. Refresh job tabs.');
-    await chrome.scripting.executeScript({target:{tabId:tab.id}, files:['reader.js']});
-    if (connection !== bound || bound.run) throw Error('The companion connection changed.');
-    const [{result}] = await chrome.scripting.executeScript({target:{tabId:tab.id},
-      func: url => globalThis.SourcerReader.readJob(url), args:[expected]});
-    const current = await chrome.tabs.get(tab.id);
-    if (connection !== bound || bound.run || jobURL(current.url) !== expected || result?.url !== expected) throw Error('The selected job changed while reading.');
-    return result;
+  if (message.action === 'jobRead' || message.action === 'jobFromLink') {
+    const bound = connection, expected = jobURL(message.action === 'jobRead' ? args.expected_url : args.url);
+    if (!expected || bound.run || jobCapture) throw Error('Finish the current browser action before reading a job ad.');
+    const token = {}; jobCapture = token;
+    let created = null;
+    try {
+      if (message.action === 'jobRead') return await readJobTab(bound, args.tab_id, expected);
+      // Only a canonical job URL explicitly submitted by the bound app may be
+      // opened. Never navigate or close any pre-existing user tab.
+      if (args.url !== expected) throw Error('Use a canonical LinkedIn job link.');
+      const tabs = await chrome.tabs.query({url:'https://www.linkedin.com/*'});
+      if (connection !== bound || bound.run) throw Error('The companion connection changed.');
+      let tab = tabs.find(value => jobURL(value.url) === expected && value.status === 'complete') || tabs.find(value => jobURL(value.url) === expected);
+      if (!tab) { tab = await chrome.tabs.create({url:expected, active:false}); created = tab.id; }
+      for (let attempt = 0; attempt < 40; attempt++) {
+        if (connection !== bound || bound.run) throw Error('The companion connection changed.');
+        const current = await chrome.tabs.get(tab.id);
+        if (jobURL(current.url) !== expected && !(created === tab.id && (!current.url || current.url === 'about:blank') && current.pendingUrl === expected)) throw Error('The job left its expected page.');
+        if (current.status === 'complete') return await readJobTab(bound, tab.id, expected);
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      throw Error('The job ad did not finish loading.');
+    } finally {
+      if (created !== null) {
+        try { const tab = await chrome.tabs.get(created); if (!tab.active && tab.url === expected) await chrome.tabs.remove(created); } catch {}
+      }
+      if (jobCapture === token) jobCapture = null;
+    }
   }
   if (message.action === 'tabs') {
     const tabs = await chrome.tabs.query({url: 'https://www.linkedin.com/*'});
     return tabs.map(tab => ({id: tab.id, url: tab.url, title: String(tab.title || 'LinkedIn').slice(0, 160), status: tab.status}));
   }
   if (message.action === 'begin') {
+    if (jobCapture) throw Error('Wait for the job ad to finish reading first.');
     if (!/^[a-f0-9]{32}$/.test(args.run_id || '')) throw Error('Invalid sourcing run.');
     if (connection.run && connection.run !== args.run_id) throw Error('Stop the current browser run first.');
     if (connection.run === args.run_id) return true;
     if (!Number.isInteger(args.max_pages) || args.max_pages < 1 || args.max_pages > 15 || !['standard', 'lite', 'recruiter'].includes(args.mode)) throw Error('Invalid browser run limits.');
     const bound = connection;
     const source = await chrome.tabs.get(args.source_tab_id);
-    if (connection !== bound || !linkedin(source.url) || profile(source.url)) throw Error('Choose a LinkedIn search tab.');
+    if (connection !== bound || jobCapture || !linkedin(source.url) || profile(source.url)) throw Error('Choose a LinkedIn search tab.');
     connection.source = source.id; connection.pages = args.max_pages;
     connection.allowed = new Set();
     connection.run = args.run_id; nextCount = 0; profileCount = 0; return true;

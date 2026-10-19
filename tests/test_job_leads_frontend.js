@@ -62,7 +62,7 @@ const root = path.resolve(__dirname, '..');
   class TestURL extends URL {static createObjectURL(blob){blobs.push(blob);return 'blob:synthetic'} static revokeObjectURL(){}}
   const location={origin:'http://127.0.0.1:5000',search:'',href:''};
   const window={addEventListener:(type,fn)=>events[type]=fn,confirm:()=>allowDiscard,postMessage:message=>{
-    events.message({source:window,origin:location.origin,data:{type:'CVSTUDIO_LINKEDIN_RESPONSE',channel:message.channel,id:message.id,result:message.action==='jobTabs'?[{id:2,title:'Sample job',url}]:{url,company:'Read company',role:'Read role'}}});
+    events.message({source:window,origin:location.origin,data:{type:'CVSTUDIO_LINKEDIN_RESPONSE',channel:message.channel,id:message.id,result:message.action==='jobTabs'?[{id:2,title:'Sample job',url}]:{url,company:'Read company',role:'Read role',contact:'Do not copy from ad',status:'won',follow_up:'2030-01-01',notes:'Do not replace notes'}}});
   }};
   const fetch=async(endpoint,options)=>{
     assert.equal(endpoint,'/job-leads');
@@ -97,5 +97,20 @@ const root = path.resolve(__dirname, '..');
   allowDiscard=true;await el('Read').click();
   assert.equal(el('company').value,'Read company');assert.match(el('Message').textContent,/Review the details/);
   assert.equal(records[0].company,'=FORMULA()', 'capture must not save automatically');
-  console.log('Job Leads: bound job-only capture, stale source rejection, Sourcer isolation, save/edit/search, duplicate/draft protection, CSV and HTML safety passed');
+  await el('New').click();
+  let prevented=false;
+  await el('url').handlers.paste({clipboardData:{getData:()=>url+'?trk=discard'},preventDefault(){prevented=true}});
+  assert(prevented);assert.equal(el('url').value,url);
+  assert.equal(el('company').value,'Read company');assert.equal(el('role').value,'Read role');
+  assert.equal(el('status').value,'new');assert.equal(el('contact').value,'');assert.equal(el('follow_up').value,'');
+  assert.match(el('Message').textContent,/optionally add a contact/);
+  el('company').value='Manual correction';el('contact').value='Manual Contact';el('notes').value='Keep my notes';el('status').value='contacted';el('follow_up').value='2026-11-01';
+  await el('AutoFill').click();
+  assert.equal(el('company').value,'Manual correction');assert.equal(el('contact').value,'Manual Contact');assert.equal(el('notes').value,'Keep my notes');assert.equal(el('status').value,'contacted');assert.equal(el('follow_up').value,'2026-11-01');
+  const previousPost=window.postMessage;
+  window.postMessage=message=>events.message({source:window,origin:location.origin,data:{type:'CVSTUDIO_LINKEDIN_RESPONSE',channel:message.channel,id:message.id,error:'Synthetic read failure'}});
+  await el('AutoFill').click();assert.equal(el('company').value,'Manual correction');assert.equal(el('contact').value,'Manual Contact');assert.equal(el('Save').disabled,false);assert.match(el('Message').textContent,/draft has been kept/);
+  window.postMessage=previousPost;
+  await el('New').click();el('url').value='https://attacker.invalid/jobs/view/123';await el('AutoFill').click();assert.equal(el('company').value,'');assert.match(el('Message').textContent,/Paste a LinkedIn job ad link/);
+  console.log('Job Leads: capture binding/isolation, save/edit/search, duplicate/draft protection, paste-link autofill, optional manual contact/status/date preservation, failure, CSV and HTML safety passed');
 })().catch(error=>{console.error(error);process.exitCode=1});

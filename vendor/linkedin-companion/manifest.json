@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "CV Studio LinkedIn Companion",
-  "version": "24.6.447",
-  "description": "Browser navigation for CV Studio's LinkedIn Sourcer module. No AI keys or provider calls.",
+  "version": "24.6.448",
+  "description": "LinkedIn Sourcer and job-link autofill for CV Studio. No AI keys or provider calls.",
   "minimum_chrome_version": "116",
   "permissions": ["activeTab", "scripting"],
   "host_permissions": ["https://www.linkedin.com/*", "http://127.0.0.1/*", "http://localhost/*"],

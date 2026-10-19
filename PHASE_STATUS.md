@@ -4,6 +4,21 @@
 
 ## Release state
 
+- Current owner-authorized source work (2026-10-19): v24.6.448,
+  `codex/v24.6.448-job-link-autofill`, from local v447 `1223ed8`.
+  Pasting a LinkedIn job link triggers companion fill of empty company, role,
+  location and description fields. Contact stays optional/manual, status starts
+  New, dates are not invented, and existing manual edits are retained. The bound
+  companion reuses matching job tabs or opens only the explicitly submitted
+  canonical job in a temporary inactive tab; cleanup preserves user-owned,
+  activated or navigated tabs. Capture is bounded and cannot overlap sourcing.
+  No route, schema, paid-boundary or permission change. Full local: 1,640 passed,
+  four skipped, three documented updater exclusions, 7,599 subtests. All 32
+  frontend suites, native Chrome synthetic Job Leads/Sourcer flows, source
+  preflight and 24-assertion smoke pass. See the v448 QA report.
+  Preview uses isolated persistent state on 5074;
+  no live LinkedIn/paid call, owner installation update, push, PR or merge.
+
 - Current owner-authorized source work (2026-10-19): v24.6.447,
   `codex/v24.6.447-job-leads`, from local v446 `cfa18bc` / main `480678d`.
   Separate Job Leads module saves LinkedIn job links, company/role, contact,

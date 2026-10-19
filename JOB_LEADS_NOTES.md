@@ -6,9 +6,14 @@ sourcer and the locked historical Lead Finder.
 
 ## Workflow
 
-- Open **Job Leads**, paste the LinkedIn job link, company and role, then save.
+- Open **Job Leads** and paste a LinkedIn job link. With the latest Chrome
+  companion connected, company, role, location and description fill automatically.
+  **Fill from link** retries the read. Existing manual entries are preserved.
+  Review the details before saving; manual entry remains available.
 - Optional fields: contact person, location, notes, status, follow-up date and
-  a retained job-description excerpt. Follow-ups due are shown in the module;
+  a retained job-description excerpt. Contact is always manual and optional;
+  status starts as New and follow-up dates are never inferred from the ad.
+  Follow-ups due are shown in the module;
   this is not a scheduled notification or outreach service.
 - To fill a draft from Chrome, install/reload the latest bundled companion,
   arm it from the CV Studio toolbar icon, open a job ad and use **Refresh job
@@ -47,13 +52,18 @@ paid route. The new seal is 120 routes:
 Excluding `job_leads` exactly reproduces the v446 119-route contract; excluding
 both new modules still reproduces the merged v445 118-route contract.
 
-The existing companion adds only `jobTabs` and `jobRead` after its bound app
-document check. Job capture requires a selected tab, matching canonical job ID,
+The companion supports `jobTabs`, `jobRead` and `jobFromLink` after its bound app
+document check. Link fill reuses a matching job tab or opens only the explicitly
+pasted canonical LinkedIn job URL in one temporary inactive tab. It never
+navigates or closes a pre-existing tab. Cleanup closes only an unchanged inactive
+tab created for that read; navigated/activated tabs are retained. One capture runs
+at a time and a sourcing run cannot start midway through it.
+Job capture requires a matching canonical job ID,
 completed loading and a recognized visible detail panel. Search-panel title
 links must confirm the selected job ID to reject stale SPA content. It stops
 on unknown layouts, access challenges, navigation or an active sourcing run.
-Capture performs no click, navigation, tab creation, tab closure or save on
-LinkedIn; it only fills an unsaved CV Studio draft. Its four-file packaging,
+Capture performs no LinkedIn click, application, message or remote save;
+it only fills an unsaved CV Studio draft. Its four-file packaging,
 permissions and provider/key isolation remain unchanged.
 
 ## Verification
@@ -66,6 +76,8 @@ covers bound job-only capture, source invalidation, sourcing isolation, draft
 protection, DOM text safety and spreadsheet-safe CSV output. Native Chrome uses
 synthetic intercepted LinkedIn pages and a simulated companion; actual extension
 installation and current live LinkedIn layouts still need owner-driven checking.
+`test_job_link_autofill_frontend.js` adds link/canonical URL constraints,
+existing-tab reuse, owned-tab cleanup, timeout and concurrent-run/reload checks.
 
 The source preview on port 5074 uses isolated state kept across its own restarts.
 It is separate from the installed owner app on port 5000. The preview state path

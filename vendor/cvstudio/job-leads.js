@@ -6,7 +6,7 @@
   const fields = ['url', 'company', 'role', 'contact', 'location', 'status', 'follow_up', 'notes', 'description'];
   const hex = () => crypto.randomUUID().replaceAll('-', '');
   const channel = hex(), pending = new Map();
-  let rows = [], editing = null, busy = false, dirty = false, page = 0, ready = false;
+  let rows = [], editing = null, busy = false, dirty = false, page = 0, ready = false, lastReadUrl = '';
   const status = message => { el('Message').textContent = message; };
   function localDate() {
     const d = new Date();
@@ -17,13 +17,14 @@
   function fill(record) {
     fields.forEach(key => { el(key).value = record?.[key] || (key === 'status' ? 'new' : ''); });
     editing = record?.id ? record : null; dirty = false;
+    lastReadUrl = record?.url || '';
     el('Heading').textContent = editing ? 'Edit lead' : 'Save a job ad';
     el('Save').textContent = editing ? 'Save changes' : 'Save lead';
   }
   function discard() { return !dirty || window.confirm('Discard the unsaved changes in this lead?'); }
   function lock(value) {
     busy = value;
-    for (const id of ['Save', 'New', 'Read', 'Tabs', 'Refresh', 'Restore']) el(id).disabled = value;
+    for (const id of ['Save', 'New', 'Read', 'Tabs', 'Refresh', 'Restore', 'AutoFill']) el(id).disabled = value;
     for (const name of fields) el(name).disabled = value;
     el('List').querySelectorAll('button').forEach(button => { button.disabled = value; });
   }
@@ -71,7 +72,7 @@
   }
   function rpc(action, args = {}) {
     return new Promise((resolve, reject) => {
-      const id = hex(), timer = setTimeout(() => { pending.delete(id); reject(Error('Open CV Studio in Chrome and click the companion toolbar icon, then refresh job tabs.')); }, 12000);
+      const id = hex(), timer = setTimeout(() => { pending.delete(id); reject(Error('Connect the latest companion in Chrome to fill from a job link. You can also enter the details manually.')); }, action === 'jobFromLink' ? 35000 : 12000);
       pending.set(id, {resolve, reject, timer});
       window.postMessage({type:'CVSTUDIO_LINKEDIN_REQUEST', id, channel, action, args}, location.origin);
     });
@@ -83,10 +84,47 @@
     clearTimeout(item.timer); pending.delete(data.id);
     if (data.error) item.reject(Error(data.error)); else item.resolve(data.result);
   });
+  function jobLink(value) {
+    try {
+      if (value.length > 2048 || value.includes('\\')) return '';
+      const u = new URL(value.trim());
+      if (u.protocol !== 'https:' || !['www.linkedin.com', 'linkedin.com', 'my.linkedin.com', 'sg.linkedin.com'].includes(u.hostname) || u.username || u.password || u.port) return '';
+      const view = u.pathname.match(/^\/jobs\/view\/(?:[^/]*-)?([0-9]{1,24})\/?$/), ids = u.searchParams.getAll('currentJobId');
+      const id = view ? view[1] : /^\/jobs(?:\/search|\/collections\/[^/]+)?\/?$/.test(u.pathname) && ids.length === 1 ? ids[0] : '';
+      return /^[0-9]{1,24}$/.test(id) ? 'https://www.linkedin.com/jobs/view/' + id : '';
+    } catch { return ''; }
+  }
+  async function fillFromLink() {
+    if (busy) return;
+    const url = jobLink(el('url').value);
+    if (!url) { status('Paste a LinkedIn job ad link to fill in its details.'); return; }
+    if (editing && jobLink(editing.url) !== url) { status('Click New lead before filling a different job ad. Your current lead has been kept.'); return; }
+    const before = draft(); lock(true); status('Reading this LinkedIn job ad…');
+    try {
+      const data = await rpc('jobFromLink', {url});
+      if (jobLink(data?.url || '') !== url || !data.company || !data.role) throw Error('The job details could not be confirmed. Use Read job ad or enter them manually.');
+      // Never fill contacts, notes, follow-up dates or BD status from ad text,
+      // and preserve manual corrections already made to other populated fields.
+      for (const key of ['company','role','location','description']) {
+        if (!before[key].trim() && typeof data[key] === 'string') el(key).value = data[key];
+      }
+      el('url').value = url; dirty = true; lastReadUrl = url;
+      status('Job details filled in. Review them, optionally add a contact, then Save lead.' + (data.description_truncated ? ' The description is an excerpt.' : ''));
+    } catch (error) { status(error.message + ' Your draft has been kept.'); }
+    finally { lock(false); }
+  }
   window.initJobLeads = async function () {
     if (ready) return;
     ready = true;
     fields.forEach(key => el(key).addEventListener('input', () => { dirty = true; }));
+    el('AutoFill').addEventListener('click', fillFromLink);
+    el('url').addEventListener('paste', event => {
+      const value = event.clipboardData?.getData('text/plain') || '';
+      if (busy || !jobLink(value)) return;
+      event.preventDefault(); el('url').value = value.trim(); dirty = true;
+      return fillFromLink();
+    });
+    el('url').addEventListener('change', () => { const url = jobLink(el('url').value); if (url && url !== lastReadUrl) return fillFromLink(); });
     el('Form').addEventListener('submit', async event => {
       event.preventDefault(); if (busy) return;
       lock(true); status('Saving lead…');
