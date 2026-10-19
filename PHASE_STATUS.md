@@ -4,12 +4,34 @@
 
 ## Release state
 
-- Current verified merged baseline (2026-10-13): v24.6.441, `fcaedae` (#227).
+- Current verified merged baseline (2026-10-17): v24.6.445, `480678d` (#228).
+  Tested head `73cac43` has the same tree `fee044b`; all three hosted gates
+  passed. Unfiltered Windows: 1,600 passed, four skipped, 7,599 subtests.
+  `codex/v24.6.442-contribution-grouping` is complete and must not be reused.
+
+- Current owner-authorized experiment (2026-10-19): isolated LinkedIn sourcing
+  POC on `codex/v24.6.445-linkedin-sourcer-poc`, from exact main `480678d`.
+  `poc/linkedin-sourcer` contains a Chrome side panel and separate loopback
+  DeepSeek bridge, with modes for People search, Recruiter Lite and Recruiter.
+  It plans a query, reads observed result cards, reviews up to five profiles per
+  page and follows recognized pagination, bounded to 15 pages and a separately
+  confirmed request ceiling. Evidence/unknowns, provenance, Stop and CSV export
+  are included. The saved Windows DeepSeek key is reused read-only on the server;
+  no key enters the extension or LinkedIn. All 26 component/browser tests pass
+  with synthetic pages and mocked transport. Native Chrome fixture rendering and
+  native Windows launcher start/stop/restart pass. Saved key presence was checked
+  without displaying it. No paid request or live LinkedIn account check occurred;
+  those remain owner-driven after loading the extension. Main application source,
+  version, routes, schemas, installation/receipt and usage history are untouched.
+  Evidence and known layout limits are in the POC's README and VERIFICATION.md.
+  Stop after the local checkpoint; no push, PR, merge or protected build.
+
+- Previous verified merged baseline (2026-10-13): v24.6.441, `fcaedae` (#227).
   Tested head `fc4ed7b` has the same tree `3e146d8`; all three hosted gates
   passed. Unfiltered Windows: 1,587 passed, four skipped, 7,121 subtests.
   `codex/v24.6.439-batch-jobadder-link` is complete.
 
-- Current owner-authorized source work (2026-10-17): v24.6.445,
+- Completed owner-authorized source work (2026-10-17): v24.6.445,
   `codex/v24.6.442-contribution-grouping`, from exact `fcaedae`.
   Contribution company/year labels are source-confirmed headings rather than
   achievement bullets, in preview and Word. Optional `item_headings` retains
@@ -33,8 +55,8 @@
   exclusions; 7,599 subtests and all 29 frontend suites passed. Exact-master
   and pre-correction replays cover 333 inputs with only intended layout deltas.
   Evidence is in the v24.6.445 QA report, supplementing the v442–v444 reports.
-  Owner authorized PR/merge on 2026-10-17. PR #228 awaits fresh exact-head
-  hosted checks; final merge/check identities will be recorded in issue #35.
+  Owner authorized PR/merge on 2026-10-17. PR #228 merged after all three
+  exact-head hosted checks passed; final merge/check identities are in issue #35.
 
 - Completed owner-authorized source work: v24.6.441,
   `codex/v24.6.439-batch-jobadder-link`, from exact `a40bf63`.

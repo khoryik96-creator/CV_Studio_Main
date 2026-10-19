@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sourcer POC</title><link rel="stylesheet" href="panel.css"></head>
+<body>
+<header><div class="eyebrow">CV STUDIO / EXPERIMENT</div><h1>Find the right people.</h1><p>A browser sourcing assistant, powered by DeepSeek.</p></header>
+<main>
+  <details id="connection" open><summary>Connect to your local bridge <span id="connected">Not connected</span></summary>
+    <p>Open <a href="http://127.0.0.1:5073/" target="_blank" rel="noopener">the local welcome page</a> and copy its pairing code. Your API key stays on your computer.</p>
+    <label for="pair">Pairing code</label><input id="pair" type="password" autocomplete="off" placeholder="Paste the pairing code">
+    <button id="pair-button" class="secondary">Connect</button>
+  </details>
+  <section aria-labelledby="brief-title"><h2 id="brief-title">Who are you looking for?</h2>
+    <label class="sr-only" for="brief">Candidate requirements</label>
+    <textarea id="brief" maxlength="4000" rows="5" placeholder="Finance managers in Klang Valley with manufacturing, SAP and regional reporting experience…"></textarea>
+    <label for="mode">Where to search</label><select id="mode"><option value="standard">LinkedIn · People search</option><option value="lite">LinkedIn Recruiter Lite</option><option value="recruiter">LinkedIn Recruiter</option></select>
+    <p id="mode-help" class="muted">Open LinkedIn in the active tab and sign in first.</p>
+    <label class="check"><input id="open-search" type="checkbox"> Review the search already open in this tab</label>
+    <div class="limits"><label>Pages <input id="pages" type="number" min="1" max="15" value="10"></label><label>API request limit <input id="calls" type="number" min="1" max="80" value="35"></label></div>
+    <p class="muted">Up to 5 promising profiles inspected per page. Keep this panel open. Different LinkedIn layouts may need adjustment during the POC.</p>
+    <label class="check consent"><input id="consent" type="checkbox"> Use my DeepSeek balance and send the brief and observed profile text to DeepSeek for this run.</label>
+    <div class="actions"><button id="start">Start sourcing <span>→</span></button><button id="stop" class="secondary" disabled>Stop</button></div>
+  </section>
+  <section id="progress" aria-live="polite"><div class="eyebrow">CURRENT RUN</div><p id="status">Connect your bridge to begin.</p><p id="usage" class="muted"></p><p id="query" class="query" hidden></p></section>
+  <section><div class="results-heading"><h2>People to review <span id="count">0</span></h2><button id="export" class="secondary small" disabled>Export CSV</button><button id="clear" class="secondary small">Clear</button></div>
+    <p class="muted">Scores describe visible evidence. Missing requirements stay unknown.</p>
+    <div id="results"><div class="empty">Your candidate list will appear here.</div></div>
+  </section>
+  <footer>Experimental · Read-only sourcing. LinkedIn restricts unauthorized automation; access checks and restrictions stop the run. A request already in flight may still finish after Stop.</footer>
+</main><script type="module" src="panel.js"></script>
+</body></html>
