@@ -1434,3 +1434,12 @@
 @media(max-width:1040px){#viewTheSpider.page-view.active{width:calc(100vw - 18px);margin-left:50%;transform:translateX(-50%)}.spider-layout{grid-template-columns:1fr}.spider-grid{grid-template-columns:1fr}.spider-search-shell{grid-template-columns:1fr}.spider-results-scroll{max-height:520px;min-height:220px}.spider-cv-preview{position:relative;top:auto;max-height:620px}.spider-cv-preview-frame{height:560px;min-height:520px}.spider-info-grid{grid-template-columns:1fr}}
 
   .provider-down-alert{border:1px solid #fecaca;background:#fff1f2;color:#991b1b;border-radius:10px;padding:10px 12px;font-weight:700;line-height:1.45;}
+
+/* LinkedIn Sourcer module */
+.li-sourcer-layout{display:grid;grid-template-columns:minmax(320px,.9fr) minmax(360px,1.1fr);gap:18px;max-width:1300px;margin:auto;align-items:start}
+#liSourcerBrief{height:140px!important;min-height:140px;max-height:300px;flex:none}
+.li-sourcer-form{display:flex;flex-direction:column;gap:12px}.li-sourcer-form p{margin:0}.li-sourcer-form label{font-size:12px;font-weight:650}
+.li-sourcer-form textarea,.li-sourcer-form select,.li-sourcer-form input[type=number]{width:100%;padding:10px;border:1px solid var(--border);background:var(--surface);color:var(--text1);border-radius:7px;font:inherit}
+.li-sourcer-row{display:flex;gap:12px;align-items:center}.li-sourcer-row>*{flex:1;min-width:0}.li-sourcer-check{display:flex;gap:9px;align-items:flex-start}.li-sourcer-check input{margin-top:3px;flex:0 0 auto}
+.li-sourcer-muted{color:var(--text3);font-size:11px;line-height:1.6}.li-sourcer-result{border-top:1px solid var(--border);padding:17px 0}.li-sourcer-result-head{display:flex;justify-content:space-between;gap:12px}.li-sourcer-result-head a{font-weight:750;overflow-wrap:anywhere}.li-sourcer-result ul{padding-left:18px;font-size:12px}.li-sourcer-form details{font-size:12px;line-height:1.65}.li-sourcer-form details li{margin:8px 0}
+@media(max-width:900px){.li-sourcer-layout{grid-template-columns:1fr}}

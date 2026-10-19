@@ -51,6 +51,8 @@ FRONTEND_MODULES = (
     "docx-export.js",
     "the-owl.js",
     "ai-crawler.js",
+    "linkedin-sourcer-core.js",
+    "linkedin-sourcer.js",
     "ai-proxy.js",
     "ai-routing.js",
     "runtime-core.js",
@@ -78,7 +80,7 @@ FRONTEND_STATIC_ASSETS = (
 class Phase6AFrontendModularizationTests(unittest.TestCase):
     def test_existing_route_and_vendor_asset_boundary(self):
         rules = list(app.app.url_map.iter_rules())
-        self.assertEqual(len(rules), 118)
+        self.assertEqual(len(rules), 119)
         vendor_rules = [rule for rule in rules if rule.rule == "/vendor/<path:filename>"]
         self.assertEqual(len(vendor_rules), 1)
         self.assertEqual(vendor_rules[0].methods - {"HEAD", "OPTIONS"}, {"GET"})

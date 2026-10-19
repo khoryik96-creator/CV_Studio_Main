@@ -24,7 +24,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.445"
+_INSTALL_RECEIPT_VERSION = "v24.6.446"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -347,7 +347,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.445"
+_CVSTUDIO_VERSION = "v24.6.446"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -1229,6 +1229,7 @@ _AI_SPEND_SESSION_COOKIE = "cvstudio_ai_spend_session"
 _AI_SPEND_SESSION_TOKEN = secrets.token_urlsafe(32)
 _CV_FORMAT_REVIEW_SIGNING_KEY = secrets.token_bytes(32)
 _AI_SPEND_EXACT_PATHS = frozenset({
+    "/linkedin-sourcer",
     "/test",
     "/parse",
     "/generate-ai",
@@ -14771,11 +14772,68 @@ app.config["SALARY_COMPARISON_KEY_RESOLVER"] = _salary_comparison_resolve_key
 _salary_comparison.init_app(app, url_prefix="/salary-comparison")
 
 
+from cvstudio_linkedin_sourcer import LinkedInSourcerService, SourcerError, SYSTEM as _SOURCER_SYSTEM
+
+
+def _linkedin_sourcer_provider_call(model, brief, task, schema, observed):
+    payload = {
+        "model": model, "max_tokens": 5000, "thinking": {"type": "disabled"},
+        "system": _SOURCER_SYSTEM,
+        "messages": [{"role": "user", "content": json.dumps({"brief": brief, "task": task, "observed_data": observed}, ensure_ascii=False)}],
+        "tools": [{"name": "return_" + task, "description": "Return the grounded sourcing result.", "input_schema": schema}],
+        "tool_choice": {"type": "tool", "name": "return_" + task},
+    }
+    attempted = False
+    try:
+        _phase5b_enforce_request_guardrail("deepseek", payload)
+        attempted = True
+        response = _AI_PROVIDER_CLIENT.request("deepseek", _resolve_request_api_key({"provider": "deepseek"}), payload, timeout=120)
+        usage = _normalize_llm_usage(response.get("usage"), api_calls=1)
+        billing = _phase5b_extract_provider_billing_result("deepseek", response)
+        if billing.get("billing"):
+            usage["_cvstudio_provider_billing"] = billing["billing"]
+        if billing.get("error"):
+            usage["_cvstudio_provider_billing_error"] = billing["error"]
+        return response, {"usage": usage, "model": model, "provider": "deepseek", **_llm_response_cost_fields(model, usage, "deepseek")}
+    except Exception as cause:
+        error = SourcerError("DeepSeek could not finish this request. No ambiguous request was automatically replayed.")
+        error.accounting = _llm_paid_failure_fields(cause, model, "deepseek", attempted=attempted)
+        raise error from None
+
+
+_LINKEDIN_SOURCER = LinkedInSourcerService(
+    key_available=lambda: bool(_resolve_request_api_key({"provider": "deepseek"})),
+    provider_call=lambda *args: _linkedin_sourcer_provider_call(*args),
+)
+
+
+@app.route("/linkedin-sourcer", methods=["GET", "POST"])
+def linkedin_sourcer():
+    if request.method == "GET":
+        if request.args.get("action") == "extension":
+            import io
+            import zipfile
+            output = io.BytesIO()
+            base = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vendor", "linkedin-companion")
+            with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
+                for name in ("manifest.json", "content.js", "worker.js", "reader.js"):
+                    archive.write(os.path.join(base, name), "CV-Studio-LinkedIn-Companion/" + name)
+            output.seek(0)
+            return send_file(output, mimetype="application/zip", as_attachment=True, download_name="CV-Studio-LinkedIn-Companion.zip")
+        return jsonify(_LINKEDIN_SOURCER.snapshot())
+    if request.content_length and request.content_length > 650000:
+        return jsonify(error="This page is too large for the sourcing module."), 413
+    try:
+        return jsonify(_LINKEDIN_SOURCER.handle(request.get_json(silent=True)))
+    except SourcerError as error:
+        return jsonify(error=str(error), retryable=False, **getattr(error, "accounting", {})), 400
+
+
 _CVSTUDIO_ARCHITECTURE = _finalize_modular_monolith_app(
     app,
-    expected_route_count=118,
+    expected_route_count=119,
     expected_route_contract_sha256=(
-        "42768445b8fe97e48688238c02bebf5abce0251befc3d212c2d2b029911f7862"
+        "da29d6476a2dc929fc3b4f06faae8bdffc7ce69261f58901b90de46d0b857e31"
     ),
     expected_before_request_handlers=(
         "_assign_cvstudio_request_id",

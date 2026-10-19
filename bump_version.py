@@ -22,9 +22,10 @@ Usage::
     python bump_version.py            # re-stamp the current VERSION (idempotent;
                                       # also repairs any existing drift)
 
-Version tokens exist in two shapes, both derived from ``VERSION``:
+Version tokens exist in three shapes, all derived from ``VERSION``:
   * dotted, ``v``-prefixed  -> ``v24.6.271`` (human-facing surfaces, receipt)
   * underscore slug         -> ``v24_6_271`` (protected-build artifact names)
+  * bare dotted             -> ``24.6.271`` (Chrome companion manifest)
 
 Windows scripts (``*.ps1``/``*.vbs``/``*.bat``) are CRLF-encoded and the
 protected build validates that; all edits here are byte-level so line endings
@@ -71,8 +72,17 @@ def slug(version: str) -> str:
 # rewritten within each match, so surrounding text is preserved verbatim.
 _D = rb"(?P<ver>v\d+\.\d+\.\d+)"
 _S = rb"(?P<ver>v\d+_\d+_\d+)"
+_B = rb"(?P<ver>\d+\.\d+\.\d+)"
+
+
+def version_token(pattern: bytes, version: str) -> bytes:
+    """Chrome manifests require bare semver; other established shapes remain."""
+    if _B in pattern:
+        return version.encode("ascii")
+    return (slug(version) if rb"_\d+_" in pattern else dotted(version)).encode("ascii")
 
 ANCHORS: dict[str, list[bytes]] = {
+    "vendor/linkedin-companion/manifest.json": [rb'"version": "' + _B + rb'"'],
     "app.py": [
         rb'_INSTALL_RECEIPT_VERSION = "' + _D + rb'"',
         rb'_CVSTUDIO_VERSION = "' + _D + rb'"',
@@ -136,15 +146,13 @@ ANCHORS: dict[str, list[bytes]] = {
 
 def stamp(version: str) -> list[str]:
     """Rewrite every anchored surface to ``version``. Returns files changed."""
-    want_dotted = dotted(version).encode("ascii")
-    want_slug = slug(version).encode("ascii")
     changed: list[str] = []
     for rel, patterns in ANCHORS.items():
         path = ROOT / rel
         data = path.read_bytes()
         original = data
         for pattern in patterns:
-            token = want_slug if rb"_\d+_" in pattern else want_dotted
+            token = version_token(pattern, version)
             new_data, count = re.subn(
                 pattern,
                 lambda m, _t=token: m.group(0).replace(m.group("ver"), _t),

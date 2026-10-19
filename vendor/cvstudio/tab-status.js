@@ -3,6 +3,7 @@
 // prevents an old async action from changing a tab after the user has cleared it
 // or started a newer action.
 var TAB_BUTTON_IDS = {
+  linkedinsourcer: 'tabLinkedinSourcer',
   format: 'tabFormat', summary: 'tabSummary', appraiser: 'tabAppraiser', theowl: 'tabTheOwl', thespider: 'tabTheSpider', batch: 'tabBatch', jaupload: 'tabJAUpload', jacreate: 'tabJACreate',
   jdanon: 'tabJDAnon', company: 'tabCompany', onenote: 'tabOneNote', leadfinder: 'tabLeadFinder', stats: 'tabStats', ppc: 'tabPPC'
 };

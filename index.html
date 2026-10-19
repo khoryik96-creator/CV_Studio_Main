@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>CV Studio</title>
 <link rel="icon" type="image/png" href="cv_studio_logo.png?v=24.6.79-ui"/>
-<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.445">
-<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.445"></script>
+<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.446">
+<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.446"></script>
 <script>
 /* CV Studio Doctor — built-in diagnostic recorder.
  * Records JS errors, unhandled rejections, failed/slow network calls and
@@ -254,7 +254,7 @@
 <div class="app">
   <div class="header" style="position:relative;">
     <div>
-      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.445 (Offline) by The 郭 Lab</span></h1>
+      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.446 (Offline) by The 郭 Lab</span></h1>
 
     </div>
     <div class="header-tools">
@@ -813,6 +813,7 @@
     <button class="page-tab" id="tabStats" onclick="switchTab('stats')"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 4.5h6v6h-6zM13.5 4.5h6v6h-6zM4.5 13.5h6v6h-6zM13.5 13.5h6v6h-6z"></path></svg></span><span class="tab-label">Dashboard</span></button>
     <button class="page-tab" id="tabPPC" onclick="switchTab('ppc')" title="Post Placement Care"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"></path><path d="M8.5 12h2l1-2.2 1.4 4.4 1.1-2.2h1.5"></path></svg></span><span class="tab-label">PPC</span></button>
     <button class="page-tab" id="tabTheSpider" onclick="switchTab('thespider')" title="AI Crawler"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8.2v10.5M7.5 10.2 4.2 7M16.5 10.2 19.8 7M7 14H3.5M17 14h3.5M7.5 17.2 4.5 20M16.5 17.2l3 2.8"></path><circle cx="12" cy="6.5" r="2.5"></circle><ellipse cx="12" cy="13.5" rx="5" ry="5.5"></ellipse></svg></span><span class="tab-label">AI Crawler</span></button>
+    <button class="page-tab" id="tabLinkedinSourcer" onclick="switchTab('linkedinsourcer')"><span class="tab-icon" aria-hidden="true">⌕</span><span class="tab-label">LinkedIn Sourcer</span></button>
     <button class="page-tab lead-locked" id="tabLeadFinder" onclick="switchTab('leadfinder')" title="Locked tab"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="10" width="12" height="9" rx="2"></rect><path d="M8.7 10V7.7a3.3 3.3 0 0 1 6.6 0V10"></path></svg></span><span class="tab-label">Locked</span></button>
     <button class="page-tab appraiser-locked" id="tabAppraiser" onclick="switchTab('appraiser')" title="Locked tab"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="10" width="12" height="9" rx="2"></rect><path d="M8.7 10V7.7a3.3 3.3 0 0 1 6.6 0V10"></path></svg></span><span class="tab-label">Locked</span></button>
     <button class="page-tab" id="tabSalary" onclick="switchTab('salary')" title="Salary Comparison"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.2"></circle><path d="M12 7.2v9.6M14.3 9.2a2.3 2.3 0 0 0-2.3-1.4c-1.4 0-2.4.8-2.4 2s1 1.7 2.4 2 2.4.8 2.4 2-1 2-2.4 2a2.4 2.4 0 0 1-2.4-1.5"></path></svg></span><span class="tab-label">Salary</span></button>
@@ -820,6 +821,35 @@
   </div>
 
 
+
+  <div class="page-view" id="viewLinkedinSourcer">
+    <div class="li-sourcer-layout">
+      <div class="card"><div class="card-head"><h2>LinkedIn Sourcer</h2><span class="pill">Experimental · DeepSeek</span></div>
+        <div class="card-body li-sourcer-form">
+          <p>Describe the person you need. Review matching profiles and their LinkedIn links here.</p>
+          <details><summary>Connect the browser companion once</summary>
+            <ol><li><a href="/linkedin-sourcer?action=extension" download>Download the browser companion</a> and extract the ZIP.</li>
+              <li>In Chrome, open <strong>chrome://extensions</strong>, turn on Developer mode, choose Load unpacked, and select the extracted folder.</li>
+              <li>Open this CV Studio address in Chrome, pin the companion, then click its toolbar icon while this tab is open.</li>
+              <li>Open your LinkedIn search in another Chrome tab, return here, and refresh the tab list.</li></ol>
+          </details>
+          <label for="liSourcerBrief">Who are you looking for?</label><textarea id="liSourcerBrief" rows="5" maxlength="4000" placeholder="Finance managers in Klang Valley with manufacturing, SAP and regional reporting experience…"></textarea>
+          <label for="liSourcerMode">Search mode</label><select id="liSourcerMode"><option value="standard">LinkedIn · People search</option><option value="lite">LinkedIn Recruiter Lite</option><option value="recruiter">LinkedIn Recruiter</option></select>
+          <div class="li-sourcer-row"><select id="liSourcerSource" aria-label="LinkedIn search tab"><option value="">Choose a LinkedIn tab</option></select><button class="sec" id="liSourcerRefresh" onclick="refreshLinkedinSourcerTabs()">Refresh tabs</button></div>
+          <label class="li-sourcer-check"><input id="liSourcerOpenSearch" type="checkbox"> Review the search already open, keeping its filters</label>
+          <div class="li-sourcer-row"><label>Pages <input id="liSourcerPages" type="number" min="1" max="15" value="10"></label><label>API request limit <input id="liSourcerCalls" type="number" min="1" max="80" value="35"></label></div>
+          <p class="li-sourcer-muted">Up to five promising profiles per page. Layout changes or LinkedIn access checks stop the run. Missing or collapsed details remain unknown.</p>
+          <label class="li-sourcer-check"><input id="liSourcerConsent" type="checkbox"> Use my saved DeepSeek key and balance, and send this brief and the observed profile text to DeepSeek for this run.</label>
+          <div class="li-sourcer-row"><button class="primary" id="liSourcerStart" onclick="startLinkedinSourcer()">Start sourcing</button><button class="sec" id="liSourcerStop" onclick="stopLinkedinSourcer()" disabled>Stop</button></div>
+          <div role="status" aria-live="polite"><p id="liSourcerStatus">Connect the browser companion to begin.</p><p id="liSourcerUsage" class="li-sourcer-muted"></p><p id="liSourcerQuery"></p></div>
+          <p class="li-sourcer-muted">LinkedIn restricts unauthorized automation. This module does not bypass login checks or usage limits.</p>
+        </div>
+      </div>
+      <div class="card"><div class="card-head"><h2>People to review <span id="liSourcerCount">0</span></h2><div><button class="sec" id="liSourcerExport" onclick="exportLinkedinSourcer()" disabled>Export CSV</button> <button class="sec" id="liSourcerClear" onclick="clearLinkedinSourcer()">Clear</button></div></div>
+        <div class="card-body"><p class="li-sourcer-muted">Scores reflect visible evidence, with unknown requirements shown explicitly.</p><div id="liSourcerResults">Your candidate list will appear here.</div></div>
+      </div>
+    </div>
+  </div>
 
   <!-- ── CV Summary view ─────────────────────────────────────────────── -->
   <div class="page-view" id="viewSummary">
@@ -2421,33 +2451,35 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
-<script src="/vendor/cvstudio/api-transport.js?v=v24.6.445"></script>
-<script src="/vendor/cvstudio/page-nav.js?v=v24.6.445"></script>
-<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.445"></script>
-<script src="/vendor/cvstudio/create-profile.js?v=v24.6.445"></script>
-<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.445"></script>
-<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.445"></script>
-<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.445"></script>
-<script src="/vendor/cvstudio/company-profile.js?v=v24.6.445"></script>
-<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.445"></script>
-<script src="/vendor/cvstudio/appearance.js?v=v24.6.445"></script>
-<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.445"></script>
-<script src="/vendor/cvstudio/docx-export.js?v=v24.6.445"></script>
-<script src="/vendor/cvstudio/the-owl.js?v=v24.6.445"></script>
-<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.445"></script>
-<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.445"></script>
-<script src="/vendor/cvstudio/settings.js?v=v24.6.445"></script>
-<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.445"></script>
-<script src="/vendor/cvstudio/tab-status.js?v=v24.6.445"></script>
-<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.445"></script>
-<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.445"></script>
-<script src="/vendor/cvstudio/cv-format.js?v=v24.6.445"></script>
-<script src="/vendor/cvstudio/locks.js?v=v24.6.445"></script>
-<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.445"></script>
-<script src="/vendor/cvstudio/ppc.js?v=v24.6.445"></script>
-<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.445"></script>
-<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.445"></script>
-<script src="/vendor/cvstudio/batch-format.js?v=v24.6.445"></script>
+<script src="/vendor/cvstudio/api-transport.js?v=v24.6.446"></script>
+<script src="/vendor/cvstudio/page-nav.js?v=v24.6.446"></script>
+<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.446"></script>
+<script src="/vendor/cvstudio/create-profile.js?v=v24.6.446"></script>
+<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.446"></script>
+<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.446"></script>
+<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.446"></script>
+<script src="/vendor/cvstudio/company-profile.js?v=v24.6.446"></script>
+<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.446"></script>
+<script src="/vendor/cvstudio/appearance.js?v=v24.6.446"></script>
+<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.446"></script>
+<script src="/vendor/cvstudio/docx-export.js?v=v24.6.446"></script>
+<script src="/vendor/cvstudio/the-owl.js?v=v24.6.446"></script>
+<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.446"></script>
+<script src="/vendor/cvstudio/linkedin-sourcer-core.js?v=v24.6.446"></script>
+<script src="/vendor/cvstudio/linkedin-sourcer.js?v=v24.6.446"></script>
+<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.446"></script>
+<script src="/vendor/cvstudio/settings.js?v=v24.6.446"></script>
+<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.446"></script>
+<script src="/vendor/cvstudio/tab-status.js?v=v24.6.446"></script>
+<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.446"></script>
+<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.446"></script>
+<script src="/vendor/cvstudio/cv-format.js?v=v24.6.446"></script>
+<script src="/vendor/cvstudio/locks.js?v=v24.6.446"></script>
+<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.446"></script>
+<script src="/vendor/cvstudio/ppc.js?v=v24.6.446"></script>
+<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.446"></script>
+<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.446"></script>
+<script src="/vendor/cvstudio/batch-format.js?v=v24.6.446"></script>
 <script>
 
 document.addEventListener('DOMContentLoaded', initPageNavPin);
@@ -2465,9 +2497,9 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 
 </script>
-<script src="/vendor/cvstudio/input-file.js?v=v24.6.445"></script>
-<script src="/vendor/cvstudio/stats.js?v=v24.6.445"></script>
-<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.445"></script>
+<script src="/vendor/cvstudio/input-file.js?v=v24.6.446"></script>
+<script src="/vendor/cvstudio/stats.js?v=v24.6.446"></script>
+<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.446"></script>
 <script>
 try { updateSummaryLockUI(); } catch(e) {}
 try { updateCvScoringLockUI(); } catch(e) {}

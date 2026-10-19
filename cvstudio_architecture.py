@@ -113,6 +113,11 @@ DEFAULT_MODULES = (
         ("cvstudio_web_assets.py",),
     ),
     ModuleDefinition(
+        "linkedin_sourcer",
+        "domain",
+        ("cvstudio_linkedin_sourcer.py",),
+    ),
+    ModuleDefinition(
         "secrets",
         "domain",
         ("cvstudio_secrets.py",),
@@ -344,6 +349,7 @@ DEFAULT_MODULES = (
             "storage",
             "storage_http",
             "web_assets",
+            "linkedin_sourcer",
         ),
     ),
 )

@@ -9,7 +9,30 @@
   passed. Unfiltered Windows: 1,600 passed, four skipped, 7,599 subtests.
   `codex/v24.6.442-contribution-grouping` is complete and must not be reused.
 
-- Current owner-authorized experiment (2026-10-19): isolated LinkedIn sourcing
+- Current owner-authorized source work (2026-10-19): v24.6.446,
+  `codex/v24.6.446-linkedin-sourcer-module`, based on local POC `de14854`
+  and exact main `480678d`. LinkedIn Sourcer is a dedicated CV Studio tab with
+  brief, modes, source-tab selection, Start/Stop, progress, evidence/unknowns,
+  candidate URLs and CSV export. Its companion is bundled for download and
+  connects to one explicitly armed Chrome app document. Only observed profile
+  links and owned tabs are available to the bounded browser run. No standalone
+  POC bridge is required. The main backend owns protected key resolution, native
+  DeepSeek tools, request/cost guards and normal usage envelopes. Stop blocks
+  subsequent browser work while preserving accounting from an already-sent call.
+  Adds only GET/POST `/linkedin-sourcer`: 119 routes with hash `da29d647...`;
+  removing it reproduces the exact previous 118-route hash. All five ordered
+  guards, existing routes, schemas, provider non-replay and CV formatting remain.
+  Source/build/module inventories and companion single-source version stamping
+  are included. Final isolated local: 1,607 passed, four skipped, three known
+  environment exclusions, 7,599 subtests; all 30 frontend suites pass. Real Chrome
+  exercised the actual module with mocked companion/provider: consent, plan,
+  screen/detail, costs, results and tab-switch persistence passed. Static/source
+  preflight and 24-assertion smoke pass. No live LinkedIn or paid provider test,
+  owner installation/receipt update, protected build, push, PR or merge.
+  See `LINKEDIN_SOURCER_NOTES.md` and the v446 QA report. Preview uses isolated
+  state on port 5074. Stop after the local checkpoint pending owner review.
+
+- Completed owner-authorized experiment (2026-10-19): isolated LinkedIn sourcing
   POC on `codex/v24.6.445-linkedin-sourcer-poc`, from exact main `480678d`.
   `poc/linkedin-sourcer` contains a Chrome side panel and separate loopback
   DeepSeek bridge, with modes for People search, Recruiter Lite and Recruiter.
