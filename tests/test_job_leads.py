@@ -1,0 +1,180 @@
+"""Job Leads persistence and guarded-route tests; no live browser/provider calls."""
+from concurrent.futures import ThreadPoolExecutor
+import hashlib
+import json
+import os
+from pathlib import Path
+import sqlite3
+import sys
+import tempfile
+from unittest import mock
+
+import pytest
+
+from cvstudio_job_leads import JobLeadsStore, JobLeadsError, clean_record, job_url
+
+
+RECORD = {"url":"https://www.linkedin.com/jobs/view/1234567890?trackingId=discard",
+          "company":"Example Company", "role":"Finance Manager", "contact":"Sample Contact",
+          "notes":"Discuss hiring needs", "status":"to_contact", "follow_up":"2026-10-19"}
+
+
+@pytest.fixture
+def store(tmp_path):
+    return JobLeadsStore(tmp_path / "job_leads.sqlite3")
+
+
+@pytest.mark.parametrize("url", ["https://www.linkedin.com/jobs/view/1234567890", "https://www.linkedin.com/jobs/view/finance-manager-1234567890/?trk=x", "https://my.linkedin.com/jobs/view/1234567890", "https://www.linkedin.com/jobs/search/?currentJobId=1234567890", "https://www.linkedin.com/jobs/collections/recommended/?currentJobId=1234567890"])
+def test_job_identity_removes_tracking_and_search_aliases(url):
+    assert job_url(url) == "https://www.linkedin.com/jobs/view/1234567890"
+
+
+@pytest.mark.parametrize("url", ["javascript:alert(1)", "http://www.linkedin.com/jobs/view/123", "https://www.linkedin.com.attacker.invalid/jobs/view/123", "https://user@www.linkedin.com/jobs/view/123", "https://www.linkedin.com:444/jobs/view/123", "https://www.linkedin.com/in/person", "https://www.linkedin.com/jobs/search/?currentJobId=1&currentJobId=2", "https://www.linkedin.com/jobs/view/no-id", "https://www.linkedin.com/jobs/search/"])
+def test_invalid_urls_are_not_saved(url, store):
+    assert not job_url(url)
+    with pytest.raises(JobLeadsError):
+        store.save({**RECORD, "url":url})
+    assert store.list() == []
+
+
+def test_persists_reopens_duplicate_keeps_notes_and_filters_unknown_fields(store):
+    saved = store.save({**RECORD, "api_key":"synthetic-secret"})["record"]
+    duplicate = JobLeadsStore(store.path).save({**RECORD, "notes":"Would overwrite"})
+    assert duplicate["duplicate"] and duplicate["record"] == saved
+    assert JobLeadsStore(store.path).list() == [saved]
+    assert "api_key" not in saved and "synthetic-secret" not in store.path.read_bytes().decode("latin1")
+
+
+def test_revision_conflict_preserves_latest_edit(store):
+    original = store.save(RECORD)["record"]
+    changed = store.save({**original, "notes":"Changed in another window"})["record"]
+    with pytest.raises(JobLeadsError) as error:
+        store.save({**original, "notes":"Stale edit"})
+    assert error.value.status == 409 and store.list() == [changed]
+
+
+def test_concurrent_saves_share_one_identity_without_lost_edits(store):
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        replies = list(pool.map(lambda _:JobLeadsStore(store.path).save(RECORD), range(5)))
+    assert sum(not row["duplicate"] for row in replies) == 1
+    assert len(store.list()) == 1
+    first = store.list()[0]
+    def update(note):
+        try:
+            return JobLeadsStore(store.path).save({**first, "notes":note})
+        except JobLeadsError as error:
+            return error.status
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(update, ["First update", "Other update"]))
+    assert sum(isinstance(value, dict) for value in results) == 1 and 409 in results
+
+
+def test_backup_restore_insert_only_and_invalid_batch_is_atomic(store, tmp_path):
+    original = store.save(RECORD)["record"]
+    backup = store.backup()
+    other = JobLeadsStore(tmp_path / "other.sqlite3")
+    assert other.restore(backup) == {"added":1, "skipped":0}
+    assert other.list()[0]["contact"] == RECORD["contact"]
+    backup["records"][0]["notes"] = "Old backup notes"
+    assert store.restore(backup) == {"added":0, "skipped":1}
+    assert store.list() == [original]
+    with pytest.raises(JobLeadsError):
+        store.restore({**backup, "records":[{**RECORD,"url":"https://www.linkedin.com/jobs/view/2"}, {**RECORD,"follow_up":"2026-02-30"}]})
+    assert store.list() == [original]
+
+
+def test_capacity_failure_rolls_back_single_and_restore_writes(store):
+    original = store.save(RECORD)["record"]
+    with mock.patch("cvstudio_job_leads.MAX_RECORDS", 1):
+        with pytest.raises(JobLeadsError):
+            store.save({**RECORD, "url":"https://www.linkedin.com/jobs/view/2"})
+        with pytest.raises(JobLeadsError):
+            store.restore({"format":"cvstudio-job-leads", "version":1,"records":[{**RECORD, "url":"https://www.linkedin.com/jobs/view/2"}]})
+    assert store.list() == [original]
+
+
+def test_first_schema_change_has_verified_backup_and_failure_does_not_migrate(store):
+    with mock.patch.object(store, "_verify", side_effect=JobLeadsError("Controlled backup failure",503)):
+        with pytest.raises(JobLeadsError): store.list()
+    with sqlite3.connect(store.path) as connection:
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 0
+        assert connection.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall() == []
+    assert store.list() == []
+    backups = list((store.path.parent / "job_leads_backups").glob("*.sqlite3"))
+    assert backups
+    for path in backups:
+        with sqlite3.connect(path) as connection:
+            assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+
+
+def test_unknown_schema_or_corruption_is_not_overwritten(store):
+    with sqlite3.connect(store.path) as connection:
+        connection.execute("CREATE TABLE existing(value TEXT)")
+        connection.execute("INSERT INTO existing VALUES ('keep')")
+    with pytest.raises(JobLeadsError): store.list()
+    with sqlite3.connect(store.path) as connection:
+        assert connection.execute("SELECT value FROM existing").fetchone()[0] == "keep"
+    store.path.write_bytes(b"corrupt synthetic contents")
+    with pytest.raises(JobLeadsError) as error: store.list()
+    assert error.value.status == 503
+    assert "synthetic" not in str(error.value) and str(store.path) not in str(error.value)
+    assert store.path.read_bytes() == b"corrupt synthetic contents"
+
+
+@pytest.mark.parametrize("patch", [{"follow_up":"2026-02-30"}, {"follow_up":"20261019"}, {"status":"unknown"}, {"contact":False}, {"notes":"x"*10001}, {"role":""}, {"company":[]}, {"notes":"bad\x00value"}])
+def test_invalid_fields_fail_before_write(patch, store):
+    with pytest.raises(JobLeadsError): store.save({**RECORD, **patch})
+    assert not store.path.exists()
+
+
+@pytest.fixture
+def module(tmp_path):
+    if "app" not in sys.modules:
+        os.environ.update(LOCALAPPDATA=str(tmp_path), APPDATA=str(tmp_path), CVSTUDIO_STATE_DIR=str(tmp_path/"state"), CVSTUDIO_DB_PATH=str(tmp_path/"main.sqlite3"), CVSTUDIO_JOB_STATE_PATH=str(tmp_path/"jobs.json"), SALARY_COMPARISON_DATA_DIR=str(tmp_path/"salary"))
+        from owner_build_tools.build_protected import write_test_receipt
+        write_test_receipt(Path(__file__).resolve().parents[1], environment={"HOME":str(tmp_path),"LOCALAPPDATA":str(tmp_path)})
+    import app
+    with mock.patch.object(app, "_JOB_LEADS", JobLeadsStore(tmp_path/"leads.sqlite3")):
+        yield app
+
+
+def test_existing_119_routes_and_five_guards_remain_exact(module):
+    from cvstudio_architecture import _route_contract
+    previous = tuple(row for row in _route_contract(module.app) if row["endpoint"] != "job_leads")
+    assert len(previous) == 119
+    assert hashlib.sha256(json.dumps(previous,ensure_ascii=True,sort_keys=True,separators=(',',':')).encode()).hexdigest() == "da29d6476a2dc929fc3b4f06faae8bdffc7ce69261f58901b90de46d0b857e31"
+    assert [fn.__name__ for fn in module.app.before_request_funcs[None]] == ["_assign_cvstudio_request_id","_reject_declared_oversize_request","_reject_non_local_host_header","_require_ai_spend_browser_session","_reject_cross_site_unsafe_request"]
+
+
+def test_route_crud_backup_needs_no_ai_and_errors_have_request_id(module):
+    client = module.app.test_client()
+    headers = {"X-CV-Studio-Request":"1"}
+    with mock.patch.object(module._AI_PROVIDER_CLIENT, "request") as provider:
+        reply = client.post('/job-leads',json={"action":"save","record":{**RECORD,"company":"示例 Company"}},headers=headers)
+        assert reply.status_code == 200 and reply.json['ok']
+        assert client.get('/job-leads').json['records'] == [reply.json['record']]
+        backup = client.get('/job-leads?action=backup')
+        assert 'attachment' in backup.headers['Content-Disposition'] and 'no-store' in backup.headers['Cache-Control']
+        assert '示例'.encode('utf-8') in backup.data and b'\\u793a' not in backup.data
+        assert client.post('/job-leads',json={"action":"restore","backup":backup.json},headers=headers).json['skipped'] == 1
+        bad = client.post('/job-leads',json={"action":"save","record":{}},headers=headers)
+        assert bad.status_code == 400 and bad.json['request_id'] and bad.json['code'] == 'JOB_LEADS_INVALID'
+        provider.assert_not_called()
+
+
+def test_route_cross_site_and_oversized_requests_blocked(module):
+    client = module.app.test_client()
+    for headers in [{"Origin":"https://attacker.invalid"}, {"Origin":"chrome-extension://"+'a'*32}]:
+        assert client.post('/job-leads',json={"action":"save","record":RECORD},headers=headers).status_code == 403
+    large = client.post('/job-leads',data=b' '*(12*1024*1024+1),content_type='application/json',headers={"X-CV-Studio-Request":"1"})
+    assert large.status_code == 413
+    assert not module._JOB_LEADS.path.exists()
+
+
+def test_route_storage_failure_visible_without_private_path(module):
+    module._JOB_LEADS.path.write_bytes(b'corrupt')
+    reply = module.app.test_client().get('/job-leads')
+    assert reply.status_code == 503 and reply.json['request_id']
+    assert reply.json['code'] == 'JOB_LEADS_CORRUPT' and reply.json['retryable'] is False
+    assert reply.json['action'] == 'restore_job_leads_backup'
+    assert str(module._JOB_LEADS.path) not in reply.text

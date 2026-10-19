@@ -8,6 +8,16 @@ function profile(value) {
   try { const u = new URL(value); return linkedin(value) && !u.username && !u.password && /^\/(in\/[^/]+|talent\/(?:hire\/)?profile\/[^/]+)\/?$/.test(u.pathname); }
   catch { return false; }
 }
+function jobURL(value) {
+  try {
+    const u = new URL(value);
+    if (!linkedin(value) || u.username || u.password) return '';
+    const view = u.pathname.match(/^\/jobs\/view\/(?:[^/]*-)?([0-9]{1,24})\/?$/);
+    const ids = u.searchParams.getAll('currentJobId');
+    const id = view ? view[1] : /^\/jobs(?:\/search|\/collections\/[^/]+)?\/?$/.test(u.pathname) && ids.length === 1 ? ids[0] : '';
+    return /^[0-9]{1,24}$/.test(id) ? 'https://www.linkedin.com/jobs/view/' + id : '';
+  } catch { return ''; }
+}
 chrome.action.onClicked.addListener(async tab => {
   if (!local(tab.url)) { await chrome.action.setBadgeText({text: 'APP'}); return; }
   const [{result, documentId}] = await chrome.scripting.executeScript({target: {tabId: tab.id},
@@ -23,6 +33,23 @@ async function handle(message, sender) {
     throw Error('In Chrome, open CV Studio and click the companion toolbar icon to connect this tab.');
   }
   const args = message.args || {};
+  if (message.action === 'jobTabs') {
+    const tabs = await chrome.tabs.query({url: 'https://www.linkedin.com/*'});
+    return tabs.filter(tab => jobURL(tab.url)).map(tab => ({id:tab.id, url:jobURL(tab.url), title:String(tab.title || 'LinkedIn job').slice(0, 160)}));
+  }
+  if (message.action === 'jobRead') {
+    const bound = connection, expected = jobURL(args.expected_url);
+    if (connection.run) throw Error('Stop the sourcing run before reading a job ad.');
+    const tab = await chrome.tabs.get(args.tab_id);
+    if (!expected || jobURL(tab.url) !== expected || tab.status !== 'complete' || connection !== bound) throw Error('The selected job changed or has not loaded. Refresh job tabs.');
+    await chrome.scripting.executeScript({target:{tabId:tab.id}, files:['reader.js']});
+    if (connection !== bound || bound.run) throw Error('The companion connection changed.');
+    const [{result}] = await chrome.scripting.executeScript({target:{tabId:tab.id},
+      func: url => globalThis.SourcerReader.readJob(url), args:[expected]});
+    const current = await chrome.tabs.get(tab.id);
+    if (connection !== bound || bound.run || jobURL(current.url) !== expected || result?.url !== expected) throw Error('The selected job changed while reading.');
+    return result;
+  }
   if (message.action === 'tabs') {
     const tabs = await chrome.tabs.query({url: 'https://www.linkedin.com/*'});
     return tabs.map(tab => ({id: tab.id, url: tab.url, title: String(tab.title || 'LinkedIn').slice(0, 160), status: tab.status}));

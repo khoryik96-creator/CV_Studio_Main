@@ -4,6 +4,24 @@
 
 ## Release state
 
+- Current owner-authorized source work (2026-10-19): v24.6.447,
+  `codex/v24.6.447-job-leads`, from local v446 `cfa18bc` / main `480678d`.
+  Separate Job Leads module saves LinkedIn job links, company/role, contact,
+  notes, status, follow-up date and optional location/description. Manual entry
+  and read-only companion capture fill a reviewable draft; no AI is required.
+  Durable separate schema-1 SQLite includes verified pre-schema backup,
+  transactions, duplicate protection, optimistic edit revisions and insert-only
+  JSON restore. Search, status/due filters and CSV are included. New GET/POST
+  `/job-leads` makes 120 routes (`ee8d33ba...`); old 119/118-route hashes, all
+  five guards, existing schema-10 data and Sourcer/provider contracts remain.
+  Full isolated local: 1,640 passed, four skipped, three documented local
+  updater exclusions; 7,599 subtests. All 31 frontend suites, native Chrome
+  synthetic job readers and actual Job Leads/Sourcer UI flows, syntax/byte/source
+  preflight and 24-assertion smoke pass. Preview 5074 uses isolated persistent
+  preview state; installed app and receipt remain unchanged. No live LinkedIn
+  test, paid call, outreach, protected build, push, PR or merge. See
+  `JOB_LEADS_NOTES.md` and the v447 QA report. Stop at the local checkpoint.
+
 - Current verified merged baseline (2026-10-17): v24.6.445, `480678d` (#228).
   Tested head `73cac43` has the same tree `fee044b`; all three hosted gates
   passed. Unfiltered Windows: 1,600 passed, four skipped, 7,599 subtests.

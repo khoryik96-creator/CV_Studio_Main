@@ -1,0 +1,155 @@
+/* Job Leads: durable local records; the companion only fills a reviewable draft. */
+(function () {
+  'use strict';
+  const el = id => document.getElementById('jobLeads' + id);
+  const labels = {new:'New', to_contact:'To contact', contacted:'Contacted', follow_up:'Following up', won:'Won', closed:'Closed'};
+  const fields = ['url', 'company', 'role', 'contact', 'location', 'status', 'follow_up', 'notes', 'description'];
+  const hex = () => crypto.randomUUID().replaceAll('-', '');
+  const channel = hex(), pending = new Map();
+  let rows = [], editing = null, busy = false, dirty = false, page = 0, ready = false;
+  const status = message => { el('Message').textContent = message; };
+  function localDate() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  const due = row => row.follow_up && row.follow_up <= localDate() && !['won', 'closed'].includes(row.status);
+  function draft() { return Object.fromEntries(fields.map(key => [key, el(key).value])); }
+  function fill(record) {
+    fields.forEach(key => { el(key).value = record?.[key] || (key === 'status' ? 'new' : ''); });
+    editing = record?.id ? record : null; dirty = false;
+    el('Heading').textContent = editing ? 'Edit lead' : 'Save a job ad';
+    el('Save').textContent = editing ? 'Save changes' : 'Save lead';
+  }
+  function discard() { return !dirty || window.confirm('Discard the unsaved changes in this lead?'); }
+  function lock(value) {
+    busy = value;
+    for (const id of ['Save', 'New', 'Read', 'Tabs', 'Refresh', 'Restore']) el(id).disabled = value;
+    for (const name of fields) el(name).disabled = value;
+    el('List').querySelectorAll('button').forEach(button => { button.disabled = value; });
+  }
+  async function api(body) {
+    const response = await fetch('/job-leads', body ? {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)} : {});
+    const data = await response.json();
+    if (!response.ok || data.error) throw Error(data.error || 'Job Leads could not finish this request.');
+    return data;
+  }
+  async function load() { rows = (await api()).records; render(); }
+  function filtered() {
+    const term = el('Search').value.trim().toLocaleLowerCase(), filter = el('Filter').value;
+    return rows.filter(row => (!filter || row.status === filter || filter === 'due' && due(row)) &&
+      (!term || [row.company, row.role, row.contact, row.notes, row.location].some(value => value.toLocaleLowerCase().includes(term))));
+  }
+  function node(tag, text, className) {
+    const value = document.createElement(tag); value.textContent = text;
+    if (className) value.className = className;
+    return value;
+  }
+  function render() {
+    const selected = filtered(), list = el('List'); list.replaceChildren();
+    el('Total').textContent = String(rows.length);
+    el('Due').textContent = String(rows.filter(due).length);
+    page = Math.min(page, Math.max(0, Math.ceil(selected.length / 40)-1));
+    el('Count').textContent = selected.length ? `${page*40+1}–${Math.min((page+1)*40, selected.length)} of ${selected.length}` : '0 leads';
+    el('Previous').disabled = page === 0; el('Next').disabled = (page+1)*40 >= selected.length;
+    if (!selected.length) list.appendChild(node('p', rows.length ? 'No leads match these filters.' : 'Save your first LinkedIn job ad to start tracking opportunities.', 'job-leads-muted'));
+    selected.slice(page*40, (page+1)*40).forEach(row => {
+      const card = node('article', '', 'job-lead-card');
+      card.append(node('h3', row.company), node('p', row.role, 'job-lead-role'));
+      const meta = node('div', '', 'job-lead-meta');
+      meta.append(node('span', labels[row.status], 'job-lead-status'));
+      if (row.follow_up) meta.append(node('span', (due(row) ? 'Due · ' : 'Follow up · ') + row.follow_up, due(row) ? 'job-lead-due' : ''));
+      card.appendChild(meta);
+      if (row.contact) card.appendChild(node('p', 'Contact: ' + row.contact));
+      if (row.location) card.appendChild(node('p', row.location, 'job-leads-muted'));
+      if (row.notes) card.appendChild(node('p', row.notes.slice(0, 300) + (row.notes.length > 300 ? '…' : ''), 'job-lead-notes'));
+      const actions = node('div', '', 'job-leads-actions');
+      const link = node('a', 'Open LinkedIn ad'); link.href = row.url; link.target = '_blank'; link.rel = 'noopener noreferrer';
+      const edit = node('button', 'Edit / view details', 'sec'); edit.type = 'button'; edit.disabled = busy;
+      edit.addEventListener('click', () => { if (!busy && discard()) { fill(row); status('Editing saved lead.'); el('Form').scrollIntoView({block:'start', behavior:'smooth'}); } });
+      actions.append(link, edit); card.appendChild(actions); list.appendChild(card);
+    });
+  }
+  function rpc(action, args = {}) {
+    return new Promise((resolve, reject) => {
+      const id = hex(), timer = setTimeout(() => { pending.delete(id); reject(Error('Open CV Studio in Chrome and click the companion toolbar icon, then refresh job tabs.')); }, 12000);
+      pending.set(id, {resolve, reject, timer});
+      window.postMessage({type:'CVSTUDIO_LINKEDIN_REQUEST', id, channel, action, args}, location.origin);
+    });
+  }
+  window.addEventListener('message', event => {
+    const data = event.data;
+    if (event.source !== window || event.origin !== location.origin || data?.type !== 'CVSTUDIO_LINKEDIN_RESPONSE' || data.channel !== channel) return;
+    const item = pending.get(data.id); if (!item) return;
+    clearTimeout(item.timer); pending.delete(data.id);
+    if (data.error) item.reject(Error(data.error)); else item.resolve(data.result);
+  });
+  window.initJobLeads = async function () {
+    if (ready) return;
+    ready = true;
+    fields.forEach(key => el(key).addEventListener('input', () => { dirty = true; }));
+    el('Form').addEventListener('submit', async event => {
+      event.preventDefault(); if (busy) return;
+      lock(true); status('Saving lead…');
+      try {
+        const value = await api({action:'save', record:{...draft(), ...(editing ? {id:editing.id, revision:editing.revision} : {})}});
+        await load();
+        if (value.duplicate) {
+          status('This job is already saved. Your draft has been kept; use Edit / view details on the existing lead to change it.');
+        } else { fill(value.record); status('Lead saved on this computer.'); }
+      } catch (error) { status(error.message); }
+      finally { lock(false); }
+    });
+    el('New').addEventListener('click', () => { if (!busy && discard()) { fill(null); status('Ready for another job ad.'); } });
+    el('Refresh').addEventListener('click', async () => { if (busy) return; lock(true); try { await load(); status('Saved leads refreshed. Reopen a lead to load its latest changes.'); } catch (error) { status(error.message); } finally { lock(false); } });
+    for (const id of ['Search', 'Filter']) el(id).addEventListener(id === 'Search' ? 'input' : 'change', () => { page = 0; render(); });
+    el('Previous').addEventListener('click', () => { page--; render(); });
+    el('Next').addEventListener('click', () => { page++; render(); });
+    el('Tabs').addEventListener('click', async () => {
+      if (busy) return; lock(true);
+      try {
+        const tabs = await rpc('jobTabs'); el('Source').replaceChildren(new Option('Choose an open LinkedIn job ad', ''));
+        tabs.forEach(tab => { const option = new Option(tab.title, String(tab.id)); option.dataset.url = tab.url; el('Source').appendChild(option); });
+        status(tabs.length ? 'Choose the job ad, then click Read job ad.' : 'Open a LinkedIn job ad in Chrome, then refresh job tabs.');
+      } catch (error) { status(error.message); } finally { lock(false); }
+    });
+    el('Read').addEventListener('click', async () => {
+      if (busy || !discard()) return;
+      const option = el('Source').selectedOptions[0];
+      if (!option?.value) { status('Choose an open LinkedIn job ad first.'); return; }
+      lock(true); status('Reading the selected job ad…');
+      try {
+        const data = await rpc('jobRead', {tab_id:Number(option.value), expected_url:option.dataset.url});
+        fill(data); dirty = true;
+        status('Job ad filled in. Review the details, add a contact or notes, then Save lead.' + (data.description_truncated ? ' The captured description is an excerpt.' : ''));
+      } catch (error) { status(error.message); } finally { lock(false); }
+    });
+    el('Export').addEventListener('click', () => {
+      const safe = value => { const text = String(value ?? ''); return '"' + (/^[\s]*[=+@-]/.test(text) ? "'" : '') + text.replaceAll('"', '""') + '"'; };
+      const keys = ['company','role','contact','status','follow_up','url','location','notes','description'];
+      download(new Blob(['\uFEFF' + [keys, ...filtered().map(row => keys.map(key => row[key]))].map(row => row.map(safe).join(',')).join('\r\n')], {type:'text/csv;charset=utf-8'}), 'CV-Studio-Job-Leads.csv');
+    });
+    el('Backup').addEventListener('click', () => { window.location.href = '/job-leads?action=backup'; });
+    el('Restore').addEventListener('click', () => el('File').click());
+    el('File').addEventListener('change', async () => {
+      const file = el('File').files[0]; if (!file || busy) return;
+      lock(true);
+      try {
+        if (file.size > 12*1024*1024) throw Error('This backup file is too large.');
+        const backup = JSON.parse(await file.text());
+        const reply = await api({action:'restore', backup}); await load();
+        status(`Restored ${reply.added} leads. Skipped ${reply.skipped} jobs already saved; existing notes were kept.`);
+      } catch (error) { status(error instanceof SyntaxError ? 'Choose a valid Job Leads backup file.' : error.message); }
+      finally { el('File').value = ''; lock(false); }
+    });
+    window.addEventListener('beforeunload', event => { if (dirty || busy) { event.preventDefault(); event.returnValue = ''; } });
+    fill(null); lock(true);
+    try { await load(); status('Ready. Saved leads stay on this computer.'); }
+    catch (error) { status(error.message); }
+    finally { lock(false); }
+  };
+  function download(blob, name) {
+    const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  document.addEventListener('DOMContentLoaded', () => { if (new URLSearchParams(location.search).get('module') === 'jobleads') switchTab('jobleads'); });
+})();

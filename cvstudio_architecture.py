@@ -118,6 +118,11 @@ DEFAULT_MODULES = (
         ("cvstudio_linkedin_sourcer.py",),
     ),
     ModuleDefinition(
+        "job_leads",
+        "domain",
+        ("cvstudio_job_leads.py",),
+    ),
+    ModuleDefinition(
         "secrets",
         "domain",
         ("cvstudio_secrets.py",),
@@ -316,6 +321,7 @@ DEFAULT_MODULES = (
             "downloads",
             "external_clients",
             "jobadder_request",
+            "job_leads",
             "jobadder_read",
             "jobadder_write",
             "cv_normalize",

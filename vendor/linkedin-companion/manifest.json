@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CV Studio LinkedIn Companion",
-  "version": "24.6.446",
+  "version": "24.6.447",
   "description": "Browser navigation for CV Studio's LinkedIn Sourcer module. No AI keys or provider calls.",
   "minimum_chrome_version": "116",
   "permissions": ["activeTab", "scripting"],

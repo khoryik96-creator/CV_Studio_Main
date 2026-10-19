@@ -116,5 +116,31 @@
     const name = text(main.querySelector('h1, [data-test-profile-name]')).slice(0, 150);
     return {text: words, publicUrl: publicLink || '', name};
   }
-  globalThis.SourcerReader = {readSearch, next, search, readProfile, profileURL};
+  function readJob(expectedURL) {
+    if (location.origin !== 'https://www.linkedin.com') throw Error('Choose a LinkedIn job ad.');
+    const problem = issue(); if (problem) throw Error(problem);
+    const view = location.pathname.match(/^\/jobs\/view\/(?:[^/]*-)?([0-9]{1,24})\/?$/);
+    const ids = new URLSearchParams(location.search).getAll('currentJobId');
+    const id = view ? view[1] : /^\/jobs(?:\/search|\/collections\/[^/]+)?\/?$/.test(location.pathname) && ids.length === 1 ? ids[0] : '';
+    const url = /^[0-9]{1,24}$/.test(id) ? 'https://www.linkedin.com/jobs/view/' + id : '';
+    if (!url || url !== expectedURL) throw Error('The selected job changed. Refresh job tabs.');
+    // Read only a recognized job detail panel, excluding neighboring result cards.
+    const panels = [...document.querySelectorAll('.jobs-search__job-details--container, .jobs-details, .job-view-layout, .top-card-layout')].filter(visible);
+    const panel = panels.find(value => value.querySelector('.job-details-jobs-unified-top-card__job-title, .jobs-unified-top-card__job-title, .top-card-layout__title'));
+    if (!panel) throw Error('This job layout is not recognized. Paste the link and details into Job Leads.');
+    const first = selector => [...panel.querySelectorAll(selector)].find(visible);
+    const roleNode = first('.job-details-jobs-unified-top-card__job-title, .jobs-unified-top-card__job-title, .top-card-layout__title');
+    const roleLink = roleNode?.matches('a[href]') ? roleNode : roleNode?.querySelector('a[href]');
+    const linkedId = roleLink ? new URL(roleLink.href, location.href).pathname.match(/^\/jobs\/view\/(?:[^/]*-)?([0-9]{1,24})\/?$/)?.[1] : '';
+    if ((linkedId && linkedId !== id) || (!view && linkedId !== id)) throw Error('The selected job details are still changing. Wait, then refresh job tabs.');
+    const role = text(roleNode).slice(0, 240);
+    const company = text(first('.job-details-jobs-unified-top-card__company-name, .jobs-unified-top-card__company-name, .topcard__org-name-link')).slice(0, 200);
+    const locationText = text(first('.job-details-jobs-unified-top-card__primary-description-container .tvm__text, .jobs-unified-top-card__bullet, .topcard__flavor--bullet')).slice(0, 240);
+    const descriptionNode = first('#job-details, .jobs-description__content, .description__text') ||
+      [...document.querySelectorAll('.description__text')].find(visible);
+    const description = visible(descriptionNode) ? String(descriptionNode.innerText || '').trim() : '';
+    if (!role || !company) throw Error('The company or role has not loaded. Paste the details into Job Leads.');
+    return {url, role, company, location:locationText, description:description.slice(0, 20000), description_truncated:description.length > 20000};
+  }
+  globalThis.SourcerReader = {readSearch, next, search, readProfile, profileURL, readJob};
 })();

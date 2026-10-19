@@ -24,7 +24,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.446"
+_INSTALL_RECEIPT_VERSION = "v24.6.447"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -347,7 +347,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.446"
+_CVSTUDIO_VERSION = "v24.6.447"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -14829,11 +14829,51 @@ def linkedin_sourcer():
         return jsonify(error=str(error), retryable=False, **getattr(error, "accounting", {})), 400
 
 
+from cvstudio_job_leads import JobLeadsStore, JobLeadsError
+from cvstudio_storage import default_state_directory as _job_leads_state_directory
+
+_JOB_LEADS = JobLeadsStore(_job_leads_state_directory() / "job_leads.sqlite3")
+
+
+@app.route("/job-leads", methods=["GET", "POST"])
+def job_leads():
+    try:
+        if request.method == "GET":
+            if request.args.get("action") == "backup":
+                # Keep the bounded UTF-8 store within the backup/import limit;
+                # ASCII escaping can triple the size of non-English job text.
+                response = app.response_class(json.dumps(_JOB_LEADS.backup(), ensure_ascii=False,
+                                                         separators=(",", ":")), mimetype="application/json")
+                response.headers["Content-Disposition"] = 'attachment; filename="CV-Studio-Job-Leads.json"'
+            else:
+                response = jsonify(records=_JOB_LEADS.list())
+            response.headers["Cache-Control"] = "no-store"
+            return response
+        if request.content_length and request.content_length > 12 * 1024 * 1024:
+            raise JobLeadsError("This Job Leads request is too large.", 413)
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            raise JobLeadsError("Enter valid job details or select a Job Leads backup.")
+        if data.get("action") == "save":
+            result = _JOB_LEADS.save(data.get("record"))
+        elif data.get("action") == "restore":
+            result = _JOB_LEADS.restore(data.get("backup"))
+        else:
+            raise JobLeadsError("Choose a supported Job Leads action.")
+        response = jsonify(ok=True, **result)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except JobLeadsError as error:
+        return _cvstudio_error_payload(error.code, str(error), error.status,
+                                       retryable=error.retryable,
+                                       action="restore_job_leads_backup" if error.code in {"JOB_LEADS_CORRUPT", "JOB_LEADS_INCOMPATIBLE"} else "refresh_job_leads")
+
+
 _CVSTUDIO_ARCHITECTURE = _finalize_modular_monolith_app(
     app,
-    expected_route_count=119,
+    expected_route_count=120,
     expected_route_contract_sha256=(
-        "da29d6476a2dc929fc3b4f06faae8bdffc7ce69261f58901b90de46d0b857e31"
+        "ee8d33baeb48b961a2f50723faacbeb7fed86b55454b3518ab4a07bcd1e90033"
     ),
     expected_before_request_handlers=(
         "_assign_cvstudio_request_id",
