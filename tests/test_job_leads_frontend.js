@@ -58,7 +58,7 @@ const root = path.resolve(__dirname, '..');
   const ids = new Map(), events={}, blobs=[];
   const document = {getElementById:id=>{if(!ids.has(id))ids.set(id,new Element());return ids.get(id)},createElement:tag=>new Element(tag),addEventListener:(type,fn)=>events[type]=fn};
   const el = name=>document.getElementById('jobLeads'+name);
-  let records=[], sequence=0, allowDiscard=true;
+  let records=[], sequence=0, allowDiscard=true, lookupError=false, lookups=0;
   class TestURL extends URL {static createObjectURL(blob){blobs.push(blob);return 'blob:synthetic'} static revokeObjectURL(){}}
   const location={origin:'http://127.0.0.1:5000',search:'',href:''};
   const window={addEventListener:(type,fn)=>events[type]=fn,confirm:()=>allowDiscard,postMessage:message=>{
@@ -68,6 +68,10 @@ const root = path.resolve(__dirname, '..');
     assert.equal(endpoint,'/job-leads');
     if(!options?.body)return {ok:true,json:async()=>({records})};
     const data=JSON.parse(options.body), value=data.record;
+    if(data.action==='lookup'){
+      lookups++;
+      return {ok:!lookupError,json:async()=>lookupError?{error:'Synthetic public page read failure'}:{record:{url:data.url,company:'Read company',role:'Read role',location:'Kuala Lumpur',description:'Job description',contact:'Do not copy',status:'won',follow_up:'2030-01-01'}}};
+    }
     if(data.action==='restore')return {ok:true,json:async()=>({added:0,skipped:records.length})};
     const duplicate=records.find(row=>row.url===value.url && row.id!==value.id);
     if(duplicate)return {ok:true,json:async()=>({record:duplicate,duplicate:true})};
@@ -102,15 +106,16 @@ const root = path.resolve(__dirname, '..');
   await el('url').handlers.paste({clipboardData:{getData:()=>url+'?trk=discard'},preventDefault(){prevented=true}});
   assert(prevented);assert.equal(el('url').value,url);
   assert.equal(el('company').value,'Read company');assert.equal(el('role').value,'Read role');
+  assert.equal(el('location').value,'Kuala Lumpur');assert(lookups>0,'paste uses the local public-read API without a companion');
   assert.equal(el('status').value,'new');assert.equal(el('contact').value,'');assert.equal(el('follow_up').value,'');
   assert.match(el('Message').textContent,/optionally add a contact/);
   el('company').value='Manual correction';el('contact').value='Manual Contact';el('notes').value='Keep my notes';el('status').value='contacted';el('follow_up').value='2026-11-01';
   await el('AutoFill').click();
   assert.equal(el('company').value,'Manual correction');assert.equal(el('contact').value,'Manual Contact');assert.equal(el('notes').value,'Keep my notes');assert.equal(el('status').value,'contacted');assert.equal(el('follow_up').value,'2026-11-01');
-  const previousPost=window.postMessage;
-  window.postMessage=message=>events.message({source:window,origin:location.origin,data:{type:'CVSTUDIO_LINKEDIN_RESPONSE',channel:message.channel,id:message.id,error:'Synthetic read failure'}});
+  lookupError=true;
   await el('AutoFill').click();assert.equal(el('company').value,'Manual correction');assert.equal(el('contact').value,'Manual Contact');assert.equal(el('Save').disabled,false);assert.match(el('Message').textContent,/draft has been kept/);
-  window.postMessage=previousPost;
+  lookupError=false;
+  await el('BrowserFill').click();assert.equal(el('contact').value,'Manual Contact');
   await el('New').click();el('url').value='https://attacker.invalid/jobs/view/123';await el('AutoFill').click();assert.equal(el('company').value,'');assert.match(el('Message').textContent,/Paste a LinkedIn job ad link/);
   console.log('Job Leads: capture binding/isolation, save/edit/search, duplicate/draft protection, paste-link autofill, optional manual contact/status/date preservation, failure, CSV and HTML safety passed');
 })().catch(error=>{console.error(error);process.exitCode=1});

@@ -24,7 +24,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.448"
+_INSTALL_RECEIPT_VERSION = "v24.6.449"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -347,7 +347,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.448"
+_CVSTUDIO_VERSION = "v24.6.449"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -14830,9 +14830,11 @@ def linkedin_sourcer():
 
 
 from cvstudio_job_leads import JobLeadsStore, JobLeadsError
+from cvstudio_job_ads import PublicLinkedInJobs
 from cvstudio_storage import default_state_directory as _job_leads_state_directory
 
 _JOB_LEADS = JobLeadsStore(_job_leads_state_directory() / "job_leads.sqlite3")
+_PUBLIC_JOB_ADS = PublicLinkedInJobs()
 
 
 @app.route("/job-leads", methods=["GET", "POST"])
@@ -14858,6 +14860,8 @@ def job_leads():
             result = _JOB_LEADS.save(data.get("record"))
         elif data.get("action") == "restore":
             result = _JOB_LEADS.restore(data.get("backup"))
+        elif data.get("action") == "lookup":
+            result = {"record": _PUBLIC_JOB_ADS.read(data.get("url"))}
         else:
             raise JobLeadsError("Choose a supported Job Leads action.")
         response = jsonify(ok=True, **result)

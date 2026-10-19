@@ -178,3 +178,12 @@ def test_route_storage_failure_visible_without_private_path(module):
     assert reply.json['code'] == 'JOB_LEADS_CORRUPT' and reply.json['retryable'] is False
     assert reply.json['action'] == 'restore_job_leads_backup'
     assert str(module._JOB_LEADS.path) not in reply.text
+
+
+def test_public_lookup_uses_no_ai_credentials_or_durable_write(module):
+    result={'url':RECORD['url'].split('?')[0],'company':'Example Company','role':'Finance Manager','location':'Penang','description':'Public description'}
+    with mock.patch.object(module._PUBLIC_JOB_ADS,'read',return_value=result) as read, mock.patch.object(module._AI_PROVIDER_CLIENT,'request') as provider:
+        reply=module.app.test_client().post('/job-leads',json={'action':'lookup','url':result['url']},headers={'X-CV-Studio-Request':'1'})
+    assert reply.status_code==200 and reply.json['record']==result
+    read.assert_called_once_with(result['url']);provider.assert_not_called()
+    assert not module._JOB_LEADS.path.exists()

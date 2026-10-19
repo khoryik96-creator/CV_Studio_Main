@@ -24,12 +24,12 @@
   function discard() { return !dirty || window.confirm('Discard the unsaved changes in this lead?'); }
   function lock(value) {
     busy = value;
-    for (const id of ['Save', 'New', 'Read', 'Tabs', 'Refresh', 'Restore', 'AutoFill']) el(id).disabled = value;
+    for (const id of ['Save', 'New', 'Read', 'Tabs', 'Refresh', 'Restore', 'AutoFill', 'BrowserFill']) el(id).disabled = value;
     for (const name of fields) el(name).disabled = value;
     el('List').querySelectorAll('button').forEach(button => { button.disabled = value; });
   }
   async function api(body) {
-    const response = await fetch('/job-leads', body ? {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)} : {});
+    const response = await fetch('/job-leads', body ? {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body), ...(body.action === 'lookup' ? {timeout:30000} : {})} : {});
     const data = await response.json();
     if (!response.ok || data.error) throw Error(data.error || 'Job Leads could not finish this request.');
     return data;
@@ -94,14 +94,14 @@
       return /^[0-9]{1,24}$/.test(id) ? 'https://www.linkedin.com/jobs/view/' + id : '';
     } catch { return ''; }
   }
-  async function fillFromLink() {
+  async function fillFromLink(useBrowser = false) {
     if (busy) return;
     const url = jobLink(el('url').value);
     if (!url) { status('Paste a LinkedIn job ad link to fill in its details.'); return; }
     if (editing && jobLink(editing.url) !== url) { status('Click New lead before filling a different job ad. Your current lead has been kept.'); return; }
-    const before = draft(); lock(true); status('Reading this LinkedIn job ad…');
+    const before = draft(); lock(true); status(useBrowser ? 'Reading this job ad in Chrome…' : 'Reading public LinkedIn job details…');
     try {
-      const data = await rpc('jobFromLink', {url});
+      const data = useBrowser ? await rpc('jobFromLink', {url}) : (await api({action:'lookup', url})).record;
       if (jobLink(data?.url || '') !== url || !data.company || !data.role) throw Error('The job details could not be confirmed. Use Read job ad or enter them manually.');
       // Never fill contacts, notes, follow-up dates or BD status from ad text,
       // and preserve manual corrections already made to other populated fields.
@@ -117,7 +117,8 @@
     if (ready) return;
     ready = true;
     fields.forEach(key => el(key).addEventListener('input', () => { dirty = true; }));
-    el('AutoFill').addEventListener('click', fillFromLink);
+    el('AutoFill').addEventListener('click', () => fillFromLink());
+    el('BrowserFill').addEventListener('click', () => fillFromLink(true));
     el('url').addEventListener('paste', event => {
       const value = event.clipboardData?.getData('text/plain') || '';
       if (busy || !jobLink(value)) return;

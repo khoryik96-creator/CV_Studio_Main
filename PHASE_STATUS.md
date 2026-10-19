@@ -4,6 +4,21 @@
 
 ## Release state
 
+- Current owner-authorized corrective (2026-10-19): v24.6.449,
+  `codex/v24.6.449-job-link-public-read`, from local v448 `94fbe8c`.
+  Live inspection reproduced the empty form: the owner used the in-app browser,
+  which cannot run the Chrome companion. Default paste now uses bounded public
+  LinkedIn job HTML through the existing guarded lookup action. Optional Chrome
+  capture remains explicit for login-only ads. Public JSON-LD or canonical top
+  cards identify the exact job; same-job redirect checks, content bounds and
+  no-auth/no-cookie/no-netrc requests preserve the public-only boundary. No
+  routes/schemas, paid behavior or manual-field/duplicate protections change.
+  The owner's exact public job link returned company, role and location in the
+  real in-app preview. Full local: 1,667 passed, four skipped, three documented
+  updater exclusions; 7,599 subtests. All 32 frontend suites, source preflight
+  and 24-assertion smoke pass. Verification is in the v449 QA report. No provider call,
+  owner installation update, push, PR or merge.
+
 - Current owner-authorized source work (2026-10-19): v24.6.448,
   `codex/v24.6.448-job-link-autofill`, from local v447 `1223ed8`.
   Pasting a LinkedIn job link triggers companion fill of empty company, role,

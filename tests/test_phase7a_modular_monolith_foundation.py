@@ -70,6 +70,7 @@ class Phase7AModularMonolithFoundationTests(unittest.TestCase):
                 "web_assets",
                 "linkedin_sourcer",
                 "job_leads",
+                "job_ads",
                 "secrets",
                 "jobadder_request",
                 "jobadder_read",

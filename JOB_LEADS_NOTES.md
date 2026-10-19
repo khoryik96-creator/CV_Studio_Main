@@ -6,8 +6,8 @@ sourcer and the locked historical Lead Finder.
 
 ## Workflow
 
-- Open **Job Leads** and paste a LinkedIn job link. With the latest Chrome
-  companion connected, company, role, location and description fill automatically.
+- Open **Job Leads** and paste a LinkedIn job link. Public company, role,
+  location and description load directly, including in the in-app browser.
   **Fill from link** retries the read. Existing manual entries are preserved.
   Review the details before saving; manual entry remains available.
 - Optional fields: contact person, location, notes, status, follow-up date and
@@ -15,10 +15,11 @@ sourcer and the locked historical Lead Finder.
   status starts as New and follow-up dates are never inferred from the ad.
   Follow-ups due are shown in the module;
   this is not a scheduled notification or outreach service.
-- To fill a draft from Chrome, install/reload the latest bundled companion,
+- For login-only ads, the optional Chrome fallback can fill a draft. Install/reload the latest bundled companion,
   arm it from the CV Studio toolbar icon, open a job ad and use **Refresh job
   tabs → Read job ad**. Review the fields before saving. Manual entry works
-  without the companion. Neither path uses AI or incurs provider charges.
+  without the companion. Public reads need no extension; neither path uses AI
+  or incurs provider charges.
 - Search saved leads, filter by status or due date, and edit/view details.
   Re-saving the same LinkedIn job preserves the existing record and notes.
   Close a lead with the Closed status; there is no destructive delete action.
@@ -37,8 +38,19 @@ the existing application database remains schema 10 and the job journal schema 1
 Initialization is restart-safe, failed writes roll back and errors are visible.
 Revisions prevent an older browser draft overwriting a newer saved edit.
 Unknown fields are discarded rather than persisted; links retain only canonical
-LinkedIn job IDs. No backend URL fetching, credentials, AI/provider calls,
+LinkedIn job IDs. No credentials, AI/provider calls,
 LinkedIn messages, applications, JobAdder writes or background worker are added.
+
+`cvstudio_job_ads.py` reads public job HTML only, through the existing guarded
+`/job-leads` lookup action. The server constructs a canonical LinkedIn URL;
+each redirect must remain on an approved LinkedIn job host and the same job ID.
+No request cookies, auth headers, .netrc credentials or tracking queries are
+forwarded. The reader limits size to 4 MiB, caps redirects/concurrent reads and
+uses network/deadline bounds. It performs no automatic retry or login bypass.
+JSON-LD JobPosting identities or a canonical public top card supply the fields;
+search headers, recommended jobs and ambiguous identity mismatches are rejected.
+No public content is stored until the owner clicks Save lead. Request failures
+leave manual entries intact and offer the explicit Chrome/manual fallback.
 
 The store is bounded to 5,000 leads and 8 MiB of field payload. Individual text
 fields and a 12 MiB route/import limit are enforced. Backup/import limits cover
@@ -78,6 +90,10 @@ synthetic intercepted LinkedIn pages and a simulated companion; actual extension
 installation and current live LinkedIn layouts still need owner-driven checking.
 `test_job_link_autofill_frontend.js` adds link/canonical URL constraints,
 existing-tab reuse, owned-tab cleanup, timeout and concurrent-run/reload checks.
+`test_job_ads.py` adds no-network public HTML extraction, same-job redirects,
+identity/size/type/auth restrictions, timeouts, ambiguity and concurrency checks.
+The owner-reported public ad was verified end-to-end in the real in-app browser
+after v449; that does not establish all LinkedIn layouts or login-only access.
 
 The source preview on port 5074 uses isolated state kept across its own restarts.
 It is separate from the installed owner app on port 5000. The preview state path
