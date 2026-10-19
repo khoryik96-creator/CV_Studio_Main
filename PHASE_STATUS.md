@@ -4,6 +4,21 @@
 
 ## Release state
 
+- Current owner-authorized source work (2026-10-19): v24.6.451,
+  `codex/v24.6.451-job-lead-organization`, from local v450 `20b1f25`.
+  Job Leads adds internal folders, folder filtering, recoverable row/bulk Trash
+  and restore, visible original creation timestamps, and passive rich content
+  from public/companion capture or formatted paste. Rich trees retain typography
+  and lists without source attributes/scripts/media; empty/failed refreshes keep
+  existing drafts. Legacy payload defaults and schema 1 are preserved. Backup
+  restore retains original creation timestamps and never resurrects current Trash.
+  Full isolated local: 1,713 passed, four skipped, three documented updater
+  exclusions, 7,599 subtests. All 34 JavaScript suites, source/native-dependency
+  preflight and 24-assertion smoke pass. Synthetic actual UI verified folder
+  save, delete/restore and rich lists; the owner's actual public ad refreshed
+  rich content into an unsaved draft. No owner data deletion or saved-record
+  modification, paid call, installed app update, push, PR or merge. See v451 QA.
+
 - Current owner-authorized source work (2026-10-19): v24.6.450,
   `codex/v24.6.450-job-ad-details`, from local v449 `087fa36`.
   Job Leads retains optional exact posting dates and exposes saved description

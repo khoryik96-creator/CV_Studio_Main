@@ -3,34 +3,54 @@
   'use strict';
   const el = id => document.getElementById('jobLeads' + id);
   const labels = {new:'New', to_contact:'To contact', contacted:'Contacted', follow_up:'Following up', won:'Won', closed:'Closed'};
-  const fields = ['url', 'company', 'role', 'contact', 'location', 'date_posted', 'status', 'follow_up', 'notes', 'description'];
+  const fields = ['url', 'company', 'role', 'contact', 'location', 'date_posted', 'folder', 'status', 'follow_up', 'notes', 'description'];
   const hex = () => crypto.randomUUID().replaceAll('-', '');
   const channel = hex(), pending = new Map();
-  let rows = [], editing = null, busy = false, dirty = false, page = 0, ready = false, lastReadUrl = '', descriptionTruncated = false;
+  let rows = [], editing = null, busy = false, dirty = false, page = 0, ready = false, lastReadUrl = '', descriptionTruncated = false, descriptionRich = [];
   const status = message => { el('Message').textContent = message; };
   function localDate() {
     const d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
   const due = row => row.follow_up && row.follow_up <= localDate() && !['won', 'closed'].includes(row.status);
-  function draft() { return {...Object.fromEntries(fields.map(key => [key, el(key).value])), description_truncated:descriptionTruncated}; }
+  function draft() { return {...Object.fromEntries(fields.map(key => [key, el(key).value])), description_truncated:descriptionTruncated, description_rich:descriptionRich}; }
+  const richTags = new Set(['p','h3','h4','ul','ol','li','strong','em','br','blockquote']);
+  function content(target, plain, rich) {
+    target.replaceChildren();
+    let count = 0;
+    function add(parent, items, depth = 0) {
+      if (!Array.isArray(items) || depth > 16) return;
+      for (const item of items) {
+        if (++count > 4000) return;
+        if (typeof item?.text === 'string') parent.appendChild(document.createTextNode(item.text));
+        else if (richTags.has(item?.tag)) { const child = document.createElement(item.tag); add(child, item.children, depth+1); parent.appendChild(child); }
+      }
+    }
+    if (Array.isArray(rich) && rich.length) add(target, rich);
+    else target.textContent = plain || 'No job ad content yet. Fill from link or paste the description below.';
+    target.className = 'job-lead-ad-content' + (rich?.length ? ' job-lead-rich' : '');
+  }
   function descriptionHint() {
     el('DescriptionNote').textContent = descriptionTruncated || el('description').value.length >= 20000 ? 'Captured excerpt. Open the LinkedIn ad for the complete content.' : 'This captured text is saved with the lead and can be read here later.';
+    content(el('Content'), el('description').value, descriptionRich);
   }
   function fill(record) {
     fields.forEach(key => { el(key).value = record?.[key] || (key === 'status' ? 'new' : ''); });
+    if (!record && !['*','!trash',''].includes(el('FolderFilter').value)) el('folder').value = el('FolderFilter').value;
     editing = record?.id ? record : null; dirty = false;
     lastReadUrl = record?.url || '';
-    descriptionTruncated = record?.description_truncated === true; descriptionHint();
+    descriptionTruncated = record?.description_truncated === true; descriptionRich = record?.description_rich || []; descriptionHint();
+    el('Created').textContent = record?.created_at ? 'Date created: ' + createdLabel(record.created_at) : 'Date created is recorded when you save this lead.';
     el('Heading').textContent = editing ? 'Edit lead' : 'Save a job ad';
     el('Save').textContent = editing ? 'Save changes' : 'Save lead';
   }
   function discard() { return !dirty || window.confirm('Discard the unsaved changes in this lead?'); }
   function lock(value) {
     busy = value;
-    for (const id of ['Save', 'New', 'Read', 'Tabs', 'Refresh', 'Restore', 'AutoFill', 'BrowserFill']) el(id).disabled = value;
+    for (const id of ['Save', 'New', 'Read', 'Tabs', 'Refresh', 'Restore', 'AutoFill', 'BrowserFill', 'RefreshContent', 'Clear', 'ClearAll']) el(id).disabled = value;
     for (const name of fields) el(name).disabled = value;
     el('List').querySelectorAll('button').forEach(button => { button.disabled = value; });
+    if (!value) updateClear();
   }
   async function api(body) {
     const response = await fetch('/job-leads', body ? {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body), ...(body.action === 'lookup' ? {timeout:30000} : {})} : {});
@@ -38,10 +58,11 @@
     if (!response.ok || data.error) throw Error(data.error || 'Job Leads could not finish this request.');
     return data;
   }
-  async function load() { rows = (await api()).records; render(); }
+  async function load() { rows = (await api()).records; syncFolders(); render(); }
   function filtered() {
-    const term = el('Search').value.trim().toLocaleLowerCase(), filter = el('Filter').value;
-    return rows.filter(row => (!filter || row.status === filter || filter === 'due' && due(row)) &&
+    const term = el('Search').value.trim().toLocaleLowerCase(), filter = el('Filter').value, folder = el('FolderFilter').value;
+    return rows.filter(row => (folder === '!trash' ? row.deleted : !row.deleted && (folder === '*' || (row.folder || '') === folder)) &&
+      (!filter || row.status === filter || filter === 'due' && due(row)) &&
       (!term || [row.company, row.role, row.contact, row.notes, row.location].some(value => value.toLocaleLowerCase().includes(term))));
   }
   function node(tag, text, className) {
@@ -54,10 +75,38 @@
     const date = new Date(value + 'T00:00:00Z');
     return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat('en-GB', {day:'numeric', month:'short', year:'numeric', timeZone:'UTC'}).format(date) : 'Not available';
   }
+  function createdLabel(value) {
+    const date = new Date(value);
+    return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat('en-GB', {day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'}).format(date) : 'Not available';
+  }
+  function updateClear() {
+    el('Clear').disabled = busy || el('FolderFilter').value === '!trash' || !filtered().length;
+    el('ClearAll').disabled = busy || !rows.some(row => !row.deleted);
+  }
+  async function moveToTrash(selected, deleted, bulk = false) {
+    if (busy || !selected.length) return;
+    if (editing && selected.some(row => row.id === editing.id) && !discard()) return;
+    if (bulk && !window.confirm(`Move these ${selected.length} saved ads to Trash? You can restore them later.`)) return;
+    lock(true);
+    try {
+      await api({action:deleted ? 'trash' : 'untrash', records:selected.map(row => ({id:row.id, revision:row.revision}))});
+      if (editing && selected.some(row => row.id === editing.id)) fill(null);
+      await load(); status(deleted ? 'Moved to Trash. Choose Trash in the folder menu to restore.' : 'Lead restored to its folder.');
+    } catch (error) { status(error.message); }
+    finally { lock(false); }
+  }
+  function syncFolders() {
+    const folder = el('FolderFilter').value;
+    const folders = [...new Set(rows.map(row => row.folder).filter(Boolean))].sort((a,b) => a.localeCompare(b));
+    el('FolderFilter').replaceChildren(new Option('All folders', '*'), new Option('Unfiled', ''), new Option('Trash', '!trash'), ...folders.map(name => new Option(name, name)));
+    el('FolderFilter').value = ['*','','!trash',...folders].includes(folder) ? folder : '*';
+    el('Folders').replaceChildren(...folders.map(name => new Option(name, name)));
+  }
   function render() {
     const selected = filtered(), list = el('List'); list.replaceChildren();
-    el('Total').textContent = String(rows.length);
-    el('Due').textContent = String(rows.filter(due).length);
+    el('Total').textContent = String(rows.filter(row => !row.deleted).length);
+    el('Due').textContent = String(rows.filter(row => !row.deleted && due(row)).length);
+    updateClear();
     page = Math.min(page, Math.max(0, Math.ceil(selected.length / 40)-1));
     el('Count').textContent = selected.length ? `${page*40+1}–${Math.min((page+1)*40, selected.length)} of ${selected.length}` : '0 leads';
     el('Previous').disabled = page === 0; el('Next').disabled = (page+1)*40 >= selected.length;
@@ -68,6 +117,8 @@
       const meta = node('div', '', 'job-lead-meta');
       meta.append(node('span', labels[row.status], 'job-lead-status'));
       meta.append(node('span', 'Posted: ' + postedLabel(row.date_posted)));
+      meta.append(node('span', 'Date created: ' + createdLabel(row.created_at)));
+      meta.append(node('span', row.folder || 'Unfiled', 'job-lead-folder'));
       if (row.follow_up) meta.append(node('span', (due(row) ? 'Due · ' : 'Follow up · ') + row.follow_up, due(row) ? 'job-lead-due' : ''));
       card.appendChild(meta);
       if (row.contact) card.appendChild(node('p', 'Contact: ' + row.contact));
@@ -75,14 +126,16 @@
       if (row.notes) card.appendChild(node('p', row.notes.slice(0, 300) + (row.notes.length > 300 ? '…' : ''), 'job-lead-notes'));
       const actions = node('div', '', 'job-leads-actions');
       const link = node('a', 'Open LinkedIn ad'); link.href = row.url; link.target = '_blank'; link.rel = 'noopener noreferrer';
-      const edit = node('button', 'Edit / view details', 'sec'); edit.type = 'button'; edit.disabled = busy;
-      edit.addEventListener('click', () => { if (!busy && discard()) { fill(row); status('Editing saved lead.'); el('Form').scrollIntoView({block:'start', behavior:'smooth'}); } });
+      const edit = node('button', row.deleted ? 'Restore' : 'Edit / view details', 'sec'); edit.type = 'button'; edit.disabled = busy;
+      edit.addEventListener('click', () => { if (row.deleted) return moveToTrash([row], false); if (!busy && discard()) { fill(row); status('Editing saved lead.'); el('Form').scrollIntoView({block:'start', behavior:'smooth'}); } });
       actions.append(link, edit); card.appendChild(actions); list.appendChild(card);
+      if (!row.deleted) { const remove = node('button', 'Delete', 'sec job-lead-delete'); remove.type = 'button'; remove.disabled = busy; remove.addEventListener('click', () => moveToTrash([row], true)); actions.appendChild(remove); }
       const details = node('details', '', 'job-lead-ad');
       details.appendChild(node('summary', 'View more — job ad content'));
       if (row.description) {
         if (row.description_truncated || row.description.length >= 20000) details.appendChild(node('p', 'Captured excerpt. Open the LinkedIn ad for the complete content.', 'job-leads-muted'));
-        details.appendChild(node('div', row.description, 'job-lead-ad-content'));
+        const body = node('div', '', 'job-lead-ad-content'); content(body, row.description, row.description_rich); details.appendChild(body);
+        if (!row.description_rich?.length) details.appendChild(node('p', 'Plain-text capture. To refresh its original formatting, use Edit / view details → Refresh ad content, then save.', 'job-leads-muted'));
       } else details.appendChild(node('p', 'No job description was saved. Open the LinkedIn ad, or use Edit / view details and Fill from link, then save.', 'job-leads-muted'));
       card.appendChild(details);
     });
@@ -111,21 +164,26 @@
       return /^[0-9]{1,24}$/.test(id) ? 'https://www.linkedin.com/jobs/view/' + id : '';
     } catch { return ''; }
   }
-  async function fillFromLink(useBrowser = false) {
+  async function prepareSource(data) {
+    if (data?.description_html) data.description_rich = (await api({action:'format_content', description:data.description || '', description_html:data.description_html})).description_rich;
+    return data;
+  }
+  async function fillFromLink(useBrowser = false, refreshContent = false) {
     if (busy) return;
     const url = jobLink(el('url').value);
     if (!url) { status('Paste a LinkedIn job ad link to fill in its details.'); return; }
     if (editing && jobLink(editing.url) !== url) { status('Click New lead before filling a different job ad. Your current lead has been kept.'); return; }
     const before = draft(); lock(true); status(useBrowser ? 'Reading this job ad in Chrome…' : 'Reading public LinkedIn job details…');
     try {
-      const data = useBrowser ? await rpc('jobFromLink', {url}) : (await api({action:'lookup', url})).record;
+      const data = await prepareSource(useBrowser ? await rpc('jobFromLink', {url}) : (await api({action:'lookup', url})).record);
       if (jobLink(data?.url || '') !== url || !data.company || !data.role) throw Error('The job details could not be confirmed. Use Read job ad or enter them manually.');
+      if (refreshContent && !data.description?.trim()) throw Error('This ad did not provide readable content. Your current content has been kept.');
       // Never fill contacts, notes, follow-up dates or BD status from ad text,
       // and preserve manual corrections already made to other populated fields.
       for (const key of ['company','role','location','date_posted','description']) {
-        if (!before[key].trim() && typeof data[key] === 'string') {
+        if ((!before[key].trim() || refreshContent && key === 'description') && typeof data[key] === 'string') {
           el(key).value = data[key];
-          if (key === 'description') descriptionTruncated = data.description_truncated === true;
+          if (key === 'description') { descriptionTruncated = data.description_truncated === true; descriptionRich = data.description_rich || []; }
         }
       }
       descriptionHint();
@@ -139,10 +197,24 @@
     ready = true;
     fields.forEach(key => el(key).addEventListener('input', () => {
       dirty = true;
-      if (key === 'description') { descriptionTruncated = false; descriptionHint(); }
+      if (key === 'description') { descriptionTruncated = false; descriptionRich = []; descriptionHint(); }
     }));
     el('AutoFill').addEventListener('click', () => fillFromLink());
     el('BrowserFill').addEventListener('click', () => fillFromLink(true));
+    el('RefreshContent').addEventListener('click', () => fillFromLink(false, true));
+    el('description').addEventListener('paste', async event => {
+      const field = el('description'), source = event.clipboardData?.getData('text/html'), plain = event.clipboardData?.getData('text/plain');
+      if (busy || !source || !plain || field.value && (field.selectionStart !== 0 || field.selectionEnd !== field.value.length)) return;
+      event.preventDefault();
+      if (plain.length > 20000 || source.length > 80000) { status('This formatted description is too large. Paste a shorter excerpt. Your draft has been kept.'); return; }
+      lock(true);
+      try {
+        const result = await api({action:'format_content', description:plain, description_html:source});
+        field.value = plain; descriptionRich = result.description_rich || []; descriptionTruncated = false; dirty = true; descriptionHint();
+        status('Job content pasted. Review it, then save the lead.');
+      } catch (error) { status(error.message + ' Your draft has been kept.'); }
+      finally { lock(false); }
+    });
     el('url').addEventListener('paste', event => {
       const value = event.clipboardData?.getData('text/plain') || '';
       if (busy || !jobLink(value)) return;
@@ -157,14 +229,16 @@
         const value = await api({action:'save', record:{...draft(), ...(editing ? {id:editing.id, revision:editing.revision} : {})}});
         await load();
         if (value.duplicate) {
-          status('This job is already saved. Your draft has been kept; use Edit / view details on the existing lead to change it.');
+          status(value.record.deleted ? 'This job is already saved in Trash. Your draft has been kept; restore the existing lead from Trash.' : 'This job is already saved. Your draft has been kept; use Edit / view details on the existing lead to change it.');
         } else { fill(value.record); status('Lead saved on this computer.'); }
       } catch (error) { status(error.message); }
       finally { lock(false); }
     });
     el('New').addEventListener('click', () => { if (!busy && discard()) { fill(null); status('Ready for another job ad.'); } });
     el('Refresh').addEventListener('click', async () => { if (busy) return; lock(true); try { await load(); status('Saved leads refreshed. Reopen a lead to load its latest changes.'); } catch (error) { status(error.message); } finally { lock(false); } });
-    for (const id of ['Search', 'Filter']) el(id).addEventListener(id === 'Search' ? 'input' : 'change', () => { page = 0; render(); });
+    for (const id of ['Search', 'Filter', 'FolderFilter']) el(id).addEventListener(id === 'Search' ? 'input' : 'change', () => { page = 0; render(); });
+    el('Clear').addEventListener('click', () => moveToTrash(filtered(), true, true));
+    el('ClearAll').addEventListener('click', () => moveToTrash(rows.filter(row => !row.deleted), true, true));
     el('Previous').addEventListener('click', () => { page--; render(); });
     el('Next').addEventListener('click', () => { page++; render(); });
     el('Tabs').addEventListener('click', async () => {
@@ -181,14 +255,14 @@
       if (!option?.value) { status('Choose an open LinkedIn job ad first.'); return; }
       lock(true); status('Reading the selected job ad…');
       try {
-        const data = await rpc('jobRead', {tab_id:Number(option.value), expected_url:option.dataset.url});
+        const data = await prepareSource(await rpc('jobRead', {tab_id:Number(option.value), expected_url:option.dataset.url}));
         fill(data); dirty = true;
         status('Job ad filled in. Review the details, add a contact or notes, then Save lead.' + (data.description_truncated ? ' The captured description is an excerpt.' : ''));
       } catch (error) { status(error.message); } finally { lock(false); }
     });
     el('Export').addEventListener('click', () => {
       const safe = value => { const text = String(value ?? ''); return '"' + (/^[\s]*[=+@-]/.test(text) ? "'" : '') + text.replaceAll('"', '""') + '"'; };
-      const keys = ['company','role','contact','date_posted','status','follow_up','url','location','notes','description'];
+      const keys = ['company','role','folder','created_at','date_posted','contact','status','follow_up','url','location','notes','description'];
       download(new Blob(['\uFEFF' + [keys, ...filtered().map(row => keys.map(key => row[key]))].map(row => row.map(safe).join(',')).join('\r\n')], {type:'text/csv;charset=utf-8'}), 'CV-Studio-Job-Leads.csv');
     });
     el('Backup').addEventListener('click', () => { window.location.href = '/job-leads?action=backup'; });

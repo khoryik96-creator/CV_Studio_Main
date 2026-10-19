@@ -147,7 +147,9 @@
       if (Number.isFinite(value.getTime()) && Number.isFinite(calendar.getTime()) && calendar.toISOString().slice(0,10) === day && (rawDate.length === 10 || Number(rawDate.slice(11,13)) < 24)) datePosted = day;
     }
     if (!role || !company) throw Error('The company or role has not loaded. Paste the details into Job Leads.');
-    return {url, role, company, location:locationText, date_posted:datePosted, description:description.slice(0, 20000), description_truncated:description.length > 20000};
+    const sourceHTML = visible(descriptionNode) ? String(descriptionNode.innerHTML || '') : '';
+    return {url, role, company, location:locationText, date_posted:datePosted, description:description.slice(0, 20000),
+      description_html:sourceHTML.length <= 80000 ? sourceHTML : '', description_truncated:description.length > 20000};
   }
   globalThis.SourcerReader = {readSearch, next, search, readProfile, profileURL, readJob};
 })();

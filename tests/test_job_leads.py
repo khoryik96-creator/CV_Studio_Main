@@ -214,3 +214,20 @@ def test_public_lookup_uses_no_ai_credentials_or_durable_write(module):
     assert reply.status_code==200 and reply.json['record']==result
     read.assert_called_once_with(result['url']);provider.assert_not_called()
     assert not module._JOB_LEADS.path.exists()
+
+
+def test_rich_format_and_trash_routes_preserve_guards_and_use_no_ai(module):
+    client = module.app.test_client()
+    headers = {'X-CV-Studio-Request':'1'}
+    with mock.patch.object(module._AI_PROVIDER_CLIENT,'request') as provider:
+        result = client.post('/job-leads',json={'action':'format_content','description':'Build partnerships.','description_html':'<p>Build <b>partnerships.</b></p><script>bad()</script>'},headers=headers)
+        assert result.status_code == 200 and result.json['description_rich'][0]['tag']=='p'
+        assert not module._JOB_LEADS.path.exists()
+        row = client.post('/job-leads',json={'action':'save','record':RECORD},headers=headers).json['record']
+        assert client.post('/job-leads',json={'action':'trash','records':[row]},headers={'Origin':'https://attacker.invalid'}).status_code == 403
+        reply = client.post('/job-leads',json={'action':'trash','records':[row]},headers=headers)
+        assert reply.status_code == 200 and reply.json['changed'] == 1
+        row = client.get('/job-leads').json['records'][0]
+        assert row['deleted']
+        assert client.post('/job-leads',json={'action':'untrash','records':[row]},headers=headers).status_code == 200
+        provider.assert_not_called()

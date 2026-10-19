@@ -11,7 +11,7 @@ from urllib.parse import urljoin, urlsplit, urlunsplit
 from bs4 import BeautifulSoup
 import requests
 
-from cvstudio_job_leads import JobLeadsError, job_url
+from cvstudio_job_leads import JobLeadsError, job_url, format_description
 
 MAX_HTML_BYTES = 4 * 1024 * 1024
 
@@ -45,7 +45,7 @@ def _text(value, limit):
     if not isinstance(value, str):
         return ""
     soup = BeautifulSoup(value, "html.parser")
-    for node in soup.select('script, style'):
+    for node in soup.select('script, style, button, .show-more-less-html__button'):
         node.decompose()
     return re.sub(r"\s+", " ", soup.get_text(" ", strip=True)).strip()[:limit]
 
@@ -54,7 +54,7 @@ def _description(value):
     if not isinstance(value, str):
         return ""
     soup = BeautifulSoup(value, "html.parser")
-    for node in soup.select('script, style'):
+    for node in soup.select('script, style, button, .show-more-less-html__button'):
         node.decompose()
     return soup.get_text("\n", strip=True)
 
@@ -132,7 +132,8 @@ def parse_public_job(html, expected_url):
             candidates.append({'url':expected, 'company':company, 'role':role,
                                'location':_location(posting.get('jobLocation')),
                                'date_posted':_posted_date(posting.get('datePosted')),
-                               'description':words[:20000], 'description_truncated':len(words) > 20000})
+                               'description':words[:20000], 'description_rich':format_description(words[:20000], posting.get('description', '')),
+                               'description_truncated':len(words) > 20000})
     if candidates:
         if len({(row['company'], row['role']) for row in candidates}) != 1:
             raise _unavailable()
@@ -151,7 +152,8 @@ def parse_public_job(html, expected_url):
             return {'url':expected, 'role':_text(str(role),240), 'company':_text(str(company),200),
                     'location':_text(str(location),240) if location else '',
                     'date_posted':_posted_date(posted.get('datetime') or posted.get('content')) if posted else '',
-                    'description':words[:20000], 'description_truncated':len(words)>20000}
+                    'description':words[:20000], 'description_rich':format_description(words[:20000], str(description)) if description else [],
+                    'description_truncated':len(words)>20000}
     raise _unavailable()
 
 

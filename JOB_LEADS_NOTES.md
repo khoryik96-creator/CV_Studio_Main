@@ -15,6 +15,13 @@ sourcer and the locked historical Lead Finder.
   status starts as New and follow-up dates are never inferred from the ad.
   Follow-ups due are shown in the module;
   this is not a scheduled notification or outreach service.
+- **Save to folder** accepts an existing folder or a new name; saving creates
+  that grouping inside Job Leads. The Folder menu shows All folders, Unfiled,
+  Trash and named folders. Empty groupings need no separate persistent record.
+- **Date created** shows the original local save timestamp on each card and in
+  the edit form. It is separate from LinkedIn's posting date, remains stable
+  through edits/Trash/restore, and is retained when restoring a current backup.
+  Legacy backups without a creation timestamp use the time they are imported.
 - For login-only ads, the optional Chrome fallback can fill a draft. Install/reload the latest bundled companion,
   arm it from the CV Studio toolbar icon, open a job ad and use **Refresh job
   tabs → Read job ad**. Review the fields before saving. Manual entry works
@@ -27,17 +34,29 @@ sourcer and the locked historical Lead Finder.
 - Expand **View more — job ad content** on a saved lead to read its captured
   description without reopening LinkedIn or making a network call. The draft
   has the same expandable section with editable text. Captured excerpts are
-  labelled, and missing descriptions explain how to add one. Content is plain
-  text, bounded to 20,000 characters; the original LinkedIn link remains available.
+  labelled, and missing descriptions explain how to add one. Headings, paragraphs,
+  bold/italic text and lists are retained as a bounded semantic tree, with no
+  source attributes, styles, media, scripts or executable HTML. Plain text is
+  retained for editing/CSV and remains bounded to 20,000 characters.
+  **Edit or paste job content** accepts formatted clipboard content into an empty
+  or fully selected field; ordinary text edits replace its rich formatting.
+  For older plain-text captures, use **Refresh ad content**, review and save.
+  Failed or empty refreshes preserve the existing draft. The LinkedIn link stays available.
 - Search saved leads, filter by status or due date, and edit/view details.
   Re-saving the same LinkedIn job preserves the existing record and notes.
-  Close a lead with the Closed status; there is no destructive delete action.
+  **Delete**, **Clear shown ads** and **Clear all ads** move records into
+  recoverable Trash. Clear shown ads affects the current folder/search/status
+  selection across all its pages; Clear all ads affects every active folder.
+  Bulk actions confirm the count. Select Trash and **Restore** to return a lead
+  to its original folder. There is no permanent purge; Trash still counts toward
+  storage limits and is retained in JSON backups. Stale selections fail atomically.
 - Export the filtered view as CSV. **Download backup** exports all records as
   Job Leads JSON. **Restore missing leads** validates the entire file before
   adding missing job IDs in one transaction; existing records are never replaced.
   This dedicated backup is separate from Settings' legacy local-data backup.
   Posting dates are included in CSV, and JSON backup/restore also retains the
-  description excerpt marker. Legacy records/backups need no schema migration.
+  description excerpt marker, rich content, folders and Trash state. CSV also
+  includes folder and creation date. Legacy records/backups need no schema migration.
 
 ## Boundaries
 

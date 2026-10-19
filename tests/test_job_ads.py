@@ -38,7 +38,8 @@ def test_structured_job_fields_are_grounded_and_contacts_are_never_filled():
     assert value['location']=='Kuala Lumpur, Malaysia'
     assert value['description']=='Build partnerships.\nManage reporting.'
     assert value['date_posted']=='2026-10-02'
-    assert set(value)=={'url','company','role','location','date_posted','description','description_truncated'}
+    assert set(value)=={'url','company','role','location','date_posted','description','description_rich','description_truncated'}
+    assert value['description_rich'][1]['tag'] == 'ul'
 
 
 @pytest.mark.parametrize('value,expected', [
