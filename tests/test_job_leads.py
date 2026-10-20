@@ -29,6 +29,16 @@ def test_job_identity_removes_tracking_and_search_aliases(url):
     assert job_url(url) == "https://www.linkedin.com/jobs/view/1234567890"
 
 
+@pytest.mark.parametrize('suffix', ['?currentJobId=1234567890', '/?keywords=finance&currentJobId=1234567890&eBP=discard'])
+def test_modern_job_search_selected_ad_identity(suffix):
+    assert job_url('https://www.linkedin.com/jobs/search-results'+suffix) == 'https://www.linkedin.com/jobs/view/1234567890'
+
+
+@pytest.mark.parametrize('query', ['', '?keywords=finance', '?currentJobId=1&currentJobId=2'])
+def test_modern_search_requires_one_selected_job(query):
+    assert not job_url('https://www.linkedin.com/jobs/search-results/'+query)
+
+
 @pytest.mark.parametrize("url", ["javascript:alert(1)", "http://www.linkedin.com/jobs/view/123", "https://www.linkedin.com.attacker.invalid/jobs/view/123", "https://user@www.linkedin.com/jobs/view/123", "https://www.linkedin.com:444/jobs/view/123", "https://www.linkedin.com/in/person", "https://www.linkedin.com/jobs/search/?currentJobId=1&currentJobId=2", "https://www.linkedin.com/jobs/view/no-id", "https://www.linkedin.com/jobs/search/"])
 def test_invalid_urls_are_not_saved(url, store):
     assert not job_url(url)

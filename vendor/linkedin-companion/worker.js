@@ -18,7 +18,7 @@ function jobURL(value) {
     if (!linkedin(value) || u.username || u.password) return '';
     const view = u.pathname.match(/^\/jobs\/view\/(?:[^/]*-)?([0-9]{1,24})\/?$/);
     const ids = u.searchParams.getAll('currentJobId');
-    const id = view ? view[1] : /^\/jobs(?:\/search|\/collections\/[^/]+)?\/?$/.test(u.pathname) && ids.length === 1 ? ids[0] : '';
+    const id = view ? view[1] : /^\/jobs(?:\/search(?:-results)?|\/collections\/[^/]+)?\/?$/.test(u.pathname) && ids.length === 1 ? ids[0] : '';
     return /^[0-9]{1,24}$/.test(id) ? 'https://www.linkedin.com/jobs/view/' + id : '';
   } catch { return ''; }
 }
@@ -26,9 +26,9 @@ function jobSearchKey(value) {
   try {
     if (typeof value !== 'string' || value.length > 2048) return '';
     const url = new URL(value);
-    if (!linkedin(value) || url.username || url.password || !/^\/jobs\/search\/?$/.test(url.pathname)) return '';
+    if (!linkedin(value) || url.username || url.password || !/^\/jobs\/search(?:-results)?\/?$/.test(url.pathname)) return '';
     url.pathname = '/jobs/search/'; url.hash = '';
-    for (const name of ['start','currentJobId','trk','trackingId','refId','lipi','position','pageNum','origin','refresh']) url.searchParams.delete(name);
+    for (const name of ['start','currentJobId','trk','trackingId','refId','lipi','position','pageNum','origin','refresh','eBP']) url.searchParams.delete(name);
     url.searchParams.sort(); return url.href;
   } catch { return ''; }
 }
@@ -155,7 +155,7 @@ async function handle(message, sender) {
     throw Error('In Chrome, open CV Studio and click the companion toolbar icon to connect this tab.');
   }
   const args = message.args || {};
-  if (message.action === 'jobStatus') return {connected:true,job_read:true,busy:!!connection.run || !!jobCapture};
+  if (message.action === 'jobStatus') return {connected:true,job_read:true,job_search:true,busy:!!connection.run || !!jobCapture};
   if (message.action === 'jobSearchTabs') {
     const tabs = await chrome.tabs.query({url:'https://www.linkedin.com/*'});
     return tabs.filter(tab => jobSearchKey(tab.url)).map(tab => ({id:tab.id, url:tab.url, title:String(tab.title || 'LinkedIn job search').slice(0,160)}));

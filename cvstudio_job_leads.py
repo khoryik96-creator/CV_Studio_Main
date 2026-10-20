@@ -147,7 +147,7 @@ def job_url(value):
         match = re.fullmatch(r"/jobs/view/(?:[^/]*-)?([0-9]{1,24})/?", u.path)
         if match:
             identity = match.group(1)
-        elif re.fullmatch(r"/jobs(?:/search|/collections/[^/]+)?/?", u.path):
+        elif re.fullmatch(r"/jobs(?:/search(?:-results)?|/collections/[^/]+)?/?", u.path):
             values = parse_qs(u.query).get("currentJobId", [])
             identity = values[0] if len(values) == 1 else ""
         else:

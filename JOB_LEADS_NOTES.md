@@ -193,6 +193,40 @@ rich formatting and empty-refresh protection apply to fallback results too.
 missing, busy, timed-out, failing or mismatched companion. Existing installations
 need the v456 companion's updated files, Reload and app-tab reconnection.
 
+## Current LinkedIn search layout (v24.6.457)
+
+The current signed-in page inspected in Brave uses `/jobs/search-results/`
+and a rendered `[componentkey="SearchResultsMainContent"]` result region.
+Its job cards are buttons with `job-card-component-ref-<numeric job ID>`
+component keys and ordered title/company/location paragraphs, with no job-view
+anchors. The reader accepts this DOM layout alongside the existing linked-card
+layout. It never reads hidden React state, tracking payloads, cookies or network
+responses. Wrong/mixed card identities, missing title/company, duplicate cards
+and oversized snapshots remain rejected/bounded. Modern Next is confined to
+the results region and a parent containing numbered Page buttons.
+
+`/jobs/search/` and `/jobs/search-results/` share one source identity; selected
+job/paging/tracking fields (including `eBP`) are excluded, while actual search
+filters remain pinned. Selected modern search links also canonicalize to the
+same job-view ID in the backend, controller and worker. Modern ad capture uses
+the same-job title link and exact `JobDetails_AboutTheJob_<ID>` region, requires
+one company and substantive description, and rejects stale/ambiguous panels.
+It retains passive source formatting and labels collapsed/truncated content.
+Relative posting ages remain unconverted.
+
+Search now probes `jobStatus` with a one-second bound before opening a source,
+clearing old results or sending End. Disconnected, busy or older companions
+leave the previous results intact and receive distinct guidance. Stop during
+this readiness check sends no unrelated End. The `job_search` capability flag
+identifies a current companion; update/reload/reconnect its v457 files.
+The in-app Codex preview has no Chrome companion and cannot execute search.
+
+Live read-only DOM inspection found 25 readable unique cards, zero normal
+job-view links, and recognized paging/scrolling on the owner-opened page. This
+verifies the observed selectors, not a complete installed-extension run.
+Synthetic modern fixtures cover card identities/field order, scoped paging,
+loading/stale description panels and bounds. Existing legacy fixtures remain.
+
 ## Verification (existing contracts)
 
 `tests/test_job_leads.py` covers canonical identities, rejection of unsafe URLs,

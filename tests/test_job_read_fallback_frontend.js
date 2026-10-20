@@ -40,6 +40,8 @@ function fixture(){
 (async()=>{
   const good=fixture();await good.init();good.state.publicError='';good.el('url').value=url;await good.read();
   assert.equal(good.el('role').value,'Finance Manager');assert.equal(good.calls.length,0,'public success never probes/opens browser');
+  good.el('url').value='https://www.linkedin.com/jobs/search-results/?currentJobId=1234567890&eBP=discard';await good.read();
+  assert.equal(good.requests.at(-1).url,url,'modern selected-ad links canonicalize before any transport');
   for(const code of ['JOB_AD_UNAVAILABLE','JOB_AD_RATE_LIMITED']){
     const f=fixture();await f.init();f.state.publicError=code;f.el('url').value=url;
     f.el('company').value='Manual Company';f.el('contact').value='Manual Contact';f.el('notes').value='Keep my notes';

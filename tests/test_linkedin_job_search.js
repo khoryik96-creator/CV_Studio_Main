@@ -46,6 +46,9 @@ function fixture(){
   assert((await f.read(id,'nextJobSearch')).error);assert.equal(f.state.next,1,'suspension/rebegin cannot reset page ceiling');
   await f.end();assert(f.tabs.has(id),'search output is retained for user review');assert.equal(f.state.removed.length,0);
   const g=fixture();await g.arm();const open=await g.begin({use_open:true,source_tab_id:2});assert.equal(open.result.tab_id,2);assert.equal(g.state.created.length,0);
+  g.tabs.get(2).url=search.replace('/jobs/search/','/jobs/search-results/')+'&eBP=job-card-tracking&currentJobId=1234567890';
+  assert.equal((await g.read(2)).result.jobs[0].url,row.url,'new layout aliases and selected-card tracking retain filter identity');
+  g.boot();assert((await g.read(2)).result,'the alias works after worker suspension');
   g.tabs.get(2).url=search+'&keywords=other';assert((await g.read(2)).error,'changed filters revoke reads');await g.end();
   const h=fixture();await h.arm();const hi=(await h.begin({max_pages:1})).result.tab_id;
   for(let n=0;n<8;n++)assert((await h.read(hi,'scrollJobSearch')).result);

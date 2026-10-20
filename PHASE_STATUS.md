@@ -4,6 +4,19 @@
 
 ## Release state
 
+- Current owner-reported job search corrective: v24.6.457,
+  `codex/v24.6.457-job-search-layout`, continuing unmerged v456 `8340c63`.
+  The owner confirmed trying search only in the Codex preview, where the
+  companion cannot connect. Search now checks readiness before clearing results
+  or opening/ending a browser run, with clear disconnected/old/busy guidance.
+  Read-only live LinkedIn inspection also confirmed a newer search-results
+  button-card layout; the reader supports its rendered IDs, fields, scrolling,
+  scoped pagination and selected-job description alongside legacy markup.
+  Search path aliases and selected-ad links canonicalize while actual filters
+  and identity checks remain pinned. No new route/schema/permission/provider.
+  See `cv_studio_v24_6_457_job_search_layout_qa_report.md` for evidence and limits.
+  No push, PR, merge or installed app change.
+
 - Current owner-reported intermittent job-read corrective: v24.6.456,
   `codex/v24.6.456-job-read-fallback`, continuing unmerged v455 `3e4f802`.
   Recognized public-read failures now try one connected, idle companion capture

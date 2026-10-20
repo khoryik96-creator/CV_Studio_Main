@@ -341,9 +341,16 @@
     if (!Number.isInteger(pages) || pages < 1 || pages > 15) { searchStatus('Choose 1 to 15 pages.'); return; }
     if (!useOpen && (!query || query.length > 240 || where.length > 160 || /[\x00-\x1f]/.test(query + where))) { searchStatus('Enter job keywords and an optional location.'); return; }
     if (useOpen && !el('SearchSource').value) { searchStatus('Refresh search tabs and choose an open LinkedIn job search.'); return; }
-    discovering = true; discoveryStopped = false; discoveryRun = hex(); discovered = []; discoveryPicked.clear(); discoveryPage = 0;
-    lock(true); drawDiscovery(); searchStatus('Opening the LinkedIn job search in Chrome…');
+    discovering = true; discoveryStopped = false; discoveryRun = '';
+    lock(true); searchStatus('Checking the browser companion…');
     try {
+      const companion = await rpc('jobStatus',{},1000).catch(() => null);
+      checkDiscovery();
+      if (!companion?.connected) throw Error('The companion is not connected to this tab. Open this CV Studio address in Chrome, reload the latest companion and click its toolbar icon. LinkedIn job search cannot run inside the Codex preview.');
+      if (companion.job_search !== true) throw Error('Update and reload the latest companion, then reconnect this tab to enable LinkedIn job search.');
+      if (companion.busy) throw Error('Finish the current companion search or ad read before starting another search.');
+      discoveryRun = hex(); discovered = []; discoveryPicked.clear(); discoveryPage = 0;
+      drawDiscovery(); searchStatus('Opening the LinkedIn job search in Chrome…');
       const source = await rpc('jobSearchBegin',{run_id:discoveryRun,query,location:where,max_pages:pages,use_open:useOpen,source_tab_id:Number(el('SearchSource').value)});
       checkDiscovery();
       let previous = '';
@@ -365,7 +372,7 @@
       checkDiscovery(); searchStatus(`Found ${discovered.length} ads. Select the ones to add. Search summaries are labelled; use Read full ad for the complete content when available.`);
     } catch (error) { searchStatus(discoveryStopped ? `Stopped. ${discovered.length} ads found so far are kept for review.` : error.message + ' Ads already found are kept.'); }
     finally {
-      try { await rpc('end',{run_id:discoveryRun}); } catch {}
+      if (discoveryRun) { try { await rpc('end',{run_id:discoveryRun}); } catch {} }
       discoveryRun = ''; discovering = false; lock(false); drawDiscovery();
     }
   }
@@ -427,7 +434,7 @@
       const u = new URL(value.trim());
       if (u.protocol !== 'https:' || !['www.linkedin.com', 'linkedin.com', 'my.linkedin.com', 'sg.linkedin.com'].includes(u.hostname) || u.username || u.password || u.port) return '';
       const view = u.pathname.match(/^\/jobs\/view\/(?:[^/]*-)?([0-9]{1,24})\/?$/), ids = u.searchParams.getAll('currentJobId');
-      const id = view ? view[1] : /^\/jobs(?:\/search|\/collections\/[^/]+)?\/?$/.test(u.pathname) && ids.length === 1 ? ids[0] : '';
+      const id = view ? view[1] : /^\/jobs(?:\/search(?:-results)?|\/collections\/[^/]+)?\/?$/.test(u.pathname) && ids.length === 1 ? ids[0] : '';
       return /^[0-9]{1,24}$/.test(id) ? 'https://www.linkedin.com/jobs/view/' + id : '';
     } catch { return ''; }
   }
@@ -493,7 +500,7 @@
     el('SearchStop').addEventListener('click',async () => {
       if (!discovering) return;
       discoveryStopped = true; discoveryControls(); searchStatus('Stopping after the current browser read. Found ads will be kept.');
-      try { await rpc('end',{run_id:discoveryRun}); } catch {}
+      if (discoveryRun) { try { await rpc('end',{run_id:discoveryRun}); } catch {} }
     });
     el('SearchMode').addEventListener('change',discoveryControls);
     el('SearchRefresh').addEventListener('click',async () => {

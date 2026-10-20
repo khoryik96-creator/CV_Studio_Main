@@ -1,0 +1,54 @@
+const fs=require('fs'),path=require('path'),vm=require('vm'),assert=require('assert/strict');
+const source=fs.readFileSync(path.join(__dirname,'../vendor/linkedin-companion/reader.js'),'utf8');
+const url='https://www.linkedin.com/jobs/view/1234567890';
+const visible=(innerText='',extra={})=>({innerText,getClientRects:()=>[{}],getAttribute:()=>null,querySelectorAll:()=>[],...extra});
+function card(id,patch={}){
+  const state={id,...patch},ps=[visible('Finance Manager (Verified job)\nFinance Manager'),visible('Example Finance'),visible('Penang')];
+  return visible('Finance Manager Example Finance Penang Posted 2 weeks ago',{state,ps,
+    getAttribute:name=>name==='componentkey'?'job-card-component-ref-'+state.id:null,
+    querySelectorAll:selector=>selector==='p'?ps:selector==='a[href]'?(state.wrongLink?[{href:'https://www.linkedin.com/jobs/view/999'}]:[]):
+      selector.startsWith('[componentkey')?(state.nested?[{getAttribute:()=> 'job-card-component-ref-999'}]:[]):[]});
+}
+const first=card('1234567890'),duplicate=card('1234567890'),bad=card('not-an-id'),ambiguous=card('7777777777',{nested:true}),wrong=card('8888888888',{wrongLink:true});
+const state={cards:[first,duplicate,bad,ambiguous,wrong],next:0,scroll:0,about:true,stale:false,companyConflict:false};
+const pageButton=visible('1'),pager={querySelector:selector=>selector==='ul button[aria-label^="Page "]'?pageButton:null};
+const next=visible('Next',{disabled:false,parentElement:pager,click:()=>state.next++});
+const decoy=visible('Next',{parentElement:{querySelector:()=>null},click:()=>{throw Error('Clicked unrelated next')}});
+const scope=visible('Current job search',{scrollTop:0,clientHeight:500,scrollHeight:1800,contains:el=>el===scope,
+  getAttribute:name=>name==='componentkey'?'SearchResultsMainContent':null,
+  scrollBy:()=>{scope.scrollTop+=500;state.scroll++},
+  querySelectorAll:selector=>selector==='button'?[decoy,next]:selector.startsWith('[role="button"]')?state.cards:[]});
+const company=visible('Example Finance'),companyOther=visible('Other Company'),companyP=visible('Example Finance'),titleP=visible('Finance Manager'),locationP=visible('Penang · 2 weeks ago · 20 applicants');
+const title=visible('Finance Manager',{href:url,closest:()=>titleP});
+const header=visible('',{querySelectorAll:selector=>selector==='a[href*="/company/"]'?state.companyConflict?[company,companyOther]:[company,company]:selector==='p'?[companyP,titleP,locationP]:[]});
+title.parentElement=header;
+const showMore=visible('Show more');
+const about=visible('About the job\nBuild partnerships.\nManage reporting.\nShow more',{
+  innerHTML:'<h2>About the job</h2><ul><li>Build partnerships.</li><li>Manage reporting.</li></ul><button>Show more</button>',querySelectorAll:selector=>selector==='button'?[showMore]:[]});
+const workspace=visible('Current jobs',{querySelectorAll:selector=>selector==='a[href]'?state.stale?[{...title,href:'https://www.linkedin.com/jobs/view/999'}]:[title]:
+  selector==='[componentkey="JobDetails_AboutTheJob_1234567890"]'&&state.about?[about]:[]});
+header.parentElement=workspace;
+const location={origin:'https://www.linkedin.com',pathname:'/jobs/search-results/',href:'https://www.linkedin.com/jobs/search-results/?keywords=finance&currentJobId=1234567890',search:'?keywords=finance&currentJobId=1234567890'};
+const document={body:workspace,querySelector:selector=>selector==='main#workspace'||selector==='main'?workspace:null,
+  querySelectorAll:selector=>selector.includes('.jobs-search-results-list')?[scope]:[]};
+const context=vm.createContext({document,location,URL,URLSearchParams,Date,Number,getComputedStyle:()=>({visibility:'visible'})});
+vm.runInContext(source,context);const reader=context.SourcerReader;
+let snapshot=reader.readJobSearch();assert.equal(snapshot.jobs.length,1,'canonical component identity, duplicates, malformed and mixed-job cards');
+assert.equal(snapshot.jobs[0].url,url);assert.equal(snapshot.jobs[0].role,'Finance Manager');assert.equal(snapshot.jobs[0].company,'Example Finance');assert.equal(snapshot.jobs[0].location,'Penang');assert.equal(snapshot.jobs[0].date_posted,'','relative dates are never guessed');
+assert(snapshot.hasNext);assert(reader.nextJobSearch(snapshot.signature));assert.equal(state.next,1);
+next.disabled=true;assert.equal(reader.nextJobSearch(snapshot.signature),false);assert.equal(state.next,1);
+assert(reader.scrollJobSearch(snapshot.signature));assert.equal(state.scroll,1);
+first.ps[0].innerText='';assert.equal(reader.readJobSearch().jobs.length,1,'loaded duplicate remains when one title is empty');
+state.cards=[first];assert.equal(reader.readJobSearch().loading,true,'missing title never shifts company into the role field');
+state.cards=Array.from({length:45},(_,i)=>card(String(2222222200+i)));assert.equal(reader.readJobSearch().jobs.length,40,'snapshot bound remains');
+let captured=reader.readJob(url);assert.equal(captured.role,'Finance Manager');assert.equal(captured.company,'Example Finance');assert.equal(captured.location,'Penang');
+assert.equal(captured.description,'About the job\nBuild partnerships.\nManage reporting.');assert.equal(captured.description_truncated,true);assert(captured.description_html.includes('<ul>'));
+const previousText=about.innerText;about.innerText='About the job';
+assert.throws(()=>reader.readJob(url),error=>error.cvstudioJobLoading===true,'a heading-only loading panel is never a successful content capture');about.innerText=previousText;
+for(const patch of [{about:false},{stale:true},{companyConflict:true}]){
+  Object.assign(state,{about:true,stale:false,companyConflict:false},patch);
+  assert.throws(()=>reader.readJob(url),error=>error.cvstudioJobLoading===true,'stale or ambiguous detail fields must not mix');
+}
+location.search='?currentJobId=1234567890&currentJobId=999';assert.throws(()=>reader.readJob(url));
+location.origin='https://attacker.invalid';assert.throws(()=>reader.readJobSearch());
+console.log('Modern LinkedIn Jobs: rendered keyed cards, field ordering, canonical identity/deduplication/bounds, scoped pagination, selected-ad identity and content safety passed');

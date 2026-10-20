@@ -15,10 +15,11 @@ function fixture(){
   const el=name=>document.getElementById('jobLeads'+name),location={origin:'http://127.0.0.1:5000',search:''};
   el('FolderFilter').value='*';el('SearchPages').value='2';el('SearchMode').value='new';el('SearchQuery').value='finance';el('SearchLocation').value='Malaysia';
   let serial=0;
-  const state={page:0,scroll:0,totalPages:2,hold:false,held:null,failSave:'',failRead:false,many:false,
+  const state={page:0,scroll:0,totalPages:2,hold:false,held:null,failSave:'',failRead:false,many:false,connected:true,searchCapable:true,busy:false,
     records:[{...b,id:'e'.repeat(32),revision:2,contact:'Manual Contact',notes:'Important saved notes',status:'contacted',description:'Saved full content',created_at:'2026-10-01T00:00:00Z',folder:'',deleted:false,follow_up:''}]};
   const window={addEventListener:(name,fn)=>events[name]=fn,confirm:()=>true,postMessage:message=>{
     calls.push(message);const reply=(value,error)=>events.message({source:window,origin:location.origin,data:{type:'CVSTUDIO_LINKEDIN_RESPONSE',id:message.id,channel:message.channel,...(error?{error}:{result:value})}});
+    if(message.action==='jobStatus')return reply({connected:state.connected,job_search:state.searchCapable,busy:state.busy});
     if(message.action==='jobSearchTabs')return reply([{id:20,title:'Open filtered jobs',url:'https://www.linkedin.com/jobs/search/?keywords=finance&f_WT=2'}]);
     if(message.action==='jobSearchBegin'){state.page=0;state.scroll=0;return reply({tab_id:20})}
     if(message.action==='end')return reply(true);
@@ -79,6 +80,13 @@ function fixture(){
   f.el('SearchPages').value='2';f.el('SearchMode').value='open';f.el('SearchMode').handlers.change();await f.el('SearchRefresh').click();
   f.el('SearchSource').value='20';f.el('SearchQuery').value='';await f.el('SearchStart').click();
   assert(f.calls.some(call=>call.action==='jobSearchBegin'&&call.args.use_open&&call.args.source_tab_id===20));
+  for(const patch of [{connected:false},{searchCapable:false},{busy:true}]){
+    Object.assign(f.state,{connected:true,searchCapable:true,busy:false},patch);
+    const before=f.calls.length;await f.el('SearchStart').click();
+    assert.deepEqual(f.calls.slice(before).map(call=>call.action),['jobStatus'],'unavailable/busy/old companions never open or end a search');
+    assert.match(f.el('SearchCount').textContent,/3 found/,'readiness failures keep the prior results');
+    assert.equal(f.el('SearchStart').disabled,false);
+  }
   const stopped=fixture();await stopped.init();stopped.state.hold=true;const running=stopped.el('SearchStart').click();
   for(let attempt=0;attempt<50&&!stopped.state.held;attempt++)await new Promise(resolve=>setTimeout(resolve,5));
   assert(stopped.state.held);await stopped.el('SearchStop').click();stopped.state.held();await running;

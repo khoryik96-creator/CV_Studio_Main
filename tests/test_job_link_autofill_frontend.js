@@ -33,7 +33,7 @@ function fixture() {
   assert((await f.rpc('jobStatus')).error,'status cannot bypass the app binding');
   assert((await f.rpc('jobFromLink',{url})).error);assert.equal(f.state.created.length,0);
   await f.arm();
-  assert.deepEqual({...((await f.rpc('jobStatus')).result)},{connected:true,job_read:true,busy:false});
+  assert.deepEqual({...((await f.rpc('jobStatus')).result)},{connected:true,job_read:true,job_search:true,busy:false});
   assert.equal((await f.rpc('jobFromLink',{url})).result.location,'Kuala Lumpur');
   assert.equal(f.state.created.length,0);assert.equal(f.state.removed.length,0,'existing tabs remain open');
   f.state.delayedReads=3;let reads=f.state.readCount;

@@ -122,13 +122,17 @@
     const problem = issue(); if (problem) throw Error(problem);
     const view = location.pathname.match(/^\/jobs\/view\/(?:[^/]*-)?([0-9]{1,24})\/?$/);
     const ids = new URLSearchParams(location.search).getAll('currentJobId');
-    const id = view ? view[1] : /^\/jobs(?:\/search|\/collections\/[^/]+)?\/?$/.test(location.pathname) && ids.length === 1 ? ids[0] : '';
+    const id = view ? view[1] : /^\/jobs(?:\/search(?:-results)?|\/collections\/[^/]+)?\/?$/.test(location.pathname) && ids.length === 1 ? ids[0] : '';
     const url = /^[0-9]{1,24}$/.test(id) ? 'https://www.linkedin.com/jobs/view/' + id : '';
     if (!url || url !== expectedURL) throw Error('The selected job changed. Refresh job tabs.');
     // Read only a recognized job detail panel, excluding neighboring result cards.
     const panels = [...document.querySelectorAll('.jobs-search__job-details--container, .jobs-details, .job-view-layout, .top-card-layout')].filter(visible);
     const panel = panels.find(value => value.querySelector('.job-details-jobs-unified-top-card__job-title, .jobs-unified-top-card__job-title, .top-card-layout__title'));
-    if (!panel) loading('This job layout has not loaded or is not recognized.');
+    if (!panel) {
+      const modern = readModernJob(url);
+      if (modern) return modern;
+      loading('This job layout has not loaded or is not recognized.');
+    }
     const first = selector => [...panel.querySelectorAll(selector)].find(visible);
     const roleNode = first('.job-details-jobs-unified-top-card__job-title, .jobs-unified-top-card__job-title, .top-card-layout__title');
     const roleLink = roleNode?.matches('a[href]') ? roleNode : roleNode?.querySelector('a[href]');
@@ -159,16 +163,51 @@
       return url.origin === 'https://www.linkedin.com' && !url.username && !url.password && match ? url.origin + '/jobs/view/' + match[1] : '';
     } catch { return ''; }
   }
+  function readModernJob(url) {
+    const workspace = document.querySelector('main#workspace');
+    if (!workspace) return null;
+    const id = url.split('/').at(-1);
+    const abouts = [...workspace.querySelectorAll('[componentkey="JobDetails_AboutTheJob_' + id + '"]')].filter(visible);
+    const title = [...workspace.querySelectorAll('a[href]')].find(link => visible(link) && jobLink(link.href) === url && text(link));
+    if (abouts.length !== 1 || !title) return null;
+    let header = title;
+    for (let step=0;step<12 && header && header !== workspace;step++,header=header.parentElement) {
+      const companies = [...new Set([...header.querySelectorAll('a[href*="/company/"]')].filter(visible).map(text).filter(Boolean))];
+      if (!companies.length) continue;
+      if (companies.length !== 1) return null;
+      const role = compact(String(title.innerText || '').split('\n')[0]).replace(/\s*\(Verified job\)\s*$/i,'').slice(0,240);
+      if (!role) return null;
+      const paragraphs = [...header.querySelectorAll('p')], titleParagraph = title.closest('p'), index = paragraphs.indexOf(titleParagraph);
+      const where = index >= 0 ? text(paragraphs[index+1]).split(/\s*·\s*/)[0].slice(0,240) : '';
+      const about = abouts[0]; let description = String(about.innerText || '').trim(), truncated = false;
+      for (const button of about.querySelectorAll('button')) {
+        const label = text(button);
+        if (/^(show|see) (more|less)$/i.test(label) && description.endsWith(label)) {
+          description = description.slice(0,-label.length).trim(); truncated ||= /more$/i.test(label);
+        }
+      }
+      if (!description.replace(/^About the job\b\s*/i,'').trim()) return null;
+      const html = String(about.innerHTML || '');
+      return {url,role,company:companies[0].slice(0,200),location:where,date_posted:'',description:description.slice(0,20000),
+        description_html:html.length <= 80000 ? html : '',description_truncated:truncated || description.length > 20000};
+    }
+    return null;
+  }
   function jobScope() {
-    if (location.origin !== 'https://www.linkedin.com' || !/^\/jobs\/search\/?$/.test(location.pathname)) throw Error('Open a LinkedIn Jobs search.');
+    if (location.origin !== 'https://www.linkedin.com' || !/^\/jobs\/search(?:-results)?\/?$/.test(location.pathname)) throw Error('Open a LinkedIn Jobs search.');
     const problem = issue(); if (problem) throw Error(problem);
-    return [...document.querySelectorAll('.jobs-search-results-list, .jobs-search__results-list, .scaffold-layout__list')].find(visible);
+    return [...document.querySelectorAll('.jobs-search-results-list, .jobs-search__results-list, .scaffold-layout__list, [componentkey="SearchResultsMainContent"]')].find(visible);
   }
   function jobScroller(scope) {
     return [scope, ...document.querySelectorAll('.jobs-search-results-list, .scaffold-layout__list')]
       .find(value => value && visible(value) && value.contains(scope) && value.clientHeight > 0 && value.scrollHeight > value.clientHeight + 5) || scope;
   }
-  function jobNextButton() {
+  function jobNextButton(scope) {
+    if (scope?.getAttribute?.('componentkey') === 'SearchResultsMainContent') {
+      return [...scope.querySelectorAll('button')].filter(visible).find(button =>
+        /^(next|next page|seterusnya)$/i.test(compact(button.getAttribute('aria-label') || button.innerText)) &&
+        button.parentElement?.querySelector('ul button[aria-label^="Page "]')) || null;
+    }
     const containers = [...document.querySelectorAll('.jobs-search-pagination, .jobs-search-results-list .artdeco-pagination, .scaffold-layout__list .artdeco-pagination')].filter(visible);
     for (const container of containers) {
       const buttons = [...container.querySelectorAll('button')].filter(visible);
@@ -185,7 +224,25 @@
     const mainText = text(scope || document.querySelector('main')).slice(0,3000);
     const empty = /no (?:matching )?(?:jobs|results)(?: found)?|couldn.t find any jobs|0 jobs/i.test(mainText);
     if (!scope) return {loading:!empty,empty,jobs,signature:'',hasNext:false,atBottom:true};
+    if (scope.getAttribute?.('componentkey') === 'SearchResultsMainContent') {
+      for (const card of scope.querySelectorAll('[role="button"][componentkey^="job-card-component-ref-"]')) {
+        const id = card.getAttribute('componentkey')?.match(/^job-card-component-ref-([0-9]{1,24})$/)?.[1];
+        if (!id || !visible(card)) continue;
+        const url = 'https://www.linkedin.com/jobs/view/' + id;
+        const identities = [...card.querySelectorAll('[componentkey^="job-card-component-ref-"]')].map(value => value.getAttribute('componentkey'));
+        const links = [...card.querySelectorAll('a[href]')].map(value => jobLink(value.href)).filter(Boolean);
+        if (seen.has(url) || identities.some(value => value !== 'job-card-component-ref-' + id) || links.some(value => value !== url)) continue;
+        const paragraphs = [...card.querySelectorAll('p')];
+        if (!visible(paragraphs[0]) || !visible(paragraphs[1])) continue;
+        const role = compact(String(paragraphs[0].innerText || '').split('\n')[0]).replace(/\s*\(Verified job\)\s*$/i,'').slice(0,240);
+        const company = text(paragraphs[1]).slice(0,200), where = text(paragraphs[2]).slice(0,240);
+        if (!role || !company) continue;
+        seen.add(url); jobs.push({url,role,company,location:where,date_posted:'',description:text(card).slice(0,6500),description_truncated:true});
+        if (jobs.length >= 40) break;
+      }
+    }
     for (const link of scope.querySelectorAll('a[href]')) {
+      if (jobs.length >= 40) break;
       const url = jobLink(link.href);
       if (!url || seen.has(url) || !visible(link)) continue;
       const card = link.closest('.jobs-search-results__list-item, .job-card-container, .job-card-list, .base-search-card, li');
@@ -206,7 +263,7 @@
       seen.add(url); jobs.push({url,role,company,location:where,date_posted:datePosted,description:text(card).slice(0,6500),description_truncated:true});
       if (jobs.length >= 40) break;
     }
-    const scroller = jobScroller(scope), next = jobNextButton();
+    const scroller = jobScroller(scope), next = jobNextButton(scope);
     return {url:location.href,jobs,empty:!jobs.length && empty,loading:!jobs.length && !empty,signature:jobs.map(row => row.url).join('|'),
       hasNext:!!next && !disabled(next),atBottom:!scroller.clientHeight || scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 5};
   }
@@ -220,7 +277,7 @@
   function nextJobSearch(signature) {
     const snapshot = readJobSearch();
     if (!signature || snapshot.signature !== signature) throw Error('The job search changed before paging.');
-    const button = jobNextButton();
+    const button = jobNextButton(jobScope());
     if (!button || disabled(button)) return false;
     button.click(); return true;
   }
