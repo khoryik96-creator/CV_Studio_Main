@@ -51,6 +51,8 @@ const root = path.resolve(__dirname, '..');
     append(...children){this.children.push(...children)}
     appendChild(child){this.children.push(child);return child}
     replaceChildren(...children){this.children=children}
+    setAttribute(name,value){this[name]=value}
+    focus(){}
     querySelectorAll(tag){return this.children.flatMap(child=>[...(child.tagName===tag?[child]:[]),...child.querySelectorAll(tag)])}
     scrollIntoView(){}
     click(){this.clicked=true;return this.handlers.click?.()}
@@ -60,7 +62,7 @@ const root = path.resolve(__dirname, '..');
   const document = {getElementById:id=>{if(!ids.has(id))ids.set(id,new Element());return ids.get(id)},createElement:tag=>new Element(tag),createTextNode:text=>new Element('#text',text),addEventListener:(type,fn)=>events[type]=fn};
   const el = name=>document.getElementById('jobLeads'+name);
   el('FolderFilter').value='*';
-  let records=[], sequence=0, allowDiscard=true, lookupError=false, lookups=0, missingDescription=false;
+  let records=[], folders=[], sequence=0, allowDiscard=true, lookupError=false, lookups=0, missingDescription=false, moveError=false;
   class TestURL extends URL {static createObjectURL(blob){blobs.push(blob);return 'blob:synthetic'} static revokeObjectURL(){}}
   const location={origin:'http://127.0.0.1:5000',search:'',href:''};
   const window={addEventListener:(type,fn)=>events[type]=fn,confirm:()=>allowDiscard,postMessage:message=>{
@@ -68,8 +70,22 @@ const root = path.resolve(__dirname, '..');
   }};
   const fetch=async(endpoint,options)=>{
     assert.equal(endpoint,'/job-leads');
-    if(!options?.body)return {ok:true,json:async()=>({records})};
+    if(!options?.body)return {ok:true,json:async()=>({records,folders})};
     const data=JSON.parse(options.body), value=data.record;
+    if(data.action==='create_folder') {
+      if (!folders.includes(data.folder)) folders.push(data.folder);
+      return {ok:true,json:async()=>({folder:data.folder})};
+    }
+    if(data.action==='delete_folder') {
+      folders=folders.filter(name=>name!==data.folder);
+      records.forEach(row=>{if(row.folder===data.folder){row.folder='';row.revision++;}});
+      return {ok:true,json:async()=>({changed:data.records.length})};
+    }
+    if(data.action==='move_folder') {
+      if(moveError)return {ok:false,json:async()=>({error:'Selected ad changed in another window'})};
+      records.forEach(row=>{if(data.records.some(item=>item.id===row.id)){row.folder=data.folder;row.revision++;}});
+      return {ok:true,json:async()=>({changed:data.records.length})};
+    }
     if(data.action==='format_content')return {ok:true,json:async()=>({description_rich:[{tag:'p',children:[{tag:'strong',children:[{text:data.description}]}]}]})};
     if(['trash','untrash'].includes(data.action)){
       for(const row of records) if(data.records.some(item=>item.id===row.id)){row.deleted=data.action==='trash';row.revision++;}
@@ -173,5 +189,43 @@ const root = path.resolve(__dirname, '..');
   el('url').value='https://www.linkedin.com/jobs/view/1234567899';const oldRecords=JSON.stringify(records);
   await el('Form').handlers.submit({preventDefault(){}});assert.equal(JSON.stringify(records),oldRecords,'Save cannot bypass source identity check');
   assert.match(el('Message').textContent,/different job|different ad/i);
+  // Explicit empty folders and selecting already-saved ads for later filing.
+  await el('New').click();
+  records=[{...records[0],id:'d'.repeat(32),url:'https://www.linkedin.com/jobs/view/555',folder:'',deleted:false},
+    {...records[0],id:'e'.repeat(32),url:'https://www.linkedin.com/jobs/view/666',folder:'',deleted:false}];
+  folders=[];await el('Refresh').click();
+  await el('FolderNew').click();assert.equal(el('FolderEditor').hidden,false);
+  el('FolderName').value='Shortlisted';await el('FolderCreate').click();
+  assert.equal(el('FolderEditor').hidden,true);assert.equal(el('FolderFilter').value,'Shortlisted');
+  assert.equal(el('Count').textContent,'0 leads');assert.equal(el('FolderDelete').disabled,false);
+  await el('Refresh').click();assert(el('FolderFilter').children.some(item=>item.value==='Shortlisted'),'empty folder survives a fresh list request');
+  el('FolderFilter').value='*';el('FolderFilter').handlers.change();
+  let pick=el('List').children[0].querySelectorAll('input')[0];pick.checked=true;pick.handlers.change();
+  assert.equal(el('SelectedCount').textContent,'1 selected');assert.equal(el('Selection').hidden,false);
+  const originalNote=records[0].notes,originalCreated=records[0].created_at;
+  el('MoveFolder').value='Shortlisted';await el('Move').click();
+  assert.equal(records[0].folder,'Shortlisted');assert.equal(records[1].folder,'');
+  assert.equal(records[0].notes,originalNote);assert.equal(records[0].created_at,originalCreated);
+  assert.equal(el('Selection').hidden,true);
+  el('SelectPage').checked=true;el('SelectPage').handlers.change();assert.equal(el('SelectedCount').textContent,'2 selected');
+  el('Search').value='no match';el('Search').handlers.input();assert.equal(el('Selection').hidden,true,'filter changes clear hidden selections');
+  el('Search').value='';el('Search').handlers.input();
+  await el('FolderNew').click();el('FolderName').value='Another';await el('FolderCreate').click();
+  el('FolderFilter').value='*';el('FolderFilter').handlers.change();
+  await el('List').children[0].querySelectorAll('button').find(button=>button.textContent==='Edit / view details').click();
+  el('notes').value='Unsaved notes';el('notes').handlers.input();
+  pick=el('List').children[0].querySelectorAll('input')[0];pick.checked=true;pick.handlers.change();
+  el('MoveFolder').value='Another';allowDiscard=false;await el('Move').click();
+  assert.equal(records[0].folder,'Shortlisted');assert.equal(el('notes').value,'Unsaved notes');
+  allowDiscard=true;moveError=true;await el('Move').click();
+  assert.equal(records[0].folder,'Shortlisted');assert.equal(el('notes').value,'Unsaved notes');assert.match(el('Message').textContent,/changed in another window/);
+  moveError=false;await el('Move').click();assert.equal(records[0].folder,'Another');assert.equal(el('folder').value,'Another');
+  assert.equal(el('notes').value,originalNote,'successful move reloads the current revision only after discard confirmation');
+  el('FolderFilter').value='Another';el('FolderFilter').handlers.change();allowDiscard=false;await el('FolderDelete').click();
+  assert(folders.includes('Another'));assert.equal(records[0].folder,'Another');
+  allowDiscard=true;await el('FolderDelete').click();
+  assert(!folders.includes('Another'));assert(records.every(row=>row.folder===''&&!row.deleted),'deleting a folder keeps its saved ads');
+  el('FolderFilter').value='Shortlisted';el('FolderFilter').handlers.change();await el('FolderDelete').click();
+  assert.equal(folders.length,0);assert.equal(records.length,2);
   console.log('Job Leads: capture binding/isolation, save/edit/search, duplicate/draft protection, paste-link autofill, optional manual contact/status/date preservation, failure, CSV and HTML safety passed');
 })().catch(error=>{console.error(error);process.exitCode=1});

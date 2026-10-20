@@ -50,7 +50,7 @@ def test_folders_rich_content_and_original_creation_survive_backup_restore(tmp_p
     other.restore(store.backup())
     assert other.list()[0]['created_at'] == row['created_at']
     assert other.list()[0]['description_rich'] == row['description_rich']
-    with sqlite3.connect(store.path) as db: assert db.execute('PRAGMA user_version').fetchone()[0] == 1
+    with sqlite3.connect(store.path) as db: assert db.execute('PRAGMA user_version').fetchone()[0] == 2
 
 
 def test_trash_restore_are_durable_revision_checked_and_never_overwritten_by_backup(tmp_path):

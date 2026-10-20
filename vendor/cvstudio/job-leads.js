@@ -6,6 +6,8 @@
   const fields = ['url', 'company', 'role', 'contact', 'location', 'date_posted', 'folder', 'status', 'follow_up', 'notes', 'description'];
   const hex = () => crypto.randomUUID().replaceAll('-', '');
   const channel = hex(), pending = new Map();
+  const picked = new Set();
+  let folderNames = [];
   let rows = [], editing = null, busy = false, dirty = false, page = 0, ready = false, lastReadUrl = '', descriptionTruncated = false, descriptionRich = [];
   const status = message => { el('Message').textContent = message; };
   function localDate() {
@@ -47,10 +49,11 @@
   function discard() { return !dirty || window.confirm('Discard the unsaved changes in this lead?'); }
   function lock(value) {
     busy = value;
-    for (const id of ['Save', 'New', 'Read', 'Tabs', 'Refresh', 'Restore', 'AutoFill', 'BrowserFill', 'RefreshContent', 'Clear', 'ClearAll']) el(id).disabled = value;
+    for (const id of ['Save', 'New', 'Read', 'Tabs', 'Refresh', 'Restore', 'AutoFill', 'BrowserFill', 'RefreshContent', 'Clear', 'ClearAll', 'FolderNew', 'FolderCreate', 'FolderCancel', 'FolderName', 'FolderDelete', 'Move', 'MoveFolder', 'SelectPage']) el(id).disabled = value;
     for (const name of fields) el(name).disabled = value;
     el('List').querySelectorAll('button').forEach(button => { button.disabled = value; });
-    if (!value) updateClear();
+    el('List').querySelectorAll('input').forEach(input => { input.disabled = value; });
+    if (!value) { updateClear(); updateSelection(); }
   }
   async function api(body) {
     const response = await fetch('/job-leads', body ? {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body), ...(body.action === 'lookup' ? {timeout:30000} : {})} : {});
@@ -58,7 +61,10 @@
     if (!response.ok || data.error) throw Error(data.error || 'Job Leads could not finish this request.');
     return data;
   }
-  async function load() { rows = (await api()).records; syncFolders(); render(); }
+  async function load() {
+    const data = await api(); rows = data.records; folderNames = data.folders || [];
+    picked.clear(); syncFolders(); render();
+  }
   function filtered() {
     const term = el('Search').value.trim().toLocaleLowerCase(), filter = el('Filter').value, folder = el('FolderFilter').value;
     return rows.filter(row => (folder === '!trash' ? row.deleted : !row.deleted && (folder === '*' || (row.folder || '') === folder)) &&
@@ -97,10 +103,68 @@
   }
   function syncFolders() {
     const folder = el('FolderFilter').value;
-    const folders = [...new Set(rows.map(row => row.folder).filter(Boolean))].sort((a,b) => a.localeCompare(b));
+    const folders = [...new Set([...folderNames, ...rows.map(row => row.folder).filter(Boolean)])].sort((a,b) => a.localeCompare(b));
     el('FolderFilter').replaceChildren(new Option('All folders', '*'), new Option('Unfiled', ''), new Option('Trash', '!trash'), ...folders.map(name => new Option(name, name)));
     el('FolderFilter').value = ['*','','!trash',...folders].includes(folder) ? folder : '*';
     el('Folders').replaceChildren(...folders.map(name => new Option(name, name)));
+    const target = el('MoveFolder').value;
+    el('MoveFolder').replaceChildren(new Option('Unfiled', ''), ...folders.map(name => new Option(name, name)));
+    el('MoveFolder').value = folders.includes(target) ? target : '';
+  }
+  function updateSelection() {
+    const visible = filtered().slice(page*40, (page+1)*40).filter(row => !row.deleted);
+    el('SelectPage').disabled = busy || !visible.length;
+    el('SelectPage').checked = !!visible.length && visible.every(row => picked.has(row.id));
+    el('SelectPage').indeterminate = !el('SelectPage').checked && visible.some(row => picked.has(row.id));
+    el('Selection').hidden = !picked.size;
+    el('SelectedCount').textContent = picked.size + ' selected';
+    el('Move').disabled = busy || !picked.size;
+    el('FolderDelete').disabled = busy || ['*','','!trash'].includes(el('FolderFilter').value);
+  }
+  async function createFolder() {
+    if (busy) return;
+    const name = el('FolderName').value;
+    lock(true);
+    try {
+      const result = await api({action:'create_folder', folder:name});
+      await load(); el('FolderFilter').value = result.folder; page = 0; render();
+      if (!editing && !dirty) fill(null);
+      el('FolderEditor').hidden = true; el('FolderName').value = '';
+      status('Folder created. Select saved ads to move them here, or save a new ad to this folder.');
+    } catch (error) { status(error.message); }
+    finally { lock(false); }
+  }
+  async function deleteFolder() {
+    const folder = el('FolderFilter').value;
+    if (busy || ['*','','!trash'].includes(folder)) return;
+    const affected = rows.filter(row => row.folder === folder);
+    const editingAffected = editing && affected.some(row => row.id === editing.id);
+    if (editingAffected && !discard()) return;
+    if (!window.confirm(`Delete folder "${folder}"? Its ${affected.length} ads will move to Unfiled, including any in Trash. No ads will be deleted.`)) return;
+    lock(true);
+    try {
+      await api({action:'delete_folder', folder, records:affected.map(row => ({id:row.id, revision:row.revision}))});
+      await load();
+      if (editingAffected) fill(null);
+      else if (el('folder').value === folder) el('folder').value = '';
+      status('Folder deleted. Its ads are kept in Unfiled; trashed ads remain in Trash.');
+    } catch (error) { status(error.message); }
+    finally { lock(false); }
+  }
+  async function moveSelected() {
+    if (busy || !picked.size) return;
+    const selection = rows.filter(row => picked.has(row.id));
+    const editingAffected = editing && picked.has(editing.id);
+    if (editingAffected && !discard()) return;
+    const folder = el('MoveFolder').value;
+    lock(true);
+    try {
+      await api({action:'move_folder', folder, records:selection.map(row => ({id:row.id, revision:row.revision}))});
+      await load();
+      if (editingAffected) fill(rows.find(row => row.id === editing.id));
+      status(`Moved ${selection.length} selected ads to ${folder || 'Unfiled'}.`);
+    } catch (error) { status(error.message); }
+    finally { lock(false); }
   }
   function render() {
     const selected = filtered(), list = el('List'); list.replaceChildren();
@@ -110,6 +174,7 @@
     page = Math.min(page, Math.max(0, Math.ceil(selected.length / 40)-1));
     el('Count').textContent = selected.length ? `${page*40+1}–${Math.min((page+1)*40, selected.length)} of ${selected.length}` : '0 leads';
     el('Previous').disabled = page === 0; el('Next').disabled = (page+1)*40 >= selected.length;
+    updateSelection();
     if (!selected.length) list.appendChild(node('p', rows.length ? 'No leads match these filters.' : 'Save your first LinkedIn job ad to start tracking opportunities.', 'job-leads-muted'));
     selected.slice(page*40, (page+1)*40).forEach(row => {
       const card = node('article', '', 'job-lead-card');
@@ -130,6 +195,13 @@
       edit.addEventListener('click', () => { if (row.deleted) return moveToTrash([row], false); if (!busy && discard()) { fill(row); status('Editing saved lead.'); el('Form').scrollIntoView({block:'start', behavior:'smooth'}); } });
       actions.append(link, edit); card.appendChild(actions); list.appendChild(card);
       if (!row.deleted) { const remove = node('button', 'Delete', 'sec job-lead-delete'); remove.type = 'button'; remove.disabled = busy; remove.addEventListener('click', () => moveToTrash([row], true)); actions.appendChild(remove); }
+      if (!row.deleted) {
+        const pick = node('label', '', 'job-lead-select'), checkbox = node('input');
+        checkbox.type = 'checkbox'; checkbox.checked = picked.has(row.id); checkbox.disabled = busy;
+        checkbox.setAttribute('aria-label', 'Select ' + row.company + ' — ' + row.role);
+        checkbox.addEventListener('change', () => { if (busy) return; if (checkbox.checked) picked.add(row.id); else picked.delete(row.id); updateSelection(); });
+        pick.append(checkbox, document.createTextNode('Select')); card.appendChild(pick);
+      }
       const details = node('details', '', 'job-lead-ad');
       details.appendChild(node('summary', 'View more — job ad content'));
       if (row.description) {
@@ -142,7 +214,7 @@
   }
   function rpc(action, args = {}) {
     return new Promise((resolve, reject) => {
-      const id = hex(), timer = setTimeout(() => { pending.delete(id); reject(Error('Connect the latest companion in Chrome to fill from a job link. You can also enter the details manually.')); }, action === 'jobFromLink' ? 35000 : 12000);
+      const id = hex(), timer = setTimeout(() => { pending.delete(id); reject(Error('The Chrome companion did not respond. This fallback only works in Chrome. Open this CV Studio address there and connect the latest companion. Saved ads remain available below.')); }, action === 'jobFromLink' ? 35000 : 12000);
       pending.set(id, {resolve, reject, timer});
       window.postMessage({type:'CVSTUDIO_LINKEDIN_REQUEST', id, channel, action, args}, location.origin);
     });
@@ -244,7 +316,20 @@
     });
     el('New').addEventListener('click', () => { if (!busy && discard()) { fill(null); status('Ready for another job ad.'); } });
     el('Refresh').addEventListener('click', async () => { if (busy) return; lock(true); try { await load(); status('Saved leads refreshed. Reopen a lead to load its latest changes.'); } catch (error) { status(error.message); } finally { lock(false); } });
-    for (const id of ['Search', 'Filter', 'FolderFilter']) el(id).addEventListener(id === 'Search' ? 'input' : 'change', () => { page = 0; render(); });
+    for (const id of ['Search', 'Filter', 'FolderFilter']) el(id).addEventListener(id === 'Search' ? 'input' : 'change', () => { picked.clear(); page = 0; render(); });
+    el('FolderNew').addEventListener('click', () => { if (!busy) { el('FolderEditor').hidden = false; el('FolderName').focus(); } });
+    el('FolderCancel').addEventListener('click', () => { if (!busy) { el('FolderEditor').hidden = true; el('FolderName').value = ''; } });
+    el('FolderCreate').addEventListener('click', createFolder);
+    el('FolderName').addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); return createFolder(); } });
+    el('FolderDelete').addEventListener('click', deleteFolder);
+    el('Move').addEventListener('click', moveSelected);
+    el('SelectPage').addEventListener('change', () => {
+      if (busy) return;
+      for (const row of filtered().slice(page*40, (page+1)*40).filter(row => !row.deleted)) {
+        if (el('SelectPage').checked) picked.add(row.id); else picked.delete(row.id);
+      }
+      render();
+    });
     el('Clear').addEventListener('click', () => moveToTrash(filtered(), true, true));
     el('ClearAll').addEventListener('click', () => moveToTrash(rows.filter(row => !row.deleted), true, true));
     el('Previous').addEventListener('click', () => { page--; render(); });

@@ -1469,6 +1469,13 @@
 .job-leads-tool-group { padding-top:12px; }
 .job-leads-tool-group + .job-leads-tool-group { border-top:1px solid var(--border); margin-top:12px; }
 .job-leads-tool-group p { margin:8px 0 0; }
+.job-leads-folder-editor, .job-leads-selection { display:flex; flex-direction:column; gap:10px; border:1px solid var(--border); border-radius:8px; padding:12px; background:var(--surface2); font-size:13px; }
+.job-leads-folder-editor[hidden], .job-leads-selection[hidden] { display:none; }
+.job-leads-pick, .job-lead-select { display:flex; align-items:center; gap:7px; font-size:12px; color:var(--text2); cursor:pointer; }
+.job-leads-pick input, .job-lead-select input { width:16px; min-height:16px; padding:0; margin:0; flex:none; accent-color:var(--accent); }
+.job-lead-select { position:absolute; top:18px; right:18px; }
+.job-lead-card { position:relative; }
+.job-lead-card h3 { padding-right:70px; }
 .job-leads-muted { color:var(--text3); font-size:12px; line-height:1.6; }
 .job-lead-card { border:1px solid var(--border); border-radius:10px; padding:18px; margin-bottom:12px; overflow-wrap:anywhere; }
 .job-lead-card h3 { margin:0 0 6px; font-size:16px; }

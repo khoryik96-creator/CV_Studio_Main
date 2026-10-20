@@ -4,6 +4,25 @@
 
 ## Release state
 
+- Current owner-requested folder controls: v24.6.454,
+  `codex/v24.6.454-job-leads-folder-controls`, from local v453 `e472cb8`.
+  Job Leads adds explicit Create folder/Delete folder and selecting saved ads
+  to Move selected into a folder. Empty folders persist; deleting a folder
+  unfiles its ads, preserving active/Trash state and all other content.
+  Dedicated Job Leads schema 2 adds only a folder table, with a verified backup,
+  transactional restart-safe migration and unchanged lead rows. Backup format 2
+  includes empty folders while accepting format 1. Main schema 10, journal 1,
+  120-route seal and five guards remain. Live public-read diagnosis observed
+  LinkedIn HTTP 429; the reader now exposes a distinct rate-limit message and
+  the Chrome-only fallback is clearer. No retry/bypass was added.
+  Full isolated Windows gate: 1,731 passed, four skipped, 7,599 subtests;
+  35 JavaScript suites, 126 focused Python checks, preflight and 24 smoke
+  assertions pass. Actual synthetic UI verified empty folder creation, moving
+  two saved ads, deleting the folder without losing ads, and the rate-limit
+  message. The persistent source preview migrated with its exact lead rows
+  preserved. See `cv_studio_v24_6_454_job_leads_folders_qa_report.md`.
+  No owner installed app update, paid call, push, PR or merge.
+
 - Current owner-requested UI cleanup: v24.6.453,
   `codex/v24.6.453-job-leads-ui-cleanup`, from local v452 `741b0f6`.
   Job Leads hides export, backup/import and bulk clearing inside collapsed

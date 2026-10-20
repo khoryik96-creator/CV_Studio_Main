@@ -24,7 +24,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.453"
+_INSTALL_RECEIPT_VERSION = "v24.6.454"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -347,7 +347,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.453"
+_CVSTUDIO_VERSION = "v24.6.454"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -14848,7 +14848,7 @@ def job_leads():
                                                          separators=(",", ":")), mimetype="application/json")
                 response.headers["Content-Disposition"] = 'attachment; filename="CV-Studio-Job-Leads.json"'
             else:
-                response = jsonify(records=_JOB_LEADS.list())
+                response = jsonify(**_JOB_LEADS.snapshot())
             response.headers["Cache-Control"] = "no-store"
             return response
         if request.content_length and request.content_length > 12 * 1024 * 1024:
@@ -14866,6 +14866,12 @@ def job_leads():
             result = _JOB_LEADS.set_deleted(data.get('records'), data['action'] == 'trash')
         elif data.get('action') == 'format_content':
             result = {'description_rich': format_description(data.get('description'), data.get('description_html'))}
+        elif data.get('action') == 'create_folder':
+            result = _JOB_LEADS.create_folder(data.get('folder'))
+        elif data.get('action') == 'delete_folder':
+            result = _JOB_LEADS.delete_folder(data.get('folder'), data.get('records'))
+        elif data.get('action') == 'move_folder':
+            result = _JOB_LEADS.move_to_folder(data.get('records'), data.get('folder'))
         else:
             raise JobLeadsError("Choose a supported Job Leads action.")
         response = jsonify(ok=True, **result)

@@ -20,9 +20,17 @@ sourcer and the locked historical Lead Finder.
   status starts as New and follow-up dates are never inferred from the ad.
   Follow-ups due are shown in the module;
   this is not a scheduled notification or outreach service.
-- **Save to folder** accepts an existing folder or a new name; saving creates
-  that grouping inside Job Leads. The Folder menu shows All folders, Unfiled,
-  Trash and named folders. Empty groupings need no separate persistent record.
+- **Create folder** creates a saved folder even before it contains an ad.
+  Choose a named folder in the Folder menu to enable **Delete folder**.
+  Deleting it moves its ads to Unfiled without deleting them; trashed ads stay
+  in Trash. The confirmation includes every ad in that folder, and concurrent
+  changes reject the operation atomically. **Save to folder** still accepts an
+  existing or new name when saving an individual ad.
+- Tick **Select** on saved cards (or **Select ads on this page**), choose
+  **Move to folder**, then **Move selected**. This files ads after reviewing
+  them; it does not change their notes, content, status or creation date.
+  Search/folder/status changes clear selections. Trash must be restored before
+  it can be selected. Unsaved edits on a selected ad require discard confirmation.
 - **Date created** shows the original local save timestamp on each card and in
   the edit form. It is separate from LinkedIn's posting date, remains stable
   through edits/Trash/restore, and is retained when restoring a current backup.
@@ -59,10 +67,11 @@ sourcer and the locked historical Lead Finder.
   until needed. **Back up saved ads** exports all records as Job Leads JSON.
   **Import backup** validates the entire file before
   adding missing job IDs in one transaction; existing records are never replaced.
-  This dedicated backup is separate from Settings' legacy local-data backup.
+  Current version-2 backups include empty folders; version-1 backups remain
+  readable. This dedicated backup is separate from Settings' legacy local-data backup.
   Posting dates are included in CSV, and JSON backup/restore also retains the
   description excerpt marker, rich content, folders and Trash state. CSV also
-  includes folder and creation date. Legacy records/backups need no schema migration.
+  includes folder and creation date. Existing records retain all their data.
 - Job Leads inputs use visible labels without placeholder text, including search.
 
 ## Boundaries
@@ -70,8 +79,12 @@ sourcer and the locked historical Lead Finder.
 `cvstudio_job_leads.py` owns a dedicated `job_leads.sqlite3` in the existing
 per-user state directory. It opens lazily, checks integrity/application/schema
 identity, creates and verifies a consistent backup before initial schema creation,
-and serializes writes using SQLite transactions. This store has its own schema 1;
+and serializes writes using SQLite transactions. This store has its own schema 2;
 the existing application database remains schema 10 and the job journal schema 1.
+An integrity-verified database backup precedes initial creation or the additive
+v1-to-v2 folder-table migration. Migration imports existing folder names without
+rewriting lead rows, is transactional and can retry after failure. Earlier source
+versions reject the newer database rather than silently dropping folder metadata.
 Initialization is restart-safe, failed writes roll back and errors are visible.
 Revisions prevent an older browser draft overwriting a newer saved edit.
 Unknown fields are discarded rather than persisted; links retain only canonical
@@ -88,6 +101,11 @@ JSON-LD JobPosting identities or a canonical public top card supply the fields;
 search headers, recommended jobs and ambiguous identity mismatches are rejected.
 No public content is stored until the owner clicks Save lead. Request failures
 leave manual entries intact and offer the explicit Chrome/manual fallback.
+LinkedIn HTTP 429 is reported separately as temporary public-read limiting;
+there is no automatic retry or login/rate-limit bypass. The Chrome fallback
+requires this CV Studio address and the connected companion in Chrome; it
+cannot operate from the in-app browser. Saved job content remains available
+locally through Edit / view details and View more.
 
 The store is bounded to 5,000 leads and 8 MiB of field payload. Individual text
 fields and a 12 MiB route/import limit are enforced. Backup/import limits cover

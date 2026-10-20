@@ -115,6 +115,15 @@ def test_access_checks_bad_types_and_size_fail_without_retry(reply):
     assert get.call_count==1 and reply.closed
 
 
+def test_public_rate_limit_is_distinct_and_never_retried_or_disguised():
+    reply = Reply(status=429)
+    get = mock.Mock(return_value=reply)
+    with pytest.raises(JobLeadsError) as error: PublicLinkedInJobs(get=get).read(URL)
+    assert error.value.code == 'JOB_AD_RATE_LIMITED' and error.value.status == 429
+    assert 'limiting' in str(error.value) and 'Chrome' in str(error.value)
+    assert get.call_count == 1 and reply.closed
+
+
 def test_time_redirect_and_concurrency_limits_release_after_failure():
     redirect=Reply(status=302,headers={'Location':URL})
     get=mock.Mock(return_value=redirect)

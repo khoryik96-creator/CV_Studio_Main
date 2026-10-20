@@ -180,6 +180,8 @@ class PublicLinkedInJobs:
                 with self.get(current, allow_redirects=False, stream=True,
                               headers={'Accept':'text/html'}, auth=_without_credentials,
                               timeout=(5, 8)) as response:
+                    if response.status_code == 429:
+                        raise JobLeadsError('LinkedIn is temporarily limiting public job reads. Try again later, or open this CV Studio address in Chrome and connect the companion to read an ad you can view there. Saved ads can still be opened below.', 429, 'JOB_AD_RATE_LIMITED')
                     if response.status_code in {301,302,303,307,308}:
                         target = urljoin(current, response.headers.get('Location', ''))
                         if job_url(target) != expected or not urlsplit(target).path.startswith('/jobs/view/'):

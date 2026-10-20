@@ -55,7 +55,7 @@ def test_posted_date_and_description_survive_save_reopen_backup_restore(store,tm
     assert record['date_posted']=='2026-10-02' and record['description']==content and record['description_truncated'] is True
 
 
-def test_legacy_rows_without_new_fields_load_without_schema_change(store):
+def test_legacy_rows_without_new_fields_keep_defaults_in_current_schema(store):
     saved=store.save(RECORD)['record']
     raw={key:value for key,value in saved.items() if key not in {'date_posted','description_truncated'}}
     with sqlite3.connect(store.path) as connection:
@@ -63,7 +63,7 @@ def test_legacy_rows_without_new_fields_load_without_schema_change(store):
     result=JobLeadsStore(store.path).list()[0]
     assert result['date_posted']=='' and result['description_truncated'] is False
     with sqlite3.connect(store.path) as connection:
-        assert connection.execute('PRAGMA user_version').fetchone()[0]==1
+        assert connection.execute('PRAGMA user_version').fetchone()[0]==2
 
 
 @pytest.mark.parametrize('patch',[{'date_posted':'2026-02-30'},{'date_posted':'2 weeks ago'},{'date_posted':'20261002'},{'date_posted':None},{'description_truncated':'false'},{'description_truncated':1}])
@@ -230,4 +230,24 @@ def test_rich_format_and_trash_routes_preserve_guards_and_use_no_ai(module):
         row = client.get('/job-leads').json['records'][0]
         assert row['deleted']
         assert client.post('/job-leads',json={'action':'untrash','records':[row]},headers=headers).status_code == 200
+        provider.assert_not_called()
+
+
+def test_folder_routes_preserve_guards_data_and_insert_only_backups(module):
+    client = module.app.test_client()
+    headers = {'X-CV-Studio-Request':'1'}
+    with mock.patch.object(module._AI_PROVIDER_CLIENT,'request') as provider:
+        assert client.post('/job-leads',json={'action':'create_folder','folder':'Finance'},headers={'Origin':'https://attacker.invalid'}).status_code == 403
+        assert client.post('/job-leads',json={'action':'create_folder','folder':'Finance'},headers=headers).status_code == 200
+        assert client.get('/job-leads').json['folders'] == ['Finance']
+        row = client.post('/job-leads',json={'action':'save','record':RECORD},headers=headers).json['record']
+        assert client.post('/job-leads',json={'action':'move_folder','folder':'Finance','records':[row]},headers=headers).status_code == 200
+        snapshot = client.get('/job-leads').json
+        assert snapshot['records'][0]['folder'] == 'Finance'
+        stale = client.post('/job-leads',json={'action':'delete_folder','folder':'Finance','records':[row]},headers=headers)
+        assert stale.status_code == 409 and stale.json['request_id']
+        assert client.post('/job-leads',json={'action':'delete_folder','folder':'Finance','records':snapshot['records']},headers=headers).status_code == 200
+        data = client.get('/job-leads').json
+        assert data['folders'] == [] and len(data['records']) == 1 and data['records'][0]['notes'] == row['notes']
+        assert not data['records'][0]['deleted'] and data['records'][0]['folder'] == ''
         provider.assert_not_called()
