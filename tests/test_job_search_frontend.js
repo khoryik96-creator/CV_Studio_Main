@@ -18,6 +18,7 @@ function fixture(){
   const state={page:0,scroll:0,totalPages:2,hold:false,held:null,failSave:'',failRead:false,many:false,connected:true,searchCapable:true,busy:false,
     records:[{...b,id:'e'.repeat(32),revision:2,contact:'Manual Contact',notes:'Important saved notes',status:'contacted',description:'Saved full content',created_at:'2026-10-01T00:00:00Z',folder:'',deleted:false,follow_up:''}]};
   const window={addEventListener:(name,fn)=>events[name]=fn,confirm:()=>true,postMessage:message=>{
+    if(message.type==='CVSTUDIO_LINKEDIN_CAPTURE_RESULT'){state.captureReply?.(message.result);state.captureReply=null;return}
     calls.push(message);const reply=(value,error)=>events.message({source:window,origin:location.origin,data:{type:'CVSTUDIO_LINKEDIN_RESPONSE',id:message.id,channel:message.channel,...(error?{error}:{result:value})}});
     if(message.action==='jobStatus')return reply({connected:state.connected,job_search:state.searchCapable,busy:state.busy});
     if(message.action==='jobSearchTabs')return reply([{id:20,title:'Open filtered jobs',url:'https://www.linkedin.com/jobs/search/?keywords=finance&f_WT=2'}]);
@@ -49,13 +50,19 @@ function fixture(){
   const context=vm.createContext({window,document,location,fetch,URL,URLSearchParams,Blob,Map,Set,Date,crypto:{randomUUID:()=>String(++serial).padStart(32,'0')},
     setTimeout:(fn,ms)=>setTimeout(fn,ms===350?0:ms),clearTimeout,Option:function(text,value){const node=new Element('option',text);node.value=value;return node}});
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../vendor/cvstudio/job-leads.js'),'utf8'),context);
-  return {el,state,calls,requests,init:()=>window.initJobLeads()};
+  return {el,state,calls,requests,init:()=>window.initJobLeads(),capture:record=>new Promise(resolve=>{
+    state.captureReply=resolve;events.message({source:window,origin:location.origin,data:{type:'CVSTUDIO_LINKEDIN_CAPTURE',channel:document.getElementById('viewJobLeads').dataset.companionChannel,id:String(++serial).padStart(32,'0'),record}});
+  })};
 }
 (async()=>{
   const f=fixture();await f.init();
+  assert.match(f.el('PreviewTitle').textContent,/Choose an ad/);
   f.el('url').value='https://www.linkedin.com/jobs/view/7777777777';f.el('company').value='Unsaved company';f.el('role').value='Unsaved role';
   f.el('notes').value='Keep unsaved notes';f.el('contact').value='Unsaved Contact';f.el('notes').handlers.input();
   await f.el('SearchStart').click();assert.match(f.el('SearchCount').textContent,/3 found/);
+  assert.equal(f.el('PreviewTitle').textContent,'Finance Manager');
+  await f.el('SearchResults').children[2].querySelectorAll('button').find(button=>button.textContent==='Preview').click();
+  assert(f.el('PreviewContent').querySelectorAll('#text').some(node=>node.textContent===c.description));
   assert.equal(f.calls.filter(call=>call.args.method==='nextJobSearch').length,1);
   assert.equal(f.calls.filter(call=>call.args.method==='scrollJobSearch').length,1);
   assert.equal(f.requests.length,0,'crawling never saves automatically');
@@ -94,5 +101,15 @@ function fixture(){
   assert.equal(stopped.requests.length,0,'stop never saves results');assert.equal(stopped.el('SearchStart').disabled,false);
   const many=fixture();await many.init();many.state.many=true;many.state.totalPages=15;many.el('SearchPages').value='15';await many.el('SearchStart').click();
   assert.match(many.el('SearchCount').textContent,/15 found/);assert.equal(many.calls.filter(call=>call.args.method==='nextJobSearch').length,14);
+  const direct=fixture();await direct.init();direct.el('SearchFolder').value='Priority';direct.el('notes').value='Keep unsaved notes';direct.el('notes').handlers.input();
+  const incoming=job('3333333333');assert((await direct.capture(incoming)).ok);
+  const quick=direct.state.records.find(row=>row.url===incoming.url);assert.equal(quick.folder,'Priority');assert.equal(quick.contact,'');assert.equal(quick.notes,'');assert.equal(quick.status,'new');
+  assert.equal(direct.el('notes').value,'Keep unsaved notes');
+  assert((await direct.capture({...b,notes:'Do not overwrite'})).duplicate);assert.equal(direct.state.records[0].notes,'Important saved notes');
+  const count=direct.state.records.length;assert((await direct.capture(job('9',{url:'https://attacker.invalid/jobs/view/9'}))).error);assert.equal(direct.state.records.length,count);
+  direct.state.failSave=a.url;assert((await direct.capture(a)).error);assert.equal(direct.el('notes').value,'Keep unsaved notes');
+  const single=fixture();await single.init();await single.el('SearchStart').click();single.el('SearchSelectPage').checked=true;single.el('SearchSelectPage').handlers.change();
+  await single.el('SearchResults').children[2].querySelectorAll('button').find(button=>button.textContent==='Preview').click();await single.el('PreviewSave').click();
+  assert(single.state.records.some(row=>row.url===c.url));assert(!single.state.records.some(row=>row.url===a.url),'Add this ad does not save other selected results');
   console.log('Job search UI: multi-page scroll/deduplication, review-only capture, full previews, selected folder import, partial failure/retry, existing notes/drafts, open filters, Stop and 15-page bounds passed');
 })().catch(error=>{console.error(error);process.exitCode=1});

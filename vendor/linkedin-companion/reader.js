@@ -3,6 +3,10 @@
   const compact = value => String(value || '').replace(/\s+/g, ' ').trim();
   const visible = el => !!el && !!el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden';
   const text = el => compact(el?.innerText || '');
+  function jobSummary(card) {
+    const value = text(card), controls = text(card.querySelector?.('[data-cvstudio-job-controls]'));
+    return controls && value.endsWith(controls) ? value.slice(0,-controls.length).trim() : value;
+  }
   function profileURL(value) {
     try {
       const u = new URL(value, location.href);
@@ -237,7 +241,7 @@
         const role = compact(String(paragraphs[0].innerText || '').split('\n')[0]).replace(/\s*\(Verified job\)\s*$/i,'').slice(0,240);
         const company = text(paragraphs[1]).slice(0,200), where = text(paragraphs[2]).slice(0,240);
         if (!role || !company) continue;
-        seen.add(url); jobs.push({url,role,company,location:where,date_posted:'',description:text(card).slice(0,6500),description_truncated:true});
+        seen.add(url); jobs.push({url,role,company,location:where,date_posted:'',description:jobSummary(card).slice(0,6500),description_truncated:true});
         if (jobs.length >= 40) break;
       }
     }
@@ -260,7 +264,7 @@
       const day = validDate ? posted.slice(0,10) : '';
       const calendar = new Date(day + 'T00:00:00Z');
       const datePosted = day && Number.isFinite(calendar.getTime()) && calendar.toISOString().slice(0,10) === day ? day : '';
-      seen.add(url); jobs.push({url,role,company,location:where,date_posted:datePosted,description:text(card).slice(0,6500),description_truncated:true});
+      seen.add(url); jobs.push({url,role,company,location:where,date_posted:datePosted,description:jobSummary(card).slice(0,6500),description_truncated:true});
       if (jobs.length >= 40) break;
     }
     const scroller = jobScroller(scope), next = jobNextButton(scope);
@@ -281,5 +285,49 @@
     if (!button || disabled(button)) return false;
     button.click(); return true;
   }
-  globalThis.SourcerReader = {readSearch, next, search, readProfile, profileURL, readJob, readJobSearch, nextJobSearch, scrollJobSearch};
+  function jobSearchContext() {
+    jobScope();
+    const header = document.querySelector('[componentkey="searchResultsHeaderComponent"]');
+    const locationLabel = el => /^location(?:\s|$)/i.test(compact(el.getAttribute('aria-label')));
+    const locations = header ? [...header.querySelectorAll('[role="button"][aria-expanded]')].filter(el => visible(el) &&
+      (locationLabel(el) || [...el.querySelectorAll('[aria-label]')].some(label => visible(label) && locationLabel(label)))).map(text).filter(Boolean) : [];
+    const fields = [...document.querySelectorAll('.jobs-search-box__location input, input[aria-label*="location" i], input[aria-label*="City" i]')].filter(visible).map(el => compact(el.value)).filter(Boolean);
+    const values = [...new Set([...locations,...fields])];
+    return {location:values.length === 1 ? values[0].slice(0,240) : ''};
+  }
+  function readJobPick(expected) {
+    if (/^\/jobs\/search(?:-results)?\/?$/.test(location.pathname)) {
+      const row = readJobSearch().jobs.find(value => value.url === expected);
+      if (!row) throw Error('This ad is no longer in the visible results.');
+      try { return readJob(expected); } catch { return row; }
+    }
+    return readJob(expected);
+  }
+  function jobTargets() {
+    if (/^\/jobs\/search(?:-results)?\/?$/.test(location.pathname)) {
+      const scope = jobScope(), snapshot = readJobSearch();
+      return snapshot.jobs.map(row => {
+        const id = row.url.split('/').at(-1);
+        const keyed = [...scope.querySelectorAll('[role="button"][componentkey="job-card-component-ref-' + id + '"]')].find(card => {
+          const paragraphs = [...card.querySelectorAll('p')];
+          return visible(card) && visible(paragraphs[0]) && visible(paragraphs[1]) &&
+            compact(String(paragraphs[0].innerText || '').split('\n')[0]).replace(/\s*\(Verified job\)\s*$/i,'').slice(0,240) === row.role && text(paragraphs[1]).slice(0,200) === row.company &&
+            [...card.querySelectorAll('[componentkey^="job-card-component-ref-"]')].every(value => value.getAttribute('componentkey') === 'job-card-component-ref-' + id) &&
+            [...card.querySelectorAll('a[href]')].map(value => jobLink(value.href)).filter(Boolean).every(value => value === row.url);
+        });
+        const link = keyed ? null : [...scope.querySelectorAll('a[href]')].find(value => {
+          const card = value.closest('.jobs-search-results__list-item, .job-card-container, .job-card-list, .base-search-card, li');
+          return jobLink(value.href) === row.url && visible(card) && [...card.querySelectorAll('a[href]')].map(link => jobLink(link.href)).filter(Boolean).every(url => url === row.url);
+        });
+        return {url:row.url,element:keyed || link?.closest('.jobs-search-results__list-item, .job-card-container, .job-card-list, .base-search-card, li')};
+      }).filter(value => value.element && visible(value.element));
+    }
+    const match = location.pathname.match(/^\/jobs\/view\/(?:[^/]*-)?([0-9]{1,24})\/?$/), ids = new URLSearchParams(location.search).getAll('currentJobId');
+    const id = match ? match[1] : /^\/jobs(?:\/collections\/[^/]+)?\/?$/.test(location.pathname) && ids.length === 1 ? ids[0] : '';
+    if (!/^[0-9]{1,24}$/.test(id)) return [];
+    const url = 'https://www.linkedin.com/jobs/view/' + id;
+    readJob(url);
+    return [{url,element:document.querySelector('main') || document.body,floating:true}];
+  }
+  globalThis.SourcerReader = {readSearch, next, search, readProfile, profileURL, readJob, readJobSearch, nextJobSearch, scrollJobSearch, jobSearchContext, readJobPick, jobTargets};
 })();
