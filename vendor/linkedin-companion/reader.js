@@ -222,7 +222,7 @@
   function readJobSearch() {
     const scope = jobScope(), jobs = [], seen = new Set();
     const mainText = text(scope || document.querySelector('main')).slice(0,3000);
-    const empty = /no (?:matching )?(?:jobs|results)(?: found)?|couldn.t find any jobs|0 jobs/i.test(mainText);
+    const empty = /no (?:matching )?(?:jobs|results)(?: found)?|couldn.t find any jobs|(?:^|[^\w.,])0 jobs\b/i.test(mainText);
     if (!scope) return {loading:!empty,empty,jobs,signature:'',hasNext:false,atBottom:true};
     if (scope.getAttribute?.('componentkey') === 'SearchResultsMainContent') {
       for (const card of scope.querySelectorAll('[role="button"][componentkey^="job-card-component-ref-"]')) {

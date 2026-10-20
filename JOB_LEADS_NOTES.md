@@ -229,6 +229,12 @@ loading/stale description panels and bounds. Existing legacy fixtures remain.
 
 ## Verification (existing contracts)
 
+The v458 review corrective makes the numeric empty-result check match only a
+standalone zero count. A header such as `10 jobs`, `100 jobs` or `1,000 jobs`
+can appear before its cards; that remains a loading snapshot rather than ending
+discovery with no ads. Both legacy and modern DOM fixtures cover positive
+counts before cards, real zero/no-result messages and delayed card readiness.
+
 `tests/test_job_leads.py` covers canonical identities, rejection of unsafe URLs,
 durability, duplicate and stale-write protection, cross-process-style concurrent
 connections, backup verification, corruption, atomic restore/rollback, route

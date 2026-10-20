@@ -41,6 +41,13 @@ assert(reader.scrollJobSearch(snapshot.signature));assert.equal(state.scroll,1);
 first.ps[0].innerText='';assert.equal(reader.readJobSearch().jobs.length,1,'loaded duplicate remains when one title is empty');
 state.cards=[first];assert.equal(reader.readJobSearch().loading,true,'missing title never shifts company into the role field');
 state.cards=Array.from({length:45},(_,i)=>card(String(2222222200+i)));assert.equal(reader.readJobSearch().jobs.length,40,'snapshot bound remains');
+state.cards=[];
+for(const label of ['10 jobs','20 jobs','100 jobs','1,000 jobs','10,000 jobs']){
+  scope.innerText=label;const pending=reader.readJobSearch();
+  assert.equal(pending.empty,false,label);assert.equal(pending.loading,true,label);
+}
+scope.innerText='0 jobs';assert.equal(reader.readJobSearch().empty,true,'modern zero count remains a true empty result');
+scope.innerText='100 jobs';state.cards=[duplicate];assert.equal(reader.readJobSearch().jobs.length,1,'modern cards are read after loading');
 let captured=reader.readJob(url);assert.equal(captured.role,'Finance Manager');assert.equal(captured.company,'Example Finance');assert.equal(captured.location,'Penang');
 assert.equal(captured.description,'About the job\nBuild partnerships.\nManage reporting.');assert.equal(captured.description_truncated,true);assert(captured.description_html.includes('<ul>'));
 const previousText=about.innerText;about.innerText='About the job';

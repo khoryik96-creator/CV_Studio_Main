@@ -4,6 +4,20 @@
 
 ## Release state
 
+- Owner-requested review fix and merge candidate: v24.6.458,
+  `codex/v24.6.458-job-search-review-fix`, continuing unmerged v457 `ca9c92d`.
+  Positive job counts ending in zero no longer look like an empty search while
+  cards are loading. Legacy and modern DOM regressions fail on the previous
+  reader, then pass with the bounded zero-count match; real zero/no-result
+  messages still stop, and delayed cards are read normally. The candidate
+  includes the v455–v457 discovery, folder/content and read-fallback work below.
+  Owner explicitly authorized push, PR and merge after verification. No new
+  route/schema/permission/provider or owner installation change. See
+  `cv_studio_v24_6_458_job_search_review_fix_qa_report.md` for final test evidence:
+  1,737 Python tests, four skips, 7,599 subtests, all 39 JavaScript suites,
+  source/native-dependency preflight and 24 smoke assertions passed. Preview
+  5074 reports v458 with both saved lead rows verified exactly unchanged.
+
 - Current owner-reported job search corrective: v24.6.457,
   `codex/v24.6.457-job-search-layout`, continuing unmerged v456 `8340c63`.
   The owner confirmed trying search only in the Codex preview, where the
