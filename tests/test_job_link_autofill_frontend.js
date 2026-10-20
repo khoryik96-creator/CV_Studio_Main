@@ -17,6 +17,8 @@ function fixture() {
       state.scripts.push(args);
       if(args.files){if(state.inject)await state.inject(args.target.tabId);return [{}]}
       if(!args.args)return [{result:true,documentId:'bound'}];
+      state.readCount=(state.readCount||0)+1;
+      if(state.delayedReads){state.delayedReads--;return [{result:{loading:true}}]}
       if(state.readFails)throw Error('Synthetic unrecognized job layout');
       return [{result:{url:args.args[0],company:'Sample Company',role:'Finance Manager',location:'Kuala Lumpur'}}];
     }},runtime:{onMessage:{addListener:fn=>hooks.message=fn}}};
@@ -28,10 +30,19 @@ function fixture() {
 }
 (async()=>{
   const f=fixture();
+  assert((await f.rpc('jobStatus')).error,'status cannot bypass the app binding');
   assert((await f.rpc('jobFromLink',{url})).error);assert.equal(f.state.created.length,0);
   await f.arm();
+  assert.deepEqual({...((await f.rpc('jobStatus')).result)},{connected:true,job_read:true,job_search:true,busy:false});
   assert.equal((await f.rpc('jobFromLink',{url})).result.location,'Kuala Lumpur');
   assert.equal(f.state.created.length,0);assert.equal(f.state.removed.length,0,'existing tabs remain open');
+  f.state.delayedReads=3;let reads=f.state.readCount;
+  assert.equal((await f.rpc('jobRead',{tab_id:2,expected_url:url})).result.company,'Sample Company');
+  assert.equal(f.state.readCount-reads,6,'waits on delayed DOM fields and description without navigating');
+  f.state.delayedReads=100;reads=f.state.readCount;
+  assert((await f.rpc('jobRead',{tab_id:2,expected_url:url})).error);
+  assert.equal(f.state.readCount-reads,16,'readiness wait has a fixed bound');f.state.delayedReads=0;
+  assert.equal(f.state.created.length,0,'readiness never retries by creating another tab');
   for(const invalid of ['javascript:alert(1)','https://attacker.invalid/jobs/view/123','https://www.linkedin.com/in/person','https://user@www.linkedin.com/jobs/view/123',url+'?trk=x','https://www.linkedin.com/jobs/search/?currentJobId=1234567890']) {
     assert((await f.rpc('jobFromLink',{url:invalid})).error,invalid);
   }
@@ -50,11 +61,13 @@ function fixture() {
   f.state.loading=false;
   let release;f.state.queryWait=new Promise(resolve=>{release=resolve});
   const pending=f.rpc('jobFromLink',{url:other});await Promise.resolve();
+  assert.equal((await f.rpc('jobStatus')).result.busy,true,'a pending capture is reported busy without disturbing it');
   assert((await f.rpc('jobFromLink',{url})).error,'concurrent capture blocked');
   assert((await f.rpc('jobRead',{tab_id:2,expected_url:url})).error,'manual read cannot overlap capture');
   assert((await f.rpc('begin',{run_id:'a'.repeat(32),source_tab_id:3,max_pages:1,mode:'standard'})).error,'Sourcer cannot start midway through capture');
   release();assert((await pending).result);f.state.queryWait=null;
   assert.equal((await f.rpc('begin',{run_id:'a'.repeat(32),source_tab_id:3,max_pages:1,mode:'standard'})).result,true);
+  assert.equal((await f.rpc('jobStatus')).result.busy,true,'profile sourcing cannot be interrupted by fallback');
   assert((await f.rpc('jobFromLink',{url})).error,'capture cannot interrupt Sourcer');await f.rpc('end',{run_id:'a'.repeat(32)});
   f.state.inject=()=>f.hooks.updated(1,{status:'loading'});
   assert((await f.rpc('jobFromLink',{url:other})).error,'reloading the app revokes capture');

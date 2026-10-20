@@ -77,6 +77,14 @@ inventories when changing them. No protected package has been produced here.
 
 ## Verification limits
 
+Job Leads also uses this companion for bounded Jobs search discovery beginning
+with v24.6.455; see `JOB_LEADS_NOTES.md`. Jobs runs are isolated from profile
+runs and single-ad reads. The source search is retained for the user, and only
+recognized results scrolling/pagination is allowed. Existing profile-run
+authority, ownership and cleanup rules remain. The four-file ZIP and permissions
+are unchanged; existing installations need the updated files, Reload and a
+reconnected app tab before using the new Jobs actions.
+
 `tests/test_linkedin_sourcer.py` exercises the service, real guarded route,
 download, provider/cost wiring and cancellation with mocked transport.
 `tests/test_linkedin_sourcer_frontend.js` exercises companion authority and all

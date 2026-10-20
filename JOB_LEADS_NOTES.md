@@ -8,7 +8,13 @@ sourcer and the locked historical Lead Finder.
 
 - Open **Job Leads** and paste a LinkedIn job link. Public company, role,
   location and description load directly, including in the in-app browser.
-  **Fill from link** retries the read. Existing manual entries are preserved.
+  **Fill from link** starts a new read. On a recognized public-unavailable or
+  public-rate-limit failure, a connected, idle Chrome companion is tried once
+  automatically (v24.6.456). A short read-only bound-status probe avoids a long
+  capture timeout when disconnected; an active profile/Jobs/capture run is left
+  alone. No public request or browser capture is automatically repeated.
+  Setup expands when the companion is unavailable or a capture fails.
+  Existing manual entries are preserved.
   Review the details before saving; manual entry remains available.
   Replacing an unsaved draft's job link asks before clearing its job-specific
   fields. The folder is retained; a cancelled or failed read keeps the old URL
@@ -133,7 +139,101 @@ Capture performs no LinkedIn click, application, message or remote save;
 it only fills an unsaved CV Studio draft. Its four-file packaging,
 permissions and provider/key isolation remain unchanged.
 
-## Verification
+## LinkedIn job discovery and content (v24.6.455)
+
+Job Leads has a collapsed **Find job ads on LinkedIn** panel. The connected
+Chrome companion opens a keyword/location Jobs search, or reads an explicitly
+chosen already-open Jobs search while retaining its filters. It reads visible
+cards, scrolls the recognized results list and uses recognized job pagination.
+Limits are 1–15 pages, eight scrolls per page, ten minutes and 600 unique ads.
+No AI provider or public per-link lookup is used for discovery. Search summaries
+are explicitly labelled; Read full ad optionally captures the selected ad.
+Selecting results and Add selected to list uses the established save route.
+Existing duplicates, including Trash, are never overwritten. A partial storage
+failure leaves the remaining selections available; existing manual drafts are
+not replaced. Stop prevents further reads/paging and retains collected results.
+New search tabs remain open for the user; existing tabs are not repurposed.
+
+Job searches have their own companion run kind and source/filter identity,
+with the existing binding, document revalidation, session-memory persistence
+and fail-closed storage behavior. Page/scroll budgets survive worker suspension
+and repeated Begin. Search filters/host changes, challenges and access limits
+stop the run; no bypass, application, message, cookie access, provider call or
+remote save is added. No new routes, schemas or extension permissions.
+
+Single-ad capture now polls the same loaded DOM for up to 16 reads separated
+by 350 ms when recognized detail fields are still loading. URL/pending URL and
+binding are rechecked each time; this is not a network or navigation retry.
+Missing description gets a shorter readiness allowance before metadata returns.
+
+Rich formatting unwraps nested layout divs into proper sibling paragraphs,
+headings and lists, retaining only the bounded passive semantic tree. Existing
+nested paragraph captures flatten at display time, and explicit plain-text
+bullet markers render as lists. Saved description text is not rewritten.
+The manually selected Save to folder default is retained in origin-local browser
+UI storage. New leads/captures use that choice; editing an existing ad uses its
+own folder. Explicit Unfiled is remembered, deletion clears the matching default,
+and reload discards a preference for a folder that no longer exists.
+
+`test_linkedin_job_search.js`, `test_job_search_reader.js` and
+`test_job_search_frontend.js` cover authority/budgets, scoped extraction and
+the actual controller with synthetic companion messages. The existing Job Leads
+and link-capture suites cover sticky folders, legacy/plain formatting, delayed
+DOM readiness and fixed timeout behavior. Refresh/reload the downloaded v455
+companion and reconnect the CV Studio Chrome tab to use the new actions.
+
+The v456 `jobStatus` probe is behind the same exact app tab/document check and
+returns only connected/capability/busy flags. It never arms the companion or
+opens, reads, navigates or closes a LinkedIn tab. Automatic link fallback is
+limited to `JOB_AD_UNAVAILABLE`/`JOB_AD_RATE_LIMITED`; storage, security, busy
+and unrelated failures do not trigger it. The existing canonical URL checks,
+single-capture lock, source-switch confirmation, optional manual contact/status,
+rich formatting and empty-refresh protection apply to fallback results too.
+`test_job_read_fallback_frontend.js` covers these flows and preservation on a
+missing, busy, timed-out, failing or mismatched companion. Existing installations
+need the v456 companion's updated files, Reload and app-tab reconnection.
+
+## Current LinkedIn search layout (v24.6.457)
+
+The current signed-in page inspected in Brave uses `/jobs/search-results/`
+and a rendered `[componentkey="SearchResultsMainContent"]` result region.
+Its job cards are buttons with `job-card-component-ref-<numeric job ID>`
+component keys and ordered title/company/location paragraphs, with no job-view
+anchors. The reader accepts this DOM layout alongside the existing linked-card
+layout. It never reads hidden React state, tracking payloads, cookies or network
+responses. Wrong/mixed card identities, missing title/company, duplicate cards
+and oversized snapshots remain rejected/bounded. Modern Next is confined to
+the results region and a parent containing numbered Page buttons.
+
+`/jobs/search/` and `/jobs/search-results/` share one source identity; selected
+job/paging/tracking fields (including `eBP`) are excluded, while actual search
+filters remain pinned. Selected modern search links also canonicalize to the
+same job-view ID in the backend, controller and worker. Modern ad capture uses
+the same-job title link and exact `JobDetails_AboutTheJob_<ID>` region, requires
+one company and substantive description, and rejects stale/ambiguous panels.
+It retains passive source formatting and labels collapsed/truncated content.
+Relative posting ages remain unconverted.
+
+Search now probes `jobStatus` with a one-second bound before opening a source,
+clearing old results or sending End. Disconnected, busy or older companions
+leave the previous results intact and receive distinct guidance. Stop during
+this readiness check sends no unrelated End. The `job_search` capability flag
+identifies a current companion; update/reload/reconnect its v457 files.
+The in-app Codex preview has no Chrome companion and cannot execute search.
+
+Live read-only DOM inspection found 25 readable unique cards, zero normal
+job-view links, and recognized paging/scrolling on the owner-opened page. This
+verifies the observed selectors, not a complete installed-extension run.
+Synthetic modern fixtures cover card identities/field order, scoped paging,
+loading/stale description panels and bounds. Existing legacy fixtures remain.
+
+## Verification (existing contracts)
+
+The v458 review corrective makes the numeric empty-result check match only a
+standalone zero count. A header such as `10 jobs`, `100 jobs` or `1,000 jobs`
+can appear before its cards; that remains a loading snapshot rather than ending
+discovery with no ads. Both legacy and modern DOM fixtures cover positive
+counts before cards, real zero/no-result messages and delayed card readiness.
 
 `tests/test_job_leads.py` covers canonical identities, rejection of unsafe URLs,
 durability, duplicate and stale-write protection, cross-process-style concurrent

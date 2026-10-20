@@ -4,6 +4,60 @@
 
 ## Release state
 
+- Owner-requested review fix and merge candidate: v24.6.458,
+  `codex/v24.6.458-job-search-review-fix`, continuing unmerged v457 `ca9c92d`.
+  Positive job counts ending in zero no longer look like an empty search while
+  cards are loading. Legacy and modern DOM regressions fail on the previous
+  reader, then pass with the bounded zero-count match; real zero/no-result
+  messages still stop, and delayed cards are read normally. The candidate
+  includes the v455–v457 discovery, folder/content and read-fallback work below.
+  Owner explicitly authorized push, PR and merge after verification. No new
+  route/schema/permission/provider or owner installation change. See
+  `cv_studio_v24_6_458_job_search_review_fix_qa_report.md` for final test evidence:
+  1,737 Python tests, four skips, 7,599 subtests, all 39 JavaScript suites,
+  source/native-dependency preflight and 24 smoke assertions passed. Preview
+  5074 reports v458 with both saved lead rows verified exactly unchanged.
+
+- Current owner-reported job search corrective: v24.6.457,
+  `codex/v24.6.457-job-search-layout`, continuing unmerged v456 `8340c63`.
+  The owner confirmed trying search only in the Codex preview, where the
+  companion cannot connect. Search now checks readiness before clearing results
+  or opening/ending a browser run, with clear disconnected/old/busy guidance.
+  Read-only live LinkedIn inspection also confirmed a newer search-results
+  button-card layout; the reader supports its rendered IDs, fields, scrolling,
+  scoped pagination and selected-job description alongside legacy markup.
+  Search path aliases and selected-ad links canonicalize while actual filters
+  and identity checks remain pinned. No new route/schema/permission/provider.
+  See `cv_studio_v24_6_457_job_search_layout_qa_report.md` for evidence and limits.
+  No push, PR, merge or installed app change.
+
+- Current owner-reported intermittent job-read corrective: v24.6.456,
+  `codex/v24.6.456-job-read-fallback`, continuing unmerged v455 `3e4f802`.
+  Recognized public-read failures now try one connected, idle companion capture
+  automatically. A short bound-status probe leaves disconnected/active runs
+  alone; setup expands on unavailable/failed fallback. Public requests and
+  browser captures are never automatically repeated. Manual edits, identity,
+  folder, optional contact/status and content-refresh protections remain.
+  No route, schema, permission, provider or saved-data change. Tests and limits
+  are recorded in `cv_studio_v24_6_456_job_read_fallback_qa_report.md`.
+  Preview 5074 retains its saved rows; installed 5000 and earlier draft tabs
+  remain untouched. No push, PR or merge.
+
+- Current owner-requested LinkedIn job discovery: v24.6.455,
+  `codex/v24.6.455-linkedin-job-search`, from merged v454 `c0bdca4`.
+  Job Leads adds keyword/location or already-open filtered Jobs search through
+  the connected Chrome companion, bounded to 15 pages with reviewable summaries
+  and optional full content. Selected ads save into an existing folder using
+  duplicate-safe local saves; existing saved details and manual drafts survive.
+  Save to folder remembers the owner's choice across new ads and reloads.
+  Rich content unwraps nested layout paragraphs; older rich/plain captures
+  display cleanly without rewriting saved rows. Single-ad capture waits briefly
+  for delayed detail fields on the same DOM. No provider call, new route/schema,
+  extension permission or access-limit bypass. Verification and limits are in
+  `cv_studio_v24_6_455_linkedin_job_search_qa_report.md`.
+  Source preview 5074 retains its two saved ads; installed app 5000 is untouched.
+  No push, PR or merge requested or performed.
+
 - Current owner-requested folder controls: v24.6.454,
   `codex/v24.6.454-job-leads-folder-controls`, from local v453 `e472cb8`.
   Job Leads adds explicit Create folder/Delete folder and selecting saved ads
