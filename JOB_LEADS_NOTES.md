@@ -8,7 +8,13 @@ sourcer and the locked historical Lead Finder.
 
 - Open **Job Leads** and paste a LinkedIn job link. Public company, role,
   location and description load directly, including in the in-app browser.
-  **Fill from link** retries the read. Existing manual entries are preserved.
+  **Fill from link** starts a new read. On a recognized public-unavailable or
+  public-rate-limit failure, a connected, idle Chrome companion is tried once
+  automatically (v24.6.456). A short read-only bound-status probe avoids a long
+  capture timeout when disconnected; an active profile/Jobs/capture run is left
+  alone. No public request or browser capture is automatically repeated.
+  Setup expands when the companion is unavailable or a capture fails.
+  Existing manual entries are preserved.
   Review the details before saving; manual entry remains available.
   Replacing an unsaved draft's job link asks before clearing its job-specific
   fields. The folder is retained; a cancelled or failed read keeps the old URL
@@ -175,6 +181,17 @@ the actual controller with synthetic companion messages. The existing Job Leads
 and link-capture suites cover sticky folders, legacy/plain formatting, delayed
 DOM readiness and fixed timeout behavior. Refresh/reload the downloaded v455
 companion and reconnect the CV Studio Chrome tab to use the new actions.
+
+The v456 `jobStatus` probe is behind the same exact app tab/document check and
+returns only connected/capability/busy flags. It never arms the companion or
+opens, reads, navigates or closes a LinkedIn tab. Automatic link fallback is
+limited to `JOB_AD_UNAVAILABLE`/`JOB_AD_RATE_LIMITED`; storage, security, busy
+and unrelated failures do not trigger it. The existing canonical URL checks,
+single-capture lock, source-switch confirmation, optional manual contact/status,
+rich formatting and empty-refresh protection apply to fallback results too.
+`test_job_read_fallback_frontend.js` covers these flows and preservation on a
+missing, busy, timed-out, failing or mismatched companion. Existing installations
+need the v456 companion's updated files, Reload and app-tab reconnection.
 
 ## Verification (existing contracts)
 

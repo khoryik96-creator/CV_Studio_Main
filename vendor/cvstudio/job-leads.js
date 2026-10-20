@@ -103,7 +103,11 @@
   async function api(body) {
     const response = await fetch('/job-leads', body ? {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body), ...(body.action === 'lookup' ? {timeout:30000} : {})} : {});
     const data = await response.json();
-    if (!response.ok || data.error) throw Error(data.error || 'Job Leads could not finish this request.');
+    if (!response.ok || data.error) {
+      const error = Error(data.error || 'Job Leads could not finish this request.');
+      error.code = data.code; error.requestId = data.request_id;
+      throw error;
+    }
     return data;
   }
   async function load() {
@@ -403,9 +407,9 @@
       searchStatus(`Added ${added} ads to ${folder || 'Unfiled'}.` + (skipped ? ` ${skipped} already saved; existing details were kept.` : '') + (failure ? ` ${failure} Refresh the saved list before trying remaining ads again.` : ''));
     }
   }
-  function rpc(action, args = {}) {
+  function rpc(action, args = {}, waitMs) {
     return new Promise((resolve, reject) => {
-      const id = hex(), timer = setTimeout(() => { pending.delete(id); reject(Error('The Chrome companion did not respond. This fallback only works in Chrome. Open this CV Studio address there and connect the latest companion. Saved ads remain available below.')); }, action === 'jobFromLink' ? 35000 : 12000);
+      const id = hex(), timer = setTimeout(() => { pending.delete(id); reject(Error('The Chrome companion did not respond. This fallback only works in Chrome. Open this CV Studio address there and connect the latest companion. Saved ads remain available below.')); }, waitMs ?? (action === 'jobFromLink' ? 35000 : 12000));
       pending.set(id, {resolve, reject, timer});
       window.postMessage({type:'CVSTUDIO_LINKEDIN_REQUEST', id, channel, action, args}, location.origin);
     });
@@ -442,7 +446,29 @@
     }
     const before = draft(); lock(true); status(useBrowser ? 'Reading this job ad in Chrome…' : 'Reading public LinkedIn job details…');
     try {
-      const data = await prepareSource(useBrowser ? await rpc('jobFromLink', {url}) : (await api({action:'lookup', url})).record);
+      let data, usedFallback = false;
+      if (useBrowser) data = await rpc('jobFromLink',{url});
+      else {
+        try { data = (await api({action:'lookup',url})).record; }
+        catch (publicError) {
+          // Probe only after a recognized public-read failure. Never repeat the
+          // server request, interrupt a browser run or replay a failed capture.
+          if (!['JOB_AD_UNAVAILABLE','JOB_AD_RATE_LIMITED'].includes(publicError.code)) throw publicError;
+          const companion = await rpc('jobStatus',{},1000).catch(() => null);
+          if (!companion?.connected || companion.job_read !== true || companion.busy) {
+            el('BrowserSetup').open = true;
+            if (companion?.busy) throw Error(publicError.message + ' Finish the current companion search or read, then try again.');
+            throw publicError;
+          }
+          status('Public details are unavailable. Reading the ad with your connected Chrome companion…');
+          try { data = await rpc('jobFromLink',{url}); usedFallback = true; }
+          catch {
+            el('BrowserSetup').open = true;
+            throw Error('The public reader and connected Chrome companion could not read this ad. Open the ad in Chrome and use Refresh job tabs → Read job ad, or enter its details manually.' + (publicError.requestId ? ' Request ID: ' + publicError.requestId : ''));
+          }
+        }
+      }
+      data = await prepareSource(data);
       if (jobLink(data?.url || '') !== url || !data.company || !data.role) throw Error('The job details could not be confirmed. Use Read job ad or enter them manually.');
       if (refreshContent && !data.description?.trim()) throw Error('This ad did not provide readable content. Your current content has been kept.');
       if (changedSource) { fill(null); el('folder').value = before.folder; }
@@ -456,7 +482,7 @@
       }
       descriptionHint();
       el('url').value = url; dirty = true; lastReadUrl = url;
-      status('Job details filled in. Review them, optionally add a contact, then Save lead.' + (data.description_truncated ? ' The description is an excerpt.' : ''));
+      status('Job details filled in' + (usedFallback ? ' using your connected Chrome companion' : '') + '. Review them, optionally add a contact, then Save lead.' + (data.description_truncated ? ' The description is an excerpt.' : ''));
     } catch (error) { if (changedSource) el('url').value = previousSource; status(error.message + ' Your draft has been kept.'); }
     finally { lock(false); }
   }

@@ -4,6 +4,18 @@
 
 ## Release state
 
+- Current owner-reported intermittent job-read corrective: v24.6.456,
+  `codex/v24.6.456-job-read-fallback`, continuing unmerged v455 `3e4f802`.
+  Recognized public-read failures now try one connected, idle companion capture
+  automatically. A short bound-status probe leaves disconnected/active runs
+  alone; setup expands on unavailable/failed fallback. Public requests and
+  browser captures are never automatically repeated. Manual edits, identity,
+  folder, optional contact/status and content-refresh protections remain.
+  No route, schema, permission, provider or saved-data change. Tests and limits
+  are recorded in `cv_studio_v24_6_456_job_read_fallback_qa_report.md`.
+  Preview 5074 retains its saved rows; installed 5000 and earlier draft tabs
+  remain untouched. No push, PR or merge.
+
 - Current owner-requested LinkedIn job discovery: v24.6.455,
   `codex/v24.6.455-linkedin-job-search`, from merged v454 `c0bdca4`.
   Job Leads adds keyword/location or already-open filtered Jobs search through

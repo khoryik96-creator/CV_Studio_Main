@@ -155,6 +155,7 @@ async function handle(message, sender) {
     throw Error('In Chrome, open CV Studio and click the companion toolbar icon to connect this tab.');
   }
   const args = message.args || {};
+  if (message.action === 'jobStatus') return {connected:true,job_read:true,busy:!!connection.run || !!jobCapture};
   if (message.action === 'jobSearchTabs') {
     const tabs = await chrome.tabs.query({url:'https://www.linkedin.com/*'});
     return tabs.filter(tab => jobSearchKey(tab.url)).map(tab => ({id:tab.id, url:tab.url, title:String(tab.title || 'LinkedIn job search').slice(0,160)}));

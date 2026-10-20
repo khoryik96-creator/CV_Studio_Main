@@ -30,8 +30,10 @@ function fixture() {
 }
 (async()=>{
   const f=fixture();
+  assert((await f.rpc('jobStatus')).error,'status cannot bypass the app binding');
   assert((await f.rpc('jobFromLink',{url})).error);assert.equal(f.state.created.length,0);
   await f.arm();
+  assert.deepEqual({...((await f.rpc('jobStatus')).result)},{connected:true,job_read:true,busy:false});
   assert.equal((await f.rpc('jobFromLink',{url})).result.location,'Kuala Lumpur');
   assert.equal(f.state.created.length,0);assert.equal(f.state.removed.length,0,'existing tabs remain open');
   f.state.delayedReads=3;let reads=f.state.readCount;
@@ -59,11 +61,13 @@ function fixture() {
   f.state.loading=false;
   let release;f.state.queryWait=new Promise(resolve=>{release=resolve});
   const pending=f.rpc('jobFromLink',{url:other});await Promise.resolve();
+  assert.equal((await f.rpc('jobStatus')).result.busy,true,'a pending capture is reported busy without disturbing it');
   assert((await f.rpc('jobFromLink',{url})).error,'concurrent capture blocked');
   assert((await f.rpc('jobRead',{tab_id:2,expected_url:url})).error,'manual read cannot overlap capture');
   assert((await f.rpc('begin',{run_id:'a'.repeat(32),source_tab_id:3,max_pages:1,mode:'standard'})).error,'Sourcer cannot start midway through capture');
   release();assert((await pending).result);f.state.queryWait=null;
   assert.equal((await f.rpc('begin',{run_id:'a'.repeat(32),source_tab_id:3,max_pages:1,mode:'standard'})).result,true);
+  assert.equal((await f.rpc('jobStatus')).result.busy,true,'profile sourcing cannot be interrupted by fallback');
   assert((await f.rpc('jobFromLink',{url})).error,'capture cannot interrupt Sourcer');await f.rpc('end',{run_id:'a'.repeat(32)});
   f.state.inject=()=>f.hooks.updated(1,{status:'loading'});
   assert((await f.rpc('jobFromLink',{url:other})).error,'reloading the app revokes capture');
