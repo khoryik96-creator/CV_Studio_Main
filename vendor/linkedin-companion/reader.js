@@ -17,7 +17,7 @@
     const path = location.pathname;
     if (/^\/(checkpoint|challenge|authwall|login|uas)(\/|$)/i.test(path)) return 'LinkedIn needs you to sign in or complete a check. The agent will stop.';
     if (document.querySelector('iframe[src*="captcha"], [data-test-id="captcha-internal"], #captcha-internal')) return 'LinkedIn needs a verification check. The agent will stop.';
-    if (/unusual activity|temporarily restricted|security verification|you.ve reached.*(?:search|commercial).*limit/i.test(text(document.querySelector('main') || document.body).slice(0, 5000))) return 'LinkedIn is showing an access or usage restriction. The agent will stop.';
+    if (/unusual activity|temporarily restricted|security verification|you(?:.ve| have) reached.*(?:search|commercial).*limit|too many requests/i.test(text(document.querySelector('main') || document.body).slice(0, 5000))) return 'LinkedIn is showing an access or usage restriction. The agent will stop.';
     return '';
   }
   function assertPage(mode, type = 'search') {
@@ -117,6 +117,7 @@
     return {text: words, publicUrl: publicLink || '', name};
   }
   function readJob(expectedURL) {
+    const loading = message => { const error = Error(message); error.cvstudioJobLoading = true; throw error; };
     if (location.origin !== 'https://www.linkedin.com') throw Error('Choose a LinkedIn job ad.');
     const problem = issue(); if (problem) throw Error(problem);
     const view = location.pathname.match(/^\/jobs\/view\/(?:[^/]*-)?([0-9]{1,24})\/?$/);
@@ -127,12 +128,12 @@
     // Read only a recognized job detail panel, excluding neighboring result cards.
     const panels = [...document.querySelectorAll('.jobs-search__job-details--container, .jobs-details, .job-view-layout, .top-card-layout')].filter(visible);
     const panel = panels.find(value => value.querySelector('.job-details-jobs-unified-top-card__job-title, .jobs-unified-top-card__job-title, .top-card-layout__title'));
-    if (!panel) throw Error('This job layout is not recognized. Paste the link and details into Job Leads.');
+    if (!panel) loading('This job layout has not loaded or is not recognized.');
     const first = selector => [...panel.querySelectorAll(selector)].find(visible);
     const roleNode = first('.job-details-jobs-unified-top-card__job-title, .jobs-unified-top-card__job-title, .top-card-layout__title');
     const roleLink = roleNode?.matches('a[href]') ? roleNode : roleNode?.querySelector('a[href]');
     const linkedId = roleLink ? new URL(roleLink.href, location.href).pathname.match(/^\/jobs\/view\/(?:[^/]*-)?([0-9]{1,24})\/?$/)?.[1] : '';
-    if ((linkedId && linkedId !== id) || (!view && linkedId !== id)) throw Error('The selected job details are still changing. Wait, then refresh job tabs.');
+    if ((linkedId && linkedId !== id) || (!view && linkedId !== id)) loading('The selected job details are still changing.');
     const role = text(roleNode).slice(0, 240);
     const company = text(first('.job-details-jobs-unified-top-card__company-name, .jobs-unified-top-card__company-name, .topcard__org-name-link')).slice(0, 200);
     const locationText = text(first('.job-details-jobs-unified-top-card__primary-description-container .tvm__text, .jobs-unified-top-card__bullet, .topcard__flavor--bullet')).slice(0, 240);
@@ -146,10 +147,82 @@
       const day = rawDate.slice(0,10), value = new Date(rawDate), calendar = new Date(day + 'T00:00:00Z');
       if (Number.isFinite(value.getTime()) && Number.isFinite(calendar.getTime()) && calendar.toISOString().slice(0,10) === day && (rawDate.length === 10 || Number(rawDate.slice(11,13)) < 24)) datePosted = day;
     }
-    if (!role || !company) throw Error('The company or role has not loaded. Paste the details into Job Leads.');
+    if (!role || !company) loading('The company or role has not loaded.');
     const sourceHTML = visible(descriptionNode) ? String(descriptionNode.innerHTML || '') : '';
     return {url, role, company, location:locationText, date_posted:datePosted, description:description.slice(0, 20000),
       description_html:sourceHTML.length <= 80000 ? sourceHTML : '', description_truncated:description.length > 20000};
   }
-  globalThis.SourcerReader = {readSearch, next, search, readProfile, profileURL, readJob};
+  function jobLink(value) {
+    try {
+      const url = new URL(value, location.href);
+      const match = url.pathname.match(/^\/jobs\/view\/(?:[^/]*-)?([0-9]{1,24})\/?$/);
+      return url.origin === 'https://www.linkedin.com' && !url.username && !url.password && match ? url.origin + '/jobs/view/' + match[1] : '';
+    } catch { return ''; }
+  }
+  function jobScope() {
+    if (location.origin !== 'https://www.linkedin.com' || !/^\/jobs\/search\/?$/.test(location.pathname)) throw Error('Open a LinkedIn Jobs search.');
+    const problem = issue(); if (problem) throw Error(problem);
+    return [...document.querySelectorAll('.jobs-search-results-list, .jobs-search__results-list, .scaffold-layout__list')].find(visible);
+  }
+  function jobScroller(scope) {
+    return [scope, ...document.querySelectorAll('.jobs-search-results-list, .scaffold-layout__list')]
+      .find(value => value && visible(value) && value.contains(scope) && value.clientHeight > 0 && value.scrollHeight > value.clientHeight + 5) || scope;
+  }
+  function jobNextButton() {
+    const containers = [...document.querySelectorAll('.jobs-search-pagination, .jobs-search-results-list .artdeco-pagination, .scaffold-layout__list .artdeco-pagination')].filter(visible);
+    for (const container of containers) {
+      const buttons = [...container.querySelectorAll('button')].filter(visible);
+      const next = buttons.find(button => button.matches('.jobs-search-pagination__button--next, .artdeco-pagination__button--next') || /^(view next page|next|next page|seterusnya)$/i.test(compact(button.getAttribute('aria-label') || button.innerText)));
+      if (next) return next;
+      const current = buttons.find(button => ['page','true'].includes(button.getAttribute('aria-current')) || button.matches('.jobs-search-pagination__indicator-button--active'));
+      const number = value => Number(compact(value?.getAttribute('aria-label') || value?.innerText).match(/^(?:Page\s+)?(\d+)$/i)?.[1] || 0);
+      if (current && number(current)) return buttons.find(button => number(button) === number(current) + 1) || null;
+    }
+    return null;
+  }
+  function readJobSearch() {
+    const scope = jobScope(), jobs = [], seen = new Set();
+    const mainText = text(scope || document.querySelector('main')).slice(0,3000);
+    const empty = /no (?:matching )?(?:jobs|results)(?: found)?|couldn.t find any jobs|0 jobs/i.test(mainText);
+    if (!scope) return {loading:!empty,empty,jobs,signature:'',hasNext:false,atBottom:true};
+    for (const link of scope.querySelectorAll('a[href]')) {
+      const url = jobLink(link.href);
+      if (!url || seen.has(url) || !visible(link)) continue;
+      const card = link.closest('.jobs-search-results__list-item, .job-card-container, .job-card-list, .base-search-card, li');
+      if (!visible(card)) continue;
+      const identities = new Set([...card.querySelectorAll('a[href]')].map(value => jobLink(value.href)).filter(Boolean));
+      if (identities.size !== 1) continue;
+      const first = selector => [...card.querySelectorAll(selector)].find(visible);
+      const roleNode = first('.job-card-list__title--link, .job-card-list__title, .base-search-card__title, .job-search-card__title, .job-card-container__link') || link;
+      const role = compact(String(roleNode.innerText || '').split('\n')[0]).slice(0,240);
+      const company = text(first('.job-card-container__primary-description, .artdeco-entity-lockup__subtitle, .base-search-card__subtitle, .job-card-container__company-name')).slice(0,200);
+      if (!role || !company) continue;
+      const where = text(first('.job-card-container__metadata-item, .artdeco-entity-lockup__caption, .job-search-card__location')).slice(0,240);
+      const posted = first('time[datetime]')?.getAttribute('datetime') || '';
+      const validDate = /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2})?)?$/.test(posted) && Number.isFinite(new Date(posted).getTime()) && (posted.length === 10 || Number(posted.slice(11,13)) < 24);
+      const day = validDate ? posted.slice(0,10) : '';
+      const calendar = new Date(day + 'T00:00:00Z');
+      const datePosted = day && Number.isFinite(calendar.getTime()) && calendar.toISOString().slice(0,10) === day ? day : '';
+      seen.add(url); jobs.push({url,role,company,location:where,date_posted:datePosted,description:text(card).slice(0,6500),description_truncated:true});
+      if (jobs.length >= 40) break;
+    }
+    const scroller = jobScroller(scope), next = jobNextButton();
+    return {url:location.href,jobs,empty:!jobs.length && empty,loading:!jobs.length && !empty,signature:jobs.map(row => row.url).join('|'),
+      hasNext:!!next && !disabled(next),atBottom:!scroller.clientHeight || scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 5};
+  }
+  function scrollJobSearch(signature) {
+    const snapshot = readJobSearch();
+    if (!signature || snapshot.signature !== signature) throw Error('The job search changed before scrolling.');
+    if (snapshot.atBottom) return false;
+    const target = jobScroller(jobScope());
+    target.scrollBy({top:Math.max(300,target.clientHeight * .85),behavior:'instant'}); return true;
+  }
+  function nextJobSearch(signature) {
+    const snapshot = readJobSearch();
+    if (!signature || snapshot.signature !== signature) throw Error('The job search changed before paging.');
+    const button = jobNextButton();
+    if (!button || disabled(button)) return false;
+    button.click(); return true;
+  }
+  globalThis.SourcerReader = {readSearch, next, search, readProfile, profileURL, readJob, readJobSearch, nextJobSearch, scrollJobSearch};
 })();

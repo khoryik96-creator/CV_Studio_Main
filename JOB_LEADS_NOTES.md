@@ -133,7 +133,50 @@ Capture performs no LinkedIn click, application, message or remote save;
 it only fills an unsaved CV Studio draft. Its four-file packaging,
 permissions and provider/key isolation remain unchanged.
 
-## Verification
+## LinkedIn job discovery and content (v24.6.455)
+
+Job Leads has a collapsed **Find job ads on LinkedIn** panel. The connected
+Chrome companion opens a keyword/location Jobs search, or reads an explicitly
+chosen already-open Jobs search while retaining its filters. It reads visible
+cards, scrolls the recognized results list and uses recognized job pagination.
+Limits are 1–15 pages, eight scrolls per page, ten minutes and 600 unique ads.
+No AI provider or public per-link lookup is used for discovery. Search summaries
+are explicitly labelled; Read full ad optionally captures the selected ad.
+Selecting results and Add selected to list uses the established save route.
+Existing duplicates, including Trash, are never overwritten. A partial storage
+failure leaves the remaining selections available; existing manual drafts are
+not replaced. Stop prevents further reads/paging and retains collected results.
+New search tabs remain open for the user; existing tabs are not repurposed.
+
+Job searches have their own companion run kind and source/filter identity,
+with the existing binding, document revalidation, session-memory persistence
+and fail-closed storage behavior. Page/scroll budgets survive worker suspension
+and repeated Begin. Search filters/host changes, challenges and access limits
+stop the run; no bypass, application, message, cookie access, provider call or
+remote save is added. No new routes, schemas or extension permissions.
+
+Single-ad capture now polls the same loaded DOM for up to 16 reads separated
+by 350 ms when recognized detail fields are still loading. URL/pending URL and
+binding are rechecked each time; this is not a network or navigation retry.
+Missing description gets a shorter readiness allowance before metadata returns.
+
+Rich formatting unwraps nested layout divs into proper sibling paragraphs,
+headings and lists, retaining only the bounded passive semantic tree. Existing
+nested paragraph captures flatten at display time, and explicit plain-text
+bullet markers render as lists. Saved description text is not rewritten.
+The manually selected Save to folder default is retained in origin-local browser
+UI storage. New leads/captures use that choice; editing an existing ad uses its
+own folder. Explicit Unfiled is remembered, deletion clears the matching default,
+and reload discards a preference for a folder that no longer exists.
+
+`test_linkedin_job_search.js`, `test_job_search_reader.js` and
+`test_job_search_frontend.js` cover authority/budgets, scoped extraction and
+the actual controller with synthetic companion messages. The existing Job Leads
+and link-capture suites cover sticky folders, legacy/plain formatting, delayed
+DOM readiness and fixed timeout behavior. Refresh/reload the downloaded v455
+companion and reconnect the CV Studio Chrome tab to use the new actions.
+
+## Verification (existing contracts)
 
 `tests/test_job_leads.py` covers canonical identities, rejection of unsafe URLs,
 durability, duplicate and stale-write protection, cross-process-style concurrent

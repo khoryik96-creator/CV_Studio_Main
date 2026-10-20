@@ -1476,6 +1476,15 @@
 .job-lead-select { position:absolute; top:18px; right:18px; }
 .job-lead-card { position:relative; }
 .job-lead-card h3 { padding-right:70px; }
+.job-leads-discovery { margin-bottom:20px; }
+.job-leads-discovery > summary { cursor:pointer; padding:18px; font-weight:700; color:var(--text1); }
+.job-leads-discovery-save { border-top:1px solid var(--border); padding-top:12px; }
+.job-leads-discovery-save > label, #jobLeadsSearchOpen > label { display:block; font-size:13px; font-weight:600; margin-bottom:6px; }
+.job-leads-discovery-card { border-top:1px solid var(--border); padding:16px 0; overflow-wrap:anywhere; }
+.job-leads-discovery-card h3 { font-size:15px; margin:0 0 6px; }
+.job-leads-discovery-card p { margin:6px 0; }
+.job-leads-discovery-card .job-leads-actions { margin-top:10px; }
+.job-leads-discovery .job-leads-pick input { min-width:16px; }
 .job-leads-muted { color:var(--text3); font-size:12px; line-height:1.6; }
 .job-lead-card { border:1px solid var(--border); border-radius:10px; padding:18px; margin-bottom:12px; overflow-wrap:anywhere; }
 .job-lead-card h3 { margin:0 0 6px; font-size:16px; }

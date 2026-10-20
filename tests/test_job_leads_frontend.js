@@ -26,7 +26,7 @@ const root = path.resolve(__dirname, '..');
       return [{result:{url,company:'Example Company',role:'Finance Manager'}}];
     }},runtime:{onMessage:{addListener:fn=>hooks.message=fn}}
   };
-  const context = vm.createContext({chrome,URL,Map,Set,Error,Number,console});
+  const context = vm.createContext({chrome,URL,Map,Set,Error,Number,console,setTimeout:fn=>fn()});
   vm.runInContext(fs.readFileSync(path.join(root,'vendor/linkedin-companion/worker.js'),'utf8'), context);
   const sender = {tab:{id:1},documentId:'bound-document',url:tabs.get(1).url};
   const rpc = (action,args={},who=sender)=>new Promise(resolve=>hooks.message({kind:'sourcer',action,args},who,resolve));
@@ -102,7 +102,8 @@ const root = path.resolve(__dirname, '..');
     const record={...value,id:value.id||'b'.repeat(32),revision:(value.revision||0)+1,created_at:'2026-10-02T12:30:00Z'};
     records=[record];return {ok:true,json:async()=>({record,duplicate:false})};
   };
-  const ui=vm.createContext({window,document,location,URL:TestURL,URLSearchParams,Blob,Map,Set,Date,Error,SyntaxError,Number,String,Object,JSON,Option:function(text,value){const node=new Element('option',text);node.value=value;return node},crypto:{randomUUID:()=>String(++sequence).padStart(32,'0')},setTimeout,clearTimeout,fetch});
+  const preferences=new Map();
+  const ui=vm.createContext({window,document,location,localStorage:{getItem:key=>preferences.get(key)??null,setItem:(key,value)=>preferences.set(key,value),removeItem:key=>preferences.delete(key)},URL:TestURL,URLSearchParams,Blob,Map,Set,Date,Error,SyntaxError,Number,String,Object,JSON,Option:function(text,value){const node=new Element('option',text);node.value=value;return node},crypto:{randomUUID:()=>String(++sequence).padStart(32,'0')},setTimeout,clearTimeout,fetch});
   vm.runInContext(fs.readFileSync(path.join(root,'vendor/cvstudio/job-leads.js'),'utf8'),ui);
   await window.initJobLeads();
   el('url').value=url;el('company').value='=FORMULA()';el('role').value='<img src=x onerror=alert(1)>';el('notes').value='Important notes';
@@ -151,7 +152,9 @@ const root = path.resolve(__dirname, '..');
   await el('Form').handlers.submit({preventDefault(){}});
   const savedCard=el('List').children[0], more=savedCard.children.at(-1);
   assert(savedCard.children[2].children.some(child=>child.textContent==='Posted: 2 Oct 2026'));
-  assert.equal(more.tagName,'details');assert.equal(more.children.find(child=>child.tagName==='div').textContent,'<script>Never execute()</script>\nFull saved description');
+  const savedText=more.children.find(child=>child.tagName==='div').querySelectorAll('#text').map(child=>child.textContent).join('\n');
+  assert.equal(more.tagName,'details');assert.equal(savedText,'<script>Never execute()</script>\nFull saved description');
+  assert.equal(more.querySelectorAll('script').length,0,'ad text is never executed');
   await el('Export').click();assert.match(await blobs.at(-1).text(),/date_posted/);assert.match(await blobs.at(-1).text(),/2026-10-02/);
   await el('New').click();el('url').value='https://attacker.invalid/jobs/view/123';await el('AutoFill').click();assert.equal(el('company').value,'');assert.match(el('Message').textContent,/Paste a LinkedIn job ad link/);
   // Realistic organization workflow: folders, known creation date, rich paste,
@@ -227,5 +230,32 @@ const root = path.resolve(__dirname, '..');
   assert(!folders.includes('Another'));assert(records.every(row=>row.folder===''&&!row.deleted),'deleting a folder keeps its saved ads');
   el('FolderFilter').value='Shortlisted';el('FolderFilter').handlers.change();await el('FolderDelete').click();
   assert.equal(folders.length,0);assert.equal(records.length,2);
+  // The chosen destination survives New, capture, editing another record and a
+  // fresh controller. An explicit Unfiled choice and deletion clear the default.
+  await el('FolderNew').click();el('FolderName').value='Preferred';await el('FolderCreate').click();
+  el('folder').value='Preferred';el('folder').handlers.change();
+  await el('New').click();assert.equal(el('folder').value,'Preferred');
+  await el('Read').click();assert.equal(el('folder').value,'Preferred');
+  el('FolderFilter').value='*';el('FolderFilter').handlers.change();
+  await el('List').children[0].querySelectorAll('button').find(button=>button.textContent==='Edit / view details').click();
+  assert.equal(el('folder').value,'','editing uses that saved ad\'s own folder');
+  await el('New').click();assert.equal(el('folder').value,'Preferred');
+  el('folder').value='';el('folder').handlers.change();
+  el('FolderFilter').value='Preferred';el('FolderFilter').handlers.change();
+  await el('New').click();assert.equal(el('folder').value,'','Unfiled overrides the board filter');
+  el('folder').value='Preferred';el('folder').handlers.change();
+  vm.runInContext(fs.readFileSync(path.join(root,'vendor/cvstudio/job-leads.js'),'utf8'),ui);await window.initJobLeads();
+  assert.equal(el('folder').value,'Preferred','selection survives reloading this CV Studio address');
+  await el('FolderDelete').click();await el('New').click();
+  assert.equal(el('folder').value,'');assert(!preferences.has('cvstudio_job_leads_folder'));
+  // Legacy nested paragraphs flatten for display; plain explicit bullets become
+  // lists while literal markup stays text. Saved payloads remain unchanged.
+  records[0].description='Heading\nFirst item\nSecond item';
+  records[0].description_rich=[{tag:'p',children:[{tag:'p',children:[{text:'Heading'}]},{tag:'ul',children:[{tag:'li',children:[{text:'First item'}]},{tag:'li',children:[{text:'Second item'}]}]}]}];
+  await el('Refresh').click();
+  const body=el('List').children[0].children.at(-1).children.find(child=>child.tagName==='div');
+  assert.equal(body.children[0].tagName,'p');assert.equal(body.children[1].tagName,'ul');assert.equal(body.children[0].querySelectorAll('p').length,0);
+  records[0].description_rich=[];records[0].description='Heading\n\n• First item\n• Second item';await el('Refresh').click();
+  assert.equal(el('List').children[0].children.at(-1).querySelectorAll('li').length,2);
   console.log('Job Leads: capture binding/isolation, save/edit/search, duplicate/draft protection, paste-link autofill, optional manual contact/status/date preservation, failure, CSV and HTML safety passed');
 })().catch(error=>{console.error(error);process.exitCode=1});

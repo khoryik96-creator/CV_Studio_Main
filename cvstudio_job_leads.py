@@ -73,28 +73,56 @@ def format_description(description, source):
                 if tag not in {'img','input','meta','link','hr','br','source','wbr'}:
                     self.skip.append(tag)
                 return
-            tag = {'b':'strong','i':'em','h1':'h3','h2':'h3','h5':'h4','h6':'h4','div':'p'}.get(tag, tag)
-            if tag in RICH_TAGS:
-                node = {'tag':tag, 'children':[]}
-                (self.stack[-1]['children'] if self.stack else self.root).append(node)
-                if tag != 'br': self.stack.append(node)
+            mapped = {'b':'strong','i':'em','h1':'h3','h2':'h3','h5':'h4','h6':'h4'}.get(tag, tag)
+            if tag not in {'img','input','meta','link','hr','source','wbr'}:
+                node = {'tag':mapped if mapped in RICH_TAGS or tag == 'div' else 'span', 'children':[]}
+                (self.stack[-1][1]['children'] if self.stack else self.root).append(node)
+                if tag != 'br': self.stack.append((tag,node))
         def handle_endtag(self, tag):
             if self.skip:
                 if tag in self.skip:
                     self.skip = self.skip[:len(self.skip)-1-self.skip[::-1].index(tag)]
                 return
-            tag = {'b':'strong','i':'em','h1':'h3','h2':'h3','h5':'h4','h6':'h4','div':'p'}.get(tag, tag)
             for offset in range(len(self.stack)-1, -1, -1):
-                if self.stack[offset]['tag'] == tag:
+                if self.stack[offset][0] == tag:
                     self.stack = self.stack[:offset]
                     break
         def handle_data(self, text):
             if not self.skip and text:
-                (self.stack[-1]['children'] if self.stack else self.root).append({'text':text})
+                (self.stack[-1][1]['children'] if self.stack else self.root).append({'text':text})
+    blocks = {'p','h3','h4','ul','ol','blockquote'}
+    def normalize(items):
+        result = []
+        for item in items:
+            if 'text' in item:
+                result.append(item)
+                continue
+            children = normalize(item['children'])
+            tag = item['tag']
+            if tag == 'span':
+                result.extend(children)
+            elif tag in {'div','p'}:
+                # Layout wrappers are transparent around real paragraphs and
+                # lists. Only their own inline runs become paragraphs.
+                run = []
+                def flush():
+                    if any(node.get('tag') or node.get('text', '').strip() for node in run):
+                        result.append({'tag':'p','children':list(run)})
+                    run.clear()
+                for child in children:
+                    if child.get('tag') in blocks:
+                        flush()
+                        result.append(child)
+                    else:
+                        run.append(child)
+                flush()
+            else:
+                result.append({'tag':tag,'children':children})
+        return result
     try:
         parser = Reader()
         parser.feed(source)
-        value = clean_rich(parser.root)
+        value = clean_rich(normalize(parser.root))
         return value if re.sub(r'\s+', '', rich_text(value)) == re.sub(r'\s+', '', description) else []
     except (JobLeadsError, RecursionError):
         return []  # Plain text remains available when markup cannot be retained.

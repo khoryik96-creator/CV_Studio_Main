@@ -39,6 +39,18 @@ def test_nested_rich_limit_and_literal_text_are_safe():
     assert format_description('x', '<div>'*30+'x'+'</div>'*30) == []
 
 
+def test_linkedin_layout_wrappers_do_not_create_nested_paragraphs():
+    source = '<div><div><h2>Responsibilities</h2><p>Build <span><b>partnerships</b></span>.</p></div><div><ul><li>Manage reporting.</li><li><em>Support teams.</em></li></ul></div></div>'
+    nodes = format_description(PLAIN, source)
+    assert nodes == format_description(PLAIN, HTML)
+    assert rich_text(nodes).replace(' ', '') == PLAIN.replace(' ', '').replace('\n', '')
+    # A nested span cannot close a surrounding paragraph or swallow the next.
+    assert format_description('First bold end. Second.', '<div><p>First <span><b>bold</b></span> end.</p><p>Second.</p></div>') == [
+        {'tag':'p','children':[{'text':'First '},{'tag':'strong','children':[{'text':'bold'}]},{'text':' end.'}]},
+        {'tag':'p','children':[{'text':'Second.'}]},
+    ]
+
+
 def test_folders_rich_content_and_original_creation_survive_backup_restore(tmp_path):
     store = JobLeadsStore(tmp_path/'leads.sqlite3')
     with mock.patch('cvstudio_job_leads._now', return_value='2026-10-02T12:30:00Z'):

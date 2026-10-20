@@ -4,6 +4,21 @@
 
 ## Release state
 
+- Current owner-requested LinkedIn job discovery: v24.6.455,
+  `codex/v24.6.455-linkedin-job-search`, from merged v454 `c0bdca4`.
+  Job Leads adds keyword/location or already-open filtered Jobs search through
+  the connected Chrome companion, bounded to 15 pages with reviewable summaries
+  and optional full content. Selected ads save into an existing folder using
+  duplicate-safe local saves; existing saved details and manual drafts survive.
+  Save to folder remembers the owner's choice across new ads and reloads.
+  Rich content unwraps nested layout paragraphs; older rich/plain captures
+  display cleanly without rewriting saved rows. Single-ad capture waits briefly
+  for delayed detail fields on the same DOM. No provider call, new route/schema,
+  extension permission or access-limit bypass. Verification and limits are in
+  `cv_studio_v24_6_455_linkedin_job_search_qa_report.md`.
+  Source preview 5074 retains its two saved ads; installed app 5000 is untouched.
+  No push, PR or merge requested or performed.
+
 - Current owner-requested folder controls: v24.6.454,
   `codex/v24.6.454-job-leads-folder-controls`, from local v453 `e472cb8`.
   Job Leads adds explicit Create folder/Delete folder and selecting saved ads
