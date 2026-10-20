@@ -55,13 +55,15 @@ sourcer and the locked historical Lead Finder.
   Bulk actions confirm the count. Select Trash and **Restore** to return a lead
   to its original folder. There is no permanent purge; Trash still counts toward
   storage limits and is retained in JSON backups. Stale selections fail atomically.
-- Export the filtered view as CSV. **Download backup** exports all records as
-  Job Leads JSON. **Restore missing leads** validates the entire file before
+- **More options** keeps CSV export, backup/import and bulk clearing collapsed
+  until needed. **Back up saved ads** exports all records as Job Leads JSON.
+  **Import backup** validates the entire file before
   adding missing job IDs in one transaction; existing records are never replaced.
   This dedicated backup is separate from Settings' legacy local-data backup.
   Posting dates are included in CSV, and JSON backup/restore also retains the
   description excerpt marker, rich content, folders and Trash state. CSV also
   includes folder and creation date. Legacy records/backups need no schema migration.
+- Job Leads inputs use visible labels without placeholder text, including search.
 
 ## Boundaries
 

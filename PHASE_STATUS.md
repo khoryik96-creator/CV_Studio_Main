@@ -4,6 +4,20 @@
 
 ## Release state
 
+- Current owner-requested UI cleanup: v24.6.453,
+  `codex/v24.6.453-job-leads-ui-cleanup`, from local v452 `741b0f6`.
+  Job Leads hides export, backup/import and bulk clearing inside collapsed
+  More options; backup/import use simpler labels and a short explanation.
+  All nine explicit Job Leads placeholders are removed, retaining visible
+  field labels and adding visible Search/Status filter labels. Existing IDs,
+  handlers, data contracts and saved records are preserved. All 35 JavaScript
+  suites, 123 focused Python checks, source/native-dependency preflight and
+  24-assertion smoke pass. Actual in-app preview confirms blank fields,
+  collapsed/expanded tools and the existing saved card. See
+  `cv_studio_v24_6_453_job_leads_ui_cleanup_qa_report.md`.
+  Source preview 5074 retains its persistent data and earlier drafts;
+  no owner install update, paid call, push, PR or merge.
+
 - Current owner-authorized review corrective: v24.6.452,
   `codex/v24.6.452-review-corrections`, from local v451 `c8c83af`.
   Fixes all three independent findings: cross-job draft identity is confirmed
