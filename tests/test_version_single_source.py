@@ -39,8 +39,7 @@ class VersionSingleSourceTests(unittest.TestCase):
             self.assertTrue(path.is_file(), rel)
             data = path.read_bytes()
             for pattern in patterns:
-                is_slug = rb"_\d+_" in pattern
-                expected = self.slug if is_slug else self.dotted
+                expected = bump_version.version_token(pattern, self.version)
                 matches = list(re.finditer(pattern, data))
                 self.assertTrue(
                     matches,
@@ -62,11 +61,13 @@ class VersionSingleSourceTests(unittest.TestCase):
         # different string and are correctly not counted.
         for rel, patterns in bump_version.ANCHORS.items():
             data = (ROOT / rel).read_bytes()
-            for token, is_slug in ((self.dotted, False), (self.slug, True)):
+            tokens = {self.dotted, self.slug}
+            tokens.update(bump_version.version_token(pattern, self.version) for pattern in patterns)
+            for token in tokens:
                 total = len(re.findall(re.escape(token), data))
                 anchored = 0
                 for pattern in patterns:
-                    if (rb"_\d+_" in pattern) == is_slug:
+                    if bump_version.version_token(pattern, self.version) == token:
                         anchored += len(list(re.finditer(pattern, data)))
                 self.assertEqual(
                     anchored,

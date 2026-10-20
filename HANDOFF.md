@@ -11,7 +11,9 @@ traps that the code alone won't warn you about.
 1. **This file (`HANDOFF.md`)** — the durable rules: the sealed route contract,
    the version-bump trap, the local test recipe, and the work-split (who owns
    what). Everyone reads it first, every time.
-2. **Your domain's deep-dive** — for CV formatting work, `FORMATTING_NOTES.md`.
+2. **Your domain's deep-dive** — for CV formatting work, `FORMATTING_NOTES.md`;
+   for the LinkedIn Sourcer module, `LINKEDIN_SOURCER_NOTES.md`; for the
+   business-development tracker, `JOB_LEADS_NOTES.md`.
 3. **GitHub issue #35** (🤝 Multi-Agent Coordination Log) — the *live* log of
    who is touching what *right now*. Post your claim there before editing code.
 
@@ -20,8 +22,8 @@ traps that the code alone won't warn you about.
 `app.py` ends with `_finalize_modular_monolith_app(...)`, which hard-asserts at
 import time:
 
-- `expected_route_count = 118`
-- `expected_route_contract_sha256 = "42768445b8fe97e48688238c02bebf5abce0251befc3d212c2d2b029911f7862"`
+- `expected_route_count = 120`
+- `expected_route_contract_sha256 = "ee8d33baeb48b961a2f50723faacbeb7fed86b55454b3518ab4a07bcd1e90033"`
 - 5 before-request guards, in this exact order:
   `_assign_cvstudio_request_id`, `_reject_declared_oversize_request`,
   `_reject_non_local_host_header`, `_require_ai_spend_browser_session`,
@@ -30,7 +32,7 @@ import time:
 
 If you add, remove, or rename **any** route, the app refuses to boot until you
 recompute the SHA and bump the count in `app.py` **and** in the ~12 test files
-that pin `118` / the SHA (`tests/test_phase7a_*`, `tests/test_phase5b_*`, etc.).
+that pin `120` / the SHA (`tests/test_phase7a_*`, `tests/test_phase5b_*`, etc.).
 If you are not touching routes, leave all of this alone.
 
 ## 2. Architecture and module extractions

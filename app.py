@@ -24,7 +24,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.445"
+_INSTALL_RECEIPT_VERSION = "v24.6.454"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -347,7 +347,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.445"
+_CVSTUDIO_VERSION = "v24.6.454"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -1229,6 +1229,7 @@ _AI_SPEND_SESSION_COOKIE = "cvstudio_ai_spend_session"
 _AI_SPEND_SESSION_TOKEN = secrets.token_urlsafe(32)
 _CV_FORMAT_REVIEW_SIGNING_KEY = secrets.token_bytes(32)
 _AI_SPEND_EXACT_PATHS = frozenset({
+    "/linkedin-sourcer",
     "/test",
     "/parse",
     "/generate-ai",
@@ -14771,11 +14772,122 @@ app.config["SALARY_COMPARISON_KEY_RESOLVER"] = _salary_comparison_resolve_key
 _salary_comparison.init_app(app, url_prefix="/salary-comparison")
 
 
+from cvstudio_linkedin_sourcer import LinkedInSourcerService, SourcerError, SYSTEM as _SOURCER_SYSTEM
+
+
+def _linkedin_sourcer_provider_call(model, brief, task, schema, observed):
+    payload = {
+        "model": model, "max_tokens": 5000, "thinking": {"type": "disabled"},
+        "system": _SOURCER_SYSTEM,
+        "messages": [{"role": "user", "content": json.dumps({"brief": brief, "task": task, "observed_data": observed}, ensure_ascii=False)}],
+        "tools": [{"name": "return_" + task, "description": "Return the grounded sourcing result.", "input_schema": schema}],
+        "tool_choice": {"type": "tool", "name": "return_" + task},
+    }
+    attempted = False
+    try:
+        _phase5b_enforce_request_guardrail("deepseek", payload)
+        attempted = True
+        response = _AI_PROVIDER_CLIENT.request("deepseek", _resolve_request_api_key({"provider": "deepseek"}), payload, timeout=120)
+        usage = _normalize_llm_usage(response.get("usage"), api_calls=1)
+        billing = _phase5b_extract_provider_billing_result("deepseek", response)
+        if billing.get("billing"):
+            usage["_cvstudio_provider_billing"] = billing["billing"]
+        if billing.get("error"):
+            usage["_cvstudio_provider_billing_error"] = billing["error"]
+        return response, {"usage": usage, "model": model, "provider": "deepseek", **_llm_response_cost_fields(model, usage, "deepseek")}
+    except Exception as cause:
+        error = SourcerError("DeepSeek could not finish this request. No ambiguous request was automatically replayed.")
+        error.accounting = _llm_paid_failure_fields(cause, model, "deepseek", attempted=attempted)
+        raise error from None
+
+
+_LINKEDIN_SOURCER = LinkedInSourcerService(
+    key_available=lambda: bool(_resolve_request_api_key({"provider": "deepseek"})),
+    provider_call=lambda *args: _linkedin_sourcer_provider_call(*args),
+)
+
+
+@app.route("/linkedin-sourcer", methods=["GET", "POST"])
+def linkedin_sourcer():
+    if request.method == "GET":
+        if request.args.get("action") == "extension":
+            import io
+            import zipfile
+            output = io.BytesIO()
+            base = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vendor", "linkedin-companion")
+            with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
+                for name in ("manifest.json", "content.js", "worker.js", "reader.js"):
+                    archive.write(os.path.join(base, name), "CV-Studio-LinkedIn-Companion/" + name)
+            output.seek(0)
+            return send_file(output, mimetype="application/zip", as_attachment=True, download_name="CV-Studio-LinkedIn-Companion.zip")
+        return jsonify(_LINKEDIN_SOURCER.snapshot())
+    if request.content_length and request.content_length > 650000:
+        return jsonify(error="This page is too large for the sourcing module."), 413
+    try:
+        return jsonify(_LINKEDIN_SOURCER.handle(request.get_json(silent=True)))
+    except SourcerError as error:
+        return jsonify(error=str(error), retryable=False, **getattr(error, "accounting", {})), 400
+
+
+from cvstudio_job_leads import JobLeadsStore, JobLeadsError, format_description
+from cvstudio_job_ads import PublicLinkedInJobs
+from cvstudio_storage import default_state_directory as _job_leads_state_directory
+
+_JOB_LEADS = JobLeadsStore(_job_leads_state_directory() / "job_leads.sqlite3")
+_PUBLIC_JOB_ADS = PublicLinkedInJobs()
+
+
+@app.route("/job-leads", methods=["GET", "POST"])
+def job_leads():
+    try:
+        if request.method == "GET":
+            if request.args.get("action") == "backup":
+                # Keep the bounded UTF-8 store within the backup/import limit;
+                # ASCII escaping can triple the size of non-English job text.
+                response = app.response_class(json.dumps(_JOB_LEADS.backup(), ensure_ascii=False,
+                                                         separators=(",", ":")), mimetype="application/json")
+                response.headers["Content-Disposition"] = 'attachment; filename="CV-Studio-Job-Leads.json"'
+            else:
+                response = jsonify(**_JOB_LEADS.snapshot())
+            response.headers["Cache-Control"] = "no-store"
+            return response
+        if request.content_length and request.content_length > 12 * 1024 * 1024:
+            raise JobLeadsError("This Job Leads request is too large.", 413)
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            raise JobLeadsError("Enter valid job details or select a Job Leads backup.")
+        if data.get("action") == "save":
+            result = _JOB_LEADS.save(data.get("record"))
+        elif data.get("action") == "restore":
+            result = _JOB_LEADS.restore(data.get("backup"))
+        elif data.get("action") == "lookup":
+            result = {"record": _PUBLIC_JOB_ADS.read(data.get("url"))}
+        elif data.get('action') in {'trash', 'untrash'}:
+            result = _JOB_LEADS.set_deleted(data.get('records'), data['action'] == 'trash')
+        elif data.get('action') == 'format_content':
+            result = {'description_rich': format_description(data.get('description'), data.get('description_html'))}
+        elif data.get('action') == 'create_folder':
+            result = _JOB_LEADS.create_folder(data.get('folder'))
+        elif data.get('action') == 'delete_folder':
+            result = _JOB_LEADS.delete_folder(data.get('folder'), data.get('records'))
+        elif data.get('action') == 'move_folder':
+            result = _JOB_LEADS.move_to_folder(data.get('records'), data.get('folder'))
+        else:
+            raise JobLeadsError("Choose a supported Job Leads action.")
+        response = jsonify(ok=True, **result)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except JobLeadsError as error:
+        return _cvstudio_error_payload(error.code, str(error), error.status,
+                                       retryable=error.retryable,
+                                       action="restore_job_leads_backup" if error.code in {"JOB_LEADS_CORRUPT", "JOB_LEADS_INCOMPATIBLE"} else "refresh_job_leads")
+
+
 _CVSTUDIO_ARCHITECTURE = _finalize_modular_monolith_app(
     app,
-    expected_route_count=118,
+    expected_route_count=120,
     expected_route_contract_sha256=(
-        "42768445b8fe97e48688238c02bebf5abce0251befc3d212c2d2b029911f7862"
+        "ee8d33baeb48b961a2f50723faacbeb7fed86b55454b3518ab4a07bcd1e90033"
     ),
     expected_before_request_handlers=(
         "_assign_cvstudio_request_id",

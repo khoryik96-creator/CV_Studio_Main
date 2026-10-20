@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "CV Studio Sourcer POC",
+  "version": "0.1.0",
+  "description": "A local DeepSeek-assisted candidate sourcing experiment.",
+  "minimum_chrome_version": "116",
+  "permissions": ["activeTab", "scripting", "storage", "sidePanel"],
+  "host_permissions": ["https://www.linkedin.com/*", "http://127.0.0.1/*"],
+  "background": {"service_worker": "worker.js"},
+  "action": {"default_title": "Open Sourcer POC"},
+  "side_panel": {"default_path": "panel.html"},
+  "content_security_policy": {"extension_pages": "script-src 'self'; object-src 'none'; connect-src http://127.0.0.1:5073; style-src 'self'"}
+}

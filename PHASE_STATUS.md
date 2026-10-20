@@ -4,12 +4,185 @@
 
 ## Release state
 
-- Current verified merged baseline (2026-10-13): v24.6.441, `fcaedae` (#227).
+- Current owner-requested folder controls: v24.6.454,
+  `codex/v24.6.454-job-leads-folder-controls`, from local v453 `e472cb8`.
+  Job Leads adds explicit Create folder/Delete folder and selecting saved ads
+  to Move selected into a folder. Empty folders persist; deleting a folder
+  unfiles its ads, preserving active/Trash state and all other content.
+  Dedicated Job Leads schema 2 adds only a folder table, with a verified backup,
+  transactional restart-safe migration and unchanged lead rows. Backup format 2
+  includes empty folders while accepting format 1. Main schema 10, journal 1,
+  120-route seal and five guards remain. Live public-read diagnosis observed
+  LinkedIn HTTP 429; the reader now exposes a distinct rate-limit message and
+  the Chrome-only fallback is clearer. No retry/bypass was added.
+  Full isolated Windows gate: 1,731 passed, four skipped, 7,599 subtests;
+  35 JavaScript suites, 126 focused Python checks, preflight and 24 smoke
+  assertions pass. Actual synthetic UI verified empty folder creation, moving
+  two saved ads, deleting the folder without losing ads, and the rate-limit
+  message. The persistent source preview migrated with its exact lead rows
+  preserved. See `cv_studio_v24_6_454_job_leads_folders_qa_report.md`.
+  No owner installed app update, paid call, push, PR or merge.
+
+- Current owner-requested UI cleanup: v24.6.453,
+  `codex/v24.6.453-job-leads-ui-cleanup`, from local v452 `741b0f6`.
+  Job Leads hides export, backup/import and bulk clearing inside collapsed
+  More options; backup/import use simpler labels and a short explanation.
+  All nine explicit Job Leads placeholders are removed, retaining visible
+  field labels and adding visible Search/Status filter labels. Existing IDs,
+  handlers, data contracts and saved records are preserved. All 35 JavaScript
+  suites, 123 focused Python checks, source/native-dependency preflight and
+  24-assertion smoke pass. Actual in-app preview confirms blank fields,
+  collapsed/expanded tools and the existing saved card. See
+  `cv_studio_v24_6_453_job_leads_ui_cleanup_qa_report.md`.
+  Source preview 5074 retains its persistent data and earlier drafts;
+  no owner install update, paid call, push, PR or merge.
+
+- Current owner-authorized review corrective: v24.6.452,
+  `codex/v24.6.452-review-corrections`, from local v451 `c8c83af`.
+  Fixes all three independent findings: cross-job draft identity is confirmed
+  and Save-guarded; companion binding/run/budgets/ownership survive ordinary
+  worker suspension with exact-document revalidation; user-taken-over profile
+  tabs are relinquished before navigation/read/cleanup. Follow-up loading-state
+  regression was reproduced and fixed, preserving pending-target polling.
+  All 35 JavaScript suites, 12 lifecycle cases, 116 focused Python checks,
+  source/native-dependency preflight and 24-assertion smoke pass. Final
+  independent review: No findings. Synthetic actual UI verified cancel/switch/
+  save consistency; owner data and old drafts remain unchanged. Pinned isolated
+  test dependencies also resolve the three previous updater-test environment
+  failures without changing installer/runtime code. Final unfiltered Windows
+  gate: 1,716 passed, four skipped, 7,599 subtests, no failures or deselections.
+  Full gate details are in
+  `cv_studio_v24_6_452_review_corrective_qa_report.md`. Native installed-extension
+  lifecycle remains untested; no paid call, owner install update, push, PR or merge.
+
+- Current owner-authorized source work (2026-10-19): v24.6.451,
+  `codex/v24.6.451-job-lead-organization`, from local v450 `20b1f25`.
+  Job Leads adds internal folders, folder filtering, recoverable row/bulk Trash
+  and restore, visible original creation timestamps, and passive rich content
+  from public/companion capture or formatted paste. Rich trees retain typography
+  and lists without source attributes/scripts/media; empty/failed refreshes keep
+  existing drafts. Legacy payload defaults and schema 1 are preserved. Backup
+  restore retains original creation timestamps and never resurrects current Trash.
+  Full isolated local: 1,713 passed, four skipped, three documented updater
+  exclusions, 7,599 subtests. All 34 JavaScript suites, source/native-dependency
+  preflight and 24-assertion smoke pass. Synthetic actual UI verified folder
+  save, delete/restore and rich lists; the owner's actual public ad refreshed
+  rich content into an unsaved draft. No owner data deletion or saved-record
+  modification, paid call, installed app update, push, PR or merge. See v451 QA.
+
+- Current owner-authorized source work (2026-10-19): v24.6.450,
+  `codex/v24.6.450-job-ad-details`, from local v449 `087fa36`.
+  Job Leads retains optional exact posting dates and exposes saved description
+  text through View more. Public/companion readers accept same-job exact date
+  metadata, preserving the source calendar day; missing/relative dates remain
+  unknown. Optional manual dates, legacy rows, excerpt markers, CSV and backup/
+  restore are covered without changing routes or schemas. The real in-app
+  preview opened an existing saved ad's description; synthetic UI confirmed
+  known/unknown dates and missing content. Full isolated local: 1,689 passed,
+  four skipped, three documented updater exclusions, 7,599 subtests. All 33
+  frontend suites, source preflight and 24-assertion smoke pass. See the v450
+  QA report. Preview 5074 preserves isolated persistent state. No paid call,
+  owner installation update, push, PR or merge.
+
+- Current owner-authorized corrective (2026-10-19): v24.6.449,
+  `codex/v24.6.449-job-link-public-read`, from local v448 `94fbe8c`.
+  Live inspection reproduced the empty form: the owner used the in-app browser,
+  which cannot run the Chrome companion. Default paste now uses bounded public
+  LinkedIn job HTML through the existing guarded lookup action. Optional Chrome
+  capture remains explicit for login-only ads. Public JSON-LD or canonical top
+  cards identify the exact job; same-job redirect checks, content bounds and
+  no-auth/no-cookie/no-netrc requests preserve the public-only boundary. No
+  routes/schemas, paid behavior or manual-field/duplicate protections change.
+  The owner's exact public job link returned company, role and location in the
+  real in-app preview. Full local: 1,667 passed, four skipped, three documented
+  updater exclusions; 7,599 subtests. All 32 frontend suites, source preflight
+  and 24-assertion smoke pass. Verification is in the v449 QA report. No provider call,
+  owner installation update, push, PR or merge.
+
+- Current owner-authorized source work (2026-10-19): v24.6.448,
+  `codex/v24.6.448-job-link-autofill`, from local v447 `1223ed8`.
+  Pasting a LinkedIn job link triggers companion fill of empty company, role,
+  location and description fields. Contact stays optional/manual, status starts
+  New, dates are not invented, and existing manual edits are retained. The bound
+  companion reuses matching job tabs or opens only the explicitly submitted
+  canonical job in a temporary inactive tab; cleanup preserves user-owned,
+  activated or navigated tabs. Capture is bounded and cannot overlap sourcing.
+  No route, schema, paid-boundary or permission change. Full local: 1,640 passed,
+  four skipped, three documented updater exclusions, 7,599 subtests. All 32
+  frontend suites, native Chrome synthetic Job Leads/Sourcer flows, source
+  preflight and 24-assertion smoke pass. See the v448 QA report.
+  Preview uses isolated persistent state on 5074;
+  no live LinkedIn/paid call, owner installation update, push, PR or merge.
+
+- Current owner-authorized source work (2026-10-19): v24.6.447,
+  `codex/v24.6.447-job-leads`, from local v446 `cfa18bc` / main `480678d`.
+  Separate Job Leads module saves LinkedIn job links, company/role, contact,
+  notes, status, follow-up date and optional location/description. Manual entry
+  and read-only companion capture fill a reviewable draft; no AI is required.
+  Durable separate schema-1 SQLite includes verified pre-schema backup,
+  transactions, duplicate protection, optimistic edit revisions and insert-only
+  JSON restore. Search, status/due filters and CSV are included. New GET/POST
+  `/job-leads` makes 120 routes (`ee8d33ba...`); old 119/118-route hashes, all
+  five guards, existing schema-10 data and Sourcer/provider contracts remain.
+  Full isolated local: 1,640 passed, four skipped, three documented local
+  updater exclusions; 7,599 subtests. All 31 frontend suites, native Chrome
+  synthetic job readers and actual Job Leads/Sourcer UI flows, syntax/byte/source
+  preflight and 24-assertion smoke pass. Preview 5074 uses isolated persistent
+  preview state; installed app and receipt remain unchanged. No live LinkedIn
+  test, paid call, outreach, protected build, push, PR or merge. See
+  `JOB_LEADS_NOTES.md` and the v447 QA report. Stop at the local checkpoint.
+
+- Current verified merged baseline (2026-10-17): v24.6.445, `480678d` (#228).
+  Tested head `73cac43` has the same tree `fee044b`; all three hosted gates
+  passed. Unfiltered Windows: 1,600 passed, four skipped, 7,599 subtests.
+  `codex/v24.6.442-contribution-grouping` is complete and must not be reused.
+
+- Current owner-authorized source work (2026-10-19): v24.6.446,
+  `codex/v24.6.446-linkedin-sourcer-module`, based on local POC `de14854`
+  and exact main `480678d`. LinkedIn Sourcer is a dedicated CV Studio tab with
+  brief, modes, source-tab selection, Start/Stop, progress, evidence/unknowns,
+  candidate URLs and CSV export. Its companion is bundled for download and
+  connects to one explicitly armed Chrome app document. Only observed profile
+  links and owned tabs are available to the bounded browser run. No standalone
+  POC bridge is required. The main backend owns protected key resolution, native
+  DeepSeek tools, request/cost guards and normal usage envelopes. Stop blocks
+  subsequent browser work while preserving accounting from an already-sent call.
+  Adds only GET/POST `/linkedin-sourcer`: 119 routes with hash `da29d647...`;
+  removing it reproduces the exact previous 118-route hash. All five ordered
+  guards, existing routes, schemas, provider non-replay and CV formatting remain.
+  Source/build/module inventories and companion single-source version stamping
+  are included. Final isolated local: 1,607 passed, four skipped, three known
+  environment exclusions, 7,599 subtests; all 30 frontend suites pass. Real Chrome
+  exercised the actual module with mocked companion/provider: consent, plan,
+  screen/detail, costs, results and tab-switch persistence passed. Static/source
+  preflight and 24-assertion smoke pass. No live LinkedIn or paid provider test,
+  owner installation/receipt update, protected build, push, PR or merge.
+  See `LINKEDIN_SOURCER_NOTES.md` and the v446 QA report. Preview uses isolated
+  state on port 5074. Stop after the local checkpoint pending owner review.
+
+- Completed owner-authorized experiment (2026-10-19): isolated LinkedIn sourcing
+  POC on `codex/v24.6.445-linkedin-sourcer-poc`, from exact main `480678d`.
+  `poc/linkedin-sourcer` contains a Chrome side panel and separate loopback
+  DeepSeek bridge, with modes for People search, Recruiter Lite and Recruiter.
+  It plans a query, reads observed result cards, reviews up to five profiles per
+  page and follows recognized pagination, bounded to 15 pages and a separately
+  confirmed request ceiling. Evidence/unknowns, provenance, Stop and CSV export
+  are included. The saved Windows DeepSeek key is reused read-only on the server;
+  no key enters the extension or LinkedIn. All 26 component/browser tests pass
+  with synthetic pages and mocked transport. Native Chrome fixture rendering and
+  native Windows launcher start/stop/restart pass. Saved key presence was checked
+  without displaying it. No paid request or live LinkedIn account check occurred;
+  those remain owner-driven after loading the extension. Main application source,
+  version, routes, schemas, installation/receipt and usage history are untouched.
+  Evidence and known layout limits are in the POC's README and VERIFICATION.md.
+  Stop after the local checkpoint; no push, PR, merge or protected build.
+
+- Previous verified merged baseline (2026-10-13): v24.6.441, `fcaedae` (#227).
   Tested head `fc4ed7b` has the same tree `3e146d8`; all three hosted gates
   passed. Unfiltered Windows: 1,587 passed, four skipped, 7,121 subtests.
   `codex/v24.6.439-batch-jobadder-link` is complete.
 
-- Current owner-authorized source work (2026-10-17): v24.6.445,
+- Completed owner-authorized source work (2026-10-17): v24.6.445,
   `codex/v24.6.442-contribution-grouping`, from exact `fcaedae`.
   Contribution company/year labels are source-confirmed headings rather than
   achievement bullets, in preview and Word. Optional `item_headings` retains
@@ -33,8 +206,8 @@
   exclusions; 7,599 subtests and all 29 frontend suites passed. Exact-master
   and pre-correction replays cover 333 inputs with only intended layout deltas.
   Evidence is in the v24.6.445 QA report, supplementing the v442–v444 reports.
-  Owner authorized PR/merge on 2026-10-17. PR #228 awaits fresh exact-head
-  hosted checks; final merge/check identities will be recorded in issue #35.
+  Owner authorized PR/merge on 2026-10-17. PR #228 merged after all three
+  exact-head hosted checks passed; final merge/check identities are in issue #35.
 
 - Completed owner-authorized source work: v24.6.441,
   `codex/v24.6.439-batch-jobadder-link`, from exact `a40bf63`.
