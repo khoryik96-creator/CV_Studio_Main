@@ -5,7 +5,7 @@ const row={url:'https://www.linkedin.com/jobs/view/1234567890',company:'Example 
 const copy=value=>JSON.parse(JSON.stringify(value));
 function fixture(){
   let hooks;
-  const state={session:{},created:[],removed:[],document:'bound',next:0,scroll:0,failWrite:false,reads:0};
+  const state={session:{},created:[],removed:[],document:'bound',next:0,scroll:0,failWrite:false,reads:0,location:'Malaysia'};
   const tabs=new Map([[1,{id:1,url:'http://127.0.0.1:5000/',status:'complete'}],[2,{id:2,url:search,status:'complete'}],[3,{id:3,url:'https://www.linkedin.com/search/results/people/',status:'complete'}]]);
   const chrome={storage:{session:{get:async key=>({[key]:copy(state.session[key]||null)}),set:async data=>{if(state.failWrite)throw Error('Synthetic storage failure');Object.assign(state.session,copy(data));}}},
     action:{onClicked:{addListener:fn=>hooks.arm=fn},setBadgeText:async()=>{}},
@@ -18,6 +18,7 @@ function fixture(){
       if(args.files){if(state.onInject)state.onInject();return [{}]}
       if(!args.args)return [{result:true,documentId:state.document}];
       const method=args.args[0];
+      if(method==='jobSearchContext')return [{result:{location:state.location}}];
       if(method==='nextJobSearch'){state.next++;return [{result:true}]}
       if(method==='scrollJobSearch'){state.scroll++;return [{result:true}]}
       state.reads++;return [{result:{url:tabs.get(args.target.tabId).url,jobs:[row],signature:row.url,hasNext:true,paginationKnown:true,atBottom:true}}];
@@ -60,5 +61,15 @@ function fixture(){
   const bad=fixture();await bad.arm();
   for(const patch of [{max_pages:16},{max_pages:0},{query:''},{query:'x'.repeat(241)},{query:'line\nbreak'},{use_open:true,source_tab_id:3}])assert((await bad.begin(patch)).error);
   assert.equal(bad.state.created.length,0);
+  const normalized=fixture();await normalized.arm();const ni=(await normalized.begin()).result.tab_id;
+  normalized.tabs.get(ni).url='https://www.linkedin.com/jobs/search-results/?keywords=finance&currentJobId=1234567890';
+  normalized.state.location='';assert.equal((await normalized.read(ni)).result.loading,true,'wait for the displayed location');
+  normalized.boot();normalized.state.location='Malaysia';assert.equal((await normalized.read(ni)).result.jobs.length,1,'initial URL normalization retains a confirmed rendered location');
+  normalized.tabs.get(ni).url+='&geoId=changed';assert((await normalized.read(ni)).error,'resolved filters are pinned after initial confirmation');
+  const wrong=fixture();await wrong.arm();const wi=(await wrong.begin()).result.tab_id;wrong.state.location='Singapore';
+  assert.match((await wrong.read(wi)).error,/different location/);assert.equal(wrong.state.reads,0);
+  const changed=fixture();await changed.arm();const ci=(await changed.begin()).result.tab_id;
+  changed.tabs.get(ci).url='https://www.linkedin.com/jobs/search-results/?keywords=other';assert((await changed.read(ci)).error,'initial normalization cannot change keywords');
+  assert.equal(changed.state.reads,0);
   console.log('Job search companion: authority, source/run isolation, validated queries, suspension-safe page/scroll bounds, filter redirects and retained search tabs passed');
 })().catch(error=>{console.error(error);process.exitCode=1});

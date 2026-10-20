@@ -37,6 +37,31 @@ function jobSearchLive(bound, run, tab) {
   if (bound.kind !== 'jobs' || Date.now() - bound.jobStarted > 600000 ||
       jobSearchKey(tab.url) !== bound.jobKey || tab.pendingUrl && jobSearchKey(tab.pendingUrl) !== bound.jobKey) throw Error('The job search changed or timed out. Start a new search.');
 }
+function safeError(message) { const error = Error(message); error.cvstudioSafe = true; return error; }
+async function settleJobSearch(bound, run, tab) {
+  live(bound,run);
+  const actual = jobSearchKey(tab.url);
+  if (!actual) throw safeError('The tab left LinkedIn Jobs search. Open a job search and try again.');
+  if (tab.pendingUrl && jobSearchKey(tab.pendingUrl) !== actual) return false;
+  const requested = new URL(bound.jobKey), resolved = new URL(actual);
+  requested.searchParams.delete('location');
+  for (const name of ['location','geoId','distance']) resolved.searchParams.delete(name);
+  if (requested.href !== resolved.href) throw safeError('LinkedIn changed the search keywords or filters. Choose the already-open search to review its current results.');
+  await chrome.scripting.executeScript({target:{tabId:tab.id},files:['reader.js']});
+  live(bound,run);
+  const [{result}] = await chrome.scripting.executeScript({target:{tabId:tab.id},func:method => globalThis.SourcerReader[method](),args:['jobSearchContext']});
+  live(bound,run);
+  const current = await chrome.tabs.get(tab.id);
+  if (jobSearchKey(current.url) !== actual || current.pendingUrl && jobSearchKey(current.pendingUrl) !== actual) throw safeError('The job search changed while loading. Choose the already-open search to continue.');
+  if (current.status !== 'complete') return false;
+  if (bound.jobLocation) {
+    if (!result?.location) return false;
+    const normalize = value => value.trim().replace(/\s+/g,' ').toLocaleLowerCase();
+    if (normalize(result.location) !== normalize(bound.jobLocation)) throw safeError('LinkedIn is showing a different location. Set the location on LinkedIn, then choose Job search already open in Chrome.');
+  }
+  bound.jobKey = actual; bound.jobInitial = false; delete bound.jobLocation;
+  await persist(); jobSearchLive(bound,run,await chrome.tabs.get(tab.id)); return true;
+}
 function persist() {
   const snapshot = {version:1, connection:connection ? {...connection, allowed:[...(connection.allowed || [])]} : null,
     owned:[...owned], nextCount:Math.min(nextCount,15), profileCount:Math.min(profileCount,76)};
@@ -62,7 +87,8 @@ async function restore() {
   if (!Number.isInteger(bound.tabId) || bound.tabId < 0 || typeof bound.documentId !== 'string' || !bound.documentId || !local(bound.url) ||
       !Array.isArray(bound.allowed) || bound.allowed.length > 40 || bound.allowed.some(url => !profile(url)) || bound.kind && !['profiles','jobs'].includes(bound.kind) ||
       bound.run && (!/^[a-f0-9]{32}$/.test(bound.run) || !Number.isInteger(bound.source) || bound.source < 0 || !Number.isInteger(bound.pages) || bound.pages < 1 || bound.pages > 15) ||
-      bound.kind === 'jobs' && (!jobSearchKey(bound.jobKey) || !Number.isFinite(bound.jobStarted) || !Number.isInteger(bound.jobScrolls) || bound.jobScrolls < 0 || bound.jobScrolls > 120)) throw Error('Invalid binding.');
+      bound.kind === 'jobs' && (!jobSearchKey(bound.jobKey) || !Number.isFinite(bound.jobStarted) || !Number.isInteger(bound.jobScrolls) || bound.jobScrolls < 0 || bound.jobScrolls > 120 ||
+        bound.jobInitial && (bound.jobInitial !== true || typeof bound.jobLocation !== 'string' || bound.jobLocation.length > 160))) throw Error('Invalid binding.');
   try {
     // Restore authority only for the exact still-live app document. Startup
     // verifies state; it never resumes browser actions or paid operations.
@@ -73,7 +99,7 @@ async function restore() {
     if (!probe?.result || probe.documentId !== bound.documentId) throw Error('App document changed.');
     connection = {tabId:bound.tabId, documentId:bound.documentId, url:bound.url, run:bound.run || null,
       source:bound.source, pages:bound.pages, allowed:new Set(bound.allowed), kind:bound.kind || 'profiles'};
-    if (bound.kind === 'jobs') Object.assign(connection, {jobKey:bound.jobKey, jobStarted:bound.jobStarted, jobScrolls:bound.jobScrolls});
+    if (bound.kind === 'jobs') Object.assign(connection, {jobKey:bound.jobKey, jobStarted:bound.jobStarted, jobScrolls:bound.jobScrolls,jobInitial:bound.jobInitial === true,jobLocation:bound.jobLocation || ''});
     nextCount = saved.nextCount; profileCount = saved.profileCount;
   } catch { connection = null; await persist(); }
 }
@@ -149,6 +175,37 @@ async function readJobTab(bound, id, expected) {
   }
   throw Error('The job details did not finish loading. Open the ad in Chrome and try Read job ad.');
 }
+async function pickJob(message, sender) {
+  await ready;
+  const bound = connection, expected = jobURL(message.url);
+  if (stateFailed || !bound) throw safeError('Open Job Leads in CV Studio and connect its companion toolbar icon first.');
+  if (!expected || expected !== message.url || sender.frameId !== 0 || !sender.documentId || !Number.isInteger(sender.tab?.id) ||
+      !(jobSearchKey(sender.url) || jobURL(sender.url))) throw safeError('Choose a visible LinkedIn job ad.');
+  if (bound.run || jobCapture) throw safeError('Wait for the current search or ad read to finish, then add this ad.');
+  const token = {}; jobCapture = token;
+  try {
+    const appTab = await chrome.tabs.get(bound.tabId);
+    live(bound);
+    if (!local(appTab.url) || appTab.status !== 'complete' || new URL(appTab.url).origin !== new URL(bound.url).origin) throw safeError('Reconnect the CV Studio tab.');
+    const target = {tabId:sender.tab.id,documentIds:[sender.documentId]};
+    const verify = async () => {
+      live(bound);
+      const tab = await chrome.tabs.get(sender.tab.id);
+      const same = value => jobSearchKey(sender.url) ? jobSearchKey(value) === jobSearchKey(sender.url) : jobURL(value) === expected;
+      if (tab.status !== 'complete' || !same(tab.url) || tab.pendingUrl && !same(tab.pendingUrl)) throw safeError('The LinkedIn page changed. Add the ad again from its current card.');
+    };
+    await verify();
+    await chrome.scripting.executeScript({target,files:['reader.js']});
+    await verify();
+    const [{result}] = await chrome.scripting.executeScript({target,func:url => globalThis.SourcerReader.readJobPick(url),args:[expected]});
+    await verify();
+    if (result?.url !== expected || !result.company || !result.role) throw safeError('The ad details have not loaded. Try again after the card appears.');
+    const id = crypto.randomUUID().replaceAll('-','');
+    const saved = await chrome.tabs.sendMessage(bound.tabId,{type:'CVSTUDIO_JOB_CAPTURE',id,record:result},{documentId:bound.documentId});
+    if (!saved?.ok) throw safeError(saved?.error || 'Open Job Leads in the connected CV Studio tab, then add this ad again.');
+    return {ok:true,duplicate:!!saved.duplicate,folder:saved.folder || ''};
+  } finally { if (jobCapture === token) jobCapture = null; }
+}
 async function handle(message, sender) {
   await ready;
   if (stateFailed || !connection || sender.tab?.id !== connection.tabId || sender.documentId !== connection.documentId || !local(sender.url)) {
@@ -182,7 +239,7 @@ async function handle(message, sender) {
       live(bound);
       const key = jobSearchKey(url || tab.url);
       if (!key) throw Error('Open a LinkedIn Jobs search first.');
-      Object.assign(bound, {kind:'jobs',run:args.run_id,source:tab.id,pages:args.max_pages,allowed:new Set(),jobKey:key,jobStarted:Date.now(),jobScrolls:0});
+      Object.assign(bound, {kind:'jobs',run:args.run_id,source:tab.id,pages:args.max_pages,allowed:new Set(),jobKey:key,jobStarted:Date.now(),jobScrolls:0,jobInitial:!args.use_open,jobLocation:args.use_open ? '' : args.location.trim()});
       nextCount = 0; profileCount = 0;
       await persist(); live(bound, args.run_id); return {tab_id:tab.id};
     } finally { if (jobCapture === token) jobCapture = null; }
@@ -244,7 +301,7 @@ async function handle(message, sender) {
   if (!connection.run || connection.run !== args.run_id) throw Error('The browser run has stopped or disconnected.');
   if (message.action === 'end') {
     connection.run = null;
-    connection.kind = 'profiles'; delete connection.jobKey; delete connection.jobStarted; delete connection.jobScrolls;
+    connection.kind = 'profiles'; delete connection.jobKey; delete connection.jobStarted; delete connection.jobScrolls; delete connection.jobInitial; delete connection.jobLocation;
     connection.allowed = new Set(); await persist();
     for (const [id, expected] of [...owned]) await closeOwned(id, expected);
     await persist(); return true;
@@ -254,6 +311,11 @@ async function handle(message, sender) {
     if (message.action !== 'read' || args.tab_id !== bound.source || !['readJobSearch','nextJobSearch','scrollJobSearch'].includes(args.method) ||
         !Array.isArray(args.values) || args.values.length > 1 || args.values.some(value => typeof value !== 'string' || value.length > 4096)) throw Error('Unsupported job-search action.');
     const tab = await chrome.tabs.get(bound.source);
+    if (bound.jobInitial) {
+      if (Date.now() - bound.jobStarted > 600000) throw safeError('The job search timed out. Start a new search.');
+      if (tab.status !== 'complete') return {loading:true};
+      if (!await settleJobSearch(bound,args.run_id,tab)) return {loading:true};
+    }
     if (tab.status === 'loading' && (!tab.url || tab.url === 'about:blank') && jobSearchKey(tab.pendingUrl) === bound.jobKey) return {loading:true};
     jobSearchLive(bound, args.run_id, tab);
     if (tab.status !== 'complete') return {loading:true};
@@ -320,7 +382,11 @@ async function handle(message, sender) {
   throw Error('Unsupported browser action.');
 }
 chrome.runtime.onMessage.addListener((message, sender, reply) => {
+  if (message?.kind === 'sourcer_job_pick') {
+    pickJob(message,sender).then(result => reply({result}),error => reply({error:error.cvstudioSafe ? error.message : 'The ad could not be added. Reconnect the companion and try again.'}));
+    return true;
+  }
   if (message?.kind !== 'sourcer') return false;
-  handle(message, sender).then(result => reply({result}), () => reply({error: 'The browser action stopped. Reconnect the companion or check the LinkedIn page.'}));
+  handle(message, sender).then(result => reply({result}), error => reply({error: error.cvstudioSafe ? error.message : 'The browser action stopped. Reconnect the companion or check the LinkedIn page.'}));
   return true;
 });

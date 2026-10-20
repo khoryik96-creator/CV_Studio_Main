@@ -85,6 +85,16 @@ authority, ownership and cleanup rules remain. The four-file ZIP and permissions
 are unchanged; existing installations need the updated files, Reload and a
 reconnected app tab before using the new Jobs actions.
 
+Since v459 its reader/content scripts also supply explicit direct-add buttons
+on recognized LinkedIn Jobs cards/pages. This uses the existing LinkedIn host
+permission and same four packaged assets. Only trusted clicks send a job-only
+capture to the exact connected CV Studio document for its ordinary guarded
+local save. It adds no profile buttons, provider calls, LinkedIn writes or
+ownership/cleanup changes. Active profile/Jobs runs block direct captures.
+See Job Leads notes for the bounded initial search-location handshake and
+preview/direct-capture test coverage. Updating needs both app and LinkedIn
+pages refreshed after the companion files are replaced/reloaded.
+
 `tests/test_linkedin_sourcer.py` exercises the service, real guarded route,
 download, provider/cost wiring and cancellation with mocked transport.
 `tests/test_linkedin_sourcer_frontend.js` exercises companion authority and all

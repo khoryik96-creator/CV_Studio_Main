@@ -227,6 +227,40 @@ verifies the observed selectors, not a complete installed-extension run.
 Synthetic modern fixtures cover card identities/field order, scoped paging,
 loading/stale description panels and bounds. Existing legacy fixtures remain.
 
+## Preview and direct LinkedIn capture (v24.6.459)
+
+Results have a Preview action and an in-app panel. Read full ad fills this
+panel using the existing companion read, and Add this ad saves only that ad.
+Other checkbox selections remain available for Add selected to list. Plain
+summaries, captured content and excerpts stay explicitly labelled; no LinkedIn
+iframe or remote HTML execution is used.
+
+The updated companion's existing four-file package also runs its reader/content
+scripts on `https://www.linkedin.com/jobs/*`. Existing host permissions are
+unchanged. Recognized rendered cards and loaded job-view pages receive an Add
+to CV Studio button. It acts only on a trusted user click, reads that visible
+job identity again and never presses LinkedIn Save, Apply or messaging controls.
+Injected control text is excluded from ad content. DOM updates do not duplicate
+controls. It uses Save selected and LinkedIn ads to folder in the connected
+Job Leads tab. Keep that tab open; refresh both pages after extension updates.
+
+Direct captures require a top-frame LinkedIn sender, the same source document,
+canonical observed job identity and an idle companion. They are forwarded to
+the exact previously connected app document, correlated through its initialized
+Job Leads channel and saved using the existing same-origin guarded API.
+Busy/replaced/disconnected pages reject visibly; no ambiguous write is replayed.
+Duplicate saves retain existing data, including Trash, and manual draft fields
+are untouched. No new route, schema, provider call or remote LinkedIn write.
+
+Live diagnosis of the v458 owner page found that LinkedIn removed `location`
+from the opened search URL while its rendered location button still said
+Malaysia. Exact URL comparison stopped discovery before results arrived. A
+new-search-only initial handshake now checks unchanged keyword/filter identity,
+reads the recognized location control and pins the resolved search identity.
+Missing location UI waits within existing limits; a different location or
+changed keywords rejects with readable guidance. Open-search mode and all
+later reads retain strict filter identity, counters, deadlines and guards.
+
 ## Verification (existing contracts)
 
 The v458 review corrective makes the numeric empty-result check match only a

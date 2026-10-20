@@ -4,7 +4,21 @@
 
 ## Release state
 
-- Owner-requested review fix and merge candidate: v24.6.458,
+- Owner-requested ad curation: v24.6.459,
+  `codex/v24.6.459-job-ad-curation`, from merged v458 `f807c08` / PR #230.
+  Job Leads has an in-app ad preview with full-read and single-ad save alongside
+  multi-select import. The companion adds explicit Add to CV Studio buttons
+  to recognized LinkedIn job cards/detail pages and forwards captures only to
+  its exact connected local app document; existing guarded duplicate-safe
+  saves retain manual notes/drafts. New searches accept LinkedIn's initial URL
+  normalization only after verifying its displayed requested location; then
+  real filters remain pinned. Full isolated Windows tests: 1,737 passed,
+  four skipped, 7,599 subtests; all 41 JavaScript suites passed. Synthetic UI
+  verifies preview/full content, selected-folder direct save and retained draft.
+  See `cv_studio_v24_6_459_job_ad_curation_qa_report.md` for checks and live-test
+  limits. No push, PR, merge or installed app change.
+
+- Owner-requested review fix: v24.6.458, merged via PR #230 as `f807c08`.
   `codex/v24.6.458-job-search-review-fix`, continuing unmerged v457 `ca9c92d`.
   Positive job counts ending in zero no longer look like an empty search while
   cards are loading. Legacy and modern DOM regressions fail on the previous

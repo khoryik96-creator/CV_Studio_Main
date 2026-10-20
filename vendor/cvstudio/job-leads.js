@@ -20,6 +20,8 @@
   let folderNames = [];
   let discovered = [], discoveryPage = 0, discovering = false, discoveryStopped = false, discoveryRun = '';
   const discoveryPicked = new Set();
+  let previewUrl = '';
+  const receivedCaptures = new Map();
   let rows = [], editing = null, busy = false, dirty = false, page = 0, ready = false, lastReadUrl = '', descriptionTruncated = false, descriptionRich = [];
   const status = message => { el('Message').textContent = message; };
   function localDate() {
@@ -281,13 +283,25 @@
     el('SearchNext').disabled = busy || (discoveryPage+1)*20 >= discovered.length;
     el('SearchResults').querySelectorAll('button').forEach(button => { button.disabled = busy; });
     el('SearchResults').querySelectorAll('input').forEach(input => { input.disabled = busy || !!savedJob(input.value); });
+    const preview = discovered.find(row => row.url === previewUrl);
+    el('PreviewRead').disabled = busy || !preview;
+    el('PreviewSave').disabled = busy || !preview || !!savedJob(preview.url);
+    el('PreviewSave').textContent = preview && savedJob(preview.url) ? 'Already saved' : 'Add this ad';
+  }
+  function drawPreview() {
+    const row = discovered.find(value => value.url === previewUrl);
+    el('PreviewTitle').textContent = row?.role || 'Choose an ad to preview';
+    el('PreviewCompany').textContent = row?.company || '';
+    el('PreviewMeta').textContent = row ? [row.location,row.full ? 'Captured ad content' : 'Search summary · Read full ad for the description',row.description_truncated ? 'Excerpt' : ''].filter(Boolean).join(' · ') : '';
+    content(el('PreviewContent'),row?.description || 'Your search results will appear here. Preview an ad, then add it or select several to save together.',row?.description_rich);
   }
   function drawDiscovery() {
     const target = el('SearchResults'); target.replaceChildren();
     discoveryPage = Math.min(discoveryPage, Math.max(0,Math.ceil(discovered.length/20)-1));
+    if (!discovered.some(row => row.url === previewUrl)) previewUrl = discovered[0]?.url || '';
     el('SearchCount').textContent = `${discovered.length} found · ${discoveryPicked.size} selected`;
     for (const row of discovered.slice(discoveryPage*20, (discoveryPage+1)*20)) {
-      const card = node('article','','job-leads-discovery-card');
+      const card = node('article','','job-leads-discovery-card' + (row.url === previewUrl ? ' is-previewing' : ''));
       card.append(node('h3',row.role),node('p',row.company),node('p',row.location || '', 'job-leads-muted'));
       card.append(node('p',row.full ? 'Full ad captured' : 'Search summary only', 'job-leads-muted'));
       const saved = savedJob(row.url), actions = node('div','','job-leads-actions');
@@ -300,6 +314,7 @@
         pick.append(input,document.createTextNode('Select')); actions.append(pick);
       }
       const link = node('a','Open on LinkedIn'); link.href = row.url; link.target = '_blank'; link.rel = 'noopener noreferrer'; actions.append(link);
+      const preview = node('button','Preview','sec'); preview.type = 'button'; preview.addEventListener('click',() => { if (busy) return; previewUrl = row.url; drawDiscovery(); el('Preview').scrollIntoView({block:'nearest',behavior:'smooth'}); }); actions.append(preview);
       const read = node('button','Read full ad','sec'); read.type = 'button'; read.addEventListener('click', () => previewDiscovered(row)); actions.append(read);
       card.append(actions);
       const details = node('details'), summary = node('summary',row.full ? 'View job ad content' : 'View search summary');
@@ -308,7 +323,7 @@
     }
     if (!discovered.length) target.append(node('p','Search LinkedIn to find ads here.','job-leads-muted'));
     el('SearchCount').textContent = `${discovered.length} found · ${discoveryPicked.size} selected`;
-    discoveryControls();
+    drawPreview(); discoveryControls();
   }
   function rememberJobs(snapshot) {
     if (!snapshot || !Array.isArray(snapshot.jobs) || snapshot.jobs.length > 40) throw Error('The job-search results could not be confirmed.');
@@ -378,6 +393,7 @@
   }
   async function previewDiscovered(row) {
     if (busy) return;
+    previewUrl = row.url;
     lock(true); searchStatus('Reading the selected ad in Chrome…');
     try {
       const data = await prepareSource(await rpc('jobFromLink',{url:row.url}));
@@ -389,9 +405,9 @@
     } catch (error) { searchStatus(error.message + ' The search summary is still available.'); }
     finally { lock(false); drawDiscovery(); }
   }
-  async function addDiscovered() {
+  async function addDiscovered(onlyUrl) {
     if (busy) return;
-    const selection = discovered.filter(row => discoveryPicked.has(row.url) && !savedJob(row.url));
+    const selection = discovered.filter(row => (typeof onlyUrl === 'string' ? row.url === onlyUrl : discoveryPicked.has(row.url)) && !savedJob(row.url));
     if (!selection.length) return;
     if (selection.length > 100) { searchStatus('Add up to 100 selected ads at a time.'); return; }
     const folder = el('SearchFolder').value; let added = 0, skipped = 0, failure = '';
@@ -423,6 +439,14 @@
   }
   window.addEventListener('message', event => {
     const data = event.data;
+    if (event.source === window && event.origin === location.origin && data?.type === 'CVSTUDIO_LINKEDIN_CAPTURE' && data.channel === channel && /^[a-f0-9]{32}$/.test(data.id || '')) {
+      if (!receivedCaptures.has(data.id)) {
+        if (receivedCaptures.size >= 20) receivedCaptures.delete(receivedCaptures.keys().next().value);
+        receivedCaptures.set(data.id,receiveCapture(data.record));
+      }
+      receivedCaptures.get(data.id).then(result => window.postMessage({type:'CVSTUDIO_LINKEDIN_CAPTURE_RESULT',id:data.id,channel,result},location.origin));
+      return;
+    }
     if (event.source !== window || event.origin !== location.origin || data?.type !== 'CVSTUDIO_LINKEDIN_RESPONSE' || data.channel !== channel) return;
     const item = pending.get(data.id); if (!item) return;
     clearTimeout(item.timer); pending.delete(data.id);
@@ -441,6 +465,27 @@
   async function prepareSource(data) {
     if (data?.description_html) data.description_rich = (await api({action:'format_content', description:data.description || '', description_html:data.description_html})).description_rich;
     return data;
+  }
+  async function receiveCapture(raw) {
+    if (!ready || busy) return {error:'Wait for the current CV Studio action to finish, then add this ad again.'};
+    const url = typeof raw?.url === 'string' ? jobLink(raw.url) : '';
+    if (!url || raw.url !== url || typeof raw.company !== 'string' || !raw.company.trim() || raw.company.length > 200 ||
+        typeof raw.role !== 'string' || !raw.role.trim() || raw.role.length > 240) return {error:'The job details could not be confirmed.'};
+    const folder = el('SearchFolder').value;
+    lock(true);
+    try {
+      await load();
+      if (folder && !folderNames.includes(folder)) throw Error('Choose an existing destination folder in CV Studio.');
+      const data = await prepareSource({...raw});
+      const record = {url,company:data.company,role:data.role,location:data.location || '',date_posted:data.date_posted || '',
+        description:data.description || '',description_rich:data.description_rich || [],description_truncated:data.description_truncated === true,
+        folder,status:'new',contact:'',notes:'',follow_up:''};
+      const saved = await api({action:'save',record});
+      await load();
+      searchStatus(saved.duplicate ? 'This LinkedIn ad was already saved. Existing details were kept.' : 'Added from LinkedIn to ' + (folder || 'Unfiled') + '.');
+      return {ok:true,duplicate:!!saved.duplicate,folder:saved.record?.folder || ''};
+    } catch (error) { return {error:error.message}; }
+    finally { lock(false); }
   }
   async function fillFromLink(useBrowser = false, refreshContent = false) {
     if (busy) return;
@@ -496,6 +541,9 @@
   window.initJobLeads = async function () {
     if (ready) return;
     ready = true;
+    document.getElementById('viewJobLeads').dataset.companionChannel = channel;
+    el('PreviewRead').addEventListener('click',() => { const row = discovered.find(value => value.url === previewUrl); if (row) return previewDiscovered(row); });
+    el('PreviewSave').addEventListener('click',() => addDiscovered(previewUrl));
     el('SearchStart').addEventListener('click',startDiscovery);
     el('SearchStop').addEventListener('click',async () => {
       if (!discovering) return;
