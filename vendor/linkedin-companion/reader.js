@@ -288,7 +288,9 @@
   function jobSearchContext() {
     jobScope();
     const header = document.querySelector('[componentkey="searchResultsHeaderComponent"]');
-    const locations = header ? [...header.querySelectorAll('[role="button"][aria-expanded]')].filter(visible).map(text).filter(Boolean) : [];
+    const locationLabel = el => /^location(?:\s|$)/i.test(compact(el.getAttribute('aria-label')));
+    const locations = header ? [...header.querySelectorAll('[role="button"][aria-expanded]')].filter(el => visible(el) &&
+      (locationLabel(el) || [...el.querySelectorAll('[aria-label]')].some(label => visible(label) && locationLabel(label)))).map(text).filter(Boolean) : [];
     const fields = [...document.querySelectorAll('.jobs-search-box__location input, input[aria-label*="location" i], input[aria-label*="City" i]')].filter(visible).map(el => compact(el.value)).filter(Boolean);
     const values = [...new Set([...locations,...fields])];
     return {location:values.length === 1 ? values[0].slice(0,240) : ''};

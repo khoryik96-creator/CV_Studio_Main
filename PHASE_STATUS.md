@@ -4,6 +4,20 @@
 
 ## Release state
 
+- Owner-authorized merge corrective: v24.6.460 on
+  `codex/v24.6.459-job-ad-curation` / PR #231, including the v459 work below.
+  The automatic review caught expandable help/filter buttons being mistaken
+  for locations. Read-only live inspection confirmed those help controls beside
+  Malaysia. The reader now requires a visible Location accessibility label on
+  the control or its rendered child; unrelated controls cannot block discovery.
+  Conflicting locations still reject. A failing-before regression covers the
+  actual help controls and additional filters. See
+  `cv_studio_v24_6_460_job_location_review_fix_qa_report.md`. Full isolated
+  Windows gate: 1,737 passed, four skipped, 7,599 subtests; all 41 JavaScript
+  suites and source/native-dependency preflight plus 24 smoke assertions passed.
+  The owner-authorized merge awaits updated hosted checks. Installed app remains
+  untouched; automatic approval review blocked restarting the existing preview.
+
 - Owner-requested ad curation: v24.6.459,
   `codex/v24.6.459-job-ad-curation`, from merged v458 `f807c08` / PR #230.
   Job Leads has an in-app ad preview with full-read and single-ad save alongside
@@ -16,7 +30,8 @@
   four skipped, 7,599 subtests; all 41 JavaScript suites passed. Synthetic UI
   verifies preview/full content, selected-folder direct save and retained draft.
   See `cv_studio_v24_6_459_job_ad_curation_qa_report.md` for checks and live-test
-  limits. No push, PR, merge or installed app change.
+  limits. Pushed as PR #231 at the owner's merge request; the v460 review
+  corrective above addresses its automatic review finding before merge.
 
 - Owner-requested review fix: v24.6.458, merged via PR #230 as `f807c08`.
   `codex/v24.6.458-job-search-review-fix`, continuing unmerged v457 `ca9c92d`.

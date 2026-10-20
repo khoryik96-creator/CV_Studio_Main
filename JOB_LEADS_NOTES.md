@@ -261,6 +261,13 @@ Missing location UI waits within existing limits; a different location or
 changed keywords rejects with readable guidance. Open-search mode and all
 later reads retain strict filter identity, counters, deadlines and guards.
 
+The v460 review corrective identifies the modern location control through its
+visible Location accessibility label (on the control or its child). Other
+expandable header filters and the promoted-jobs/AI-search help controls are
+excluded. Read-only live inspection confirmed the nested label and both help
+controls. Multiple conflicting recognized locations still reject; unrecognized
+location UI remains loading within the existing budget.
+
 ## Verification (existing contracts)
 
 The v458 review corrective makes the numeric empty-result check match only a
