@@ -15,8 +15,9 @@ const root = path.resolve(__dirname, '..');
     [5, {id:5, url:'https://attacker.invalid/jobs/view/1234567890', status:'complete'}]
   ]);
   const chrome = {
+    storage:{session:{get:async()=>({}),set:async()=>{}}},
     action:{onClicked:{addListener:fn=>hooks.click=fn}, setBadgeText:async()=>{}},
-    tabs:{onRemoved:{addListener:()=>{}},onUpdated:{addListener:fn=>hooks.updated=fn}, query:async()=>[...tabs.values()], get:async id=>tabs.get(id),
+    tabs:{onRemoved:{addListener:()=>{}},onUpdated:{addListener:fn=>hooks.updated=fn},onActivated:{addListener:()=>{}}, query:async()=>[...tabs.values()], get:async id=>tabs.get(id),
       create:async()=>{throw Error('Job capture must never create a tab')}, update:async()=>{throw Error('Job capture must never navigate')}, remove:async()=>{throw Error('Job capture must never close a tab')}},
     scripting:{executeScript:async args=>{
       scriptCalls.push(args);
@@ -76,6 +77,7 @@ const root = path.resolve(__dirname, '..');
     }
     if(data.action==='lookup'){
       lookups++;
+      if(data.url.endsWith('/9999999990'))return {ok:!lookupError,json:async()=>lookupError?{error:'Synthetic public page read failure'}:{record:{url:data.url,company:'Other company',role:'Other role',location:'Penang',description:'Other description'}}};
       return {ok:!lookupError,json:async()=>lookupError?{error:'Synthetic public page read failure'}:{record:{url:data.url,company:'Read company',role:'Read role',location:'Kuala Lumpur',date_posted:'2026-10-02',description:missingDescription?'':'Job description',description_rich:[{tag:'p',children:[{tag:'strong',children:[{text:'Job description'}]}]}],description_truncated:true,contact:'Do not copy',status:'won',follow_up:'2030-01-01'}}};
     }
     if(data.action==='restore')return {ok:true,json:async()=>({added:0,skipped:records.length})};
@@ -154,5 +156,22 @@ const root = path.resolve(__dirname, '..');
   el('FolderFilter').value='Finance';el('FolderFilter').handlers.change();allowDiscard=false;await el('Clear').click();assert(!records.some(row=>row.deleted));
   allowDiscard=true;await el('Clear').click();assert(records.find(row=>row.folder==='Finance').deleted);assert(!records.find(row=>row.folder==='Technology').deleted);
   await el('ClearAll').click();assert(records.every(row=>row.deleted));assert.equal(el('Total').textContent,'0');
+  // Changing source identity must never save a new URL with the old ad's data.
+  await el('New').click();
+  const pasteJob=value=>el('url').handlers.paste({clipboardData:{getData:()=>value},preventDefault(){}});
+  await pasteJob(url);
+  el('contact').value='Contact for A';el('notes').value='Notes for A';el('company').value='Manual A correction';
+  el('folder').value='Priority';el('status').value='contacted';el('follow_up').value='2026-11-01';
+  allowDiscard=false;await pasteJob('https://www.linkedin.com/jobs/view/9999999990');
+  assert.equal(el('url').value,url,'cancel keeps the original ad identity');assert.equal(el('company').value,'Manual A correction');
+  allowDiscard=true;lookupError=true;await pasteJob('https://www.linkedin.com/jobs/view/9999999990');
+  assert.equal(el('url').value,url,'failed switch keeps the original ad identity');assert.equal(el('notes').value,'Notes for A');
+  lookupError=false;await pasteJob('https://www.linkedin.com/jobs/view/9999999990');
+  assert.equal(el('company').value,'Other company');assert.equal(el('role').value,'Other role');assert.equal(el('description').value,'Other description');
+  assert.equal(el('contact').value,'');assert.equal(el('notes').value,'');assert.equal(el('status').value,'new');assert.equal(el('date_posted').value,'');assert.equal(el('follow_up').value,'');assert.equal(el('folder').value,'Priority');
+  el('company').value='Manual B correction';await el('AutoFill').click();assert.equal(el('company').value,'Manual B correction','same-job manual corrections survive');
+  el('url').value='https://www.linkedin.com/jobs/view/1234567899';const oldRecords=JSON.stringify(records);
+  await el('Form').handlers.submit({preventDefault(){}});assert.equal(JSON.stringify(records),oldRecords,'Save cannot bypass source identity check');
+  assert.match(el('Message').textContent,/different job|different ad/i);
   console.log('Job Leads: capture binding/isolation, save/edit/search, duplicate/draft protection, paste-link autofill, optional manual contact/status/date preservation, failure, CSV and HTML safety passed');
 })().catch(error=>{console.error(error);process.exitCode=1});

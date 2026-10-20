@@ -11,8 +11,10 @@ reference, and is not imported by the main app.
 2. Expand **Connect the browser companion once**, download/extract its ZIP, and
    load the extracted folder through Chrome's **Load unpacked** control.
 3. Open CV Studio in Chrome and click the companion toolbar icon to connect that
-   specific app document. Reloading CV Studio or restarting the extension requires
-   reconnecting. No additional API key, pairing code or POC server is needed.
+   specific app document. Ordinary service-worker suspension retains that binding
+   and run limits after exact-document revalidation. Reloading CV Studio,
+   restarting Chrome, or reloading/updating the extension requires reconnecting.
+   No additional API key, pairing code or POC server is needed.
 4. Open a LinkedIn search tab, return to the module and refresh the tab list.
    Choose People search, Recruiter Lite or Recruiter and select the source tab.
    **Review the search already open** retains its existing filters.
@@ -49,6 +51,21 @@ There are no contact, message, project-save, profile-edit or JobAdder actions.
   Begin cannot reset the page budget. Only inactive, unchanged, extension-owned
   profile tabs are closed. No provider calls, AI keys, cookie access or HTTP
   exception to the main app guards exists in the companion.
+- Worker state uses the extension's `storage.session` memory, with the storage
+  permission and existing host allowlist. It retains only binding/run authority,
+  bounded observed URLs, counters and owned-tab identities; no keys, captured
+  profile content or provider requests. It is not local/sync/disk persistence,
+  and is not exposed to content scripts. Recovery validates the original live
+  document ID and never replays browser or paid actions. Storage failures stop
+  commands visibly. Clicking the toolbar again on the same live document cannot
+  reset an active run's budgets.
+- Activating or navigating a profile tab relinquishes extension ownership.
+  Every profile read/navigation checks ownership and current/pending URLs, with
+  another check after script injection. Normal extension-commanded navigation
+  (old committed URL, expected pending URL, loading) retains ownership and the
+  existing loading-poll behavior, including across suspension. Cleanup preserves
+  user-taken-over tabs. Interrupted temporary job tabs receive the same bounded
+  ownership tracking and conservative cleanup.
 
 The sealed 119-route hash is
 `da29d6476a2dc929fc3b4f06faae8bdffc7ce69261f58901b90de46d0b857e31`.
@@ -67,3 +84,7 @@ three 15-page controller modes with synthetic browser state. Native Chrome
 exercised the actual app UI with a simulated companion and provider. Live
 LinkedIn layouts, real extension installation and a paid DeepSeek call still
 require an owner-driven check. They are not implied by those automated results.
+`tests/test_linkedin_companion_lifecycle.js` also runs fresh-worker VMs sharing
+synthetic session storage, covering revalidation, limits, takeover, storage
+failure, loading transitions and cleanup. These are not genuine installed-Chrome
+worker suspension/extension-installation tests.

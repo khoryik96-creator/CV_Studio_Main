@@ -14,8 +14,9 @@ const root = path.resolve(__dirname, '..');
   ]);
   const url = 'https://www.linkedin.com/in/sample-person';
   const chrome = {
+    storage:{session:{get:async()=>({}),set:async()=>{}}},
     action: {onClicked:{addListener:fn=>callbacks.click=fn},setBadgeText:async()=>{}},
-    tabs: {onRemoved:{addListener:()=>{}},onUpdated:{addListener:()=>{}},
+    tabs: {onRemoved:{addListener:()=>{}},onUpdated:{addListener:()=>{}},onActivated:{addListener:()=>{}},
       query:async()=>[tabs.get(2)],get:async id=>{if(!tabs.has(id))throw Error('Missing');return tabs.get(id)},
       create:async({url})=>{const tab={id:++counter,url,active:false,status:'complete'};tabs.set(tab.id,tab);return tab},
       update:async(id,{url})=>{tabs.get(id).url=url},remove:async id=>tabs.delete(id)},

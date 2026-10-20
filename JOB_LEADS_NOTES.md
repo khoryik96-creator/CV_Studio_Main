@@ -10,6 +10,11 @@ sourcer and the locked historical Lead Finder.
   location and description load directly, including in the in-app browser.
   **Fill from link** retries the read. Existing manual entries are preserved.
   Review the details before saving; manual entry remains available.
+  Replacing an unsaved draft's job link asks before clearing its job-specific
+  fields. The folder is retained; a cancelled or failed read keeps the old URL
+  and details. Same-job manual corrections remain. Save independently rejects
+  a different URL that has not been loaded into this draft; saved leads require
+  New lead before switching to another job.
 - Optional fields: contact person, location, posting date, notes, status,
   follow-up date and retained job-description text. Contact is always manual and optional;
   status starts as New and follow-up dates are never inferred from the ad.

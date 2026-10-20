@@ -6,7 +6,8 @@ function fixture() {
   const tabs=new Map([[1,{id:1,url:'http://127.0.0.1:5000/',status:'complete',active:true}],
     [2,{id:2,url,status:'complete',active:false}],[3,{id:3,url:'https://www.linkedin.com/search/results/people/',status:'complete'}]]);
   const chrome={action:{onClicked:{addListener:fn=>hooks.arm=fn},setBadgeText:async()=>{}},
-    tabs:{onRemoved:{addListener:()=>{}},onUpdated:{addListener:fn=>hooks.updated=fn},
+    storage:{session:{get:async()=>({}),set:async()=>{}}},
+    tabs:{onRemoved:{addListener:()=>{}},onUpdated:{addListener:fn=>hooks.updated=fn},onActivated:{addListener:()=>{}},
       query:async()=>{if(state.queryWait)await state.queryWait;return [...tabs.values()]},
       get:async id=>{const row=tabs.get(id);if(!row)throw Error('Missing synthetic tab');return row},
       create:async args=>{state.created.push(args);const tab={id:++state.counter,url:args.url,active:args.active,status:state.loading?'loading':'complete'};tabs.set(tab.id,tab);return tab},

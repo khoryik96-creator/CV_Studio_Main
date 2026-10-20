@@ -4,6 +4,24 @@
 
 ## Release state
 
+- Current owner-authorized review corrective: v24.6.452,
+  `codex/v24.6.452-review-corrections`, from local v451 `c8c83af`.
+  Fixes all three independent findings: cross-job draft identity is confirmed
+  and Save-guarded; companion binding/run/budgets/ownership survive ordinary
+  worker suspension with exact-document revalidation; user-taken-over profile
+  tabs are relinquished before navigation/read/cleanup. Follow-up loading-state
+  regression was reproduced and fixed, preserving pending-target polling.
+  All 35 JavaScript suites, 12 lifecycle cases, 116 focused Python checks,
+  source/native-dependency preflight and 24-assertion smoke pass. Final
+  independent review: No findings. Synthetic actual UI verified cancel/switch/
+  save consistency; owner data and old drafts remain unchanged. Pinned isolated
+  test dependencies also resolve the three previous updater-test environment
+  failures without changing installer/runtime code. Final unfiltered Windows
+  gate: 1,716 passed, four skipped, 7,599 subtests, no failures or deselections.
+  Full gate details are in
+  `cv_studio_v24_6_452_review_corrective_qa_report.md`. Native installed-extension
+  lifecycle remains untested; no paid call, owner install update, push, PR or merge.
+
 - Current owner-authorized source work (2026-10-19): v24.6.451,
   `codex/v24.6.451-job-lead-organization`, from local v450 `20b1f25`.
   Job Leads adds internal folders, folder filtering, recoverable row/bulk Trash

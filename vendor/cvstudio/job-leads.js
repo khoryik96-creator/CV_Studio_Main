@@ -173,15 +173,20 @@
     const url = jobLink(el('url').value);
     if (!url) { status('Paste a LinkedIn job ad link to fill in its details.'); return; }
     if (editing && jobLink(editing.url) !== url) { status('Click New lead before filling a different job ad. Your current lead has been kept.'); return; }
+    const previousSource = lastReadUrl, changedSource = previousSource && previousSource !== url;
+    if (changedSource && !window.confirm('Use this different job ad? Its details will replace this draft, including contact, notes, status and dates. The folder will be kept.')) {
+      el('url').value = previousSource; status('The current job draft has been kept.'); return;
+    }
     const before = draft(); lock(true); status(useBrowser ? 'Reading this job ad in Chrome…' : 'Reading public LinkedIn job details…');
     try {
       const data = await prepareSource(useBrowser ? await rpc('jobFromLink', {url}) : (await api({action:'lookup', url})).record);
       if (jobLink(data?.url || '') !== url || !data.company || !data.role) throw Error('The job details could not be confirmed. Use Read job ad or enter them manually.');
       if (refreshContent && !data.description?.trim()) throw Error('This ad did not provide readable content. Your current content has been kept.');
+      if (changedSource) { fill(null); el('folder').value = before.folder; }
       // Never fill contacts, notes, follow-up dates or BD status from ad text,
       // and preserve manual corrections already made to other populated fields.
       for (const key of ['company','role','location','date_posted','description']) {
-        if ((!before[key].trim() || refreshContent && key === 'description') && typeof data[key] === 'string') {
+        if ((changedSource || !before[key].trim() || refreshContent && key === 'description') && typeof data[key] === 'string') {
           el(key).value = data[key];
           if (key === 'description') { descriptionTruncated = data.description_truncated === true; descriptionRich = data.description_rich || []; }
         }
@@ -189,7 +194,7 @@
       descriptionHint();
       el('url').value = url; dirty = true; lastReadUrl = url;
       status('Job details filled in. Review them, optionally add a contact, then Save lead.' + (data.description_truncated ? ' The description is an excerpt.' : ''));
-    } catch (error) { status(error.message + ' Your draft has been kept.'); }
+    } catch (error) { if (changedSource) el('url').value = previousSource; status(error.message + ' Your draft has been kept.'); }
     finally { lock(false); }
   }
   window.initJobLeads = async function () {
@@ -197,6 +202,7 @@
     ready = true;
     fields.forEach(key => el(key).addEventListener('input', () => {
       dirty = true;
+      if (key !== 'url' && !lastReadUrl) lastReadUrl = jobLink(el('url').value);
       if (key === 'description') { descriptionTruncated = false; descriptionRich = []; descriptionHint(); }
     }));
     el('AutoFill').addEventListener('click', () => fillFromLink());
@@ -211,6 +217,7 @@
       try {
         const result = await api({action:'format_content', description:plain, description_html:source});
         field.value = plain; descriptionRich = result.description_rich || []; descriptionTruncated = false; dirty = true; descriptionHint();
+        if (!lastReadUrl) lastReadUrl = jobLink(el('url').value);
         status('Job content pasted. Review it, then save the lead.');
       } catch (error) { status(error.message + ' Your draft has been kept.'); }
       finally { lock(false); }
@@ -224,6 +231,7 @@
     el('url').addEventListener('change', () => { const url = jobLink(el('url').value); if (url && url !== lastReadUrl) return fillFromLink(); });
     el('Form').addEventListener('submit', async event => {
       event.preventDefault(); if (busy) return;
+      if (lastReadUrl && jobLink(el('url').value) !== lastReadUrl) { status('This is a different job ad. Use Fill from link to replace the draft, or New lead to enter it manually. Your current details have been kept.'); return; }
       lock(true); status('Saving lead…');
       try {
         const value = await api({action:'save', record:{...draft(), ...(editing ? {id:editing.id, revision:editing.revision} : {})}});
