@@ -120,21 +120,26 @@ function event(change) {
 function live(bound, run) {
   if (stateFailed || connection !== bound || run && bound.run !== run) throw Error('The companion connection changed.');
 }
-function expectedLoading(tab, expected) { return tab.status === 'loading' && tab.pendingUrl === expected; }
+function sameOwnedPage(value, expected) {
+  // LinkedIn may add a single trailing slash while loading an observed profile.
+  // Do not equate query/hash changes, another identity or arbitrary redirects.
+  return value === expected || !!profile(expected) && !/[?#]/.test(expected) && value === expected.replace(/\/$/,'') + '/';
+}
+function expectedLoading(tab, expected) { return tab.status === 'loading' && sameOwnedPage(tab.pendingUrl, expected); }
 async function ownedTab(id) {
-  // An activated or redirected tab belongs to the user permanently, including
+  // An activated or differently redirected tab belongs to the user permanently, including
   // after it becomes inactive again. Event listeners persist that relinquishment.
   const expected = owned.get(id), tab = await chrome.tabs.get(id);
-  if (!expected || owned.get(id) !== expected || tab.active || tab.url !== expected && !expectedLoading(tab, expected) || tab.pendingUrl && tab.pendingUrl !== expected) {
+  if (!expected || owned.get(id) !== expected || tab.active || !sameOwnedPage(tab.url, expected) && !expectedLoading(tab, expected) || tab.pendingUrl && !sameOwnedPage(tab.pendingUrl, expected)) {
     if (owned.has(id)) { owned.delete(id); await persist(); }
-    throw Error('This profile tab was taken over. Start a new run to continue.');
+    throw safeError('The background profile tab changed or was opened manually. Your candidate list is kept. Start again and leave the background profile tabs untouched.');
   }
   return tab;
 }
 async function closeOwned(id, expected) {
   try {
     const tab = await chrome.tabs.get(id);
-    if (owned.get(id) === expected && !tab.active && tab.url === expected && (!tab.pendingUrl || tab.pendingUrl === expected)) await chrome.tabs.remove(id);
+    if (owned.get(id) === expected && !tab.active && sameOwnedPage(tab.url, expected) && (!tab.pendingUrl || sameOwnedPage(tab.pendingUrl, expected))) await chrome.tabs.remove(id);
   } catch {}
   if (owned.get(id) === expected) owned.delete(id);
 }
@@ -157,7 +162,7 @@ chrome.tabs.onRemoved.addListener(id => event(() => { const changed = connection
 chrome.tabs.onUpdated.addListener((id, change) => event(() => {
   let changed = false;
   if (id === connection?.tabId && change.status === 'loading') { connection = null; changed = true; }
-  if (owned.has(id) && change.url && change.url !== owned.get(id)) { owned.delete(id); changed = true; }
+  if (owned.has(id) && change.url && !sameOwnedPage(change.url, owned.get(id))) { owned.delete(id); changed = true; }
   return changed;
 }));
 chrome.tabs.onActivated.addListener(info => event(() => owned.delete(info.tabId)));
@@ -297,7 +302,8 @@ async function handle(message, sender) {
   }
   if (message.action === 'tabs') {
     const tabs = await chrome.tabs.query({url: 'https://www.linkedin.com/*'});
-    return tabs.map(tab => ({id: tab.id, url: tab.url, title: String(tab.title || 'LinkedIn').slice(0, 160), status: tab.status}));
+    return tabs.map(tab => ({id: tab.id, url: tab.url, title: String(tab.title || 'LinkedIn').slice(0, 160), status: tab.status,
+      lastAccessed:Number.isFinite(tab.lastAccessed) ? tab.lastAccessed : 0}));
   }
   if (message.action === 'begin') {
     if (jobCapture) throw Error('Wait for the job ad to finish reading first.');
@@ -373,7 +379,7 @@ async function handle(message, sender) {
     await persist(); live(bound, args.run_id);
     if (previous) {
       const current = await chrome.tabs.get(tab.id);
-      if (owned.get(tab.id) !== args.url || current.active || current.url !== previous || current.pendingUrl && current.pendingUrl !== previous) {
+      if (owned.get(tab.id) !== args.url || current.active || !sameOwnedPage(current.url, previous) || current.pendingUrl && !sameOwnedPage(current.pendingUrl, previous)) {
         owned.delete(tab.id); await persist(); throw Error('This profile tab was taken over.');
       }
     }
