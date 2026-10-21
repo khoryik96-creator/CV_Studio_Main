@@ -324,6 +324,22 @@ identity/size/type/auth restrictions, timeouts, ambiguity and concurrency checks
 The owner-reported public ad was verified end-to-end in the real in-app browser
 after v449; that does not establish all LinkedIn layouts or login-only access.
 
-The source preview on port 5074 uses isolated state kept across its own restarts.
-It is separate from the installed owner app on port 5000. The preview state path
-is retained only in ignored runtime configuration. No user data was used for QA.
+In v462 the preview reads both saved records and temporary search results.
+Reloading without an active search shows the first active saved ad; Preview on
+a saved card opens the search/preview panel, and direct LinkedIn additions select
+the affected saved ad immediately. Search still selects its first result and
+keeps its own counts and selection. Removed ads display In Trash without offering
+a duplicate save. Empty previews hide unavailable actions and explain the sources.
+Reading a full saved ad is temporary: it never updates the record or editing
+draft. Refresh reverts to authoritative saved content. Persisting updated content
+still requires Edit / view details, Refresh ad content, then Save changes.
+
+The v462 companion folder controls have consistent sizing, borders and spacing.
+Their inline-size isolation, recognized native column mount and explicit wrapping
+remain essential. Added keeps its reversible action in its accessible label and
+hover title. The four-file package and extension permissions are unchanged.
+
+The current source preview on port 5077 uses a verified SQLite snapshot of the
+earlier isolated preview state. The installed owner app on port 5000 is separate.
+Preview paths and QA screenshots remain in ignored runtime configuration. All
+interactive QA uses isolated fictional ads; no owner records were changed.

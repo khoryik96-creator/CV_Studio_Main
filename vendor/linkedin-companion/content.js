@@ -38,11 +38,12 @@
         const name = document.createElement('input'), saveFolder = document.createElement('button');
         let added = false, foldersLoaded = false, working = false;
         controls.dataset.cvstudioJobControls = '1'; controls.dataset.url = url;
-        controls.style.cssText = (floating ? 'position:fixed;bottom:28px;left:24px;z-index:1000;background:white;padding:12px;border:1px solid #ccc;border-radius:8px;' : 'padding:8px 0;') + 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;min-width:0;width:100%;contain:inline-size;white-space:normal;max-width:'+(floating?'min(320px,calc(100vw - 48px))':'100%')+';box-sizing:border-box';
+        const controlStyle = 'min-height:34px;border:1px solid #bdd7db;border-radius:8px;padding:7px 10px;font:600 12px/18px Arial,sans-serif;box-sizing:border-box;min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere;';
+        controls.style.cssText = (floating ? 'position:fixed;bottom:28px;left:24px;z-index:1000;box-shadow:0 6px 24px #123b4426;' : 'margin:8px 0 2px;') + 'background:#f4f9fa;border:1px solid #dcebed;border-radius:12px;padding:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;min-width:0;width:100%;contain:inline-size;white-space:normal;max-width:'+(floating?'min(340px,calc(100vw - 48px))':'100%')+';box-sizing:border-box';
         button.type = 'button'; button.textContent = 'Add to CV Studio';
-        button.style.cssText = 'background:#087c83;color:white;border:0;border-radius:6px;padding:7px 12px;font:600 13px Arial;cursor:pointer;min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere';
+        button.style.cssText = controlStyle + 'background:#087c83;color:white;border-color:#087c83;cursor:pointer;';
         folders.setAttribute('aria-label','Save to CV Studio folder'); folders.dataset.cvstudioJobFolder = '1';
-        folders.style.cssText = 'width:170px;max-width:100%;min-width:0;font:13px Arial;padding:5px;box-sizing:border-box';
+        folders.style.cssText = controlStyle + 'flex:1 1 145px;width:145px;background-color:white;color:#254c53;font-weight:400;padding-right:28px;appearance:none;background-image:linear-gradient(45deg,transparent 50%,#53747a 50%),linear-gradient(135deg,#53747a 50%,transparent 50%);background-position:calc(100% - 15px) 14px,calc(100% - 10px) 14px;background-size:5px 5px;background-repeat:no-repeat;cursor:pointer;white-space:nowrap;text-overflow:ellipsis;';
         const option = (text,value) => { const el=document.createElement('option');el.textContent=text;el.value=value;return el; };
         const choose = value => {
           preferredFolder=value;
@@ -52,12 +53,12 @@
           }
         };
         folders.append(option(preferredFolder === undefined ? 'CV Studio folder' : preferredFolder || 'Unfiled',preferredFolder || ''));
-        create.type='button';create.textContent='New folder';create.style.cssText='font:13px Arial;padding:5px;min-width:0;max-width:100%;white-space:normal';
+        create.type='button';create.textContent='+ New folder';create.style.cssText=controlStyle+'background:white;color:#08747c;cursor:pointer;';
         editor.hidden=true;editor.style.cssText='flex-basis:100%;min-width:0';
-        name.setAttribute('aria-label','New folder name');name.maxLength=80;name.style.cssText='width:170px;max-width:100%;min-width:0;font:13px Arial;box-sizing:border-box';
-        saveFolder.type='button';saveFolder.textContent='Create';editor.append(name,saveFolder);
-        note.style.cssText = 'font:12px Arial;color:#444;flex-basis:100%;min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere'; note.setAttribute('role','status');
-        const display = () => { button.textContent=added?'Added — click to remove':'Add to CV Studio';button.setAttribute('aria-pressed',String(added)); };
+        name.setAttribute('aria-label','New folder name');name.maxLength=80;name.style.cssText=controlStyle+'width:170px;background:white;color:#254c53;font-weight:400;margin:0 6px 6px 0;vertical-align:top;';
+        saveFolder.type='button';saveFolder.textContent='Create';saveFolder.style.cssText=controlStyle+'background:#087c83;border-color:#087c83;color:white;cursor:pointer;vertical-align:top;';editor.append(name,saveFolder);
+        note.style.cssText = 'font:12px/17px Arial,sans-serif;color:#526b70;flex-basis:100%;min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere'; note.setAttribute('role','status');
+        const display = () => { button.textContent=added?'Added':'Add to CV Studio';button.title=added?'Click to remove from CV Studio':'Add to CV Studio';button.setAttribute('aria-label',added?'Added — click to remove from CV Studio':'Add to CV Studio');button.setAttribute('aria-pressed',String(added)); };
         const populate = result => {
           folders.replaceChildren(option('Unfiled',''),...(result.folders || []).map(value=>option(value,value)));
           folders.value = preferredFolder !== undefined && ['',...(result.folders || [])].includes(preferredFolder) ? preferredFolder : result.folder || '';

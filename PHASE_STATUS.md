@@ -4,6 +4,21 @@
 
 ## Release state
 
+- Owner-requested companion control polish and Job Leads preview: v24.6.462,
+  `codex/v24.6.462-job-leads-polish-preview`, from merged v461 `854109b`.
+  Folder controls share consistent borders, spacing and sizing without changing
+  native card widths. Preview now reads saved ads after reload and selects direct
+  LinkedIn additions; saved cards also expose Preview. Full reads of saved ads are
+  temporary previews and preserve durable content and unsaved editing drafts.
+  Search results remain separate, with automatic first-result selection and
+  explicit preview switching. Full isolated Python: 1,737 passed, four skipped,
+  7,599 subtests; all 41 JavaScript suites, source/native-dependency preflight
+  and 24 source smoke assertions passed. Actual controller/backend and
+  content-script browser fixtures use sample data and simulated companion
+  transport; no live installed-companion claim. See
+  `cv_studio_v24_6_462_job_leads_preview_polish_qa_report.md`.
+  Local checkpoint only; no push, PR, merge or installed-app update.
+
 - Owner-requested LinkedIn ad controls: v24.6.461,
   `codex/v24.6.461-linkedin-ad-controls`, from merged v460 `0f80bc5`.
   Clicking Added removes the ad to recoverable Trash; adding again restores
@@ -19,8 +34,8 @@
   and 24 smoke assertions passed. Isolated real-controller/backend UI verified
   folder save, Trash, folder creation/restore and a preserved unsaved draft.
   Flex, narrow and grid card widths stayed identical after Add/error messages.
-  No installed-app update, owner-data change, push,
-  PR or merge. See `cv_studio_v24_6_461_linkedin_ad_controls_qa_report.md`.
+  Subsequently merged with owner authorization as PR #232, squash `854109b`.
+  See `cv_studio_v24_6_461_linkedin_ad_controls_qa_report.md`.
 
 - Owner-authorized merge corrective: v24.6.460 on
   `codex/v24.6.459-job-ad-curation` / PR #231, including the v459 work below.

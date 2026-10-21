@@ -62,7 +62,23 @@ function fixture(){
 }
 (async()=>{
   const f=fixture();await f.init();
-  assert.match(f.el('PreviewTitle').textContent,/Choose an ad/);
+  assert.equal(f.el('PreviewTitle').textContent,b.role,'a saved ad fills the preview after reload without repeating the search');
+  assert(f.el('PreviewContent').querySelectorAll('#text').some(node=>node.textContent==='Saved full content'));
+  assert.equal(f.el('PreviewSave').textContent,'Already saved');
+  const empty=fixture();empty.state.records=[];await empty.init();
+  assert.match(empty.el('PreviewTitle').textContent,/Choose an ad/);assert(empty.el('PreviewRead').hidden);assert(empty.el('PreviewSave').hidden);
+  const savedPreview=fixture();await savedPreview.init();
+  await savedPreview.el('List').querySelectorAll('button').find(button=>button.textContent==='Preview').click();
+  assert.equal(savedPreview.el('SearchPanel').open,true);
+  savedPreview.el('description').value='Unsaved description';savedPreview.el('notes').value='Unsaved notes';savedPreview.el('notes').handlers.input();
+  const beforeSaved=structuredClone(savedPreview.state.records);
+  await savedPreview.el('PreviewRead').click();
+  assert(savedPreview.el('PreviewContent').querySelectorAll('#text').some(node=>node.textContent==='Full captured job ad'));
+  assert.deepEqual(savedPreview.state.records,beforeSaved,'a full preview never overwrites a saved lead');
+  assert.deepEqual(savedPreview.requests.map(request=>request.action),['format_content'],'previewing does not issue record writes');
+  assert.equal(savedPreview.el('description').value,'Unsaved description');assert.equal(savedPreview.el('notes').value,'Unsaved notes');
+  await savedPreview.el('Refresh').click();
+  assert(savedPreview.el('PreviewContent').querySelectorAll('#text').some(node=>node.textContent==='Saved full content'),'refresh discards the temporary full read and shows authoritative saved content');
   f.el('url').value='https://www.linkedin.com/jobs/view/7777777777';f.el('company').value='Unsaved company';f.el('role').value='Unsaved role';
   f.el('notes').value='Keep unsaved notes';f.el('contact').value='Unsaved Contact';f.el('notes').handlers.input();
   await f.el('SearchStart').click();assert.match(f.el('SearchCount').textContent,/3 found/);
@@ -109,7 +125,10 @@ function fixture(){
   const many=fixture();await many.init();many.state.many=true;many.state.totalPages=15;many.el('SearchPages').value='15';await many.el('SearchStart').click();
   assert.match(many.el('SearchCount').textContent,/15 found/);assert.equal(many.calls.filter(call=>call.args.method==='nextJobSearch').length,14);
   const direct=fixture();await direct.init();direct.el('SearchFolder').value='Priority';direct.el('notes').value='Keep unsaved notes';direct.el('notes').handlers.input();
-  const incoming=job('3333333333');assert((await direct.capture(incoming)).ok);
+  const incoming=job('3333333333',{role:'Direct LinkedIn preview',description:'Content added from LinkedIn'});assert((await direct.capture(incoming)).ok);
+  assert.equal(direct.el('PreviewTitle').textContent,incoming.role);assert.equal(direct.el('SearchPanel').open,true);
+  assert(direct.el('PreviewContent').querySelectorAll('#text').some(node=>node.textContent===incoming.description));
+  assert.match(direct.el('SearchCount').textContent,/0 found/,'direct additions do not become temporary search results');
   const quick=direct.state.records.find(row=>row.url===incoming.url);assert.equal(quick.folder,'Priority');assert.equal(quick.contact,'');assert.equal(quick.notes,'');assert.equal(quick.status,'new');
   assert.equal(direct.el('notes').value,'Keep unsaved notes');
   assert((await direct.capture({...b,notes:'Do not overwrite'})).duplicate);assert.equal(direct.state.records[0].notes,'Important saved notes');
@@ -118,6 +137,7 @@ function fixture(){
   const folders=await direct.capture(b,{action:'folders'});assert.equal(folders.folders[0],'Priority');assert.equal(folders.saved,true);
   assert((await direct.capture(b,{action:'create_folder',folder:'SAP'})).ok);assert(direct.state.folders.includes('SAP'));assert.equal(direct.state.records.length,count,'creating a folder never adds an ad');
   assert((await direct.capture(b,{action:'remove'})).saved===false);assert(direct.state.records[0].deleted);assert.equal(direct.state.records[0].notes,'Important saved notes');
+  assert.equal(direct.el('PreviewSave').textContent,'In Trash');assert.equal(direct.el('PreviewSave').disabled,true);
   assert((await direct.capture(b,{action:'add',folder:'SAP'})).saved);assert.equal(direct.state.records[0].folder,'SAP');assert.equal(direct.state.records[0].deleted,false);assert.equal(direct.state.records[0].status,'contacted');assert.equal(direct.state.records[0].notes,'Important saved notes');
   await direct.capture(b,{action:'remove'});direct.state.failMove=true;const partial=await direct.capture(b,{action:'add',folder:'Priority'});assert.equal(partial.saved,true);assert.match(partial.warning,/folder move failure/);assert.equal(direct.state.records[0].folder,'SAP');direct.state.failMove=false;
   const writes=direct.requests.length;assert((await direct.capture(b,{action:'purge'})).error);assert((await direct.capture(b,null)).error);assert.equal(direct.requests.length,writes);
