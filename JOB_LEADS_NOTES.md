@@ -343,3 +343,31 @@ The current source preview on port 5077 uses a verified SQLite snapshot of the
 earlier isolated preview state. The installed owner app on port 5000 is separate.
 Preview paths and QA screenshots remain in ignored runtime configuration. All
 interactive QA uses isolated fictional ads; no owner records were changed.
+
+## Preview navigation and reversible removal (v24.6.468)
+
+The preview identifies its source and position: Saved ads or Search results.
+**Previous ad / Next ad** browse individual ads; saved navigation follows the
+current folder/search/status filters. Search navigation follows the selected ad
+across its 20-result pages. **Previous results page / Next results page** select
+the first result on the requested page and appear only when multiple pages exist.
+Without search results, the preview fills the available width.
+
+**Close preview** dismisses its content without changing saved records, selected
+results or an editing draft. Refreshing records or changing checkboxes does not
+reopen it. An explicit Preview action or a new search opens it again. Clearing
+search results also dismisses the preview instead of silently selecting a saved
+ad. These are temporary page controls; a fresh page still starts with its first
+matching saved ad as before.
+
+Saved previews offer **Move to Trash**, or **Restore ad** when already trashed.
+Both use the existing revision-guarded operations and draft-discard check. Saved
+browsing advances to the next matching record after success, or clears the
+preview when none remain. Failed or cancelled writes keep the current ad.
+Search previews retain their result and show its current Trash/restore state.
+No permanent deletion, implicit save, provider call, companion change or schema
+change is introduced. Companion direct-add/removal keeps its existing behavior.
+
+The v468 browser QA preview is isolated and contains fictional ads, with a
+simulated companion for search. It does not change the installed app or owner
+records. See the v468 QA report for the regression and live-browser checks.

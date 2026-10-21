@@ -20,7 +20,7 @@
   let folderNames = [];
   let discovered = [], discoveryPage = 0, discovering = false, discoveryStopped = false, discoveryRun = '';
   const discoveryPicked = new Set();
-  let previewUrl = '', previewCapture = null;
+  let previewUrl = '', previewCapture = null, previewSource = 'saved', previewDismissed = false;
   const receivedCaptures = new Map();
   let rows = [], editing = null, busy = false, dirty = false, page = 0, ready = false, lastReadUrl = '', descriptionTruncated = false, descriptionRich = [];
   const status = message => { el('Message').textContent = message; };
@@ -143,15 +143,16 @@
     el('ClearAll').disabled = busy || !rows.some(row => !row.deleted);
   }
   async function moveToTrash(selected, deleted, bulk = false) {
-    if (busy || !selected.length) return;
-    if (editing && selected.some(row => row.id === editing.id) && !discard()) return;
-    if (bulk && !window.confirm(`Move these ${selected.length} saved ads to Trash? You can restore them later.`)) return;
+    if (busy || !selected.length) return false;
+    if (editing && selected.some(row => row.id === editing.id) && !discard()) return false;
+    if (bulk && !window.confirm(`Move these ${selected.length} saved ads to Trash? You can restore them later.`)) return false;
     lock(true);
     try {
       await api({action:deleted ? 'trash' : 'untrash', records:selected.map(row => ({id:row.id, revision:row.revision}))});
       if (editing && selected.some(row => row.id === editing.id)) fill(null);
       await load(); status(deleted ? 'Moved to Trash. Choose Trash in the folder menu to restore.' : 'Lead restored to its folder.');
-    } catch (error) { status(error.message); }
+      return true;
+    } catch (error) { status(error.message); return false; }
     finally { lock(false); }
   }
   function syncFolders() {
@@ -274,9 +275,43 @@
   const searchStatus = value => { el('SearchStatus').textContent = value; };
   const savedJob = url => rows.find(row => jobLink(row.url) === url);
   const previewRow = () => previewCapture?.url === previewUrl ? previewCapture : savedJob(previewUrl) || discovered.find(row => row.url === previewUrl);
-  function selectPreview(url, scroll = false) {
-    previewUrl = url; drawDiscovery(); el('SearchPanel').open = true;
+  const previewSequence = () => previewSource === 'search' ? discovered : filtered();
+  function selectPreview(url, scroll = false, source = 'saved') {
+    previewUrl = url; previewSource = source; previewDismissed = false;
+    if (source === 'search') {
+      const index = discovered.findIndex(row => row.url === url);
+      if (index >= 0) discoveryPage = Math.floor(index/20);
+    }
+    drawDiscovery(); el('SearchPanel').open = true;
     if (scroll) el('Preview').scrollIntoView({block:'nearest',behavior:'smooth'});
+  }
+  function closePreview() {
+    if (busy) return;
+    previewUrl = ''; previewCapture = null; previewDismissed = true; drawDiscovery();
+  }
+  function navigatePreview(delta) {
+    if (busy || !previewRow()) return;
+    const sequence = previewSequence(), index = sequence.findIndex(row => row.url === previewUrl);
+    const next = sequence[index+delta];
+    if (next) selectPreview(next.url, false, previewSource);
+  }
+  function navigateResults(delta) {
+    if (busy) return;
+    const next = discoveryPage+delta;
+    if (next < 0 || next*20 >= discovered.length) return;
+    selectPreview(discovered[next*20].url, false, 'search');
+  }
+  async function managePreview() {
+    const saved = savedJob(previewUrl);
+    if (busy || !saved) return;
+    const source = previewSource, sequence = previewSequence();
+    const index = sequence.findIndex(row => row.url === saved.url);
+    const neighbor = sequence[index+1] || sequence[index-1];
+    if (!await moveToTrash([saved], !saved.deleted) || source === 'search') return;
+    const current = previewSequence();
+    const next = current.find(row => row.url === neighbor?.url) || current[0];
+    if (next) selectPreview(next.url, false, source);
+    else closePreview();
   }
   function discoveryControls() {
     for (const name of ['SearchStart','SearchRefresh','SearchMode','SearchQuery','SearchLocation','SearchPages','SearchSource','SearchFolder','SearchClear']) el(name).disabled = busy;
@@ -292,13 +327,24 @@
     el('SearchResults').querySelectorAll('button').forEach(button => { button.disabled = busy; });
     el('SearchResults').querySelectorAll('input').forEach(input => { input.disabled = busy || !!savedJob(input.value); });
     const preview = previewRow(), saved = preview && savedJob(preview.url);
+    const sequence = previewSequence(), index = sequence.findIndex(row => row.url === previewUrl);
     el('PreviewRead').hidden = !preview; el('PreviewSave').hidden = !preview;
     el('PreviewRead').disabled = busy || !preview;
     el('PreviewSave').disabled = busy || !preview || !!savedJob(preview.url);
     el('PreviewSave').textContent = saved ? saved.deleted ? 'In Trash' : 'Already saved' : 'Add this ad';
+    el('PreviewPrevious').disabled = busy || !preview || index <= 0;
+    el('PreviewNext').disabled = busy || !preview || index+1 >= sequence.length;
+    el('PreviewClose').hidden = !preview; el('PreviewClose').disabled = busy;
+    el('PreviewRemove').hidden = !saved; el('PreviewRemove').disabled = busy || !saved;
+    el('PreviewRemove').textContent = saved?.deleted ? 'Restore ad' : 'Move to Trash';
+    el('PreviewRemove').className = 'sec' + (saved?.deleted ? '' : ' job-lead-delete');
+    el('SearchPagination').hidden = discovered.length <= 20;
   }
   function drawPreview() {
     const row = previewRow(), saved = row && row === savedJob(row.url);
+    const sequence = previewSequence(), index = sequence.findIndex(item => item.url === previewUrl);
+    el('PreviewPosition').textContent = row ? (previewSource === 'search' ? 'Search results' : 'Saved ads') +
+      (index >= 0 ? ` · ${index+1} of ${sequence.length}` : ' · Outside current filters') : '';
     el('PreviewTitle').textContent = row?.role || 'Choose an ad to preview';
     el('PreviewCompany').textContent = row?.company || '';
     el('PreviewMeta').textContent = row ? [row.location,saved ? 'Saved ad content' : row.full ? 'Captured ad content' : 'Search summary · Read full ad for the description',row.description_truncated ? 'Excerpt' : ''].filter(Boolean).join(' · ') : '';
@@ -307,7 +353,9 @@
   function drawDiscovery() {
     const target = el('SearchResults'); target.replaceChildren();
     discoveryPage = Math.min(discoveryPage, Math.max(0,Math.ceil(discovered.length/20)-1));
-    if (!previewRow()) previewUrl = discovered[0]?.url || (!discovering && rows.find(row => !row.deleted)?.url) || '';
+    if (!previewRow() && !previewDismissed) previewUrl = previewSequence()[0]?.url || '';
+    el('SearchResults').hidden = !discovered.length;
+    el('Curation').className = 'job-leads-curation' + (!discovered.length ? ' no-search-results' : '');
     el('SearchCount').textContent = `${discovered.length} found · ${discoveryPicked.size} selected`;
     for (const row of discovered.slice(discoveryPage*20, (discoveryPage+1)*20)) {
       const card = node('article','','job-leads-discovery-card' + (row.url === previewUrl ? ' is-previewing' : ''));
@@ -323,7 +371,7 @@
         pick.append(input,document.createTextNode('Select')); actions.append(pick);
       }
       const link = node('a','Open on LinkedIn'); link.href = row.url; link.target = '_blank'; link.rel = 'noopener noreferrer'; actions.append(link);
-      const preview = node('button','Preview','sec'); preview.type = 'button'; preview.addEventListener('click',() => { if (!busy) selectPreview(row.url, true); }); actions.append(preview);
+      const preview = node('button','Preview','sec'); preview.type = 'button'; preview.addEventListener('click',() => { if (!busy) selectPreview(row.url, true, 'search'); }); actions.append(preview);
       const read = node('button','Read full ad','sec'); read.type = 'button'; read.addEventListener('click', () => previewDiscovered(row)); actions.append(read);
       card.append(actions);
       const details = node('details'), summary = node('summary',row.full ? 'View job ad content' : 'View search summary');
@@ -374,6 +422,7 @@
       if (companion.job_search !== true || !Number.isInteger(companion.job_search_revision) || companion.job_search_revision < 1) throw Error('Update and reload the latest companion, refresh CV Studio and LinkedIn, then reconnect this tab to enable the current job search. Updating CV Studio alone does not update the companion.');
       if (companion.busy) throw Error('Finish the current companion search or ad read before starting another search.');
       discoveryRun = hex(); discovered = []; discoveryPicked.clear(); discoveryPage = 0; previewUrl = ''; previewCapture = null;
+      previewSource = 'search'; previewDismissed = false;
       drawDiscovery(); searchStatus('Opening the LinkedIn job search in Chrome…');
       const source = await rpc('jobSearchBegin',{run_id:discoveryRun,query,location:where,max_pages:pages,use_open:useOpen,source_tab_id:Number(el('SearchSource').value)});
       checkDiscovery();
@@ -400,9 +449,9 @@
       discoveryRun = ''; discovering = false; lock(false); drawDiscovery();
     }
   }
-  async function previewDiscovered(row) {
+  async function previewDiscovered(row, source = 'search') {
     if (busy) return;
-    selectPreview(row.url);
+    selectPreview(row.url, false, source);
     lock(true); searchStatus('Reading the selected ad in Chrome…');
     try {
       const data = await prepareSource(await rpc('jobFromLink',{url:row.url}));
@@ -590,8 +639,12 @@
     ready = true;
     document.getElementById('viewJobLeads').dataset.companionChannel = channel;
     document.getElementById('viewJobLeads').dataset.companionActions = '1';
-    el('PreviewRead').addEventListener('click',() => { const row = previewRow(); if (row) return previewDiscovered(row); });
+    el('PreviewRead').addEventListener('click',() => { const row = previewRow(); if (row) return previewDiscovered(row, previewSource); });
     el('PreviewSave').addEventListener('click',() => addDiscovered(previewUrl));
+    el('PreviewPrevious').addEventListener('click',() => navigatePreview(-1));
+    el('PreviewNext').addEventListener('click',() => navigatePreview(1));
+    el('PreviewClose').addEventListener('click',closePreview);
+    el('PreviewRemove').addEventListener('click',managePreview);
     el('SearchStart').addEventListener('click',startDiscovery);
     el('SearchStop').addEventListener('click',async () => {
       if (!discovering) return;
@@ -610,9 +663,9 @@
       finally { lock(false); }
     });
     el('SearchAdd').addEventListener('click',addDiscovered);
-    el('SearchClear').addEventListener('click',() => { if (!busy) { discovered = []; discoveryPicked.clear(); discoveryPage = 0; previewUrl = ''; previewCapture = null; drawDiscovery(); searchStatus('Search results cleared. Your saved ads are kept.'); } });
-    el('SearchPrevious').addEventListener('click',() => { if (!busy) { discoveryPage--; drawDiscovery(); } });
-    el('SearchNext').addEventListener('click',() => { if (!busy) { discoveryPage++; drawDiscovery(); } });
+    el('SearchClear').addEventListener('click',() => { if (!busy) { discovered = []; discoveryPicked.clear(); discoveryPage = 0; closePreview(); searchStatus('Search results cleared. Your saved ads are kept.'); } });
+    el('SearchPrevious').addEventListener('click',() => navigateResults(-1));
+    el('SearchNext').addEventListener('click',() => navigateResults(1));
     el('SearchSelectPage').addEventListener('change',() => {
       if (busy) return;
       for (const row of discovered.slice(discoveryPage*20,(discoveryPage+1)*20).filter(row => !savedJob(row.url))) {
@@ -667,7 +720,11 @@
     });
     el('New').addEventListener('click', () => { if (!busy && discard()) { fill(null); status('Ready for another job ad.'); } });
     el('Refresh').addEventListener('click', async () => { if (busy) return; lock(true); try { await load(); status('Saved leads refreshed. Reopen a lead to load its latest changes.'); } catch (error) { status(error.message); } finally { lock(false); } });
-    for (const id of ['Search', 'Filter', 'FolderFilter']) el(id).addEventListener(id === 'Search' ? 'input' : 'change', () => { picked.clear(); page = 0; render(); });
+    for (const id of ['Search', 'Filter', 'FolderFilter']) el(id).addEventListener(id === 'Search' ? 'input' : 'change', () => {
+      picked.clear(); page = 0; render();
+      if (previewSource === 'saved' && !previewSequence().some(row => row.url === previewUrl)) { previewUrl = ''; previewCapture = null; }
+      drawDiscovery();
+    });
     el('FolderNew').addEventListener('click', () => { if (!busy) { el('FolderEditor').hidden = false; el('FolderName').focus(); } });
     el('FolderCancel').addEventListener('click', () => { if (!busy) { el('FolderEditor').hidden = true; el('FolderName').value = ''; } });
     el('FolderCreate').addEventListener('click', createFolder);

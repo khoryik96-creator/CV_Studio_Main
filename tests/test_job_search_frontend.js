@@ -17,7 +17,7 @@ function fixture(){
   let serial=0;
   const state={page:0,scroll:0,totalPages:2,hold:false,held:null,failSave:'',failRead:false,many:false,connected:true,searchCapable:true,searchRevision:1,busy:false,
     folders:['Priority'],records:[{...b,id:'e'.repeat(32),revision:2,contact:'Manual Contact',notes:'Important saved notes',status:'contacted',description:'Saved full content',created_at:'2026-10-01T00:00:00Z',folder:'',deleted:false,follow_up:''}]};
-  const window={addEventListener:(name,fn)=>events[name]=fn,confirm:()=>true,postMessage:message=>{
+  const window={addEventListener:(name,fn)=>events[name]=fn,confirm:()=>state.allowDiscard!==false,postMessage:message=>{
     if(message.type==='CVSTUDIO_LINKEDIN_CAPTURE_RESULT'){state.captureReply?.(message.result);state.captureReply=null;return}
     calls.push(message);const reply=(value,error)=>events.message({source:window,origin:location.origin,data:{type:'CVSTUDIO_LINKEDIN_RESPONSE',id:message.id,channel:message.channel,...(error?{error}:{result:value})}});
     if(message.action==='jobStatus')return reply({connected:state.connected,job_search:state.searchCapable,job_search_revision:state.searchRevision,version:'24.6.461',busy:state.busy});
@@ -28,7 +28,7 @@ function fixture(){
     if(message.action==='read'){
       if(message.args.method==='nextJobSearch'){state.page++;state.scroll=0;return reply(true)}
       if(message.args.method==='scrollJobSearch'){state.scroll++;return reply(true)}
-      const jobs=state.many?[job(String(2222222200+state.page))]:state.page===0?state.scroll?[a,b]:[a]:[b,c,job('999',{url:'https://attacker.invalid/jobs/view/999'})];
+      const jobs=state.many?Array.from({length:state.pageSize||1},(_,index)=>job(String(2222222200+state.page*(state.pageSize||1)+index),{role:'Found role '+index})):state.page===0?state.scroll?[a,b]:[a]:[b,c,job('999',{url:'https://attacker.invalid/jobs/view/999'})];
       const snapshot={jobs,signature:jobs.map(row=>row.url).join('|'),hasNext:state.page+1<state.totalPages,atBottom:state.many||state.page>0||!!state.scroll};
       if(state.hold&&state.page===1){state.held=()=>reply(snapshot);return}
       return reply(snapshot);
@@ -42,6 +42,7 @@ function fixture(){
     if(data.action==='format_content')return {ok:true,json:async()=>({description_rich:[{tag:'p',children:[{tag:'strong',children:[{text:data.description}]}]}]})};
     if(data.action==='create_folder'){if(!data.folder?.trim())return {ok:false,json:async()=>({error:'Enter a folder name.'})};if(!state.folders.includes(data.folder))state.folders.push(data.folder);return {ok:true,json:async()=>({folder:data.folder})};}
     if(['trash','untrash','move_folder'].includes(data.action)){
+      if(data.action==='trash'&&state.failTrash)return {ok:false,json:async()=>({error:'Synthetic stale ad revision'})};
       if(data.action==='move_folder'&&state.failMove)return {ok:false,json:async()=>({error:'Synthetic folder move failure'})};
       for(const selected of data.records){const row=state.records.find(row=>row.id===selected.id);assert.equal(row.revision,selected.revision);if(data.action==='move_folder')row.folder=data.folder;else row.deleted=data.action==='trash';row.revision++;}
       return {ok:true,json:async()=>({changed:data.records.length})};
@@ -65,6 +66,54 @@ function fixture(){
   assert.equal(f.el('PreviewTitle').textContent,b.role,'a saved ad fills the preview after reload without repeating the search');
   assert(f.el('PreviewContent').querySelectorAll('#text').some(node=>node.textContent==='Saved full content'));
   assert.equal(f.el('PreviewSave').textContent,'Already saved');
+  const browse=fixture();
+  const savedBase=structuredClone(browse.state.records[0]);
+  browse.state.records=[{...savedBase,folder:'Priority'},
+    {...savedBase,url:c.url,id:'c'.repeat(32),role:'Cloud Architect',folder:'Priority'},
+    {...savedBase,url:a.url,id:'a'.repeat(32),role:'Finance Lead',folder:'Other'}];
+  await browse.init();
+  assert.match(browse.el('PreviewPosition').textContent,/Saved ads.*1 of 3/);
+  assert(browse.el('PreviewPrevious').disabled);assert(!browse.el('PreviewNext').disabled);
+  assert(browse.el('SearchPagination').hidden,'empty search pagination is hidden while browsing saved ads');
+  await browse.el('PreviewNext').click();assert.equal(browse.el('PreviewTitle').textContent,'Cloud Architect');
+  await browse.el('PreviewPrevious').click();assert.equal(browse.el('PreviewTitle').textContent,b.role);
+  await browse.el('PreviewNext').click();await browse.el('PreviewNext').click();
+  assert.equal(browse.el('PreviewTitle').textContent,'Finance Lead');assert(browse.el('PreviewNext').disabled);
+  assert.equal(browse.requests.length,0,'browsing saved previews never writes records');
+  await browse.el('PreviewClose').click();assert.match(browse.el('PreviewTitle').textContent,/Choose an ad/);
+  await browse.el('Refresh').click();assert.match(browse.el('PreviewTitle').textContent,/Choose an ad/,'refresh does not reopen a dismissed preview');
+  await browse.el('List').children[0].querySelectorAll('button').find(button=>button.textContent==='Preview').click();
+  browse.el('FolderFilter').value='Priority';browse.el('FolderFilter').handlers.change();
+  assert.match(browse.el('PreviewPosition').textContent,/1 of 2/);await browse.el('PreviewNext').click();
+  assert.equal(browse.el('PreviewTitle').textContent,'Cloud Architect');assert(browse.el('PreviewNext').disabled,'saved navigation respects folder filters');
+  browse.state.failTrash=true;await browse.el('PreviewRemove').click();
+  assert.equal(browse.el('PreviewTitle').textContent,'Cloud Architect');assert.match(browse.el('Message').textContent,/stale ad revision/);
+  assert(!browse.state.records[1].deleted);browse.state.failTrash=false;
+  await browse.el('PreviewRemove').click();assert(browse.state.records[1].deleted);
+  assert.equal(browse.el('PreviewTitle').textContent,b.role,'removing a saved preview advances to the remaining ad');
+  assert.equal(browse.state.records[1].notes,savedBase.notes,'Trash preserves saved notes');
+  await browse.el('List').children[0].querySelectorAll('button').find(button=>button.textContent==='Edit / view details').click();
+  browse.el('notes').value='Unsaved editing notes';browse.el('notes').handlers.input();browse.state.allowDiscard=false;
+  const beforeCancel=browse.requests.length;await browse.el('PreviewRemove').click();
+  assert.equal(browse.requests.length,beforeCancel,'cancelled discard prevents removing the edited ad');
+  assert.equal(browse.el('notes').value,'Unsaved editing notes');assert(!browse.state.records[0].deleted);
+  browse.state.allowDiscard=true;await browse.el('PreviewRemove').click();
+  assert.match(browse.el('PreviewTitle').textContent,/Choose an ad/,'removing the last matching ad clears the preview');
+  assert(browse.el('PreviewRemove').hidden);assert.equal(browse.state.records[2].deleted,false,'ads outside the chosen folder are unchanged');
+  browse.el('FolderFilter').value='!trash';browse.el('FolderFilter').handlers.change();
+  await browse.el('List').children[0].querySelectorAll('button').find(button=>button.textContent==='Preview').click();
+  assert.equal(browse.el('PreviewRemove').textContent,'Restore ad');await browse.el('PreviewRemove').click();
+  assert.equal(browse.state.records[0].deleted,false,'a trashed preview restores through the existing guarded operation');
+  assert.equal(browse.state.records[0].notes,savedBase.notes);
+  const paging=fixture();paging.state.many=true;paging.state.totalPages=1;paging.state.pageSize=23;
+  await paging.init();await paging.el('SearchStart').click();assert.match(paging.el('PreviewPosition').textContent,/Search results.*1 of 23/);
+  assert(!paging.el('SearchPagination').hidden);assert(paging.el('PreviewRemove').hidden,'unsaved search ads cannot be trashed as saved records');
+  await paging.el('SearchNext').click();assert.equal(paging.el('PreviewTitle').textContent,'Found role 20');
+  await paging.el('PreviewPrevious').click();assert.equal(paging.el('PreviewTitle').textContent,'Found role 19');
+  assert(!paging.el('SearchNext').disabled,'ad navigation follows its result across results pages');
+  await paging.el('PreviewNext').click();assert.equal(paging.el('PreviewTitle').textContent,'Found role 20');
+  await paging.el('SearchPrevious').click();assert.equal(paging.el('PreviewTitle').textContent,'Found role 0');
+  assert.equal(paging.requests.length,0,'search preview navigation never saves or removes ads');
   const empty=fixture();empty.state.records=[];await empty.init();
   assert.match(empty.el('PreviewTitle').textContent,/Choose an ad/);assert(empty.el('PreviewRead').hidden);assert(empty.el('PreviewSave').hidden);
   const savedPreview=fixture();await savedPreview.init();
@@ -105,6 +154,7 @@ function fixture(){
   assert.equal(added.description,'Full captured job ad');assert.equal(added.description_rich[0].tag,'p');
   assert.equal(f.el('notes').value,'Keep unsaved notes','import does not replace the manual draft');
   await f.el('SearchClear').click();assert.equal(f.state.records.length,3);assert.match(f.el('SearchCount').textContent,/0 found/);
+  assert.match(f.el('PreviewTitle').textContent,/Choose an ad/,'Clear results does not silently select an unrelated saved ad');
   const badCalls=f.calls.length;f.el('SearchPages').value='16';await f.el('SearchStart').click();assert.equal(f.calls.length,badCalls);
   f.el('SearchPages').value='2';f.el('SearchMode').value='open';f.el('SearchMode').handlers.change();await f.el('SearchRefresh').click();
   f.el('SearchSource').value='20';f.el('SearchQuery').value='';await f.el('SearchStart').click();
@@ -149,6 +199,9 @@ function fixture(){
   assert.match((await direct.capture(b,{action:'add',folder:'Priority'})).error,/Finish editing/);
   assert.equal(direct.requests.length,protectedWrites);assert.equal(direct.state.records[0].deleted,false);assert.equal(direct.el('notes').value,'Keep this editing draft');
   const single=fixture();await single.init();await single.el('SearchStart').click();single.el('SearchSelectPage').checked=true;single.el('SearchSelectPage').handlers.change();
+  await single.el('PreviewClose').click();single.el('SearchSelectPage').handlers.change();
+  assert.match(single.el('PreviewTitle').textContent,/Choose an ad/,'changing selections does not reopen a dismissed preview');
+  assert.match(single.el('SearchCount').textContent,/2 selected/,'closing the preview retains selected results');
   await single.el('SearchResults').children[2].querySelectorAll('button').find(button=>button.textContent==='Preview').click();await single.el('PreviewSave').click();
   assert(single.state.records.some(row=>row.url===c.url));assert(!single.state.records.some(row=>row.url===a.url),'Add this ad does not save other selected results');
   console.log('Job search UI: multi-page scroll/deduplication, review-only capture, full previews, selected folder import, partial failure/retry, existing notes/drafts, open filters, Stop and 15-page bounds passed');

@@ -1488,6 +1488,10 @@
 .job-leads-discovery-card .job-leads-actions { margin-top:10px; }
 .job-leads-discovery .job-leads-pick input { min-width:16px; }
 .job-leads-curation { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.15fr); gap:20px; align-items:start; }
+.job-leads-curation.no-search-results { grid-template-columns:minmax(0,1fr); }
+.job-leads-preview-nav { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
+.job-leads-preview-pages { justify-content:space-between; margin-top:16px; }
+.job-leads-curation [hidden], .job-leads-pagination[hidden] { display:none; }
 .job-leads-preview { position:sticky; top:20px; border:1px solid var(--border); border-radius:10px; padding:18px; min-width:0; }
 .job-leads-preview h3 { margin:0 0 8px; font-size:17px; }
 .job-leads-preview .job-lead-ad-content { max-height:540px; overflow:auto; margin-top:16px; }

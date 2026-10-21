@@ -4,6 +4,18 @@
 
 ## Release state
 
+- Owner-requested Job Leads stuck-preview correction: v24.6.468 on
+  `codex/v24.6.468-job-preview-controls`, based on merged v467 `3528005`.
+  Individual ad navigation, preview dismissal and reversible Trash/restore now
+  work in the preview; result-page navigation changes the selected preview too.
+  Saved navigation respects filters, and clearing results does not select an
+  unrelated saved ad. Full isolated Windows Python: 1,750 passed, four skipped,
+  8,392 subtests; all 42 JavaScript suites passed. Actual browser verification
+  used fictional records and a simulated companion. Source/static/repository/
+  Windows native preflight and 24 smoke assertions passed. Source checkpoint only;
+  installed owner app/records unchanged, no new PR or merge requested yet.
+  See `cv_studio_v24_6_468_job_preview_controls_qa_report.md`.
+
 - Owner-authorized PR #235 automatic-review corrective: v24.6.467 on
   `codex/v24.6.465-blind-profile-summary-lists`. Blind source-summary recovery
   shares the complete established DOCX section vocabulary, keeping Experience,
