@@ -5,7 +5,7 @@ const row={url:'https://www.linkedin.com/jobs/view/1234567890',company:'Example 
 const copy=value=>JSON.parse(JSON.stringify(value));
 function fixture(){
   let hooks;
-  const state={session:{},created:[],removed:[],document:'bound',next:0,scroll:0,failWrite:false,reads:0,location:'Malaysia'};
+  const state={session:{},created:[],removed:[],document:'bound',next:0,scroll:0,failWrite:false,reads:0,location:'Malaysia',failInjection:false,failReader:false};
   const tabs=new Map([[1,{id:1,url:'http://127.0.0.1:5000/',status:'complete'}],[2,{id:2,url:search,status:'complete'}],[3,{id:3,url:'https://www.linkedin.com/search/results/people/',status:'complete'}]]);
   const chrome={storage:{session:{get:async key=>({[key]:copy(state.session[key]||null)}),set:async data=>{if(state.failWrite)throw Error('Synthetic storage failure');Object.assign(state.session,copy(data));}}},
     action:{onClicked:{addListener:fn=>hooks.arm=fn},setBadgeText:async()=>{}},
@@ -15,14 +15,15 @@ function fixture(){
       remove:async id=>{state.removed.push(id);tabs.delete(id)},update:async()=>{throw Error('Do not navigate existing tabs')}},
     scripting:{executeScript:async args=>{
       if(args.target.documentIds?.[0] && args.target.documentIds[0]!==state.document)throw Error('Stale document');
-      if(args.files){if(state.onInject)state.onInject();return [{}]}
+      if(args.files){if(state.failInjection)throw Error('PRIVATE synthetic path and detail');if(state.onInject)state.onInject();return [{}]}
       if(!args.args)return [{result:true,documentId:state.document}];
       const method=args.args[0];
+      if(state.failReader)throw Error('PRIVATE synthetic document and detail');
       if(method==='jobSearchContext')return [{result:{location:state.location}}];
       if(method==='nextJobSearch'){state.next++;return [{result:true}]}
       if(method==='scrollJobSearch'){state.scroll++;return [{result:true}]}
       state.reads++;return [{result:{url:tabs.get(args.target.tabId).url,jobs:[row],signature:row.url,hasNext:true,paginationKnown:true,atBottom:true}}];
-    }},runtime:{onMessage:{addListener:fn=>hooks.message=fn}}};
+    }},runtime:{getManifest:()=>({version:'24.6.461'}),onMessage:{addListener:fn=>hooks.message=fn}}};
   const boot=()=>{hooks={};vm.runInContext(worker,vm.createContext({chrome,URL,Map,Set,Date,console,setTimeout,clearTimeout}));};boot();
   const sender=()=>({tab:{id:1},documentId:state.document,url:tabs.get(1).url});
   const rpc=(action,args={},who=sender())=>new Promise(resolve=>hooks.message({kind:'sourcer',action,args},who,resolve));
@@ -33,6 +34,7 @@ function fixture(){
 (async()=>{
   const f=fixture();assert((await f.begin()).error);assert.equal(f.state.created.length,0);await f.arm();
   const started=await f.begin();assert(started.result?.tab_id,'bound job search begins');const id=started.result.tab_id;
+  const status=(await f.rpc('jobStatus')).result;assert.equal(status.version,'24.6.461');assert.equal(status.job_search_revision,1,'readiness identifies the current reader/search contract');
   assert.equal(f.state.created.length,1);assert.equal(new URL(f.state.created[0].url).searchParams.get('keywords'),'finance');
   assert.equal(new URL(f.state.created[0].url).searchParams.get('location'),'Malaysia');
   assert.equal(f.tabs.get(2).url,search,'existing tabs are never repurposed');
@@ -71,5 +73,11 @@ function fixture(){
   const changed=fixture();await changed.arm();const ci=(await changed.begin()).result.tab_id;
   changed.tabs.get(ci).url='https://www.linkedin.com/jobs/search-results/?keywords=other';assert((await changed.read(ci)).error,'initial normalization cannot change keywords');
   assert.equal(changed.state.reads,0);
+  for(const initial of [true,false])for(const kind of ['failInjection','failReader']){
+    const broken=fixture();await broken.arm();const bi=(await broken.begin(initial?{}:{use_open:true,source_tab_id:2})).result.tab_id;broken.state[kind]=true;
+    const error=(await broken.read(bi)).error;
+    assert.match(error,/LinkedIn|reader/,'the failed browser step is actionable');assert(!error.includes('PRIVATE'),'raw injection errors never leave the worker');
+    assert.match(error,kind==='failInjection'?/reader could not start/:/could not be read/);
+  }
   console.log('Job search companion: authority, source/run isolation, validated queries, suspension-safe page/scroll bounds, filter redirects and retained search tabs passed');
 })().catch(error=>{console.error(error);process.exitCode=1});

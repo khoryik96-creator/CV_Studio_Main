@@ -15,12 +15,12 @@ function fixture(){
   const el=name=>document.getElementById('jobLeads'+name),location={origin:'http://127.0.0.1:5000',search:''};
   el('FolderFilter').value='*';el('SearchPages').value='2';el('SearchMode').value='new';el('SearchQuery').value='finance';el('SearchLocation').value='Malaysia';
   let serial=0;
-  const state={page:0,scroll:0,totalPages:2,hold:false,held:null,failSave:'',failRead:false,many:false,connected:true,searchCapable:true,busy:false,
-    records:[{...b,id:'e'.repeat(32),revision:2,contact:'Manual Contact',notes:'Important saved notes',status:'contacted',description:'Saved full content',created_at:'2026-10-01T00:00:00Z',folder:'',deleted:false,follow_up:''}]};
+  const state={page:0,scroll:0,totalPages:2,hold:false,held:null,failSave:'',failRead:false,many:false,connected:true,searchCapable:true,searchRevision:1,busy:false,
+    folders:['Priority'],records:[{...b,id:'e'.repeat(32),revision:2,contact:'Manual Contact',notes:'Important saved notes',status:'contacted',description:'Saved full content',created_at:'2026-10-01T00:00:00Z',folder:'',deleted:false,follow_up:''}]};
   const window={addEventListener:(name,fn)=>events[name]=fn,confirm:()=>true,postMessage:message=>{
     if(message.type==='CVSTUDIO_LINKEDIN_CAPTURE_RESULT'){state.captureReply?.(message.result);state.captureReply=null;return}
     calls.push(message);const reply=(value,error)=>events.message({source:window,origin:location.origin,data:{type:'CVSTUDIO_LINKEDIN_RESPONSE',id:message.id,channel:message.channel,...(error?{error}:{result:value})}});
-    if(message.action==='jobStatus')return reply({connected:state.connected,job_search:state.searchCapable,busy:state.busy});
+    if(message.action==='jobStatus')return reply({connected:state.connected,job_search:state.searchCapable,job_search_revision:state.searchRevision,version:'24.6.461',busy:state.busy});
     if(message.action==='jobSearchTabs')return reply([{id:20,title:'Open filtered jobs',url:'https://www.linkedin.com/jobs/search/?keywords=finance&f_WT=2'}]);
     if(message.action==='jobSearchBegin'){state.page=0;state.scroll=0;return reply({tab_id:20})}
     if(message.action==='end')return reply(true);
@@ -37,9 +37,15 @@ function fixture(){
   }};
   const fetch=async(endpoint,options)=>{
     assert.equal(endpoint,'/job-leads','search must not call a paid route');
-    if(!options?.body)return {ok:true,json:async()=>({records:structuredClone(state.records),folders:['Priority']})};
+    if(!options?.body)return {ok:true,json:async()=>({records:structuredClone(state.records),folders:[...state.folders]})};
     const data=JSON.parse(options.body);requests.push(data);
     if(data.action==='format_content')return {ok:true,json:async()=>({description_rich:[{tag:'p',children:[{tag:'strong',children:[{text:data.description}]}]}]})};
+    if(data.action==='create_folder'){if(!data.folder?.trim())return {ok:false,json:async()=>({error:'Enter a folder name.'})};if(!state.folders.includes(data.folder))state.folders.push(data.folder);return {ok:true,json:async()=>({folder:data.folder})};}
+    if(['trash','untrash','move_folder'].includes(data.action)){
+      if(data.action==='move_folder'&&state.failMove)return {ok:false,json:async()=>({error:'Synthetic folder move failure'})};
+      for(const selected of data.records){const row=state.records.find(row=>row.id===selected.id);assert.equal(row.revision,selected.revision);if(data.action==='move_folder')row.folder=data.folder;else row.deleted=data.action==='trash';row.revision++;}
+      return {ok:true,json:async()=>({changed:data.records.length})};
+    }
     assert.equal(data.action,'save');
     if(data.record.url===state.failSave)return {ok:false,json:async()=>({error:'Synthetic storage limit'})};
     const duplicate=state.records.find(row=>row.url===data.record.url);
@@ -50,8 +56,8 @@ function fixture(){
   const context=vm.createContext({window,document,location,fetch,URL,URLSearchParams,Blob,Map,Set,Date,crypto:{randomUUID:()=>String(++serial).padStart(32,'0')},
     setTimeout:(fn,ms)=>setTimeout(fn,ms===350?0:ms),clearTimeout,Option:function(text,value){const node=new Element('option',text);node.value=value;return node}});
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../vendor/cvstudio/job-leads.js'),'utf8'),context);
-  return {el,state,calls,requests,init:()=>window.initJobLeads(),capture:record=>new Promise(resolve=>{
-    state.captureReply=resolve;events.message({source:window,origin:location.origin,data:{type:'CVSTUDIO_LINKEDIN_CAPTURE',channel:document.getElementById('viewJobLeads').dataset.companionChannel,id:String(++serial).padStart(32,'0'),record}});
+  return {el,state,calls,requests,init:()=>window.initJobLeads(),capture:(record,request)=>new Promise(resolve=>{
+    state.captureReply=resolve;events.message({source:window,origin:location.origin,data:{type:'CVSTUDIO_LINKEDIN_CAPTURE',channel:document.getElementById('viewJobLeads').dataset.companionChannel,id:String(++serial).padStart(32,'0'),record,request}});
   })};
 }
 (async()=>{
@@ -87,12 +93,13 @@ function fixture(){
   f.el('SearchPages').value='2';f.el('SearchMode').value='open';f.el('SearchMode').handlers.change();await f.el('SearchRefresh').click();
   f.el('SearchSource').value='20';f.el('SearchQuery').value='';await f.el('SearchStart').click();
   assert(f.calls.some(call=>call.action==='jobSearchBegin'&&call.args.use_open&&call.args.source_tab_id===20));
-  for(const patch of [{connected:false},{searchCapable:false},{busy:true}]){
-    Object.assign(f.state,{connected:true,searchCapable:true,busy:false},patch);
+  for(const patch of [{connected:false},{searchCapable:false},{searchRevision:undefined},{searchRevision:0},{searchRevision:'1'},{busy:true}]){
+    Object.assign(f.state,{connected:true,searchCapable:true,searchRevision:1,busy:false},patch);
     const before=f.calls.length;await f.el('SearchStart').click();
     assert.deepEqual(f.calls.slice(before).map(call=>call.action),['jobStatus'],'unavailable/busy/old companions never open or end a search');
     assert.match(f.el('SearchCount').textContent,/3 found/,'readiness failures keep the prior results');
     assert.equal(f.el('SearchStart').disabled,false);
+    if('searchRevision' in patch)assert.match(f.el('SearchStatus').textContent,/Update and reload/);
   }
   const stopped=fixture();await stopped.init();stopped.state.hold=true;const running=stopped.el('SearchStart').click();
   for(let attempt=0;attempt<50&&!stopped.state.held;attempt++)await new Promise(resolve=>setTimeout(resolve,5));
@@ -108,6 +115,19 @@ function fixture(){
   assert((await direct.capture({...b,notes:'Do not overwrite'})).duplicate);assert.equal(direct.state.records[0].notes,'Important saved notes');
   const count=direct.state.records.length;assert((await direct.capture(job('9',{url:'https://attacker.invalid/jobs/view/9'}))).error);assert.equal(direct.state.records.length,count);
   direct.state.failSave=a.url;assert((await direct.capture(a)).error);assert.equal(direct.el('notes').value,'Keep unsaved notes');
+  const folders=await direct.capture(b,{action:'folders'});assert.equal(folders.folders[0],'Priority');assert.equal(folders.saved,true);
+  assert((await direct.capture(b,{action:'create_folder',folder:'SAP'})).ok);assert(direct.state.folders.includes('SAP'));assert.equal(direct.state.records.length,count,'creating a folder never adds an ad');
+  assert((await direct.capture(b,{action:'remove'})).saved===false);assert(direct.state.records[0].deleted);assert.equal(direct.state.records[0].notes,'Important saved notes');
+  assert((await direct.capture(b,{action:'add',folder:'SAP'})).saved);assert.equal(direct.state.records[0].folder,'SAP');assert.equal(direct.state.records[0].deleted,false);assert.equal(direct.state.records[0].status,'contacted');assert.equal(direct.state.records[0].notes,'Important saved notes');
+  await direct.capture(b,{action:'remove'});direct.state.failMove=true;const partial=await direct.capture(b,{action:'add',folder:'Priority'});assert.equal(partial.saved,true);assert.match(partial.warning,/folder move failure/);assert.equal(direct.state.records[0].folder,'SAP');direct.state.failMove=false;
+  const writes=direct.requests.length;assert((await direct.capture(b,{action:'purge'})).error);assert((await direct.capture(b,null)).error);assert.equal(direct.requests.length,writes);
+  assert.equal(direct.el('notes').value,'Keep unsaved notes','folder creation/removal/restore preserve the manual draft');
+  const editingCard=direct.el('List').children.find(card=>card.querySelectorAll('a').some(link=>link.href===b.url));
+  await editingCard.querySelectorAll('button').find(button=>button.textContent==='Edit / view details').click();
+  direct.el('notes').value='Keep this editing draft';direct.el('notes').handlers.input();const protectedWrites=direct.requests.length;
+  assert.match((await direct.capture(b,{action:'remove'})).error,/Finish editing/);
+  assert.match((await direct.capture(b,{action:'add',folder:'Priority'})).error,/Finish editing/);
+  assert.equal(direct.requests.length,protectedWrites);assert.equal(direct.state.records[0].deleted,false);assert.equal(direct.el('notes').value,'Keep this editing draft');
   const single=fixture();await single.init();await single.el('SearchStart').click();single.el('SearchSelectPage').checked=true;single.el('SearchSelectPage').handlers.change();
   await single.el('SearchResults').children[2].querySelectorAll('button').find(button=>button.textContent==='Preview').click();await single.el('PreviewSave').click();
   assert(single.state.records.some(row=>row.url===c.url));assert(!single.state.records.some(row=>row.url===a.url),'Add this ad does not save other selected results');

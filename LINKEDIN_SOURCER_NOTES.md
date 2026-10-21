@@ -95,6 +95,14 @@ See Job Leads notes for the bounded initial search-location handshake and
 preview/direct-capture test coverage. Updating needs both app and LinkedIn
 pages refreshed after the companion files are replaced/reloaded.
 
+The v461 direct controls also select/create local folders and reversibly remove
+saved ads through the bound app's existing guarded actions. New local-page
+capability checks prevent old pages interpreting these commands as adds. Cards
+mount controls in an existing text column; native layout/styles and profile
+actions remain unchanged. Folder operations/removal require both updated app and
+companion, refreshed pages and reconnection. See Job Leads notes for restore,
+partial-failure and editing-draft behavior.
+
 `tests/test_linkedin_sourcer.py` exercises the service, real guarded route,
 download, provider/cost wiring and cancellation with mocked transport.
 `tests/test_linkedin_sourcer_frontend.js` exercises companion authority and all

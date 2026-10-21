@@ -270,6 +270,39 @@ location UI remains loading within the existing budget.
 
 ## Verification (existing contracts)
 
+### LinkedIn controls (v24.6.461)
+
+The owner confirmed that updating/reloading the wrong companion version resolved
+the missing-results report. Readiness now reports the manifest version and an
+explicit current-search revision; older companions stop before results are cleared
+or a source tab opens. Known reader-start/read failures return fixed guidance,
+without exposing raw browser errors or document information.
+
+LinkedIn cards place controls in an existing vertical text column. They never
+add a competing flex-row column or change native card styles; unrecognized
+horizontal/grid containers receive no inline controls. Summary extraction excludes
+the injected controls even when a native footer follows them.
+
+Added is a reversible toggle: removal calls the established revision-guarded
+Trash operation, and explicit Add restores the same stored lead. Contact, notes,
+status and follow-up details remain. A selected destination can move the restored
+lead afterward through the existing guarded operation. If restore succeeds but a
+subsequent move fails, the result stays Added in its actual folder with a visible
+warning; no write is replayed. A lead currently open for editing in CV Studio
+cannot be removed/moved through the companion, preserving that draft.
+
+The LinkedIn folder selector loads from the exact connected Job Leads tab.
+New folder creates a folder without saving an ad and selects it for subsequent
+adds. Chosen folders carry across the page's controls. All operations still require
+an explicit trusted interaction, a visible canonical ad, exact source/destination
+documents and an idle companion. Folder names are rendered as text. No new route,
+schema, permission, LinkedIn write or provider call exists.
+
+Both the v461 app and companion are needed for folders/removal. An older local
+page rejects management commands visibly rather than treating them as legacy
+adds. Existing ordinary direct-add messages remain compatible. Replace/reload
+the companion files, refresh both pages and reconnect the intended app tab.
+
 The v458 review corrective makes the numeric empty-result check match only a
 standalone zero count. A header such as `10 jobs`, `100 jobs` or `1,000 jobs`
 can appear before its cards; that remains a loading snapshot rather than ending

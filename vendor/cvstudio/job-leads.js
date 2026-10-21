@@ -362,7 +362,7 @@
       const companion = await rpc('jobStatus',{},1000).catch(() => null);
       checkDiscovery();
       if (!companion?.connected) throw Error('The companion is not connected to this tab. Open this CV Studio address in Chrome, reload the latest companion and click its toolbar icon. LinkedIn job search cannot run inside the Codex preview.');
-      if (companion.job_search !== true) throw Error('Update and reload the latest companion, then reconnect this tab to enable LinkedIn job search.');
+      if (companion.job_search !== true || !Number.isInteger(companion.job_search_revision) || companion.job_search_revision < 1) throw Error('Update and reload the latest companion, refresh CV Studio and LinkedIn, then reconnect this tab to enable the current job search. Updating CV Studio alone does not update the companion.');
       if (companion.busy) throw Error('Finish the current companion search or ad read before starting another search.');
       discoveryRun = hex(); discovered = []; discoveryPicked.clear(); discoveryPage = 0;
       drawDiscovery(); searchStatus('Opening the LinkedIn job search in Chrome…');
@@ -442,7 +442,7 @@
     if (event.source === window && event.origin === location.origin && data?.type === 'CVSTUDIO_LINKEDIN_CAPTURE' && data.channel === channel && /^[a-f0-9]{32}$/.test(data.id || '')) {
       if (!receivedCaptures.has(data.id)) {
         if (receivedCaptures.size >= 20) receivedCaptures.delete(receivedCaptures.keys().next().value);
-        receivedCaptures.set(data.id,receiveCapture(data.record));
+        receivedCaptures.set(data.id,receiveCapture(data.record,data.request));
       }
       receivedCaptures.get(data.id).then(result => window.postMessage({type:'CVSTUDIO_LINKEDIN_CAPTURE_RESULT',id:data.id,channel,result},location.origin));
       return;
@@ -466,16 +466,46 @@
     if (data?.description_html) data.description_rich = (await api({action:'format_content', description:data.description || '', description_html:data.description_html})).description_rich;
     return data;
   }
-  async function receiveCapture(raw) {
+  async function receiveCapture(raw, request = {}) {
     if (!ready || busy) return {error:'Wait for the current CV Studio action to finish, then add this ad again.'};
+    if (!request || typeof request !== 'object' || Array.isArray(request)) return {error:'Choose a valid job-ad action.'};
     const url = typeof raw?.url === 'string' ? jobLink(raw.url) : '';
     if (!url || raw.url !== url || typeof raw.company !== 'string' || !raw.company.trim() || raw.company.length > 200 ||
         typeof raw.role !== 'string' || !raw.role.trim() || raw.role.length > 240) return {error:'The job details could not be confirmed.'};
-    const folder = el('SearchFolder').value;
+    const action = request.action === undefined ? 'add' : request.action;
+    if (!['add','remove','folders','create_folder'].includes(action) || request.folder !== undefined &&
+        (typeof request.folder !== 'string' || request.folder.length > 80 || /[\x00-\x1f]/.test(request.folder))) return {error:'Choose a valid job-ad action and folder.'};
+    const folder = request.folder === undefined ? el('SearchFolder').value : request.folder;
+    let changed = false;
     lock(true);
     try {
       await load();
+      let existing = rows.find(row => row.url === url);
+      if (action === 'folders') return {ok:true,folders:[...folderNames],folder:existing && !existing.deleted ? existing.folder : el('SearchFolder').value,saved:!!existing && !existing.deleted};
+      if (action === 'create_folder') {
+        const created = await api({action:'create_folder',folder});
+        await load();
+        return {ok:true,folders:[...folderNames],folder:created.folder,saved:!!existing && !existing.deleted};
+      }
+      if (editing && existing?.id === editing.id) throw Error('Finish editing this ad in CV Studio before changing it from LinkedIn. Your draft has been kept.');
+      if (action === 'remove') {
+        if (existing && !existing.deleted) await api({action:'trash',records:[{id:existing.id,revision:existing.revision}]});
+        await load(); searchStatus('Removed from LinkedIn selection. The ad can be restored from Trash.');
+        return {ok:true,saved:false,folder:existing?.folder || ''};
+      }
       if (folder && !folderNames.includes(folder)) throw Error('Choose an existing destination folder in CV Studio.');
+      if (existing) {
+        if (existing.deleted) {
+          await api({action:'untrash',records:[{id:existing.id,revision:existing.revision}]}); changed = true;
+          await load(); existing = rows.find(row => row.url === url);
+        }
+        if (request.folder !== undefined && existing.folder !== folder) {
+          await api({action:'move_folder',folder,records:[{id:existing.id,revision:existing.revision}]}); changed = true;
+          await load(); existing = rows.find(row => row.url === url);
+        }
+        searchStatus('This LinkedIn ad is saved in ' + (existing.folder || 'Unfiled') + '. Existing details were kept.');
+        return {ok:true,duplicate:true,saved:true,folder:existing.folder || ''};
+      }
       const data = await prepareSource({...raw});
       const record = {url,company:data.company,role:data.role,location:data.location || '',date_posted:data.date_posted || '',
         description:data.description || '',description_rich:data.description_rich || [],description_truncated:data.description_truncated === true,
@@ -483,8 +513,14 @@
       const saved = await api({action:'save',record});
       await load();
       searchStatus(saved.duplicate ? 'This LinkedIn ad was already saved. Existing details were kept.' : 'Added from LinkedIn to ' + (folder || 'Unfiled') + '.');
-      return {ok:true,duplicate:!!saved.duplicate,folder:saved.record?.folder || ''};
-    } catch (error) { return {error:error.message}; }
+      return {ok:true,duplicate:!!saved.duplicate,saved:!saved.record?.deleted,folder:saved.record?.folder || ''};
+    } catch (error) {
+      if (changed) {
+        try { await load(); const current = rows.find(row => row.url === url); return {ok:true,saved:!!current && !current.deleted,folder:current?.folder || '',warning:error.message}; }
+        catch {}
+      }
+      return {error:error.message};
+    }
     finally { lock(false); }
   }
   async function fillFromLink(useBrowser = false, refreshContent = false) {
@@ -542,6 +578,7 @@
     if (ready) return;
     ready = true;
     document.getElementById('viewJobLeads').dataset.companionChannel = channel;
+    document.getElementById('viewJobLeads').dataset.companionActions = '1';
     el('PreviewRead').addEventListener('click',() => { const row = discovered.find(value => value.url === previewUrl); if (row) return previewDiscovered(row); });
     el('PreviewSave').addEventListener('click',() => addDiscovered(previewUrl));
     el('SearchStart').addEventListener('click',startDiscovery);

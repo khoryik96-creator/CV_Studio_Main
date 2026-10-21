@@ -5,7 +5,8 @@
   const text = el => compact(el?.innerText || '');
   function jobSummary(card) {
     const value = text(card), controls = text(card.querySelector?.('[data-cvstudio-job-controls]'));
-    return controls && value.endsWith(controls) ? value.slice(0,-controls.length).trim() : value;
+    const index = controls ? value.indexOf(controls) : -1;
+    return index >= 0 ? compact(value.slice(0,index) + ' ' + value.slice(index+controls.length)) : value;
   }
   function profileURL(value) {
     try {
