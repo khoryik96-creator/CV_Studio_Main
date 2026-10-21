@@ -17328,6 +17328,214 @@
       "Led delivery."
     ],
     "note": "Candidate table labels following a floating Word summary do not belong to its final bullet."
+  },
+  {
+    "id": "B1-shared-boundary-experience",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• Senior engineer.",
+      "EXPERIENCE",
+      "• Unrelated section detail.",
+      "References"
+    ],
+    "expect": [
+      "Senior engineer."
+    ],
+    "note": "The complete established summary-DOCX section vocabulary also ends Blind CV source-summary recovery."
+  },
+  {
+    "id": "B1-shared-boundary-employment",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• Senior engineer.",
+      "EMPLOYMENT",
+      "• Unrelated section detail.",
+      "References"
+    ],
+    "expect": [
+      "Senior engineer."
+    ],
+    "note": "The complete established summary-DOCX section vocabulary also ends Blind CV source-summary recovery."
+  },
+  {
+    "id": "B1-shared-boundary-work-history",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• Senior engineer.",
+      "WORK HISTORY",
+      "• Unrelated section detail.",
+      "References"
+    ],
+    "expect": [
+      "Senior engineer."
+    ],
+    "note": "The complete established summary-DOCX section vocabulary also ends Blind CV source-summary recovery."
+  },
+  {
+    "id": "B1-shared-boundary-professional-skills",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• Senior engineer.",
+      "PROFESSIONAL SKILLS",
+      "• Unrelated section detail.",
+      "References"
+    ],
+    "expect": [
+      "Senior engineer."
+    ],
+    "note": "The complete established summary-DOCX section vocabulary also ends Blind CV source-summary recovery."
+  },
+  {
+    "id": "B1-shared-boundary-relevant-experience",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• Senior engineer.",
+      "Relevant Experience",
+      "• Unrelated section detail.",
+      "References"
+    ],
+    "expect": [
+      "Senior engineer."
+    ],
+    "note": "The complete established summary-DOCX section vocabulary also ends Blind CV source-summary recovery."
+  },
+  {
+    "id": "B1-shared-boundary-industry-experience",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• Senior engineer.",
+      "2. Industry Experience",
+      "• Unrelated section detail.",
+      "References"
+    ],
+    "expect": [
+      "Senior engineer."
+    ],
+    "note": "The complete established summary-DOCX section vocabulary also ends Blind CV source-summary recovery."
+  },
+  {
+    "id": "B1-shared-boundary-career-background",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• Senior engineer.",
+      "- CAREER BACKGROUND",
+      "• Unrelated section detail.",
+      "References"
+    ],
+    "expect": [
+      "Senior engineer."
+    ],
+    "note": "The complete established summary-DOCX section vocabulary also ends Blind CV source-summary recovery."
+  },
+  {
+    "id": "B1-shared-boundary-it-skills",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• Senior engineer.",
+      "- IT Skills:",
+      "• Unrelated section detail.",
+      "References"
+    ],
+    "expect": [
+      "Senior engineer."
+    ],
+    "note": "The complete established summary-DOCX section vocabulary also ends Blind CV source-summary recovery."
+  },
+  {
+    "id": "B1-shared-boundary-project-history",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• Senior engineer.",
+      "Project History",
+      "• Unrelated section detail.",
+      "References"
+    ],
+    "expect": [
+      "Senior engineer."
+    ],
+    "note": "The complete established summary-DOCX section vocabulary also ends Blind CV source-summary recovery."
+  },
+  {
+    "id": "B1-shared-boundary-career-highlights",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• Senior engineer.",
+      "Career Highlights",
+      "• Unrelated section detail.",
+      "References"
+    ],
+    "expect": [
+      "Senior engineer."
+    ],
+    "note": "The complete established summary-DOCX section vocabulary also ends Blind CV source-summary recovery."
+  },
+  {
+    "id": "B1-shared-boundary-licence",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• Senior engineer.",
+      "LICENCE",
+      "• Unrelated section detail.",
+      "References"
+    ],
+    "expect": [
+      "Senior engineer."
+    ],
+    "note": "The complete established summary-DOCX section vocabulary also ends Blind CV source-summary recovery."
+  },
+  {
+    "id": "B1-shared-boundary-training-programme",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• Senior engineer.",
+      "Participated Training Programme",
+      "• Unrelated section detail.",
+      "References"
+    ],
+    "expect": [
+      "Senior engineer."
+    ],
+    "note": "The complete established summary-DOCX section vocabulary also ends Blind CV source-summary recovery."
+  },
+  {
+    "id": "B1-shared-boundary-after-footer",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• Senior engineer.",
+      "Private & Confidential",
+      "EXPERIENCE",
+      "• Unrelated work detail."
+    ],
+    "expect": [
+      "Senior engineer."
+    ],
+    "note": "A footer followed by an established section heading ends a complete source summary."
   }
  ]
 }

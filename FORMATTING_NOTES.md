@@ -51,6 +51,13 @@ rules D2/D4 and the v438 QA report.
 
 ## The pipeline (source doc → formatted DOCX)
 
+Blind source-summary recovery and DOCX summary replacement use the same
+`_SUMMARY_DOCX_SECTION_HEADING_KEYS` vocabulary from `cvstudio_blind_mask.py`.
+Keep this single authority when adding section aliases: missing a boundary can
+copy unrelated work or skills into the summary. Source recovery still accepts
+its additional aliases and distinguishes strong headings from ordinary marked
+points. The app-level compatibility name remains available.
+
 1. **`/extract-text`** (`app.py`) — pulls raw text from the upload: `pdfplumber`
    for PDF and verified `antiword` first for legacy `.doc`. If the verified
    runtime rejects only that document, an optional installed Microsoft Word

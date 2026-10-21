@@ -24,7 +24,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.466"
+_INSTALL_RECEIPT_VERSION = "v24.6.467"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -347,7 +347,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.466"
+_CVSTUDIO_VERSION = "v24.6.467"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -11448,81 +11448,6 @@ def _summary_docx_visible_text(paragraph_xml):
     ).strip()
 
 
-_SUMMARY_DOCX_SECTION_HEADING_KEYS = frozenset({
-    "experience",
-    "professionalexperience",
-    "professionalexperiences",
-    "workexperience",
-    "workexperiences",
-    "workingexperience",
-    "relevantexperience",
-    "industryexperience",
-    "employment",
-    "employmentexperience",
-    "employmenthistory",
-    "careerhistory",
-    "careerbackground",
-    "workhistory",
-    "education",
-    "educationqualifications",
-    "academicbackground",
-    "academicqualifications",
-    "qualifications",
-    "skills",
-    "keyskills",
-    "technicalskills",
-    "professionalskills",
-    "coreskills",
-    "itskills",
-    "coreexpertise",
-    "expertise",
-    "competencies",
-    "corecompetencies",
-    "certification",
-    "certifications",
-    "license",
-    "licenses",
-    "licence",
-    "licences",
-    "accreditation",
-    "accreditations",
-    "project",
-    "projects",
-    "projecthistory",
-    "projectinvolvementhistory",
-    "achievement",
-    "achievements",
-    "careerhighlights",
-    "professionalhighlights",
-    "selectedaccomplishments",
-    "accomplishments",
-    "award",
-    "awards",
-    "honour",
-    "honours",
-    "honor",
-    "honors",
-    "reference",
-    "references",
-    "language",
-    "languages",
-    "publication",
-    "publications",
-    "interest",
-    "interests",
-    "membership",
-    "memberships",
-    "professionaldevelopment",
-    "training",
-    "trainingprogramme",
-    "participatedtrainingprogramme",
-    "volunteerexperience",
-    "volunteering",
-    "personaldetails",
-    "additionalinformation",
-})
-
-
 def _summary_docx_is_section_boundary(text):
     """Return True only for a complete, standalone CV section heading.
 
@@ -14225,6 +14150,7 @@ from cvstudio_blind_mask import (
     _BLIND_ORG_SUFFIX_RE,
     _BLIND_ORG_TECH_ALLOWLIST,
     _BLIND_SUMMARY_MARKER_RE,
+    _SUMMARY_DOCX_SECTION_HEADING_KEYS,
     _blind_add_mask_term,
     _blind_collect_org_mask_terms,
     _blind_finalize_generated_summary_text,

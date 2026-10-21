@@ -153,6 +153,27 @@ class SourceRestoreGuardrails(unittest.TestCase):
             self.assertEqual(blind_mask._blind_source_summary_bullets(source), [])
             self.assertLess(time.perf_counter() - started, 1)
 
+    def test_blind_source_summary_respects_all_shared_section_headings(self):
+        for key in sorted(blind_mask._SUMMARY_DOCX_SECTION_HEADING_KEYS):
+            word = key.title()
+            for heading, stop in (
+                (word, True), (word.upper(), True), ("2. " + word, True),
+                ("• " + word.upper(), True), ("- " + word + ":", True),
+                (" ".join(word.upper()), True), ("• " + word, False),
+                ("- " + word, False), ("* " + word, False),
+                ("Experience delivering " + word + " projects.", False),
+            ):
+                with self.subTest(key=key, heading=heading):
+                    source = "\n".join(["ABOUT HIM / HER", "• Senior engineer.",
+                                         heading, "• Built platforms.", "References"])
+                    if stop:
+                        expected = ["Senior engineer."]
+                    elif heading.startswith(("•", "-", "*")):
+                        expected = ["Senior engineer.", word, "Built platforms."]
+                    else:
+                        expected = ["Senior engineer. " + heading, "Built platforms."]
+                    self.assertEqual(blind_mask._blind_source_summary_bullets(source), expected)
+
     def test_blind_summary_corrections_remain_bounded_and_keep_numeric_anchors(self):
         for index in range(100):
             source = [f"experinced engineer with kafka on team {index}."]

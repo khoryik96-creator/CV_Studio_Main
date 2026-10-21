@@ -147,6 +147,28 @@ class SummarySalaryDocxTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(app._blind_source_summary_bullets(response.get_json()["text"]), points)
 
+    def test_shared_section_boundaries_keep_work_out_of_blind_summary(self):
+        import cvstudio_blind_mask
+        self.assertIs(app._SUMMARY_DOCX_SECTION_HEADING_KEYS,
+                      cvstudio_blind_mask._SUMMARY_DOCX_SECTION_HEADING_KEYS)
+        for heading in ("EXPERIENCE", "EMPLOYMENT", "WORK HISTORY", "PROFESSIONAL SKILLS"):
+            with self.subTest(heading=heading):
+                self.assertTrue(app._summary_docx_is_section_boundary(heading))
+                parsed = _cv(["Senior engineer."])
+                source = "\n".join(["ABOUT HIM / HER", "• Senior engineer.", heading,
+                                    "• Built batch pipelines.", "Education"])
+                with mock.patch.object(app, "_resolve_request_api_key", return_value="<fixture>"), \
+                        mock.patch.object(app, "_ai_spend_session_allowed", return_value=True), \
+                        mock.patch.object(app, "call_llm", return_value={"content": [
+                            {"type": "text", "text": json.dumps(parsed)}], "usage": {}}):
+                    response = self.client.post("/parse", json={"cv_text": source,
+                        "preserve_source_summary": True}, headers=HEADERS)
+                self.assertEqual(response.status_code, 200)
+                result = response.get_json()["data"]
+                self.assertEqual(result["summary_bullets"], ["Senior engineer."])
+                self.assertEqual(result["work_experiences"][0]["roles"][0]["bullets"],
+                                 ["Built batch pipelines."])
+
     def test_native_word_numbered_section_headings_remain_boundaries(self):
         from docx import Document
         doc = Document()

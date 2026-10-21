@@ -112,6 +112,10 @@ never runs after blinding, never bypasses the salary filter or identity scrub,
 and never overrides a summary explicitly linked by the user after parsing.
 Numbered, uppercase or colon-emphasized recognized section headings are real
 boundaries even when marked; ordinary marked title-case words remain points.
+Recovery and DOCX summary replacement share the complete established section
+vocabulary, including Experience, Employment, Work History and Professional
+Skills. Additional source aliases remain supported; whole-line matching avoids
+turning sentences beginning with those words into section boundaries.
 Word body/table list numbering is read from direct/inherited numbering with an
 explicit zero disabling it, and tables remain beside their source headings.
 Labelled candidate-details rows following a floating About box are boundaries.

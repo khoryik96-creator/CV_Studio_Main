@@ -4,6 +4,19 @@
 
 ## Release state
 
+- Owner-authorized PR #235 automatic-review corrective: v24.6.467 on
+  `codex/v24.6.465-blind-profile-summary-lists`. Blind source-summary recovery
+  shares the complete established DOCX section vocabulary, keeping Experience,
+  Employment, Work History, Professional Skills and every other supported
+  section outside the summary. The app compatibility global and existing
+  marked-content/numbered-heading decisions remain. Thirteen new B1 fixtures
+  reproduced the gap before correction; all prior fixture expectations remain.
+  Full isolated Windows Python: 1,750 passed, four skipped, 8,392 subtests;
+  all 42 JavaScript suites passed. Original master replay, 710 generated heading
+  layouts, hostile input and eleven deliberate mutations passed. Validation is in
+  `cv_studio_v24_6_467_blind_summary_section_boundaries_qa_report.md`.
+  Final PR checks and merge identity are recorded in the coordination log.
+
 - Owner-authorized review corrective and merge: v24.6.466 on
   `codex/v24.6.465-blind-profile-summary-lists`. Genuine Word body/table lists
   and enumerated section headings retain layout evidence; source recovery
