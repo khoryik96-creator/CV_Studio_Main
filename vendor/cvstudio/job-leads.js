@@ -184,7 +184,7 @@
     lock(true);
     try {
       const result = await api({action:'create_folder', folder:name});
-      await load(); el('FolderFilter').value = result.folder; page = 0; render();
+      await load(); el('FolderFilter').value = result.folder; applySavedFilters();
       if (!editing && !dirty) fill(null);
       el('FolderEditor').hidden = true; el('FolderName').value = '';
       status('Folder created. Select saved ads to move them here, or save a new ad to this folder.');
@@ -276,6 +276,11 @@
   const savedJob = url => rows.find(row => jobLink(row.url) === url);
   const previewRow = () => previewCapture?.url === previewUrl ? previewCapture : savedJob(previewUrl) || discovered.find(row => row.url === previewUrl);
   const previewSequence = () => previewSource === 'search' ? discovered : filtered();
+  function applySavedFilters() {
+    picked.clear(); page = 0; render();
+    if (previewSource === 'saved' && !previewSequence().some(row => row.url === previewUrl)) { previewUrl = ''; previewCapture = null; }
+    drawDiscovery();
+  }
   function selectPreview(url, scroll = false, source = 'saved') {
     previewUrl = url; previewSource = source; previewDismissed = false;
     if (source === 'search') {
@@ -720,11 +725,7 @@
     });
     el('New').addEventListener('click', () => { if (!busy && discard()) { fill(null); status('Ready for another job ad.'); } });
     el('Refresh').addEventListener('click', async () => { if (busy) return; lock(true); try { await load(); status('Saved leads refreshed. Reopen a lead to load its latest changes.'); } catch (error) { status(error.message); } finally { lock(false); } });
-    for (const id of ['Search', 'Filter', 'FolderFilter']) el(id).addEventListener(id === 'Search' ? 'input' : 'change', () => {
-      picked.clear(); page = 0; render();
-      if (previewSource === 'saved' && !previewSequence().some(row => row.url === previewUrl)) { previewUrl = ''; previewCapture = null; }
-      drawDiscovery();
-    });
+    for (const id of ['Search', 'Filter', 'FolderFilter']) el(id).addEventListener(id === 'Search' ? 'input' : 'change', applySavedFilters);
     el('FolderNew').addEventListener('click', () => { if (!busy) { el('FolderEditor').hidden = false; el('FolderName').focus(); } });
     el('FolderCancel').addEventListener('click', () => { if (!busy) { el('FolderEditor').hidden = true; el('FolderName').value = ''; } });
     el('FolderCreate').addEventListener('click', createFolder);

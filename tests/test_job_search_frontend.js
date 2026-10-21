@@ -66,6 +66,30 @@ function fixture(){
   assert.equal(f.el('PreviewTitle').textContent,b.role,'a saved ad fills the preview after reload without repeating the search');
   assert(f.el('PreviewContent').querySelectorAll('#text').some(node=>node.textContent==='Saved full content'));
   assert.equal(f.el('PreviewSave').textContent,'Already saved');
+  const folderPreview=fixture();await folderPreview.init();
+  folderPreview.el('notes').value='Keep my draft';folderPreview.el('notes').handlers.input();
+  const folderRecords=structuredClone(folderPreview.state.records);
+  folderPreview.el('FolderName').value='Empty folder';await folderPreview.el('FolderCreate').click();
+  assert.equal(folderPreview.el('FolderFilter').value,'Empty folder');assert.equal(folderPreview.el('Count').textContent,'0 leads');
+  assert.match(folderPreview.el('PreviewTitle').textContent,/Choose an ad/,'creating an empty folder clears the previous folder preview');
+  assert.equal(folderPreview.el('PreviewPosition').textContent,'');assert(folderPreview.el('PreviewRemove').hidden);
+  assert(folderPreview.el('PreviewPrevious').disabled);assert(folderPreview.el('PreviewNext').disabled);
+  assert.equal(folderPreview.el('notes').value,'Keep my draft');assert.deepEqual(folderPreview.state.records,folderRecords);
+  assert.deepEqual(folderPreview.requests.map(request=>request.action),['create_folder'],'folder selection never removes or updates ads');
+  const existingFolder=fixture();const folderBase=structuredClone(existingFolder.state.records[0]);
+  existingFolder.state.records.push({...folderBase,id:'c'.repeat(32),url:c.url,role:'Priority architect',folder:'Priority'},
+    {...folderBase,id:'a'.repeat(32),url:a.url,role:'Priority manager',folder:'Priority'});
+  await existingFolder.init();existingFolder.el('FolderName').value='Priority';await existingFolder.el('FolderCreate').click();
+  assert.equal(existingFolder.el('PreviewTitle').textContent,'Priority architect');assert.match(existingFolder.el('PreviewPosition').textContent,/1 of 2/);
+  await existingFolder.el('PreviewNext').click();assert.equal(existingFolder.el('PreviewTitle').textContent,'Priority manager');
+  await existingFolder.el('PreviewClose').click();existingFolder.el('FolderName').value='Priority';await existingFolder.el('FolderCreate').click();
+  assert.match(existingFolder.el('PreviewTitle').textContent,/Choose an ad/,'folder creation respects a dismissed preview');
+  const searchFolder=fixture();await searchFolder.init();await searchFolder.el('SearchStart').click();
+  searchFolder.el('SearchSelectPage').checked=true;searchFolder.el('SearchSelectPage').handlers.change();
+  const searchPosition=searchFolder.el('PreviewPosition').textContent;
+  searchFolder.el('FolderName').value='Search shortlist';await searchFolder.el('FolderCreate').click();
+  assert.equal(searchFolder.el('PreviewPosition').textContent,searchPosition,'saved folder changes preserve search preview context');
+  assert.match(searchFolder.el('SearchCount').textContent,/2 selected/);
   const browse=fixture();
   const savedBase=structuredClone(browse.state.records[0]);
   browse.state.records=[{...savedBase,folder:'Priority'},

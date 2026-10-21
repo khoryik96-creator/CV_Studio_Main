@@ -371,3 +371,10 @@ change is introduced. Companion direct-add/removal keeps its existing behavior.
 The v468 browser QA preview is isolated and contains fictional ads, with a
 simulated companion for search. It does not change the installed app or owner
 records. See the v468 QA report for the regression and live-browser checks.
+
+The v469 corrective uses the same saved-filter synchronization after folder
+creation as after a manual filter change. Selecting a newly created empty
+folder clears the previous saved preview and its management actions. An
+existing populated folder selects its first matching ad with the correct
+count. Closed previews, search-result context/selections and unsaved drafts
+remain intact. Folder selection does not move, remove or update saved ads.

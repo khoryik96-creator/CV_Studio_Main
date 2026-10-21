@@ -4,6 +4,20 @@
 
 ## Release state
 
+- Owner-authorized Job Leads preview review corrective and merge: v24.6.469 on
+  `codex/v24.6.468-job-preview-controls`, from merged v467 `3528005`.
+  Folder creation and manual filter changes now share preview synchronization,
+  clearing stale out-of-folder previews and keeping counts/actions consistent.
+  Focused regressions cover empty/existing folders, dismissed previews, search
+  selections and unsaved notes; the original review reproduction failed before
+  correction. Full isolated Windows Python: 1,750 passed, four skipped, 8,392
+  subtests; all 42 JavaScript suites passed. An actual browser check with
+  isolated fictional ads confirmed a new empty folder shows zero leads and
+  clears the previous preview/action while retaining all three saved records.
+  See `cv_studio_v24_6_469_job_preview_folder_corrective_qa_report.md`.
+  Source/static/repository/Windows native preflight and 24 smoke assertions
+  passed. PR checks and merge verification follow the tested checkpoint.
+
 - Owner-requested Job Leads stuck-preview correction: v24.6.468 on
   `codex/v24.6.468-job-preview-controls`, based on merged v467 `3528005`.
   Individual ad navigation, preview dismissal and reversible Trash/restore now
