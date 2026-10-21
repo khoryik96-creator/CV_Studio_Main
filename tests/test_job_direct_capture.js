@@ -9,7 +9,7 @@ function fixture(){
     action:{onClicked:{addListener:fn=>hooks.arm=fn},setBadgeText:async()=>{}},
     tabs:{onRemoved:{addListener:()=>{}},onUpdated:{addListener:fn=>hooks.updated=fn},onActivated:{addListener:()=>{}},
       get:async id=>({...tabs.get(id)}),query:async()=>[...tabs.values()],
-      sendMessage:async(id,message,options)=>{assert.equal(id,1);if(options.documentId!==state.appDoc)throw Error('Stale app');state.saved.push(message);return {ok:true,folder:'Priority',duplicate:state.saved.length>1}},
+      sendMessage:async(id,message,options)=>{assert.equal(id,1);if(options.documentId!==state.appDoc)throw Error('Stale app');state.saved.push(message);return state.appResult || {ok:true,folder:'Priority',duplicate:state.saved.length>1}},
       create:async()=>{throw Error('A direct pick must not create a tab')},update:async()=>{throw Error('A direct pick must not navigate')},remove:async()=>{throw Error('A direct pick must not close a tab')}},
     scripting:{executeScript:async args=>{
       if(args.files)return [{}];
@@ -20,7 +20,7 @@ function fixture(){
   const boot=()=>{hooks={};vm.runInContext(source,vm.createContext({chrome,URL,Map,Set,Date,setTimeout,clearTimeout,crypto:{randomUUID:()=> 'a'.repeat(32)}}))};boot();
   const app=()=>({tab:{id:1},documentId:state.appDoc,url:tabs.get(1).url});
   const sender=()=>({tab:{id:2},documentId:'linkedin-document',frameId:0,url:tabs.get(2).url});
-  const pick=(patch={})=>new Promise(resolve=>hooks.message({kind:'sourcer_job_pick',url},{...sender(),...patch},resolve));
+  const pick=(patch={},message={})=>new Promise(resolve=>hooks.message({kind:'sourcer_job_pick',url,...message},{...sender(),...patch},resolve));
   const rpc=(action,args={})=>new Promise(resolve=>hooks.message({kind:'sourcer',action,args},app(),resolve));
   return {state,tabs,boot,pick,rpc,arm:()=>hooks.arm(tabs.get(1)),reload:()=>hooks.updated(1,{status:'loading'})};
 }
@@ -35,5 +35,13 @@ function fixture(){
   f.state.hold=new Promise(resolve=>{f.state.release=resolve});const pending=f.pick();await new Promise(resolve=>setTimeout(resolve,0));assert((await f.pick()).error);f.state.release();assert((await pending).result.ok);
   f.state.appDoc='new-document';assert((await f.pick()).error,'stale destination document cannot receive a save');assert.equal(f.state.saved.length,before+1);
   await f.reload();assert((await f.pick()).error);
+  const manage=fixture();await manage.arm();
+  for(const message of [{operation:'purge'},{operation:null},{operation:'create_folder'},{operation:'create_folder',folder:''},{folder:'x'.repeat(81)},{folder:'line\nbreak'}])assert((await manage.pick({},message)).error);
+  assert.equal(manage.state.saved.length,0,'invalid management requests never reach the app');
+  manage.state.appResult={ok:true,saved:false,folder:'Priority',folders:['Priority','SAP']};
+  assert.equal((await manage.pick({},{operation:'folders'})).result.folders[1],'SAP');assert.equal(manage.state.saved.at(-1).request.action,'folders');
+  await manage.pick({},{operation:'create_folder',folder:'SAP'});assert.equal(manage.state.saved.at(-1).request.folder,'SAP');
+  assert.equal((await manage.pick({},{operation:'remove'})).result.saved,false);assert.equal(manage.state.saved.at(-1).request.action,'remove');
+  await manage.pick({},{operation:'add',folder:'SAP'});assert.equal(manage.state.saved.at(-1).request.folder,'SAP');
   console.log('Direct LinkedIn picks: exact app/document binding, top-frame host/identity checks, no tab actions, suspension, busy/concurrency and stale destination protection passed');
 })().catch(error=>{console.error(error);process.exitCode=1});

@@ -48,6 +48,7 @@ state.locations=[];assert.equal(reader.jobSearchContext().location,'','unrelated
 state.locations=['Malaysia','Singapore'];assert.equal(reader.jobSearchContext().location,'','conflicting labelled locations still reject with unrelated filters present');
 state.locations=['Malaysia'];state.filters=[];
 first.state.controls='Add to CV Studio';first.innerText+=' Add to CV Studio';assert(!reader.readJobSearch().jobs[0].description.includes('Add to CV Studio'),'companion UI never enters saved ad content');
+first.innerText+=' Viewed';assert(!reader.readJobSearch().jobs[0].description.includes('Add to CV Studio'),'controls inside the text column are excluded before native footer text too');assert(reader.readJobSearch().jobs[0].description.endsWith('Viewed'));
 assert.equal(reader.readJobPick(url).company,'Example Finance');
 assert.throws(()=>reader.readJobPick('https://www.linkedin.com/jobs/view/999'),'unobserved jobs are never captured');
 assert.equal(snapshot.jobs[0].url,url);assert.equal(snapshot.jobs[0].role,'Finance Manager');assert.equal(snapshot.jobs[0].company,'Example Finance');assert.equal(snapshot.jobs[0].location,'Penang');assert.equal(snapshot.jobs[0].date_posted,'','relative dates are never guessed');

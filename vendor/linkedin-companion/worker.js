@@ -35,9 +35,18 @@ function jobSearchKey(value) {
 function jobSearchLive(bound, run, tab) {
   live(bound, run);
   if (bound.kind !== 'jobs' || Date.now() - bound.jobStarted > 600000 ||
-      jobSearchKey(tab.url) !== bound.jobKey || tab.pendingUrl && jobSearchKey(tab.pendingUrl) !== bound.jobKey) throw Error('The job search changed or timed out. Start a new search.');
+      jobSearchKey(tab.url) !== bound.jobKey || tab.pendingUrl && jobSearchKey(tab.pendingUrl) !== bound.jobKey) throw safeError('The job search changed or timed out. Choose the job search already open in Chrome to review its current results.');
 }
 function safeError(message) { const error = Error(message); error.cvstudioSafe = true; return error; }
+async function jobScript(options, message) {
+  try {
+    const results = await chrome.scripting.executeScript(options);
+    if (!Array.isArray(results) || !results.length) throw Error();
+    return results;
+  } catch { throw safeError(message); }
+}
+const jobReaderStartError = 'The LinkedIn reader could not start. Refresh LinkedIn, then reload and reconnect the latest companion.';
+const jobReaderReadError = 'LinkedIn job results could not be read. Refresh LinkedIn and try again. If this repeats, update and reload the companion.';
 async function settleJobSearch(bound, run, tab) {
   live(bound,run);
   const actual = jobSearchKey(tab.url);
@@ -47,9 +56,10 @@ async function settleJobSearch(bound, run, tab) {
   requested.searchParams.delete('location');
   for (const name of ['location','geoId','distance']) resolved.searchParams.delete(name);
   if (requested.href !== resolved.href) throw safeError('LinkedIn changed the search keywords or filters. Choose the already-open search to review its current results.');
-  await chrome.scripting.executeScript({target:{tabId:tab.id},files:['reader.js']});
+  await jobScript({target:{tabId:tab.id},files:['reader.js']},jobReaderStartError);
   live(bound,run);
-  const [{result}] = await chrome.scripting.executeScript({target:{tabId:tab.id},func:method => globalThis.SourcerReader[method](),args:['jobSearchContext']});
+  const [{result}] = await jobScript({target:{tabId:tab.id},func:method => globalThis.SourcerReader[method](),args:['jobSearchContext']},jobReaderReadError);
+  if (!result || typeof result.location !== 'string') throw safeError(jobReaderReadError);
   live(bound,run);
   const current = await chrome.tabs.get(tab.id);
   if (jobSearchKey(current.url) !== actual || current.pendingUrl && jobSearchKey(current.pendingUrl) !== actual) throw safeError('The job search changed while loading. Choose the already-open search to continue.');
@@ -177,7 +187,10 @@ async function readJobTab(bound, id, expected) {
 }
 async function pickJob(message, sender) {
   await ready;
-  const bound = connection, expected = jobURL(message.url);
+  const bound = connection, expected = jobURL(message.url), operation = message.operation === undefined ? 'add' : message.operation;
+  if (!['add','remove','folders','create_folder'].includes(operation) || message.folder !== undefined &&
+      (typeof message.folder !== 'string' || message.folder.length > 80 || /[\x00-\x1f]/.test(message.folder))) throw safeError('Choose a valid folder or job-ad action.');
+  if (operation === 'create_folder' && (typeof message.folder !== 'string' || !message.folder.trim())) throw safeError('Enter a folder name.');
   if (stateFailed || !bound) throw safeError('Open Job Leads in CV Studio and connect its companion toolbar icon first.');
   if (!expected || expected !== message.url || sender.frameId !== 0 || !sender.documentId || !Number.isInteger(sender.tab?.id) ||
       !(jobSearchKey(sender.url) || jobURL(sender.url))) throw safeError('Choose a visible LinkedIn job ad.');
@@ -201,9 +214,11 @@ async function pickJob(message, sender) {
     await verify();
     if (result?.url !== expected || !result.company || !result.role) throw safeError('The ad details have not loaded. Try again after the card appears.');
     const id = crypto.randomUUID().replaceAll('-','');
-    const saved = await chrome.tabs.sendMessage(bound.tabId,{type:'CVSTUDIO_JOB_CAPTURE',id,record:result},{documentId:bound.documentId});
+    const request = {action:operation,...(message.folder === undefined ? {} : {folder:message.folder})};
+    const saved = await chrome.tabs.sendMessage(bound.tabId,{type:'CVSTUDIO_JOB_CAPTURE',id,record:result,request},{documentId:bound.documentId});
     if (!saved?.ok) throw safeError(saved?.error || 'Open Job Leads in the connected CV Studio tab, then add this ad again.');
-    return {ok:true,duplicate:!!saved.duplicate,folder:saved.folder || ''};
+    return {ok:true,duplicate:!!saved.duplicate,folder:saved.folder || '',saved:saved.saved !== false,
+      ...(Array.isArray(saved.folders) ? {folders:saved.folders} : {}),...(saved.warning ? {warning:saved.warning} : {})};
   } finally { if (jobCapture === token) jobCapture = null; }
 }
 async function handle(message, sender) {
@@ -212,7 +227,7 @@ async function handle(message, sender) {
     throw Error('In Chrome, open CV Studio and click the companion toolbar icon to connect this tab.');
   }
   const args = message.args || {};
-  if (message.action === 'jobStatus') return {connected:true,job_read:true,job_search:true,busy:!!connection.run || !!jobCapture};
+  if (message.action === 'jobStatus') return {connected:true,job_read:true,job_search:true,job_search_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
   if (message.action === 'jobSearchTabs') {
     const tabs = await chrome.tabs.query({url:'https://www.linkedin.com/*'});
     return tabs.filter(tab => jobSearchKey(tab.url)).map(tab => ({id:tab.id, url:tab.url, title:String(tab.title || 'LinkedIn job search').slice(0,160)}));
@@ -327,10 +342,11 @@ async function handle(message, sender) {
       bound.jobScrolls++; await persist(); live(bound, args.run_id);
       if (bound.jobScrolls > bound.pages * 8) throw Error('The job-search scroll limit was reached.');
     }
-    await chrome.scripting.executeScript({target:{tabId:tab.id},files:['reader.js']});
+    await jobScript({target:{tabId:tab.id},files:['reader.js']},jobReaderStartError);
     jobSearchLive(bound, args.run_id, await chrome.tabs.get(tab.id));
-    const [{result}] = await chrome.scripting.executeScript({target:{tabId:tab.id},
-      func:(method, values) => globalThis.SourcerReader[method](...values), args:[args.method,args.values]});
+    const [{result}] = await jobScript({target:{tabId:tab.id},
+      func:(method, values) => globalThis.SourcerReader[method](...values), args:[args.method,args.values]},jobReaderReadError);
+    if (args.method === 'readJobSearch' ? !result || !Array.isArray(result.jobs) && result.loading !== true : typeof result !== 'boolean') throw safeError(jobReaderReadError);
     jobSearchLive(bound, args.run_id, await chrome.tabs.get(tab.id));
     return result;
   }

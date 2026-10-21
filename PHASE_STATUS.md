@@ -4,6 +4,24 @@
 
 ## Release state
 
+- Owner-requested LinkedIn ad controls: v24.6.461,
+  `codex/v24.6.461-linkedin-ad-controls`, from merged v460 `0f80bc5`.
+  Clicking Added removes the ad to recoverable Trash; adding again restores
+  existing notes/tracking. LinkedIn controls can select/create folders using
+  the exact connected app's existing guarded APIs. Controls mount in the native
+  text column, preserving card layout, and their text is excluded from captured
+  summaries even before native footers. New app/companion capability checks
+  prevent management commands becoming legacy adds on older pages; search
+  readiness detects older companions. The owner confirmed the prior missing
+  results used an old companion and worked after updating/reloading; no source
+  authority check was relaxed. Full isolated Python: 1,737 passed, four skipped,
+  7,599 subtests; all 41 JavaScript suites, source/native-dependency preflight
+  and 24 smoke assertions passed. Isolated real-controller/backend UI verified
+  folder save, Trash, folder creation/restore and a preserved unsaved draft.
+  Flex, narrow and grid card widths stayed identical after Add/error messages.
+  No installed-app update, owner-data change, push,
+  PR or merge. See `cv_studio_v24_6_461_linkedin_ad_controls_qa_report.md`.
+
 - Owner-authorized merge corrective: v24.6.460 on
   `codex/v24.6.459-job-ad-curation` / PR #231, including the v459 work below.
   The automatic review caught expandable help/filter buttons being mistaken
@@ -15,7 +33,7 @@
   `cv_studio_v24_6_460_job_location_review_fix_qa_report.md`. Full isolated
   Windows gate: 1,737 passed, four skipped, 7,599 subtests; all 41 JavaScript
   suites and source/native-dependency preflight plus 24 smoke assertions passed.
-  The owner-authorized merge awaits updated hosted checks. Installed app remains
+  Merged via PR #231 as `0f80bc5`; all three hosted checks passed. Installed app remained
   untouched; automatic approval review blocked restarting the existing preview.
 
 - Owner-requested ad curation: v24.6.459,

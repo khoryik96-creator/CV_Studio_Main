@@ -21,7 +21,7 @@ function fixture() {
       if(state.delayedReads){state.delayedReads--;return [{result:{loading:true}}]}
       if(state.readFails)throw Error('Synthetic unrecognized job layout');
       return [{result:{url:args.args[0],company:'Sample Company',role:'Finance Manager',location:'Kuala Lumpur'}}];
-    }},runtime:{onMessage:{addListener:fn=>hooks.message=fn}}};
+    }},runtime:{getManifest:()=>({version:'24.6.461'}),onMessage:{addListener:fn=>hooks.message=fn}}};
   const context=vm.createContext({chrome,URL,Map,Set,Error,Number,setTimeout:fn=>fn()});
   vm.runInContext(fs.readFileSync(path.join(root,'vendor/linkedin-companion/worker.js'),'utf8'),context);
   const sender={tab:{id:1},documentId:'bound',url:tabs.get(1).url};
@@ -33,7 +33,7 @@ function fixture() {
   assert((await f.rpc('jobStatus')).error,'status cannot bypass the app binding');
   assert((await f.rpc('jobFromLink',{url})).error);assert.equal(f.state.created.length,0);
   await f.arm();
-  assert.deepEqual({...((await f.rpc('jobStatus')).result)},{connected:true,job_read:true,job_search:true,busy:false});
+  assert.deepEqual({...((await f.rpc('jobStatus')).result)},{connected:true,job_read:true,job_search:true,job_search_revision:1,version:'24.6.461',busy:false});
   assert.equal((await f.rpc('jobFromLink',{url})).result.location,'Kuala Lumpur');
   assert.equal(f.state.created.length,0);assert.equal(f.state.removed.length,0,'existing tabs remain open');
   f.state.delayedReads=3;let reads=f.state.readCount;
