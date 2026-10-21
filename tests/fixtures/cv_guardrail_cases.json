@@ -16749,6 +16749,259 @@
     }
    ],
    "note": "An ordinary marked achievement keeps later groups; an unmarked section ends them."
+  },
+  {
+    "id": "B1-about-before-later-summary",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "Candidate",
+      "ABOUT HIM / HER",
+      "• Consultant with six years",
+      "of ERP experience.",
+      "• Delivered migrations.",
+      "Note: Open to training.",
+      "Private & Confidential | © Hyppies.com",
+      "W O R K E X P E R I E N C E S ____",
+      "Northwind",
+      "Summary:",
+      "Highly motivated consultant."
+    ],
+    "expect": [
+      "Consultant with six years of ERP experience.",
+      "Delivered migrations.",
+      "Note: Open to training."
+    ],
+    "note": "Keep source summary boundaries before blinding; defer when ambiguous."
+  },
+  {
+    "id": "B1-pdf-marker",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "� Led migrations",
+      "across regions.",
+      "� Supported users.",
+      "WORK EXPERIENCES"
+    ],
+    "expect": [
+      "Led migrations across regions.",
+      "Supported users."
+    ],
+    "note": "Keep source summary boundaries before blinding; defer when ambiguous."
+  },
+  {
+    "id": "B1-plain-paragraph",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "Professional Summary:",
+      "Experienced engineer with strong",
+      "delivery skills. Works across teams.",
+      "Skills",
+      "Python"
+    ],
+    "expect": [
+      "Experienced engineer with strong delivery skills. Works across teams."
+    ],
+    "note": "Keep source summary boundaries before blinding; defer when ambiguous."
+  },
+  {
+    "id": "B1-marked-heading-word",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "Profile",
+      "- Education",
+      "- Training",
+      "Skills",
+      "Python"
+    ],
+    "expect": [
+      "Education",
+      "Training"
+    ],
+    "note": "Keep source summary boundaries before blinding; defer when ambiguous."
+  },
+  {
+    "id": "B1-numbered-and-wrapped",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "SUMMARY",
+      "1. Designed systems",
+      "across regions.",
+      "2) Led delivery.",
+      "Education"
+    ],
+    "expect": [
+      "Designed systems across regions.",
+      "Led delivery."
+    ],
+    "note": "Keep source summary boundaries before blinding; defer when ambiguous."
+  },
+  {
+    "id": "B1-missing",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "Engineer",
+      "WORK EXPERIENCE",
+      "- Delivered migrations."
+    ],
+    "expect": [],
+    "note": "Keep source summary boundaries before blinding; defer when ambiguous."
+  },
+  {
+    "id": "B1-repeated-about",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "- First.",
+      "Skills",
+      "ABOUT HIM / HER",
+      "- Different.",
+      "References"
+    ],
+    "expect": [],
+    "note": "Keep source summary boundaries before blinding; defer when ambiguous."
+  },
+  {
+    "id": "B1-repeated-summary",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "Summary",
+      "- First.",
+      "Skills",
+      "Summary",
+      "- Different.",
+      "References"
+    ],
+    "expect": [],
+    "note": "Keep source summary boundaries before blinding; defer when ambiguous."
+  },
+  {
+    "id": "B1-no-false-heading",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "Summary of project results includes:",
+      "- Led delivery.",
+      "Education"
+    ],
+    "expect": [],
+    "note": "Keep source summary boundaries before blinding; defer when ambiguous."
+  },
+  {
+    "id": "B1-source-heading-only",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "WORK EXPERIENCE"
+    ],
+    "expect": [],
+    "note": "Keep source summary boundaries before blinding; defer when ambiguous."
+  },
+  {
+    "id": "B1-paragraph-blocks",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "Overview",
+      "Experienced engineer.",
+      "",
+      "Works across teams.",
+      "Education"
+    ],
+    "expect": [
+      "Experienced engineer.",
+      "Works across teams."
+    ],
+    "note": "Keep source summary boundaries before blinding; defer when ambiguous."
+  },
+  {
+    "id": "B1-crlf-wrap",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER\r",
+      "• Led delivery\r",
+      "across teams.\r",
+      "• Improved quality.\r",
+      "Private & Confidential | © Hyppies.com"
+    ],
+    "expect": [
+      "Led delivery across teams.",
+      "Improved quality."
+    ],
+    "note": "Keep source summary boundaries before blinding; defer when ambiguous."
+  },
+  {
+    "id": "B1-marked-summary-word",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "Profile",
+      "• Summary",
+      "• Delivered migrations.",
+      "Education"
+    ],
+    "expect": [
+      "Summary",
+      "Delivered migrations."
+    ],
+    "note": "A marked point named Summary is not a repeated source section."
+  },
+  {
+    "id": "B1-combined-boundary",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• Led migrations.",
+      "Skills and Competencies",
+      "• Python"
+    ],
+    "expect": [
+      "Led migrations."
+    ],
+    "note": "A recognized combined heading ends recovery."
+  },
+  {
+    "id": "B1-page-continuation-defers",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• First point.",
+      "Private & Confidential | © Hyppies.com",
+      "• Another point.",
+      "WORK EXPERIENCES"
+    ],
+    "expect": [],
+    "note": "A footer cannot silently truncate a summary that continues onto another page."
+  },
+  {
+    "id": "B1-hyphenated-wrap",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• Managed SLA-",
+      "driven delivery.",
+      "• Kept costs -",
+      "5% below budget.",
+      "WORK EXPERIENCE"
+    ],
+    "expect": [
+      "Managed SLA-driven delivery.",
+      "Kept costs - 5% below budget."
+    ],
+    "note": "Preserve hyphenated words across a physical line break, without joining a numeric sign."
   }
  ]
 }

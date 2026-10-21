@@ -24,7 +24,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.464"
+_INSTALL_RECEIPT_VERSION = "v24.6.465"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -347,7 +347,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.464"
+_CVSTUDIO_VERSION = "v24.6.465"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -9066,6 +9066,17 @@ def parse_cv():
         bullet_levels = _infer_label_bullet_levels(parsed)
         parsed = _normalize_cv_structured_content(parsed)
         parsed = _normalize_cv_data_for_output(parsed, cv_text)
+        # Blind CV must retain the original About box, even when the provider
+        # picked a generic Summary from a later page. Recover before masking;
+        # a user-linked summary can still replace it in the browser afterward.
+        if body.get("preserve_source_summary") is True:
+            source_summary = _blind_source_summary_bullets(cv_text)
+            if source_summary:
+                parsed["summary_bullets"] = source_summary
+                # Remove competing source Summary categories now, while this
+                # choice is nonempty. If the pay filter empties it below, /blind
+                # must not accidentally promote the discarded later paragraph.
+                parsed = _blind_prepare_summary_bullets(parsed)
         # Salary never reaches the Summary box, so the preview shows what the
         # Word file will carry. A removal is reported so the page can say so.
         summary_pay_removed = 0
@@ -14168,6 +14179,7 @@ from cvstudio_blind_mask import (
     _blind_replace_org_terms_in_text,
     _blind_restore_cv_bullet_structure,
     _blind_scrub_candidate_identity,
+    _blind_source_summary_bullets,
     _blind_walk_strings,
 )
 

@@ -99,6 +99,18 @@ from the provider's visible items, never from source text. Changed order,
 missing/rewritten items or ambiguous structure receives no heading metadata.
 The provider's content and representation remain intact.
 
+### B1
+**Blind CV keeps the source summary's points.** Only the Blind CV parse opt-in
+recovers a uniquely headed About / Summary section before identity masking.
+An explicit About Him / Her box takes precedence over a later generic Summary.
+Marked points remain separate; wrapped lines remain part of their point. A
+separate Note is retained as its own item. A real paragraph stays a paragraph.
+Known section headings and the template footer end recovery; marked content
+that merely names a section remains content. Missing, repeated, oversized or
+uncertain sections leave the provider's interpretation unchanged. Recovery
+never runs after blinding, never bypasses the salary filter or identity scrub,
+and never overrides a summary explicitly linked by the user after parsing.
+
 ## Work-row reader
 
 ### R1

@@ -18,6 +18,7 @@ import tempfile
 import unittest
 from unittest import mock
 import zipfile
+from lxml import etree
 
 from owner_build_tools.build_protected import write_test_receipt
 
@@ -245,6 +246,71 @@ class SummarySalaryDocxTests(unittest.TestCase):
         self.assertNotIn("RM16,000", out["content"][0]["text"])
         self.assertIn("Built pipelines.", out["content"][0]["text"])
 
+    def test_blind_parse_keeps_source_about_points_through_masking_and_word(self):
+        source = "\n".join([
+            "Test Candidate", "ABOUT HIM / HER",
+            "• Engineer at Northwind Data Sdn Bhd with six years", "of experience.",
+            "• Delivered migrations.", "• Current salary RM 12k.",
+            "Note: Open to training.", "Private & Confidential | © Hyppies.com",
+            "WORK EXPERIENCES", "Summary:", "A later generic paragraph.",
+        ])
+        parsed = _cv([])
+        parsed["skills"] = [{"category": "Summary", "items": "A later generic paragraph."}]
+
+        def fake_parse(provider, key, payload):
+            return {"content": [{"type": "text", "text": json.dumps(parsed)}], "usage": {}}
+
+        with mock.patch.object(app, "_resolve_request_api_key", return_value="<fixture-credential>"), \
+                mock.patch.object(app, "_ai_spend_session_allowed", return_value=True), \
+                mock.patch.object(app, "call_llm", side_effect=fake_parse):
+            for flag in (None, False, "true", True):
+                body = {"cv_text": source, "provider": "anthropic"}
+                if flag is not None:
+                    body["preserve_source_summary"] = flag
+                response = self.client.post("/parse", json=body, headers=HEADERS)
+                self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+                if flag is not True:
+                    self.assertEqual(response.get_json()["data"]["summary_bullets"], [])
+            recovered = response.get_json()
+        expected = ["Engineer at Northwind Data Sdn Bhd with six years of experience.",
+                    "Delivered migrations.", "Note: Open to training."]
+        self.assertEqual(recovered["data"]["summary_bullets"], expected)
+        self.assertEqual(recovered["summary_pay_removed"], 1)
+        seen = {}
+
+        def fake_blind(provider, key, payload):
+            sent = json.loads(payload["messages"][0]["content"].split("\n\n", 1)[1])
+            seen["summary"] = sent["summary_bullets"][:]
+            self.assertEqual(sent["skills"], [])
+            # Echoing source identity is deliberately hostile: the existing
+            # deterministic scrub still has to mask the recovered source too.
+            return {"content": [{"type": "text", "text": json.dumps(sent)}], "usage": {}}
+
+        with mock.patch.object(app, "_resolve_request_api_key", return_value="<fixture-credential>"), \
+                mock.patch.object(app, "_ai_spend_session_allowed", return_value=True), \
+                mock.patch.object(app, "call_llm", side_effect=fake_blind):
+            response = self.client.post("/blind", json={"cv_data": recovered["data"],
+                                                       "provider": "anthropic"}, headers=HEADERS)
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(seen["summary"], expected)
+        blinded = response.get_json()["data"]
+        self.assertEqual(len(blinded["summary_bullets"]), 3)
+        self.assertNotIn("Northwind", json.dumps(blinded))
+        self.assertNotIn("Test Candidate", json.dumps(blinded))
+        self.assertNotIn("later generic", json.dumps(blinded))
+        word = self.client.post("/generate-docx", json={"data": blinded}, headers=HEADERS)
+        self.assertEqual(word.status_code, 200)
+        xml = etree.fromstring(_document_xml(word.data).encode("utf-8"))
+        ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+        boxes = xml.xpath("//w:txbxContent", namespaces=ns)
+        matching = [box for box in boxes if "Delivered migrations." in "".join(box.itertext())]
+        self.assertEqual(len(matching), 2)  # DrawingML plus the VML compatibility copy.
+        for box in matching:
+            paragraphs = box.xpath("./w:p[w:pPr/w:numPr]", namespaces=ns)
+            self.assertEqual(len(paragraphs), 3)
+            self.assertEqual(["".join(p.xpath(".//w:t/text()", namespaces=ns))
+                              for p in paragraphs], blinded["summary_bullets"])
+
     def test_the_blind_summary_is_filtered_before_the_provider_sees_it(self):
         seen = {}
 
@@ -266,6 +332,24 @@ class SummarySalaryDocxTests(unittest.TestCase):
         # and the removal is reported.
         self.assertEqual(response.get_json()["data"]["summary_bullets"], ["Data engineer with 11 years in banking."])
         self.assertEqual(response.get_json()["summary_pay_removed"], 1)
+
+    def test_pay_only_recovered_about_cannot_fall_back_to_a_later_summary(self):
+        source = "ABOUT HIM / HER\n• Current salary RM 12k.\nWORK EXPERIENCES\nSummary:\nLater paragraph."
+        parsed = _cv([])
+        parsed["skills"] = [{"category": "Summary", "items": "Later paragraph."},
+                            {"category": "Technology", "items": "Python"}]
+        with mock.patch.object(app, "_resolve_request_api_key", return_value="<fixture-credential>"), \
+                mock.patch.object(app, "_ai_spend_session_allowed", return_value=True), \
+                mock.patch.object(app, "call_llm", return_value={"content": [
+                    {"type": "text", "text": json.dumps(parsed)}], "usage": {}}):
+            response = self.client.post("/parse", json={"cv_text": source,
+                "preserve_source_summary": True}, headers=HEADERS)
+        self.assertEqual(response.status_code, 200)
+        result = response.get_json()
+        self.assertEqual(result["summary_pay_removed"], 1)
+        self.assertEqual(result["data"]["summary_bullets"], [])
+        self.assertEqual(app._blind_prepare_summary_bullets(result["data"])["summary_bullets"], [])
+        self.assertEqual(result["data"]["skills"], [{"category": "Technology", "items": "Python"}])
 
     def test_a_format_summary_that_was_only_pay_still_writes_the_cv(self):
         # The summary is one part of the CV: the Word file is still written, with

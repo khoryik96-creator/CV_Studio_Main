@@ -4,6 +4,21 @@
 
 ## Release state
 
+- Owner-requested Blind CV summary preservation: v24.6.465,
+  `codex/v24.6.465-blind-profile-summary-lists`, from merged v464 `02af520`.
+  Single and batch Blind CV retain a uniquely headed source About / Summary
+  section before identity masking, preferring an explicit About box over a
+  later generic Summary. Marked points and wrapped continuations retain their
+  grouping; normal formatting, user-linked summaries and existing pay/identity
+  safeguards remain intact. Full isolated Windows Python: 1,741 passed, four
+  skipped, 7,645 subtests; all 42 JavaScript suites passed. Original 985-case
+  replay and repository sentence comparison passed; eight reader mutations and
+  baseline/route guard regressions were caught. A corrected local document copy
+  was rendered through native Word plus the packaged renderer and all six pages
+  inspected. No paid call or owner installed-app update. Source checkpoint only,
+  not pushed, opened as a PR or merged. See
+  `cv_studio_v24_6_465_blind_profile_summary_qa_report.md`.
+
 - Merge-review compatibility correction: v24.6.464 on
   `codex/v24.6.463-sourcer-simple-start`, PR #234. The companion retains Chrome
   116 support, exposing the active flag beside optional recency metadata. Startup

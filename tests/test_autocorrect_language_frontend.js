@@ -89,14 +89,22 @@ function wiredIntoParseAndSettings() {
     const requests = [...source.matchAll(/JSON\.stringify\((\{[^\n]*auto_correct_language:[^\n]*?\})\)/g)];
     assert.strictEqual(requests.length,1,module+' has one parse payload with the preference');
     for (const enabled of [false,true]) {
-      const env=buildContext();
-      env.context.setCvAutoCorrectLanguage(enabled,true);
-      Object.assign(env.context, {key:'fixture-key',route:{model:'fixture',provider:'fixture'},
-        jaRoute:{api_key:'fixture-key',model:'fixture',provider:'fixture'},
-        raw:'Example Candidate',rawText:'Example Candidate',cvText:'Example Candidate'});
-      const sent=JSON.parse(vm.runInContext('JSON.stringify('+requests[0][1]+')',env.context));
-      assert.strictEqual(sent.auto_correct_language,enabled,module+' sends a real boolean');
-      assert.strictEqual(sent.cv_text,'Example Candidate',module+' does not alter input');
+      for (const blindMode of [false,true]) {
+        const env=buildContext();
+        env.context.setCvAutoCorrectLanguage(enabled,true);
+        Object.assign(env.context, {key:'fixture-key',route:{model:'fixture',provider:'fixture'},
+          jaRoute:{api_key:'fixture-key',model:'fixture',provider:'fixture'},
+          raw:'Example Candidate',rawText:'Example Candidate',cvText:'Example Candidate',
+          blind:blindMode,isBlind:blindMode});
+        const sent=JSON.parse(vm.runInContext('JSON.stringify('+requests[0][1]+')',env.context));
+        assert.strictEqual(sent.auto_correct_language,enabled,module+' sends a real boolean');
+        assert.strictEqual(sent.cv_text,'Example Candidate',module+' does not alter input');
+        if (module !== 'create-profile.js') {
+          assert.strictEqual(sent.preserve_source_summary,blindMode,module+' keeps source points only in Blind mode');
+        } else {
+          assert.strictEqual(sent.preserve_source_summary,undefined,'profile creation retains its parse behavior');
+        }
+      }
     }
   }
   // Durable-key allowlist and the Settings control exist.

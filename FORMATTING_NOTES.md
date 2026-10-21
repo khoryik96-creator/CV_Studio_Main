@@ -264,6 +264,18 @@ container shape only when the original and already-blinded flattened text
 counts match exactly. It never copies source wording or unknown source fields;
 a mismatch is left untouched instead of guessed.
 
+Blind mode in single and batch formatting opts into `/parse` with
+`preserve_source_summary: true`. `_blind_source_summary_bullets` reads a unique
+headed About / Summary block before masking, prioritizing an explicit About box
+over a later generic Summary. Wrapped lines stay with their marked point; a
+separate Note remains its own item, and plain paragraphs stay paragraphs.
+Ambiguous/oversized blocks and possible page continuations defer to the existing
+provider interpretation. Competing parsed summary categories are removed before
+the pay filter, so an emptied pay-only About box cannot fall back to a later
+paragraph. User-linked summaries still replace the parse result afterward.
+Normal Format CV and Create Profile do not opt in. See guardrail B1 and its
+anonymized cases; never recover source strings after the blinding call.
+
 ## ⚠️ Highest-risk code
 
 `_reconcile_work_experience_with_authoritative_table` (`cvstudio_cv_reconcile.py`)

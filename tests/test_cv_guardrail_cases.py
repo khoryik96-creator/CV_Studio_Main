@@ -120,6 +120,30 @@ class SourceCheckGuardrails(unittest.TestCase):
 
 
 class SourceRestoreGuardrails(unittest.TestCase):
+    def test_blind_source_summary_keeps_original_points(self):
+        for case in _cases("blind_source_summary"):
+            with self.subTest(case=case["id"]):
+                self.assertEqual(
+                    blind_mask._blind_source_summary_bullets("\n".join(case["lines"])),
+                    case["expect"], case["note"],
+                )
+
+    def test_blind_source_summary_generated_lists_and_limits(self):
+        for count in (1, 2, 6, 20, 21, 100):
+            expected = [f"Delivered project {index} across regions." for index in range(count)]
+            for marker in ("•", "-", "\ufffd", "1.", "(2)"):
+                with self.subTest(count=count, marker=marker):
+                    source = "ABOUT HIM / HER\n" + "\n".join(
+                        f"{marker} Delivered project {index}\nacross regions." for index in range(count)
+                    ) + "\nWORK EXPERIENCES\n- Must not enter summary."
+                    self.assertEqual(blind_mask._blind_source_summary_bullets(source), expected)
+        for source in ("x" * 1_000_001, "\n" * 12_001,
+                       "SUMMARY\n" + "• A point.\n" * 101,
+                       "SUMMARY\n• " + "x" * 32_001):
+            started = time.perf_counter()
+            self.assertEqual(blind_mask._blind_source_summary_bullets(source), [])
+            self.assertLess(time.perf_counter() - started, 1)
+
     def test_generated_blind_contribution_hints_stay_with_returned_text(self):
         category = "Contribution towards Projects / Taskforce"
         for index in range(100):

@@ -526,6 +526,100 @@ def _blind_summary_items(value, *, limit=20):
     return out if limit is None else out[:limit]
 
 
+def _blind_source_summary_bullets(source_text):
+    """Read a unique source summary before masking; never repair from source after it."""
+    if not isinstance(source_text, str):
+        return []
+    # This is a layout correction, not another document parser. Refuse excessive
+    # inputs/sections rather than returning a silently truncated summary.
+    if len(source_text) > 1_000_000 or source_text.count("\n") > 12_000:
+        return []
+    lines = source_text.splitlines()
+    about_keys = {"abouthimher", "abouthim", "abouther", "aboutthecandidate"}
+    summary_keys = about_keys | {
+        "summary", "professionalsummary", "executivesummary", "profile",
+        "professionalprofile", "careerprofile", "objective", "careerobjective", "overview",
+    }
+    boundary_keys = summary_keys | {
+        "workexperience", "workexperiences", "workingexperience", "professionalexperience",
+        "employmenthistory", "careerhistory", "education", "educationalbackground",
+        "academicqualifications", "qualifications", "certifications", "certification",
+        "educationcertification", "educationcertifications", "educationandcertifications",
+        "educationsandtraining", "educationtraining", "educationandtraining",
+        "educationqualifications", "educationbackground", "academicbackground",
+        "professionalqualifications", "certificationstraining", "coursestraining",
+        "trainingcourses", "trainingdevelopment", "licenses", "licensescertifications",
+        "skills", "technicalskills", "softskills", "languages", "languageproficiency",
+        "skillsandcompetencies", "coreexpertise", "competencies", "competency",
+        "additionalinformation", "otherinformation", "personaldetails", "personalparticulars",
+        "achievements", "awards", "training", "projects", "references", "referees",
+        "hobbies", "interests", "professionaldevelopment",
+        "awardsachievements", "publications", "professionalaffiliations",
+        "professionalmemberships", "memberships", "volunteer", "volunteering",
+        "volunteerexperience", "volunteercommunity", "communityinvolvement",
+    }
+
+    def heading_key(line):
+        # Letter-spaced template headings and decorative underlines are layout.
+        # Reject digits/sentences instead of mistaking prose for a heading.
+        if (len(line) > 120 or re.search(r"[0-9.!?]", line)
+                or re.match(r"^[-*•●▪◦‣⁃∙·‧\ufffd]+\s+", line)):
+            return ""
+        return re.sub(r"[^a-z]", "", line.lower())
+
+    starts = [(index, heading_key(line.strip())) for index, line in enumerate(lines)
+              if heading_key(line.strip()) in summary_keys]
+    about = [item for item in starts if item[1] in about_keys]
+    selected = about or starts
+    if len(selected) != 1:
+        return []
+    start = selected[0][0] + 1
+    items, current = [], []
+    marked_current = False
+    section_size = 0
+
+    def flush():
+        if current:
+            items.append(" ".join(current))
+            current.clear()
+
+    for index, raw in enumerate(lines[start:], start):
+        line = raw.strip()
+        section_size += len(raw)
+        if section_size > 32_000 or len(items) > 100:
+            return []
+        if re.match(r"^Private\s*&\s*Confidential\b", line, re.I):
+            following = next((value.strip() for value in lines[index + 1:]
+                              if value.strip()), "")
+            if following and heading_key(following) not in boundary_keys:
+                # A footer alone cannot prove the summary ended: it may carry
+                # on onto the next page. Defer rather than retaining half of it.
+                return []
+            break
+        # Some searchable PDFs expose an undefined bullet glyph as U+FFFD.
+        marker = re.match(r"^(?:[-*•●▪◦‣⁃∙·‧\ufffd]+\s+|\(?\d{1,3}[.)]\s+)", line)
+        if not marker and heading_key(line) in boundary_keys:
+            break
+        if not line:
+            if not marked_current:
+                flush()
+            continue
+        if marker:
+            flush()
+            line = line[marker.end():].strip()
+            marked_current = True
+        elif re.match(r"^Note\s*:", line, re.I):
+            flush()
+            marked_current = False
+        if line:
+            if current and re.search(r"[A-Za-z]-$", current[-1]) and re.match(r"[a-z]", line):
+                current[-1] += line
+            else:
+                current.append(line)
+    flush()
+    return items if len(items) <= 100 else []
+
+
 def _blind_prepare_summary_bullets(cv_data):
     """Promote source Summary/About content before the provider blinds it."""
     if not isinstance(cv_data, dict):
