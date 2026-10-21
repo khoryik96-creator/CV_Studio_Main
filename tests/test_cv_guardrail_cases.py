@@ -120,6 +120,76 @@ class SourceCheckGuardrails(unittest.TestCase):
 
 
 class SourceRestoreGuardrails(unittest.TestCase):
+    def test_blind_source_summary_keeps_matching_provider_corrections(self):
+        for case in _cases("blind_source_recovery"):
+            with self.subTest(case=case["id"]):
+                parsed = copy.deepcopy(case["parsed"])
+                self.assertEqual(blind_mask._blind_preserve_summary_corrections(
+                    parsed, case["source"], correct_language=case.get("correct_language", False)
+                ), case["expect"], case["note"])
+                self.assertEqual(parsed, case["parsed"])
+
+    def test_blind_source_summary_keeps_original_points(self):
+        for case in _cases("blind_source_summary"):
+            with self.subTest(case=case["id"]):
+                self.assertEqual(
+                    blind_mask._blind_source_summary_bullets("\n".join(case["lines"])),
+                    case["expect"], case["note"],
+                )
+
+    def test_blind_source_summary_generated_lists_and_limits(self):
+        for count in (1, 2, 6, 20, 21, 100):
+            expected = [f"Delivered project {index} across regions." for index in range(count)]
+            for marker in ("•", "-", "\ufffd", "1.", "(2)"):
+                with self.subTest(count=count, marker=marker):
+                    source = "ABOUT HIM / HER\n" + "\n".join(
+                        f"{marker} Delivered project {index}\nacross regions." for index in range(count)
+                    ) + "\nWORK EXPERIENCES\n- Must not enter summary."
+                    self.assertEqual(blind_mask._blind_source_summary_bullets(source), expected)
+        for source in ("x" * 1_000_001, "\n" * 12_001,
+                       "SUMMARY\n" + "• A point.\n" * 101,
+                       "SUMMARY\n• " + "x" * 32_001):
+            started = time.perf_counter()
+            self.assertEqual(blind_mask._blind_source_summary_bullets(source), [])
+            self.assertLess(time.perf_counter() - started, 1)
+
+    def test_blind_source_summary_respects_all_shared_section_headings(self):
+        for key in sorted(blind_mask._SUMMARY_DOCX_SECTION_HEADING_KEYS):
+            word = key.title()
+            for heading, stop in (
+                (word, True), (word.upper(), True), ("2. " + word, True),
+                ("• " + word.upper(), True), ("- " + word + ":", True),
+                (" ".join(word.upper()), True), ("• " + word, False),
+                ("- " + word, False), ("* " + word, False),
+                ("Experience delivering " + word + " projects.", False),
+            ):
+                with self.subTest(key=key, heading=heading):
+                    source = "\n".join(["ABOUT HIM / HER", "• Senior engineer.",
+                                         heading, "• Built platforms.", "References"])
+                    if stop:
+                        expected = ["Senior engineer."]
+                    elif heading.startswith(("•", "-", "*")):
+                        expected = ["Senior engineer.", word, "Built platforms."]
+                    else:
+                        expected = ["Senior engineer. " + heading, "Built platforms."]
+                    self.assertEqual(blind_mask._blind_source_summary_bullets(source), expected)
+
+    def test_blind_summary_corrections_remain_bounded_and_keep_numeric_anchors(self):
+        for index in range(100):
+            source = [f"experinced engineer with kafka on team {index}."]
+            corrected = [f"Experienced engineer with Kafka on team {index}."]
+            self.assertEqual(blind_mask._blind_preserve_summary_corrections(
+                {"summary_bullets": corrected}, source, correct_language=True), corrected)
+            wrong_number = [f"Experienced engineer with Kafka on team {index+1}."]
+            self.assertEqual(blind_mask._blind_preserve_summary_corrections(
+                {"summary_bullets": wrong_number}, source, correct_language=True), source)
+        source = ["a" * 32_000]
+        for reply in (["b" * 32_000], ["a" * 32_001], ["a"] * 101):
+            started = time.perf_counter()
+            self.assertEqual(blind_mask._blind_preserve_summary_corrections(
+                {"summary_bullets": reply}, source, correct_language=True), source)
+            self.assertLess(time.perf_counter() - started, 1)
+
     def test_generated_blind_contribution_hints_stay_with_returned_text(self):
         category = "Contribution towards Projects / Taskforce"
         for index in range(100):

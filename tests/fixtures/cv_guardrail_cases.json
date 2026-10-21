@@ -16749,6 +16749,793 @@
     }
    ],
    "note": "An ordinary marked achievement keeps later groups; an unmarked section ends them."
+  },
+  {
+    "id": "B1-about-before-later-summary",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "Candidate",
+      "ABOUT HIM / HER",
+      "• Consultant with six years",
+      "of ERP experience.",
+      "• Delivered migrations.",
+      "Note: Open to training.",
+      "Private & Confidential | © Hyppies.com",
+      "W O R K E X P E R I E N C E S ____",
+      "Northwind",
+      "Summary:",
+      "Highly motivated consultant."
+    ],
+    "expect": [
+      "Consultant with six years of ERP experience.",
+      "Delivered migrations.",
+      "Note: Open to training."
+    ],
+    "note": "Keep source summary boundaries before blinding; defer when ambiguous."
+  },
+  {
+    "id": "B1-pdf-marker",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "� Led migrations",
+      "across regions.",
+      "� Supported users.",
+      "WORK EXPERIENCES"
+    ],
+    "expect": [
+      "Led migrations across regions.",
+      "Supported users."
+    ],
+    "note": "Keep source summary boundaries before blinding; defer when ambiguous."
+  },
+  {
+    "id": "B1-plain-paragraph",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "Professional Summary:",
+      "Experienced engineer with strong",
+      "delivery skills. Works across teams.",
+      "Skills",
+      "Python"
+    ],
+    "expect": [
+      "Experienced engineer with strong delivery skills. Works across teams."
+    ],
+    "note": "Keep source summary boundaries before blinding; defer when ambiguous."
+  },
+  {
+    "id": "B1-marked-heading-word",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "Profile",
+      "- Education",
+      "- Training",
+      "Skills",
+      "Python"
+    ],
+    "expect": [
+      "Education",
+      "Training"
+    ],
+    "note": "Keep source summary boundaries before blinding; defer when ambiguous."
+  },
+  {
+    "id": "B1-numbered-and-wrapped",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "SUMMARY",
+      "1. Designed systems",
+      "across regions.",
+      "2) Led delivery.",
+      "Education"
+    ],
+    "expect": [
+      "Designed systems across regions.",
+      "Led delivery."
+    ],
+    "note": "Keep source summary boundaries before blinding; defer when ambiguous."
+  },
+  {
+    "id": "B1-missing",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "Engineer",
+      "WORK EXPERIENCE",
+      "- Delivered migrations."
+    ],
+    "expect": [],
+    "note": "Keep source summary boundaries before blinding; defer when ambiguous."
+  },
+  {
+    "id": "B1-repeated-about",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "- First.",
+      "Skills",
+      "ABOUT HIM / HER",
+      "- Different.",
+      "References"
+    ],
+    "expect": [],
+    "note": "Keep source summary boundaries before blinding; defer when ambiguous."
+  },
+  {
+    "id": "B1-repeated-summary",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "Summary",
+      "- First.",
+      "Skills",
+      "Summary",
+      "- Different.",
+      "References"
+    ],
+    "expect": [],
+    "note": "Keep source summary boundaries before blinding; defer when ambiguous."
+  },
+  {
+    "id": "B1-no-false-heading",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "Summary of project results includes:",
+      "- Led delivery.",
+      "Education"
+    ],
+    "expect": [],
+    "note": "Keep source summary boundaries before blinding; defer when ambiguous."
+  },
+  {
+    "id": "B1-source-heading-only",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "WORK EXPERIENCE"
+    ],
+    "expect": [],
+    "note": "Keep source summary boundaries before blinding; defer when ambiguous."
+  },
+  {
+    "id": "B1-paragraph-blocks",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "Overview",
+      "Experienced engineer.",
+      "",
+      "Works across teams.",
+      "Education"
+    ],
+    "expect": [
+      "Experienced engineer.",
+      "Works across teams."
+    ],
+    "note": "Keep source summary boundaries before blinding; defer when ambiguous."
+  },
+  {
+    "id": "B1-crlf-wrap",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER\r",
+      "• Led delivery\r",
+      "across teams.\r",
+      "• Improved quality.\r",
+      "Private & Confidential | © Hyppies.com"
+    ],
+    "expect": [
+      "Led delivery across teams.",
+      "Improved quality."
+    ],
+    "note": "Keep source summary boundaries before blinding; defer when ambiguous."
+  },
+  {
+    "id": "B1-marked-summary-word",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "Profile",
+      "• Summary",
+      "• Delivered migrations.",
+      "Education"
+    ],
+    "expect": [
+      "Summary",
+      "Delivered migrations."
+    ],
+    "note": "A marked point named Summary is not a repeated source section."
+  },
+  {
+    "id": "B1-combined-boundary",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• Led migrations.",
+      "Skills and Competencies",
+      "• Python"
+    ],
+    "expect": [
+      "Led migrations."
+    ],
+    "note": "A recognized combined heading ends recovery."
+  },
+  {
+    "id": "B1-page-continuation-defers",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• First point.",
+      "Private & Confidential | © Hyppies.com",
+      "• Another point.",
+      "WORK EXPERIENCES"
+    ],
+    "expect": [],
+    "note": "A footer cannot silently truncate a summary that continues onto another page."
+  },
+  {
+    "id": "B1-hyphenated-wrap",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• Managed SLA-",
+      "driven delivery.",
+      "• Kept costs -",
+      "5% below budget.",
+      "WORK EXPERIENCE"
+    ],
+    "expect": [
+      "Managed SLA-driven delivery.",
+      "Kept costs - 5% below budget."
+    ],
+    "note": "Preserve hyphenated words across a physical line break, without joining a numeric sign."
+  },
+  {
+    "id": "B1-review-numbered-work-boundary",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• Experienced engineer.",
+      "2. WORK EXPERIENCE",
+      "2019 - 2024 | Northwind",
+      "Engineer",
+      "• Built pipelines.",
+      "3. EDUCATION",
+      "Bachelor of Computing"
+    ],
+    "expect": [
+      "Experienced engineer."
+    ],
+    "note": "Distinguish real section headings from ordinary marked summary content."
+  },
+  {
+    "id": "B1-review-numbered-summary-heading",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "1. PROFESSIONAL SUMMARY",
+      "• Led delivery.",
+      "2. WORK EXPERIENCE",
+      "• Built pipelines."
+    ],
+    "expect": [
+      "Led delivery."
+    ],
+    "note": "Distinguish real section headings from ordinary marked summary content."
+  },
+  {
+    "id": "B1-review-core-competencies-boundary",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "Professional Summary",
+      "• Experienced engineer.",
+      "Core Competencies",
+      "• Python",
+      "• Team leadership"
+    ],
+    "expect": [
+      "Experienced engineer."
+    ],
+    "note": "Distinguish real section headings from ordinary marked summary content."
+  },
+  {
+    "id": "B1-review-marked-uppercase-heading",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "Profile",
+      "• Experienced engineer.",
+      "• TECHNICAL SKILLS",
+      "• Python"
+    ],
+    "expect": [
+      "Experienced engineer."
+    ],
+    "note": "Distinguish real section headings from ordinary marked summary content."
+  },
+  {
+    "id": "B1-review-marked-colon-heading",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "Profile",
+      "• Experienced engineer.",
+      "- Core Skills:",
+      "• Python"
+    ],
+    "expect": [
+      "Experienced engineer."
+    ],
+    "note": "Distinguish real section headings from ordinary marked summary content."
+  },
+  {
+    "id": "B1-review-ordinary-marked-heading-words",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "Profile",
+      "• Core Skills",
+      "• Education",
+      "• Training",
+      "Work Experience"
+    ],
+    "expect": [
+      "Core Skills",
+      "Education",
+      "Training"
+    ],
+    "note": "Distinguish real section headings from ordinary marked summary content."
+  },
+  {
+    "id": "B1-review-language-correction",
+    "rule": "B1",
+    "kind": "blind_source_recovery",
+    "source": [
+      "experinced engineer with kafka."
+    ],
+    "parsed": {
+      "skills": [
+        {
+          "category": "Summary",
+          "items": "Experienced engineer with Kafka."
+        }
+      ]
+    },
+    "correct_language": true,
+    "expect": [
+      "Experienced engineer with Kafka."
+    ],
+    "note": "Retain matching parsed mechanics and unambiguous item boundaries without selecting another summary or changing numbers."
+  },
+  {
+    "id": "B1-review-case-punctuation",
+    "rule": "B1",
+    "kind": "blind_source_recovery",
+    "source": [
+      "engineer with kafka"
+    ],
+    "parsed": {
+      "summary_bullets": [
+        "Engineer with Kafka."
+      ]
+    },
+    "correct_language": false,
+    "expect": [
+      "Engineer with Kafka."
+    ],
+    "note": "Retain matching parsed mechanics and unambiguous item boundaries without selecting another summary or changing numbers."
+  },
+  {
+    "id": "B1-review-unmarked-provider-boundaries",
+    "rule": "B1",
+    "kind": "blind_source_recovery",
+    "source": [
+      "Led delivery teams. Designed data platforms."
+    ],
+    "parsed": {
+      "skills": [
+        {
+          "category": "Summary",
+          "items": "Led delivery teams.\nDesigned data platforms."
+        }
+      ]
+    },
+    "correct_language": false,
+    "expect": [
+      "Led delivery teams.",
+      "Designed data platforms."
+    ],
+    "note": "Retain matching parsed mechanics and unambiguous item boundaries without selecting another summary or changing numbers."
+  },
+  {
+    "id": "B1-review-later-summary-refused",
+    "rule": "B1",
+    "kind": "blind_source_recovery",
+    "source": [
+      "SAP consultant with six years of experience."
+    ],
+    "parsed": {
+      "skills": [
+        {
+          "category": "Summary",
+          "items": "Highly motivated professional with extensive experience."
+        }
+      ]
+    },
+    "correct_language": true,
+    "expect": [
+      "SAP consultant with six years of experience."
+    ],
+    "note": "Retain matching parsed mechanics and unambiguous item boundaries without selecting another summary or changing numbers."
+  },
+  {
+    "id": "B1-review-changed-numbers-refused",
+    "rule": "B1",
+    "kind": "blind_source_recovery",
+    "source": [
+      "Managed 12 teams."
+    ],
+    "parsed": {
+      "summary_bullets": [
+        "Managed 21 teams."
+      ]
+    },
+    "correct_language": true,
+    "expect": [
+      "Managed 12 teams."
+    ],
+    "note": "Retain matching parsed mechanics and unambiguous item boundaries without selecting another summary or changing numbers."
+  },
+  {
+    "id": "B1-review-reordered-points-refused",
+    "rule": "B1",
+    "kind": "blind_source_recovery",
+    "source": [
+      "Led teams.",
+      "Built platforms."
+    ],
+    "parsed": {
+      "summary_bullets": [
+        "Built platforms.",
+        "Led teams."
+      ]
+    },
+    "correct_language": true,
+    "expect": [
+      "Led teams.",
+      "Built platforms."
+    ],
+    "note": "Retain matching parsed mechanics and unambiguous item boundaries without selecting another summary or changing numbers."
+  },
+  {
+    "id": "B1-review-uncorrected-source-kept",
+    "rule": "B1",
+    "kind": "blind_source_recovery",
+    "source": [
+      "experinced engineer."
+    ],
+    "parsed": {
+      "summary_bullets": [
+        "Experienced engineer."
+      ]
+    },
+    "correct_language": false,
+    "expect": [
+      "experinced engineer."
+    ],
+    "note": "Retain matching parsed mechanics and unambiguous item boundaries without selecting another summary or changing numbers."
+  },
+  {
+    "id": "B1-review-decimal-number-refused",
+    "rule": "B1",
+    "kind": "blind_source_recovery",
+    "source": [
+      "Improved output by 1.2 percent."
+    ],
+    "parsed": {
+      "summary_bullets": [
+        "Improved output by 12 percent."
+      ]
+    },
+    "correct_language": true,
+    "expect": [
+      "Improved output by 1.2 percent."
+    ],
+    "note": "Preserve numeric and short-word meaning anchors while accepting narrow spelling changes."
+  },
+  {
+    "id": "B1-review-short-word-transposition",
+    "rule": "B1",
+    "kind": "blind_source_recovery",
+    "source": [
+      "Built teh platform."
+    ],
+    "parsed": {
+      "summary_bullets": [
+        "Built the platform."
+      ]
+    },
+    "correct_language": true,
+    "expect": [
+      "Built the platform."
+    ],
+    "note": "Preserve numeric and short-word meaning anchors while accepting narrow spelling changes."
+  },
+  {
+    "id": "B1-review-negation-preserved",
+    "rule": "B1",
+    "kind": "blind_source_recovery",
+    "source": [
+      "Did not deploy."
+    ],
+    "parsed": {
+      "summary_bullets": [
+        "Did now deploy."
+      ]
+    },
+    "correct_language": true,
+    "expect": [
+      "Did not deploy."
+    ],
+    "note": "Preserve numeric and short-word meaning anchors while accepting narrow spelling changes."
+  },
+  {
+    "id": "B1-review-polarity-preserved",
+    "rule": "B1",
+    "kind": "blind_source_recovery",
+    "source": [
+      "Increased revenue."
+    ],
+    "parsed": {
+      "summary_bullets": [
+        "Decreased revenue."
+      ]
+    },
+    "correct_language": true,
+    "expect": [
+      "Increased revenue."
+    ],
+    "note": "Preserve numeric and short-word meaning anchors while accepting narrow spelling changes."
+  },
+  {
+    "id": "B1-review-candidate-header-boundary",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• Led delivery.",
+      "Example Candidate | NOTICE PERIOD:",
+      "1 month",
+      "CURRENT COMPANY: Northwind",
+      "WORK EXPERIENCES"
+    ],
+    "expect": [
+      "Led delivery."
+    ],
+    "note": "Candidate table labels following a floating Word summary do not belong to its final bullet."
+  },
+  {
+    "id": "B1-shared-boundary-experience",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• Senior engineer.",
+      "EXPERIENCE",
+      "• Unrelated section detail.",
+      "References"
+    ],
+    "expect": [
+      "Senior engineer."
+    ],
+    "note": "The complete established summary-DOCX section vocabulary also ends Blind CV source-summary recovery."
+  },
+  {
+    "id": "B1-shared-boundary-employment",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• Senior engineer.",
+      "EMPLOYMENT",
+      "• Unrelated section detail.",
+      "References"
+    ],
+    "expect": [
+      "Senior engineer."
+    ],
+    "note": "The complete established summary-DOCX section vocabulary also ends Blind CV source-summary recovery."
+  },
+  {
+    "id": "B1-shared-boundary-work-history",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• Senior engineer.",
+      "WORK HISTORY",
+      "• Unrelated section detail.",
+      "References"
+    ],
+    "expect": [
+      "Senior engineer."
+    ],
+    "note": "The complete established summary-DOCX section vocabulary also ends Blind CV source-summary recovery."
+  },
+  {
+    "id": "B1-shared-boundary-professional-skills",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• Senior engineer.",
+      "PROFESSIONAL SKILLS",
+      "• Unrelated section detail.",
+      "References"
+    ],
+    "expect": [
+      "Senior engineer."
+    ],
+    "note": "The complete established summary-DOCX section vocabulary also ends Blind CV source-summary recovery."
+  },
+  {
+    "id": "B1-shared-boundary-relevant-experience",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• Senior engineer.",
+      "Relevant Experience",
+      "• Unrelated section detail.",
+      "References"
+    ],
+    "expect": [
+      "Senior engineer."
+    ],
+    "note": "The complete established summary-DOCX section vocabulary also ends Blind CV source-summary recovery."
+  },
+  {
+    "id": "B1-shared-boundary-industry-experience",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• Senior engineer.",
+      "2. Industry Experience",
+      "• Unrelated section detail.",
+      "References"
+    ],
+    "expect": [
+      "Senior engineer."
+    ],
+    "note": "The complete established summary-DOCX section vocabulary also ends Blind CV source-summary recovery."
+  },
+  {
+    "id": "B1-shared-boundary-career-background",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• Senior engineer.",
+      "- CAREER BACKGROUND",
+      "• Unrelated section detail.",
+      "References"
+    ],
+    "expect": [
+      "Senior engineer."
+    ],
+    "note": "The complete established summary-DOCX section vocabulary also ends Blind CV source-summary recovery."
+  },
+  {
+    "id": "B1-shared-boundary-it-skills",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• Senior engineer.",
+      "- IT Skills:",
+      "• Unrelated section detail.",
+      "References"
+    ],
+    "expect": [
+      "Senior engineer."
+    ],
+    "note": "The complete established summary-DOCX section vocabulary also ends Blind CV source-summary recovery."
+  },
+  {
+    "id": "B1-shared-boundary-project-history",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• Senior engineer.",
+      "Project History",
+      "• Unrelated section detail.",
+      "References"
+    ],
+    "expect": [
+      "Senior engineer."
+    ],
+    "note": "The complete established summary-DOCX section vocabulary also ends Blind CV source-summary recovery."
+  },
+  {
+    "id": "B1-shared-boundary-career-highlights",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• Senior engineer.",
+      "Career Highlights",
+      "• Unrelated section detail.",
+      "References"
+    ],
+    "expect": [
+      "Senior engineer."
+    ],
+    "note": "The complete established summary-DOCX section vocabulary also ends Blind CV source-summary recovery."
+  },
+  {
+    "id": "B1-shared-boundary-licence",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• Senior engineer.",
+      "LICENCE",
+      "• Unrelated section detail.",
+      "References"
+    ],
+    "expect": [
+      "Senior engineer."
+    ],
+    "note": "The complete established summary-DOCX section vocabulary also ends Blind CV source-summary recovery."
+  },
+  {
+    "id": "B1-shared-boundary-training-programme",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• Senior engineer.",
+      "Participated Training Programme",
+      "• Unrelated section detail.",
+      "References"
+    ],
+    "expect": [
+      "Senior engineer."
+    ],
+    "note": "The complete established summary-DOCX section vocabulary also ends Blind CV source-summary recovery."
+  },
+  {
+    "id": "B1-shared-boundary-after-footer",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• Senior engineer.",
+      "Private & Confidential",
+      "EXPERIENCE",
+      "• Unrelated work detail."
+    ],
+    "expect": [
+      "Senior engineer."
+    ],
+    "note": "A footer followed by an established section heading ends a complete source summary."
   }
  ]
 }

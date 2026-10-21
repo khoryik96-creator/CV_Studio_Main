@@ -6,6 +6,9 @@ const vm = require('vm');
 
 const html = require('./frontend_sources').frontendSource();
 const generate = fs.readFileSync('generate.js', 'utf8');
+// Both entry points opt into source summary preservation only for Blind CV.
+assert.ok(/cv_text: raw,.*preserve_source_summary: blind\}/.test(html));
+assert.ok(/cv_text: rawText,.*preserve_source_summary: isBlind \}/.test(html));
 
 function fnFrom(source, name) {
   const start = source.indexOf('function ' + name + '(');

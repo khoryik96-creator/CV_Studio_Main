@@ -51,6 +51,13 @@ rules D2/D4 and the v438 QA report.
 
 ## The pipeline (source doc → formatted DOCX)
 
+Blind source-summary recovery and DOCX summary replacement use the same
+`_SUMMARY_DOCX_SECTION_HEADING_KEYS` vocabulary from `cvstudio_blind_mask.py`.
+Keep this single authority when adding section aliases: missing a boundary can
+copy unrelated work or skills into the summary. Source recovery still accepts
+its additional aliases and distinguishes strong headings from ordinary marked
+points. The app-level compatibility name remains available.
+
 1. **`/extract-text`** (`app.py`) — pulls raw text from the upload: `pdfplumber`
    for PDF and verified `antiword` first for legacy `.doc`. If the verified
    runtime rejects only that document, an optional installed Microsoft Word
@@ -263,6 +270,29 @@ then uses `_blind_restore_cv_bullet_structure` to reapply the original role
 container shape only when the original and already-blinded flattened text
 counts match exactly. It never copies source wording or unknown source fields;
 a mismatch is left untouched instead of guessed.
+
+Blind mode in single and batch formatting opts into `/parse` with
+`preserve_source_summary: true`. `_blind_source_summary_bullets` reads a unique
+headed About / Summary block before masking, prioritizing an explicit About box
+over a later generic Summary. Wrapped lines stay with their marked point; a
+separate Note remains its own item, and plain paragraphs stay paragraphs.
+Ambiguous/oversized blocks and possible page continuations defer to the existing
+provider interpretation. Competing parsed summary categories are removed before
+the pay filter, so an emptied pay-only About box cannot fall back to a later
+paragraph. User-linked summaries still replace the parse result afterward.
+Normal Format CV and Create Profile do not opt in. See guardrail B1 and its
+anonymized cases; never recover source strings after the blinding call.
+
+The v24.6.466 review correction shares genuine Word list detection between
+legacy extraction and `/extract-text`, preserving direct/inherited numbering,
+explicit `numId=0`, cell boundaries and body/table order. Summary recovery
+recognizes strong marked section headings, the existing skills-section aliases
+and candidate-details rows. It guides the same parse request with the selected
+points in user-message data, then retains aligned provider mechanics and
+requested spelling corrections with unchanged numeric/order anchors. When
+plain-text extraction lacks list evidence, exactly matching provider item
+boundaries survive. No additional paid request or post-blind source recovery
+is introduced.
 
 ## ⚠️ Highest-risk code
 

@@ -11,8 +11,86 @@ This module never imports ``app``.
 """
 
 import copy
+import difflib
 import functools
 import re
+
+
+# Shared by source-summary recovery and the app's DOCX summary replacement.
+# Keep one vocabulary so both paths stop at every established CV section.
+_SUMMARY_DOCX_SECTION_HEADING_KEYS = frozenset({
+    "experience",
+    "professionalexperience",
+    "professionalexperiences",
+    "workexperience",
+    "workexperiences",
+    "workingexperience",
+    "relevantexperience",
+    "industryexperience",
+    "employment",
+    "employmentexperience",
+    "employmenthistory",
+    "careerhistory",
+    "careerbackground",
+    "workhistory",
+    "education",
+    "educationqualifications",
+    "academicbackground",
+    "academicqualifications",
+    "qualifications",
+    "skills",
+    "keyskills",
+    "technicalskills",
+    "professionalskills",
+    "coreskills",
+    "itskills",
+    "coreexpertise",
+    "expertise",
+    "competencies",
+    "corecompetencies",
+    "certification",
+    "certifications",
+    "license",
+    "licenses",
+    "licence",
+    "licences",
+    "accreditation",
+    "accreditations",
+    "project",
+    "projects",
+    "projecthistory",
+    "projectinvolvementhistory",
+    "achievement",
+    "achievements",
+    "careerhighlights",
+    "professionalhighlights",
+    "selectedaccomplishments",
+    "accomplishments",
+    "award",
+    "awards",
+    "honour",
+    "honours",
+    "honor",
+    "honors",
+    "reference",
+    "references",
+    "language",
+    "languages",
+    "publication",
+    "publications",
+    "interest",
+    "interests",
+    "membership",
+    "memberships",
+    "professionaldevelopment",
+    "training",
+    "trainingprogramme",
+    "participatedtrainingprogramme",
+    "volunteerexperience",
+    "volunteering",
+    "personaldetails",
+    "additionalinformation",
+})
 
 
 _BLIND_ORG_TECH_ALLOWLIST = {
@@ -524,6 +602,179 @@ def _blind_summary_items(value, *, limit=20):
         if clean:
             out.append(clean)
     return out if limit is None else out[:limit]
+
+
+def _blind_source_summary_bullets(source_text):
+    """Read a unique source summary before masking; never repair from source after it."""
+    if not isinstance(source_text, str):
+        return []
+    # This is a layout correction, not another document parser. Refuse excessive
+    # inputs/sections rather than returning a silently truncated summary.
+    if len(source_text) > 1_000_000 or source_text.count("\n") > 12_000:
+        return []
+    lines = source_text.splitlines()
+    about_keys = {"abouthimher", "abouthim", "abouther", "aboutthecandidate"}
+    summary_keys = about_keys | {
+        "summary", "professionalsummary", "executivesummary", "profile",
+        "professionalprofile", "careerprofile", "objective", "careerobjective", "overview",
+    }
+    boundary_keys = summary_keys | _SUMMARY_DOCX_SECTION_HEADING_KEYS | {
+        "workexperience", "workexperiences", "workingexperience", "professionalexperience",
+        "employmenthistory", "careerhistory", "education", "educationalbackground",
+        "academicqualifications", "qualifications", "certifications", "certification",
+        "educationcertification", "educationcertifications", "educationandcertifications",
+        "educationsandtraining", "educationtraining", "educationandtraining",
+        "educationqualifications", "educationbackground", "academicbackground",
+        "professionalqualifications", "certificationstraining", "coursestraining",
+        "trainingcourses", "trainingdevelopment", "licenses", "licensescertifications",
+        "skills", "technicalskills", "softskills", "languages", "languageproficiency",
+        "skillsandcompetencies", "coreexpertise", "competencies", "competency",
+        "additionalinformation", "otherinformation", "personaldetails", "personalparticulars",
+        "achievements", "awards", "training", "projects", "references", "referees",
+        "hobbies", "interests", "professionaldevelopment",
+        "awardsachievements", "publications", "professionalaffiliations",
+        "professionalmemberships", "memberships", "volunteer", "volunteering",
+        "volunteerexperience", "volunteercommunity", "communityinvolvement",
+        "coreskills", "keyskills", "corecompetencies", "strengths", "keystrengths",
+        "areasofexpertise", "expertise", "specialties", "certificates", "accreditations",
+        "professionalcertifications", "trainings", "courses", "shortcourses", "workshops",
+        "reference", "referee", "refereedetails", "professionalreferences", "characterreferences",
+    }
+    marker_re = re.compile(r"^(?:[-*•●▪◦‣⁃∙·‧\ufffd]+\s+|\(?\d{1,3}[.)]\s+)")
+
+    def heading_key(line):
+        # Letter-spaced template headings and decorative underlines are layout.
+        # Reject digits/sentences instead of mistaking prose for a heading.
+        if (len(line) > 120 or re.search(r"[0-9.!?]", line)
+                or re.match(r"^[-*•●▪◦‣⁃∙·‧\ufffd]+\s+", line)):
+            return ""
+        return re.sub(r"[^a-z]", "", line.lower())
+
+    def section_key(line):
+        marker = marker_re.match(line)
+        if marker:
+            text = line[marker.end():].strip()
+            letters = [char for char in text if char.isalpha()]
+            numbered = bool(re.match(r"\(?\d", marker.group()))
+            if not (numbered or text.endswith(":") or (letters and all(char.isupper() for char in letters))):
+                return ""
+            return heading_key(text)
+        return heading_key(line)
+
+    starts = [(index, section_key(line.strip())) for index, line in enumerate(lines)
+              if section_key(line.strip()) in summary_keys]
+    about = [item for item in starts if item[1] in about_keys]
+    selected = about or starts
+    if len(selected) != 1:
+        return []
+    start = selected[0][0] + 1
+    items, current = [], []
+    marked_current = False
+    section_size = 0
+
+    def flush():
+        if current:
+            items.append(" ".join(current))
+            current.clear()
+
+    for index, raw in enumerate(lines[start:], start):
+        line = raw.strip()
+        section_size += len(raw)
+        if section_size > 32_000 or len(items) > 100:
+            return []
+        if re.match(r"^Private\s*&\s*Confidential\b", line, re.I):
+            following = next((value.strip() for value in lines[index + 1:]
+                              if value.strip()), "")
+            if following and section_key(following) not in boundary_keys:
+                # A footer alone cannot prove the summary ended: it may carry
+                # on onto the next page. Defer rather than retaining half of it.
+                return []
+            break
+        # Some searchable PDFs expose an undefined bullet glyph as U+FFFD.
+        marker = marker_re.match(line)
+        if section_key(line) in boundary_keys:
+            break
+        if not marker and re.search(
+            r"(?:^|\|)\s*(?:notice\s+period|current\s+(?:position|company)|languages)\s*:", line, re.I
+        ):
+            # Word's floating About box can precede the candidate-details table
+            # in XML order. Those labelled cells never belong to its last point.
+            break
+        if not line:
+            if not marked_current:
+                flush()
+            continue
+        if marker:
+            flush()
+            line = line[marker.end():].strip()
+            marked_current = True
+        elif re.match(r"^Note\s*:", line, re.I):
+            flush()
+            marked_current = False
+        if line:
+            if current and re.search(r"[A-Za-z]-$", current[-1]) and re.match(r"[a-z]", line):
+                current[-1] += line
+            else:
+                current.append(line)
+    flush()
+    return items if len(items) <= 100 else []
+
+
+def _blind_preserve_summary_corrections(parsed, source, *, correct_language=False):
+    """Keep grounded parsed mechanics while restoring the selected source section."""
+    original = list(source)
+    if not isinstance(parsed, dict) or not source:
+        return original
+
+    def key(value):
+        return re.sub(r"[\W_]+", "", value.casefold())
+
+    def matches(left, right):
+        if re.findall(r"\d+", left) != re.findall(r"\d+", right):
+            return False
+        if key(left) == key(right):
+            return True
+        if correct_language is not True or max(len(left), len(right)) > 2000:
+            return False
+        # Only small spelling changes are eligible. Dates/numbers, word order
+        # and short meaning-bearing words (e.g. not/now) must remain unchanged.
+        before = re.findall(r"\w+", left.casefold())
+        after = re.findall(r"\w+", right.casefold())
+        if len(before) != len(after):
+            return False
+        for old, new in zip(before, after):
+            if old == new:
+                continue
+            swapped = (len(old) == len(new) and len(old) >= 3
+                       and any(old[:i] + old[i+1] + old[i] + old[i+2:] == new
+                               for i in range(len(old)-1)))
+            if swapped:
+                continue
+            if (min(len(old), len(new)) < 4 or max(len(old), len(new)) > 80
+                    or old[0] != new[0]):
+                return False
+            edits = difflib.SequenceMatcher(None, old, new, autojunk=False).get_opcodes()
+            if sum(max(i2-i1, j2-j1) for tag, i1, i2, j1, j2 in edits if tag != "equal") > 2:
+                return False
+        return True
+
+    candidates = [parsed.get("summary_bullets")]
+    for skill in parsed.get("skills") or []:
+        if isinstance(skill, dict) and _BLIND_SUMMARY_CATEGORY_RE.fullmatch(str(skill.get("category") or "").strip()):
+            candidates.append(skill.get("items"))
+    for value in candidates[:101]:
+        bullets = _blind_summary_items(value, limit=None)
+        if not bullets or len(bullets) > 100 or sum(map(len, bullets)) > 32_000:
+            continue
+        if len(bullets) == len(source) and all(matches(old, new) for old, new in zip(source, bullets)):
+            return bullets
+        # Unmarked DOCX/pasted lines can be genuinely ambiguous. Retain existing
+        # provider item boundaries only when every source character still matches.
+        if (len(source) == 1 and len(bullets) > 1
+                and key(source[0]) == key(" ".join(bullets))
+                and re.findall(r"\d+", source[0]) == re.findall(r"\d+", " ".join(bullets))):
+            return bullets
+    return original
 
 
 def _blind_prepare_summary_bullets(cv_data):
