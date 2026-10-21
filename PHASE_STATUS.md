@@ -4,6 +4,31 @@
 
 ## Release state
 
+- Merge-review compatibility correction: v24.6.464 on
+  `codex/v24.6.463-sourcer-simple-start`, PR #234. The companion retains Chrome
+  116 support, exposing the active flag beside optional recency metadata. Startup
+  prioritizes an active compatible tab when recency is unavailable/tied, while
+  retaining manual selection and modern recency ordering. Both new focused
+  regressions failed before the correction; all 42 JavaScript suites pass.
+  Full isolated Python: 1,737 passed, four skipped, 7,599 subtests; source/native
+  preflight and 24 source smoke assertions passed. PR checks/review precede merge. See
+  `cv_studio_v24_6_464_sourcer_tab_compatibility_qa_report.md`.
+
+- Owner-requested simpler Sourcer startup: v24.6.463,
+  `codex/v24.6.463-sourcer-simple-start`, from merged v462 `b4f4760`.
+  Open search/type detection is automatic, manual controls are under Search
+  options, and the explicit DeepSeek permission remains visible. Readiness failures
+  preserve candidate results and cannot start paid work. A failing-before test
+  caught same-profile trailing slashes wrongly relinquishing background-tab
+  ownership; the bounded correction preserves activation, identity, query/hash,
+  pending-navigation and document checks. Full isolated Python: 1,737 passed,
+  four skipped, 7,599 subtests; all 42 JavaScript suites, source/native preflight
+  and 24 source smoke assertions passed. Actual UI/controller/
+  backend checks use fictional profiles and simulated companion/provider transport.
+  See `cv_studio_v24_6_463_sourcer_simple_start_qa_report.md`.
+  Published at owner request as PR #234; v464 above corrects its review finding
+  before merge. No owner installed-app update.
+
 - Owner-requested companion control polish and Job Leads preview: v24.6.462,
   `codex/v24.6.462-job-leads-polish-preview`, from merged v461 `854109b`.
   Folder controls share consistent borders, spacing and sizing without changing
@@ -17,7 +42,7 @@
   content-script browser fixtures use sample data and simulated companion
   transport; no live installed-companion claim. See
   `cv_studio_v24_6_462_job_leads_preview_polish_qa_report.md`.
-  Local checkpoint only; no push, PR, merge or installed-app update.
+  Subsequently merged with owner authorization as PR #233, squash `b4f4760`.
 
 - Owner-requested LinkedIn ad controls: v24.6.461,
   `codex/v24.6.461-linkedin-ad-controls`, from merged v460 `0f80bc5`.

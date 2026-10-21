@@ -8,18 +8,25 @@ reference, and is not imported by the main app.
 ## User workflow
 
 1. Open **LinkedIn Sourcer** in CV Studio.
-2. Expand **Connect the browser companion once**, download/extract its ZIP, and
+2. Expand **Browser connection help**, download/extract its ZIP, and
    load the extracted folder through Chrome's **Load unpacked** control.
 3. Open CV Studio in Chrome and click the companion toolbar icon to connect that
    specific app document. Ordinary service-worker suspension retains that binding
    and run limits after exact-document revalidation. Reloading CV Studio,
    restarting Chrome, or reloading/updating the extension requires reconnecting.
    No additional API key, pairing code or POC server is needed.
-4. Open a LinkedIn search tab, return to the module and refresh the tab list.
-   Choose People search, Recruiter Lite or Recruiter and select the source tab.
-   **Review the search already open** retains its existing filters.
-5. Enter the brief, choose 1–15 pages and the API-attempt ceiling, confirm the
-   displayed DeepSeek use, and start. Try one page before increasing the limit.
+4. Open a LinkedIn People or Recruiter search in that browser. The module detects
+   the source and search type automatically; it preserves an existing selection
+   or chooses the most recently used compatible search when that metadata exists.
+   When recency is missing/tied, an active compatible tab takes priority; a
+   remaining tie keeps browser order. Manual selection stays authoritative.
+   A status line identifies
+   the chosen tab. Existing search filters are kept by default; the brief ranks
+   these results and does not change their location filters.
+5. Enter the brief, tick **Use DeepSeek for this search**, then **Start search**.
+   **Search options** retains manual source/type selection, new-keyword search,
+   1–15 pages and the 1–80 request ceiling. The default remains 10 pages / 35
+   requests, displayed beside the explicit balance/data-sharing permission.
 6. Review exact supporting quotes, missing requirements, source provenance and
    links. Export CSV or Clear when finished. Candidate results stay in browser
    session storage, not durable CV Studio records or diagnostic logs.
@@ -102,6 +109,20 @@ mount controls in an existing text column; native layout/styles and profile
 actions remain unchanged. Folder operations/removal require both updated app and
 companion, refreshed pages and reconnection. See Job Leads notes for restore,
 partial-failure and editing-draft behavior.
+
+The v463 startup checks the companion and selected source before starting paid
+work. Missing/disconnected sources and rejected starts keep the previous list.
+Stop during detection cannot start a paid request. Automatic discovery runs on
+panel initialization and Start, while manual selections remain available.
+No paid confirmation, provider retry or exact-document gate is removed.
+
+Profile-tab ownership in v463 accepts a single added trailing slash on the exact
+observed profile URL. The old byte comparison rejected that same-identity change;
+its regression failed before the correction. Query/hash changes, another profile,
+user activation and mismatched pending navigations still relinquish ownership.
+Checks before/after script injection, suspension recovery, cleanup and page/profile
+budgets remain. This reproduces a possible browser-action failure, not proof of the
+precise failure shown in the owner's screenshot, which had already screened cards.
 
 `tests/test_linkedin_sourcer.py` exercises the service, real guarded route,
 download, provider/cost wiring and cancellation with mocked transport.

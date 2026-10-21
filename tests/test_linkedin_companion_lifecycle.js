@@ -34,6 +34,21 @@ function fixture(){
     navigate:id=>rpc('navigate',{run_id:run,tab_id:id,url:second}),end:()=>rpc('end',{run_id:run})};
 }
 const cases=[
+  ['a trailing slash on the same profile is still the owned page',async()=>{
+    const f=fixture();await f.arm();await f.begin();await f.observe();const id=(await f.create()).result;
+    f.tabs.get(id).url=first+'/';await f.hooks().updated(id,{url:first+'/'});
+    f.boot();assert.equal((await f.rpc('read',{run_id:f.run,tab_id:id,method:'readProfile',values:[first]})).result,true);
+    assert((await f.navigate(id)).result);f.tabs.get(id).url=second+'/';await f.hooks().updated(id,{url:second+'/'});
+    await f.end();assert(!f.tabs.has(id),'same-page slash variants remain eligible for conservative cleanup');
+  }],
+  ['query/hash/another profile never inherit slash normalization',async()=>{
+    for(const changed of [first+'/?tracking=1',first+'/#about',second+'/',first+'/extra']){
+      const f=fixture();await f.arm();await f.begin();await f.observe();const id=(await f.create()).result;
+      f.tabs.get(id).url=changed;await f.hooks().updated(id,{url:changed});
+      assert((await f.rpc('read',{run_id:f.run,tab_id:id,method:'readProfile',values:[first]})).error);
+      await f.end();assert(f.tabs.has(id),'changed pages are neither read nor closed');
+    }
+  }],
   ['binding and limits survive a fresh worker',async()=>{
     const f=fixture();await f.arm();f.boot();assert((await f.rpc('tabs')).result,'idle worker restart preserves the same app binding');
     await f.begin();await f.observe();const id=(await f.create()).result;

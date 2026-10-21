@@ -3,17 +3,19 @@
   const el = id => document.getElementById('liSourcer' + id);
   const hex = () => crypto.randomUUID().replaceAll('-', '');
   const channel = hex(), pending = new Map();
-  let agent = null, run = null, abort = null, results = [], browserRun = '', busy = false;
+  let agent = null, run = null, abort = null, results = [], browserRun = '', busy = false, runOptions = null, setupSequence = 0;
   function tell(value) { el('Status').textContent = value; }
   function controls() {
     el('Start').disabled = busy; el('Stop').disabled = !busy && (!run || run.stopped);
     el('Export').disabled = !results.length; el('Clear').disabled = busy;
     for (const name of ['Brief', 'Mode', 'Pages', 'Calls', 'Source', 'OpenSearch', 'Consent', 'Refresh']) el(name).disabled = busy;
+    el('Limits').textContent = `Up to ${el('Pages').value} pages · ${el('Calls').value} API requests.`;
   }
-  function rpc(action, args = {}) {
+  const connectionHelp = 'Open this CV Studio page in Chrome or Brave, click the companion toolbar icon, then try again. Reconnect after refreshing CV Studio.';
+  function rpc(action, args = {}, waitMs = 12000) {
     return new Promise((resolve, reject) => {
       const id = hex();
-      const timer = setTimeout(() => { pending.delete(id); reject(Error('Connect the companion in Chrome, then refresh LinkedIn tabs.')); }, 12000);
+      const timer = setTimeout(() => { pending.delete(id); reject(Error(connectionHelp)); }, waitMs);
       pending.set(id, {resolve, reject, timer});
       window.postMessage({type: 'CVSTUDIO_LINKEDIN_REQUEST', id, channel, action, args}, location.origin);
     });
@@ -42,11 +44,11 @@
   async function begin() {
     if (!run || abort?.signal.aborted) throw Error('Stopped.');
     if (browserRun === run.id) return;
-    await rpc('begin', {run_id: run.id, source_tab_id: Number(el('Source').value), mode: el('Mode').value, max_pages: Number(el('Pages').value)}); browserRun = run.id;
+    await rpc('begin', {run_id: run.id, source_tab_id: runOptions.source, mode: runOptions.mode, max_pages: runOptions.max_pages}); browserRun = run.id;
   }
   const browser = {
     async activeTab() {
-      const id = Number(el('Source').value);
+      const id = runOptions.source;
       const tabs = await rpc('tabs'); const selected = tabs.find(tab => tab.id === id);
       if (!selected) throw Error('Choose a LinkedIn search tab first.');
       if (CVLinkedinCore.profileURL(selected.url)) throw Error('Choose a LinkedIn search or home tab, rather than a profile page.');
@@ -88,16 +90,45 @@
     controls();
     try { sessionStorage.setItem('cvstudio_linkedin_sourcer', JSON.stringify({run, results})); } catch { tell('Session storage is unavailable. Export the current list before closing.'); }
   }
-  window.refreshLinkedinSourcerTabs = async function() {
+  function sourceMode(tab) {
+    if (CVLinkedinCore.isSearchURL(tab.url,'standard')) return 'standard';
+    if (CVLinkedinCore.isSearchURL(tab.url,'recruiter')) return /\blite\b/i.test(tab.title || '') ? 'lite' : 'recruiter';
+    return 'standard';
+  }
+  async function discoverTabs() {
+    const sequence = ++setupSequence;
+    el('Connection').textContent = 'Checking your LinkedIn search…';
     try {
-      const tabs = (await rpc('tabs')).filter(tab => !CVLinkedinCore.profileURL(tab.url)); const selected = el('Source').value; el('Source').replaceChildren();
-      for (const tab of tabs) { const option = document.createElement('option'); option.value = tab.id; option.textContent = tab.title; el('Source').append(option); }
+      const tabs = (await rpc('tabs',{},2500)).filter(tab => {
+        if (CVLinkedinCore.profileURL(tab.url)) return false;
+        const mode = el('Mode').value === 'auto' ? sourceMode(tab) : el('Mode').value;
+        return CVLinkedinCore.isSearchURL(tab.url,mode) || !el('OpenSearch').checked && mode === 'standard' && /^https:\/\/www\.linkedin\.com\/(?:feed\/?)?(?:[?#]|$)/.test(tab.url);
+      }).sort((a,b) => (b.lastAccessed || 0) - (a.lastAccessed || 0) || Number(b.active === true) - Number(a.active === true));
+      if (sequence !== setupSequence) return null;
+      const selected = el('Source').value; el('Source').replaceChildren();
+      for (const tab of tabs) { const option = document.createElement('option'); option.value = String(tab.id); option.textContent = tab.title; el('Source').append(option); }
       if ([...el('Source').options].some(option => option.value === selected)) el('Source').value = selected;
-      tell(tabs.length ? 'Browser connected. Choose the search tab to use.' : 'Connected. Open a LinkedIn search in Chrome, then refresh tabs.');
-    } catch (error) { tell(error.message); }
+      else if (tabs.length) el('Source').value = String(tabs[0].id);
+      const source = tabs.find(tab => String(tab.id) === el('Source').value);
+      el('Connection').textContent = source ? 'Connected · ' + source.title + (el('OpenSearch').checked ? ' · keeping its filters' : ' · new keywords from your brief') : 'Companion connected. Open a LinkedIn People or Recruiter search, then start. It will be detected automatically.';
+      if (!source) el('Options').open = true;
+      return source;
+    } catch (error) {
+      if (sequence === setupSequence) { el('Connection').textContent = connectionHelp; el('Setup').open = true; }
+      throw error;
+    }
+  }
+  window.refreshLinkedinSourcerTabs = async function() {
+    if (busy) return;
+    try { await discoverTabs(); } catch { /* Connection guidance is shown beside the brief. */ }
   };
+  for (const name of ['Mode','OpenSearch']) el(name).addEventListener('change',window.refreshLinkedinSourcerTabs);
+  for (const name of ['Pages','Calls']) el(name).addEventListener('input',controls);
+  el('OpenSearch').addEventListener('change',() => { el('ConnectionHint').textContent = el('OpenSearch').checked ? 'Your brief ranks the current results. Set location and other filters on LinkedIn first.' : 'New keywords will be generated from your brief. Check the location and filters on LinkedIn.'; });
+  el('Source').addEventListener('change',() => { if (!busy) window.refreshLinkedinSourcerTabs(); });
   window.initLinkedinSourcer = async function() {
-    if (!el('Brief')) return;
+    if (!el('Brief') || busy) return;
+    window.refreshLinkedinSourcerTabs();
     try {
       if (!agent && !busy && !results.length) { const saved = JSON.parse(sessionStorage.getItem('cvstudio_linkedin_sourcer') || 'null'); if (saved) { run = saved.run; results = saved.results || []; } }
       const state = await api('/api/status'); if (!busy) run = state.run;
@@ -110,17 +141,26 @@
     if (busy) return;
     const options = {brief: el('Brief').value.trim(), mode: el('Mode').value, max_pages: Number(el('Pages').value),
       max_calls: Number(el('Calls').value), confirm_paid: el('Consent').checked, use_open_search: el('OpenSearch').checked};
-    if (!options.confirm_paid) { tell('Confirm the displayed DeepSeek use before starting.'); return; }
+    if (!options.confirm_paid) { tell('Tick “Use DeepSeek for this search” below your brief, then start.'); el('Consent').focus(); return; }
     if (options.brief.length < 5) { tell('Describe the role, location and skills you need.'); return; }
-    busy = true; results = []; abort = new AbortController(); browserRun = ''; draw();
+    if (!Number.isInteger(options.max_pages) || options.max_pages < 1 || options.max_pages > 15 || !Number.isInteger(options.max_calls) || options.max_calls < 1 || options.max_calls > 80) { el('Options').open = true; tell('Choose 1–15 pages and 1–80 API requests in Search options.'); return; }
+    busy = true; abort = new AbortController(); browserRun = ''; draw();
     const activity = markTabRunning('linkedinsourcer');
     let failed = false;
-    agent = new CVLinkedinCore.Agent({api, browser, signal: abort.signal, update: patch => {
-      if (patch.run) run = patch.run; if (patch.results) results = patch.results; if (patch.status) tell(patch.status);
-      if (patch.plan) el('Query').textContent = 'Search: ' + patch.plan.query;
-      draw();
-    }});
-    try { await agent.start(options); }
+    try {
+      tell('Finding your open LinkedIn search…');
+      const source = await discoverTabs();
+      if (abort.signal.aborted) throw Error('Stopped.');
+      if (!source) throw Error('Open a LinkedIn People or Recruiter search in this browser, then start again. Your current candidate list is kept.');
+      options.mode = options.mode === 'auto' ? sourceMode(source) : options.mode;
+      runOptions = {...options,source:source.id};
+      agent = new CVLinkedinCore.Agent({api, browser, signal: abort.signal, update: patch => {
+        if (patch.run) run = patch.run; if (patch.results) results = patch.results; if (patch.status) tell(patch.status);
+        if (patch.plan) el('Query').textContent = 'Search: ' + patch.plan.query;
+        draw();
+      }});
+      await agent.start(options);
+    }
     catch (error) { failed = !abort.signal.aborted; tell(abort.signal.aborted ? 'Stopped. Your current list is kept.' : error.message); }
     finally {
       if (browserRun) { try { await rpc('end', {run_id: browserRun}); } catch {} browserRun = ''; }
