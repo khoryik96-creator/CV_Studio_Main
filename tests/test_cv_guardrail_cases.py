@@ -120,6 +120,15 @@ class SourceCheckGuardrails(unittest.TestCase):
 
 
 class SourceRestoreGuardrails(unittest.TestCase):
+    def test_blind_source_summary_keeps_matching_provider_corrections(self):
+        for case in _cases("blind_source_recovery"):
+            with self.subTest(case=case["id"]):
+                parsed = copy.deepcopy(case["parsed"])
+                self.assertEqual(blind_mask._blind_preserve_summary_corrections(
+                    parsed, case["source"], correct_language=case.get("correct_language", False)
+                ), case["expect"], case["note"])
+                self.assertEqual(parsed, case["parsed"])
+
     def test_blind_source_summary_keeps_original_points(self):
         for case in _cases("blind_source_summary"):
             with self.subTest(case=case["id"]):
@@ -142,6 +151,22 @@ class SourceRestoreGuardrails(unittest.TestCase):
                        "SUMMARY\n• " + "x" * 32_001):
             started = time.perf_counter()
             self.assertEqual(blind_mask._blind_source_summary_bullets(source), [])
+            self.assertLess(time.perf_counter() - started, 1)
+
+    def test_blind_summary_corrections_remain_bounded_and_keep_numeric_anchors(self):
+        for index in range(100):
+            source = [f"experinced engineer with kafka on team {index}."]
+            corrected = [f"Experienced engineer with Kafka on team {index}."]
+            self.assertEqual(blind_mask._blind_preserve_summary_corrections(
+                {"summary_bullets": corrected}, source, correct_language=True), corrected)
+            wrong_number = [f"Experienced engineer with Kafka on team {index+1}."]
+            self.assertEqual(blind_mask._blind_preserve_summary_corrections(
+                {"summary_bullets": wrong_number}, source, correct_language=True), source)
+        source = ["a" * 32_000]
+        for reply in (["b" * 32_000], ["a" * 32_001], ["a"] * 101):
+            started = time.perf_counter()
+            self.assertEqual(blind_mask._blind_preserve_summary_corrections(
+                {"summary_bullets": reply}, source, correct_language=True), source)
             self.assertLess(time.perf_counter() - started, 1)
 
     def test_generated_blind_contribution_hints_stay_with_returned_text(self):

@@ -110,6 +110,16 @@ that merely names a section remains content. Missing, repeated, oversized or
 uncertain sections leave the provider's interpretation unchanged. Recovery
 never runs after blinding, never bypasses the salary filter or identity scrub,
 and never overrides a summary explicitly linked by the user after parsing.
+Numbered, uppercase or colon-emphasized recognized section headings are real
+boundaries even when marked; ordinary marked title-case words remain points.
+Word body/table list numbering is read from direct/inherited numbering with an
+explicit zero disabling it, and tables remain beside their source headings.
+Labelled candidate-details rows following a floating About box are boundaries.
+The selected source points guide the existing parse call as user-message data.
+Matching provider casing/punctuation and explicitly requested small spelling
+corrections are retained with unchanged numeric anchors and point order.
+Unmarked ambiguous input may retain provider splits only when the combined text
+matches exactly; unrelated or reordered summaries never replace the source.
 
 ## Work-row reader
 

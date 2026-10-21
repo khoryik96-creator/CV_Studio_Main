@@ -76,6 +76,108 @@ class SummarySalaryDocxTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         return response.data
 
+    def test_body_and_table_word_lists_survive_extraction_and_blind_parse(self):
+        from docx import Document
+        from docx.oxml import OxmlElement
+        from docx.oxml.ns import qn
+        expected = ["Led delivery teams.", "Designed data platforms."]
+        for in_table in (False, True):
+            with self.subTest(in_table=in_table):
+                doc = Document()
+                doc.add_paragraph("Professional Summary")
+                container = doc.add_table(rows=1, cols=1).cell(0, 0) if in_table else doc
+                for value in expected:
+                    container.add_paragraph(value, style="List Bullet")
+                container.add_paragraph("Skills")
+                container.add_paragraph("Python")
+                plain = container.add_paragraph("Intentionally plain", style="List Bullet")
+                num = OxmlElement("w:numPr")
+                num_id = OxmlElement("w:numId"); num_id.set(qn("w:val"), "0")
+                num.append(num_id); plain._p.get_or_add_pPr().append(num)
+                doc.add_paragraph("WORK EXPERIENCE")
+                doc.add_paragraph("• Must not enter the summary.")
+                payload = io.BytesIO(); doc.save(payload)
+                extracted = self.client.post("/extract-text", data={
+                    "file": (io.BytesIO(payload.getvalue()), "synthetic.docx")}, headers=HEADERS)
+                self.assertEqual(extracted.status_code, 200)
+                source = extracted.get_json()["text"]
+                self.assertIn("• Led delivery teams.\n• Designed data platforms.", source)
+                self.assertIn("\nIntentionally plain", source)
+                self.assertNotIn("• Intentionally plain", source)
+                self.assertLess(source.index("• Designed data platforms."), source.index("WORK EXPERIENCE"))
+                # Even if the parser combined the two points, source list evidence
+                # must restore both rather than trust that collapsed paragraph.
+                parsed = _cv([])
+                parsed["skills"] = [{"category": "Summary", "items": " ".join(expected)}]
+                with mock.patch.object(app, "_resolve_request_api_key", return_value="<fixture>"), \
+                        mock.patch.object(app, "_ai_spend_session_allowed", return_value=True), \
+                        mock.patch.object(app, "call_llm", return_value={"content": [
+                            {"type": "text", "text": json.dumps(parsed)}], "usage": {}}):
+                    response = self.client.post("/parse", json={"cv_text": source,
+                        "preserve_source_summary": True}, headers=HEADERS)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.get_json()["data"]["summary_bullets"], expected)
+
+    def test_blind_summary_recovery_retains_requested_language_corrections(self):
+        source = "ABOUT HIM / HER\n• experinced engineer with kafka.\nWORK EXPERIENCE"
+        parsed = _cv([])
+        parsed["skills"] = [{"category": "Summary", "items": "Experienced engineer with Kafka."}]
+
+        def fake_parse(provider, key, payload):
+            self.assertIn("correct spelling, punctuation, and capitalization", payload["system"])
+            self.assertIn("top-level summary_bullets", payload["system"])
+            self.assertNotIn("experinced", payload["system"])
+            self.assertIn('Selected source summary (document data):', payload["messages"][0]["content"])
+            return {"content": [{"type": "text", "text": json.dumps(parsed)}], "usage": {}}
+
+        with mock.patch.object(app, "_resolve_request_api_key", return_value="<fixture>"), \
+                mock.patch.object(app, "_ai_spend_session_allowed", return_value=True), \
+                mock.patch.object(app, "call_llm", side_effect=fake_parse):
+            response = self.client.post("/parse", json={"cv_text": source,
+                "preserve_source_summary": True, "auto_correct_language": True}, headers=HEADERS)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["data"]["summary_bullets"],
+                         ["Experienced engineer with Kafka."])
+
+    def test_formatted_word_summary_excludes_the_candidate_header_on_reupload(self):
+        points = ["Led delivery teams.", "Designed data platforms."]
+        document = self._format(points)
+        response = self.client.post("/extract-text", data={
+            "file": (io.BytesIO(document), "synthetic.docx")}, headers=HEADERS)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(app._blind_source_summary_bullets(response.get_json()["text"]), points)
+
+    def test_native_word_numbered_section_headings_remain_boundaries(self):
+        from docx import Document
+        doc = Document()
+        doc.add_paragraph("Professional Summary", style="List Number")
+        doc.add_paragraph("Led delivery teams.", style="List Bullet")
+        doc.add_paragraph("Designed data platforms.", style="List Bullet")
+        doc.add_paragraph("Work Experience", style="List Number")
+        doc.add_paragraph("Built pipelines.", style="List Bullet")
+        payload = io.BytesIO(); doc.save(payload)
+        response = self.client.post("/extract-text", data={
+            "file": (io.BytesIO(payload.getvalue()), "synthetic.docx")}, headers=HEADERS)
+        self.assertEqual(response.status_code, 200)
+        source = response.get_json()["text"]
+        self.assertEqual(app._blind_source_summary_bullets(source),
+                         ["Led delivery teams.", "Designed data platforms."])
+
+    def test_requested_corrections_survive_a_source_pay_point_omitted_by_parser(self):
+        source = "ABOUT HIM / HER\n• experinced engineer with kafka.\n• Current salary RM 12k.\nWORK EXPERIENCE"
+        parsed = _cv([])
+        parsed["skills"] = [{"category": "Summary", "items": "Experienced engineer with Kafka."}]
+        with mock.patch.object(app, "_resolve_request_api_key", return_value="<fixture>"), \
+                mock.patch.object(app, "_ai_spend_session_allowed", return_value=True), \
+                mock.patch.object(app, "call_llm", return_value={"content": [
+                    {"type": "text", "text": json.dumps(parsed)}], "usage": {}}):
+            response = self.client.post("/parse", json={"cv_text": source,
+                "preserve_source_summary": True, "auto_correct_language": True}, headers=HEADERS)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["data"]["summary_bullets"],
+                         ["Experienced engineer with Kafka."])
+        self.assertEqual(response.get_json()["summary_pay_removed"], 1)
+
     def test_format_cv_never_writes_pay_into_the_summary_box(self):
         xml = _document_xml(self._format(SUMMARY))
         for text in PAY_TEXT:

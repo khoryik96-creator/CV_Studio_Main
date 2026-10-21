@@ -11,6 +11,7 @@ This module never imports ``app``.
 """
 
 import copy
+import difflib
 import functools
 import re
 
@@ -557,7 +558,12 @@ def _blind_source_summary_bullets(source_text):
         "awardsachievements", "publications", "professionalaffiliations",
         "professionalmemberships", "memberships", "volunteer", "volunteering",
         "volunteerexperience", "volunteercommunity", "communityinvolvement",
+        "coreskills", "keyskills", "corecompetencies", "strengths", "keystrengths",
+        "areasofexpertise", "expertise", "specialties", "certificates", "accreditations",
+        "professionalcertifications", "trainings", "courses", "shortcourses", "workshops",
+        "reference", "referee", "refereedetails", "professionalreferences", "characterreferences",
     }
+    marker_re = re.compile(r"^(?:[-*•●▪◦‣⁃∙·‧\ufffd]+\s+|\(?\d{1,3}[.)]\s+)")
 
     def heading_key(line):
         # Letter-spaced template headings and decorative underlines are layout.
@@ -567,8 +573,19 @@ def _blind_source_summary_bullets(source_text):
             return ""
         return re.sub(r"[^a-z]", "", line.lower())
 
-    starts = [(index, heading_key(line.strip())) for index, line in enumerate(lines)
-              if heading_key(line.strip()) in summary_keys]
+    def section_key(line):
+        marker = marker_re.match(line)
+        if marker:
+            text = line[marker.end():].strip()
+            letters = [char for char in text if char.isalpha()]
+            numbered = bool(re.match(r"\(?\d", marker.group()))
+            if not (numbered or text.endswith(":") or (letters and all(char.isupper() for char in letters))):
+                return ""
+            return heading_key(text)
+        return heading_key(line)
+
+    starts = [(index, section_key(line.strip())) for index, line in enumerate(lines)
+              if section_key(line.strip()) in summary_keys]
     about = [item for item in starts if item[1] in about_keys]
     selected = about or starts
     if len(selected) != 1:
@@ -591,14 +608,20 @@ def _blind_source_summary_bullets(source_text):
         if re.match(r"^Private\s*&\s*Confidential\b", line, re.I):
             following = next((value.strip() for value in lines[index + 1:]
                               if value.strip()), "")
-            if following and heading_key(following) not in boundary_keys:
+            if following and section_key(following) not in boundary_keys:
                 # A footer alone cannot prove the summary ended: it may carry
                 # on onto the next page. Defer rather than retaining half of it.
                 return []
             break
         # Some searchable PDFs expose an undefined bullet glyph as U+FFFD.
-        marker = re.match(r"^(?:[-*•●▪◦‣⁃∙·‧\ufffd]+\s+|\(?\d{1,3}[.)]\s+)", line)
-        if not marker and heading_key(line) in boundary_keys:
+        marker = marker_re.match(line)
+        if section_key(line) in boundary_keys:
+            break
+        if not marker and re.search(
+            r"(?:^|\|)\s*(?:notice\s+period|current\s+(?:position|company)|languages)\s*:", line, re.I
+        ):
+            # Word's floating About box can precede the candidate-details table
+            # in XML order. Those labelled cells never belong to its last point.
             break
         if not line:
             if not marked_current:
@@ -618,6 +641,63 @@ def _blind_source_summary_bullets(source_text):
                 current.append(line)
     flush()
     return items if len(items) <= 100 else []
+
+
+def _blind_preserve_summary_corrections(parsed, source, *, correct_language=False):
+    """Keep grounded parsed mechanics while restoring the selected source section."""
+    original = list(source)
+    if not isinstance(parsed, dict) or not source:
+        return original
+
+    def key(value):
+        return re.sub(r"[\W_]+", "", value.casefold())
+
+    def matches(left, right):
+        if re.findall(r"\d+", left) != re.findall(r"\d+", right):
+            return False
+        if key(left) == key(right):
+            return True
+        if correct_language is not True or max(len(left), len(right)) > 2000:
+            return False
+        # Only small spelling changes are eligible. Dates/numbers, word order
+        # and short meaning-bearing words (e.g. not/now) must remain unchanged.
+        before = re.findall(r"\w+", left.casefold())
+        after = re.findall(r"\w+", right.casefold())
+        if len(before) != len(after):
+            return False
+        for old, new in zip(before, after):
+            if old == new:
+                continue
+            swapped = (len(old) == len(new) and len(old) >= 3
+                       and any(old[:i] + old[i+1] + old[i] + old[i+2:] == new
+                               for i in range(len(old)-1)))
+            if swapped:
+                continue
+            if (min(len(old), len(new)) < 4 or max(len(old), len(new)) > 80
+                    or old[0] != new[0]):
+                return False
+            edits = difflib.SequenceMatcher(None, old, new, autojunk=False).get_opcodes()
+            if sum(max(i2-i1, j2-j1) for tag, i1, i2, j1, j2 in edits if tag != "equal") > 2:
+                return False
+        return True
+
+    candidates = [parsed.get("summary_bullets")]
+    for skill in parsed.get("skills") or []:
+        if isinstance(skill, dict) and _BLIND_SUMMARY_CATEGORY_RE.fullmatch(str(skill.get("category") or "").strip()):
+            candidates.append(skill.get("items"))
+    for value in candidates[:101]:
+        bullets = _blind_summary_items(value, limit=None)
+        if not bullets or len(bullets) > 100 or sum(map(len, bullets)) > 32_000:
+            continue
+        if len(bullets) == len(source) and all(matches(old, new) for old, new in zip(source, bullets)):
+            return bullets
+        # Unmarked DOCX/pasted lines can be genuinely ambiguous. Retain existing
+        # provider item boundaries only when every source character still matches.
+        if (len(source) == 1 and len(bullets) > 1
+                and key(source[0]) == key(" ".join(bullets))
+                and re.findall(r"\d+", source[0]) == re.findall(r"\d+", " ".join(bullets))):
+            return bullets
+    return original
 
 
 def _blind_prepare_summary_bullets(cv_data):

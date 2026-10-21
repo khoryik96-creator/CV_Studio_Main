@@ -17002,6 +17002,332 @@
       "Kept costs - 5% below budget."
     ],
     "note": "Preserve hyphenated words across a physical line break, without joining a numeric sign."
+  },
+  {
+    "id": "B1-review-numbered-work-boundary",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• Experienced engineer.",
+      "2. WORK EXPERIENCE",
+      "2019 - 2024 | Northwind",
+      "Engineer",
+      "• Built pipelines.",
+      "3. EDUCATION",
+      "Bachelor of Computing"
+    ],
+    "expect": [
+      "Experienced engineer."
+    ],
+    "note": "Distinguish real section headings from ordinary marked summary content."
+  },
+  {
+    "id": "B1-review-numbered-summary-heading",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "1. PROFESSIONAL SUMMARY",
+      "• Led delivery.",
+      "2. WORK EXPERIENCE",
+      "• Built pipelines."
+    ],
+    "expect": [
+      "Led delivery."
+    ],
+    "note": "Distinguish real section headings from ordinary marked summary content."
+  },
+  {
+    "id": "B1-review-core-competencies-boundary",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "Professional Summary",
+      "• Experienced engineer.",
+      "Core Competencies",
+      "• Python",
+      "• Team leadership"
+    ],
+    "expect": [
+      "Experienced engineer."
+    ],
+    "note": "Distinguish real section headings from ordinary marked summary content."
+  },
+  {
+    "id": "B1-review-marked-uppercase-heading",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "Profile",
+      "• Experienced engineer.",
+      "• TECHNICAL SKILLS",
+      "• Python"
+    ],
+    "expect": [
+      "Experienced engineer."
+    ],
+    "note": "Distinguish real section headings from ordinary marked summary content."
+  },
+  {
+    "id": "B1-review-marked-colon-heading",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "Profile",
+      "• Experienced engineer.",
+      "- Core Skills:",
+      "• Python"
+    ],
+    "expect": [
+      "Experienced engineer."
+    ],
+    "note": "Distinguish real section headings from ordinary marked summary content."
+  },
+  {
+    "id": "B1-review-ordinary-marked-heading-words",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "Profile",
+      "• Core Skills",
+      "• Education",
+      "• Training",
+      "Work Experience"
+    ],
+    "expect": [
+      "Core Skills",
+      "Education",
+      "Training"
+    ],
+    "note": "Distinguish real section headings from ordinary marked summary content."
+  },
+  {
+    "id": "B1-review-language-correction",
+    "rule": "B1",
+    "kind": "blind_source_recovery",
+    "source": [
+      "experinced engineer with kafka."
+    ],
+    "parsed": {
+      "skills": [
+        {
+          "category": "Summary",
+          "items": "Experienced engineer with Kafka."
+        }
+      ]
+    },
+    "correct_language": true,
+    "expect": [
+      "Experienced engineer with Kafka."
+    ],
+    "note": "Retain matching parsed mechanics and unambiguous item boundaries without selecting another summary or changing numbers."
+  },
+  {
+    "id": "B1-review-case-punctuation",
+    "rule": "B1",
+    "kind": "blind_source_recovery",
+    "source": [
+      "engineer with kafka"
+    ],
+    "parsed": {
+      "summary_bullets": [
+        "Engineer with Kafka."
+      ]
+    },
+    "correct_language": false,
+    "expect": [
+      "Engineer with Kafka."
+    ],
+    "note": "Retain matching parsed mechanics and unambiguous item boundaries without selecting another summary or changing numbers."
+  },
+  {
+    "id": "B1-review-unmarked-provider-boundaries",
+    "rule": "B1",
+    "kind": "blind_source_recovery",
+    "source": [
+      "Led delivery teams. Designed data platforms."
+    ],
+    "parsed": {
+      "skills": [
+        {
+          "category": "Summary",
+          "items": "Led delivery teams.\nDesigned data platforms."
+        }
+      ]
+    },
+    "correct_language": false,
+    "expect": [
+      "Led delivery teams.",
+      "Designed data platforms."
+    ],
+    "note": "Retain matching parsed mechanics and unambiguous item boundaries without selecting another summary or changing numbers."
+  },
+  {
+    "id": "B1-review-later-summary-refused",
+    "rule": "B1",
+    "kind": "blind_source_recovery",
+    "source": [
+      "SAP consultant with six years of experience."
+    ],
+    "parsed": {
+      "skills": [
+        {
+          "category": "Summary",
+          "items": "Highly motivated professional with extensive experience."
+        }
+      ]
+    },
+    "correct_language": true,
+    "expect": [
+      "SAP consultant with six years of experience."
+    ],
+    "note": "Retain matching parsed mechanics and unambiguous item boundaries without selecting another summary or changing numbers."
+  },
+  {
+    "id": "B1-review-changed-numbers-refused",
+    "rule": "B1",
+    "kind": "blind_source_recovery",
+    "source": [
+      "Managed 12 teams."
+    ],
+    "parsed": {
+      "summary_bullets": [
+        "Managed 21 teams."
+      ]
+    },
+    "correct_language": true,
+    "expect": [
+      "Managed 12 teams."
+    ],
+    "note": "Retain matching parsed mechanics and unambiguous item boundaries without selecting another summary or changing numbers."
+  },
+  {
+    "id": "B1-review-reordered-points-refused",
+    "rule": "B1",
+    "kind": "blind_source_recovery",
+    "source": [
+      "Led teams.",
+      "Built platforms."
+    ],
+    "parsed": {
+      "summary_bullets": [
+        "Built platforms.",
+        "Led teams."
+      ]
+    },
+    "correct_language": true,
+    "expect": [
+      "Led teams.",
+      "Built platforms."
+    ],
+    "note": "Retain matching parsed mechanics and unambiguous item boundaries without selecting another summary or changing numbers."
+  },
+  {
+    "id": "B1-review-uncorrected-source-kept",
+    "rule": "B1",
+    "kind": "blind_source_recovery",
+    "source": [
+      "experinced engineer."
+    ],
+    "parsed": {
+      "summary_bullets": [
+        "Experienced engineer."
+      ]
+    },
+    "correct_language": false,
+    "expect": [
+      "experinced engineer."
+    ],
+    "note": "Retain matching parsed mechanics and unambiguous item boundaries without selecting another summary or changing numbers."
+  },
+  {
+    "id": "B1-review-decimal-number-refused",
+    "rule": "B1",
+    "kind": "blind_source_recovery",
+    "source": [
+      "Improved output by 1.2 percent."
+    ],
+    "parsed": {
+      "summary_bullets": [
+        "Improved output by 12 percent."
+      ]
+    },
+    "correct_language": true,
+    "expect": [
+      "Improved output by 1.2 percent."
+    ],
+    "note": "Preserve numeric and short-word meaning anchors while accepting narrow spelling changes."
+  },
+  {
+    "id": "B1-review-short-word-transposition",
+    "rule": "B1",
+    "kind": "blind_source_recovery",
+    "source": [
+      "Built teh platform."
+    ],
+    "parsed": {
+      "summary_bullets": [
+        "Built the platform."
+      ]
+    },
+    "correct_language": true,
+    "expect": [
+      "Built the platform."
+    ],
+    "note": "Preserve numeric and short-word meaning anchors while accepting narrow spelling changes."
+  },
+  {
+    "id": "B1-review-negation-preserved",
+    "rule": "B1",
+    "kind": "blind_source_recovery",
+    "source": [
+      "Did not deploy."
+    ],
+    "parsed": {
+      "summary_bullets": [
+        "Did now deploy."
+      ]
+    },
+    "correct_language": true,
+    "expect": [
+      "Did not deploy."
+    ],
+    "note": "Preserve numeric and short-word meaning anchors while accepting narrow spelling changes."
+  },
+  {
+    "id": "B1-review-polarity-preserved",
+    "rule": "B1",
+    "kind": "blind_source_recovery",
+    "source": [
+      "Increased revenue."
+    ],
+    "parsed": {
+      "summary_bullets": [
+        "Decreased revenue."
+      ]
+    },
+    "correct_language": true,
+    "expect": [
+      "Increased revenue."
+    ],
+    "note": "Preserve numeric and short-word meaning anchors while accepting narrow spelling changes."
+  },
+  {
+    "id": "B1-review-candidate-header-boundary",
+    "rule": "B1",
+    "kind": "blind_source_summary",
+    "lines": [
+      "ABOUT HIM / HER",
+      "• Led delivery.",
+      "Example Candidate | NOTICE PERIOD:",
+      "1 month",
+      "CURRENT COMPANY: Northwind",
+      "WORK EXPERIENCES"
+    ],
+    "expect": [
+      "Led delivery."
+    ],
+    "note": "Candidate table labels following a floating Word summary do not belong to its final bullet."
   }
  ]
 }

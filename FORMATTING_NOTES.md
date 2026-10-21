@@ -276,6 +276,17 @@ paragraph. User-linked summaries still replace the parse result afterward.
 Normal Format CV and Create Profile do not opt in. See guardrail B1 and its
 anonymized cases; never recover source strings after the blinding call.
 
+The v24.6.466 review correction shares genuine Word list detection between
+legacy extraction and `/extract-text`, preserving direct/inherited numbering,
+explicit `numId=0`, cell boundaries and body/table order. Summary recovery
+recognizes strong marked section headings, the existing skills-section aliases
+and candidate-details rows. It guides the same parse request with the selected
+points in user-message data, then retains aligned provider mechanics and
+requested spelling corrections with unchanged numeric/order anchors. When
+plain-text extraction lacks list evidence, exactly matching provider item
+boundaries survive. No additional paid request or post-blind source recovery
+is introduced.
+
 ## ⚠️ Highest-risk code
 
 `_reconcile_work_experience_with_authoritative_table` (`cvstudio_cv_reconcile.py`)
