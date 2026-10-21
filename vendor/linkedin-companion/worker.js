@@ -303,7 +303,7 @@ async function handle(message, sender) {
   if (message.action === 'tabs') {
     const tabs = await chrome.tabs.query({url: 'https://www.linkedin.com/*'});
     return tabs.map(tab => ({id: tab.id, url: tab.url, title: String(tab.title || 'LinkedIn').slice(0, 160), status: tab.status,
-      lastAccessed:Number.isFinite(tab.lastAccessed) ? tab.lastAccessed : 0}));
+      lastAccessed:Number.isFinite(tab.lastAccessed) ? tab.lastAccessed : 0,active:tab.active === true}));
   }
   if (message.action === 'begin') {
     if (jobCapture) throw Error('Wait for the job ad to finish reading first.');

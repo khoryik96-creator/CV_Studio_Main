@@ -51,6 +51,10 @@ function fixture(){
   assert.equal(f.requests[0].action,'start');assert.equal(f.requests[0].mode,'standard');assert.equal(f.requests[0].confirm_paid,true);assert.equal(f.requests[0].use_open_search,true);
   assert.equal(f.el('Count').textContent,1);assert.match(f.el('Status').textContent,/last result page/);assert.equal(f.el('Start').disabled,false);
   assert.equal(f.calls.filter(call=>call.action==='navigate').length,0,'default preserves the open search filters');
+  const legacy=fixture();legacy.state.tabs=[{...people,lastAccessed:undefined,active:false},{...people,id:5,title:'Active compatible search',lastAccessed:undefined,active:true}];await legacy.init();
+  assert.equal(legacy.el('Source').value,'5','without recency metadata an active compatible search wins over query order');
+  const recent=fixture();recent.state.tabs=[{...people,id:6,lastAccessed:10,active:true},people];await recent.init();
+  assert.equal(recent.el('Source').value,'2','real recency metadata remains authoritative when available');
   const begin=f.calls.find(call=>call.action==='begin');assert.equal(begin.args.source_tab_id,2);assert.equal(begin.args.mode,'standard');
   for(const [title,mode] of [['Recruiter Lite search','lite'],['Recruiter search','recruiter']]){
     const g=fixture();g.state.tabs=[{id:7,url:'https://www.linkedin.com/talent/search',title}];await g.init();g.el('Brief').value='SAP finance managers';g.el('Consent').checked=true;await g.start();assert.equal(g.requests[0].mode,mode);

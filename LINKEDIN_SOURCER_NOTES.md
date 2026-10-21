@@ -17,7 +17,10 @@ reference, and is not imported by the main app.
    No additional API key, pairing code or POC server is needed.
 4. Open a LinkedIn People or Recruiter search in that browser. The module detects
    the source and search type automatically; it preserves an existing selection
-   or chooses the most recently used compatible search. A status line identifies
+   or chooses the most recently used compatible search when that metadata exists.
+   When recency is missing/tied, an active compatible tab takes priority; a
+   remaining tie keeps browser order. Manual selection stays authoritative.
+   A status line identifies
    the chosen tab. Existing search filters are kept by default; the brief ranks
    these results and does not change their location filters.
 5. Enter the brief, tick **Use DeepSeek for this search**, then **Start search**.

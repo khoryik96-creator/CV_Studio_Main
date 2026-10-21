@@ -103,7 +103,7 @@
         if (CVLinkedinCore.profileURL(tab.url)) return false;
         const mode = el('Mode').value === 'auto' ? sourceMode(tab) : el('Mode').value;
         return CVLinkedinCore.isSearchURL(tab.url,mode) || !el('OpenSearch').checked && mode === 'standard' && /^https:\/\/www\.linkedin\.com\/(?:feed\/?)?(?:[?#]|$)/.test(tab.url);
-      }).sort((a,b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
+      }).sort((a,b) => (b.lastAccessed || 0) - (a.lastAccessed || 0) || Number(b.active === true) - Number(a.active === true));
       if (sequence !== setupSequence) return null;
       const selected = el('Source').value; el('Source').replaceChildren();
       for (const tab of tabs) { const option = document.createElement('option'); option.value = String(tab.id); option.textContent = tab.title; el('Source').append(option); }

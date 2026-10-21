@@ -9,7 +9,7 @@ const root = path.resolve(__dirname, '..');
   let counter = 10;
   const tabs = new Map([
     [1, {id:1, url:'http://127.0.0.1:5000/', active:true}],
-    [2, {id:2, url:'https://www.linkedin.com/search/results/people/', status:'complete'}],
+    [2, {id:2, url:'https://www.linkedin.com/search/results/people/', status:'complete',active:true}],
     [3, {id:3, url:'https://www.linkedin.com/in/unrelated', status:'complete'}]
   ]);
   const url = 'https://www.linkedin.com/in/sample-person';
@@ -33,6 +33,7 @@ const root = path.resolve(__dirname, '..');
   assert((await rpc('tabs')).error);
   await callbacks.click(tabs.get(1));
   assert.equal((await rpc('tabs')).result[0].id,2);
+  const legacyTab=(await rpc('tabs')).result[0];assert.equal(legacyTab.active,true);assert.equal(legacyTab.lastAccessed,0,'older Chrome metadata has an active-tab fallback without requiring a newer minimum version');
   assert((await rpc('tabs',{}, {...sender,documentId:'different-document'})).error);
   const run_id='a'.repeat(32);
   const begin={run_id,source_tab_id:2,max_pages:2,mode:'standard'};
