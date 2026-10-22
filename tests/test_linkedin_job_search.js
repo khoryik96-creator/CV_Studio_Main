@@ -12,8 +12,9 @@ function fixture(){
     tabs:{onRemoved:{addListener:fn=>hooks.removed=fn},onUpdated:{addListener:fn=>hooks.updated=fn},onActivated:{addListener:fn=>hooks.activated=fn},
       query:async()=>[...tabs.values()],get:async id=>{if(!tabs.has(id))throw Error('Missing tab');return {...tabs.get(id)}},
       create:async args=>{state.created.push(args);const tab={...args,id:10+state.created.length,status:'complete'};tabs.set(tab.id,tab);return {...tab}},
-      remove:async id=>{state.removed.push(id);tabs.delete(id)},update:async()=>{throw Error('Do not navigate existing tabs')}},
+      remove:async id=>{state.removed.push(id);tabs.delete(id)},update:async(id,args)=>{if(state.onUpdate)return state.onUpdate(id,args);throw Error('Do not navigate existing tabs')}},
     scripting:{executeScript:async args=>{
+      if(state.onScript){const response=state.onScript(args);if(response!==undefined)return response;}
       if(args.target.documentIds?.[0] && args.target.documentIds[0]!==state.document)throw Error('Stale document');
       if(args.files){if(state.failInjection)throw Error('PRIVATE synthetic path and detail');if(state.onInject)state.onInject();return [{}]}
       if(!args.args)return [{result:true,documentId:state.document}];
@@ -31,7 +32,8 @@ function fixture(){
   return {state,tabs,boot,rpc,run,arm:()=>hooks.arm(tabs.get(1)),begin:(patch={})=>rpc('jobSearchBegin',{run_id:run,query:'finance',location:'Malaysia',max_pages:2,...patch}),
     read:(id,method='readJobSearch')=>rpc('read',{run_id:run,tab_id:id,method,values:method==='readJobSearch'?[]:[row.url]}),end:()=>rpc('end',{run_id:run})};
 }
-(async()=>{
+module.exports={fixture};
+if(require.main===module)(async()=>{
   const f=fixture();assert((await f.begin()).error);assert.equal(f.state.created.length,0);await f.arm();
   const started=await f.begin();assert(started.result?.tab_id,'bound job search begins');const id=started.result.tab_id;
   const status=(await f.rpc('jobStatus')).result;assert.equal(status.version,'24.6.461');assert.equal(status.job_search_revision,1,'readiness identifies the current reader/search contract');

@@ -4,6 +4,24 @@
 
 ## Release state
 
+- Owner-requested Job Leads Phase 2: v24.6.474 on
+  `codex/v24.6.474-job-leads-company-hr`, from merged master `15b89cf`.
+  Saved ads show an HR column with Any country / named-country selection,
+  editable HR title keywords and a bounded companion scan using LinkedIn's
+  observed company employee ID and native location chooser. Passive profile
+  links/title/location evidence is saved with the ad through the existing
+  guarded route; notes/folders/status are preserved and stale writes reject.
+  No paid calls, outreach, route/schema/permission change or owner-state edits.
+  Full isolated Windows Python passed (1,765 passed, four skipped, 8,392
+  subtests); all 45 JavaScript suites and source/static/repository/native
+  preflight plus 24 source-smoke assertions passed. Browser QA used fictional
+  ads/people with simulated transport: worldwide and Singapore scans, retained
+  results after reload, per-ad separation and a full-ad refresh beside HR.
+  Current LinkedIn company/location controls were inspected read-only; no real
+  installed-companion end-to-end scan or paid call is claimed. Local checkpoint
+  only; no PR or merge has been requested. See
+  `cv_studio_v24_6_474_company_hr_people_qa_report.md`.
+
 - PR #237 timing corrective: v24.6.473 on
   `codex/v24.6.471-linkedin-folder-refresh`. The Add handler treats every existing
   active ad as a duplicate without entering its folder-move path. Records saved

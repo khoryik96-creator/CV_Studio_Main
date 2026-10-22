@@ -191,6 +191,69 @@ def clean_record(raw):
     result['deleted'] = deleted
     rich = clean_rich(raw.get('description_rich', []))
     result['description_rich'] = rich if re.sub(r'\s+', '', rich_text(rich)) == re.sub(r'\s+', '', result['description']) else []
+    if raw.get('hr'):
+        result['hr'] = clean_hr(raw['hr'], result['company'])
+    return result
+
+
+def clean_hr(raw, company):
+    """Bounded passive public professional evidence; never executable markup."""
+    def invalid():
+        raise JobLeadsError('The HR search results are invalid. Saved ad details were kept.')
+    if not isinstance(raw, dict):
+        invalid()
+    result = {}
+    for key, limit in {'company':200, 'company_url':300, 'company_id':24, 'country':100,
+                       'keywords':600, 'source_url':2048, 'scanned_at':40}.items():
+        value = raw.get(key, '')
+        if not isinstance(value, str) or len(value) > limit or any(ord(c) < 32 for c in value):
+            invalid()
+        result[key] = value.strip()
+    if result['company'] != company or not re.fullmatch(r'[0-9]{1,24}', result['company_id']):
+        invalid()
+    if not re.fullmatch(r'https://www\.linkedin\.com/company/[A-Za-z0-9_-]+/', result['company_url']):
+        invalid()
+    try:
+        url = urlsplit(result['source_url'])
+        query = parse_qs(url.query)
+        if (url.scheme != 'https' or url.netloc != 'www.linkedin.com' or
+                url.path.rstrip('/') != '/search/results/people' or url.fragment or
+                set(query) - {'currentCompany','keywords','geoUrn'} or
+                len(query.get('currentCompany', [])) != 1 or
+                json.loads(query['currentCompany'][0]) != [result['company_id']]):
+            invalid()
+        geo = query.get('geoUrn', [])
+        if result['country']:
+            if len(geo) != 1 or not re.fullmatch(r'\["[0-9]{1,24}"\]', geo[0]):
+                invalid()
+        elif geo:
+            invalid()
+    except (ValueError, TypeError):
+        invalid()
+    if result['scanned_at']:
+        result['scanned_at'] = _backup_created({'created_at':result['scanned_at']})
+    if type(raw.get('complete')) is not bool or not result['keywords']:
+        invalid()
+    people = raw.get('people')
+    if not isinstance(people, list) or len(people) > 100:
+        invalid()
+    result['complete'], result['people'] = raw['complete'], []
+    seen = set()
+    for person in people:
+        if not isinstance(person, dict):
+            invalid()
+        entry = {}
+        for key, limit in {'name':200,'title':500,'location':240,'url':400,'matched':600}.items():
+            value = person.get(key, '')
+            if not isinstance(value, str) or len(value) > limit or any(ord(c) < 32 for c in value):
+                invalid()
+            entry[key] = value.strip()
+        if (not entry['name'] or not entry['title'] or not entry['matched'] or
+                not re.fullmatch(r'https://www\.linkedin\.com/in/[A-Za-z0-9_%~-]+/?', entry['url'])):
+            invalid()
+        if entry['url'].rstrip('/') not in seen:
+            seen.add(entry['url'].rstrip('/'))
+            result['people'].append(entry)
     return result
 
 
@@ -383,7 +446,8 @@ class JobLeadsStore:
         return {'changed':len(expected)}
 
     def save(self, raw):
-        data = clean_record(raw)
+        # Only save_hr may update search evidence; ordinary forms may be stale.
+        data = clean_record({key:value for key,value in raw.items() if key != 'hr'} if isinstance(raw, dict) else raw)
         identity, revision = raw.get("id", ""), raw.get("revision")
         if identity and (not isinstance(identity, str) or not re.fullmatch(r"[a-f0-9]{32}", identity)):
             raise JobLeadsError("Invalid saved lead. Refresh the list.")
@@ -401,6 +465,10 @@ class JobLeadsStore:
                     raise JobLeadsError("Restore this lead from Trash before editing it.", 409, "JOB_LEADS_CONFLICT")
                 if type(revision) is not int or revision != current["revision"]:
                     raise JobLeadsError("This lead changed in another window. Refresh and reopen it before saving. Your draft is still here.", 409, "JOB_LEADS_CONFLICT")
+                previous = self._record(current)
+                data.pop('hr', None)
+                if previous['company'] == data['company'] and previous['url'] == data['url'] and previous.get('hr'):
+                    data['hr'] = previous['hr']
                 data['deleted'] = False
                 connection.execute("UPDATE leads SET url=?,payload=?,revision=revision+1,updated_at=? WHERE id=?", (data["url"], json.dumps(data, ensure_ascii=False), now, identity))
             else:
@@ -413,6 +481,25 @@ class JobLeadsStore:
             result = self._record(connection.execute("SELECT * FROM leads WHERE id=?", (identity,)).fetchone())
             connection.commit()
             return {"record": result, "duplicate": False}
+
+    def save_hr(self, identity, revision, raw):
+        _selection([{'id':identity, 'revision':revision}])
+        with self._connection() as connection:
+            connection.execute('BEGIN IMMEDIATE')
+            current = connection.execute('SELECT * FROM leads WHERE id=?', (identity,)).fetchone()
+            if current is None or current['revision'] != revision:
+                raise JobLeadsError('This ad changed during the HR search. Refresh and scan again. Its details were kept.', 409, 'JOB_LEADS_CONFLICT')
+            record = self._record(current)
+            if record['deleted']:
+                raise JobLeadsError('Restore this ad before saving HR people.', 409, 'JOB_LEADS_CONFLICT')
+            record['hr'] = clean_hr(raw, record['company'])
+            record['hr']['scanned_at'] = _now()
+            connection.execute('UPDATE leads SET payload=?,revision=revision+1,updated_at=? WHERE id=?',
+                               (json.dumps(clean_record(record), ensure_ascii=False), _now(), identity))
+            self._check_capacity(connection)
+            result = self._record(connection.execute('SELECT * FROM leads WHERE id=?', (identity,)).fetchone())
+            connection.commit()
+        return {'record':result}
 
     def set_deleted(self, selection, deleted):
         if not isinstance(selection, list) or not selection or len(selection) > MAX_RECORDS or type(deleted) is not bool:

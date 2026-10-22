@@ -158,7 +158,7 @@
     }
     if (!role || !company) loading('The company or role has not loaded.');
     const sourceHTML = visible(descriptionNode) ? String(descriptionNode.innerHTML || '') : '';
-    return {url, role, company, location:locationText, date_posted:datePosted, description:description.slice(0, 20000),
+    return {url, role, company, company_url:jobCompanyURL(panel,company), location:locationText, date_posted:datePosted, description:description.slice(0, 20000),
       description_html:sourceHTML.length <= 80000 ? sourceHTML : '', description_truncated:description.length > 20000};
   }
   function jobLink(value) {
@@ -193,7 +193,7 @@
       }
       if (!description.replace(/^About the job\b\s*/i,'').trim()) return null;
       const html = String(about.innerHTML || '');
-      return {url,role,company:companies[0].slice(0,200),location:where,date_posted:'',description:description.slice(0,20000),
+      return {url,role,company:companies[0].slice(0,200),company_url:jobCompanyURL(header,companies[0]),location:where,date_posted:'',description:description.slice(0,20000),
         description_html:html.length <= 80000 ? html : '',description_truncated:truncated || description.length > 20000};
     }
     return null;
@@ -330,5 +330,102 @@
     readJob(url);
     return [{url,element:document.querySelector('main') || document.body,floating:true}];
   }
-  globalThis.SourcerReader = {readSearch, next, search, readProfile, profileURL, readJob, readJobSearch, nextJobSearch, scrollJobSearch, jobSearchContext, readJobPick, jobTargets};
+  function companyURL(value) {
+    try {
+      const u = new URL(value);
+      const match = u.pathname.match(/^\/company\/([A-Za-z0-9_-]+)(?:\/.*)?$/);
+      return u.origin === 'https://www.linkedin.com' && !u.username && !u.password && match ? u.origin+'/company/'+match[1]+'/' : '';
+    } catch { return ''; }
+  }
+  function jobCompanyURL(scope, company) {
+    const urls = [...new Set([...scope.querySelectorAll('a[href*="/company/"]')].filter(n=>visible(n) && text(n) === company).map(n=>companyURL(n.href)).filter(Boolean))];
+    return urls.length === 1 ? urls[0] : '';
+  }
+  const normalized = value => compact(value).toLocaleLowerCase();
+  function readHRCompany(expected, company) {
+    const problem = issue(); if (problem) throw Error(problem);
+    if (companyURL(location.href) !== expected || !/\/people\/?$/.test(location.pathname)) throw Error('The company page changed.');
+    const heading = [...document.querySelectorAll('main h1, h1')].find(visible);
+    if (!heading) return {loading:true};
+    if (normalized(text(heading)) !== normalized(company)) throw Error('The company page does not match the saved ad company.');
+    // Scope to the company header, excluding suggested/affiliated companies.
+    const scope = heading.closest('section, .org-top-card') || heading.parentElement?.parentElement;
+    const ids = [...new Set([...(scope?.querySelectorAll('a[href]') || [])].filter(visible).map(link=>{
+      try {
+        const u = new URL(link.href), ids = JSON.parse(u.searchParams.get('currentCompany'));
+        return u.origin === 'https://www.linkedin.com' && /^\/search\/results\/people\/?$/.test(u.pathname) &&
+          Array.isArray(ids) && ids.length === 1 && /^[0-9]{1,24}$/.test(ids[0]) ? ids[0] : '';
+      } catch { return ''; }
+    }).filter(Boolean))];
+    return ids.length === 1 ? {company_id:ids[0]} : {loading:true};
+  }
+  function hrToolbar() { return document.querySelector('[componentkey="SearchResults_SearchResultsFilterBar"], [role="toolbar"], .search-reusables__filters-bar'); }
+  function hrCountryOpen(country) {
+    assertPage('standard','search');
+    const toolbar = hrToolbar();
+    const button = [...(toolbar?.querySelectorAll('button') || [])].find(n=>visible(n) && /^(?:Filter by )?Locations$/i.test(n.getAttribute('aria-label') || text(n)));
+    if (!button) throw Error('LinkedIn location controls are not recognized.');
+    button.click();
+    return true;
+  }
+  function hrCountryType(country) {
+    assertPage('standard','search');
+    const field = [...document.querySelectorAll('input[placeholder="Add a location"], input[aria-label="Add a location"]')].find(visible);
+    if (!field) return false;
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(field,country);
+    field.dispatchEvent(new Event('input',{bubbles:true})); return true;
+  }
+  function hrCountryPick(country) {
+    assertPage('standard','search');
+    const list = [...document.querySelectorAll('[role="listbox"]')].find(visible);
+    const choices = [...(list?.querySelectorAll('button') || [])].filter(n=>visible(n) && normalized(text(n)) === normalized(country));
+    if (choices.length !== 1) return false;
+    choices[0].click(); return true;
+  }
+  function hrCountryApply(country) {
+    assertPage('standard','search');
+    const toolbar = hrToolbar();
+    const selected = [...(toolbar?.querySelectorAll('input[type="checkbox"], [role="checkbox"]') || [])].filter(n=>visible(n) && (n.checked || n.getAttribute('aria-checked') === 'true') && normalized(n.getAttribute('aria-label')) === normalized(country));
+    const actions = [...(toolbar?.querySelectorAll('a, button') || [])].filter(n=>visible(n) && text(n) === 'Show results');
+    if (selected.length !== 1 || actions.length !== 1) return false;
+    actions[0].click(); return true;
+  }
+  function readHRSearch(company, country, keywords) {
+    assertPage('standard','search');
+    const toolbar = hrToolbar();
+    const labels = [...(toolbar?.querySelectorAll('input[type="checkbox"], [role="checkbox"]') || [])].filter(n=>visible(n) && (n.checked || n.getAttribute('aria-checked') === 'true')).map(n=>normalized(n.getAttribute('aria-label') || text(n)));
+    if (!labels.includes(normalized(company)) || country && !labels.includes(normalized(country))) return {loading:true};
+    const scope = document.querySelector('main [role="region"][aria-label="Primary content"]') || document.querySelector('main');
+    if (!scope) return {loading:true};
+    const cards = [...scope.querySelectorAll('[componentkey^="SearchResults_"] [role="listitem"], [role="list"] > [role="listitem"], li.reusable-search__result-container, .entity-result')].filter(visible);
+    const people = [], seen = new Set();
+    for (const card of cards) {
+      const paragraphs = [...card.querySelectorAll('p')].filter(visible);
+      const nameLink = paragraphs[0]?.querySelector('a[href*="/in/"]') || card.querySelector('.entity-result__title-text a[href*="/in/"]');
+      const url = profileURL(nameLink?.href);
+      const name = text(nameLink).slice(0,200);
+      const title = text(paragraphs[1] || card.querySelector('.entity-result__primary-subtitle')).slice(0,500);
+      const where = text(paragraphs[2] || card.querySelector('.entity-result__secondary-subtitle')).slice(0,240);
+      if (!url || !name || !title || seen.has(url)) continue;
+      seen.add(url);
+      const matched = keywords.split(',').map(compact).filter(word=>word && new RegExp('(?:^|[^a-z0-9])'+word.replace(/[.*+?^${}()|[\]\\]/g,'\\$&').replace(/\s+/g,'\\s+')+'(?:$|[^a-z0-9])','i').test(title));
+      if (matched.length) people.push({url,name,title,location:where,matched:matched.join(', ')});
+      if (seen.size >= 40) break;
+    }
+    const empty = /\b(?:no results|no people found|0 results)\b/i.test(text(scope));
+    if (!seen.size && !empty) return {loading:true};
+    const next = hrNextButton();
+    return {people,signature:[...seen].join('|'),empty,hasNext:!!next && !next.disabled && next.getAttribute('aria-disabled') !== 'true'};
+  }
+  function hrNextButton() {
+    return nextButton() || [...(document.querySelector('main')?.querySelectorAll('button') || [])].find(button=>visible(button) && /^(next|next page)$/i.test(button.getAttribute('aria-label') || text(button)) && button.parentElement?.querySelector('ul button[aria-label^="Page "]'));
+  }
+  function nextHRSearch(signature, company, country, keywords) {
+    const snapshot = readHRSearch(company,country,keywords);
+    if (snapshot.loading || !signature || snapshot.signature !== signature) throw Error('The HR results changed before paging.');
+    const button = hrNextButton(); if (!snapshot.hasNext || !button) return false;
+    button.click(); return true;
+  }
+  globalThis.SourcerReader = {readSearch, next, search, readProfile, profileURL, readJob, readJobSearch, nextJobSearch, scrollJobSearch, jobSearchContext, readJobPick, jobTargets,
+    readHRCompany, hrCountryOpen, hrCountryType, hrCountryPick, hrCountryApply, readHRSearch, nextHRSearch};
 })();

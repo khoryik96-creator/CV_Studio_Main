@@ -4,6 +4,56 @@ Current version is the repository-root `VERSION`. This owner-requested module
 tracks LinkedIn job ads for business development, separately from the candidate
 sourcer and the locked historical Lead Finder.
 
+## Phase 2: company HR people (v24.6.474)
+
+Saved active ads have **HR people** beside Preview. Preview also shows a
+Phase 2 column beside the ad. Choose **Any country** (default) or enter a country
+name, then **Find HR people**. Search options retain comma-separated title
+keywords, a 1–15-page ceiling (default 3), and an optional company-page override.
+Defaults include HR, human resources, CHRO, chief people officer, talent
+acquisition, TA, recruitment, hiring, recruiter, HRBP and end to end recruitment.
+
+The connected current Chrome companion reads the exact ad's company link when
+needed, opens that company's People page, verifies its heading against the saved
+company, and reads the header's observed single-company employee-search ID.
+It opens a standard People search with that Current company filter and the HR
+keywords. For a named country it uses LinkedIn's visible location chooser and
+one exact suggestion, then verifies the settled geo filter and visible checked
+company/country labels before reading. No guessed company/geo IDs, private API,
+paid provider, contact enrichment, messages or LinkedIn writes are involved.
+The source tab remains open; existing user tabs are never navigated or closed.
+
+Only observed public profile links and visible name/title/location are retained.
+Title keywords use word boundaries (TA cannot match “data”); matched terms are
+shown. Company association comes from LinkedIn's Current company search, not a
+claim that employment or hiring authority has independently been verified.
+Unknown/collapsed profile details are not inferred. Results cover the requested
+pages, up to 100 unique matches, not an exhaustive employee directory.
+
+Normal completion saves results, country, keywords, source and local scan time
+with that ad. Opening it again displays the saved results without a new scan.
+Notes, manual contact, folder, status and creation time remain. Ordinary ad saves
+preserve current HR evidence; changing the company or job identity clears it.
+Trash/folder moves and the existing JSON backup/import retain HR evidence.
+A dedicated revision-checked `save_hr` action on the existing guarded
+`/job-leads` route updates only evidence; concurrent edits/Trash reject stale
+results atomically. New bounded JSON payload fields require no database schema
+change (Job Leads remains schema 2; main DB 10 and journal 1 remain).
+
+Stop, failed reads, unrecognized layouts, restrictions and storage failures keep
+previous saved results. Partial matches may remain visibly unsaved until another
+scan/navigation. HR browser work is isolated from Jobs/profile/capture runs, has
+a ten-minute ceiling and persists its page budget in extension session memory.
+Pending mutations are marked before native clicks/navigation; an interrupted
+mutation cannot replay after worker suspension. Exact app-document/source/filter
+checks remain, including checks around reader injection. No automatic resume,
+new route, extension permission or packaged asset is added.
+
+Existing installations need the updated companion files, Reload, refreshed
+CV Studio/LinkedIn pages and a reconnected app tab. Automated reader/worker/UI
+fixtures and an isolated browser demo do not prove a real installed-extension
+end-to-end scan; live company/location controls were inspected read-only.
+
 ## Workflow
 
 - Open **Job Leads** and paste a LinkedIn job link. Public company, role,
