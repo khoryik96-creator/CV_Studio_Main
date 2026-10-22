@@ -4,6 +4,16 @@ Current version is the repository-root `VERSION`. This owner-requested module
 tracks LinkedIn job ads for business development, separately from the candidate
 sourcer and the locked historical Lead Finder.
 
+## Complex-ad plain-text fallback (v24.6.477)
+
+If the optional rich serializer reaches its 4,000-node / 32-level limit, the
+ad still imports its company, role and a readable plain description. A separate
+iterative walk keeps the same hidden/control/active-content exclusions, stops
+after 16,000 nodes or a 20,000-character excerpt, and drops optional markup.
+Truncation or a visible More control is labelled as an excerpt. Normal captures
+retain the original rich formatting; identity/access/layout failures still stop
+instead of being swallowed by this size-only fallback.
+
 ## HR company joining dates (v24.6.476)
 
 Each HR result card shows **Joined company**, using a month/year or year-only

@@ -4,6 +4,17 @@
 
 ## Release state
 
+- v24.6.477 corrects the review's complex-ad import regression while retaining
+  the v474 company HR feature, v475 rich formatting and v476 joining dates.
+  Rich traversal overflow now uses a bounded iterative plain-text capture;
+  company/role metadata remains available and incomplete text is labelled.
+  Hidden/active/control content, identity checks, routes, schemas, ownership,
+  permissions and provider boundaries remain. Owner authorized fix and merge;
+  full isolated Windows Python passed (1,776 passed, four skipped, 8,392
+  subtests) and all 46 JavaScript suites passed. Further
+  local/CI verification and merge evidence are recorded in
+  `cv_studio_v24_6_477_complex_job_ad_fallback_qa_report.md`.
+
 - HR company joining dates: v24.6.476 continues the unmerged
   `codex/v24.6.474-job-leads-company-hr` branch. HR cards show an explicit
   month/year or year-only start from the matched company's current visible

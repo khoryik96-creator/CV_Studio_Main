@@ -98,6 +98,26 @@ assert(captured.description_html.includes('<ul><li>Keep the list item.</li></ul>
 assert(!captured.description.includes('Hidden UI'));assert(!captured.description.includes('bad()'));
 assert(!captured.description_html.includes('javascript:'));assert(!captured.description_html.includes('onclick'));
 assert(captured.description.includes('Read the role.'));delete about.fakeNodes;
+// Optional typography must not make a readable, identity-confirmed ad fail.
+about.fakeNodes=[dom('h2',['About the job']),...Array.from({length:2001},()=>dom('span',['Work. ']))];
+captured=reader.readJob(url);
+assert.equal(captured.company,'Example Finance');assert.equal(captured.role,'Finance Manager');
+assert.equal(captured.description,('About the job\n'+'Work. '.repeat(2001)).trim());
+assert.equal(captured.description_html,'');assert.equal(captured.description_truncated,true,'visible Show more still marks the fallback excerpt');
+let nested=dom('p',['Deep role content.']);for(let i=0;i<80;i++)nested=dom('div',[nested]);
+about.fakeNodes=[dom('h2',['About the job']),nested,dom('button',['… more']),dom('script',['UNSAFE']),
+  {...dom('span',['HIDDEN']),computedStyle:{display:'none'}},dom('p',['Benefits remain.'])];
+captured=reader.readJob(url);
+assert(captured.description.includes('Deep role content.'));assert(captured.description.includes('Benefits remain.'));
+assert(!/UNSAFE|HIDDEN|… more/.test(captured.description));assert.equal(captured.description_html,'');
+about.fakeNodes=[dom('h2',['About the job']),...Array.from({length:20000},()=>dom('span',['x']))];
+captured=reader.readJob(url);assert(captured.description.includes('x'));assert(captured.description.length<=20000);
+assert(captured.description_truncated,'plain node-budget exhaustion is an explicit excerpt');
+about.fakeNodes=[dom('h2',['About the job']),nested,dom('p',['Long text. '.repeat(3000)])];
+captured=reader.readJob(url);assert.equal(captured.description.length,20000);assert(captured.description_truncated);
+about.fakeNodes=[{get nodeType(){throw Error('Synthetic unexpected DOM failure');}}];
+assert.throws(()=>reader.readJob(url),/Synthetic unexpected DOM failure/,'only the local size sentinel may use fallback');
+delete about.fakeNodes;
 for(const patch of [{about:false},{stale:true},{companyConflict:true}]){
   Object.assign(state,{about:true,stale:false,companyConflict:false},patch);
   assert.throws(()=>reader.readJob(url),error=>error.cvstudioJobLoading===true,'stale or ambiguous detail fields must not mix');

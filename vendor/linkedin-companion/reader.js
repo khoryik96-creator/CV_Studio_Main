@@ -197,9 +197,37 @@
     const blocks = new Set(['p','div','h1','h2','h3','h4','h5','h6','ul','ol','li','blockquote']);
     const escape = value => value.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
     const weight = value => value === 'bold' ? 700 : Number.parseInt(value || '400',10);
+    const normalize = value => value.replace(/\r\n?/g,'\n').replace(/[\t ]+\n/g,'\n').replace(/\n[\t ]+/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
+    const richLimit = {};
+    function plainFallback() {
+      // Typography has a tighter structural budget than readable text. Walk
+      // iteratively so deep wrappers cannot overflow the call stack, and keep
+      // both a node ceiling and a 20k-character output ceiling. No raw innerText
+      // fallback: embedded controls/hidden content must stay excluded here too.
+      const stack=[{nodes:root.childNodes,index:0,block:false}];
+      let value='',visited=0;
+      while (stack.length && value.length < 20001 && visited < 16000) {
+        const frame=stack[stack.length-1];
+        if (frame.index >= frame.nodes.length) {
+          stack.pop();
+          if (frame.block && value && !value.endsWith('\n')) value+='\n';
+          continue;
+        }
+        const node=frame.nodes[frame.index++]; visited++;
+        if (node.nodeType === 3) { value+=(node.nodeValue || '').slice(0,20001-value.length); continue; }
+        if (node.nodeType !== 1) continue;
+        const tag=String(node.tagName || '').toLowerCase(), style=getComputedStyle(node);
+        if (blocked.has(tag) || node.hasAttribute?.('hidden') || node.getAttribute?.('aria-hidden') === 'true' || style.display === 'none' || style.visibility === 'hidden') continue;
+        if (tag === 'br') { value+='\n'; continue; }
+        const role=node.getAttribute?.('role');
+        stack.push({nodes:node.childNodes,index:0,block:blocks.has(tag) || role === 'list' || role === 'listitem' || style.display === 'block'});
+      }
+      const plain=normalize(value);
+      return {description:plain.slice(0,20000),description_html:'',description_truncated:!!stack.length || plain.length > 20000 || more};
+    }
     let count=0;
     function visit(node,depth=0) {
-      if (++count > 4000 || depth > 32) throw Error('The job description is too complex to capture.');
+      if (++count > 4000 || depth > 32) throw richLimit;
       if (node.nodeType === 3) return {plain:node.nodeValue || '',html:escape(node.nodeValue || '')};
       if (node.nodeType !== 1) return {plain:'',html:''};
       const tag=String(node.tagName || '').toLowerCase(), style=getComputedStyle(node);
@@ -216,10 +244,12 @@
       if ((blocks.has(mapped) || blocks.has(tag)) && plain && !plain.endsWith('\n')) plain+='\n';
       return {plain,html};
     }
-    const parts=[...root.childNodes].map(node=>visit(node));
-    const plain=parts.map(part=>part.plain).join('').replace(/\r\n?/g,'\n').replace(/[\t ]+\n/g,'\n').replace(/\n[\t ]+/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
-    const html=parts.map(part=>part.html).join('');
     const more=[...root.querySelectorAll('button')].some(button=>visible(button) && /^(?:(?:show|see)\s+|(?:…|\.\.\.)\s*)?more$/i.test(text(button)));
+    let parts;
+    try { parts=[...root.childNodes].map(node=>visit(node)); }
+    catch(error) { if (error === richLimit) return plainFallback(); throw error; }
+    const plain=normalize(parts.map(part=>part.plain).join(''));
+    const html=parts.map(part=>part.html).join('');
     return {description:plain.slice(0,20000),description_html:html.length <= 80000 ? html : '',description_truncated:more || plain.length > 20000};
   }
   function jobScope() {
