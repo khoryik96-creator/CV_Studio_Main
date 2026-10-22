@@ -444,6 +444,78 @@
   function hrNextButton() {
     return nextButton() || [...(document.querySelector('main')?.querySelectorAll('button') || [])].find(button=>visible(button) && /^(next|next page)$/i.test(button.getAttribute('aria-label') || text(button)) && button.parentElement?.querySelector('ul button[aria-label^="Page "]'));
   }
+  function prepareHRJoined(expectedURL) {
+    assertPage('', 'profile');
+    if (profileURL(location.href) !== expectedURL) throw Error('The HR profile identity changed.');
+    const main=document.querySelector('main'); if (!main) return false;
+    const experience=main.querySelector('[componentkey^="profileCardsExperienceOnly"], #experience');
+    if (experience) experience.scrollIntoView({block:'start',behavior:'instant'});
+    else main.scrollBy({top:Math.min(main.clientHeight || 600,900),behavior:'instant'});
+    return true;
+  }
+  function readHRJoined(expectedURL, expectedCompany, companyId) {
+    assertPage('', 'profile');
+    if (profileURL(location.href) !== expectedURL || !companyURL(expectedCompany) || !/^[0-9]{1,24}$/.test(companyId)) throw Error('The HR profile identity changed.');
+    const main = document.querySelector('main');
+    const heading = [...document.querySelectorAll('main h2, h2')].find(n=>visible(n) && text(n) === 'Experience');
+    if (!main || !heading) return {loading:true};
+    // Modern company groups have a stable entity key; legacy groups live in
+    // the Experience section. Never scan About, activity, education or captions
+    // in free-form role descriptions for dates.
+    const scope = heading.getAttribute('componentkey') === 'ProfileNullStateCardAnchor_Experience' ? heading.parentElement?.parentElement :
+      document.querySelector('main #experience')?.closest('section');
+    if (!scope) return {joined:''};
+    const selector = '[componentkey^="entity-collection-item-"], li.artdeco-list__item';
+    const cards = [...scope.querySelectorAll(selector)].filter(n=>visible(n) && !n.parentElement?.closest?.(selector));
+    if (!cards.length) return {loading:true};
+    const months = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+    const date = value => {
+      const match = compact(value).match(/^(?:([A-Za-z]+) )?((?:19|20)\d{2})$/);
+      if (!match) return null;
+      const month = match[1] ? months.findIndex(name=>[name,name.slice(0,3),'september' === name ? 'sept' : name].includes(match[1].toLowerCase()))+1 : 0;
+      if (match[1] && !month) return null;
+      return {value:match[2]+(month ? '-'+String(month).padStart(2,'0') : ''), month, year:Number(match[2]), order:Number(match[2])*12+(month || 1)};
+    };
+    const ranges = words => {
+      const match = compact(words).match(/^((?:[A-Za-z]+ )?(?:19|20)\d{2})\s*[-–—]\s*(Present|(?:[A-Za-z]+ )?(?:19|20)\d{2})(?:\s*·.*)?$/i);
+      if (!match) return null;
+      const start=date(match[1]), current=/^present$/i.test(match[2]), end=current ? null : date(match[2]);
+      return start && (current || end && end.order >= start.order) ? {start,end,current} : null;
+    };
+    const matches = [];
+    for (const card of cards) {
+      const links = [...card.querySelectorAll('a[href*="/company/"]')].filter(n=>visible(n) && [expectedCompany,'https://www.linkedin.com/company/'+companyId+'/'].includes(companyURL(n.href)));
+      if (!links.length) continue;
+      // An expandable group may hide the actual first role. A current role's
+      // date alone must not be presented as the company joining date.
+      if ([...card.querySelectorAll('a, button')].some(n=>visible(n) && /(?:show|see) all|more (?:positions|roles|experiences)/i.test(text(n)))) continue;
+      const linked = n=>[...n.querySelectorAll('a[href*="/company/"]')].some(a=>visible(a) && [expectedCompany,'https://www.linkedin.com/company/'+companyId+'/'].includes(companyURL(a.href)));
+      const roles=[...card.querySelectorAll('ul > li, [role="list"] > [role="listitem"]')].filter(n=>visible(n) && linked(n));
+      if (roles.some(n=>![...n.querySelectorAll('a[href*="/company/"] p, .pvs-entity__caption-wrapper')].filter(visible).some(n=>ranges(text(n))))) continue;
+      const observed = links.flatMap(n=>[...n.querySelectorAll('p, .pvs-entity__caption-wrapper')].filter(visible).map(n=>ranges(text(n))).filter(Boolean));
+      // Legacy date captions can sit beside the company link, within the same
+      // bounded Experience item, rather than inside that link.
+      if (!observed.length && card.matches?.('li.artdeco-list__item')) {
+        observed.push(...[...card.querySelectorAll('.pvs-entity__caption-wrapper')].filter(visible).map(n=>ranges(text(n))).filter(Boolean));
+      }
+      const unique = [...new Map(observed.map(r=>[r.start.value+'|'+(r.current?'present':r.end.value),r])).values()];
+      const current = unique.filter(r=>r.current);
+      if (current.length > 1) return {joined:''};
+      if (current.length !== 1) continue;
+      let first=current[0].start;
+      // Walk only directly adjacent/overlapping roles in this current group.
+      // A gap (or imprecise end date) cannot prove continuity after rejoining.
+      let complete=true;
+      for (const role of unique.filter(r=>!r.current).sort((a,b)=>b.start.order-a.start.order)) {
+        if (role.start.order < first.order) {
+          if (!first.month || !role.end.month || role.end.order < first.order-1) { complete=false; break; }
+          first=role.start;
+        }
+      }
+      if (complete) matches.push(first.value);
+    }
+    return {joined:matches.length === 1 ? matches[0] : ''};
+  }
   function nextHRSearch(signature, company, country, keywords) {
     const snapshot = readHRSearch(company,country,keywords);
     if (snapshot.loading || !signature || snapshot.signature !== signature) throw Error('The HR results changed before paging.');
@@ -451,5 +523,5 @@
     button.click(); return true;
   }
   globalThis.SourcerReader = {readSearch, next, search, readProfile, profileURL, readJob, readJobSearch, nextJobSearch, scrollJobSearch, jobSearchContext, readJobPick, jobTargets,
-    readHRCompany, hrCountryOpen, hrCountryType, hrCountryPick, hrCountryApply, readHRSearch, nextHRSearch};
+    readHRCompany, hrCountryOpen, hrCountryType, hrCountryPick, hrCountryApply, readHRSearch, nextHRSearch, readHRJoined, prepareHRJoined};
 })();

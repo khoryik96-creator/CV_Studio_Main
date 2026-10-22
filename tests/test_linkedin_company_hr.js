@@ -10,8 +10,14 @@ function hrFixture(country=''){
     if(method==='readHRCompany')return [{result:f.state.badCompany?{hrError:'layout'}:{company_id:'123'}}];
     if(method==='readHRSearch'){
       f.state.hrReads++;
-      return [{result:{people:[],signature:'one',hasNext:true,empty:false}}];
+      return [{result:{people:[{url:'https://www.linkedin.com/in/sample'}],signature:'one',hasNext:true,empty:false}}];
     }
+    if(Array.isArray(method)) {
+      f.state.joinedReads=(f.state.joinedReads||0)+1;
+      if(f.state.joinedNull)return [{result:null}];
+      return [{result:{joined:f.state.joinedBad?'2024-13':'2020-06'}}];
+    }
+    if(method==='https://www.linkedin.com/in/sample'){f.state.profileScrolls=(f.state.profileScrolls||0)+1;return [{result:true}];}
     if(method.startsWith('hrCountry')||method==='nextHRSearch'){
       f.state.hrClicks.push(method);
       if(f.state.nullMutation)return [{result:null}];
@@ -55,5 +61,38 @@ function hrFixture(country=''){
   assert.equal(bad.state.created.length,0);
   const busy=hrFixture();await busy.arm();await busy.begin();assert((await busy.beginHR()).error,'Jobs and HR runs cannot overlap');
   const old=hrFixture();await old.arm();const oi=(await old.beginHR()).result.tab_id;old.tabs.get(oi).url='https://www.linkedin.com/login';assert((await old.readHR(oi)).error);
+  const dates=hrFixture();await dates.arm();const di=(await dates.beginHR()).result.tab_id;await dates.readHR(di);await dates.readHR(di);
+  const dateRead=(url='https://www.linkedin.com/in/sample')=>dates.rpc('hrJoined',{run_id:dates.run,tab_id:di,url});
+  assert((await dateRead('https://www.linkedin.com/in/unobserved')).error);assert.equal(dates.state.created.length,1);
+  assert((await dateRead()).result.loading);assert.equal(dates.state.created.length,2);const pi=dates.state.created.length+10;
+  dates.boot();assert((await dates.nextHR(di)).error,'cannot page while an HR profile read is pending');
+  assert.equal((await dateRead()).result.joined,'2020-06');assert(dates.state.removed.includes(pi));
+  assert(!dates.state.session.cvstudioLinkedinSessionV1.connection.hr.joining);
+  assert.equal(dates.state.session.cvstudioLinkedinSessionV1.connection.hr.joined_count,1);
+  assert(!JSON.stringify(dates.state.session).includes('2020-06'),'dates and captured profile content do not enter worker session state');
+  assert.equal((await dates.rpc('hrJoinedClose',{run_id:dates.run,tab_id:di})).result,true);
+  const takeover=hrFixture();await takeover.arm();const ti=(await takeover.beginHR()).result.tab_id;await takeover.readHR(ti);await takeover.readHR(ti);
+  const tr=()=>takeover.rpc('hrJoined',{run_id:takeover.run,tab_id:ti,url:'https://www.linkedin.com/in/sample'});
+  await tr();takeover.tabs.get(12).active=true;assert((await tr()).error);await takeover.end();assert(takeover.tabs.has(12),'a user-opened profile is never closed');
+  const interrupted=hrFixture();await interrupted.arm();const ii=(await interrupted.beginHR()).result.tab_id;await interrupted.readHR(ii);await interrupted.readHR(ii);
+  interrupted.state.session.cvstudioLinkedinSessionV1.connection.hr.joining={url:'https://www.linkedin.com/in/sample',tab_id:null};interrupted.boot();
+  assert((await interrupted.rpc('hrJoined',{run_id:interrupted.run,tab_id:ii,url:'https://www.linkedin.com/in/sample'})).error);assert.equal(interrupted.state.created.length,1,'ambiguous creation cannot reopen a profile');
+  const limit=hrFixture();await limit.arm();const li=(await limit.beginHR()).result.tab_id;await limit.readHR(li);await limit.readHR(li);
+  limit.state.session.cvstudioLinkedinSessionV1.connection.hr.joined_count=100;limit.boot();
+  assert((await limit.rpc('hrJoined',{run_id:limit.run,tab_id:li,url:'https://www.linkedin.com/in/sample'})).error);assert.equal(limit.state.created.length,1);
+  const drift=hrFixture();await drift.arm();const si=(await drift.beginHR()).result.tab_id;await drift.readHR(si);await drift.readHR(si);
+  const sr=()=>drift.rpc('hrJoined',{run_id:drift.run,tab_id:si,url:'https://www.linkedin.com/in/sample'});await sr();
+  drift.state.onInject=()=>{drift.tabs.get(12).url='https://www.linkedin.com/in/another'};
+  assert((await sr()).error);assert.equal(drift.state.joinedReads||0,0,'owned profile identity is checked after reader injection');
+  await drift.end();assert(drift.tabs.has(12),'an unrelated redirect is retained');
+  const stale=hrFixture();await stale.arm();const sti=(await stale.beginHR()).result.tab_id;await stale.readHR(sti);await stale.readHR(sti);
+  stale.tabs.get(sti).url+='&network=%5B%22F%22%5D';
+  assert((await stale.rpc('hrJoined',{run_id:stale.run,tab_id:sti,url:'https://www.linkedin.com/in/sample'})).error);assert.equal(stale.state.created.length,1);
+  const unreadable=hrFixture();await unreadable.arm();const ui=(await unreadable.beginHR()).result.tab_id;await unreadable.readHR(ui);await unreadable.readHR(ui);
+  const ur=()=>unreadable.rpc('hrJoined',{run_id:unreadable.run,tab_id:ui,url:'https://www.linkedin.com/in/sample'});await ur();unreadable.state.joinedNull=true;unreadable.boot();assert((await ur()).result.loading);
+  for(let n=0;n<7;n++){unreadable.boot();assert((await ur()).result.loading);}
+  assert.equal(unreadable.state.profileScrolls,4,'lazy Experience scroll budget persists across suspension');
+  assert.equal(unreadable.state.created.length,2,'null/loading reads poll the same owned profile');
+  await unreadable.rpc('hrJoinedClose',{run_id:unreadable.run,tab_id:ui});assert(unreadable.state.removed.includes(12));
   console.log('Company HR worker: exact document/company/country/source, bounded pages, suspension, mutation non-replay, competing runs and retained source passed');
 })().catch(error=>{console.error(error);process.exitCode=1});

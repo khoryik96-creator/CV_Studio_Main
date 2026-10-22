@@ -147,6 +147,9 @@ async function restore() {
         bound.jobInitial && (bound.jobInitial !== true || typeof bound.jobLocation !== 'string' || bound.jobLocation.length > 160)) ||
       bound.kind === 'hr' && (!bound.hr || !hrCompanyURL(bound.hr.company_url) || typeof bound.hr.company !== 'string' || bound.hr.company.length > 200 || typeof bound.hr.country !== 'string' || bound.hr.country.length > 100 ||
         typeof bound.hr.keywords !== 'string' || bound.hr.keywords.length > 600 || !Number.isFinite(bound.hr.started) || !['company','search','type','pick','apply','country_wait','ready','interrupted'].includes(bound.hr.stage) ||
+        bound.hr.joined_count !== undefined && (!Number.isInteger(bound.hr.joined_count) || bound.hr.joined_count < 0 || bound.hr.joined_count > 100) ||
+        bound.hr.joining && (!/^https:\/\/www\.linkedin\.com\/in\/[A-Za-z0-9_%~-]+$/.test(bound.hr.joining.url || '') || bound.hr.joining.tab_id !== null && !Number.isInteger(bound.hr.joining.tab_id) ||
+          bound.hr.joining.scrolls !== undefined && (!Number.isInteger(bound.hr.joining.scrolls) || bound.hr.joining.scrolls < 0 || bound.hr.joining.scrolls > 4)) ||
         bound.hr.stage !== 'company' && (!/^[0-9]{1,24}$/.test(bound.hr.company_id || '') || !bound.hr.key) ||
         bound.hr.key && (bound.hr.key.length > 2048 || hrSearchKey(bound.hr.key) !== bound.hr.key))) throw Error('Invalid binding.');
   try {
@@ -290,7 +293,7 @@ async function handle(message, sender) {
     throw Error('In Chrome, open CV Studio and click the companion toolbar icon to connect this tab.');
   }
   const args = message.args || {};
-  if (message.action === 'jobStatus') return {connected:true,job_read:true,job_search:true,job_search_revision:1,company_hr_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
+  if (message.action === 'jobStatus') return {connected:true,job_read:true,job_search:true,job_search_revision:1,company_hr_revision:1,hr_joined_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
   if (message.action === 'hrBegin') {
     const bound = connection;
     if (!/^[a-f0-9]{32}$/.test(args.run_id || '') || !hrCompanyURL(args.company_url) || typeof args.company !== 'string' || !args.company.trim() || args.company.length > 200 ||
@@ -302,7 +305,7 @@ async function handle(message, sender) {
     try {
       const tab = await chrome.tabs.create({url:args.company_url+'people/',active:false}); live(bound);
       Object.assign(bound,{kind:'hr',run:args.run_id,source:tab.id,pages:args.max_pages,allowed:new Set(),
-        hr:{company_url:args.company_url,company:args.company.trim(),country:args.country.trim(),keywords:args.keywords.trim(),stage:'company',key:'',started:Date.now()}});
+        hr:{company_url:args.company_url,company:args.company.trim(),country:args.country.trim(),keywords:args.keywords.trim(),stage:'company',key:'',started:Date.now(),joined_count:0}});
       nextCount=0; await persist(); return {tab_id:tab.id};
     } finally { if (jobCapture === token) jobCapture = null; }
   }
@@ -416,7 +419,7 @@ async function handle(message, sender) {
   }
   if (connection.kind === 'hr') {
     const bound = connection, hr = bound.hr, run = args.run_id;
-    if (!['hrRead','hrNext'].includes(message.action) || args.tab_id !== bound.source) throw safeError('This action does not belong to the company HR search.');
+    if (!['hrRead','hrNext','hrJoined','hrJoinedClose'].includes(message.action) || args.tab_id !== bound.source) throw safeError('This action does not belong to the company HR search.');
     if (jobCapture) throw safeError('Wait for the current HR browser action to finish.');
     const token = {}; jobCapture = token;
     try {
@@ -424,6 +427,58 @@ async function handle(message, sender) {
     const tab = await chrome.tabs.get(bound.source); live(bound,run);
     if (!linkedin(tab.url) && !(tab.status === 'loading' && (!tab.url || tab.url === 'about:blank'))) throw safeError('The HR search left LinkedIn.');
     if (tab.status !== 'complete') return {loading:true};
+    if (['hrJoined','hrJoinedClose'].includes(message.action)) {
+      const verify = async () => {
+        live(bound,run); const source=await chrome.tabs.get(bound.source);
+        if (hr.stage !== 'ready' || source.status !== 'complete' || hrSearchKey(source.url) !== hr.key || source.pendingUrl && hrSearchKey(source.pendingUrl) !== hr.key) throw safeError('The HR search changed while checking joining dates. Start a new scan.');
+      };
+      await verify();
+      if (message.action === 'hrJoinedClose') {
+        if (hr.joining && hr.joining.tab_id !== null) await closeOwned(hr.joining.tab_id,hr.joining.url);
+        delete hr.joining; await persist(); return true;
+      }
+      if (!/^https:\/\/www\.linkedin\.com\/in\/[A-Za-z0-9_%~-]+$/.test(args.url || '') || !bound.allowed.has(args.url)) throw safeError('Choose an HR profile observed on this results page.');
+      if (!hr.joining) {
+        if ((hr.joined_count || 0) >= 100 || owned.size >= 76) throw safeError('The joining-date lookup limit was reached.');
+        // Persist the attempt before opening. If suspension occurs mid-create,
+        // the absent tab ID stops visibly rather than opening another tab.
+        hr.joined_count=(hr.joined_count || 0)+1; hr.joining={url:args.url,tab_id:null,scrolls:0};
+        await persist(); live(bound,run);
+        const created=await chrome.tabs.create({url:args.url,active:false});
+        owned.set(created.id,args.url);
+        try { live(bound,run); hr.joining.tab_id=created.id; await persist(); }
+        catch(error) { await closeOwned(created.id,args.url); throw error; }
+        return {loading:true};
+      }
+      if (hr.joining.url !== args.url || hr.joining.tab_id === null) throw safeError('The joining-date lookup was interrupted. Start a new scan.');
+      const id=hr.joining.tab_id;
+      const profileTab=await ownedTab(id); live(bound,run);
+      if (profileTab.status !== 'complete') return {loading:true};
+      await jobScript({target:{tabId:id},files:['reader.js']},jobReaderStartError);
+      await ownedTab(id); await verify();
+      const [injection]=await jobScript({target:{tabId:id},func:(values)=>{
+        try { return globalThis.SourcerReader.readHRJoined(...values); }
+        catch(error) { return {hrError:/sign in|verification|restriction/i.test(String(error?.message)) ? 'access' : 'layout'}; }
+      },args:[[args.url,hr.company_url,hr.company_id]]},'The HR joining date could not be read. Refresh LinkedIn and try again.');
+      await ownedTab(id); await verify();
+      const result=injection?.result;
+      if (result?.hrError) throw safeError(result.hrError === 'access' ? 'LinkedIn needs sign-in or is showing a restriction. Resolve it before scanning again.' : 'The HR profile changed or could not be confirmed.');
+      if (result == null || result.loading) {
+        // LinkedIn lazy-loads Experience after scrolling. Only our unchanged
+        // inactive tab can be scrolled; persist its small budget first.
+        if ((hr.joining.scrolls || 0) < 4) {
+          hr.joining.scrolls=(hr.joining.scrolls || 0)+1; await persist();
+          await ownedTab(id); await verify();
+          await jobScript({target:{tabId:id},func:url=>globalThis.SourcerReader.prepareHRJoined(url),args:[args.url]},'The profile Experience section could not be loaded.');
+          await ownedTab(id); await verify();
+        }
+        return {loading:true};
+      }
+      if (typeof result.joined !== 'string' || !/^(?:(?:19|20)\d{2}(?:-(?:0[1-9]|1[0-2]))?)?$/.test(result.joined)) throw safeError('The joining date could not be confirmed.');
+      await closeOwned(id,args.url); delete hr.joining; await persist(); live(bound,run);
+      return {url:args.url,joined:result.joined};
+    }
+    if (hr.joining) throw safeError('Finish the current joining-date lookup before paging.');
     if (message.action === 'hrNext') {
       if (hr.stage !== 'ready' || typeof args.signature !== 'string' || !args.signature || args.signature.length > 17000) throw safeError('Read the HR results before paging.');
       nextCount++; await persist(); if (nextCount >= bound.pages) throw safeError('The HR page limit was reached.');
@@ -458,6 +513,8 @@ async function handle(message, sender) {
     if (result == null || result.loading) return {loading:true};
     if (!Array.isArray(result.people) || result.people.length > 40 || typeof result.signature !== 'string') throw safeError('The HR results could not be read.');
     if (hrSearchKey((await chrome.tabs.get(bound.source)).url) !== hr.key) throw safeError('The HR search changed during the read.');
+    bound.allowed=new Set(result.people.map(person=>person.url).filter(url=>typeof url === 'string' && /^https:\/\/www\.linkedin\.com\/in\/[A-Za-z0-9_%~-]+$/.test(url)));
+    await persist(); live(bound,run);
     return {...result,company_id:hr.company_id,source_url:hr.key};
     } finally { if (jobCapture === token) jobCapture = null; }
   }

@@ -275,11 +275,13 @@ def clean_hr(raw, company):
         if not isinstance(person, dict):
             invalid()
         entry = {}
-        for key, limit in {'name':200,'title':500,'location':240,'url':400,'matched':600}.items():
+        for key, limit in {'name':200,'title':500,'location':240,'url':400,'matched':600,'joined':7}.items():
             value = person.get(key, '')
             if not isinstance(value, str) or len(value) > limit or any(ord(c) < 32 for c in value):
                 invalid()
             entry[key] = value.strip()
+        if entry['joined'] and not re.fullmatch(r'(?:19|20)\d{2}(?:-(?:0[1-9]|1[0-2]))?', entry['joined']):
+            invalid()
         if (not entry['name'] or not entry['title'] or not entry['matched'] or
                 not re.fullmatch(r'https://www\.linkedin\.com/in/[A-Za-z0-9_%~-]+/?', entry['url'])):
             invalid()

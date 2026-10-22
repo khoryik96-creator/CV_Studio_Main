@@ -4,6 +4,32 @@ Current version is the repository-root `VERSION`. This owner-requested module
 tracks LinkedIn job ads for business development, separately from the candidate
 sourcer and the locked historical Lead Finder.
 
+## HR company joining dates (v24.6.476)
+
+Each HR result card shows **Joined company**, using a month/year or year-only
+date explicitly visible in that profile's current company Experience. Missing,
+hidden, unrecognized or ambiguous evidence shows **Not available**. The scan
+does not subtract tenure durations or infer a date from headlines. Promotions
+within one fully visible company group use the earliest explicitly dated,
+continuous role; a separate former stint cannot replace the rejoining date.
+
+After each results page the companion checks the observed HR public profile
+links sequentially in temporary inactive tabs, up to 100 per run within the
+existing ten-minute ceiling. Exact profile/company identities and current
+employment dates are required. Activation/navigation relinquishes ownership;
+user tabs remain untouched. Each lookup is polled briefly, and a slow/missing
+Experience section leaves its optional date unavailable. Up to four persisted
+scroll attempts load LinkedIn's lazy Experience content within that owned tab;
+an empty loading skeleton is polled instead of being treated as final evidence.
+Restrictions, identity
+changes and interrupted browser actions stop visibly and preserve saved results.
+The attempt count is persisted before opening; suspension during creation cannot
+silently open another tab. No captured Experience text/date enters worker
+session state. The existing saved-ad JSON evidence/backup retains the bounded
+optional date; older records remain readable and show Not available until a
+new HR scan. No route, database schema, extension permission, AI call or outreach
+is added. Update/reload the companion and reconnect for joining-date scans.
+
 ## Rich-content capture corrective (v24.6.475)
 
 Modern LinkedIn can put an aria-hidden **“… more”** button inside the About

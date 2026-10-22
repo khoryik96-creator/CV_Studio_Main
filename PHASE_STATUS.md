@@ -4,6 +4,20 @@
 
 ## Release state
 
+- HR company joining dates: v24.6.476 continues the unmerged
+  `codex/v24.6.474-job-leads-company-hr` branch. HR cards show an explicit
+  month/year or year-only start from the matched company's current visible
+  Experience stint, with Not available for missing/ambiguous evidence. Bounded
+  sequential owned profile reads retain cancellation, identity checks and
+  suspension-safe attempt limits. Optional dates survive saved-ad backups;
+  old records, ad details, rich formatting and folders remain compatible.
+  No route/schema/permission change, paid call, outreach or installed owner
+  state change. Full isolated Windows Python: 1,776 passed, four skipped,
+  8,392 subtests; all 46 JavaScript suites, static/native/source preflight and
+  24 source-smoke assertions passed. QA details are in
+  `cv_studio_v24_6_476_hr_joining_dates_qa_report.md`. Local checkpoint only;
+  no PR or merge requested.
+
 - Job-ad rich formatting corrective: v24.6.475 continues the unmerged
   `codex/v24.6.474-job-leads-company-hr` branch. Companion captures now derive
   plain text and passive formatted markup from the same DOM while removing

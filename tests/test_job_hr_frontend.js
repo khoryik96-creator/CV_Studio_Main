@@ -6,7 +6,9 @@ function hrFixture(){
   const f=fixture();Object.assign(f.state,{hrPage:0,hrSeen:0});
   f.state.onRPC=(message,reply)=>{
     const {action,args}=message;
-    if(action==='jobStatus'){reply({connected:true,company_hr_revision:f.state.oldCompanion?0:1,busy:!!f.state.hrBusy});return true;}
+    if(action==='jobStatus'){reply({connected:true,company_hr_revision:f.state.oldCompanion?0:1,hr_joined_revision:1,busy:!!f.state.hrBusy});return true;}
+    if(action==='hrJoined'){reply(f.state.joinedLoading?{loading:true}:{url:args.url,joined:f.state.joined ?? '2020-06'});return true;}
+    if(action==='hrJoinedClose'){reply(true);return true;}
     if(action==='jobFromLink'){reply({...f.state.records[0],company_url:companyURL});return true;}
     if(action==='hrBegin'){f.state.hrArgs=args;reply({tab_id:30});return true;}
     if(action==='hrNext'){f.state.hrPage++;reply(true);return true;}
@@ -41,6 +43,9 @@ function hrFixture(){
   assert.equal(f.state.records[0].hr.people.length,1,'profiles deduplicate across pages');
   assert.equal(f.el('notes').value,'Unsaved draft stays');assert.match(f.el('HRMessage').textContent,/1 HR matches saved/);
   assert.equal(f.el('HRResults').children[0].children[0].textContent,'Sample <Person>','names remain text');
+  assert.equal(f.el('HRResults').children[0].children[3].textContent,'Joined company: Jun 2020');
+  assert.equal(f.state.records[0].hr.people[0].joined,'2020-06');
+  assert.equal(f.calls.filter(x=>x.action==='hrJoined').length,1,'duplicate pages do not re-open profiles');
   assert(f.calls.some(x=>x.action==='end'));
   f.el('HRCountryMode').value='specific';f.el('HRCountryMode').handlers.change();assert(!f.el('HRCountry').hidden);
   f.el('HRCountry').value='Singapore';await f.el('HRStart').click();assert.equal(f.state.hrArgs.country,'Singapore');
@@ -63,5 +68,13 @@ function hrFixture(){
   assert.match(stopped.el('HRMessage').textContent,/Scan stopped/);
   const trash=hrFixture();trash.state.records[0].deleted=true;trash.el('FolderFilter').value='!trash';await trash.init();
   assert(trash.el('HR').hidden);assert(trash.el('HRStart').disabled);
+  const year=hrFixture();await year.init();year.state.joined='2023';await year.el('HRStart').click();
+  assert.equal(year.el('HRResults').children[0].children[3].textContent,'Joined company: 2023');
+  delete year.state.records[0].hr.people[0].joined;year.state.records[0].revision++;await year.el('Refresh').click();
+  assert.equal(year.el('HRResults').children[0].children[3].textContent,'Joined company: Not available','older records still render safely');
+  const missing=hrFixture();await missing.init();missing.state.joinedLoading=true;await missing.el('HRStart').click();
+  assert.equal(missing.state.records[0].hr.people[0].joined,'','optional missing Experience does not lose valid HR people');
+  assert.equal(missing.calls.filter(x=>x.action==='hrJoined').length,20,'loading lookup has a bounded poll count');
+  assert(missing.calls.some(x=>x.action==='hrJoinedClose'));
   console.log('Company HR UI: company-scoped requests, countries, paging/dedup, saved evidence, XSS text, draft preservation, Stop, old/busy companion, invalid profiles and stale-write failures passed');
 })().catch(error=>{console.error(error);process.exitCode=1});

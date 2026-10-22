@@ -400,13 +400,17 @@
     drawPreview(); discoveryControls();
   }
   const hrDefaultKeywords = 'HR, human resources, CHRO, chief people officer, talent acquisition, TA, recruitment, hiring, recruiter, HRBP, end to end recruitment';
+  function hrJoinedLabel(value) {
+    if (typeof value !== 'string' || !/^(?:19|20)\d{2}(?:-(?:0[1-9]|1[0-2]))?$/.test(value)) return 'Not available';
+    return value.length === 4 ? value : ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][Number(value.slice(5))-1]+' '+value.slice(0,4);
+  }
   function hrPeople(people) {
     const target = el('HRResults'); target.replaceChildren();
     for (const person of people || []) {
       if (!/^https:\/\/www\.linkedin\.com\/in\/[A-Za-z0-9_%~-]+\/?$/.test(person?.url || '')) continue;
       const card = node('article','','job-leads-hr-person'), link = node('a',person.name);
       link.href=person.url; link.target='_blank'; link.rel='noopener noreferrer';
-      card.append(link,node('p',person.title),node('p',person.location || 'Location not shown','job-leads-muted'),node('p','Matched: '+person.matched,'job-leads-muted'));
+      card.append(link,node('p',person.title),node('p',person.location || 'Location not shown','job-leads-muted'),node('p','Joined company: '+hrJoinedLabel(person.joined),'job-leads-muted'),node('p','Matched: '+person.matched,'job-leads-muted'));
       target.append(card);
     }
   }
@@ -438,7 +442,7 @@
     try {
       el('HRMessage').textContent='Checking the companion…';
       const companion = await rpc('jobStatus',{},1500); checkHR();
-      if (!companion?.connected || companion.company_hr_revision !== 1) throw Error('Open this CV Studio address in Chrome, reload the latest companion, refresh pages and reconnect it to find company HR people.');
+      if (!companion?.connected || companion.company_hr_revision !== 1 || companion.hr_joined_revision !== 1) throw Error('Open this CV Studio address in Chrome, reload the latest companion, refresh pages and reconnect it to find company HR people and joining dates.');
       if (companion.busy) throw Error('Finish the current companion search or ad read first.');
       if (!companyURL) {
         el('HRMessage').textContent='Reading the company link from the saved ad…';
@@ -465,7 +469,24 @@
         finalSnapshot=snapshot;
         for (const person of snapshot.people) {
           if (typeof person?.url !== 'string' || !/^https:\/\/www\.linkedin\.com\/in\/[A-Za-z0-9_%~-]+\/?$/.test(person.url) || typeof person.name !== 'string' || typeof person.title !== 'string' || typeof person.location !== 'string' || typeof person.matched !== 'string') throw Error('An HR result could not be confirmed.');
-          if (found.size < 100 && !found.has(person.url)) found.set(person.url,person);
+          const profileURL=person.url.replace(/\/$/,'');
+          if (found.size < 100 && !found.has(profileURL)) {
+            const entry={...person,url:profileURL,joined:''};
+            found.set(profileURL,entry); hrPeople([...found.values()]);
+            // Read only this observed profile, one background tab at a time.
+            // A missing/slow Experience section is optional evidence, never a
+            // fabricated date or reason to erase otherwise valid HR matches.
+            for (let attempt=0;attempt<20;attempt++) {
+              checkHR(); el('HRMessage').textContent=`Checking when ${person.name} joined ${row.company}…`;
+              const value=await rpc('hrJoined',{run_id:hrRun,tab_id:source.tab_id,url:profileURL}); checkHR();
+              if (value && !value.loading) {
+                if (value.url !== profileURL || typeof value.joined !== 'string' || !/^(?:(?:19|20)\d{2}(?:-(?:0[1-9]|1[0-2]))?)?$/.test(value.joined)) throw Error('An HR joining date could not be confirmed.');
+                entry.joined=value.joined; break;
+              }
+              await pauseDiscovery();
+            }
+            checkHR(); await rpc('hrJoinedClose',{run_id:hrRun,tab_id:source.tab_id}); checkHR();
+          }
         }
         hrPeople([...found.values()]);
         if (snapshot.empty || !snapshot.hasNext || found.size >= 100 || pageIndex+1 === pages) break;
