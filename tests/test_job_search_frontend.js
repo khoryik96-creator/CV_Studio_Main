@@ -49,6 +49,7 @@ function fixture(){
     }
     assert.equal(data.action,'save');
     if(data.record.url===state.failSave)return {ok:false,json:async()=>({error:'Synthetic storage limit'})};
+    if(state.beforeSave){state.records.push(state.beforeSave);state.beforeSave=null;}
     const duplicate=state.records.find(row=>row.url===data.record.url);
     if(duplicate)return {ok:true,json:async()=>({record:duplicate,duplicate:true})};
     const record={...data.record,id:String(++serial).padStart(32,'0'),revision:1,created_at:'2026-10-20T00:00:00Z',deleted:false};
@@ -209,6 +210,40 @@ function fixture(){
   const count=direct.state.records.length;assert((await direct.capture(job('9',{url:'https://attacker.invalid/jobs/view/9'}))).error);assert.equal(direct.state.records.length,count);
   direct.state.failSave=a.url;assert((await direct.capture(a)).error);assert.equal(direct.el('notes').value,'Keep unsaved notes');
   const folders=await direct.capture(b,{action:'folders'});assert.equal(folders.folders[0],'Priority');assert.equal(folders.saved,true);
+  const beforeFolderRead=direct.requests.length;
+  const metadataFolders=await direct.capture({url:b.url},{action:'folders'});
+  assert.equal(metadataFolders.folders[0],'Priority','read-only folders accept a canonical identity without reparsing company/role');
+  assert.equal(metadataFolders.saved,true);assert.equal(direct.requests.length,beforeFolderRead,'folder reads never write records');
+  assert((await direct.capture({url:b.url},{action:'add'})).error,'identity-only metadata cannot become an ad save');
+  assert((await direct.capture({url:b.url},{action:'remove'})).error,'existing removal confirmation remains strict');
+  const raced=fixture();await raced.init();raced.state.folders.push('Keep original','SAP');
+  assert.equal((await raced.capture({url:a.url},{action:'folders'})).saved,false);
+  const racedRecord={...raced.state.records[0],...a,id:'d'.repeat(32),folder:'Keep original',notes:'Keep original notes',contact:'Keep original contact'};
+  raced.state.records.push(structuredClone(racedRecord));
+  const beforeRacedAdd=raced.requests.length;
+  const racedResult=await raced.capture(a,{action:'add',folder:'SAP'});
+  assert.equal(racedResult.folder,'Keep original','an ad saved between metadata and Add cannot be moved implicitly');
+  assert.equal(racedResult.duplicate,true);assert.deepEqual(raced.state.records.find(row=>row.url===a.url),racedRecord);
+  assert.equal(raced.requests.length,beforeRacedAdd,'an already-active duplicate causes no write regardless of supplied folder');
+  const duringSave=fixture();await duringSave.init();duringSave.state.folders.push('Keep original','SAP');
+  duringSave.state.beforeSave=structuredClone(racedRecord);
+  const duringResult=await duringSave.capture(a,{action:'add',folder:'SAP'});
+  assert.equal(duringResult.folder,'Keep original');assert.deepEqual(duringSave.state.records.find(row=>row.url===a.url),racedRecord);
+  assert(!duringSave.requests.some(request=>request.action==='move_folder'),'a duplicate found atomically by save never enters a move path');
+  const folderSelection=fixture();await folderSelection.init();await folderSelection.el('SearchStart').click();
+  folderSelection.el('SearchSelectPage').checked=true;folderSelection.el('SearchSelectPage').handlers.change();
+  folderSelection.el('notes').value='Keep this local draft';folderSelection.el('notes').handlers.input();
+  const selectionCount=folderSelection.el('SearchCount').textContent,previewTitle=folderSelection.el('PreviewTitle').textContent;
+  folderSelection.state.folders.push('Created elsewhere');
+  assert((await folderSelection.capture({url:b.url},{action:'folders'})).folders.includes('Created elsewhere'));
+  assert.equal(folderSelection.el('SearchCount').textContent,selectionCount);assert.equal(folderSelection.el('PreviewTitle').textContent,previewTitle);
+  assert.equal(folderSelection.el('notes').value,'Keep this local draft');assert.equal(folderSelection.requests.length,0,'metadata refresh has no write/render side effects');
+  const busyMetadata=fixture();await busyMetadata.init();busyMetadata.state.hold=true;const busyRun=busyMetadata.el('SearchStart').click();
+  for(let attempt=0;attempt<50&&!busyMetadata.state.held;attempt++)await new Promise(resolve=>setTimeout(resolve,5));
+  assert(busyMetadata.state.held);assert(busyMetadata.el('SearchStart').disabled);
+  assert((await busyMetadata.capture({url:b.url},{action:'folders'})).ok,'local metadata remains readable during discovery');
+  assert(busyMetadata.el('SearchStart').disabled,'metadata cannot unlock a running operation');
+  await busyMetadata.el('SearchStop').click();busyMetadata.state.held();await busyRun;
   assert((await direct.capture(b,{action:'create_folder',folder:'SAP'})).ok);assert(direct.state.folders.includes('SAP'));assert.equal(direct.state.records.length,count,'creating a folder never adds an ad');
   assert((await direct.capture(b,{action:'remove'})).saved===false);assert(direct.state.records[0].deleted);assert.equal(direct.state.records[0].notes,'Important saved notes');
   assert.equal(direct.el('PreviewSave').textContent,'In Trash');assert.equal(direct.el('PreviewSave').disabled,true);

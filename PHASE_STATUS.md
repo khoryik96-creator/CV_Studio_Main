@@ -4,6 +4,59 @@
 
 ## Release state
 
+- PR #237 timing corrective: v24.6.473 on
+  `codex/v24.6.471-linkedin-folder-refresh`. The Add handler treats every existing
+  active ad as a duplicate without entering its folder-move path. Records saved
+  after the metadata check retain their folder; records appearing during the
+  final save use the existing transactional duplicate/no-overwrite guarantee.
+  Explicit moves and revision-guarded Trash restoration remain available.
+  Both timing windows have actual-controller regressions; the pre-Add race
+  failed on v472 before correction. All 42 JavaScript suites passed; full isolated
+  Windows Python passed (1,750 passed, four skipped, 8,392 subtests). Source/static/
+  repository/native preflight and 24 smoke assertions passed. Exact-head PR gate
+  results are recorded before merge in issue #35 and
+  `cv_studio_v24_6_473_companion_add_idempotency_qa_report.md`.
+
+- PR #237 review corrective: v24.6.472 on
+  `codex/v24.6.471-linkedin-folder-refresh`. Add now fetches the clicked ad's own
+  authoritative saved state before any write; a shared folder catalog cannot
+  imply that the ad is unsaved. Existing ads show Added and keep their folder
+  without a write. New ads still use the chosen folder. The reported regression
+  failed before correction; all 42 JavaScript suites and full isolated Windows
+  Python passed (1,750 passed, four skipped, 8,392 subtests). Actual browser QA
+  retained an existing ad in Priority with zero Add writes despite SAP selected
+  across both menus, then saved a new ad into SAP. Only fictional data/simulated
+  transport was used. Final source/native and exact-head PR checks gate merge.
+  See `cv_studio_v24_6_472_companion_saved_state_corrective_qa_report.md`.
+
+- Owner-requested LinkedIn ad folder-menu correction: v24.6.471 on
+  `codex/v24.6.471-linkedin-folder-refresh`, retaining reviewed unmerged v470
+  `a0a73bc`. Folder catalogs preload/share across cards and refresh on menu open,
+  tab return or Refresh folders. Catalog reads no longer require parsing ad
+  details; exact document checks and strict explicit write gates remain.
+  Chosen folders, unsaved drafts, selections and active operation locks are
+  preserved; failed/late reads cannot silently replace a usable newer catalog.
+  Full isolated Windows Python: 1,750 passed, four skipped, 8,392 subtests;
+  all 42 JavaScript suites passed. Source/static/repository/Windows native
+  preflight and 24 smoke assertions passed. Browser QA uses fictional job
+  cards with the actual controls and a simulated companion connection.
+  Local checkpoint only; no PR/merge or owner installation/data changes.
+  See `cv_studio_v24_6_471_linkedin_folder_catalog_qa_report.md`.
+
+- Owner-requested LinkedIn Sourcer startup/readiness correction: v24.6.470 on
+  `codex/v24.6.470-linkedin-sourcer-start`, from merged v469 `59c7f09`.
+  Start defaults to a fresh People search every time, retaining existing-search
+  and Recruiter options. Missing script results no longer reach an unchecked
+  `snapshot.empty`; bounded read-only polling and fixed reader/access errors
+  preserve paid-call non-replay, consent, budgets and browser authority.
+  Full isolated Windows Python: 1,750 passed, four skipped, 8,392 subtests;
+  all 42 JavaScript suites passed. Source/static/repository/Windows native
+  preflight and 24 source smoke assertions passed. The actual browser UI
+  completed two runs with distinct simulated new sources, recovering from a
+  null read. No live LinkedIn/extension or paid provider test is claimed.
+  Local source checkpoint and isolated demo only; no PR/merge requested yet.
+  See `cv_studio_v24_6_470_sourcer_start_readiness_qa_report.md`.
+
 - Owner-authorized Job Leads preview review corrective and merge: v24.6.469 on
   `codex/v24.6.468-job-preview-controls`, from merged v467 `3528005`.
   Folder creation and manual filter changes now share preview synchronization,

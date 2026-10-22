@@ -13,6 +13,7 @@ const root = path.resolve(__dirname, '..');
     [3, {id:3, url:'https://www.linkedin.com/in/unrelated', status:'complete'}]
   ]);
   const url = 'https://www.linkedin.com/in/sample-person';
+  let searchResult, readerFailure='';
   const chrome = {
     storage:{session:{get:async()=>({}),set:async()=>{}}},
     action: {onClicked:{addListener:fn=>callbacks.click=fn},setBadgeText:async()=>{}},
@@ -23,7 +24,8 @@ const root = path.resolve(__dirname, '..');
     scripting:{executeScript:async args=>{
       if(args.files)return [{}];
       if(!args.args)return [{result:true,documentId:'app-document'}];
-      return [{result:args.args[0]==='readSearch'?{profiles:[{id:'p0',url}],signature:'one',hasNext:true}:true}];
+      if(readerFailure)return [{result:vm.runInNewContext('('+args.func.toString()+')(...values)',{values:args.args,SourcerReader:{[args.args[0]]:()=>{throw Error(readerFailure)}}})}];
+      return [{result:args.args[0]==='readSearch'?(searchResult === undefined ? {profiles:[{id:'p0',url}],signature:'one',hasNext:true} : searchResult):true}];
     }},runtime:{onMessage:{addListener:fn=>callbacks.message=fn}}
   };
   const context=vm.createContext({chrome,URL,console,Map,Set,Error,Number});
@@ -36,11 +38,26 @@ const root = path.resolve(__dirname, '..');
   const legacyTab=(await rpc('tabs')).result[0];assert.equal(legacyTab.active,true);assert.equal(legacyTab.lastAccessed,0,'older Chrome metadata has an active-tab fallback without requiring a newer minimum version');
   assert((await rpc('tabs',{}, {...sender,documentId:'different-document'})).error);
   const run_id='a'.repeat(32);
+  const fresh=(await rpc('openPeopleSearch')).result;
+  assert.equal(fresh.url,'https://www.linkedin.com/search/results/people/');
+  assert.notEqual(fresh.id,2,'fresh searches never repurpose an existing tab');
   const begin={run_id,source_tab_id:2,max_pages:2,mode:'standard'};
   assert.equal((await rpc('begin',begin)).result,true);
+  assert((await rpc('openPeopleSearch')).error,'an active run cannot open another source');
   assert((await rpc('create',{run_id,url})).error, 'unobserved profile must be blocked');
   assert((await rpc('read',{run_id,tab_id:3,method:'readProfile',values:[tabs.get(3).url]})).error);
   await rpc('read',{run_id,tab_id:2,method:'readSearch',values:['standard']});
+  searchResult=null;
+  assert.equal((await rpc('read',{run_id,tab_id:2,method:'readSearch',values:['standard']})).result.loading,true,'missing injection results are loading, never successful snapshots');
+  searchResult={profiles:'invalid'};
+  assert((await rpc('read',{run_id,tab_id:2,method:'readSearch',values:['standard']})).error,'malformed nonempty snapshots fail visibly');
+  searchResult=undefined;
+  readerFailure='LinkedIn needs you to sign in or complete a check. The agent will stop.';
+  assert.match((await rpc('read',{run_id,tab_id:2,method:'readSearch',values:['standard']})).error,/sign-in|verification/,'page exceptions survive as useful, fixed guidance');
+  readerFailure='Synthetic error with private page text';
+  const readerError=(await rpc('read',{run_id,tab_id:2,method:'readSearch',values:['standard']})).error;
+  assert.match(readerError,/latest companion/);assert(!readerError.includes('private page text'));
+  readerFailure='';
   const profile=(await rpc('create',{run_id,url})).result;
   assert.equal(typeof profile,'number');
   assert((await rpc('navigate',{run_id,tab_id:profile,url:'https://attacker.invalid'})).error);
@@ -49,12 +66,19 @@ const root = path.resolve(__dirname, '..');
   assert((await rpc('read',{run_id,tab_id:2,method:'next',values:['standard','one']})).error, 'repeat begin must not reset limits');
   await rpc('end',{run_id});
   assert(!tabs.has(profile));
+  assert(tabs.has(fresh.id),'End never closes the new source search');
   assert((await rpc('read',{run_id,tab_id:2,method:'readSearch',values:['standard']})).error);
   assert(!fs.readFileSync(path.join(root,'vendor/linkedin-companion/worker.js'),'utf8').includes('api.deepseek.com'));
 
   const coreContext=vm.createContext({window:{},URL,Map,Set,setTimeout,clearTimeout,Error,console});
   vm.runInContext(fs.readFileSync(path.join(root,'vendor/cvstudio/linkedin-sourcer-core.js'),'utf8'),coreContext);
   const Core=coreContext.window.CVLinkedinCore;
+  for(const invalid of [null,undefined,{},true,{empty:true},{profiles:'invalid',signature:'one'}]) {
+    let reads=0;
+    const invalidAgent=new Core.Agent({signal:new AbortController().signal,wait:async()=>{},update:()=>{},api:async()=>{},browser:{read:async()=>{reads++;return invalid}}});
+    await assert.rejects(invalidAgent.waitSearch(2,'standard'),/LinkedIn.*read|LinkedIn.*reader/,'invalid snapshots have useful guidance instead of null/empty errors');
+    assert.equal(reads,1,'malformed snapshots are not treated as zero results');
+  }
   for (const mode of ['standard','lite','recruiter']) {
     let page=1,next=0,calls=0;
     const candidate=()=>({id:'p0',name:'Sample Person',url:`https://www.linkedin.com/in/sample-${page}`,text:'SAP manufacturing',score:80,evidence:['SAP'],unknowns:['Availability']});

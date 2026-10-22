@@ -13,7 +13,8 @@ function fixture(){
       create:async()=>{throw Error('A direct pick must not create a tab')},update:async()=>{throw Error('A direct pick must not navigate')},remove:async()=>{throw Error('A direct pick must not close a tab')}},
     scripting:{executeScript:async args=>{
       if(args.files)return [{}];
-      if(!args.args){if(args.target.documentIds?.[0]&&args.target.documentIds[0]!==state.appDoc)throw Error('Stale app');return [{result:true,documentId:state.appDoc}]}
+      if(!args.args){const documentId=args.target.tabId===1?state.appDoc:state.sourceDoc||'linkedin-document';if(args.target.documentIds?.[0]&&args.target.documentIds[0]!==documentId)throw Error('Stale document');return [{result:true,documentId}]}
+      if(state.parsingFails)throw Error('Synthetic job layout is loading');
       if(state.hold){await state.hold;state.hold=null}
       return [{result:{url:state.wrong?'https://www.linkedin.com/jobs/view/999':args.args[0],company:'Example Finance',role:'Finance Manager',description:'Visible ad',description_truncated:true}}];
     }},runtime:{onMessage:{addListener:fn=>hooks.message=fn}}};
@@ -40,6 +41,16 @@ function fixture(){
   assert.equal(manage.state.saved.length,0,'invalid management requests never reach the app');
   manage.state.appResult={ok:true,saved:false,folder:'Priority',folders:['Priority','SAP']};
   assert.equal((await manage.pick({},{operation:'folders'})).result.folders[1],'SAP');assert.equal(manage.state.saved.at(-1).request.action,'folders');
+  manage.state.parsingFails=true;
+  assert.equal((await manage.pick({},{operation:'folders'})).result.folders[1],'SAP','folder metadata does not depend on reading a job card');
+  assert((await manage.pick({},{operation:'add'})).error,'ad saves still require verified details');
+  manage.state.parsingFails=false;
+  manage.state.sourceDoc='new-linkedin-document';const beforeStaleRead=manage.state.saved.length;
+  assert((await manage.pick({},{operation:'folders'})).error);assert.equal(manage.state.saved.length,beforeStaleRead,'metadata still requires the exact live source document');
+  manage.state.sourceDoc='linkedin-document';
+  await manage.rpc('jobSearchBegin',{run_id:run,max_pages:1,use_open:true,source_tab_id:2});
+  assert((await manage.pick({},{operation:'folders'})).result.ok,'metadata-only folder reads do not need to stop browser searches');
+  assert((await manage.pick({},{operation:'add'})).error);await manage.rpc('end',{run_id:run});
   await manage.pick({},{operation:'create_folder',folder:'SAP'});assert.equal(manage.state.saved.at(-1).request.folder,'SAP');
   assert.equal((await manage.pick({},{operation:'remove'})).result.saved,false);assert.equal(manage.state.saved.at(-1).request.action,'remove');
   await manage.pick({},{operation:'add',folder:'SAP'});assert.equal(manage.state.saved.at(-1).request.folder,'SAP');
