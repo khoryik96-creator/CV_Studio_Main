@@ -4,6 +4,20 @@
 
 ## Release state
 
+- Owner-requested LinkedIn ad folder-menu correction: v24.6.471 on
+  `codex/v24.6.471-linkedin-folder-refresh`, retaining reviewed unmerged v470
+  `a0a73bc`. Folder catalogs preload/share across cards and refresh on menu open,
+  tab return or Refresh folders. Catalog reads no longer require parsing ad
+  details; exact document checks and strict explicit write gates remain.
+  Chosen folders, unsaved drafts, selections and active operation locks are
+  preserved; failed/late reads cannot silently replace a usable newer catalog.
+  Full isolated Windows Python: 1,750 passed, four skipped, 8,392 subtests;
+  all 42 JavaScript suites passed. Source/static/repository/Windows native
+  preflight and 24 smoke assertions passed. Browser QA uses fictional job
+  cards with the actual controls and a simulated companion connection.
+  Local checkpoint only; no PR/merge or owner installation/data changes.
+  See `cv_studio_v24_6_471_linkedin_folder_catalog_qa_report.md`.
+
 - Owner-requested LinkedIn Sourcer startup/readiness correction: v24.6.470 on
   `codex/v24.6.470-linkedin-sourcer-start`, from merged v469 `59c7f09`.
   Start defaults to a fresh People search every time, retaining existing-search

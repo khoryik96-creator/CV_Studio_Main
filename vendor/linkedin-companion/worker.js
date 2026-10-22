@@ -206,8 +206,9 @@ async function pickJob(message, sender) {
   if (stateFailed || !bound) throw safeError('Open Job Leads in CV Studio and connect its companion toolbar icon first.');
   if (!expected || expected !== message.url || sender.frameId !== 0 || !sender.documentId || !Number.isInteger(sender.tab?.id) ||
       !(jobSearchKey(sender.url) || jobURL(sender.url))) throw safeError('Choose a visible LinkedIn job ad.');
-  if (bound.run || jobCapture) throw safeError('Wait for the current search or ad read to finish, then add this ad.');
-  const token = {}; jobCapture = token;
+  const foldersOnly = operation === 'folders';
+  if (!foldersOnly && (bound.run || jobCapture)) throw safeError('Wait for the current search or ad read to finish, then add this ad.');
+  const token = foldersOnly ? null : {}; if (token) jobCapture = token;
   try {
     const appTab = await chrome.tabs.get(bound.tabId);
     live(bound);
@@ -220,18 +221,24 @@ async function pickJob(message, sender) {
       if (tab.status !== 'complete' || !same(tab.url) || tab.pendingUrl && !same(tab.pendingUrl)) throw safeError('The LinkedIn page changed. Add the ad again from its current card.');
     };
     await verify();
-    await chrome.scripting.executeScript({target,files:['reader.js']});
+    let result = {url:expected};
+    if (foldersOnly) {
+      const [probe] = await chrome.scripting.executeScript({target,func:() => location.origin === 'https://www.linkedin.com'});
+      if (!probe?.result || probe.documentId !== sender.documentId) throw safeError('The LinkedIn page changed. Refresh its folders and try again.');
+    } else {
+      await chrome.scripting.executeScript({target,files:['reader.js']});
+      await verify();
+      [{result}] = await chrome.scripting.executeScript({target,func:url => globalThis.SourcerReader.readJobPick(url),args:[expected]});
+      if (result?.url !== expected || !result.company || !result.role) throw safeError('The ad details have not loaded. Try again after the card appears.');
+    }
     await verify();
-    const [{result}] = await chrome.scripting.executeScript({target,func:url => globalThis.SourcerReader.readJobPick(url),args:[expected]});
-    await verify();
-    if (result?.url !== expected || !result.company || !result.role) throw safeError('The ad details have not loaded. Try again after the card appears.');
     const id = crypto.randomUUID().replaceAll('-','');
     const request = {action:operation,...(message.folder === undefined ? {} : {folder:message.folder})};
     const saved = await chrome.tabs.sendMessage(bound.tabId,{type:'CVSTUDIO_JOB_CAPTURE',id,record:result,request},{documentId:bound.documentId});
     if (!saved?.ok) throw safeError(saved?.error || 'Open Job Leads in the connected CV Studio tab, then add this ad again.');
     return {ok:true,duplicate:!!saved.duplicate,folder:saved.folder || '',saved:saved.saved !== false,
       ...(Array.isArray(saved.folders) ? {folders:saved.folders} : {}),...(saved.warning ? {warning:saved.warning} : {})};
-  } finally { if (jobCapture === token) jobCapture = null; }
+  } finally { if (token && jobCapture === token) jobCapture = null; }
 }
 async function handle(message, sender) {
   await ready;

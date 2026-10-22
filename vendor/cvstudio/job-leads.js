@@ -532,21 +532,28 @@
     return data;
   }
   async function receiveCapture(raw, request = {}) {
-    if (!ready || busy) return {error:'Wait for the current CV Studio action to finish, then add this ad again.'};
     if (!request || typeof request !== 'object' || Array.isArray(request)) return {error:'Choose a valid job-ad action.'};
-    const url = typeof raw?.url === 'string' ? jobLink(raw.url) : '';
-    if (!url || raw.url !== url || typeof raw.company !== 'string' || !raw.company.trim() || raw.company.length > 200 ||
-        typeof raw.role !== 'string' || !raw.role.trim() || raw.role.length > 240) return {error:'The job details could not be confirmed.'};
     const action = request.action === undefined ? 'add' : request.action;
     if (!['add','remove','folders','create_folder'].includes(action) || request.folder !== undefined &&
         (typeof request.folder !== 'string' || request.folder.length > 80 || /[\x00-\x1f]/.test(request.folder))) return {error:'Choose a valid job-ad action and folder.'};
+    if (!ready || busy && action !== 'folders') return {error:'Wait for the current CV Studio action to finish, then add this ad again.'};
+    const url = typeof raw?.url === 'string' ? jobLink(raw.url) : '';
+    if (!url || raw.url !== url || action !== 'folders' && (typeof raw.company !== 'string' || !raw.company.trim() || raw.company.length > 200 ||
+        typeof raw.role !== 'string' || !raw.role.trim() || raw.role.length > 240)) return {error:'The job details could not be confirmed.'};
+    if (action === 'folders') {
+      // Read authoritative metadata without rendering/loading the panel: doing
+      // that would clear selections or disturb a draft while LinkedIn preloads.
+      try {
+        const data = await api(), existing = data.records.find(row => row.url === url);
+        return {ok:true,folders:data.folders || [],folder:existing && !existing.deleted ? existing.folder : el('SearchFolder').value,saved:!!existing && !existing.deleted};
+      } catch (error) { return {error:error.message}; }
+    }
     const folder = request.folder === undefined ? el('SearchFolder').value : request.folder;
     let changed = false;
     lock(true);
     try {
       await load();
       let existing = rows.find(row => row.url === url);
-      if (action === 'folders') return {ok:true,folders:[...folderNames],folder:existing && !existing.deleted ? existing.folder : el('SearchFolder').value,saved:!!existing && !existing.deleted};
       if (action === 'create_folder') {
         const created = await api({action:'create_folder',folder});
         await load();
@@ -644,6 +651,7 @@
     ready = true;
     document.getElementById('viewJobLeads').dataset.companionChannel = channel;
     document.getElementById('viewJobLeads').dataset.companionActions = '1';
+    document.getElementById('viewJobLeads').dataset.companionFolders = '2';
     el('PreviewRead').addEventListener('click',() => { const row = previewRow(); if (row) return previewDiscovered(row, previewSource); });
     el('PreviewSave').addEventListener('click',() => addDiscovered(previewUrl));
     el('PreviewPrevious').addEventListener('click',() => navigatePreview(-1));

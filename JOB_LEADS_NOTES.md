@@ -293,10 +293,27 @@ cannot be removed/moved through the companion, preserving that draft.
 
 The LinkedIn folder selector loads from the exact connected Job Leads tab.
 New folder creates a folder without saving an ad and selects it for subsequent
-adds. Chosen folders carry across the page's controls. All operations still require
+adds. Chosen folders carry across the page's controls. Ad writes and folder creation still require
 an explicit trusted interaction, a visible canonical ad, exact source/destination
 documents and an idle companion. Folder names are rendered as text. No new route,
 schema, permission, LinkedIn write or provider call exists.
+
+In v471 the folder catalog is separate read-only metadata. The page preloads it
+once and shares it across current/new cards; concurrent refreshes are coalesced.
+Opening a menu, returning to the LinkedIn tab or **Refresh folders** reads the
+current catalog. Successful creation updates all menus. A valid chosen folder is
+retained; a deleted folder falls back to Unfiled without recreating it. Initial
+loading/failure is explicit; failed refreshes retain a usable cached list. Reads
+time out after 12 seconds and late responses cannot overwrite a newer catalog.
+
+Catalog reads no longer parse company/role or require the ad layout to finish
+loading. They still verify the top Jobs frame, canonical URL and exact live source
+and destination documents. These local reads may run during sourcing/discovery;
+they never acquire/release a write lock, render the Job Leads panel, clear selected
+ads or modify drafts/records. The content bridge permits bounded parallel reads
+while serializing writes. Save/remove/create still use the full existing ad
+validation, trusted click, busy/revision and non-replay gates. Updated app capability
+is required; old app pages receive refresh/update guidance before metadata is sent.
 
 Both the v461 app and companion are needed for folders/removal. An older local
 page rejects management commands visibly rather than treating them as legacy
