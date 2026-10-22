@@ -35,11 +35,12 @@
         menu.populate({folders:folderCatalog});
       }
     };
-    const readFolders = url => {
-      if (!folderRead) folderRead = new Promise((resolve,reject) => {
+    const fetchFolders = url => new Promise((resolve,reject) => {
         const timeout = setTimeout(() => reject(Error('Folders did not finish loading. Try Refresh folders.')),12000);
         send({kind:'sourcer_job_pick',url,operation:'folders'}).then(resolve,reject).finally(() => clearTimeout(timeout));
-      }).then(result => {
+    });
+    const readFolders = url => {
+      if (!folderRead) folderRead = fetchFolders(url).then(result => {
         publishFolders(result.folders); return {...result,sourceUrl:url};
       }).catch(error => {
         catalogError = error.message;
@@ -97,6 +98,18 @@
           working=true;activeOperation=operation;button.disabled=true;create.disabled=true;saveFolder.disabled=true;refresh.disabled=true;folders.disabled=!foldersLoaded||operation!=='folders';note.textContent=operation==='folders'?'Loading folders…':'';
           try {
             if (operation!=='folders' && folderRead) await folderRead.catch(() => {});
+            if (operation==='add') {
+              // A shared catalog says nothing about this card's saved state.
+              // Check this exact ad before sending any destination folder/write.
+              const current = await fetchFolders(url);
+              if (typeof current.saved !== 'boolean') throw Error('The saved ad could not be checked. Refresh folders and try again.');
+              publishFolders(current.folders);
+              if (current.saved) {
+                added=true;populate(current);
+                note.textContent='Already saved in '+(current.folder || 'Unfiled')+'. No changes made.';
+                return;
+              }
+            }
             const result=operation==='folders' ? await readFolders(url) : await send({kind:'sourcer_job_pick',url,operation,...(folder===undefined?{}:{folder})});
             if (result.folders && operation!=='folders') publishFolders(result.folders);
             if (operation==='folders' && result.sourceUrl!==url) { note.textContent='Folders refreshed.'; return; }

@@ -4,6 +4,18 @@
 
 ## Release state
 
+- PR #237 review corrective: v24.6.472 on
+  `codex/v24.6.471-linkedin-folder-refresh`. Add now fetches the clicked ad's own
+  authoritative saved state before any write; a shared folder catalog cannot
+  imply that the ad is unsaved. Existing ads show Added and keep their folder
+  without a write. New ads still use the chosen folder. The reported regression
+  failed before correction; all 42 JavaScript suites and full isolated Windows
+  Python passed (1,750 passed, four skipped, 8,392 subtests). Actual browser QA
+  retained an existing ad in Priority with zero Add writes despite SAP selected
+  across both menus, then saved a new ad into SAP. Only fictional data/simulated
+  transport was used. Final source/native and exact-head PR checks gate merge.
+  See `cv_studio_v24_6_472_companion_saved_state_corrective_qa_report.md`.
+
 - Owner-requested LinkedIn ad folder-menu correction: v24.6.471 on
   `codex/v24.6.471-linkedin-folder-refresh`, retaining reviewed unmerged v470
   `a0a73bc`. Folder catalogs preload/share across cards and refresh on menu open,

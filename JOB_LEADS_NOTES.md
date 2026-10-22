@@ -315,6 +315,14 @@ while serializing writes. Save/remove/create still use the full existing ad
 validation, trusted click, busy/revision and non-replay gates. Updated app capability
 is required; old app pages receive refresh/update guidance before metadata is sent.
 
+The v472 review corrective checks the clicked ad's own saved state on every Add,
+using the bounded read-only metadata request rather than the shared catalog's
+unrelated first-card status. An already-active saved ad is labelled Added and
+retains its folder without sending an Add/move/remove write. A genuinely new ad
+still receives the chosen folder. Failed/unknown checks issue no write. Explicit
+Added/removal and later Trash restoration retain their existing behavior; no
+route, schema, worker contract or legacy duplicate/move behavior is changed.
+
 Both the v461 app and companion are needed for folders/removal. An older local
 page rejects management commands visibly rather than treating them as legacy
 adds. Existing ordinary direct-add messages remain compatible. Replace/reload
