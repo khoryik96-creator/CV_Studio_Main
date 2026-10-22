@@ -565,6 +565,13 @@
         await load(); selectPreview(url); searchStatus('Removed from LinkedIn selection. The ad can be restored from Trash.');
         return {ok:true,saved:false,folder:existing?.folder || ''};
       }
+      // Add is idempotent for an active record, even if another window saved it
+      // after the companion's preflight. Only explicit moves or Trash restore
+      // may refile an existing ad; a chosen Add destination is for new ads.
+      if (existing && !existing.deleted) {
+        selectPreview(url); searchStatus('This LinkedIn ad is already saved. Its existing folder and details were kept.');
+        return {ok:true,duplicate:true,saved:true,folder:existing.folder || ''};
+      }
       if (folder && !folderNames.includes(folder)) throw Error('Choose an existing destination folder in CV Studio.');
       if (existing) {
         if (existing.deleted) {

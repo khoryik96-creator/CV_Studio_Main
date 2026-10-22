@@ -49,6 +49,7 @@ function fixture(){
     }
     assert.equal(data.action,'save');
     if(data.record.url===state.failSave)return {ok:false,json:async()=>({error:'Synthetic storage limit'})};
+    if(state.beforeSave){state.records.push(state.beforeSave);state.beforeSave=null;}
     const duplicate=state.records.find(row=>row.url===data.record.url);
     if(duplicate)return {ok:true,json:async()=>({record:duplicate,duplicate:true})};
     const record={...data.record,id:String(++serial).padStart(32,'0'),revision:1,created_at:'2026-10-20T00:00:00Z',deleted:false};
@@ -215,6 +216,20 @@ function fixture(){
   assert.equal(metadataFolders.saved,true);assert.equal(direct.requests.length,beforeFolderRead,'folder reads never write records');
   assert((await direct.capture({url:b.url},{action:'add'})).error,'identity-only metadata cannot become an ad save');
   assert((await direct.capture({url:b.url},{action:'remove'})).error,'existing removal confirmation remains strict');
+  const raced=fixture();await raced.init();raced.state.folders.push('Keep original','SAP');
+  assert.equal((await raced.capture({url:a.url},{action:'folders'})).saved,false);
+  const racedRecord={...raced.state.records[0],...a,id:'d'.repeat(32),folder:'Keep original',notes:'Keep original notes',contact:'Keep original contact'};
+  raced.state.records.push(structuredClone(racedRecord));
+  const beforeRacedAdd=raced.requests.length;
+  const racedResult=await raced.capture(a,{action:'add',folder:'SAP'});
+  assert.equal(racedResult.folder,'Keep original','an ad saved between metadata and Add cannot be moved implicitly');
+  assert.equal(racedResult.duplicate,true);assert.deepEqual(raced.state.records.find(row=>row.url===a.url),racedRecord);
+  assert.equal(raced.requests.length,beforeRacedAdd,'an already-active duplicate causes no write regardless of supplied folder');
+  const duringSave=fixture();await duringSave.init();duringSave.state.folders.push('Keep original','SAP');
+  duringSave.state.beforeSave=structuredClone(racedRecord);
+  const duringResult=await duringSave.capture(a,{action:'add',folder:'SAP'});
+  assert.equal(duringResult.folder,'Keep original');assert.deepEqual(duringSave.state.records.find(row=>row.url===a.url),racedRecord);
+  assert(!duringSave.requests.some(request=>request.action==='move_folder'),'a duplicate found atomically by save never enters a move path');
   const folderSelection=fixture();await folderSelection.init();await folderSelection.el('SearchStart').click();
   folderSelection.el('SearchSelectPage').checked=true;folderSelection.el('SearchSelectPage').handlers.change();
   folderSelection.el('notes').value='Keep this local draft';folderSelection.el('notes').handlers.input();

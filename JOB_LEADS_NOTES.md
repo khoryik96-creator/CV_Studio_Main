@@ -323,6 +323,15 @@ still receives the chosen folder. Failed/unknown checks issue no write. Explicit
 Added/removal and later Trash restoration retain their existing behavior; no
 route, schema, worker contract or legacy duplicate/move behavior is changed.
 
+The v473 timing correction also makes the actual companion Add handler idempotent
+for every active duplicate, even if another window saves it after the preflight.
+The selected destination is used for new ads, and for explicitly restoring a
+trashed ad, but never moves an already-active duplicate. Use the established
+Move to folder controls to refile saved ads. If a record appears during the final
+store save, the existing immediate transaction returns the unchanged duplicate;
+the frontend does not follow it with a move. Explicit moves and revision-guarded
+Trash restoration keep their existing paths. No route or schema changes.
+
 Both the v461 app and companion are needed for folders/removal. An older local
 page rejects management commands visibly rather than treating them as legacy
 adds. Existing ordinary direct-add messages remain compatible. Replace/reload

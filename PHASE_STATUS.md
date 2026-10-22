@@ -4,6 +4,19 @@
 
 ## Release state
 
+- PR #237 timing corrective: v24.6.473 on
+  `codex/v24.6.471-linkedin-folder-refresh`. The Add handler treats every existing
+  active ad as a duplicate without entering its folder-move path. Records saved
+  after the metadata check retain their folder; records appearing during the
+  final save use the existing transactional duplicate/no-overwrite guarantee.
+  Explicit moves and revision-guarded Trash restoration remain available.
+  Both timing windows have actual-controller regressions; the pre-Add race
+  failed on v472 before correction. All 42 JavaScript suites passed; full isolated
+  Windows Python passed (1,750 passed, four skipped, 8,392 subtests). Source/static/
+  repository/native preflight and 24 smoke assertions passed. Exact-head PR gate
+  results are recorded before merge in issue #35 and
+  `cv_studio_v24_6_473_companion_add_idempotency_qa_report.md`.
+
 - PR #237 review corrective: v24.6.472 on
   `codex/v24.6.471-linkedin-folder-refresh`. Add now fetches the clicked ad's own
   authoritative saved state before any write; a shared folder catalog cannot
