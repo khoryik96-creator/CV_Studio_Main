@@ -8,6 +8,13 @@ function local(value) {
   catch { return false; }
 }
 function linkedin(value) { try { return new URL(value).origin === 'https://www.linkedin.com'; } catch { return false; } }
+function pendingPeopleSearch(tab) {
+  try {
+    const url = new URL(tab.pendingUrl);
+    return tab.status === 'loading' && (!tab.url || tab.url === 'about:blank') && linkedin(url.href) &&
+      !url.username && !url.password && /^\/search\/results\/people\/?$/.test(url.pathname);
+  } catch { return false; }
+}
 function profile(value) {
   try { const u = new URL(value); return linkedin(value) && !u.username && !u.password && /^\/(in\/[^/]+|talent\/(?:hire\/)?profile\/[^/]+)\/?$/.test(u.pathname); }
   catch { return false; }
@@ -302,8 +309,21 @@ async function handle(message, sender) {
   }
   if (message.action === 'tabs') {
     const tabs = await chrome.tabs.query({url: 'https://www.linkedin.com/*'});
-    return tabs.map(tab => ({id: tab.id, url: tab.url, title: String(tab.title || 'LinkedIn').slice(0, 160), status: tab.status,
+    return tabs.map(tab => ({id: tab.id, url: pendingPeopleSearch(tab) ? tab.pendingUrl : tab.url, title: String(tab.title || 'LinkedIn').slice(0, 160), status: tab.status,
       lastAccessed:Number.isFinite(tab.lastAccessed) ? tab.lastAccessed : 0,active:tab.active === true}));
+  }
+  if (message.action === 'openPeopleSearch') {
+    const bound = connection, token = {};
+    if (bound.run || jobCapture) throw safeError('Stop the current browser action before opening a new People search.');
+    jobCapture = token;
+    try {
+      // This source stays open for the user; it is never an owned profile tab.
+      // No caller-provided URL or navigation of an existing tab is permitted.
+      const url = 'https://www.linkedin.com/search/results/people/';
+      const tab = await chrome.tabs.create({url,active:false});
+      live(bound);
+      return {id:tab.id,url,title:'New LinkedIn People search',status:tab.status};
+    } finally { if (jobCapture === token) jobCapture = null; }
   }
   if (message.action === 'begin') {
     if (jobCapture) throw Error('Wait for the job ad to finish reading first.');
@@ -313,7 +333,7 @@ async function handle(message, sender) {
     if (!Number.isInteger(args.max_pages) || args.max_pages < 1 || args.max_pages > 15 || !['standard', 'lite', 'recruiter'].includes(args.mode)) throw Error('Invalid browser run limits.');
     const bound = connection;
     const source = await chrome.tabs.get(args.source_tab_id);
-    if (connection !== bound || jobCapture || !linkedin(source.url) || profile(source.url)) throw Error('Choose a LinkedIn search tab.');
+    if (connection !== bound || jobCapture || !linkedin(source.url) && !pendingPeopleSearch(source) || profile(source.url)) throw Error('Choose a LinkedIn search tab.');
     connection.source = source.id; connection.pages = args.max_pages;
     connection.kind = 'profiles';
     connection.allowed = new Set();
@@ -367,7 +387,7 @@ async function handle(message, sender) {
   const bound = connection;
   const tab = owned.has(args.tab_id) ? await ownedTab(args.tab_id) : await chrome.tabs.get(args.tab_id);
   if (connection?.run !== args.run_id) throw Error('The browser run has stopped.');
-  if (!linkedin(tab.url) && !(owned.has(tab.id) && expectedLoading(tab, owned.get(tab.id)))) throw Error('The selected tab left LinkedIn.');
+  if (!linkedin(tab.url) && !(owned.has(tab.id) && expectedLoading(tab, owned.get(tab.id))) && !(tab.id === connection.source && pendingPeopleSearch(tab))) throw Error('The selected tab left LinkedIn.');
   if (tab.id !== connection.source && !owned.has(tab.id)) throw Error('This tab does not belong to the sourcing run.');
   if (message.action === 'navigate') {
     const search = args.url?.startsWith('https://www.linkedin.com/search/results/people/?');
@@ -391,13 +411,26 @@ async function handle(message, sender) {
     if (args.method === 'readProfile' ? !owned.has(tab.id) : tab.id !== connection.source) throw Error('This read does not belong to the sourcing run.');
     if (tab.status !== 'complete') return {loading: true};
     if (args.method === 'next') { nextCount++; await persist(); live(bound, args.run_id); if (nextCount >= connection.pages) throw Error('The requested page limit was reached.'); }
-    await chrome.scripting.executeScript({target: {tabId: tab.id}, files: ['reader.js']});
+    const readerError = 'LinkedIn results could not be read. Refresh LinkedIn, then reload and reconnect the latest companion.';
+    await jobScript({target: {tabId: tab.id}, files: ['reader.js']},readerError);
     if (connection?.run !== args.run_id) throw Error('The browser run has stopped.');
     if (args.method === 'readProfile') await ownedTab(tab.id);
     live(bound, args.run_id);
-    const [{result}] = await chrome.scripting.executeScript({target: {tabId: tab.id},
-      func: (method, values) => globalThis.SourcerReader[method](...values), args: [args.method, args.values || []]});
+    const [injection] = await jobScript({target: {tabId: tab.id},
+      func: (method, values) => {
+        try { return globalThis.SourcerReader[method](...values); }
+        // Script exceptions may arrive without a serializable result. Return a
+        // fixed reason instead of leaking page content or treating failure as empty.
+        catch (error) { return {cvstudioReaderError:/sign in|verification check|access or usage restriction/i.test(String(error?.message)) ? 'access' : 'reader'}; }
+      }, args: [args.method, args.values || []]},readerError);
+    const result = injection?.result;
     live(bound, args.run_id);
+    if (result?.cvstudioReaderError) throw safeError(result.cvstudioReaderError === 'access' ? 'LinkedIn needs sign-in or a verification check, or is showing a restriction. Open its tab and resolve this before starting again.' : readerError);
+    if (result == null) {
+      if (['readSearch','readProfile'].includes(args.method)) return {loading:true};
+      throw safeError(readerError);
+    }
+    if (args.method === 'readSearch' && !Array.isArray(result.profiles)) throw safeError(readerError);
     if (args.method === 'readSearch') { connection.allowed = new Set((result?.profiles || []).map(row => row.url).filter(profile).slice(0,40)); await persist(); }
     return result;
   }

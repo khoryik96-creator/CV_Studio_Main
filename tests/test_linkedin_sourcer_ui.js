@@ -8,11 +8,11 @@ class Element {
 }
 const people={id:2,url:'https://www.linkedin.com/search/results/people/?keywords=SAP',title:'SAP people | LinkedIn',lastAccessed:20};
 const previous={name:'Previous candidate',url:'https://www.linkedin.com/in/previous',score:80,evidence:['Previous evidence'],unknowns:[]};
-function fixture(){
+function fixture(reuse=true){
   const ids=new Map(),events={},calls=[],requests=[];
   const el=name=>{if(!ids.has(name))ids.set(name,new Element());return ids.get(name)};
-  el('Mode').value='auto';el('Pages').value='10';el('Calls').value='35';el('OpenSearch').checked=true;
-  const state={tabs:[people],connected:true,hold:false,held:null,failStart:false,page:1};
+  el('Mode').value='auto';el('Pages').value='10';el('Calls').value='35';el('OpenSearch').checked=reuse;
+  const state={tabs:[people],connected:true,hold:false,held:null,failStart:false,page:1,opened:0,missingReads:0,readCount:0};
   let serial=0;
   const run={id:'a'.repeat(32),calls:0,max_calls:35,tokens:0,usage_complete:true,stopped:false};
   const candidate={id:'p0',name:'Sample candidate',url:'https://www.linkedin.com/in/sample',text:'SAP finance experience',score:85,evidence:['SAP finance experience'],unknowns:['Availability']};
@@ -22,9 +22,20 @@ function fixture(){
     const reply=(result,error)=>events.message({source:window,origin:location.origin,data:{type:'CVSTUDIO_LINKEDIN_RESPONSE',channel:message.channel,id:message.id,...(error?{error}:{result})}});
     if(!state.connected)return reply(null,'The browser action stopped. Reconnect the companion or check the LinkedIn page.');
     if(message.action==='tabs'){if(state.hold){state.held=()=>reply(state.tabs);return}return reply(state.tabs)}
+    if(message.action==='openPeopleSearch'){
+      if(state.oldCompanion)return reply(null,'Unsupported browser action.');
+      const tab={...people,id:20+(++state.opened),url:'https://www.linkedin.com/search/results/people/',title:'New People search'};
+      state.tabs.push(tab);
+      if(state.holdOpen){state.held=()=>reply(tab);return}
+      return reply(tab);
+    }
     if(message.action==='begin'||message.action==='end'||message.action==='navigate')return reply(true);
     if(message.action==='create')return reply(10);
-    if(message.action==='read')return reply(message.args.method==='readProfile'?{text:candidate.text,name:candidate.name}:message.args.method==='search'?true:{profiles:[candidate],signature:'one',hasNext:false,paginationKnown:true});
+    if(message.action==='read'){
+      state.readCount++;
+      if(state.missingReads-- > 0 || state.missingMethod===message.args.method)return reply(null);
+      return reply(message.args.method==='readProfile'?{text:candidate.text,name:candidate.name}:['search','next'].includes(message.args.method)?true:{profiles:[candidate],signature:'one',hasNext:!!state.morePages,paginationKnown:true});
+    }
     throw Error('Unexpected browser command '+message.action);
   }};
   const saved=JSON.stringify({run:null,results:[previous]});
@@ -69,5 +80,31 @@ function fixture(){
   const cancelled=fixture();await cancelled.init();cancelled.state.hold=true;cancelled.el('Brief').value='SAP finance';cancelled.el('Consent').checked=true;const starting=cancelled.start();
   assert(cancelled.state.held);await cancelled.stop();cancelled.state.held();await starting;assert.equal(cancelled.requests.length,0,'Stop during readiness sends no paid action');assert.equal(cancelled.el('Count').textContent,1);
   const invalid=fixture();await invalid.init();invalid.el('Brief').value='SAP finance';invalid.el('Consent').checked=true;invalid.el('Pages').value='16';await invalid.start();assert.equal(invalid.requests.length,0);assert(invalid.el('Options').open);
-  console.log('Sourcer UI: automatic tabs/modes, explicit consent, preserved filters and prior results, missing/disconnected readiness, manual selection, rejected start and Stop before paid work passed');
+  const fresh=fixture(false);fresh.state.tabs=[];await fresh.init();assert.equal(fresh.state.opened,0,'panel initialization never opens tabs');
+  fresh.el('Brief').value='SAP finance';await fresh.start();assert.equal(fresh.state.opened,0,'consent is required before opening a source');
+  fresh.el('Consent').checked=true;await fresh.start();await fresh.start();
+  assert.equal(fresh.state.opened,2,'each Start opens a separate People search, even if one now exists');
+  assert.deepEqual(fresh.calls.filter(c=>c.action==='begin').map(c=>c.args.source_tab_id),[21,22]);
+  assert(fresh.requests.filter(r=>r.action==='start').every(r=>r.mode==='standard'&&!r.use_open_search));
+  assert(fresh.calls.filter(c=>c.action==='navigate').every(c=>/^https:\/\/www\.linkedin\.com\/search\/results\/people\/\?keywords=SAP$/.test(c.args.url)));
+  const old=fixture(false);old.state.oldCompanion=true;await old.init();old.el('Brief').value='SAP finance';old.el('Consent').checked=true;await old.start();
+  assert.equal(old.requests.length,0);assert.equal(old.el('Count').textContent,1);assert.match(old.el('Status').textContent,/latest companion/i);
+  const opening=fixture(false);await opening.init();opening.state.holdOpen=true;opening.el('Brief').value='SAP finance';opening.el('Consent').checked=true;const openingRun=opening.start();
+  await new Promise(resolve=>setTimeout(resolve,0));assert(opening.state.held);await opening.stop();opening.state.held();await openingRun;
+  assert.equal(opening.requests.length,0,'Stop while opening a tab prevents the first paid action');
+  const transient=fixture();await transient.init();transient.el('Brief').value='SAP finance';transient.el('Consent').checked=true;transient.state.missingReads=1;await transient.start();
+  assert.match(transient.el('Status').textContent,/last result page/);assert.equal(transient.requests.filter(r=>r.action==='plan').length,1);
+  const unavailable=fixture();await unavailable.init();unavailable.el('Brief').value='SAP finance';unavailable.el('Consent').checked=true;unavailable.state.missingReads=100;await unavailable.start();
+  assert.match(unavailable.el('Status').textContent,/LinkedIn.*read|LinkedIn.*reader/);assert.equal(unavailable.state.readCount,30,'missing results have a bounded read-only retry');
+  assert.equal(unavailable.requests.filter(r=>r.action==='plan').length,1);assert.equal(unavailable.requests.filter(r=>r.action==='review').length,0);assert.equal(unavailable.requests.filter(r=>r.action==='stop').length,1);
+  assert(unavailable.calls.some(c=>c.action==='end'),'reader failure cleans up the browser run');
+  const ambiguousSearch=fixture(false);ambiguousSearch.el('Mode').value='lite';ambiguousSearch.state.tabs=[{id:7,url:'https://www.linkedin.com/talent/search',title:'Recruiter Lite'}];
+  await ambiguousSearch.init();ambiguousSearch.el('Brief').value='SAP finance';ambiguousSearch.el('Consent').checked=true;ambiguousSearch.state.missingMethod='search';await ambiguousSearch.start();
+  assert.equal(ambiguousSearch.calls.filter(c=>c.action==='read'&&c.args.method==='search').length,1,'an ambiguous search submission is never replayed');
+  assert.equal(ambiguousSearch.requests.filter(r=>r.action==='review').length,0);
+  const ambiguousNext=fixture();await ambiguousNext.init();ambiguousNext.el('Brief').value='SAP finance';ambiguousNext.el('Consent').checked=true;ambiguousNext.state.morePages=true;ambiguousNext.state.missingMethod='next';await ambiguousNext.start();
+  assert.equal(ambiguousNext.calls.filter(c=>c.action==='read'&&c.args.method==='next').length,1,'an ambiguous next-page click is never replayed');
+  assert.match(ambiguousNext.el('Status').textContent,/did not confirm/);
+  assert(!/id="liSourcerOpenSearch"[^>]*\bchecked\b/.test(fs.readFileSync(path.join(__dirname,'../index.html'),'utf8')),'fresh searches are the actual UI default');
+  console.log('Sourcer UI: fresh sources on every Start, reuse/Recruiter options, consent, null-read recovery/bounds, non-replay, prior results and Stop before paid work passed');
 })().catch(error=>{console.error(error);process.exitCode=1});

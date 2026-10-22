@@ -65,6 +65,9 @@ class Agent {
     let previous = '', stable = 0;
     for (let attempt = 0; attempt < 30; attempt++) {
       const snapshot = await this.read(tab, 'readSearch', [mode]);
+      if (!snapshot || !Array.isArray(snapshot.profiles) || typeof snapshot.signature !== 'string') {
+        throw Error('LinkedIn results could not be read. Refresh LinkedIn, then reload and reconnect the latest companion.');
+      }
       if (snapshot.empty) return snapshot;
       if (snapshot.signature && snapshot.signature !== oldSignature) {
         stable = snapshot.signature === previous ? stable + 1 : 0;

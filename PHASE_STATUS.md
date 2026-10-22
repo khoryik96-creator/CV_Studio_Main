@@ -4,6 +4,20 @@
 
 ## Release state
 
+- Owner-requested LinkedIn Sourcer startup/readiness correction: v24.6.470 on
+  `codex/v24.6.470-linkedin-sourcer-start`, from merged v469 `59c7f09`.
+  Start defaults to a fresh People search every time, retaining existing-search
+  and Recruiter options. Missing script results no longer reach an unchecked
+  `snapshot.empty`; bounded read-only polling and fixed reader/access errors
+  preserve paid-call non-replay, consent, budgets and browser authority.
+  Full isolated Windows Python: 1,750 passed, four skipped, 8,392 subtests;
+  all 42 JavaScript suites passed. Source/static/repository/Windows native
+  preflight and 24 source smoke assertions passed. The actual browser UI
+  completed two runs with distinct simulated new sources, recovering from a
+  null read. No live LinkedIn/extension or paid provider test is claimed.
+  Local source checkpoint and isolated demo only; no PR/merge requested yet.
+  See `cv_studio_v24_6_470_sourcer_start_readiness_qa_report.md`.
+
 - Owner-authorized Job Leads preview review corrective and merge: v24.6.469 on
   `codex/v24.6.468-job-preview-controls`, from merged v467 `3528005`.
   Folder creation and manual filter changes now share preview synchronization,

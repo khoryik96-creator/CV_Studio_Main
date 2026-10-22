@@ -15,13 +15,17 @@ reference, and is not imported by the main app.
    and run limits after exact-document revalidation. Reloading CV Studio,
    restarting Chrome, or reloading/updating the extension requires reconnecting.
    No additional API key, pairing code or POC server is needed.
-4. Open a LinkedIn People or Recruiter search in that browser. The module detects
-   the source and search type automatically; it preserves an existing selection
+4. By default, **Start search opens a fresh LinkedIn People search every time**,
+   then uses the generated keywords from the brief. No LinkedIn tab needs to be
+   opened first. The source stays open for the user and existing tabs are kept.
+   To review a filtered search or use Recruiter, expand **Search options** and
+   select the search type / **Use the search already open**. In that mode the
+   module detects the source and search type automatically; it preserves an existing selection
    or chooses the most recently used compatible search when that metadata exists.
    When recency is missing/tied, an active compatible tab takes priority; a
    remaining tie keeps browser order. Manual selection stays authoritative.
    A status line identifies
-   the chosen tab. Existing search filters are kept by default; the brief ranks
+   the chosen tab. With existing-search review selected, filters are kept; the brief ranks
    these results and does not change their location filters.
 5. Enter the brief, tick **Use DeepSeek for this search**, then **Start search**.
    **Search options** retains manual source/type selection, new-keyword search,
@@ -110,11 +114,27 @@ actions remain unchanged. Folder operations/removal require both updated app and
 companion, refreshed pages and reconnection. See Job Leads notes for restore,
 partial-failure and editing-draft behavior.
 
-The v463 startup checks the companion and selected source before starting paid
-work. Missing/disconnected sources and rejected starts keep the previous list.
+The startup checks the companion and selected/new source before starting paid
+work. Missing/disconnected sources in reuse mode and rejected starts keep the previous list.
 Stop during detection cannot start a paid request. Automatic discovery runs on
 panel initialization and Start, while manual selections remain available.
 No paid confirmation, provider retry or exact-document gate is removed.
+
+In v470 fresh People search is the default, as requested by the owner. The narrow
+`openPeopleSearch` companion action accepts no destination URL, requires the exact
+bound app document and blocks concurrent browser work. It opens an inactive source
+tab, keeps it out of profile ownership/cleanup, and handles an initially uncommitted
+People URL as loading. Stop during opening prevents the first provider request.
+Old companions show explicit update/reconnect guidance before paid work starts.
+
+The v470 reader boundary also handles missing script results: search/profile reads
+receive bounded read-only polling; search submissions and pagination clicks are
+never replayed after a missing result. Script exceptions return a fixed reason so
+sign-in/restriction errors stop with useful guidance, without returning arbitrary
+page text. Malformed search snapshots cannot reach `snapshot.empty` or paid review.
+This corrects the null/empty crash shown by the owner; the screenshot alone does
+not identify which page/transport event caused the original missing result. No
+provider retry, consent bypass, route/schema or extension-permission change occurs.
 
 Profile-tab ownership in v463 accepts a single added trailing slash on the exact
 observed profile URL. The old byte comparison rejected that same-identity change;

@@ -34,6 +34,17 @@ function fixture(){
     navigate:id=>rpc('navigate',{run_id:run,tab_id:id,url:second}),end:()=>rpc('end',{run_id:run})};
 }
 const cases=[
+  ['fresh People sources may still have an uncommitted URL',async()=>{
+    const f=fixture();await f.arm();f.state.loadingCreate=true;
+    const opened=(await f.rpc('openPeopleSearch')).result;
+    assert.equal(opened.url,'https://www.linkedin.com/search/results/people/');
+    assert.equal((await f.rpc('tabs')).result.find(t=>t.id===opened.id).url,opened.url);
+    assert.equal((await f.rpc('begin',{run_id:f.run,source_tab_id:opened.id,max_pages:2,mode:'standard'})).result,true);
+    assert.equal((await f.rpc('read',{run_id:f.run,tab_id:opened.id,method:'readSearch',values:['standard']})).result.loading,true);
+    await f.end();assert(f.tabs.has(opened.id),'source search remains available to the user');
+    f.tabs.get(opened.id).pendingUrl='https://attacker.invalid/search/results/people/';
+    assert((await f.rpc('begin',{run_id:f.run,source_tab_id:opened.id,max_pages:2,mode:'standard'})).error);
+  }],
   ['a trailing slash on the same profile is still the owned page',async()=>{
     const f=fixture();await f.arm();await f.begin();await f.observe();const id=(await f.create()).result;
     f.tabs.get(id).url=first+'/';await f.hooks().updated(id,{url:first+'/'});
