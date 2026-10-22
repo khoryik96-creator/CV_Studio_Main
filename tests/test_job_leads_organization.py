@@ -51,6 +51,19 @@ def test_linkedin_layout_wrappers_do_not_create_nested_paragraphs():
     ]
 
 
+def test_capture_limit_keeps_rich_prefix_without_retaining_unseen_suffix():
+    source = '<p><strong>Responsibilities</strong></p><ul><li>' + 'Plan delivery. '*1500 + '</li><li>Unretained suffix.</li></ul>'
+    plain = ('Responsibilities\n'+'Plan delivery. '*1500+'\nUnretained suffix.')[:20000]
+    nodes = format_description(plain, source)
+    assert nodes and nodes[0]['children'][0]['tag'] == 'strong'
+    assert nodes[1]['tag'] == 'ul'
+    assert ''.join(rich_text(nodes).split()) == ''.join(plain.split())
+    assert 'Unretained suffix' not in rich_text(nodes)
+    assert len(rich_text(nodes)) <= 20000
+    assert format_description('Responsibilities', source) == [], 'ordinary manual prefixes do not relax the exact-text gate'
+    assert format_description(plain.replace('Plan','Fake',1), source) == []
+
+
 def test_folders_rich_content_and_original_creation_survive_backup_restore(tmp_path):
     store = JobLeadsStore(tmp_path/'leads.sqlite3')
     with mock.patch('cvstudio_job_leads._now', return_value='2026-10-02T12:30:00Z'):

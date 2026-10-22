@@ -148,7 +148,7 @@
     const locationText = text(first('.job-details-jobs-unified-top-card__primary-description-container .tvm__text, .jobs-unified-top-card__bullet, .topcard__flavor--bullet')).slice(0, 240);
     const descriptionNode = first('#job-details, .jobs-description__content, .description__text') ||
       [...document.querySelectorAll('.description__text')].find(visible);
-    const description = visible(descriptionNode) ? String(descriptionNode.innerText || '').trim() : '';
+    const captured = visible(descriptionNode) ? jobDescription(descriptionNode) : {description:'',description_html:'',description_truncated:false};
     const posted = panel.querySelector('time[itemprop="datePosted"], meta[itemprop="datePosted"], time[data-test-job-posted-date]');
     const rawDate = posted?.getAttribute('datetime') || posted?.getAttribute('content') || '';
     let datePosted = '';
@@ -157,9 +157,7 @@
       if (Number.isFinite(value.getTime()) && Number.isFinite(calendar.getTime()) && calendar.toISOString().slice(0,10) === day && (rawDate.length === 10 || Number(rawDate.slice(11,13)) < 24)) datePosted = day;
     }
     if (!role || !company) loading('The company or role has not loaded.');
-    const sourceHTML = visible(descriptionNode) ? String(descriptionNode.innerHTML || '') : '';
-    return {url, role, company, company_url:jobCompanyURL(panel,company), location:locationText, date_posted:datePosted, description:description.slice(0, 20000),
-      description_html:sourceHTML.length <= 80000 ? sourceHTML : '', description_truncated:description.length > 20000};
+    return {url, role, company, company_url:jobCompanyURL(panel,company), location:locationText, date_posted:datePosted, ...captured};
   }
   function jobLink(value) {
     try {
@@ -184,19 +182,45 @@
       if (!role) return null;
       const paragraphs = [...header.querySelectorAll('p')], titleParagraph = title.closest('p'), index = paragraphs.indexOf(titleParagraph);
       const where = index >= 0 ? text(paragraphs[index+1]).split(/\s*·\s*/)[0].slice(0,240) : '';
-      const about = abouts[0]; let description = String(about.innerText || '').trim(), truncated = false;
-      for (const button of about.querySelectorAll('button')) {
-        const label = text(button);
-        if (/^(show|see) (more|less)$/i.test(label) && description.endsWith(label)) {
-          description = description.slice(0,-label.length).trim(); truncated ||= /more$/i.test(label);
-        }
-      }
-      if (!description.replace(/^About the job\b\s*/i,'').trim()) return null;
-      const html = String(about.innerHTML || '');
-      return {url,role,company:companies[0].slice(0,200),company_url:jobCompanyURL(header,companies[0]),location:where,date_posted:'',description:description.slice(0,20000),
-        description_html:html.length <= 80000 ? html : '',description_truncated:truncated || description.length > 20000};
+      const captured = jobDescription(abouts[0]);
+      if (!captured.description.replace(/^About the job\b\s*/i,'').trim()) return null;
+      return {url,role,company:companies[0].slice(0,200),company_url:jobCompanyURL(header,companies[0]),location:where,date_posted:'',...captured};
     }
     return null;
+  }
+  function jobDescription(root) {
+    // Derive both representations from the same passive DOM. In modern pages
+    // the aria-hidden "… more" button can sit before benefits, not at the end.
+    // Keeping it in innerText but dropping it from HTML invalidated all rich text.
+    const allowed = new Set(['p','div','h1','h2','h3','h4','h5','h6','ul','ol','li','strong','b','em','i','br','blockquote']);
+    const blocked = new Set(['button','script','style','svg','math','iframe','object','template','form','noscript','select','textarea','input']);
+    const blocks = new Set(['p','div','h1','h2','h3','h4','h5','h6','ul','ol','li','blockquote']);
+    const escape = value => value.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+    const weight = value => value === 'bold' ? 700 : Number.parseInt(value || '400',10);
+    let count=0;
+    function visit(node,depth=0) {
+      if (++count > 4000 || depth > 32) throw Error('The job description is too complex to capture.');
+      if (node.nodeType === 3) return {plain:node.nodeValue || '',html:escape(node.nodeValue || '')};
+      if (node.nodeType !== 1) return {plain:'',html:''};
+      const tag=String(node.tagName || '').toLowerCase(), style=getComputedStyle(node);
+      if (blocked.has(tag) || node.hasAttribute?.('hidden') || node.getAttribute?.('aria-hidden') === 'true' || style.display === 'none' || style.visibility === 'hidden') return {plain:'',html:''};
+      const children=[...node.childNodes].map(child=>visit(child,depth+1));
+      let plain=children.map(child=>child.plain).join(''), html=children.map(child=>child.html).join('');
+      const parentStyle=node.parentElement ? getComputedStyle(node.parentElement) : {};
+      if (!['strong','b'].includes(tag) && !/^h[1-6]$/.test(tag) && weight(style.fontWeight) >= 600 && weight(parentStyle.fontWeight) < 600) html='<strong>'+html+'</strong>';
+      if (!['em','i'].includes(tag) && style.fontStyle === 'italic' && parentStyle.fontStyle !== 'italic') html='<em>'+html+'</em>';
+      const role=node.getAttribute?.('role');
+      const mapped = role === 'list' ? 'ul' : role === 'listitem' ? 'li' : allowed.has(tag) ? tag : style.display === 'block' ? 'div' : '';
+      if (mapped === 'br') return {plain:'\n',html:'<br>'};
+      if (mapped) html='<'+mapped+'>'+html+'</'+mapped+'>';
+      if ((blocks.has(mapped) || blocks.has(tag)) && plain && !plain.endsWith('\n')) plain+='\n';
+      return {plain,html};
+    }
+    const parts=[...root.childNodes].map(node=>visit(node));
+    const plain=parts.map(part=>part.plain).join('').replace(/\r\n?/g,'\n').replace(/[\t ]+\n/g,'\n').replace(/\n[\t ]+/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
+    const html=parts.map(part=>part.html).join('');
+    const more=[...root.querySelectorAll('button')].some(button=>visible(button) && /^(?:(?:show|see)\s+|(?:…|\.\.\.)\s*)?more$/i.test(text(button)));
+    return {description:plain.slice(0,20000),description_html:html.length <= 80000 ? html : '',description_truncated:more || plain.length > 20000};
   }
   function jobScope() {
     if (location.origin !== 'https://www.linkedin.com' || !/^\/jobs\/search(?:-results)?\/?$/.test(location.pathname)) throw Error('Open a LinkedIn Jobs search.');

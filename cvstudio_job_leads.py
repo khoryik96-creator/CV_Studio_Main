@@ -122,8 +122,40 @@ def format_description(description, source):
     try:
         parser = Reader()
         parser.feed(source)
-        value = clean_rich(normalize(parser.root))
-        return value if re.sub(r'\s+', '', rich_text(value)) == re.sub(r'\s+', '', description) else []
+        value = normalize(parser.root)
+        target = re.sub(r'\s+', '', description)
+        actual = re.sub(r'\s+', '', rich_text(value))
+        if actual != target:
+            # The established capture cap keeps only a plain-text prefix. Clip
+            # the matching semantic tree too, rather than discarding all its
+            # typography. Short/manual mismatches still fail the exact gate.
+            if len(description) != 20000 or not actual.startswith(target):
+                return []
+            remaining = len(target)
+            def prefix(items):
+                nonlocal remaining
+                result = []
+                for item in items:
+                    if not remaining:
+                        break
+                    if 'text' in item:
+                        text = item['text']
+                        count = len(re.sub(r'\s+', '', text))
+                        if count > remaining:
+                            positions = [m.end() for m in re.finditer(r'\S', text)]
+                            text = text[:positions[remaining-1]]
+                            count = remaining
+                        remaining -= count
+                        if text:
+                            result.append({'text':text})
+                    else:
+                        children = prefix(item['children'])
+                        if children:
+                            result.append({'tag':item['tag'], 'children':children})
+                return result
+            value = prefix(value)
+        value = clean_rich(value)
+        return value if re.sub(r'\s+', '', rich_text(value)) == target else []
     except (JobLeadsError, RecursionError):
         return []  # Plain text remains available when markup cannot be retained.
 

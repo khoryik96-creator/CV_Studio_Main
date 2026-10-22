@@ -5,6 +5,7 @@ function read(rawDate) {
   const visible=innerText=>({innerText,getClientRects:()=>[{}]});
   const title={...visible('Finance Manager'),matches:()=>false,querySelector:()=>({href:expected})};
   const company=visible('Example Company'),locationText=visible('Penang'),description=visible('Build partnerships.\nManage reporting.');
+  description.childNodes=[{nodeType:3,nodeValue:description.innerText}];description.querySelectorAll=()=>[];
   const panel={getClientRects:()=>[{}],
     querySelector:selector=>selector.includes('datePosted')?rawDate===null?null:{getAttribute:name=>name==='datetime'?rawDate:''}:selector.includes('job-title')?title:null,
     querySelectorAll:selector=>selector.includes('job-title')?[title]:selector.includes('company-name')?[company]:selector.includes('primary-description')?[locationText]:selector.includes('#job-details')?[description]:[]};

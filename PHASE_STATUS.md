@@ -4,6 +4,21 @@
 
 ## Release state
 
+- Job-ad rich formatting corrective: v24.6.475 continues the unmerged
+  `codex/v24.6.474-job-leads-company-hr` branch. Companion captures now derive
+  plain text and passive formatted markup from the same DOM while removing
+  embedded expansion/UI controls. Original lists/emphasis, computed bold/italic
+  and block/list roles are preserved. Capped descriptions keep their matching
+  rich prefix; canonical public markup may supply richer formatting only when
+  it matches the retained metadata text. Existing ads need explicit content
+  refresh/save to recover formatting lost by earlier captures.
+  Full isolated Windows Python: 1,767 passed, four skipped, 8,392 subtests;
+  all 45 JavaScript suites, static/native/source preflight and 24 source-smoke
+  checks passed. Browser QA rendered the inspected LinkedIn DOM structure with
+  synthetic text, preserving bold sections and seven numbered items. No live
+  installed-companion capture, owner data change, PR or merge was performed.
+  See `cv_studio_v24_6_475_job_ad_rich_formatting_qa_report.md`.
+
 - Owner-requested Job Leads Phase 2: v24.6.474 on
   `codex/v24.6.474-job-leads-company-hr`, from merged master `15b89cf`.
   Saved ads show an HR column with Any country / named-country selection,

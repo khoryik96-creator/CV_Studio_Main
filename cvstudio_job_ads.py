@@ -137,7 +137,16 @@ def parse_public_job(html, expected_url):
     if candidates:
         if len({(row['company'], row['role']) for row in candidates}) != 1:
             raise _unavailable()
-        return candidates[0]
+        result = candidates[0]
+        descriptions = soup.select('.description__text') if canonical else []
+        if len(descriptions) == 1:
+            # Metadata sometimes has only plain text while the canonical ad
+            # retains lists/emphasis. Use its formatting only for identical text.
+            markup = str(descriptions[0])
+            visible_rich = format_description(result['description'], markup) if len(markup) <= 80000 else []
+            if visible_rich:
+                result['description_rich'] = visible_rich
+        return result
     # Public markup fallback is confined to the canonical job's top card.
     # Search headers and recommended jobs are never used as field guesses.
     card = soup.select_one('.top-card-layout') if canonical and not postings else None

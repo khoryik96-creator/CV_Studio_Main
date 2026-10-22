@@ -4,6 +4,36 @@ Current version is the repository-root `VERSION`. This owner-requested module
 tracks LinkedIn job ads for business development, separately from the candidate
 sourcer and the locked historical Lead Finder.
 
+## Rich-content capture corrective (v24.6.475)
+
+Modern LinkedIn can put an aria-hidden **“… more”** button inside the About
+section, before benefit text. The previous reader retained that label in plain
+text but the passive HTML sanitizer removed it. The exact-text consistency
+check then rejected the whole rich tree, losing otherwise valid bold and lists.
+
+Both companion job readers now derive plain text and passive markup from the
+same bounded DOM traversal, excluding controls, hidden/active elements and all
+source attributes/URLs. Semantic lists/headings/emphasis remain; computed bold,
+italic and block layout are converted to passive tags, and explicit ARIA list
+roles remain lists. No styling rules or source code are executed/stored.
+Visible expansion controls still mark captured excerpts. Existing size/depth
+limits, job/source identity and companion ownership checks remain.
+
+At the established 20,000-character capture limit, a matching semantic prefix
+is clipped to the retained text instead of discarding all formatting. The final
+exact-text gate still applies; short/manual mismatches remain rejected. Public
+reads can use one canonical visible description's richer formatting when its
+words exactly match the retained metadata text; metadata fields/text are kept.
+Oversized optional markup cannot break a valid metadata-only result.
+
+The shared preview/form/saved-ad renderer already supports these passive tags;
+no display-only guess of bold or bullet meaning is needed. Older saved plain
+captures cannot recover their original typography locally. After updating and
+reloading the companion, use **Edit / view details → Refresh ad content → Save**.
+Public reads use the corrected backend directly. Existing duplicates, drafts,
+folders, HR results and manual contact/status/notes remain unchanged; no
+automatic record rewrite, paid call, route/schema or permission change occurs.
+
 ## Phase 2: company HR people (v24.6.474)
 
 Saved active ads have **HR people** beside Preview. Preview also shows a
