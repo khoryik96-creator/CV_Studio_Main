@@ -27,7 +27,8 @@ const title=visible('Finance Manager',{href:url,closest:()=>titleP});
 const header=visible('',{querySelectorAll:selector=>selector==='a[href*="/company/"]'?state.companyConflict?[company,companyOther]:[company,company]:selector==='p'?[companyP,titleP,locationP]:[]});
 title.parentElement=header;
 titleP.parentElement=header;
-const hybrid=visible('Hybrid',{href:url+'/',closest:()=>null,parentElement:header});
+const hybridParagraph=visible('Hybrid',{parentElement:header});
+const hybrid=visible('Hybrid',{href:url+'/',closest:()=>state.leadingNotice?hybridParagraph:null,parentElement:header});
 const showMore=visible('Show more');
 const about=visible('About the job\nBuild partnerships.\nManage reporting.\nShow more',{
   innerHTML:'<h2>About the job</h2><ul><li>Build partnerships.</li><li>Manage reporting.</li></ul><button>Show more</button>',querySelectorAll:selector=>selector==='button'?[showMore]:[]});
@@ -36,7 +37,7 @@ const dom=(tag,children,attrs={})=>({...visible(''),nodeType:1,tagName:tag.toUpp
 Object.defineProperty(about,'childNodes',{get:()=>about.fakeNodes || (about.innerText==='About the job'?[dom('h2',['About the job'])]:about.innerHTML.includes('Medical insurance')?
   [dom('h2',['About the job']),dom('p',[dom('strong',['Build partnerships.'])]),dom('ol',[dom('li',['Manage reporting.'])]),dom('button',['… more'],{'aria-hidden':'true'}),dom('p',['Benefits found in job post']),dom('p',['Medical insurance'])]:
   [dom('h2',['About the job']),dom('ul',[dom('li',['Build partnerships.']),dom('li',['Manage reporting.'])]),dom('button',['Show more'])])});
-const workspace=visible('Current jobs',{querySelectorAll:selector=>selector==='p'&&state.plainTitle?[companyP,titleP,locationP]:selector==='a[href]'?state.plainTitle?[hybrid]:state.stale?[{...title,href:'https://www.linkedin.com/jobs/view/999'}]:[title]:
+const workspace=visible('Current jobs',{querySelectorAll:selector=>selector==='p'&&state.plainTitle?[...(state.leadingNotice?[visible('This job has a notice above its header')]:[]),companyP,titleP,locationP]:selector==='a[href]'?state.plainTitle?[hybrid]:state.stale?[{...title,href:'https://www.linkedin.com/jobs/view/999'}]:[title]:
   selector==='[componentkey="JobDetails_AboutTheJob_1234567890"]'&&state.about?[about]:[]});
 header.parentElement=workspace;
 const location={origin:'https://www.linkedin.com',pathname:'/jobs/search-results/',href:'https://www.linkedin.com/jobs/search-results/?keywords=finance&currentJobId=1234567890',search:'?keywords=finance&currentJobId=1234567890'};
@@ -78,6 +79,9 @@ let captured=reader.readJob(url);assert.equal(captured.role,'Finance Manager');a
 state.plainTitle=true;location.pathname='/jobs/view/1234567890/';location.href=url+'/';location.search='';
 captured=reader.readJob(url);assert.equal(captured.role,'Finance Manager','standalone plain title is not replaced by the Hybrid job-type link');
 assert.equal(captured.company_url,'https://www.linkedin.com/company/example/');assert.equal(captured.location,'Penang');
+state.leadingNotice=true;
+for(const companyOnly of [false,true])assert.throws(()=>reader.readJob(url,companyOnly),error=>error.cvstudioJobLoading===true,'a leading paragraph cannot authorize the fallback Hybrid link inside another paragraph');
+state.leadingNotice=false;
 titleP.innerText='';assert.throws(()=>reader.readJob(url),error=>error.cvstudioJobLoading===true,'missing plain title cannot promote job metadata to a title');titleP.innerText='Finance Manager';
 locationP.innerText='';assert.throws(()=>reader.readJob(url),error=>error.cvstudioJobLoading===true,'wait for the standalone header identity fields to load');locationP.innerText='Penang · 2 weeks ago · 20 applicants';
 state.plainTitle=false;location.pathname='/jobs/search-results/';location.href='https://www.linkedin.com/jobs/search-results/?keywords=finance&currentJobId=1234567890';location.search='?keywords=finance&currentJobId=1234567890';

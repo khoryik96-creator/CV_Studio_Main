@@ -4,6 +4,17 @@
 
 ## Release state
 
+- v24.6.484 corrects PR #240's remaining standalone-title fallback finding.
+  Every standalone ad clears the generic linked-title fallback before validating
+  its visible company/title/location tuple. A leading notice or unknown header
+  cannot import a paragraph-wrapped job-type link as the role, for either full
+  ad or HR company-only reads. Recognized standalone and linked/search layouts,
+  all v483 corrections and pairing/security/storage boundaries remain. The new
+  case failed against v483 before the fix and passes in both synthetic and real
+  isolated Chromium checks. Owner authorized merging PR #240; final exact-head
+  hosted regression checks and automated review must pass first. See the v484
+  standalone-title corrective QA report.
+
 - v24.6.483 is a local correction from merged master `e316bfe` for the owner's
   normal-Brave companion/HR lookup report. Refresh restored stale page messaging;
   modern standalone ad titles now come from the company/title/location header,

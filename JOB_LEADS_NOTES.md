@@ -27,6 +27,10 @@ job-type buttons still point to the same ad. Only a recognized visible
 company/title/location header establishes that plain title; incomplete or
 ambiguous headers stay loading instead of importing a job-type label as a role.
 Existing linked-title and search-detail layouts remain supported.
+The v484 review correction clears standalone fallback selection unconditionally:
+a leading notice before the recognized tuple cannot retain a paragraph-wrapped
+job-type link, including during company-only HR reads. Unknown header layouts
+fail with the existing specific guidance rather than importing a guessed role.
 
 HR's `jobFromLink` call sets `company_only: true`. It validates the same canonical
 job/header/company identity but does not wait for or collect the description.

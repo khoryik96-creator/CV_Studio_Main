@@ -174,16 +174,14 @@
     const abouts = [...workspace.querySelectorAll('[componentkey="JobDetails_AboutTheJob_' + id + '"]')].filter(visible);
     let title = [...workspace.querySelectorAll('a[href]')].find(link => visible(link) && jobLink(link.href) === url && text(link) && link.closest('p'));
     if (jobLink(location.href) === url) {
+      title=null;
       // Standalone ads now render the title as plain text. Job-type buttons
-      // still link to the ad, so their labels cannot establish its title.
+      // still link to the ad, so unrecognized headers must not retain them.
       const [company,role,metadata]=[...workspace.querySelectorAll('p')].filter(visible);
       const names=[...new Set([...(company?.querySelectorAll('a[href*="/company/"]') || [])]
         .filter(link=>visible(link) && companyURL(link.href)).map(text).filter(Boolean))];
-      if (names.length) {
-        title=null;
-        if (names.length===1 && text(company)===names[0] && text(role) && role.closest('p')===role &&
-            !role.querySelector('a[href*="/company/"]') && /\S\s*·\s*\S/.test(text(metadata))) title=role;
-      }
+      if (names.length===1 && text(company)===names[0] && text(role) && role.closest('p')===role &&
+          !role.querySelector('a[href*="/company/"]') && /\S\s*·\s*\S/.test(text(metadata))) title=role;
     }
     if (abouts.length !== 1 || !title) return null;
     let header = title;
