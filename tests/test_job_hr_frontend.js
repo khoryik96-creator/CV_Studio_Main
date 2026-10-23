@@ -15,7 +15,7 @@ function hrFixture(){
     if(action==='hrJoinedClose'){reply(true);return true;}
     if(action==='jobFromLink'){reply({...f.state.records[0],company_url:companyURL});return true;}
     if(action==='hrBegin'){f.state.hrArgs=args;reply({tab_id:30});return true;}
-    if(action==='hrNext'){f.state.hrPage++;reply(true);return true;}
+    if(action==='hrNext'){if(f.state.nextLoading>0){f.state.nextLoading--;reply({loading:true});return true;}f.state.hrPage++;reply(true);return true;}
     if(action==='hrRead'){
       f.state.hrSeen++;
       if(f.state.loading&&f.state.hrSeen===1){reply({loading:true});return true;}
@@ -57,6 +57,11 @@ function hrFixture(){
   assert.equal(f.state.records[0].hr.people[0].joined,'2020-06');
   assert.equal(f.calls.filter(x=>x.action==='hrJoined').length,1,'duplicate pages do not re-open profiles');
   assert(f.calls.some(x=>x.action==='end'));
+  const paging=hrFixture();await paging.init();paging.state.nextLoading=2;await paging.el('HRStart').click();
+  assert.equal(paging.calls.filter(x=>x.action==='hrNext').length,3,'pending paging waits instead of treating a loading object as a successful next click');
+  assert.equal(paging.state.records[0].hr.complete,true);
+  const waiting=hrFixture();await waiting.init();waiting.state.nextLoading=1000;await waiting.el('HRStart').click();
+  assert(!waiting.requests.some(x=>x.action==='save_hr'),'exhausted next-page wait cannot save a fake completed scan');
   f.el('HRCountryMode').value='specific';f.el('HRCountryMode').handlers.change();assert(!f.el('HRCountry').hidden);
   f.el('HRCountry').value='Singapore';await f.el('HRStart').click();assert.equal(f.state.hrArgs.country,'Singapore');
   f.state.records[0].hr.people=[{...profile,name:'Changed in another window'}];f.state.records[0].revision++;

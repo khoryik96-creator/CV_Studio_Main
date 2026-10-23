@@ -35,6 +35,37 @@ function hrFixture(country=''){
   return f;
 }
 (async()=>{
+  const delayed=hrFixture();await delayed.arm();const delayId=(await delayed.beginHR()).result.tab_id;
+  delayed.state.onUpdate=(id,args)=>{delayed.state.hrMutations.push(args.url);delayed.state.requested=args.url;return {...delayed.tabs.get(id),pendingUrl:args.url}};
+  assert((await delayed.readHR(delayId)).result.loading);
+  delayed.boot();
+  assert.equal((await delayed.readHR(delayId)).result?.loading,true,'tabs.update can return while the previous company page is still complete');
+  delayed.tabs.get(delayId).pendingUrl=delayed.state.requested;
+  assert.equal((await delayed.readHR(delayId)).result?.loading,true,'the exact requested pending People search is awaited');
+  assert.equal(delayed.state.hrReads,0);assert.equal(delayed.state.hrMutations.length,1,'waiting never repeats navigation');
+  Object.assign(delayed.tabs.get(delayId),{url:delayed.state.requested,pendingUrl:undefined,status:'complete'});
+  delayed.boot();assert((await delayed.readHR(delayId)).result?.people,'reading resumes only after the requested company and keyword search commits');
+  delayed.tabs.get(delayId).url=companyURL+'people/';
+  assert((await delayed.readHR(delayId)).error,'returning to the old company page after the search is ready is not a loading transition');
+  const loading=hrFixture('Malaysia');await loading.arm();const loadingId=(await loading.beginHR()).result.tab_id;await loading.readHR(loadingId);
+  loading.state.onInject=()=>{loading.tabs.get(loadingId).status='loading'};
+  assert.equal((await loading.readHR(loadingId)).result?.loading,true,'same-search loading during injection waits before any filter click');
+  assert.equal(loading.state.hrClicks.length,0);loading.boot();loading.state.onInject=null;loading.tabs.get(loadingId).status='complete';
+  assert((await loading.readHR(loadingId)).result?.loading);assert.deepEqual(loading.state.hrClicks,['hrCountryOpen'],'a deferred, unexecuted action runs once');
+  const pageWait=hrFixture();await pageWait.arm();const pageId=(await pageWait.beginHR()).result.tab_id;await pageWait.readHR(pageId);await pageWait.readHR(pageId);
+  pageWait.state.onInject=()=>{pageWait.tabs.get(pageId).status='loading'};
+  assert.equal((await pageWait.nextHR(pageId)).result?.loading,true);assert.equal(pageWait.state.hrClicks.length,0);
+  pageWait.boot();pageWait.state.onInject=null;pageWait.tabs.get(pageId).status='complete';
+  assert.equal((await pageWait.nextHR(pageId)).result,true,'an unexecuted loading wait does not consume the page budget');
+  assert.deepEqual(pageWait.state.hrClicks,['nextHRSearch']);
+  assert((await pageWait.nextHR(pageId)).error,'a completed next-page click still consumes its persisted budget');
+  for(const target of ['https://www.linkedin.com/search/results/people/?currentCompany=%5B%22999%22%5D','https://www.linkedin.com/login']){
+    const wrongPending=hrFixture();await wrongPending.arm();const source=(await wrongPending.beginHR()).result.tab_id;
+    wrongPending.state.onUpdate=(id,args)=>{wrongPending.state.requested=args.url;return {...wrongPending.tabs.get(id)}};
+    await wrongPending.readHR(source);wrongPending.tabs.get(source).pendingUrl=target;
+    assert((await wrongPending.readHR(source)).error,'an unrelated pending navigation must not be accepted as the requested transition');
+    assert.equal(wrongPending.state.hrReads,0);
+  }
   const f=hrFixture();assert((await f.beginHR()).error);await f.arm();const id=(await f.beginHR()).result.tab_id;
   assert.equal(f.tabs.get(id).url,companyURL+'people/');assert.equal(f.state.created.length,1);
   assert((await f.readHR(id)).result.loading);
