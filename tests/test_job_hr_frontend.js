@@ -20,6 +20,11 @@ function hrFixture(){
       f.state.hrSeen++;
       if(f.state.loading&&f.state.hrSeen===1){reply({loading:true});return true;}
       const snapshot={company_id:'123',source_url:'https://www.linkedin.com/search/results/people/?currentCompany=%5B%22123%22%5D'+(f.state.hrArgs.country?'&geoUrn=%5B%22106808692%22%5D':''),people:[profile],signature:'page'+f.state.hrPage,hasNext:f.state.hrPage===0,empty:false};
+      if(f.state.capCase){
+        const count=f.state.capCase==='exact'&&f.state.hrPage===2?20:40;
+        snapshot.people=Array.from({length:count},(_,i)=>({...profile,url:profile.url+'-'+(f.state.capCase==='duplicates'&&f.state.hrPage===2&&i>=20?i:f.state.hrPage*40+i)}));
+        snapshot.hasNext=f.state.hrPage<2;
+      }
       if(f.state.bad)snapshot.people=[{...profile,url:'javascript:bad'}];
       if(f.state.hold){f.state.release=()=>reply(snapshot);return true;}
       reply(snapshot);return true;
@@ -85,5 +90,15 @@ function hrFixture(){
   assert(unloaded.state.releaseJoined);unloaded.pagehide();
   assert(unloaded.calls.some(x=>x.action==='end'&&x.args.run_id===unloaded.state.hrArgs.run_id),'pagehide ends the exact active HR run without waiting for a profile read');
   unloaded.state.releaseJoined();await unloading;assert(!unloaded.requests.some(x=>x.action==='save_hr'),'an unloaded attempt cannot save later');
+  for(const kind of ['overflow','exact','duplicates']){
+    const cap=hrFixture();await cap.init();cap.state.capCase=kind;await cap.el('HRStart').click();
+    assert.equal(cap.state.records[0].hr.people.length,100);
+    assert.equal(cap.calls.filter(x=>x.action==='hrJoined').length,100,'result ceiling also bounds profile lookups');
+    assert.equal(cap.state.records[0].hr.complete,kind!=='overflow','only omitted unique profiles make the final page incomplete');
+    assert.match(cap.el('HRMessage').textContent,kind==='overflow'?/limit reached/:/No further results/);
+    cap.el('PreviewClose').click();await cap.el('Refresh').click();
+    cap.el('List').querySelectorAll('button').find(button=>button.textContent.startsWith('HR people')).click();
+    assert.equal(cap.el('HRMessage').textContent.includes('Limited scan'),kind==='overflow','saved incomplete status survives reopening');
+  }
   console.log('Company HR UI: company-scoped requests, countries, paging/dedup, saved evidence, XSS text, draft preservation, Stop, old/busy companion, invalid profiles and stale-write failures passed');
 })().catch(error=>{console.error(error);process.exitCode=1});

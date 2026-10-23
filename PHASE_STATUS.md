@@ -4,6 +4,16 @@
 
 ## Release state
 
+- v24.6.479 corrects PR #238's capped-final-page completeness finding. Any
+  unique matches omitted by the 100-person ceiling keep saved evidence and the
+  completion message limited; exactly-full or duplicate-only final pages keep
+  their accurate completion status. No scan budgets, storage/route/schema,
+  permission or provider changes. Prior HR unload and rich-ad fixes remain.
+  Full isolated Windows Python passed (1,776 tests, four skipped, 8,392
+  subtests), as did all 46 JavaScript suites.
+  See `cv_studio_v24_6_479_hr_result_completeness_qa_report.md` and PR #238 for
+  verification and owner-authorized merge evidence.
+
 - v24.6.478 corrects PR #238's automated-review HR unload finding. Pagehide
   stops the exact HR run; worker app-disconnect and failed-restoration cleanup
   close only inactive unchanged owned tabs, including matching pending loads.

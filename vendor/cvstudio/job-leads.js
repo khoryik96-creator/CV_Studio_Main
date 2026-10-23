@@ -438,7 +438,7 @@
     const keywords = el('HRKeywords').value.trim(), pages = Number(el('HRPages').value);
     if (el('HRCountryMode').value && !country || country.length > 100 || !keywords.split(',').some(word=>word.trim()) || keywords.length > 600 || /[\x00-\x1f]/.test(country+keywords) || !Number.isInteger(pages) || pages < 1 || pages > 15) { el('HRMessage').textContent='Enter a country name, comma-separated keywords and 1 to 15 pages.'; return; }
     hrStopped=false; hrRunning=true; hrRun=''; lock(true);
-    const found = new Map(); let companyURL=el('HRCompanyURL').value.trim(), finalSnapshot=null;
+    const found = new Map(); let companyURL=el('HRCompanyURL').value.trim(), finalSnapshot=null, omitted=false;
     try {
       el('HRMessage').textContent='Checking the companion…';
       const companion = await rpc('jobStatus',{},1500); checkHR();
@@ -470,6 +470,7 @@
         for (const person of snapshot.people) {
           if (typeof person?.url !== 'string' || !/^https:\/\/www\.linkedin\.com\/in\/[A-Za-z0-9_%~-]+\/?$/.test(person.url) || typeof person.name !== 'string' || typeof person.title !== 'string' || typeof person.location !== 'string' || typeof person.matched !== 'string') throw Error('An HR result could not be confirmed.');
           const profileURL=person.url.replace(/\/$/,'');
+          if (found.size >= 100 && !found.has(profileURL)) { omitted=true; continue; }
           if (found.size < 100 && !found.has(profileURL)) {
             const entry={...person,url:profileURL,joined:''};
             found.set(profileURL,entry); hrPeople([...found.values()]);
@@ -494,12 +495,13 @@
         if (!await rpc('hrNext',{run_id:hrRun,tab_id:source.tab_id,signature:previous})) break;
       }
       checkHR();
+      const complete=!finalSnapshot.hasNext && !omitted;
       const response = await api({action:'save_hr',id:row.id,revision:row.revision,search:{company:row.company,company_url:companyURL,company_id:finalSnapshot.company_id,
-        country,keywords,source_url:finalSnapshot.source_url,complete:!finalSnapshot.hasNext,people:[...found.values()]}});
+        country,keywords,source_url:finalSnapshot.source_url,complete,people:[...found.values()]}});
       const index = rows.findIndex(item=>item.id===row.id); if (index >= 0) rows[index]=response.record;
       if (editing?.id === row.id) editing={...editing,revision:response.record.revision,hr:response.record.hr};
       hrRow=''; render(); drawPreview();
-      el('HRMessage').textContent=`${found.size} HR matches saved · ${country || 'Any country'} · Last scan ${createdLabel(response.record.hr.scanned_at)}. ${finalSnapshot.hasNext ? 'Page/result limit reached; more people may be available on LinkedIn.' : 'No further results shown by LinkedIn.'}`;
+      el('HRMessage').textContent=`${found.size} HR matches saved · ${country || 'Any country'} · Last scan ${createdLabel(response.record.hr.scanned_at)}. ${complete ? 'No further results shown by LinkedIn.' : 'Page/result limit reached; more people may be available on LinkedIn.'}`;
     } catch(error) {
       el('HRMessage').textContent=(hrStopped ? 'Scan stopped.' : error.message)+` ${found.size ? found.size+' matches shown from this attempt have not been saved. ' : ''}Previous saved results and ad details were kept.`;
       if (!found.size) hrPeople(row.hr?.people);

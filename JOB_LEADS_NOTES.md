@@ -4,6 +4,15 @@ Current version is the repository-root `VERSION`. This owner-requested module
 tracks LinkedIn job ads for business development, separately from the candidate
 sourcer and the locked historical Lead Finder.
 
+## HR completeness at the result ceiling (v24.6.479)
+
+The 100-person cap applies to unique canonical profile links. If a final-page
+snapshot contains additional unique matches after the cap, the saved scan and
+completion message remain limited even when LinkedIn shows no next page.
+Exactly 100 retained matches, or duplicates after the ceiling, do not falsely
+mark an otherwise complete final page as incomplete. No extra profile lookups
+or pages are requested; the saved limited label survives reopening the ad.
+
 ## HR unload cleanup (v24.6.478)
 
 Reloading/closing the app ends its HR run on pagehide and prevents a late read
