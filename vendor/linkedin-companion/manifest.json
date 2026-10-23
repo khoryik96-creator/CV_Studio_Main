@@ -1,13 +1,13 @@
 {
   "manifest_version": 3,
   "name": "CV Studio LinkedIn Companion",
-  "version": "24.6.479",
+  "version": "24.6.482",
   "description": "LinkedIn Sourcer and job-link autofill for CV Studio. No AI keys or provider calls.",
   "minimum_chrome_version": "116",
   "permissions": ["activeTab", "scripting", "storage"],
   "host_permissions": ["https://www.linkedin.com/*", "http://127.0.0.1/*", "http://localhost/*"],
   "background": {"service_worker": "worker.js"},
-  "action": {"default_title": "Connect this CV Studio tab to LinkedIn"},
+  "action": {"default_title": "CV Studio companion · connects automatically"},
   "content_scripts": [
     {"matches": ["http://127.0.0.1/*", "http://localhost/*"], "js": ["content.js"], "run_at": "document_idle", "all_frames": false},
     {"matches": ["https://www.linkedin.com/jobs/*"], "js": ["reader.js", "content.js"], "run_at": "document_idle", "all_frames": false}

@@ -24,7 +24,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.479"
+_INSTALL_RECEIPT_VERSION = "v24.6.482"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -347,7 +347,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.479"
+_CVSTUDIO_VERSION = "v24.6.482"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -2712,7 +2712,7 @@ def _ms_outlook_keychain_available():
 # Windows DPAPI, macOS Keychain, or an authenticated machine-bound fallback.
 def _cv_secure_service_name(service):
     clean = re.sub(r"[^a-z0-9_-]", "", str(service or "").lower())
-    if clean not in {"jobadder", "onenote", "ai"}:
+    if clean not in {"jobadder", "onenote", "ai", "companion"}:
         raise ValueError("Unsupported secure-store service")
     return clean
 
@@ -14802,9 +14802,54 @@ _LINKEDIN_SOURCER = LinkedInSourcerService(
 )
 
 
+_LINKEDIN_COMPANION_KEY = ""
+_LINKEDIN_COMPANION_KEY_LOCK = threading.Lock()
+
+
+def _linkedin_companion_proof(pair=False):
+    """Prove a previously toolbar-paired installation; never trust DOM IDs alone."""
+    if not _ai_spend_session_allowed():
+        return jsonify(error="Reload CV Studio before connecting its companion."), 403
+    nonce = request.args.get("nonce", "")
+    if not re.fullmatch(r"[a-f0-9]{64}", nonce):
+        return jsonify(error="Invalid companion verification challenge."), 400
+    global _LINKEDIN_COMPANION_KEY
+    try:
+        with _LINKEDIN_COMPANION_KEY_LOCK:
+            if not _LINKEDIN_COMPANION_KEY:
+                saved = _cv_secure_load("companion")
+                key = saved.get("key", "")
+                if not isinstance(key, str) or not re.fullmatch(r"[a-f0-9]{64}", key):
+                    key = secrets.token_hex(32)
+                    _cv_secure_save("companion", {"key": key})
+                _LINKEDIN_COMPANION_KEY = key
+            # A different checkout/installation or origin requires its own
+            # explicit toolbar pairing, even with the same per-user vault.
+            origin = request.host_url.rstrip("/")
+            installation = os.path.normcase(os.path.realpath(__file__))
+            key = _receipt_hmac.new(bytes.fromhex(_LINKEDIN_COMPANION_KEY),
+                ("CVStudio companion identity v1|" + installation + "|" + origin).encode("utf-8"),
+                _receipt_hashlib.sha256).digest()
+        proof = _receipt_hmac.new(key, ("CVStudio companion v1|" + origin + "|" + nonce).encode("utf-8"),
+                                 _receipt_hashlib.sha256).hexdigest()
+        response = jsonify(proof=proof, **({"key": key.hex()} if pair else {}))
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except Exception:
+        return jsonify(error="Companion verification is unavailable. Check CV Studio and try again."), 503
+
+
 @app.route("/linkedin-sourcer", methods=["GET", "POST"])
 def linkedin_sourcer():
     if request.method == "GET":
+        if request.args.get("action") in {"companion_pair", "companion_challenge"}:
+            return _linkedin_companion_proof(request.args["action"] == "companion_pair")
+        if request.args.get("action") == "companion_setup":
+            # A local setup hint only; never copy or rewrite browser profiles.
+            response = jsonify(version=_CVSTUDIO_VERSION.lstrip("v"), folder=os.path.join(
+                os.path.dirname(os.path.abspath(__file__)), "vendor", "linkedin-companion"))
+            response.headers["Cache-Control"] = "no-store"
+            return response
         if request.args.get("action") == "extension":
             import io
             import zipfile

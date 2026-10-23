@@ -546,7 +546,7 @@
     try {
       const companion = await rpc('jobStatus',{},1000).catch(() => null);
       checkDiscovery();
-      if (!companion?.connected) throw Error('The companion is not connected to this tab. Open this CV Studio address in Chrome, reload the latest companion and click its toolbar icon. LinkedIn job search cannot run inside the Codex preview.');
+      if (!companion?.connected) throw Error('Open this CV Studio address in Chrome or Brave with the companion enabled. It connects automatically. Use Set up companion once if needed. LinkedIn job search cannot run inside the Codex preview.');
       if (companion.job_search !== true || !Number.isInteger(companion.job_search_revision) || companion.job_search_revision < 1) throw Error('Update and reload the latest companion, refresh CV Studio and LinkedIn, then reconnect this tab to enable the current job search. Updating CV Studio alone does not update the companion.');
       if (companion.busy) throw Error('Finish the current companion search or ad read before starting another search.');
       discoveryRun = hex(); discovered = []; discoveryPicked.clear(); discoveryPage = 0; previewUrl = ''; previewCapture = null;

@@ -22,6 +22,8 @@ function fixture(reuse=true){
     const reply=(result,error)=>events.message({source:window,origin:location.origin,data:{type:'CVSTUDIO_LINKEDIN_RESPONSE',channel:message.channel,id:message.id,...(error?{error}:{result})}});
     if(!state.connected)return reply(null,'The browser action stopped. Reconnect the companion or check the LinkedIn page.');
     if(message.action==='tabs'){if(state.hold){state.held=()=>reply(state.tabs);return}return reply(state.tabs)}
+    if(message.action==='reloadCompanion')return reply(state.reloadResult||{current:true});
+    if(message.action==='jobStatus')return reply({connected:true,companion_update_revision:state.oldUpdateCompanion?0:1});
     if(message.action==='openPeopleSearch'){
       if(state.oldCompanion)return reply(null,'Unsupported browser action.');
       const tab={...people,id:20+(++state.opened),url:'https://www.linkedin.com/search/results/people/',title:'New People search'};
@@ -29,7 +31,8 @@ function fixture(reuse=true){
       if(state.holdOpen){state.held=()=>reply(tab);return}
       return reply(tab);
     }
-    if(message.action==='begin'||message.action==='end'||message.action==='navigate')return reply(true);
+    if(message.action==='begin'){if(state.failBegin)return reply(null,'Synthetic reservation failed');if(state.holdBegin){state.beginReply=()=>reply(true);return;}return reply(true);}
+    if(message.action==='end'||message.action==='navigate')return reply(true);
     if(message.action==='create')return reply(10);
     if(message.action==='read'){
       state.readCount++;
@@ -43,14 +46,16 @@ function fixture(reuse=true){
     sessionStorage:{getItem:()=>saved,setItem:()=>{}},crypto:{randomUUID:()=>String(++serial).padStart(32,'0')},
     setTimeout:(fn,ms)=>setTimeout(fn,[500,1000,1500,2000].includes(ms)?0:ms),clearTimeout,AbortController,URL,URLSearchParams,Blob,
     markTabRunning:()=>1,finishTabRun:()=>{},responseHasPaidUsage:()=>false,
-    fetch:async(url,options)=>{assert.equal(url,'/linkedin-sourcer');const body=options?.body?JSON.parse(options.body):null;if(body)requests.push(body);
+    navigator:{clipboard:{writeText:async text=>{if(state.clipboardFail)throw Error('Unavailable');state.copied=text;}}},
+    fetch:async(url,options)=>{if(url==='/linkedin-sourcer?action=companion_setup')return {ok:true,json:async()=>({folder:'Bundled companion folder',version:'24.6.480'})};assert.equal(url,'/linkedin-sourcer');const body=options?.body?JSON.parse(options.body):null;if(body)requests.push(body);
       if(!body)return {ok:true,json:async()=>({configured:true,run:null})};
       if(body.action==='start'&&state.failStart)return {ok:false,json:async()=>({error:'Synthetic start rejected'})};
+      if(body.action==='plan'&&state.holdPlan)await new Promise(resolve=>state.planReply=resolve);
       if(body.action==='stop')run.stopped=true;
       return {ok:true,json:async()=>({run:{...run},...(body.action==='plan'?{plan:{query:'SAP'}}:{}),...(body.action==='review'?{candidates:[candidate]}:{})})};}
   });
   for(const file of ['linkedin-sourcer-core.js','linkedin-sourcer.js']){vm.runInContext(fs.readFileSync(path.join(__dirname,'../vendor/cvstudio',file),'utf8'),context);context.CVLinkedinCore=window.CVLinkedinCore;}
-  return {el,state,calls,requests,init:async()=>{await window.initLinkedinSourcer();await new Promise(resolve=>setTimeout(resolve,0))},
+  return {el,state,calls,requests,copy:window.copyLinkedinCompanionFolder,reload:window.reloadLinkedinCompanion,init:async()=>{await window.initLinkedinSourcer();await new Promise(resolve=>setTimeout(resolve,0))},
     start:()=>window.startLinkedinSourcer(),stop:()=>window.stopLinkedinSourcer()};
 }
 (async()=>{
@@ -62,6 +67,15 @@ function fixture(reuse=true){
   assert.equal(f.requests[0].action,'start');assert.equal(f.requests[0].mode,'standard');assert.equal(f.requests[0].confirm_paid,true);assert.equal(f.requests[0].use_open_search,true);
   assert.equal(f.el('Count').textContent,1);assert.match(f.el('Status').textContent,/last result page/);assert.equal(f.el('Start').disabled,false);
   assert.equal(f.calls.filter(call=>call.action==='navigate').length,0,'default preserves the open search filters');
+  const planning=fixture();await planning.init();planning.el('Brief').value='SAP finance';planning.el('Consent').checked=true;planning.state.holdPlan=true;
+  const planningRun=planning.start();await new Promise(resolve=>setImmediate(resolve));assert(planning.state.planReply);
+  assert(planning.calls.some(c=>c.action==='begin'),'worker ownership must be reserved before the paid plan is pending');
+  planning.state.planReply();await planningRun;assert.equal(planning.calls.filter(c=>c.action==='begin').length,1,'reservation does not reset budgets after planning');
+  const noReservation=fixture();await noReservation.init();noReservation.el('Brief').value='SAP finance';noReservation.el('Consent').checked=true;noReservation.state.failBegin=true;await noReservation.start();
+  assert.equal(noReservation.requests.filter(r=>r.action==='plan').length,0,'failed reservation sends no paid plan');
+  const stopReservation=fixture();await stopReservation.init();stopReservation.el('Brief').value='SAP finance';stopReservation.el('Consent').checked=true;stopReservation.state.holdBegin=true;
+  const reservedRun=stopReservation.start();await new Promise(resolve=>setImmediate(resolve));assert(stopReservation.state.beginReply);await stopReservation.stop();stopReservation.state.beginReply();await reservedRun;
+  assert.equal(stopReservation.requests.filter(r=>r.action==='plan').length,0,'Stop during reservation sends no paid plan');assert(stopReservation.calls.some(c=>c.action==='end'),'a late reservation acknowledgement is cleaned up');
   const legacy=fixture();legacy.state.tabs=[{...people,lastAccessed:undefined,active:false},{...people,id:5,title:'Active compatible search',lastAccessed:undefined,active:true}];await legacy.init();
   assert.equal(legacy.el('Source').value,'5','without recency metadata an active compatible search wins over query order');
   const recent=fixture();recent.state.tabs=[{...people,id:6,lastAccessed:10,active:true},people];await recent.init();
@@ -73,7 +87,13 @@ function fixture(reuse=true){
   const missing=fixture();missing.state.tabs=[];await missing.init();missing.el('Brief').value='SAP finance';missing.el('Consent').checked=true;await missing.start();
   assert.equal(missing.requests.length,0);assert.equal(missing.el('Count').textContent,1,'missing tabs preserve the previous list');assert(missing.el('Options').open);
   const disconnected=fixture();disconnected.state.connected=false;await disconnected.init();disconnected.el('Brief').value='SAP finance';disconnected.el('Consent').checked=true;await disconnected.start();
-  assert.equal(disconnected.requests.length,0);assert.equal(disconnected.el('Count').textContent,1);assert(disconnected.el('Setup').open);assert.match(disconnected.el('Connection').textContent,/toolbar icon/);
+  assert.equal(disconnected.requests.length,0);assert.equal(disconnected.el('Count').textContent,1);assert(disconnected.el('Setup').open);assert.match(disconnected.el('Connection').textContent,/connects automatically/);
+  const setup=fixture(),note=new Element(),button={disabled:false,parentElement:{querySelector:()=>note}};
+  await setup.copy(button);assert.equal(setup.state.copied,'Bundled companion folder');assert.match(note.textContent,/Folder copied/);assert.equal(button.disabled,false);
+  setup.state.clipboardFail=true;await setup.copy(button);assert.equal(note.textContent,'Bundled companion folder','clipboard denial retains a selectable setup path');
+  await setup.reload(button);assert.match(note.textContent,/up to date/);assert.equal(setup.calls.at(-1).action,'reloadCompanion');assert.equal(setup.requests.length,0,'setup never starts paid work');
+  setup.state.reloadResult={reloading:true};await setup.reload(button);assert.match(note.textContent,/reloading.*Refresh/);
+  setup.state.oldUpdateCompanion=true;const reloads=setup.calls.filter(c=>c.action==='reloadCompanion').length;await setup.reload(button);assert.match(note.textContent,/Set up companion once/);assert.equal(setup.calls.filter(c=>c.action==='reloadCompanion').length,reloads,'legacy extensions receive migration guidance without an unsupported reload');
   const chosen=fixture();chosen.state.tabs=[people,{...people,id:4,title:'Older filtered search',lastAccessed:1}];await chosen.init();chosen.el('Source').value='4';chosen.el('Mode').value='standard';await chosen.el('Source').change();
   chosen.el('Brief').value='SAP finance';chosen.el('Consent').checked=true;await chosen.start();assert.equal(chosen.calls.find(call=>call.action==='begin').args.source_tab_id,4,'a manual source selection is retained');
   const rejected=fixture();await rejected.init();rejected.state.failStart=true;rejected.el('Brief').value='SAP finance';rejected.el('Consent').checked=true;await rejected.start();assert.equal(rejected.el('Count').textContent,1);assert.match(rejected.el('Status').textContent,/Synthetic start rejected/);

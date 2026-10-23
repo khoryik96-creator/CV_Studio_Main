@@ -147,8 +147,39 @@
     document.addEventListener('visibilitychange',() => { if(!document.hidden){catalogAttempted=false;schedule();} }); scan(); return;
   }
   if (location.pathname !== '/' || window.top !== window) return;
+  // The verified worker binding is renewed for each page document. The
+  // After one explicit toolbar pairing, no repeated toggle is needed.
+  let connecting, recoveryTimer, recoveryAttempts=0, recoveryStopped=false;
+  const connect = () => {
+    if (!connecting) connecting = new Promise(resolve => {
+      try { chrome.runtime.sendMessage({kind:'sourcer',action:'connect'},reply=>{
+        resolve(chrome.runtime.lastError ? {error:'Refresh CV Studio after updating the companion.'} : reply);
+      }); }
+      catch { resolve({error:'Refresh CV Studio after updating the companion.'}); }
+    }).finally(()=>{connecting=null;});
+    return connecting;
+  };
+  const recover = () => Promise.resolve(connecting).then(()=>connect()).then(reply=>{
+    if(reply?.loading && !recoveryStopped && !recoveryTimer && recoveryAttempts<20){
+      recoveryAttempts++;
+      recoveryTimer=setTimeout(()=>{recoveryTimer=null;recover();},250);
+    }
+    return reply;
+  });
+  connect().then(reply=>{if(reply?.loading && document.readyState==='complete')recover();});
+  // Chrome may omit/delay its tab-complete event. The document's own load
+  // event supplies an independent bounded, read-only handshake recovery.
+  window.addEventListener('load',recover,{once:true});
+  window.addEventListener('pagehide',()=>{recoveryStopped=true;clearTimeout(recoveryTimer);recoveryTimer=null;},{once:true});
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)connect();});
   const captures = new Map();
   chrome.runtime.onMessage.addListener((message,sender,reply) => {
+    if (sender.id === chrome.runtime.id && message?.type === 'CVSTUDIO_COMPANION_READY') {
+      // Do not coalesce the completion signal into a loading-time attempt
+      // that is still returning its rejection. Probe again after it settles.
+      recover().then(reply);
+      return true;
+    }
     if (sender.id !== chrome.runtime.id || message?.type !== 'CVSTUDIO_JOB_CAPTURE' || !/^[a-f0-9]{32}$/.test(message.id || '')) return false;
     const channel = document.getElementById('viewJobLeads')?.dataset.companionChannel;
     if (message.request?.action === 'folders' && document.getElementById('viewJobLeads')?.dataset.companionFolders !== '2') {
@@ -174,10 +205,13 @@
     if (event.source !== window || event.origin !== location.origin || !message ||
         message.type !== 'CVSTUDIO_LINKEDIN_REQUEST' || !/^[a-f0-9]{32}$/.test(message.channel || '') ||
         !/^[a-f0-9]{32}$/.test(message.id || '')) return;
-    chrome.runtime.sendMessage({kind: 'sourcer', action: message.action, args: message.args}, reply => {
+    connect().then(connection=>{
+      const respond=reply=>window.postMessage({type:'CVSTUDIO_LINKEDIN_RESPONSE',channel:message.channel,id:message.id,...reply},location.origin);
+      if(connection?.error){respond({error:connection.error});return;}
+      try { chrome.runtime.sendMessage({kind: 'sourcer', action: message.action, args: message.args}, reply => {
       const error = chrome.runtime.lastError;
-      window.postMessage({type: 'CVSTUDIO_LINKEDIN_RESPONSE', channel: message.channel, id: message.id,
-                          ...(error ? {error: 'Reconnect the browser companion from its toolbar icon.'} : reply)}, location.origin);
+      respond(error ? {error:'Refresh CV Studio after updating the companion.'} : reply);
+      }); } catch {respond({error:'Refresh CV Studio after updating the companion.'});}
     });
   });
 })();

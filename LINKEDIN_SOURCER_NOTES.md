@@ -8,13 +8,31 @@ reference, and is not imported by the main app.
 ## User workflow
 
 1. Open **LinkedIn Sourcer** in CV Studio.
-2. Expand **Browser connection help**, download/extract its ZIP, and
-   load the extracted folder through Chrome's **Load unpacked** control.
-3. Open CV Studio in Chrome and click the companion toolbar icon to connect that
-   specific app document. Ordinary service-worker suspension retains that binding
-   and run limits after exact-document revalidation. Reloading CV Studio,
-   restarting Chrome, or reloading/updating the extension requires reconnecting.
-   No additional API key, pairing code or POC server is needed.
+2. In the normal installed CV Studio address, expand **Set up companion / updates**
+   and **Copy setup folder**. Remove any old downloaded companion, then use
+   Chrome/Brave's **Load unpacked** with that bundled folder. Keep Developer mode
+   on. The ZIP remains available for installations requiring manual file updates.
+3. Refresh CV Studio, then click the companion toolbar icon once to trust this
+   installation/address. The enabled companion then connects automatically to its verified document
+   on load, return to the tab, and before browser RPCs. Page refresh/browser
+   restart needs no toolbar click. Worker suspension retains an exact live
+   document's binding and limits. A replacement document gets no previous run
+   authority; active worker runs/captures cannot be stolen by another app tab,
+   and a background tab cannot replace an idle binding. The toolbar remains an
+   explicit manual connection/recovery option. Search, write and DeepSeek consent
+   gates remain explicit. No additional API key, pairing code or POC server is
+   needed. A new installation/address or changed identity needs another toolbar
+   pairing. Fresh origin-bound HMAC challenges authenticate reconnects against
+   the paired backend key; DOM markers alone cannot grant authority. The backend
+   root key uses the existing protected vault; only a derived installation/origin
+   key enters extension-local storage, restricted to trusted extension contexts.
+   Keys never enter page messages, session snapshots, SQLite or diagnostics.
+   After normal **Update & Restart**, **Apply companion update** reloads
+   matching files already updated in the bundled folder. It reads only its own
+   local manifest, refuses active work, and never downloads or evaluates remote
+   code. Refresh CV Studio and LinkedIn when ready; drafts are not forcibly
+   reloaded. Legacy downloaded copies receive one-time setup guidance. Setup
+   must use the normal installation's folder, rather than a development preview.
 4. By default, **Start search opens a fresh LinkedIn People search every time**,
    then uses the generated keywords from the brief. No LinkedIn tab needs to be
    opened first. The source stays open for the user and existing tabs are kept.
@@ -43,6 +61,18 @@ restrictions and layout changes stop the run rather than triggering a bypass.
 There are no contact, message, project-save, profile-edit or JobAdder actions.
 
 ## Ownership and boundaries
+
+The v24.6.481 connection correction retries a rejected document-idle handshake
+when Chrome reports tab completion. Only the current local top-level content
+script receives the readiness notification; it waits for any old in-flight
+attempt to settle before a fresh verified connection. No browser action is
+queued/replayed by readiness recovery. The document's own load event is an
+independent fallback if Chrome omits/delays its completion notification. Only
+verified same-URL loading hints can schedule up to 20 handshake-only retries
+250 ms apart; pagehide cancels them. Sourcing reserves the existing bounded
+worker run before the paid planning request, protecting background planning
+from another app tab's automatic connection. Failed/cancelled reservation sends
+no plan request; subsequent browser operations reuse the same run and budgets.
 
 - `cvstudio_linkedin_sourcer.py`: app-independent ephemeral run state, bounded
   attempts/time/pages, validated observed URLs, exact quote checks and native
