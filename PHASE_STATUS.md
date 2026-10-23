@@ -4,6 +4,31 @@
 
 ## Release state
 
+- v24.6.484 corrects PR #240's remaining standalone-title fallback finding.
+  Every standalone ad clears the generic linked-title fallback before validating
+  its visible company/title/location tuple. A leading notice or unknown header
+  cannot import a paragraph-wrapped job-type link as the role, for either full
+  ad or HR company-only reads. Recognized standalone and linked/search layouts,
+  all v483 corrections and pairing/security/storage boundaries remain. The new
+  case failed against v483 before the fix and passes in both synthetic and real
+  isolated Chromium checks. Owner authorized merging PR #240; final exact-head
+  hosted regression checks and automated review must pass first. See the v484
+  standalone-title corrective QA report.
+
+- v24.6.483 is a local correction from merged master `e316bfe` for the owner's
+  normal-Brave companion/HR lookup report. Refresh restored stale page messaging;
+  modern standalone ad titles now come from the company/title/location header,
+  rather than job-type links. HR reads only confirmed company metadata, so an
+  unloaded ad body does not block it; full ad imports keep content readiness.
+  Newly created job tabs tolerate a bounded initial URL-metadata gap, and job
+  access/layout failures return redacted, specific guidance. Pairing/security,
+  all routes/schemas/permissions, saved ad content and HR write validation remain.
+  All 1,779 Windows Python tests (four skipped, 8,392 subtests), all 47 JavaScript
+  suites, source/native preflight and 24 smoke assertions passed. Isolated real
+  Chromium reproduced the v482 wrong-title defect and verified the correction
+  plus company-only reads with an unloaded body. No follow-up PR/merge or owner
+  installation update has been performed. See the v483 QA report.
+
 - v24.6.482 corrects PR #239's automatic-connection trust finding. One explicit
   toolbar pairing pins an installation/origin key; fresh backend HMAC challenges
   authenticate later connections and restored worker authority. The backend root

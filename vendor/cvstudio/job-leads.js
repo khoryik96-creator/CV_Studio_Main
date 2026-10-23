@@ -446,7 +446,7 @@
       if (companion.busy) throw Error('Finish the current companion search or ad read first.');
       if (!companyURL) {
         el('HRMessage').textContent='Reading the company link from the saved ad…';
-        const captured = await rpc('jobFromLink',{url:row.url}); checkHR();
+        const captured = await rpc('jobFromLink',{url:row.url,company_only:true}); checkHR();
         if (captured?.url !== row.url || captured.company?.trim().toLocaleLowerCase() !== row.company.trim().toLocaleLowerCase()) throw Error('The ad company could not be confirmed. Set its LinkedIn company page in Search options.');
         companyURL=captured.company_url || '';
       }
@@ -620,7 +620,7 @@
   }
   function rpc(action, args = {}, waitMs) {
     return new Promise((resolve, reject) => {
-      const id = hex(), timer = setTimeout(() => { pending.delete(id); reject(Error('The Chrome companion did not respond. This fallback only works in Chrome. Open this CV Studio address there and connect the latest companion. Saved ads remain available below.')); }, waitMs ?? (action === 'jobFromLink' ? 35000 : 12000));
+      const id = hex(), timer = setTimeout(() => { pending.delete(id); reject(Error('The companion did not respond. Refresh this CV Studio tab after reloading the companion. Use Chrome or Brave, and click the companion toolbar icon once if this installation has not been connected. Saved ads remain available below.')); }, waitMs ?? (action === 'jobFromLink' ? 35000 : 12000));
       pending.set(id, {resolve, reject, timer});
       window.postMessage({type:'CVSTUDIO_LINKEDIN_REQUEST', id, channel, action, args}, location.origin);
     });

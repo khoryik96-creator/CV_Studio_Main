@@ -317,29 +317,34 @@ chrome.tabs.onUpdated.addListener((id, change) => event(async () => {
   return changed;
 }));
 chrome.tabs.onActivated.addListener(info => event(() => owned.delete(info.tabId)));
-async function readJobTab(bound, id, expected) {
+async function readJobTab(bound, id, expected, companyOnly=false) {
   const verify = tab => {
-    if (connection !== bound || bound.run || jobURL(tab.url) !== expected || tab.pendingUrl && jobURL(tab.pendingUrl) !== expected || tab.status !== 'complete') throw Error('The selected job changed or has not loaded.');
+    if (connection !== bound || bound.run || jobURL(tab.url) !== expected || tab.pendingUrl && jobURL(tab.pendingUrl) !== expected || tab.status !== 'complete') throw safeError('The selected job changed or has not loaded. Open its LinkedIn tab, wait for it to load, then try again.');
   };
   verify(await chrome.tabs.get(id));
-  await chrome.scripting.executeScript({target:{tabId:id}, files:['reader.js']});
+  await jobScript({target:{tabId:id}, files:['reader.js']},jobReaderStartError);
   // A complete browser load can precede LinkedIn's React detail panel. Wait on
   // that same DOM briefly; never re-navigate or replay a failed network request.
   for (let attempt=0;attempt<16;attempt++) {
     verify(await chrome.tabs.get(id));
-    const [{result}] = await chrome.scripting.executeScript({target:{tabId:id},
-      func: url => {
-        try { return globalThis.SourcerReader.readJob(url); }
-        catch (error) { if (error.cvstudioJobLoading) return {loading:true}; throw error; }
-      }, args:[expected]});
+    const [injection] = await jobScript({target:{tabId:id},
+      func: (url,companyOnly) => {
+        try { return globalThis.SourcerReader.readJob(url,companyOnly); }
+        catch (error) {
+          if (error.cvstudioJobLoading) return {loading:true};
+          return {jobError:/sign in|verification|restriction/i.test(String(error?.message))?'access':'layout'};
+        }
+      }, args:[expected,companyOnly]},jobReaderReadError);
+    const result=injection?.result;
     verify(await chrome.tabs.get(id));
+    if (result?.jobError) throw safeError(result.jobError==='access' ? 'LinkedIn needs sign-in or is showing a verification or usage restriction. Check the LinkedIn tab before trying again.' : jobReaderReadError);
     if (!result?.loading) {
-      if (result?.url !== expected) throw Error('The selected job changed while reading.');
-      if (result.description || attempt >= 5) return result;
+      if (result?.url !== expected) throw safeError('The selected job could not be confirmed. Open its LinkedIn tab and try again.');
+      if (companyOnly && result.company_url || result.description || attempt >= 5) return result;
     }
     if (attempt < 15) await new Promise(resolve => setTimeout(resolve,350));
   }
-  throw Error('The job details did not finish loading. Open the ad in Chrome and try Read job ad.');
+  throw safeError('The job details did not finish loading or the layout is not recognized. Open the ad in Chrome or Brave and try Read job ad. For HR searches, you can enter the company page under Search options.');
 }
 async function pickJob(message, sender) {
   await ready;
@@ -478,11 +483,12 @@ async function handle(message, sender) {
       for (let attempt = 0; attempt < 40; attempt++) {
         if (connection !== bound || bound.run) throw Error('The companion connection changed.');
         const current = await chrome.tabs.get(tab.id);
-        if (jobURL(current.url) !== expected && !(created === tab.id && (!current.url || current.url === 'about:blank') && current.pendingUrl === expected)) throw Error('The job left its expected page.');
-        if (current.status === 'complete') return await readJobTab(bound, tab.id, expected);
+        const starting=created===tab.id && current.status==='loading' && (!current.url || current.url==='about:blank') && (!current.pendingUrl || current.pendingUrl===expected);
+        if (jobURL(current.url) !== expected && !starting) throw safeError('The job left its expected LinkedIn page. Check the ad before trying again.');
+        if (current.status === 'complete') return await readJobTab(bound, tab.id, expected,args.company_only===true);
         await new Promise(resolve => setTimeout(resolve, 500));
       }
-      throw Error('The job ad did not finish loading.');
+      throw safeError('The LinkedIn ad did not finish loading. Open it in your browser, wait for the page to load, then try again.');
     } finally {
       if (created !== null) {
         await closeOwned(created, expected);

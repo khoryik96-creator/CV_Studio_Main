@@ -48,6 +48,7 @@ function hrFixture(){
   f.state.loading=true;await f.el('HRStart').click();
   assert.equal(f.state.hrArgs.country,'');assert.match(f.state.hrArgs.keywords,/CHRO/);
   assert.equal(f.state.hrArgs.company,f.state.records[0].company);assert.equal(f.state.hrArgs.company_url,companyURL);
+  assert(f.calls.some(call=>call.action==='jobFromLink' && call.args.company_only===true),'HR only requests company metadata, not a complete ad capture');
   assert.equal(f.state.hrSeen,3);assert.equal(f.requests.filter(x=>x.action==='save_hr').length,1);
   assert.equal(f.state.records[0].hr.people.length,1,'profiles deduplicate across pages');
   assert.equal(f.el('notes').value,'Unsaved draft stays');assert.match(f.el('HRMessage').textContent,/1 HR matches saved/);

@@ -20,6 +20,31 @@ the in-app action reloads the matching local bundle while idle. Old downloaded
 copies require this one-time migration or continued manual ZIP updates. The
 action leaves page refresh to the user, preserving unsaved drafts.
 
+## Standalone ad / HR company-read correction (v24.6.483)
+
+Modern standalone LinkedIn ads can render their title as a plain paragraph while
+job-type buttons still point to the same ad. Only a recognized visible
+company/title/location header establishes that plain title; incomplete or
+ambiguous headers stay loading instead of importing a job-type label as a role.
+Existing linked-title and search-detail layouts remain supported.
+The v484 review correction clears standalone fallback selection unconditionally:
+a leading notice before the recognized tuple cannot retain a paragraph-wrapped
+job-type link, including during company-only HR reads. Unknown header layouts
+fail with the existing specific guidance rather than importing a guessed role.
+
+HR's `jobFromLink` call sets `company_only: true`. It validates the same canonical
+job/header/company identity but does not wait for or collect the description.
+Only literal boolean true enables this mode. Normal ad imports, preview reads
+and direct-add controls keep the existing full-content behavior. No metadata-only
+result overwrites saved ad content: HR uses only its confirmed company link.
+
+A newly created extension-owned job tab may briefly lack both committed and
+pending URLs. Its existing bounded load poll can wait through that exact loading
+state; another pending target fails before reading. Page access/layout/injection
+errors receive fixed, redacted guidance rather than a generic disconnect claim.
+After a companion reload, refresh the open CV Studio and LinkedIn pages to
+replace invalidated content scripts. Timeout guidance supports Chrome and Brave.
+
 ## HR completeness at the result ceiling (v24.6.479)
 
 The 100-person cap applies to unique canonical profile links. If a final-page

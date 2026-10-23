@@ -121,7 +121,8 @@
     const name = text(main.querySelector('h1, [data-test-profile-name]')).slice(0, 150);
     return {text: words, publicUrl: publicLink || '', name};
   }
-  function readJob(expectedURL) {
+  function readJob(expectedURL, companyOnly=false) {
+    companyOnly=companyOnly===true;
     const loading = message => { const error = Error(message); error.cvstudioJobLoading = true; throw error; };
     if (location.origin !== 'https://www.linkedin.com') throw Error('Choose a LinkedIn job ad.');
     const problem = issue(); if (problem) throw Error(problem);
@@ -134,7 +135,7 @@
     const panels = [...document.querySelectorAll('.jobs-search__job-details--container, .jobs-details, .job-view-layout, .top-card-layout')].filter(visible);
     const panel = panels.find(value => value.querySelector('.job-details-jobs-unified-top-card__job-title, .jobs-unified-top-card__job-title, .top-card-layout__title'));
     if (!panel) {
-      const modern = readModernJob(url);
+      const modern = readModernJob(url,companyOnly);
       if (modern) return modern;
       loading('This job layout has not loaded or is not recognized.');
     }
@@ -148,7 +149,7 @@
     const locationText = text(first('.job-details-jobs-unified-top-card__primary-description-container .tvm__text, .jobs-unified-top-card__bullet, .topcard__flavor--bullet')).slice(0, 240);
     const descriptionNode = first('#job-details, .jobs-description__content, .description__text') ||
       [...document.querySelectorAll('.description__text')].find(visible);
-    const captured = visible(descriptionNode) ? jobDescription(descriptionNode) : {description:'',description_html:'',description_truncated:false};
+    const captured = !companyOnly && visible(descriptionNode) ? jobDescription(descriptionNode) : {description:'',description_html:'',description_truncated:companyOnly};
     const posted = panel.querySelector('time[itemprop="datePosted"], meta[itemprop="datePosted"], time[data-test-job-posted-date]');
     const rawDate = posted?.getAttribute('datetime') || posted?.getAttribute('content') || '';
     let datePosted = '';
@@ -166,12 +167,22 @@
       return url.origin === 'https://www.linkedin.com' && !url.username && !url.password && match ? url.origin + '/jobs/view/' + match[1] : '';
     } catch { return ''; }
   }
-  function readModernJob(url) {
+  function readModernJob(url, companyOnly=false) {
     const workspace = document.querySelector('main#workspace');
     if (!workspace) return null;
     const id = url.split('/').at(-1);
     const abouts = [...workspace.querySelectorAll('[componentkey="JobDetails_AboutTheJob_' + id + '"]')].filter(visible);
-    const title = [...workspace.querySelectorAll('a[href]')].find(link => visible(link) && jobLink(link.href) === url && text(link));
+    let title = [...workspace.querySelectorAll('a[href]')].find(link => visible(link) && jobLink(link.href) === url && text(link) && link.closest('p'));
+    if (jobLink(location.href) === url) {
+      title=null;
+      // Standalone ads now render the title as plain text. Job-type buttons
+      // still link to the ad, so unrecognized headers must not retain them.
+      const [company,role,metadata]=[...workspace.querySelectorAll('p')].filter(visible);
+      const names=[...new Set([...(company?.querySelectorAll('a[href*="/company/"]') || [])]
+        .filter(link=>visible(link) && companyURL(link.href)).map(text).filter(Boolean))];
+      if (names.length===1 && text(company)===names[0] && text(role) && role.closest('p')===role &&
+          !role.querySelector('a[href*="/company/"]') && /\S\s*·\s*\S/.test(text(metadata))) title=role;
+    }
     if (abouts.length !== 1 || !title) return null;
     let header = title;
     for (let step=0;step<12 && header && header !== workspace;step++,header=header.parentElement) {
@@ -182,8 +193,8 @@
       if (!role) return null;
       const paragraphs = [...header.querySelectorAll('p')], titleParagraph = title.closest('p'), index = paragraphs.indexOf(titleParagraph);
       const where = index >= 0 ? text(paragraphs[index+1]).split(/\s*·\s*/)[0].slice(0,240) : '';
-      const captured = jobDescription(abouts[0]);
-      if (!captured.description.replace(/^About the job\b\s*/i,'').trim()) return null;
+      const captured = companyOnly ? {description:'',description_html:'',description_truncated:true} : jobDescription(abouts[0]);
+      if (!companyOnly && !captured.description.replace(/^About the job\b\s*/i,'').trim()) return null;
       return {url,role,company:companies[0].slice(0,200),company_url:jobCompanyURL(header,companies[0]),location:where,date_posted:'',...captured};
     }
     return null;
