@@ -27,6 +27,11 @@ title.parentElement=header;
 const showMore=visible('Show more');
 const about=visible('About the job\nBuild partnerships.\nManage reporting.\nShow more',{
   innerHTML:'<h2>About the job</h2><ul><li>Build partnerships.</li><li>Manage reporting.</li></ul><button>Show more</button>',querySelectorAll:selector=>selector==='button'?[showMore]:[]});
+const textNode=value=>({nodeType:3,nodeValue:value});
+const dom=(tag,children,attrs={})=>({...visible(''),nodeType:1,tagName:tag.toUpperCase(),childNodes:children.map(value=>typeof value==='string'?textNode(value):value),getAttribute:name=>attrs[name] || null});
+Object.defineProperty(about,'childNodes',{get:()=>about.fakeNodes || (about.innerText==='About the job'?[dom('h2',['About the job'])]:about.innerHTML.includes('Medical insurance')?
+  [dom('h2',['About the job']),dom('p',[dom('strong',['Build partnerships.'])]),dom('ol',[dom('li',['Manage reporting.'])]),dom('button',['… more'],{'aria-hidden':'true'}),dom('p',['Benefits found in job post']),dom('p',['Medical insurance'])]:
+  [dom('h2',['About the job']),dom('ul',[dom('li',['Build partnerships.']),dom('li',['Manage reporting.'])]),dom('button',['Show more'])])});
 const workspace=visible('Current jobs',{querySelectorAll:selector=>selector==='a[href]'?state.stale?[{...title,href:'https://www.linkedin.com/jobs/view/999'}]:[title]:
   selector==='[componentkey="JobDetails_AboutTheJob_1234567890"]'&&state.about?[about]:[]});
 header.parentElement=workspace;
@@ -37,7 +42,7 @@ const searchHeader={querySelectorAll:()=>[
 ]};
 const document={body:workspace,querySelector:selector=>selector==='[componentkey="searchResultsHeaderComponent"]'?searchHeader:selector==='main#workspace'||selector==='main'?workspace:null,
   querySelectorAll:selector=>selector.includes('.jobs-search-results-list')?[scope]:[]};
-const context=vm.createContext({document,location,URL,URLSearchParams,Date,Number,getComputedStyle:()=>({visibility:'visible'})});
+const context=vm.createContext({document,location,URL,URLSearchParams,Date,Number,getComputedStyle:node=>({visibility:'visible',...node.computedStyle})});
 vm.runInContext(source,context);const reader=context.SourcerReader;
 let snapshot=reader.readJobSearch();assert.equal(snapshot.jobs.length,1,'canonical component identity, duplicates, malformed and mixed-job cards');
 assert.equal(reader.jobTargets().length,1,'direct-add targets use only confirmed card identities');
@@ -70,6 +75,49 @@ assert.equal(captured.description,'About the job\nBuild partnerships.\nManage re
 location.pathname='/jobs/collections/recommended/';assert.equal(reader.jobTargets()[0].floating,true,'a confirmed selected collection ad gets the same direct-add control');location.pathname='/jobs/search-results/';
 const previousText=about.innerText;about.innerText='About the job';
 assert.throws(()=>reader.readJob(url),error=>error.cvstudioJobLoading===true,'a heading-only loading panel is never a successful content capture');about.innerText=previousText;
+// Current LinkedIn places an aria-hidden expansion button before benefit text.
+// Its label must not enter plain text while being excluded from rich content.
+const previousHTML=about.innerHTML;
+showMore.innerText='… more';
+about.innerText='About the job\nBuild partnerships.\nManage reporting.\n… more\nBenefits found in job post\nMedical insurance';
+about.innerHTML='<h2>About the job</h2><p><strong>Build partnerships.</strong></p><ol><li>Manage reporting.</li></ol><button aria-hidden="true" data-testid="expandable-text-button">… more</button><p>Benefits found in job post</p><p>Medical insurance</p>';
+captured=reader.readJob(url);
+assert(!captured.description.includes('… more'),'embedded LinkedIn UI text cannot invalidate the entire rich description');
+assert(captured.description.includes('Medical insurance'));assert(captured.description_truncated);
+assert(captured.description_html.includes('<strong>'));assert(captured.description_html.includes('<ol>'));
+assert(!captured.description_html.includes('<button'));
+about.innerText=previousText;about.innerHTML=previousHTML;showMore.innerText='Show more';
+about.fakeNodes=[dom('h2',['About the job']),{...dom('p',['Bold heading']),computedStyle:{fontWeight:'700'}},
+  {...dom('span',['Block one.']),computedStyle:{display:'block'}},{...dom('span',['Block two.']),computedStyle:{display:'block'}},
+  dom('div',[dom('div',['Keep the list item.'],{role:'listitem'})],{role:'list'}),
+  {...dom('span',['Hidden UI']),computedStyle:{display:'none'}},dom('script',['bad()']),dom('a',['Read the role.'],{href:'javascript:bad()',onclick:'bad()'})];
+captured=reader.readJob(url);
+assert(captured.description_html.includes('<strong>Bold heading</strong>'),'computed font styling becomes passive emphasis');
+assert(captured.description.includes('Block one.\nBlock two.'),'CSS block wrappers retain line separation');
+assert(captured.description_html.includes('<ul><li>Keep the list item.</li></ul>'),'ARIA lists retain list semantics');
+assert(!captured.description.includes('Hidden UI'));assert(!captured.description.includes('bad()'));
+assert(!captured.description_html.includes('javascript:'));assert(!captured.description_html.includes('onclick'));
+assert(captured.description.includes('Read the role.'));delete about.fakeNodes;
+// Optional typography must not make a readable, identity-confirmed ad fail.
+about.fakeNodes=[dom('h2',['About the job']),...Array.from({length:2001},()=>dom('span',['Work. ']))];
+captured=reader.readJob(url);
+assert.equal(captured.company,'Example Finance');assert.equal(captured.role,'Finance Manager');
+assert.equal(captured.description,('About the job\n'+'Work. '.repeat(2001)).trim());
+assert.equal(captured.description_html,'');assert.equal(captured.description_truncated,true,'visible Show more still marks the fallback excerpt');
+let nested=dom('p',['Deep role content.']);for(let i=0;i<80;i++)nested=dom('div',[nested]);
+about.fakeNodes=[dom('h2',['About the job']),nested,dom('button',['… more']),dom('script',['UNSAFE']),
+  {...dom('span',['HIDDEN']),computedStyle:{display:'none'}},dom('p',['Benefits remain.'])];
+captured=reader.readJob(url);
+assert(captured.description.includes('Deep role content.'));assert(captured.description.includes('Benefits remain.'));
+assert(!/UNSAFE|HIDDEN|… more/.test(captured.description));assert.equal(captured.description_html,'');
+about.fakeNodes=[dom('h2',['About the job']),...Array.from({length:20000},()=>dom('span',['x']))];
+captured=reader.readJob(url);assert(captured.description.includes('x'));assert(captured.description.length<=20000);
+assert(captured.description_truncated,'plain node-budget exhaustion is an explicit excerpt');
+about.fakeNodes=[dom('h2',['About the job']),nested,dom('p',['Long text. '.repeat(3000)])];
+captured=reader.readJob(url);assert.equal(captured.description.length,20000);assert(captured.description_truncated);
+about.fakeNodes=[{get nodeType(){throw Error('Synthetic unexpected DOM failure');}}];
+assert.throws(()=>reader.readJob(url),/Synthetic unexpected DOM failure/,'only the local size sentinel may use fallback');
+delete about.fakeNodes;
 for(const patch of [{about:false},{stale:true},{companyConflict:true}]){
   Object.assign(state,{about:true,stale:false,companyConflict:false},patch);
   assert.throws(()=>reader.readJob(url),error=>error.cvstudioJobLoading===true,'stale or ambiguous detail fields must not mix');

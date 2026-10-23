@@ -4,6 +4,84 @@
 
 ## Release state
 
+- v24.6.479 corrects PR #238's capped-final-page completeness finding. Any
+  unique matches omitted by the 100-person ceiling keep saved evidence and the
+  completion message limited; exactly-full or duplicate-only final pages keep
+  their accurate completion status. No scan budgets, storage/route/schema,
+  permission or provider changes. Prior HR unload and rich-ad fixes remain.
+  Full isolated Windows Python passed (1,776 tests, four skipped, 8,392
+  subtests), as did all 46 JavaScript suites.
+  See `cv_studio_v24_6_479_hr_result_completeness_qa_report.md` and PR #238 for
+  verification and owner-authorized merge evidence.
+
+- v24.6.478 corrects PR #238's automated-review HR unload finding. Pagehide
+  stops the exact HR run; worker app-disconnect and failed-restoration cleanup
+  close only inactive unchanged owned tabs, including matching pending loads.
+  User-taken-over tabs and source searches remain. Existing ad formatting,
+  joining dates, routes/schemas/permissions and provider boundaries remain.
+  Owner-authorized merge remains gated on local and exact-head PR checks.
+  Full isolated Windows Python passed: 1,776 tests, four skipped, 8,392
+  subtests. All 46 JavaScript suites passed after the final cleanup fixtures.
+  See `cv_studio_v24_6_478_hr_unload_cleanup_qa_report.md` and PR #238.
+
+- v24.6.477 corrects the review's complex-ad import regression while retaining
+  the v474 company HR feature, v475 rich formatting and v476 joining dates.
+  Rich traversal overflow now uses a bounded iterative plain-text capture;
+  company/role metadata remains available and incomplete text is labelled.
+  Hidden/active/control content, identity checks, routes, schemas, ownership,
+  permissions and provider boundaries remain. Owner authorized fix and merge;
+  full isolated Windows Python passed (1,776 passed, four skipped, 8,392
+  subtests) and all 46 JavaScript suites passed. Further
+  local/CI verification and merge evidence are recorded in
+  `cv_studio_v24_6_477_complex_job_ad_fallback_qa_report.md`.
+
+- HR company joining dates: v24.6.476 continues the unmerged
+  `codex/v24.6.474-job-leads-company-hr` branch. HR cards show an explicit
+  month/year or year-only start from the matched company's current visible
+  Experience stint, with Not available for missing/ambiguous evidence. Bounded
+  sequential owned profile reads retain cancellation, identity checks and
+  suspension-safe attempt limits. Optional dates survive saved-ad backups;
+  old records, ad details, rich formatting and folders remain compatible.
+  No route/schema/permission change, paid call, outreach or installed owner
+  state change. Full isolated Windows Python: 1,776 passed, four skipped,
+  8,392 subtests; all 46 JavaScript suites, static/native/source preflight and
+  24 source-smoke assertions passed. QA details are in
+  `cv_studio_v24_6_476_hr_joining_dates_qa_report.md`. Local checkpoint only;
+  no PR or merge requested.
+
+- Job-ad rich formatting corrective: v24.6.475 continues the unmerged
+  `codex/v24.6.474-job-leads-company-hr` branch. Companion captures now derive
+  plain text and passive formatted markup from the same DOM while removing
+  embedded expansion/UI controls. Original lists/emphasis, computed bold/italic
+  and block/list roles are preserved. Capped descriptions keep their matching
+  rich prefix; canonical public markup may supply richer formatting only when
+  it matches the retained metadata text. Existing ads need explicit content
+  refresh/save to recover formatting lost by earlier captures.
+  Full isolated Windows Python: 1,767 passed, four skipped, 8,392 subtests;
+  all 45 JavaScript suites, static/native/source preflight and 24 source-smoke
+  checks passed. Browser QA rendered the inspected LinkedIn DOM structure with
+  synthetic text, preserving bold sections and seven numbered items. No live
+  installed-companion capture, owner data change, PR or merge was performed.
+  See `cv_studio_v24_6_475_job_ad_rich_formatting_qa_report.md`.
+
+- Owner-requested Job Leads Phase 2: v24.6.474 on
+  `codex/v24.6.474-job-leads-company-hr`, from merged master `15b89cf`.
+  Saved ads show an HR column with Any country / named-country selection,
+  editable HR title keywords and a bounded companion scan using LinkedIn's
+  observed company employee ID and native location chooser. Passive profile
+  links/title/location evidence is saved with the ad through the existing
+  guarded route; notes/folders/status are preserved and stale writes reject.
+  No paid calls, outreach, route/schema/permission change or owner-state edits.
+  Full isolated Windows Python passed (1,765 passed, four skipped, 8,392
+  subtests); all 45 JavaScript suites and source/static/repository/native
+  preflight plus 24 source-smoke assertions passed. Browser QA used fictional
+  ads/people with simulated transport: worldwide and Singapore scans, retained
+  results after reload, per-ad separation and a full-ad refresh beside HR.
+  Current LinkedIn company/location controls were inspected read-only; no real
+  installed-companion end-to-end scan or paid call is claimed. Local checkpoint
+  only; no PR or merge has been requested. See
+  `cv_studio_v24_6_474_company_hr_people_qa_report.md`.
+
 - PR #237 timing corrective: v24.6.473 on
   `codex/v24.6.471-linkedin-folder-refresh`. The Add handler treats every existing
   active ad as a duplicate without entering its folder-move path. Records saved

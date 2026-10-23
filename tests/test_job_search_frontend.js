@@ -20,6 +20,7 @@ function fixture(){
   const window={addEventListener:(name,fn)=>events[name]=fn,confirm:()=>state.allowDiscard!==false,postMessage:message=>{
     if(message.type==='CVSTUDIO_LINKEDIN_CAPTURE_RESULT'){state.captureReply?.(message.result);state.captureReply=null;return}
     calls.push(message);const reply=(value,error)=>events.message({source:window,origin:location.origin,data:{type:'CVSTUDIO_LINKEDIN_RESPONSE',id:message.id,channel:message.channel,...(error?{error}:{result:value})}});
+    if(state.onRPC?.(message,reply))return;
     if(message.action==='jobStatus')return reply({connected:state.connected,job_search:state.searchCapable,job_search_revision:state.searchRevision,version:'24.6.461',busy:state.busy});
     if(message.action==='jobSearchTabs')return reply([{id:20,title:'Open filtered jobs',url:'https://www.linkedin.com/jobs/search/?keywords=finance&f_WT=2'}]);
     if(message.action==='jobSearchBegin'){state.page=0;state.scroll=0;return reply({tab_id:20})}
@@ -39,6 +40,7 @@ function fixture(){
     assert.equal(endpoint,'/job-leads','search must not call a paid route');
     if(!options?.body)return {ok:true,json:async()=>({records:structuredClone(state.records),folders:[...state.folders]})};
     const data=JSON.parse(options.body);requests.push(data);
+    if(state.onRequest){const response=await state.onRequest(data);if(response)return response;}
     if(data.action==='format_content')return {ok:true,json:async()=>({description_rich:[{tag:'p',children:[{tag:'strong',children:[{text:data.description}]}]}]})};
     if(data.action==='create_folder'){if(!data.folder?.trim())return {ok:false,json:async()=>({error:'Enter a folder name.'})};if(!state.folders.includes(data.folder))state.folders.push(data.folder);return {ok:true,json:async()=>({folder:data.folder})};}
     if(['trash','untrash','move_folder'].includes(data.action)){
@@ -58,11 +60,12 @@ function fixture(){
   const context=vm.createContext({window,document,location,fetch,URL,URLSearchParams,Blob,Map,Set,Date,crypto:{randomUUID:()=>String(++serial).padStart(32,'0')},
     setTimeout:(fn,ms)=>setTimeout(fn,ms===350?0:ms),clearTimeout,Option:function(text,value){const node=new Element('option',text);node.value=value;return node}});
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../vendor/cvstudio/job-leads.js'),'utf8'),context);
-  return {el,state,calls,requests,init:()=>window.initJobLeads(),capture:(record,request)=>new Promise(resolve=>{
+  return {el,state,calls,requests,pagehide:()=>events.pagehide?.(),init:()=>window.initJobLeads(),capture:(record,request)=>new Promise(resolve=>{
     state.captureReply=resolve;events.message({source:window,origin:location.origin,data:{type:'CVSTUDIO_LINKEDIN_CAPTURE',channel:document.getElementById('viewJobLeads').dataset.companionChannel,id:String(++serial).padStart(32,'0'),record,request}});
   })};
 }
-(async()=>{
+module.exports={fixture};
+if(require.main===module)(async()=>{
   const f=fixture();await f.init();
   assert.equal(f.el('PreviewTitle').textContent,b.role,'a saved ad fills the preview after reload without repeating the search');
   assert(f.el('PreviewContent').querySelectorAll('#text').some(node=>node.textContent==='Saved full content'));

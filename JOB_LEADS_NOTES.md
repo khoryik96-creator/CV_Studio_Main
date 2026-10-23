@@ -4,6 +4,141 @@ Current version is the repository-root `VERSION`. This owner-requested module
 tracks LinkedIn job ads for business development, separately from the candidate
 sourcer and the locked historical Lead Finder.
 
+## HR completeness at the result ceiling (v24.6.479)
+
+The 100-person cap applies to unique canonical profile links. If a final-page
+snapshot contains additional unique matches after the cap, the saved scan and
+completion message remain limited even when LinkedIn shows no next page.
+Exactly 100 retained matches, or duplicates after the ceiling, do not falsely
+mark an otherwise complete final page as incomplete. No extra profile lookups
+or pages are requested; the saved limited label survives reopening the ad.
+
+## HR unload cleanup (v24.6.478)
+
+Reloading/closing the app ends its HR run on pagehide and prevents a late read
+from saving. If that final message is lost, the worker also clears the run and
+closes unchanged inactive owned tabs on app navigation/removal or failed
+exact-document restoration. Matching pending profile loads are cleaned too,
+including a tab whose creation completes after the app disconnects. User-taken-
+over/redirected tabs and the retained company search remain untouched. No scan
+or paid operation is restarted during cleanup.
+
+## Complex-ad plain-text fallback (v24.6.477)
+
+If the optional rich serializer reaches its 4,000-node / 32-level limit, the
+ad still imports its company, role and a readable plain description. A separate
+iterative walk keeps the same hidden/control/active-content exclusions, stops
+after 16,000 nodes or a 20,000-character excerpt, and drops optional markup.
+Truncation or a visible More control is labelled as an excerpt. Normal captures
+retain the original rich formatting; identity/access/layout failures still stop
+instead of being swallowed by this size-only fallback.
+
+## HR company joining dates (v24.6.476)
+
+Each HR result card shows **Joined company**, using a month/year or year-only
+date explicitly visible in that profile's current company Experience. Missing,
+hidden, unrecognized or ambiguous evidence shows **Not available**. The scan
+does not subtract tenure durations or infer a date from headlines. Promotions
+within one fully visible company group use the earliest explicitly dated,
+continuous role; a separate former stint cannot replace the rejoining date.
+
+After each results page the companion checks the observed HR public profile
+links sequentially in temporary inactive tabs, up to 100 per run within the
+existing ten-minute ceiling. Exact profile/company identities and current
+employment dates are required. Activation/navigation relinquishes ownership;
+user tabs remain untouched. Each lookup is polled briefly, and a slow/missing
+Experience section leaves its optional date unavailable. Up to four persisted
+scroll attempts load LinkedIn's lazy Experience content within that owned tab;
+an empty loading skeleton is polled instead of being treated as final evidence.
+Restrictions, identity
+changes and interrupted browser actions stop visibly and preserve saved results.
+The attempt count is persisted before opening; suspension during creation cannot
+silently open another tab. No captured Experience text/date enters worker
+session state. The existing saved-ad JSON evidence/backup retains the bounded
+optional date; older records remain readable and show Not available until a
+new HR scan. No route, database schema, extension permission, AI call or outreach
+is added. Update/reload the companion and reconnect for joining-date scans.
+
+## Rich-content capture corrective (v24.6.475)
+
+Modern LinkedIn can put an aria-hidden **“… more”** button inside the About
+section, before benefit text. The previous reader retained that label in plain
+text but the passive HTML sanitizer removed it. The exact-text consistency
+check then rejected the whole rich tree, losing otherwise valid bold and lists.
+
+Both companion job readers now derive plain text and passive markup from the
+same bounded DOM traversal, excluding controls, hidden/active elements and all
+source attributes/URLs. Semantic lists/headings/emphasis remain; computed bold,
+italic and block layout are converted to passive tags, and explicit ARIA list
+roles remain lists. No styling rules or source code are executed/stored.
+Visible expansion controls still mark captured excerpts. Existing size/depth
+limits, job/source identity and companion ownership checks remain.
+
+At the established 20,000-character capture limit, a matching semantic prefix
+is clipped to the retained text instead of discarding all formatting. The final
+exact-text gate still applies; short/manual mismatches remain rejected. Public
+reads can use one canonical visible description's richer formatting when its
+words exactly match the retained metadata text; metadata fields/text are kept.
+Oversized optional markup cannot break a valid metadata-only result.
+
+The shared preview/form/saved-ad renderer already supports these passive tags;
+no display-only guess of bold or bullet meaning is needed. Older saved plain
+captures cannot recover their original typography locally. After updating and
+reloading the companion, use **Edit / view details → Refresh ad content → Save**.
+Public reads use the corrected backend directly. Existing duplicates, drafts,
+folders, HR results and manual contact/status/notes remain unchanged; no
+automatic record rewrite, paid call, route/schema or permission change occurs.
+
+## Phase 2: company HR people (v24.6.474)
+
+Saved active ads have **HR people** beside Preview. Preview also shows a
+Phase 2 column beside the ad. Choose **Any country** (default) or enter a country
+name, then **Find HR people**. Search options retain comma-separated title
+keywords, a 1–15-page ceiling (default 3), and an optional company-page override.
+Defaults include HR, human resources, CHRO, chief people officer, talent
+acquisition, TA, recruitment, hiring, recruiter, HRBP and end to end recruitment.
+
+The connected current Chrome companion reads the exact ad's company link when
+needed, opens that company's People page, verifies its heading against the saved
+company, and reads the header's observed single-company employee-search ID.
+It opens a standard People search with that Current company filter and the HR
+keywords. For a named country it uses LinkedIn's visible location chooser and
+one exact suggestion, then verifies the settled geo filter and visible checked
+company/country labels before reading. No guessed company/geo IDs, private API,
+paid provider, contact enrichment, messages or LinkedIn writes are involved.
+The source tab remains open; existing user tabs are never navigated or closed.
+
+Only observed public profile links and visible name/title/location are retained.
+Title keywords use word boundaries (TA cannot match “data”); matched terms are
+shown. Company association comes from LinkedIn's Current company search, not a
+claim that employment or hiring authority has independently been verified.
+Unknown/collapsed profile details are not inferred. Results cover the requested
+pages, up to 100 unique matches, not an exhaustive employee directory.
+
+Normal completion saves results, country, keywords, source and local scan time
+with that ad. Opening it again displays the saved results without a new scan.
+Notes, manual contact, folder, status and creation time remain. Ordinary ad saves
+preserve current HR evidence; changing the company or job identity clears it.
+Trash/folder moves and the existing JSON backup/import retain HR evidence.
+A dedicated revision-checked `save_hr` action on the existing guarded
+`/job-leads` route updates only evidence; concurrent edits/Trash reject stale
+results atomically. New bounded JSON payload fields require no database schema
+change (Job Leads remains schema 2; main DB 10 and journal 1 remain).
+
+Stop, failed reads, unrecognized layouts, restrictions and storage failures keep
+previous saved results. Partial matches may remain visibly unsaved until another
+scan/navigation. HR browser work is isolated from Jobs/profile/capture runs, has
+a ten-minute ceiling and persists its page budget in extension session memory.
+Pending mutations are marked before native clicks/navigation; an interrupted
+mutation cannot replay after worker suspension. Exact app-document/source/filter
+checks remain, including checks around reader injection. No automatic resume,
+new route, extension permission or packaged asset is added.
+
+Existing installations need the updated companion files, Reload, refreshed
+CV Studio/LinkedIn pages and a reconnected app tab. Automated reader/worker/UI
+fixtures and an isolated browser demo do not prove a real installed-extension
+end-to-end scan; live company/location controls were inspected read-only.
+
 ## Workflow
 
 - Open **Job Leads** and paste a LinkedIn job link. Public company, role,

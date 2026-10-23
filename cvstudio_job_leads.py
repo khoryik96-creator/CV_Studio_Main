@@ -122,8 +122,40 @@ def format_description(description, source):
     try:
         parser = Reader()
         parser.feed(source)
-        value = clean_rich(normalize(parser.root))
-        return value if re.sub(r'\s+', '', rich_text(value)) == re.sub(r'\s+', '', description) else []
+        value = normalize(parser.root)
+        target = re.sub(r'\s+', '', description)
+        actual = re.sub(r'\s+', '', rich_text(value))
+        if actual != target:
+            # The established capture cap keeps only a plain-text prefix. Clip
+            # the matching semantic tree too, rather than discarding all its
+            # typography. Short/manual mismatches still fail the exact gate.
+            if len(description) != 20000 or not actual.startswith(target):
+                return []
+            remaining = len(target)
+            def prefix(items):
+                nonlocal remaining
+                result = []
+                for item in items:
+                    if not remaining:
+                        break
+                    if 'text' in item:
+                        text = item['text']
+                        count = len(re.sub(r'\s+', '', text))
+                        if count > remaining:
+                            positions = [m.end() for m in re.finditer(r'\S', text)]
+                            text = text[:positions[remaining-1]]
+                            count = remaining
+                        remaining -= count
+                        if text:
+                            result.append({'text':text})
+                    else:
+                        children = prefix(item['children'])
+                        if children:
+                            result.append({'tag':item['tag'], 'children':children})
+                return result
+            value = prefix(value)
+        value = clean_rich(value)
+        return value if re.sub(r'\s+', '', rich_text(value)) == target else []
     except (JobLeadsError, RecursionError):
         return []  # Plain text remains available when markup cannot be retained.
 
@@ -191,6 +223,71 @@ def clean_record(raw):
     result['deleted'] = deleted
     rich = clean_rich(raw.get('description_rich', []))
     result['description_rich'] = rich if re.sub(r'\s+', '', rich_text(rich)) == re.sub(r'\s+', '', result['description']) else []
+    if raw.get('hr'):
+        result['hr'] = clean_hr(raw['hr'], result['company'])
+    return result
+
+
+def clean_hr(raw, company):
+    """Bounded passive public professional evidence; never executable markup."""
+    def invalid():
+        raise JobLeadsError('The HR search results are invalid. Saved ad details were kept.')
+    if not isinstance(raw, dict):
+        invalid()
+    result = {}
+    for key, limit in {'company':200, 'company_url':300, 'company_id':24, 'country':100,
+                       'keywords':600, 'source_url':2048, 'scanned_at':40}.items():
+        value = raw.get(key, '')
+        if not isinstance(value, str) or len(value) > limit or any(ord(c) < 32 for c in value):
+            invalid()
+        result[key] = value.strip()
+    if result['company'] != company or not re.fullmatch(r'[0-9]{1,24}', result['company_id']):
+        invalid()
+    if not re.fullmatch(r'https://www\.linkedin\.com/company/[A-Za-z0-9_-]+/', result['company_url']):
+        invalid()
+    try:
+        url = urlsplit(result['source_url'])
+        query = parse_qs(url.query)
+        if (url.scheme != 'https' or url.netloc != 'www.linkedin.com' or
+                url.path.rstrip('/') != '/search/results/people' or url.fragment or
+                set(query) - {'currentCompany','keywords','geoUrn'} or
+                len(query.get('currentCompany', [])) != 1 or
+                json.loads(query['currentCompany'][0]) != [result['company_id']]):
+            invalid()
+        geo = query.get('geoUrn', [])
+        if result['country']:
+            if len(geo) != 1 or not re.fullmatch(r'\["[0-9]{1,24}"\]', geo[0]):
+                invalid()
+        elif geo:
+            invalid()
+    except (ValueError, TypeError):
+        invalid()
+    if result['scanned_at']:
+        result['scanned_at'] = _backup_created({'created_at':result['scanned_at']})
+    if type(raw.get('complete')) is not bool or not result['keywords']:
+        invalid()
+    people = raw.get('people')
+    if not isinstance(people, list) or len(people) > 100:
+        invalid()
+    result['complete'], result['people'] = raw['complete'], []
+    seen = set()
+    for person in people:
+        if not isinstance(person, dict):
+            invalid()
+        entry = {}
+        for key, limit in {'name':200,'title':500,'location':240,'url':400,'matched':600,'joined':7}.items():
+            value = person.get(key, '')
+            if not isinstance(value, str) or len(value) > limit or any(ord(c) < 32 for c in value):
+                invalid()
+            entry[key] = value.strip()
+        if entry['joined'] and not re.fullmatch(r'(?:19|20)\d{2}(?:-(?:0[1-9]|1[0-2]))?', entry['joined']):
+            invalid()
+        if (not entry['name'] or not entry['title'] or not entry['matched'] or
+                not re.fullmatch(r'https://www\.linkedin\.com/in/[A-Za-z0-9_%~-]+/?', entry['url'])):
+            invalid()
+        if entry['url'].rstrip('/') not in seen:
+            seen.add(entry['url'].rstrip('/'))
+            result['people'].append(entry)
     return result
 
 
@@ -383,7 +480,8 @@ class JobLeadsStore:
         return {'changed':len(expected)}
 
     def save(self, raw):
-        data = clean_record(raw)
+        # Only save_hr may update search evidence; ordinary forms may be stale.
+        data = clean_record({key:value for key,value in raw.items() if key != 'hr'} if isinstance(raw, dict) else raw)
         identity, revision = raw.get("id", ""), raw.get("revision")
         if identity and (not isinstance(identity, str) or not re.fullmatch(r"[a-f0-9]{32}", identity)):
             raise JobLeadsError("Invalid saved lead. Refresh the list.")
@@ -401,6 +499,10 @@ class JobLeadsStore:
                     raise JobLeadsError("Restore this lead from Trash before editing it.", 409, "JOB_LEADS_CONFLICT")
                 if type(revision) is not int or revision != current["revision"]:
                     raise JobLeadsError("This lead changed in another window. Refresh and reopen it before saving. Your draft is still here.", 409, "JOB_LEADS_CONFLICT")
+                previous = self._record(current)
+                data.pop('hr', None)
+                if previous['company'] == data['company'] and previous['url'] == data['url'] and previous.get('hr'):
+                    data['hr'] = previous['hr']
                 data['deleted'] = False
                 connection.execute("UPDATE leads SET url=?,payload=?,revision=revision+1,updated_at=? WHERE id=?", (data["url"], json.dumps(data, ensure_ascii=False), now, identity))
             else:
@@ -413,6 +515,25 @@ class JobLeadsStore:
             result = self._record(connection.execute("SELECT * FROM leads WHERE id=?", (identity,)).fetchone())
             connection.commit()
             return {"record": result, "duplicate": False}
+
+    def save_hr(self, identity, revision, raw):
+        _selection([{'id':identity, 'revision':revision}])
+        with self._connection() as connection:
+            connection.execute('BEGIN IMMEDIATE')
+            current = connection.execute('SELECT * FROM leads WHERE id=?', (identity,)).fetchone()
+            if current is None or current['revision'] != revision:
+                raise JobLeadsError('This ad changed during the HR search. Refresh and scan again. Its details were kept.', 409, 'JOB_LEADS_CONFLICT')
+            record = self._record(current)
+            if record['deleted']:
+                raise JobLeadsError('Restore this ad before saving HR people.', 409, 'JOB_LEADS_CONFLICT')
+            record['hr'] = clean_hr(raw, record['company'])
+            record['hr']['scanned_at'] = _now()
+            connection.execute('UPDATE leads SET payload=?,revision=revision+1,updated_at=? WHERE id=?',
+                               (json.dumps(clean_record(record), ensure_ascii=False), _now(), identity))
+            self._check_capacity(connection)
+            result = self._record(connection.execute('SELECT * FROM leads WHERE id=?', (identity,)).fetchone())
+            connection.commit()
+        return {'record':result}
 
     def set_deleted(self, selection, deleted):
         if not isinstance(selection, list) or not selection or len(selection) > MAX_RECORDS or type(deleted) is not bool:

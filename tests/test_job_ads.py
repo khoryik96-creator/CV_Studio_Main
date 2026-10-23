@@ -42,6 +42,20 @@ def test_structured_job_fields_are_grounded_and_contacts_are_never_filled():
     assert value['description_rich'][1]['tag'] == 'ul'
 
 
+def test_public_metadata_can_retain_matching_richer_visible_description():
+    posting = {**POSTING, 'description':'Build partnerships. Manage reporting.'}
+    body = html(posting).replace(b'</body>', b'<div class="description__text"><p><strong>Build partnerships.</strong></p><ol><li>Manage reporting.</li></ol></div></body>')
+    value = parse_public_job(body, URL)
+    assert value['description'] == posting['description']
+    assert value['description_rich'][0]['children'][0]['tag'] == 'strong'
+    assert value['description_rich'][1]['tag'] == 'ol'
+    mismatch = parse_public_job(body.replace(b'<strong>Build partnerships.</strong>', b'<strong>Different duties.</strong>'), URL)
+    assert not any(node.get('tag') == 'ol' for node in mismatch['description_rich'])
+    assert mismatch['description'] == value['description']
+    oversized = body.replace(b'class="description__text"', b'class="description__text" data-layout="'+b'x'*80000+b'"')
+    assert parse_public_job(oversized, URL)['description'] == value['description'], 'oversized optional DOM markup cannot break otherwise valid metadata'
+
+
 @pytest.mark.parametrize('value,expected', [
     ('2026-10-02','2026-10-02'), ('2026-10-02T00:15:00+08:00','2026-10-02'),
     ('2026-10-02T23:30:00-04:00','2026-10-02'), ('2026-10-02T12:30:00.123Z','2026-10-02'),

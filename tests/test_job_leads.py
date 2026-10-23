@@ -208,6 +208,23 @@ def test_route_cross_site_and_oversized_requests_blocked(module):
     assert not module._JOB_LEADS.path.exists()
 
 
+def test_hr_results_route_keeps_guards_no_paid_call_and_revision_contract(module):
+    from test_job_leads_hr import SEARCH
+    client = module.app.test_client()
+    headers = {'X-CV-Studio-Request':'1'}
+    row = client.post('/job-leads',json={'action':'save','record':{**RECORD,'company':'Example Company'}},headers=headers).json['record']
+    body = {'action':'save_hr','id':row['id'],'revision':row['revision'],'search':SEARCH}
+    with mock.patch.object(module._AI_PROVIDER_CLIENT,'request') as provider:
+        assert client.post('/job-leads',json=body,headers={'Origin':'https://attacker.invalid'}).status_code == 403
+        saved = client.post('/job-leads',json=body,headers=headers)
+        assert saved.status_code == 200 and saved.json['record']['hr']['country'] == 'Malaysia'
+        assert 'no-store' in saved.headers['Cache-Control']
+        conflict = client.post('/job-leads',json=body,headers=headers)
+        assert conflict.status_code == 409 and conflict.json['request_id']
+        assert client.get('/job-leads').json['records'][0]['notes'] == RECORD['notes']
+        provider.assert_not_called()
+
+
 def test_route_storage_failure_visible_without_private_path(module):
     module._JOB_LEADS.path.write_bytes(b'corrupt')
     reply = module.app.test_client().get('/job-leads')
