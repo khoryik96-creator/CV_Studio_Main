@@ -147,6 +147,20 @@
     document.addEventListener('visibilitychange',() => { if(!document.hidden){catalogAttempted=false;schedule();} }); scan(); return;
   }
   if (location.pathname !== '/' || window.top !== window) return;
+  // The verified worker binding is renewed for each page document. The
+  // extension being enabled is enough; no repeated toolbar toggle is needed.
+  let connecting;
+  const connect = () => {
+    if (!connecting) connecting = new Promise(resolve => {
+      try { chrome.runtime.sendMessage({kind:'sourcer',action:'connect'},reply=>{
+        resolve(chrome.runtime.lastError ? {error:'Refresh CV Studio after updating the companion.'} : reply);
+      }); }
+      catch { resolve({error:'Refresh CV Studio after updating the companion.'}); }
+    }).finally(()=>{connecting=null;});
+    return connecting;
+  };
+  connect();
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)connect();});
   const captures = new Map();
   chrome.runtime.onMessage.addListener((message,sender,reply) => {
     if (sender.id !== chrome.runtime.id || message?.type !== 'CVSTUDIO_JOB_CAPTURE' || !/^[a-f0-9]{32}$/.test(message.id || '')) return false;
@@ -174,10 +188,13 @@
     if (event.source !== window || event.origin !== location.origin || !message ||
         message.type !== 'CVSTUDIO_LINKEDIN_REQUEST' || !/^[a-f0-9]{32}$/.test(message.channel || '') ||
         !/^[a-f0-9]{32}$/.test(message.id || '')) return;
-    chrome.runtime.sendMessage({kind: 'sourcer', action: message.action, args: message.args}, reply => {
+    connect().then(connection=>{
+      const respond=reply=>window.postMessage({type:'CVSTUDIO_LINKEDIN_RESPONSE',channel:message.channel,id:message.id,...reply},location.origin);
+      if(connection?.error){respond({error:connection.error});return;}
+      try { chrome.runtime.sendMessage({kind: 'sourcer', action: message.action, args: message.args}, reply => {
       const error = chrome.runtime.lastError;
-      window.postMessage({type: 'CVSTUDIO_LINKEDIN_RESPONSE', channel: message.channel, id: message.id,
-                          ...(error ? {error: 'Reconnect the browser companion from its toolbar icon.'} : reply)}, location.origin);
+      respond(error ? {error:'Refresh CV Studio after updating the companion.'} : reply);
+      }); } catch {respond({error:'Refresh CV Studio after updating the companion.'});}
     });
   });
 })();

@@ -20,7 +20,7 @@ async function fixture(linkedin,layout='flex',options={}){
   document.querySelectorAll=selector=>selector==='[data-cvstudio-job-folder]'?document.body.querySelectorAll('select'):[];
   const location={origin:linkedin?'https://www.linkedin.com':'http://127.0.0.1:5000',pathname:linkedin?'/jobs/search-results/':'/'};
   const window={addEventListener:(name,fn)=>events[name]=fn,postMessage:message=>state.delivered.push(message)};window.top=window;
-  const chrome={runtime:{id:'extension-id',lastError:null,onMessage:{addListener:fn=>state.onRuntime=fn},sendMessage:(message,reply)=>{state.messages.push(message);state.reply=reply;if(message.operation==='folders'&&!state.manualFolders&&!options.hold)reply(options.fail?{error:'Synthetic folder connection failure'}:{result:{ok:true,saved:false,folder:'Priority',folders:['Priority']}})}}};
+  const chrome={runtime:{id:'extension-id',lastError:null,onMessage:{addListener:fn=>state.onRuntime=fn},sendMessage:(message,reply)=>{state.messages.push(message);state.reply=reply;if(message.action==='connect')reply({result:{connected:true}});else if(message.operation==='folders'&&!state.manualFolders&&!options.hold)reply(options.fail?{error:'Synthetic folder connection failure'}:{result:{ok:true,saved:false,folder:'Priority',folders:['Priority']}})}}};
   state.targets=[{element:card,url:'https://www.linkedin.com/jobs/view/1234567890'}];
   const context=vm.createContext({window,document,location,chrome,Map,Set,MutationObserver:class{constructor(fn){state.observer=fn}observe(){}},
     setTimeout:fn=>{const id=++state.sequence;state.timers.set(id,fn);return id},clearTimeout:id=>state.timers.delete(id),
@@ -96,6 +96,8 @@ assert(secondSelect.children.some(option=>option.value==='Back from CV Studio'))
 work=select.events.focus({isTrusted:true});li.state.reply({result:{ok:true,saved:false,folders:[],folder:''}});await work;
 assert.deepEqual(secondSelect.children.map(option=>option.value),['']);assert.equal(secondSelect.disabled,false,'an empty authoritative catalog still offers Unfiled');
 const app=await fixture(false),message={type:'CVSTUDIO_JOB_CAPTURE',id:'b'.repeat(32),record:{url:'https://www.linkedin.com/jobs/view/1234567890'}};
+assert.equal(app.state.messages[0].action,'connect','the app document connects on load');
+app.events.visibilitychange();await new Promise(resolve=>setImmediate(resolve));assert.equal(app.state.messages.at(-1).action,'connect','returning to the app renews its binding');
 let replied;
 assert.equal(app.state.onRuntime(message,{id:'foreign-extension'},()=>{throw Error('Foreign sender replied')}),false);
 assert.equal(app.state.onRuntime(message,{id:'extension-id'},result=>replied=result),true);

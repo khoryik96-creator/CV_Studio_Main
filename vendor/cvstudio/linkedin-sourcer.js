@@ -11,7 +11,37 @@
     for (const name of ['Brief', 'Mode', 'Pages', 'Calls', 'Source', 'OpenSearch', 'Consent', 'Refresh']) el(name).disabled = busy;
     el('Limits').textContent = `Up to ${el('Pages').value} pages · ${el('Calls').value} API requests.`;
   }
-  const connectionHelp = 'Open this CV Studio page in Chrome or Brave, click the companion toolbar icon, then try again. Reconnect after refreshing CV Studio.';
+  const connectionHelp = 'Open this CV Studio page in Chrome or Brave with the companion enabled. It connects automatically. Use Set up companion if needed.';
+  async function companionSetup() {
+    const response=await fetch('/linkedin-sourcer?action=companion_setup',{cache:'no-store'});
+    const setup=await response.json();
+    if (!response.ok || typeof setup.folder !== 'string' || !/^\d+\.\d+\.\d+$/.test(setup.version || '')) throw Error('Companion setup could not be read. Update and restart CV Studio.');
+    return setup;
+  }
+  const companionNote = button => button.parentElement.querySelector('[data-companion-status]');
+  window.copyLinkedinCompanionFolder = async function(button) {
+    const note=companionNote(button);button.disabled=true;
+    try {
+      const setup=await companionSetup();
+      // Always show a selectable path as well as attempting clipboard copy.
+      // Embedded previews and older browsers may not provide Clipboard access.
+      note.textContent=setup.folder;
+      try { await navigator.clipboard.writeText(setup.folder);note.textContent='Folder copied: '+setup.folder; } catch {}
+    } catch(error) { note.textContent=error.message; }
+    finally { button.disabled=false; }
+  };
+  window.reloadLinkedinCompanion = async function(button) {
+    const note=companionNote(button);button.disabled=true;note.textContent='Checking companion…';
+    try {
+      if(busy)throw Error('Stop the current search before updating the companion.');
+      const setup=await companionSetup();
+      const status=await rpc('jobStatus');
+      if(status?.companion_update_revision!==1)throw Error('Use Set up companion once to replace the old downloaded copy with the CV Studio folder.');
+      const result=await rpc('reloadCompanion',{version:setup.version});
+      note.textContent=result?.current ? 'Your companion is up to date.' : result?.reloading ? 'Companion is reloading. Refresh CV Studio and LinkedIn when ready.' : 'Set up companion once using the CV Studio folder below.';
+    } catch(error) { note.textContent=error.message; }
+    finally { button.disabled=false; }
+  };
   function rpc(action, args = {}, waitMs = 12000) {
     return new Promise((resolve, reject) => {
       const id = hex();

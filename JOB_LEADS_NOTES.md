@@ -4,6 +4,20 @@ Current version is the repository-root `VERSION`. This owner-requested module
 tracks LinkedIn job ads for business development, separately from the candidate
 sourcer and the locked historical Lead Finder.
 
+## Companion connection and updates (v24.6.480)
+
+The enabled companion connects automatically when the verified CV Studio tab
+loads or is revisited. The toolbar remains a manual recovery option. Active
+worker runs/captures and document ownership remain protected; automatic connection
+does not start searches, writes, profile reads or paid requests.
+
+Find job ads includes **Apply companion update** and a collapsed **Set up
+companion once**. Load the bundled folder copied from the normal installation
+once, with Developer mode kept on. Update & Restart then updates those files;
+the in-app action reloads the matching local bundle while idle. Old downloaded
+copies require this one-time migration or continued manual ZIP updates. The
+action leaves page refresh to the user, preserving unsaved drafts.
+
 ## HR completeness at the result ceiling (v24.6.479)
 
 The 100-person cap applies to unique canonical profile links. If a final-page

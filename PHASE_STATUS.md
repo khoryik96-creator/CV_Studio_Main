@@ -4,6 +4,20 @@
 
 ## Release state
 
+- v24.6.480 adds owner-requested automatic companion connection and bundled-folder
+  setup with an in-app apply-update action. Exact document verification,
+  active-run/capture protection and all explicit search/write/paid gates remain.
+  A one-time Load unpacked from the normal installation replaces repeat ZIP
+  downloads; Developer mode must remain on. No forced page refresh, browser
+  profile edit, new permission, route or storage-schema change. Local branch
+  `codex/v24.6.480-companion-easy-updates` from merged master `065e75e`.
+  Full isolated Windows Python: 1,777 passed, four skipped, 8,392 subtests;
+  all 47 JavaScript suites and source/native preflight plus 24 smoke assertions
+  passed. Isolated Chromium verified automatic connection, page-refresh recovery
+  and applying an on-disk bundle update without forcing draft loss. No owner
+  browser installation/state change, paid call, PR or merge in this task.
+  See `cv_studio_v24_6_480_companion_connection_updates_qa_report.md`.
+
 - v24.6.479 corrects PR #238's capped-final-page completeness finding. Any
   unique matches omitted by the 100-person ceiling keep saved evidence and the
   completion message limited; exactly-full or duplicate-only final pages keep

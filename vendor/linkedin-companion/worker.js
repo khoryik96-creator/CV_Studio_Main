@@ -2,7 +2,7 @@ let connection = null, owned = new Map(), nextCount = 0, profileCount = 0, jobCa
 const SESSION_KEY = 'cvstudioLinkedinSessionV1';
 // Chrome session memory survives worker suspension, but not browser/extension
 // restarts. Never store credentials, captured content or provider requests here.
-let stateFailed = false, writes = Promise.resolve();
+let stateFailed = false, writes = Promise.resolve(), connections = Promise.resolve(), reloading = false;
 function local(value) {
   try { const u = new URL(value); return u.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(u.hostname) && u.pathname === '/'; }
   catch { return false; }
@@ -206,10 +206,38 @@ async function closeHROwnedTabs() {
   // ownership/current-or-pending URL checks still protect user-taken-over tabs.
   for (const [id, expected] of [...owned]) await closeOwned(id,expected);
 }
+function connectApp(sender) {
+  const connect = async () => {
+    if (stateFailed || reloading || sender.id !== chrome.runtime.id || sender.frameId !== 0 || !sender.documentId || !local(sender.url)) throw safeError('Open CV Studio in this browser to connect the companion.');
+    const tab = await chrome.tabs.get(sender.tab?.id);
+    if (tab.status !== 'complete' || tab.pendingUrl || tab.url !== sender.url) throw safeError('Wait for CV Studio to finish loading.');
+    if (connection?.tabId === tab.id && connection.documentId === sender.documentId) return;
+    const previous = connection;
+    if (previous?.run || jobCapture || previous && !tab.active) throw safeError('Finish the companion action in the other CV Studio tab first.');
+    const [probe] = await chrome.scripting.executeScript({target:{tabId:tab.id,documentIds:[sender.documentId]},
+      func:()=>!!document.getElementById('viewLinkedinSourcer') && !!document.getElementById('tabLinkedinSourcer')});
+    if (!probe?.result || probe.documentId !== sender.documentId) throw safeError('This page is not CV Studio.');
+    if (connection !== previous || previous?.run || jobCapture) throw safeError('The companion is busy. Try again after it finishes.');
+    // A new binding grants no old run authority. Automatic connection never
+    // starts searches, repeats browser mutations or confirms provider spending.
+    connection = null;
+    for (const [id, expected] of [...owned]) await closeOwned(id,expected);
+    const current=await chrome.tabs.get(tab.id);
+    if (connection || current.status !== 'complete' || current.pendingUrl || current.url !== sender.url) throw safeError('CV Studio changed while connecting. Refresh its tab.');
+    const [confirmed]=await chrome.scripting.executeScript({target:{tabId:tab.id,documentIds:[sender.documentId]},
+      func:()=>!!document.getElementById('viewLinkedinSourcer') && !!document.getElementById('tabLinkedinSourcer')});
+    if (connection || !confirmed?.result || confirmed.documentId !== sender.documentId) throw safeError('CV Studio changed while connecting. Refresh its tab.');
+    connection = {tabId:tab.id,documentId:sender.documentId,url:tab.url,allowed:new Set()};
+    nextCount=0;profileCount=0;
+    await persist();await chrome.action.setBadgeText({text:'ON'});
+  };
+  const result=connections.catch(()=>{}).then(connect);
+  connections=result;return result;
+}
 chrome.action.onClicked.addListener(async tab => {
   try {
     await ready; await writes.catch(() => {});
-    if (!local(tab.url)) { await chrome.action.setBadgeText({text: 'APP'}); return; }
+    if (!local(tab.url)) { await chrome.action.setBadgeText({text: connection ? 'ON' : ''}); return; }
     const [{result, documentId}] = await chrome.scripting.executeScript({target: {tabId: tab.id},
       func: () => !!document.getElementById('viewLinkedinSourcer') && !!document.getElementById('tabLinkedinSourcer')});
     if (!result || !documentId) { await chrome.action.setBadgeText({text: 'APP'}); return; }
@@ -269,7 +297,7 @@ async function pickJob(message, sender) {
   if (!['add','remove','folders','create_folder'].includes(operation) || message.folder !== undefined &&
       (typeof message.folder !== 'string' || message.folder.length > 80 || /[\x00-\x1f]/.test(message.folder))) throw safeError('Choose a valid folder or job-ad action.');
   if (operation === 'create_folder' && (typeof message.folder !== 'string' || !message.folder.trim())) throw safeError('Enter a folder name.');
-  if (stateFailed || !bound) throw safeError('Open Job Leads in CV Studio and connect its companion toolbar icon first.');
+  if (stateFailed || !bound) throw safeError('Open Job Leads in CV Studio in this browser. The companion connects automatically.');
   if (!expected || expected !== message.url || sender.frameId !== 0 || !sender.documentId || !Number.isInteger(sender.tab?.id) ||
       !(jobSearchKey(sender.url) || jobURL(sender.url))) throw safeError('Choose a visible LinkedIn job ad.');
   const foldersOnly = operation === 'folders';
@@ -308,11 +336,29 @@ async function pickJob(message, sender) {
 }
 async function handle(message, sender) {
   await ready;
+  if (message.action === 'connect') {
+    await connectApp(sender);
+    return {connected:true,version:chrome.runtime.getManifest().version};
+  }
   if (stateFailed || !connection || sender.tab?.id !== connection.tabId || sender.documentId !== connection.documentId || !local(sender.url)) {
     throw Error('In Chrome, open CV Studio and click the companion toolbar icon to connect this tab.');
   }
   const args = message.args || {};
-  if (message.action === 'jobStatus') return {connected:true,job_read:true,job_search:true,job_search_revision:1,company_hr_revision:1,hr_joined_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
+  if (reloading && message.action !== 'jobStatus') throw safeError('The companion is updating. Refresh CV Studio and LinkedIn when ready.');
+  if (message.action === 'reloadCompanion') {
+    if (connection.run || jobCapture || owned.size) throw safeError('Finish or stop the current companion action before updating.');
+    if (!/^\d+\.\d+\.\d+$/.test(args.version || '')) throw safeError('Refresh CV Studio and try the companion update again.');
+    const bound=connection;
+    const response=await fetch(chrome.runtime.getURL('manifest.json'),{cache:'no-store'});
+    const installed=await response.json();
+    if (!response.ok || installed.manifest_version !== 3 || installed.name !== 'CV Studio LinkedIn Companion' || installed.version !== args.version) throw safeError('Use Set up companion once and select the CV Studio folder. This downloaded copy is not updated with the app.');
+    live(bound);
+    if (bound.run || jobCapture || owned.size) throw safeError('Finish or stop the current companion action before updating.');
+    if (chrome.runtime.getManifest().version === args.version) return {current:true};
+    if (!reloading) { reloading=true;setTimeout(()=>chrome.runtime.reload(),100); }
+    return {reloading:true};
+  }
+  if (message.action === 'jobStatus') return {connected:true,job_read:true,job_search:true,job_search_revision:1,company_hr_revision:1,hr_joined_revision:1,companion_update_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
   if (message.action === 'hrBegin') {
     const bound = connection;
     if (!/^[a-f0-9]{32}$/.test(args.run_id || '') || !hrCompanyURL(args.company_url) || typeof args.company !== 'string' || !args.company.trim() || args.company.length > 200 ||

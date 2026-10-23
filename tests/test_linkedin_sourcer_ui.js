@@ -22,6 +22,8 @@ function fixture(reuse=true){
     const reply=(result,error)=>events.message({source:window,origin:location.origin,data:{type:'CVSTUDIO_LINKEDIN_RESPONSE',channel:message.channel,id:message.id,...(error?{error}:{result})}});
     if(!state.connected)return reply(null,'The browser action stopped. Reconnect the companion or check the LinkedIn page.');
     if(message.action==='tabs'){if(state.hold){state.held=()=>reply(state.tabs);return}return reply(state.tabs)}
+    if(message.action==='reloadCompanion')return reply(state.reloadResult||{current:true});
+    if(message.action==='jobStatus')return reply({connected:true,companion_update_revision:state.oldUpdateCompanion?0:1});
     if(message.action==='openPeopleSearch'){
       if(state.oldCompanion)return reply(null,'Unsupported browser action.');
       const tab={...people,id:20+(++state.opened),url:'https://www.linkedin.com/search/results/people/',title:'New People search'};
@@ -43,14 +45,15 @@ function fixture(reuse=true){
     sessionStorage:{getItem:()=>saved,setItem:()=>{}},crypto:{randomUUID:()=>String(++serial).padStart(32,'0')},
     setTimeout:(fn,ms)=>setTimeout(fn,[500,1000,1500,2000].includes(ms)?0:ms),clearTimeout,AbortController,URL,URLSearchParams,Blob,
     markTabRunning:()=>1,finishTabRun:()=>{},responseHasPaidUsage:()=>false,
-    fetch:async(url,options)=>{assert.equal(url,'/linkedin-sourcer');const body=options?.body?JSON.parse(options.body):null;if(body)requests.push(body);
+    navigator:{clipboard:{writeText:async text=>{if(state.clipboardFail)throw Error('Unavailable');state.copied=text;}}},
+    fetch:async(url,options)=>{if(url==='/linkedin-sourcer?action=companion_setup')return {ok:true,json:async()=>({folder:'Bundled companion folder',version:'24.6.480'})};assert.equal(url,'/linkedin-sourcer');const body=options?.body?JSON.parse(options.body):null;if(body)requests.push(body);
       if(!body)return {ok:true,json:async()=>({configured:true,run:null})};
       if(body.action==='start'&&state.failStart)return {ok:false,json:async()=>({error:'Synthetic start rejected'})};
       if(body.action==='stop')run.stopped=true;
       return {ok:true,json:async()=>({run:{...run},...(body.action==='plan'?{plan:{query:'SAP'}}:{}),...(body.action==='review'?{candidates:[candidate]}:{})})};}
   });
   for(const file of ['linkedin-sourcer-core.js','linkedin-sourcer.js']){vm.runInContext(fs.readFileSync(path.join(__dirname,'../vendor/cvstudio',file),'utf8'),context);context.CVLinkedinCore=window.CVLinkedinCore;}
-  return {el,state,calls,requests,init:async()=>{await window.initLinkedinSourcer();await new Promise(resolve=>setTimeout(resolve,0))},
+  return {el,state,calls,requests,copy:window.copyLinkedinCompanionFolder,reload:window.reloadLinkedinCompanion,init:async()=>{await window.initLinkedinSourcer();await new Promise(resolve=>setTimeout(resolve,0))},
     start:()=>window.startLinkedinSourcer(),stop:()=>window.stopLinkedinSourcer()};
 }
 (async()=>{
@@ -73,7 +76,13 @@ function fixture(reuse=true){
   const missing=fixture();missing.state.tabs=[];await missing.init();missing.el('Brief').value='SAP finance';missing.el('Consent').checked=true;await missing.start();
   assert.equal(missing.requests.length,0);assert.equal(missing.el('Count').textContent,1,'missing tabs preserve the previous list');assert(missing.el('Options').open);
   const disconnected=fixture();disconnected.state.connected=false;await disconnected.init();disconnected.el('Brief').value='SAP finance';disconnected.el('Consent').checked=true;await disconnected.start();
-  assert.equal(disconnected.requests.length,0);assert.equal(disconnected.el('Count').textContent,1);assert(disconnected.el('Setup').open);assert.match(disconnected.el('Connection').textContent,/toolbar icon/);
+  assert.equal(disconnected.requests.length,0);assert.equal(disconnected.el('Count').textContent,1);assert(disconnected.el('Setup').open);assert.match(disconnected.el('Connection').textContent,/connects automatically/);
+  const setup=fixture(),note=new Element(),button={disabled:false,parentElement:{querySelector:()=>note}};
+  await setup.copy(button);assert.equal(setup.state.copied,'Bundled companion folder');assert.match(note.textContent,/Folder copied/);assert.equal(button.disabled,false);
+  setup.state.clipboardFail=true;await setup.copy(button);assert.equal(note.textContent,'Bundled companion folder','clipboard denial retains a selectable setup path');
+  await setup.reload(button);assert.match(note.textContent,/up to date/);assert.equal(setup.calls.at(-1).action,'reloadCompanion');assert.equal(setup.requests.length,0,'setup never starts paid work');
+  setup.state.reloadResult={reloading:true};await setup.reload(button);assert.match(note.textContent,/reloading.*Refresh/);
+  setup.state.oldUpdateCompanion=true;const reloads=setup.calls.filter(c=>c.action==='reloadCompanion').length;await setup.reload(button);assert.match(note.textContent,/Set up companion once/);assert.equal(setup.calls.filter(c=>c.action==='reloadCompanion').length,reloads,'legacy extensions receive migration guidance without an unsupported reload');
   const chosen=fixture();chosen.state.tabs=[people,{...people,id:4,title:'Older filtered search',lastAccessed:1}];await chosen.init();chosen.el('Source').value='4';chosen.el('Mode').value='standard';await chosen.el('Source').change();
   chosen.el('Brief').value='SAP finance';chosen.el('Consent').checked=true;await chosen.start();assert.equal(chosen.calls.find(call=>call.action==='begin').args.source_tab_id,4,'a manual source selection is retained');
   const rejected=fixture();await rejected.init();rejected.state.failStart=true;rejected.el('Brief').value='SAP finance';rejected.el('Consent').checked=true;await rejected.start();assert.equal(rejected.el('Count').textContent,1);assert.match(rejected.el('Status').textContent,/Synthetic start rejected/);

@@ -106,6 +106,14 @@ class RouteTests(unittest.TestCase):
             self.assertEqual({Path(name).name for name in archive.namelist()},{'manifest.json','worker.js','content.js','reader.js'})
             manifest=json.loads(archive.read('CV-Studio-LinkedIn-Companion/manifest.json'))
             self.assertNotIn('https://api.deepseek.com/*',manifest['host_permissions'])
+    def test_companion_setup_uses_bundled_folder_and_current_version(self):
+        response=self.client.get('/linkedin-sourcer?action=companion_setup')
+        self.assertEqual(response.status_code,200)
+        self.assertTrue(response.cache_control.no_store)
+        folder=Path(response.json['folder'])
+        self.assertEqual(folder,Path(self.module.__file__).resolve().parent/'vendor'/'linkedin-companion')
+        self.assertEqual(response.json['version'],(folder.parents[1]/'VERSION').read_text().strip())
+        self.assertTrue((folder/'manifest.json').is_file())
     def test_paid_tools_use_central_guard_and_keep_usage(self):
         response=self.post(action='start',brief='Finance managers with SAP',mode='standard',max_pages=1,max_calls=3,confirm_paid=True)
         run=response.json['run']['id']

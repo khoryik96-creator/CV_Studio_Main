@@ -8,13 +8,24 @@ reference, and is not imported by the main app.
 ## User workflow
 
 1. Open **LinkedIn Sourcer** in CV Studio.
-2. Expand **Browser connection help**, download/extract its ZIP, and
-   load the extracted folder through Chrome's **Load unpacked** control.
-3. Open CV Studio in Chrome and click the companion toolbar icon to connect that
-   specific app document. Ordinary service-worker suspension retains that binding
-   and run limits after exact-document revalidation. Reloading CV Studio,
-   restarting Chrome, or reloading/updating the extension requires reconnecting.
-   No additional API key, pairing code or POC server is needed.
+2. In the normal installed CV Studio address, expand **Set up companion / updates**
+   and **Copy setup folder**. Remove any old downloaded companion, then use
+   Chrome/Brave's **Load unpacked** with that bundled folder. Keep Developer mode
+   on. The ZIP remains available for installations requiring manual file updates.
+3. The enabled companion connects automatically to a verified CV Studio document
+   on load, return to the tab, and before browser RPCs. Page refresh/browser
+   restart needs no toolbar click. Worker suspension retains an exact live
+   document's binding and limits. A replacement document gets no previous run
+   authority; active worker runs/captures cannot be stolen by another app tab,
+   and a background tab cannot replace an idle binding. The toolbar remains an
+   explicit manual connection/recovery option. Search, write and DeepSeek consent
+   gates remain explicit. No additional API key, pairing code or POC server is
+   needed. After normal **Update & Restart**, **Apply companion update** reloads
+   matching files already updated in the bundled folder. It reads only its own
+   local manifest, refuses active work, and never downloads or evaluates remote
+   code. Refresh CV Studio and LinkedIn when ready; drafts are not forcibly
+   reloaded. Legacy downloaded copies receive one-time setup guidance. Setup
+   must use the normal installation's folder, rather than a development preview.
 4. By default, **Start search opens a fresh LinkedIn People search every time**,
    then uses the generated keywords from the brief. No LinkedIn tab needs to be
    opened first. The source stays open for the user and existing tabs are kept.
