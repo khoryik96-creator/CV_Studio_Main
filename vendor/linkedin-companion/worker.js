@@ -52,16 +52,18 @@ function hrSearchKey(value) {
     url.searchParams.sort(); return url.href;
   } catch { return ''; }
 }
+const HR_LOADING = Symbol('HR pre-action loading');
 async function hrScript(bound, run, method, values) {
   live(bound,run);
   const expected = bound.hr.stage === 'company' ? bound.hr.company_url+'people/' : bound.hr.key;
   const check = async () => {
     live(bound,run); const tab = await chrome.tabs.get(bound.source);
-    if (tab.status !== 'complete' || (expected.endsWith('/people/') && expected.includes('/company/') ? tab.url !== expected : hrSearchKey(tab.url) !== expected) || tab.pendingUrl && hrSearchKey(tab.pendingUrl) !== hrSearchKey(tab.url)) throw safeError('The HR search changed. Start again from the saved ad.');
+    if ((expected === bound.hr.company_url+'people/' ? tab.url !== expected : hrSearchKey(tab.url) !== expected) || tab.pendingUrl && tab.pendingUrl !== expected && hrSearchKey(tab.pendingUrl) !== expected) throw safeError('The HR search changed. Start again from the saved ad.');
+    return tab.status === 'complete';
   };
-  await check();
+  if (!await check()) return HR_LOADING;
   await jobScript({target:{tabId:bound.source},files:['reader.js']},jobReaderStartError);
-  await check();
+  if (!await check()) return HR_LOADING;
   const [injection] = await jobScript({target:{tabId:bound.source},func:(method,values)=>{
     try { return globalThis.SourcerReader[method](...values); }
     catch(error) { return {hrError:/sign in|verification|restriction/i.test(String(error?.message)) ? 'access' : 'layout'}; }
@@ -76,6 +78,9 @@ async function hrMutation(bound, run, method, values, nextStage) {
   // it never repeats a possibly completed browser action.
   bound.hr.stage = 'interrupted'; await persist(); live(bound,run);
   const result = await hrScript(bound,run,method,values);
+  // This sentinel is produced only before invoking the reader action. Unlike
+  // a missing/invalid action result, it proves that no click needs replaying.
+  if (result === HR_LOADING) { bound.hr.stage=before; await persist(); return HR_LOADING; }
   if (typeof result !== 'boolean') throw safeError('The HR browser action was interrupted. Start a new scan.');
   bound.hr.stage = result ? nextStage : before; await persist(); return result;
 }
@@ -148,7 +153,7 @@ async function restore() {
       bound.kind === 'jobs' && (!jobSearchKey(bound.jobKey) || !Number.isFinite(bound.jobStarted) || !Number.isInteger(bound.jobScrolls) || bound.jobScrolls < 0 || bound.jobScrolls > 120 ||
         bound.jobInitial && (bound.jobInitial !== true || typeof bound.jobLocation !== 'string' || bound.jobLocation.length > 160)) ||
       bound.kind === 'hr' && (!bound.hr || !hrCompanyURL(bound.hr.company_url) || typeof bound.hr.company !== 'string' || bound.hr.company.length > 200 || typeof bound.hr.country !== 'string' || bound.hr.country.length > 100 ||
-        typeof bound.hr.keywords !== 'string' || bound.hr.keywords.length > 600 || !Number.isFinite(bound.hr.started) || !['company','search','type','pick','apply','country_wait','ready','interrupted'].includes(bound.hr.stage) ||
+        typeof bound.hr.keywords !== 'string' || bound.hr.keywords.length > 600 || !Number.isFinite(bound.hr.started) || !['company','search_wait','search','type','pick','apply','country_wait','ready','interrupted'].includes(bound.hr.stage) ||
         bound.hr.joined_count !== undefined && (!Number.isInteger(bound.hr.joined_count) || bound.hr.joined_count < 0 || bound.hr.joined_count > 100) ||
         bound.hr.joining && (!/^https:\/\/www\.linkedin\.com\/in\/[A-Za-z0-9_%~-]+$/.test(bound.hr.joining.url || '') || bound.hr.joining.tab_id !== null && !Number.isInteger(bound.hr.joining.tab_id) ||
           bound.hr.joining.scrolls !== undefined && (!Number.isInteger(bound.hr.joining.scrolls) || bound.hr.joining.scrolls < 0 || bound.hr.joining.scrolls > 4)) ||
@@ -603,11 +608,13 @@ async function handle(message, sender) {
     if (message.action === 'hrNext') {
       if (hr.stage !== 'ready' || typeof args.signature !== 'string' || !args.signature || args.signature.length > 17000) throw safeError('Read the HR results before paging.');
       nextCount++; await persist(); if (nextCount >= bound.pages) throw safeError('The HR page limit was reached.');
-      return hrMutation(bound,run,'nextHRSearch',[args.signature,hr.company,hr.country,hr.keywords],'ready');
+      const result=await hrMutation(bound,run,'nextHRSearch',[args.signature,hr.company,hr.country,hr.keywords],'ready');
+      if (result === HR_LOADING) { nextCount--; await persist(); return {loading:true}; }
+      return result;
     }
     if (hr.stage === 'company') {
       const result = await hrScript(bound,run,'readHRCompany',[hr.company_url,hr.company]);
-      if (result?.loading || result == null) return {loading:true};
+      if (result === HR_LOADING || result?.loading || result == null) return {loading:true};
       if (!/^[0-9]{1,24}$/.test(result.company_id || '')) throw safeError('The company employee link could not be confirmed.');
       hr.company_id = result.company_id;
       const url = new URL('https://www.linkedin.com/search/results/people/');
@@ -615,7 +622,15 @@ async function handle(message, sender) {
       url.searchParams.set('keywords',hr.keywords.split(',').map(x=>x.trim()).filter(Boolean).map(x=>'"'+x.replaceAll('"','')+'"').join(' OR '));
       hr.key = hrSearchKey(url.href); hr.stage='interrupted'; await persist(); live(bound,run);
       if (hr.key.length > 2048) throw safeError('Shorten the HR keywords before starting a new scan.');
-      await chrome.tabs.update(bound.source,{url:hr.key}); live(bound,run); hr.stage='search'; await persist(); return {loading:true};
+      await chrome.tabs.update(bound.source,{url:hr.key}); live(bound,run); hr.stage='search_wait'; await persist(); return {loading:true};
+    }
+    if (hr.stage === 'search_wait') {
+      // tabs.update resolves before the old complete document necessarily
+      // commits the requested navigation. Wait only for our exact target;
+      // never read the old company page as People results or navigate again.
+      if (tab.pendingUrl && hrSearchKey(tab.pendingUrl) !== hr.key || tab.url !== hr.company_url+'people/' && hrSearchKey(tab.url) !== hr.key) throw safeError('The HR search changed. Start again from the saved ad.');
+      if (hrSearchKey(tab.url) !== hr.key) return {loading:true};
+      hr.stage='search'; await persist();
     }
     if (hr.stage === 'country_wait') {
       const resolved = new URL(tab.url), expected = new URL(hr.key);
@@ -631,7 +646,7 @@ async function handle(message, sender) {
     if (hr.stage === 'pick') { await hrMutation(bound,run,'hrCountryPick',[hr.country],'apply'); return {loading:true}; }
     if (hr.stage === 'apply') { await hrMutation(bound,run,'hrCountryApply',[hr.country],'country_wait'); return {loading:true}; }
     const result = await hrScript(bound,run,'readHRSearch',[hr.company,hr.country,hr.keywords]);
-    if (result == null || result.loading) return {loading:true};
+    if (result === HR_LOADING || result == null || result.loading) return {loading:true};
     if (!Array.isArray(result.people) || result.people.length > 40 || typeof result.signature !== 'string') throw safeError('The HR results could not be read.');
     if (hrSearchKey((await chrome.tabs.get(bound.source)).url) !== hr.key) throw safeError('The HR search changed during the read.');
     bound.allowed=new Set(result.people.map(person=>person.url).filter(url=>typeof url === 'string' && /^https:\/\/www\.linkedin\.com\/in\/[A-Za-z0-9_%~-]+$/.test(url)));

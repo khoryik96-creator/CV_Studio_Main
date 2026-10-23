@@ -45,6 +45,34 @@ errors receive fixed, redacted guidance rather than a generic disconnect claim.
 After a companion reload, refresh the open CV Studio and LinkedIn pages to
 replace invalidated content scripts. Timeout guidance supports Chrome and Brave.
 
+## HR search transition and modern filter correction (v24.6.485)
+
+After the company employee link is confirmed, the companion persists a
+`search_wait` stage. Chrome can still report the old company document as complete
+after accepting the navigation. That exact old page may wait for the requested
+People search; it cannot supply results, trigger a second navigation or authorize
+a different pending company/search. Once ready, the full company/keyword/country
+search identity remains pinned. Worker suspension retains this waiting state.
+
+A same-search load beginning during reader injection also waits before invoking
+any filter/page action. Only this worker-generated pre-action sentinel permits
+retrying an action; missing/invalid results after invocation remain interrupted
+and never replay. Deferred next-page attempts do not consume the page budget.
+The controller polls explicit paging-loading responses within its existing
+90-attempt ceiling, preserving Stop and avoiding false completion/saving on timeout.
+
+Modern selected company/country inputs can get their names from associated
+visible labels. Country controls also support role-based Locations buttons,
+exact option rows with native buttons and the location popover outside the filter
+toolbar. Unchecked/different company or country labels cannot authorize results;
+partial country suggestions cannot be selected. Result reads prefer the primary
+content region, including its current semantic-section layout.
+
+No route/schema/permission, pairing, scan limit, paid call, saved-ad data or
+joining-date ownership change. Development and QA do not update the normal
+installation. After adoption, apply its companion update and refresh the open
+CV Studio and LinkedIn pages to replace older page scripts.
+
 ## HR completeness at the result ceiling (v24.6.479)
 
 The 100-person cap applies to unique canonical profile links. If a final-page

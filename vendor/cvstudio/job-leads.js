@@ -492,7 +492,14 @@
         hrPeople([...found.values()]);
         if (snapshot.empty || !snapshot.hasNext || found.size >= 100 || pageIndex+1 === pages) break;
         previous=snapshot.signature;
-        if (!await rpc('hrNext',{run_id:hrRun,tab_id:source.tab_id,signature:previous})) break;
+        let advanced=null;
+        for (let attempt=0;attempt<90;attempt++) {
+          checkHR(); advanced=await rpc('hrNext',{run_id:hrRun,tab_id:source.tab_id,signature:previous}); checkHR();
+          if (!advanced?.loading) break;
+          await pauseDiscovery();
+        }
+        if (typeof advanced !== 'boolean') throw Error('LinkedIn did not finish loading the next HR page. Check the search tab and try again.');
+        if (!advanced) break;
       }
       checkHR();
       const complete=!finalSnapshot.hasNext && !omitted;
