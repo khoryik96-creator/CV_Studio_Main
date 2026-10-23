@@ -4,6 +4,16 @@ Current version is the repository-root `VERSION`. This owner-requested module
 tracks LinkedIn job ads for business development, separately from the candidate
 sourcer and the locked historical Lead Finder.
 
+## HR unload cleanup (v24.6.478)
+
+Reloading/closing the app ends its HR run on pagehide and prevents a late read
+from saving. If that final message is lost, the worker also clears the run and
+closes unchanged inactive owned tabs on app navigation/removal or failed
+exact-document restoration. Matching pending profile loads are cleaned too,
+including a tab whose creation completes after the app disconnects. User-taken-
+over/redirected tabs and the retained company search remain untouched. No scan
+or paid operation is restarted during cleanup.
+
 ## Complex-ad plain-text fallback (v24.6.477)
 
 If the optional rich serializer reaches its 4,000-node / 32-level limit, the

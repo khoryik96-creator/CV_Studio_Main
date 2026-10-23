@@ -11,7 +11,7 @@ function fixture(){
     action:{onClicked:{addListener:fn=>hooks.arm=fn},setBadgeText:async()=>{}},
     tabs:{onRemoved:{addListener:fn=>hooks.removed=fn},onUpdated:{addListener:fn=>hooks.updated=fn},onActivated:{addListener:fn=>hooks.activated=fn},
       query:async()=>[...tabs.values()],get:async id=>{if(!tabs.has(id))throw Error('Missing tab');return {...tabs.get(id)}},
-      create:async args=>{state.created.push(args);const tab={...args,id:10+state.created.length,status:'complete'};tabs.set(tab.id,tab);return {...tab}},
+      create:async args=>{state.created.push(args);const tab={...args,id:10+state.created.length,status:'complete'};tabs.set(tab.id,tab);if(state.onCreated)await state.onCreated(tab);return {...tab}},
       remove:async id=>{state.removed.push(id);tabs.delete(id)},update:async(id,args)=>{if(state.onUpdate)return state.onUpdate(id,args);throw Error('Do not navigate existing tabs')}},
     scripting:{executeScript:async args=>{
       if(state.onScript){const response=state.onScript(args);if(response!==undefined)return response;}
@@ -29,7 +29,7 @@ function fixture(){
   const sender=()=>({tab:{id:1},documentId:state.document,url:tabs.get(1).url});
   const rpc=(action,args={},who=sender())=>new Promise(resolve=>hooks.message({kind:'sourcer',action,args},who,resolve));
   const run='b'.repeat(32);
-  return {state,tabs,boot,rpc,run,arm:()=>hooks.arm(tabs.get(1)),begin:(patch={})=>rpc('jobSearchBegin',{run_id:run,query:'finance',location:'Malaysia',max_pages:2,...patch}),
+  return {state,tabs,boot,rpc,run,hooks:()=>hooks,arm:()=>hooks.arm(tabs.get(1)),begin:(patch={})=>rpc('jobSearchBegin',{run_id:run,query:'finance',location:'Malaysia',max_pages:2,...patch}),
     read:(id,method='readJobSearch')=>rpc('read',{run_id:run,tab_id:id,method,values:method==='readJobSearch'?[]:[row.url]}),end:()=>rpc('end',{run_id:run})};
 }
 module.exports={fixture};

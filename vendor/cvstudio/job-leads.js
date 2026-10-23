@@ -817,7 +817,11 @@
       }
       drawDiscovery();
     });
-    window.addEventListener('pagehide',() => { discoveryStopped = true; if (discoveryRun) rpc('end',{run_id:discoveryRun}).catch(() => {}); });
+    window.addEventListener('pagehide',() => {
+      discoveryStopped = true; hrStopped = true;
+      if (discoveryRun) rpc('end',{run_id:discoveryRun}).catch(() => {});
+      if (hrRun) rpc('end',{run_id:hrRun}).catch(() => {});
+    });
     fields.forEach(key => el(key).addEventListener('input', () => {
       dirty = true;
       if (key === 'folder') rememberFolder(el(key).value.trim());

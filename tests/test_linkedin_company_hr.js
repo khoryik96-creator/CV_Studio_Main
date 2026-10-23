@@ -94,5 +94,34 @@ function hrFixture(country=''){
   assert.equal(unreadable.state.profileScrolls,4,'lazy Experience scroll budget persists across suspension');
   assert.equal(unreadable.state.created.length,2,'null/loading reads poll the same owned profile');
   await unreadable.rpc('hrJoinedClose',{run_id:unreadable.run,tab_id:ui});assert(unreadable.state.removed.includes(12));
+  for(const reason of ['navigate','remove','restore_missing','restore_changed'])for(const ownership of ['owned','pending','taken_over','redirected','other_pending']){
+    const cleanup=hrFixture();await cleanup.arm();const source=(await cleanup.beginHR()).result.tab_id;await cleanup.readHR(source);await cleanup.readHR(source);
+    await cleanup.rpc('hrJoined',{run_id:cleanup.run,tab_id:source,url:'https://www.linkedin.com/in/sample'});
+    const profile=cleanup.tabs.get(12);
+    if(ownership==='pending')Object.assign(profile,{url:'about:blank',pendingUrl:'https://www.linkedin.com/in/sample',status:'loading'});
+    if(ownership==='taken_over'){profile.active=true;await cleanup.hooks().activated({tabId:12});profile.active=false;}
+    if(ownership==='redirected'){profile.url='https://www.linkedin.com/in/other';await cleanup.hooks().updated(12,{url:profile.url});}
+    if(ownership==='other_pending')profile.pendingUrl='https://www.linkedin.com/in/other';
+    if(reason==='navigate'){cleanup.tabs.get(1).status='loading';await cleanup.hooks().updated(1,{status:'loading'});}
+    if(reason==='remove'){cleanup.tabs.delete(1);await cleanup.hooks().removed(1);}
+    if(reason==='restore_missing'){cleanup.tabs.delete(1);cleanup.boot();}
+    if(reason==='restore_changed'){cleanup.state.document='replacement';cleanup.boot();}
+    const sender={tab:{id:1},documentId:'bound',url:'http://127.0.0.1:5000/'};
+    assert((await cleanup.rpc('jobStatus',{},sender)).error);
+    const shouldClose=['owned','pending'].includes(ownership);
+    assert.equal(cleanup.state.removed.includes(12),shouldClose,reason+'/'+ownership+' closes only inactive, unchanged HR-owned tabs');
+    assert(cleanup.tabs.has(source),'the company search remains open');
+    assert.equal(cleanup.state.session.cvstudioLinkedinSessionV1.connection,null);
+    assert.equal(cleanup.state.session.cvstudioLinkedinSessionV1.owned.length,0);
+  }
+  const opening=hrFixture();await opening.arm();const os=(await opening.beginHR()).result.tab_id;await opening.readHR(os);await opening.readHR(os);
+  opening.state.onCreated=tab=>new Promise(resolve=>{
+    Object.assign(tab,{url:'about:blank',pendingUrl:'https://www.linkedin.com/in/sample',status:'loading'});
+    opening.state.finishCreate=resolve;
+  });
+  const pending=opening.rpc('hrJoined',{run_id:opening.run,tab_id:os,url:'https://www.linkedin.com/in/sample'});
+  for(let n=0;n<20&&!opening.state.finishCreate;n++)await new Promise(resolve=>setTimeout(resolve,0));
+  assert(opening.state.finishCreate);await opening.hooks().updated(1,{status:'loading'});opening.state.finishCreate();
+  assert((await pending).error);assert(opening.state.removed.includes(12),'a late-created pending tab is cleaned after its HR app document disappears');
   console.log('Company HR worker: exact document/company/country/source, bounded pages, suspension, mutation non-replay, competing runs and retained source passed');
 })().catch(error=>{console.error(error);process.exitCode=1});

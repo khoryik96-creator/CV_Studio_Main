@@ -165,11 +165,15 @@ async function restore() {
     if (bound.kind === 'jobs') Object.assign(connection, {jobKey:bound.jobKey, jobStarted:bound.jobStarted, jobScrolls:bound.jobScrolls,jobInitial:bound.jobInitial === true,jobLocation:bound.jobLocation || ''});
     if (bound.kind === 'hr') connection.hr = {...bound.hr};
     nextCount = saved.nextCount; profileCount = saved.profileCount;
-  } catch { connection = null; await persist(); }
+  } catch {
+    connection = null;
+    if (bound.kind === 'hr') await closeHROwnedTabs();
+    await persist();
+  }
 }
 const ready = restore().catch(() => { stateFailed = true; connection = null; owned.clear(); });
 function event(change) {
-  return ready.then(async () => { if (change()) await persist(); }).catch(() => { stateFailed = true; connection = null; });
+  return ready.then(async () => { if (await change()) await persist(); }).catch(() => { stateFailed = true; connection = null; });
 }
 function live(bound, run) {
   if (stateFailed || connection !== bound || run && bound.run !== run) throw Error('The companion connection changed.');
@@ -193,9 +197,14 @@ async function ownedTab(id) {
 async function closeOwned(id, expected) {
   try {
     const tab = await chrome.tabs.get(id);
-    if (owned.get(id) === expected && !tab.active && sameOwnedPage(tab.url, expected) && (!tab.pendingUrl || sameOwnedPage(tab.pendingUrl, expected))) await chrome.tabs.remove(id);
+    if (owned.get(id) === expected && !tab.active && (sameOwnedPage(tab.url, expected) || expectedLoading(tab, expected)) && (!tab.pendingUrl || sameOwnedPage(tab.pendingUrl, expected))) await chrome.tabs.remove(id);
   } catch {}
   if (owned.get(id) === expected) owned.delete(id);
+}
+async function closeHROwnedTabs() {
+  // The app may already be gone before its pagehide message can arrive. Exact
+  // ownership/current-or-pending URL checks still protect user-taken-over tabs.
+  for (const [id, expected] of [...owned]) await closeOwned(id,expected);
 }
 chrome.action.onClicked.addListener(async tab => {
   try {
@@ -212,10 +221,20 @@ chrome.action.onClicked.addListener(async tab => {
     await persist(); await chrome.action.setBadgeText({text: 'ON'});
   } catch { connection = null; stateFailed = true; await chrome.action.setBadgeText({text:'ERR'}); }
 });
-chrome.tabs.onRemoved.addListener(id => event(() => { const changed = connection?.tabId === id || owned.has(id); if (connection?.tabId === id) connection = null; owned.delete(id); return changed; }));
-chrome.tabs.onUpdated.addListener((id, change) => event(() => {
+chrome.tabs.onRemoved.addListener(id => event(async () => {
+  const appRemoved=connection?.tabId === id, hrRemoved=appRemoved && connection.kind === 'hr';
+  const changed=appRemoved || owned.has(id);
+  if (appRemoved) connection=null;
+  owned.delete(id);
+  if (hrRemoved) await closeHROwnedTabs();
+  return changed;
+}));
+chrome.tabs.onUpdated.addListener((id, change) => event(async () => {
   let changed = false;
-  if (id === connection?.tabId && change.status === 'loading') { connection = null; changed = true; }
+  if (id === connection?.tabId && change.status === 'loading') {
+    const wasHR=connection.kind === 'hr'; connection = null; changed = true;
+    if (wasHR) await closeHROwnedTabs();
+  }
   if (owned.has(id) && change.url && !sameOwnedPage(change.url, owned.get(id))) { owned.delete(id); changed = true; }
   return changed;
 }));

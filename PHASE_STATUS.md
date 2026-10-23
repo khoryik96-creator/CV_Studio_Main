@@ -4,6 +4,16 @@
 
 ## Release state
 
+- v24.6.478 corrects PR #238's automated-review HR unload finding. Pagehide
+  stops the exact HR run; worker app-disconnect and failed-restoration cleanup
+  close only inactive unchanged owned tabs, including matching pending loads.
+  User-taken-over tabs and source searches remain. Existing ad formatting,
+  joining dates, routes/schemas/permissions and provider boundaries remain.
+  Owner-authorized merge remains gated on local and exact-head PR checks.
+  Full isolated Windows Python passed: 1,776 tests, four skipped, 8,392
+  subtests. All 46 JavaScript suites passed after the final cleanup fixtures.
+  See `cv_studio_v24_6_478_hr_unload_cleanup_qa_report.md` and PR #238.
+
 - v24.6.477 corrects the review's complex-ad import regression while retaining
   the v474 company HR feature, v475 rich formatting and v476 joining dates.
   Rich traversal overflow now uses a bounded iterative plain-text capture;

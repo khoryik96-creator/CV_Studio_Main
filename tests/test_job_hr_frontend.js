@@ -7,7 +7,11 @@ function hrFixture(){
   f.state.onRPC=(message,reply)=>{
     const {action,args}=message;
     if(action==='jobStatus'){reply({connected:true,company_hr_revision:f.state.oldCompanion?0:1,hr_joined_revision:1,busy:!!f.state.hrBusy});return true;}
-    if(action==='hrJoined'){reply(f.state.joinedLoading?{loading:true}:{url:args.url,joined:f.state.joined ?? '2020-06'});return true;}
+    if(action==='hrJoined'){
+      const value=f.state.joinedLoading?{loading:true}:{url:args.url,joined:f.state.joined ?? '2020-06'};
+      if(f.state.holdJoined)f.state.releaseJoined=()=>reply(value);else reply(value);
+      return true;
+    }
     if(action==='hrJoinedClose'){reply(true);return true;}
     if(action==='jobFromLink'){reply({...f.state.records[0],company_url:companyURL});return true;}
     if(action==='hrBegin'){f.state.hrArgs=args;reply({tab_id:30});return true;}
@@ -76,5 +80,10 @@ function hrFixture(){
   assert.equal(missing.state.records[0].hr.people[0].joined,'','optional missing Experience does not lose valid HR people');
   assert.equal(missing.calls.filter(x=>x.action==='hrJoined').length,20,'loading lookup has a bounded poll count');
   assert(missing.calls.some(x=>x.action==='hrJoinedClose'));
+  const unloaded=hrFixture();await unloaded.init();unloaded.state.holdJoined=true;
+  const unloading=unloaded.el('HRStart').click();for(let n=0;n<20&&!unloaded.state.releaseJoined;n++)await new Promise(resolve=>setTimeout(resolve,0));
+  assert(unloaded.state.releaseJoined);unloaded.pagehide();
+  assert(unloaded.calls.some(x=>x.action==='end'&&x.args.run_id===unloaded.state.hrArgs.run_id),'pagehide ends the exact active HR run without waiting for a profile read');
+  unloaded.state.releaseJoined();await unloading;assert(!unloaded.requests.some(x=>x.action==='save_hr'),'an unloaded attempt cannot save later');
   console.log('Company HR UI: company-scoped requests, countries, paging/dedup, saved evidence, XSS text, draft preservation, Stop, old/busy companion, invalid profiles and stale-write failures passed');
 })().catch(error=>{console.error(error);process.exitCode=1});
