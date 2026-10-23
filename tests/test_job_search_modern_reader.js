@@ -20,10 +20,14 @@ const scope=visible('Current job search',{scrollTop:0,clientHeight:500,scrollHei
   getAttribute:name=>name==='componentkey'?'SearchResultsMainContent':null,
   scrollBy:()=>{scope.scrollTop+=500;state.scroll++},
   querySelectorAll:selector=>selector==='button'?[decoy,next]:selector.startsWith('[role="button"]')?state.cards.filter(card=>!selector.includes('componentkey="job-card-component-ref-') || selector.includes('job-card-component-ref-'+card.state.id+'"')):[]});
-const company=visible('Example Finance'),companyOther=visible('Other Company'),companyP=visible('Example Finance'),titleP=visible('Finance Manager'),locationP=visible('Penang · 2 weeks ago · 20 applicants');
+const company=visible('Example Finance',{href:'https://www.linkedin.com/company/example/life/'}),companyOther=visible('Other Company'),companyP=visible('Example Finance',{querySelectorAll:()=>[company]}),titleP=visible('Finance Manager'),locationP=visible('Penang · 2 weeks ago · 20 applicants');
+titleP.closest=()=>titleP;
+titleP.querySelector=()=>null;
 const title=visible('Finance Manager',{href:url,closest:()=>titleP});
 const header=visible('',{querySelectorAll:selector=>selector==='a[href*="/company/"]'?state.companyConflict?[company,companyOther]:[company,company]:selector==='p'?[companyP,titleP,locationP]:[]});
 title.parentElement=header;
+titleP.parentElement=header;
+const hybrid=visible('Hybrid',{href:url+'/',closest:()=>null,parentElement:header});
 const showMore=visible('Show more');
 const about=visible('About the job\nBuild partnerships.\nManage reporting.\nShow more',{
   innerHTML:'<h2>About the job</h2><ul><li>Build partnerships.</li><li>Manage reporting.</li></ul><button>Show more</button>',querySelectorAll:selector=>selector==='button'?[showMore]:[]});
@@ -32,7 +36,7 @@ const dom=(tag,children,attrs={})=>({...visible(''),nodeType:1,tagName:tag.toUpp
 Object.defineProperty(about,'childNodes',{get:()=>about.fakeNodes || (about.innerText==='About the job'?[dom('h2',['About the job'])]:about.innerHTML.includes('Medical insurance')?
   [dom('h2',['About the job']),dom('p',[dom('strong',['Build partnerships.'])]),dom('ol',[dom('li',['Manage reporting.'])]),dom('button',['… more'],{'aria-hidden':'true'}),dom('p',['Benefits found in job post']),dom('p',['Medical insurance'])]:
   [dom('h2',['About the job']),dom('ul',[dom('li',['Build partnerships.']),dom('li',['Manage reporting.'])]),dom('button',['Show more'])])});
-const workspace=visible('Current jobs',{querySelectorAll:selector=>selector==='a[href]'?state.stale?[{...title,href:'https://www.linkedin.com/jobs/view/999'}]:[title]:
+const workspace=visible('Current jobs',{querySelectorAll:selector=>selector==='p'&&state.plainTitle?[companyP,titleP,locationP]:selector==='a[href]'?state.plainTitle?[hybrid]:state.stale?[{...title,href:'https://www.linkedin.com/jobs/view/999'}]:[title]:
   selector==='[componentkey="JobDetails_AboutTheJob_1234567890"]'&&state.about?[about]:[]});
 header.parentElement=workspace;
 const location={origin:'https://www.linkedin.com',pathname:'/jobs/search-results/',href:'https://www.linkedin.com/jobs/search-results/?keywords=finance&currentJobId=1234567890',search:'?keywords=finance&currentJobId=1234567890'};
@@ -71,10 +75,19 @@ for(const label of ['10 jobs','20 jobs','100 jobs','1,000 jobs','10,000 jobs']){
 scope.innerText='0 jobs';assert.equal(reader.readJobSearch().empty,true,'modern zero count remains a true empty result');
 scope.innerText='100 jobs';state.cards=[duplicate];assert.equal(reader.readJobSearch().jobs.length,1,'modern cards are read after loading');
 let captured=reader.readJob(url);assert.equal(captured.role,'Finance Manager');assert.equal(captured.company,'Example Finance');assert.equal(captured.location,'Penang');
+state.plainTitle=true;location.pathname='/jobs/view/1234567890/';location.href=url+'/';location.search='';
+captured=reader.readJob(url);assert.equal(captured.role,'Finance Manager','standalone plain title is not replaced by the Hybrid job-type link');
+assert.equal(captured.company_url,'https://www.linkedin.com/company/example/');assert.equal(captured.location,'Penang');
+titleP.innerText='';assert.throws(()=>reader.readJob(url),error=>error.cvstudioJobLoading===true,'missing plain title cannot promote job metadata to a title');titleP.innerText='Finance Manager';
+locationP.innerText='';assert.throws(()=>reader.readJob(url),error=>error.cvstudioJobLoading===true,'wait for the standalone header identity fields to load');locationP.innerText='Penang · 2 weeks ago · 20 applicants';
+state.plainTitle=false;location.pathname='/jobs/search-results/';location.href='https://www.linkedin.com/jobs/search-results/?keywords=finance&currentJobId=1234567890';location.search='?keywords=finance&currentJobId=1234567890';
 assert.equal(captured.description,'About the job\nBuild partnerships.\nManage reporting.');assert.equal(captured.description_truncated,true);assert(captured.description_html.includes('<ul>'));
 location.pathname='/jobs/collections/recommended/';assert.equal(reader.jobTargets()[0].floating,true,'a confirmed selected collection ad gets the same direct-add control');location.pathname='/jobs/search-results/';
 const previousText=about.innerText;about.innerText='About the job';
-assert.throws(()=>reader.readJob(url),error=>error.cvstudioJobLoading===true,'a heading-only loading panel is never a successful content capture');about.innerText=previousText;
+assert.throws(()=>reader.readJob(url),error=>error.cvstudioJobLoading===true,'a heading-only loading panel is never a successful content capture');
+const companyOnly=reader.readJob(url,true);assert.equal(companyOnly.company,'Example Finance');assert.equal(companyOnly.company_url,'https://www.linkedin.com/company/example/');
+assert.equal(companyOnly.description,'','HR company lookup does not wait for or collect unloaded ad content');
+assert.throws(()=>reader.readJob(url,'true'),error=>error.cvstudioJobLoading===true,'only the explicit metadata-only flag can bypass content readiness');about.innerText=previousText;
 // Current LinkedIn places an aria-hidden expansion button before benefit text.
 // Its label must not enter plain text while being excluded from rich content.
 const previousHTML=about.innerHTML;

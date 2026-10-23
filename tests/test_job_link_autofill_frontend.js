@@ -9,7 +9,7 @@ function fixture() {
     storage:{session:{get:async()=>({}),set:async()=>{}}},
     tabs:{onRemoved:{addListener:()=>{}},onUpdated:{addListener:fn=>hooks.updated=fn},onActivated:{addListener:()=>{}},
       query:async()=>{if(state.queryWait)await state.queryWait;return [...tabs.values()]},
-      get:async id=>{const row=tabs.get(id);if(!row)throw Error('Missing synthetic tab');return row},
+      get:async id=>{const row=tabs.get(id);if(!row)throw Error('Missing synthetic tab');if(state.metadataGap&&id>10&&!state.gapSeen){state.gapSeen=true;return {...row,url:'about:blank',status:'loading',pendingUrl:state.changedPending?'https://attacker.invalid/':undefined}}return row},
       create:async args=>{state.created.push(args);const tab={id:++state.counter,url:args.url,active:args.active,status:state.loading?'loading':'complete'};tabs.set(tab.id,tab);return tab},
       remove:async id=>{state.removed.push(id);tabs.delete(id)},
       update:async()=>{throw Error('Must not navigate an existing tab')}},
@@ -20,7 +20,7 @@ function fixture() {
       state.readCount=(state.readCount||0)+1;
       if(state.delayedReads){state.delayedReads--;return [{result:{loading:true}}]}
       if(state.readFails)throw Error('Synthetic unrecognized job layout');
-      return [{result:{url:args.args[0],company:'Sample Company',role:'Finance Manager',location:'Kuala Lumpur'}}];
+      return [{result:state.readerError?{jobError:state.readerError}:{url:args.args[0],company:'Sample Company',role:'Finance Manager',location:'Kuala Lumpur'}}];
     }},runtime:{getManifest:()=>({version:'24.6.461'}),onMessage:{addListener:fn=>hooks.message=fn}}};
   const identity=require('./linkedin_companion_identity_fixture')(chrome);
   const context=vm.createContext({chrome,URL,Map,Set,Error,Number,setTimeout:fn=>fn(),crypto:identity.crypto,TextEncoder});
@@ -30,6 +30,12 @@ function fixture() {
   return {hooks,state,tabs,rpc,arm:()=>hooks.arm(tabs.get(1))};
 }
 (async()=>{
+  const cold=fixture();await cold.arm();cold.state.metadataGap=true;
+  assert.equal((await cold.rpc('jobFromLink',{url:other})).result?.company,'Sample Company','new owned tab may initially lack committed and pending URL metadata');
+  const changed=fixture();await changed.arm();changed.state.metadataGap=true;changed.state.changedPending=true;
+  assert((await changed.rpc('jobFromLink',{url:other})).error);assert.equal(changed.state.readCount||0,0,'a different pending target is never read');
+  const access=fixture();await access.arm();access.state.readerError='access';
+  assert.match((await access.rpc('jobRead',{tab_id:2,expected_url:url})).error,/sign-in|verification|restriction/i,'LinkedIn access failure is not reported as a disconnected extension');
   const f=fixture();
   assert((await f.rpc('jobStatus')).error,'status cannot bypass the app binding');
   assert((await f.rpc('jobFromLink',{url})).error);assert.equal(f.state.created.length,0);
