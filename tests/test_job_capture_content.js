@@ -15,12 +15,12 @@ async function fixture(linkedin,layout='flex',options={}){
   const card=new Element(),details=new Element(),root=new Element();card.display=layout==='grid'?'grid':'flex';card.direction='row';details.display='flex';details.direction=layout==='unsupported'?'row':'column';
   details.append(new Element('p'),new Element('p'),new Element('p'));card.append(new Element('img'),details);
   root.dataset.companionChannel='a'.repeat(32);root.dataset.companionActions='1';
-  const document={body:new Element(),hidden:false,querySelectorAll:()=>[],createElement:tag=>new Element(tag),addEventListener:(name,fn)=>events[name]=fn,getElementById:()=>root};
+  const document={body:new Element(),hidden:false,readyState:options.complete?'complete':'interactive',querySelectorAll:()=>[],createElement:tag=>new Element(tag),addEventListener:(name,fn)=>events[name]=fn,getElementById:()=>root};
   document.body.append(card);
   document.querySelectorAll=selector=>selector==='[data-cvstudio-job-folder]'?document.body.querySelectorAll('select'):[];
   const location={origin:linkedin?'https://www.linkedin.com':'http://127.0.0.1:5000',pathname:linkedin?'/jobs/search-results/':'/'};
   const window={addEventListener:(name,fn)=>events[name]=fn,postMessage:message=>state.delivered.push(message)};window.top=window;
-  const chrome={runtime:{id:'extension-id',lastError:null,onMessage:{addListener:fn=>state.onRuntime=fn},sendMessage:(message,reply)=>{state.messages.push(message);state.reply=reply;if(message.action==='connect')reply({result:{connected:true}});else if(message.operation==='folders'&&!state.manualFolders&&!options.hold)reply(options.fail?{error:'Synthetic folder connection failure'}:{result:{ok:true,saved:false,folder:'Priority',folders:['Priority']}})}}};
+  const chrome={runtime:{id:'extension-id',lastError:null,onMessage:{addListener:fn=>state.onRuntime=fn},sendMessage:(message,reply)=>{state.messages.push(message);state.reply=reply;if(message.action==='connect'){if(options.holdConnect&&state.messages.filter(m=>m.action==='connect').length===1)state.releaseConnect=()=>reply({error:'Wait for loading'});else if(options.loading||state.loading)reply({error:'Wait for loading',loading:true});else reply({result:{connected:true}});}else if(message.operation==='folders'&&!state.manualFolders&&!options.hold)reply(options.fail?{error:'Synthetic folder connection failure'}:{result:{ok:true,saved:false,folder:'Priority',folders:['Priority']}})}}};
   state.targets=[{element:card,url:'https://www.linkedin.com/jobs/view/1234567890'}];
   const context=vm.createContext({window,document,location,chrome,Map,Set,MutationObserver:class{constructor(fn){state.observer=fn}observe(){}},
     setTimeout:fn=>{const id=++state.sequence;state.timers.set(id,fn);return id},clearTimeout:id=>state.timers.delete(id),
@@ -96,6 +96,21 @@ assert(secondSelect.children.some(option=>option.value==='Back from CV Studio'))
 work=select.events.focus({isTrusted:true});li.state.reply({result:{ok:true,saved:false,folders:[],folder:''}});await work;
 assert.deepEqual(secondSelect.children.map(option=>option.value),['']);assert.equal(secondSelect.disabled,false,'an empty authoritative catalog still offers Unfiled');
 const app=await fixture(false),message={type:'CVSTUDIO_JOB_CAPTURE',id:'b'.repeat(32),record:{url:'https://www.linkedin.com/jobs/view/1234567890'}};
+const missedReady=await fixture(false);missedReady.state.loading=true;missedReady.events.load();await new Promise(resolve=>setImmediate(resolve));
+assert.equal(missedReady.state.timers.size,1,'the document load event schedules bounded recovery when Chrome readiness is late or omitted');
+missedReady.state.loading=false;for(const [id,fn]of [...missedReady.state.timers]){missedReady.state.timers.delete(id);fn();}await new Promise(resolve=>setImmediate(resolve));
+assert.equal(missedReady.state.timers.size,0,'successful recovery stops polling');
+const stillLoading=await fixture(false,'flex',{complete:true,loading:true});for(let i=0;i<30;i++){for(const [id,fn]of [...stillLoading.state.timers]){stillLoading.state.timers.delete(id);fn();}await new Promise(resolve=>setImmediate(resolve));}
+assert.equal(stillLoading.state.timers.size,0,'load recovery has a hard retry ceiling');assert(stillLoading.state.messages.length<=22,'only bounded handshake messages were sent');assert(stillLoading.state.messages.every(m=>m.action==='connect'));
+const leaving=await fixture(false,'flex',{complete:true,loading:true});assert.equal(leaving.state.timers.size,1);leaving.events.pagehide();assert.equal(leaving.state.timers.size,0,'pagehide cancels scheduled connection recovery');
+let readyReply;
+assert.equal(app.state.onRuntime({type:'CVSTUDIO_COMPANION_READY'},{id:'foreign-extension'},()=>{throw Error('Foreign ready message accepted')}),false);
+assert.equal(app.state.onRuntime({type:'CVSTUDIO_COMPANION_READY'},{id:'extension-id'},result=>readyReply=result),true);
+await new Promise(resolve=>setImmediate(resolve));assert(readyReply.result.connected);
+const loadingApp=await fixture(false,'flex',{holdConnect:true});let loadingReply;
+assert.equal(loadingApp.state.onRuntime({type:'CVSTUDIO_COMPANION_READY'},{id:'extension-id'},result=>loadingReply=result),true);
+loadingApp.state.releaseConnect();await new Promise(resolve=>setImmediate(resolve));
+assert.equal(loadingApp.state.messages.filter(m=>m.action==='connect').length,2,'completion retries after the old in-flight loading rejection settles');assert(loadingReply.result.connected);
 assert.equal(app.state.messages[0].action,'connect','the app document connects on load');
 app.events.visibilitychange();await new Promise(resolve=>setImmediate(resolve));assert.equal(app.state.messages.at(-1).action,'connect','returning to the app renews its binding');
 let replied;

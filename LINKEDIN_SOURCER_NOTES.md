@@ -55,6 +55,18 @@ There are no contact, message, project-save, profile-edit or JobAdder actions.
 
 ## Ownership and boundaries
 
+The v24.6.481 connection correction retries a rejected document-idle handshake
+when Chrome reports tab completion. Only the current local top-level content
+script receives the readiness notification; it waits for any old in-flight
+attempt to settle before a fresh verified connection. No browser action is
+queued/replayed by readiness recovery. The document's own load event is an
+independent fallback if Chrome omits/delays its completion notification. Only
+verified same-URL loading hints can schedule up to 20 handshake-only retries
+250 ms apart; pagehide cancels them. Sourcing reserves the existing bounded
+worker run before the paid planning request, protecting background planning
+from another app tab's automatic connection. Failed/cancelled reservation sends
+no plan request; subsequent browser operations reuse the same run and budgets.
+
 - `cvstudio_linkedin_sourcer.py`: app-independent ephemeral run state, bounded
   attempts/time/pages, validated observed URLs, exact quote checks and native
   tool-output validation. A stopped/in-flight run cannot be replaced silently.

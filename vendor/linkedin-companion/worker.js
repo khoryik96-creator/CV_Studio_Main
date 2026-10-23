@@ -210,7 +210,11 @@ function connectApp(sender) {
   const connect = async () => {
     if (stateFailed || reloading || sender.id !== chrome.runtime.id || sender.frameId !== 0 || !sender.documentId || !local(sender.url)) throw safeError('Open CV Studio in this browser to connect the companion.');
     const tab = await chrome.tabs.get(sender.tab?.id);
-    if (tab.status !== 'complete' || tab.pendingUrl || tab.url !== sender.url) throw safeError('Wait for CV Studio to finish loading.');
+    if (tab.status !== 'complete' || tab.pendingUrl || tab.url !== sender.url) {
+      const error=safeError('Wait for CV Studio to finish loading.');
+      error.cvstudioLoading=tab.status === 'loading' && (!tab.pendingUrl || tab.pendingUrl === sender.url) && tab.url === sender.url;
+      throw error;
+    }
     if (connection?.tabId === tab.id && connection.documentId === sender.documentId) return;
     const previous = connection;
     if (previous?.run || jobCapture || previous && !tab.active) throw safeError('Finish the companion action in the other CV Studio tab first.');
@@ -264,6 +268,16 @@ chrome.tabs.onUpdated.addListener((id, change) => event(async () => {
     if (wasHR) await closeHROwnedTabs();
   }
   if (owned.has(id) && change.url && !sameOwnedPage(change.url, owned.get(id))) { owned.delete(id); changed = true; }
+  if (change.status === 'complete') {
+    try {
+      const tab=await chrome.tabs.get(id);
+      if (local(tab.url) && tab.status === 'complete' && !tab.pendingUrl) {
+        // document_idle can precede tab completion. Ask the current top-level
+        // content script to retry its own verified handshake, never an action.
+        await chrome.tabs.sendMessage(id,{type:'CVSTUDIO_COMPANION_READY'},{frameId:0});
+      }
+    } catch { /* A closed/replaced document will connect on its next load. */ }
+  }
   return changed;
 }));
 chrome.tabs.onActivated.addListener(info => event(() => owned.delete(info.tabId)));
@@ -678,6 +692,6 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     return true;
   }
   if (message?.kind !== 'sourcer') return false;
-  handle(message, sender).then(result => reply({result}), error => reply({error: error.cvstudioSafe ? error.message : 'The browser action stopped. Reconnect the companion or check the LinkedIn page.'}));
+  handle(message, sender).then(result => reply({result}), error => reply({error: error.cvstudioSafe ? error.message : 'The browser action stopped. Reconnect the companion or check the LinkedIn page.',...(error.cvstudioLoading ? {loading:true} : {})}));
   return true;
 });

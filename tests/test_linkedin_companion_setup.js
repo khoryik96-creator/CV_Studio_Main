@@ -8,7 +8,8 @@ function fixture(){
     action:{onClicked:{addListener:fn=>hooks.click=fn},setBadgeText:async()=>{}},
     tabs:{onRemoved:{addListener:fn=>hooks.removed=fn},onUpdated:{addListener:fn=>hooks.updated=fn},onActivated:{addListener:()=>{}},
       get:async id=>{if(!tabs.has(id))throw Error('Missing tab');return {...tabs.get(id)}},query:async()=>[...tabs.values()],
-      create:async options=>{state.created.push(options);return {id:20,...options}},remove:async id=>state.removed.push(id)},
+      create:async options=>{state.created.push(options);return {id:20,...options}},remove:async id=>state.removed.push(id),
+      sendMessage:async(id,message,options)=>{(state.readyMessages??=[]).push({id,message,options});return state.onReady?.()}},
     scripting:{executeScript:async options=>{if(options.target.documentIds?.[0]!==undefined&&options.target.documentIds[0]!==state.document)throw Error('Stale document');return [{result:state.valid,documentId:state.document}]}},
     runtime:{id:'test-extension',getManifest:()=>({version:state.loaded}),getURL:file=>'chrome-extension://test-extension/'+file,
       reload:()=>state.reloads++,onMessage:{addListener:fn=>hooks.message=fn}}};
@@ -19,6 +20,23 @@ function fixture(){
   return {state,tabs,hooks,rpc,sender,session};
 }
 const tests=[
+  ['loading-time rejection reconnects on tab completion without another app action',async()=>{
+    const f=fixture();f.tabs.get(1).status='loading';const loading=await f.rpc('connect');assert(loading.error);assert.equal(loading.loading,true);
+    f.state.onReady=()=>f.rpc('connect');f.tabs.get(1).status='complete';await f.hooks.updated(1,{status:'complete'});
+    assert((await f.rpc('jobStatus')).result?.connected,'completion must initiate a fresh verified handshake');
+    assert.equal(f.state.readyMessages[0].options.frameId,0);
+  }],
+  ['only the same loading app URL receives a retry hint',async()=>{
+    const f=fixture();f.tabs.get(1).status='loading';f.tabs.get(1).pendingUrl=f.tabs.get(1).url;assert.equal((await f.rpc('connect')).loading,true);
+    f.tabs.get(1).pendingUrl='https://example.invalid/';assert.equal((await f.rpc('connect')).loading,undefined);
+    f.tabs.get(1).pendingUrl='';assert.equal((await f.rpc('connect',{}, {...f.sender(),frameId:1})).loading,undefined);
+  }],
+  ['completion does not notify other hosts, paths or pending navigations',async()=>{
+    for(const url of ['https://example.invalid/','http://127.0.0.1:5000/other']){
+      const f=fixture();f.tabs.get(1).url=url;await f.hooks.updated(1,{status:'complete'});assert.equal(f.state.readyMessages?.length||0,0);
+    }
+    const f=fixture();f.tabs.get(1).pendingUrl='https://example.invalid/';await f.hooks.updated(1,{status:'complete'});assert.equal(f.state.readyMessages?.length||0,0);
+  }],
   ['connects a verified CV Studio document without a toolbar click',async()=>{
     const f=fixture();assert.equal((await f.rpc('connect')).result.connected,true);
     assert.equal((await f.rpc('jobStatus')).result.connected,true);assert.equal(f.state.created.length,0);

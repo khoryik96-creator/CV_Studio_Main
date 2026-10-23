@@ -4,6 +4,16 @@
 
 ## Release state
 
+- v24.6.481 corrects both v480 review findings: cold-load handshake recovery at
+  actual tab completion, and companion ownership reserved before paid sourcing
+  planning. Exact document/pending URL checks, active-run isolation, cancellation,
+  budgets, paid non-replay, setup/local-update flow and existing ad/HR/folder
+  behavior remain. No new route, schema, permission or owner-state change.
+  Full isolated Windows Python: 1,777 passed, four skipped, 8,392 subtests;
+  all 47 JavaScript suites, source/native preflight and 24 smoke assertions passed.
+  Owner authorized fix and merge; exact-head PR checks/review remain required.
+  See `cv_studio_v24_6_481_companion_connection_corrective_qa_report.md`.
+
 - v24.6.480 adds owner-requested automatic companion connection and bundled-folder
   setup with an in-app apply-update action. Exact document verification,
   active-run/capture protection and all explicit search/write/paid gates remain.

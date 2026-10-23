@@ -59,6 +59,12 @@
   });
   async function api(path, body) {
     const action = path.split('/').pop();
+    if (action === 'plan') {
+      // Reserve the existing bounded browser run before spending on planning.
+      // Another app tab becoming visible must not take an in-flight search.
+      await begin();
+      if (abort?.signal.aborted) throw Error('Stopped.');
+    }
     const response = await fetch('/linkedin-sourcer', body ? {method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({...body, action}), timeout: 145000} : {timeout: 10000});
     const value = await response.json();

@@ -149,7 +149,7 @@
   if (location.pathname !== '/' || window.top !== window) return;
   // The verified worker binding is renewed for each page document. The
   // extension being enabled is enough; no repeated toolbar toggle is needed.
-  let connecting;
+  let connecting, recoveryTimer, recoveryAttempts=0, recoveryStopped=false;
   const connect = () => {
     if (!connecting) connecting = new Promise(resolve => {
       try { chrome.runtime.sendMessage({kind:'sourcer',action:'connect'},reply=>{
@@ -159,10 +159,27 @@
     }).finally(()=>{connecting=null;});
     return connecting;
   };
-  connect();
+  const recover = () => Promise.resolve(connecting).then(()=>connect()).then(reply=>{
+    if(reply?.loading && !recoveryStopped && !recoveryTimer && recoveryAttempts<20){
+      recoveryAttempts++;
+      recoveryTimer=setTimeout(()=>{recoveryTimer=null;recover();},250);
+    }
+    return reply;
+  });
+  connect().then(reply=>{if(reply?.loading && document.readyState==='complete')recover();});
+  // Chrome may omit/delay its tab-complete event. The document's own load
+  // event supplies an independent bounded, read-only handshake recovery.
+  window.addEventListener('load',recover,{once:true});
+  window.addEventListener('pagehide',()=>{recoveryStopped=true;clearTimeout(recoveryTimer);recoveryTimer=null;},{once:true});
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)connect();});
   const captures = new Map();
   chrome.runtime.onMessage.addListener((message,sender,reply) => {
+    if (sender.id === chrome.runtime.id && message?.type === 'CVSTUDIO_COMPANION_READY') {
+      // Do not coalesce the completion signal into a loading-time attempt
+      // that is still returning its rejection. Probe again after it settles.
+      recover().then(reply);
+      return true;
+    }
     if (sender.id !== chrome.runtime.id || message?.type !== 'CVSTUDIO_JOB_CAPTURE' || !/^[a-f0-9]{32}$/.test(message.id || '')) return false;
     const channel = document.getElementById('viewJobLeads')?.dataset.companionChannel;
     if (message.request?.action === 'folders' && document.getElementById('viewJobLeads')?.dataset.companionFolders !== '2') {

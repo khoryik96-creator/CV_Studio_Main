@@ -31,7 +31,8 @@ function fixture(reuse=true){
       if(state.holdOpen){state.held=()=>reply(tab);return}
       return reply(tab);
     }
-    if(message.action==='begin'||message.action==='end'||message.action==='navigate')return reply(true);
+    if(message.action==='begin'){if(state.failBegin)return reply(null,'Synthetic reservation failed');if(state.holdBegin){state.beginReply=()=>reply(true);return;}return reply(true);}
+    if(message.action==='end'||message.action==='navigate')return reply(true);
     if(message.action==='create')return reply(10);
     if(message.action==='read'){
       state.readCount++;
@@ -49,6 +50,7 @@ function fixture(reuse=true){
     fetch:async(url,options)=>{if(url==='/linkedin-sourcer?action=companion_setup')return {ok:true,json:async()=>({folder:'Bundled companion folder',version:'24.6.480'})};assert.equal(url,'/linkedin-sourcer');const body=options?.body?JSON.parse(options.body):null;if(body)requests.push(body);
       if(!body)return {ok:true,json:async()=>({configured:true,run:null})};
       if(body.action==='start'&&state.failStart)return {ok:false,json:async()=>({error:'Synthetic start rejected'})};
+      if(body.action==='plan'&&state.holdPlan)await new Promise(resolve=>state.planReply=resolve);
       if(body.action==='stop')run.stopped=true;
       return {ok:true,json:async()=>({run:{...run},...(body.action==='plan'?{plan:{query:'SAP'}}:{}),...(body.action==='review'?{candidates:[candidate]}:{})})};}
   });
@@ -65,6 +67,15 @@ function fixture(reuse=true){
   assert.equal(f.requests[0].action,'start');assert.equal(f.requests[0].mode,'standard');assert.equal(f.requests[0].confirm_paid,true);assert.equal(f.requests[0].use_open_search,true);
   assert.equal(f.el('Count').textContent,1);assert.match(f.el('Status').textContent,/last result page/);assert.equal(f.el('Start').disabled,false);
   assert.equal(f.calls.filter(call=>call.action==='navigate').length,0,'default preserves the open search filters');
+  const planning=fixture();await planning.init();planning.el('Brief').value='SAP finance';planning.el('Consent').checked=true;planning.state.holdPlan=true;
+  const planningRun=planning.start();await new Promise(resolve=>setImmediate(resolve));assert(planning.state.planReply);
+  assert(planning.calls.some(c=>c.action==='begin'),'worker ownership must be reserved before the paid plan is pending');
+  planning.state.planReply();await planningRun;assert.equal(planning.calls.filter(c=>c.action==='begin').length,1,'reservation does not reset budgets after planning');
+  const noReservation=fixture();await noReservation.init();noReservation.el('Brief').value='SAP finance';noReservation.el('Consent').checked=true;noReservation.state.failBegin=true;await noReservation.start();
+  assert.equal(noReservation.requests.filter(r=>r.action==='plan').length,0,'failed reservation sends no paid plan');
+  const stopReservation=fixture();await stopReservation.init();stopReservation.el('Brief').value='SAP finance';stopReservation.el('Consent').checked=true;stopReservation.state.holdBegin=true;
+  const reservedRun=stopReservation.start();await new Promise(resolve=>setImmediate(resolve));assert(stopReservation.state.beginReply);await stopReservation.stop();stopReservation.state.beginReply();await reservedRun;
+  assert.equal(stopReservation.requests.filter(r=>r.action==='plan').length,0,'Stop during reservation sends no paid plan');assert(stopReservation.calls.some(c=>c.action==='end'),'a late reservation acknowledgement is cleaned up');
   const legacy=fixture();legacy.state.tabs=[{...people,lastAccessed:undefined,active:false},{...people,id:5,title:'Active compatible search',lastAccessed:undefined,active:true}];await legacy.init();
   assert.equal(legacy.el('Source').value,'5','without recency metadata an active compatible search wins over query order');
   const recent=fixture();recent.state.tabs=[{...people,id:6,lastAccessed:10,active:true},people];await recent.init();
