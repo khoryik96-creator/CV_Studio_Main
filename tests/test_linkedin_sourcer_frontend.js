@@ -8,7 +8,7 @@ const root = path.resolve(__dirname, '..');
   const callbacks = {};
   let counter = 10;
   const tabs = new Map([
-    [1, {id:1, url:'http://127.0.0.1:5000/', active:true}],
+    [1, {id:1, url:'http://127.0.0.1:5000/', status:'complete',active:true}],
     [2, {id:2, url:'https://www.linkedin.com/search/results/people/', status:'complete',active:true}],
     [3, {id:3, url:'https://www.linkedin.com/in/unrelated', status:'complete'}]
   ]);
@@ -28,7 +28,8 @@ const root = path.resolve(__dirname, '..');
       return [{result:args.args[0]==='readSearch'?(searchResult === undefined ? {profiles:[{id:'p0',url}],signature:'one',hasNext:true} : searchResult):true}];
     }},runtime:{onMessage:{addListener:fn=>callbacks.message=fn}}
   };
-  const context=vm.createContext({chrome,URL,console,Map,Set,Error,Number});
+  const identity=require('./linkedin_companion_identity_fixture')(chrome);
+  const context=vm.createContext({chrome,URL,console,Map,Set,Error,Number,crypto:identity.crypto,TextEncoder});
   vm.runInContext(fs.readFileSync(path.join(root,'vendor/linkedin-companion/worker.js'),'utf8'),context);
   const sender={tab:{id:1},documentId:'app-document',url:tabs.get(1).url};
   const rpc=(action,args={},who=sender)=>new Promise(resolve=>callbacks.message({kind:'sourcer',action,args},who,resolve));

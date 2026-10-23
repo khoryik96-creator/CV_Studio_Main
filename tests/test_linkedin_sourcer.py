@@ -114,6 +114,37 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(folder,Path(self.module.__file__).resolve().parent/'vendor'/'linkedin-companion')
         self.assertEqual(response.json['version'],(folder.parents[1]/'VERSION').read_text().strip())
         self.assertTrue((folder/'manifest.json').is_file())
+    def test_companion_pairing_proof_requires_live_app_session_and_fresh_challenge(self):
+        nonce='a'*64
+        address='/linkedin-sourcer?action=companion_challenge&nonce='+nonce
+        self.assertEqual(self.module.app.test_client().get(address).status_code,403)
+        self.assertEqual(self.client.get(address.replace(nonce,'invalid')).status_code,400)
+        secret='12'*32
+        with mock.patch.object(self.module,'_LINKEDIN_COMPANION_KEY',''), mock.patch.object(self.module,'_cv_secure_load',return_value={'key':secret}), mock.patch.object(self.module,'_cv_secure_save') as save:
+            response=self.client.get(address)
+            paired=self.client.get(address.replace('companion_challenge','companion_pair'))
+            changed=self.client.get(address.replace(nonce,'b'*64))
+            save.assert_not_called()
+        self.assertEqual(response.status_code,200,response.json)
+        self.assertTrue(response.cache_control.no_store)
+        self.assertNotIn('key',response.json)
+        import hmac
+        expected=hmac.new(bytes.fromhex(paired.json['key']),('CVStudio companion v1|http://localhost|'+nonce).encode(),hashlib.sha256).hexdigest()
+        self.assertEqual(response.json['proof'],expected)
+        self.assertNotEqual(changed.json['proof'],expected)
+        self.assertNotEqual(paired.json['key'],secret,'identity is specific to the installation folder')
+    def test_companion_key_creation_is_protected_and_failed_save_is_failure_visible(self):
+        with mock.patch.object(self.module,'_LINKEDIN_COMPANION_KEY',''), mock.patch.object(self.module,'_cv_secure_load',return_value={}), mock.patch.object(self.module,'_cv_secure_save') as save:
+            response=self.client.get('/linkedin-sourcer?action=companion_pair&nonce='+'a'*64)
+            self.assertEqual(response.status_code,200)
+            self.client.get('/linkedin-sourcer?action=companion_challenge&nonce='+'b'*64)
+            save.assert_called_once()
+            self.assertEqual(save.call_args.args[0],'companion')
+            self.assertEqual(len(save.call_args.args[1]['key']),64)
+        with mock.patch.object(self.module,'_LINKEDIN_COMPANION_KEY',''), mock.patch.object(self.module,'_cv_secure_load',return_value={}), mock.patch.object(self.module,'_cv_secure_save',side_effect=OSError('Synthetic private path')):
+            response=self.client.get('/linkedin-sourcer?action=companion_pair&nonce='+'a'*64)
+            self.assertEqual(response.status_code,503)
+            self.assertNotIn('Synthetic private path',response.text)
     def test_paid_tools_use_central_guard_and_keep_usage(self):
         response=self.post(action='start',brief='Finance managers with SAP',mode='standard',max_pages=1,max_calls=3,confirm_paid=True)
         run=response.json['run']['id']

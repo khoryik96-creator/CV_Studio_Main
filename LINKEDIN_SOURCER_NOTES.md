@@ -12,7 +12,8 @@ reference, and is not imported by the main app.
    and **Copy setup folder**. Remove any old downloaded companion, then use
    Chrome/Brave's **Load unpacked** with that bundled folder. Keep Developer mode
    on. The ZIP remains available for installations requiring manual file updates.
-3. The enabled companion connects automatically to a verified CV Studio document
+3. Refresh CV Studio, then click the companion toolbar icon once to trust this
+   installation/address. The enabled companion then connects automatically to its verified document
    on load, return to the tab, and before browser RPCs. Page refresh/browser
    restart needs no toolbar click. Worker suspension retains an exact live
    document's binding and limits. A replacement document gets no previous run
@@ -20,7 +21,13 @@ reference, and is not imported by the main app.
    and a background tab cannot replace an idle binding. The toolbar remains an
    explicit manual connection/recovery option. Search, write and DeepSeek consent
    gates remain explicit. No additional API key, pairing code or POC server is
-   needed. After normal **Update & Restart**, **Apply companion update** reloads
+   needed. A new installation/address or changed identity needs another toolbar
+   pairing. Fresh origin-bound HMAC challenges authenticate reconnects against
+   the paired backend key; DOM markers alone cannot grant authority. The backend
+   root key uses the existing protected vault; only a derived installation/origin
+   key enters extension-local storage, restricted to trusted extension contexts.
+   Keys never enter page messages, session snapshots, SQLite or diagnostics.
+   After normal **Update & Restart**, **Apply companion update** reloads
    matching files already updated in the bundled folder. It reads only its own
    local manifest, refuses active work, and never downloads or evaluates remote
    code. Refresh CV Studio and LinkedIn when ready; drafts are not forcibly

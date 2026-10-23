@@ -18,7 +18,8 @@ function fixture(){
       if(state.hold){await state.hold;state.hold=null}
       return [{result:{url:state.wrong?'https://www.linkedin.com/jobs/view/999':args.args[0],company:'Example Finance',role:'Finance Manager',description:'Visible ad',description_truncated:true}}];
     }},runtime:{onMessage:{addListener:fn=>hooks.message=fn}}};
-  const boot=()=>{hooks={};vm.runInContext(source,vm.createContext({chrome,URL,Map,Set,Date,setTimeout,clearTimeout,crypto:{randomUUID:()=> 'a'.repeat(32)}}))};boot();
+  const identity=require('./linkedin_companion_identity_fixture')(chrome);
+  const boot=()=>{hooks={};vm.runInContext(source,vm.createContext({chrome,URL,Map,Set,Date,setTimeout,clearTimeout,TextEncoder,crypto:{getRandomValues:identity.crypto.getRandomValues.bind(identity.crypto),subtle:identity.crypto.subtle,randomUUID:()=> 'a'.repeat(32)}}))};boot();
   const app=()=>({tab:{id:1},documentId:state.appDoc,url:tabs.get(1).url});
   const sender=()=>({tab:{id:2},documentId:'linkedin-document',frameId:0,url:tabs.get(2).url});
   const pick=(patch={},message={})=>new Promise(resolve=>hooks.message({kind:'sourcer_job_pick',url,...message},{...sender(),...patch},resolve));

@@ -148,7 +148,7 @@
   }
   if (location.pathname !== '/' || window.top !== window) return;
   // The verified worker binding is renewed for each page document. The
-  // extension being enabled is enough; no repeated toolbar toggle is needed.
+  // After one explicit toolbar pairing, no repeated toggle is needed.
   let connecting, recoveryTimer, recoveryAttempts=0, recoveryStopped=false;
   const connect = () => {
     if (!connecting) connecting = new Promise(resolve => {

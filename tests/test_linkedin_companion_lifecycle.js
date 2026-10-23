@@ -22,7 +22,8 @@ function fixture(){
       if(!args.args)return [{result:true,documentId:state.document}];
       return [{result:args.args[0]==='readSearch'?{profiles:[{url:first},{url:second}]}:true}];
     }},runtime:{onMessage:{addListener:fn=>hooks.message=fn}}};
-  function boot(){hooks={};vm.runInContext(source,vm.createContext({chrome,URL,console,Map,Set,Error,Number,JSON,Promise,Array,Object,String,Date,setTimeout,clearTimeout}));}
+  const identity=require('./linkedin_companion_identity_fixture')(chrome);
+  function boot(){hooks={};vm.runInContext(source,vm.createContext({chrome,URL,console,Map,Set,Error,Number,JSON,Promise,Array,Object,String,Date,setTimeout,clearTimeout,crypto:identity.crypto,TextEncoder}));}
   boot();
   const sender=()=>({tab:{id:1},documentId:state.document,url:tabs.get(1).url});
   const rpc=(action,args={},who=sender())=>new Promise(resolve=>hooks.message({kind:'sourcer',action,args},who,resolve));

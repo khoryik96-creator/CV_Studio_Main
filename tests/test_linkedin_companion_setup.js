@@ -14,12 +14,50 @@ function fixture(){
     runtime:{id:'test-extension',getManifest:()=>({version:state.loaded}),getURL:file=>'chrome-extension://test-extension/'+file,
       reload:()=>state.reloads++,onMessage:{addListener:fn=>hooks.message=fn}}};
   const fetch=async(url,options)=>{state.fetches.push({url,options});if(state.beforeFetch)await state.beforeFetch();return {ok:true,json:async()=>({manifest_version:3,name:'CV Studio LinkedIn Companion',version:state.disk})}};
-  vm.runInNewContext(source,{chrome,fetch,URL,console,setTimeout,clearTimeout});
+  const identity=require('./linkedin_companion_identity_fixture')(chrome);
+  const boot=()=>vm.runInNewContext(source,{chrome,fetch,URL,console,setTimeout,clearTimeout,crypto:identity.crypto,TextEncoder});boot();
   const sender=(id=1)=>({id:chrome.runtime.id,tab:tabs.get(id),frameId:0,documentId:state.document,url:tabs.get(id)?.url});
   const rpc=(action,args={},who=sender())=>new Promise(resolve=>hooks.message({kind:'sourcer',action,args},who,resolve));
-  return {state,tabs,hooks,rpc,sender,session};
+  return {state,tabs,hooks,rpc,sender,session,identity:identity.state,boot};
 }
 const tests=[
+  ['unpaired local imitations cannot auto-connect or steal an idle binding',async()=>{
+    const f=fixture();f.identity.trusted={};assert((await f.rpc('connect')).error);
+    assert((await f.rpc('tabs')).error);assert.equal(f.session.cvstudioLinkedinSessionV1?.connection??null,null);
+    f.identity.trusted={'http://127.0.0.1:5000':f.identity.key};assert((await f.rpc('connect')).result.connected);
+    f.tabs.set(3,{id:3,url:'http://127.0.0.1:5999/',status:'complete',active:true});
+    assert((await f.rpc('connect',{},f.sender(3))).error);assert.equal(f.session.cvstudioLinkedinSessionV1.connection.tabId,1);
+  }],
+  ['paired origins must answer a fresh backend proof, not just copy DOM markers',async()=>{
+    const f=fixture();f.identity.key='34'.repeat(32);assert((await f.rpc('connect')).error);
+    f.identity.key='12'.repeat(32);assert((await f.rpc('connect')).result.connected);
+    const proof=f.identity.proofs[0].nonce;assert.notEqual(proof,f.identity.proofs[1].nonce);
+    await f.hooks.updated(1,{status:'loading'});f.state.document='doc-2';f.identity.proof='00'.repeat(32);
+    assert((await f.rpc('connect')).error);
+  }],
+  ['toolbar pairing is explicit, persists trust and fails closed on storage errors',async()=>{
+    const f=fixture();f.identity.trusted={};await f.hooks.click(f.tabs.get(1));
+    assert.equal(f.identity.trusted['http://127.0.0.1:5000'],f.identity.key);
+    assert((await f.rpc('connect')).result.connected);
+    assert(!JSON.stringify(f.session).includes(f.identity.key),'pairing keys never enter session snapshots');
+    assert.equal(f.identity.access[0].accessLevel,'TRUSTED_CONTEXTS');
+    const broken=fixture();broken.identity.trusted={};broken.identity.failWrite=true;await broken.hooks.click(broken.tabs.get(1));
+    assert((await broken.rpc('tabs')).error);
+  }],
+  ['fresh workers verify persistent trust and cannot inherit an old unpaired session',async()=>{
+    const f=fixture();f.identity.trusted={};await f.hooks.click(f.tabs.get(1));
+    f.boot();assert((await f.rpc('tabs')).result);
+    f.identity.trusted={};f.boot();assert((await f.rpc('tabs')).error);
+    assert.equal(f.session.cvstudioLinkedinSessionV1.connection,null);
+  }],
+  ['old proofs cannot be replayed and navigation during pairing grants no authority',async()=>{
+    const f=fixture();assert((await f.rpc('connect')).result);
+    const {createHmac}=require('crypto'),first=f.identity.proofs[0];
+    f.identity.proof=createHmac('sha256',Buffer.from(f.identity.key,'hex')).update('CVStudio companion v1|'+first.actual+'|'+first.nonce).digest('hex');
+    await f.hooks.updated(1,{status:'loading'});f.state.document='doc-2';assert((await f.rpc('connect')).error);
+    const moved=fixture();moved.identity.trusted={};moved.identity.beforeWrite=async()=>{moved.state.document='doc-2'};
+    await moved.hooks.click(moved.tabs.get(1));assert((await moved.rpc('tabs')).error);
+  }],
   ['loading-time rejection reconnects on tab completion without another app action',async()=>{
     const f=fixture();f.tabs.get(1).status='loading';const loading=await f.rpc('connect');assert(loading.error);assert.equal(loading.loading,true);
     f.state.onReady=()=>f.rpc('connect');f.tabs.get(1).status='complete';await f.hooks.updated(1,{status:'complete'});

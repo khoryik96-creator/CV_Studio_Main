@@ -6,8 +6,10 @@ sourcer and the locked historical Lead Finder.
 
 ## Companion connection and updates (v24.6.480)
 
-The enabled companion connects automatically when the verified CV Studio tab
-loads or is revisited. The toolbar remains a manual recovery option. Active
+Trust the normal CV Studio installation/address once using the companion toolbar
+icon. The enabled companion then reconnects automatically when its verified tab
+loads or is revisited. Fresh backend challenges authenticate the paired identity;
+another local page with copied markers cannot connect. The toolbar remains a manual recovery option. Active
 worker runs/captures and document ownership remain protected; automatic connection
 does not start searches, writes, profile reads or paid requests.
 

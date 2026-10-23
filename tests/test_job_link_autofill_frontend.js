@@ -22,7 +22,8 @@ function fixture() {
       if(state.readFails)throw Error('Synthetic unrecognized job layout');
       return [{result:{url:args.args[0],company:'Sample Company',role:'Finance Manager',location:'Kuala Lumpur'}}];
     }},runtime:{getManifest:()=>({version:'24.6.461'}),onMessage:{addListener:fn=>hooks.message=fn}}};
-  const context=vm.createContext({chrome,URL,Map,Set,Error,Number,setTimeout:fn=>fn()});
+  const identity=require('./linkedin_companion_identity_fixture')(chrome);
+  const context=vm.createContext({chrome,URL,Map,Set,Error,Number,setTimeout:fn=>fn(),crypto:identity.crypto,TextEncoder});
   vm.runInContext(fs.readFileSync(path.join(root,'vendor/linkedin-companion/worker.js'),'utf8'),context);
   const sender={tab:{id:1},documentId:'bound',url:tabs.get(1).url};
   const rpc=(action,args={},who=sender)=>new Promise(resolve=>hooks.message({kind:'sourcer',action,args},who,resolve));

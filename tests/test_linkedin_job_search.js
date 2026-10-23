@@ -25,7 +25,8 @@ function fixture(){
       if(method==='scrollJobSearch'){state.scroll++;return [{result:true}]}
       state.reads++;return [{result:{url:tabs.get(args.target.tabId).url,jobs:[row],signature:row.url,hasNext:true,paginationKnown:true,atBottom:true}}];
     }},runtime:{getManifest:()=>({version:'24.6.461'}),onMessage:{addListener:fn=>hooks.message=fn}}};
-  const boot=()=>{hooks={};vm.runInContext(worker,vm.createContext({chrome,URL,Map,Set,Date,console,setTimeout,clearTimeout}));};boot();
+  const identity=require('./linkedin_companion_identity_fixture')(chrome);
+  const boot=()=>{hooks={};vm.runInContext(worker,vm.createContext({chrome,URL,Map,Set,Date,console,setTimeout,clearTimeout,crypto:identity.crypto,TextEncoder}));};boot();
   const sender=()=>({tab:{id:1},documentId:state.document,url:tabs.get(1).url});
   const rpc=(action,args={},who=sender())=>new Promise(resolve=>hooks.message({kind:'sourcer',action,args},who,resolve));
   const run='b'.repeat(32);
