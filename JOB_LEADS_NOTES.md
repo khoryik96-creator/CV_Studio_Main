@@ -73,6 +73,34 @@ joining-date ownership change. Development and QA do not update the normal
 installation. After adoption, apply its companion update and refresh the open
 CV Studio and LinkedIn pages to replace older page scripts.
 
+## Bounded HR keyword searches (v24.6.486)
+
+The default eleven-term Boolean returned no results on the owner's normal
+LinkedIn People search, while the same current-company filter returned people
+with short queries. The companion now groups up to five distinct comma-separated
+terms per query; it does not discard the remaining terms or remove the company
+or country. Five is a conservatively tested group size, not a claim about a
+universal LinkedIn account limit.
+
+All groups share the original page, profile and ten-minute budgets. Empty
+nonterminal groups advance rather than ending the scan. Repeated people across
+queries are deduplicated, and query-aware page signatures distinguish identical
+result cards from a stuck page. Company/country filters and all original matching
+keywords remain pinned. Interrupted query navigation never repeats after worker
+suspension. Older in-flight sessions remain readable; new UI requires the
+corrected companion capability before starting HR scans.
+
+The shared page budget reserves a first result page for each remaining group
+when possible. Skipping further pages in an earlier group keeps the final scan
+limited, including when the last group has no next page. A small limit can still
+leave groups unreviewed; it never silently increases the selected page count.
+
+Saved evidence keeps the full original keyword list and the final confirmed
+company/country source URL, within the existing record and backup format. A scan
+that reaches its shared limits remains limited even if some keyword groups or
+result pages were not reviewed. No paid request, new permission, route, database
+migration, owner installation update or external write is introduced.
+
 ## HR completeness at the result ceiling (v24.6.479)
 
 The 100-person cap applies to unique canonical profile links. If a final-page
