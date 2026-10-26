@@ -7,15 +7,17 @@ const employee=id=>element('Employees',{href:'https://www.linkedin.com/search/re
 const header=element('',{querySelectorAll:()=>state.companyIds.map(employee)});
 const heading=element('Example Company',{closest:()=>header});
 const toolbar=element('',{querySelectorAll:selector=>{
-  if(selector==='button')return [element('Locations',{click:()=>state.clicks.push('open')})];
-  if(selector.includes('checkbox'))return [state.company,...(state.selected?[state.country]:[])].map(label=>element('',{checked:true,getAttribute:name=>name==='aria-label'?label:null}));
-  if(selector==='a, button')return [element('Show results',{click:()=>state.clicks.push('apply')})];
+  if(selector==='button' || selector==='button, [role="button"]')return state.modern && selector==='button'?[]:[element('Locations',{click:()=>state.clicks.push('open')})];
+  if(selector.includes('checkbox'))return [state.company,...(!state.modern&&state.selected?[state.country]:[])].map(label=>element('',{checked:true,labels:state.modern?[element(label)]:[],getAttribute:name=>name==='aria-label'&&!state.modern?label:null}));
+  if(selector==='a, button')return state.modern?[]:[element('Show results',{click:()=>state.clicks.push('apply')})];
   return [];
 }});
 class Input{dispatchEvent(event){state.inputEvent=event.type}}
 Object.defineProperty(Input.prototype,'value',{set(value){state.input=value}});
-const input=new Input();input.getClientRects=()=>[{}];
-const suggestions=element('',{querySelectorAll:()=>[element('Malaysia',{click:()=>state.clicks.push('pick')}),element('Selangor, Malaysia',{click:()=>{throw Error('must not select partial country match')}})]});
+const input=new Input();input.getClientRects=()=>[{}];input.getAttribute=()=>null;
+const popup=element('',{querySelectorAll:selector=>selector.includes('checkbox')?[element('',{checked:state.selected,labels:[element(state.country)]})]:selector==='a, button'?[element('Show results',{click:()=>state.clicks.push('apply')})]:[]});
+input.closest=()=>state.modern?popup:null;
+const suggestions=element('',{querySelectorAll:selector=>state.modern&&selector==='button'?[]:!state.modern&&selector==='[role="option"]'?[]:[element('Malaysia',{querySelector:()=>state.modern?element('',{click:()=>state.clicks.push('pick')}):null,click:()=>state.clicks.push('pick')}),element('Selangor, Malaysia',{click:()=>{throw Error('must not select partial country match')}})]});
 const card=(name,title,where,url='https://www.linkedin.com/in/'+name)=>{
   const link=element(name,{href:url}),paras=[element(name,{querySelector:()=>link}),element(title),element(where)];
   return element(name+' '+title,{querySelectorAll:s=>s==='p'?paras:[],querySelector:()=>null});
@@ -56,5 +58,12 @@ assert.equal(reader.readHRSearch('Example Company','',keywords).people.length,2,
 assert(reader.readHRSearch('Different Company','',keywords).loading);state.selected=true;
 state.cards=[card('nonhr','Developer','Malaysia')];snapshot=reader.readHRSearch('Example Company','Malaysia',keywords);assert.equal(snapshot.people.length,0);assert.equal(snapshot.loading,undefined,'valid page with zero HR matches still paginates');
 state.cards=[];assert(reader.readHRSearch('Example Company','Malaysia',keywords).loading);state.empty=true;assert(reader.readHRSearch('Example Company','Malaysia',keywords).empty);
+state.modern=true;
+assert(reader.readHRSearch('Example Company','',keywords).empty,'a checked company filter can get its name from an associated visible label');
+assert(reader.readHRSearch('Other Company','',keywords).loading,'another company label is not accepted');
+assert(reader.hrCountryOpen('Malaysia'),'modern Locations is a role=button div');
+assert(reader.hrCountryPick('Malaysia'),'modern suggestions are role=option rows containing role=button controls');
+assert(reader.hrCountryApply('Malaysia'),'the exact selected country and Show results can be in a portal outside the toolbar');
+state.selected=false;assert(!reader.hrCountryApply('Malaysia'),'an unchecked country cannot be applied');
 state.restricted=true;assert.throws(()=>reader.readHRSearch('Example Company','Malaysia',keywords));
 console.log('Company HR reader: observed company ID, exact country suggestions/badges, native-only controls, scoped fields, HR word boundaries, loading/empty distinction, pagination and restrictions passed');

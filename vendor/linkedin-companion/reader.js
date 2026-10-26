@@ -425,10 +425,17 @@
     return ids.length === 1 ? {company_id:ids[0]} : {loading:true};
   }
   function hrToolbar() { return document.querySelector('[componentkey="SearchResults_SearchResultsFilterBar"], [role="toolbar"], .search-reusables__filters-bar'); }
+  function hrFilterLabel(node) {
+    const label=node.getAttribute('aria-label');
+    if (label) return normalized(label.replace(/^Filter by /i,''));
+    // Modern filters name the associated label rather than the hidden input.
+    const labels=[...(node.labels || [])].filter(visible);
+    return normalized(labels.length === 1 ? text(labels[0]) : text(node));
+  }
   function hrCountryOpen(country) {
     assertPage('standard','search');
     const toolbar = hrToolbar();
-    const button = [...(toolbar?.querySelectorAll('button') || [])].find(n=>visible(n) && /^(?:Filter by )?Locations$/i.test(n.getAttribute('aria-label') || text(n)));
+    const button = [...(toolbar?.querySelectorAll('button, [role="button"]') || [])].find(n=>visible(n) && /^(?:Filter by )?Locations$/i.test(n.getAttribute('aria-label') || text(n)));
     if (!button) throw Error('LinkedIn location controls are not recognized.');
     button.click();
     return true;
@@ -443,24 +450,27 @@
   function hrCountryPick(country) {
     assertPage('standard','search');
     const list = [...document.querySelectorAll('[role="listbox"]')].find(visible);
-    const choices = [...(list?.querySelectorAll('button') || [])].filter(n=>visible(n) && normalized(text(n)) === normalized(country));
+    const options=[...(list?.querySelectorAll('[role="option"]') || [])];
+    const choices = (options.length ? options : [...(list?.querySelectorAll('button') || [])]).filter(n=>visible(n) && normalized(text(n)) === normalized(country));
     if (choices.length !== 1) return false;
-    choices[0].click(); return true;
+    const button=choices[0].querySelector('button, [role="button"]');
+    (visible(button) ? button : choices[0]).click(); return true;
   }
   function hrCountryApply(country) {
     assertPage('standard','search');
-    const toolbar = hrToolbar();
-    const selected = [...(toolbar?.querySelectorAll('input[type="checkbox"], [role="checkbox"]') || [])].filter(n=>visible(n) && (n.checked || n.getAttribute('aria-checked') === 'true') && normalized(n.getAttribute('aria-label')) === normalized(country));
-    const actions = [...(toolbar?.querySelectorAll('a, button') || [])].filter(n=>visible(n) && text(n) === 'Show results');
+    const field=[...document.querySelectorAll('input[placeholder="Add a location"], input[aria-label="Add a location"]')].find(visible);
+    const scope=field?.closest('[popover], [role="dialog"]') || hrToolbar();
+    const selected = [...(scope?.querySelectorAll('input[type="checkbox"], [role="checkbox"]') || [])].filter(n=>visible(n) && (n.checked || n.getAttribute('aria-checked') === 'true') && hrFilterLabel(n) === normalized(country));
+    const actions = [...(scope?.querySelectorAll('a, button') || [])].filter(n=>visible(n) && !disabled(n) && text(n) === 'Show results');
     if (selected.length !== 1 || actions.length !== 1) return false;
     actions[0].click(); return true;
   }
   function readHRSearch(company, country, keywords) {
     assertPage('standard','search');
     const toolbar = hrToolbar();
-    const labels = [...(toolbar?.querySelectorAll('input[type="checkbox"], [role="checkbox"]') || [])].filter(n=>visible(n) && (n.checked || n.getAttribute('aria-checked') === 'true')).map(n=>normalized(n.getAttribute('aria-label') || text(n)));
+    const labels = [...(toolbar?.querySelectorAll('input[type="checkbox"], [role="checkbox"]') || [])].filter(n=>visible(n) && (n.checked || n.getAttribute('aria-checked') === 'true')).map(hrFilterLabel);
     if (!labels.includes(normalized(company)) || country && !labels.includes(normalized(country))) return {loading:true};
-    const scope = document.querySelector('main [role="region"][aria-label="Primary content"]') || document.querySelector('main');
+    const scope = document.querySelector('main [aria-label="Primary content"]') || document.querySelector('main');
     if (!scope) return {loading:true};
     const cards = [...scope.querySelectorAll('[componentkey^="SearchResults_"] [role="listitem"], [role="list"] > [role="listitem"], li.reusable-search__result-container, .entity-result')].filter(visible);
     const people = [], seen = new Set();

@@ -4,6 +4,24 @@
 
 ## Release state
 
+- v24.6.485 is a local correction from merged master `d90c676` for the owner's
+  false "HR search changed" report. An explicit persisted wait now separates
+  company-to-People navigation from reading the new search. Same-search loading
+  before an action waits safely; ambiguous invoked actions still never replay.
+  Modern associated filter labels, role-based country buttons/options and the
+  country popover are recognized without weakening exact company/country checks.
+  The UI waits for a deferred next-page click rather than treating a loading
+  response as successful paging. Regression and isolated-browser evidence are
+  recorded in the v485 QA report. All 1,779 isolated Windows Python tests (four
+  skipped, 8,392 subtests), 47 JavaScript suites, source/native preflight and
+  24 smoke assertions passed. Local checkpoint only; no PR, merge or owner
+  installation update in this follow-up.
+
+- PR #240 merged v24.6.483–484 as `d90c6760a9a27c0a5ca197d5280929991507ae6a`.
+  Master's full tree equals tested head `b2c4795`; all three hosted checks and
+  the completed clean automated review passed on that exact head. The old
+  branch is finished. Earlier pre-merge notes below are historical.
+
 - v24.6.484 corrects PR #240's remaining standalone-title fallback finding.
   Every standalone ad clears the generic linked-title fallback before validating
   its visible company/title/location tuple. A leading notice or unknown header
