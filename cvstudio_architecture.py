@@ -129,6 +129,11 @@ DEFAULT_MODULES = (
         ("job_leads",),
     ),
     ModuleDefinition(
+        "email_verifier",
+        "domain",
+        ("cvstudio_email_verifier.py",),
+    ),
+    ModuleDefinition(
         "secrets",
         "domain",
         ("cvstudio_secrets.py",),
@@ -318,6 +323,7 @@ DEFAULT_MODULES = (
         ),
         (
             "composition_root",
+            "email_verifier",
             "ai_costs",
             "ai_providers",
             "background_jobs",

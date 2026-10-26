@@ -24,7 +24,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.486"
+_INSTALL_RECEIPT_VERSION = "v24.6.487"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -347,7 +347,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.486"
+_CVSTUDIO_VERSION = "v24.6.487"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -14925,11 +14925,38 @@ def job_leads():
                                        action="restore_job_leads_backup" if error.code in {"JOB_LEADS_CORRUPT", "JOB_LEADS_INCOMPATIBLE"} else "refresh_job_leads")
 
 
+from cvstudio_email_verifier import EmailVerifier, VerifierError
+
+_EMAIL_VERIFIER = EmailVerifier()
+
+
+@app.route("/email-verifier", methods=["POST"])
+def email_verifier():
+    if request.content_length and request.content_length > 2048:
+        return _cvstudio_error_payload("EMAIL_VERIFIER_INPUT", "Enter one email address per check.", 413,
+                                       retryable=False, action="use_smaller_file")
+    try:
+        raw = request.stream.read(2049)
+        if len(raw) > 2048:
+            raise VerifierError("Enter one email address per check.", 413)
+        try:
+            data = json.loads(raw) if request.is_json else None
+        except (ValueError, UnicodeError):
+            data = None
+        result = _EMAIL_VERIFIER.check(data)
+        response = jsonify(ok=True, result=result)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except VerifierError as error:
+        return _cvstudio_error_payload("EMAIL_VERIFIER_INPUT", str(error), error.status,
+                                       retryable=error.status == 429, action="retry_later" if error.status == 429 else "")
+
+
 _CVSTUDIO_ARCHITECTURE = _finalize_modular_monolith_app(
     app,
-    expected_route_count=120,
+    expected_route_count=121,
     expected_route_contract_sha256=(
-        "ee8d33baeb48b961a2f50723faacbeb7fed86b55454b3518ab4a07bcd1e90033"
+        "6b0b7dfd41ab2b85fa4685de18efdf1aad477fa91a39cbf0b8a8794eb923b221"
     ),
     expected_before_request_handlers=(
         "_assign_cvstudio_request_id",

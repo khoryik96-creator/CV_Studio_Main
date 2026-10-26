@@ -15,7 +15,7 @@ function switchTab(tab) {
     tab = 'format';
   }
   // Map tab names to their element ID suffixes
-  var tabMap = { format:'Format', batch:'Batch', summary:'Summary', appraiser:'Appraiser', theowl:'TheOwl', thespider:'TheSpider', linkedinsourcer:'LinkedinSourcer', jobleads:'JobLeads', stats:'Stats', jaupload:'JAUpload', jacreate:'JACreate', onenote:'OneNote', jdanon:'JDAnon', company:'Company', leadfinder:'LeadFinder', ppc:'PPC', salary:'Salary' };
+  var tabMap = { format:'Format', batch:'Batch', summary:'Summary', appraiser:'Appraiser', theowl:'TheOwl', thespider:'TheSpider', linkedinsourcer:'LinkedinSourcer', jobleads:'JobLeads', emailverifier:'EmailVerifier', stats:'Stats', jaupload:'JAUpload', jacreate:'JACreate', onenote:'OneNote', jdanon:'JDAnon', company:'Company', leadfinder:'LeadFinder', ppc:'PPC', salary:'Salary' };
   Object.keys(tabMap).forEach(function(t) {
     var suffix = tabMap[t];
     document.getElementById('view' + suffix).classList.toggle('active', t === tab);
@@ -47,6 +47,7 @@ function switchTab(tab) {
   if (tab === 'thespider') updateTheSpiderRouteBadge();
   if (tab === 'linkedinsourcer') initLinkedinSourcer();
   if (tab === 'jobleads') initJobLeads();
+  if (tab === 'emailverifier') initEmailVerifier();
   if (tab === 'jaupload') updateJAUploadConnStatus();
   if (tab === 'jacreate') updateJACreateConnStatus();
   if (tab === 'onenote') { updateOneNoteConnStatus(); oneNoteSourceModeChanged(); oneNoteRenderSavedLinks(); oneNoteRefreshCost(); oneNoteRenderRecords(); oneNoteInitActivityDiagnostic(); }
