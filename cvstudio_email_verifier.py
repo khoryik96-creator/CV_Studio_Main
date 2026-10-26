@@ -299,10 +299,20 @@ class EmailVerifier:
                 result.update(status="invalid", reason="The domain does not exist." if state == "no_domain" else "The domain explicitly declares that it does not receive email.")
                 return result
             reachable = []
+            lookup_failure = None
             for host in hosts:
-                addresses = self.dns.addresses(host, deadline)
+                try:
+                    addresses = self.dns.addresses(host, deadline)
+                except CheckUnavailable as error:
+                    # A failed/restricted MX must not discard another usable
+                    # public server. The failing host contributes no addresses.
+                    if lookup_failure is None:
+                        lookup_failure = error
+                    continue
                 reachable.extend((host, ip) for ip in addresses)
             if not reachable:
+                if lookup_failure is not None:
+                    raise lookup_failure
                 result.update(status="invalid" if state == "implicit" else "unknown", domain="no_server",
                               reason="No mail server or fallback server was found." if state == "implicit" else "The advertised mail server has no usable address. Mailbox validity is unknown.")
                 return result

@@ -1,5 +1,13 @@
 # Email Verifier
 
+The v491 pre-merge review correction isolates address-lookup failures to each
+MX host. A failed or restricted host contributes no addresses, while another
+successfully resolved public host remains usable for quick and mailbox checks.
+If no host is usable and any lookup was inconclusive, the result stays unknown;
+it is never reinterpreted as a definite missing-domain/server verdict. Public
+address validation within each host, SMTP pinning, scan budgets and cleanup
+remain unchanged.
+
 The v490 UI calls the machine status `unknown` **Unconfirmed** and displays
 independent format, mail-record and mailbox evidence. No verdict semantics or
 route fields changed. A timeout before the mail-server greeting is reported as

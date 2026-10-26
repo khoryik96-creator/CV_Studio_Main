@@ -77,6 +77,48 @@ def test_no_mx_has_implicit_fallback_and_missing_mx_target_is_not_definite_inval
     assert engine('mx',[]).check({'email':'person@example.test'})['status']=='unknown'
 
 
+@pytest.mark.parametrize('mode', ['quick','full'])
+@pytest.mark.parametrize('failed_first', [False,True])
+def test_one_mx_lookup_failure_does_not_discard_a_usable_server(mode,failed_first):
+    service=engine()
+    service.dns.hosts.return_value=('mx',['primary.example.test','backup.example.test'])
+    failure=CheckUnavailable('The domain\'s DNS could not be read. This does not mean the address is invalid.')
+    answers=[failure,['8.8.8.8']] if failed_first else [['8.8.8.8'],failure]
+    service.dns.addresses.side_effect=answers
+    result=service.check({'email':'person@example.test','mode':mode})
+    assert result['status']==('domain_ok' if mode=='quick' else 'accepted')
+    assert result['domain']=='mx'
+    if mode=='quick': service.probe.check.assert_not_called()
+    else:
+        host='backup.example.test' if failed_first else 'primary.example.test'
+        assert service.probe.check.call_args.args[:3]==(host,'8.8.8.8','person@example.test')
+
+
+def test_all_failed_mx_lookups_stay_unknown_and_release_domain_slots():
+    service=engine()
+    service.dns.hosts.return_value=('mx',['primary.example.test','backup.example.test'])
+    service.dns.addresses.side_effect=CheckUnavailable('DNS temporarily unavailable')
+    for _ in range(3):
+        result=service.check({'email':'person@example.test'})
+        assert result['status']=='unknown' and result['reason']=='DNS temporarily unavailable'
+        assert result['mailbox']=='not_checked'
+    assert service.dns.addresses.call_count==6
+    service.probe.check.assert_not_called()
+
+
+def test_restricted_mx_is_skipped_without_weakening_the_public_address_guard():
+    resolver=MailDNS()
+    resolver.hosts=mock.Mock(return_value=('mx',['restricted.example.test','public.example.test']))
+    def records(host,kind,deadline):
+        return [SimpleNamespace(address='10.0.0.1' if host=='restricted.example.test' else '8.8.8.8')] if kind=='A' else []
+    resolver.query=mock.Mock(side_effect=records)
+    probe=mock.Mock();probe.check.return_value=('accepted','Synthetic protocol evidence')
+    result=EmailVerifier(resolver,probe).check({'email':'person@example.test'})
+    assert result['status']=='accepted'
+    assert probe.check.call_args.args[:3]==('public.example.test','8.8.8.8','person@example.test')
+    assert probe.check.call_count==1
+
+
 def test_dns_failure_and_unsupported_syntax_are_unknown_and_release_slots():
     service=engine()
     service.dns.hosts.side_effect=CheckUnavailable('DNS temporarily unavailable')

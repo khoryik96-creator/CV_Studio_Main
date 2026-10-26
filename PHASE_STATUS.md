@@ -4,6 +4,16 @@
 
 ## Release state
 
+- v24.6.491 corrects PR #249's pre-merge review finding: a failed primary or
+  backup MX address lookup no longer cancels another usable public mail server.
+  Both quick and full checks retain usable hosts; all-inconclusive lookups remain
+  unknown, and restricted/private addresses never reach SMTP. Five regression
+  cases failed before the correction, and a sixth exercises the real public-IP
+  guard. All 1,853 isolated Windows Python tests (four skipped, 8,416 subtests),
+  all 52 JavaScript fixture files, preflight and 24 smoke assertions passed.
+  Final hosted-check identities are recorded in the v491 QA report and
+  coordination issue #35. All v490 Awards and HR fixes remain.
+
 - v24.6.490 integrates Email Verifier v487 with the tested
   v488 Awards grouping and v489 saved-ad HR corrections. A valid email can remain
   unconfirmed when direct mailbox probing is unavailable; the UI now labels
