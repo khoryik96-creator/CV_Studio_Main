@@ -227,6 +227,14 @@ class SourceRestoreGuardrails(unittest.TestCase):
                 )
                 self.assertEqual(result["skills"], case["expect"], case["note"])
 
+    def test_award_headings(self):
+        for case in _cases("award_headings"):
+            with self.subTest(case=case["id"]):
+                result = normalize._normalize_cv_data_for_output(
+                    copy.deepcopy(case["parsed"]), "\n".join(case["lines"])
+                )
+                self.assertEqual(result["skills"], case["expect"], case["note"])
+
     def test_contribution_generic_boundaries_respect_achievement_markers(self):
         category = "Contribution towards Projects / Taskforce"
         for boundary in sorted(normalize._CV_SOURCE_SECTION_BOUNDARY_KEYS):

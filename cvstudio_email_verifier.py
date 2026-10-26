@@ -193,10 +193,12 @@ class SMTPProbe:
             budget()
             return fn(*args)
 
+        phase = "connection"
         try:
             code, _ = command(client.connect, ip, 25)
             if code != 220:
                 return "unknown", "The mail server did not accept the connection."
+            phase = "session"
             code, _ = command(client.ehlo)
             if code != 250:
                 code, _ = command(client.helo)
@@ -212,6 +214,7 @@ class SMTPProbe:
             code, _ = command(client.mail, "")
             if code != 250:
                 return "unknown", "The server declined a verification-only sender. No mailbox conclusion is possible."
+            phase = "mailbox"
             code, text = command(client.rcpt, address)
             # Generic 550 / policy blocks, full mailboxes and temporary errors
             # are not proof the recipient does not exist.
@@ -232,8 +235,18 @@ class SMTPProbe:
             if code in {550, 551, 553} and re.search(rb"\b5\.1\.1\b", text):
                 return "accepted", "The server accepted this mailbox and rejected a made-up one. Delivery is still not guaranteed."
             return "unknown", "The mailbox was accepted, but the server did not give a clear catch-all result."
-        except (OSError, smtplib.SMTPException, UnicodeError, TimeoutError):
-            return "unknown", "Mailbox probing was blocked, interrupted or timed out. Your network may block outgoing SMTP (port 25)."
+        except ssl.SSLCertVerificationError:
+            return "unknown", "The mail server's secure connection could not be verified. The mailbox remains unconfirmed."
+        except TimeoutError:
+            if phase == "connection":
+                return "unknown", "The mail server connection timed out on port 25. Your network or the mail server may block verification. This does not mean the email is invalid."
+            if phase == "mailbox":
+                return "unknown", "The mailbox response timed out. The mailbox remains unconfirmed; it has not been marked invalid."
+            return "unknown", "The mail server's verification session timed out before a mailbox answer. The mailbox remains unconfirmed."
+        except ConnectionRefusedError:
+            return "unknown", "The mail server connection was refused. The mailbox remains unconfirmed; it has not been marked invalid."
+        except (OSError, smtplib.SMTPException, UnicodeError):
+            return "unknown", "The mail server connection was interrupted or unavailable. The mailbox remains unconfirmed; it has not been marked invalid."
         finally:
             # close(), rather than QUIT, cannot wait on an unresponsive server.
             client.close()

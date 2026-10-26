@@ -93,11 +93,28 @@ rendered as formatting.
 ### C2
 **Blind headings contain only blinded visible text.** Discard provider-supplied
 `item_headings`, which can echo real source labels. Rebuild this layout hint
-only for corresponding contribution groups with matching category, item count,
+only for corresponding contribution or confirmed award groups with matching category, item count,
 unchanged years and unchanged non-heading anchors. Take every rebuilt value
 from the provider's visible items, never from source text. Changed order,
 missing/rewritten items or ambiguous structure receives no heading metadata.
 The provider's content and representation remain intact.
+
+### C3
+**Awards employer/year labels remain headings only with exact source alignment.**
+A unique explicit Awards / Awards & Achievements / Awards & Recognition source
+section must match every existing item in order, allowing wrapped body lines.
+An unmarked full employer name matching work history, or a short name-like
+explicit legal entity, followed by bare-year and award-description pairs,
+establishes the group. A source's awards legal entity may differ from the work
+history's brand; neither name is changed or merged. Company/year labels must each
+be one unmarked source line and unique within the group. Only existing labels
+receive `item_headings`; award wording, order and items representation are kept.
+Ordinary skills, unknown employers, marked labels, duplicate sections/groups,
+missing/reordered/changed items and uncertain structures receive no new hints.
+Source-backed rechecks remove stale award hints; source-free export retains
+confirmed hints. Recognized following CV sections end the source span. All scans
+are bounded. Blind CV rebuilds confirmed award hints only from already-blinded
+visible text with the same unchanged-year/non-heading-anchor checks as C2.
 
 ### B1
 **Blind CV keeps the source summary's points.** Only the Blind CV parse opt-in

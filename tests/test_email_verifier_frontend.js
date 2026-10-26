@@ -53,6 +53,14 @@ async function main(){
   await failed.el('Start').click();assert.equal(failed.calls.length,1);assert(failed.state.failed);
   assert.equal(failed.el('Total').textContent,'0 of 2 checked');assert(failed.el('Start').disabled===false);
 
+  const unconfirmed=fixture();unconfirmed.el('Input').value='person@example.test';
+  unconfirmed.state.fetch=async()=>({ok:true,json:async()=>({ok:true,result:{status:'unknown',syntax:'ok',domain:'mx',mailbox:'unknown',reason:'Connection timed out.',flags:[]}})});
+  await unconfirmed.el('Start').click();
+  const row=unconfirmed.el('Results').children[0];
+  assert.equal(row.children[1].children[0].textContent,'Unconfirmed');
+  assert(row.children[2].children.some(n=>/Format: Passed.*Mail records: Found.*Mailbox: Unconfirmed/.test(n.textContent)));
+  assert.equal(unconfirmed.el('Invalid').textContent,0);
+
   const importing=fixture();let load;
   importing.el('File').files=[{size:30,text:()=>new Promise(resolve=>{load=resolve;})}];
   const upload=importing.el('File').handlers.change();importing.el('Filter').handlers.change();

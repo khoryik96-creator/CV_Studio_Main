@@ -430,6 +430,15 @@ assert.strictEqual((contributionPreview.match(/class="preview-bullet"/g) || []).
 const duplicateContribution = context.cvSkillPreviewHtml({
   items: ['Northwind', 'Northwind', 'Won an award.'], item_headings: ['Northwind'],
 });
+const awardsPreview = context.cvSkillPreviewHtml({
+  category: 'Awards & Achievements',
+  items: ['Northwind Services (M) Sdn Bhd', '2024', 'Recognition Award - Ten years.', '2023', 'Silver Award - Monitoring support.'],
+  item_headings: ['Northwind Services (M) Sdn Bhd', '2024', '2023'],
+});
+assert.ok(awardsPreview.includes('<strong>Northwind Services (M) Sdn Bhd</strong>'));
+assert.ok(awardsPreview.includes('<strong>2024</strong>'));
+assert.ok(awardsPreview.includes('<strong>2023</strong>'));
+assert.strictEqual((awardsPreview.match(/class="preview-bullet"/g) || []).length, 2);
 assert.strictEqual((duplicateContribution.match(/class="preview-bullet"/g) || []).length, 3);
 const plainYears = context.cvSkillPreviewHtml({items: ['2020', '2019']});
 assert.strictEqual((plainYears.match(/class="preview-bullet"/g) || []).length, 2);

@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const MAX = 200;
-  const labels = {accepted:'Mailbox accepted', invalid:'Invalid', catch_all:'Catch-all', unknown:'Unknown', domain_ok:'Domain passed', not_checked:'Not checked'};
+  const labels = {accepted:'Mailbox accepted', invalid:'Invalid', catch_all:'Catch-all', unknown:'Unconfirmed', domain_ok:'Domain passed', not_checked:'Not checked'};
   const el = name => document.getElementById('emailVerifier' + name);
   let rows = [], running = false, importing = false, stopping = false, ready = false;
 
@@ -78,6 +78,17 @@
     const filter = el('Filter').value, search = el('Search').value.toLowerCase().trim();
     return rows.filter(row => (!filter || row.status === filter) && (!search || row.email.toLowerCase().includes(search)));
   }
+  function evidence(row) {
+    const parts=[];
+    const syntax={ok:'Passed',invalid:'Invalid',unsupported:'Not supported'}[row.syntax];
+    if(syntax) parts.push('Format: '+syntax);
+    const domain={mx:'Found',no_domain:'Domain missing',no_mail:'Domain does not receive mail',no_server:'No usable server',not_checked:'Not checked'}[row.domain];
+    if(domain) parts.push('Mail records: '+domain);
+    if(row.domain==='implicit') parts.push(row.status==='domain_ok'||row.mailbox&&row.mailbox!=='not_checked'?'Fallback mail server: Found':'MX record: Not found');
+    const mailbox={accepted:'Accepted',invalid:'Does not exist',catch_all:'Catch-all',unknown:'Unconfirmed',not_checked:'Not checked'}[row.mailbox];
+    if(mailbox) parts.push('Mailbox: '+mailbox);
+    return parts.join(' · ');
+  }
   function render() {
     const complete = rows.filter(row => row.status !== 'not_checked').length;
     for (const [name, state] of [['Accepted','accepted'],['Invalid','invalid'],['CatchAll','catch_all'],['Unknown','unknown'],['Domain','domain_ok']]) {
@@ -96,6 +107,8 @@
       state.appendChild(textNode('span',labels[row.status] || 'Unknown','ev-badge ev-' + (Object.hasOwn(labels,row.status) ? row.status : 'unknown')));
       const detail = document.createElement('td');
       detail.appendChild(textNode('p',row.reason || (running ? 'Waiting for its turn.' : 'Not checked in this run.')));
+      const checks=evidence(row);
+      if(checks) detail.appendChild(textNode('small',checks,'ev-flags'));
       if (row.flags?.length) detail.appendChild(textNode('small',row.flags.join(' · '),'ev-flags'));
       tr.append(email,state,detail); el('Results').appendChild(tr);
     }

@@ -6,6 +6,17 @@ sourcer and the locked historical Lead Finder.
 
 ## Companion connection and updates (v24.6.480)
 
+The v489 saved-ad HR correction reads modern list items nested one wrapper below
+the results list. Only the first wrapper carries a SearchResults component key;
+the old selector consequently saw just one of ten cards. Reading remains scoped
+to the primary results region and retains exact company/country badge checks.
+Native pagination's `spellCorrectionEnabled` and `prioritizeMessage` URL options
+are excluded from the identity key, alongside the existing page/tracking fields;
+company, geography, keyword text and other filters remain identity-bearing.
+If the location button has not hydrated, no click occurs and the existing bounded
+poll loop can wait. An invoked/ambiguous action still never replays. Reader
+exceptions use fixed, step-specific messages and never expose arbitrary page text.
+
 Trust the normal CV Studio installation/address once using the companion toolbar
 icon. The enabled companion then reconnects automatically when its verified tab
 loads or is revisited. Fresh backend challenges authenticate the paired identity;

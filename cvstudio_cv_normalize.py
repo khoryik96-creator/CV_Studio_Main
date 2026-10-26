@@ -1147,6 +1147,123 @@ def _restore_cv_contribution_headings(parsed, source_text):
     return parsed
 
 
+def _restore_cv_award_headings(parsed, source_text):
+    """Keep existing employer/year labels above exactly source-matched awards.
+
+    Unlike contributions, award descriptions may be plain source paragraphs.
+    Require the whole existing list to align before annotating any label.
+    """
+    award_categories = {"awards", "awards achievements", "awards recognition"}
+    groups = [skill for skill in parsed.get("skills") or []
+              if isinstance(skill, dict)
+              and _cv_source_boundary_key(skill.get("category")) in award_categories]
+    if not groups or not source_text or len(source_text) > 1000000:
+        return parsed
+    lines = [line.strip() for line in str(source_text).splitlines() if line.strip()]
+    if len(lines) > 12000 or len(parsed.get("work_experiences") or []) > 256:
+        return parsed
+    # Source-free exports retain confirmed hints. With a source, uncertainty
+    # must not retain a now-stale company/year annotation.
+    for group in groups:
+        group.pop("item_headings", None)
+    starts = [i for i, line in enumerate(lines)
+              if _cv_source_boundary_key(line) in award_categories
+              and _strip_leading_bullet_marker(line).strip() == line
+              and not re.search(r"\d", line)]
+    if len(groups) != 1 or len(starts) != 1:
+        return parsed
+    values = groups[0].get("items") or []
+    values = values if isinstance(values, list) else str(values).splitlines()
+    if not values or len(values) > 512 or any(not isinstance(value, str) for value in values):
+        return parsed
+    items = [value.strip() for value in values if value.strip()]
+
+    def key(value):
+        return re.sub(r"[\W_]+", " ", unicodedata.normalize("NFKC", value).casefold()).strip()
+
+    boundaries = (_CV_SOURCE_SECTION_BOUNDARY_KEYS | set(_CV_RECOVERABLE_SOURCE_SECTIONS)
+                  | award_categories | {"training highlights", "professional references"})
+    section = []
+    for line in lines[starts[0] + 1:]:
+        plain = _strip_leading_bullet_marker(line).strip()
+        letters = [char for char in plain if char.isalpha()]
+        strong = (bool(letters) and all(char.isupper() for char in letters)) or line.endswith(":")
+        numbered = bool(re.match(r"^(?:\(\d{1,3}\)|\d{1,3}[.)])\s*", line))
+        if (_cv_source_boundary_key(plain) in boundaries
+                and (plain == line or strong or numbered)):
+            break
+        if line != "## RESTRICTED ##":
+            section.append(line)
+    if not section or len(section) > 2048:
+        return parsed
+    source_keys = [key(_strip_leading_bullet_marker(line)) for line in section]
+    item_keys = [key(value) for value in items]
+    # Align each item to consecutive complete source lines. Wrapped award prose
+    # is supported; partial matches, dropped content and reordering are not.
+    spans, cursor = [], 0
+    for wanted in item_keys:
+        start, joined = cursor, ""
+        while cursor < len(section) and len(joined) <= 8192:
+            joined = (joined + " " + source_keys[cursor]).strip()
+            cursor += 1
+            if joined == wanted:
+                spans.append((start, cursor))
+                break
+            if not wanted.startswith(joined + " "):
+                return parsed
+        else:
+            return parsed
+    if cursor != len(section):
+        return parsed
+    employers = {key(str(exp.get("company"))) for exp in parsed.get("work_experiences") or []
+                 if isinstance(exp, dict) and exp.get("company")}
+    year = re.compile(r"(?:19|20)\d{2}\Z")
+
+    def unmarked_label(index):
+        start, end = spans[index]
+        return end == start + 1 and _strip_leading_bullet_marker(section[start]).strip() == section[start]
+
+    def employer_label(index):
+        if item_keys[index] in employers:
+            return True
+        # An awards section may use a legal entity different from the work
+        # history's brand. Its own explicit name remains the layout authority;
+        # never rewrite or merge those companies. Refuse award titles/prose.
+        value = items[index]
+        words = re.findall(r"[^\W\d_]+", value)
+        return (len(value) <= 120 and 2 <= len(words) <= 16
+                and all(word[0].isupper() or word in {"and", "of", "the"} for word in words)
+                and not re.search(r"\b(?:awards?|recognition|recognized|recognised|achievements?|received|awarded)\b", value, re.I)
+                and bool(re.search(r"\b(?:sdn bhd|berhad|pte ltd|pvt ltd|inc|incorporated|ltd|limited|llc|plc|corp|corporation)\Z", item_keys[index])))
+
+    positions, index = [], 0
+    while index < len(items):
+        if not employer_label(index) or not unmarked_label(index):
+            return parsed
+        positions.append(index)
+        index += 1
+        pairs = 0
+        while index < len(items) and year.fullmatch(items[index]):
+            if (not unmarked_label(index) or index + 1 >= len(items)
+                    or year.fullmatch(items[index + 1]) or item_keys[index + 1] in employers):
+                return parsed
+            positions.append(index)
+            pairs += 1
+            index += 2
+        if not pairs:
+            return parsed
+    item_counts, source_counts = {}, {}
+    for value in item_keys:
+        item_counts[value] = item_counts.get(value, 0) + 1
+    for value in source_keys:
+        source_counts[value] = source_counts.get(value, 0) + 1
+    headings = [items[i] for i in positions
+                if item_counts[item_keys[i]] == 1 and source_counts[item_keys[i]] == 1]
+    if headings:
+        groups[0]["item_headings"] = headings
+    return parsed
+
+
 def _recover_cv_source_additional_sections(parsed, source_text):
     """Restore exact project/training lists and remove duplicated training certs."""
     recovered = _extract_recoverable_cv_source_sections(source_text)
@@ -1490,6 +1607,7 @@ def _normalize_cv_data_for_output(
     )
     parsed = _normalize_cv_structured_content(parsed)
     parsed = _restore_cv_contribution_headings(parsed, source_text)
+    parsed = _restore_cv_award_headings(parsed, source_text)
     parsed = _recover_cv_source_additional_sections(parsed, source_text)
     parsed = _recover_cv_source_skill_item_punctuation(parsed, source_text)
     parsed = _remove_ungrounded_cv_github_links(parsed, source_text)

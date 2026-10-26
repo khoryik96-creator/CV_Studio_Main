@@ -1,5 +1,15 @@
 # Email Verifier
 
+The v490 UI calls the machine status `unknown` **Unconfirmed** and displays
+independent format, mail-record and mailbox evidence. No verdict semantics or
+route fields changed. A timeout before the mail-server greeting is reported as
+a connection timeout; a recipient-response timeout, refused connection and TLS
+certificate failure each have fixed, distinct guidance. None is an Invalid
+verdict and raw exceptions/recipient data are never echoed in the reason.
+Finding MX records proves routing exists, not that a mailbox exists. A blocked
+port-25 connection cannot be repaired by declaring the address valid; successful
+mailbox probing requires a network and remote mail server that permit it.
+
 The repository-root `VERSION` is the release source of truth. This module was
 introduced on `codex/v24.6.487-email-verifier` from master `d9b91d9` at the
 owner's request for a first-party verifier without a verification service.

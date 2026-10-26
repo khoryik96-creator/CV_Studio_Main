@@ -335,6 +335,15 @@ Formatting is deterministic, so you rarely need the browser or a live parse:
 
 ## Known-minor, deliberately unfixed
 
+Awards employer/year labels (v24.6.488) use optional `item_headings` after the
+entire existing list aligns to a unique source Awards section. A work-history
+company or explicit name-like legal entity can head plain year/award pairs;
+the source legal label is never rewritten to a different work-history brand.
+Missing, reordered, marked or ambiguous source labels remain ordinary items.
+Source-free exports retain confirmed metadata. Blind rebuilding uses only the
+already-blinded visible labels and unchanged year/body anchors. See guardrail
+C3 and `tests/test_cv_award_headings.py`.
+
 Markdown `*emphasis*` as an entire bullet (`*Achieved target*`) → the leading `*`
 is stripped and a trailing `*` dangles. Vanishingly rare in CVs, and a "fix"
 risks over-stripping real content, so it is left as-is.

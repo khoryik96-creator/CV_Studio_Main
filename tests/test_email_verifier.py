@@ -6,6 +6,7 @@ from pathlib import Path
 import smtplib
 import socket
 import socketserver
+import ssl
 import sys
 import threading
 import time
@@ -174,6 +175,29 @@ def test_tls_uses_mx_identity_and_sender_rejection_is_unknown():
             result=SMTPProbe().check('mx.example.test','8.8.8.8','person@example.test',time.monotonic()+5)
         if tls: assert ('tls','mx.example.test') in fixture.calls
         else: assert result[0]=='unknown' and not any(row[0]=='rcpt' for row in fixture.calls)
+
+
+@pytest.mark.parametrize('stage,error,word',[
+    ('connect',TimeoutError(),'connection timed out'),
+    ('connect',ConnectionRefusedError(),'connection was refused'),
+    ('rcpt',TimeoutError(),'mailbox response timed out'),
+    ('starttls',ssl.SSLCertVerificationError(),'secure connection'),
+])
+def test_probe_failures_remain_unconfirmed_with_specific_safe_evidence(stage,error,word):
+    fixture=SMTPFixture((250,b'OK'),tls=stage=='starttls')
+    setattr(fixture,stage,mock.Mock(side_effect=error))
+    with mock.patch('cvstudio_email_verifier._DeadlineSMTP',return_value=fixture):
+        verdict,reason=SMTPProbe().check('mx.example.test','8.8.8.8','person@example.test',time.monotonic()+5)
+    assert verdict=='unknown' and fixture.closed
+    assert word in reason.lower()
+    assert 'person@example.test' not in reason
+    if stage=='connect': assert not any(row[0]=='rcpt' for row in fixture.calls)
+
+
+def test_timeout_keeps_passed_format_and_mail_records_without_invalid_verdict():
+    service=engine(verdict='unknown')
+    result=service.check({'email':'person@example.test'})
+    assert (result['syntax'],result['domain'],result['mailbox'],result['status'])==('ok','mx','unknown','unknown')
 
 
 def test_reply_reader_bounds_slow_drips_line_size_and_multiline_replies():

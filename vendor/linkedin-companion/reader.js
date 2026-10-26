@@ -436,7 +436,9 @@
     assertPage('standard','search');
     const toolbar = hrToolbar();
     const button = [...(toolbar?.querySelectorAll('button, [role="button"]') || [])].find(n=>visible(n) && /^(?:Filter by )?Locations$/i.test(n.getAttribute('aria-label') || text(n)));
-    if (!button) throw Error('LinkedIn location controls are not recognized.');
+    // A complete tab can still be hydrating its filter bar. No click occurred,
+    // so the controller may safely wait within its existing bounded poll loop.
+    if (!button) return false;
     button.click();
     return true;
   }
@@ -470,9 +472,12 @@
     const toolbar = hrToolbar();
     const labels = [...(toolbar?.querySelectorAll('input[type="checkbox"], [role="checkbox"]') || [])].filter(n=>visible(n) && (n.checked || n.getAttribute('aria-checked') === 'true')).map(hrFilterLabel);
     if (!labels.includes(normalized(company)) || country && !labels.includes(normalized(country))) return {loading:true};
-    const scope = document.querySelector('main [aria-label="Primary content"]') || document.querySelector('main');
+    const primary = document.querySelector('main [aria-label="Primary content"]');
+    const scope = primary || document.querySelector('main');
     if (!scope) return {loading:true};
-    const cards = [...scope.querySelectorAll('[componentkey^="SearchResults_"] [role="listitem"], [role="list"] > [role="listitem"], li.reusable-search__result-container, .entity-result')].filter(visible);
+    const selector = '[componentkey^="SearchResults_"] [role="listitem"], [role="list"] > [role="listitem"], li.reusable-search__result-container, .entity-result' +
+      (primary ? ', [role="list"] > * > [role="listitem"]' : '');
+    const cards = [...scope.querySelectorAll(selector)].filter(visible);
     const people = [], seen = new Set();
     for (const card of cards) {
       const paragraphs = [...card.querySelectorAll('p')].filter(visible);
