@@ -34,7 +34,15 @@ reference, and is not imported by the main app.
    reloaded. Legacy downloaded copies receive one-time setup guidance. Setup
    must use the normal installation's folder, rather than a development preview.
 4. By default, **Start search opens a fresh LinkedIn People search every time**,
-   then uses the generated keywords from the brief. No LinkedIn tab needs to be
+   then uses role/skill keywords from the brief. A requested country is returned
+   separately by the existing planning call and selected through LinkedIn's
+   native **Locations** menu (open, type, exact suggestion, Show results).
+   Countries, cities and regional aliases are excluded from the keyword query;
+   a plan that still puts its country in the query is rejected visibly.
+   The worker confirms the visible selected country and a single observed
+   geography filter before reading profiles. It never invents a geography ID,
+   calls LinkedIn's private APIs or falls back to geographic keywords.
+   No LinkedIn tab needs to be
    opened first. The source stays open for the user and existing tabs are kept.
    To review a filtered search or use Recruiter, expand **Search options** and
    select the search type / **Use the search already open**. In that mode the
@@ -59,6 +67,17 @@ Only observed public URLs are shown; otherwise the Recruiter profile URL remains
 labelled as requiring login. Collapsed/unloaded content stays unknown. LinkedIn
 restrictions and layout changes stop the run rather than triggering a bypass.
 There are no contact, message, project-save, profile-edit or JobAdder actions.
+
+v492's automatic country selection is for fresh normal People searches.
+Recruiter searches requesting a country stop with guidance to set Locations
+there and review the existing search. Existing-search mode always keeps its
+filters. Reload the v492 companion and refresh CV Studio/LinkedIn after updating;
+an older companion is rejected before the paid planning call for a new normal
+search. Country selection retains exact source/run authority across worker
+suspension, stages mutations before invocation, and never repeats an ambiguous
+click. Same-filter loading waits cannot consume a pagination click or replay
+one already confirmed. Candidate scoring remains behind the existing consent
+and request limit, after successful filter confirmation.
 
 ## Ownership and boundaries
 

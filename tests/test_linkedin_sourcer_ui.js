@@ -23,7 +23,7 @@ function fixture(reuse=true){
     if(!state.connected)return reply(null,'The browser action stopped. Reconnect the companion or check the LinkedIn page.');
     if(message.action==='tabs'){if(state.hold){state.held=()=>reply(state.tabs);return}return reply(state.tabs)}
     if(message.action==='reloadCompanion')return reply(state.reloadResult||{current:true});
-    if(message.action==='jobStatus')return reply({connected:true,companion_update_revision:state.oldUpdateCompanion?0:1});
+    if(message.action==='jobStatus')return reply({connected:true,people_country_revision:state.oldCountryCompanion?0:1,companion_update_revision:state.oldUpdateCompanion?0:1});
     if(message.action==='openPeopleSearch'){
       if(state.oldCompanion)return reply(null,'Unsupported browser action.');
       const tab={...people,id:20+(++state.opened),url:'https://www.linkedin.com/search/results/people/',title:'New People search'};
@@ -36,6 +36,7 @@ function fixture(reuse=true){
     if(message.action==='create')return reply(10);
     if(message.action==='read'){
       state.readCount++;
+      if(message.args.method==='setCountry'){if(state.holdCountry){state.countryReply=()=>reply(true);return;}return reply(true);}
       if(state.missingReads-- > 0 || state.missingMethod===message.args.method)return reply(null);
       return reply(message.args.method==='readProfile'?{text:candidate.text,name:candidate.name}:['search','next'].includes(message.args.method)?true:{profiles:[candidate],signature:'one',hasNext:!!state.morePages,paginationKnown:true});
     }
@@ -52,7 +53,7 @@ function fixture(reuse=true){
       if(body.action==='start'&&state.failStart)return {ok:false,json:async()=>({error:'Synthetic start rejected'})};
       if(body.action==='plan'&&state.holdPlan)await new Promise(resolve=>state.planReply=resolve);
       if(body.action==='stop')run.stopped=true;
-      return {ok:true,json:async()=>({run:{...run},...(body.action==='plan'?{plan:{query:'SAP'}}:{}),...(body.action==='review'?{candidates:[candidate]}:{})})};}
+      return {ok:true,json:async()=>({run:{...run},...(body.action==='plan'?{plan:{query:'SAP',country:state.planCountry||''}}:{}),...(body.action==='review'?{candidates:[candidate]}:{})})};}
   });
   for(const file of ['linkedin-sourcer-core.js','linkedin-sourcer.js']){vm.runInContext(fs.readFileSync(path.join(__dirname,'../vendor/cvstudio',file),'utf8'),context);context.CVLinkedinCore=window.CVLinkedinCore;}
   return {el,state,calls,requests,copy:window.copyLinkedinCompanionFolder,reload:window.reloadLinkedinCompanion,init:async()=>{await window.initLinkedinSourcer();await new Promise(resolve=>setTimeout(resolve,0))},
@@ -109,6 +110,14 @@ function fixture(reuse=true){
   assert(fresh.calls.filter(c=>c.action==='navigate').every(c=>/^https:\/\/www\.linkedin\.com\/search\/results\/people\/\?keywords=SAP$/.test(c.args.url)));
   const old=fixture(false);old.state.oldCompanion=true;await old.init();old.el('Brief').value='SAP finance';old.el('Consent').checked=true;await old.start();
   assert.equal(old.requests.length,0);assert.equal(old.el('Count').textContent,1);assert.match(old.el('Status').textContent,/latest companion/i);
+  const oldCountry=fixture(false);oldCountry.state.oldCountryCompanion=true;await oldCountry.init();oldCountry.el('Brief').value='SAP in Malaysia';oldCountry.el('Consent').checked=true;await oldCountry.start();
+  assert.equal(oldCountry.requests.length,0,'country capability is checked before any paid planning');assert.match(oldCountry.el('Status').textContent,/companion update/i);
+  const location=fixture(false);await location.init();location.state.planCountry='Malaysia';location.el('Brief').value='SAP FICO in Malaysia';location.el('Consent').checked=true;await location.start();
+  assert(location.calls.some(c=>c.action==='read'&&c.args.method==='setCountry'&&c.args.values[0]==='Malaysia'));assert.match(location.el('Query').textContent,/Location filter: Malaysia/);
+  assert.equal(new URL(location.calls.find(c=>c.action==='navigate').args.url).searchParams.get('keywords'),'SAP');assert.equal(location.el('Count').textContent,1);
+  const stopCountry=fixture(false);await stopCountry.init();stopCountry.state.planCountry='Malaysia';stopCountry.state.holdCountry=true;stopCountry.el('Brief').value='SAP FICO in Malaysia';stopCountry.el('Consent').checked=true;
+  const countryRun=stopCountry.start();for(let i=0;i<30&&!stopCountry.state.countryReply;i++)await new Promise(resolve=>setTimeout(resolve,0));assert(stopCountry.state.countryReply);await stopCountry.stop();stopCountry.state.countryReply();await countryRun;
+  assert.equal(stopCountry.requests.filter(r=>r.action==='review').length,0,'Stop during native location selection sends no scoring request');
   const opening=fixture(false);await opening.init();opening.state.holdOpen=true;opening.el('Brief').value='SAP finance';opening.el('Consent').checked=true;const openingRun=opening.start();
   await new Promise(resolve=>setTimeout(resolve,0));assert(opening.state.held);await opening.stop();opening.state.held();await openingRun;
   assert.equal(opening.requests.length,0,'Stop while opening a tab prevents the first paid action');

@@ -95,7 +95,13 @@ class Agent {
         if (!isSearchURL(tab.url, options.mode)) throw Error('Open the selected LinkedIn search first.');
       } else if (options.mode === 'standard') {
         await this.browser.navigate(tab.id, 'https://www.linkedin.com/search/results/people/?keywords=' + encodeURIComponent(reply.plan.query));
+        this.check();
+        if (reply.plan.country) {
+          this.update({status: 'Selecting ' + reply.plan.country + ' in LinkedIn Locations…'});
+          if (await this.read(tab.id, 'setCountry', [reply.plan.country]) !== true) throw Error('LinkedIn did not confirm the requested Locations filter. Start a new search.');
+        }
       } else {
+        if (reply.plan.country) throw Error('For automatic country selection, choose LinkedIn People search. In Recruiter, set Locations first and use the search already open.');
         if (!isSearchURL(tab.url, options.mode)) throw Error('Open Recruiter search first, then start again.');
         await this.read(tab.id, 'search', [options.mode, reply.plan.query]);
       }

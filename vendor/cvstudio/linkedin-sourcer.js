@@ -108,7 +108,7 @@
         else if (!value.loading) return value;
         await new Promise(resolve => setTimeout(resolve, 500));
       }
-      throw Error('LinkedIn results could not be read. Refresh LinkedIn, then reload and reconnect the latest companion.');
+      throw Error(method === 'setCountry' ? 'LinkedIn could not confirm the country in Locations. Check the country name and location menu in its search tab, then start again.' : 'LinkedIn results could not be read. Refresh LinkedIn, then reload and reconnect the latest companion.');
     }
   };
   function draw() {
@@ -155,7 +155,7 @@
       else if (tabs.length) el('Source').value = String(tabs[0].id);
       const source = tabs.find(tab => String(tab.id) === el('Source').value);
       el('Connection').textContent = freshPeopleSearch() ? 'Connected · a new People search will open each time you start.' : source ? 'Connected · ' + source.title + (el('OpenSearch').checked ? ' · keeping its filters' : ' · new keywords from your brief') : 'Companion connected. Open a LinkedIn People or Recruiter search, then start. It will be detected automatically.';
-      el('ConnectionHint').textContent = freshPeopleSearch() ? 'A new People search opens each time. Use Search options to review an existing search or use Recruiter.' : el('OpenSearch').checked ? 'Your brief ranks the current results. Set location and other filters on LinkedIn first.' : 'New keywords will be generated from your brief. Check the location and filters on LinkedIn.';
+      el('ConnectionHint').textContent = freshPeopleSearch() ? 'Include a country in your brief to select it automatically in LinkedIn Locations. A new People search opens each time.' : el('OpenSearch').checked ? 'Your brief ranks the current results. Set location and other filters on LinkedIn first.' : 'New People searches select the country from your brief in Locations. For Recruiter, set its filters first and review the search already open.';
       if (!source && !freshPeopleSearch()) el('Options').open = true;
       return source;
     } catch (error) {
@@ -205,10 +205,11 @@
       }
       if (!source) throw Error('Open a LinkedIn People or Recruiter search in this browser, then start again. Your current candidate list is kept.');
       options.mode = options.mode === 'auto' ? sourceMode(source) : options.mode;
+      if (!options.use_open_search && options.mode === 'standard' && (await rpc('jobStatus'))?.people_country_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn. This search needs the native Locations filter.');
       runOptions = {...options,source:source.id,openedSource:freshPeopleSearch() ? source : null};
       agent = new CVLinkedinCore.Agent({api, browser, signal: abort.signal, update: patch => {
         if (patch.run) run = patch.run; if (patch.results) results = patch.results; if (patch.status) tell(patch.status);
-        if (patch.plan) el('Query').textContent = 'Search: ' + patch.plan.query;
+        if (patch.plan) el('Query').textContent = 'Search: ' + patch.plan.query + (patch.plan.country && !options.use_open_search ? ' · Location filter: ' + patch.plan.country : '');
         draw();
       }});
       await agent.start(options);

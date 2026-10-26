@@ -4,6 +4,15 @@
 
 ## Release state
 
+- v24.6.492 is an unmerged corrective checkpoint from v491: HR joining-date
+  reads wait through same-filter loading; country mode/name and page count
+  persist across saved ads and browser reloads; fresh LinkedIn People searches
+  put the brief's country in the native Locations filter, keeping geography out
+  of the Boolean role/skill query. Existing-search filters remain authoritative.
+  The new companion capabilities are checked before paid planning/HR scanning;
+  ambiguous mutations never replay. Routes, guards, schemas and paid-call
+  consent are unchanged. See the v492 QA report. No PR or merge is included.
+
 - v24.6.491 corrects PR #249's pre-merge review finding: a failed primary or
   backup MX address lookup no longer cancels another usable public mail server.
   Both quick and full checks retain usable hosts; all-inconclusive lookups remain

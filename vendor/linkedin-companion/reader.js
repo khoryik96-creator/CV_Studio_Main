@@ -497,6 +497,12 @@
     const next = hrNextButton();
     return {people,signature:[...seen].join('|'),empty,hasNext:!!next && !next.disabled && next.getAttribute('aria-disabled') !== 'true'};
   }
+  function peopleCountrySelected(country) {
+    assertPage('standard','search');
+    const toolbar=hrToolbar();
+    return [...(toolbar?.querySelectorAll('input[type="checkbox"], [role="checkbox"], button, [role="button"]') || [])].some(n=>visible(n) &&
+      (n.checked || n.getAttribute('aria-checked') === 'true' || n.matches('button, [role="button"]')) && hrFilterLabel(n) === normalized(country));
+  }
   function hrNextButton() {
     return nextButton() || [...(document.querySelector('main')?.querySelectorAll('button') || [])].find(button=>visible(button) && /^(next|next page)$/i.test(button.getAttribute('aria-label') || text(button)) && button.parentElement?.querySelector('ul button[aria-label^="Page "]'));
   }
@@ -579,5 +585,5 @@
     button.click(); return true;
   }
   globalThis.SourcerReader = {readSearch, next, search, readProfile, profileURL, readJob, readJobSearch, nextJobSearch, scrollJobSearch, jobSearchContext, readJobPick, jobTargets,
-    readHRCompany, hrCountryOpen, hrCountryType, hrCountryPick, hrCountryApply, readHRSearch, nextHRSearch, readHRJoined, prepareHRJoined};
+    readHRCompany, hrCountryOpen, hrCountryType, hrCountryPick, hrCountryApply, peopleCountrySelected, readHRSearch, nextHRSearch, readHRJoined, prepareHRJoined};
 })();
