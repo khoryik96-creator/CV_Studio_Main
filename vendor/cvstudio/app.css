@@ -1450,6 +1450,60 @@
 .job-leads-intro p { color:var(--text2); margin:0; }
 .job-leads-totals { display:flex; gap:18px; flex-wrap:wrap; color:var(--text2); }
 .job-leads-totals strong { color:var(--accent); font-size:22px; }
+.ev-heading { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; margin:8px 0 24px; }
+.ev-eyebrow { color:var(--accent); font-size:10px; font-weight:750; letter-spacing:1.4px; }
+.ev-heading h2 { font-size:30px; letter-spacing:-1px; margin:7px 0; }
+.ev-heading p { color:var(--text3); font-size:14px; }
+.ev-local { color:var(--green); background:var(--green-light); border-radius:30px; padding:9px 14px; font-size:11px; font-weight:600; }
+.ev-local span { font-size:8px; margin-right:5px; }
+.ev-layout { display:grid; grid-template-columns:minmax(280px,.75fr) minmax(0,1.4fr); gap:22px; align-items:start; }
+.ev-panel { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:24px; min-width:0; box-shadow:0 3px 12px #162e4e04; }
+.ev-panel-title { display:flex; gap:10px; align-items:center; }
+.ev-panel-title h3 { font-size:16px; letter-spacing:-.3px; }
+.ev-step { background:var(--blue-light); color:var(--blue); border-radius:8px; display:grid; place-items:center; width:28px; height:28px; font-weight:700; font-size:12px; }
+.ev-panel label { display:block; font-size:12px; font-weight:650; margin:20px 0 8px; }
+.ev-panel textarea,.ev-panel select,.ev-panel input[type=search] { width:100%; box-sizing:border-box; background:var(--surface); color:var(--text); border:1px solid var(--border2); border-radius:9px; padding:11px 12px; font-family:inherit; font-size:13px; line-height:1.6; }
+.ev-panel textarea { height:210px !important; resize:vertical; min-height:130px; font-family:ui-monospace,monospace; line-height:1.7; font-size:13px; }
+.ev-panel textarea:focus,.ev-panel input:focus,.ev-panel select:focus { outline:2px solid var(--accent); outline-offset:2px; }
+.ev-muted { font-size:11px; color:var(--text3); line-height:1.6; margin-top:9px; }
+.ev-import { display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-top:16px; }
+.ev-import label { margin:0; padding:8px 12px; border:1px solid var(--border); border-radius:8px; color:var(--accent); cursor:pointer; }
+.ev-import span { color:var(--text3); font-size:10px; }
+.ev-import input { width:100%; font-size:11px; color:var(--text3); }
+.ev-explainer { background:var(--surface2); padding:14px; border-radius:10px; margin:18px 0; font-size:11px; line-height:1.7; color:var(--text3); }
+.ev-explainer strong { color:var(--text2); font-weight:650; }
+.ev-explainer p { margin-top:7px; }
+.ev-actions { display:flex; gap:10px; }
+.ev-actions .primary { flex:1; display:flex; justify-content:space-between; align-items:center; }
+.ev-actions button,.ev-results-panel button { min-height:35px; border-radius:8px; font-size:11px; }
+.ev-message { font-size:12px; line-height:1.6; color:var(--text2); min-height:20px; margin:13px 0 6px; white-space:pre-wrap; }
+.ev-results-heading,.ev-progress-heading { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+.ev-summary { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:6px; border-block:1px solid var(--border); margin:22px 0 16px; padding:18px 0; }
+.ev-summary div { min-width:0; }
+.ev-summary span { display:block; font-size:25px; font-weight:700; font-variant-numeric:tabular-nums; }
+.ev-summary small { display:block; font-size:10px; color:var(--text3); margin-top:4px; line-height:1.4; }
+#emailVerifierAccepted { color:var(--green); } #emailVerifierInvalid { color:var(--red); }
+.ev-progress-heading { font-size:11px; color:var(--text3); }
+.ev-panel progress { width:100%; height:5px; margin-top:14px; accent-color:var(--accent); }
+.ev-filters { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:0 0 18px; }
+.ev-filters label { margin-top:17px; font-weight:500; font-size:11px; }
+.ev-filters select,.ev-filters input[type=search] { min-width:0; min-height:39px; padding:8px; font-size:12px; }
+.ev-table-wrap { overflow:auto; max-height:540px; border:1px solid var(--border); border-radius:10px; }
+.ev-table-wrap table { width:100%; border-collapse:collapse; font-size:12px; text-align:left; }
+.ev-table-wrap th { background:var(--surface2); padding:11px; font-size:10px; color:var(--text3); font-weight:600; position:sticky; top:0; z-index:1; }
+.ev-table-wrap td { padding:14px 11px; border-top:1px solid var(--border); vertical-align:top; line-height:1.6; min-width:125px; max-width:240px; overflow-wrap:anywhere; }
+.ev-table-wrap td:last-child { min-width:190px; }
+.ev-address { font-weight:600; } .ev-suggestion,.ev-flags { display:block; margin-top:5px; color:var(--text3); font-size:10px; }
+.ev-badge { display:inline-block; border-radius:6px; padding:3px 7px; font-size:10px; font-weight:650; background:var(--surface2); color:var(--text3); white-space:nowrap; }
+.ev-accepted { background:var(--green-light); color:var(--green); } .ev-invalid { background:var(--red-light); color:var(--red); }
+.ev-catch_all { background:#fff3db; color:#805400; } .ev-domain_ok { background:var(--blue-light); color:var(--blue); }
+.ev-empty { text-align:center; padding:65px 16px; font-size:12px; color:var(--text3); }
+.ev-guide { font-size:11px; color:var(--text3); line-height:1.7; margin-top:18px; }
+.ev-guide summary { cursor:pointer; color:var(--text2); font-weight:600; }
+.ev-guide dt { font-weight:650; color:var(--text2); margin-top:10px; } .ev-guide p { margin-top:12px; }
+.ev-panel [hidden] { display:none; }
+@media(max-width:1000px) { .ev-layout { grid-template-columns:1fr; } .ev-panel textarea { height:140px !important; } }
+@media(max-width:500px) { .ev-panel { padding:16px; } .ev-summary { grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; } .ev-filters { grid-template-columns:1fr; gap:0; } }
 .job-leads-layout { display:grid; grid-template-columns:minmax(320px, .85fr) minmax(400px, 1.3fr); align-items:start; gap:20px; }
 .job-leads-form, .job-leads-board { display:flex; flex-direction:column; gap:12px; }
 .job-leads-form > label { margin-bottom:-6px; font-size:13px; font-weight:600; }

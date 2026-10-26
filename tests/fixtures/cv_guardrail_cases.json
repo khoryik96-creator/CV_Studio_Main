@@ -17536,6 +17536,1570 @@
       "Senior engineer."
     ],
     "note": "A footer followed by an established section heading ends a complete source summary."
+  },
+  {
+   "id": "C3-source-company-and-four-years",
+   "rule": "C3",
+   "kind": "award_headings",
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Services (M) Sdn Bhd"
+     }
+    ],
+    "skills": [
+     {
+      "category": "Awards & Achievements",
+      "items": [
+       "Northwind Services (M) Sdn Bhd",
+       "2024",
+       "Recognition Award - Recognized for ten years of dedicated support.",
+       "2023",
+       "Silver Award - Recognized for excellent monitoring support.",
+       "2022",
+       "Silver Award - Recognized for zero incidents and escalations.",
+       "2019",
+       "Recognition Award - Recognized for five years of team support."
+      ]
+     }
+    ]
+   },
+   "lines": [
+    "AWARDS/ ACHIEVEMENTS",
+    "Northwind Services (M) Sdn Bhd",
+    "2024",
+    "Recognition Award - Recognized for ten years of dedicated support.",
+    "2023",
+    "Silver Award - Recognized for excellent monitoring support.",
+    "2022",
+    "Silver Award - Recognized for zero incidents and escalations.",
+    "2019",
+    "Recognition Award - Recognized for five years of team support.",
+    "TRAINING HIGHLIGHTS",
+    "Monitoring, service management",
+    "REFERENCES"
+   ],
+   "expect": [
+    {
+     "category": "Awards & Achievements",
+     "items": [
+      "Northwind Services (M) Sdn Bhd",
+      "2024",
+      "Recognition Award - Recognized for ten years of dedicated support.",
+      "2023",
+      "Silver Award - Recognized for excellent monitoring support.",
+      "2022",
+      "Silver Award - Recognized for zero incidents and escalations.",
+      "2019",
+      "Recognition Award - Recognized for five years of team support."
+     ],
+     "item_headings": [
+      "Northwind Services (M) Sdn Bhd",
+      "2024",
+      "2023",
+      "2022",
+      "2019"
+     ]
+    }
+   ],
+   "note": "Source-confirmed award labels remain unbulleted; award descriptions remain bullets."
+  },
+  {
+   "id": "C3-newline-items",
+   "rule": "C3",
+   "kind": "award_headings",
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Services (M) Sdn Bhd"
+     }
+    ],
+    "skills": [
+     {
+      "category": "Awards & Achievements",
+      "items": "Northwind Services (M) Sdn Bhd\n2024\nRecognition Award - Recognized for ten years of dedicated support.\n2023\nSilver Award - Recognized for excellent monitoring support.\n2022\nSilver Award - Recognized for zero incidents and escalations.\n2019\nRecognition Award - Recognized for five years of team support."
+     }
+    ]
+   },
+   "lines": [
+    "AWARDS/ ACHIEVEMENTS",
+    "Northwind Services (M) Sdn Bhd",
+    "2024",
+    "Recognition Award - Recognized for ten years of dedicated support.",
+    "2023",
+    "Silver Award - Recognized for excellent monitoring support.",
+    "2022",
+    "Silver Award - Recognized for zero incidents and escalations.",
+    "2019",
+    "Recognition Award - Recognized for five years of team support.",
+    "TRAINING HIGHLIGHTS",
+    "Monitoring, service management",
+    "REFERENCES"
+   ],
+   "expect": [
+    {
+     "category": "Awards & Achievements",
+     "items": "Northwind Services (M) Sdn Bhd\n2024\nRecognition Award - Recognized for ten years of dedicated support.\n2023\nSilver Award - Recognized for excellent monitoring support.\n2022\nSilver Award - Recognized for zero incidents and escalations.\n2019\nRecognition Award - Recognized for five years of team support.",
+     "item_headings": [
+      "Northwind Services (M) Sdn Bhd",
+      "2024",
+      "2023",
+      "2022",
+      "2019"
+     ]
+    }
+   ],
+   "note": "Source-confirmed award labels remain unbulleted; award descriptions remain bullets."
+  },
+  {
+   "id": "C3-wrapped-award-body",
+   "rule": "C3",
+   "kind": "award_headings",
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Services (M) Sdn Bhd"
+     }
+    ],
+    "skills": [
+     {
+      "category": "Awards & Achievements",
+      "items": [
+       "Northwind Services (M) Sdn Bhd",
+       "2024",
+       "Recognition Award - Recognized for ten years of dedicated support.",
+       "2023",
+       "Silver Award - Recognized for excellent monitoring support.",
+       "2022",
+       "Silver Award - Recognized for zero incidents and escalations.",
+       "2019",
+       "Recognition Award - Recognized for five years of team support."
+      ]
+     }
+    ]
+   },
+   "lines": [
+    "AWARDS/ ACHIEVEMENTS",
+    "Northwind Services (M) Sdn Bhd",
+    "2024",
+    "Recognition Award - Recognized for ten years",
+    "of dedicated support.",
+    "2023",
+    "Silver Award - Recognized for excellent monitoring support.",
+    "2022",
+    "Silver Award - Recognized for zero incidents and escalations.",
+    "2019",
+    "Recognition Award - Recognized for five years of team support.",
+    "TRAINING HIGHLIGHTS",
+    "Monitoring, service management",
+    "REFERENCES"
+   ],
+   "expect": [
+    {
+     "category": "Awards & Achievements",
+     "items": [
+      "Northwind Services (M) Sdn Bhd",
+      "2024",
+      "Recognition Award - Recognized for ten years of dedicated support.",
+      "2023",
+      "Silver Award - Recognized for excellent monitoring support.",
+      "2022",
+      "Silver Award - Recognized for zero incidents and escalations.",
+      "2019",
+      "Recognition Award - Recognized for five years of team support."
+     ],
+     "item_headings": [
+      "Northwind Services (M) Sdn Bhd",
+      "2024",
+      "2023",
+      "2022",
+      "2019"
+     ]
+    }
+   ],
+   "note": "Source-confirmed award labels remain unbulleted; award descriptions remain bullets."
+  },
+  {
+   "id": "C3-alias-awards",
+   "rule": "C3",
+   "kind": "award_headings",
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Services (M) Sdn Bhd"
+     }
+    ],
+    "skills": [
+     {
+      "category": "Awards",
+      "items": [
+       "Northwind Services (M) Sdn Bhd",
+       "2024",
+       "Recognition Award - Recognized for ten years of dedicated support.",
+       "2023",
+       "Silver Award - Recognized for excellent monitoring support.",
+       "2022",
+       "Silver Award - Recognized for zero incidents and escalations.",
+       "2019",
+       "Recognition Award - Recognized for five years of team support."
+      ]
+     }
+    ]
+   },
+   "lines": [
+    "AWARDS",
+    "Northwind Services (M) Sdn Bhd",
+    "2024",
+    "Recognition Award - Recognized for ten years of dedicated support.",
+    "2023",
+    "Silver Award - Recognized for excellent monitoring support.",
+    "2022",
+    "Silver Award - Recognized for zero incidents and escalations.",
+    "2019",
+    "Recognition Award - Recognized for five years of team support.",
+    "TRAINING HIGHLIGHTS",
+    "Monitoring, service management",
+    "REFERENCES"
+   ],
+   "expect": [
+    {
+     "category": "Awards",
+     "items": [
+      "Northwind Services (M) Sdn Bhd",
+      "2024",
+      "Recognition Award - Recognized for ten years of dedicated support.",
+      "2023",
+      "Silver Award - Recognized for excellent monitoring support.",
+      "2022",
+      "Silver Award - Recognized for zero incidents and escalations.",
+      "2019",
+      "Recognition Award - Recognized for five years of team support."
+     ],
+     "item_headings": [
+      "Northwind Services (M) Sdn Bhd",
+      "2024",
+      "2023",
+      "2022",
+      "2019"
+     ]
+    }
+   ],
+   "note": "Source-confirmed award labels remain unbulleted; award descriptions remain bullets."
+  },
+  {
+   "id": "C3-alias-awards-and-achievements",
+   "rule": "C3",
+   "kind": "award_headings",
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Services (M) Sdn Bhd"
+     }
+    ],
+    "skills": [
+     {
+      "category": "Awards and Achievements",
+      "items": [
+       "Northwind Services (M) Sdn Bhd",
+       "2024",
+       "Recognition Award - Recognized for ten years of dedicated support.",
+       "2023",
+       "Silver Award - Recognized for excellent monitoring support.",
+       "2022",
+       "Silver Award - Recognized for zero incidents and escalations.",
+       "2019",
+       "Recognition Award - Recognized for five years of team support."
+      ]
+     }
+    ]
+   },
+   "lines": [
+    "AWARDS AND ACHIEVEMENTS",
+    "Northwind Services (M) Sdn Bhd",
+    "2024",
+    "Recognition Award - Recognized for ten years of dedicated support.",
+    "2023",
+    "Silver Award - Recognized for excellent monitoring support.",
+    "2022",
+    "Silver Award - Recognized for zero incidents and escalations.",
+    "2019",
+    "Recognition Award - Recognized for five years of team support.",
+    "TRAINING HIGHLIGHTS",
+    "Monitoring, service management",
+    "REFERENCES"
+   ],
+   "expect": [
+    {
+     "category": "Awards and Achievements",
+     "items": [
+      "Northwind Services (M) Sdn Bhd",
+      "2024",
+      "Recognition Award - Recognized for ten years of dedicated support.",
+      "2023",
+      "Silver Award - Recognized for excellent monitoring support.",
+      "2022",
+      "Silver Award - Recognized for zero incidents and escalations.",
+      "2019",
+      "Recognition Award - Recognized for five years of team support."
+     ],
+     "item_headings": [
+      "Northwind Services (M) Sdn Bhd",
+      "2024",
+      "2023",
+      "2022",
+      "2019"
+     ]
+    }
+   ],
+   "note": "Source-confirmed award labels remain unbulleted; award descriptions remain bullets."
+  },
+  {
+   "id": "C3-alias-awards-and-recognition",
+   "rule": "C3",
+   "kind": "award_headings",
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Services (M) Sdn Bhd"
+     }
+    ],
+    "skills": [
+     {
+      "category": "Awards & Recognition",
+      "items": [
+       "Northwind Services (M) Sdn Bhd",
+       "2024",
+       "Recognition Award - Recognized for ten years of dedicated support.",
+       "2023",
+       "Silver Award - Recognized for excellent monitoring support.",
+       "2022",
+       "Silver Award - Recognized for zero incidents and escalations.",
+       "2019",
+       "Recognition Award - Recognized for five years of team support."
+      ]
+     }
+    ]
+   },
+   "lines": [
+    "AWARDS & RECOGNITION",
+    "Northwind Services (M) Sdn Bhd",
+    "2024",
+    "Recognition Award - Recognized for ten years of dedicated support.",
+    "2023",
+    "Silver Award - Recognized for excellent monitoring support.",
+    "2022",
+    "Silver Award - Recognized for zero incidents and escalations.",
+    "2019",
+    "Recognition Award - Recognized for five years of team support.",
+    "TRAINING HIGHLIGHTS",
+    "Monitoring, service management",
+    "REFERENCES"
+   ],
+   "expect": [
+    {
+     "category": "Awards & Recognition",
+     "items": [
+      "Northwind Services (M) Sdn Bhd",
+      "2024",
+      "Recognition Award - Recognized for ten years of dedicated support.",
+      "2023",
+      "Silver Award - Recognized for excellent monitoring support.",
+      "2022",
+      "Silver Award - Recognized for zero incidents and escalations.",
+      "2019",
+      "Recognition Award - Recognized for five years of team support."
+     ],
+     "item_headings": [
+      "Northwind Services (M) Sdn Bhd",
+      "2024",
+      "2023",
+      "2022",
+      "2019"
+     ]
+    }
+   ],
+   "note": "Source-confirmed award labels remain unbulleted; award descriptions remain bullets."
+  },
+  {
+   "id": "C3-alias-awards-slash-recognition",
+   "rule": "C3",
+   "kind": "award_headings",
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Services (M) Sdn Bhd"
+     }
+    ],
+    "skills": [
+     {
+      "category": "Awards / Recognition",
+      "items": [
+       "Northwind Services (M) Sdn Bhd",
+       "2024",
+       "Recognition Award - Recognized for ten years of dedicated support.",
+       "2023",
+       "Silver Award - Recognized for excellent monitoring support.",
+       "2022",
+       "Silver Award - Recognized for zero incidents and escalations.",
+       "2019",
+       "Recognition Award - Recognized for five years of team support."
+      ]
+     }
+    ]
+   },
+   "lines": [
+    "AWARDS / RECOGNITION",
+    "Northwind Services (M) Sdn Bhd",
+    "2024",
+    "Recognition Award - Recognized for ten years of dedicated support.",
+    "2023",
+    "Silver Award - Recognized for excellent monitoring support.",
+    "2022",
+    "Silver Award - Recognized for zero incidents and escalations.",
+    "2019",
+    "Recognition Award - Recognized for five years of team support.",
+    "TRAINING HIGHLIGHTS",
+    "Monitoring, service management",
+    "REFERENCES"
+   ],
+   "expect": [
+    {
+     "category": "Awards / Recognition",
+     "items": [
+      "Northwind Services (M) Sdn Bhd",
+      "2024",
+      "Recognition Award - Recognized for ten years of dedicated support.",
+      "2023",
+      "Silver Award - Recognized for excellent monitoring support.",
+      "2022",
+      "Silver Award - Recognized for zero incidents and escalations.",
+      "2019",
+      "Recognition Award - Recognized for five years of team support."
+     ],
+     "item_headings": [
+      "Northwind Services (M) Sdn Bhd",
+      "2024",
+      "2023",
+      "2022",
+      "2019"
+     ]
+    }
+   ],
+   "note": "Source-confirmed award labels remain unbulleted; award descriptions remain bullets."
+  },
+  {
+   "id": "C3-duplicate-source-sections",
+   "rule": "C3",
+   "kind": "award_headings",
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Services (M) Sdn Bhd"
+     }
+    ],
+    "skills": [
+     {
+      "category": "Awards & Achievements",
+      "items": [
+       "Northwind Services (M) Sdn Bhd",
+       "2024",
+       "Recognition Award - Recognized for ten years of dedicated support.",
+       "2023",
+       "Silver Award - Recognized for excellent monitoring support.",
+       "2022",
+       "Silver Award - Recognized for zero incidents and escalations.",
+       "2019",
+       "Recognition Award - Recognized for five years of team support."
+      ]
+     }
+    ]
+   },
+   "lines": [
+    "AWARDS/ ACHIEVEMENTS",
+    "Northwind Services (M) Sdn Bhd",
+    "2024",
+    "Recognition Award - Recognized for ten years of dedicated support.",
+    "2023",
+    "Silver Award - Recognized for excellent monitoring support.",
+    "2022",
+    "Silver Award - Recognized for zero incidents and escalations.",
+    "2019",
+    "Recognition Award - Recognized for five years of team support.",
+    "TRAINING HIGHLIGHTS",
+    "Monitoring, service management",
+    "REFERENCES",
+    "AWARDS",
+    "Other award"
+   ],
+   "expect": [
+    {
+     "category": "Awards & Achievements",
+     "items": [
+      "Northwind Services (M) Sdn Bhd",
+      "2024",
+      "Recognition Award - Recognized for ten years of dedicated support.",
+      "2023",
+      "Silver Award - Recognized for excellent monitoring support.",
+      "2022",
+      "Silver Award - Recognized for zero incidents and escalations.",
+      "2019",
+      "Recognition Award - Recognized for five years of team support."
+     ]
+    }
+   ],
+   "note": "Source-confirmed award labels remain unbulleted; award descriptions remain bullets."
+  },
+  {
+   "id": "C3-missing-award-description",
+   "rule": "C3",
+   "kind": "award_headings",
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Services (M) Sdn Bhd"
+     }
+    ],
+    "skills": [
+     {
+      "category": "Awards & Achievements",
+      "items": [
+       "Northwind Services (M) Sdn Bhd",
+       "2024",
+       "Recognition Award - Recognized for ten years of dedicated support.",
+       "2023",
+       "Silver Award - Recognized for excellent monitoring support.",
+       "2022",
+       "Silver Award - Recognized for zero incidents and escalations.",
+       "2019"
+      ]
+     }
+    ]
+   },
+   "lines": [
+    "AWARDS/ ACHIEVEMENTS",
+    "Northwind Services (M) Sdn Bhd",
+    "2024",
+    "Recognition Award - Recognized for ten years of dedicated support.",
+    "2023",
+    "Silver Award - Recognized for excellent monitoring support.",
+    "2022",
+    "Silver Award - Recognized for zero incidents and escalations.",
+    "2019",
+    "Recognition Award - Recognized for five years of team support.",
+    "TRAINING HIGHLIGHTS",
+    "Monitoring, service management",
+    "REFERENCES"
+   ],
+   "expect": [
+    {
+     "category": "Awards & Achievements",
+     "items": [
+      "Northwind Services (M) Sdn Bhd",
+      "2024",
+      "Recognition Award - Recognized for ten years of dedicated support.",
+      "2023",
+      "Silver Award - Recognized for excellent monitoring support.",
+      "2022",
+      "Silver Award - Recognized for zero incidents and escalations.",
+      "2019"
+     ]
+    }
+   ],
+   "note": "Source-confirmed award labels remain unbulleted; award descriptions remain bullets."
+  },
+  {
+   "id": "C3-changed-award-description",
+   "rule": "C3",
+   "kind": "award_headings",
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Services (M) Sdn Bhd"
+     }
+    ],
+    "skills": [
+     {
+      "category": "Awards & Achievements",
+      "items": [
+       "Northwind Services (M) Sdn Bhd",
+       "2024",
+       "Recognition Award - Changed the original meaning.",
+       "2023",
+       "Silver Award - Recognized for excellent monitoring support.",
+       "2022",
+       "Silver Award - Recognized for zero incidents and escalations.",
+       "2019",
+       "Recognition Award - Recognized for five years of team support."
+      ]
+     }
+    ]
+   },
+   "lines": [
+    "AWARDS/ ACHIEVEMENTS",
+    "Northwind Services (M) Sdn Bhd",
+    "2024",
+    "Recognition Award - Recognized for ten years of dedicated support.",
+    "2023",
+    "Silver Award - Recognized for excellent monitoring support.",
+    "2022",
+    "Silver Award - Recognized for zero incidents and escalations.",
+    "2019",
+    "Recognition Award - Recognized for five years of team support.",
+    "TRAINING HIGHLIGHTS",
+    "Monitoring, service management",
+    "REFERENCES"
+   ],
+   "expect": [
+    {
+     "category": "Awards & Achievements",
+     "items": [
+      "Northwind Services (M) Sdn Bhd",
+      "2024",
+      "Recognition Award - Changed the original meaning.",
+      "2023",
+      "Silver Award - Recognized for excellent monitoring support.",
+      "2022",
+      "Silver Award - Recognized for zero incidents and escalations.",
+      "2019",
+      "Recognition Award - Recognized for five years of team support."
+     ]
+    }
+   ],
+   "note": "Source-confirmed award labels remain unbulleted; award descriptions remain bullets."
+  },
+  {
+   "id": "C3-reordered-years",
+   "rule": "C3",
+   "kind": "award_headings",
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Services (M) Sdn Bhd"
+     }
+    ],
+    "skills": [
+     {
+      "category": "Awards & Achievements",
+      "items": [
+       "Northwind Services (M) Sdn Bhd",
+       "2023",
+       "Recognition Award - Recognized for ten years of dedicated support.",
+       "2024",
+       "Silver Award - Recognized for excellent monitoring support.",
+       "2022",
+       "Silver Award - Recognized for zero incidents and escalations.",
+       "2019",
+       "Recognition Award - Recognized for five years of team support."
+      ]
+     }
+    ]
+   },
+   "lines": [
+    "AWARDS/ ACHIEVEMENTS",
+    "Northwind Services (M) Sdn Bhd",
+    "2024",
+    "Recognition Award - Recognized for ten years of dedicated support.",
+    "2023",
+    "Silver Award - Recognized for excellent monitoring support.",
+    "2022",
+    "Silver Award - Recognized for zero incidents and escalations.",
+    "2019",
+    "Recognition Award - Recognized for five years of team support.",
+    "TRAINING HIGHLIGHTS",
+    "Monitoring, service management",
+    "REFERENCES"
+   ],
+   "expect": [
+    {
+     "category": "Awards & Achievements",
+     "items": [
+      "Northwind Services (M) Sdn Bhd",
+      "2023",
+      "Recognition Award - Recognized for ten years of dedicated support.",
+      "2024",
+      "Silver Award - Recognized for excellent monitoring support.",
+      "2022",
+      "Silver Award - Recognized for zero incidents and escalations.",
+      "2019",
+      "Recognition Award - Recognized for five years of team support."
+     ]
+    }
+   ],
+   "note": "Source-confirmed award labels remain unbulleted; award descriptions remain bullets."
+  },
+  {
+   "id": "C3-marked-company",
+   "rule": "C3",
+   "kind": "award_headings",
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Services (M) Sdn Bhd"
+     }
+    ],
+    "skills": [
+     {
+      "category": "Awards & Achievements",
+      "items": [
+       "Northwind Services (M) Sdn Bhd",
+       "2024",
+       "Recognition Award - Recognized for ten years of dedicated support.",
+       "2023",
+       "Silver Award - Recognized for excellent monitoring support.",
+       "2022",
+       "Silver Award - Recognized for zero incidents and escalations.",
+       "2019",
+       "Recognition Award - Recognized for five years of team support."
+      ]
+     }
+    ]
+   },
+   "lines": [
+    "AWARDS/ ACHIEVEMENTS",
+    "• Northwind Services (M) Sdn Bhd",
+    "2024",
+    "Recognition Award - Recognized for ten years of dedicated support.",
+    "2023",
+    "Silver Award - Recognized for excellent monitoring support.",
+    "2022",
+    "Silver Award - Recognized for zero incidents and escalations.",
+    "2019",
+    "Recognition Award - Recognized for five years of team support.",
+    "TRAINING HIGHLIGHTS",
+    "Monitoring, service management",
+    "REFERENCES"
+   ],
+   "expect": [
+    {
+     "category": "Awards & Achievements",
+     "items": [
+      "Northwind Services (M) Sdn Bhd",
+      "2024",
+      "Recognition Award - Recognized for ten years of dedicated support.",
+      "2023",
+      "Silver Award - Recognized for excellent monitoring support.",
+      "2022",
+      "Silver Award - Recognized for zero incidents and escalations.",
+      "2019",
+      "Recognition Award - Recognized for five years of team support."
+     ]
+    }
+   ],
+   "note": "Source-confirmed award labels remain unbulleted; award descriptions remain bullets."
+  },
+  {
+   "id": "C3-marked-year",
+   "rule": "C3",
+   "kind": "award_headings",
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Services (M) Sdn Bhd"
+     }
+    ],
+    "skills": [
+     {
+      "category": "Awards & Achievements",
+      "items": [
+       "Northwind Services (M) Sdn Bhd",
+       "2024",
+       "Recognition Award - Recognized for ten years of dedicated support.",
+       "2023",
+       "Silver Award - Recognized for excellent monitoring support.",
+       "2022",
+       "Silver Award - Recognized for zero incidents and escalations.",
+       "2019",
+       "Recognition Award - Recognized for five years of team support."
+      ]
+     }
+    ]
+   },
+   "lines": [
+    "AWARDS/ ACHIEVEMENTS",
+    "Northwind Services (M) Sdn Bhd",
+    "• 2024",
+    "Recognition Award - Recognized for ten years of dedicated support.",
+    "2023",
+    "Silver Award - Recognized for excellent monitoring support.",
+    "2022",
+    "Silver Award - Recognized for zero incidents and escalations.",
+    "2019",
+    "Recognition Award - Recognized for five years of team support.",
+    "TRAINING HIGHLIGHTS",
+    "Monitoring, service management",
+    "REFERENCES"
+   ],
+   "expect": [
+    {
+     "category": "Awards & Achievements",
+     "items": [
+      "Northwind Services (M) Sdn Bhd",
+      "2024",
+      "Recognition Award - Recognized for ten years of dedicated support.",
+      "2023",
+      "Silver Award - Recognized for excellent monitoring support.",
+      "2022",
+      "Silver Award - Recognized for zero incidents and escalations.",
+      "2019",
+      "Recognition Award - Recognized for five years of team support."
+     ]
+    }
+   ],
+   "note": "Source-confirmed award labels remain unbulleted; award descriptions remain bullets."
+  },
+  {
+   "id": "C3-unknown-employer",
+   "rule": "C3",
+   "kind": "award_headings",
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Different Employer"
+     }
+    ],
+    "skills": [
+     {
+      "category": "Awards & Achievements",
+      "items": [
+       "Unverified Group",
+       "2024",
+       "Recognition Award - Recognized for ten years of dedicated support.",
+       "2023",
+       "Silver Award - Recognized for excellent monitoring support.",
+       "2022",
+       "Silver Award - Recognized for zero incidents and escalations.",
+       "2019",
+       "Recognition Award - Recognized for five years of team support."
+      ]
+     }
+    ]
+   },
+   "lines": [
+    "AWARDS/ ACHIEVEMENTS",
+    "Unverified Group",
+    "2024",
+    "Recognition Award - Recognized for ten years of dedicated support.",
+    "2023",
+    "Silver Award - Recognized for excellent monitoring support.",
+    "2022",
+    "Silver Award - Recognized for zero incidents and escalations.",
+    "2019",
+    "Recognition Award - Recognized for five years of team support.",
+    "TRAINING HIGHLIGHTS",
+    "Monitoring, service management",
+    "REFERENCES"
+   ],
+   "expect": [
+    {
+     "category": "Awards & Achievements",
+     "items": [
+      "Unverified Group",
+      "2024",
+      "Recognition Award - Recognized for ten years of dedicated support.",
+      "2023",
+      "Silver Award - Recognized for excellent monitoring support.",
+      "2022",
+      "Silver Award - Recognized for zero incidents and escalations.",
+      "2019",
+      "Recognition Award - Recognized for five years of team support."
+     ]
+    }
+   ],
+   "note": "Source-confirmed award labels remain unbulleted; award descriptions remain bullets."
+  },
+  {
+   "id": "C3-ordinary-skills-stay-unchanged",
+   "rule": "C3",
+   "kind": "award_headings",
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Services (M) Sdn Bhd"
+     }
+    ],
+    "skills": [
+     {
+      "category": "Skills",
+      "items": [
+       "Northwind Services (M) Sdn Bhd",
+       "2024",
+       "Recognition Award - Recognized for ten years of dedicated support.",
+       "2023",
+       "Silver Award - Recognized for excellent monitoring support.",
+       "2022",
+       "Silver Award - Recognized for zero incidents and escalations.",
+       "2019",
+       "Recognition Award - Recognized for five years of team support."
+      ]
+     }
+    ]
+   },
+   "lines": [
+    "AWARDS/ ACHIEVEMENTS",
+    "Northwind Services (M) Sdn Bhd",
+    "2024",
+    "Recognition Award - Recognized for ten years of dedicated support.",
+    "2023",
+    "Silver Award - Recognized for excellent monitoring support.",
+    "2022",
+    "Silver Award - Recognized for zero incidents and escalations.",
+    "2019",
+    "Recognition Award - Recognized for five years of team support.",
+    "TRAINING HIGHLIGHTS",
+    "Monitoring, service management",
+    "REFERENCES"
+   ],
+   "expect": [
+    {
+     "category": "Skills",
+     "items": [
+      "Northwind Services (M) Sdn Bhd",
+      "2024",
+      "Recognition Award - Recognized for ten years of dedicated support.",
+      "2023",
+      "Silver Award - Recognized for excellent monitoring support.",
+      "2022",
+      "Silver Award - Recognized for zero incidents and escalations.",
+      "2019",
+      "Recognition Award - Recognized for five years of team support."
+     ]
+    }
+   ],
+   "note": "Source-confirmed award labels remain unbulleted; award descriptions remain bullets."
+  },
+  {
+   "id": "C3-duplicate-provider-groups",
+   "rule": "C3",
+   "kind": "award_headings",
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Services (M) Sdn Bhd"
+     }
+    ],
+    "skills": [
+     {
+      "category": "Awards & Achievements",
+      "items": [
+       "Northwind Services (M) Sdn Bhd",
+       "2024",
+       "Recognition Award - Recognized for ten years of dedicated support.",
+       "2023",
+       "Silver Award - Recognized for excellent monitoring support.",
+       "2022",
+       "Silver Award - Recognized for zero incidents and escalations.",
+       "2019",
+       "Recognition Award - Recognized for five years of team support."
+      ]
+     },
+     {
+      "category": "Awards & Achievements",
+      "items": [
+       "Northwind Services (M) Sdn Bhd",
+       "2024",
+       "Recognition Award - Recognized for ten years of dedicated support.",
+       "2023",
+       "Silver Award - Recognized for excellent monitoring support.",
+       "2022",
+       "Silver Award - Recognized for zero incidents and escalations.",
+       "2019",
+       "Recognition Award - Recognized for five years of team support."
+      ]
+     }
+    ]
+   },
+   "lines": [
+    "AWARDS/ ACHIEVEMENTS",
+    "Northwind Services (M) Sdn Bhd",
+    "2024",
+    "Recognition Award - Recognized for ten years of dedicated support.",
+    "2023",
+    "Silver Award - Recognized for excellent monitoring support.",
+    "2022",
+    "Silver Award - Recognized for zero incidents and escalations.",
+    "2019",
+    "Recognition Award - Recognized for five years of team support.",
+    "TRAINING HIGHLIGHTS",
+    "Monitoring, service management",
+    "REFERENCES"
+   ],
+   "expect": [
+    {
+     "category": "Awards & Achievements",
+     "items": [
+      "Northwind Services (M) Sdn Bhd",
+      "2024",
+      "Recognition Award - Recognized for ten years of dedicated support.",
+      "2023",
+      "Silver Award - Recognized for excellent monitoring support.",
+      "2022",
+      "Silver Award - Recognized for zero incidents and escalations.",
+      "2019",
+      "Recognition Award - Recognized for five years of team support."
+     ]
+    },
+    {
+     "category": "Awards & Achievements",
+     "items": [
+      "Northwind Services (M) Sdn Bhd",
+      "2024",
+      "Recognition Award - Recognized for ten years of dedicated support.",
+      "2023",
+      "Silver Award - Recognized for excellent monitoring support.",
+      "2022",
+      "Silver Award - Recognized for zero incidents and escalations.",
+      "2019",
+      "Recognition Award - Recognized for five years of team support."
+     ]
+    }
+   ],
+   "note": "Source-confirmed award labels remain unbulleted; award descriptions remain bullets."
+  },
+  {
+   "id": "C3-stale-hints-cleared",
+   "rule": "C3",
+   "kind": "award_headings",
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Services (M) Sdn Bhd"
+     }
+    ],
+    "skills": [
+     {
+      "category": "Awards & Achievements",
+      "items": [
+       "Northwind Services (M) Sdn Bhd",
+       "2024",
+       "Recognition Award - Recognized for ten years of dedicated support.",
+       "2023",
+       "Silver Award - Recognized for excellent monitoring support.",
+       "2022",
+       "Silver Award - Recognized for zero incidents and escalations.",
+       "2019",
+       "Recognition Award - Recognized for five years of team support."
+      ],
+      "item_headings": [
+       "Northwind Services (M) Sdn Bhd",
+       "2024"
+      ]
+     }
+    ]
+   },
+   "lines": [
+    "AWARDS/ ACHIEVEMENTS",
+    "Northwind Services (M) Sdn Bhd",
+    "2024",
+    "Different source award wording.",
+    "2023",
+    "Silver Award - Recognized for excellent monitoring support.",
+    "2022",
+    "Silver Award - Recognized for zero incidents and escalations.",
+    "2019",
+    "Recognition Award - Recognized for five years of team support.",
+    "TRAINING HIGHLIGHTS",
+    "Monitoring, service management",
+    "REFERENCES"
+   ],
+   "expect": [
+    {
+     "category": "Awards & Achievements",
+     "items": [
+      "Northwind Services (M) Sdn Bhd",
+      "2024",
+      "Recognition Award - Recognized for ten years of dedicated support.",
+      "2023",
+      "Silver Award - Recognized for excellent monitoring support.",
+      "2022",
+      "Silver Award - Recognized for zero incidents and escalations.",
+      "2019",
+      "Recognition Award - Recognized for five years of team support."
+     ]
+    }
+   ],
+   "note": "Source-confirmed award labels remain unbulleted; award descriptions remain bullets."
+  },
+  {
+   "id": "C3-source-free-export-keeps-hints",
+   "rule": "C3",
+   "kind": "award_headings",
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Services (M) Sdn Bhd"
+     }
+    ],
+    "skills": [
+     {
+      "category": "Awards & Achievements",
+      "items": [
+       "Northwind Services (M) Sdn Bhd",
+       "2024",
+       "Recognition Award - Recognized for ten years of dedicated support.",
+       "2023",
+       "Silver Award - Recognized for excellent monitoring support.",
+       "2022",
+       "Silver Award - Recognized for zero incidents and escalations.",
+       "2019",
+       "Recognition Award - Recognized for five years of team support."
+      ],
+      "item_headings": [
+       "Northwind Services (M) Sdn Bhd",
+       "2024",
+       "2023",
+       "2022",
+       "2019"
+      ]
+     }
+    ]
+   },
+   "lines": [],
+   "expect": [
+    {
+     "category": "Awards & Achievements",
+     "items": [
+      "Northwind Services (M) Sdn Bhd",
+      "2024",
+      "Recognition Award - Recognized for ten years of dedicated support.",
+      "2023",
+      "Silver Award - Recognized for excellent monitoring support.",
+      "2022",
+      "Silver Award - Recognized for zero incidents and escalations.",
+      "2019",
+      "Recognition Award - Recognized for five years of team support."
+     ],
+     "item_headings": [
+      "Northwind Services (M) Sdn Bhd",
+      "2024",
+      "2023",
+      "2022",
+      "2019"
+     ]
+    }
+   ],
+   "note": "Source-confirmed award labels remain unbulleted; award descriptions remain bullets."
+  },
+  {
+   "id": "C3-duplicate-years-stay-bulleted",
+   "rule": "C3",
+   "kind": "award_headings",
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Services (M) Sdn Bhd"
+     }
+    ],
+    "skills": [
+     {
+      "category": "Awards & Achievements",
+      "items": [
+       "Northwind Services (M) Sdn Bhd",
+       "2024",
+       "Recognition Award - Recognized for ten years of dedicated support.",
+       "2024",
+       "Silver Award - Recognized for excellent monitoring support.",
+       "2022",
+       "Silver Award - Recognized for zero incidents and escalations.",
+       "2019",
+       "Recognition Award - Recognized for five years of team support."
+      ]
+     }
+    ]
+   },
+   "lines": [
+    "AWARDS/ ACHIEVEMENTS",
+    "Northwind Services (M) Sdn Bhd",
+    "2024",
+    "Recognition Award - Recognized for ten years of dedicated support.",
+    "2024",
+    "Silver Award - Recognized for excellent monitoring support.",
+    "2022",
+    "Silver Award - Recognized for zero incidents and escalations.",
+    "2019",
+    "Recognition Award - Recognized for five years of team support.",
+    "TRAINING HIGHLIGHTS",
+    "Monitoring, service management",
+    "REFERENCES"
+   ],
+   "expect": [
+    {
+     "category": "Awards & Achievements",
+     "items": [
+      "Northwind Services (M) Sdn Bhd",
+      "2024",
+      "Recognition Award - Recognized for ten years of dedicated support.",
+      "2024",
+      "Silver Award - Recognized for excellent monitoring support.",
+      "2022",
+      "Silver Award - Recognized for zero incidents and escalations.",
+      "2019",
+      "Recognition Award - Recognized for five years of team support."
+     ],
+     "item_headings": [
+      "Northwind Services (M) Sdn Bhd",
+      "2022",
+      "2019"
+     ]
+    }
+   ],
+   "note": "Source-confirmed award labels remain unbulleted; award descriptions remain bullets."
+  },
+  {
+   "id": "C3-explicit-legal-awards-label-differs-from-work-history",
+   "rule": "C3",
+   "kind": "award_headings",
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Origin (Malaysia) Sdn Bhd"
+     }
+    ],
+    "skills": [
+     {
+      "category": "Awards & Achievements",
+      "items": [
+       "Northwind Services (M) Sdn Bhd",
+       "2024",
+       "Recognition Award - Recognized for ten years of dedicated support.",
+       "2023",
+       "Silver Award - Recognized for excellent monitoring support.",
+       "2022",
+       "Silver Award - Recognized for zero incidents and escalations.",
+       "2019",
+       "Recognition Award - Recognized for five years of team support."
+      ]
+     }
+    ]
+   },
+   "lines": [
+    "AWARDS/ ACHIEVEMENTS",
+    "Northwind Services (M) Sdn Bhd",
+    "2024",
+    "Recognition Award - Recognized for ten years of dedicated support.",
+    "2023",
+    "Silver Award - Recognized for excellent monitoring support.",
+    "2022",
+    "Silver Award - Recognized for zero incidents and escalations.",
+    "2019",
+    "Recognition Award - Recognized for five years of team support.",
+    "TRAINING HIGHLIGHTS",
+    "Monitoring, service management",
+    "REFERENCES"
+   ],
+   "expect": [
+    {
+     "category": "Awards & Achievements",
+     "items": [
+      "Northwind Services (M) Sdn Bhd",
+      "2024",
+      "Recognition Award - Recognized for ten years of dedicated support.",
+      "2023",
+      "Silver Award - Recognized for excellent monitoring support.",
+      "2022",
+      "Silver Award - Recognized for zero incidents and escalations.",
+      "2019",
+      "Recognition Award - Recognized for five years of team support."
+     ],
+     "item_headings": [
+      "Northwind Services (M) Sdn Bhd",
+      "2024",
+      "2023",
+      "2022",
+      "2019"
+     ]
+    }
+   ],
+   "note": "The source uses a different explicit legal employer label in Awards; formatting must keep that exact label without relabelling work history."
+  },
+  {
+   "id": "C2-blind-award-headings-use-returned-text",
+   "rule": "C2",
+   "kind": "blind_contribution_headings",
+   "original": {
+    "skills": [
+     {
+      "category": "Awards & Achievements",
+      "items": [
+       "Northwind Services (M) Sdn Bhd",
+       "2024",
+       "Recognition Award - Recognized for ten years of dedicated support.",
+       "2023",
+       "Silver Award - Recognized for excellent monitoring support.",
+       "2022",
+       "Silver Award - Recognized for zero incidents and escalations.",
+       "2019",
+       "Recognition Award - Recognized for five years of team support."
+      ],
+      "item_headings": [
+       "Northwind Services (M) Sdn Bhd",
+       "2024",
+       "2023",
+       "2022",
+       "2019"
+      ]
+     }
+    ]
+   },
+   "reply": {
+    "skills": [
+     {
+      "category": "Awards & Achievements",
+      "items": [
+       "Leading Technology Company",
+       "2024",
+       "Recognition Award - Recognized for ten years of dedicated support.",
+       "2023",
+       "Silver Award - Recognized for excellent monitoring support.",
+       "2022",
+       "Silver Award - Recognized for zero incidents and escalations.",
+       "2019",
+       "Recognition Award - Recognized for five years of team support."
+      ],
+      "item_headings": [
+       "Northwind Services (M) Sdn Bhd",
+       "2024",
+       "2023",
+       "2022",
+       "2019"
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "skills": [
+     {
+      "category": "Awards & Achievements",
+      "items": [
+       "Leading Technology Company",
+       "2024",
+       "Recognition Award - Recognized for ten years of dedicated support.",
+       "2023",
+       "Silver Award - Recognized for excellent monitoring support.",
+       "2022",
+       "Silver Award - Recognized for zero incidents and escalations.",
+       "2019",
+       "Recognition Award - Recognized for five years of team support."
+      ],
+      "item_headings": [
+       "Leading Technology Company",
+       "2024",
+       "2023",
+       "2022",
+       "2019"
+      ]
+     }
+    ]
+   },
+   "note": "Awards labels are rebuilt solely from already-blinded visible items; copied source heading hints are discarded."
+  },
+  {
+   "id": "C2-blind-award-year-changed",
+   "rule": "C2",
+   "kind": "blind_contribution_headings",
+   "original": {
+    "skills": [
+     {
+      "category": "Awards & Achievements",
+      "items": [
+       "Northwind Services (M) Sdn Bhd",
+       "2024",
+       "Recognition Award - Recognized for ten years of dedicated support.",
+       "2023",
+       "Silver Award - Recognized for excellent monitoring support.",
+       "2022",
+       "Silver Award - Recognized for zero incidents and escalations.",
+       "2019",
+       "Recognition Award - Recognized for five years of team support."
+      ],
+      "item_headings": [
+       "Northwind Services (M) Sdn Bhd",
+       "2024",
+       "2023",
+       "2022",
+       "2019"
+      ]
+     }
+    ]
+   },
+   "reply": {
+    "skills": [
+     {
+      "category": "Awards & Achievements",
+      "items": [
+       "Leading Technology Company",
+       "2020",
+       "Recognition Award - Recognized for ten years of dedicated support.",
+       "2023",
+       "Silver Award - Recognized for excellent monitoring support.",
+       "2022",
+       "Silver Award - Recognized for zero incidents and escalations.",
+       "2019",
+       "Recognition Award - Recognized for five years of team support."
+      ],
+      "item_headings": [
+       "Northwind Services (M) Sdn Bhd",
+       "2024",
+       "2023",
+       "2022",
+       "2019"
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "skills": [
+     {
+      "category": "Awards & Achievements",
+      "items": [
+       "Leading Technology Company",
+       "2020",
+       "Recognition Award - Recognized for ten years of dedicated support.",
+       "2023",
+       "Silver Award - Recognized for excellent monitoring support.",
+       "2022",
+       "Silver Award - Recognized for zero incidents and escalations.",
+       "2019",
+       "Recognition Award - Recognized for five years of team support."
+      ]
+     }
+    ]
+   },
+   "note": "Changed anchors do not justify copying source award label metadata."
+  },
+  {
+   "id": "C2-blind-award-award-body-changed",
+   "rule": "C2",
+   "kind": "blind_contribution_headings",
+   "original": {
+    "skills": [
+     {
+      "category": "Awards & Achievements",
+      "items": [
+       "Northwind Services (M) Sdn Bhd",
+       "2024",
+       "Recognition Award - Recognized for ten years of dedicated support.",
+       "2023",
+       "Silver Award - Recognized for excellent monitoring support.",
+       "2022",
+       "Silver Award - Recognized for zero incidents and escalations.",
+       "2019",
+       "Recognition Award - Recognized for five years of team support."
+      ],
+      "item_headings": [
+       "Northwind Services (M) Sdn Bhd",
+       "2024",
+       "2023",
+       "2022",
+       "2019"
+      ]
+     }
+    ]
+   },
+   "reply": {
+    "skills": [
+     {
+      "category": "Awards & Achievements",
+      "items": [
+       "Leading Technology Company",
+       "2024",
+       "Rewritten award description.",
+       "2023",
+       "Silver Award - Recognized for excellent monitoring support.",
+       "2022",
+       "Silver Award - Recognized for zero incidents and escalations.",
+       "2019",
+       "Recognition Award - Recognized for five years of team support."
+      ],
+      "item_headings": [
+       "Northwind Services (M) Sdn Bhd",
+       "2024",
+       "2023",
+       "2022",
+       "2019"
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "skills": [
+     {
+      "category": "Awards & Achievements",
+      "items": [
+       "Leading Technology Company",
+       "2024",
+       "Rewritten award description.",
+       "2023",
+       "Silver Award - Recognized for excellent monitoring support.",
+       "2022",
+       "Silver Award - Recognized for zero incidents and escalations.",
+       "2019",
+       "Recognition Award - Recognized for five years of team support."
+      ]
+     }
+    ]
+   },
+   "note": "Changed anchors do not justify copying source award label metadata."
+  },
+  {
+   "id": "C3-unmapped-source-tail",
+   "rule": "C3",
+   "kind": "award_headings",
+   "parsed": {
+    "work_experiences": [
+     {
+      "company": "Northwind Services (M) Sdn Bhd"
+     }
+    ],
+    "skills": [
+     {
+      "category": "Awards & Achievements",
+      "items": [
+       "Northwind Services (M) Sdn Bhd",
+       "2024",
+       "Recognition Award - Recognized for ten years of dedicated support.",
+       "2023",
+       "Silver Award - Recognized for excellent monitoring support.",
+       "2022",
+       "Silver Award - Recognized for zero incidents and escalations.",
+       "2019",
+       "Recognition Award - Recognized for five years of team support."
+      ]
+     }
+    ]
+   },
+   "lines": [
+    "AWARDS/ ACHIEVEMENTS",
+    "Northwind Services (M) Sdn Bhd",
+    "2024",
+    "Recognition Award - Recognized for ten years of dedicated support.",
+    "2023",
+    "Silver Award - Recognized for excellent monitoring support.",
+    "2022",
+    "Silver Award - Recognized for zero incidents and escalations.",
+    "2019",
+    "Recognition Award - Recognized for five years of team support.",
+    "Additional award detail missing from the parsed items.",
+    "TRAINING HIGHLIGHTS",
+    "Monitoring, service management",
+    "REFERENCES"
+   ],
+   "expect": [
+    {
+     "category": "Awards & Achievements",
+     "items": [
+      "Northwind Services (M) Sdn Bhd",
+      "2024",
+      "Recognition Award - Recognized for ten years of dedicated support.",
+      "2023",
+      "Silver Award - Recognized for excellent monitoring support.",
+      "2022",
+      "Silver Award - Recognized for zero incidents and escalations.",
+      "2019",
+      "Recognition Award - Recognized for five years of team support."
+     ]
+    }
+   ],
+   "note": "Do not annotate when the existing list omits a source paragraph within the awards section."
   }
  ]
 }

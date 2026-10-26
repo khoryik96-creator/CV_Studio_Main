@@ -48,7 +48,9 @@ function hrSearchKey(value) {
     const url = new URL(value);
     if (!linkedin(value) || url.username || url.password || !/^\/search\/results\/people\/?$/.test(url.pathname)) return '';
     url.pathname = '/search/results/people/'; url.hash = '';
-    for (const name of ['origin','lipi','trk','sid','skipRedirect','page']) url.searchParams.delete(name);
+    // Native People pagination adds these two options without changing the
+    // selected company, country or keyword text. Keep every actual filter.
+    for (const name of ['origin','lipi','trk','sid','skipRedirect','page','spellCorrectionEnabled','prioritizeMessage']) url.searchParams.delete(name);
     url.searchParams.sort(); return url.href;
   } catch { return ''; }
 }
@@ -77,7 +79,18 @@ async function hrScript(bound, run, method, values) {
     catch(error) { return {hrError:/sign in|verification|restriction/i.test(String(error?.message)) ? 'access' : 'layout'}; }
   },args:[method,values]},jobReaderReadError);
   live(bound,run);
-  if (injection?.result?.hrError) throw safeError(injection.result.hrError === 'access' ? 'LinkedIn needs sign-in or is showing a restriction. Resolve it in the search tab before trying again.' : 'The company or LinkedIn layout could not be confirmed. Check the company page and try again.');
+  if (injection?.result?.hrError) {
+    const errors={
+      readHRCompany:'The company page could not be matched to the saved ad. Check its company name and LinkedIn company page.',
+      hrCountryOpen:'The LinkedIn location filter could not be opened. Check the HR search tab and start again.',
+      hrCountryType:'The LinkedIn location filter could not receive the country. Check the HR search tab and start again.',
+      hrCountryPick:'The country suggestion could not be selected. Check the LinkedIn location filter and start again.',
+      hrCountryApply:'The selected country could not be applied. Check the LinkedIn location filter and start again.',
+      readHRSearch:'The HR results layout could not be read. Refresh the LinkedIn HR search tab and start again.',
+      nextHRSearch:'The HR results changed before the next-page click. Start again from the saved ad.'
+    };
+    throw safeError(injection.result.hrError === 'access' ? 'LinkedIn needs sign-in or is showing a restriction. Resolve it in the search tab before trying again.' : errors[method] || 'The HR page could not be read. Check the LinkedIn search tab and start again.');
+  }
   return injection?.result;
 }
 async function hrMutation(bound, run, method, values, nextStage) {

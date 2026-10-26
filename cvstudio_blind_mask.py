@@ -1587,7 +1587,9 @@ def _blind_restore_cv_skill_headings(repaired, original_cv):
         if not isinstance(original, dict) or not isinstance(blinded, dict):
             continue
         category = key(original.get("category"))
-        if (category != "contribution towards projects taskforce"
+        if (category not in {"contribution towards projects taskforce", "awards",
+                             "awards achievements", "awards and achievements",
+                             "awards recognition", "awards and recognition"}
                 or key(blinded.get("category")) != category):
             continue
         hints = original.get("item_headings")

@@ -4,6 +4,46 @@
 
 ## Release state
 
+- v24.6.491 corrects PR #249's pre-merge review finding: a failed primary or
+  backup MX address lookup no longer cancels another usable public mail server.
+  Both quick and full checks retain usable hosts; all-inconclusive lookups remain
+  unknown, and restricted/private addresses never reach SMTP. Five regression
+  cases failed before the correction, and a sixth exercises the real public-IP
+  guard. All 1,853 isolated Windows Python tests (four skipped, 8,416 subtests),
+  all 52 JavaScript fixture files, preflight and 24 smoke assertions passed.
+  Final hosted-check identities are recorded in the v491 QA report and
+  coordination issue #35. All v490 Awards and HR fixes remain.
+
+- v24.6.490 integrates Email Verifier v487 with the tested
+  v488 Awards grouping and v489 saved-ad HR corrections. A valid email can remain
+  unconfirmed when direct mailbox probing is unavailable; the UI now labels
+  that outcome Unconfirmed, shows the independent format/mail-record evidence,
+  and distinguishes connection, mailbox-response and TLS failures. Machine
+  status `unknown` and the existing conservative verdict rules are unchanged.
+  Modern HR wrapper support is additionally limited to a recognized primary
+  results region. All 1,847 isolated Windows Python tests (four skipped, 8,416
+  subtests), JavaScript fixtures, isolated native browser checks, owner-source
+  preflight and 24 smoke assertions passed. The owner subsequently authorized
+  publication and merge after the hosted checks; final PR and merge identities
+  are recorded in coordination issue #35. Earlier local checkpoint notes below
+  are historical. No paid call, outreach, user-file overwrite or owner
+  installation update is included.
+
+- v24.6.487 adds the owner-requested first-party Email Verifier on
+  `codex/v24.6.487-email-verifier`, based on merged master `d9b91d9`.
+  It has paste/CSV input, a sequential cancellable batch, syntax/DNS/mailbox
+  checks, separate evidence-based verdicts, filters and safe CSV export.
+  No verification API, paid provider, AI key or saved email database is used.
+  One POST route brings the sealed inventory to 121; the complete previous
+  120-route contract, five guards and schemas are preserved. The v487 QA report
+  records isolated regression, browser and protocol evidence. Local checkpoint
+  only; no PR, merge or owner installation update is part of this work.
+
+- PR #248 merged v24.6.486 as `d9b91d9d3d90cb65956f5811099663a9872bb768`.
+  Its full tree equals tested head `c63c6c59`; all three exact-head hosted
+  checks and completed clean automated review passed. That squash-merged branch
+  is finished. The earlier local v486 notes below are historical.
+
 - v24.6.486 is a local follow-up from merged master `27f66e5` for LinkedIn's
   native empty HR search. Live comparison retained the exact company filter:
   the eleven-term query returned no results, while compact queries returned

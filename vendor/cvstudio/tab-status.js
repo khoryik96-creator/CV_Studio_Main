@@ -5,6 +5,7 @@
 var TAB_BUTTON_IDS = {
   linkedinsourcer: 'tabLinkedinSourcer',
   jobleads: 'tabJobLeads',
+  emailverifier: 'tabEmailVerifier',
   format: 'tabFormat', summary: 'tabSummary', appraiser: 'tabAppraiser', theowl: 'tabTheOwl', thespider: 'tabTheSpider', batch: 'tabBatch', jaupload: 'tabJAUpload', jacreate: 'tabJACreate',
   jdanon: 'tabJDAnon', company: 'tabCompany', onenote: 'tabOneNote', leadfinder: 'tabLeadFinder', stats: 'tabStats', ppc: 'tabPPC'
 };

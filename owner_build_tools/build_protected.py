@@ -40,8 +40,8 @@ except ModuleNotFoundError:  # Direct `python owner_build_tools/build_protected.
         find_pinned_checkout_action,
     )
 
-VERSION = "v24.6.486"
-VERSION_SLUG = "v24_6_486"
+VERSION = "v24.6.491"
+VERSION_SLUG = "v24_6_491"
 PRODUCT = "TheGuoLab-CVStudio"
 RECEIPT_SCHEMA = 2
 TOTP_MASK = bytes([147,57,36,83,116,245,122,57,165,162,176,168,249,50,204,128,45,174,232,56])
@@ -70,6 +70,7 @@ FRONTEND_MODULES = (
     "linkedin-sourcer-core.js",
     "linkedin-sourcer.js",
     "job-leads.js",
+    "email-verifier.js",
     "ai-proxy.js",
     "ai-routing.js",
     "runtime-core.js",
@@ -280,7 +281,7 @@ def validate_repository_dependency_state(root: Path) -> None:
             raise RuntimeError(f"POSIX script is not LF-only: {rel}. Run repo_consistency.py --repair.")
 
 def validate_source(root: Path) -> None:
-    required=("cvstudio_job_ads.py","cvstudio_job_leads.py","app.py","cvstudio_linkedin_sourcer.py","cvstudio_architecture.py","cvstudio_ai_costs.py","cvstudio_ai_providers.py","cvstudio_antiword.py","cvstudio_tesseract.py","cvstudio_clients.py","cvstudio_storage.py","cvstudio_storage_bridge.py","cvstudio_diagnostics.py","cvstudio_document_safety.py","cvstudio_jobs.py","cvstudio_startup.py","cvstudio_runtime.py","cvstudio_downloads.py","cvstudio_web_assets.py","cvstudio_secrets.py","cvstudio_jobadder_request.py","cvstudio_jobadder_read.py","cvstudio_jobadder_write.py","cvstudio_onenote_text.py","cvstudio_outlook_crypto.py","cvstudio_cv_normalize.py","cvstudio_cv_reconcile.py","cvstudio_cv_fidelity.py","cvstudio_lead_match.py","cvstudio_lead_enrich.py","cvstudio_lead_cache.py","cvstudio_lead_search.py","cvstudio_spider_boolean.py","cvstudio_spider_summary.py","cvstudio_spider_score.py","cvstudio_spider_documents.py","cvstudio_ja_typos.py","cvstudio_salary_parse.py","cvstudio_ja_answers.py","cvstudio_ja_activity.py","cvstudio_ja_screening.py","cvstudio_ja_salary_notice.py","cvstudio_ja_salary_ai.py","cvstudio_blind_mask.py","cvstudio_ppc.py","cvstudio_msgraph.py","cvstudio_onenote_desktop.py","index.html","generate.js","template.docx","package.json","requirements.txt","merge_title_cache.py","vendor/linkedin-companion/manifest.json","vendor/linkedin-companion/content.js","vendor/linkedin-companion/worker.js","vendor/linkedin-companion/reader.js") + tuple(
+    required=("cvstudio_email_verifier.py","cvstudio_job_ads.py","cvstudio_job_leads.py","app.py","cvstudio_linkedin_sourcer.py","cvstudio_architecture.py","cvstudio_ai_costs.py","cvstudio_ai_providers.py","cvstudio_antiword.py","cvstudio_tesseract.py","cvstudio_clients.py","cvstudio_storage.py","cvstudio_storage_bridge.py","cvstudio_diagnostics.py","cvstudio_document_safety.py","cvstudio_jobs.py","cvstudio_startup.py","cvstudio_runtime.py","cvstudio_downloads.py","cvstudio_web_assets.py","cvstudio_secrets.py","cvstudio_jobadder_request.py","cvstudio_jobadder_read.py","cvstudio_jobadder_write.py","cvstudio_onenote_text.py","cvstudio_outlook_crypto.py","cvstudio_cv_normalize.py","cvstudio_cv_reconcile.py","cvstudio_cv_fidelity.py","cvstudio_lead_match.py","cvstudio_lead_enrich.py","cvstudio_lead_cache.py","cvstudio_lead_search.py","cvstudio_spider_boolean.py","cvstudio_spider_summary.py","cvstudio_spider_score.py","cvstudio_spider_documents.py","cvstudio_ja_typos.py","cvstudio_salary_parse.py","cvstudio_ja_answers.py","cvstudio_ja_activity.py","cvstudio_ja_screening.py","cvstudio_ja_salary_notice.py","cvstudio_ja_salary_ai.py","cvstudio_blind_mask.py","cvstudio_ppc.py","cvstudio_msgraph.py","cvstudio_onenote_desktop.py","index.html","generate.js","template.docx","package.json","requirements.txt","merge_title_cache.py","vendor/linkedin-companion/manifest.json","vendor/linkedin-companion/content.js","vendor/linkedin-companion/worker.js","vendor/linkedin-companion/reader.js") + tuple(
         "vendor/cvstudio/" + filename for filename in FRONTEND_MODULES
     ) + tuple(
         "vendor/cvstudio/" + filename for filename in FRONTEND_STATIC_ASSETS
@@ -425,7 +426,7 @@ def validate_vetted_adm_zip(root: Path) -> Path:
 
 
 def preflight_source(root: Path, target: str | None = None) -> None:
-    run([sys.executable,"-m","py_compile",str(root/"app.py"),str(root/"cvstudio_linkedin_sourcer.py"),str(root/"cvstudio_job_leads.py"),str(root/"cvstudio_job_ads.py"),str(root/"cvstudio_architecture.py"),str(root/"cvstudio_ai_costs.py"),str(root/"cvstudio_ai_providers.py"),str(root/"cvstudio_antiword.py"),str(root/"cvstudio_tesseract.py"),str(root/"cvstudio_clients.py"),str(root/"cvstudio_storage.py"),str(root/"cvstudio_storage_bridge.py"),str(root/"cvstudio_diagnostics.py"),str(root/"cvstudio_document_safety.py"),str(root/"cvstudio_jobs.py"),str(root/"cvstudio_startup.py"),str(root/"cvstudio_runtime.py"),str(root/"cvstudio_downloads.py"),str(root/"cvstudio_web_assets.py"),str(root/"cvstudio_secrets.py"),str(root/"cvstudio_jobadder_request.py"),str(root/"cvstudio_jobadder_read.py"),str(root/"cvstudio_jobadder_write.py"),str(root/"cvstudio_onenote_text.py"),str(root/"cvstudio_outlook_crypto.py"),str(root/"cvstudio_cv_normalize.py"),str(root/"cvstudio_cv_reconcile.py"),str(root/"cvstudio_cv_fidelity.py"),str(root/"cvstudio_lead_match.py"),str(root/"cvstudio_lead_enrich.py"),str(root/"cvstudio_lead_cache.py"),str(root/"cvstudio_lead_search.py"),str(root/"cvstudio_spider_boolean.py"),str(root/"cvstudio_spider_summary.py"),str(root/"cvstudio_spider_score.py"),str(root/"cvstudio_spider_documents.py"),str(root/"cvstudio_ja_typos.py"),str(root/"cvstudio_salary_parse.py"),str(root/"cvstudio_ja_answers.py"),str(root/"cvstudio_ja_activity.py"),str(root/"cvstudio_ja_screening.py"),str(root/"cvstudio_ja_salary_notice.py"),str(root/"cvstudio_ja_salary_ai.py"),str(root/"cvstudio_blind_mask.py"),str(root/"cvstudio_ppc.py"),str(root/"cvstudio_msgraph.py"),str(root/"cvstudio_onenote_desktop.py"),str(root/"merge_title_cache.py")]+[str(root/rel) for rel in SALARY_COMPARISON_MODULES])
+    run([sys.executable,"-m","py_compile",str(root/"app.py"),str(root/"cvstudio_linkedin_sourcer.py"),str(root/"cvstudio_job_leads.py"),str(root/"cvstudio_job_ads.py"),str(root/"cvstudio_email_verifier.py"),str(root/"cvstudio_architecture.py"),str(root/"cvstudio_ai_costs.py"),str(root/"cvstudio_ai_providers.py"),str(root/"cvstudio_antiword.py"),str(root/"cvstudio_tesseract.py"),str(root/"cvstudio_clients.py"),str(root/"cvstudio_storage.py"),str(root/"cvstudio_storage_bridge.py"),str(root/"cvstudio_diagnostics.py"),str(root/"cvstudio_document_safety.py"),str(root/"cvstudio_jobs.py"),str(root/"cvstudio_startup.py"),str(root/"cvstudio_runtime.py"),str(root/"cvstudio_downloads.py"),str(root/"cvstudio_web_assets.py"),str(root/"cvstudio_secrets.py"),str(root/"cvstudio_jobadder_request.py"),str(root/"cvstudio_jobadder_read.py"),str(root/"cvstudio_jobadder_write.py"),str(root/"cvstudio_onenote_text.py"),str(root/"cvstudio_outlook_crypto.py"),str(root/"cvstudio_cv_normalize.py"),str(root/"cvstudio_cv_reconcile.py"),str(root/"cvstudio_cv_fidelity.py"),str(root/"cvstudio_lead_match.py"),str(root/"cvstudio_lead_enrich.py"),str(root/"cvstudio_lead_cache.py"),str(root/"cvstudio_lead_search.py"),str(root/"cvstudio_spider_boolean.py"),str(root/"cvstudio_spider_summary.py"),str(root/"cvstudio_spider_score.py"),str(root/"cvstudio_spider_documents.py"),str(root/"cvstudio_ja_typos.py"),str(root/"cvstudio_salary_parse.py"),str(root/"cvstudio_ja_answers.py"),str(root/"cvstudio_ja_activity.py"),str(root/"cvstudio_ja_screening.py"),str(root/"cvstudio_ja_salary_notice.py"),str(root/"cvstudio_ja_salary_ai.py"),str(root/"cvstudio_blind_mask.py"),str(root/"cvstudio_ppc.py"),str(root/"cvstudio_msgraph.py"),str(root/"cvstudio_onenote_desktop.py"),str(root/"merge_title_cache.py")]+[str(root/rel) for rel in SALARY_COMPARISON_MODULES])
     run(["node","--check",str(root/"generate.js")])
     for filename in FRONTEND_MODULES:
         run(["node","--check",str(root/"vendor"/"cvstudio"/filename)])
@@ -641,7 +642,7 @@ def compile_native(root: Path, work: Path, target: str, source_entry: Path | Non
          # follow that conditional import, so force it in -- otherwise the frozen
          # build ships without Waitress and silently serves on the Werkzeug dev
          # server instead of the intended production server.
-         "--include-package=waitress"]
+         "--include-package=waitress","--include-package=dns"]
     if target=="windows-x64":
         cmd += ["--windows-console-mode=disable","--windows-icon-from-ico="+str(root/"cv_studio.ico")]
         # Imports are present in app.py and followed by Nuitka. Keep explicit

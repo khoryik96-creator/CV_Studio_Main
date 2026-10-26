@@ -13,3 +13,4 @@ beautifulsoup4==4.15.0
 pypdf==6.16.2
 requests==2.34.2
 waitress==3.0.2
+dnspython==2.9.0

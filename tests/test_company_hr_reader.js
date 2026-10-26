@@ -26,11 +26,13 @@ state.cards=[card('sample','Senior HRBP | Talent Acquisition','Malaysia'),card('
   card('decoy','Data Architect at Example Company','Malaysia'),card('word','Data platform specialist','Malaysia'),card('sample','Recruiter','Malaysia'),card('bad','HR Manager','Malaysia','https://attacker.invalid/in/bad')];
 const pageButton=element('Page 1');const pager={querySelector:()=>pageButton};
 const next=element('Next',{parentElement:pager,click:()=>state.clicks.push('next')});
-const main=element('',{querySelectorAll:s=>s==='button'?[next]:s.includes('listitem')?state.cards:[]});
+const main=element('',{querySelectorAll:s=>s==='button'?[next]:s.includes('listitem')?
+  state.wrapped&&!s.includes('[role="list"] > * > [role="listitem"]')?state.cards.slice(0,1):state.cards:[]});
 Object.defineProperty(main,'innerText',{get:()=>state.restricted?'You have reached the commercial search limit':state.empty?'No results found':'Visible employee results'});
 const document={body:main,querySelector:selector=>{
   if(selector==='main')return main;
-  if(selector.includes('FilterBar'))return toolbar;
+  if(selector==='main [aria-label="Primary content"]')return state.wrapped&&!state.noPrimary?main:null;
+  if(selector.includes('FilterBar'))return state.missingToolbar?null:toolbar;
   return null;
 },querySelectorAll:selector=>{
   if(selector==='main h1, h1')return [heading];
@@ -65,5 +67,13 @@ assert(reader.hrCountryOpen('Malaysia'),'modern Locations is a role=button div')
 assert(reader.hrCountryPick('Malaysia'),'modern suggestions are role=option rows containing role=button controls');
 assert(reader.hrCountryApply('Malaysia'),'the exact selected country and Show results can be in a portal outside the toolbar');
 state.selected=false;assert(!reader.hrCountryApply('Malaysia'),'an unchecked country cannot be applied');
+state.selected=true;state.empty=false;state.wrapped=true;
+state.cards=Array.from({length:10},(_,i)=>card('synthetic-'+i,'Talent Acquisition Specialist','Malaysia'));
+assert.equal(reader.readHRSearch('Example Company','',keywords).people.length,10,'modern list wrappers have a component key on the first result only; all ten result items must be read');
+state.noPrimary=true;
+assert.equal(reader.readHRSearch('Example Company','',keywords).people.length,1,'the new wrapper fallback is restricted to a recognized primary-results region');
+state.noPrimary=false;
+state.missingToolbar=true;
+assert.equal(reader.hrCountryOpen('Malaysia'),false,'a delayed filter bar causes no click and can be polled safely');
 state.restricted=true;assert.throws(()=>reader.readHRSearch('Example Company','Malaysia',keywords));
 console.log('Company HR reader: observed company ID, exact country suggestions/badges, native-only controls, scoped fields, HR word boundaries, loading/empty distinction, pagination and restrictions passed');
