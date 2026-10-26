@@ -7,7 +7,7 @@ function fixture(){
   let hooks;
   const state={session:{},created:[],removed:[],document:'bound',next:0,scroll:0,failWrite:false,reads:0,location:'Malaysia',failInjection:false,failReader:false};
   const tabs=new Map([[1,{id:1,url:'http://127.0.0.1:5000/',status:'complete'}],[2,{id:2,url:search,status:'complete'}],[3,{id:3,url:'https://www.linkedin.com/search/results/people/',status:'complete'}]]);
-  const chrome={storage:{session:{get:async key=>({[key]:copy(state.session[key]||null)}),set:async data=>{if(state.failWrite)throw Error('Synthetic storage failure');Object.assign(state.session,copy(data));}}},
+  const chrome={storage:{session:{get:async key=>({[key]:copy(state.session[key]||null)}),set:async data=>{if(state.failWrite)throw Error('Synthetic storage failure');Object.assign(state.session,copy(data));if(state.onPersist)await state.onPersist(data);}}},
     action:{onClicked:{addListener:fn=>hooks.arm=fn},setBadgeText:async()=>{}},
     tabs:{onRemoved:{addListener:fn=>hooks.removed=fn},onUpdated:{addListener:fn=>hooks.updated=fn},onActivated:{addListener:fn=>hooks.activated=fn},
       query:async()=>[...tabs.values()],get:async id=>{if(!tabs.has(id))throw Error('Missing tab');return {...tabs.get(id)}},

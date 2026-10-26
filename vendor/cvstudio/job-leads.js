@@ -442,7 +442,7 @@
     try {
       el('HRMessage').textContent='Checking the companion…';
       const companion = await rpc('jobStatus',{},1500); checkHR();
-      if (!companion?.connected || companion.company_hr_revision !== 1 || companion.hr_joined_revision !== 1) throw Error('Open this CV Studio address in Chrome, reload the latest companion, refresh pages and reconnect it to find company HR people and joining dates.');
+      if (!companion?.connected || companion.company_hr_revision !== 1 || companion.hr_joined_revision !== 1 || companion.hr_keyword_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to find company HR people with the corrected keyword search.');
       if (companion.busy) throw Error('Finish the current companion search or ad read first.');
       if (!companyURL) {
         el('HRMessage').textContent='Reading the company link from the saved ad…';

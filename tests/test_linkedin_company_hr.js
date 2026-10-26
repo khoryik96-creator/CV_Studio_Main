@@ -10,6 +10,7 @@ function hrFixture(country=''){
     if(method==='readHRCompany')return [{result:f.state.badCompany?{hrError:'layout'}:{company_id:'123'}}];
     if(method==='readHRSearch'){
       f.state.hrReads++;
+      if(f.state.hrSnapshot)return [{result:f.state.hrSnapshot()}];
       return [{result:{people:[{url:'https://www.linkedin.com/in/sample'}],signature:'one',hasNext:true,empty:false}}];
     }
     if(Array.isArray(method)) {
@@ -34,7 +35,8 @@ function hrFixture(country=''){
   f.nextHR=id=>f.rpc('hrNext',{run_id:f.run,tab_id:id,signature:'one'});
   return f;
 }
-(async()=>{
+module.exports={hrFixture};
+if(require.main===module)(async()=>{
   const delayed=hrFixture();await delayed.arm();const delayId=(await delayed.beginHR()).result.tab_id;
   delayed.state.onUpdate=(id,args)=>{delayed.state.hrMutations.push(args.url);delayed.state.requested=args.url;return {...delayed.tabs.get(id),pendingUrl:args.url}};
   assert((await delayed.readHR(delayId)).result.loading);

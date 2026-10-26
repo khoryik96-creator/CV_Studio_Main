@@ -4,6 +4,22 @@
 
 ## Release state
 
+- v24.6.486 is a local follow-up from merged master `27f66e5` for LinkedIn's
+  native empty HR search. Live comparison retained the exact company filter:
+  the eleven-term query returned no results, while compact queries returned
+  people. Keyword groups now share the existing scan budgets and country/company
+  identity; empty groups advance, duplicates merge and incomplete scans remain
+  limited. The corrected companion capability is checked before starting.
+  All 1,779 Windows Python tests (four skipped, 8,392 subtests), all 48 JavaScript
+  suites, isolated Chromium, native/source preflight and 24 smoke assertions
+  passed. Verification is recorded in the v486 HR keyword-search QA report. No new PR,
+  merge, paid call or owner installation update is part of this correction.
+
+- PR #241 merged v24.6.485 as `27f66e57daf3e082a018a96a2d4b923cfcb3bd47`.
+  Its tree equals tested head `20fb3f0`; all three hosted checks and the completed
+  clean automated review passed. That branch is finished; the local notes below
+  describe its historical pre-merge checkpoint.
+
 - v24.6.485 is a local correction from merged master `d90c676` for the owner's
   false "HR search changed" report. An explicit persisted wait now separates
   company-to-People navigation from reading the new search. Same-search loading

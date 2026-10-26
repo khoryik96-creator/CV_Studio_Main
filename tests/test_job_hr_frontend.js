@@ -6,7 +6,7 @@ function hrFixture(){
   const f=fixture();Object.assign(f.state,{hrPage:0,hrSeen:0});
   f.state.onRPC=(message,reply)=>{
     const {action,args}=message;
-    if(action==='jobStatus'){reply({connected:true,company_hr_revision:f.state.oldCompanion?0:1,hr_joined_revision:1,busy:!!f.state.hrBusy});return true;}
+    if(action==='jobStatus'){reply({connected:true,company_hr_revision:f.state.oldCompanion?0:1,hr_joined_revision:1,hr_keyword_revision:f.state.oldKeywords?0:1,busy:!!f.state.hrBusy});return true;}
     if(action==='hrJoined'){
       const value=f.state.joinedLoading?{loading:true}:{url:args.url,joined:f.state.joined ?? '2020-06'};
       if(f.state.holdJoined)f.state.releaseJoined=()=>reply(value);else reply(value);
@@ -20,6 +20,11 @@ function hrFixture(){
       f.state.hrSeen++;
       if(f.state.loading&&f.state.hrSeen===1){reply({loading:true});return true;}
       const snapshot={company_id:'123',source_url:'https://www.linkedin.com/search/results/people/?currentCompany=%5B%22123%22%5D'+(f.state.hrArgs.country?'&geoUrn=%5B%22106808692%22%5D':''),people:[profile],signature:'page'+f.state.hrPage,hasNext:f.state.hrPage===0,empty:false};
+      if(f.state.queryCase){
+        snapshot.query_index=f.state.hrPage;snapshot.query_count=3;snapshot.signature=f.state.hrPage+':same-person';snapshot.hasNext=f.state.hrPage<2;
+        if(f.state.hrPage===0){snapshot.people=[];snapshot.signature='0:';}
+        snapshot.source_url+='&keywords='+encodeURIComponent(f.state.hrPage===0?'"HR"':'"recruiter"');
+      }
       if(f.state.capCase){
         const count=f.state.capCase==='exact'&&f.state.hrPage===2?20:40;
         snapshot.people=Array.from({length:count},(_,i)=>({...profile,url:profile.url+'-'+(f.state.capCase==='duplicates'&&f.state.hrPage===2&&i>=20?i:f.state.hrPage*40+i)}));
@@ -62,16 +67,22 @@ function hrFixture(){
   assert.equal(paging.state.records[0].hr.complete,true);
   const waiting=hrFixture();await waiting.init();waiting.state.nextLoading=1000;await waiting.el('HRStart').click();
   assert(!waiting.requests.some(x=>x.action==='save_hr'),'exhausted next-page wait cannot save a fake completed scan');
+  const queries=hrFixture();await queries.init();queries.state.queryCase=true;queries.el('HRPages').value='3';await queries.el('HRStart').click();
+  assert.equal(queries.state.hrPage,2,'an empty nonterminal keyword group advances to the remaining searches');
+  assert.equal(queries.state.records[0].hr.people.length,1);assert.equal(queries.calls.filter(x=>x.action==='hrJoined').length,1,'duplicate profiles across groups do not reset the joined-date lookup budget');
+  assert(queries.state.records[0].hr.complete);assert.equal(queries.requests.filter(x=>x.action==='save_hr').length,1);
+  const queryCap=hrFixture();await queryCap.init();queryCap.state.queryCase=true;queryCap.el('HRPages').value='1';await queryCap.el('HRStart').click();
+  assert.equal(queryCap.state.hrPage,0);assert.equal(queryCap.state.records[0].hr.complete,false,'unsearched keyword groups are saved as limited, not a complete empty search');
   f.el('HRCountryMode').value='specific';f.el('HRCountryMode').handlers.change();assert(!f.el('HRCountry').hidden);
   f.el('HRCountry').value='Singapore';await f.el('HRStart').click();assert.equal(f.state.hrArgs.country,'Singapore');
   f.state.records[0].hr.people=[{...profile,name:'Changed in another window'}];f.state.records[0].revision++;
   await f.el('Refresh').click();assert.equal(f.el('HRResults').children[0].children[0].textContent,'Changed in another window','explicit Refresh loads newer saved HR evidence');
   f.state.records[0].hr.complete=false;f.state.records[0].revision++;await f.el('Refresh').click();assert.match(f.el('HRMessage').textContent,/Limited scan/);
-  for(const kind of ['oldCompanion','hrBusy','bad','conflict']){
+  for(const kind of ['oldCompanion','oldKeywords','hrBusy','bad','conflict']){
     const g=hrFixture();await g.init();g.state[kind]=true;await g.el('HRStart').click();
     assert(!g.state.records[0].hr,kind+' must not persist partial/unverified results');
     assert.match(g.el('HRMessage').textContent,/Previous saved results/);
-    if(['oldCompanion','hrBusy'].includes(kind))assert(!g.calls.some(x=>x.action==='hrBegin'));
+    if(['oldCompanion','oldKeywords','hrBusy'].includes(kind))assert(!g.calls.some(x=>x.action==='hrBegin'));
   }
   const stopped=hrFixture();await stopped.init();stopped.state.hold=true;
   const run=stopped.el('HRStart').click();for(let n=0;n<20&&!stopped.state.release;n++)await new Promise(resolve=>setTimeout(resolve,0));

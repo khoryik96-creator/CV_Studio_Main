@@ -52,6 +52,14 @@ function hrSearchKey(value) {
     url.searchParams.sort(); return url.href;
   } catch { return ''; }
 }
+function hrKeywordQueries(keywords, grouped=true) {
+  const terms=[...new Map(keywords.split(',').map(word=>word.replaceAll('"','').trim()).filter(Boolean).map(word=>[word.toLocaleLowerCase(),word])).values()];
+  const queries=[],size=grouped ? 5 : Math.max(terms.length,1);
+  for (let index=0;index<terms.length;index+=size) queries.push(terms.slice(index,index+size).map(word=>'"'+word+'"').join(' OR '));
+  return queries;
+}
+function hrQueries(hr) { return hrKeywordQueries(hr.keywords,hr.query_index !== undefined); }
+function hrSignature(hr, signature) { return hrQueries(hr).length > 1 ? hr.query_index+':'+signature : signature; }
 const HR_LOADING = Symbol('HR pre-action loading');
 async function hrScript(bound, run, method, values) {
   live(bound,run);
@@ -154,6 +162,9 @@ async function restore() {
         bound.jobInitial && (bound.jobInitial !== true || typeof bound.jobLocation !== 'string' || bound.jobLocation.length > 160)) ||
       bound.kind === 'hr' && (!bound.hr || !hrCompanyURL(bound.hr.company_url) || typeof bound.hr.company !== 'string' || bound.hr.company.length > 200 || typeof bound.hr.country !== 'string' || bound.hr.country.length > 100 ||
         typeof bound.hr.keywords !== 'string' || bound.hr.keywords.length > 600 || !Number.isFinite(bound.hr.started) || !['company','search_wait','search','type','pick','apply','country_wait','ready','interrupted'].includes(bound.hr.stage) ||
+        bound.hr.query_index !== undefined && (!Number.isInteger(bound.hr.query_index) || bound.hr.query_index < 0 || bound.hr.query_index >= hrQueries(bound.hr).length ||
+          bound.hr.key && new URL(bound.hr.key).searchParams.get('keywords') !== hrQueries(bound.hr)[bound.hr.query_index]) ||
+        bound.hr.omitted_pages !== undefined && typeof bound.hr.omitted_pages !== 'boolean' ||
         bound.hr.joined_count !== undefined && (!Number.isInteger(bound.hr.joined_count) || bound.hr.joined_count < 0 || bound.hr.joined_count > 100) ||
         bound.hr.joining && (!/^https:\/\/www\.linkedin\.com\/in\/[A-Za-z0-9_%~-]+$/.test(bound.hr.joining.url || '') || bound.hr.joining.tab_id !== null && !Number.isInteger(bound.hr.joining.tab_id) ||
           bound.hr.joining.scrolls !== undefined && (!Number.isInteger(bound.hr.joining.scrolls) || bound.hr.joining.scrolls < 0 || bound.hr.joining.scrolls > 4)) ||
@@ -418,11 +429,11 @@ async function handle(message, sender) {
     if (!reloading) { reloading=true;setTimeout(()=>chrome.runtime.reload(),100); }
     return {reloading:true};
   }
-  if (message.action === 'jobStatus') return {connected:true,job_read:true,job_search:true,job_search_revision:1,company_hr_revision:1,hr_joined_revision:1,companion_update_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
+  if (message.action === 'jobStatus') return {connected:true,job_read:true,job_search:true,job_search_revision:1,company_hr_revision:1,hr_joined_revision:1,hr_keyword_revision:1,companion_update_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
   if (message.action === 'hrBegin') {
     const bound = connection;
     if (!/^[a-f0-9]{32}$/.test(args.run_id || '') || !hrCompanyURL(args.company_url) || typeof args.company !== 'string' || !args.company.trim() || args.company.length > 200 ||
-      typeof args.country !== 'string' || args.country.length > 100 || typeof args.keywords !== 'string' || !args.keywords.split(',').some(word=>word.trim()) || args.keywords.length > 600 || /[\x00-\x1f]/.test(args.company+args.country+args.keywords) ||
+      typeof args.country !== 'string' || args.country.length > 100 || typeof args.keywords !== 'string' || args.keywords.length > 600 || !hrKeywordQueries(args.keywords).length || /[\x00-\x1f]/.test(args.company+args.country+args.keywords) ||
       !Number.isInteger(args.max_pages) || args.max_pages < 1 || args.max_pages > 15) throw safeError('Choose a LinkedIn company page, country and 1 to 15 pages.');
     if (bound.run === args.run_id && bound.kind === 'hr') return {tab_id:bound.source};
     if (bound.run || jobCapture) throw safeError('Finish the current companion search first.');
@@ -430,7 +441,7 @@ async function handle(message, sender) {
     try {
       const tab = await chrome.tabs.create({url:args.company_url+'people/',active:false}); live(bound);
       Object.assign(bound,{kind:'hr',run:args.run_id,source:tab.id,pages:args.max_pages,allowed:new Set(),
-        hr:{company_url:args.company_url,company:args.company.trim(),country:args.country.trim(),keywords:args.keywords.trim(),stage:'company',key:'',started:Date.now(),joined_count:0}});
+        hr:{company_url:args.company_url,company:args.company.trim(),country:args.country.trim(),keywords:args.keywords.trim(),query_index:0,stage:'company',key:'',started:Date.now(),joined_count:0}});
       nextCount=0; await persist(); return {tab_id:tab.id};
     } finally { if (jobCapture === token) jobCapture = null; }
   }
@@ -607,9 +618,39 @@ async function handle(message, sender) {
     if (hr.joining) throw safeError('Finish the current joining-date lookup before paging.');
     if (message.action === 'hrNext') {
       if (hr.stage !== 'ready' || typeof args.signature !== 'string' || !args.signature || args.signature.length > 17000) throw safeError('Read the HR results before paging.');
+      const queries=hrQueries(hr), snapshot=await hrScript(bound,run,'readHRSearch',[hr.company,hr.country,hr.keywords]);
+      if (snapshot === HR_LOADING || snapshot == null || snapshot.loading) return {loading:true};
+      if (typeof snapshot.signature !== 'string' || typeof snapshot.hasNext !== 'boolean' || hrSignature(hr,snapshot.signature) !== args.signature) throw safeError('The HR results changed. Read the current results before paging.');
+      const moreQueries=(hr.query_index || 0)+1 < queries.length;
+      if (!snapshot.hasNext && !moreQueries) return false;
+      // Within the existing total limit, reserve a first page for the remaining
+      // groups instead of spending every page on one broad keyword query.
+      const changeQuery=moreQueries && (!snapshot.hasNext || bound.pages-nextCount-1 <= queries.length-hr.query_index-1);
       nextCount++; await persist(); if (nextCount >= bound.pages) throw safeError('The HR page limit was reached.');
-      const result=await hrMutation(bound,run,'nextHRSearch',[args.signature,hr.company,hr.country,hr.keywords],'ready');
-      if (result === HR_LOADING) { nextCount--; await persist(); return {loading:true}; }
+      if (changeQuery) {
+        const oldKey=hr.key,oldIndex=hr.query_index,oldOmitted=hr.omitted_pages;
+        const url=new URL(oldKey);url.searchParams.set('keywords',queries[oldIndex+1]);url.searchParams.delete('page');
+        const target=hrSearchKey(url.href);if (target.length > 2048) throw safeError('Shorten the HR keywords before starting a new scan.');
+        hr.stage='interrupted';await persist();live(bound,run);
+        const current=await chrome.tabs.get(bound.source);live(bound,run);
+        if (hrSearchKey(current.url) !== oldKey || current.pendingUrl && hrSearchKey(current.pendingUrl) !== oldKey) throw safeError('The HR search changed. Start again from the saved ad.');
+        if (current.status !== 'complete') { hr.stage='ready';nextCount--;await persist();return {loading:true}; }
+        // Persist before navigating: suspension cannot repeat a possibly
+        // completed query change or reset the shared page/profile/time budgets.
+        if (snapshot.hasNext) hr.omitted_pages=true;
+        hr.query_index=oldIndex+1;hr.key=target;await persist();live(bound,run);
+        const confirmed=await chrome.tabs.get(bound.source);live(bound,run);
+        if (hrSearchKey(confirmed.url) !== oldKey || confirmed.pendingUrl && hrSearchKey(confirmed.pendingUrl) !== oldKey) throw safeError('The HR search changed. Start again from the saved ad.');
+        if (confirmed.status !== 'complete') {
+          hr.query_index=oldIndex;hr.key=oldKey;hr.stage='ready';
+          if (oldOmitted === undefined) delete hr.omitted_pages;else hr.omitted_pages=oldOmitted;
+          nextCount--;await persist();return {loading:true};
+        }
+        await chrome.tabs.update(bound.source,{url:target});live(bound,run);
+        hr.stage='search_wait';await persist();return true;
+      }
+      const result=await hrMutation(bound,run,'nextHRSearch',[snapshot.signature,hr.company,hr.country,hr.keywords],'ready');
+      if (result === HR_LOADING || result === false) { nextCount--; await persist(); return {loading:true}; }
       return result;
     }
     if (hr.stage === 'company') {
@@ -619,7 +660,7 @@ async function handle(message, sender) {
       hr.company_id = result.company_id;
       const url = new URL('https://www.linkedin.com/search/results/people/');
       url.searchParams.set('currentCompany',JSON.stringify([hr.company_id]));
-      url.searchParams.set('keywords',hr.keywords.split(',').map(x=>x.trim()).filter(Boolean).map(x=>'"'+x.replaceAll('"','')+'"').join(' OR '));
+      url.searchParams.set('keywords',hrQueries(hr)[0]);
       hr.key = hrSearchKey(url.href); hr.stage='interrupted'; await persist(); live(bound,run);
       if (hr.key.length > 2048) throw safeError('Shorten the HR keywords before starting a new scan.');
       await chrome.tabs.update(bound.source,{url:hr.key}); live(bound,run); hr.stage='search_wait'; await persist(); return {loading:true};
@@ -628,9 +669,11 @@ async function handle(message, sender) {
       // tabs.update resolves before the old complete document necessarily
       // commits the requested navigation. Wait only for our exact target;
       // never read the old company page as People results or navigate again.
-      if (tab.pendingUrl && hrSearchKey(tab.pendingUrl) !== hr.key || tab.url !== hr.company_url+'people/' && hrSearchKey(tab.url) !== hr.key) throw safeError('The HR search changed. Start again from the saved ad.');
+      let previous=hr.company_url+'people/';
+      if (hr.query_index > 0) { const url=new URL(hr.key);url.searchParams.set('keywords',hrQueries(hr)[hr.query_index-1]);previous=hrSearchKey(url.href); }
+      if (tab.pendingUrl && hrSearchKey(tab.pendingUrl) !== hr.key || (hr.query_index > 0 ? hrSearchKey(tab.url) : tab.url) !== previous && hrSearchKey(tab.url) !== hr.key) throw safeError('The HR search changed. Start again from the saved ad.');
       if (hrSearchKey(tab.url) !== hr.key) return {loading:true};
-      hr.stage='search'; await persist();
+      hr.stage=hr.query_index > 0 ? 'ready' : 'search'; await persist();
     }
     if (hr.stage === 'country_wait') {
       const resolved = new URL(tab.url), expected = new URL(hr.key);
@@ -651,7 +694,9 @@ async function handle(message, sender) {
     if (hrSearchKey((await chrome.tabs.get(bound.source)).url) !== hr.key) throw safeError('The HR search changed during the read.');
     bound.allowed=new Set(result.people.map(person=>person.url).filter(url=>typeof url === 'string' && /^https:\/\/www\.linkedin\.com\/in\/[A-Za-z0-9_%~-]+$/.test(url)));
     await persist(); live(bound,run);
-    return {...result,company_id:hr.company_id,source_url:hr.key};
+    const hasNext=result.hasNext || (hr.query_index || 0)+1 < hrQueries(hr).length || hr.omitted_pages === true;
+    return {...result,signature:hrSignature(hr,result.signature),hasNext,empty:result.empty && !hasNext,
+      query_index:hr.query_index || 0,query_count:hrQueries(hr).length,company_id:hr.company_id,source_url:hr.key};
     } finally { if (jobCapture === token) jobCapture = null; }
   }
   if (connection.kind === 'jobs') {
