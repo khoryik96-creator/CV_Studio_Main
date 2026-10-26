@@ -4,7 +4,7 @@
 
 ## Release state
 
-- v24.6.490 locally integrates the unmerged Email Verifier v487 with the tested
+- v24.6.490 integrates Email Verifier v487 with the tested
   v488 Awards grouping and v489 saved-ad HR corrections. A valid email can remain
   unconfirmed when direct mailbox probing is unavailable; the UI now labels
   that outcome Unconfirmed, shows the independent format/mail-record evidence,
@@ -13,8 +13,11 @@
   Modern HR wrapper support is additionally limited to a recognized primary
   results region. All 1,847 isolated Windows Python tests (four skipped, 8,416
   subtests), JavaScript fixtures, isolated native browser checks, owner-source
-  preflight and 24 smoke assertions passed. No paid call, outreach, user-file
-  overwrite, owner installation update, PR, push or merge is included.
+  preflight and 24 smoke assertions passed. The owner subsequently authorized
+  publication and merge after the hosted checks; final PR and merge identities
+  are recorded in coordination issue #35. Earlier local checkpoint notes below
+  are historical. No paid call, outreach, user-file overwrite or owner
+  installation update is included.
 
 - v24.6.487 adds the owner-requested first-party Email Verifier on
   `codex/v24.6.487-email-verifier`, based on merged master `d9b91d9`.

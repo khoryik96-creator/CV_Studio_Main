@@ -7,6 +7,16 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
+**Current delivery: v24.6.490.** The owner authorized merging the tested
+`codex/v24.6.490-verification-corrections` branch. It contains the first-party
+Email Verifier (no external verification service), source-confirmed Awards
+company/year headings and modern saved-ad HR result/pagination corrections.
+Local validation passed 1,847 Python tests, four skips, 8,416 subtests, all
+52 JavaScript fixture files, isolated browser checks and source/native preflight.
+Final PR checks and merge identities are recorded in coordination issue #35.
+Earlier dated release/branch entries below are historical; use `VERSION` and
+the fetched master/coordination log before starting subsequent work.
+
 **Reading order:**
 1. **This file (`HANDOFF.md`)** — the durable rules: the sealed route contract,
    the version-bump trap, the local test recipe, and the work-split (who owns
