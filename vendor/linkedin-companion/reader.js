@@ -170,6 +170,36 @@
       return url.origin === 'https://www.linkedin.com' && !url.username && !url.password && match ? url.origin + '/jobs/view/' + match[1] : '';
     } catch { return ''; }
   }
+  function jobHeaderEmployer(scope,url) {
+    const employer=jobEmployer(scope);if(!employer || employer.ambiguous)return employer;
+    const jobs=[...scope.querySelectorAll('a[href]')].filter(visible).map(n=>jobLink(n.href)).filter(Boolean);
+    return jobs.some(value=>value!==url)?{ambiguous:true}:employer;
+  }
+  function modernStandaloneTitle(workspace, abouts,url) {
+    const beforeDescription=node=>!abouts[0] || !node.compareDocumentPosition || !!(node.compareDocumentPosition(abouts[0]) & 4);
+    const context=node=>{
+      if(node.closest('aside, nav, [role="complementary"], [role="navigation"], [componentkey^="job-card-component-ref-"], .job-card-container'))return null;
+      for(let scope=node.parentElement,depth=0;scope && scope!==workspace && depth<12;scope=scope.parentElement,depth++){
+        const employer=jobHeaderEmployer(scope,url);if(employer)return employer.ambiguous?null:employer;
+      }
+      return null;
+    };
+    const headings=[...workspace.querySelectorAll('h1, [role="heading"][aria-level="1"]')].filter(n=>visible(n) && text(n) && beforeDescription(n));
+    const candidates=headings.filter(heading=>{const employer=context(heading);return employer && normalized(text(heading))!==normalized(employer.name);});
+    const paragraphs=[...workspace.querySelectorAll('p')].filter(n=>visible(n) && beforeDescription(n));
+    for(let index=0;index+2<paragraphs.length;index++){
+      const employer=jobEmployer(paragraphs[index]),role=paragraphs[index+1],metadata=paragraphs[index+2];
+      if(!employer || employer.ambiguous || !text(role) || role.closest('p')!==role ||
+        role.querySelector('a[href], button, [role="button"]') || /[·•]/.test(text(role)) || !/\S\s*·\s*\S/.test(text(metadata)))continue;
+      const header=context(role);if(header?.url===employer.url)candidates.push(role);
+    }
+    return candidates.length===1?candidates[0]:null;
+  }
+  function jobUnavailable() {
+    const main=document.querySelector('main') || document.body;
+    const headings=[...(main?.querySelectorAll?.('h1, h2, [role="heading"]') || [])].filter(visible).map(text).join(' ').slice(0,1200);
+    return /\b(?:this job is no longer available|job (?:is )?not (?:found|available)|page (?:was )?not found)\b/i.test(headings);
+  }
   function readModernJob(url, companyOnly=false) {
     const workspace = document.querySelector('main#workspace');
     if (!workspace) return null;
@@ -177,24 +207,22 @@
     const abouts = [...workspace.querySelectorAll('[componentkey="JobDetails_AboutTheJob_' + id + '"]')].filter(visible);
     let title = [...workspace.querySelectorAll('a[href]')].find(link => visible(link) && jobLink(link.href) === url && text(link) && link.closest('p'));
     if (jobLink(location.href) === url) {
-      title=null;
-      // Standalone ads now render the title as plain text. Job-type buttons
-      // still link to the ad, so unrecognized headers must not retain them.
-      const [company,role,metadata]=[...workspace.querySelectorAll('p')].filter(visible);
-      const employer=jobEmployer(company);
-      if (employer && !employer.ambiguous && text(role) && role.closest('p')===role &&
-          !role.querySelector('a[href*="/company/"]') && /\S\s*·\s*\S/.test(text(metadata))) title=role;
+      // Bind to a semantic header, or an unambiguous employer/title/metadata
+      // group. Notices elsewhere in the workspace are not header positions.
+      title=modernStandaloneTitle(workspace,abouts,url);
     }
     if ((!companyOnly && abouts.length !== 1) || abouts.length>1 || !title) return null;
     let header = title;
     for (let step=0;step<12 && header && header !== workspace;step++,header=header.parentElement) {
-      const employer=jobEmployer(header);
+      const employer=jobHeaderEmployer(header,url);
       if (!employer) continue;
       if (employer.ambiguous) return null;
       const role = compact(String(title.innerText || '').split('\n')[0]).replace(/\s*\(Verified job\)\s*$/i,'').slice(0,240);
       if (!role) return null;
       const paragraphs = [...header.querySelectorAll('p')], titleParagraph = title.closest('p'), index = paragraphs.indexOf(titleParagraph);
-      const where = index >= 0 ? text(paragraphs[index+1]).split(/\s*·\s*/)[0].slice(0,240) : '';
+      const following=index<0 && title.compareDocumentPosition?paragraphs.filter(p=>visible(p) && !!(title.compareDocumentPosition(p)&4) && /\S\s*·\s*\S/.test(text(p))):[];
+      const metadata=index>=0?paragraphs[index+1]:following.length===1?following[0]:null;
+      const where = text(metadata).split(/\s*·\s*/)[0].slice(0,240);
       const captured = companyOnly ? {description:'',description_html:'',description_truncated:true} : jobDescription(abouts[0]);
       if (!companyOnly && !captured.description.replace(/^About the job\b\s*/i,'').trim()) return null;
       return {url,role,company:employer.name.slice(0,200),company_url:employer.url,location:where,date_posted:'',...captured};
@@ -416,13 +444,15 @@
     return {name:text(links[0]),url:urls[0]};
   }
   const normalized = value => compact(value).toLocaleLowerCase();
-  function readHRCompany(expected, company, sourceConfirmed=false) {
+  function readHRCompany(expected, company, sourceConfirmed=false, expectedId='') {
     const problem = issue(); if (problem) throw Error(problem);
     if (companyURL(location.href) !== expected || !/\/people\/?$/.test(location.pathname)) throw Error('The company page changed.');
     const heading = [...document.querySelectorAll('main h1, h1')].find(visible);
     if (!heading) return {loading:true};
-    if (normalized(text(heading)) !== normalized(company) && sourceConfirmed!==true) throw Error('The company page does not match the saved ad company.');
-    const identity=sourceConfirmed===true?{company_name:text(heading).slice(0,200)}:{};
+    const pinned=typeof expectedId==='string' && /^[0-9]{1,24}$/.test(expectedId);
+    if(expectedId && !pinned)throw Error('The previous company identity is invalid.');
+    if (normalized(text(heading)) !== normalized(company) && sourceConfirmed!==true && !pinned) throw Error('The company page does not match the saved ad company.');
+    const identity=sourceConfirmed===true || pinned?{company_name:text(heading).slice(0,200)}:{};
     // Scope to the company header, excluding suggested/affiliated companies.
     const scope = heading.closest('section, .org-top-card') || heading.parentElement?.parentElement;
     const evidence = [...(scope?.querySelectorAll('a[href]') || [])].filter(visible).map(link=>{
@@ -447,6 +477,9 @@
         item.u.searchParams.getAll('network').length === 1 && item.u.searchParams.get('network') === '["F"]';
     });
     const ids = [...new Set(singles.map(item=>item.ids[0]))];
+    if(pinned && (ids.length===1 && ids[0]!==expectedId || !ids.length && groups.length && groups.some(group=>!group.ids.includes(expectedId)))){
+      const error=Error('The company link points to a different company.');error.cvstudioHRIdentity=true;throw error;
+    }
     if (ids.length === 1) return {...identity,company_id:ids[0]};
     if (!ids.length && groups.length && groups.every(group=>group.ids.length === groups[0].ids.length && group.ids.every(id=>groups[0].ids.includes(id)))) {
       // Candidates only. The worker must select the exact visible company in
@@ -538,7 +571,8 @@
     assertPage('standard','search');
     const toolbar = hrToolbar();
     const labels = [...(toolbar?.querySelectorAll('input[type="checkbox"], [role="checkbox"]') || [])].filter(n=>visible(n) && (n.checked || n.getAttribute('aria-checked') === 'true')).map(hrFilterLabel);
-    if (!labels.includes(normalized(company)) || country && !labels.includes(normalized(country))) return {loading:true};
+    if (!labels.includes(normalized(company))) return {loading:true,wait_stage:'company_filter'};
+    if (country && !labels.includes(normalized(country))) return {loading:true,wait_stage:'country_filter'};
     const primary = document.querySelector('main [aria-label="Primary content"]');
     const scope = primary || document.querySelector('main');
     if (!scope) return {loading:true};
@@ -652,5 +686,5 @@
     button.click(); return true;
   }
   globalThis.SourcerReader = {readSearch, next, search, readProfile, profileURL, readJob, readJobSearch, nextJobSearch, scrollJobSearch, jobSearchContext, readJobPick, jobTargets,
-    readHRCompany, hrCompanyOpen, hrCompanyOnly, hrCompanyApply, hrCountryOpen, hrCountryType, hrCountryPick, hrCountryApply, peopleCountrySelected, readHRSearch, nextHRSearch, readHRJoined, prepareHRJoined};
+    readHRCompany, hrCompanyOpen, hrCompanyOnly, hrCompanyApply, hrCountryOpen, hrCountryType, hrCountryPick, hrCountryApply, peopleCountrySelected, readHRSearch, nextHRSearch, readHRJoined, prepareHRJoined,jobUnavailable};
 })();

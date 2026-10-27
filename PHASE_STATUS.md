@@ -4,6 +4,18 @@
 
 ## Release state
 
+- v24.6.499 is an unmerged resilience checkpoint stacked on local v498
+  `ac22175`; merged master remains v497 `ff722b3`. Repeat HR scans refresh the
+  ad employer. Previous evidence is a fallback only for an unreadable ad and
+  must revalidate its numeric company ID on the live page; redirects cannot
+  switch companies. A fresh redirect can recheck its exact ad link once before
+  filters, following confirmed cleanup. Structural headers ignore leading
+  notices and unrelated job headings. Bounded metadata waits support exact
+  cancellation, explicit access/unavailability/stage errors and two passive
+  same-filter result refreshes without repeated page clicks or lookups.
+  Route/storage schemas, provider behavior, previous results, source/country
+  authority, scan limits and mutation non-replay remain. See the v499 QA report.
+
 - v24.6.498 is an unmerged HR employer-identity correction from merged v497
   `ff722b3`. Short saved company labels no longer have to equal LinkedIn's
   full employer name: a worker-observed exact ad/company URL binding, with two

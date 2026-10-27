@@ -21,7 +21,7 @@ const scope=visible('Current job search',{scrollTop:0,clientHeight:500,scrollHei
   scrollBy:()=>{scope.scrollTop+=500;state.scroll++},
   querySelectorAll:selector=>selector==='button'?[decoy,next]:selector.startsWith('[role="button"]')?state.cards.filter(card=>!selector.includes('componentkey="job-card-component-ref-') || selector.includes('job-card-component-ref-'+card.state.id+'"')):[]});
 const company=visible('Example Finance',{href:'https://www.linkedin.com/company/example/life/'}),companyOther=visible('Other Company'),companyP=visible('Example Finance',{querySelectorAll:()=>[company]}),titleP=visible('Finance Manager'),locationP=visible('Penang · 2 weeks ago · 20 applicants');
-titleP.closest=()=>titleP;
+titleP.closest=selector=>selector==='p'?titleP:null;
 titleP.querySelector=()=>null;
 const title=visible('Finance Manager',{href:url,closest:()=>titleP});
 const header=visible('',{querySelectorAll:selector=>selector==='a[href*="/company/"]'?state.companyConflict?[company,companyOther]:[company,company]:selector==='p'?[companyP,titleP,locationP]:[]});
@@ -80,7 +80,7 @@ state.plainTitle=true;location.pathname='/jobs/view/1234567890/';location.href=u
 captured=reader.readJob(url);assert.equal(captured.role,'Finance Manager','standalone plain title is not replaced by the Hybrid job-type link');
 assert.equal(captured.company_url,'https://www.linkedin.com/company/example/');assert.equal(captured.location,'Penang');
 state.leadingNotice=true;
-for(const companyOnly of [false,true])assert.throws(()=>reader.readJob(url,companyOnly),error=>error.cvstudioJobLoading===true,'a leading paragraph cannot authorize the fallback Hybrid link inside another paragraph');
+for(const companyOnly of [false,true])assert.equal(reader.readJob(url,companyOnly).role,'Finance Manager','a leading notice does not replace the structurally bound role with a Hybrid link');
 state.leadingNotice=false;
 titleP.innerText='';assert.throws(()=>reader.readJob(url),error=>error.cvstudioJobLoading===true,'missing plain title cannot promote job metadata to a title');titleP.innerText='Finance Manager';
 locationP.innerText='';assert.throws(()=>reader.readJob(url),error=>error.cvstudioJobLoading===true,'wait for the standalone header identity fields to load');locationP.innerText='Penang · 2 weeks ago · 20 applicants';

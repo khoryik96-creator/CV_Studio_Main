@@ -1,5 +1,50 @@
 # Job Leads module
 
+## HR resilience and bounded recovery (v24.6.499)
+
+Every automatic/repeat scan rereads its exact ad's employer. A manually changed
+company-page URL keeps the strict manual path. If a previously scanned ad is
+unavailable, missing its employer link, times out or uses an unknown layout,
+only its valid saved source/company-ID binding may be reused. Access failures,
+disconnection and changed source tabs do not enter that fallback. The live
+company header must reconfirm the saved numeric ID; native group selection must
+also commit that same ID. It may then adopt the current canonical name/URL.
+An unrelated company's ID always stops before profile reads.
+
+Company People tracking parameters are normalized only for the old company
+page during the exact requested search transition. Actual search filters keep
+their existing binding. A fresh ad whose company link redirects without prior
+numeric evidence receives one source-link reread, following confirmed run
+cleanup and before any filter/profile/save work. The reread employer URL must
+equal the observed redirect target. No confirmed link, Stop or unconfirmed
+cleanup means no restart. No page click, paid action or ambiguous mutation is
+automatically replayed.
+
+Standalone headers use employer/job-scoped semantic headings or one unambiguous
+employer/title/metadata group before the description. Navigation, related-job
+cards, other job IDs, company-name headings, description headings and ambiguous
+employers cannot supply the title. Leading notices do not shift global field
+positions. Unrecognized/localized controls still fail visibly; no location or
+company filter is dropped to produce results.
+
+Company-only metadata gets at most 48 passive polls (full-ad reads retain 16),
+within a 55-second frontend request allowance; initial page loading remains
+bounded. `jobReadCancel` requires the exact active operation ID and verified
+app document, and only cancels metadata capture. Stop/pagehide request it; the
+worker exits its next readiness boundary and cleans only its unchanged inactive
+owned tab. This cannot interrupt another request, native filter mutation or
+paid operation.
+
+HR readiness has bounded company, company-filter, country-filter, navigation
+and result stages. The frontend uses at most 120 polls per page/paging wait.
+Systemic filter/access failures stop the remaining queue. Results changing
+under unchanged filters cause at most two passive same-page rereads per scan,
+with existing person deduplication, 100-person/look-up and total page/time limits;
+no Next click or budget is consumed by a refresh request. Continuous churn fails
+visibly and retains previous saved results. Structured `HR_*` reasons are
+additive beside the legacy error string and contain no private page content.
+`hr_resilience_revision:1` requires the current companion before single/bulk HR.
+
 ## Saved labels and verified employer identity (v24.6.498)
 
 A saved public/search-card label can be shorter than the employer link in the

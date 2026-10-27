@@ -21,7 +21,7 @@
   let discovered = [], discoveryPage = 0, discovering = false, discoveryStopped = false, discoveryRun = '';
   const discoveryPicked = new Set();
   let previewUrl = '', previewCapture = null, previewSource = 'saved', previewDismissed = false;
-  let hrRow = '', hrRun = '', hrStopped = false, hrRunning = false;
+  let hrRow = '', hrRun = '', hrCapture = '', hrStopped = false, hrRunning = false;
   let bulkHR = null;
   const receivedCaptures = new Map();
   let rows = [], editing = null, busy = false, dirty = false, page = 0, ready = false, lastReadUrl = '', descriptionTruncated = false, descriptionRich = [];
@@ -482,39 +482,66 @@
     try { outcome=await scanHR(row,{...settings,companyURL:el('HRCompanyURL').value.trim()},value=>{el('HRMessage').textContent=value;},hrPeople); }
     finally { hrRunning=false;lock(false);finishScanActivity(activity,!outcome || outcome.state==='failed' || outcome.stopQueue); }
   }
-  async function scanHR(row, {country,keywords,pages,companyURL}, notify, showPeople) {
-    const found = new Map();let finalSnapshot=null,omitted=false,outcome,cleanupFailed=false,saving=false;
-    let companyName=row.hr?.company_name || row.company, jobURL='';
+  function previousHRCompany(row) {
+    const h=row.hr;
+    if(!h || h.company!==row.company || typeof h.company_id!=='string' || !/^[0-9]{1,24}$/.test(h.company_id) || !/^https:\/\/www\.linkedin\.com\/company\/[A-Za-z0-9_-]+\/$/.test(h.company_url || ''))return null;
+    try { const u=new URL(h.source_url);if(u.origin!=='https://www.linkedin.com' || u.username || u.password || u.hash || u.pathname.replace(/\/$/,'')!=='/search/results/people' || u.searchParams.getAll('currentCompany').length!==1 || u.searchParams.get('currentCompany')!==JSON.stringify([h.company_id]))return null; } catch {return null;}
+    return {url:h.company_url,id:h.company_id};
+  }
+  function hrWaitMessage(stage,country) {
+    return {company:'Checking the LinkedIn company identity…',company_filter:'Waiting for LinkedIn’s company filter…',country_filter:'Waiting for LinkedIn’s location filter'+(country?' · '+country:'')+'…',navigation:'Waiting for the LinkedIn search to open…',results:'Waiting for LinkedIn HR results…'}[stage] || '';
+  }
+  function hrTimeoutMessage(stage,country) {
+    return {company:'The LinkedIn company identity did not finish loading.',company_filter:'LinkedIn’s company filter did not confirm the company.',country_filter:'LinkedIn’s location filter did not confirm '+(country || 'the selected country')+'.',navigation:'The expected LinkedIn search did not finish opening.',results:'The LinkedIn HR results did not finish loading.'}[stage] || 'LinkedIn did not finish loading the HR results.';
+  }
+  async function scanHR(row, {country,keywords,pages,companyURL,expectedRedirectURL}, notify, showPeople, recovery=0) {
+    const found = new Map();let finalSnapshot=null,omitted=false,outcome,cleanupFailed=false,saving=false,retryCompanyURL='';
+    let companyName=row.hr?.company_name || row.company, jobURL='',expectedID='';
     hrRun='';
     try {
       notify('Checking the companion…');
       const companion = await rpc('jobStatus',{},1500); checkHR();
-      if (!companion?.connected || companion.company_hr_revision !== 1 || companion.hr_company_identity_revision !== 1 || companion.hr_company_filter_revision !== 1 || companion.hr_company_source_revision !== 1 || companion.hr_joined_revision !== 1 || companion.hr_joined_loading_revision !== 1 || companion.hr_keyword_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to use the corrected HR search and joining-date checks.');
+      if (!companion?.connected || companion.company_hr_revision !== 1 || companion.hr_company_identity_revision !== 1 || companion.hr_company_filter_revision !== 1 || companion.hr_company_source_revision !== 1 || companion.hr_resilience_revision !== 1 || companion.hr_joined_revision !== 1 || companion.hr_joined_loading_revision !== 1 || companion.hr_keyword_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to use the corrected HR search and joining-date checks.');
       if (companion.busy) throw Error('Finish the current companion search or ad read first.');
-      if (!companyURL) {
+      const saved=previousHRCompany(row),manual=companyURL && (!saved || companyURL!==saved.url);
+      if (!manual) {
         notify('Reading the company link from the saved ad…');
-        const captured = await rpc('jobFromLink',{url:row.url,company_only:true}); checkHR();
-        if (captured?.url !== row.url) throw Error('LinkedIn did not confirm this exact job ad. Refresh its tab and try again.');
-        if (typeof captured.company!=='string' || !captured.company.trim() || captured.company.length>200 || /[\x00-\x1f\x7f]/.test(captured.company)) throw Error('The job ad employer has not loaded. Open the ad in LinkedIn and try again.');
-        companyURL=captured.company_url || '';
-        companyName=captured.company.trim();jobURL=row.url;
+        let captured;
+        hrCapture=hex();
+        try { captured=await rpc('jobFromLink',{url:row.url,company_only:true,operation_id:hrCapture}); }
+        catch(error) {
+          checkHR();
+          if(!expectedRedirectURL && saved && ['HR_AD_UNAVAILABLE','HR_AD_TIMEOUT','HR_AD_LAYOUT','HR_EMPLOYER_LINK_MISSING'].includes(error.companionCode)){
+            companyURL=saved.url;expectedID=saved.id;notify('The ad could not be read. Confirming the previously saved LinkedIn company identity…');
+          } else throw error;
+        } finally {hrCapture='';}
+        checkHR();
+        if(!expectedID){
+          if (captured?.url !== row.url) throw Error('LinkedIn did not confirm this exact job ad. Refresh its tab and try again.');
+          if (typeof captured.company!=='string' || !captured.company.trim() || captured.company.length>200 || /[\x00-\x1f\x7f]/.test(captured.company)) throw Error('The job ad employer has not loaded. Open the ad in LinkedIn and try again.');
+          companyURL=captured.company_url || '';companyName=captured.company.trim();jobURL=row.url;
+        }
       }
       const companyMatch=companyURL.match(/^https:\/\/www\.linkedin\.com\/company\/([A-Za-z0-9_-]+)(?:\/(?:people|about|life))?\/?$/);
       if (!companyMatch) throw Error('The company link is unavailable. Enter its LinkedIn company page under Search options.');
       companyURL='https://www.linkedin.com/company/'+companyMatch[1]+'/';
+      if(expectedRedirectURL && companyURL!==expectedRedirectURL)throw Error('LinkedIn still shows the old company link on this ad. Open it and confirm its employer link before trying again.');
       checkHR(); hrRun=hex();
-      const source = await rpc('hrBegin',{run_id:hrRun,company_url:companyURL,company:companyName,...(jobURL?{job_url:jobURL}:{}),country,keywords,max_pages:pages}); checkHR();
+      const source = await rpc('hrBegin',{run_id:hrRun,company_url:companyURL,company:companyName,...(jobURL?{job_url:jobURL}:{}),...(expectedID?{expected_company_id:expectedID}:{}),country,keywords,max_pages:pages}); checkHR();
       if (!Number.isInteger(source?.tab_id)) throw Error('The HR search did not open.');
-      let previous='';
+      let previous='',pageRefreshes=0;
       for (let pageIndex=0;pageIndex<pages;pageIndex++) {
-        let snapshot=null;
-        for (let attempt=0;attempt<90;attempt++) {
+        let snapshot=null,waitStage='results';
+        for (let attempt=0;attempt<120;attempt++) {
           checkHR(); notify(`Finding ${country || 'worldwide'} HR people · page ${pageIndex+1} of ${pages}…`);
           const value = await rpc('hrRead',{run_id:hrRun,tab_id:source.tab_id}); checkHR();
           if (value && !value.loading && (!previous || value.empty || value.signature !== previous)) { snapshot=value; break; }
+          if(hrWaitMessage(value?.wait_stage,country)){waitStage=value.wait_stage;notify(hrWaitMessage(waitStage,country)+` · page ${pageIndex+1} of ${pages}`);}
           await pauseDiscovery();
         }
-        if (!snapshot || !Array.isArray(snapshot.people) || snapshot.people.length > 40 || typeof snapshot.signature !== 'string') throw Error('LinkedIn did not finish loading or its company/location controls changed. Check the search tab and try again.');
+        if (!snapshot || !Array.isArray(snapshot.people) || snapshot.people.length > 40 || typeof snapshot.signature !== 'string') {
+          const error=Error(hrTimeoutMessage(waitStage,country)+' Check that stage in the LinkedIn tab and try again.');error.stopQueue=['company_filter','country_filter'].includes(waitStage);throw error;
+        }
         finalSnapshot=snapshot;
         for (const person of snapshot.people) {
           if (typeof person?.url !== 'string' || !/^https:\/\/www\.linkedin\.com\/in\/[A-Za-z0-9_%~-]+\/?$/.test(person.url) || typeof person.name !== 'string' || typeof person.title !== 'string' || typeof person.location !== 'string' || typeof person.matched !== 'string') throw Error('An HR result could not be confirmed.');
@@ -542,10 +569,14 @@
         if (snapshot.empty || !snapshot.hasNext || found.size >= 100 || pageIndex+1 === pages) break;
         previous=snapshot.signature;
         let advanced=null;
-        for (let attempt=0;attempt<90;attempt++) {
+        for (let attempt=0;attempt<120;attempt++) {
           checkHR(); advanced=await rpc('hrNext',{run_id:hrRun,tab_id:source.tab_id,signature:previous}); checkHR();
           if (!advanced?.loading) break;
           await pauseDiscovery();
+        }
+        if(advanced?.refresh===true){
+          if(++pageRefreshes>2)throw Error('LinkedIn kept changing the results before paging. Check its search tab and try again.');
+          previous='';pageIndex--;notify('LinkedIn updated these results. Reading the same company and filters again…');continue;
         }
         if (typeof advanced !== 'boolean') throw Error('LinkedIn did not finish loading the next HR page. Check the search tab and try again.');
         if (!advanced) break;
@@ -553,17 +584,18 @@
       checkHR();
       const complete=!finalSnapshot.hasNext && !omitted;
       saving=true;
-      const response = await api({action:'save_hr',id:row.id,revision:row.revision,search:{company:row.company,company_name:finalSnapshot.company_name || companyName,company_url:companyURL,company_id:finalSnapshot.company_id,
+      const response = await api({action:'save_hr',id:row.id,revision:row.revision,search:{company:row.company,company_name:finalSnapshot.company_name || companyName,company_url:finalSnapshot.company_url || companyURL,company_id:finalSnapshot.company_id,
         country,keywords,source_url:finalSnapshot.source_url,complete,people:[...found.values()]}});
       const index = rows.findIndex(item=>item.id===row.id); if (index >= 0) rows[index]=response.record;
       if (editing?.id === row.id) editing={...editing,revision:response.record.revision,hr:response.record.hr};
       hrRow=''; render(); drawPreview();
-      const message=`${found.size} HR matches saved · ${country || 'Any country'} · Last scan ${createdLabel(response.record.hr.scanned_at)}. ${complete ? 'No further results shown by LinkedIn.' : 'Page/result limit reached; more people may be available on LinkedIn.'}`;
+      const message=`${found.size} HR matches saved · ${country || 'Any country'} · Last scan ${createdLabel(response.record.hr.scanned_at)}. ${complete ? 'No further results shown by LinkedIn.' : 'Page/result limit reached; more people may be available on LinkedIn.'}`+(expectedID?' The ad could not be reread; its previously saved company identity was reconfirmed.':'');
       outcome={state:'saved',matches:found.size,complete,message};notify(message);
     } catch(error) {
+      if(error.companionCode==='HR_COMPANY_REDIRECT' && recovery===0 && jobURL && !found.size && !finalSnapshot && !saving && error.companyURL)retryCompanyURL=error.companyURL;
       const saveUnconfirmed=saving && error.code!=='JOB_LEADS_CONFLICT';
       const message=(hrStopped ? 'Scan stopped.' : error.message)+' '+(saveUnconfirmed ? 'The save could not be confirmed. Refresh saved ads before trying again. No ad details were edited.' : `${found.size ? found.size+' matches from this attempt have not been saved. ' : ''}Previous saved results and ad details were kept.`);
-      outcome={state:hrStopped ? 'stopped' : 'failed',message,stopQueue:saveUnconfirmed || /companion|reconnect|sign.?in|restriction|verification check|browser action stopped/i.test(error.message)};
+      outcome={state:hrStopped ? 'stopped' : 'failed',message,stopQueue:saveUnconfirmed || error.stopQueue || ['HR_ACCESS_REQUIRED','HR_PAGE_CHANGED'].includes(error.companionCode) || /companion|reconnect|sign.?in|restriction|verification check|browser action stopped/i.test(error.message)};
       notify(message);
       if (!found.size) showPeople(row.hr?.people);
     } finally {
@@ -573,6 +605,7 @@
     if (cleanupFailed) {
       outcome.stopQueue=true;outcome.message+=' The companion did not confirm cleanup. Reconnect it before scanning again.';notify(outcome.message);
     }
+    if(retryCompanyURL && !cleanupFailed && !hrStopped){notify('Rechecking the updated employer link before starting the search…');return scanHR(row,{country,keywords,pages,companyURL:'',expectedRedirectURL:retryCompanyURL},notify,showPeople,recovery+1);}
     return outcome;
   }
   function bulkHRControls() {
@@ -583,6 +616,7 @@
   function stopHR() {
     if (!hrRunning) return;
     hrStopped=true;el('HRMessage').textContent='Stopping after the current read…';
+    if(hrCapture)rpc('jobReadCancel',{operation_id:hrCapture}).catch(()=>{});
     if (bulkHR?.running) el('BulkHRMessage').textContent='Stopping after the current read. Completed ads are already saved; remaining ads will not start.';
     discoveryControls();
   }
@@ -758,7 +792,7 @@
   }
   function rpc(action, args = {}, waitMs) {
     return new Promise((resolve, reject) => {
-      const id = hex(), timer = setTimeout(() => { pending.delete(id); reject(Error('The companion did not respond. Refresh this CV Studio tab after reloading the companion. Use Chrome or Brave, and click the companion toolbar icon once if this installation has not been connected. Saved ads remain available below.')); }, waitMs ?? (action === 'jobFromLink' ? 35000 : 12000));
+      const id = hex(), timer = setTimeout(() => { pending.delete(id); reject(Error('The companion did not respond. Refresh this CV Studio tab after reloading the companion. Use Chrome or Brave, and click the companion toolbar icon once if this installation has not been connected. Saved ads remain available below.')); }, waitMs ?? (action === 'jobFromLink' ? args.company_only ? 55000 : 35000 : 12000));
       pending.set(id, {resolve, reject, timer});
       window.postMessage({type:'CVSTUDIO_LINKEDIN_REQUEST', id, channel, action, args}, location.origin);
     });
@@ -776,7 +810,7 @@
     if (event.source !== window || event.origin !== location.origin || data?.type !== 'CVSTUDIO_LINKEDIN_RESPONSE' || data.channel !== channel) return;
     const item = pending.get(data.id); if (!item) return;
     clearTimeout(item.timer); pending.delete(data.id);
-    if (data.error) item.reject(Error(data.error)); else item.resolve(data.result);
+    if (data.error) { const error=Error(data.error);if(/^HR_[A-Z_]{1,50}$/.test(data.error_code || ''))error.companionCode=data.error_code;if(/^https:\/\/www\.linkedin\.com\/company\/[A-Za-z0-9_-]+\/$/.test(data.company_url || ''))error.companyURL=data.company_url;item.reject(error); } else item.resolve(data.result);
   });
   function jobLink(value) {
     try {
@@ -968,6 +1002,7 @@
     });
     window.addEventListener('pagehide',() => {
       discoveryStopped = true; hrStopped = true;
+      if(hrCapture)rpc('jobReadCancel',{operation_id:hrCapture}).catch(()=>{});
       if (discoveryRun) rpc('end',{run_id:discoveryRun}).catch(() => {});
       if (hrRun) rpc('end',{run_id:hrRun}).catch(() => {});
     });

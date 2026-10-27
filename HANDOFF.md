@@ -7,18 +7,20 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current development: v24.6.498, unmerged** on
-`codex/v24.6.498-hr-company-source`, from merged master `ff722b3` (v497).
-Saved ad labels can differ from the employer's LinkedIn label. HR scans now
-bind to the single employer link observed twice on that exact ad, rather than
-requiring its saved display name to equal LinkedIn's name. Short-lived,
-document-scoped worker evidence is required before the exact linked company
-page may supply its canonical heading for native company/country filters.
-Manual company pages retain strict name matching. Optional bounded HR
-`company_name` evidence survives saves/backups; the saved ad label is unchanged.
-Company-only capture no longer waits for About content, and bounded passive
-reads wait through same-ad loading and reinject after document changes. See
-the v498 QA report. Existing identity, save, activity and paid gates remain.
+**Current development: v24.6.499, unmerged** on
+`codex/v24.6.499-hr-scan-resilience`, stacked on local v498 `ac22175` from
+merged master `ff722b3` (v497). The v498 exact-ad employer binding is retained.
+Repeat scans refresh the employer link; an unreadable ad can reuse previous
+company evidence only after the same numeric company ID is confirmed live.
+Renames, native company redirects and tracking parameters preserve that ID
+boundary. A fresh-source redirect gets one employer-link recheck before filters,
+after confirmed cleanup, never a blind redirect or mutation replay.
+Header detection uses employer/job-scoped semantics or unambiguous field groups,
+ignoring unrelated notices/headings. Slow metadata waits are bounded and
+cancellable. Readiness stages distinguish company, company filter, country,
+navigation and results; same-filter result churn permits two passive rereads.
+Manual company pages, source changes, access checks, save revisions, run limits,
+orange activity and paid gates remain. See the v499 QA report and Job Leads notes.
 
 The v495 checkpoint adds per-installation Apollo OAuth connections and business-email
 unlocks on saved HR cards. A shared free-tier Cloudflare broker keeps the app
