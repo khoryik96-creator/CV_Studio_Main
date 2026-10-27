@@ -12,18 +12,30 @@ import unittest
 from unittest import mock
 import zipfile
 
-from cvstudio_linkedin_sourcer import LinkedInSourcerService, SourcerError
+from cvstudio_linkedin_sourcer import LinkedInSourcerService, SourcerError, validate_plan, PLAN_SCHEMA
 
 PROFILE = {"id": "p0", "name": "Sample Person", "url": "https://www.linkedin.com/in/sample-person", "text": "Finance Manager. SAP and manufacturing."}
 ROW = {"id": "p0", "score": 80, "evidence": ["SAP and manufacturing"], "unknowns": ["Availability"]}
 
 
 def provider(model, brief, task, schema, data):
-    value = {"query": "Finance SAP", "requirements": ["Manufacturing"]} if task == 'search_plan' else {"candidates": [ROW]}
+    value = {"query": "Finance SAP", "country": "", "requirements": ["Manufacturing"]} if task == 'search_plan' else {"candidates": [ROW]}
     return {"content": [{"type": "tool_use", "name": "return_"+task, "input": value}]}, {"usage": {"input_tokens": 100, "output_tokens": 20, "api_calls": 1}, "cost": 0.001, "model": model, "provider": "deepseek"}
 
 
 class DomainTests(unittest.TestCase):
+    def test_country_is_a_native_filter_not_boolean_keywords(self):
+        query = '("SAP FICO" OR "SAP FI/CO" OR "SAP Finance" OR "SAP Controlling")'
+        plan = {"query": query, "requirements": ["SAP FICO", "Malaysia"], "country": "Malaysia"}
+        self.assertEqual(validate_plan(plan), plan)
+        self.assertEqual(validate_plan({"query": "SAP", "country": "", "requirements": ["SAP"]})["country"], "")
+        with self.assertRaises(SourcerError): validate_plan({"query": "SAP", "requirements": ["SAP"]})
+        for country in [None, [], "x\ny", "x" * 101]:
+            with self.assertRaises(SourcerError): validate_plan({**plan, "country": country})
+        with self.assertRaises(SourcerError):
+            validate_plan({**plan, "query": query + ' AND (Malaysia OR "Kuala Lumpur" OR Selangor OR Penang OR Johor)'})
+        self.assertIn("country", PLAN_SCHEMA["required"])
+        self.assertIn("Exclude ALL geography", PLAN_SCHEMA["properties"]["query"]["description"])
     def setUp(self):
         self.transport = mock.Mock(side_effect=provider)
         self.service = LinkedInSourcerService(key_available=lambda: True, provider_call=self.transport)
@@ -148,7 +160,7 @@ class RouteTests(unittest.TestCase):
     def test_paid_tools_use_central_guard_and_keep_usage(self):
         response=self.post(action='start',brief='Finance managers with SAP',mode='standard',max_pages=1,max_calls=3,confirm_paid=True)
         run=response.json['run']['id']
-        raw={'content':[{'type':'tool_use','name':'return_search_plan','input':{'query':'Finance SAP','requirements':['Manufacturing']}}],'usage':{'input_tokens':100,'output_tokens':20}}
+        raw={'content':[{'type':'tool_use','name':'return_search_plan','input':{'query':'Finance SAP','country':'','requirements':['Manufacturing']}}],'usage':{'input_tokens':100,'output_tokens':20}}
         with mock.patch.object(self.module,'_phase5b_enforce_request_guardrail') as gate, mock.patch.object(self.module._AI_PROVIDER_CLIENT,'request',return_value=raw) as call, mock.patch.dict(self.module._ai_secret_store,{'main_deepseek':'synthetic-private-key'}):
             result=self.post(action='plan',run_id=run)
         self.assertEqual(result.status_code,200,result.json)

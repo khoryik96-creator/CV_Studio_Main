@@ -9,7 +9,7 @@ class Element {
 }
 const job=(number,patch={})=>({url:'https://www.linkedin.com/jobs/view/'+number,company:'Example Finance',role:'Finance Manager',location:'Penang',date_posted:'2026-10-02',description:'Search summary '+number,contact:'Never copy',notes:'Never copy',status:'won',...patch});
 const a=job('1111111110'),b=job('1111111111'),c=job('1111111112');
-function fixture(){
+function fixture(options={}){
   const ids=new Map(),events={},calls=[],requests=[];
   const document={getElementById:id=>{if(!ids.has(id))ids.set(id,new Element());return ids.get(id)},createElement:tag=>new Element(tag),createTextNode:text=>new Element('#text',text),addEventListener:(name,fn)=>events[name]=fn};
   const el=name=>document.getElementById('jobLeads'+name),location={origin:'http://127.0.0.1:5000',search:''};
@@ -57,7 +57,9 @@ function fixture(){
     const record={...data.record,id:String(++serial).padStart(32,'0'),revision:1,created_at:'2026-10-20T00:00:00Z',deleted:false};
     state.records.push(record);return {ok:true,json:async()=>({record,duplicate:false})};
   };
-  const context=vm.createContext({window,document,location,fetch,URL,URLSearchParams,Blob,Map,Set,Date,crypto:{randomUUID:()=>String(++serial).padStart(32,'0')},
+  const preferences=options.preferences || new Map();
+  const localStorage=options.storage || {getItem:key=>preferences.get(key)??null,setItem:(key,value)=>preferences.set(key,value),removeItem:key=>preferences.delete(key)};
+  const context=vm.createContext({window,document,location,localStorage,fetch,URL,URLSearchParams,Blob,Map,Set,Date,crypto:{randomUUID:()=>String(++serial).padStart(32,'0')},
     setTimeout:(fn,ms)=>setTimeout(fn,ms===350?0:ms),clearTimeout,Option:function(text,value){const node=new Element('option',text);node.value=value;return node}});
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../vendor/cvstudio/job-leads.js'),'utf8'),context);
   return {el,state,calls,requests,pagehide:()=>events.pagehide?.(),init:()=>window.initJobLeads(),capture:(record,request)=>new Promise(resolve=>{

@@ -61,7 +61,14 @@ def validate_plan(value):
     must = value.get("requirements")
     if not isinstance(must, list) or not 1 <= len(must) <= 12 or not all(_text(s, 250) for s in must):
         raise SourcerError("DeepSeek did not return usable search requirements.")
-    return {"query": value["query"].strip(), "requirements": [s.strip() for s in must]}
+    country = value.get("country")
+    if (not isinstance(country, str) or len(country) > 100
+            or re.search(r"[\x00-\x1f\x7f]", country)):
+        raise SourcerError("DeepSeek did not return a usable country filter.")
+    country = country.strip()
+    if country and re.search(r"(?<!\w)" + re.escape(country) + r"(?!\w)", value["query"], re.I):
+        raise SourcerError("DeepSeek mixed the country into the keywords. No search was started; try again.")
+    return {"query": value["query"].strip(), "country": country, "requirements": [s.strip() for s in must]}
 
 
 def validate_reviews(value, profiles, maximum):
@@ -106,9 +113,10 @@ Return the requested tool call only."""
 
 
 PLAN_SCHEMA = {"type": "object", "properties": {
-    "query": {"type": "string", "description": "Short LinkedIn keyword/Boolean query for the brief, without site: syntax."},
+    "query": {"type": "string", "description": "LinkedIn role/skill Boolean keywords only. Exclude ALL geography: countries, regions, cities and their aliases. Never add location keyword clauses or site: syntax. Example SAP FICO in Malaysia: (\"SAP FICO\" OR \"SAP FI/CO\" OR \"SAP Finance\" OR \"SAP Controlling\")."},
+    "country": {"type": "string", "description": "Country explicitly requested in the brief, as its full English LinkedIn Locations suggestion (e.g. Malaysia). Use the native Locations filter, never query keywords. Empty string when no country is specified; do not infer nationality or a country from profile data."},
     "requirements": {"type": "array", "items": {"type": "string"}}},
-    "required": ["query", "requirements"], "additionalProperties": False}
+    "required": ["query", "country", "requirements"], "additionalProperties": False}
 REVIEW_SCHEMA = {"type": "object", "properties": {"candidates": {"type": "array", "items": {
     "type": "object", "properties": {"id": {"type": "string"}, "score": {"type": "integer"},
         "evidence": {"type": "array", "items": {"type": "string"}},

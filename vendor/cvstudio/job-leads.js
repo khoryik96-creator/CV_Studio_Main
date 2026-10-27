@@ -400,6 +400,25 @@
     drawPreview(); discoveryControls();
   }
   const hrDefaultKeywords = 'HR, human resources, CHRO, chief people officer, talent acquisition, TA, recruitment, hiring, recruiter, HRBP, end to end recruitment';
+  const hrPreferenceKey = 'cvstudio_job_leads_hr_preferences';
+  function validHRPreferences(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value) || !['','specific'].includes(value.countryMode) ||
+        typeof value.country !== 'string' || value.country.length > 100 || /[\x00-\x1f\x7f]/.test(value.country) ||
+        ![1,3,5,10,15].includes(value.pages)) return null;
+    return {countryMode:value.countryMode,country:value.country.trim(),pages:value.pages};
+  }
+  let preferredHR = null;
+  try {
+    const stored=localStorage.getItem(hrPreferenceKey);
+    if (stored && stored.length <= 1024) preferredHR=validHRPreferences(JSON.parse(stored));
+  } catch {}
+  function rememberHRPreferences() {
+    if (busy) return;
+    const value=validHRPreferences({countryMode:el('HRCountryMode').value,country:el('HRCountry').value,pages:Number(el('HRPages').value)});
+    if (!value) return;
+    preferredHR=value;
+    try { localStorage.setItem(hrPreferenceKey,JSON.stringify(value)); } catch {}
+  }
   function hrJoinedLabel(value) {
     if (typeof value !== 'string' || !/^(?:19|20)\d{2}(?:-(?:0[1-9]|1[0-2]))?$/.test(value)) return 'Not available';
     return value.length === 4 ? value : ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][Number(value.slice(5))-1]+' '+value.slice(0,4);
@@ -422,11 +441,12 @@
     if (key === hrRow) return;
     hrRow = key;
     const search = row.hr;
-    el('HRCountryMode').value = search?.country ? 'specific' : '';
-    el('HRCountry').value = search?.country || '';
-    el('HRCountry').hidden = el('HRCountryLabel').hidden = !search?.country;
+    const preference=preferredHR || {countryMode:search?.country ? 'specific' : '',country:search?.country || '',pages:3};
+    el('HRCountryMode').value = preference.countryMode;
+    el('HRCountry').value = preference.country;
+    el('HRCountry').hidden = el('HRCountryLabel').hidden = !preference.countryMode;
     el('HRKeywords').value = search?.keywords || hrDefaultKeywords;
-    el('HRPages').value = '3'; el('HRCompanyURL').value=search?.company_url || '';
+    el('HRPages').value = String(preference.pages); el('HRCompanyURL').value=search?.company_url || '';
     el('HRMessage').textContent = search ? `${search.people.length} saved matches · ${search.country || 'Any country'} · Last scan ${createdLabel(search.scanned_at)}. ${search.complete ? '' : 'Limited scan; more matches may be available. '}LinkedIn company association; titles are keyword matches.` : 'Use the connected Chrome companion to scan this company. Results will be saved with this ad. No AI charge.';
     hrPeople(search?.people);
   }
@@ -437,12 +457,13 @@
     const country = el('HRCountryMode').value ? el('HRCountry').value.trim() : '';
     const keywords = el('HRKeywords').value.trim(), pages = Number(el('HRPages').value);
     if (el('HRCountryMode').value && !country || country.length > 100 || !keywords.split(',').some(word=>word.trim()) || keywords.length > 600 || /[\x00-\x1f]/.test(country+keywords) || !Number.isInteger(pages) || pages < 1 || pages > 15) { el('HRMessage').textContent='Enter a country name, comma-separated keywords and 1 to 15 pages.'; return; }
+    rememberHRPreferences();
     hrStopped=false; hrRunning=true; hrRun=''; lock(true);
     const found = new Map(); let companyURL=el('HRCompanyURL').value.trim(), finalSnapshot=null, omitted=false;
     try {
       el('HRMessage').textContent='Checking the companion…';
       const companion = await rpc('jobStatus',{},1500); checkHR();
-      if (!companion?.connected || companion.company_hr_revision !== 1 || companion.hr_joined_revision !== 1 || companion.hr_keyword_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to find company HR people with the corrected keyword search.');
+      if (!companion?.connected || companion.company_hr_revision !== 1 || companion.hr_joined_revision !== 1 || companion.hr_joined_loading_revision !== 1 || companion.hr_keyword_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to use the corrected HR search and joining-date checks.');
       if (companion.busy) throw Error('Finish the current companion search or ad read first.');
       if (!companyURL) {
         el('HRMessage').textContent='Reading the company link from the saved ad…';
@@ -788,7 +809,9 @@
     ready = true;
     el('HRStart').addEventListener('click',startHR);
     el('HRStop').addEventListener('click',()=>{ if (hrRunning) { hrStopped=true; el('HRStop').disabled=true; el('HRMessage').textContent='Stopping after the current read…'; } });
-    el('HRCountryMode').addEventListener('change',()=>{ el('HRCountry').hidden=el('HRCountryLabel').hidden=!el('HRCountryMode').value; });
+    el('HRCountryMode').addEventListener('change',()=>{ el('HRCountry').hidden=el('HRCountryLabel').hidden=!el('HRCountryMode').value; rememberHRPreferences(); });
+    el('HRCountry').addEventListener('input',rememberHRPreferences);
+    el('HRPages').addEventListener('change',rememberHRPreferences);
     document.getElementById('viewJobLeads').dataset.companionChannel = channel;
     document.getElementById('viewJobLeads').dataset.companionActions = '1';
     document.getElementById('viewJobLeads').dataset.companionFolders = '2';

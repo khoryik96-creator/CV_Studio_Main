@@ -7,7 +7,15 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current delivery: v24.6.491.** The owner authorized merging the tested
+**Current development: v24.6.492, unmerged** on
+`codex/v24.6.492-hr-joining-preferences`, based on merged v491 (`4f04818`).
+It corrects same-filter HR joining-date loading races, remembers the HR country
+and page controls, and selects the brief's country through native LinkedIn
+People Locations instead of Boolean geography. See the v492 QA report for the
+isolated verification and companion update requirement. No owner data migration,
+paid call, PR or merge is included in this checkpoint.
+
+**Last merged delivery: v24.6.491.** The owner authorized merging the tested
 `codex/v24.6.490-verification-corrections` branch. It contains the first-party
 Email Verifier (no external verification service), source-confirmed Awards
 company/year headings and modern saved-ad HR result/pagination corrections.

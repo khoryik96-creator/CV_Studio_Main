@@ -4,6 +4,23 @@ Current version is the repository-root `VERSION`. This owner-requested module
 tracks LinkedIn job ads for business development, separately from the candidate
 sourcer and the locked historical Lead Finder.
 
+## HR joining-date loading and remembered controls (v24.6.492)
+
+Joining-date checks now distinguish an unchanged source reloading from an actual
+company/country/keyword change at every verification boundary. Same-filter
+loading waits without opening a duplicate profile or spending another profile
+budget. Cleanup may release an exact inactive owned profile during that loading;
+the next lookup cannot inherit a false interrupted state. Actual filter or
+pending-navigation changes still stop, retaining previous saved HR evidence.
+The UI requires the additive joining-loading companion capability.
+
+Explicit country mode/name and pages are remembered in the browser's bounded,
+validated `cvstudio_job_leads_hr_preferences` setting, across ads and reloads.
+Absent a preference, the saved scan country/default page count are retained.
+Any country remembers its mode without discarding the last typed country.
+Invalid storage is ignored; blocked storage retains the choices for the current
+tab. These controls never rewrite the country/provenance of saved HR matches.
+
 ## Companion connection and updates (v24.6.480)
 
 The v489 saved-ad HR correction reads modern list items nested one wrapper below
