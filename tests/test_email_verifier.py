@@ -94,6 +94,46 @@ def test_one_mx_lookup_failure_does_not_discard_a_usable_server(mode,failed_firs
         assert service.probe.check.call_args.args[:3]==(host,'8.8.8.8','person@example.test')
 
 
+@pytest.mark.parametrize('v4,v6,expected', [
+    (['8.8.8.8','8.8.4.4'], ['2001:4860:4860::8888'], ['8.8.8.8','2001:4860:4860::8888']),
+    (['8.8.8.8','8.8.4.4'], ['2001:4860:4860::8888','2001:4860:4860::8844'], ['8.8.8.8','2001:4860:4860::8888']),
+    (['8.8.8.8'], ['2001:4860:4860::8888'], ['8.8.8.8','2001:4860:4860::8888']),
+    (['8.8.8.8','8.8.4.4'], [], ['8.8.8.8','8.8.4.4']),
+    ([], ['2001:4860:4860::8888','2001:4860:4860::8844'], ['2001:4860:4860::8888','2001:4860:4860::8844']),
+    (['8.8.8.8','8.8.8.8','8.8.4.4'], ['2001:4860:4860::8888'], ['8.8.8.8','2001:4860:4860::8888']),
+    (['8.8.8.8'], ['::ffff:8.8.4.4','2001:4860:4860::8888'], ['8.8.8.8','2001:4860:4860::8888']),
+])
+def test_bounded_mail_addresses_keep_both_advertised_families(v4,v6,expected):
+    resolver=MailDNS()
+    resolver.query=mock.Mock(side_effect=lambda host,kind,deadline:[SimpleNamespace(address=ip) for ip in (v4 if kind=='A' else v6)])
+    assert resolver.addresses('mx.example.test',time.monotonic()+5)==expected
+    assert resolver.query.call_count==2
+
+
+def test_full_mailbox_check_falls_back_to_ipv6_after_ipv4_timeout():
+    resolver=MailDNS()
+    resolver.hosts=mock.Mock(return_value=('mx',['mx.example.test']))
+    resolver.query=mock.Mock(side_effect=lambda host,kind,deadline:[SimpleNamespace(address=ip) for ip in (['8.8.8.8','8.8.4.4'] if kind=='A' else ['2001:4860:4860::8888'])])
+    attempted=[]
+    def probe(host,ip,address,deadline):
+        attempted.append((host,ip,address,deadline))
+        return ('unknown','Connection timed out') if ':' not in ip else ('accepted','Synthetic recipient-specific SMTP evidence')
+    service=EmailVerifier(resolver,mock.Mock())
+    service.probe.check.side_effect=probe
+    result=service.check({'email':'person@example.test'})
+    assert result['status']=='accepted'
+    assert [call[1] for call in attempted]==['8.8.8.8','2001:4860:4860::8888']
+    assert attempted[0][3]==attempted[1][3], 'fallback retains the single overall deadline'
+    assert service.probe.check.call_count==2
+
+
+@pytest.mark.parametrize('bad', ['10.0.0.1','::1','fc00::1','::ffff:127.0.0.1','ff02::1'])
+def test_address_family_selection_cannot_hide_restricted_answers(bad):
+    resolver=MailDNS()
+    resolver.query=mock.Mock(side_effect=lambda host,kind,deadline:[SimpleNamespace(address=ip) for ip in (['8.8.8.8','8.8.4.4'] if kind=='A' else ['2001:4860:4860::8888',bad])])
+    with pytest.raises(CheckUnavailable): resolver.addresses('mx.example.test',time.monotonic()+5)
+
+
 def test_all_failed_mx_lookups_stay_unknown_and_release_domain_slots():
     service=engine()
     service.dns.hosts.return_value=('mx',['primary.example.test','backup.example.test'])

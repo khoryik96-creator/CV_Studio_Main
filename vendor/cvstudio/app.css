@@ -1527,6 +1527,24 @@
 .job-leads-tool-group p { margin:8px 0 0; }
 .job-leads-folder-editor, .job-leads-selection { display:flex; flex-direction:column; gap:10px; border:1px solid var(--border); border-radius:8px; padding:12px; background:var(--surface2); font-size:13px; }
 .job-leads-folder-editor[hidden], .job-leads-selection[hidden] { display:none; }
+.job-leads-bulk-hr,.job-leads-bulk-progress { border:1px solid var(--border);border-radius:12px;padding:16px;background:var(--surface2);font-size:13px;min-width:0; }
+.job-leads-bulk-hr[hidden],.job-leads-bulk-progress[hidden] { display:none; }
+.job-leads-bulk-hr h3,.job-leads-bulk-progress h3 { margin:0;font-size:15px; }
+.job-leads-bulk-hr { display:grid;gap:14px; }
+.job-leads-bulk-hr .job-leads-pair label { margin-bottom:7px; }
+.job-leads-bulk-hr label[hidden] { display:none; }
+.job-leads-bulk-hr input { margin-top:7px; }
+.job-leads-bulk-hr summary { cursor:pointer;font-weight:600; }
+.job-leads-bulk-hr details label { display:block;margin:10px 0 6px; }
+.job-leads-bulk-hr p { margin:0;line-height:1.6; }
+.job-leads-bulk-hr > button { justify-self:start; }
+.job-leads-bulk-progress progress { display:block;width:100%;height:8px;accent-color:var(--accent);margin:12px 0; }
+.job-leads-bulk-progress progress[hidden] { display:none; }
+.job-leads-bulk-progress > .job-leads-actions { justify-content:space-between; }
+.job-leads-bulk-progress ol { padding-left:22px;margin:12px 0 0;max-height:260px;overflow:auto; }
+.job-leads-bulk-progress li { padding:7px 2px;line-height:1.6;overflow-wrap:anywhere; }
+.job-leads-bulk-progress li[data-state="running"] { color:var(--accent);font-weight:600; }
+.job-leads-bulk-progress li[data-state="failed"] { color:var(--red,#b42318); }
 .job-leads-pick, .job-lead-select { display:flex; align-items:center; gap:7px; font-size:12px; color:var(--text2); cursor:pointer; }
 .job-leads-pick input, .job-lead-select input { width:16px; min-height:16px; padding:0; margin:0; flex:none; accent-color:var(--accent); }
 .job-lead-select { position:absolute; top:18px; right:18px; }

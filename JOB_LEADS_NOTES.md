@@ -4,6 +4,41 @@ Current version is the repository-root `VERSION`. This owner-requested module
 tracks LinkedIn job ads for business development, separately from the candidate
 sourcer and the locked historical Lead Finder.
 
+## Bulk HR scans (v24.6.494)
+
+Use the existing saved-ad checkboxes (or Select ads on this page), set the
+shared country and pages in **Find HR people for selected ads**, then click
+**Scan selected ads**. Country/page choices are prefilled from the same
+validated preference as individual HR scans and changes update that preference.
+The collapsed HR keyword field applies one title query to every selected ad.
+Country may be Any country; pages remain 1–15 per ad. A queue is capped at 40
+ads, matching one board page; selection across pages still works within that
+cap. Ordinary folder moves are not limited by the HR queue cap.
+
+The native progress bar counts processed ads. Current company/role, page or
+joining-date stage and a per-ad result list stay visible; errors and limited
+scans are distinguished from complete saves. Each ad uses its own original
+revision, fresh companion run and exact company scope, with awaited cleanup
+before the next starts. A single reusable scanning function backs both bulk
+and individual scans. Unsaved form text and selection stay intact.
+
+Completed results save independently using the existing `save_hr` operation.
+A per-ad missing company/layout or revision conflict is reported without
+overwriting prior results; other ads can continue. Disconnected/busy/old
+companions, LinkedIn access restrictions and unconfirmed cleanup stop the
+remaining queue. Stop waits for the current bounded read, retains completed
+saves and does not start another ad. An unavailable or unconfirmed save also
+halts the queue and requires a refresh, without replay or a claim that an
+ambiguous write definitely failed. An atomic save already sent may finish
+and is counted honestly. Pagehide stops and ends the exact active run; reload
+does not resume a queue. Keep the CV Studio tab open. This is browser-driven,
+not a durable worker, and uses no AI/provider call or outreach.
+
+The established source-tab retention and 100-person/15-page/per-run limits in
+the companion remain unchanged; no new companion permission/action or server
+route/schema was introduced. The user can inspect completed HR people through
+each ad's existing HR people button.
+
 ## HR joining-date loading and remembered controls (v24.6.492)
 
 Joining-date checks now distinguish an unchanged source reloading from an actual

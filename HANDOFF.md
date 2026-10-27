@@ -7,15 +7,27 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current development: v24.6.492, unmerged** on
-`codex/v24.6.492-hr-joining-preferences`, based on merged v491 (`4f04818`).
-It corrects same-filter HR joining-date loading races, remembers the HR country
-and page controls, and selects the brief's country through native LinkedIn
-People Locations instead of Boolean geography. See the v492 QA report for the
-isolated verification and companion update requirement. No owner data migration,
-paid call, PR or merge is included in this checkpoint.
+**Current development: v24.6.494, unmerged** on
+`codex/v24.6.494-bulk-hr-scans`, stacked on the tested, unmerged v493 checkpoint
+`4ec0fd5` from merged v492 (`15c9948`). It adds saved-ad bulk HR scans with shared
+remembered country/pages, sequential per-ad save/cleanup, progress and Stop.
+Up to 40 selected ads run within each ad's established scan limits. Per-ad
+failures retain previous HR evidence; connection/access/cleanup failures stop
+the queue. Reload never resumes scans. See the v494 QA report.
 
-**Last merged delivery: v24.6.491.** The owner authorized merging the tested
+The v493 Email Verifier IPv6 fallback is retained: it keeps one real IPv6 MX
+address within the existing limits. An owner-authorized live check completed
+as catch-all where IPv4 timed out. No message was delivered, firewall changed
+or service/key added. See its separate QA report. Neither checkpoint is merged.
+
+**Last merged delivery: v24.6.492.** PR #250 merged as `15c9948` with all three
+hosted checks and an automated review with no findings on exact head `06a4e24`.
+It corrects same-filter HR joining-date loading races, remembers HR country/page
+choices and selects the Sourcer country's native People Locations filter.
+The unmerged status in its checkpoint QA report is historical; coordination
+issue #35 records the final merge.
+
+**Previous delivery: v24.6.491.** The owner authorized merging the tested
 `codex/v24.6.490-verification-corrections` branch. It contains the first-party
 Email Verifier (no external verification service), source-confirmed Awards
 company/year headings and modern saved-ad HR result/pagination corrections.

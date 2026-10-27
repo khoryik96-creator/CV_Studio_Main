@@ -38,7 +38,7 @@ function hrFixture(){
   };
   f.state.onRequest=async data=>{
     if(data.action!=='save_hr')return;
-    if(f.state.conflict)return {ok:false,json:async()=>({error:'Ad changed during scan'})};
+    if(f.state.conflict)return {ok:false,json:async()=>({error:'Ad changed during scan',code:'JOB_LEADS_CONFLICT'})};
     const row=f.state.records[0];assert.equal(data.revision,row.revision);
     row.hr={...data.search,scanned_at:'2026-10-22T00:00:00Z'};row.revision++;
     return {ok:true,json:async()=>({record:structuredClone(row)})};
