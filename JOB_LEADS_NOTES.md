@@ -1,5 +1,18 @@
 # Job Leads module
 
+## Grouped company headers (v24.6.496)
+
+The three owner-reported batch failures stopped on their company People pages,
+before a search opened. LinkedIn's employee link listed several related IDs;
+the separate exact-company connection link used an HTTP-valued URL. The old
+reader discarded both and repeatedly returned loading. A singleton HTTP ID is
+now usable only inside the matching company header, on the recognized native
+connections route/query and corroborated by its HTTPS employee group. The
+reader never navigates that HTTP link. Conflicts, unrelated recommendations,
+foreign URLs and missing evidence remain unconfirmed. Existing HTTPS singleton
+headers are unchanged. `hr_company_identity_revision:1` is required before any
+single/bulk scan so an older companion gives update guidance immediately.
+
 ## Apollo connection (v24.6.495, local; activation pending)
 
 Saved HR cards can explicitly unlock a business email through the user's own

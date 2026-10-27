@@ -7,9 +7,17 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current development: v24.6.495, unmerged** on
-`codex/v24.6.495-apollo-hr-emails`, from merged master `a323ad5` (v494).
-It adds per-installation Apollo OAuth connections and explicit business-email
+**Current development: v24.6.496, unmerged** on
+`codex/v24.6.496-hr-company-identity`, stacked on the tested local Apollo
+checkpoint `5c3fa52` (v495) from master `a323ad5` (v494). It corrects HR scans
+waiting forever on grouped-company headers: an exact header connection link
+may use an HTTP-valued URL while the employee link contains several company
+IDs. The reader can use that one ID only when its recognized header evidence
+is corroborated by the HTTPS employee group; it never follows HTTP or picks
+the first related company. Old companions stop before scanning with update
+guidance. See the v496 QA report. No route/schema/filter/save authority changed.
+
+The v495 checkpoint adds per-installation Apollo OAuth connections and business-email
 unlocks on saved HR cards. A shared free-tier Cloudflare broker keeps the app
 secret and encrypted per-account provider tokens; the local protected vault
 holds that installation's connection and email cache. No automatic paid retry,
