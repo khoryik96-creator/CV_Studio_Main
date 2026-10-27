@@ -415,13 +415,28 @@
     if (normalized(text(heading)) !== normalized(company)) throw Error('The company page does not match the saved ad company.');
     // Scope to the company header, excluding suggested/affiliated companies.
     const scope = heading.closest('section, .org-top-card') || heading.parentElement?.parentElement;
-    const ids = [...new Set([...(scope?.querySelectorAll('a[href]') || [])].filter(visible).map(link=>{
+    const evidence = [...(scope?.querySelectorAll('a[href]') || [])].filter(visible).map(link=>{
       try {
         const u = new URL(link.href), ids = JSON.parse(u.searchParams.get('currentCompany'));
-        return u.origin === 'https://www.linkedin.com' && /^\/search\/results\/people\/?$/.test(u.pathname) &&
-          Array.isArray(ids) && ids.length === 1 && /^[0-9]{1,24}$/.test(ids[0]) ? ids[0] : '';
-      } catch { return ''; }
-    }).filter(Boolean))];
+        if (!['https:','http:'].includes(u.protocol) || u.hostname !== 'www.linkedin.com' || u.username || u.password || u.port || u.hash ||
+            !/^\/search\/results\/people\/?$/.test(u.pathname) || u.searchParams.getAll('currentCompany').length !== 1 ||
+            !Array.isArray(ids) || !ids.length || ids.length > 20 || new Set(ids).size !== ids.length ||
+            !ids.every(id=>typeof id === 'string' && /^[0-9]{1,24}$/.test(id))) return null;
+        return {u,ids,label:text(link)};
+      } catch { return null; }
+    }).filter(Boolean);
+    const groups = evidence.filter(item=>item.u.protocol === 'https:' && item.ids.length > 1 &&
+      /\bemployees?\b|\bassociated members?\b/i.test(item.label) && item.u.searchParams.get('origin') === 'COMPANY_PAGE_CANNED_SEARCH');
+    const singles = evidence.filter(item=>{
+      if (item.ids.length !== 1) return false;
+      if (item.u.protocol === 'https:') return true;
+      // Some company headers expose the exact company only in an HTTP-valued
+      // connections link. Read its ID; never follow or execute that link.
+      return groups.length && groups.every(group=>group.ids.includes(item.ids[0])) &&
+        item.u.searchParams.get('origin') === 'COMPANY_PAGE_CANNED_SEARCH' &&
+        item.u.searchParams.getAll('network').length === 1 && item.u.searchParams.get('network') === '["F"]';
+    });
+    const ids = [...new Set(singles.map(item=>item.ids[0]))];
     return ids.length === 1 ? {company_id:ids[0]} : {loading:true};
   }
   function hrToolbar() { return document.querySelector('[componentkey="SearchResults_SearchResultsFilterBar"], [role="toolbar"], .search-reusables__filters-bar'); }

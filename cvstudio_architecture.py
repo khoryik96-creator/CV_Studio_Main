@@ -133,6 +133,7 @@ DEFAULT_MODULES = (
         "domain",
         ("cvstudio_email_verifier.py",),
     ),
+    ModuleDefinition("apollo", "domain", ("cvstudio_apollo.py",)),
     ModuleDefinition(
         "secrets",
         "domain",
@@ -323,6 +324,7 @@ DEFAULT_MODULES = (
         ),
         (
             "composition_root",
+            "apollo",
             "email_verifier",
             "ai_costs",
             "ai_providers",

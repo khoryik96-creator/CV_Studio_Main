@@ -103,7 +103,7 @@ class RouteTests(unittest.TestCase):
         return self.client.post('/linkedin-sourcer',json=data,headers={'X-CV-Studio-Request':'1'})
     def test_existing_118_route_contract_and_guards_preserved(self):
         from cvstudio_architecture import _route_contract
-        rows=tuple(row for row in _route_contract(self.module.app) if row['endpoint'] not in {'linkedin_sourcer', 'job_leads', 'email_verifier'})
+        rows=tuple(row for row in _route_contract(self.module.app) if row['endpoint'] not in {'linkedin_sourcer', 'job_leads', 'email_verifier', 'apollo_connection'})
         digest=hashlib.sha256(json.dumps(rows,ensure_ascii=True,sort_keys=True,separators=(',',':')).encode()).hexdigest()
         self.assertEqual(digest,'42768445b8fe97e48688238c02bebf5abce0251befc3d212c2d2b029911f7862')
     def test_new_route_requires_paid_session_and_rejects_extension_origin(self):

@@ -1612,3 +1612,10 @@
 .job-leads-hr-person a{font-weight:700;color:#1264b1;text-decoration:none}
 .job-leads-hr-person p{margin:6px 0 0;font-size:12px;line-height:1.5}
 @media(max-width:1100px){.job-leads-curation.has-hr,.job-leads-curation.has-hr:not(.no-search-results){grid-template-columns:minmax(0,1fr)}.job-leads-hr-results{max-height:500px}}
+/* Apollo stays compact beside saved HR evidence, with its source explicit. */
+.job-leads-apollo {margin:14px 0;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--bg);}
+.job-leads-apollo p {margin:6px 0;}
+.job-leads-apollo-person {margin-top:12px;padding-top:10px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.job-leads-apollo-person > div {flex:1 1 100%;}
+.job-leads-apollo-person small {display:block;margin-top:4px;}
+.job-leads-apollo-email {font-weight:600;overflow-wrap:anywhere;user-select:text;}

@@ -4,6 +4,31 @@
 
 ## Release state
 
+- v24.6.496 is an unmerged company-identity corrective stacked on local v495
+  `5c3fa52`. Read-only diagnosis of the three failed batch pages confirmed the
+  same layout: grouped HTTPS employee IDs, plus the exact company in an
+  HTTP-valued header connection link. The reader uses the latter only with
+  scoped, corroborating employee-group evidence. HTTP is never followed and
+  an arbitrary related ID is never selected. New capability negotiation blocks
+  an older companion before scanning. Existing company/country/search binding,
+  scan limits, stored evidence, routes/schemas and Apollo gates are preserved.
+
+- v24.6.495 is a local, unmerged Apollo milestone from `a323ad5`. Each
+  installation connects its own Apollo account through a shared OAuth broker;
+  saved HR cards offer explicit credit-confirmed email unlocks. Connection and
+  email evidence use the protected vault, separately from ad storage. OAuth,
+  refresh and paid ambiguity are never replayed; Check lookup reads an existing
+  result. `/apollo` is session/CSRF guarded; the exact previous 121-route
+  contract remains pinned independently. SQLite/journal and verifier verdicts
+  are unchanged. Hosted activation and live acceptance remain pending free
+  Cloudflare setup and Apollo application approval; no registration or paid
+  lookup was created. See the v495 QA report and broker setup guide.
+
+- v24.6.494 (including v493) merged in PR #251 as `a323ad5`, with all three
+  required hosted checks passed. Optional automated review was still pending
+  at merge. The unmerged wording in the two historical checkpoint entries below
+  is superseded by this merge and coordination issue #35.
+
 - v24.6.494 adds an unmerged saved-ad bulk HR queue on the tested v493 branch.
   Existing checkboxes select up to 40 ads; one remembered country/page setting
   and shared HR keywords apply to each sequential scan. Native progress and

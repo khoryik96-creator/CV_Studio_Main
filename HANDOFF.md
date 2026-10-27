@@ -7,25 +7,35 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current development: v24.6.494, unmerged** on
-`codex/v24.6.494-bulk-hr-scans`, stacked on the tested, unmerged v493 checkpoint
-`4ec0fd5` from merged v492 (`15c9948`). It adds saved-ad bulk HR scans with shared
-remembered country/pages, sequential per-ad save/cleanup, progress and Stop.
-Up to 40 selected ads run within each ad's established scan limits. Per-ad
-failures retain previous HR evidence; connection/access/cleanup failures stop
-the queue. Reload never resumes scans. See the v494 QA report.
+**Current development: v24.6.496, unmerged** on
+`codex/v24.6.496-hr-company-identity`, stacked on the tested local Apollo
+checkpoint `5c3fa52` (v495) from master `a323ad5` (v494). It corrects HR scans
+waiting forever on grouped-company headers: an exact header connection link
+may use an HTTP-valued URL while the employee link contains several company
+IDs. The reader can use that one ID only when its recognized header evidence
+is corroborated by the HTTPS employee group; it never follows HTTP or picks
+the first related company. Old companions stop before scanning with update
+guidance. See the v496 QA report. No route/schema/filter/save authority changed.
 
-The v493 Email Verifier IPv6 fallback is retained: it keeps one real IPv6 MX
-address within the existing limits. An owner-authorized live check completed
-as catch-all where IPv4 timed out. No message was delivered, firewall changed
-or service/key added. See its separate QA report. Neither checkpoint is merged.
+The v495 checkpoint adds per-installation Apollo OAuth connections and business-email
+unlocks on saved HR cards. A shared free-tier Cloudflare broker keeps the app
+secret and encrypted per-account provider tokens; the local protected vault
+holds that installation's connection and email cache. No automatic paid retry,
+cross-account cache reuse or ad/HR rewrite. `/apollo` is the only added route
+and requires the current browser session for POSTs.
 
-**Last merged delivery: v24.6.492.** PR #250 merged as `15c9948` with all three
-hosted checks and an automated review with no findings on exact head `06a4e24`.
-It corrects same-filter HR joining-date loading races, remembers HR country/page
-choices and selects the Sourcer country's native People Locations filter.
-The unmerged status in its checkpoint QA report is historical; coordination
-issue #35 records the final merge.
+**Activation is pending.** No Cloudflare service or Apollo registration has been
+created. The public broker address is deliberately blank. The free service and
+approved Apollo app must be configured before sign-in works. See
+`integrations/apollo-broker/README.md` and the v495 QA report. No shared API key
+or colleague-specific hosting account is required.
+
+**Last merged delivery: v24.6.494.** PR #251 merged as `a323ad5`, including v493
+IPv6 mail probing and v494 selected-ad bulk HR scans. All three required hosted
+checks passed on tested head `e0cec20`. The optional automated review was still
+pending at merge; it is not claimed as passed. Prior v493/v494 unmerged notes
+are superseded by coordination issue #35. v492 previously merged in PR #250
+as `15c9948` with all required checks and a clean review.
 
 **Previous delivery: v24.6.491.** The owner authorized merging the tested
 `codex/v24.6.490-verification-corrections` branch. It contains the first-party
@@ -54,8 +64,8 @@ the fetched master/coordination log before starting subsequent work.
 `app.py` ends with `_finalize_modular_monolith_app(...)`, which hard-asserts at
 import time:
 
-- `expected_route_count = 121`
-- `expected_route_contract_sha256 = "6b0b7dfd41ab2b85fa4685de18efdf1aad477fa91a39cbf0b8a8794eb923b221"`
+- `expected_route_count = 122`
+- `expected_route_contract_sha256 = "4cb6b3f8e64b3421c9b9fae819c7fe64e6b05d98db193bb1eb42f8da07aaf600"`
 - 5 before-request guards, in this exact order:
   `_assign_cvstudio_request_id`, `_reject_declared_oversize_request`,
   `_reject_non_local_host_header`, `_require_ai_spend_browser_session`,

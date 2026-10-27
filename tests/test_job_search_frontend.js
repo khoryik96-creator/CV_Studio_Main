@@ -37,6 +37,10 @@ function fixture(options={}){
     throw Error('Unexpected companion command '+message.action);
   }};
   const fetch=async(endpoint,options)=>{
+    if(endpoint==='/apollo') {
+      assert(state.onApollo,'Apollo calls require an explicit test fixture');
+      return state.onApollo(options?.body?JSON.parse(options.body):null);
+    }
     assert.equal(endpoint,'/job-leads','search must not call a paid route');
     if(!options?.body)return {ok:true,json:async()=>({records:structuredClone(state.records),folders:[...state.folders]})};
     const data=JSON.parse(options.body);requests.push(data);
@@ -60,9 +64,14 @@ function fixture(options={}){
   const preferences=options.preferences || new Map();
   const localStorage=options.storage || {getItem:key=>preferences.get(key)??null,setItem:(key,value)=>preferences.set(key,value),removeItem:key=>preferences.delete(key)};
   const context=vm.createContext({window,document,location,localStorage,fetch,URL,URLSearchParams,Blob,Map,Set,Date,crypto:{randomUUID:()=>String(++serial).padStart(32,'0')},
+    navigator:{clipboard:{writeText:async value=>{state.clipboard=value}}},
     setTimeout:(fn,ms)=>setTimeout(fn,ms===350?0:ms),clearTimeout,Option:function(text,value){const node=new Element('option',text);node.value=value;return node}});
+  if(options.apollo) {
+    window.open=()=>{state.popup={location:{},close(){state.popupClosed=true}};return state.popup};
+    vm.runInContext(fs.readFileSync(path.join(__dirname,'../vendor/cvstudio/job-leads-apollo.js'),'utf8'),context);
+  }
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../vendor/cvstudio/job-leads.js'),'utf8'),context);
-  return {el,state,calls,requests,pagehide:()=>events.pagehide?.(),init:()=>window.initJobLeads(),capture:(record,request)=>new Promise(resolve=>{
+  return {el,state,calls,requests,apollo:window.cvStudioApollo,pagehide:()=>events.pagehide?.(),init:()=>window.initJobLeads(),capture:(record,request)=>new Promise(resolve=>{
     state.captureReply=resolve;events.message({source:window,origin:location.origin,data:{type:'CVSTUDIO_LINKEDIN_CAPTURE',channel:document.getElementById('viewJobLeads').dataset.companionChannel,id:String(++serial).padStart(32,'0'),record,request}});
   })};
 }
