@@ -477,9 +477,10 @@
     if (busy || !row || row.deleted) return;
     let settings;try { settings=hrSettings('HR'); } catch(error) { el('HRMessage').textContent=error.message;return; }
     rememberHRPreferences();
+    const activity=beginScanActivity();let outcome;
     hrStopped=false; hrRunning=true; hrRun=''; lock(true);
-    try { await scanHR(row,{...settings,companyURL:el('HRCompanyURL').value.trim()},value=>{el('HRMessage').textContent=value;},hrPeople); }
-    finally { hrRunning=false;lock(false); }
+    try { outcome=await scanHR(row,{...settings,companyURL:el('HRCompanyURL').value.trim()},value=>{el('HRMessage').textContent=value;},hrPeople); }
+    finally { hrRunning=false;lock(false);finishScanActivity(activity,!outcome || outcome.state==='failed' || outcome.stopQueue); }
   }
   async function scanHR(row, {country,keywords,pages,companyURL}, notify, showPeople) {
     const found = new Map();let finalSnapshot=null,omitted=false,outcome,cleanupFailed=false,saving=false;
@@ -487,7 +488,7 @@
     try {
       notify('Checking the companion…');
       const companion = await rpc('jobStatus',{},1500); checkHR();
-      if (!companion?.connected || companion.company_hr_revision !== 1 || companion.hr_company_identity_revision !== 1 || companion.hr_joined_revision !== 1 || companion.hr_joined_loading_revision !== 1 || companion.hr_keyword_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to use the corrected HR search and joining-date checks.');
+      if (!companion?.connected || companion.company_hr_revision !== 1 || companion.hr_company_identity_revision !== 1 || companion.hr_company_filter_revision !== 1 || companion.hr_joined_revision !== 1 || companion.hr_joined_loading_revision !== 1 || companion.hr_keyword_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to use the corrected HR search and joining-date checks.');
       if (companion.busy) throw Error('Finish the current companion search or ad read first.');
       if (!companyURL) {
         notify('Reading the company link from the saved ad…');
@@ -597,6 +598,7 @@
       el('BulkHRProgress').hidden=false;el('BulkHRBar').hidden=true;el('BulkHRSummary').textContent='';el('BulkHRResults').replaceChildren();el('BulkHRMessage').textContent=error.message;return;
     }
     rememberHRPreferences('BulkHR');
+    const activity=beginScanActivity();
     hrStopped=false;hrRunning=true;bulkHR={running:true,completed:0,saved:0,failed:0,cancelled:0,items:[]};
     el('BulkHRResults').replaceChildren();el('BulkHRProgress').hidden=false;el('BulkHRBar').hidden=false;
     el('BulkHRBar').max=selection.length;
@@ -633,7 +635,7 @@
       const remaining=bulkHR.items.length-bulkHR.completed;
       for (const item of bulkHR.items) if (item.node.dataset.state==='waiting') item.node.textContent=item.title+' · Not started';
       el('BulkHRMessage').textContent=(hrStopped || stoppedReason ? 'Queue stopped. ' : 'Queue finished. ')+`${bulkHR.saved} ads saved, ${bulkHR.failed} failed${bulkHR.cancelled ? ', '+bulkHR.cancelled+' stopped' : ''}${remaining ? ', '+remaining+' not started' : ''}. `+(stoppedReason || 'Completed results are saved with each ad.');
-      bulkHRSummary();lock(false);
+      bulkHRSummary();lock(false);finishScanActivity(activity,bulkHR.failed>0 || !!stoppedReason);
     }
   }
   function rememberJobs(snapshot) {
@@ -650,6 +652,12 @@
   }
   function checkDiscovery() { if (discoveryStopped) throw Error('Stopped.'); }
   const pauseDiscovery = () => new Promise(resolve => setTimeout(resolve,350));
+  const beginScanActivity = () => typeof markTabRunning === 'function' ? markTabRunning('jobleads') : null;
+  function finishScanActivity(token, failed) {
+    if (token === null) return;
+    if (failed && typeof markTabFailed === 'function') markTabFailed('jobleads',token);
+    else if (typeof markTabDone === 'function') markTabDone('jobleads',token);
+  }
   async function readDiscovery(tab, previous = '') {
     for (let attempt=0;attempt<35;attempt++) {
       checkDiscovery();
@@ -668,6 +676,7 @@
     if (!useOpen && (!query || query.length > 240 || where.length > 160 || /[\x00-\x1f]/.test(query + where))) { searchStatus('Enter job keywords and an optional location.'); return; }
     if (useOpen && !el('SearchSource').value) { searchStatus('Refresh search tabs and choose an open LinkedIn job search.'); return; }
     discovering = true; discoveryStopped = false; discoveryRun = '';
+    const activity=beginScanActivity();let failed=false;
     lock(true); searchStatus('Checking the browser companion…');
     try {
       const companion = await rpc('jobStatus',{},1000).catch(() => null);
@@ -697,10 +706,10 @@
         if (!await rpc('read',{run_id:discoveryRun,tab_id:source.tab_id,method:'nextJobSearch',values:[previous]})) break;
       }
       checkDiscovery(); searchStatus(`Found ${discovered.length} ads. Select the ones to add. Search summaries are labelled; use Read full ad for the complete content when available.`);
-    } catch (error) { searchStatus(discoveryStopped ? `Stopped. ${discovered.length} ads found so far are kept for review.` : error.message + ' Ads already found are kept.'); }
+    } catch (error) { failed=!discoveryStopped;searchStatus(discoveryStopped ? `Stopped. ${discovered.length} ads found so far are kept for review.` : error.message + ' Ads already found are kept.'); }
     finally {
       if (discoveryRun) { try { await rpc('end',{run_id:discoveryRun}); } catch {} }
-      discoveryRun = ''; discovering = false; lock(false); drawDiscovery();
+      discoveryRun = ''; discovering = false; lock(false); drawDiscovery();finishScanActivity(activity,failed);
     }
   }
   async function previewDiscovered(row, source = 'search') {

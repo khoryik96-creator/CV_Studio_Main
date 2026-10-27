@@ -54,6 +54,9 @@ function hrSearchKey(value) {
     url.searchParams.sort(); return url.href;
   } catch { return ''; }
 }
+function hrCompanyGroup(ids) {
+  return Array.isArray(ids) && ids.length>=2 && ids.length<=20 && new Set(ids).size===ids.length && ids.every(id=>typeof id==='string' && /^[0-9]{1,24}$/.test(id));
+}
 function hrKeywordQueries(keywords, grouped=true) {
   const terms=[...new Map(keywords.split(',').map(word=>word.replaceAll('"','').trim()).filter(Boolean).map(word=>[word.toLocaleLowerCase(),word])).values()];
   const queries=[],size=grouped ? 5 : Math.max(terms.length,1);
@@ -126,6 +129,9 @@ async function hrScript(bound, run, method, values) {
   if (injection?.result?.hrError) {
     const errors={
       readHRCompany:'The company page could not be matched to the saved ad. Check its company name and LinkedIn company page.',
+      hrCompanyOpen:'The LinkedIn Current companies filter could not be opened. Check the company search tab.',
+      hrCompanyOnly:'The exact saved-ad company could not be selected from LinkedIn\'s grouped company filter. Check the company name and search tab.',
+      hrCompanyApply:'The exact company selection could not be applied. Check the LinkedIn company filter.',
       hrCountryOpen:'The LinkedIn location filter could not be opened. Check the HR search tab and start again.',
       hrCountryType:'The LinkedIn location filter could not receive the country. Check the HR search tab and start again.',
       hrCountryPick:'The country suggestion could not be selected. Check the LinkedIn location filter and start again.',
@@ -218,14 +224,17 @@ async function restore() {
       bound.kind === 'jobs' && (!jobSearchKey(bound.jobKey) || !Number.isFinite(bound.jobStarted) || !Number.isInteger(bound.jobScrolls) || bound.jobScrolls < 0 || bound.jobScrolls > 120 ||
         bound.jobInitial && (bound.jobInitial !== true || typeof bound.jobLocation !== 'string' || bound.jobLocation.length > 160)) ||
       bound.kind === 'hr' && (!bound.hr || !hrCompanyURL(bound.hr.company_url) || typeof bound.hr.company !== 'string' || bound.hr.company.length > 200 || typeof bound.hr.country !== 'string' || bound.hr.country.length > 100 ||
-        typeof bound.hr.keywords !== 'string' || bound.hr.keywords.length > 600 || !Number.isFinite(bound.hr.started) || !['company','search_wait','search','type','pick','apply','country_wait','ready','interrupted'].includes(bound.hr.stage) ||
+        typeof bound.hr.keywords !== 'string' || bound.hr.keywords.length > 600 || !Number.isFinite(bound.hr.started) || !['company','search_wait','company_open','company_only','company_apply','company_wait','search','type','pick','apply','country_wait','ready','interrupted'].includes(bound.hr.stage) ||
+        bound.hr.company_group !== undefined && (!hrCompanyGroup(bound.hr.company_group) || bound.hr.company_id ||
+          !['search_wait','company_open','company_only','company_apply','company_wait','interrupted'].includes(bound.hr.stage) ||
+          !bound.hr.key || new URL(bound.hr.key).searchParams.get('currentCompany')!==JSON.stringify(bound.hr.company_group)) ||
         bound.hr.query_index !== undefined && (!Number.isInteger(bound.hr.query_index) || bound.hr.query_index < 0 || bound.hr.query_index >= hrQueries(bound.hr).length ||
           bound.hr.key && new URL(bound.hr.key).searchParams.get('keywords') !== hrQueries(bound.hr)[bound.hr.query_index]) ||
         bound.hr.omitted_pages !== undefined && typeof bound.hr.omitted_pages !== 'boolean' ||
         bound.hr.joined_count !== undefined && (!Number.isInteger(bound.hr.joined_count) || bound.hr.joined_count < 0 || bound.hr.joined_count > 100) ||
         bound.hr.joining && (!/^https:\/\/www\.linkedin\.com\/in\/[A-Za-z0-9_%~-]+$/.test(bound.hr.joining.url || '') || bound.hr.joining.tab_id !== null && !Number.isInteger(bound.hr.joining.tab_id) ||
           bound.hr.joining.scrolls !== undefined && (!Number.isInteger(bound.hr.joining.scrolls) || bound.hr.joining.scrolls < 0 || bound.hr.joining.scrolls > 4)) ||
-        bound.hr.stage !== 'company' && (!/^[0-9]{1,24}$/.test(bound.hr.company_id || '') || !bound.hr.key) ||
+        bound.hr.stage !== 'company' && ((!/^[0-9]{1,24}$/.test(bound.hr.company_id || '') && !hrCompanyGroup(bound.hr.company_group)) || !bound.hr.key) ||
         bound.hr.key && (bound.hr.key.length > 2048 || hrSearchKey(bound.hr.key) !== bound.hr.key))) throw Error('Invalid binding.');
   if (bound.peopleSearch && (bound.kind !== 'profiles' || typeof bound.peopleSearch.key !== 'string' || bound.peopleSearch.key.length > 10000 || hrSearchKey(bound.peopleSearch.key) !== bound.peopleSearch.key ||
       typeof bound.peopleSearch.previous !== 'string' || bound.peopleSearch.previous.length > 10000 || bound.peopleSearch.previous && hrSearchKey(bound.peopleSearch.previous) !== bound.peopleSearch.previous ||
@@ -491,7 +500,7 @@ async function handle(message, sender) {
     if (!reloading) { reloading=true;setTimeout(()=>chrome.runtime.reload(),100); }
     return {reloading:true};
   }
-  if (message.action === 'jobStatus') return {connected:true,job_read:true,job_search:true,job_search_revision:1,company_hr_revision:1,hr_company_identity_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_keyword_revision:1,people_country_revision:1,companion_update_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
+  if (message.action === 'jobStatus') return {connected:true,job_read:true,job_search:true,job_search_revision:1,company_hr_revision:1,hr_company_identity_revision:1,hr_company_filter_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_keyword_revision:1,people_country_revision:1,companion_update_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
   if (message.action === 'hrBegin') {
     const bound = connection;
     if (!/^[a-f0-9]{32}$/.test(args.run_id || '') || !hrCompanyURL(args.company_url) || typeof args.company !== 'string' || !args.company.trim() || args.company.length > 200 ||
@@ -723,11 +732,14 @@ async function handle(message, sender) {
     }
     if (hr.stage === 'company') {
       const result = await hrScript(bound,run,'readHRCompany',[hr.company_url,hr.company]);
-      if (result === HR_LOADING || result?.loading || result == null) return {loading:true};
-      if (!/^[0-9]{1,24}$/.test(result.company_id || '')) throw safeError('The company employee link could not be confirmed.');
-      hr.company_id = result.company_id;
+      if (hrCompanyGroup(result?.company_ids)) hr.company_group=[...result.company_ids];
+      else {
+        if (result === HR_LOADING || result?.loading || result == null) return {loading:true};
+        if (typeof result.company_id!=='string' || !/^[0-9]{1,24}$/.test(result.company_id)) throw safeError('The company employee link could not be confirmed.');
+        hr.company_id = result.company_id;
+      }
       const url = new URL('https://www.linkedin.com/search/results/people/');
-      url.searchParams.set('currentCompany',JSON.stringify([hr.company_id]));
+      url.searchParams.set('currentCompany',JSON.stringify(hr.company_group || [hr.company_id]));
       url.searchParams.set('keywords',hrQueries(hr)[0]);
       hr.key = hrSearchKey(url.href); hr.stage='interrupted'; await persist(); live(bound,run);
       if (hr.key.length > 2048) throw safeError('Shorten the HR keywords before starting a new scan.');
@@ -741,7 +753,25 @@ async function handle(message, sender) {
       if (hr.query_index > 0) { const url=new URL(hr.key);url.searchParams.set('keywords',hrQueries(hr)[hr.query_index-1]);previous=hrSearchKey(url.href); }
       if (tab.pendingUrl && hrSearchKey(tab.pendingUrl) !== hr.key || (hr.query_index > 0 ? hrSearchKey(tab.url) : tab.url) !== previous && hrSearchKey(tab.url) !== hr.key) throw safeError('The HR search changed. Start again from the saved ad.');
       if (hrSearchKey(tab.url) !== hr.key) return {loading:true};
-      hr.stage=hr.query_index > 0 ? 'ready' : 'search'; await persist();
+      hr.stage=hr.company_group ? 'company_open' : hr.query_index > 0 ? 'ready' : 'search'; await persist();
+    }
+    if (hr.stage==='company_open') { await hrMutation(bound,run,'hrCompanyOpen',[],'company_only'); return {loading:true}; }
+    if (hr.stage==='company_only') { await hrMutation(bound,run,'hrCompanyOnly',[hr.company,hr.company_group.length],'company_apply'); return {loading:true}; }
+    if (hr.stage==='company_apply') { await hrMutation(bound,run,'hrCompanyApply',[hr.company],'company_wait'); return {loading:true}; }
+    if (hr.stage==='company_wait') {
+      const resolve=value=>{
+        const key=hrSearchKey(value);if(key===hr.key || key==='https://www.linkedin.com/search/results/people/') return null;
+        let ids;try { ids=JSON.parse(new URL(value).searchParams.get('currentCompany')); } catch {}
+        if (!Array.isArray(ids) || ids.length!==1 || !hr.company_group.includes(ids[0])) throw safeError('The grouped company selection changed. Start a new scan.');
+        const expected=new URL(hr.key);expected.searchParams.set('currentCompany',JSON.stringify(ids));
+        if(key!==hrSearchKey(expected.href)) throw safeError('The company search filters changed. Start a new scan.');
+        return {key,id:ids[0]};
+      };
+      const selected=resolve(tab.url),pending=tab.pendingUrl?resolve(tab.pendingUrl):null;
+      if (!selected) return {loading:true};
+      if (pending && pending.key!==selected.key) throw safeError('The grouped company selection changed. Start a new scan.');
+      if (tab.pendingUrl && !pending) return {loading:true};
+      hr.company_id=selected.id;hr.key=selected.key;delete hr.company_group;hr.stage='search';await persist();return {loading:true};
     }
     if (hr.stage === 'country_wait') {
       const resolved = new URL(tab.url), expected = new URL(hr.key);

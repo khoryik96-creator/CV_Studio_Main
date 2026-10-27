@@ -64,6 +64,7 @@ function fixture(options={}){
   const preferences=options.preferences || new Map();
   const localStorage=options.storage || {getItem:key=>preferences.get(key)??null,setItem:(key,value)=>preferences.set(key,value),removeItem:key=>preferences.delete(key)};
   const context=vm.createContext({window,document,location,localStorage,fetch,URL,URLSearchParams,Blob,Map,Set,Date,crypto:{randomUUID:()=>String(++serial).padStart(32,'0')},
+    ...options.activity,
     navigator:{clipboard:{writeText:async value=>{state.clipboard=value}}},
     setTimeout:(fn,ms)=>setTimeout(fn,ms===350?0:ms),clearTimeout,Option:function(text,value){const node=new Element('option',text);node.value=value;return node}});
   if(options.apollo) {

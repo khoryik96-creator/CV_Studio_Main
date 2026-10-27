@@ -2,12 +2,13 @@ const assert=require('assert/strict');
 const {fixture}=require('./test_job_search_frontend');
 const preference='cvstudio_job_leads_hr_preferences';
 function bulkFixture(options={}){
-  const f=fixture(options),base=f.state.records[0];
+  const activity=[];
+  const f=fixture({...options,activity:{markTabRunning:tab=>{assert.equal(tab,'jobleads');activity.push('running');return activity.length;},markTabDone:()=>activity.push('done'),markTabFailed:()=>activity.push('failed')}}),base=f.state.records[0];f.activity=activity;
   f.state.records=[1,2,3].map(n=>({...structuredClone(base),id:String(n).repeat(32),url:'https://www.linkedin.com/jobs/view/111111111'+n,company:'Example Company '+n,role:'Example role '+n,hr:{people:[],country:'Singapore',keywords:'HR',company_url:'',complete:true}}));
   Object.assign(f.state,{active:null,ends:[],starts:[]});
   f.state.onRPC=(message,reply)=>{
     const {action,args}=message,s=f.state;
-    if(action==='jobStatus'){reply({connected:!s.disconnected,company_hr_revision:1,hr_company_identity_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_keyword_revision:1,busy:false});return true;}
+    if(action==='jobStatus'){reply({connected:!s.disconnected,company_hr_revision:1,hr_company_identity_revision:1,hr_company_filter_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_keyword_revision:1,busy:false});return true;}
     if(action==='jobFromLink'){
       const row=s.records.find(r=>r.url===args.url);s.active=row;
       if(row.id===s.failId){reply(null,'The company link is unavailable.');return true;}
@@ -45,17 +46,21 @@ async function held(f){for(let i=0;i<40&&!f.state.release;i++)await new Promise(
   assert.equal(f.el('BulkHRCountry').value,'Malaysia');assert.equal(f.el('BulkHRPages').value,'10');
   f.el('notes').value='Keep my draft';f.el('notes').handlers.input();await f.start();
   assert.equal(f.state.starts.length,3);assert(f.state.starts.every(a=>a.country==='Malaysia'&&a.max_pages===10));
+  assert.deepEqual(f.activity,['running','done'],'one activity token covers the whole queue');
   assert.equal(new Set(f.state.starts.map(a=>a.run_id)).size,3);assert.deepEqual(f.state.ends,f.state.starts.map(a=>a.run_id));
   assert.equal(f.el('BulkHRBar').value,3);assert.equal(f.el('BulkHRBar').max,3);assert.match(f.el('BulkHRMessage').textContent,/finished/i);
   assert.equal(f.el('notes').value,'Keep my draft');assert.equal(f.requests.filter(r=>r.action==='save_hr').length,3);
   assert.equal(f.el('HRResults').children[0].children[0].textContent,'Example Person 1','another company cannot replace the previewed company HR cards');
   assert(f.state.records.every(r=>r.hr.people.length===1&&r.hr.country==='Malaysia'&&r.notes==='Important saved notes'&&r.contact==='Manual Contact'));
   const stopped=bulkFixture();await stopped.init();stopped.select();stopped.state.holdId='2'.repeat(32);const running=stopped.start();await held(stopped);
+  assert.deepEqual(stopped.activity,['running'],'the running state remains active while another ad is held');
   assert.equal(stopped.el('BulkHRBar').value,1);assert(stopped.el('BulkHRStart').disabled);assert(!stopped.el('BulkHRStop').disabled);
   assert.match(stopped.el('BulkHRMessage').textContent,/2 of 3.*Example Company 2/);stopped.el('BulkHRStop').click();stopped.state.release();await running;
   assert.equal(stopped.requests.filter(r=>r.action==='save_hr').length,1);assert.equal(stopped.state.starts.length,2);assert.equal(stopped.state.records[1].hr.country,'Singapore');assert.equal(stopped.state.records[2].hr.country,'Singapore');
   assert.match(stopped.el('BulkHRMessage').textContent,/stopped/i);assert(!stopped.el('BulkHRStart').disabled);
+  assert.deepEqual(stopped.activity,['running','done'],'intentional Stop releases the activity after cleanup');
   const failed=bulkFixture();await failed.init();failed.select();failed.state.failId='2'.repeat(32);await failed.start();
+  assert.deepEqual(failed.activity,['running','failed'],'partial failures require attention');
   assert.equal(failed.requests.filter(r=>r.action==='save_hr').length,2);assert.equal(failed.el('BulkHRBar').value,3);assert.match(failed.el('BulkHRResults').children[1].textContent,/unavailable/);
   const stale=bulkFixture();await stale.init();stale.select();stale.state.staleId='2'.repeat(32);await stale.start();assert.equal(stale.state.records[1].hr.country,'Singapore');assert.equal(stale.state.records[2].hr.people.length,1);
   const storage=bulkFixture();await storage.init();storage.select();storage.state.onRequest=async data=>data.action==='save_hr'?{ok:false,json:async()=>({error:'Storage unavailable',code:'JOB_LEADS_STORAGE_ERROR'})}:undefined;

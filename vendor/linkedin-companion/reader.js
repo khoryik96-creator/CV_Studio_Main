@@ -437,7 +437,13 @@
         item.u.searchParams.getAll('network').length === 1 && item.u.searchParams.get('network') === '["F"]';
     });
     const ids = [...new Set(singles.map(item=>item.ids[0]))];
-    return ids.length === 1 ? {company_id:ids[0]} : {loading:true};
+    if (ids.length === 1) return {company_id:ids[0]};
+    if (!ids.length && groups.length && groups.every(group=>group.ids.length === groups[0].ids.length && group.ids.every(id=>groups[0].ids.includes(id)))) {
+      // Candidates only. The worker must select the exact visible company in
+      // LinkedIn's native filter before any profile can be read or saved.
+      return {loading:true,company_ids:[...groups[0].ids]};
+    }
+    return {loading:true};
   }
   function hrToolbar() { return document.querySelector('[componentkey="SearchResults_SearchResultsFilterBar"], [role="toolbar"], .search-reusables__filters-bar'); }
   function hrFilterLabel(node) {
@@ -446,6 +452,42 @@
     // Modern filters name the associated label rather than the hidden input.
     const labels=[...(node.labels || [])].filter(visible);
     return normalized(labels.length === 1 ? text(labels[0]) : text(node));
+  }
+  function hrCompanyOpen() {
+    assertPage('standard','search');
+    const choices=[...(hrToolbar()?.querySelectorAll('button, [role="button"]') || [])].filter(n=>visible(n) && /^(?:Filter by )?(?:\d+\s+)?Current companies$/i.test(n.getAttribute('aria-label') || text(n)));
+    if (choices.length !== 1) return false;
+    choices[0].click(); return true;
+  }
+  function hrCompanyChoices() {
+    const choices=[...document.querySelectorAll('[popover], [role="dialog"]')].filter(visible).map(scope=>({scope,
+      boxes:[...scope.querySelectorAll('input[type="checkbox"], [role="checkbox"]')].filter(visible),
+      actions:[...scope.querySelectorAll('a, button')].filter(n=>visible(n) && !disabled(n) && text(n) === 'Show results')})).filter(item=>item.boxes.length && item.actions.length === 1);
+    if (choices.length !== 1) return null;
+    const value=choices[0];value.selected=value.boxes.filter(n=>n.checked || n.getAttribute('aria-checked') === 'true');return value;
+  }
+  function hrCompanyOnly(company, count) {
+    assertPage('standard','search');
+    const value=hrCompanyChoices(); if (!value) return false;
+    let expected=value.selected.map(hrFilterLabel);
+    if (!Number.isInteger(count) || count<2 || count>20 || expected.length!==count || expected.some(label=>!label) ||
+        new Set(expected).size!==count || expected.filter(label=>label===normalized(company)).length!==1) throw Error('The exact company could not be selected from the group.');
+    for (const label of expected.filter(label=>label!==normalized(company))) {
+      const current=hrCompanyChoices(), actual=current?.selected.map(hrFilterLabel) || [];
+      if (actual.length!==expected.length || actual.some(name=>!expected.includes(name))) throw Error('The company selection changed.');
+      const box=current.selected.find(n=>hrFilterLabel(n)===label), labels=[...(box.labels || [])].filter(visible);
+      (labels.length===1?labels[0]:box).click();
+      expected=expected.filter(name=>name!==label);
+    }
+    const final=hrCompanyChoices();
+    if (!final || final.selected.length!==1 || hrFilterLabel(final.selected[0])!==normalized(company)) throw Error('The company selection could not be confirmed.');
+    return true;
+  }
+  function hrCompanyApply(company) {
+    assertPage('standard','search');
+    const value=hrCompanyChoices(); if (!value) return false;
+    if (value.selected.length!==1 || hrFilterLabel(value.selected[0])!==normalized(company)) throw Error('The company selection changed.');
+    value.actions[0].click(); return true;
   }
   function hrCountryOpen(country) {
     assertPage('standard','search');
@@ -600,5 +642,5 @@
     button.click(); return true;
   }
   globalThis.SourcerReader = {readSearch, next, search, readProfile, profileURL, readJob, readJobSearch, nextJobSearch, scrollJobSearch, jobSearchContext, readJobPick, jobTargets,
-    readHRCompany, hrCountryOpen, hrCountryType, hrCountryPick, hrCountryApply, peopleCountrySelected, readHRSearch, nextHRSearch, readHRJoined, prepareHRJoined};
+    readHRCompany, hrCompanyOpen, hrCompanyOnly, hrCompanyApply, hrCountryOpen, hrCountryType, hrCountryPick, hrCountryApply, peopleCountrySelected, readHRSearch, nextHRSearch, readHRJoined, prepareHRJoined};
 })();
