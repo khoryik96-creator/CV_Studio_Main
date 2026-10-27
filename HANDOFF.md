@@ -7,15 +7,16 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current development: v24.6.496, unmerged** on
-`codex/v24.6.496-hr-company-identity`, stacked on the tested local Apollo
-checkpoint `5c3fa52` (v495) from master `a323ad5` (v494). It corrects HR scans
-waiting forever on grouped-company headers: an exact header connection link
-may use an HTTP-valued URL while the employee link contains several company
-IDs. The reader can use that one ID only when its recognized header evidence
-is corroborated by the HTTPS employee group; it never follows HTTP or picks
-the first related company. Old companions stop before scanning with update
-guidance. See the v496 QA report. No route/schema/filter/save authority changed.
+**Current development: v24.6.497, unmerged** on
+`codex/v24.6.497-hr-scan-activity`, from merged master `e13727d` (v496).
+Job Leads now uses the established orange sidebar status during single HR,
+bulk HR and ad-search scans, resolving the token after cleanup. The remaining
+grouped-company layout has no exact singleton connection link at all. Its
+observed group may open only a setup search: native Current companies controls
+must select the exact saved-ad company and commit a corroborating singleton
+before profiles can be read. Country, keyword, joining-date and save gates
+remain. Old companions stop before scanning with update guidance. See the
+v497 QA report. No route/schema/permission or paid behavior changed.
 
 The v495 checkpoint adds per-installation Apollo OAuth connections and business-email
 unlocks on saved HR cards. A shared free-tier Cloudflare broker keeps the app
@@ -30,12 +31,13 @@ approved Apollo app must be configured before sign-in works. See
 `integrations/apollo-broker/README.md` and the v495 QA report. No shared API key
 or colleague-specific hosting account is required.
 
-**Last merged delivery: v24.6.494.** PR #251 merged as `a323ad5`, including v493
-IPv6 mail probing and v494 selected-ad bulk HR scans. All three required hosted
-checks passed on tested head `e0cec20`. The optional automated review was still
-pending at merge; it is not claimed as passed. Prior v493/v494 unmerged notes
-are superseded by coordination issue #35. v492 previously merged in PR #250
-as `15c9948` with all required checks and a clean review.
+**Last merged delivery: v24.6.496.** PR #252 merged as `e13727d`, including
+the v495 Apollo preparation and v496 corroborated HTTP-valued company-link
+correction. All three hosted checks passed on tested head `bc85d4d`; optional
+automated review remained pending at merge. Apollo activation was explicitly
+deferred. This supersedes unmerged wording in the historical v495/v496 QA
+reports. v494 previously merged in PR #251 as `a323ad5`, including v493 IPv6
+mail probing and selected-ad bulk HR scans. See coordination issue #35.
 
 **Previous delivery: v24.6.491.** The owner authorized merging the tested
 `codex/v24.6.490-verification-corrections` branch. It contains the first-party

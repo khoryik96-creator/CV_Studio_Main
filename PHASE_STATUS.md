@@ -4,6 +4,22 @@
 
 ## Release state
 
+- v24.6.497 is an unmerged correction from merged v496 `e13727d`. Single HR,
+  bulk HR and job-ad searches now share the existing orange run-token status;
+  completion, Stop and failures settle it after cleanup. For company headers
+  with only a related-company group and no singleton, the companion opens the
+  observed group only to narrow the native Current companies filter to the
+  exact ad company. No grouped profile data is read; the committed singleton
+  must belong to the observed group, preserve all other filters and pass the
+  existing visible company/country checks. New capability negotiation rejects
+  older companions before scanning. Routes, schemas, permissions, saved
+  evidence and paid gates remain unchanged. See the v497 QA report.
+
+- v24.6.496 (including v495) merged in PR #252 as `e13727d`, after all three
+  hosted checks passed on exact tested head `bc85d4d`. Optional automated review
+  was still pending at merge, and Apollo activation remains explicitly deferred.
+  This supersedes unmerged wording in the historical entries below.
+
 - v24.6.496 is an unmerged company-identity corrective stacked on local v495
   `5c3fa52`. Read-only diagnosis of the three failed batch pages confirmed the
   same layout: grouped HTTPS employee IDs, plus the exact company in an

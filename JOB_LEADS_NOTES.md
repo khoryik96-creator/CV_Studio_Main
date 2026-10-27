@@ -1,5 +1,30 @@
 # Job Leads module
 
+## Scan activity and grouped-company selection (v24.6.497)
+
+Single HR, bulk HR and job-ad searches now hold one token in the existing
+sidebar activity system: orange during the scan and cleanup, then the normal
+completion/error state. A bulk queue holds that token across all ads; any
+failure leaves an error indication even when later ads save. Stop settles it
+after cleanup. Loading the module and invalid inputs create no run indicator.
+
+Some company People headers contain only a related-company employee group,
+without the singleton link used by v496. The reader returns those observed
+IDs as candidates only. The worker may open that group as a setup step, but
+does not read profiles. In the native Current companies popup it requires one
+checked label matching the exact saved-ad company, unique checked names and
+the expected group count, then unchecks the other native labels. Each click
+uses a fresh DOM query. Show results must commit a singleton from the observed
+group while preserving keywords and other filter identity; normal visible
+company/country checks still precede profile reads. Bare faceted-search and
+unchanged group URLs may wait during navigation, never authorize results.
+
+Each native mutation persists an interrupted marker before clicking; a partial
+failure or suspended worker cannot silently replay it. A missing/ambiguous
+company remains unconfirmed. `hr_company_filter_revision:1` is required before
+single/bulk HR starts. Apply the companion update and refresh both pages.
+No new permission, external API, paid call or persisted ad/HR format is added.
+
 ## Grouped company headers (v24.6.496)
 
 The three owner-reported batch failures stopped on their company People pages,
