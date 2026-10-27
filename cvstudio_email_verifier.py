@@ -7,6 +7,8 @@ Only public, resolved IP literals may be contacted, on SMTP port 25 exclusively.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import hashlib
+import hmac
 import ipaddress
 import re
 import secrets
@@ -199,7 +201,7 @@ def missing_recipient(host, code, text):
     # Microsoft DBEB: constrain this non-generic code to its documented
     # recipient response AND actual MX suffix, never arbitrary Access denied.
     return code == 550 and mail_provider(host) == 'Microsoft 365' and bool(
-        re.match(rb'\s*5\.4\.1 Recipient address rejected: Access denied(?:\s|$)', text, re.I))
+        re.match(rb'\s*5\.4\.1 Recipient address rejected: Access denied\.?(?:\s|$)', text, re.I))
 
 
 class ProbeResult(tuple):
@@ -212,9 +214,11 @@ class ProbeResult(tuple):
 
 class SMTPProbe:
     """No DATA, AUTH, VRFY or EXPN. Reset each envelope and close every socket."""
-    def check(self, host, ip, address, deadline):
+    def check(self, host, ip, address, deadline, *, control_id=None):
         if not public_ip(ip) or not domain_name(host):
             raise CheckUnavailable("The mail server's network address is restricted. It was not contacted.")
+        if control_id is not None and (not isinstance(control_id, str) or not re.fullmatch(r'[a-f0-9]{32}', control_id)):
+            raise VerifierError('The verification control identity is invalid. Start a new check.')
         client = _DeadlineSMTP(deadline)
 
         def budget():
@@ -279,7 +283,7 @@ class SMTPProbe:
             code, _ = command(client.mail, "")
             if code != 250:
                 return done('unknown', 'The mailbox was accepted, but the catch-all check could not be completed.', 'temporary' if 400 <= code < 500 else 'sender_policy', 400 <= code < 500)
-            random_address = "cvstudio-" + secrets.token_hex(16) + "@" + address.rsplit("@", 1)[1]
+            random_address = "cvstudio-" + (control_id or secrets.token_hex(16)) + "@" + address.rsplit("@", 1)[1]
             code, text = command(client.rcpt, random_address)
             if code in {250, 251}:
                 return done('catch_all', 'The server accepts made-up addresses too. A real mailbox can exist on this domain, but this check cannot confirm it.', 'catch_all', control='detected')
@@ -310,6 +314,26 @@ class EmailVerifier:
         self._slots = threading.BoundedSemaphore(2)
         self._lock = threading.Lock()
         self._domains = set()
+        # Volatile signing key only: no mailbox history, token/result cache or
+        # external credentials. Restarting the engine invalidates old contexts.
+        self._recheck_key = secrets.token_bytes(32)
+
+    def _control_identity(self, address, payload):
+        lifetime = 4 * 60 * 60
+        now = int(time.time())
+        supplied = payload.get('recheck_token')
+        if 'recheck_token' in payload:
+            match = re.fullmatch(r'v1\.([0-9]{1,12})\.([a-f0-9]{32})\.([a-f0-9]{64})', supplied) if isinstance(supplied, str) else None
+            if not match:
+                raise VerifierError('This recheck reference is invalid. Start a new verification.')
+            expires, nonce, signature = int(match[1]), match[2], match[3]
+        else:
+            expires, nonce, signature = now + lifetime, secrets.token_hex(16), ''
+        message = f'CVStudioEmailRecheck-v1\0{address}\0{expires}\0{nonce}'.encode('ascii')
+        expected = hmac.new(self._recheck_key, message, hashlib.sha256).hexdigest()
+        if 'recheck_token' in payload and (not now <= expires <= now + lifetime or not hmac.compare_digest(expected, signature)):
+            raise VerifierError('This recheck has expired or no longer matches this address. Start a new verification.')
+        return nonce, f'v1.{expires}.{nonce}.{expected}'
 
     def check(self, payload):
         result = self._check(payload)
@@ -350,6 +374,8 @@ class EmailVerifier:
         mode = payload.get("mode", "full")
         if not isinstance(mode, str) or mode not in {"full", "quick", "deep"}:
             raise VerifierError("Choose mailbox verification or a quick domain check.")
+        if mode == 'quick' and 'recheck_token' in payload:
+            raise VerifierError('A mailbox recheck reference cannot be used for a domain-only check.')
         address, domain, syntax = address_parts(payload["email"])
         result = {"email": payload["email"].strip(), "normalized": address, "status": "unknown", "reason": "",
                   "mode": mode, "checked_at": datetime.now(timezone.utc).isoformat(),
@@ -368,6 +394,9 @@ class EmailVerifier:
         if syntax == "unsupported":
             result["reason"] = "Quoted mailbox names, international mailbox names and address literals are not supported by this checker. This address has not been marked invalid."
             return result
+        control_id = None
+        if mode != 'quick':
+            control_id, result['recheck_token'] = self._control_identity(address, payload)
         if not self._slots.acquire(blocking=False):
             raise VerifierError("The verifier is busy. Wait for the current checks to finish.", 429)
         owned = False
@@ -417,7 +446,7 @@ class EmailVerifier:
                     break
                 if mode == 'deep' and host in settled:
                     continue
-                probe_result = self.probe.check(host, ip, address, deadline)
+                probe_result = self.probe.check(host, ip, address, deadline, control_id=control_id)
                 verdict, reason = probe_result
                 result['attempts'] += 1
                 observation = dict(getattr(probe_result, 'evidence', {}))

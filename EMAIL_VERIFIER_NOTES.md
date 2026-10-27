@@ -1,5 +1,36 @@
 # Email Verifier
 
+## Review corrections (v24.6.501)
+
+Microsoft DBEB replies may include the documented terminal period before a
+diagnostic suffix. Only that optional period is added; MX suffix, SMTP code,
+leading enhanced code, exact phrase and word boundary remain mandatory.
+Lookalike providers, temporary codes, joined words and repeated punctuation
+cannot become missing-recipient evidence.
+
+Each full/deep check now creates one control identity shared by its bounded
+SMTP sessions. Its response includes an optional opaque `recheck_token`.
+Automatic/list rechecks and explicit same-address HR-card retries return it
+so recipient-based greylisting can recognize the original control recipient.
+New checks still work without a token. Quick/unsupported checks issue none.
+
+The token contains only a version, expiration, random nonce and HMAC-SHA256.
+Its signature binds the canonical address (local-part case preserved), nonce
+and expiry to a random process-local key. It expires after four hours and is
+invalid after restart. Malformed, tampered, expired, other-address/process or
+quick-mode references fail before DNS/SMTP, with fixed guidance to start fresh.
+It is a recheck correlation reference, not an account/provider credential or
+permission to contact a new destination. No token/result/address cache or
+database/schema change was introduced. The server key is volatile only.
+
+The four-hour bound accommodates the existing 200-address/two-pass foreground
+queue without arbitrary persistence. A suspended tab may outlive the reference;
+the resulting visible error retains prior results and never silently switches
+control identity. The reference stays in tab memory and POST bodies, is not
+exported, and is cleared by HR input/account changes. Existing 25-second/global/
+domain limits, public-IP pinning, null sender and no-mail behaviour remain.
+See the v501 QA report for counterfactual/protocol/browser validation.
+
 ## Evidence and deeper checks (v24.6.500, local and unmerged)
 
 The owner authorized improving the first-party checker and adding verification

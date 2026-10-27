@@ -1,5 +1,14 @@
 # Job Leads module
 
+## Review corrections (v24.6.501)
+
+One title paragraph exposed as both a semantic heading and an employer/title/
+metadata row now counts once by DOM identity. Distinct headings remain
+ambiguous, and employer/job/description/sidebar boundaries remain. Optional HR
+email checks retain their verifier-provided recheck reference for the unchanged
+address only; input edits and cleared account suggestions discard it together
+with previous/pending results. No saved HR/ad fields or paid calls change.
+
 ## First-party email verification on HR cards (v24.6.500, unmerged)
 
 Each HR card has an optional Email to verify field and explicit Verify email

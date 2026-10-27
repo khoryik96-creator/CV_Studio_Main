@@ -104,8 +104,8 @@
     }
     return parts.join(' · ');
   }
-  async function checkEmail(email,mode) {
-    const response=await fetch('/email-verifier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,mode}),timeout:32000});
+  async function checkEmail(email,mode,recheckToken) {
+    const response=await fetch('/email-verifier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,mode,...(typeof recheckToken==='string' && recheckToken?{recheck_token:recheckToken}:{})}),timeout:32000});
     const data=await response.json();
     if(!response.ok || !data.ok) throw Error(data.error || 'The check could not be completed.');
     const result=data.result;
@@ -183,7 +183,7 @@
             el('Message').textContent=(rechecking?'Rechecking ':'Checking ')+(position+1)+' of '+queue.length+'…';
             const previous=rows[index];
             if(rechecking) previous._rechecked=true;
-            const result=await checkEmail(previous.email,mode);
+            const result=await checkEmail(previous.email,mode,rechecking?previous.recheck_token:undefined);
             rows[index]={...previous,...result,_rechecked:rechecking,_lastCheck:now(),previous_result:rechecking?labels[previous.status]+': '+previous.reason:''};
           } catch (error) {
             failed = true;
@@ -240,16 +240,17 @@
       label.appendChild(input);
       const button=textNode('button','Verify email','sec'), result=textNode('div','','job-leads-email-result');
       button.type='button';result.setAttribute?.('role','status');result.setAttribute?.('aria-live','polite');
-      let pending=false, generation=0, proposed='';
-      input.addEventListener('input',()=>{++generation;result.replaceChildren();});
+      let pending=false, generation=0, proposed='', recheckToken='';
+      input.addEventListener('input',()=>{++generation;recheckToken='';result.replaceChildren();});
       button.addEventListener('click',async()=>{
         if(pending || !input.value.trim()) {if(!pending) result.replaceChildren(textNode('small','Enter an email address first.'));return;}
         const email=input.value.trim(), current=++generation;
         pending=true;button.disabled=true;button.textContent='Checking…';
         result.replaceChildren(textNode('small','Checking mail servers without sending an email…'));
         try {
-          const answer=await checkEmail(email,'deep');
+          const answer=await checkEmail(email,'deep',recheckToken);
           if(current!==generation || leaving) return;
+          recheckToken=answer.recheck_token || '';
           result.replaceChildren(textNode('strong',answer.assessment?.label || labels[answer.status]),textNode('p',answer.reason),textNode('small',details(answer)));
         } catch(error) {if(current===generation && !leaving) result.replaceChildren(textNode('small',error.message));}
         finally {pending=false;button.disabled=false;button.textContent='Verify email';}
@@ -257,7 +258,7 @@
       const controller={suggest(email) {
         email=typeof email==='string'?email:'';
         if(email===proposed) return;
-        if(!input.value || input.value===proposed) {input.value=email;++generation;result.replaceChildren();}
+        if(!input.value || input.value===proposed) {input.value=email;++generation;recheckToken='';result.replaceChildren();}
         proposed=email;
       }};
       cards.set(card,controller);wrap.append(label,button,result);card.appendChild(wrap);

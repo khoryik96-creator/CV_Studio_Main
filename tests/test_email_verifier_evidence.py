@@ -84,7 +84,7 @@ def test_deep_connection_failure_keeps_dual_stack_recovery_before_another_blocke
     service=engine()
     service.dns.hosts.return_value=('mx',['one.example.test','two.example.test'])
     service.dns.addresses.return_value=['8.8.8.8','2001:4860:4860::8888']
-    service.probe.check.side_effect=lambda host,ip,*args: ProbeResult('unknown','Network blocked',outcome='connection',retryable=True) if ':' not in ip else ProbeResult('accepted','Specific acceptance',outcome='recipient_supported',target='accepted')
+    service.probe.check.side_effect=lambda host,ip,*args,**kwargs: ProbeResult('unknown','Network blocked',outcome='connection',retryable=True) if ':' not in ip else ProbeResult('accepted','Specific acceptance',outcome='recipient_supported',target='accepted')
     result=service.check({'email':'person@example.test','mode':'deep'})
     assert result['status']=='accepted' and result['attempts']==4
     assert [(call.args[0],call.args[1]) for call in service.probe.check.call_args_list][:2]==[('one.example.test','8.8.8.8'),('one.example.test','2001:4860:4860::8888')]

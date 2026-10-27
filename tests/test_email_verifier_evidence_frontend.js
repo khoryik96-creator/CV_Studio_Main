@@ -1,7 +1,7 @@
 const assert=require('assert/strict');
 const {fixture}=require('./test_email_verifier_frontend');
 const tick=()=>new Promise(resolve=>setTimeout(resolve,0));
-const answer=(patch={})=>({status:'unknown',reason:'Temporary server deferral.',mailbox_evidence:'unconfirmed',catch_all:'inconclusive',assessment:{level:'unconfirmed',label:'More evidence needed'},provider:'Microsoft 365',attempts:2,retryable:true,checked_at:'2099-01-01T00:00:00Z',...patch});
+const answer=(patch={})=>({status:'unknown',reason:'Temporary server deferral.',mailbox_evidence:'unconfirmed',catch_all:'inconclusive',assessment:{level:'unconfirmed',label:'More evidence needed'},provider:'Microsoft 365',attempts:2,retryable:true,recheck_token:'fictional-opaque-context',checked_at:'2099-01-01T00:00:00Z',...patch});
 const reply=result=>({ok:true,json:async()=>({ok:true,result})});
 function clockFixture(){
   let clock=1000000;const waits=[];
@@ -16,10 +16,12 @@ async function main(){
   assert.equal(f.calls.length,1);assert.match(f.el('Message').textContent,/Waiting 120 seconds/,'future server timestamp cannot extend our wait');
   for(let i=0;i<120;i++)await f.advance();await run;
   assert.equal(f.calls.length,2,'one delayed recheck only');
+  assert.equal(JSON.parse(f.calls[1].options.body).recheck_token,'fictional-opaque-context','the delayed recheck retains its original control identity');
+  assert(!('recheck_token' in JSON.parse(f.calls[0].options.body)),'a new check requests a fresh identity');
   assert(f.calls.every(call=>JSON.parse(call.options.body).mode==='deep'));
   assert(f.el('Recheck').disabled);
   const row=f.el('Results').children[0];assert(row.children[2].children.some(node=>node.textContent.includes('Previous check: Unconfirmed')));
-  f.el('Export').click();const csv=await f.exports[0].text();assert(csv.includes('Mailbox evidence')&&csv.includes('More evidence needed'));
+  f.el('Export').click();const csv=await f.exports[0].text();assert(csv.includes('Mailbox evidence')&&csv.includes('More evidence needed'));assert(!csv.includes('fictional-opaque-context'),'retry context is never exported');
 
   const stopped=clockFixture();stopped.el('Mode').value='deep';stopped.el('Input').value='person@example.test';stopped.state.fetch=async()=>reply(answer());
   const stopRun=stopped.el('Start').click();await tick();stopped.el('Stop').click();await stopped.advance();await stopRun;
@@ -46,6 +48,8 @@ async function main(){
   input.value='manual@example.test';input.handlers.input();control.suggest('other@example.test');assert.equal(input.value,'manual@example.test','Apollo does not replace manually entered addresses');
   cardFixture.state.fetch=async()=>reply(answer({status:'catch_all',retryable:false,reason:'<script>fictional</script>'}));
   await button.click();assert(result.children.some(node=>node.textContent==='<script>fictional</script>'));assert(!('innerHTML' in result));
+  assert(!('recheck_token' in JSON.parse(cardFixture.calls.at(-1).options.body)),'manual edits discard the old address context');
+  await button.click();assert.equal(JSON.parse(cardFixture.calls.at(-1).options.body).recheck_token,'fictional-opaque-context');
   let late;cardFixture.state.fetch=()=>new Promise(resolve=>{late=()=>resolve(reply(answer()));});
   const changed=button.click();input.value='new@example.test';input.handlers.input();late();await changed;
   assert.equal(result.children.length,0,'editing an address invalidates its pending check');

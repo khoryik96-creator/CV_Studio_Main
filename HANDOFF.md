@@ -7,7 +7,21 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current development: v24.6.500, unmerged** on
+**Current source checkpoint: v24.6.501** on
+`codex/v24.6.501-review-corrections`, stacked on v500 `b2d3637` and retaining
+v498/v499. The three review findings are corrected: Microsoft recipient replies
+allow their documented terminal period; delayed rechecks carry an address-bound,
+four-hour, process-signed reference to the same random control address; and
+semantic/paragraph title candidates are deduplicated by DOM identity while
+distinct ambiguous headings still fail. Retry references stay only in request/
+tab memory, are never exported/stored with records, and invalid references fail
+before DNS. Routes, schemas, provider gates and no-mail limits remain. The owner
+authorized fixing and merging this stack after full local and hosted checks.
+See the v501 QA report and EMAIL_VERIFIER_NOTES.md. The merge baseline is
+v497 `ff722b3`; coordination issue #35 supplies the final publication/merge
+identity and supersedes historical unmerged wording below.
+
+**Previous local checkpoint: v24.6.500, unmerged** on
 `codex/v24.6.500-email-evidence`, stacked on v499 `1e856cb` with both v498/v499
 retained. Email Verifier now has additive conservative provider evidence,
 separate mailbox/catch-all recommendations, a bounded Deep check and one

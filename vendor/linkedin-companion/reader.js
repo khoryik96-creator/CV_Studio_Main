@@ -193,7 +193,8 @@
         role.querySelector('a[href], button, [role="button"]') || /[·•]/.test(text(role)) || !/\S\s*·\s*\S/.test(text(metadata)))continue;
       const header=context(role);if(header?.url===employer.url)candidates.push(role);
     }
-    return candidates.length===1?candidates[0]:null;
+    const unique=[...new Set(candidates)];
+    return unique.length===1?unique[0]:null;
   }
   function jobUnavailable() {
     const main=document.querySelector('main') || document.body;

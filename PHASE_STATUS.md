@@ -4,6 +4,15 @@
 
 ## Release state
 
+- v24.6.501 corrects all three findings on the unmerged v498–v500 stack.
+  Microsoft DBEB punctuation remains constrained by provider/code/word guards;
+  rechecks retain a signed, address/process-bound control identity for up to
+  four hours; a single semantic title found through two paths counts once.
+  Expired/tampered/cross-address references fail before network checks. No new
+  route, schema, persistent email/token store or external/paid service. The
+  owner authorized publishing and merging after final local/hosted validation;
+  the final merge identity belongs in coordination issue #35.
+
 - v24.6.500 is a local unmerged Email Verifier evidence improvement stacked
   on v499 `1e856cb`, with v498/v499 retained. It adds conservative documented
   provider rejection handling, separate mailbox/catch-all assessment, bounded

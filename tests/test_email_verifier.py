@@ -115,7 +115,7 @@ def test_full_mailbox_check_falls_back_to_ipv6_after_ipv4_timeout():
     resolver.hosts=mock.Mock(return_value=('mx',['mx.example.test']))
     resolver.query=mock.Mock(side_effect=lambda host,kind,deadline:[SimpleNamespace(address=ip) for ip in (['8.8.8.8','8.8.4.4'] if kind=='A' else ['2001:4860:4860::8888'])])
     attempted=[]
-    def probe(host,ip,address,deadline):
+    def probe(host,ip,address,deadline,**kwargs):
         attempted.append((host,ip,address,deadline))
         return ('unknown','Connection timed out') if ':' not in ip else ('accepted','Synthetic recipient-specific SMTP evidence')
     service=EmailVerifier(resolver,mock.Mock())
@@ -327,7 +327,7 @@ def test_real_smtp_parser_on_isolated_loopback_never_sends_message_data(expected
 
 def test_global_probe_concurrency_is_bounded_without_waiting_or_leaking_slots():
     service=engine(); entered=threading.Event(); release=threading.Event()
-    def held(*args):
+    def held(*args,**kwargs):
         entered.set(); release.wait(3); return 'unknown','Synthetic wait'
     service.probe.check.side_effect=held
     thread=threading.Thread(target=lambda:service.check({'email':'a@example.test'}))
