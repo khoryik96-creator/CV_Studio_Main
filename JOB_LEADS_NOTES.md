@@ -1,5 +1,22 @@
 # Job Leads module
 
+## Apollo connection (v24.6.495, local; activation pending)
+
+Saved HR cards can explicitly unlock a business email through the user's own
+Apollo account. Setup is shared once; colleagues sign in individually. The
+hosted broker source and owner setup are in `integrations/apollo-broker/`.
+The blank root `apollo_connection.json` makes setup unavailable until a real
+approved deployment is configured. No provider password/token is returned to
+the browser. The protected local `apollo` vault keeps account-scoped outcomes;
+ad/HR SQLite and JSON backups receive no email or credential fields.
+
+Credit confirmation precedes the durable operation marker and paid transport.
+Uncertain lookups offer Check lookup, which reads the original operation only.
+Disconnect overwrites the protected local record and clears visible results;
+changing accounts cannot reuse an earlier account's cache. The email label is
+Apollo's assessment, separate from first-party SMTP verification. No live
+service, registration, credit-consuming request or outreach was performed.
+
 Current version is the repository-root `VERSION`. This owner-requested module
 tracks LinkedIn job ads for business development, separately from the candidate
 sourcer and the locked historical Lead Finder.

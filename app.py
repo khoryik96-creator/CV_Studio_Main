@@ -24,7 +24,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.494"
+_INSTALL_RECEIPT_VERSION = "v24.6.495"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -347,7 +347,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.494"
+_CVSTUDIO_VERSION = "v24.6.495"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -1229,6 +1229,7 @@ _AI_SPEND_SESSION_COOKIE = "cvstudio_ai_spend_session"
 _AI_SPEND_SESSION_TOKEN = secrets.token_urlsafe(32)
 _CV_FORMAT_REVIEW_SIGNING_KEY = secrets.token_bytes(32)
 _AI_SPEND_EXACT_PATHS = frozenset({
+    "/apollo",
     "/linkedin-sourcer",
     "/test",
     "/parse",
@@ -2712,7 +2713,7 @@ def _ms_outlook_keychain_available():
 # Windows DPAPI, macOS Keychain, or an authenticated machine-bound fallback.
 def _cv_secure_service_name(service):
     clean = re.sub(r"[^a-z0-9_-]", "", str(service or "").lower())
-    if clean not in {"jobadder", "onenote", "ai", "companion"}:
+    if clean not in {"jobadder", "onenote", "ai", "companion", "apollo"}:
         raise ValueError("Unsupported secure-store service")
     return clean
 
@@ -14927,6 +14928,55 @@ def job_leads():
 
 from cvstudio_email_verifier import EmailVerifier, VerifierError
 
+from cvstudio_apollo import ApolloService, ApolloBrokerClient, ApolloError
+
+
+def _apollo_broker_origin():
+    # Only a public service address is distributed; client secrets stay hosted.
+    configured = os.environ.get("CVSTUDIO_APOLLO_BROKER_URL")
+    if configured is not None:
+        return configured
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "apollo_connection.json"), encoding="utf-8") as handle:
+            return json.load(handle).get("broker_url", "")
+    except Exception:
+        return ""
+
+
+try:
+    _apollo_client = ApolloBrokerClient(_apollo_broker_origin())
+except ApolloError:
+    _apollo_client = ApolloBrokerClient("")
+_APOLLO = ApolloService(client=_apollo_client,
+    load=lambda: _cv_secure_load("apollo"), save=lambda value: _cv_secure_save("apollo", value))
+
+
+@app.route("/apollo", methods=["GET", "POST"])
+def apollo_connection():
+    try:
+        if request.method == "GET":
+            result = _APOLLO.status()
+        else:
+            if request.content_length and request.content_length > 4096:
+                raise ApolloError("This Apollo request is too large.", status=413)
+            raw = request.stream.read(4097)
+            if len(raw) > 4096:
+                raise ApolloError("This Apollo request is too large.", status=413)
+            try:
+                data = json.loads(raw) if request.is_json else None
+            except (ValueError, UnicodeError):
+                data = None
+            if not isinstance(data, dict):
+                raise ApolloError("Choose a valid Apollo action.")
+            action = data.get("action")
+            row = _JOB_LEADS.hr_record(data.get("id"), data.get("revision")) if action in {"emails", "reveal"} else None
+            result = _APOLLO.perform(action, row=row, url=data.get("url"), confirmed=data.get("confirmed"))
+        response = jsonify(ok=True, **result)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except (ApolloError, JobLeadsError) as exc:
+        return _cvstudio_error_payload(exc.code, str(exc), exc.status, retryable=False, action="check_apollo_connection")
+
 _EMAIL_VERIFIER = EmailVerifier()
 
 
@@ -14954,9 +15004,9 @@ def email_verifier():
 
 _CVSTUDIO_ARCHITECTURE = _finalize_modular_monolith_app(
     app,
-    expected_route_count=121,
+    expected_route_count=122,
     expected_route_contract_sha256=(
-        "6b0b7dfd41ab2b85fa4685de18efdf1aad477fa91a39cbf0b8a8794eb923b221"
+        "4cb6b3f8e64b3421c9b9fae819c7fe64e6b05d98db193bb1eb42f8da07aaf600"
     ),
     expected_before_request_handlers=(
         "_assign_cvstudio_request_id",

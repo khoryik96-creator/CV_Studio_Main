@@ -424,6 +424,15 @@ class JobLeadsStore:
     def list(self):
         return self.snapshot()['records']
 
+    def hr_record(self, identity, revision):
+        """Read exact saved evidence before an explicitly requested enrichment."""
+        _selection([{'id':identity, 'revision':revision}])
+        with self._connection() as connection:
+            record = self._record(connection.execute('SELECT * FROM leads WHERE id=?', (identity,)).fetchone())
+            if record['revision'] != revision or record['deleted'] or not record.get('hr'):
+                raise JobLeadsError('The saved HR results changed. Refresh the ad before unlocking an email.', 409, 'JOB_LEADS_CONFLICT')
+            return record
+
     def snapshot(self):
         with self._connection() as connection:
             connection.execute('BEGIN')

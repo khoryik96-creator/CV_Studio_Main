@@ -97,6 +97,7 @@
   function discard() { return !dirty || window.confirm('Discard the unsaved changes in this lead?'); }
   function lock(value) {
     busy = value;
+    window.cvStudioApollo?.busy(value);
     el('Previous').disabled=value || page===0;el('Next').disabled=value || (page+1)*40>=filtered().length;
     for (const name of ['Search','Filter','FolderFilter']) el(name).disabled = value && hrRunning;
     for (const id of ['Save', 'New', 'Read', 'Tabs', 'Refresh', 'Restore', 'AutoFill', 'BrowserFill', 'RefreshContent', 'Clear', 'ClearAll', 'FolderNew', 'FolderCreate', 'FolderCancel', 'FolderName', 'FolderDelete', 'Move', 'MoveFolder', 'SelectPage']) el(id).disabled = value;
@@ -436,11 +437,13 @@
   }
   function hrPeople(people) {
     const target = el('HRResults'); target.replaceChildren();
+    window.cvStudioApollo?.begin(savedJob(previewUrl));
     for (const person of people || []) {
       if (!/^https:\/\/www\.linkedin\.com\/in\/[A-Za-z0-9_%~-]+\/?$/.test(person?.url || '')) continue;
       const card = node('article','','job-leads-hr-person'), link = node('a',person.name);
       link.href=person.url; link.target='_blank'; link.rel='noopener noreferrer';
       card.append(link,node('p',person.title),node('p',person.location || 'Location not shown','job-leads-muted'),node('p','Joined company: '+hrJoinedLabel(person.joined),'job-leads-muted'),node('p','Matched: '+person.matched,'job-leads-muted'));
+      window.cvStudioApollo?.decorate(card,person);
       target.append(card);
     }
   }
@@ -900,6 +903,7 @@
     finally { lock(false); }
   }
   window.initJobLeads = async function () {
+    void window.cvStudioApollo?.init();
     if (ready) return;
     ready = true;
     el('HRStart').addEventListener('click',startHR);
