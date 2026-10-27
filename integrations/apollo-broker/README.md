@@ -32,6 +32,8 @@ Do not use another application's client ID, including Apollo CLI's identity.
    a trailing slash. Disable Worker observability/request logs as in
    `wrangler.jsonc`. Do not add request-body, authorization or callback logging.
 4. Register the Apollo app with that `/callback` address and the scopes above.
+   The public GET/HEAD callback probe works before app credentials exist, so
+   Apollo can verify the HTTPS URL. It returns no account or authorization data.
    When approved, set Worker **secret** variables `APOLLO_CLIENT_ID` and
    `APOLLO_CLIENT_SECRET`. Do not put them in a file, Git, chat or a screenshot.
 5. Generate a random 32-byte encryption key and save its 64-character hex form
@@ -85,7 +87,8 @@ integrations. If broker deletion cannot be confirmed, the UI says so explicitly.
   requires reconnect. Duplicate operation IDs return only the original result.
 - Strict fixed Apollo endpoints, no redirects, bounded bodies/timeouts and
   fixed errors prevent redirect-based credential leakage and provider error
-  content entering diagnostics. No browser CORS access is enabled on the broker.
+  content entering diagnostics. Browser CORS is disabled on authenticated APIs;
+  only the public, static callback-verification probe permits cross-origin reads.
 - Use a fresh connection after an interrupted worker has retained its busy
   marker. That marker is intentionally not reset by guessing whether paid work
   completed. Existing confirmed results remain readable.

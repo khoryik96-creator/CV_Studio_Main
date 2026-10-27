@@ -152,7 +152,12 @@ async function reveal(env, data, connection, now, fetcher) {
 export async function handle(request, env, fetcher=fetch, now=Math.floor(Date.now()/1000)) {
   try {
     const url=new URL(request.url);
-    if(url.origin!==env.PUBLIC_ORIGIN || !env.APOLLO_CLIENT_ID || !env.APOLLO_CLIENT_SECRET || !HEX.test(env.TOKEN_KEY || '')) return json({error:'Service setup is incomplete.'},503);
+    if(url.origin!==env.PUBLIC_ORIGIN) return json({error:'Service setup is incomplete.'},503);
+    // Apollo's registration form verifies the callback before issuing the
+    // client secret. This public probe contains no state, account or token.
+    if(['GET','HEAD'].includes(request.method) && url.pathname==='/callback' && !url.search) return new Response(request.method==='HEAD'?null:'CV Studio Apollo callback. Sign-in requires completed owner setup.',
+      {headers:{...headers,'Content-Type':'text/plain; charset=utf-8','Access-Control-Allow-Origin':'*'}});
+    if(!env.APOLLO_CLIENT_ID || !env.APOLLO_CLIENT_SECRET || !HEX.test(env.TOKEN_KEY || '')) return json({error:'Service setup is incomplete.'},503);
     if(request.method==='GET' && url.pathname==='/callback') return await callback(request,env,now,fetcher);
     if(request.method!=='POST' || url.search || !['/start','/poll','/cancel','/disconnect','/reveal','/lookup-status'].includes(url.pathname)) return json({error:'Unsupported action.'},404);
     const data=await bodyJSON(request), action=url.pathname;

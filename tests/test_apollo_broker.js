@@ -7,6 +7,10 @@ async function main(){
   const sql=new DatabaseSync(':memory:');sql.exec('PRAGMA foreign_keys=ON');sql.exec(fs.readFileSync(path.join(__dirname,'../integrations/apollo-broker/schema.sql'),'utf8'));
   function prepare(query){return {bind(...args){return {query,args,async first(){return sql.prepare(query).get(...args)||null},async run(){const r=sql.prepare(query).run(...args);return {meta:{changes:r.changes}}}}}}}
   const env={PUBLIC_ORIGIN:'https://cvstudio-apollo.example.workers.dev',APOLLO_CLIENT_ID:'fictional-client',APOLLO_CLIENT_SECRET:'fictional-secret',TOKEN_KEY:'1'.repeat(64),DB:{prepare,async batch(statements){sql.exec('BEGIN');try{for(const s of statements)sql.prepare(s.query).run(...s.args);sql.exec('COMMIT')}catch(e){sql.exec('ROLLBACK');throw e}}}};
+  const setupEnv={PUBLIC_ORIGIN:env.PUBLIC_ORIGIN};
+  assert.equal((await handle(new Request(env.PUBLIC_ORIGIN+'/callback'),setupEnv,()=>{throw Error('no external request')})).status,200,'callback verification is available before Apollo issues app credentials');
+  assert.equal((await handle(new Request(env.PUBLIC_ORIGIN+'/callback?code=untrusted'),setupEnv,()=>{})).status,503,'the setup probe cannot complete OAuth');
+  assert.equal((await handle(new Request(env.PUBLIC_ORIGIN+'/callback',{method:'HEAD'}),setupEnv,()=>{})).status,200);
   const expected={url:'https://www.linkedin.com/in/sample-person',name:'Sample Person',company:'Example Company',company_url:'https://www.linkedin.com/company/example/',company_id:'123'};
   const upstream={match_confidence:'high',person:{linkedin_url:expected.url,email:'person@example.test',email_status:'verified',organization:{linkedin_url:expected.company_url,name:expected.company}}};
   let calls=[],failLookup=false,hold=null,tokenFails=false;

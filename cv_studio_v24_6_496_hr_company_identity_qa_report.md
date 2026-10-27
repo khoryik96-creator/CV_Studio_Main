@@ -55,6 +55,13 @@ boundaries are unchanged. No route/schema/permission/provider change is added.
 
 ## Delivery limits
 
+The subsequent setup-page check left an unsubmitted Apollo app draft with the
+minimal three scopes and did not create credentials. A public, static callback
+probe was added to the broker so HTTPS URL verification can run before Apollo
+issues app credentials. Its GET/HEAD/no-state behavior is fixture-tested; real
+OAuth and authenticated APIs still require completed setup. The owner explicitly
+deferred Cloudflare setup; no deployment or registration was submitted.
+
 No owner saved ad, HR record, installed source/receipt or active companion was
 modified. Company tabs were only read; no live scan reran or private profiles/
 messages were inspected. Preview 5093 is isolated from installed port 5000.
