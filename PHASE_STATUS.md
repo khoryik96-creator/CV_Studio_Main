@@ -4,6 +4,17 @@
 
 ## Release state
 
+- v24.6.494 adds an unmerged saved-ad bulk HR queue on the tested v493 branch.
+  Existing checkboxes select up to 40 ads; one remembered country/page setting
+  and shared HR keywords apply to each sequential scan. Native progress and
+  per-ad outcomes distinguish saved, limited, failed, stopped and not-started
+  work. Each success uses the existing revision-checked `save_hr`; failures
+  retain previous HR evidence and ad details. Stop/pagehide prevent the next
+  ad, while a save already sent is accounted for. Connection, access and
+  unconfirmed cleanup stop the queue. No paid call, route, schema, companion
+  action/permission or persistent job family was added. The v493 correction is
+  retained; neither checkpoint is merged. See the v494 QA report.
+
 - v24.6.493 is an unmerged Email Verifier correction from master `15c9948`:
   preserve one IPv4 and one real IPv6 MX address within the existing two-address,
   two-probe and 25-second limits. An IPv4 timeout can now reach the advertised

@@ -7,13 +7,18 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current development: v24.6.493, unmerged** on
-`codex/v24.6.493-email-ipv6-fallback`, based on merged v492 (`15c9948`).
-It keeps a real IPv6 MX address within the existing two-address/two-probe limits
-instead of discarding it after two IPv4 DNS answers. On the owner's network,
-IPv4 SMTP timed out but IPv6 worked. An authorized live check now completed as
-catch-all; no email was delivered, no firewall changed and no service/key added.
-See the v493 QA report. No PR or merge is included in this checkpoint.
+**Current development: v24.6.494, unmerged** on
+`codex/v24.6.494-bulk-hr-scans`, stacked on the tested, unmerged v493 checkpoint
+`4ec0fd5` from merged v492 (`15c9948`). It adds saved-ad bulk HR scans with shared
+remembered country/pages, sequential per-ad save/cleanup, progress and Stop.
+Up to 40 selected ads run within each ad's established scan limits. Per-ad
+failures retain previous HR evidence; connection/access/cleanup failures stop
+the queue. Reload never resumes scans. See the v494 QA report.
+
+The v493 Email Verifier IPv6 fallback is retained: it keeps one real IPv6 MX
+address within the existing limits. An owner-authorized live check completed
+as catch-all where IPv4 timed out. No message was delivered, firewall changed
+or service/key added. See its separate QA report. Neither checkpoint is merged.
 
 **Last merged delivery: v24.6.492.** PR #250 merged as `15c9948` with all three
 hosted checks and an automated review with no findings on exact head `06a4e24`.
