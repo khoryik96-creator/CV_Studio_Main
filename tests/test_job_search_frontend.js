@@ -41,6 +41,7 @@ function fixture(options={}){
       assert(state.onApollo,'Apollo calls require an explicit test fixture');
       return state.onApollo(options?.body?JSON.parse(options.body):null);
     }
+    if(endpoint==='/email-verifier') {assert(state.onVerify,'Mail checks require an explicit fixture');return state.onVerify(JSON.parse(options.body));}
     assert.equal(endpoint,'/job-leads','search must not call a paid route');
     if(!options?.body)return {ok:true,json:async()=>({records:structuredClone(state.records),folders:[...state.folders]})};
     const data=JSON.parse(options.body);requests.push(data);
@@ -67,6 +68,7 @@ function fixture(options={}){
     ...options.activity,
     navigator:{clipboard:{writeText:async value=>{state.clipboard=value}}},
     setTimeout:(fn,ms)=>setTimeout(fn,ms===350?0:ms),clearTimeout,Option:function(text,value){const node=new Element('option',text);node.value=value;return node}});
+  if(options.emailVerifier) vm.runInContext(fs.readFileSync(path.join(__dirname,'../vendor/cvstudio/email-verifier.js'),'utf8'),context);
   if(options.apollo) {
     window.open=()=>{state.popup={location:{},close(){state.popupClosed=true}};return state.popup};
     vm.runInContext(fs.readFileSync(path.join(__dirname,'../vendor/cvstudio/job-leads-apollo.js'),'utf8'),context);

@@ -1,5 +1,18 @@
 # Job Leads module
 
+## First-party email verification on HR cards (v24.6.500, unmerged)
+
+Each HR card has an optional Email to verify field and explicit Verify email
+button. It uses the existing first-party `/email-verifier` route in Deep mode;
+displaying a card or revealing an Apollo email does not probe mail servers.
+Existing revealed Apollo emails can prefill the field; edits remain manual,
+and disconnect/account changes clear any unchanged suggested address, result
+and late response. Verification does not unlock an email, connect Apollo,
+spend credits, send mail or save email fields with ads/HR scans. Manual checks
+work while Apollo activation is deferred. Checks report mailbox evidence,
+catch-all behaviour, qualitative recommendation and time in the card only.
+See EMAIL_VERIFIER_NOTES.md for limits and the v500 QA report for validation.
+
 ## HR resilience and bounded recovery (v24.6.499)
 
 Every automatic/repeat scan rereads its exact ad's employer. A manually changed

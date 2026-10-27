@@ -7,7 +7,18 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current development: v24.6.499, unmerged** on
+**Current development: v24.6.500, unmerged** on
+`codex/v24.6.500-email-evidence`, stacked on v499 `1e856cb` with both v498/v499
+retained. Email Verifier now has additive conservative provider evidence,
+separate mailbox/catch-all recommendations, a bounded Deep check and one
+cancellable delayed recheck for temporary unknown results. Job Leads HR cards
+can explicitly verify a manually entered or already revealed Apollo email;
+input/account changes invalidate old results. No saved email state, provider
+credit use, account/history connection, hosting setup or mail delivery. Routes,
+schemas, credentials and prior HR fixes remain. See EMAIL_VERIFIER_NOTES.md
+and the v500 QA report. Master remains merged v497 `ff722b3`; no merge yet.
+
+**Previous local checkpoint: v24.6.499, unmerged** on
 `codex/v24.6.499-hr-scan-resilience`, stacked on local v498 `ac22175` from
 merged master `ff722b3` (v497). The v498 exact-ad employer binding is retained.
 Repeat scans refresh the employer link; an unreadable ad can reuse previous

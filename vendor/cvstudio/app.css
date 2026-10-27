@@ -1619,3 +1619,10 @@
 .job-leads-apollo-person > div {flex:1 1 100%;}
 .job-leads-apollo-person small {display:block;margin-top:4px;}
 .job-leads-apollo-email {font-weight:600;overflow-wrap:anywhere;user-select:text;}
+.job-leads-email-check {margin-top:12px;padding-top:10px;border-top:1px solid var(--border);display:flex;align-items:end;gap:8px;flex-wrap:wrap;}
+.job-leads-email-check label {flex:1 1 180px;margin:0;font-size:12px;}
+.job-leads-email-check input {margin-top:6px;}
+.job-leads-email-check button {flex:0 0 auto;}
+.job-leads-email-result {flex:1 1 100%;font-size:12px;line-height:1.5;}
+.job-leads-email-result small {display:block;color:var(--text3);}
+.ev-progress-heading {flex-wrap:wrap;gap:8px;}

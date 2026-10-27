@@ -443,6 +443,7 @@
       const card = node('article','','job-leads-hr-person'), link = node('a',person.name);
       link.href=person.url; link.target='_blank'; link.rel='noopener noreferrer';
       card.append(link,node('p',person.title),node('p',person.location || 'Location not shown','job-leads-muted'),node('p','Joined company: '+hrJoinedLabel(person.joined),'job-leads-muted'),node('p','Matched: '+person.matched,'job-leads-muted'));
+      window.cvStudioEmailVerifier?.decorate(card,person);
       window.cvStudioApollo?.decorate(card,person);
       target.append(card);
     }

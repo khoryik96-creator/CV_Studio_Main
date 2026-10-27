@@ -4,6 +4,15 @@
 
 ## Release state
 
+- v24.6.500 is a local unmerged Email Verifier evidence improvement stacked
+  on v499 `1e856cb`, with v498/v499 retained. It adds conservative documented
+  provider rejection handling, separate mailbox/catch-all assessment, bounded
+  deeper MX comparison, cancellable one-time delayed rechecks and explicit
+  email checks on HR cards. No third-party verifier, paid call, mail delivery,
+  account/history connection, hosting setup, persistent email store, route or
+  schema change. Catch-all uncertainty and network limitations remain visible.
+  Master remains merged v497 `ff722b3`; no merge is authorized in this turn.
+
 - v24.6.499 is an unmerged resilience checkpoint stacked on local v498
   `ac22175`; merged master remains v497 `ff722b3`. Repeat HR scans refresh the
   ad employer. Previous evidence is a fallback only for an unreadable ad and
