@@ -145,7 +145,10 @@
     const linkedId = roleLink ? new URL(roleLink.href, location.href).pathname.match(/^\/jobs\/view\/(?:[^/]*-)?([0-9]{1,24})\/?$/)?.[1] : '';
     if ((linkedId && linkedId !== id) || (!view && linkedId !== id)) loading('The selected job details are still changing.');
     const role = text(roleNode).slice(0, 240);
-    const company = text(first('.job-details-jobs-unified-top-card__company-name, .jobs-unified-top-card__company-name, .topcard__org-name-link')).slice(0, 200);
+    const companyNode=first('.job-details-jobs-unified-top-card__company-name, .jobs-unified-top-card__company-name, .topcard__org-name-link');
+    const employer=jobEmployer(companyNode);
+    if (employer?.ambiguous) loading('The job employer links are still changing.');
+    const company = (employer?.name || text(companyNode)).slice(0, 200);
     const locationText = text(first('.job-details-jobs-unified-top-card__primary-description-container .tvm__text, .jobs-unified-top-card__bullet, .topcard__flavor--bullet')).slice(0, 240);
     const descriptionNode = first('#job-details, .jobs-description__content, .description__text') ||
       [...document.querySelectorAll('.description__text')].find(visible);
@@ -158,7 +161,7 @@
       if (Number.isFinite(value.getTime()) && Number.isFinite(calendar.getTime()) && calendar.toISOString().slice(0,10) === day && (rawDate.length === 10 || Number(rawDate.slice(11,13)) < 24)) datePosted = day;
     }
     if (!role || !company) loading('The company or role has not loaded.');
-    return {url, role, company, company_url:jobCompanyURL(panel,company), location:locationText, date_posted:datePosted, ...captured};
+    return {url, role, company, company_url:employer?.url || jobCompanyURL(panel,company), location:locationText, date_posted:datePosted, ...captured};
   }
   function jobLink(value) {
     try {
@@ -178,24 +181,23 @@
       // Standalone ads now render the title as plain text. Job-type buttons
       // still link to the ad, so unrecognized headers must not retain them.
       const [company,role,metadata]=[...workspace.querySelectorAll('p')].filter(visible);
-      const names=[...new Set([...(company?.querySelectorAll('a[href*="/company/"]') || [])]
-        .filter(link=>visible(link) && companyURL(link.href)).map(text).filter(Boolean))];
-      if (names.length===1 && text(company)===names[0] && text(role) && role.closest('p')===role &&
+      const employer=jobEmployer(company);
+      if (employer && !employer.ambiguous && text(role) && role.closest('p')===role &&
           !role.querySelector('a[href*="/company/"]') && /\S\s*·\s*\S/.test(text(metadata))) title=role;
     }
-    if (abouts.length !== 1 || !title) return null;
+    if ((!companyOnly && abouts.length !== 1) || abouts.length>1 || !title) return null;
     let header = title;
     for (let step=0;step<12 && header && header !== workspace;step++,header=header.parentElement) {
-      const companies = [...new Set([...header.querySelectorAll('a[href*="/company/"]')].filter(visible).map(text).filter(Boolean))];
-      if (!companies.length) continue;
-      if (companies.length !== 1) return null;
+      const employer=jobEmployer(header);
+      if (!employer) continue;
+      if (employer.ambiguous) return null;
       const role = compact(String(title.innerText || '').split('\n')[0]).replace(/\s*\(Verified job\)\s*$/i,'').slice(0,240);
       if (!role) return null;
       const paragraphs = [...header.querySelectorAll('p')], titleParagraph = title.closest('p'), index = paragraphs.indexOf(titleParagraph);
       const where = index >= 0 ? text(paragraphs[index+1]).split(/\s*·\s*/)[0].slice(0,240) : '';
       const captured = companyOnly ? {description:'',description_html:'',description_truncated:true} : jobDescription(abouts[0]);
       if (!companyOnly && !captured.description.replace(/^About the job\b\s*/i,'').trim()) return null;
-      return {url,role,company:companies[0].slice(0,200),company_url:jobCompanyURL(header,companies[0]),location:where,date_posted:'',...captured};
+      return {url,role,company:employer.name.slice(0,200),company_url:employer.url,location:where,date_posted:'',...captured};
     }
     return null;
   }
@@ -406,13 +408,21 @@
     const urls = [...new Set([...scope.querySelectorAll('a[href*="/company/"]')].filter(n=>visible(n) && text(n) === company).map(n=>companyURL(n.href)).filter(Boolean))];
     return urls.length === 1 ? urls[0] : '';
   }
+  function jobEmployer(scope) {
+    const links=[...(scope?.querySelectorAll?.('a[href*="/company/"]') || []),...(scope?.matches?.('a[href*="/company/"]')?[scope]:[])].filter(n=>visible(n) && text(n));
+    if (!links.length) return null;
+    const urls=links.map(n=>companyURL(n.href));
+    if (urls.some(value=>!value) || new Set(urls).size!==1) return {ambiguous:true};
+    return {name:text(links[0]),url:urls[0]};
+  }
   const normalized = value => compact(value).toLocaleLowerCase();
-  function readHRCompany(expected, company) {
+  function readHRCompany(expected, company, sourceConfirmed=false) {
     const problem = issue(); if (problem) throw Error(problem);
     if (companyURL(location.href) !== expected || !/\/people\/?$/.test(location.pathname)) throw Error('The company page changed.');
     const heading = [...document.querySelectorAll('main h1, h1')].find(visible);
     if (!heading) return {loading:true};
-    if (normalized(text(heading)) !== normalized(company)) throw Error('The company page does not match the saved ad company.');
+    if (normalized(text(heading)) !== normalized(company) && sourceConfirmed!==true) throw Error('The company page does not match the saved ad company.');
+    const identity=sourceConfirmed===true?{company_name:text(heading).slice(0,200)}:{};
     // Scope to the company header, excluding suggested/affiliated companies.
     const scope = heading.closest('section, .org-top-card') || heading.parentElement?.parentElement;
     const evidence = [...(scope?.querySelectorAll('a[href]') || [])].filter(visible).map(link=>{
@@ -437,11 +447,11 @@
         item.u.searchParams.getAll('network').length === 1 && item.u.searchParams.get('network') === '["F"]';
     });
     const ids = [...new Set(singles.map(item=>item.ids[0]))];
-    if (ids.length === 1) return {company_id:ids[0]};
+    if (ids.length === 1) return {...identity,company_id:ids[0]};
     if (!ids.length && groups.length && groups.every(group=>group.ids.length === groups[0].ids.length && group.ids.every(id=>groups[0].ids.includes(id)))) {
       // Candidates only. The worker must select the exact visible company in
       // LinkedIn's native filter before any profile can be read or saved.
-      return {loading:true,company_ids:[...groups[0].ids]};
+      return {...identity,loading:true,company_ids:[...groups[0].ids]};
     }
     return {loading:true};
   }

@@ -135,6 +135,9 @@ captured=reader.readJob(url);assert.equal(captured.description.length,20000);ass
 about.fakeNodes=[{get nodeType(){throw Error('Synthetic unexpected DOM failure');}}];
 assert.throws(()=>reader.readJob(url),/Synthetic unexpected DOM failure/,'only the local size sentinel may use fallback');
 delete about.fakeNodes;
+Object.assign(state,{about:false,stale:false,companyConflict:false});
+assert.equal(reader.readJob(url,true).company_url,'https://www.linkedin.com/company/example/','confirmed employer headers do not require an About section for HR metadata');
+state.stale=true;assert.throws(()=>reader.readJob(url,true),error=>error.cvstudioJobLoading===true,'metadata-only mode still rejects another job title');
 for(const patch of [{about:false},{stale:true},{companyConflict:true}]){
   Object.assign(state,{about:true,stale:false,companyConflict:false},patch);
   assert.throws(()=>reader.readJob(url),error=>error.cvstudioJobLoading===true,'stale or ambiguous detail fields must not mix');

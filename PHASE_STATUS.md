@@ -4,6 +4,22 @@
 
 ## Release state
 
+- v24.6.498 is an unmerged HR employer-identity correction from merged v497
+  `ff722b3`. Short saved company labels no longer have to equal LinkedIn's
+  full employer name: a worker-observed exact ad/company URL binding, with two
+  agreeing passive reads and a two-minute/document-bound lifetime, authorizes
+  only that linked company page's canonical heading. Manual pages retain the
+  strict name check. Optional bounded `hr.company_name` preserves verified
+  identity for later scans without rewriting saved ad labels or changing any
+  database/backup schema version. Missing About content, header controls and
+  same-job document loading no longer masquerade as company mismatches.
+  Existing company/country filters, limits, saves, activity, access and paid
+  gates remain. See the v498 QA report.
+
+- v24.6.497 merged in PR #253 as `ff722b3` after all three hosted checks and
+  GitHub automated review completed with no findings on exact head `1ca7a72`.
+  This supersedes the historical unmerged entry below.
+
 - v24.6.497 is an unmerged correction from merged v496 `e13727d`. Single HR,
   bulk HR and job-ad searches now share the existing orange run-token status;
   completion, Stop and failures settle it after cleanup. For company headers

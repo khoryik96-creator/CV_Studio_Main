@@ -8,7 +8,7 @@ function bulkFixture(options={}){
   Object.assign(f.state,{active:null,ends:[],starts:[]});
   f.state.onRPC=(message,reply)=>{
     const {action,args}=message,s=f.state;
-    if(action==='jobStatus'){reply({connected:!s.disconnected,company_hr_revision:1,hr_company_identity_revision:1,hr_company_filter_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_keyword_revision:1,busy:false});return true;}
+    if(action==='jobStatus'){reply({connected:!s.disconnected,company_hr_revision:1,hr_company_identity_revision:1,hr_company_filter_revision:1,hr_company_source_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_keyword_revision:1,busy:false});return true;}
     if(action==='jobFromLink'){
       const row=s.records.find(r=>r.url===args.url);s.active=row;
       if(row.id===s.failId){reply(null,'The company link is unavailable.');return true;}

@@ -7,16 +7,18 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current development: v24.6.497, unmerged** on
-`codex/v24.6.497-hr-scan-activity`, from merged master `e13727d` (v496).
-Job Leads now uses the established orange sidebar status during single HR,
-bulk HR and ad-search scans, resolving the token after cleanup. The remaining
-grouped-company layout has no exact singleton connection link at all. Its
-observed group may open only a setup search: native Current companies controls
-must select the exact saved-ad company and commit a corroborating singleton
-before profiles can be read. Country, keyword, joining-date and save gates
-remain. Old companions stop before scanning with update guidance. See the
-v497 QA report. No route/schema/permission or paid behavior changed.
+**Current development: v24.6.498, unmerged** on
+`codex/v24.6.498-hr-company-source`, from merged master `ff722b3` (v497).
+Saved ad labels can differ from the employer's LinkedIn label. HR scans now
+bind to the single employer link observed twice on that exact ad, rather than
+requiring its saved display name to equal LinkedIn's name. Short-lived,
+document-scoped worker evidence is required before the exact linked company
+page may supply its canonical heading for native company/country filters.
+Manual company pages retain strict name matching. Optional bounded HR
+`company_name` evidence survives saves/backups; the saved ad label is unchanged.
+Company-only capture no longer waits for About content, and bounded passive
+reads wait through same-ad loading and reinject after document changes. See
+the v498 QA report. Existing identity, save, activity and paid gates remain.
 
 The v495 checkpoint adds per-installation Apollo OAuth connections and business-email
 unlocks on saved HR cards. A shared free-tier Cloudflare broker keeps the app
@@ -31,13 +33,12 @@ approved Apollo app must be configured before sign-in works. See
 `integrations/apollo-broker/README.md` and the v495 QA report. No shared API key
 or colleague-specific hosting account is required.
 
-**Last merged delivery: v24.6.496.** PR #252 merged as `e13727d`, including
-the v495 Apollo preparation and v496 corroborated HTTP-valued company-link
-correction. All three hosted checks passed on tested head `bc85d4d`; optional
-automated review remained pending at merge. Apollo activation was explicitly
-deferred. This supersedes unmerged wording in the historical v495/v496 QA
-reports. v494 previously merged in PR #251 as `a323ad5`, including v493 IPv6
-mail probing and selected-ad bulk HR scans. See coordination issue #35.
+**Last merged delivery: v24.6.497.** PR #253 merged as `ff722b3` after all
+three hosted checks and GitHub's automated review passed on tested head
+`1ca7a72`. It adds orange Job Leads scan activity and native exact-company
+narrowing for grouped headers without singleton evidence. PR #252 previously
+merged v496 as `e13727d`, including deferred Apollo preparation. Historical
+pre-publication unmerged wording is superseded by coordination issue #35.
 
 **Previous delivery: v24.6.491.** The owner authorized merging the tested
 `codex/v24.6.490-verification-corrections` branch. It contains the first-party

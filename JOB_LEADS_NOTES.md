@@ -1,5 +1,35 @@
 # Job Leads module
 
+## Saved labels and verified employer identity (v24.6.498)
+
+A saved public/search-card label can be shorter than the employer link in the
+same job's full header. Do not compare the saved label to LinkedIn text as the
+identity boundary. `jobFromLink(company_only:true)` must confirm the exact job
+URL and a single native employer link in two consecutive observations. The
+worker keeps only bounded job/company URL/name/time metadata, scoped to the
+verified app document and expiring after two minutes. `hrBegin(job_url:...)`
+requires that exact observation; another ad, URL, name, expired proof or app
+document cannot reuse it. It is consumed when the scan begins.
+
+Only this source-confirmed path may read the heading of the exact linked
+company page as the native filter name. Company URL, observed singleton/group,
+country, keywords, joining-date checks and save revision remain enforced.
+There is no fuzzy alias or name-only company search. Manually entered company
+pages keep strict name matching. Saved `hr.company` continues to equal the ad's
+unchanged display label; optional bounded `hr.company_name` records the verified
+LinkedIn name and is shown in the HR panel/reused on later scans. Legacy records
+without it remain readable, including backup/restore; no schema bump or
+migration occurs.
+
+Metadata-only reads need the identity-confirmed employer header, not About
+content. A company-name container's Follow controls do not become its label;
+multiple labels sharing one exact company URL are one identity, while
+conflicting/foreign links remain unconfirmed. Same-ad loading and document
+replacement receive bounded passive waits/reinjection without re-navigation.
+Missing employer links use the full existing sixteen-poll bound and report a
+specific error. `hr_company_source_revision:1` gates older companions before
+single/bulk scans. Apply the companion update and refresh both pages.
+
 ## Scan activity and grouped-company selection (v24.6.497)
 
 Single HR, bulk HR and job-ad searches now hold one token in the existing

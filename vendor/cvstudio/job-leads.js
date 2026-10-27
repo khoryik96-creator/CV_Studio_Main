@@ -450,7 +450,7 @@
   function drawHR(row) {
     el('HR').hidden = !row || row.deleted;
     if (!row || row.deleted) { hrRow=''; return; }
-    el('HRCompany').textContent = row.company;
+    el('HRCompany').textContent = row.hr?.company_name || row.company;
     const key = row.id+'|'+row.company+'|'+row.revision;
     if (key === hrRow) return;
     hrRow = key;
@@ -484,23 +484,26 @@
   }
   async function scanHR(row, {country,keywords,pages,companyURL}, notify, showPeople) {
     const found = new Map();let finalSnapshot=null,omitted=false,outcome,cleanupFailed=false,saving=false;
+    let companyName=row.hr?.company_name || row.company, jobURL='';
     hrRun='';
     try {
       notify('Checking the companion…');
       const companion = await rpc('jobStatus',{},1500); checkHR();
-      if (!companion?.connected || companion.company_hr_revision !== 1 || companion.hr_company_identity_revision !== 1 || companion.hr_company_filter_revision !== 1 || companion.hr_joined_revision !== 1 || companion.hr_joined_loading_revision !== 1 || companion.hr_keyword_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to use the corrected HR search and joining-date checks.');
+      if (!companion?.connected || companion.company_hr_revision !== 1 || companion.hr_company_identity_revision !== 1 || companion.hr_company_filter_revision !== 1 || companion.hr_company_source_revision !== 1 || companion.hr_joined_revision !== 1 || companion.hr_joined_loading_revision !== 1 || companion.hr_keyword_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to use the corrected HR search and joining-date checks.');
       if (companion.busy) throw Error('Finish the current companion search or ad read first.');
       if (!companyURL) {
         notify('Reading the company link from the saved ad…');
         const captured = await rpc('jobFromLink',{url:row.url,company_only:true}); checkHR();
-        if (captured?.url !== row.url || captured.company?.trim().toLocaleLowerCase() !== row.company.trim().toLocaleLowerCase()) throw Error('The ad company could not be confirmed. Set its LinkedIn company page in Search options.');
+        if (captured?.url !== row.url) throw Error('LinkedIn did not confirm this exact job ad. Refresh its tab and try again.');
+        if (typeof captured.company!=='string' || !captured.company.trim() || captured.company.length>200 || /[\x00-\x1f\x7f]/.test(captured.company)) throw Error('The job ad employer has not loaded. Open the ad in LinkedIn and try again.');
         companyURL=captured.company_url || '';
+        companyName=captured.company.trim();jobURL=row.url;
       }
       const companyMatch=companyURL.match(/^https:\/\/www\.linkedin\.com\/company\/([A-Za-z0-9_-]+)(?:\/(?:people|about|life))?\/?$/);
       if (!companyMatch) throw Error('The company link is unavailable. Enter its LinkedIn company page under Search options.');
       companyURL='https://www.linkedin.com/company/'+companyMatch[1]+'/';
       checkHR(); hrRun=hex();
-      const source = await rpc('hrBegin',{run_id:hrRun,company_url:companyURL,company:row.company,country,keywords,max_pages:pages}); checkHR();
+      const source = await rpc('hrBegin',{run_id:hrRun,company_url:companyURL,company:companyName,...(jobURL?{job_url:jobURL}:{}),country,keywords,max_pages:pages}); checkHR();
       if (!Number.isInteger(source?.tab_id)) throw Error('The HR search did not open.');
       let previous='';
       for (let pageIndex=0;pageIndex<pages;pageIndex++) {
@@ -550,7 +553,7 @@
       checkHR();
       const complete=!finalSnapshot.hasNext && !omitted;
       saving=true;
-      const response = await api({action:'save_hr',id:row.id,revision:row.revision,search:{company:row.company,company_url:companyURL,company_id:finalSnapshot.company_id,
+      const response = await api({action:'save_hr',id:row.id,revision:row.revision,search:{company:row.company,company_name:finalSnapshot.company_name || companyName,company_url:companyURL,company_id:finalSnapshot.company_id,
         country,keywords,source_url:finalSnapshot.source_url,complete,people:[...found.values()]}});
       const index = rows.findIndex(item=>item.id===row.id); if (index >= 0) rows[index]=response.record;
       if (editing?.id === row.id) editing={...editing,revision:response.record.revision,hr:response.record.hr};
