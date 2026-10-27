@@ -4,14 +4,27 @@
 
 ## Release state
 
-- v24.6.492 is an unmerged corrective checkpoint from v491: HR joining-date
+- v24.6.493 is an unmerged Email Verifier correction from master `15c9948`:
+  preserve one IPv4 and one real IPv6 MX address within the existing two-address,
+  two-probe and 25-second limits. An IPv4 timeout can now reach the advertised
+  IPv6 destination. All DNS answers are still validated before selection, with
+  pinned SMTP destinations, hostname-validated TLS and conservative verdicts.
+  Native connectivity and one authorized live check confirmed the reported
+  failure is resolved on the available IPv6 route; the target/control were
+  accepted and the final verdict is catch-all. No message delivery, firewall
+  change, service/key, route/schema change, PR or merge is included.
+
+- v24.6.492 merged in PR #250 as `15c9948` after all three hosted checks and
+  the automated code review with no findings on exact tested head `06a4e24`.
+  Its corrective checkpoint from v491 fixes HR joining-date
   reads wait through same-filter loading; country mode/name and page count
   persist across saved ads and browser reloads; fresh LinkedIn People searches
   put the brief's country in the native Locations filter, keeping geography out
   of the Boolean role/skill query. Existing-search filters remain authoritative.
   The new companion capabilities are checked before paid planning/HR scanning;
   ambiguous mutations never replay. Routes, guards, schemas and paid-call
-  consent are unchanged. See the v492 QA report. No PR or merge is included.
+  consent are unchanged. See the v492 QA report for checkpoint evidence and
+  coordination issue #35 for the final merge identity.
 
 - v24.6.491 corrects PR #249's pre-merge review finding: a failed primary or
   backup MX address lookup no longer cancels another usable public mail server.

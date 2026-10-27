@@ -7,15 +7,22 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current development: v24.6.492, unmerged** on
-`codex/v24.6.492-hr-joining-preferences`, based on merged v491 (`4f04818`).
-It corrects same-filter HR joining-date loading races, remembers the HR country
-and page controls, and selects the brief's country through native LinkedIn
-People Locations instead of Boolean geography. See the v492 QA report for the
-isolated verification and companion update requirement. No owner data migration,
-paid call, PR or merge is included in this checkpoint.
+**Current development: v24.6.493, unmerged** on
+`codex/v24.6.493-email-ipv6-fallback`, based on merged v492 (`15c9948`).
+It keeps a real IPv6 MX address within the existing two-address/two-probe limits
+instead of discarding it after two IPv4 DNS answers. On the owner's network,
+IPv4 SMTP timed out but IPv6 worked. An authorized live check now completed as
+catch-all; no email was delivered, no firewall changed and no service/key added.
+See the v493 QA report. No PR or merge is included in this checkpoint.
 
-**Last merged delivery: v24.6.491.** The owner authorized merging the tested
+**Last merged delivery: v24.6.492.** PR #250 merged as `15c9948` with all three
+hosted checks and an automated review with no findings on exact head `06a4e24`.
+It corrects same-filter HR joining-date loading races, remembers HR country/page
+choices and selects the Sourcer country's native People Locations filter.
+The unmerged status in its checkpoint QA report is historical; coordination
+issue #35 records the final merge.
+
+**Previous delivery: v24.6.491.** The owner authorized merging the tested
 `codex/v24.6.490-verification-corrections` branch. It contains the first-party
 Email Verifier (no external verification service), source-confirmed Awards
 company/year headings and modern saved-ad HR result/pagination corrections.

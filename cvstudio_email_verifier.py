@@ -142,7 +142,15 @@ class MailDNS:
         # literal, never resolve the hostname again at socket creation.
         if any(not public_ip(ip) for ip in addresses):
             raise CheckUnavailable("The mail server resolves to a restricted network address. It was not contacted.")
-        return list(dict.fromkeys(addresses))[:2]
+        unique = list(dict.fromkeys(addresses))
+        # Keep one real IPv6 destination when both families are advertised.
+        # Otherwise two A answers consume both slots and a blocked IPv4 path
+        # prevents trying a working IPv6 path. Validate every answer above
+        # before reducing the set; mapped IPv4 is not an independent IPv6 path.
+        ipv6 = [ip for ip in unique if ipaddress.ip_address(ip).version == 6
+                and ipaddress.ip_address(ip).ipv4_mapped is None]
+        ipv4 = [ip for ip in unique if ip not in ipv6]
+        return [ipv4[0], ipv6[0]] if ipv4 and ipv6 else unique[:2]
 
 
 class _DeadlineSMTP(smtplib.SMTP):

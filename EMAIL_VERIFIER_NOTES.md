@@ -1,5 +1,22 @@
 # Email Verifier
 
+The v493 correction keeps one IPv4 and one real IPv6 address when an MX
+advertises both, within the existing two-address/two-probe/25-second limits.
+Previously two A answers filled both slots and every AAAA answer was discarded,
+so an IPv4 SMTP timeout prevented using a working IPv6 route. IPv4-only and
+IPv6-only ordering remains unchanged. Every DNS answer still passes the public
+address guard before selection; mapped IPv4 does not count as an independent
+IPv6 route. Connections remain pinned to the selected IP and TLS still checks
+the MX hostname. No firewall, new service, additional port, key or mail delivery
+is needed for this fallback.
+
+Read-only native connectivity checks confirmed working IPv6 SMTP greetings
+where IPv4 connections timed out. One owner-authorized live mailbox check then
+completed as catch-all: the server accepted the target and the random control.
+This resolves that connection failure; catch-all acceptance cannot establish
+that every accepted address is an actual mailbox. A future server that blocks
+both address families may still remain unconfirmed.
+
 The v491 pre-merge review correction isolates address-lookup failures to each
 MX host. A failed or restricted host contributes no addresses, while another
 successfully resolved public host remains usable for quick and mailbox checks.
