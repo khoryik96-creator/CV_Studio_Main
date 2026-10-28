@@ -1,5 +1,28 @@
 # Job Leads module
 
+## Compact controls and observed header recovery (v24.6.502)
+
+Folder selection/buttons share a toolbar; selected count/move controls share
+one row; HR action, country/name and pages use a compact panel. Labels remain
+accessible, country/pages keep existing preferences, and mobile controls wrap.
+At the same 1440px viewport the controls measure 339px instead of 666px (49%
+shorter). Record, selection and persistence contracts are unchanged.
+
+Live DKSH/cbs headers contain an icon-only verification link inside the title.
+The paragraph detector accepts it only for the exact current job, containing
+the named Verified job image and no other text except the known annotation.
+Other links/buttons, foreign jobs and ambiguous employers remain rejected.
+This corrects the v499 all-anchor rejection.
+
+A completed company document with no heading and an empty body can receive
+one reload after twelve passive polls, only while its exact unchanged source
+is inactive. Bounded count/marker survive suspension and persist before reload.
+Failed writes, different/pending navigation, active tabs, sign-in/checks and
+nonblank unknown layouts cannot authorise it. Interrupted reloads allow only
+passive confirmation, never another reload. Exact company/native filters still
+precede profile reads and saves. Stop invalidates the run at existing await
+boundaries. `hr_layout_revision:1` requires the updated companion.
+
 ## Review corrections (v24.6.501)
 
 One title paragraph exposed as both a semantic heading and an employer/title/

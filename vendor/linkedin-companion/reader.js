@@ -45,7 +45,22 @@
     assertPage(mode);
     const scope = document.querySelector('main') || document.body;
     const rows = [], seen = new Set();
-    for (const link of scope.querySelectorAll('a[href]')) {
+    // Modern cards include mutual connections' /in/ links. Only the first
+    // name paragraph in a primary-results list item identifies its candidate.
+    const primary=mode==='standard'?document.querySelector('main [aria-label="Primary content"]'):null;
+    for(const card of primary?.querySelectorAll('[role="listitem"]') || []){
+      if(!visible(card) || card.querySelector('[role="listitem"]'))continue;
+      const paragraphs=[...card.querySelectorAll('p')].filter(visible);
+      const names=[...(paragraphs[0]?.querySelectorAll('a[href]') || [])].filter(n=>visible(n) && profileURL(n.href));
+      const urls=new Set(names.map(n=>profileURL(n.href))),url=profileURL(names[0]?.href);
+      if(urls.size!==1 || seen.has(url) || !text(names[0]) || !text(paragraphs[1]))continue;
+      const words=paragraphs.filter(p=>[...p.querySelectorAll('a[href]')].every(a=>!profileURL(a.href) || profileURL(a.href)===url)).map(text).join('\n');
+      if(words.length<8 || words.length>6500)continue;
+      seen.add(url);rows.push({id:'p'+rows.length,name:text(names[0]).slice(0,150),url,text:words});
+      if(rows.length>=40)break;
+    }
+    for (const link of (primary || scope).querySelectorAll('a[href]')) {
+      if(rows.length>=40)break;
       const url = profileURL(link.href);
       if (!url || seen.has(url) || !visible(link)) continue;
       const card = link.closest(cardSelectors[mode]) || link.closest('li, article, [role="listitem"]');
@@ -62,7 +77,7 @@
       rows.push({id: 'p' + rows.length, name, url, text: words});
       if (rows.length >= 40) break;
     }
-    const mainText = text(scope).slice(0, 2000);
+    const mainText = text(primary || scope).slice(0, 2000);
     const empty = !rows.length && /no results|no candidates|couldn.t find any|0 results/i.test(mainText);
     const button = nextButton();
     return {url: location.href, profiles: rows, empty, paginationKnown: !!button, hasNext: !!button && !disabled(button),
@@ -70,6 +85,12 @@
   }
   function disabled(el) { return el.disabled || el.getAttribute('aria-disabled') === 'true'; }
   function nextButton() {
+    const modern=[...document.querySelectorAll('main [aria-label="Primary content"] [data-testid="pagination-controls-list"]')].filter(visible);
+    if(modern.length===1){
+      const pages=[...modern[0].querySelectorAll('button[aria-current="true"]')].filter(visible);
+      const buttons=[...(modern[0].parentElement?.querySelectorAll('button') || [])].filter(b=>visible(b) && /^(next|next page|seterusnya)$/i.test(compact(b.getAttribute('aria-label') || b.innerText)));
+      if(pages.length===1 && buttons.length===1)return buttons[0];
+    }
     const selector = '.artdeco-pagination__button--next, [data-test-pagination-next], [data-test-pagination-page-btn="next"]';
     const direct = [...document.querySelectorAll(selector)].find(visible);
     if (direct) return direct;
@@ -175,6 +196,12 @@
     const jobs=[...scope.querySelectorAll('a[href]')].filter(visible).map(n=>jobLink(n.href)).filter(Boolean);
     return jobs.some(value=>value!==url)?{ambiguous:true}:employer;
   }
+  function jobTitleControls(node,url) {
+    if(node.querySelector('button, [role="button"]'))return true;
+    return [...node.querySelectorAll('a[href]')].some(link=>jobLink(link.href)!==url ||
+      !link.querySelector('[role="img"][aria-label="Verified job"]') ||
+      !['','(verified job)'].includes(normalized(text(link))));
+  }
   function modernStandaloneTitle(workspace, abouts,url) {
     const beforeDescription=node=>!abouts[0] || !node.compareDocumentPosition || !!(node.compareDocumentPosition(abouts[0]) & 4);
     const context=node=>{
@@ -190,7 +217,7 @@
     for(let index=0;index+2<paragraphs.length;index++){
       const employer=jobEmployer(paragraphs[index]),role=paragraphs[index+1],metadata=paragraphs[index+2];
       if(!employer || employer.ambiguous || !text(role) || role.closest('p')!==role ||
-        role.querySelector('a[href], button, [role="button"]') || /[·•]/.test(text(role)) || !/\S\s*·\s*\S/.test(text(metadata)))continue;
+        jobTitleControls(role,url) || /[·•]/.test(text(role)) || !/\S\s*·\s*\S/.test(text(metadata)))continue;
       const header=context(role);if(header?.url===employer.url)candidates.push(role);
     }
     const unique=[...new Set(candidates)];
@@ -449,7 +476,7 @@
     const problem = issue(); if (problem) throw Error(problem);
     if (companyURL(location.href) !== expected || !/\/people\/?$/.test(location.pathname)) throw Error('The company page changed.');
     const heading = [...document.querySelectorAll('main h1, h1')].find(visible);
-    if (!heading) return {loading:true};
+    if (!heading) return {loading:true,...(document.body && !text(document.body)?{blank_document:true}:{})};
     const pinned=typeof expectedId==='string' && /^[0-9]{1,24}$/.test(expectedId);
     if(expectedId && !pinned)throw Error('The previous company identity is invalid.');
     if (normalized(text(heading)) !== normalized(company) && sourceConfirmed!==true && !pinned) throw Error('The company page does not match the saved ad company.');

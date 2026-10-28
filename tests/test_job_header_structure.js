@@ -15,6 +15,17 @@ assert.equal(reader.readJob(url,true).location,'Malaysia','an unambiguous follow
 state.semanticParagraph=true;
 assert.equal(reader.readJob(url,true).role,'SAP Consultant','one semantic paragraph exposed by both detection paths is a single candidate');
 assert.equal(reader.readJob(url,true).location,'Malaysia');state.semanticParagraph=false;
+// Modern standalone titles include a non-textual LinkedIn verification link.
+// Reproduce it without relying on a semantic heading (the live layout has none).
+state.headings=[];state.semanticParagraph=true;
+const badge=el('',{href:url+'/#',querySelector:s=>s==='[role="img"][aria-label="Verified job"]'?el(''):null});
+title.querySelectorAll=s=>s==='a[href]'?[badge]:[];
+title.querySelector=s=>s.includes('a[href]')?badge:null;
+assert.equal(reader.readJob(url,true).role,'SAP Consultant','a same-job Verified job icon is not another title or action');
+badge.href='https://www.linkedin.com/jobs/view/999/#';assert.throws(()=>reader.readJob(url,true),'a verified badge for another job cannot authorize this title');
+badge.href=url+'/#';badge.innerText='Unrelated link';assert.throws(()=>reader.readJob(url,true),'a text-bearing link cannot masquerade as the verification icon');
+badge.innerText='';badge.querySelector=()=>null;assert.throws(()=>reader.readJob(url,true),'an arbitrary empty link is not a verified badge');
+title.querySelector=()=>null;title.querySelectorAll=()=>[];state.semanticParagraph=false;state.headings=[title];
 const foreign=el('Unrelated role',{compareDocumentPosition:()=>4}),foreignHeader=el('',{querySelectorAll:s=>s.includes('/company/')?[link]:s==='a[href]'?[el('Other job',{href:'https://www.linkedin.com/jobs/view/999'})]:[]});foreign.parentElement=foreignHeader;foreignHeader.parentElement=workspace;
 state.headings=[foreign,title];assert.equal(reader.readJob(url,true).role,'SAP Consultant','a heading bound to a different job cannot replace or obscure the current header');state.headings=[foreign];assert.throws(()=>reader.readJob(url,true),'another job heading cannot authorize this ad');state.headings=[title];
 const secondTitle=el('SAP Consultant',{parentElement:header,compareDocumentPosition:()=>4});

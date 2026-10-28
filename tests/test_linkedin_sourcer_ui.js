@@ -23,7 +23,7 @@ function fixture(reuse=true){
     if(!state.connected)return reply(null,'The browser action stopped. Reconnect the companion or check the LinkedIn page.');
     if(message.action==='tabs'){if(state.hold){state.held=()=>reply(state.tabs);return}return reply(state.tabs)}
     if(message.action==='reloadCompanion')return reply(state.reloadResult||{current:true});
-    if(message.action==='jobStatus')return reply({connected:true,people_country_revision:state.oldCountryCompanion?0:1,companion_update_revision:state.oldUpdateCompanion?0:1});
+    if(message.action==='jobStatus')return reply({connected:true,people_results_revision:state.oldResultsCompanion?0:1,people_country_revision:state.oldCountryCompanion?0:1,companion_update_revision:state.oldUpdateCompanion?0:1});
     if(message.action==='openPeopleSearch'){
       if(state.oldCompanion)return reply(null,'Unsupported browser action.');
       const tab={...people,id:20+(++state.opened),url:'https://www.linkedin.com/search/results/people/',title:'New People search'};
@@ -127,6 +127,10 @@ function fixture(reuse=true){
   assert.match(unavailable.el('Status').textContent,/LinkedIn.*read|LinkedIn.*reader/);assert.equal(unavailable.state.readCount,30,'missing results have a bounded read-only retry');
   assert.equal(unavailable.requests.filter(r=>r.action==='plan').length,1);assert.equal(unavailable.requests.filter(r=>r.action==='review').length,0);assert.equal(unavailable.requests.filter(r=>r.action==='stop').length,1);
   assert(unavailable.calls.some(c=>c.action==='end'),'reader failure cleans up the browser run');
+  for(const reuse of [true,false]){
+    const outdated=fixture(reuse);await outdated.init();outdated.el('Brief').value='SAP finance';outdated.el('Consent').checked=true;outdated.state.oldResultsCompanion=true;await outdated.start();
+    assert.equal(outdated.requests.filter(r=>r.action==='start'||r.action==='plan').length,0,'an old People reader is rejected before any paid work');assert.match(outdated.el('Status').textContent,/latest companion update/);
+  }
   const ambiguousSearch=fixture(false);ambiguousSearch.el('Mode').value='lite';ambiguousSearch.state.tabs=[{id:7,url:'https://www.linkedin.com/talent/search',title:'Recruiter Lite'}];
   await ambiguousSearch.init();ambiguousSearch.el('Brief').value='SAP finance';ambiguousSearch.el('Consent').checked=true;ambiguousSearch.state.missingMethod='search';await ambiguousSearch.start();
   assert.equal(ambiguousSearch.calls.filter(c=>c.action==='read'&&c.args.method==='search').length,1,'an ambiguous search submission is never replayed');

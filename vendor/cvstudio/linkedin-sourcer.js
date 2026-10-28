@@ -205,7 +205,10 @@
       }
       if (!source) throw Error('Open a LinkedIn People or Recruiter search in this browser, then start again. Your current candidate list is kept.');
       options.mode = options.mode === 'auto' ? sourceMode(source) : options.mode;
-      if (!options.use_open_search && options.mode === 'standard' && (await rpc('jobStatus'))?.people_country_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn. This search needs the native Locations filter.');
+      if(options.mode==='standard'){
+        const status=await rpc('jobStatus');
+        if(status?.people_results_revision!==1 || !options.use_open_search && status?.people_country_revision!==1)throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn. This search needs the current People-card, pagination and Locations readers.');
+      }
       runOptions = {...options,source:source.id,openedSource:freshPeopleSearch() ? source : null};
       agent = new CVLinkedinCore.Agent({api, browser, signal: abort.signal, update: patch => {
         if (patch.run) run = patch.run; if (patch.results) results = patch.results; if (patch.status) tell(patch.status);
