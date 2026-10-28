@@ -89,7 +89,7 @@ if(require.main===module)(async()=>{
   const folderRecords=structuredClone(folderPreview.state.records);
   folderPreview.el('FolderName').value='Empty folder';await folderPreview.el('FolderCreate').click();
   assert.equal(folderPreview.el('FolderFilter').value,'Empty folder');assert.equal(folderPreview.el('Count').textContent,'0 leads');
-  assert.match(folderPreview.el('PreviewTitle').textContent,/Choose an ad/,'creating an empty folder clears the previous folder preview');
+  assert(folderPreview.el('Preview').hidden,'creating an empty folder clears the previous folder preview');
   assert.equal(folderPreview.el('PreviewPosition').textContent,'');assert(folderPreview.el('PreviewRemove').hidden);
   assert(folderPreview.el('PreviewPrevious').disabled);assert(folderPreview.el('PreviewNext').disabled);
   assert.equal(folderPreview.el('notes').value,'Keep my draft');assert.deepEqual(folderPreview.state.records,folderRecords);
@@ -101,7 +101,7 @@ if(require.main===module)(async()=>{
   assert.equal(existingFolder.el('PreviewTitle').textContent,'Priority architect');assert.match(existingFolder.el('PreviewPosition').textContent,/1 of 2/);
   await existingFolder.el('PreviewNext').click();assert.equal(existingFolder.el('PreviewTitle').textContent,'Priority manager');
   await existingFolder.el('PreviewClose').click();existingFolder.el('FolderName').value='Priority';await existingFolder.el('FolderCreate').click();
-  assert.match(existingFolder.el('PreviewTitle').textContent,/Choose an ad/,'folder creation respects a dismissed preview');
+  assert(existingFolder.el('Preview').hidden,'folder creation respects a dismissed preview');
   const searchFolder=fixture();await searchFolder.init();await searchFolder.el('SearchStart').click();
   searchFolder.el('SearchSelectPage').checked=true;searchFolder.el('SearchSelectPage').handlers.change();
   const searchPosition=searchFolder.el('PreviewPosition').textContent;
@@ -122,8 +122,8 @@ if(require.main===module)(async()=>{
   await browse.el('PreviewNext').click();await browse.el('PreviewNext').click();
   assert.equal(browse.el('PreviewTitle').textContent,'Finance Lead');assert(browse.el('PreviewNext').disabled);
   assert.equal(browse.requests.length,0,'browsing saved previews never writes records');
-  await browse.el('PreviewClose').click();assert.match(browse.el('PreviewTitle').textContent,/Choose an ad/);
-  await browse.el('Refresh').click();assert.match(browse.el('PreviewTitle').textContent,/Choose an ad/,'refresh does not reopen a dismissed preview');
+  await browse.el('PreviewClose').click();assert(browse.el('Preview').hidden);
+  await browse.el('Refresh').click();assert(browse.el('Preview').hidden,'refresh does not reopen a dismissed preview');
   await browse.el('List').children[0].querySelectorAll('button').find(button=>button.textContent==='Preview').click();
   browse.el('FolderFilter').value='Priority';browse.el('FolderFilter').handlers.change();
   assert.match(browse.el('PreviewPosition').textContent,/1 of 2/);await browse.el('PreviewNext').click();
@@ -140,7 +140,7 @@ if(require.main===module)(async()=>{
   assert.equal(browse.requests.length,beforeCancel,'cancelled discard prevents removing the edited ad');
   assert.equal(browse.el('notes').value,'Unsaved editing notes');assert(!browse.state.records[0].deleted);
   browse.state.allowDiscard=true;await browse.el('PreviewRemove').click();
-  assert.match(browse.el('PreviewTitle').textContent,/Choose an ad/,'removing the last matching ad clears the preview');
+  assert(browse.el('Preview').hidden,'removing the last matching ad clears the preview');
   assert(browse.el('PreviewRemove').hidden);assert.equal(browse.state.records[2].deleted,false,'ads outside the chosen folder are unchanged');
   browse.el('FolderFilter').value='!trash';browse.el('FolderFilter').handlers.change();
   await browse.el('List').children[0].querySelectorAll('button').find(button=>button.textContent==='Preview').click();
@@ -157,7 +157,7 @@ if(require.main===module)(async()=>{
   await paging.el('SearchPrevious').click();assert.equal(paging.el('PreviewTitle').textContent,'Found role 0');
   assert.equal(paging.requests.length,0,'search preview navigation never saves or removes ads');
   const empty=fixture();empty.state.records=[];await empty.init();
-  assert.match(empty.el('PreviewTitle').textContent,/Choose an ad/);assert(empty.el('PreviewRead').hidden);assert(empty.el('PreviewSave').hidden);
+  assert(empty.el('Preview').hidden);assert(empty.el('PreviewRead').hidden);assert(empty.el('PreviewSave').hidden);
   const savedPreview=fixture();await savedPreview.init();
   await savedPreview.el('List').querySelectorAll('button').find(button=>button.textContent==='Preview').click();
   assert.equal(savedPreview.el('SearchPanel').open,true);
@@ -196,7 +196,7 @@ if(require.main===module)(async()=>{
   assert.equal(added.description,'Full captured job ad');assert.equal(added.description_rich[0].tag,'p');
   assert.equal(f.el('notes').value,'Keep unsaved notes','import does not replace the manual draft');
   await f.el('SearchClear').click();assert.equal(f.state.records.length,3);assert.match(f.el('SearchCount').textContent,/0 found/);
-  assert.match(f.el('PreviewTitle').textContent,/Choose an ad/,'Clear results does not silently select an unrelated saved ad');
+  assert(f.el('Preview').hidden,'Clear results does not silently select an unrelated saved ad');
   const badCalls=f.calls.length;f.el('SearchPages').value='16';await f.el('SearchStart').click();assert.equal(f.calls.length,badCalls);
   f.el('SearchPages').value='2';f.el('SearchMode').value='open';f.el('SearchMode').handlers.change();await f.el('SearchRefresh').click();
   f.el('SearchSource').value='20';f.el('SearchQuery').value='';await f.el('SearchStart').click();
@@ -276,7 +276,7 @@ if(require.main===module)(async()=>{
   assert.equal(direct.requests.length,protectedWrites);assert.equal(direct.state.records[0].deleted,false);assert.equal(direct.el('notes').value,'Keep this editing draft');
   const single=fixture();await single.init();await single.el('SearchStart').click();single.el('SearchSelectPage').checked=true;single.el('SearchSelectPage').handlers.change();
   await single.el('PreviewClose').click();single.el('SearchSelectPage').handlers.change();
-  assert.match(single.el('PreviewTitle').textContent,/Choose an ad/,'changing selections does not reopen a dismissed preview');
+  assert(single.el('Preview').hidden,'changing selections does not reopen a dismissed preview');
   assert.match(single.el('SearchCount').textContent,/2 selected/,'closing the preview retains selected results');
   await single.el('SearchResults').children[2].querySelectorAll('button').find(button=>button.textContent==='Preview').click();await single.el('PreviewSave').click();
   assert(single.state.records.some(row=>row.url===c.url));assert(!single.state.records.some(row=>row.url===a.url),'Add this ad does not save other selected results');

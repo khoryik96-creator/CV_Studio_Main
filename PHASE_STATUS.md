@@ -4,6 +4,12 @@
 
 ## Release state
 
+- v24.6.503 is a local, unmerged UI cleanup stacked on v502 `3bbe021`.
+  Search fields/actions are compact; repetitive guidance moves behind Companion;
+  empty previews/selection tools and instructional placeholders are absent.
+  Real content, errors/progress, created dates, excerpts, folder choices and
+  accessibility remain. No scan-reader/backend/route/storage changes.
+
 - v24.6.502 is a local, unmerged correction on merged v501 `b646d8d` (PR #254).
   It compacts saved-ad/bulk HR controls, accepts exact same-job verification
   icons within modern titles, recovers a blank inactive company page once

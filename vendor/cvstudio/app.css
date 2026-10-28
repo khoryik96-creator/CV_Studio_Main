@@ -1578,8 +1578,29 @@
 .job-lead-card { position:relative; }
 .job-lead-card h3 { padding-right:70px; }
 .job-leads-discovery { margin-bottom:20px; }
-.job-leads-discovery > summary { cursor:pointer; padding:18px; font-weight:700; color:var(--text1); }
-.job-leads-discovery-save { border-top:1px solid var(--border); padding-top:12px; }
+.job-leads-discovery > summary { cursor:pointer; padding:12px 16px; font-weight:700; color:var(--text1); }
+.job-leads-discovery > .card-body { padding:12px 16px;gap:8px; }
+.job-leads-search-fields { display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1.5fr) minmax(0,1.4fr) 68px;gap:10px; }
+.job-leads-search-fields > div { min-width:0; }
+.job-leads-search-fields label { display:block;font-size:12px;font-weight:600;margin-bottom:4px; }
+.job-leads-discovery input,.job-leads-discovery select { min-height:32px;padding:6px 9px;font-size:12px; }
+.job-leads-discovery .job-leads-pick input { min-height:16px;padding:0; }
+.job-leads-search-toolbar { display:flex;align-items:start;justify-content:space-between;gap:8px;flex-wrap:wrap; }
+.job-leads-discovery button { min-height:30px;padding:6px 10px; }
+.job-leads-discovery .job-leads-actions { gap:7px; }
+.job-leads-search-status { font-size:12px;line-height:1.4;margin:0; }
+#viewJobLeads p:empty:not([role="status"]),#jobLeadsSearchSelection[hidden],#jobLeadsCuration[hidden] { display:none; }
+#viewJobLeads p[role="status"]:empty { position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap; }
+.job-leads-setup { font-size:12px; }
+.job-leads-setup > summary { cursor:pointer;line-height:30px;color:var(--text2); }
+.job-leads-setup[open] { flex-basis:100%;border-top:1px solid var(--border);padding-top:4px; }
+.job-leads-setup p { margin:6px 0;line-height:1.5; }
+.job-leads-setup [data-companion-status] { flex-basis:100%;overflow-wrap:anywhere;user-select:text; }
+.job-leads-discovery-save { display:flex;align-items:center;gap:10px;border-top:1px solid var(--border);padding-top:8px; }
+.job-leads-discovery-save > .job-leads-actions { flex:1;min-width:0; }
+.job-leads-discovery-save > label { white-space:nowrap; }
+.job-leads-discovery-save select { min-width:90px; }
+.job-leads-discovery-save button { white-space:nowrap; }
 .job-leads-discovery-save > label, #jobLeadsSearchOpen > label { display:block; font-size:13px; font-weight:600; margin-bottom:6px; }
 .job-leads-discovery-card { border-top:1px solid var(--border); padding:16px 0; overflow-wrap:anywhere; }
 .job-leads-discovery-card h3 { font-size:15px; margin:0 0 6px; }
@@ -1588,14 +1609,20 @@
 .job-leads-discovery .job-leads-pick input { min-width:16px; }
 .job-leads-curation { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.15fr); gap:20px; align-items:start; }
 .job-leads-curation.no-search-results { grid-template-columns:minmax(0,1fr); }
+.job-leads-curation.no-preview { grid-template-columns:minmax(0,1fr); }
 .job-leads-preview-nav { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
 .job-leads-preview-pages { justify-content:space-between; margin-top:16px; }
 .job-leads-curation [hidden], .job-leads-pagination[hidden] { display:none; }
-.job-leads-preview { position:sticky; top:20px; border:1px solid var(--border); border-radius:10px; padding:18px; min-width:0; }
+.job-leads-preview { position:sticky; top:20px; border:1px solid var(--border); border-radius:10px; padding:12px; min-width:0; }
 .job-leads-preview h3 { margin:0 0 8px; font-size:17px; }
 .job-leads-preview .job-lead-ad-content { max-height:540px; overflow:auto; margin-top:16px; }
 .job-leads-discovery-card.is-previewing { border-left:3px solid var(--accent); padding-left:12px; }
 @media(max-width:850px) { .job-leads-curation { grid-template-columns:1fr; } .job-leads-preview { position:static; } }
+@media(max-width:760px) { .job-leads-search-fields { grid-template-columns:1fr 1fr; } }
+.job-leads-form { gap:8px; }
+.job-leads-form > label { font-size:12px; }
+.job-leads-form input,.job-leads-form select { min-height:32px;padding:6px 9px;font-size:12px; }
+#jobLeadsnotes { height:84px !important;min-height:70px; }
 .job-leads-muted { color:var(--text3); font-size:12px; line-height:1.6; }
 .job-lead-card { border:1px solid var(--border); border-radius:10px; padding:18px; margin-bottom:12px; overflow-wrap:anywhere; }
 .job-lead-card h3 { margin:0 0 6px; font-size:16px; }

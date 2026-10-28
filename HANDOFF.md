@@ -7,7 +7,18 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current source checkpoint: v24.6.502, local and unmerged** on
+**Current source checkpoint: v24.6.503, local and unmerged** on
+`codex/v24.6.503-job-leads-cleanup`, retaining v502 `3bbe021` and based on
+merged v501 `b646d8d`. Job Leads search fields/actions are compact; setup/update
+guidance is inside Companion; empty previews, zero-result selection controls
+and instructional placeholders are absent. Actual errors/progress, record
+creation dates, excerpt warnings, folder preferences and preview actions stay.
+The empty desktop search panel measures 210px instead of 737px (72% shorter).
+No reader, route, storage or paid-boundary change in this UI pass. Preview
+remains port 5095, with its isolated state retained. See the v503 QA report.
+No publication/merge or owner installation changes.
+
+**Previous source checkpoint: v24.6.502, local and unmerged** on
 `codex/v24.6.502-hr-layout-compact`, based on merged v501 `b646d8d` (PR #254).
 Saved-ad controls are 49% shorter at the checked desktop size and retain their
 remembered country/pages. The v499 header regression rejected LinkedIn's

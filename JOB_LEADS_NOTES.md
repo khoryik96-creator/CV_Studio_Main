@@ -1,5 +1,22 @@
 # Job Leads module
 
+## Minimal discovery and form UI (v24.6.503)
+
+Discovery starts with labelled keywords/location/source/pages fields and Search.
+Companion setup/update instructions live inside one collapsed Companion menu;
+both helpers keep their status element in the button's parent as required by
+the shared helper. Folder selection stays visible for direct LinkedIn saves.
+Stop/Clear/Add/selection controls appear when relevant. Actual errors/progress
+remain visible; empty live status regions retain accessible presence without
+occupying layout space.
+
+Empty previews and curation containers are hidden. Closing a real preview leaves
+results at full width, keeps selections/drafts/folder choices, and does not
+reopen a saved ad silently. Real captured content and excerpt labels remain;
+empty content boxes and generic creation/content guidance are absent. Created
+dates appear only for saved records. The form removes repetitive descriptions
+and uses shorter fields/notes. No backend/reader/record contract changes.
+
 ## Compact controls and observed header recovery (v24.6.502)
 
 Folder selection/buttons share a toolbar; selected count/move controls share
