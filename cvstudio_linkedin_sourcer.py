@@ -15,6 +15,17 @@ class SourcerError(Exception):
     pass
 
 
+class SourcerResponseError(SourcerError):
+    """A paid response failed validation, independently of key authentication."""
+    code = "AI_PROVIDER_RESPONSE_INVALID"
+    action = "review_sourcer_results"
+
+
+_REVIEW_EVIDENCE_MAX = 4
+_REVIEW_UNKNOWNS_MAX = 6
+_REVIEW_TEXT_MAX = 250
+
+
 def profile_url(value):
     """Accept observed profile links only, stripping tracking and credentials."""
     try:
@@ -114,25 +125,25 @@ def validate_reviews(value, profiles, maximum):
     known = {p["id"]: p for p in profiles}
     rows = value.get("candidates") if isinstance(value, dict) else None
     if not isinstance(rows, list) or len(rows) > maximum:
-        raise SourcerError("DeepSeek returned an invalid candidate list.")
+        raise SourcerResponseError("DeepSeek returned an invalid candidate list.")
     result, seen = [], set()
     for row in rows:
         if (not isinstance(row, dict) or not isinstance(row.get("id"), str)
                 or row["id"] not in known or row["id"] in seen):
-            raise SourcerError("DeepSeek referred to a profile that was not on this page.")
+            raise SourcerResponseError("DeepSeek referred to a profile that was not on this page.")
         seen.add(row["id"])
         score = row.get("score")
         if isinstance(score, bool) or not isinstance(score, int) or not 0 <= score <= 100:
-            raise SourcerError("DeepSeek returned an invalid match assessment.")
+            raise SourcerResponseError("DeepSeek returned an invalid match assessment.")
         evidence, unknowns = row.get("evidence"), row.get("unknowns")
-        if (not isinstance(evidence, list) or not 1 <= len(evidence) <= 4
-                or not isinstance(unknowns, list) or len(unknowns) > 6
-                or not all(_text(s, 250) for s in evidence + unknowns)):
-            raise SourcerError("DeepSeek returned an incomplete assessment.")
+        if (not isinstance(evidence, list) or not 1 <= len(evidence) <= _REVIEW_EVIDENCE_MAX
+                or not isinstance(unknowns, list) or len(unknowns) > _REVIEW_UNKNOWNS_MAX
+                or not all(_text(s, _REVIEW_TEXT_MAX) for s in evidence + unknowns)):
+            raise SourcerResponseError("DeepSeek returned an incomplete assessment.")
         normalize = lambda s: " ".join(s.casefold().split())
         text = normalize(known[row["id"]]["text"])
         if any(normalize(quote) not in text for quote in evidence):
-            raise SourcerError("A claimed match has no supporting text on the observed page.")
+            raise SourcerResponseError("A claimed match has no supporting text on the observed page.")
         # Name and URL always come from the reader, never from model output.
         result.append({"id": row["id"], "url": known[row["id"]]["url"],
                        "name": known[row["id"]]["name"], "score": score,
@@ -163,9 +174,14 @@ STANDARD_PLAN_SCHEMA = {**PLAN_SCHEMA, "properties": {**PLAN_SCHEMA["properties"
         " Put the user's exact core role/skill first, with at most four high-signal aliases."
         " Keep the complete matching criteria in requirements; never drop mandatory exclusions to meet this budget."}}}
 REVIEW_SCHEMA = {"type": "object", "properties": {"candidates": {"type": "array", "items": {
-    "type": "object", "properties": {"id": {"type": "string"}, "score": {"type": "integer"},
-        "evidence": {"type": "array", "items": {"type": "string"}},
-        "unknowns": {"type": "array", "items": {"type": "string"}}},
+    "type": "object", "properties": {"id": {"type": "string"},
+        "score": {"type": "integer", "minimum": 0, "maximum": 100},
+        "evidence": {"type": "array", "minItems": 1, "maxItems": _REVIEW_EVIDENCE_MAX,
+                     "description": "Short exact quotes from this observed profile; never invented or paraphrased.",
+                     "items": {"type": "string", "minLength": 1, "maxLength": _REVIEW_TEXT_MAX}},
+        "unknowns": {"type": "array", "maxItems": _REVIEW_UNKNOWNS_MAX,
+                     "description": "Brief missing or unclear requirements. Use an empty list when none are unknown.",
+                     "items": {"type": "string", "minLength": 1, "maxLength": _REVIEW_TEXT_MAX}}},
     "required": ["id", "score", "evidence", "unknowns"], "additionalProperties": False}}},
     "required": ["candidates"], "additionalProperties": False}
 
@@ -229,10 +245,16 @@ class LinkedInSourcerService:
                     or type(page) is not int or not 1 <= page <= run.max_pages):
                 raise SourcerError("The page or review stage is invalid.")
             maximum = 5 if stage == "screen" else len(profiles)
+            schema = {**REVIEW_SCHEMA, "properties": {**REVIEW_SCHEMA["properties"],
+                "candidates": {**REVIEW_SCHEMA["properties"]["candidates"], "maxItems": maximum}}}
             observed = {"stage": stage, "profiles": profiles, "maximum_candidates": maximum,
-                        "instruction": "Select up to five promising profiles." if stage == "screen"
-                        else "Assess observed details and explicitly list missing requirements."}
-            return self.paid(run, "profile_review", REVIEW_SCHEMA, observed,
+                        "instruction": ("Select up to five promising profiles." if stage == "screen"
+                        else "Assess observed details and explicitly list missing requirements.") +
+                        f" Each assessment needs 1-{_REVIEW_EVIDENCE_MAX} exact evidence quotes and"
+                        f" 0-{_REVIEW_UNKNOWNS_MAX} unknown requirements, each no longer than"
+                        f" {_REVIEW_TEXT_MAX} characters. If no supporting quote is available for"
+                        " a profile, leave it out of candidates. Never invent evidence to fill a field."}
+            return self.paid(run, "profile_review", schema, observed,
                              lambda value: validate_reviews(value, profiles, maximum), "candidates")
         raise SourcerError("This sourcing action is not supported.")
 
@@ -275,7 +297,7 @@ class LinkedInSourcerService:
             blocks = response.get("content") if isinstance(response, dict) else None
             tools = [block for block in blocks or [] if isinstance(block, dict) and block.get("type") == "tool_use"]
             if len(tools) != 1 or tools[0].get("name") != "return_" + task:
-                raise SourcerError("DeepSeek returned an unexpected action. Nothing was executed.")
+                raise SourcerResponseError("DeepSeek returned an unexpected action. Nothing was executed.")
             value = validate(tools[0].get("input"))
             if run.stopped:
                 raise SourcerError("Stopped. The current AI request finished; no next action was taken.")

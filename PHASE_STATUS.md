@@ -4,6 +4,13 @@
 
 ## Release state
 
+- v24.6.508 is a local Sourcer response correction on merged v507 `8c99a3d`.
+  The assessment schema declares the existing validator bounds, and invalid
+  response/tool output gets response-specific guidance rather than key advice.
+  Strict evidence/ID/score checks, prior card results/provenance, usage/costs,
+  Stop/limits and paid non-replay remain. No provider call, owner update,
+  storage-schema/route change, publication or merge. See the v508 QA report.
+
 - v24.6.507 corrects PR #258's nested-only Blind CV finding while retaining the
   project grouping and DNS-family fixes. Confirmed children need no recognized
   heading to survive unchanged blinded correspondence; every existing duty/date
