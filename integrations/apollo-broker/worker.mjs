@@ -62,15 +62,27 @@ async function exchange(env, parameters, fetcher) {
     body:new URLSearchParams({...parameters,client_id:env.APOLLO_CLIENT_ID,client_secret:env.APOLLO_CLIENT_SECRET}).toString()},fetcher);
 }
 const normalized = text => typeof text==='string' ? text.trim().replace(/\s+/g,' ').toLowerCase() : '';
+// Apollo returns LinkedIn links as http://www.linkedin.com/...; saved HR links
+// are https. Compare the public handle only, never the scheme or host form.
+const linkedinHandle = (value, kind) => {
+  const m=/^(?:https?:\/\/)?(?:www\.|[a-z]{2}\.)?linkedin\.com\/(in|company)\/([A-Za-z0-9_%~-]+)\/?$/i.exec(String(value || '').trim());
+  return m && m[1].toLowerCase()===kind ? m[2].toLowerCase() : '';
+};
+const LEGAL = new Set(['pt','tbk','sdn','bhd','berhad','pte','ltd','limited','inc','llc','corp','corporation','co','plc','gmbh','the']);
+const nameWords = text => normalized(text).replace(/[^a-z0-9]+/g,' ').split(' ').filter(word=>word && !LEGAL.has(word));
+function sameCompanyName(a, b) {
+  const [short,long]=[nameWords(a),nameWords(b)].sort((x,y)=>x.length-y.length);
+  return short.length>0 && short.every(word=>long.includes(word));
+}
 export function emailResult(data, expected) {
   const person=data?.person;
   if(!person) return {state:'not_found'};
-  const profile=String(person.linkedin_url || '').replace(/\/$/,'');
+  const profile=linkedinHandle(person.linkedin_url,'in');
   const org=person.organization;
-  const companyURL=String(org?.linkedin_url || '').replace(/\/$/,'')+'/';
-  const companyMatches=COMPANY.test(companyURL) ? companyURL===expected.company_url ||
-    companyURL===`https://www.linkedin.com/company/${expected.company_id}/` : normalized(org?.name)===normalized(expected.company);
-  if(!PROFILE.test(profile) || profile!==expected.url.replace(/\/$/,'') || !companyMatches || data.match_confidence==='low' || data.match_confidence==='none') return {state:'mismatch'};
+  const company=linkedinHandle(org?.linkedin_url,'company');
+  const companyMatches=(company && (company===linkedinHandle(expected.company_url,'company') || company===expected.company_id)) ||
+    sameCompanyName(org?.name,expected.company);
+  if(!profile || profile!==linkedinHandle(expected.url,'in') || !companyMatches || data.match_confidence==='low' || data.match_confidence==='none') return {state:'mismatch'};
   const email=person.email;
   if(typeof email!=='string' || email.length>254 || !/^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,63}$/.test(email) ||
       /@(gmail|googlemail|yahoo|hotmail|outlook|live|aol|icloud|protonmail|proton|mail|gmx)\./i.test(email)) return {state:'not_found'};
