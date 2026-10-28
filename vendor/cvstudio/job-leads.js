@@ -511,6 +511,7 @@
     try {
       notify('Checking the companion…');
       const companion = await rpc('jobStatus',{},1500); checkHR();
+      if (companion?.profile_browsing_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to keep browsing safely during scans.');
       if (!companion?.connected || companion.company_hr_revision !== 1 || companion.hr_company_identity_revision !== 1 || companion.hr_company_filter_revision !== 1 || companion.hr_company_source_revision !== 1 || companion.hr_resilience_revision !== 1 || companion.hr_layout_revision !== 1 || companion.hr_joined_revision !== 1 || companion.hr_joined_loading_revision !== 1 || companion.hr_keyword_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to use the corrected HR search and joining-date checks.');
       if (companion.busy) throw Error('Finish the current companion search or ad read first.');
       const saved=previousHRCompany(row),manual=companyURL && (!saved || companyURL!==saved.url);

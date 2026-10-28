@@ -8,11 +8,11 @@ function fixture(){
     [2,{id:2,url:'https://www.linkedin.com/search/results/people/',status:'complete',active:true}]]);
   let hooks;
   const chrome={
-    storage:{session:{get:async key=>({[key]:clone(state.session[key]??null)}),set:async value=>{if(state.failWrite)throw Error('Synthetic session failure');Object.assign(state.session,clone(value));}}},
+    storage:{session:{get:async key=>({[key]:clone(state.session[key]??null)}),set:async value=>{if(state.failWrite)throw Error('Synthetic session failure');if(state.onWrite)await state.onWrite(value);Object.assign(state.session,clone(value));}}},
     action:{onClicked:{addListener:fn=>hooks.arm=fn},setBadgeText:async()=>{}},
     tabs:{onRemoved:{addListener:fn=>hooks.removed=fn},onUpdated:{addListener:fn=>hooks.updated=fn},onActivated:{addListener:fn=>hooks.activated=fn},
       query:async()=>[...tabs.values()],get:async id=>{if(!tabs.has(id))throw Error('Missing synthetic tab');return {...tabs.get(id)}},
-      create:async({url,active})=>{const tab={id:++state.counter,url:state.loadingCreate?'about:blank':url,active,status:state.loadingCreate?'loading':'complete'};if(state.loadingCreate)tab.pendingUrl=url;tabs.set(tab.id,tab);return {...tab}},
+      create:async({url,active})=>{const tab={id:++state.counter,url:state.loadingCreate?'about:blank':url,active,status:state.loadingCreate?'loading':'complete'};if(state.loadingCreate)tab.pendingUrl=url;tabs.set(tab.id,tab);if(state.onCreated)state.onCreated(tab);return {...tab}},
       update:async(id,{url})=>{state.updates.push({id,url});const tab=tabs.get(id);if(state.loadingNavigation){tab.pendingUrl=url;tab.status='loading'}else tab.url=url;return {...tab}},
       remove:async id=>{state.removed.push(id);tabs.delete(id)}},
     scripting:{executeScript:async args=>{
@@ -20,6 +20,7 @@ function fixture(){
       if(args.target.documentIds && args.target.documentIds[0]!==state.document)throw Error('Original document is gone');
       if(args.files){if(state.onInject)await state.onInject(args.target.tabId);return [{}]}
       if(!args.args)return [{result:true,documentId:state.document}];
+      if(args.args[0]==='readProfile' && state.onRead)await state.onRead(args.target.tabId);
       return [{result:args.args[0]==='readSearch'?{profiles:[{url:first},{url:second}]}:true}];
     }},runtime:{onMessage:{addListener:fn=>hooks.message=fn}}};
   const identity=require('./linkedin_companion_identity_fixture')(chrome);
@@ -70,17 +71,17 @@ const cases=[
     assert((await f.navigate(id)).result,'owned tabs and observed links survive restart');
     await f.end();assert(!f.tabs.has(id),'End cleans up only retained owned tabs');f.boot();assert((await f.navigate(id)).error,'ended run stays ended');
   }],
-  ['user activation relinquishes a profile tab',async()=>{
+  ['user activation protects the profile and replaces further navigation',async()=>{
     const f=fixture();await f.arm();await f.begin();await f.observe();const id=(await f.create()).result;
-    f.tabs.get(id).active=true;assert((await f.navigate(id)).error,'active user-owned tab must not be navigated');
-    assert.equal(f.state.updates.length,0);f.tabs.get(id).active=false;await f.end();assert(f.tabs.has(id),'a relinquished tab is never cleaned up');
+    f.tabs.get(id).active=true;const moved=(await f.navigate(id)).result;assert(Number.isInteger(moved.tab_id),'use a new inactive profile instead of navigating the viewed tab');
+    assert.equal(f.state.updates.length,0);f.tabs.get(id).active=false;await f.end();assert(f.tabs.has(id),'a viewed tab is never cleaned up');assert(!f.tabs.has(moved.tab_id));
   }],
   ['user navigation relinquishes a profile tab',async()=>{
     const f=fixture();await f.arm();await f.begin();await f.observe();const id=(await f.create()).result;
     f.tabs.get(id).url='https://www.linkedin.com/feed/';assert((await f.navigate(id)).error);assert.equal(f.state.updates.length,0);
     await f.end();assert(f.tabs.has(id));
   }],
-  ['activation events persist relinquishment across restart',async()=>{
+  ['activation events persist read-only protection across restart',async()=>{
     const f=fixture();await f.arm();await f.begin();await f.observe();const id=(await f.create()).result;
     f.tabs.get(id).active=true;await f.hooks().activated({tabId:id});f.tabs.get(id).active=false;f.boot();await f.end();assert(f.tabs.has(id));
   }],
@@ -93,11 +94,11 @@ const cases=[
     const f=fixture();f.state.failWrite=true;await f.arm();assert((await f.rpc('tabs')).error);
     assert.equal(f.state.updates.length,0);assert.equal(f.state.counter,10);
   }],
-  ['ownership is checked again after script injection',async()=>{
+  ['viewing during injection preserves read-only authority',async()=>{
     const f=fixture();await f.arm();await f.begin();await f.observe();const id=(await f.create()).result;
     f.state.onInject=tabId=>{if(tabId===id)f.tabs.get(id).active=true};
-    const before=f.state.scripts.length;assert((await f.rpc('read',{run_id:f.run,tab_id:id,method:'readProfile',values:[first]})).error);
-    assert.equal(f.state.scripts.slice(before).filter(item=>item.args?.[0]==='readProfile').length,0);
+    const before=f.state.scripts.length;assert.equal((await f.rpc('read',{run_id:f.run,tab_id:id,method:'readProfile',values:[first]})).result,true);
+    assert.equal(f.state.scripts.slice(before).filter(item=>item.args?.[0]==='readProfile').length,1);await f.end();assert(f.tabs.has(id));
   }],
   ['profile limits and toolbar rearming cannot reset a running budget',async()=>{
     const f=fixture();await f.arm();await f.begin();await f.observe();const id=(await f.create()).result;
@@ -133,4 +134,5 @@ const cases=[
     assert.equal((await f.rpc('read',{run_id:f.run,tab_id:id,method:'readProfile',values:[first]})).result,true);
   }],
 ];
-(async()=>{let failures=0;for(const [name,test] of cases){try{await test();console.log('PASS',name)}catch(error){failures++;console.error('FAIL',name,error.message)}}if(failures)process.exitCode=1;})().catch(error=>{console.error(error);process.exitCode=1});
+module.exports={fixture};
+if(require.main===module)(async()=>{let failures=0;for(const [name,test] of cases){try{await test();console.log('PASS',name)}catch(error){failures++;console.error('FAIL',name,error.message)}}if(failures)process.exitCode=1;})().catch(error=>{console.error(error);process.exitCode=1});

@@ -106,7 +106,7 @@ if(require.main===module)(async()=>{
   assert.equal((await dates.rpc('hrJoinedClose',{run_id:dates.run,tab_id:di})).result,true);
   const takeover=hrFixture();await takeover.arm();const ti=(await takeover.beginHR()).result.tab_id;await takeover.readHR(ti);await takeover.readHR(ti);
   const tr=()=>takeover.rpc('hrJoined',{run_id:takeover.run,tab_id:ti,url:'https://www.linkedin.com/in/sample'});
-  await tr();takeover.tabs.get(12).active=true;assert((await tr()).error);await takeover.end();assert(takeover.tabs.has(12),'a user-opened profile is never closed');
+  await tr();takeover.tabs.get(12).active=true;assert.equal((await tr()).result.joined,'2020-06');await takeover.end();assert(takeover.tabs.has(12),'viewing permits exact-profile reads but never cleanup');
   const interrupted=hrFixture();await interrupted.arm();const ii=(await interrupted.beginHR()).result.tab_id;await interrupted.readHR(ii);await interrupted.readHR(ii);
   interrupted.state.session.cvstudioLinkedinSessionV1.connection.hr.joining={url:'https://www.linkedin.com/in/sample',tab_id:null};interrupted.boot();
   assert((await interrupted.rpc('hrJoined',{run_id:interrupted.run,tab_id:ii,url:'https://www.linkedin.com/in/sample'})).error);assert.equal(interrupted.state.created.length,1,'ambiguous creation cannot reopen a profile');

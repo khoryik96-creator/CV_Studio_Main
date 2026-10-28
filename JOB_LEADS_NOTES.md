@@ -1,5 +1,22 @@
 # Job Leads module
 
+## Browsing during HR scans (v24.6.509)
+
+The owner can switch LinkedIn tabs while a scan continues. Viewing a temporary
+joining-date profile retains exact-page read authority, but permanently releases
+automatic navigation/closure. If Experience is still missing, its joining date
+remains unknown; the companion never scrolls a viewed tab. A second page-side
+visibility check protects the scroll boundary. Completed reads release their
+reference while leaving viewed pages open. Other user tabs are never adopted.
+
+The shared worker persists bounded read-only protection across suspension,
+keeps it separate from owned action authority and rechecks real URL changes.
+Existing company/search/native country, snapshot, document, run/page/profile,
+Stop/save-revision guards remain. `profile_browsing_revision:1` requires the
+updated companion before individual/bulk HR discovery. No provider call,
+permission, route, record/storage schema or paid replay changes. See Sourcer
+notes and the v509 QA report; actual scan-page/filter edits still stop.
+
 ## Minimal discovery and form UI (v24.6.503)
 
 Discovery starts with labelled keywords/location/source/pages fields and Search.
@@ -397,7 +414,8 @@ continuous role; a separate former stint cannot replace the rejoining date.
 After each results page the companion checks the observed HR public profile
 links sequentially in temporary inactive tabs, up to 100 per run within the
 existing ten-minute ceiling. Exact profile/company identities and current
-employment dates are required. Activation/navigation relinquishes ownership;
+employment dates are required. Activation relinquishes navigation/closure
+ownership (v509 retains exact read access); navigation relinquishes all authority;
 user tabs remain untouched. Each lookup is polled briefly, and a slow/missing
 Experience section leaves its optional date unavailable. Up to four persisted
 scroll attempts load LinkedIn's lazy Experience content within that owned tab;
