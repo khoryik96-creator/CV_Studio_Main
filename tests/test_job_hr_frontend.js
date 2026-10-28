@@ -7,7 +7,7 @@ function hrFixture(){
   const f=fixture({activity:{markTabRunning:tab=>{assert.equal(tab,'jobleads');activity.push('running');return 1},markTabDone:()=>activity.push('done'),markTabFailed:()=>activity.push('failed')}});f.activity=activity;Object.assign(f.state,{hrPage:0,hrSeen:0});
   f.state.onRPC=(message,reply)=>{
     const {action,args}=message;
-    if(action==='jobStatus'){reply({connected:true,company_hr_revision:f.state.oldCompanion?0:1,hr_company_identity_revision:f.state.oldCompanyIdentity?0:1,hr_company_filter_revision:f.state.oldGroupFilter?0:1,hr_company_source_revision:f.state.oldCompanySource?0:1,hr_resilience_revision:f.state.oldResilience?0:1,hr_layout_revision:f.state.oldLayout?0:1,profile_browsing_revision:f.state.oldBrowsing?0:1,hr_joined_revision:1,hr_joined_loading_revision:f.state.oldJoinedLoading?0:1,hr_keyword_revision:f.state.oldKeywords?0:1,busy:!!f.state.hrBusy});return true;}
+    if(action==='jobStatus'){reply({connected:true,company_hr_revision:f.state.oldCompanion?0:1,hr_company_identity_revision:f.state.oldCompanyIdentity?0:1,hr_company_filter_revision:f.state.oldGroupFilter?0:1,hr_company_source_revision:f.state.oldCompanySource?0:1,hr_resilience_revision:f.state.oldResilience?0:1,hr_layout_revision:f.state.oldLayout?0:1,concurrent_scans_revision:f.state.oldConcurrent?0:1,profile_browsing_revision:f.state.oldBrowsing?0:1,hr_joined_revision:1,hr_joined_loading_revision:f.state.oldJoinedLoading?0:1,hr_keyword_revision:f.state.oldKeywords?0:1,busy:!!f.state.hrBusy});return true;}
     if(action==='hrJoined'){
       const value=f.state.joinedLoading?{loading:true}:{url:args.url,joined:f.state.joined ?? '2020-06'};
       if(f.state.holdJoined)f.state.releaseJoined=()=>reply(value);else reply(value);
@@ -94,12 +94,12 @@ if(require.main===module)(async()=>{
   f.state.records[0].hr.people=[{...profile,name:'Changed in another window'}];f.state.records[0].revision++;
   await f.el('Refresh').click();assert.equal(f.el('HRResults').children[0].children[0].textContent,'Changed in another window','explicit Refresh loads newer saved HR evidence');
   f.state.records[0].hr.complete=false;f.state.records[0].revision++;await f.el('Refresh').click();assert.match(f.el('HRMessage').textContent,/Limited scan/);
-  for(const kind of ['oldCompanion','oldKeywords','oldCompanyIdentity','oldGroupFilter','oldCompanySource','oldResilience','oldLayout','oldJoinedLoading','oldBrowsing','hrBusy','bad','conflict']){
+  for(const kind of ['oldCompanion','oldKeywords','oldCompanyIdentity','oldGroupFilter','oldCompanySource','oldResilience','oldLayout','oldJoinedLoading','oldBrowsing','oldConcurrent','hrBusy','bad','conflict']){
     const g=hrFixture();await g.init();g.state[kind]=true;await g.el('HRStart').click();
     assert(!g.state.records[0].hr,kind+' must not persist partial/unverified results');
     assert.match(g.el('HRMessage').textContent,/Previous saved results/);
     assert.deepEqual(g.activity,['running','failed'],kind+' must settle the activity on failure');
-    if(['oldCompanion','oldKeywords','oldCompanyIdentity','oldGroupFilter','oldCompanySource','oldResilience','oldLayout','oldJoinedLoading','oldBrowsing','hrBusy'].includes(kind))assert(!g.calls.some(x=>x.action==='hrBegin'));
+    if(['oldCompanion','oldKeywords','oldCompanyIdentity','oldGroupFilter','oldCompanySource','oldResilience','oldLayout','oldJoinedLoading','oldBrowsing','oldConcurrent','hrBusy'].includes(kind))assert(!g.calls.some(x=>x.action==='hrBegin'));
   }
   const stopped=hrFixture();await stopped.init();stopped.state.hold=true;
   const run=stopped.el('HRStart').click();for(let n=0;n<20&&!stopped.state.release;n++)await new Promise(resolve=>setTimeout(resolve,0));

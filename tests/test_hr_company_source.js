@@ -37,7 +37,7 @@ if(require.main===module)(async()=>{
     const bad=sourceFixture();await bad.arm();await bad.capture();const count=bad.state.created.length;assert((await bad.start(patch)).error);assert.equal(bad.state.created.length,count,'source evidence cannot authorize another job, company URL or label');
   }
   const cold=sourceFixture();await cold.arm();assert((await cold.start()).error,'an app flag without observed employer evidence is insufficient');
-  const stale=sourceFixture();await stale.arm();await stale.capture();stale.state.session.cvstudioLinkedinSessionV1.connection.jobCompany.at-=120001;stale.boot();assert((await stale.start()).error,'expired evidence cannot authorize a scan after restart');
+  const stale=sourceFixture();await stale.arm();await stale.capture();stale.state.session.cvstudioLinkedinLeadsSessionV1.connection.jobCompany.at-=120001;stale.boot();assert((await stale.start()).error,'expired evidence cannot authorize a scan after restart');
   const missing=sourceFixture();await missing.arm();missing.state.noLink=true;assert((await missing.capture()).error);assert.equal(missing.state.companyReads,48);assert((await missing.start()).error,'a loaded name without a single employer link cannot authorize a scan');
   const manual=sourceFixture();await manual.arm();const manualID=(await manual.beginHR()).result.tab_id;await manual.readHR(manualID);assert.equal(manual.state.sourceConfirmed,false,'manual company pages keep the strict name match');
   console.log('HR source identity: exact job/employer evidence, stable reads, short-to-full labels, canonical company name, restart, expiry, manual boundaries and missing/changed sources passed.');

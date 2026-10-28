@@ -7,7 +7,26 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current source checkpoint: v24.6.509, local and unmerged** on
+**Current source checkpoint: v24.6.511, local and unmerged** on
+`codex/v24.6.511-concurrent-companion`, from merged v509 `7a25051` / PR #260.
+The owner explicitly authorizes simultaneous Job Leads and Sourcer runs. The
+existing bounded worker implementation now has independent profiles/leads
+sessions under one authenticated app document, scoped RPCs, separate owned/viewed
+maps, budgets, Stop and durable snapshots. Cross-session tab leases prevent
+source reuse, reads, navigation or cleanup of another scan. Shared updates
+reserve both sessions; old app pages retain the single-run contract. Legacy HR
+state moves atomically into its separate key without resuming actions.
+Fresh inactive profile tabs avoid reuse-event races, following Gazy's scoped
+fetch pattern; viewed tabs remain protected. Temporary known grouped-company
+selections wait for a singleton rather than failing or reading mixed results.
+Literal job-ad HTML now displays as safe rich text and clean bullets through
+the existing read-only formatter; stored records/notes are unchanged. Final
+native/full checks are in the v511 QA report. No new permission/route/storage
+schema, provider retry, owner installation update, publication or merge. v510
+belongs to separate JobAdder PR #257 and is excluded. Issue #35 supplies live
+coordination and supersedes historical checkpoint publication wording.
+
+**Previous source checkpoint: v24.6.509, merged in PR #260** on
 `codex/v24.6.509-companion-tab-browsing`, from merged v508 `156980b` / PR #259.
 The owner explicitly permits browsing other LinkedIn tabs during Sourcer and
 Job Leads scans. Activating a scan profile now retains exact-page read authority

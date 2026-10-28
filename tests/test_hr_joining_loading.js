@@ -11,7 +11,7 @@ function loadOnSecondRead(f,id){
   const first=await ready();let restore=loadOnSecondRead(first.f,first.id);
   assert.equal((await first.read()).result?.loading,true,'same-source loading between initial metadata and joining verification waits');
   assert.equal(first.f.state.created.length,1,'no profile opens while source readiness is unknown');
-  assert.equal(first.f.state.session.cvstudioLinkedinSessionV1.connection.hr.joined_count||0,0);
+  assert.equal(first.f.state.session.cvstudioLinkedinLeadsSessionV1.connection.hr.joined_count||0,0);
   restore();first.f.boot();assert((await first.read()).result.loading);
   assert.equal((await first.read()).result.joined,'2020-06');assert.equal(first.f.state.created.length,2);
 
@@ -31,7 +31,7 @@ function loadOnSecondRead(f,id){
 
   const cleanup=await ready();await cleanup.read();cleanup.f.tabs.get(cleanup.id).status='loading';
   assert.equal((await cleanup.f.rpc('hrJoinedClose',{run_id:cleanup.f.run,tab_id:cleanup.id})).result,true,'optional lookup cleanup is safe during an unchanged source load');
-  assert(!cleanup.f.tabs.has(12));assert(!cleanup.f.state.session.cvstudioLinkedinSessionV1.connection.hr.joining);
+  assert(!cleanup.f.tabs.has(12));assert(!cleanup.f.state.session.cvstudioLinkedinLeadsSessionV1.connection.hr.joining);
   cleanup.f.tabs.get(cleanup.id).status='complete';assert((await cleanup.read()).result.loading,'cleanup does not leave the next profile falsely interrupted');
 
   for(const key of ['currentCompany','geoUrn','keywords']){

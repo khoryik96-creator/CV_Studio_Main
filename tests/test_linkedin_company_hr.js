@@ -100,18 +100,18 @@ if(require.main===module)(async()=>{
   assert((await dateRead()).result.loading);assert.equal(dates.state.created.length,2);const pi=dates.state.created.length+10;
   dates.boot();assert((await dates.nextHR(di)).error,'cannot page while an HR profile read is pending');
   assert.equal((await dateRead()).result.joined,'2020-06');assert(dates.state.removed.includes(pi));
-  assert(!dates.state.session.cvstudioLinkedinSessionV1.connection.hr.joining);
-  assert.equal(dates.state.session.cvstudioLinkedinSessionV1.connection.hr.joined_count,1);
+  assert(!dates.state.session.cvstudioLinkedinLeadsSessionV1.connection.hr.joining);
+  assert.equal(dates.state.session.cvstudioLinkedinLeadsSessionV1.connection.hr.joined_count,1);
   assert(!JSON.stringify(dates.state.session).includes('2020-06'),'dates and captured profile content do not enter worker session state');
   assert.equal((await dates.rpc('hrJoinedClose',{run_id:dates.run,tab_id:di})).result,true);
   const takeover=hrFixture();await takeover.arm();const ti=(await takeover.beginHR()).result.tab_id;await takeover.readHR(ti);await takeover.readHR(ti);
   const tr=()=>takeover.rpc('hrJoined',{run_id:takeover.run,tab_id:ti,url:'https://www.linkedin.com/in/sample'});
   await tr();takeover.tabs.get(12).active=true;assert.equal((await tr()).result.joined,'2020-06');await takeover.end();assert(takeover.tabs.has(12),'viewing permits exact-profile reads but never cleanup');
   const interrupted=hrFixture();await interrupted.arm();const ii=(await interrupted.beginHR()).result.tab_id;await interrupted.readHR(ii);await interrupted.readHR(ii);
-  interrupted.state.session.cvstudioLinkedinSessionV1.connection.hr.joining={url:'https://www.linkedin.com/in/sample',tab_id:null};interrupted.boot();
+  interrupted.state.session.cvstudioLinkedinLeadsSessionV1.connection.hr.joining={url:'https://www.linkedin.com/in/sample',tab_id:null};interrupted.boot();
   assert((await interrupted.rpc('hrJoined',{run_id:interrupted.run,tab_id:ii,url:'https://www.linkedin.com/in/sample'})).error);assert.equal(interrupted.state.created.length,1,'ambiguous creation cannot reopen a profile');
   const limit=hrFixture();await limit.arm();const li=(await limit.beginHR()).result.tab_id;await limit.readHR(li);await limit.readHR(li);
-  limit.state.session.cvstudioLinkedinSessionV1.connection.hr.joined_count=100;limit.boot();
+  limit.state.session.cvstudioLinkedinLeadsSessionV1.connection.hr.joined_count=100;limit.boot();
   assert((await limit.rpc('hrJoined',{run_id:limit.run,tab_id:li,url:'https://www.linkedin.com/in/sample'})).error);assert.equal(limit.state.created.length,1);
   const drift=hrFixture();await drift.arm();const si=(await drift.beginHR()).result.tab_id;await drift.readHR(si);await drift.readHR(si);
   const sr=()=>drift.rpc('hrJoined',{run_id:drift.run,tab_id:si,url:'https://www.linkedin.com/in/sample'});await sr();
@@ -144,8 +144,8 @@ if(require.main===module)(async()=>{
     const shouldClose=['owned','pending'].includes(ownership);
     assert.equal(cleanup.state.removed.includes(12),shouldClose,reason+'/'+ownership+' closes only inactive, unchanged HR-owned tabs');
     assert(cleanup.tabs.has(source),'the company search remains open');
-    assert.equal(cleanup.state.session.cvstudioLinkedinSessionV1.connection,null);
-    assert.equal(cleanup.state.session.cvstudioLinkedinSessionV1.owned.length,0);
+    assert.equal(cleanup.state.session.cvstudioLinkedinLeadsSessionV1.connection,null);
+    assert.equal(cleanup.state.session.cvstudioLinkedinLeadsSessionV1.owned.length,0);
   }
   const opening=hrFixture();await opening.arm();const os=(await opening.beginHR()).result.tab_id;await opening.readHR(os);await opening.readHR(os);
   opening.state.onCreated=tab=>new Promise(resolve=>{

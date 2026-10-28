@@ -21,7 +21,7 @@ function fixture(options={}){
     if(message.type==='CVSTUDIO_LINKEDIN_CAPTURE_RESULT'){state.captureReply?.(message.result);state.captureReply=null;return}
     calls.push(message);const reply=(value,error)=>events.message({source:window,origin:location.origin,data:{type:'CVSTUDIO_LINKEDIN_RESPONSE',id:message.id,channel:message.channel,...(error?typeof error==='object'?{error:error.message,error_code:error.code,...(error.companyURL?{company_url:error.companyURL}:{})}:{error}:{result:value})}});
     if(state.onRPC?.(message,reply))return;
-    if(message.action==='jobStatus')return reply({connected:state.connected,job_search:state.searchCapable,job_search_revision:state.searchRevision,version:'24.6.461',busy:state.busy});
+    if(message.action==='jobStatus')return reply({connected:state.connected,job_search:state.searchCapable,job_search_revision:state.searchRevision,concurrent_scans_revision:state.oldConcurrent?0:1,version:'24.6.461',busy:state.busy});
     if(message.action==='jobSearchTabs')return reply([{id:20,title:'Open filtered jobs',url:'https://www.linkedin.com/jobs/search/?keywords=finance&f_WT=2'}]);
     if(message.action==='jobSearchBegin'){state.page=0;state.scroll=0;return reply({tab_id:20})}
     if(message.action==='end')return reply(true);
@@ -201,8 +201,8 @@ if(require.main===module)(async()=>{
   f.el('SearchPages').value='2';f.el('SearchMode').value='open';f.el('SearchMode').handlers.change();await f.el('SearchRefresh').click();
   f.el('SearchSource').value='20';f.el('SearchQuery').value='';await f.el('SearchStart').click();
   assert(f.calls.some(call=>call.action==='jobSearchBegin'&&call.args.use_open&&call.args.source_tab_id===20));
-  for(const patch of [{connected:false},{searchCapable:false},{searchRevision:undefined},{searchRevision:0},{searchRevision:'1'},{busy:true}]){
-    Object.assign(f.state,{connected:true,searchCapable:true,searchRevision:1,busy:false},patch);
+  for(const patch of [{connected:false},{searchCapable:false},{searchRevision:undefined},{searchRevision:0},{searchRevision:'1'},{oldConcurrent:true},{busy:true}]){
+    Object.assign(f.state,{connected:true,searchCapable:true,searchRevision:1,oldConcurrent:false,busy:false},patch);
     const before=f.calls.length;await f.el('SearchStart').click();
     assert.deepEqual(f.calls.slice(before).map(call=>call.action),['jobStatus'],'unavailable/busy/old companions never open or end a search');
     assert.match(f.el('SearchCount').textContent,/3 found/,'readiness failures keep the prior results');
