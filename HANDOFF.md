@@ -7,7 +7,23 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current source checkpoint: v24.6.513, local and unmerged** on
+**Current source checkpoint: v24.6.514, local and unmerged** on
+`codex/v24.6.514-sourcer-evidence-refs`, stacked on local v513 `ec2dda3` from
+merged v511 `44f1887`. The pending Shiseido Apply correction is retained.
+Sourcer now asks the AI to select request/profile-bound IDs for bounded exact
+source passages; the app resolves displayed quotations locally, then applies
+the original strict source/identity/score/shape validator. The observed text
+is retained in order without duplicating it in provider input. Unknown, stale,
+cross-profile or ambiguous references fail; legacy exact-quote output remains
+strictly grounded. No fuzzy acceptance, partial-result filtering, extra provider
+call or paid retry is added. Source references are ephemeral and never exposed
+in client results. The reported request ID had no retained redacted log entry;
+its exact rejected quote is not claimed as recovered. See the v514 QA report
+and Sourcer notes. Full checks use synthetic provider data; owner installation,
+keys, records, routes/schemas, publication and merge remain untouched. Separate
+v512 JobAdder PR #257 is excluded.
+
+**Previous source checkpoint: v24.6.513, local and unmerged** on
 `codex/v24.6.513-company-apply-transition`, from merged v511 `44f1887` / PR #261.
 Live Shiseido inspection found its native Show results anchor keeps the HR
 keywords but temporarily omits `currentCompany`; its retained final search is

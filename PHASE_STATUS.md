@@ -4,6 +4,16 @@
 
 ## Release state
 
+- v24.6.514 is a local Sourcer evidence-protocol correction stacked on unmerged
+  v513 `ec2dda3`, retaining that HR fix. New reviews select bounded source
+  passage IDs; the app resolves exact original text before unchanged grounding,
+  identity, score and bounds checks. Cross-profile/stale/unknown/mixed references
+  fail; legacy quotes remain strictly validated. No client contract, route,
+  schema, extra provider call, paid retry or owner-install change. Native actual
+  route/Agent and domain tests use synthetic data; exact reported raw output is
+  unavailable by design. See the v514 QA report. No publication or merge;
+  separate v512 JobAdder PR #257 remains excluded.
+
 - v24.6.513 is a local grouped-company Apply correction on merged v511
   `44f1887`. Native Show results may retain keywords while omitting the company
   during navigation. Only that same-other-filter intermediate can wait after
