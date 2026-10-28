@@ -47,6 +47,7 @@ function applyJAPublicInfo(info, options) {
       && previousAccountCacheNamespace !== nextAccountCacheNamespace) {
     if (typeof clearTheSpiderJobAdderAccountState === 'function') clearTheSpiderJobAdderAccountState();
     if (typeof invalidateOneNoteJobAdderMatches === 'function') invalidateOneNoteJobAdderMatches();
+    if (typeof clearEmailVerifierJobAdderAccountState === 'function') clearEmailVerifierJobAdderAccountState();
     if (typeof clearPPCJobAdderAccountState === 'function') {
       Promise.resolve(clearPPCJobAdderAccountState()).catch(function(){});
     }
@@ -279,6 +280,7 @@ async function signOutJobAdder() {
     clearJALocalAccountState();
     clearTheSpiderJobAdderAccountState();
     invalidateOneNoteJobAdderMatches();
+    if (typeof clearEmailVerifierJobAdderAccountState === 'function') clearEmailVerifierJobAdderAccountState();
     await clearPPCJobAdderAccountState();
     await refreshIntegrationDiagnostics();
     showToast('Signed out from JobAdder in CV Studio', 'ok');

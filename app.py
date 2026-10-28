@@ -24,7 +24,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.511"
+_INSTALL_RECEIPT_VERSION = "v24.6.512"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -347,7 +347,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.511"
+_CVSTUDIO_VERSION = "v24.6.512"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -8245,6 +8245,11 @@ def jobadder_get_candidate():
 def jobadder_debug_endpoints():
     return _CVSTUDIO_JOBADDER_READ_SERVICE.debug_endpoints()
 
+@app.route("/jobadder/client_contacts", methods=["GET"])
+def jobadder_client_contacts():
+    """One page of client contacts for the Email Verifier's read-only JobAdder scan."""
+    return _CVSTUDIO_JOBADDER_READ_SERVICE.client_contacts()
+
 @app.route("/jobadder/upload_cv", methods=["POST"])
 @_ja_critical_write_route
 def jobadder_upload_cv():
@@ -15012,9 +15017,9 @@ def email_verifier():
 
 _CVSTUDIO_ARCHITECTURE = _finalize_modular_monolith_app(
     app,
-    expected_route_count=122,
+    expected_route_count=123,
     expected_route_contract_sha256=(
-        "4cb6b3f8e64b3421c9b9fae819c7fe64e6b05d98db193bb1eb42f8da07aaf600"
+        "fc424da1fa9e16a08098e5e603c16383194a70efef141d5fa20073d51682849f"
     ),
     expected_before_request_handlers=(
         "_assign_cvstudio_request_id",

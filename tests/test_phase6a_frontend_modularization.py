@@ -56,6 +56,7 @@ FRONTEND_MODULES = (
     "job-leads-apollo.js",
     "job-leads.js",
     "email-verifier.js",
+    "email-verifier-jobadder.js",
     "ai-proxy.js",
     "ai-routing.js",
     "runtime-core.js",
@@ -83,7 +84,7 @@ FRONTEND_STATIC_ASSETS = (
 class Phase6AFrontendModularizationTests(unittest.TestCase):
     def test_existing_route_and_vendor_asset_boundary(self):
         rules = list(app.app.url_map.iter_rules())
-        self.assertEqual(len(rules), 122)
+        self.assertEqual(len(rules), 123)
         vendor_rules = [rule for rule in rules if rule.rule == "/vendor/<path:filename>"]
         self.assertEqual(len(vendor_rules), 1)
         self.assertEqual(vendor_rules[0].methods - {"HEAD", "OPTIONS"}, {"GET"})

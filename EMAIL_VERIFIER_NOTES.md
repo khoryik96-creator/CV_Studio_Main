@@ -1,5 +1,65 @@
 # Email Verifier
 
+## JobAdder client-contact scan (v24.6.512, PR #257, unmerged)
+
+The owner asked for a scan of the email addresses of JobAdder client contacts
+that shows the invalid ones. The owner chose a dashboard rather than any change
+in JobAdder: **nothing is written to JobAdder**. Each listed contact links to its page in the connected tenant's own JobAdder
+web address (`<web base>/contacts/<contactId>`). The web base is the same one
+the rest of CV Studio uses, from `window._jaWebBase` or the stored `ja_web_base`.
+Only an `https://…jobadder.com` address is accepted, and `app.jobadder.com` is
+the fallback.
+
+- **Route.** `GET /jobadder/client_contacts?offset=&limit=` is the one new route.
+  It returns one page (at most 100) of contact id, name, company, primary email,
+  and JobAdder's no-longer-with-company flag. Status, phones, owners, notes and
+  custom fields are left behind. Bad offsets and limits fail before any
+  request. JobAdder errors return fixed messages and never echo the response
+  body. A page without an `items` list is an error, never an empty last page.
+  That covers a 200 response that is not JSON, such as a maintenance page. A
+  sign-in refresh that cannot reach JobAdder answers 503 (temporary), not 401
+  ("connect JobAdder"). It reads with the existing token and `JobAdderClient` (GET only). The
+  existing `read write` OAuth scope already covers it. Contract: 123 routes, SHA
+  `fc424da1fa9e16a08098e5e603c16383194a70efef141d5fa20073d51682849f`.
+- **Browser** (`vendor/cvstudio/email-verifier-jobadder.js`).
+  - The scan loads every page first, up to 20,000 contacts. A page that does
+    not move forward ends loading.
+  - Each unique email is checked once through the unchanged `POST
+    /email-verifier`.
+  - At most two checks run at once, never two on one domain, matching the
+    engine's limits. A 429 "busy" answer means wait and retry, not a result.
+  - When a check shows a domain accepts any address, its other addresses get
+    only a format-and-mail-records check (`quick`), never another mailbox probe.
+    Ones that pass show as Catch-all; a malformed address there is still
+    Invalid. The queue keys domains in their ASCII (IDNA) form, the same as
+    the engine's one-check-per-domain lock.
+  - A failed check (timeout, temporary server error) is retried twice, then set
+    aside so the rest of the list continues; Continue retries set-aside emails.
+    Five set-aside emails in a row with no success between them stop the scan,
+    because the connection is probably down. Temporary JobAdder page errors
+    (429/502/503/504 or no connection) are retried three times.
+  - A scan started before the page learned the connected account adopts that
+    account when it becomes known; any other account change clears the scan.
+  - A warning appears when five checks fail to reach any mail server and none
+    succeeds. That points to outgoing port 25 being blocked.
+  - Stop keeps results and Continue resumes. A failed check stops the scan
+    without losing results.
+  - Contacts and results stay in this tab only, like the rest of the module.
+    CSV export escapes formula prefixes.
+- **Only Invalid is a definite problem.** It covers a malformed address, a
+  missing domain, a domain with no mail server, or an explicit
+  missing-mailbox reply. The default view shows only these. Unconfirmed and
+  Catch-all are never treated as invalid.
+- **Account isolation.** Both JobAdder sign-out and an account change clear the
+  scan, through `clearEmailVerifierJobAdderAccountState()`. The dashboard also
+  refuses to show a scan whose account namespace no longer matches, so a missed
+  signal cannot leave one account's contacts on screen. Signing out and back
+  into the same account mid-check stops the old scan's background checks.
+
+The scan runs on the recruiter's laptop and network, like the rest of the
+module. Many company servers (often Microsoft 365) accept any address or
+decline verification checks, so their results stay Catch-all or Unconfirmed.
+
 ## DNS family recovery (v24.6.506)
 
 Each MX host's IPv4 (A) and IPv6 (AAAA) lookup now fails independently. A timeout

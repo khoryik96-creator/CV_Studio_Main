@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>CV Studio</title>
 <link rel="icon" type="image/png" href="cv_studio_logo.png?v=24.6.79-ui"/>
-<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.511">
-<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.511"></script>
+<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.512">
+<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.512"></script>
 <script>
 /* CV Studio Doctor — built-in diagnostic recorder.
  * Records JS errors, unhandled rejections, failed/slow network calls and
@@ -254,7 +254,7 @@
 <div class="app">
   <div class="header" style="position:relative;">
     <div>
-      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.511 (Offline) by The 郭 Lab</span></h1>
+      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.512 (Offline) by The 郭 Lab</span></h1>
 
     </div>
     <div class="header-tools">
@@ -891,6 +891,25 @@
         <details class="ev-guide"><summary>What do the results mean?</summary><dl><dt>Mailbox accepted</dt><dd>The server accepted this address and rejected a made-up address. It is positive evidence, but future delivery is not guaranteed.</dd><dt>Invalid</dt><dd>A definite format, domain or missing-mailbox problem was found.</dd><dt>Catch-all</dt><dd>The server accepts made-up addresses too, so the individual mailbox cannot be confirmed.</dd><dt>Unconfirmed</dt><dd>A timeout, access policy or temporary failure prevented a clear answer. Do not treat it as invalid.</dd><dt>Domain passed</dt><dd>Only address format and mail-server records were checked. Mailbox existence remains unconfirmed.</dd></dl><p>Disposable and role-address flags are separate hints. This version does not claim to identify spam traps or provide a complete reputation database.</p></details>
       </section>
     </div>
+    <section class="ev-panel ev-ja-panel" aria-labelledby="emailVerifierJaTitle">
+      <div class="ev-results-heading"><div class="ev-panel-title"><span class="ev-step">JA</span><h3 id="emailVerifierJaTitle">Scan JobAdder client contacts</h3></div><button id="emailVerifierJaClear" class="sec" disabled>Clear</button></div>
+      <p class="ev-muted">Reads your JobAdder client contacts and checks each email address. Nothing is changed in JobAdder: contacts with an invalid email are listed here with a link, so you can update them yourself. The list stays in this tab; export it before refreshing or closing.</p>
+      <div class="ev-ja-controls">
+        <div><label for="emailVerifierJaMode">Check depth</label><select id="emailVerifierJaMode"><option value="full">Mailbox verification</option><option value="quick">Domain check only (faster)</option></select></div>
+        <div class="ev-actions"><button id="emailVerifierJaStart" class="primary">Scan client contacts <span aria-hidden="true">→</span></button><button id="emailVerifierJaContinue" class="sec" disabled>Continue</button><button id="emailVerifierJaStop" class="sec" disabled>Stop</button></div>
+      </div>
+      <p id="emailVerifierJaMessage" role="status" aria-live="polite" class="ev-message"></p>
+      <p id="emailVerifierJaWarning" class="ev-ja-warning" hidden></p>
+      <div class="ev-summary" aria-label="JobAdder scan summary">
+        <div><span id="emailVerifierJaInvalid">0</span><small>Invalid email</small></div><div><span id="emailVerifierJaUnknown">0</span><small>Unconfirmed</small></div><div><span id="emailVerifierJaCatchAll">0</span><small>Catch-all</small></div><div><span id="emailVerifierJaAccepted">0</span><small>Accepted / domain passed</small></div><div><span id="emailVerifierJaNoEmail">0</span><small>No email</small></div>
+      </div>
+      <div class="ev-progress-heading"><span id="emailVerifierJaTotal">Your scan results will appear here</span><button id="emailVerifierJaExport" class="sec" disabled>Export shown ↓</button></div>
+      <progress id="emailVerifierJaProgress" max="1" value="0" hidden aria-label="Client contact emails checked"></progress>
+      <div class="ev-filters ev-ja-filters"><div><label for="emailVerifierJaFilter">Show</label><select id="emailVerifierJaFilter"><option value="invalid">Invalid emails</option><option value="unknown">Unconfirmed</option><option value="catch_all">Catch-all</option><option value="ok">Accepted / domain passed</option><option value="no_email">No email</option><option value="not_checked">Not checked yet</option><option value="">All contacts</option></select></div><div><label for="emailVerifierJaSearch">Find a contact, company or email</label><input id="emailVerifierJaSearch" type="search" autocomplete="off"/></div><label class="ev-ja-check"><input id="emailVerifierJaHideInactive" type="checkbox"/> Hide contacts no longer with the company</label></div>
+      <div class="ev-table-wrap"><table><thead><tr><th scope="col">Contact</th><th scope="col">Company</th><th scope="col">Email</th><th scope="col">Result</th><th scope="col">What we found</th></tr></thead><tbody id="emailVerifierJaResults"></tbody></table><div id="emailVerifierJaEmpty" class="ev-empty">Press Scan client contacts to check every client contact’s email.</div></div>
+      <p id="emailVerifierJaMore" class="ev-muted" hidden></p>
+      <p class="ev-muted">Only Invalid means a definite problem: the address is malformed, its domain does not exist or receive email, or the mail server said the mailbox does not exist. Unconfirmed and Catch-all are never treated as invalid. When a company’s server accepts any address, its other contacts are not checked one by one.</p>
+    </section>
   </div>
 
   <div class="page-view" id="viewJobLeads">
@@ -2601,38 +2620,39 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
-<script src="/vendor/cvstudio/api-transport.js?v=v24.6.511"></script>
-<script src="/vendor/cvstudio/page-nav.js?v=v24.6.511"></script>
-<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.511"></script>
-<script src="/vendor/cvstudio/create-profile.js?v=v24.6.511"></script>
-<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.511"></script>
-<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.511"></script>
-<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.511"></script>
-<script src="/vendor/cvstudio/company-profile.js?v=v24.6.511"></script>
-<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.511"></script>
-<script src="/vendor/cvstudio/appearance.js?v=v24.6.511"></script>
-<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.511"></script>
-<script src="/vendor/cvstudio/docx-export.js?v=v24.6.511"></script>
-<script src="/vendor/cvstudio/the-owl.js?v=v24.6.511"></script>
-<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.511"></script>
-<script src="/vendor/cvstudio/linkedin-sourcer-core.js?v=v24.6.511"></script>
-<script src="/vendor/cvstudio/linkedin-sourcer.js?v=v24.6.511"></script>
-<script src="/vendor/cvstudio/job-leads-apollo.js?v=v24.6.511"></script>
-<script src="/vendor/cvstudio/job-leads.js?v=v24.6.511"></script>
-<script src="/vendor/cvstudio/email-verifier.js?v=v24.6.511"></script>
-<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.511"></script>
-<script src="/vendor/cvstudio/settings.js?v=v24.6.511"></script>
-<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.511"></script>
-<script src="/vendor/cvstudio/tab-status.js?v=v24.6.511"></script>
-<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.511"></script>
-<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.511"></script>
-<script src="/vendor/cvstudio/cv-format.js?v=v24.6.511"></script>
-<script src="/vendor/cvstudio/locks.js?v=v24.6.511"></script>
-<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.511"></script>
-<script src="/vendor/cvstudio/ppc.js?v=v24.6.511"></script>
-<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.511"></script>
-<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.511"></script>
-<script src="/vendor/cvstudio/batch-format.js?v=v24.6.511"></script>
+<script src="/vendor/cvstudio/api-transport.js?v=v24.6.512"></script>
+<script src="/vendor/cvstudio/page-nav.js?v=v24.6.512"></script>
+<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.512"></script>
+<script src="/vendor/cvstudio/create-profile.js?v=v24.6.512"></script>
+<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.512"></script>
+<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.512"></script>
+<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.512"></script>
+<script src="/vendor/cvstudio/company-profile.js?v=v24.6.512"></script>
+<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.512"></script>
+<script src="/vendor/cvstudio/appearance.js?v=v24.6.512"></script>
+<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.512"></script>
+<script src="/vendor/cvstudio/docx-export.js?v=v24.6.512"></script>
+<script src="/vendor/cvstudio/the-owl.js?v=v24.6.512"></script>
+<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.512"></script>
+<script src="/vendor/cvstudio/linkedin-sourcer-core.js?v=v24.6.512"></script>
+<script src="/vendor/cvstudio/linkedin-sourcer.js?v=v24.6.512"></script>
+<script src="/vendor/cvstudio/job-leads-apollo.js?v=v24.6.512"></script>
+<script src="/vendor/cvstudio/job-leads.js?v=v24.6.512"></script>
+<script src="/vendor/cvstudio/email-verifier.js?v=v24.6.512"></script>
+<script src="/vendor/cvstudio/email-verifier-jobadder.js?v=v24.6.512"></script>
+<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.512"></script>
+<script src="/vendor/cvstudio/settings.js?v=v24.6.512"></script>
+<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.512"></script>
+<script src="/vendor/cvstudio/tab-status.js?v=v24.6.512"></script>
+<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.512"></script>
+<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.512"></script>
+<script src="/vendor/cvstudio/cv-format.js?v=v24.6.512"></script>
+<script src="/vendor/cvstudio/locks.js?v=v24.6.512"></script>
+<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.512"></script>
+<script src="/vendor/cvstudio/ppc.js?v=v24.6.512"></script>
+<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.512"></script>
+<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.512"></script>
+<script src="/vendor/cvstudio/batch-format.js?v=v24.6.512"></script>
 <script>
 
 document.addEventListener('DOMContentLoaded', initPageNavPin);
@@ -2650,9 +2670,9 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 
 </script>
-<script src="/vendor/cvstudio/input-file.js?v=v24.6.511"></script>
-<script src="/vendor/cvstudio/stats.js?v=v24.6.511"></script>
-<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.511"></script>
+<script src="/vendor/cvstudio/input-file.js?v=v24.6.512"></script>
+<script src="/vendor/cvstudio/stats.js?v=v24.6.512"></script>
+<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.512"></script>
 <script>
 try { updateSummaryLockUI(); } catch(e) {}
 try { updateCvScoringLockUI(); } catch(e) {}

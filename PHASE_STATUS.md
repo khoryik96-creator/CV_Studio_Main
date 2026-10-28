@@ -4,7 +4,18 @@
 
 ## Release state
 
-- v24.6.511 is a local concurrent companion/ad-content correction on merged
+- v24.6.512 (unmerged PR #257 on `claude/pr157-chatgpt-fix-zke4cy`,
+  rebased on merged master `44f1887` v511) adds a read-only JobAdder client-contact
+  scan to the Email Verifier. It has one new GET route,
+  `/jobadder/client_contacts` (route contract 122 to 123), and a dashboard that
+  lists contacts whose email is Invalid, with a link to each JobAdder contact.
+  It writes nothing to JobAdder and stores no email list. The existing verifier
+  limits are unchanged, and there is no paid or AI call. It was numbered v510
+  before v511 merged first. See the v512 QA report and EMAIL_VERIFIER_NOTES.md.
+
+- v24.6.509 is merged in PR #260 as `7a25051`, a tab-browsing correction on merged v508 `156980b`.
+
+- v24.6.511 is merged in PR #261 as `44f1887`, a concurrent companion/ad-content correction on merged
   v509 `7a25051`. Profiles/leads use separate bounded run state, ownership,
   Stop and snapshots, with shared authenticated-document/update gates and
   cross-session source/tab exclusion. Fresh inactive profile lookups avoid
