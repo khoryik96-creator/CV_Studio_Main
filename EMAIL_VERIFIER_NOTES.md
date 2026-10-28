@@ -1,5 +1,21 @@
 # Email Verifier
 
+## DNS family recovery (v24.6.506)
+
+Each MX host's IPv4 (A) and IPv6 (AAAA) lookup now fails independently. A timeout
+or other inconclusive result in one family cannot discard public answers from
+the other, and both queries retain the same original deadline. Every returned
+address is still checked before selection: any restricted/malformed answer
+rejects that host even if the other family failed. The two-address cap, balanced
+IPv4/real-IPv6 selection and literal-IP SMTP pinning are unchanged.
+
+If neither family supplies an address and either lookup failed, the failure
+remains explicit Unconfirmed, including implicit-MX domains. Definitively empty
+answers retain their prior behavior. Quick/full/deep checks share this resolver
+path. No new DNS retry, SMTP session, paid/provider call, route or stored state
+is added. This extends the v491 per-MX isolation and preserves v493 family
+selection and v500/v501 evidence/recheck controls.
+
 ## Review corrections (v24.6.501)
 
 Microsoft DBEB replies may include the documented terminal period before a

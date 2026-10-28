@@ -4,6 +4,15 @@
 
 ## Release state
 
+- v24.6.506 corrects the review's DNS-family failure isolation on top of pending
+  v505 `3f9e340`, with owner authorization to merge both after final checks.
+  A successful public A/AAAA answer survives an inconclusive lookup in the other
+  family. Restricted/malformed answers still reject the host, missing answers
+  plus an inconclusive lookup stay Unconfirmed, and definitive empty answers
+  retain compatibility. Shared deadlines, two-address selection, SMTP limits,
+  routes, schemas and paid/credential boundaries remain unchanged. Separate
+  JobAdder PR #257 is excluded; issue #35 records final publication status.
+
 - v24.6.505 is a local, unmerged CV project-layout correction on merged v504
   `8d0e8dc` / PR #256. Exact source-confirmed project/role headings retain their
   grouping in Additional Information, and confirmed lowercase-o children use

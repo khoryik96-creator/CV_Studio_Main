@@ -7,7 +7,19 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current source checkpoint: v24.6.505, local and unmerged** on
+**Current source checkpoint: v24.6.506, owner-authorized for merge** on
+`codex/v24.6.506-dns-family-recovery`, retaining pending v505 `3f9e340` from
+merged v504 `8d0e8dc`. The old v490 review identified a still-current DNS issue:
+one failed A/AAAA query discarded a usable answer from the other family.
+Each family now fails independently under the same deadline; all returned
+addresses still pass the restricted-address guard before bounded selection.
+An inconclusive lookup without usable addresses remains Unconfirmed, including
+implicit MX. Quick/full/deep modes share the correction. Version, verifier notes
+and the v506 QA report record the final checks. Routes/storage/provider/SMTP
+limits and owner installation remain untouched; separate JobAdder PR #257 is
+excluded. Publication/merge identity belongs in coordination issue #35.
+
+**Previous source checkpoint: v24.6.505, local and unmerged** on
 `codex/v24.6.505-project-bullets`, based on merged v504 `8d0e8dc` / PR #256.
 Dedicated Project Experience additional-info groups now retain source-confirmed
 project/company and role headings plus lowercase-o child bullets. Positional,
