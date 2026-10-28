@@ -1596,7 +1596,7 @@ def _blind_restore_cv_skill_headings(repaired, original_cv):
                     and len(layout) == len(before)
                     and all(isinstance(style, str) and style in {"heading", "bullet", "nested"}
                             for style in layout)
-                    and any(style == "heading" for style in layout)
+                    and any(style != "bullet" for style in layout)
                     and all(before[i] == after[i] for i, style in enumerate(layout) if style != "heading")
                     and all(re.findall(r"\d+", a) == re.findall(r"\d+", b)
                             for a, b in zip(before, after))):

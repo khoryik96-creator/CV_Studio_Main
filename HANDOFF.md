@@ -7,7 +7,17 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current source checkpoint: v24.6.506, owner-authorized for merge** on
+**Current source checkpoint: v24.6.507, review correction for PR #258** on
+`codex/v24.6.506-dns-family-recovery`, retaining v505/v506. Hosted review found
+that Blind CV discarded confirmed child nesting when a project group had no
+recognized heading. Nested-only layouts now survive the same exact category,
+count, duty and numeric-anchor checks; provider hints remain discarded and no
+source text is copied. New array/string and real Word pipeline regressions
+failed before the one-line predicate correction. See guardrail C4 and the v507
+QA report. The owner already authorized fixes and merge; wait for hosted checks
+and review of the new exact head. PR #257 and owner installation remain excluded.
+
+**Previous source checkpoint: v24.6.506, owner-authorized for merge** on
 `codex/v24.6.506-dns-family-recovery`, retaining pending v505 `3f9e340` from
 merged v504 `8d0e8dc`. The old v490 review identified a still-current DNS issue:
 one failed A/AAAA query discarded a usable answer from the other family.

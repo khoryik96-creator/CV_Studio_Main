@@ -133,7 +133,9 @@ Duplicates, mismatches, other categories, ambiguous sections and oversized input
 do not justify new hints. Source-backed rechecks clear stale hints; source-free
 export retains them. Blind rebuilding discards provider hints and copies only
 text-free layout positions with matching categories/counts and unchanged duties
-and numeric anchors. No source wording is recovered after blinding.
+and numeric anchors. A confirmed nested-only layout needs no recognized heading
+to survive blinding; unchanged parent/child items prove correspondence. No
+source wording is recovered after blinding.
 
 ### B1
 **Blind CV keeps the source summary's points.** Only the Blind CV parse opt-in

@@ -127,6 +127,11 @@ class SourceRestoreGuardrails(unittest.TestCase):
                     copy.deepcopy(case["parsed"]), "\n".join(case["lines"]))
                 self.assertEqual(result["skills"][0].get("item_layout"),
                                  case["expect_layout"], case["note"])
+                if "expect_blind_layout" in case:
+                    reply = blind_mask._blind_restore_cv_bullet_structure(
+                        copy.deepcopy(result), result)
+                    self.assertEqual(reply["skills"][0].get("item_layout"),
+                                     case["expect_blind_layout"], case["note"])
 
     def test_blind_source_summary_keeps_matching_provider_corrections(self):
         for case in _cases("blind_source_recovery"):

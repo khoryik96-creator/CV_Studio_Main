@@ -4,6 +4,13 @@
 
 ## Release state
 
+- v24.6.507 corrects PR #258's nested-only Blind CV finding while retaining the
+  project grouping and DNS-family fixes. Confirmed children need no recognized
+  heading to survive unchanged blinded correspondence; every existing duty/date
+  guard remains. Three new regressions failed before correction. Final local
+  and hosted results/merge identity are recorded in issue #35 and the v507 QA
+  report. No route, schema, provider, owner-installation or PR #257 scope change.
+
 - v24.6.506 corrects the review's DNS-family failure isolation on top of pending
   v505 `3f9e340`, with owner authorization to merge both after final checks.
   A successful public A/AAAA answer survives an inconclusive lookup in the other

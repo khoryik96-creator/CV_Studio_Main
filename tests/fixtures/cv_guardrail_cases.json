@@ -19136,6 +19136,41 @@
     "bullet"
    ],
    "note": "Exact unmarked dated project/role labels remain headings; source lowercase o children retain one nested real bullet."
+  },
+  {
+   "id": "C4-blind-nested-without-headings",
+   "rule": "C4",
+   "kind": "project_layout",
+   "parsed": {
+    "skills": [
+     {
+      "category": "Project Experience",
+      "items": [
+       "Implemented migration",
+       "o Tested rollback",
+       "o Verified recovery"
+      ]
+     }
+    ]
+   },
+   "lines": [
+    "PROJECT EXPERIENCE",
+    "• Implemented migration",
+    "o Tested rollback",
+    "o Verified recovery",
+    "EDUCATION"
+   ],
+   "expect_layout": [
+    "bullet",
+    "nested",
+    "nested"
+   ],
+   "expect_blind_layout": [
+    "bullet",
+    "nested",
+    "nested"
+   ],
+   "note": "Unchanged blinded project items retain confirmed child nesting even when no project heading was recognized."
   }
  ]
 }

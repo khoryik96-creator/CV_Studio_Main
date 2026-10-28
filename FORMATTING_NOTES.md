@@ -61,7 +61,11 @@ source-confirmed children beneath a unique matching parent; ordinary O-words are
 untouched. Preview and Word validate category/count/style values before using
 hints. Source rechecks clear stale metadata; source-free exports preserve it.
 Blind CV discards provider hints and restores only text-free positions when
-category/count, duties and numeric anchors still match. Guardrail C4 and
+category/count, duties and numeric anchors still match.
+The v24.6.507 review correction also retains confirmed nested-only layouts
+through Blind CV when no heading was recognized; the same exact duty/date
+checks remain, and no source text is copied.
+Guardrail C4 and
 `tests/test_cv_project_layout.py` cover uncertainty, duplicate labels/parents,
 Unicode names, malformed hints, limits and real Word numbering. This does not
 replace the existing role-section, contribution, award or training rules.

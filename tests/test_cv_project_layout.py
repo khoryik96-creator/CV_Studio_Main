@@ -22,6 +22,31 @@ def example(shape=list):
                       'items': items if shape is list else '\n'.join(items)}]}, source
 
 
+def nested_example(shape=list):
+    items=['Implemented migration','o Tested rollback','o Verified recovery']
+    source='PROJECT EXPERIENCE\n\u2022 Implemented migration\no Tested rollback\no Verified recovery\nEDUCATION'
+    data={'candidate':{'name':'Example Candidate','current_position':''},
+          'skills':[{'category':'Project Experience','items':items if shape is list else '\n'.join(items)}]}
+    return data,source
+
+
+@pytest.mark.parametrize('shape',[list,str])
+def test_blind_retains_confirmed_nested_only_layout_without_heading(shape):
+    data,source=nested_example(shape)
+    original=n._normalize_cv_data_for_output(data,source)
+    assert original['skills'][0]['item_layout']==['bullet','nested','nested']
+    reply=copy.deepcopy(original)
+    result=blind._blind_restore_cv_bullet_structure(reply,original)
+    assert result['skills']==original['skills']
+    assert result['skills'][0]['items']==reply['skills'][0]['items']
+
+
+def test_blind_nested_only_layout_still_requires_unchanged_duties():
+    data,source=nested_example();original=n._normalize_cv_data_for_output(data,source)
+    reply=copy.deepcopy(original);reply['skills'][0]['items'][1]='o Rewritten duty'
+    assert 'item_layout' not in blind._blind_restore_cv_bullet_structure(reply,original)['skills'][0]
+
+
 @pytest.mark.parametrize('shape',[list,str])
 def test_project_names_roles_and_nested_points_keep_the_source_shape(shape):
     data,source=example(shape)
@@ -121,14 +146,16 @@ def test_explicit_legacy_date_title_can_have_a_source_marker():
     assert result['item_layout'][:2] == ['bullet','bullet']
 
 
-def test_real_word_pipeline_uses_headings_and_nested_numbering(tmp_path):
+@pytest.mark.parametrize('nested_only',[False,True])
+def test_real_word_pipeline_uses_headings_and_nested_numbering(tmp_path,nested_only):
     import subprocess
     import json
     import zipfile
     from pathlib import Path
     from lxml import etree
-    data, source = example()
+    data, source = nested_example() if nested_only else example()
     normalized = n._normalize_cv_data_for_output(data, source)
+    normalized = blind._blind_restore_cv_bullet_structure(copy.deepcopy(normalized), normalized)
     payload = tmp_path/'cv.json'
     output = tmp_path/'cv.docx'
     payload.write_text(json.dumps(normalized), encoding='utf-8')
