@@ -9,6 +9,7 @@
   }
   function pushApiError(entry){window._cvStudioRecentApiErrors.push(entry);if(window._cvStudioRecentApiErrors.length>30)window._cvStudioRecentApiErrors.splice(0,window._cvStudioRecentApiErrors.length-30);try{window.dispatchEvent(new CustomEvent('cvstudio-api-error',{detail:entry}));}catch(e){}}
   function actionHint(action){
+    if(action==='review_sourcer_results')return 'Results already found are kept. No AI request was retried automatically.';
     var map={open_jobadder_settings:'Open JobAdder settings and reconnect.',open_onenote_settings:'Open OneNote settings and reconnect.',open_outlook_settings:'Open Outlook settings and reconnect.',open_ai_settings:'Open Main API Settings and check the provider key.',open_settings:'Open Settings and review the connection.',retry:'Retry the action.',retry_later:'Try again shortly.',retry_or_switch_provider:'Retry shortly or switch provider.',use_smaller_file:'Use a smaller file or split the request.',unlock_feature:'Unlock this feature first.',reopen_local_app:'Close this page and reopen CV Studio from its local launcher.',reload_browser:'Reload CV Studio in this browser tab and try again.'};
     return map[String(action||'')]||'';
   }

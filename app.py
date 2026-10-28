@@ -24,7 +24,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.507"
+_INSTALL_RECEIPT_VERSION = "v24.6.508"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -347,7 +347,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.507"
+_CVSTUDIO_VERSION = "v24.6.508"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -14768,7 +14768,8 @@ app.config["SALARY_COMPARISON_KEY_RESOLVER"] = _salary_comparison_resolve_key
 _salary_comparison.init_app(app, url_prefix="/salary-comparison")
 
 
-from cvstudio_linkedin_sourcer import LinkedInSourcerService, SourcerError, SYSTEM as _SOURCER_SYSTEM
+from cvstudio_linkedin_sourcer import (LinkedInSourcerService, SourcerError,
+                                     SourcerResponseError, SYSTEM as _SOURCER_SYSTEM)
 
 
 def _linkedin_sourcer_provider_call(model, brief, task, schema, observed):
@@ -14867,7 +14868,10 @@ def linkedin_sourcer():
     try:
         return jsonify(_LINKEDIN_SOURCER.handle(request.get_json(silent=True)))
     except SourcerError as error:
-        return jsonify(error=str(error), retryable=False, **getattr(error, "accounting", {})), 400
+        extra = dict(getattr(error, "accounting", {}))
+        if isinstance(error, SourcerResponseError):
+            extra.update(code=error.code, action=error.action)
+        return jsonify(error=str(error), retryable=False, **extra), 400
 
 
 from cvstudio_job_leads import JobLeadsStore, JobLeadsError, format_description

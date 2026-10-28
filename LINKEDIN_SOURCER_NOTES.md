@@ -1,5 +1,32 @@
 # LinkedIn Sourcer module
 
+## Assessment output limits and failure guidance (v24.6.508)
+
+The review request now declares the same bounds as the existing validator:
+integer score 0–100; 1–4 exact supporting quotes; 0–6 unknown requirements;
+each text item at most 250 characters. Shared constants drive schema and
+validator text/list limits. Each request also supplies its existing stage's
+candidate maximum without mutating the shared schema. No supporting quote
+means omit the candidate, never manufacture evidence or pad an empty field.
+Grounding, observed IDs, duplicate detection and strict score/text checks stay.
+
+Previously the schema omitted these bounds, so provider output could match the
+requested shape yet fail local assessment validation. Such failures now use
+`AI_PROVIDER_RESPONSE_INVALID` / `review_sourcer_results`, separate from key
+authentication. The central transport keeps the request ID and explains that
+results already found remain and no AI request was automatically retried.
+Real key/authentication guidance remains unchanged. The five already screened
+results in the reported screenshot therefore need no credential replacement
+based on this response-validation error alone.
+
+There is no truncation of unknown requirements, quote rewriting, acceptance of
+unverified claims, automatic paid retry, continuation after a failed assessment
+or added provider call. Failed detail checks retain prior search-card evidence
+without falsely marking it as profile-detail checked. Existing accounting,
+request ceilings, Stop/cleanup, browser authority and storage contracts remain.
+Raw provider/profile data is not logged; the supplied request ID was absent from
+the existing redacted runtime log, so no exact rejected field is claimed.
+
 ## Conservative normal-search Boolean budget (v24.6.504)
 
 LinkedIn documents a consumer Boolean-operator limit without stating its

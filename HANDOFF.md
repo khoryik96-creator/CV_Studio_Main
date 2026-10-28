@@ -7,7 +7,19 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current source checkpoint: v24.6.507, review correction for PR #258** on
+**Current source checkpoint: v24.6.508, local and unmerged** on
+`codex/v24.6.508-sourcer-assessment-output`, from merged v507 `8c99a3d` / PR #258.
+An incomplete Sourcer assessment was incorrectly followed by API-key advice.
+The review schema now declares the validator's existing score/quote/unknown
+bounds and stage candidate maximum. Invalid review/tool output uses a distinct
+response-error code/action while real authentication guidance remains. Existing
+found card results, provenance, billing and no paid replay are preserved; no
+claims/unknowns are truncated or guessed. Synthetic route/domain/browser and
+native actual-route + transport + agent checks cover the failure. No live
+provider/key test, owner installation change, publication or merge. Separate
+JobAdder PR #257 is excluded. See Sourcer notes and the v508 QA report.
+
+**Previous source checkpoint: v24.6.507, merged in PR #258** on
 `codex/v24.6.506-dns-family-recovery`, retaining v505/v506. Hosted review found
 that Blind CV discarded confirmed child nesting when a project group had no
 recognized heading. Nested-only layouts now survive the same exact category,
