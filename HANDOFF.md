@@ -7,7 +7,19 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current source checkpoint: v24.6.515** on
+**Current source checkpoint: v24.6.516** on
+`codex/v24.6.516-contacts-visibility`, from merged v515 `2514d1a` / PR #263.
+The owner authorizes fixing and merging the sole post-merge review finding:
+the global `.card` display rule overrode the Contacts panel's hidden attribute.
+A panel-specific `[hidden]` rule now removes it from layout on Job ads. The
+portable optional native regression in `tests/browser/apollo_contacts_visibility.js`
+uses actual markup/CSS/controller with synthetic local fetches and blocked
+network. It fails before the fix and passes for initial, selected, returned and
+fresh desktop/mobile views, preserving the draft/search and avoiding paid work.
+No controller, Apollo/Worker/backend/storage/credential/record changes. See the
+v516 QA report and issue #35 for publication. PR #257 remains on hold.
+
+**Previous source checkpoint: v24.6.515, merged in PR #263** on
 `codex/v24.6.515-apollo-contacts`, based on merged v514 `336ba15` / PR #262.
 The owner's two unpushed Apollo commits were applied with git am: public Worker
 address and named HTTP client, plus HTTP/HTTPS LinkedIn-handle identity. The

@@ -4,6 +4,15 @@
 
 ## Release state
 
+- v24.6.516 corrects the sole post-merge v515 review finding on master `2514d1a`
+  / PR #263. A scoped `[hidden]` rule makes the Contacts card follow the selected
+  Job Leads view despite the global flex-card rule. A native browser regression
+  using actual markup/CSS/controller fails before and passes after the fix on
+  desktop/mobile, including tab switching, fresh views and draft/search retention.
+  No backend/Worker/account/data/route/schema change; no live Apollo spend or
+  owner installation change. The owner authorizes fix and merge; PR #257 stays
+  on hold. See the v516 QA report and issue #35 for final validation/publication.
+
 - v24.6.515 applies the owner's unpushed Apollo activation patch on merged
   v514 (`336ba15` / PR #262), then tightens overly broad company-name matching.
   Job Leads adds a protected local unlocked-contacts history with filtered XLSX
