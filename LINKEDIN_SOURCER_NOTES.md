@@ -1,5 +1,30 @@
 # LinkedIn Sourcer module
 
+## Conservative normal-search Boolean budget (v24.6.504)
+
+LinkedIn documents a consumer Boolean-operator limit without stating its
+numeric size: https://www.linkedin.com/help/linkedin/answer/a524411/boolean-query-limitations.
+On the owner's account, the reported seven-alias SAP query returned no results;
+the four-alias query returned ten visible cards before and after that check,
+with the same native Malaysia geography filter.
+
+New standard searches therefore request at most three AND/OR/NOT operators
+outside quoted phrases. The original exact core role/skill comes first; full
+criteria remain in requirements for assessment. A deterministic validator can
+narrow only an overlong flat positive OR list to four aliases, deduplicating
+exact case-insensitive alternatives. Country and requirements are copied
+unchanged. Quoted operator words/parentheses remain literal. Empty/invalid
+aliases, nested logic, AND and NOT in an overbudget plan fail with guidance to
+use fewer alternatives or Recruiter, without silently losing constraints.
+This is a conservative product budget, not a claimed universal LinkedIn limit.
+
+Recruiter/Lite and review-existing-filtered-search mode retain the original
+schema/validator. The existing start request's use_open_search boolean is kept
+in the in-memory Run only; summaries, persistence, routes and paid boundaries
+are unchanged. No new provider call, automatic retry or paid replay. Older
+companions that already support v502 cards/country work with this correction.
+An empty first page says no matches; only a later empty page says no more results.
+
 ## Modern People cards and pagination (v24.6.502)
 
 Live cards now contain mutual connections' profile links, which made the old

@@ -7,7 +7,20 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current source checkpoint: v24.6.503, local and unmerged** on
+**Current source checkpoint: v24.6.504, local and unmerged** on
+`codex/v24.6.504-sourcer-queries`, based on merged v503 `e689e39` / PR #255.
+Live A/B/A testing found the reported seven-alias People query returns no
+results, while four aliases restore ten cards with the same native Malaysia
+filter. Normal new searches now request a conservative three-operator plan.
+Overlong flat positive OR lists retain at most four aliases; full assessment
+requirements/country remain. AND/NOT/nested overbudget plans fail visibly rather
+than silently losing constraints or replaying a paid call. Recruiter/Lite and
+existing filtered searches retain the old planning path. Empty first pages
+report no matches, distinct from exhausted later pages. See the v504 QA report.
+The original v502/v503 source is merged; historical unmerged notes below are
+superseded by coordination issue #35. No owner installation or merge in v504.
+
+**Previous source checkpoint: v24.6.503** on
 `codex/v24.6.503-job-leads-cleanup`, retaining v502 `3bbe021` and based on
 merged v501 `b646d8d`. Job Leads search fields/actions are compact; setup/update
 guidance is inside Companion; empty previews, zero-result selection controls

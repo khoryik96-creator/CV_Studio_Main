@@ -111,7 +111,7 @@ class Agent {
         this.check();
         this.update({status: `Reading search page ${page} of ${options.max_pages}…`, page});
         const snapshot = await this.waitSearch(tab.id, options.mode, oldSignature);
-        if (snapshot.empty) { this.update({status: 'LinkedIn returned no more results.'}); break; }
+        if (snapshot.empty) { this.update({status: page === 1 ? 'LinkedIn found no matches for this search.' : 'LinkedIn returned no more results.'}); break; }
         if (seen.has(snapshot.signature)) throw Error('LinkedIn repeated a result page. The agent stopped.');
         seen.add(snapshot.signature);
         oldSignature = snapshot.signature;

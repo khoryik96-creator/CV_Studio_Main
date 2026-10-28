@@ -4,6 +4,13 @@
 
 ## Release state
 
+- v24.6.504 is a local, unmerged normal People-query correction based on merged
+  v503 `e689e39`. Request a concise plan, bound oversized flat OR aliases to
+  four and retain country/full assessment criteria. Never drop mandatory
+  AND/NOT/nested constraints to fit. Recruiter/Lite and existing filtered
+  searches retain the existing plan; no extra provider call or replay. First
+  empty pages report no matches. No route/schema/credential/reader changes.
+
 - v24.6.503 is a local, unmerged UI cleanup stacked on v502 `3bbe021`.
   Search fields/actions are compact; repetitive guidance moves behind Companion;
   empty previews/selection tools and instructional placeholders are absent.

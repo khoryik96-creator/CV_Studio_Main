@@ -71,6 +71,45 @@ def validate_plan(value):
     return {"query": value["query"].strip(), "country": country, "requirements": [s.strip() for s in must]}
 
 
+def validate_standard_plan(value):
+    plan = validate_plan(value)
+    query = plan["query"]
+    # LinkedIn documents a consumer-query limit without publishing its size.
+    # Use the conservative three-operator query reproduced successfully live.
+    tokens = list(re.finditer(r'"[^"]*"|\b(?:AND|OR|NOT)\b|[()]', query))
+    if sum(token.group() in {"AND", "OR", "NOT"} for token in tokens) <= 3:
+        return plan
+    message = ("This query is too complex for normal LinkedIn search. "
+               "Use fewer keyword alternatives, or choose Recruiter.")
+    # Only a flat positive OR list is safely narrowed. Never discard AND/NOT
+    # clauses or flatten nested logic to make a provider's plan fit.
+    grouped = query.startswith("(") and query.endswith(")")
+    inner = query[1:-1].strip() if grouped else query
+    if inner.count('"') % 2 or re.search(r"[\x00-\x1f\x7f]", inner):
+        raise SourcerError(message)
+    terms, start = [], 0
+    for token in re.finditer(r'"[^"]*"|\b(?:AND|OR|NOT)\b|[()]', inner):
+        if token.group().startswith('"'):
+            continue
+        if token.group() != "OR":
+            raise SourcerError(message)
+        terms.append(inner[start:token.start()].strip())
+        start = token.end()
+    terms.append(inner[start:].strip())
+    aliases, seen = [], set()
+    for term in terms:
+        quoted = term.startswith('"') and term.endswith('"') and term.count('"') == 2
+        if (not term or not (term[1:-1].strip() if quoted else term)
+                or ('"' in term and not quoted)):
+            raise SourcerError(message)
+        key = term.casefold()
+        if key not in seen:
+            aliases.append(term)
+            seen.add(key)
+    shortened = " OR ".join(aliases[:4])
+    return {**plan, "query": "(" + shortened + ")" if grouped else shortened}
+
+
 def validate_reviews(value, profiles, maximum):
     known = {p["id"]: p for p in profiles}
     rows = value.get("candidates") if isinstance(value, dict) else None
@@ -117,6 +156,12 @@ PLAN_SCHEMA = {"type": "object", "properties": {
     "country": {"type": "string", "description": "Country explicitly requested in the brief, as its full English LinkedIn Locations suggestion (e.g. Malaysia). Use the native Locations filter, never query keywords. Empty string when no country is specified; do not infer nationality or a country from profile data."},
     "requirements": {"type": "array", "items": {"type": "string"}}},
     "required": ["query", "country", "requirements"], "additionalProperties": False}
+STANDARD_PLAN_SCHEMA = {**PLAN_SCHEMA, "properties": {**PLAN_SCHEMA["properties"],
+    "query": {**PLAN_SCHEMA["properties"]["query"], "description":
+        PLAN_SCHEMA["properties"]["query"]["description"] +
+        " For normal People search, use at most three Boolean operators total outside quotes."
+        " Put the user's exact core role/skill first, with at most four high-signal aliases."
+        " Keep the complete matching criteria in requirements; never drop mandatory exclusions to meet this budget."}}}
 REVIEW_SCHEMA = {"type": "object", "properties": {"candidates": {"type": "array", "items": {
     "type": "object", "properties": {"id": {"type": "string"}, "score": {"type": "integer"},
         "evidence": {"type": "array", "items": {"type": "string"}},
@@ -132,6 +177,7 @@ class Run:
     max_pages: int
     max_calls: int
     model: str
+    review_open_search: bool = False
     id: str = field(default_factory=lambda: secrets.token_hex(16))
     calls: int = 0
     tokens: int = 0
@@ -173,7 +219,9 @@ class LinkedInSourcerService:
         if run.stopped or time.monotonic() >= run.expires:
             raise SourcerError("The run has stopped or expired.")
         if action == "plan":
-            return self.paid(run, "search_plan", PLAN_SCHEMA, {"mode": run.mode}, validate_plan, "plan")
+            normal = run.mode == "standard" and not run.review_open_search
+            return self.paid(run, "search_plan", STANDARD_PLAN_SCHEMA if normal else PLAN_SCHEMA,
+                             {"mode": run.mode}, validate_standard_plan if normal else validate_plan, "plan")
         if action == "review":
             profiles = clean_profiles(data.get("profiles"))
             stage, page = data.get("stage"), data.get("page")
@@ -204,7 +252,8 @@ class LinkedInSourcerService:
             old = self.run
             if old and (old.busy.locked() or (not old.stopped and time.monotonic() < old.expires)):
                 raise SourcerError("Stop the current run before starting another.")
-            self.run = Run(brief.strip(), mode, pages, calls, "deepseek-v4-flash")
+            self.run = Run(brief.strip(), mode, pages, calls, "deepseek-v4-flash",
+                           review_open_search=data.get("use_open_search") is True)
         return {"run": self.run.summary()}
 
     def paid(self, run, task, schema, data, validate, field_name):
