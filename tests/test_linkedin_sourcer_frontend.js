@@ -100,5 +100,15 @@ const root = path.resolve(__dirname, '..');
     assert.equal(agent.results.length,15);assert.equal(next,14);assert.equal(calls,30);
   }
   assert(Core.csv([{name:'=FORMULA()',url,score:5,checked:true,evidence:[],unknowns:[]}]).includes("'=FORMULA()"));
+  for(const firstEmpty of [true,false]){
+    const statuses=[];let current=1,reviews=0;const run={id:'c'.repeat(32)};
+    const emptyAgent=new Core.Agent({signal:new AbortController().signal,wait:async()=>{},update:patch=>{if(patch.status)statuses.push(patch.status)},
+      api:async route=>{if(route.endsWith('plan'))return {run,plan:{query:'SAP FICO'}};if(route.endsWith('review')){reviews++;return {run,candidates:[]}}return {run}},
+      browser:{activeTab:async()=>({id:2,url:'https://www.linkedin.com/search/results/people/'}),navigate:async()=>{},
+        read:async(id,method)=>{if(method==='next'){current++;return true}const empty=firstEmpty||current>1;return {profiles:[],signature:empty?'':'first-page',empty,hasNext:true,paginationKnown:true}}}});
+    await emptyAgent.start({mode:'standard',max_pages:10,use_open_search:false});
+    assert(statuses.includes(firstEmpty?'LinkedIn found no matches for this search.':'LinkedIn returned no more results.'));
+    assert.equal(reviews,firstEmpty?0:1,'an empty first page never triggers a paid profile review');
+  }
   console.log('LinkedIn module: companion binding, observed links, owned tabs, Stop/page limits, all three 15-page modes and CSV safety passed');
 })().catch(error=>{console.error(error);process.exitCode=1});
