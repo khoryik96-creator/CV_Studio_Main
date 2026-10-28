@@ -1,5 +1,25 @@
 # Job Leads module
 
+## Apollo activation and contact history (v24.6.515)
+
+The owner's two local Apollo activation commits are applied on merged v514,
+excluding held JobAdder PR #257. The configured public broker and named HTTP
+client fix the supplied Cloudflare case. Worker identity uses LinkedIn handles;
+legal-affix-only name equality and numeric-ID conflict rejection keep different
+employers separate. Redeploy the final Worker separately; local/Git validation
+does not establish live Apollo account eligibility or delivery quality.
+
+Job Leads has Job ads / Unlocked contacts views. The latter auto-archives
+successful Apollo emails in a separate protected device vault, deduplicates
+person/company/email, retains history on disconnect, and offers search, 40-row
+paging and real XLSX export of matching contacts. It preserves ad/HR records,
+drafts and running scans. Country is explicitly the scan filter; observed
+location remains separate in export. No browser/SQLite email mirror, shared
+team data, new route, storage-schema migration or automatic paid lookup/replay
+is introduced. Known old successful lookups can import read-only when their HR
+source remains. Storage failure retains the paid outcome with visible recovery
+guidance. See the Apollo README and v515 QA report for bounds and verification.
+
 ## Native Show results transition (v24.6.513)
 
 Shiseido's retained search and exact ad employer confirmed the correct company;

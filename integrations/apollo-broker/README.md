@@ -46,6 +46,9 @@ Do not use another application's client ID, including Apollo CLI's identity.
    `apollo_connection.json` as `broker_url`. This file ships to colleagues.
    An owner-only `CVSTUDIO_APOLLO_BROKER_URL` environment override is available
    for development. Client secrets and account tokens never belong here.
+   CV Studio calls the Worker with the `CVStudio-Apollo/1.0` User-Agent.
+   Cloudflare refuses Python's default `Python-urllib` agent with error 1010,
+   which CV Studio reports as an Apollo permission (403) message.
 8. Run the account/credit acceptance checks below before distributing a release.
 
 `wrangler.jsonc` also supports a CLI deployment after the owner fills in the
@@ -68,6 +71,54 @@ cache. **Disconnect** removes the local protected credential/cache and asks the
 broker to delete that connection and its temporary outcomes. It does not claim
 to revoke the Apollo-wide app grant; users can revoke that in Apollo's connected
 integrations. If broker deletion cannot be confirmed, the UI says so explicitly.
+
+### Unlocked contacts (v24.6.515)
+
+Job Leads → **Unlocked contacts** is a separate device-local history of business
+emails returned successfully by Apollo. It remains after sign-out/disconnect;
+the confirmation says so. This intentional history is separate from the account
+lookup cache, which is still cleared. It is not a shared team database.
+The archive uses Windows DPAPI or the existing authenticated machine-bound file
+vault on other platforms. It deliberately avoids macOS Keychain command-size
+limits for a larger contact list. Credentials retain their existing storage.
+No email/token mirror is added to browser storage or Job Leads SQLite/backups.
+
+Successful unlocks and read-only recovery save name, position, company, observed
+location, scan country, email, Apollo status and source URLs. Deduplication uses
+person + employer ID + email; the first saved context is retained. Country is
+labelled **Country (scan)**; it is not an independently verified person/company
+country. Previous successful lookups import locally where their saved HR source
+still exists. No provider lookup occurs for import, refresh, search or export.
+If archival fails, the paid result stays on its HR card with explicit guidance;
+refresh recovers from that cache without spending again. Disconnect preserves
+its existing cache-clearing contract and remains available if ad/contact storage
+is unavailable; its confirmation says to copy any unarchived email first. View
+older successful lookups before disconnecting if they have not been archived.
+The archive is bounded at
+5,000 contacts/8 MB, never silently evicts, and reports storage/capacity failures.
+An import failure does not block viewing/exporting the contacts already saved;
+the dashboard and download show that some HR-card emails remain unarchived.
+
+Excel export is a genuine `.xlsx` file of the matching contacts, with all source
+values written as literal text (including leading formula characters). Exports
+include profile/company/ad URLs and the archive-save time. Exported files are
+ordinary user-managed files; the plain Job Leads ad backup does not include this
+protected contact history.
+
+### Applying the supplied activation fixes
+
+The shipped public `apollo_connection.json` points to the owner's Worker; no
+secret is distributed. The Python client sends `CVStudio-Apollo/1.0`. Provider
+profile/company links compare their LinkedIn handles across HTTP/HTTPS and host
+forms. Company names may ignore legal affixes, but their remaining full names
+must agree; a partial brand overlap or conflicting numeric company ID fails.
+Unicode company names retain their letters. Low/no-confidence matches remain
+rejected. The protocol fix is code-supported; no live unlock is claimed here.
+
+Pushing/merging Git does not deploy Cloudflare. Redeploy the final **worker.mjs**
+in the existing Worker, then disconnect/reconnect once to clear terminal cached
+mismatches. The next explicitly authorized unlock is the live credit-consuming
+acceptance check. Do not silently replay previous operations or credits.
 
 ## Boundaries and retention
 
@@ -98,6 +149,8 @@ integrations. If broker deletion cannot be confirmed, the UI says so explicitly.
 Local tests use fictional accounts and intercept all provider traffic:
 `tests/test_apollo.py`, `tests/test_apollo_routes.py`,
 `tests/test_apollo_frontend.js`, `tests/test_apollo_broker.js`.
+Contact archive, guarded download and UI tests are in `tests/test_apollo_contacts.py`
+and `tests/test_apollo_contacts_frontend.js`.
 The Worker test executes the real SQL against Node's in-memory SQLite and uses
 real WebCrypto. This is not a Cloudflare-hosted or live Apollo authorization test.
 

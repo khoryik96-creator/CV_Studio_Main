@@ -4,6 +4,16 @@
 
 ## Release state
 
+- v24.6.515 applies the owner's unpushed Apollo activation patch on merged
+  v514 (`336ba15` / PR #262), then tightens overly broad company-name matching.
+  Job Leads adds a protected local unlocked-contacts history with filtered XLSX
+  export, distinct from revocable account lookup state. Emails survive
+  disconnect as explicitly stated; old successful cached results import only
+  from retained HR sources. No browser/SQLite email persistence, new HTTP route,
+  paid retry, live provider call or owner-install update. Worker redeployment
+  and first live acceptance remain separate. See the v515 QA report. The owner
+  authorized push, not merge; PR #257 stays on hold and excluded.
+
 - v24.6.514 is a local Sourcer evidence-protocol correction stacked on unmerged
   v513 `ec2dda3`, retaining that HR fix. New reviews select bounded source
   passage IDs; the app resolves exact original text before unchanged grounding,

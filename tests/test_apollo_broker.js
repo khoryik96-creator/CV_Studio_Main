@@ -60,6 +60,23 @@ async function main(){
   await handle(new Request(env.PUBLIC_ORIGIN+'/callback?state='+a.connection_id+'&code=replayed'),env,fetcher,1000);assert.equal(calls.length,previous,'callback code is consumed once');
   for(const bad of [{...upstream,person:{...upstream.person,linkedin_url:'https://www.linkedin.com/in/other'}},{...upstream,person:{...upstream.person,organization:{name:'Other'}}},{...upstream,match_confidence:'low'}])assert.equal(emailResult(bad,expected).state,'mismatch');
   assert.equal(emailResult({...upstream,person:{...upstream.person,email:'person@gmail.com'}},expected).state,'not_found');
+  // Apollo's own link form (http, trailing slash, other letter case) still matches the saved profile and company.
+  const apolloForm={match_confidence:'high',person:{...upstream.person,linkedin_url:'http://www.linkedin.com/in/Sample-Person/',organization:{linkedin_url:'http://www.linkedin.com/company/example',name:'Example Company'}}};
+  assert.equal(emailResult(apolloForm,expected).state,'found');
+  assert.equal(emailResult({...apolloForm,person:{...apolloForm.person,organization:{linkedin_url:'http://www.linkedin.com/company/123',name:'Renamed'}}},expected).state,'found');
+  assert.equal(emailResult({...apolloForm,person:{...apolloForm.person,organization:{linkedin_url:'http://www.linkedin.com/company/456',name:expected.company}}},expected).state,'mismatch');
+  assert.equal(emailResult({...apolloForm,person:{...apolloForm.person,organization:{linkedin_url:'http://www.linkedin.com/company/example-old-slug',name:'PT Example Company Tbk'}}},expected).state,'found');
+  assert.equal(emailResult({...apolloForm,person:{...apolloForm.person,organization:{name:'Example'}}},expected).state,'mismatch');
+  for(const name of ['Example Company Services','Example Other Company','Company Example','PT Tbk','中国企业','Éxample Company'])
+    assert.equal(emailResult({...apolloForm,person:{...apolloForm.person,organization:{name}}},expected).state,'mismatch','an overlapping or non-ASCII distinct brand is not the same employer');
+  for(const name of ['PT Example Company Tbk','The Example Company Sdn. Bhd.','Example Company Pte Ltd'])
+    assert.equal(emailResult({...apolloForm,person:{...apolloForm.person,organization:{name}}},expected).state,'found');
+  const unicodeExpected={...expected,company:'Éxample 中国'};
+  assert.equal(emailResult({...apolloForm,person:{...apolloForm.person,organization:{name:'Éxample 中国 Ltd'}}},unicodeExpected).state,'found');
+  for(const org of [{linkedin_url:'http://www.linkedin.com/company/other',name:'Other Holdings'},{name:'PT Tbk'},{}])
+    assert.equal(emailResult({...apolloForm,person:{...apolloForm.person,organization:org}},expected).state,'mismatch');
+  for(const url of ['http://www.linkedin.com/in/sample-person-2','http://www.linkedin.com/company/sample-person','https://evil.test/in/sample-person',''])
+    assert.equal(emailResult({...apolloForm,person:{...apolloForm.person,linkedin_url:url}},expected).state,'mismatch');
   assert.equal(emailResult({...upstream,person:{...upstream.person,email_status:'catch_all'}},expected).email_status,'catch_all');
   await post('disconnect',a);assert.equal((await post('lookup-status',{...a,operation_id:op.operation_id})).status,401);assert.equal(sql.prepare('SELECT COUNT(*) AS n FROM operations WHERE connection_id=?').get(a.connection_id).n,0);
   // Refresh rotation is serialized and uncertain refreshes require reconnect.

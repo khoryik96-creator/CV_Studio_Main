@@ -148,3 +148,15 @@ def test_transport_does_not_retry_or_follow_redirects_and_hides_errors():
     with pytest.raises(ApolloError): client.post('poll',{})
     from cvstudio_apollo import _NoRedirect
     with pytest.raises(ApolloError): _NoRedirect().redirect_request(None,None,302,'',{},'https://other.test')
+
+
+def test_transport_names_cv_studio_instead_of_the_blocked_python_agent():
+    seen=[]
+    class Reply(io.BytesIO):
+        def __enter__(self): return self
+        def __exit__(self,*args): self.close()
+    def opener(req,timeout):
+        seen.append(req); return Reply(b'{}')
+    ApolloBrokerClient(ORIGIN,opener).post('poll',{})
+    agent=seen[0].get_header('User-agent')
+    assert agent=='CVStudio-Apollo/1.0' and 'python' not in agent.lower()

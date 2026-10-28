@@ -1680,3 +1680,13 @@
 .job-leads-email-result {flex:1 1 100%;font-size:12px;line-height:1.5;}
 .job-leads-email-result small {display:block;color:var(--text3);}
 .ev-progress-heading {flex-wrap:wrap;gap:8px;}
+/* The contact dashboard stays inside Job Leads; wide fields scroll on phones. */
+.job-leads-contact-tabs{margin:0 0 12px}
+.job-leads-contact-tabs [aria-pressed="true"]{color:var(--blue);border-color:var(--blue);background:var(--blue-light,#f2f7ff)}
+.job-leads-contact-table{overflow:auto;max-height:60vh;border:1px solid var(--border);border-radius:10px}
+.job-leads-contact-table table{width:100%;border-collapse:collapse;text-align:left;font-size:12px}
+.job-leads-contact-table th,.job-leads-contact-table td{padding:10px 12px;vertical-align:top;border-bottom:1px solid var(--border);min-width:110px;max-width:300px;overflow-wrap:anywhere}
+.job-leads-contact-table th{position:sticky;top:0;background:var(--surface);font-size:11px;color:var(--text2);z-index:1}
+.job-leads-contact-table td:nth-child(5){white-space:nowrap}
+#jobLeadsApolloContactsSearch{max-width:400px}
+#jobLeadsApolloContactsCount{font-weight:normal;color:var(--text3);margin-left:5px}

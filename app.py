@@ -24,7 +24,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.514"
+_INSTALL_RECEIPT_VERSION = "v24.6.515"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -347,7 +347,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.514"
+_CVSTUDIO_VERSION = "v24.6.515"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -2713,7 +2713,7 @@ def _ms_outlook_keychain_available():
 # Windows DPAPI, macOS Keychain, or an authenticated machine-bound fallback.
 def _cv_secure_service_name(service):
     clean = re.sub(r"[^a-z0-9_-]", "", str(service or "").lower())
-    if clean not in {"jobadder", "onenote", "ai", "companion", "apollo"}:
+    if clean not in {"jobadder", "onenote", "ai", "companion", "apollo", "apollo_contacts"}:
         raise ValueError("Unsupported secure-store service")
     return clean
 
@@ -2765,7 +2765,7 @@ def _cv_secure_load(service):
             if isinstance(data, dict):
                 data["_storage"] = "windows_dpapi"
                 return data
-        if sys.platform == "darwin" and _ms_outlook_keychain_available():
+        if sys.platform == "darwin" and name != "apollo_contacts" and _ms_outlook_keychain_available():
             proc = subprocess.run(["security", "find-generic-password", "-a", _ms_outlook_keychain_account(), "-s", "TheGuoLab.CVStudio." + name, "-w"], capture_output=True, text=True, timeout=10, check=False)
             if proc.returncode == 0:
                 data = json.loads((proc.stdout or "{}").strip())
@@ -2778,7 +2778,8 @@ def _cv_secure_load(service):
             data["_storage"] = "machine_bound_file"
             return data
     except Exception:
-        pass
+        if name == "apollo_contacts":
+            raise ValueError("Saved contacts could not be read securely") from None
     return {}
 
 
@@ -2796,7 +2797,7 @@ def _cv_secure_save(service, record):
         try: os.remove(fallback_path)
         except Exception: pass
         return "windows_dpapi"
-    if sys.platform == "darwin" and _ms_outlook_keychain_available():
+    if sys.platform == "darwin" and name != "apollo_contacts" and _ms_outlook_keychain_available():
         proc = subprocess.run(["security", "add-generic-password", "-U", "-a", _ms_outlook_keychain_account(), "-s", "TheGuoLab.CVStudio." + name, "-w", text], capture_output=True, text=True, timeout=15, check=False)
         if proc.returncode == 0:
             try: os.remove(fallback_path)
@@ -14936,7 +14937,7 @@ def job_leads():
 
 from cvstudio_email_verifier import EmailVerifier, VerifierError
 
-from cvstudio_apollo import ApolloService, ApolloBrokerClient, ApolloError
+from cvstudio_apollo import ApolloService, ApolloBrokerClient, ApolloError, ApolloContacts, export_contacts
 
 
 def _apollo_broker_origin():
@@ -14956,7 +14957,9 @@ try:
 except ApolloError:
     _apollo_client = ApolloBrokerClient("")
 _APOLLO = ApolloService(client=_apollo_client,
-    load=lambda: _cv_secure_load("apollo"), save=lambda value: _cv_secure_save("apollo", value))
+    load=lambda: _cv_secure_load("apollo"), save=lambda value: _cv_secure_save("apollo", value),
+    contacts=ApolloContacts(load=lambda: _cv_secure_load("apollo_contacts"), save=lambda value: _cv_secure_save("apollo_contacts", value)),
+    rows=lambda: _JOB_LEADS.list())
 
 
 @app.route("/apollo", methods=["GET", "POST"])
@@ -14978,7 +14981,19 @@ def apollo_connection():
                 raise ApolloError("Choose a valid Apollo action.")
             action = data.get("action")
             row = _JOB_LEADS.hr_record(data.get("id"), data.get("revision")) if action in {"emails", "reveal"} else None
-            result = _APOLLO.perform(action, row=row, url=data.get("url"), confirmed=data.get("confirmed"))
+            if action in {"contacts", "export_contacts"}:
+                result = _APOLLO.perform("contacts", query=data.get("query", ""))
+                if action == "export_contacts":
+                    from io import BytesIO
+                    response = send_file(BytesIO(export_contacts(result["contacts"])),
+                        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        as_attachment=True, download_name="CV-Studio-Contacts.xlsx")
+                    response.headers["Cache-Control"] = "no-store"
+                    if result.get("contact_warning"):
+                        response.headers["X-CVStudio-Contacts-Incomplete"] = "1"
+                    return response
+            else:
+                result = _APOLLO.perform(action, row=row, url=data.get("url"), confirmed=data.get("confirmed"))
         response = jsonify(ok=True, **result)
         response.headers["Cache-Control"] = "no-store"
         return response

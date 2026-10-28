@@ -4,6 +4,7 @@
   const el=name=>document.getElementById('jobLeadsApollo'+name);
   let ready=false, account={available:false,connected:false}, row=null, rowKey='', sequence=0;
   let working=false, appBusy=false, polling=false, pollGeneration=0, cache={}, views=[];
+  let contacts=[], contactsPage=0, contactsLoading=false, contactsLoaded=false, contactsExporting=false;
   const statusLabels={verified:'Verified by Apollo',unverified:'Unverified by Apollo',catch_all:'Catch-all · reported by Apollo',unavailable:'Unavailable',user_managed:'User-managed in Apollo',unknown:'Status not provided by Apollo'};
   async function api(body) {
     const response=await fetch('/apollo',body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),timeout:30000}:{cache:'no-store'});
@@ -34,12 +35,67 @@
       view.button.disabled=working || appBusy || !account.connected || !view.saved;
       view.copy.hidden=!found;view.copy.disabled=working;
     }
+    contactControls();
+  }
+  function filteredContacts() {
+    const query=el('ContactsSearch').value.trim().toLowerCase();
+    return contacts.filter(row=>!query || Object.values(row).join(' ').toLowerCase().includes(query));
+  }
+  function contactControls() {
+    el('ContactsRefresh').disabled=contactsLoading || working;
+    el('ContactsExport').disabled=contactsLoading || working || contactsExporting || !filteredContacts().length;
+  }
+  function renderContacts() {
+    const rows=filteredContacts();contactsPage=Math.min(contactsPage,Math.max(0,Math.ceil(rows.length/40)-1));
+    el('ContactsCount').textContent=String(rows.length);
+    el('ContactsRows').replaceChildren();
+    for(const row of rows.slice(contactsPage*40,(contactsPage+1)*40)) {
+      const tr=document.createElement('tr'), name=document.createElement('td');
+      const link=text('a',row.name);
+      if(/^https:\/\/www\.linkedin\.com\/in\/[A-Za-z0-9_%~-]+\/?$/.test(row.profile_url)) {
+        link.href=row.profile_url;link.target='_blank';link.rel='noopener noreferrer';name.append(link);
+      } else name.textContent=row.name;
+      tr.append(name,...['position','company','country','email'].map(key=>text('td',row[key] || '—')),
+        text('td',statusLabels[row.email_status] || statusLabels.unknown));
+      el('ContactsRows').append(tr);
+    }
+    el('ContactsPage').textContent=rows.length?`${contactsPage*40+1}–${Math.min((contactsPage+1)*40,rows.length)} of ${rows.length}`:'';
+    el('ContactsPrevious').disabled=contactsPage===0;el('ContactsNext').disabled=(contactsPage+1)*40>=rows.length;
+    contactControls();
+  }
+  async function refreshContacts() {
+    if(contactsLoading) return;
+    contactsLoading=true;contactControls();el('ContactsMessage').textContent='Loading contacts…';
+    try {
+      const data=await api({action:'contacts'});
+      contacts=data.contacts || [];contactsLoaded=true;
+      el('ContactsMessage').textContent=data.contact_warning || (contacts.length?'':'No unlocked contacts yet.');
+      renderContacts();
+    } catch(error) {el('ContactsMessage').textContent=error.message;}
+    finally {contactsLoading=false;contactControls();}
+  }
+  function showContacts(show) {
+    el('AdsPanel').hidden=show;el('ContactsPanel').hidden=!show;
+    el('AdsTab').setAttribute('aria-pressed',String(!show));el('ContactsTab').setAttribute('aria-pressed',String(show));
+    if(show && !contactsLoading && !working) void refreshContacts();
+  }
+  async function exportContacts() {
+    if(contactsLoading || contactsExporting || working || !filteredContacts().length) return;
+    contactsExporting=true;contactControls();
+    try {
+      const response=await fetch('/apollo',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'export_contacts',query:el('ContactsSearch').value})});
+      if(!response.ok) {const data=await response.json();throw Error(data.error || 'Contacts could not be exported.');}
+      const url=URL.createObjectURL(await response.blob()), link=document.createElement('a');
+      link.href=url;link.download='CV-Studio-Contacts.xlsx';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+      el('ContactsMessage').textContent=response.headers?.get('X-CVStudio-Contacts-Incomplete')==='1'?'Saved contacts exported. Some HR-card emails have not been archived; check storage and refresh.':'Excel file downloaded.';
+    } catch(error) {el('ContactsMessage').textContent=error.message;}
+    finally {contactsExporting=false;contactControls();}
   }
   async function refreshEmails(current, token) {
     if(!current?.hr || !account.connected) return;
     try {
       const data=await api({action:'emails',id:current.id,revision:current.revision});
-      if(token===sequence) {cache=data.emails || {};controls();}
+      if(token===sequence) {cache=data.emails || {};if(data.contact_warning)message(data.contact_warning);controls();}
     } catch(error) {if(token===sequence) message(error.message);}
   }
   async function poll(generation) {
@@ -79,7 +135,7 @@
   }
   async function disconnect() {
     if(working || appBusy) return;
-    if(account.connected && !window.confirm('Disconnect this Apollo account and clear its revealed emails from this device? Saved job ads and HR profiles stay.')) return;
+    if(account.connected && !window.confirm('Disconnect this Apollo account and clear its lookup cache? Contacts already saved in Unlocked contacts stay on this device. Copy any email with a dashboard save warning first. Saved job ads and HR profiles stay.')) return;
     working=true;++pollGeneration;controls();
     try {
       const data=await api({action:'disconnect'});
@@ -95,7 +151,8 @@
     working=true;message(previous?'Checking the previous lookup without spending another credit…':'Looking up this person in Apollo…');controls();
     try {
       const data=await api({action:'reveal',id:current.id,revision:current.revision,url:person.url,confirmed:!previous});
-      if(token===sequence) {cache[person.url]=data.result;message(data.result.message);}
+      if(token===sequence) {cache[person.url]=data.result;message(data.contact_warning || data.result.message);}
+      if(data.result.state==='found' && (contactsLoaded || !el('ContactsPanel').hidden)) await refreshContacts();
     } catch(error) {
       if(token===sequence) {
         // The response may have been lost after charging/saving. A follow-up
@@ -109,6 +166,12 @@
     async init() {
       if(ready) return;ready=true;
       el('Connect').addEventListener('click',connect);el('Disconnect').addEventListener('click',disconnect);
+      el('AdsTab').addEventListener('click',()=>showContacts(false));el('ContactsTab').addEventListener('click',()=>showContacts(true));
+      el('ContactsRefresh').addEventListener('click',refreshContacts);el('ContactsExport').addEventListener('click',exportContacts);
+      el('ContactsSearch').addEventListener('input',()=>{contactsPage=0;renderContacts();});
+      el('ContactsPrevious').addEventListener('click',()=>{contactsPage=Math.max(0,contactsPage-1);renderContacts();});
+      el('ContactsNext').addEventListener('click',()=>{contactsPage++;renderContacts();});
+      el('ContactsPanel').hidden=true;renderContacts();
       window.addEventListener('pagehide',()=>{++pollGeneration;account.connecting=false;});
       try {
         account=await api();
