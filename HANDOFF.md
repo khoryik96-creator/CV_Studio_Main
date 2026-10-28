@@ -7,7 +7,17 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current source checkpoint: v24.6.511, local and unmerged** on
+**Unmerged branch checkpoint: v24.6.512** on
+`claude/pr157-chatgpt-fix-zke4cy` (PR #257), rebased on merged master `44f1887` (v511). It adds
+a read-only JobAdder client-contact email scan to the Email Verifier, with a
+dashboard of invalid emails linked to each JobAdder contact. There is one new
+GET route, `/jobadder/client_contacts`, so the route contract goes from 122 to
+123 (see section 1). No JobAdder writes, no stored email list, and no change to
+the verifier engine. It was numbered v510 before v511 merged first; it now
+follows v511. See the "JobAdder client-contact scan" section of
+EMAIL_VERIFIER_NOTES.md and the v512 QA report.
+
+**Previous source checkpoint: v24.6.511, merged in PR #261** on
 `codex/v24.6.511-concurrent-companion`, from merged v509 `7a25051` / PR #260.
 The owner explicitly authorizes simultaneous Job Leads and Sourcer runs. The
 existing bounded worker implementation now has independent profiles/leads
@@ -217,8 +227,8 @@ the fetched master/coordination log before starting subsequent work.
 `app.py` ends with `_finalize_modular_monolith_app(...)`, which hard-asserts at
 import time:
 
-- `expected_route_count = 122`
-- `expected_route_contract_sha256 = "4cb6b3f8e64b3421c9b9fae819c7fe64e6b05d98db193bb1eb42f8da07aaf600"`
+- `expected_route_count = 123`
+- `expected_route_contract_sha256 = "fc424da1fa9e16a08098e5e603c16383194a70efef141d5fa20073d51682849f"`
 - 5 before-request guards, in this exact order:
   `_assign_cvstudio_request_id`, `_reject_declared_oversize_request`,
   `_reject_non_local_host_header`, `_require_ai_spend_browser_session`,
