@@ -69,10 +69,16 @@ const linkedinHandle = (value, kind) => {
   return m && m[1].toLowerCase()===kind ? m[2].toLowerCase() : '';
 };
 const LEGAL = new Set(['pt','tbk','sdn','bhd','berhad','pte','ltd','limited','inc','llc','corp','corporation','co','plc','gmbh','the']);
-const nameWords = text => normalized(text).replace(/[^a-z0-9]+/g,' ').split(' ').filter(word=>word && !LEGAL.has(word));
+const nameWords = text => {
+  const words=normalized(text).normalize('NFKC').replace(/[^\p{L}\p{N}]+/gu,' ').trim().split(/\s+/);
+  // Legal affixes may wrap a brand, but words inside it remain significant.
+  while(words.length && LEGAL.has(words[0]))words.shift();
+  while(words.length && LEGAL.has(words.at(-1)))words.pop();
+  return words.join(' ');
+};
 function sameCompanyName(a, b) {
-  const [short,long]=[nameWords(a),nameWords(b)].sort((x,y)=>x.length-y.length);
-  return short.length>0 && short.every(word=>long.includes(word));
+  const first=nameWords(a), second=nameWords(b);
+  return !!first && first===second;
 }
 export function emailResult(data, expected) {
   const person=data?.person;
@@ -80,6 +86,7 @@ export function emailResult(data, expected) {
   const profile=linkedinHandle(person.linkedin_url,'in');
   const org=person.organization;
   const company=linkedinHandle(org?.linkedin_url,'company');
+  if(/^[0-9]+$/.test(company) && company!==expected.company_id) return {state:'mismatch'};
   const companyMatches=(company && (company===linkedinHandle(expected.company_url,'company') || company===expected.company_id)) ||
     sameCompanyName(org?.name,expected.company);
   if(!profile || profile!==linkedinHandle(expected.url,'in') || !companyMatches || data.match_confidence==='low' || data.match_confidence==='none') return {state:'mismatch'};

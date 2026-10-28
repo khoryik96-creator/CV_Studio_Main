@@ -64,8 +64,15 @@ async function main(){
   const apolloForm={match_confidence:'high',person:{...upstream.person,linkedin_url:'http://www.linkedin.com/in/Sample-Person/',organization:{linkedin_url:'http://www.linkedin.com/company/example',name:'Example Company'}}};
   assert.equal(emailResult(apolloForm,expected).state,'found');
   assert.equal(emailResult({...apolloForm,person:{...apolloForm.person,organization:{linkedin_url:'http://www.linkedin.com/company/123',name:'Renamed'}}},expected).state,'found');
+  assert.equal(emailResult({...apolloForm,person:{...apolloForm.person,organization:{linkedin_url:'http://www.linkedin.com/company/456',name:expected.company}}},expected).state,'mismatch');
   assert.equal(emailResult({...apolloForm,person:{...apolloForm.person,organization:{linkedin_url:'http://www.linkedin.com/company/example-old-slug',name:'PT Example Company Tbk'}}},expected).state,'found');
-  assert.equal(emailResult({...apolloForm,person:{...apolloForm.person,organization:{name:'Example'}}},expected).state,'found');
+  assert.equal(emailResult({...apolloForm,person:{...apolloForm.person,organization:{name:'Example'}}},expected).state,'mismatch');
+  for(const name of ['Example Company Services','Example Other Company','Company Example','PT Tbk','中国企业','Éxample Company'])
+    assert.equal(emailResult({...apolloForm,person:{...apolloForm.person,organization:{name}}},expected).state,'mismatch','an overlapping or non-ASCII distinct brand is not the same employer');
+  for(const name of ['PT Example Company Tbk','The Example Company Sdn. Bhd.','Example Company Pte Ltd'])
+    assert.equal(emailResult({...apolloForm,person:{...apolloForm.person,organization:{name}}},expected).state,'found');
+  const unicodeExpected={...expected,company:'Éxample 中国'};
+  assert.equal(emailResult({...apolloForm,person:{...apolloForm.person,organization:{name:'Éxample 中国 Ltd'}}},unicodeExpected).state,'found');
   for(const org of [{linkedin_url:'http://www.linkedin.com/company/other',name:'Other Holdings'},{name:'PT Tbk'},{}])
     assert.equal(emailResult({...apolloForm,person:{...apolloForm.person,organization:org}},expected).state,'mismatch');
   for(const url of ['http://www.linkedin.com/in/sample-person-2','http://www.linkedin.com/company/sample-person','https://evil.test/in/sample-person',''])

@@ -12,6 +12,8 @@ import re
 import secrets
 import threading
 import time
+from datetime import datetime, timezone
+from io import BytesIO
 from urllib import request, error
 from urllib.parse import urlsplit
 
@@ -91,8 +93,9 @@ RESULT_MESSAGES = {
 
 
 class ApolloService:
-    def __init__(self, *, client, load, save, clock=time.time):
+    def __init__(self, *, client, load, save, clock=time.time, contacts=None, rows=None):
         self.client, self.load, self.save, self.clock = client, load, save, clock
+        self.contacts, self.rows = contacts, rows
         self.lock = threading.Lock()
 
     def _write(self, value):
@@ -118,11 +121,35 @@ class ApolloService:
             raise ApolloError("Connect your Apollo account first.", "APOLLO_CONNECT", 409)
         return {"connection_id":data["connection"], "secret":data["secret"]}
 
-    def perform(self, action, *, row=None, url="", confirmed=False):
+    @staticmethod
+    def _identity(row, person):
+        return hashlib.sha256(json.dumps([row["id"], row["company"], row["hr"]["company_id"], person["url"].rstrip("/")], separators=(",", ":")).encode()).hexdigest()
+
+    def _archive(self, rows, cache):
+        if self.contacts:
+            self.contacts.remember([(row, person, cache[self._identity(row, person)])
+                for row in rows if row.get("hr")
+                for person in row["hr"]["people"] if self._identity(row, person) in cache])
+
+    def perform(self, action, *, row=None, url="", confirmed=False, query=""):
         if not self.lock.acquire(blocking=False):
             raise ApolloError("Finish the current Apollo action first.", "APOLLO_BUSY", 409)
         try:
             data = self._data()
+            if action == "contacts":
+                if not self.contacts:
+                    return {"contacts":[]}
+                # Read-only recovery of old local results, never a broker lookup.
+                cache = data.get("emails", {})
+                warning = ""
+                if cache and self.rows:
+                    try:
+                        self._archive(self.rows(), cache)
+                    except Exception:
+                        # Existing history must still be viewable/exportable if
+                        # importing another email hits capacity/ad-store failure.
+                        warning = "Some HR-card emails could not be copied to contacts. Saved contacts are shown; check storage and refresh to recover the remaining emails without another credit."
+                return {"contacts":self.contacts.list(query), "contact_warning":warning}
             if action == "connect":
                 if data.get("connection"):
                     raise ApolloError("Disconnect the current Apollo account before changing accounts.")
@@ -154,6 +181,9 @@ class ApolloService:
                 self._write({"broker_url":self.client.origin,"connection":flow["id"], "secret":flow["secret"], "name":name, "emails":{}})
                 return {"connected":True, "name":name}
             if action == "disconnect":
+                # Disconnect must remain possible even if the ad database or
+                # contact archive is unavailable. Its confirmed cache clearing
+                # remains separate from already archived device contacts.
                 warning = ""
                 try:
                     if data.get("connection"):
@@ -171,10 +201,11 @@ class ApolloService:
                 raise ApolloError("Open a saved ad with saved HR people first.")
             people = row["hr"]["people"]
             def identity(person):
-                return hashlib.sha256(json.dumps([row["id"], row["company"], row["hr"]["company_id"], person["url"].rstrip("/")], separators=(",", ":")).encode()).hexdigest()
+                return self._identity(row, person)
             cache = data.setdefault("emails", {})
             if action == "emails":
-                return {"emails":{p["url"]:self._public(cache[identity(p)]) for p in people if identity(p) in cache}}
+                warning = self._archive_warning(row, cache)
+                return {"emails":{p["url"]:self._public(cache[identity(p)]) for p in people if identity(p) in cache}, "contact_warning":warning}
             if action != "reveal":
                 raise ApolloError("Choose a supported Apollo action.")
             person = next((p for p in people if p["url"].rstrip("/") == str(url).rstrip("/")), None)
@@ -183,7 +214,7 @@ class ApolloService:
             key = identity(person)
             previous = cache.get(key)
             if previous and previous["state"] not in {"pending", "unconfirmed"}:
-                return {"result":self._public(previous)}
+                return {"result":self._public(previous), "contact_warning":self._archive_warning(row, cache)}
             if previous:
                 # Read-only recovery: the same operation is never resubmitted.
                 action, body = "lookup-status", {**credentials, "operation_id":previous["operation_id"]}
@@ -215,12 +246,122 @@ class ApolloService:
             except Exception:
                 previous.update(state="unconfirmed", email="", email_status="unknown")
             self._write(data)
-            return {"result":self._public(previous)}
+            return {"result":self._public(previous), "contact_warning":self._archive_warning(row, cache)}
         finally:
             self.lock.release()
+
+    def _archive_warning(self, row, cache):
+        try:
+            self._archive([row], cache)
+            return ""
+        except ApolloError as exc:
+            # The result/non-replay marker is already durable. Do not hide it or
+            # resend the paid lookup just because the contact archive is full.
+            return str(exc)
 
     @staticmethod
     def _public(result):
         state = result["state"]
         return {"state":state, "email":result.get("email", ""), "email_status":result.get("email_status", "unknown"),
                 "message":RESULT_MESSAGES[state]}
+
+
+class ApolloContacts:
+    """Device-local contact history, separate from revocable OAuth credentials.
+
+    Inject the existing protected vault; never store business emails in SQLite
+    or browser storage. Source metadata is a snapshot, not a claim of freshness.
+    """
+    MAX_CONTACTS = 5000
+    MAX_BYTES = 8 * 1024 * 1024
+    FIELDS = {"name":200, "position":500, "company":200, "country":100,
+              "location":240, "email":254, "email_status":32, "profile_url":400,
+              "company_id":24, "company_url":300, "job_url":2048, "unlocked_at":40}
+
+    def __init__(self, *, load, save, clock=time.time):
+        self.load, self.save, self.clock = load, save, clock
+
+    def _read(self):
+        try:
+            data = self.load()
+            if not data:
+                return {}
+            if data.get("version") != 1 or not isinstance(data.get("contacts"), dict):
+                raise ValueError()
+            contacts = data["contacts"]
+            if len(contacts) > self.MAX_CONTACTS:
+                raise ValueError()
+            for key, row in contacts.items():
+                if not re.fullmatch(r"[a-f0-9]{64}", key) or not isinstance(row, dict) or set(row) != set(self.FIELDS):
+                    raise ValueError()
+                if any(not isinstance(row[k], str) or len(row[k]) > n or any(ord(c)<32 for c in row[k]) for k,n in self.FIELDS.items()):
+                    raise ValueError()
+            return contacts
+        except Exception:
+            raise ApolloError("Saved contacts could not be read securely. Keep the existing files and check local storage.", "APOLLO_CONTACTS_STORAGE", 503) from None
+
+    def remember(self, entries):
+        found = [(row, person, result) for row,person,result in entries if result.get("state") == "found"]
+        if not found:
+            return
+        contacts = self._read()
+        changed = False
+        for row, person, result in found:
+            # Deduplicate across job ads/accounts on this device, retaining the
+            # first observed context for the same person + employer + email.
+            key = hashlib.sha256(json.dumps([row["hr"]["company_id"], person["url"].rstrip("/").lower(), result["email"].lower()]).encode()).hexdigest()
+            if key in contacts:
+                continue
+            contacts[key] = {"name":person["name"], "position":person.get("title", ""), "company":row["company"],
+                "country":row["hr"].get("country", ""), "location":person.get("location", ""),
+                "email":result["email"], "email_status":result.get("email_status", "unknown"),
+                "profile_url":person["url"], "company_id":row["hr"]["company_id"],
+                "company_url":row["hr"]["company_url"], "job_url":row.get("url", ""),
+                "unlocked_at":datetime.fromtimestamp(self.clock(), timezone.utc).isoformat(timespec="seconds")}
+            changed = True
+        if not changed:
+            return
+        value = {"version":1, "contacts":contacts}
+        if len(contacts) > self.MAX_CONTACTS or len(json.dumps(value).encode()) > self.MAX_BYTES:
+            raise ApolloError("The contacts dashboard reached its local limit. This email is still saved on its HR card. Export your contacts and keep a copy of this email.", "APOLLO_CONTACTS_LIMIT", 409)
+        try:
+            self.save(value)
+        except Exception:
+            raise ApolloError("The email is saved on its HR card, but the contacts dashboard could not save it. Check storage, then refresh contacts; no credit will be spent again.", "APOLLO_CONTACTS_STORAGE", 503) from None
+
+    def list(self, query=""):
+        if not isinstance(query, str) or len(query) > 240 or any(ord(c)<32 for c in query):
+            raise ApolloError("Use a shorter contacts search.")
+        # Match the browser's toLowerCase search so exports contain exactly the
+        # same matching rows (casefold would also expand e.g. ß into ss).
+        query = query.strip().lower()
+        return sorted((dict(row) for row in self._read().values()
+            if not query or query in " ".join(row.values()).lower()), key=lambda row:row["unlocked_at"], reverse=True)
+
+
+def export_contacts(rows):
+    """A genuine XLSX file. Every source cell is literal text, never a formula."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+    from openpyxl.utils import get_column_letter
+    fields = {"name":"Name", "position":"Position", "company":"Company", "country":"Country (scan filter)",
+              "location":"Observed location", "email":"Email", "email_status":"Apollo email status",
+              "profile_url":"LinkedIn profile", "company_url":"LinkedIn company", "job_url":"Source job ad", "unlocked_at":"Saved at (UTC)"}
+    book = Workbook()
+    sheet = book.active
+    sheet.title = "Unlocked contacts"
+    sheet.append(list(fields.values()))
+    for cell in sheet[1]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="16365D")
+    for number, row in enumerate(rows, 2):
+        for column, key in enumerate(fields, 1):
+            cell = sheet.cell(number, column, row.get(key, ""))
+            cell.data_type = "s"
+    sheet.freeze_panes = "A2"
+    sheet.auto_filter.ref = sheet.dimensions
+    for column in range(1,len(fields)+1):
+        sheet.column_dimensions[get_column_letter(column)].width = 30 if column != 2 else 45
+    output = BytesIO()
+    book.save(output)
+    return output.getvalue()

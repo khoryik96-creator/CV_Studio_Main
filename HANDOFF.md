@@ -7,7 +7,23 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current source checkpoint: v24.6.514, local and unmerged** on
+**Current source checkpoint: v24.6.515** on
+`codex/v24.6.515-apollo-contacts`, based on merged v514 `336ba15` / PR #262.
+The owner's two unpushed Apollo commits were applied with git am: public Worker
+address and named HTTP client, plus HTTP/HTTPS LinkedIn-handle identity. The
+company fallback now compares full names after legal affixes rather than
+allowing arbitrary subset words, preserves Unicode and rejects conflicting
+numeric IDs. Job Leads adds Job ads / Unlocked contacts views, separate
+protected device history, read-only old-cache recovery and filtered real XLSX
+exports. Contacts survive account disconnect intentionally; account lookup
+caches/credentials retain isolation. No browser/SQLite email mirror, route/schema
+change, paid retry or owner-installation update. Worker redeployment/live unlock
+is separate from publishing Git. See Apollo README, Job Leads notes and the v515
+QA report. Push is authorized; merge is not. JobAdder PR #257 remains on hold.
+The installed owner checkout has an existing one-line `cvstudio_apollo.py`
+test edit. It was left untouched; reconcile/preserve it before a future update.
+
+**Previous source checkpoint: v24.6.514, merged in PR #262** on
 `codex/v24.6.514-sourcer-evidence-refs`, stacked on local v513 `ec2dda3` from
 merged v511 `44f1887`. The pending Shiseido Apply correction is retained.
 Sourcer now asks the AI to select request/profile-bound IDs for bounded exact
