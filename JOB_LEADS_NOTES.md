@@ -1,5 +1,17 @@
 # Job Leads module
 
+## Contact view visibility (v24.6.516)
+
+The Contacts panel has the shared `card` class, whose explicit flex display
+overrides the browser's default hidden style. A scoped panel `[hidden]` rule
+now hides its contents and layout when Job ads is selected. Controller state,
+contact data, filtering, export, drafts and ongoing scan behavior are unchanged.
+`tests/browser/apollo_contacts_visibility.js` verifies computed visibility with
+the real HTML/CSS/controller in Chromium, synthetic responses and blocked
+network. It reproduces v515 and passes the corrected initial/selected/returned/
+fresh desktop and mobile views. It needs optional Playwright/Chromium, not a
+running application or account; the standard JS fixtures still need no browser.
+
 ## Apollo activation and contact history (v24.6.515)
 
 The owner's two local Apollo activation commits are applied on merged v514,

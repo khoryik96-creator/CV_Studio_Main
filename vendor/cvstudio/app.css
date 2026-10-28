@@ -1681,6 +1681,7 @@
 .job-leads-email-result small {display:block;color:var(--text3);}
 .ev-progress-heading {flex-wrap:wrap;gap:8px;}
 /* The contact dashboard stays inside Job Leads; wide fields scroll on phones. */
+#jobLeadsApolloContactsPanel[hidden]{display:none}
 .job-leads-contact-tabs{margin:0 0 12px}
 .job-leads-contact-tabs [aria-pressed="true"]{color:var(--blue);border-color:var(--blue);background:var(--blue-light,#f2f7ff)}
 .job-leads-contact-table{overflow:auto;max-height:60vh;border:1px solid var(--border);border-radius:10px}
