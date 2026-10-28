@@ -413,6 +413,26 @@ const recoveredSkillPreview = context.cvSkillPreviewHtml({
   category: 'Project Involvement History',
   items: ['Firewall Upgrade', 'Network Redesign'],
 });
+for (const items of [
+  ['Project: Example 2024', 'Technical Lead', 'Managed delivery', 'o Child <point>'],
+  'Project: Example 2024\nTechnical Lead\nManaged delivery\no Child <point>'
+]) {
+  const html = context.cvSkillPreviewHtml({category:'Project Experience', items,
+    item_layout:['heading','heading','bullet','nested']});
+  assert.ok(html.includes('<strong>Project: Example 2024</strong>'));
+  assert.ok(html.includes('<strong>Technical Lead</strong>'));
+  assert.ok(html.includes('style="margin-left:1.5em">Child <point>'));
+  assert.strictEqual((html.match(/class="preview-bullet"/g)||[]).length, 2);
+}
+for (const skill of [
+  {category:'Skills',items:['O ring','Ordinary'],item_layout:['heading','nested']},
+  {category:'Project Experience',items:['O ring','Ordinary'],item_layout:['heading']},
+  {category:'Project Experience',items:['O ring','Ordinary'],item_layout:['heading','unsafe']}
+]) {
+  const html = context.cvSkillPreviewHtml(skill);
+  assert.strictEqual((html.match(/class="preview-bullet"/g)||[]).length, 2);
+  assert.ok(html.includes('O ring'));
+}
 assert.ok(recoveredSkillPreview.includes('<strong>Project Involvement History:</strong>'));
 assert.strictEqual((recoveredSkillPreview.match(/class="preview-bullet"/g) || []).length, 2);
 assert.ok(!recoveredSkillPreview.includes('Firewall Upgrade, Network Redesign'));

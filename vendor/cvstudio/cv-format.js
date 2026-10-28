@@ -771,7 +771,19 @@ function cvSkillPreviewHtml(skill) {
     var listHtml = showCategory
       ? '<div class="preview-skill-cat"><strong>' + esc(category) + ':</strong></div>'
       : '';
-    lines.forEach(function(line){
+    var layout = /^project experiences?$/i.test(category.replace(/:$/, '').trim()) &&
+      Array.isArray(skill.item_layout) && skill.item_layout.length === lines.length &&
+      skill.item_layout.every(function(style){ return ['heading','bullet','nested'].indexOf(style) >= 0; })
+      ? skill.item_layout : [];
+    lines.forEach(function(line, index){
+      if (layout[index] === 'heading') {
+        listHtml += '<div class="preview-skill-cat"><strong>' + esc(line.replace(/\*\*([^*]+)\*\*/g, '$1')) + '</strong></div>';
+        return;
+      }
+      if (layout[index] === 'nested') {
+        listHtml += '<div class="preview-bullet" style="margin-left:1.5em">' + esc(line.replace(/^o\s+/, '')) + '</div>';
+        return;
+      }
       var isHeading = Array.isArray(skill.item_headings) && skill.item_headings.indexOf(line) >= 0 &&
         lines.indexOf(line) === lines.lastIndexOf(line);
       listHtml += isHeading

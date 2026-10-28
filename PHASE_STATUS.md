@@ -4,7 +4,16 @@
 
 ## Release state
 
-- v24.6.504 is a local, unmerged normal People-query correction based on merged
+- v24.6.505 is a local, unmerged CV project-layout correction on merged v504
+  `8d0e8dc` / PR #256. Exact source-confirmed project/role headings retain their
+  grouping in Additional Information, and confirmed lowercase-o children use
+  real nested bullets. Text-free positional hints preserve repeated role labels,
+  source-free export and safe blinded correspondence. Source rechecks clear
+  stale hints; ambiguous/malformed data stays conservative. Existing words,
+  order, routes, schemas, paid calls and owner installation remain unchanged.
+  See guardrail C4 and the v505 QA report.
+
+- v24.6.504 is merged as `8d0e8dc` / PR #256, a normal People-query correction on
   v503 `e689e39`. Request a concise plan, bound oversized flat OR aliases to
   four and retain country/full assessment criteria. Never drop mandatory
   AND/NOT/nested constraints to fit. Recruiter/Lite and existing filtered

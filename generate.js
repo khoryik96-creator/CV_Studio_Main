@@ -357,7 +357,7 @@ function boldBlackPara(text, size = 24) {
 }
 
 // ── Bullet paragraph (uses ListParagraph style, indent, 24pt size) ────────────
-function bulletPara(text, alignmentXml = BODY_ALIGNMENT_XML) {
+function bulletPara(text, alignmentXml = BODY_ALIGNMENT_XML, levelOverride = null) {
   const t = stripLeadingBulletMarker(
     String(text == null ? '' : (typeof text === 'object' ? (text.text || text.heading || '') : text))
   ).trim();
@@ -377,7 +377,7 @@ function bulletPara(text, alignmentXml = BODY_ALIGNMENT_XML) {
   // a character-unit indent (w:leftChars) that Word applies in preference to
   // w:left, so an explicit per-level w:leftChars is required or every level
   // would collapse to the same indent.
-  const level = bulletLevelFor(t);
+  const level = levelOverride === 1 ? 1 : bulletLevelFor(t);
   const leftIndent = 720 * (level + 1);
   const indent = level > 0
     ? `w:leftChars="${200 + level * 300}" w:left="${leftIndent}" w:hanging="360"`
@@ -821,7 +821,18 @@ function makeAdditionalSection(certs, skills) {
       if (!lines.length) continue;
       if (lines.length > 1) {
         const headings = Array.isArray(s.item_headings) ? s.item_headings : [];
-        for (const line of lines) {
+        const layout = /^project experiences?$/i.test(category.replace(/:$/, '').trim()) &&
+          Array.isArray(s.item_layout) && s.item_layout.length === lines.length &&
+          s.item_layout.every(style => ['heading', 'bullet', 'nested'].includes(style)) ? s.item_layout : [];
+        for (const [index, line] of lines.entries()) {
+          if (layout[index] === 'heading') {
+            xml += boldBlackPara(line.replace(/\*\*([^*]+)\*\*/g, '$1'), 24);
+            continue;
+          }
+          if (layout[index] === 'nested') {
+            xml += bulletPara(line.replace(/^o\s+/, ''), LEFT_ALIGNMENT_XML, 1);
+            continue;
+          }
           const isHeading = headings.includes(line) && lines.indexOf(line) === lines.lastIndexOf(line);
           xml += isHeading ? boldBlackPara(line.replace(/\*\*([^*]+)\*\*/g, '$1'), 24) : bulletPara(line, LEFT_ALIGNMENT_XML);
         }

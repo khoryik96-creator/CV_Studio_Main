@@ -1264,6 +1264,138 @@ def _restore_cv_award_headings(parsed, source_text):
     return parsed
 
 
+def _restore_cv_project_item_layout(parsed, source_text):
+    """Annotate existing project items from explicit source layout, never prose."""
+    categories = {"project experience", "project experiences"}
+    groups = [s for s in parsed.get("skills") or [] if isinstance(s, dict)
+              and _cv_source_section_key(s.get("category")) in categories]
+    if not source_text:
+        return parsed  # Export retains already confirmed, text-free positions.
+    for group in groups:
+        group.pop("item_layout", None)
+    if len(groups) != 1 or len(source_text) > 1000000:
+        return parsed
+    lines = [re.sub(r"\s+", " ", s).strip() for s in str(source_text).splitlines() if s.strip()]
+    if len(lines) > 12000:
+        return parsed
+    starts = [i for i, s in enumerate(lines) if _cv_source_section_key(s) in categories
+              and _strip_leading_bullet_marker(s).strip() == s]
+    if len(starts) != 1:
+        return parsed
+    section = []
+    boundaries = _CV_SOURCE_SECTION_BOUNDARY_KEYS | set(_CV_RECOVERABLE_SOURCE_SECTIONS)
+    for line in lines[starts[0] + 1:]:
+        plain = _strip_leading_bullet_marker(line).strip()
+        letters = [c for c in plain if c.isalpha()]
+        strong = line.endswith(":") or (letters and all(c.isupper() for c in letters))
+        if (_cv_source_boundary_key(plain) in boundaries
+                and (plain == line or strong or re.match(r"^\d+[.)]\s", line))):
+            break
+        section.append(line)
+    raw = groups[0].get("items") or []
+    values = raw if isinstance(raw, list) else str(raw).splitlines()
+    if (not values or len(values) > 512 or len(section) > 4096
+            or any(not isinstance(v, str) for v in values)):
+        return parsed
+    items = [v.strip() for v in values if v.strip()]
+
+    def key(value):
+        return re.sub(r"[\W_]+", " ", unicodedata.normalize("NFKC", value).casefold()).strip()
+
+    keys = [key(v) for v in items]
+    positions = {}
+    for i, item_key in enumerate(keys):
+        positions.setdefault(item_key, []).append(i)
+    layout = ["bullet"] * len(items)
+
+    def marked(line):
+        return (_strip_leading_bullet_marker(line).strip() != line
+                or line.startswith("\uf0b7"))  # PDF Symbol-font bullet
+
+    def child(line):
+        return bool(re.match(r"^o\s+\S", line))
+
+    def content_key(line):
+        return key(re.sub(r"^o\s+", "", line) if child(line)
+                   else _strip_leading_bullet_marker(line))
+
+    def paragraph_matches(start, wanted):
+        # Match only a complete initial paragraph, including wrapped PDF lines.
+        joined = ""
+        for j in range(start, min(start + 8, len(section))):
+            if j > start and (marked(section[j]) or child(section[j])):
+                break
+            joined = (joined + " " + content_key(section[j])).strip()
+            if joined == wanted:
+                return True
+            if not wanted.startswith(joined + " "):
+                break
+        return False
+
+    headers = []
+    for i in range(len(section) - 2):
+        title, role, duty = section[i:i + 3]
+        if marked(title) or child(title) or child(role) or not marked(duty):
+            continue
+        labelled = bool(re.match(r"^(?:Project|Role)\s*:", title, re.I)
+                        and re.search(r"\b(?:19|20)\d{2}\b", title))
+        plain_role = _strip_leading_bullet_marker(role).lstrip("\uf0b7").strip()
+        legacy = bool(re.match(r"^(?:(?:0?[1-9]|1[0-2])[/.-])?(?:19|20)\d{2}\b", plain_role)
+                      and "," in plain_role and re.search(r"[^\W\d_]", plain_role))
+        if (len(title) <= 512 and len(role) <= 256
+                and ((labelled and not marked(role)) or legacy)):
+            headers.append(i)
+    source_counts = {}
+    for line in section:
+        source_key = key(line)
+        source_counts[source_key] = source_counts.get(source_key, 0) + 1
+    for start in headers:
+        title_key = key(section[start])
+        role_key = content_key(section[start + 1])
+        hits = positions.get(title_key, [])
+        if len(hits) != 1 or source_counts[title_key] != 1:
+            continue
+        index = hits[0]
+        if (index + 2 < len(keys) and keys[index + 1] == role_key
+                and paragraph_matches(start + 2, keys[index + 2])):
+            layout[index:index + 2] = ["heading", "heading"]
+
+    # Lowercase o is not a universal marker: require a marked parent and an
+    # exact consecutive parent/child match. Never strip ordinary O-ring prose.
+    parents = []
+    for start, line in enumerate(section):
+        if not marked(line):
+            continue
+        end = start + 1
+        while end < len(section) and not marked(section[end]) and not child(section[end]):
+            end += 1
+        if end == len(section) or not child(section[end]):
+            continue
+        parent_key = " ".join(content_key(s) for s in section[start:end])
+        parents.append((parent_key, end))
+    parent_counts = {}
+    for parent_key, _ in parents:
+        parent_counts[parent_key] = parent_counts.get(parent_key, 0) + 1
+    for parent_key, end in parents:
+        hits = positions.get(parent_key, [])
+        if len(hits) != 1 or parent_counts[parent_key] != 1:
+            continue
+        index = hits[0] + 1
+        while end < len(section) and child(section[end]) and index < len(keys):
+            next_end = end + 1
+            while (next_end < len(section) and not marked(section[next_end])
+                   and not child(section[next_end])):
+                next_end += 1
+            wanted = content_key(items[index])
+            if not paragraph_matches(end, wanted):
+                break
+            layout[index] = "nested"
+            index, end = index + 1, next_end
+    if any(style != "bullet" for style in layout):
+        groups[0]["item_layout"] = layout
+    return parsed
+
+
 def _recover_cv_source_additional_sections(parsed, source_text):
     """Restore exact project/training lists and remove duplicated training certs."""
     recovered = _extract_recoverable_cv_source_sections(source_text)
@@ -1608,6 +1740,7 @@ def _normalize_cv_data_for_output(
     parsed = _normalize_cv_structured_content(parsed)
     parsed = _restore_cv_contribution_headings(parsed, source_text)
     parsed = _restore_cv_award_headings(parsed, source_text)
+    parsed = _restore_cv_project_item_layout(parsed, source_text)
     parsed = _recover_cv_source_additional_sections(parsed, source_text)
     parsed = _recover_cv_source_skill_item_punctuation(parsed, source_text)
     parsed = _remove_ungrounded_cv_github_links(parsed, source_text)

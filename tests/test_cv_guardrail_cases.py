@@ -120,6 +120,14 @@ class SourceCheckGuardrails(unittest.TestCase):
 
 
 class SourceRestoreGuardrails(unittest.TestCase):
+    def test_project_layout(self):
+        for case in _cases("project_layout"):
+            with self.subTest(case=case["id"]):
+                result = normalize._normalize_cv_data_for_output(
+                    copy.deepcopy(case["parsed"]), "\n".join(case["lines"]))
+                self.assertEqual(result["skills"][0].get("item_layout"),
+                                 case["expect_layout"], case["note"])
+
     def test_blind_source_summary_keeps_matching_provider_corrections(self):
         for case in _cases("blind_source_recovery"):
             with self.subTest(case=case["id"]):

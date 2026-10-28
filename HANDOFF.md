@@ -7,7 +7,21 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current source checkpoint: v24.6.504, local and unmerged** on
+**Current source checkpoint: v24.6.505, local and unmerged** on
+`codex/v24.6.505-project-bullets`, based on merged v504 `8d0e8dc` / PR #256.
+Dedicated Project Experience additional-info groups now retain source-confirmed
+project/company and role headings plus lowercase-o child bullets. Positional,
+text-free `item_layout` hints handle repeated role labels without changing item
+words/order or representation. Preview/Word render confirmed headings unbulleted
+and children with real nested bullets; ordinary O-words and uncertain structures
+stay unchanged. Source rechecks clear stale hints, source-free exports retain
+them and Blind CV rebuilds them only with unchanged duties/numeric anchors.
+Malformed hints are discarded safely. Guardrail C4 and the v505 QA report cover
+the boundaries/replay/render checks. No route/schema/provider changes, owner
+installation changes, publication or merge. Separate Claude JobAdder work stays
+excluded; issue #35 retains the live claim state.
+
+**Previous source checkpoint: v24.6.504, now merged** on
 `codex/v24.6.504-sourcer-queries`, based on merged v503 `e689e39` / PR #255.
 Live A/B/A testing found the reported seven-alias People query returns no
 results, while four aliases restore ten cards with the same native Malaysia
@@ -18,7 +32,8 @@ than silently losing constraints or replaying a paid call. Recruiter/Lite and
 existing filtered searches retain the old planning path. Empty first pages
 report no matches, distinct from exhausted later pages. See the v504 QA report.
 The original v502/v503 source is merged; historical unmerged notes below are
-superseded by coordination issue #35. No owner installation or merge in v504.
+superseded by coordination issue #35. PR #256 merged v504 as `8d0e8dc`;
+the owner installation was untouched.
 
 **Previous source checkpoint: v24.6.503** on
 `codex/v24.6.503-job-leads-cleanup`, retaining v502 `3bbe021` and based on
