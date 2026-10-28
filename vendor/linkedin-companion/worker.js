@@ -1,4 +1,4 @@
-let connection = null, owned = new Map(), nextCount = 0, profileCount = 0, jobCapture = null;
+let connection = null, owned = new Map(), viewed = new Map(), nextCount = 0, profileCount = 0, jobCapture = null;
 const SESSION_KEY = 'cvstudioLinkedinSessionV1';
 const TRUST_KEY = 'cvstudioLinkedinTrustedAppsV1';
 // Chrome session memory survives worker suspension, but not browser/extension
@@ -219,7 +219,7 @@ async function settleJobSearch(bound, run, tab) {
 }
 function persist() {
   const snapshot = {version:1, connection:connection ? {...connection, allowed:[...(connection.allowed || [])]} : null,
-    owned:[...owned], nextCount:Math.min(nextCount,15), profileCount:Math.min(profileCount,76)};
+    owned:[...owned], viewed:[...viewed], nextCount:Math.min(nextCount,15), profileCount:Math.min(profileCount,76)};
   const write = writes.catch(() => {}).then(() => {
     if (stateFailed) throw Error('Companion session storage is unavailable.');
     return chrome.storage.session.set({[SESSION_KEY]:snapshot});
@@ -237,6 +237,12 @@ async function restore() {
   for (const row of saved.owned) {
     if (!Array.isArray(row) || row.length !== 2 || !Number.isInteger(row[0]) || row[0] < 0 || owned.has(row[0]) || typeof row[1] !== 'string' || !row[1] || row[1].length > 2048 || !(profile(row[1]) || jobURL(row[1]) === row[1])) throw Error('Invalid owned tab.');
     owned.set(row[0], row[1]);
+  }
+  const protectedTabs=saved.viewed === undefined ? [] : saved.viewed;
+  if (!Array.isArray(protectedTabs) || saved.owned.length+protectedTabs.length>76) throw Error('Invalid viewed tabs.');
+  for (const row of protectedTabs) {
+    if (!Array.isArray(row) || row.length!==2 || !Number.isInteger(row[0]) || row[0]<0 || owned.has(row[0]) || viewed.has(row[0]) || typeof row[1]!=='string' || !row[1] || row[1].length>2048 || !(profile(row[1]) || jobURL(row[1])===row[1])) throw Error('Invalid viewed tab.');
+    viewed.set(row[0],row[1]);
   }
   const bound = saved.connection;
   if (!bound) return;
@@ -294,7 +300,7 @@ async function restore() {
     await persist();
   }
 }
-const ready = restore().catch(() => { stateFailed = true; connection = null; owned.clear(); });
+const ready = restore().catch(() => { stateFailed = true; connection = null; owned.clear(); viewed.clear(); });
 function event(change) {
   return ready.then(async () => { if (await change()) await persist(); }).catch(() => { stateFailed = true; connection = null; });
 }
@@ -308,14 +314,19 @@ function sameOwnedPage(value, expected) {
 }
 function expectedLoading(tab, expected) { return tab.status === 'loading' && sameOwnedPage(tab.pendingUrl, expected); }
 async function ownedTab(id) {
-  // An activated or differently redirected tab belongs to the user permanently, including
-  // after it becomes inactive again. Event listeners persist that relinquishment.
-  const expected = owned.get(id), tab = await chrome.tabs.get(id);
-  if (!expected || owned.get(id) !== expected || tab.active || !sameOwnedPage(tab.url, expected) && !expectedLoading(tab, expected) || tab.pendingUrl && !sameOwnedPage(tab.pendingUrl, expected)) {
-    if (owned.has(id)) { owned.delete(id); await persist(); }
-    throw safeError('The background profile tab changed or was opened manually. Your candidate list is kept. Start again and leave the background profile tabs untouched.');
+  // Viewing retains exact-page read authority, but permanently removes automatic
+  // navigation/closure authority. Actual URL changes still relinquish both.
+  const expected = owned.get(id) || viewed.get(id), tab = await chrome.tabs.get(id);
+  if (!expected || (owned.get(id) || viewed.get(id)) !== expected || !sameOwnedPage(tab.url, expected) && !expectedLoading(tab, expected) || tab.pendingUrl && !sameOwnedPage(tab.pendingUrl, expected)) {
+    if (owned.has(id) || viewed.has(id)) { owned.delete(id); viewed.delete(id); await persist(); }
+    throw safeError('The scan profile tab was changed or closed. Your candidate list is kept. Browse in another tab and start again.');
   }
+  if (tab.active && protectViewed(id)) await persist();
   return tab;
+}
+function protectViewed(id) {
+  if (!owned.has(id)) return false;
+  viewed.set(id,owned.get(id));owned.delete(id);return true;
 }
 async function closeOwned(id, expected) {
   try {
@@ -323,11 +334,12 @@ async function closeOwned(id, expected) {
     if (owned.get(id) === expected && !tab.active && (sameOwnedPage(tab.url, expected) || expectedLoading(tab, expected)) && (!tab.pendingUrl || sameOwnedPage(tab.pendingUrl, expected))) await chrome.tabs.remove(id);
   } catch {}
   if (owned.get(id) === expected) owned.delete(id);
+  if (viewed.get(id) === expected) viewed.delete(id);
 }
 async function closeHROwnedTabs() {
   // The app may already be gone before its pagehide message can arrive. Exact
   // ownership/current-or-pending URL checks still protect user-taken-over tabs.
-  for (const [id, expected] of [...owned]) await closeOwned(id,expected);
+  for (const [id, expected] of [...owned,...viewed]) await closeOwned(id,expected);
 }
 async function authenticateApp(tab, documentId, pair=false) {
   await chrome.storage.local.setAccessLevel({accessLevel:'TRUSTED_CONTEXTS'});
@@ -371,7 +383,7 @@ function connectApp(sender, pair=false) {
     // A new binding grants no old run authority. Automatic connection never
     // starts searches, repeats browser mutations or confirms provider spending.
     connection = null;
-    for (const [id, expected] of [...owned]) await closeOwned(id,expected);
+    for (const [id, expected] of [...owned,...viewed]) await closeOwned(id,expected);
     const current=await chrome.tabs.get(tab.id);
     if (connection || current.status !== 'complete' || current.pendingUrl || current.url !== sender.url) throw safeError('CV Studio changed while connecting. Refresh its tab.');
     const [confirmed]=await chrome.scripting.executeScript({target:{tabId:tab.id,documentIds:[sender.documentId]},
@@ -406,9 +418,10 @@ chrome.action.onClicked.addListener(async tab => {
 });
 chrome.tabs.onRemoved.addListener(id => event(async () => {
   const appRemoved=connection?.tabId === id, hrRemoved=appRemoved && connection.kind === 'hr';
-  const changed=appRemoved || owned.has(id);
+  const changed=appRemoved || owned.has(id) || viewed.has(id);
   if (appRemoved) connection=null;
   owned.delete(id);
+  viewed.delete(id);
   if (hrRemoved) await closeHROwnedTabs();
   return changed;
 }));
@@ -418,7 +431,7 @@ chrome.tabs.onUpdated.addListener((id, change) => event(async () => {
     const wasHR=connection.kind === 'hr'; connection = null; changed = true;
     if (wasHR) await closeHROwnedTabs();
   }
-  if (owned.has(id) && change.url && !sameOwnedPage(change.url, owned.get(id))) { owned.delete(id); changed = true; }
+  if ((owned.has(id) || viewed.has(id)) && change.url && !sameOwnedPage(change.url,owned.get(id) || viewed.get(id))) { owned.delete(id); viewed.delete(id); changed = true; }
   if (change.status === 'complete') {
     try {
       const tab=await chrome.tabs.get(id);
@@ -431,7 +444,7 @@ chrome.tabs.onUpdated.addListener((id, change) => event(async () => {
   }
   return changed;
 }));
-chrome.tabs.onActivated.addListener(info => event(() => owned.delete(info.tabId)));
+chrome.tabs.onActivated.addListener(info => event(() => protectViewed(info.tabId)));
 async function readJobTab(bound, id, expected, companyOnly=false) {
   const verify = tab => {
     if(jobCapture?.cancelled)throw safeError('The job company read was stopped.','HR_STOPPED');
@@ -551,7 +564,7 @@ async function handle(message, sender) {
     if(jobCapture?.bound!==connection || jobCapture.operation!==args.operation_id)return false;
     jobCapture.cancelled=true;return true;
   }
-  if (message.action === 'jobStatus') return {connected:true,job_read:true,job_search:true,job_search_revision:1,company_hr_revision:1,hr_company_identity_revision:1,hr_company_filter_revision:1,hr_company_source_revision:1,hr_resilience_revision:1,hr_layout_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_keyword_revision:1,people_country_revision:1,people_results_revision:1,companion_update_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
+  if (message.action === 'jobStatus') return {connected:true,job_read:true,job_search:true,job_search_revision:1,company_hr_revision:1,hr_company_identity_revision:1,hr_company_filter_revision:1,hr_company_source_revision:1,hr_resilience_revision:1,hr_layout_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_keyword_revision:1,people_country_revision:1,people_results_revision:1,profile_browsing_revision:1,companion_update_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
   if (message.action === 'hrBegin') {
     const bound = connection;
     if (!/^[a-f0-9]{32}$/.test(args.run_id || '') || !hrCompanyURL(args.company_url) || typeof args.company !== 'string' || !args.company.trim() || args.company.length > 200 ||
@@ -618,7 +631,7 @@ async function handle(message, sender) {
       // opened. Never navigate or close any pre-existing user tab.
       if (args.url !== expected) throw Error('Use a canonical LinkedIn job link.');
       delete bound.jobCompany;
-      for (const [id, value] of [...owned]) if (jobURL(value)) await closeOwned(id, value);
+      for (const [id, value] of [...owned,...viewed]) if (jobURL(value)) await closeOwned(id, value);
       await persist();
       const tabs = await chrome.tabs.query({url:'https://www.linkedin.com/*'});
       if (connection !== bound || bound.run) throw Error('The companion connection changed.');
@@ -682,7 +695,7 @@ async function handle(message, sender) {
     delete connection.hr;
     delete connection.peopleSearch;
     connection.allowed = new Set(); await persist();
-    for (const [id, expected] of [...owned]) await closeOwned(id, expected);
+    for (const [id, expected] of [...owned,...viewed]) await closeOwned(id, expected);
     await persist(); return true;
   }
   if (connection.kind === 'hr') {
@@ -711,7 +724,7 @@ async function handle(message, sender) {
       if (!sourceReady) return hrWaiting(hr);
       if (!/^https:\/\/www\.linkedin\.com\/in\/[A-Za-z0-9_%~-]+$/.test(args.url || '') || !bound.allowed.has(args.url)) throw safeError('Choose an HR profile observed on this results page.');
       if (!hr.joining) {
-        if ((hr.joined_count || 0) >= 100 || owned.size >= 76) throw safeError('The joining-date lookup limit was reached.');
+        if ((hr.joined_count || 0) >= 100 || owned.size+viewed.size >= 76) throw safeError('The joining-date lookup limit was reached.');
         // Persist the attempt before opening. If suspension occurs mid-create,
         // the absent tab ID stops visibly rather than opening another tab.
         hr.joined_count=(hr.joined_count || 0)+1; hr.joining={url:args.url,tab_id:null,scrolls:0};
@@ -736,12 +749,18 @@ async function handle(message, sender) {
       const result=injection?.result;
       if (result?.hrError) throw safeError(result.hrError === 'access' ? 'LinkedIn needs sign-in or is showing a restriction. Resolve it before scanning again.' : 'The HR profile changed or could not be confirmed.');
       if (result == null || result.loading) {
+        const leaveViewed = async () => {
+          await closeOwned(id,args.url); delete hr.joining; await persist(); live(bound,run);
+          return {url:args.url,joined:''};
+        };
+        if (viewed.has(id)) return leaveViewed();
         // LinkedIn lazy-loads Experience after scrolling. Only our unchanged
         // inactive tab can be scrolled; persist its small budget first.
         if ((hr.joining.scrolls || 0) < 4) {
           hr.joining.scrolls=(hr.joining.scrolls || 0)+1; await persist();
           await ownedTab(id); if (!await verify()) return hrWaiting(hr);
-          await jobScript({target:{tabId:id},func:url=>globalThis.SourcerReader.prepareHRJoined(url),args:[args.url]},'The profile Experience section could not be loaded.');
+          if (viewed.has(id)) return leaveViewed();
+          await jobScript({target:{tabId:id},func:url=>document.visibilityState==='visible'?false:globalThis.SourcerReader.prepareHRJoined(url),args:[args.url]},'The profile Experience section could not be loaded.');
           await ownedTab(id); if (!await verify()) return hrWaiting(hr);
         }
         return hrWaiting(hr);
@@ -932,17 +951,29 @@ async function handle(message, sender) {
     catch (error) { await closeOwned(tab.id, args.url); throw error; }
   }
   const bound = connection;
-  const tab = owned.has(args.tab_id) ? await ownedTab(args.tab_id) : await chrome.tabs.get(args.tab_id);
+  const tab = owned.has(args.tab_id) || viewed.has(args.tab_id) ? await ownedTab(args.tab_id) : await chrome.tabs.get(args.tab_id);
   if (connection?.run !== args.run_id) throw Error('The browser run has stopped.');
-  if (!linkedin(tab.url) && !(owned.has(tab.id) && expectedLoading(tab, owned.get(tab.id))) && !(tab.id === connection.source && pendingPeopleSearch(tab))) throw Error('The selected tab left LinkedIn.');
-  if (tab.id !== connection.source && !owned.has(tab.id)) throw Error('This tab does not belong to the sourcing run.');
+  if (!linkedin(tab.url) && !((owned.has(tab.id) || viewed.has(tab.id)) && expectedLoading(tab,owned.get(tab.id) || viewed.get(tab.id))) && !(tab.id === connection.source && pendingPeopleSearch(tab))) throw Error('The selected tab left LinkedIn.');
+  if (tab.id !== connection.source && !owned.has(tab.id) && !viewed.has(tab.id)) throw safeError('The scan profile tab changed or closed. Your candidate list is kept.');
   if (message.action === 'navigate') {
     const search = args.url?.startsWith('https://www.linkedin.com/search/results/people/?');
     if ((!search && !profile(args.url)) || (search && tab.id !== connection.source) ||
-        (profile(args.url) && (!owned.has(tab.id) || !connection.allowed.has(args.url)))) throw Error('This navigation is not supported.');
+        (profile(args.url) && (!owned.has(tab.id) && !viewed.has(tab.id) || !connection.allowed.has(args.url)))) throw Error('This navigation is not supported.');
     if (profile(args.url) && ++profileCount > 75) throw Error('The profile limit was reached.');
-    const previous = owned.get(tab.id);
-    if (previous) owned.set(tab.id, args.url);
+    const previous = owned.get(tab.id) || viewed.get(tab.id);
+    const replacement = async () => {
+      // The viewed page is released before opening another exact observed URL.
+      // It can never be closed by a suspended or older worker afterward.
+      owned.delete(tab.id);viewed.delete(tab.id);await persist();live(bound,args.run_id);
+      const created=await chrome.tabs.create({url:args.url,active:false});owned.set(created.id,args.url);
+      try {await persist();live(bound,args.run_id);return {tab_id:created.id};}
+      catch(error){await closeOwned(created.id,args.url);throw error;}
+    };
+    if (previous) {
+      const current=await ownedTab(tab.id);live(bound,args.run_id);
+      if (viewed.has(tab.id) || current.active) return replacement();
+      owned.set(tab.id,args.url);
+    }
     if (search) {
       if (bound.peopleSearch) throw safeError('Start a new run before changing the People search.');
       bound.peopleSearch={key:hrSearchKey(args.url),previous:hrSearchKey(tab.url),country:'',stage:'waiting',started:Date.now()};
@@ -950,9 +981,10 @@ async function handle(message, sender) {
     await persist(); live(bound, args.run_id);
     if (previous) {
       const current = await chrome.tabs.get(tab.id);
-      if (owned.get(tab.id) !== args.url || current.active || !sameOwnedPage(current.url, previous) || current.pendingUrl && !sameOwnedPage(current.pendingUrl, previous)) {
-        owned.delete(tab.id); await persist(); throw Error('This profile tab was taken over.');
+      if ((!owned.has(tab.id) && !viewed.has(tab.id)) || !sameOwnedPage(current.url, previous) || current.pendingUrl && !sameOwnedPage(current.pendingUrl, previous)) {
+        owned.delete(tab.id);viewed.delete(tab.id); await persist(); throw safeError('The scan profile tab changed. Your candidate list is kept.');
       }
+      if (viewed.has(tab.id) || current.active) return replacement();
     }
     live(bound, args.run_id); await chrome.tabs.update(tab.id, {url: args.url});
     return true;
@@ -965,7 +997,7 @@ async function handle(message, sender) {
       finally { if(jobCapture===token)jobCapture=null; }
     }
     if (!['readSearch', 'readProfile', 'search', 'next'].includes(args.method)) throw Error('This browser action is not supported.');
-    if (args.method === 'readProfile' ? !owned.has(tab.id) : tab.id !== connection.source) throw Error('This read does not belong to the sourcing run.');
+    if (args.method === 'readProfile' ? !owned.has(tab.id) && !viewed.has(tab.id) : tab.id !== connection.source) throw Error('This read does not belong to the sourcing run.');
     if (tab.status !== 'complete') return {loading: true};
     const readerError = 'LinkedIn results could not be read. Refresh LinkedIn, then reload and reconnect the latest companion.';
     const checkCountry=async()=>{
@@ -995,6 +1027,7 @@ async function handle(message, sender) {
       }, args: [args.method, args.values || []]},readerError);
     const result = injection?.result;
     live(bound, args.run_id);
+    if (args.method === 'readProfile') { await ownedTab(tab.id); live(bound,args.run_id); }
     // A successful Next may already be loading the new page. Never replay its
     // click merely because the unchanged filters are temporarily loading.
     if (!await checkCountry() && args.method !== 'next') return {loading:true};

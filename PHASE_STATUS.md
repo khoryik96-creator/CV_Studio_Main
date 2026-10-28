@@ -4,12 +4,21 @@
 
 ## Release state
 
-- v24.6.508 is a local Sourcer response correction on merged v507 `8c99a3d`.
+- v24.6.509 is a local tab-browsing correction on merged v508 `156980b`.
+  Viewing scan profiles retains exact-page read access but releases automatic
+  navigation/closure permanently. Sourcer follows a confirmed fresh inactive
+  replacement ID; HR skips scrolling viewed profiles and leaves unavailable
+  joining dates unknown. URL/filter/document changes, run/page/profile budgets,
+  stored-state validation, Stop/cleanup and paid non-replay remain. UI gates
+  reject older companions before scan/paid work. No route, schema, permission,
+  provider, owner-installation or PR #257 scope change; not published/merged.
+
+- v24.6.508 is merged in PR #259 on merged v507 `8c99a3d`.
   The assessment schema declares the existing validator bounds, and invalid
   response/tool output gets response-specific guidance rather than key advice.
   Strict evidence/ID/score checks, prior card results/provenance, usage/costs,
   Stop/limits and paid non-replay remain. No provider call, owner update,
-  storage-schema/route change, publication or merge. See the v508 QA report.
+  storage-schema/route change. See the v508 QA report; merge is `156980b`.
 
 - v24.6.507 corrects PR #258's nested-only Blind CV finding while retaining the
   project grouping and DNS-family fixes. Confirmed children need no recognized

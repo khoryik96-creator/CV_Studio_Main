@@ -126,7 +126,14 @@ class Agent {
           if (inspected.has(candidate.url)) continue;
           if (!profileURL(candidate.url) || !snapshot.profiles.some(p => p.id === candidate.id && p.url === candidate.url)) throw Error('An unobserved profile was rejected.');
           if (this.profileTab === null) this.profileTab = await this.browser.createTab(candidate.url);
-          else await this.browser.navigate(this.profileTab, candidate.url);
+          else {
+            const moved=await this.browser.navigate(this.profileTab, candidate.url);
+            this.check();
+            if (moved && typeof moved==='object') {
+              if (Array.isArray(moved) || !Number.isInteger(moved.tab_id) || moved.tab_id<0) throw Error('The companion could not confirm the new background profile tab.');
+              this.profileTab=moved.tab_id;
+            }
+          }
           await this.wait(2000, this.signal);
           const profile = await this.read(this.profileTab, 'readProfile', [candidate.url]);
           details.push({...candidate, text: profile.text, name: profile.name || candidate.name,

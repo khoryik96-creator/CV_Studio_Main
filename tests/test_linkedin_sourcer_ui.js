@@ -23,7 +23,7 @@ function fixture(reuse=true){
     if(!state.connected)return reply(null,'The browser action stopped. Reconnect the companion or check the LinkedIn page.');
     if(message.action==='tabs'){if(state.hold){state.held=()=>reply(state.tabs);return}return reply(state.tabs)}
     if(message.action==='reloadCompanion')return reply(state.reloadResult||{current:true});
-    if(message.action==='jobStatus')return reply({connected:true,people_results_revision:state.oldResultsCompanion?0:1,people_country_revision:state.oldCountryCompanion?0:1,companion_update_revision:state.oldUpdateCompanion?0:1});
+    if(message.action==='jobStatus')return reply({connected:true,profile_browsing_revision:state.oldBrowsingCompanion?0:1,people_results_revision:state.oldResultsCompanion?0:1,people_country_revision:state.oldCountryCompanion?0:1,companion_update_revision:state.oldUpdateCompanion?0:1});
     if(message.action==='openPeopleSearch'){
       if(state.oldCompanion)return reply(null,'Unsupported browser action.');
       const tab={...people,id:20+(++state.opened),url:'https://www.linkedin.com/search/results/people/',title:'New People search'};
@@ -130,6 +130,11 @@ function fixture(reuse=true){
   for(const reuse of [true,false]){
     const outdated=fixture(reuse);await outdated.init();outdated.el('Brief').value='SAP finance';outdated.el('Consent').checked=true;outdated.state.oldResultsCompanion=true;await outdated.start();
     assert.equal(outdated.requests.filter(r=>r.action==='start'||r.action==='plan').length,0,'an old People reader is rejected before any paid work');assert.match(outdated.el('Status').textContent,/latest companion update/);
+  }
+  for(const mode of ['standard','lite','recruiter']){
+    const outdated=fixture(mode!=='standard');outdated.state.tabs=[{id:7,url:mode==='standard'?'https://www.linkedin.com/search/results/people/':'https://www.linkedin.com/talent/search',title:'Recruiter search'}];await outdated.init();
+    outdated.el('Mode').value=mode;outdated.el('Brief').value='SAP finance';outdated.el('Consent').checked=true;outdated.state.oldBrowsingCompanion=true;await outdated.start();
+    assert.equal(outdated.requests.length,0,'old tab policy stops before paid work in '+mode);assert(!outdated.calls.some(c=>c.action==='begin'));assert.match(outdated.el('Status').textContent,/keep browsing safely/);
   }
   const ambiguousSearch=fixture(false);ambiguousSearch.el('Mode').value='lite';ambiguousSearch.state.tabs=[{id:7,url:'https://www.linkedin.com/talent/search',title:'Recruiter Lite'}];
   await ambiguousSearch.init();ambiguousSearch.el('Brief').value='SAP finance';ambiguousSearch.el('Consent').checked=true;ambiguousSearch.state.missingMethod='search';await ambiguousSearch.start();

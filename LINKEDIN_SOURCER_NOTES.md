@@ -1,5 +1,30 @@
 # LinkedIn Sourcer module
 
+## Browse LinkedIn while scans run (v24.6.509)
+
+The owner explicitly changed the old activation-stop policy: switching tabs
+alone must not stop either Sourcer or Job Leads. Activating an extension-created
+profile now moves its exact URL/ID from `owned` to read-only `viewed` session
+state. Every profile read verifies its current/pending URL before injection and
+after reading. Actual navigation, source/filter changes, replaced app documents,
+access checks and Stop retain their guards. A viewed profile can never become
+automatically navigable/closable again, even after becoming inactive or worker
+suspension. Other user tabs are not adopted.
+
+When the next observed candidate requires navigation, a viewed profile is left
+open and a new inactive profile is created. The existing profile budget still
+counts the destination once; the controller accepts only a valid returned
+integer tab ID. Cleanup releases viewed references without closing those tabs.
+The optional session `viewed` list is URL/ID validated, disjoint from `owned`,
+and both lists together remain bounded to 76. Old snapshots without it work;
+old workers ignore it, so downgrade cannot reacquire navigation/closure power.
+This does not resume paid work after interruption or add an API request.
+
+`profile_browsing_revision:1` is required before planning in all search modes
+and before Job Leads HR discovery. Apply the updated companion and refresh
+CV Studio/LinkedIn after publication. Browsing other pages is supported; changing
+the actual scan's source/filter/page still invalidates its evidence.
+
 ## Assessment output limits and failure guidance (v24.6.508)
 
 The review request now declares the same bounds as the existing validator:
@@ -190,7 +215,8 @@ no plan request; subsequent browser operations reuse the same run and budgets.
   document ID and never replays browser or paid actions. Storage failures stop
   commands visibly. Clicking the toolbar again on the same live document cannot
   reset an active run's budgets.
-- Activating or navigating a profile tab relinquishes extension ownership.
+- Activating a profile tab relinquishes navigation/closure ownership (v509
+  retains read-only access); navigating it relinquishes all authority.
   Every profile read/navigation checks ownership and current/pending URLs, with
   another check after script injection. Normal extension-commanded navigation
   (old committed URL, expected pending URL, loading) retains ownership and the
@@ -259,7 +285,8 @@ provider retry, consent bypass, route/schema or extension-permission change occu
 Profile-tab ownership in v463 accepts a single added trailing slash on the exact
 observed profile URL. The old byte comparison rejected that same-identity change;
 its regression failed before the correction. Query/hash changes, another profile,
-user activation and mismatched pending navigations still relinquish ownership.
+user activation relinquishes navigation/closure ownership (v509 retains exact
+read access), and mismatched pending navigations relinquish all authority.
 Checks before/after script injection, suspension recovery, cleanup and page/profile
 budgets remain. This reproduces a possible browser-action failure, not proof of the
 precise failure shown in the owner's screenshot, which had already screened cards.

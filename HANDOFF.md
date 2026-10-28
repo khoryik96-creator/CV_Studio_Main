@@ -7,7 +7,19 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current source checkpoint: v24.6.508, local and unmerged** on
+**Current source checkpoint: v24.6.509, local and unmerged** on
+`codex/v24.6.509-companion-tab-browsing`, from merged v508 `156980b` / PR #259.
+The owner explicitly permits browsing other LinkedIn tabs during Sourcer and
+Job Leads scans. Activating a scan profile now retains exact-page read authority
+in a separate bounded session map while permanently removing navigation/closure
+authority. Sourcer allocates a fresh inactive profile for its next observed
+candidate; HR never scrolls a viewed profile. Real URL/filter/document changes
+still stop. Old companions fail before paid planning/HR work via the additive
+capability. No provider replay, route/schema/permission/credential change or
+owner-installation update. See the v509 QA report and module notes. Separate
+JobAdder PR #257 remains excluded; publication/merge requires the owner.
+
+**Previous source checkpoint: v24.6.508, merged in PR #259** on
 `codex/v24.6.508-sourcer-assessment-output`, from merged v507 `8c99a3d` / PR #258.
 An incomplete Sourcer assessment was incorrectly followed by API-key advice.
 The review schema now declares the validator's existing score/quote/unknown
@@ -16,7 +28,7 @@ response-error code/action while real authentication guidance remains. Existing
 found card results, provenance, billing and no paid replay are preserved; no
 claims/unknowns are truncated or guessed. Synthetic route/domain/browser and
 native actual-route + transport + agent checks cover the failure. No live
-provider/key test, owner installation change, publication or merge. Separate
+provider/key test or owner installation change. Merged as `156980b`. Separate
 JobAdder PR #257 is excluded. See Sourcer notes and the v508 QA report.
 
 **Previous source checkpoint: v24.6.507, merged in PR #258** on
