@@ -1,5 +1,102 @@
 # Job Leads module
 
+## Review corrections (v24.6.501)
+
+One title paragraph exposed as both a semantic heading and an employer/title/
+metadata row now counts once by DOM identity. Distinct headings remain
+ambiguous, and employer/job/description/sidebar boundaries remain. Optional HR
+email checks retain their verifier-provided recheck reference for the unchanged
+address only; input edits and cleared account suggestions discard it together
+with previous/pending results. No saved HR/ad fields or paid calls change.
+
+## First-party email verification on HR cards (v24.6.500, unmerged)
+
+Each HR card has an optional Email to verify field and explicit Verify email
+button. It uses the existing first-party `/email-verifier` route in Deep mode;
+displaying a card or revealing an Apollo email does not probe mail servers.
+Existing revealed Apollo emails can prefill the field; edits remain manual,
+and disconnect/account changes clear any unchanged suggested address, result
+and late response. Verification does not unlock an email, connect Apollo,
+spend credits, send mail or save email fields with ads/HR scans. Manual checks
+work while Apollo activation is deferred. Checks report mailbox evidence,
+catch-all behaviour, qualitative recommendation and time in the card only.
+See EMAIL_VERIFIER_NOTES.md for limits and the v500 QA report for validation.
+
+## HR resilience and bounded recovery (v24.6.499)
+
+Every automatic/repeat scan rereads its exact ad's employer. A manually changed
+company-page URL keeps the strict manual path. If a previously scanned ad is
+unavailable, missing its employer link, times out or uses an unknown layout,
+only its valid saved source/company-ID binding may be reused. Access failures,
+disconnection and changed source tabs do not enter that fallback. The live
+company header must reconfirm the saved numeric ID; native group selection must
+also commit that same ID. It may then adopt the current canonical name/URL.
+An unrelated company's ID always stops before profile reads.
+
+Company People tracking parameters are normalized only for the old company
+page during the exact requested search transition. Actual search filters keep
+their existing binding. A fresh ad whose company link redirects without prior
+numeric evidence receives one source-link reread, following confirmed run
+cleanup and before any filter/profile/save work. The reread employer URL must
+equal the observed redirect target. No confirmed link, Stop or unconfirmed
+cleanup means no restart. No page click, paid action or ambiguous mutation is
+automatically replayed.
+
+Standalone headers use employer/job-scoped semantic headings or one unambiguous
+employer/title/metadata group before the description. Navigation, related-job
+cards, other job IDs, company-name headings, description headings and ambiguous
+employers cannot supply the title. Leading notices do not shift global field
+positions. Unrecognized/localized controls still fail visibly; no location or
+company filter is dropped to produce results.
+
+Company-only metadata gets at most 48 passive polls (full-ad reads retain 16),
+within a 55-second frontend request allowance; initial page loading remains
+bounded. `jobReadCancel` requires the exact active operation ID and verified
+app document, and only cancels metadata capture. Stop/pagehide request it; the
+worker exits its next readiness boundary and cleans only its unchanged inactive
+owned tab. This cannot interrupt another request, native filter mutation or
+paid operation.
+
+HR readiness has bounded company, company-filter, country-filter, navigation
+and result stages. The frontend uses at most 120 polls per page/paging wait.
+Systemic filter/access failures stop the remaining queue. Results changing
+under unchanged filters cause at most two passive same-page rereads per scan,
+with existing person deduplication, 100-person/look-up and total page/time limits;
+no Next click or budget is consumed by a refresh request. Continuous churn fails
+visibly and retains previous saved results. Structured `HR_*` reasons are
+additive beside the legacy error string and contain no private page content.
+`hr_resilience_revision:1` requires the current companion before single/bulk HR.
+
+## Saved labels and verified employer identity (v24.6.498)
+
+A saved public/search-card label can be shorter than the employer link in the
+same job's full header. Do not compare the saved label to LinkedIn text as the
+identity boundary. `jobFromLink(company_only:true)` must confirm the exact job
+URL and a single native employer link in two consecutive observations. The
+worker keeps only bounded job/company URL/name/time metadata, scoped to the
+verified app document and expiring after two minutes. `hrBegin(job_url:...)`
+requires that exact observation; another ad, URL, name, expired proof or app
+document cannot reuse it. It is consumed when the scan begins.
+
+Only this source-confirmed path may read the heading of the exact linked
+company page as the native filter name. Company URL, observed singleton/group,
+country, keywords, joining-date checks and save revision remain enforced.
+There is no fuzzy alias or name-only company search. Manually entered company
+pages keep strict name matching. Saved `hr.company` continues to equal the ad's
+unchanged display label; optional bounded `hr.company_name` records the verified
+LinkedIn name and is shown in the HR panel/reused on later scans. Legacy records
+without it remain readable, including backup/restore; no schema bump or
+migration occurs.
+
+Metadata-only reads need the identity-confirmed employer header, not About
+content. A company-name container's Follow controls do not become its label;
+multiple labels sharing one exact company URL are one identity, while
+conflicting/foreign links remain unconfirmed. Same-ad loading and document
+replacement receive bounded passive waits/reinjection without re-navigation.
+Missing employer links use the full existing sixteen-poll bound and report a
+specific error. `hr_company_source_revision:1` gates older companions before
+single/bulk scans. Apply the companion update and refresh both pages.
+
 ## Scan activity and grouped-company selection (v24.6.497)
 
 Single HR, bulk HR and job-ad searches now hold one token in the existing

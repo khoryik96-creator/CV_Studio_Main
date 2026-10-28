@@ -4,6 +4,52 @@
 
 ## Release state
 
+- v24.6.501 corrects all three findings on the unmerged v498–v500 stack.
+  Microsoft DBEB punctuation remains constrained by provider/code/word guards;
+  rechecks retain a signed, address/process-bound control identity for up to
+  four hours; a single semantic title found through two paths counts once.
+  Expired/tampered/cross-address references fail before network checks. No new
+  route, schema, persistent email/token store or external/paid service. The
+  owner authorized publishing and merging after final local/hosted validation;
+  the final merge identity belongs in coordination issue #35.
+
+- v24.6.500 is a local unmerged Email Verifier evidence improvement stacked
+  on v499 `1e856cb`, with v498/v499 retained. It adds conservative documented
+  provider rejection handling, separate mailbox/catch-all assessment, bounded
+  deeper MX comparison, cancellable one-time delayed rechecks and explicit
+  email checks on HR cards. No third-party verifier, paid call, mail delivery,
+  account/history connection, hosting setup, persistent email store, route or
+  schema change. Catch-all uncertainty and network limitations remain visible.
+  Master remains merged v497 `ff722b3`; no merge is authorized in this turn.
+
+- v24.6.499 is an unmerged resilience checkpoint stacked on local v498
+  `ac22175`; merged master remains v497 `ff722b3`. Repeat HR scans refresh the
+  ad employer. Previous evidence is a fallback only for an unreadable ad and
+  must revalidate its numeric company ID on the live page; redirects cannot
+  switch companies. A fresh redirect can recheck its exact ad link once before
+  filters, following confirmed cleanup. Structural headers ignore leading
+  notices and unrelated job headings. Bounded metadata waits support exact
+  cancellation, explicit access/unavailability/stage errors and two passive
+  same-filter result refreshes without repeated page clicks or lookups.
+  Route/storage schemas, provider behavior, previous results, source/country
+  authority, scan limits and mutation non-replay remain. See the v499 QA report.
+
+- v24.6.498 is an unmerged HR employer-identity correction from merged v497
+  `ff722b3`. Short saved company labels no longer have to equal LinkedIn's
+  full employer name: a worker-observed exact ad/company URL binding, with two
+  agreeing passive reads and a two-minute/document-bound lifetime, authorizes
+  only that linked company page's canonical heading. Manual pages retain the
+  strict name check. Optional bounded `hr.company_name` preserves verified
+  identity for later scans without rewriting saved ad labels or changing any
+  database/backup schema version. Missing About content, header controls and
+  same-job document loading no longer masquerade as company mismatches.
+  Existing company/country filters, limits, saves, activity, access and paid
+  gates remain. See the v498 QA report.
+
+- v24.6.497 merged in PR #253 as `ff722b3` after all three hosted checks and
+  GitHub automated review completed with no findings on exact head `1ca7a72`.
+  This supersedes the historical unmerged entry below.
+
 - v24.6.497 is an unmerged correction from merged v496 `e13727d`. Single HR,
   bulk HR and job-ad searches now share the existing orange run-token status;
   completion, Stop and failures settle it after cleanup. For company headers

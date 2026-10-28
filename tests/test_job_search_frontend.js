@@ -19,7 +19,7 @@ function fixture(options={}){
     folders:['Priority'],records:[{...b,id:'e'.repeat(32),revision:2,contact:'Manual Contact',notes:'Important saved notes',status:'contacted',description:'Saved full content',created_at:'2026-10-01T00:00:00Z',folder:'',deleted:false,follow_up:''}]};
   const window={addEventListener:(name,fn)=>events[name]=fn,confirm:()=>state.allowDiscard!==false,postMessage:message=>{
     if(message.type==='CVSTUDIO_LINKEDIN_CAPTURE_RESULT'){state.captureReply?.(message.result);state.captureReply=null;return}
-    calls.push(message);const reply=(value,error)=>events.message({source:window,origin:location.origin,data:{type:'CVSTUDIO_LINKEDIN_RESPONSE',id:message.id,channel:message.channel,...(error?{error}:{result:value})}});
+    calls.push(message);const reply=(value,error)=>events.message({source:window,origin:location.origin,data:{type:'CVSTUDIO_LINKEDIN_RESPONSE',id:message.id,channel:message.channel,...(error?typeof error==='object'?{error:error.message,error_code:error.code,...(error.companyURL?{company_url:error.companyURL}:{})}:{error}:{result:value})}});
     if(state.onRPC?.(message,reply))return;
     if(message.action==='jobStatus')return reply({connected:state.connected,job_search:state.searchCapable,job_search_revision:state.searchRevision,version:'24.6.461',busy:state.busy});
     if(message.action==='jobSearchTabs')return reply([{id:20,title:'Open filtered jobs',url:'https://www.linkedin.com/jobs/search/?keywords=finance&f_WT=2'}]);
@@ -41,6 +41,7 @@ function fixture(options={}){
       assert(state.onApollo,'Apollo calls require an explicit test fixture');
       return state.onApollo(options?.body?JSON.parse(options.body):null);
     }
+    if(endpoint==='/email-verifier') {assert(state.onVerify,'Mail checks require an explicit fixture');return state.onVerify(JSON.parse(options.body));}
     assert.equal(endpoint,'/job-leads','search must not call a paid route');
     if(!options?.body)return {ok:true,json:async()=>({records:structuredClone(state.records),folders:[...state.folders]})};
     const data=JSON.parse(options.body);requests.push(data);
@@ -67,6 +68,7 @@ function fixture(options={}){
     ...options.activity,
     navigator:{clipboard:{writeText:async value=>{state.clipboard=value}}},
     setTimeout:(fn,ms)=>setTimeout(fn,ms===350?0:ms),clearTimeout,Option:function(text,value){const node=new Element('option',text);node.value=value;return node}});
+  if(options.emailVerifier) vm.runInContext(fs.readFileSync(path.join(__dirname,'../vendor/cvstudio/email-verifier.js'),'utf8'),context);
   if(options.apollo) {
     window.open=()=>{state.popup={location:{},close(){state.popupClosed=true}};return state.popup};
     vm.runInContext(fs.readFileSync(path.join(__dirname,'../vendor/cvstudio/job-leads-apollo.js'),'utf8'),context);

@@ -1,5 +1,101 @@
 # Email Verifier
 
+## Review corrections (v24.6.501)
+
+Microsoft DBEB replies may include the documented terminal period before a
+diagnostic suffix. Only that optional period is added; MX suffix, SMTP code,
+leading enhanced code, exact phrase and word boundary remain mandatory.
+Lookalike providers, temporary codes, joined words and repeated punctuation
+cannot become missing-recipient evidence.
+
+Each full/deep check now creates one control identity shared by its bounded
+SMTP sessions. Its response includes an optional opaque `recheck_token`.
+Automatic/list rechecks and explicit same-address HR-card retries return it
+so recipient-based greylisting can recognize the original control recipient.
+New checks still work without a token. Quick/unsupported checks issue none.
+
+The token contains only a version, expiration, random nonce and HMAC-SHA256.
+Its signature binds the canonical address (local-part case preserved), nonce
+and expiry to a random process-local key. It expires after four hours and is
+invalid after restart. Malformed, tampered, expired, other-address/process or
+quick-mode references fail before DNS/SMTP, with fixed guidance to start fresh.
+It is a recheck correlation reference, not an account/provider credential or
+permission to contact a new destination. No token/result/address cache or
+database/schema change was introduced. The server key is volatile only.
+
+The four-hour bound accommodates the existing 200-address/two-pass foreground
+queue without arbitrary persistence. A suspended tab may outlive the reference;
+the resulting visible error retains prior results and never silently switches
+control identity. The reference stays in tab memory and POST bodies, is not
+exported, and is cleared by HR input/account changes. Existing 25-second/global/
+domain limits, public-IP pinning, null sender and no-mail behaviour remain.
+See the v501 QA report for counterfactual/protocol/browser validation.
+
+## Evidence and deeper checks (v24.6.500, local and unmerged)
+
+The owner authorized improving the first-party checker and adding verification
+to Job Leads HR cards. No external verifier, account connection, hosted worker,
+mail delivery or paid service was introduced. Legacy status/response fields and
+the POST route remain; evidence fields and `mode:deep` are additive.
+
+- `mailbox_evidence` separates acceptance/rejection/unconfirmed/conflicting
+  answers from `catch_all` domain behaviour. A real address can coexist with
+  catch-all acceptance. The assessment is a qualitative recommendation, never
+  a measured probability, ownership claim or inbox-delivery guarantee. A known
+  disposable hint can add caution without rewriting the SMTP verdict.
+- The documented Microsoft DBEB `550 5.4.1 Recipient address rejected: Access
+  denied` is recipient evidence only on an MX ending in
+  `.mail.protection.outlook.com`, at RCPT time with the exact bounded phrase.
+  Other hosts, suffix lookalikes, generic Access denied and policy codes stay
+  unknown. General missing-recipient evidence requires a leading `5.1.1` and
+  the established permanent reply codes. Source:
+  [Microsoft DBEB](https://learn.microsoft.com/en-us/exchange/mail-flow-best-practices/use-directory-based-edge-blocking).
+- Temporary deferrals, full mailboxes, sender policy, TLS failure, connection
+  failure and explicit recipient rejection have distinct fixed outcomes. Raw
+  server replies, hosts/IPs and recipient strings are absent from explanations.
+  Transient DNS/connection/4xx cases may suggest a later recheck; policy, TLS,
+  restricted destinations and mailbox-full answers do not trigger one.
+- Full mode retains two sessions. Deep mode tries at most four within the same
+  total 25-second budget, comparing the two available MX hosts before second
+  address-family attempts. A connection failure prioritises that host's known
+  alternate family so blocked IPv4 cannot starve working IPv6. A decisive host
+  need not be contacted again through
+  its other family. Both modes retain conflicting acceptance/rejection as
+  unconfirmed. Catch-all on one responding server remains caution even if
+  another rejects a random control. No manufactured-address acceptance can
+  establish that the requested mailbox actually exists.
+- Deeper UI runs perform one additional check only for temporary unknown
+  results, after at least 120 seconds from receipt of that address's first
+  result. Waiting uses the browser's monotonic clock and is cancellable at
+  one-second boundaries. This is a foreground queue, not durable automatic
+  resume. A delayed check can still remain unknown; greylisting may last longer.
+  Policy blocks are never automatically replayed. Explicit Recheck uncertain
+  also covers catch-all addresses, once per result with the same spacing.
+- Previous results remain visible during a recheck and survive transport
+  failure. Successful rechecks retain a textual previous result. CSV adds
+  assessment, mailbox/domain evidence, provider class, session count and the
+  previous result; existing formula protection remains. Checks show their time.
+- HR cards accept an optional manually entered email and require Verify email
+  before contacting a mail server. An already revealed Apollo email prefills
+  that field without triggering a probe or another credit use. Manual edits
+  are not overwritten. Input changes and Apollo account clearing invalidate
+  old results and pending responses. Verification never rewrites saved ads,
+  HR data, notes or protected Apollo records. Results live only in card memory.
+
+No user correspondence or directory is connected in this milestone. Consented
+delivery/reply evidence, calibrated outcome-based scoring, comprehensive
+licensed risk data and self-hosted SMTP workers are subsequent work requiring
+real evidence or infrastructure setup. Controlled protocol tests cannot support
+a commercial accuracy percentage. Current operation remains laptop/network
+dependent, and unresolved catch-alls remain explicit. RFC reference:
+[greylisting](https://www.rfc-editor.org/rfc/rfc6647.html).
+
+The earlier limits below describe the initial checker. The v500 paragraph
+supersedes its two-session limit only for the explicit Deep mode. All public
+DNS/IP pinning, TLS identity, no-DATA/no-AUTH/no-VRFY/no-EXPN, request/response
+bounds, domain/global concurrency, no persistent email lists and credential
+boundaries remain.
+
 The v493 correction keeps one IPv4 and one real IPv6 address when an MX
 advertises both, within the existing two-address/two-probe/25-second limits.
 Previously two A answers filled both slots and every AAAA answer was discarded,

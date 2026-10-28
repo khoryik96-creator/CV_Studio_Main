@@ -243,6 +243,11 @@ def clean_hr(raw, company):
         result[key] = value.strip()
     if result['company'] != company or not re.fullmatch(r'[0-9]{1,24}', result['company_id']):
         invalid()
+    if 'company_name' in raw:
+        name = raw['company_name']
+        if not isinstance(name, str) or not name.strip() or len(name) > 200 or any(ord(c) < 32 or ord(c) == 127 for c in name):
+            invalid()
+        result['company_name'] = name.strip()
     if not re.fullmatch(r'https://www\.linkedin\.com/company/[A-Za-z0-9_-]+/', result['company_url']):
         invalid()
     try:

@@ -5,6 +5,9 @@
   const labels = {accepted:'Mailbox accepted', invalid:'Invalid', catch_all:'Catch-all', unknown:'Unconfirmed', domain_ok:'Domain passed', not_checked:'Not checked'};
   const el = name => document.getElementById('emailVerifier' + name);
   let rows = [], running = false, importing = false, stopping = false, ready = false;
+  let leaving = false;
+  const cards = new WeakMap();
+  const now=()=>typeof performance!=='undefined'?performance.now():Date.now();
 
   function unique(values) {
     const seen = new Set(), emails = [];
@@ -65,8 +68,8 @@
     return '"' + text.replaceAll('"', '""') + '"';
   }
   function makeCSV(results) {
-    const header = ['Email','Result','Reason','Flags','Suggested correction','Mode','Checked at'];
-    return [header, ...results.map(row => [row.email, labels[row.status] || 'Unknown', row.reason, (row.flags || []).join('; '), row.suggestion, row.mode, row.checked_at])]
+    const header = ['Email','Result','Reason','Flags','Suggested correction','Mode','Checked at','Assessment','Mailbox evidence','Catch-all policy','Mail provider','SMTP sessions','Previous result'];
+    return [header, ...results.map(row => [row.email, labels[row.status] || 'Unknown', row.reason, (row.flags || []).join('; '), row.suggestion, row.mode, row.checked_at,row.assessment?.label,row.mailbox_evidence,row.catch_all,row.provider,row.attempts,row.previous_result])]
       .map(row => row.map(csvCell).join(',')).join('\r\n');
   }
   function textNode(tag, value, className) {
@@ -89,6 +92,35 @@
     if(mailbox) parts.push('Mailbox: '+mailbox);
     return parts.join(' · ');
   }
+  function details(row) {
+    const parts=[];
+    if(row.mailbox_evidence) parts.push('Address response: '+({accepted:'Accepted by server',rejected:'Rejected',unconfirmed:'Unconfirmed',conflicting:'Conflicting answers',not_checked:'Not checked'}[row.mailbox_evidence] || 'Unconfirmed'));
+    if(row.catch_all) parts.push('Catch-all policy: '+({detected:'Detected',not_detected:'Not detected',inconclusive:'Unconfirmed',not_checked:'Not checked'}[row.catch_all] || 'Unconfirmed'));
+    if(row.provider && row.provider!=='Not checked') parts.push(row.provider);
+    if(Number.isInteger(row.attempts)) parts.push(row.attempts+' mail-server sessions');
+    if(row.checked_at) {
+      const checked=new Date(row.checked_at);
+      if(!Number.isNaN(checked.getTime())) parts.push('Checked '+checked.toLocaleString());
+    }
+    return parts.join(' · ');
+  }
+  async function checkEmail(email,mode,recheckToken) {
+    const response=await fetch('/email-verifier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,mode,...(typeof recheckToken==='string' && recheckToken?{recheck_token:recheckToken}:{})}),timeout:32000});
+    const data=await response.json();
+    if(!response.ok || !data.ok) throw Error(data.error || 'The check could not be completed.');
+    const result=data.result;
+    if(!result || !Object.hasOwn(labels,result.status) || result.status==='not_checked' || typeof result.reason!=='string') throw Error('The verifier returned an incomplete result.');
+    return {...result,email};
+  }
+  function canRecheck(row) {return ['unknown','catch_all'].includes(row.status) && !row._rechecked;}
+  async function waitForRecheck(row) {
+    // Space attempts using our own receipt time, independent of server clock skew.
+    const until=Math.min(row._lastCheck ?? now(),now())+120000;
+    while(!stopping && !leaving && now()<until) {
+      el('Message').textContent='Waiting '+Math.ceil((until-now())/1000)+' seconds before a deeper recheck. Previous results are kept. You can Stop.';
+      await new Promise(resolve=>setTimeout(resolve,Math.min(1000,Math.max(1,until-now()))));
+    }
+  }
   function render() {
     const complete = rows.filter(row => row.status !== 'not_checked').length;
     for (const [name, state] of [['Accepted','accepted'],['Invalid','invalid'],['CatchAll','catch_all'],['Unknown','unknown'],['Domain','domain_ok']]) {
@@ -106,9 +138,12 @@
       const state = document.createElement('td');
       state.appendChild(textNode('span',labels[row.status] || 'Unknown','ev-badge ev-' + (Object.hasOwn(labels,row.status) ? row.status : 'unknown')));
       const detail = document.createElement('td');
+      if(row.assessment?.label) detail.appendChild(textNode('strong',row.assessment.label));
       detail.appendChild(textNode('p',row.reason || (running ? 'Waiting for its turn.' : 'Not checked in this run.')));
       const checks=evidence(row);
-      if(checks) detail.appendChild(textNode('small',checks,'ev-flags'));
+      if(checks && !row.mailbox_evidence) detail.appendChild(textNode('small',checks,'ev-flags'));
+      if(details(row)) detail.appendChild(textNode('small',details(row),'ev-flags'));
+      if(row.previous_result) detail.appendChild(textNode('small','Previous check: '+row.previous_result,'ev-flags'));
       if (row.flags?.length) detail.appendChild(textNode('small',row.flags.join(' · '),'ev-flags'));
       tr.append(email,state,detail); el('Results').appendChild(tr);
     }
@@ -117,40 +152,48 @@
     el('Export').disabled = !visible.some(row => row.status !== 'not_checked');
     el('Clear').disabled = running || importing || !rows.length;
     el('Start').disabled = running || importing;
+    el('Recheck').disabled = running || importing || !rows.some(canRecheck);
     el('Stop').disabled = !running || stopping;
     el('Input').disabled = running || importing; el('File').disabled = running || importing; el('Import').disabled = running || importing; el('Mode').disabled = running || importing;
   }
-  async function start() {
+  async function start(recheckOnly=false) {
     if (running || importing) return;
     let list;
-    try { list = parseText(el('Input').value); if (!list.emails.length) throw new Error('Add at least one email address first.'); }
+    try { list = recheckOnly ? {emails:rows.map(row=>row.email),duplicates:0} : parseText(el('Input').value); if (!list.emails.length) throw new Error('Add at least one email address first.'); }
     catch (error) { el('Message').textContent = error.message; return; }
-    const mode = el('Mode').value;
-    rows = list.emails.map(email => ({email,status:'not_checked',reason:'',flags:[],mode}));
+    const mode = recheckOnly?'deep':el('Mode').value;
+    if(!recheckOnly) rows = list.emails.map(email => ({email,status:'not_checked',reason:'',flags:[],mode}));
+    const indexes=rows.map((row,index)=>index).filter(index=>!recheckOnly || canRecheck(rows[index]));
+    if(!indexes.length) return;
     running = true; stopping = false;
     const token = typeof markTabRunning === 'function' ? markTabRunning('emailverifier') : null;
     let failed = false;
     el('Message').textContent = list.duplicates ? list.duplicates + ' duplicate entries removed.' : 'Checking your list…';
     render();
     try {
-      for (let index = 0; index < rows.length && !stopping; index++) {
-        el('Message').textContent = 'Checking ' + (index + 1) + ' of ' + rows.length + '…';
-        try {
-          const response = await fetch('/email-verifier', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:rows[index].email,mode}),timeout:32000});
-          const data = await response.json();
-          if (!response.ok || !data.ok) throw new Error(data.error || 'The check could not be completed.');
-          const result = data.result;
-          if (!result || !Object.hasOwn(labels,result.status) || result.status === 'not_checked' || typeof result.reason !== 'string') throw new Error('The verifier returned an incomplete result.');
-          // Keep the input identity; never accept a returned email as another row.
-          rows[index] = {...rows[index],...result,email:rows[index].email};
-        } catch (error) {
-          failed = true;
-          el('Message').textContent = 'Stopped: ' + error.message + ' Completed results have been kept.';
-          break;
+      const rounds=recheckOnly?1:mode==='deep'?2:1;
+      for(let round=0;round<rounds && !failed && !stopping && !leaving;round++) {
+        const rechecking=recheckOnly || round===1;
+        const queue=indexes.filter(index=>!rechecking || canRecheck(rows[index]) && (recheckOnly || rows[index].retryable===true));
+        for (const [position,index] of queue.entries()) {
+          if(stopping || leaving) break;
+          try {
+            if(rechecking) await waitForRecheck(rows[index]);
+            if(stopping || leaving) break;
+            el('Message').textContent=(rechecking?'Rechecking ':'Checking ')+(position+1)+' of '+queue.length+'…';
+            const previous=rows[index];
+            if(rechecking) previous._rechecked=true;
+            const result=await checkEmail(previous.email,mode,rechecking?previous.recheck_token:undefined);
+            rows[index]={...previous,...result,_rechecked:rechecking,_lastCheck:now(),previous_result:rechecking?labels[previous.status]+': '+previous.reason:''};
+          } catch (error) {
+            failed = true;
+            el('Message').textContent = 'Stopped: ' + error.message + ' Completed results have been kept.';
+            break;
+          }
+          render();
         }
-        render();
       }
-      if (!failed) el('Message').textContent = stopping ? 'Stopped. Completed results are kept; remaining emails have not been checked.' : 'Finished. ' + rows.length + ' emails checked' + (list.duplicates ? '; ' + list.duplicates + ' duplicates removed.' : '.');
+      if (!failed) el('Message').textContent = stopping || leaving ? 'Stopped. Completed results are kept; remaining checks have not run.' : recheckOnly?'Deeper rechecks finished. Previous results remain in each explanation.':'Finished. ' + rows.length + ' emails checked' + (list.duplicates ? '; ' + list.duplicates + ' duplicates removed.' : '.');
     } finally {
       running = false; render();
       if (token !== null) { if (failed && typeof markTabFailed === 'function') markTabFailed('emailverifier',token); else if (typeof markTabDone === 'function') markTabDone('emailverifier',token); }
@@ -159,7 +202,8 @@
   function init() {
     if (ready) return;
     ready = true;
-    el('Start').addEventListener('click',start);
+    el('Start').addEventListener('click',()=>start());
+    el('Recheck').addEventListener('click',()=>start(true));
     el('Stop').addEventListener('click',() => { stopping = true; el('Message').textContent = 'Stopping after the current email check…'; render(); });
     el('Clear').addEventListener('click',() => { if (running || importing) return; rows=[]; el('Input').value=''; el('Filter').value=''; el('Search').value=''; el('Message').textContent=''; render(); });
     el('Filter').addEventListener('change',render); el('Search').addEventListener('input',render);
@@ -186,7 +230,42 @@
     render();
   }
   window.initEmailVerifier = init;
+  window.addEventListener?.('pagehide',()=>{leaving=true;stopping=true;});
+  window.addEventListener?.('pageshow',()=>{leaving=false;});
+  window.cvStudioEmailVerifier={
+    forCard:card=>cards.get(card),
+    decorate(card,person) {
+      const wrap=textNode('div','','job-leads-email-check'), label=textNode('label','Email to verify'), input=document.createElement('input');
+      input.type='email';input.autocomplete='off';input.setAttribute?.('aria-label','Email to verify for '+person.name);
+      label.appendChild(input);
+      const button=textNode('button','Verify email','sec'), result=textNode('div','','job-leads-email-result');
+      button.type='button';result.setAttribute?.('role','status');result.setAttribute?.('aria-live','polite');
+      let pending=false, generation=0, proposed='', recheckToken='';
+      input.addEventListener('input',()=>{++generation;recheckToken='';result.replaceChildren();});
+      button.addEventListener('click',async()=>{
+        if(pending || !input.value.trim()) {if(!pending) result.replaceChildren(textNode('small','Enter an email address first.'));return;}
+        const email=input.value.trim(), current=++generation;
+        pending=true;button.disabled=true;button.textContent='Checking…';
+        result.replaceChildren(textNode('small','Checking mail servers without sending an email…'));
+        try {
+          const answer=await checkEmail(email,'deep',recheckToken);
+          if(current!==generation || leaving) return;
+          recheckToken=answer.recheck_token || '';
+          result.replaceChildren(textNode('strong',answer.assessment?.label || labels[answer.status]),textNode('p',answer.reason),textNode('small',details(answer)));
+        } catch(error) {if(current===generation && !leaving) result.replaceChildren(textNode('small',error.message));}
+        finally {pending=false;button.disabled=false;button.textContent='Verify email';}
+      });
+      const controller={suggest(email) {
+        email=typeof email==='string'?email:'';
+        if(email===proposed) return;
+        if(!input.value || input.value===proposed) {input.value=email;++generation;recheckToken='';result.replaceChildren();}
+        proposed=email;
+      }};
+      cards.set(card,controller);wrap.append(label,button,result);card.appendChild(wrap);
+      return controller;
+    }
+  };
   // Pure parsing/export functions are shared by the no-network regression fixture.
-  if (typeof module !== 'undefined' && module.exports) module.exports={parseText,parseCSV,makeCSV};
+  if (typeof module !== 'undefined' && module.exports) module.exports={parseText,parseCSV,makeCSV,details};
   document.addEventListener('DOMContentLoaded',() => { if (new URLSearchParams(location.search).get('module') === 'emailverifier') switchTab('emailverifier'); });
 }());

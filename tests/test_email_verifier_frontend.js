@@ -5,16 +5,16 @@ class Element {
   addEventListener(name,fn){this.handlers[name]=fn;} appendChild(node){this.children.push(node);return node;}
   append(...nodes){this.children.push(...nodes);} replaceChildren(...nodes){this.children=nodes;} click(){return this.handlers.click?.();}
 }
-function fixture(){
+function fixture(options={}){
   const ids=new Map(),calls=[],events={},exports=[],state={};
   const document={getElementById:id=>{if(!ids.has(id))ids.set(id,new Element());return ids.get(id);},createElement:tag=>new Element(tag),addEventListener:(name,fn)=>events[name]=fn};
   const el=name=>document.getElementById('emailVerifier'+name);
   el('Mode').value='full';
-  const context={document,window:{},location:{search:''},URLSearchParams,module:{exports:{}},Blob,URL:{createObjectURL:blob=>{exports.push(blob);return 'blob:synthetic';},revokeObjectURL(){}},setTimeout:fn=>fn(),
+  const context={document,window:{addEventListener:(name,fn)=>events[name]=fn},Date:options.Date || Date,WeakMap,location:{search:''},URLSearchParams,module:{exports:{}},Blob,URL:{createObjectURL:blob=>{exports.push(blob);return 'blob:synthetic';},revokeObjectURL(){}},setTimeout:options.setTimeout || (fn=>fn()),
     markTabRunning:()=>1,markTabDone:()=>{state.done=true;},markTabFailed:()=>{state.failed=true;},
     fetch:async(url,options)=>{calls.push({url,options});if(state.fetch)return state.fetch(url,options);const body=JSON.parse(options.body);return {ok:true,json:async()=>({ok:true,result:{email:body.email,status:body.email.startsWith('bad')?'invalid':'accepted',reason:'Synthetic check',flags:[],mode:body.mode,checked_at:'2026-10-26T00:00:00Z'}})};}};
   vm.runInNewContext(source,context);context.window.initEmailVerifier();
-  return {el,calls,exports,state,api:context.module.exports};
+  return {el,calls,exports,state,api:context.module.exports,verifier:context.window.cvStudioEmailVerifier,Element,events};
 }
 async function main(){
   const {api}=fixture();
@@ -73,4 +73,5 @@ async function main(){
   assert.equal(address.textContent,'<img onerror=alert(1)>@example.test');assert(!('innerHTML' in address));
   console.log('Email Verifier: parser, queue, stop, import races, filtering, CSV safety and text rendering passed.');
 }
-main().catch(error=>{console.error(error);process.exit(1);});
+if(require.main===module)main().catch(error=>{console.error(error);process.exit(1);});
+module.exports={fixture};

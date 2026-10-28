@@ -24,6 +24,7 @@
     el('Disconnect').textContent=account.connecting?'Cancel sign-in':'Disconnect';
     for(const view of views) {
       const result=cache[view.person.url], found=result?.state==='found';
+      window.cvStudioEmailVerifier?.forCard(view.card)?.suggest(found?result.email:'');
       view.result.replaceChildren();
       if(found) {
         view.result.append(text('span',result.email,'job-leads-apollo-email'),text('small',statusLabels[result.email_status] || statusLabels.unknown,'job-leads-muted'));
@@ -130,7 +131,7 @@
       const saved=!!row?.hr?.people.some(p=>p.url===person.url);
       button.addEventListener('click',()=>unlock(person));
       copy.addEventListener('click',async()=>{try {await navigator.clipboard.writeText(cache[person.url].email);message('Email copied.');}catch{message('Select the email address and copy it manually.');}});
-      wrap.append(result,button,copy);card.append(wrap);views.push({person,result,button,copy,saved});controls();
+      wrap.append(result,button,copy);card.append(wrap);views.push({card,person,result,button,copy,saved});controls();
     }
   };
 })();

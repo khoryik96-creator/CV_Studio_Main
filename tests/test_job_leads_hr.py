@@ -13,6 +13,27 @@ SEARCH = {'company':'Example Company', 'company_url':'https://www.linkedin.com/c
           'location':'Malaysia','url':'https://www.linkedin.com/in/sample-person', 'matched':'HR'}]}
 
 
+def test_verified_linkedin_name_is_separate_from_saved_ad_label(tmp_path):
+    store = JobLeadsStore(tmp_path/'leads.sqlite3')
+    old = store.save({**AD, 'company':'ABC'})['record']
+    saved = store.save_hr(old['id'], old['revision'], {**SEARCH, 'company':'ABC', 'company_name':'ABC Corporate Business Solutions'})['record']
+    assert saved['company'] == 'ABC'
+    assert saved['notes'] == AD['notes']
+    assert saved['hr']['company_name'] == 'ABC Corporate Business Solutions'
+    restored = JobLeadsStore(tmp_path/'restored.sqlite3')
+    restored.restore(store.backup())
+    assert restored.list()[0]['hr'] == saved['hr']
+
+
+@pytest.mark.parametrize('name', ['', ' ', 'x'*201, None, 'Example\nCompany'])
+def test_invalid_verified_company_name_keeps_previous_records(tmp_path, name):
+    store = JobLeadsStore(tmp_path/'leads.sqlite3')
+    old = store.save(AD)['record']
+    with pytest.raises(JobLeadsError):
+        store.save_hr(old['id'], old['revision'], {**SEARCH, 'company_name':name})
+    assert store.list() == [old]
+
+
 def test_hr_roundtrip_preserves_ad_and_survives_edits_trash_folders_backup(tmp_path):
     store = JobLeadsStore(tmp_path/'leads.sqlite3')
     old = store.save(AD)['record']

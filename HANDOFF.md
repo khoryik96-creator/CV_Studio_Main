@@ -7,16 +7,45 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current development: v24.6.497, unmerged** on
-`codex/v24.6.497-hr-scan-activity`, from merged master `e13727d` (v496).
-Job Leads now uses the established orange sidebar status during single HR,
-bulk HR and ad-search scans, resolving the token after cleanup. The remaining
-grouped-company layout has no exact singleton connection link at all. Its
-observed group may open only a setup search: native Current companies controls
-must select the exact saved-ad company and commit a corroborating singleton
-before profiles can be read. Country, keyword, joining-date and save gates
-remain. Old companions stop before scanning with update guidance. See the
-v497 QA report. No route/schema/permission or paid behavior changed.
+**Current source checkpoint: v24.6.501** on
+`codex/v24.6.501-review-corrections`, stacked on v500 `b2d3637` and retaining
+v498/v499. The three review findings are corrected: Microsoft recipient replies
+allow their documented terminal period; delayed rechecks carry an address-bound,
+four-hour, process-signed reference to the same random control address; and
+semantic/paragraph title candidates are deduplicated by DOM identity while
+distinct ambiguous headings still fail. Retry references stay only in request/
+tab memory, are never exported/stored with records, and invalid references fail
+before DNS. Routes, schemas, provider gates and no-mail limits remain. The owner
+authorized fixing and merging this stack after full local and hosted checks.
+See the v501 QA report and EMAIL_VERIFIER_NOTES.md. The merge baseline is
+v497 `ff722b3`; coordination issue #35 supplies the final publication/merge
+identity and supersedes historical unmerged wording below.
+
+**Previous local checkpoint: v24.6.500, unmerged** on
+`codex/v24.6.500-email-evidence`, stacked on v499 `1e856cb` with both v498/v499
+retained. Email Verifier now has additive conservative provider evidence,
+separate mailbox/catch-all recommendations, a bounded Deep check and one
+cancellable delayed recheck for temporary unknown results. Job Leads HR cards
+can explicitly verify a manually entered or already revealed Apollo email;
+input/account changes invalidate old results. No saved email state, provider
+credit use, account/history connection, hosting setup or mail delivery. Routes,
+schemas, credentials and prior HR fixes remain. See EMAIL_VERIFIER_NOTES.md
+and the v500 QA report. Master remains merged v497 `ff722b3`; no merge yet.
+
+**Previous local checkpoint: v24.6.499, unmerged** on
+`codex/v24.6.499-hr-scan-resilience`, stacked on local v498 `ac22175` from
+merged master `ff722b3` (v497). The v498 exact-ad employer binding is retained.
+Repeat scans refresh the employer link; an unreadable ad can reuse previous
+company evidence only after the same numeric company ID is confirmed live.
+Renames, native company redirects and tracking parameters preserve that ID
+boundary. A fresh-source redirect gets one employer-link recheck before filters,
+after confirmed cleanup, never a blind redirect or mutation replay.
+Header detection uses employer/job-scoped semantics or unambiguous field groups,
+ignoring unrelated notices/headings. Slow metadata waits are bounded and
+cancellable. Readiness stages distinguish company, company filter, country,
+navigation and results; same-filter result churn permits two passive rereads.
+Manual company pages, source changes, access checks, save revisions, run limits,
+orange activity and paid gates remain. See the v499 QA report and Job Leads notes.
 
 The v495 checkpoint adds per-installation Apollo OAuth connections and business-email
 unlocks on saved HR cards. A shared free-tier Cloudflare broker keeps the app
@@ -31,13 +60,12 @@ approved Apollo app must be configured before sign-in works. See
 `integrations/apollo-broker/README.md` and the v495 QA report. No shared API key
 or colleague-specific hosting account is required.
 
-**Last merged delivery: v24.6.496.** PR #252 merged as `e13727d`, including
-the v495 Apollo preparation and v496 corroborated HTTP-valued company-link
-correction. All three hosted checks passed on tested head `bc85d4d`; optional
-automated review remained pending at merge. Apollo activation was explicitly
-deferred. This supersedes unmerged wording in the historical v495/v496 QA
-reports. v494 previously merged in PR #251 as `a323ad5`, including v493 IPv6
-mail probing and selected-ad bulk HR scans. See coordination issue #35.
+**Last merged delivery: v24.6.497.** PR #253 merged as `ff722b3` after all
+three hosted checks and GitHub's automated review passed on tested head
+`1ca7a72`. It adds orange Job Leads scan activity and native exact-company
+narrowing for grouped headers without singleton evidence. PR #252 previously
+merged v496 as `e13727d`, including deferred Apollo preparation. Historical
+pre-publication unmerged wording is superseded by coordination issue #35.
 
 **Previous delivery: v24.6.491.** The owner authorized merging the tested
 `codex/v24.6.490-verification-corrections` branch. It contains the first-party

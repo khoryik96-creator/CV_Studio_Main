@@ -44,6 +44,10 @@ const context=vm.createContext({document,location,URL,URLSearchParams,HTMLInputE
 vm.runInContext(source,context);const reader=context.SourcerReader;
 assert.equal(reader.readHRCompany('https://www.linkedin.com/company/example/','Example Company').company_id,'123');
 assert.throws(()=>reader.readHRCompany('https://www.linkedin.com/company/example/','Other Company'));
+assert.equal(reader.readHRCompany('https://www.linkedin.com/company/example/','Different ad display label',true).company_name,'Example Company','only source-confirmed calls can derive the company-page label');
+assert.throws(()=>reader.readHRCompany('https://www.linkedin.com/company/other/','Example Company',true),'source evidence cannot authorize a different company URL');
+assert.equal(reader.readHRCompany('https://www.linkedin.com/company/example/','Old company label',false,'123').company_name,'Example Company','a previous numeric identity must be reconfirmed on the live page before adopting its current name');
+assert.throws(()=>reader.readHRCompany('https://www.linkedin.com/company/example/','Old company label',false,'999'),error=>error.cvstudioHRIdentity===true,'a different company ID cannot reuse cached authority');
 state.companyIds=['123','999'];assert(reader.readHRCompany('https://www.linkedin.com/company/example/','Example Company').loading);state.companyIds=['123'];
 location.pathname='/search/results/people/';location.href='https://www.linkedin.com/search/results/people/?currentCompany=%5B%22123%22%5D';
 assert(reader.hrCountryOpen('Malaysia'));assert(reader.hrCountryType('Malaysia'));assert.equal(state.input,'Malaysia');assert.equal(state.inputEvent,'input');
