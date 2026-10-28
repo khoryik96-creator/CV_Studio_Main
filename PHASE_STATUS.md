@@ -4,7 +4,32 @@
 
 ## Release state
 
-- v24.6.504 is a local, unmerged normal People-query correction based on merged
+- v24.6.507 corrects PR #258's nested-only Blind CV finding while retaining the
+  project grouping and DNS-family fixes. Confirmed children need no recognized
+  heading to survive unchanged blinded correspondence; every existing duty/date
+  guard remains. Three new regressions failed before correction. Final local
+  and hosted results/merge identity are recorded in issue #35 and the v507 QA
+  report. No route, schema, provider, owner-installation or PR #257 scope change.
+
+- v24.6.506 corrects the review's DNS-family failure isolation on top of pending
+  v505 `3f9e340`, with owner authorization to merge both after final checks.
+  A successful public A/AAAA answer survives an inconclusive lookup in the other
+  family. Restricted/malformed answers still reject the host, missing answers
+  plus an inconclusive lookup stay Unconfirmed, and definitive empty answers
+  retain compatibility. Shared deadlines, two-address selection, SMTP limits,
+  routes, schemas and paid/credential boundaries remain unchanged. Separate
+  JobAdder PR #257 is excluded; issue #35 records final publication status.
+
+- v24.6.505 is a local, unmerged CV project-layout correction on merged v504
+  `8d0e8dc` / PR #256. Exact source-confirmed project/role headings retain their
+  grouping in Additional Information, and confirmed lowercase-o children use
+  real nested bullets. Text-free positional hints preserve repeated role labels,
+  source-free export and safe blinded correspondence. Source rechecks clear
+  stale hints; ambiguous/malformed data stays conservative. Existing words,
+  order, routes, schemas, paid calls and owner installation remain unchanged.
+  See guardrail C4 and the v505 QA report.
+
+- v24.6.504 is merged as `8d0e8dc` / PR #256, a normal People-query correction on
   v503 `e689e39`. Request a concise plan, bound oversized flat OR aliases to
   four and retain country/full assessment criteria. Never drop mandatory
   AND/NOT/nested constraints to fit. Recruiter/Lite and existing filtered

@@ -51,6 +51,25 @@ rules D2/D4 and the v438 QA report.
 
 ## The pipeline (source doc → formatted DOCX)
 
+Project Experience additional-info lists (v24.6.505) use optional positional
+`item_layout` values `heading`, `bullet`, or `nested`. A unique explicit source
+section must confirm adjacent dated project/company, role and first-duty items.
+Legacy company/date/title pairs are supported, including a marker on the dated
+title line. Wrapped duties, repeated role labels and PDF Symbol-font markers are
+handled without rewriting words. Lowercase `o` is removed at rendering only for
+source-confirmed children beneath a unique matching parent; ordinary O-words are
+untouched. Preview and Word validate category/count/style values before using
+hints. Source rechecks clear stale metadata; source-free exports preserve it.
+Blind CV discards provider hints and restores only text-free positions when
+category/count, duties and numeric anchors still match.
+The v24.6.507 review correction also retains confirmed nested-only layouts
+through Blind CV when no heading was recognized; the same exact duty/date
+checks remain, and no source text is copied.
+Guardrail C4 and
+`tests/test_cv_project_layout.py` cover uncertainty, duplicate labels/parents,
+Unicode names, malformed hints, limits and real Word numbering. This does not
+replace the existing role-section, contribution, award or training rules.
+
 Blind source-summary recovery and DOCX summary replacement use the same
 `_SUMMARY_DOCX_SECTION_HEADING_KEYS` vocabulary from `cvstudio_blind_mask.py`.
 Keep this single authority when adding section aliases: missing a boundary can

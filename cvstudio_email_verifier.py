@@ -136,14 +136,26 @@ class MailDNS:
 
     def addresses(self, host, deadline):
         addresses = []
+        lookup_failure = None
         for kind in ("A", "AAAA"):
-            answer = self.query(host, kind, deadline)
+            try:
+                answer = self.query(host, kind, deadline)
+            except CheckUnavailable as error:
+                # One failed family must not discard the other's usable public
+                # answer. Both queries retain the original overall deadline.
+                if lookup_failure is None:
+                    lookup_failure = error
+                continue
             if answer:
                 addresses.extend(str(item.address) for item in answer)
         # Fail closed on mixed public/private answers; connect to the checked
         # literal, never resolve the hostname again at socket creation.
         if any(not public_ip(ip) for ip in addresses):
             raise CheckUnavailable("The mail server resolves to a restricted network address. It was not contacted.")
+        if not addresses and lookup_failure is not None:
+            # An inconclusive lookup is not evidence of a definite empty host,
+            # especially for an implicit MX where empty would mean Invalid.
+            raise lookup_failure
         unique = list(dict.fromkeys(addresses))
         # Keep one real IPv6 destination when both families are advertised.
         # Otherwise two A answers consume both slots and a blocked IPv4 path

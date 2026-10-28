@@ -1568,6 +1568,7 @@ def _blind_restore_cv_skill_headings(repaired, original_cv):
     for skill in output:
         if isinstance(skill, dict):
             skill.pop("item_headings", None)
+            skill.pop("item_layout", None)
     source = original_cv.get("skills")
     if not isinstance(source, list) or len(source) != len(output):
         return
@@ -1587,6 +1588,20 @@ def _blind_restore_cv_skill_headings(repaired, original_cv):
         if not isinstance(original, dict) or not isinstance(blinded, dict):
             continue
         category = key(original.get("category"))
+        if category in {"project experience", "project experiences"}:
+            before, after = lines(original), lines(blinded)
+            layout = original.get("item_layout")
+            if (key(blinded.get("category")) == category and before
+                    and len(before) == len(after) and isinstance(layout, list)
+                    and len(layout) == len(before)
+                    and all(isinstance(style, str) and style in {"heading", "bullet", "nested"}
+                            for style in layout)
+                    and any(style != "bullet" for style in layout)
+                    and all(before[i] == after[i] for i, style in enumerate(layout) if style != "heading")
+                    and all(re.findall(r"\d+", a) == re.findall(r"\d+", b)
+                            for a, b in zip(before, after))):
+                blinded["item_layout"] = layout[:]
+            continue
         if (category not in {"contribution towards projects taskforce", "awards",
                              "awards achievements", "awards and achievements",
                              "awards recognition", "awards and recognition"}

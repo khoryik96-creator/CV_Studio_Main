@@ -110,6 +110,71 @@ def test_bounded_mail_addresses_keep_both_advertised_families(v4,v6,expected):
     assert resolver.query.call_count==2
 
 
+@pytest.mark.parametrize('mode', ['quick','full','deep'])
+@pytest.mark.parametrize('failed_family', ['A','AAAA'])
+def test_one_address_family_failure_keeps_a_usable_mx(mode, failed_family):
+    resolver=MailDNS()
+    resolver.hosts=mock.Mock(return_value=('mx',['mx.example.test']))
+    ip='2001:4860:4860::8888' if failed_family=='A' else '8.8.8.8'
+    def records(host,kind,deadline):
+        if kind==failed_family: raise CheckUnavailable('DNS temporarily unavailable')
+        return [SimpleNamespace(address=ip)]
+    resolver.query=mock.Mock(side_effect=records)
+    probe=mock.Mock();probe.check.return_value=('accepted','Synthetic protocol evidence')
+    result=EmailVerifier(resolver,probe).check({'email':'person@example.test','mode':mode})
+    assert result['status']==('domain_ok' if mode=='quick' else 'accepted')
+    assert [call.args[1] for call in resolver.query.call_args_list]==['A','AAAA']
+    deadlines=[call.args[2] for call in resolver.query.call_args_list]
+    assert deadlines[0]==deadlines[1]
+    if mode=='quick': probe.check.assert_not_called()
+    else:
+        assert probe.check.call_count==1
+        assert probe.check.call_args.args[:3]==('mx.example.test',ip,'person@example.test')
+        assert probe.check.call_args.args[3]==deadlines[0]
+
+
+@pytest.mark.parametrize('empty', [[],None])
+@pytest.mark.parametrize('failed_family', ['A','AAAA','both'])
+@pytest.mark.parametrize('state', ['mx','implicit'])
+def test_no_usable_family_with_a_dns_failure_remains_unknown(empty,failed_family,state):
+    resolver=MailDNS()
+    resolver.hosts=mock.Mock(return_value=(state,['mx.example.test']))
+    def records(host,kind,deadline):
+        if failed_family in {kind,'both'}: raise CheckUnavailable('DNS temporarily unavailable')
+        return empty
+    resolver.query=mock.Mock(side_effect=records)
+    probe=mock.Mock()
+    service=EmailVerifier(resolver,probe)
+    for _ in range(3):
+        result=service.check({'email':'person@example.test'})
+        assert result['status']=='unknown'
+        assert result['reason']=='DNS temporarily unavailable'
+    assert resolver.query.call_count==6
+    probe.check.assert_not_called()
+
+
+@pytest.mark.parametrize('failed_family', ['A','AAAA'])
+@pytest.mark.parametrize('bad', ['10.0.0.1','::1','::ffff:127.0.0.1','not an IP'])
+def test_family_recovery_never_uses_a_restricted_or_malformed_answer(failed_family,bad):
+    resolver=MailDNS()
+    resolver.hosts=mock.Mock(return_value=('mx',['mx.example.test']))
+    def records(host,kind,deadline):
+        if kind==failed_family: raise CheckUnavailable('DNS temporarily unavailable')
+        return [SimpleNamespace(address=ip) for ip in ['8.8.8.8',bad]]
+    resolver.query=mock.Mock(side_effect=records)
+    with pytest.raises(CheckUnavailable,match='restricted network'):
+        resolver.addresses('mx.example.test',time.monotonic()+5)
+    probe=mock.Mock()
+    assert EmailVerifier(resolver,probe).check({'email':'person@example.test'})['status']=='unknown'
+    probe.check.assert_not_called()
+
+
+@pytest.mark.parametrize('empty', [[],None])
+def test_definitive_empty_family_answers_preserve_existing_empty_result(empty):
+    resolver=MailDNS();resolver.query=mock.Mock(return_value=empty)
+    assert resolver.addresses('mx.example.test',time.monotonic()+5)==[]
+
+
 def test_full_mailbox_check_falls_back_to_ipv6_after_ipv4_timeout():
     resolver=MailDNS()
     resolver.hosts=mock.Mock(return_value=('mx',['mx.example.test']))

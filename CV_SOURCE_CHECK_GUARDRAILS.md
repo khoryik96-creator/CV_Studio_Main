@@ -116,6 +116,27 @@ confirmed hints. Recognized following CV sections end the source span. All scans
 are bounded. Blind CV rebuilds confirmed award hints only from already-blinded
 visible text with the same unchanged-year/non-heading-anchor checks as C2.
 
+### C4
+**Project Experience keeps source-confirmed headings and nested points.** In a
+unique dedicated Project Experience section and matching additional-info group,
+an unmarked dated Project/Role label (or company above a dated role), its
+unmarked role line and first marked duty must match adjacent existing items.
+A legacy date/title line beneath an unmarked company may itself carry a source
+bullet; its explicit date followed by comma-separated title still identifies
+metadata, unlike an ordinary marked role description.
+Only those confirmed labels receive positional `item_layout` heading hints.
+Repeated role labels can be headings under different uniquely identified projects.
+Lowercase `o` children become nested only beneath a matching marked source parent
+and aligned existing child sequence. Existing words/order/representation stay;
+renderers remove `o` only for confirmed children, using real nested bullets.
+Duplicates, mismatches, other categories, ambiguous sections and oversized input
+do not justify new hints. Source-backed rechecks clear stale hints; source-free
+export retains them. Blind rebuilding discards provider hints and copies only
+text-free layout positions with matching categories/counts and unchanged duties
+and numeric anchors. A confirmed nested-only layout needs no recognized heading
+to survive blinding; unchanged parent/child items prove correspondence. No
+source wording is recovered after blinding.
+
 ### B1
 **Blind CV keeps the source summary's points.** Only the Blind CV parse opt-in
 recovers a uniquely headed About / Summary section before identity masking.
