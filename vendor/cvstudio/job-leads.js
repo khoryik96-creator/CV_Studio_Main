@@ -74,11 +74,14 @@
           paragraph.appendChild(document.createTextNode(line));
         }
       }
-    } else target.textContent = 'No job ad content yet. Fill from link or paste the description below.';
+    } else target.textContent = '';
+    target.hidden = !plain && !(Array.isArray(rich) && rich.length);
     target.className = 'job-lead-ad-content job-lead-rich';
   }
   function descriptionHint() {
-    el('DescriptionNote').textContent = descriptionTruncated || el('description').value.length >= 20000 ? 'Captured excerpt. Open the LinkedIn ad for the complete content.' : 'This captured text is saved with the lead and can be read here later.';
+    const excerpt=descriptionTruncated || el('description').value.length >= 20000;
+    el('DescriptionNote').textContent = excerpt ? 'Captured excerpt.' : '';
+    el('DescriptionNote').hidden=!excerpt;
     content(el('Content'), el('description').value, descriptionRich);
   }
   function fill(record) {
@@ -90,7 +93,8 @@
     editing = record?.id ? record : null; dirty = false;
     lastReadUrl = record?.url || '';
     descriptionTruncated = record?.description_truncated === true; descriptionRich = record?.description_rich || []; descriptionHint();
-    el('Created').textContent = record?.created_at ? 'Date created: ' + createdLabel(record.created_at) : 'Date created is recorded when you save this lead.';
+    el('Created').textContent = record?.created_at ? 'Date created: ' + createdLabel(record.created_at) : '';
+    el('Created').hidden=!record?.created_at;
     el('Heading').textContent = editing ? 'Edit lead' : 'Save a job ad';
     el('Save').textContent = editing ? 'Save changes' : 'Save lead';
   }
@@ -240,7 +244,7 @@
     el('Count').textContent = selected.length ? `${page*40+1}–${Math.min((page+1)*40, selected.length)} of ${selected.length}` : '0 leads';
     el('Previous').disabled = busy || page === 0; el('Next').disabled = busy || (page+1)*40 >= selected.length;
     updateSelection();
-    if (!selected.length) list.appendChild(node('p', rows.length ? 'No leads match these filters.' : 'Save your first LinkedIn job ad to start tracking opportunities.', 'job-leads-muted'));
+    if (!selected.length && rows.length) list.appendChild(node('p','No matching ads.','job-leads-muted'));
     selected.slice(page*40, (page+1)*40).forEach(row => {
       const card = node('article', '', 'job-lead-card');
       card.append(node('h3', row.company), node('p', row.role, 'job-lead-role'));
@@ -333,6 +337,10 @@
   function discoveryControls() {
     for (const name of ['SearchStart','SearchRefresh','SearchMode','SearchQuery','SearchLocation','SearchPages','SearchSource','SearchFolder','SearchClear']) el(name).disabled = busy;
     el('SearchStop').disabled = !discovering || discoveryStopped;
+    el('SearchStop').hidden = !discovering;
+    el('SearchClear').hidden = !discovered.length && !discovering;
+    el('SearchAdd').hidden = !discovered.length;
+    el('SearchSelection').hidden = !discovered.length;
     el('SearchOpen').hidden = el('SearchMode').value !== 'open';
     const visible = discovered.slice(discoveryPage*20, (discoveryPage+1)*20).filter(row => !savedJob(row.url));
     el('SearchSelectPage').disabled = busy || !visible.length;
@@ -366,18 +374,20 @@
     const sequence = previewSequence(), index = sequence.findIndex(item => item.url === previewUrl);
     el('PreviewPosition').textContent = row ? (previewSource === 'search' ? 'Search results' : 'Saved ads') +
       (index >= 0 ? ` · ${index+1} of ${sequence.length}` : ' · Outside current filters') : '';
-    el('PreviewTitle').textContent = row?.role || 'Choose an ad to preview';
+    el('Preview').hidden=!row;
+    el('PreviewTitle').textContent = row?.role || '';
     el('PreviewCompany').textContent = row?.company || '';
     el('PreviewMeta').textContent = row ? [row.location,saved ? 'Saved ad content' : row.full ? 'Captured ad content' : 'Search summary · Read full ad for the description',row.description_truncated ? 'Excerpt' : ''].filter(Boolean).join(' · ') : '';
-    content(el('PreviewContent'),row ? row.description || 'No description captured. Use Read full ad to try reading it from LinkedIn.' : 'Search LinkedIn, add an ad with the companion, or choose Preview on a saved ad.',row?.description_rich);
+    content(el('PreviewContent'),row?.description || '',row?.description_rich);
     drawHR(row ? savedJob(row.url) : null);
   }
   function drawDiscovery() {
     const target = el('SearchResults'); target.replaceChildren();
     discoveryPage = Math.min(discoveryPage, Math.max(0,Math.ceil(discovered.length/20)-1));
     if (!previewRow() && !previewDismissed) previewUrl = previewSequence()[0]?.url || '';
+    el('Curation').hidden=!discovered.length && !previewRow();
     el('SearchResults').hidden = !discovered.length;
-    el('Curation').className = 'job-leads-curation' + (!discovered.length ? ' no-search-results' : '');
+    el('Curation').className = 'job-leads-curation' + (!discovered.length ? ' no-search-results' : '') + (!previewRow() ? ' no-preview' : '');
     if (savedJob(previewUrl) && !savedJob(previewUrl).deleted) el('Curation').className += ' has-hr';
     el('SearchCount').textContent = `${discovered.length} found · ${discoveryPicked.size} selected`;
     for (const row of discovered.slice(discoveryPage*20, (discoveryPage+1)*20)) {
@@ -401,7 +411,6 @@
       details.append(summary); const body = node('div'); content(body,row.description,row.description_rich); details.append(body); card.append(details);
       target.append(card);
     }
-    if (!discovered.length) target.append(node('p','Search LinkedIn to find ads here.','job-leads-muted'));
     el('SearchCount').textContent = `${discovered.length} found · ${discoveryPicked.size} selected`;
     drawPreview(); discoveryControls();
   }
@@ -502,7 +511,7 @@
     try {
       notify('Checking the companion…');
       const companion = await rpc('jobStatus',{},1500); checkHR();
-      if (!companion?.connected || companion.company_hr_revision !== 1 || companion.hr_company_identity_revision !== 1 || companion.hr_company_filter_revision !== 1 || companion.hr_company_source_revision !== 1 || companion.hr_resilience_revision !== 1 || companion.hr_joined_revision !== 1 || companion.hr_joined_loading_revision !== 1 || companion.hr_keyword_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to use the corrected HR search and joining-date checks.');
+      if (!companion?.connected || companion.company_hr_revision !== 1 || companion.hr_company_identity_revision !== 1 || companion.hr_company_filter_revision !== 1 || companion.hr_company_source_revision !== 1 || companion.hr_resilience_revision !== 1 || companion.hr_layout_revision !== 1 || companion.hr_joined_revision !== 1 || companion.hr_joined_loading_revision !== 1 || companion.hr_keyword_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to use the corrected HR search and joining-date checks.');
       if (companion.busy) throw Error('Finish the current companion search or ad read first.');
       const saved=previousHRCompany(row),manual=companyURL && (!saved || companyURL!==saved.url);
       if (!manual) {
@@ -743,7 +752,7 @@
         previous = snapshot.signature; checkDiscovery();
         if (!await rpc('read',{run_id:discoveryRun,tab_id:source.tab_id,method:'nextJobSearch',values:[previous]})) break;
       }
-      checkDiscovery(); searchStatus(`Found ${discovered.length} ads. Select the ones to add. Search summaries are labelled; use Read full ad for the complete content when available.`);
+      checkDiscovery(); searchStatus(`Found ${discovered.length} ads.`);
     } catch (error) { failed=!discoveryStopped;searchStatus(discoveryStopped ? `Stopped. ${discovered.length} ads found so far are kept for review.` : error.message + ' Ads already found are kept.'); }
     finally {
       if (discoveryRun) { try { await rpc('end',{run_id:discoveryRun}); } catch {} }
@@ -1113,7 +1122,7 @@
     try {
       await load();
       if (preferredFolder && !folderNames.includes(preferredFolder)) { rememberFolder(null); el('folder').value = ''; }
-      status('Ready. Saved leads stay on this computer.');
+      status('');
     }
     catch (error) { status(error.message); }
     finally { lock(false); }

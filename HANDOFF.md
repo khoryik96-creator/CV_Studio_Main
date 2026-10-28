@@ -7,7 +7,31 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current source checkpoint: v24.6.501** on
+**Current source checkpoint: v24.6.503, local and unmerged** on
+`codex/v24.6.503-job-leads-cleanup`, retaining v502 `3bbe021` and based on
+merged v501 `b646d8d`. Job Leads search fields/actions are compact; setup/update
+guidance is inside Companion; empty previews, zero-result selection controls
+and instructional placeholders are absent. Actual errors/progress, record
+creation dates, excerpt warnings, folder preferences and preview actions stay.
+The empty desktop search panel measures 210px instead of 737px (72% shorter).
+No reader, route, storage or paid-boundary change in this UI pass. Preview
+remains port 5095, with its isolated state retained. See the v503 QA report.
+No publication/merge or owner installation changes.
+
+**Previous source checkpoint: v24.6.502, local and unmerged** on
+`codex/v24.6.502-hr-layout-compact`, based on merged v501 `b646d8d` (PR #254).
+Saved-ad controls are 49% shorter at the checked desktop size and retain their
+remembered country/pages. The v499 header regression rejected LinkedIn's
+icon-only Verified job link within the title; only exact same-job badge links
+are now allowed. Empty completed company documents receive at most one reload
+while the unchanged source is inactive, before any filters/profiles. Modern
+People cards bind to the primary name paragraph, exclude mutual/sidebar
+profiles and recognise scoped native pagination. `hr_layout_revision:1`
+and `people_results_revision:1` reject older readers before scan/paid work.
+Apply companion update and refresh both pages. See the v502 QA report and
+domain notes. No owner installation changes, publication or merge.
+
+**Previous source checkpoint: v24.6.501** on
 `codex/v24.6.501-review-corrections`, stacked on v500 `b2d3637` and retaining
 v498/v499. The three review findings are corrected: Microsoft recipient replies
 allow their documented terminal period; delayed rechecks carry an address-bound,
@@ -60,7 +84,13 @@ approved Apollo app must be configured before sign-in works. See
 `integrations/apollo-broker/README.md` and the v495 QA report. No shared API key
 or colleague-specific hosting account is required.
 
-**Last merged delivery: v24.6.497.** PR #253 merged as `ff722b3` after all
+**Last merged delivery: v24.6.501.** PR #254 merged as `b646d8d` from tested
+head `1175634`, including v498–v500 and all three review corrections. All three
+hosted checks passed; hosted Codex review was unavailable due to the account's
+review usage limit. Local review failures were reproduced/corrected and full
+regressions passed. The owner installation remains separate from this merge.
+
+**Previous merged delivery: v24.6.497.** PR #253 merged as `ff722b3` after all
 three hosted checks and GitHub's automated review passed on tested head
 `1ca7a72`. It adds orange Job Leads scan activity and native exact-company
 narrowing for grouped headers without singleton evidence. PR #252 previously

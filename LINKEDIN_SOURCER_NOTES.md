@@ -1,5 +1,24 @@
 # LinkedIn Sourcer module
 
+## Modern People cards and pagination (v24.6.502)
+
+Live cards now contain mutual connections' profile links, which made the old
+whole-card single-profile check discard otherwise valid candidates. Standard
+People search uses only a primary-results list item's first name paragraph to
+bind the candidate, requires a visible following paragraph, rejects nested or
+ambiguous primary cards and excludes foreign-profile paragraphs from evidence.
+Visible additional career paragraphs remain; missing location stays unknown.
+The legacy path remains for
+older layouts and Recruiter, but standard modern results cannot read sidebar
+recommendations. The 40-card/page and existing profile/paid budgets remain.
+
+Native Next detection is scoped to one visible primary-results pagination list
+with one current-page indicator and one Next button. Signatures and existing
+worker query/country guards still precede a click; disabled Next means last
+page. Ambiguous next-page actions are never replayed. `people_results_revision:1`
+is required before any standard-search paid request, alongside the existing
+Locations capability for new searches. Update companion and refresh both tabs.
+
 Release identity comes from root `VERSION`; stamp changes with `bump_version.py`.
 This experimental CV Studio module replaces the separate POC workflow for normal
 use. The historical POC remains under `poc/linkedin-sourcer` as an isolated

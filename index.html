@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>CV Studio</title>
 <link rel="icon" type="image/png" href="cv_studio_logo.png?v=24.6.79-ui"/>
-<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.501">
-<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.501"></script>
+<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.503">
+<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.503"></script>
 <script>
 /* CV Studio Doctor — built-in diagnostic recorder.
  * Records JS errors, unhandled rejections, failed/slow network calls and
@@ -254,7 +254,7 @@
 <div class="app">
   <div class="header" style="position:relative;">
     <div>
-      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.501 (Offline) by The 郭 Lab</span></h1>
+      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.503 (Offline) by The 郭 Lab</span></h1>
 
     </div>
     <div class="header-tools">
@@ -894,26 +894,21 @@
   </div>
 
   <div class="page-view" id="viewJobLeads">
-    <div class="job-leads-intro"><div><h2>Job Leads</h2><p>Keep relevant LinkedIn job ads and plan your next business-development conversation.</p></div><div class="job-leads-totals"><span><strong id="jobLeadsTotal">0</strong> saved</span><span><strong id="jobLeadsDue">0</strong> follow-ups due</span></div></div>
+    <div class="job-leads-intro"><h2>Job Leads</h2><div class="job-leads-totals"><span><strong id="jobLeadsTotal">0</strong> saved</span><span><strong id="jobLeadsDue">0</strong> follow-ups due</span></div></div>
     <details id="jobLeadsSearchPanel" class="card job-leads-discovery">
       <summary>Find job ads on LinkedIn</summary>
       <div class="card-body job-leads-board">
-        <p class="job-leads-muted">Search and shortlist in Chrome with the connected companion. The Codex preview supports saved ads and public link reads. No AI usage charge.</p>
-        <p class="job-leads-muted">Trust CV Studio once using the companion’s toolbar icon; it then reconnects automatically. After Update &amp; Restart, apply its update below.</p>
-        <div class="job-leads-actions"><button type="button" class="sec" onclick="reloadLinkedinCompanion(this)">Apply companion update</button><span data-companion-status role="status" aria-live="polite" style="overflow-wrap:anywhere;user-select:text"></span></div>
-        <details><summary>Set up companion once</summary><p>Open your normal CV Studio installation for this setup. Its bundled companion stays current with app updates.</p><div class="job-leads-actions"><button type="button" class="sec" onclick="copyLinkedinCompanionFolder(this)">Copy setup folder</button><span data-companion-status role="status" aria-live="polite" style="overflow-wrap:anywhere;user-select:text"></span></div><p>Remove the old downloaded companion from your browser’s Extensions page. Keep Developer mode on. Choose <strong>Load unpacked</strong> and paste the copied folder path. Refresh CV Studio and LinkedIn. With CV Studio open, click the companion’s toolbar icon once to trust this installation. Future updates need no download.</p><p><a href="/linkedin-sourcer?action=extension" download>Download ZIP instead</a> (manual file updates).</p></details>
-        <div class="job-leads-pair"><div><label for="jobLeadsSearchQuery">Job keywords</label><input id="jobLeadsSearchQuery" maxlength="240"></div><div><label for="jobLeadsSearchLocation">Location</label><input id="jobLeadsSearchLocation" maxlength="160"></div></div>
-        <div class="job-leads-pair"><div><label for="jobLeadsSearchMode">Search from</label><select id="jobLeadsSearchMode"><option value="new">New LinkedIn job search</option><option value="open">Job search already open in Chrome</option></select></div><div><label for="jobLeadsSearchPages">Pages to review</label><input id="jobLeadsSearchPages" type="number" min="1" max="15" value="3"></div></div>
-        <div id="jobLeadsSearchOpen" hidden><label for="jobLeadsSearchSource">Open LinkedIn job search</label><div class="job-leads-actions"><select id="jobLeadsSearchSource"></select><button type="button" class="sec" id="jobLeadsSearchRefresh">Refresh search tabs</button></div><p class="job-leads-muted">Keeps the filters you already chose on LinkedIn.</p></div>
-        <div class="job-leads-actions"><button type="button" class="primary" id="jobLeadsSearchStart">Search LinkedIn</button><button type="button" class="sec" id="jobLeadsSearchStop" disabled>Stop</button><button type="button" class="sec" id="jobLeadsSearchClear">Clear results</button></div>
-        <p id="jobLeadsSearchStatus" role="status" aria-live="polite">Open this CV Studio address in Chrome or Brave with the companion enabled to begin.</p>
-        <div class="job-leads-discovery-save"><label for="jobLeadsSearchFolder">Save selected and LinkedIn ads to folder</label><div class="job-leads-actions"><select id="jobLeadsSearchFolder"><option value="">Unfiled</option></select><button type="button" class="sec" id="jobLeadsSearchAdd" disabled>Add selected to list</button></div><p class="job-leads-muted">The latest companion also adds an Add to CV Studio button to LinkedIn job cards. Keep this CV Studio tab open. Refresh LinkedIn after updating the companion.</p></div>
-        <div class="job-leads-actions"><label class="job-leads-pick"><input type="checkbox" id="jobLeadsSearchSelectPage" disabled>Select ads on this results page</label><span id="jobLeadsSearchCount" class="job-leads-muted">0 found</span></div>
-        <div id="jobLeadsCuration" class="job-leads-curation">
+        <div class="job-leads-search-fields"><div><label for="jobLeadsSearchQuery">Job keywords</label><input id="jobLeadsSearchQuery" maxlength="240"></div><div><label for="jobLeadsSearchLocation">Location</label><input id="jobLeadsSearchLocation" maxlength="160"></div><div><label for="jobLeadsSearchMode">Search from</label><select id="jobLeadsSearchMode"><option value="new">New search</option><option value="open">Open LinkedIn search</option></select></div><div><label for="jobLeadsSearchPages">Pages</label><input id="jobLeadsSearchPages" type="number" min="1" max="15" value="3"></div></div>
+        <div id="jobLeadsSearchOpen" hidden><label for="jobLeadsSearchSource">LinkedIn search tab</label><div class="job-leads-actions"><select id="jobLeadsSearchSource"></select><button type="button" class="sec" id="jobLeadsSearchRefresh">Refresh tabs</button></div></div>
+        <div class="job-leads-search-toolbar"><div class="job-leads-actions"><button type="button" class="primary" id="jobLeadsSearchStart">Search LinkedIn</button><button type="button" class="sec" id="jobLeadsSearchStop" disabled hidden>Stop</button><button type="button" class="sec" id="jobLeadsSearchClear" hidden>Clear</button></div><details class="job-leads-setup"><summary>Companion</summary><div class="job-leads-actions"><button type="button" class="sec" onclick="reloadLinkedinCompanion(this)">Apply update</button><button type="button" class="sec" onclick="copyLinkedinCompanionFolder(this)">Copy setup folder</button><span data-companion-status role="status" aria-live="polite"></span></div><p>Use Chrome or Brave. Load the copied folder in Extensions → Developer mode → Load unpacked. Refresh both tabs, then click the companion’s toolbar icon once to connect.</p><p>After updating CV Studio, apply the companion update here.</p><a href="/linkedin-sourcer?action=extension" download>Download ZIP</a></details></div>
+        <p id="jobLeadsSearchStatus" class="job-leads-search-status" role="status" aria-live="polite"></p>
+        <div class="job-leads-discovery-save"><label for="jobLeadsSearchFolder">Save to folder</label><div class="job-leads-actions"><select id="jobLeadsSearchFolder"><option value="">Unfiled</option></select><button type="button" class="sec" id="jobLeadsSearchAdd" disabled hidden>Add selected</button></div></div>
+        <div class="job-leads-actions" id="jobLeadsSearchSelection" hidden><label class="job-leads-pick"><input type="checkbox" id="jobLeadsSearchSelectPage" disabled>Select page</label><span id="jobLeadsSearchCount" class="job-leads-muted"></span></div>
+        <div id="jobLeadsCuration" class="job-leads-curation" hidden>
           <div id="jobLeadsSearchResults"></div>
-          <aside id="jobLeadsPreview" class="job-leads-preview" aria-label="Job ad preview" tabindex="-1">
+          <aside id="jobLeadsPreview" class="job-leads-preview" aria-label="Job ad preview" tabindex="-1" hidden>
             <div class="job-leads-preview-nav"><span id="jobLeadsPreviewPosition" class="job-leads-muted" aria-live="polite"></span><button type="button" class="sec" id="jobLeadsPreviewClose" hidden>Close preview</button></div>
-            <h3 id="jobLeadsPreviewTitle">Choose an ad to preview</h3><p id="jobLeadsPreviewCompany"></p><p id="jobLeadsPreviewMeta" class="job-leads-muted"></p>
+            <h3 id="jobLeadsPreviewTitle"></h3><p id="jobLeadsPreviewCompany"></p><p id="jobLeadsPreviewMeta" class="job-leads-muted"></p>
             <div class="job-leads-actions"><button type="button" class="sec" id="jobLeadsPreviewRead" disabled>Read full ad</button><button type="button" class="primary" id="jobLeadsPreviewSave" disabled>Add this ad</button><button type="button" class="sec job-lead-delete" id="jobLeadsPreviewRemove" hidden>Move to Trash</button></div>
             <div id="jobLeadsPreviewContent" class="job-lead-ad-content"></div>
             <div class="job-leads-actions job-leads-preview-pages"><button type="button" class="sec" id="jobLeadsPreviewPrevious" disabled>Previous ad</button><button type="button" class="sec" id="jobLeadsPreviewNext" disabled>Next ad</button></div>
@@ -921,7 +916,6 @@
           <aside id="jobLeadsHR" class="job-leads-hr" hidden aria-label="Company HR people">
             <div class="job-leads-hr-heading"><span class="job-lead-status">Phase 2</span><h3>HR people</h3></div>
             <p id="jobLeadsHRCompany" class="job-lead-role"></p>
-            <p class="job-leads-muted">Find people LinkedIn associates with this company, matching HR and hiring titles.</p>
             <label for="jobLeadsHRCountryMode">Country</label>
             <select id="jobLeadsHRCountryMode"><option value="">Any country</option><option value="specific">Choose a country</option></select>
             <label for="jobLeadsHRCountry" id="jobLeadsHRCountryLabel" hidden>Country name</label><input id="jobLeadsHRCountry" maxlength="100" hidden>
@@ -948,43 +942,39 @@
     <div class="job-leads-layout">
       <div class="card"><div class="card-head"><h2 id="jobLeadsHeading">Save a job ad</h2><button type="button" class="sec" id="jobLeadsNew">New lead</button></div>
         <form id="jobLeadsForm" class="card-body job-leads-form">
-          <label for="jobLeadsurl">Paste a LinkedIn job link *</label><div class="job-leads-actions"><input id="jobLeadsurl" type="url" required maxlength="2048"><button type="button" class="sec" id="jobLeadsAutoFill">Fill from link</button></div><p class="job-leads-muted">Public job details load here. If unavailable, a connected Chrome companion is tried once automatically. Existing manual entries are kept.</p>
-          <details id="jobLeadsBrowserSetup"><summary>Companion help / read an open ad</summary><p>If the public ad cannot be read, CV Studio tries the companion automatically. Keep this CV Studio address open in Chrome or Brave with the companion enabled.</p><p>First-time setup and updates are under <strong>Find job ads on LinkedIn → Set up companion once</strong> above.</p><button type="button" class="sec" id="jobLeadsBrowserFill">Fill this link in Chrome</button>
+          <label for="jobLeadsurl">LinkedIn job link *</label><div class="job-leads-actions"><input id="jobLeadsurl" type="url" required maxlength="2048"><button type="button" class="sec" id="jobLeadsAutoFill">Fill from link</button></div>
+          <details id="jobLeadsBrowserSetup"><summary>Read an open ad</summary><p>Use Chrome or Brave with the companion enabled. Setup and updates are under <strong>Find job ads on LinkedIn → Companion</strong>.</p><button type="button" class="sec" id="jobLeadsBrowserFill">Read link with companion</button>
             <div class="job-leads-actions"><select id="jobLeadsSource" aria-label="Open LinkedIn job ad"><option value="">Choose an open LinkedIn job ad</option></select><button type="button" class="sec" id="jobLeadsTabs">Refresh job tabs</button><button type="button" class="sec" id="jobLeadsRead">Read job ad</button></div><p class="job-leads-muted">Reads the selected job ad into this form. Review it before saving. No AI usage charge.</p>
           </details>
           <label for="jobLeadscompany">Company *</label><input id="jobLeadscompany" required maxlength="200">
           <label for="jobLeadsrole">Role *</label><input id="jobLeadsrole" required maxlength="240">
-          <label for="jobLeadsfolder">Save to folder</label><input id="jobLeadsfolder" maxlength="80" list="jobLeadsFolders"><datalist id="jobLeadsFolders"></datalist><p class="job-leads-muted">Type a folder name to create it when you save, or choose an existing folder. Your choice is kept for the next ad.</p>
-          <p id="jobLeadsCreated" class="job-leads-muted">Date created is recorded when you save this lead.</p>
+          <label for="jobLeadsfolder">Save to folder</label><input id="jobLeadsfolder" maxlength="80" list="jobLeadsFolders"><datalist id="jobLeadsFolders"></datalist>
+          <p id="jobLeadsCreated" class="job-leads-muted" hidden></p>
           <label for="jobLeadscontact">Contact person (optional)</label><input id="jobLeadscontact" maxlength="400">
           <label for="jobLeadslocation">Location</label><input id="jobLeadslocation" maxlength="240">
-          <label for="jobLeadsdate_posted">Date posted (if available)</label><input id="jobLeadsdate_posted" type="date"><p class="job-leads-muted">From the job ad when available. A blank date means LinkedIn did not provide an exact date.</p>
+          <label for="jobLeadsdate_posted">Date posted</label><input id="jobLeadsdate_posted" type="date">
           <div class="job-leads-pair"><div><label for="jobLeadsstatus">Status</label><select id="jobLeadsstatus"><option value="new">New</option><option value="to_contact">To contact</option><option value="contacted">Contacted</option><option value="follow_up">Following up</option><option value="won">Won</option><option value="closed">Closed</option></select></div><div><label for="jobLeadsfollow_up">Follow-up date</label><input id="jobLeadsfollow_up" type="date"></div></div>
-          <p class="job-leads-muted">New leads start as New. Change the status or choose a follow-up date whenever you need.</p>
           <label for="jobLeadsnotes">Your notes</label><textarea id="jobLeadsnotes" maxlength="10000" rows="4"></textarea>
-          <details><summary>View more — job ad content</summary><p id="jobLeadsDescriptionNote" class="job-leads-muted">This captured text is saved with the lead and can be read here later.</p><button type="button" class="sec" id="jobLeadsRefreshContent">Refresh ad content</button><p class="job-leads-muted">Refresh the captured content from this link, then save to keep the changes.</p><div id="jobLeadsContent" class="job-lead-ad-content"></div><details><summary>Edit or paste job content</summary><label for="jobLeadsdescription">Captured job description</label><p class="job-leads-muted">Paste a copied job description into an empty field (or select all first) to keep headings, bold text and bullets. Plain-text edits replace the captured formatting.</p><textarea id="jobLeadsdescription" maxlength="20000" rows="12"></textarea></details></details>
+          <details><summary>Job ad content</summary><p id="jobLeadsDescriptionNote" class="job-leads-muted" hidden></p><button type="button" class="sec" id="jobLeadsRefreshContent">Refresh content</button><div id="jobLeadsContent" class="job-lead-ad-content" hidden></div><details><summary>Edit content</summary><label for="jobLeadsdescription">Job description</label><textarea id="jobLeadsdescription" maxlength="20000" rows="12"></textarea></details></details>
           <button type="submit" class="primary" id="jobLeadsSave">Save lead</button>
           <p id="jobLeadsMessage" role="status" aria-live="polite">Loading saved leads…</p>
-          <p class="job-leads-muted">Saved on this computer.</p>
         </form>
       </div>
       <div class="card"><div class="card-head"><h2>Your opportunities</h2><button type="button" id="jobLeadsRefresh" class="sec">Refresh</button></div>
         <div class="card-body job-leads-board">
-          <label for="jobLeadsFolderFilter">Folder</label><select id="jobLeadsFolderFilter"><option value="*">All folders</option><option value="">Unfiled</option><option value="!trash">Trash</option></select>
-          <div class="job-leads-actions"><button type="button" class="sec" id="jobLeadsFolderNew">Create folder</button><button type="button" class="sec" id="jobLeadsFolderDelete" disabled>Delete folder</button></div>
+          <div class="job-leads-folder-bar"><label class="job-leads-sr" for="jobLeadsFolderFilter">Folder</label><select id="jobLeadsFolderFilter"><option value="*">All folders</option><option value="">Unfiled</option><option value="!trash">Trash</option></select><button type="button" class="sec" id="jobLeadsFolderNew">New folder</button><button type="button" class="sec" id="jobLeadsFolderDelete" disabled>Delete folder</button></div>
           <div class="job-leads-folder-editor" id="jobLeadsFolderEditor" hidden><label for="jobLeadsFolderName">Folder name</label><input id="jobLeadsFolderName" maxlength="80"><div class="job-leads-actions"><button type="button" class="sec" id="jobLeadsFolderCreate">Create</button><button type="button" class="sec" id="jobLeadsFolderCancel">Cancel</button></div></div>
           <div class="job-leads-pair"><div><label for="jobLeadsSearch">Search saved ads</label><input id="jobLeadsSearch" type="search" aria-label="Search saved leads"></div><div><label for="jobLeadsFilter">Status</label><select id="jobLeadsFilter" aria-label="Filter leads"><option value="">All statuses</option><option value="due">Follow-ups due</option><option value="new">New</option><option value="to_contact">To contact</option><option value="contacted">Contacted</option><option value="follow_up">Following up</option><option value="won">Won</option><option value="closed">Closed</option></select></div></div>
           <label class="job-leads-pick"><input type="checkbox" id="jobLeadsSelectPage">Select ads on this page</label>
-          <div class="job-leads-selection" id="jobLeadsSelection" hidden><span id="jobLeadsSelectedCount">0 selected</span><label for="jobLeadsMoveFolder">Move to folder</label><div class="job-leads-actions"><select id="jobLeadsMoveFolder"><option value="">Unfiled</option></select><button type="button" class="sec" id="jobLeadsMove">Move selected</button></div></div>
+          <div class="job-leads-selection" id="jobLeadsSelection" hidden><strong id="jobLeadsSelectedCount">0 selected</strong><label class="job-leads-sr" for="jobLeadsMoveFolder">Move to folder</label><select id="jobLeadsMoveFolder"><option value="">Unfiled</option></select><button type="button" class="sec" id="jobLeadsMove">Move selected</button></div>
           <section class="job-leads-bulk-hr" id="jobLeadsBulkHR" hidden aria-labelledby="jobLeadsBulkHRTitle">
-            <h3 id="jobLeadsBulkHRTitle">Find HR people for selected ads</h3>
+            <div class="job-leads-bulk-heading"><h3 id="jobLeadsBulkHRTitle">Find HR people</h3><button type="button" class="primary" id="jobLeadsBulkHRStart" disabled>Scan selected ads</button></div>
             <div class="job-leads-pair">
-              <div><label for="jobLeadsBulkHRCountryMode">Country</label><select id="jobLeadsBulkHRCountryMode"><option value="">Any country</option><option value="specific">Choose a country</option></select><label for="jobLeadsBulkHRCountry" id="jobLeadsBulkHRCountryLabel" hidden>Country name</label><input id="jobLeadsBulkHRCountry" maxlength="100" hidden></div>
+              <div><label for="jobLeadsBulkHRCountryMode">Country</label><div class="job-leads-country-control"><select id="jobLeadsBulkHRCountryMode"><option value="">Any country</option><option value="specific">Country</option></select><label class="job-leads-sr" for="jobLeadsBulkHRCountry" id="jobLeadsBulkHRCountryLabel" hidden>Country name</label><input id="jobLeadsBulkHRCountry" maxlength="100" hidden></div></div>
               <div><label for="jobLeadsBulkHRPages">Pages per ad</label><select id="jobLeadsBulkHRPages"><option value="1">1</option><option value="3" selected>3</option><option value="5">5</option><option value="10">10</option><option value="15">15</option></select></div>
             </div>
             <details><summary>HR title keywords</summary><label for="jobLeadsBulkHRKeywords">Match any of these titles or keywords</label><textarea id="jobLeadsBulkHRKeywords" rows="3" maxlength="600"></textarea></details>
-            <p class="job-leads-muted">Scan up to 40 selected ads, one at a time, with these settings. Completed results are saved with each ad. Keep this tab open while it scans. No AI charge.</p>
-            <button type="button" class="primary" id="jobLeadsBulkHRStart" disabled>Scan selected ads</button>
+            <p class="job-leads-muted">Up to 40 ads · Saved as each finishes · Keep this tab open · No AI charge</p>
           </section>
           <section class="job-leads-bulk-progress" id="jobLeadsBulkHRProgress" hidden aria-labelledby="jobLeadsBulkHRProgressTitle">
             <div class="job-leads-actions"><h3 id="jobLeadsBulkHRProgressTitle">HR scan progress</h3><button type="button" class="sec" id="jobLeadsBulkHRStop" disabled>Stop</button></div>
@@ -2611,38 +2601,38 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
-<script src="/vendor/cvstudio/api-transport.js?v=v24.6.501"></script>
-<script src="/vendor/cvstudio/page-nav.js?v=v24.6.501"></script>
-<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.501"></script>
-<script src="/vendor/cvstudio/create-profile.js?v=v24.6.501"></script>
-<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.501"></script>
-<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.501"></script>
-<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.501"></script>
-<script src="/vendor/cvstudio/company-profile.js?v=v24.6.501"></script>
-<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.501"></script>
-<script src="/vendor/cvstudio/appearance.js?v=v24.6.501"></script>
-<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.501"></script>
-<script src="/vendor/cvstudio/docx-export.js?v=v24.6.501"></script>
-<script src="/vendor/cvstudio/the-owl.js?v=v24.6.501"></script>
-<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.501"></script>
-<script src="/vendor/cvstudio/linkedin-sourcer-core.js?v=v24.6.501"></script>
-<script src="/vendor/cvstudio/linkedin-sourcer.js?v=v24.6.501"></script>
-<script src="/vendor/cvstudio/job-leads-apollo.js?v=v24.6.501"></script>
-<script src="/vendor/cvstudio/job-leads.js?v=v24.6.501"></script>
-<script src="/vendor/cvstudio/email-verifier.js?v=v24.6.501"></script>
-<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.501"></script>
-<script src="/vendor/cvstudio/settings.js?v=v24.6.501"></script>
-<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.501"></script>
-<script src="/vendor/cvstudio/tab-status.js?v=v24.6.501"></script>
-<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.501"></script>
-<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.501"></script>
-<script src="/vendor/cvstudio/cv-format.js?v=v24.6.501"></script>
-<script src="/vendor/cvstudio/locks.js?v=v24.6.501"></script>
-<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.501"></script>
-<script src="/vendor/cvstudio/ppc.js?v=v24.6.501"></script>
-<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.501"></script>
-<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.501"></script>
-<script src="/vendor/cvstudio/batch-format.js?v=v24.6.501"></script>
+<script src="/vendor/cvstudio/api-transport.js?v=v24.6.503"></script>
+<script src="/vendor/cvstudio/page-nav.js?v=v24.6.503"></script>
+<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.503"></script>
+<script src="/vendor/cvstudio/create-profile.js?v=v24.6.503"></script>
+<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.503"></script>
+<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.503"></script>
+<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.503"></script>
+<script src="/vendor/cvstudio/company-profile.js?v=v24.6.503"></script>
+<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.503"></script>
+<script src="/vendor/cvstudio/appearance.js?v=v24.6.503"></script>
+<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.503"></script>
+<script src="/vendor/cvstudio/docx-export.js?v=v24.6.503"></script>
+<script src="/vendor/cvstudio/the-owl.js?v=v24.6.503"></script>
+<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.503"></script>
+<script src="/vendor/cvstudio/linkedin-sourcer-core.js?v=v24.6.503"></script>
+<script src="/vendor/cvstudio/linkedin-sourcer.js?v=v24.6.503"></script>
+<script src="/vendor/cvstudio/job-leads-apollo.js?v=v24.6.503"></script>
+<script src="/vendor/cvstudio/job-leads.js?v=v24.6.503"></script>
+<script src="/vendor/cvstudio/email-verifier.js?v=v24.6.503"></script>
+<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.503"></script>
+<script src="/vendor/cvstudio/settings.js?v=v24.6.503"></script>
+<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.503"></script>
+<script src="/vendor/cvstudio/tab-status.js?v=v24.6.503"></script>
+<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.503"></script>
+<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.503"></script>
+<script src="/vendor/cvstudio/cv-format.js?v=v24.6.503"></script>
+<script src="/vendor/cvstudio/locks.js?v=v24.6.503"></script>
+<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.503"></script>
+<script src="/vendor/cvstudio/ppc.js?v=v24.6.503"></script>
+<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.503"></script>
+<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.503"></script>
+<script src="/vendor/cvstudio/batch-format.js?v=v24.6.503"></script>
 <script>
 
 document.addEventListener('DOMContentLoaded', initPageNavPin);
@@ -2660,9 +2650,9 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 
 </script>
-<script src="/vendor/cvstudio/input-file.js?v=v24.6.501"></script>
-<script src="/vendor/cvstudio/stats.js?v=v24.6.501"></script>
-<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.501"></script>
+<script src="/vendor/cvstudio/input-file.js?v=v24.6.503"></script>
+<script src="/vendor/cvstudio/stats.js?v=v24.6.503"></script>
+<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.503"></script>
 <script>
 try { updateSummaryLockUI(); } catch(e) {}
 try { updateCvScoringLockUI(); } catch(e) {}

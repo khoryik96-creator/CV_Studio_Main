@@ -1,0 +1,21 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert/strict');
+const el=(innerText='',extra={})=>({innerText,getClientRects:()=>[{}],getAttribute:()=>null,querySelector:()=>null,querySelectorAll:()=>[],closest:()=>null,...extra});
+const own=el('Example Person',{href:'https://www.linkedin.com/in/example-person/'}),mutual=el('Mutual Person',{href:'https://www.linkedin.com/in/mutual-person/'});
+const name=el('Example Person • 1st',{querySelectorAll:()=>[own]}),title=el('SAP FICO Consultant'),where=el('Malaysia'),summary=el('SAP systems consultant since 2021'),connections=el('Mutual Person and 20 others',{querySelectorAll:()=>[mutual]});
+const state={ambiguous:false,primary:true,hidden:false,nested:false,clicks:0};
+const card=el('Example Person SAP FICO Consultant Malaysia Mutual Person',{getClientRects:()=>state.hidden?[]:[{}],querySelector:s=>s==='[role="listitem"]'&&state.nested?el():null,querySelectorAll:s=>s==='p'?[name,title,where,summary,connections]:s==='a[href]'?[own,mutual]:[]});own.closest=mutual.closest=()=>card;
+const next=el('Next',{click:()=>state.clicks++}),current=el('1'),pager=el('',{querySelectorAll:()=>[current]});pager.parentElement=el('',{querySelectorAll:()=>[current,next]});
+const primary=el('',{querySelectorAll:()=>[card]}),main=el('Visible search results',{querySelectorAll:s=>s==='a[href]'?[own,mutual]:[]});
+const document={body:main,querySelector:s=>s==='main'?main:s==='main [aria-label="Primary content"]'&&state.primary?primary:null,querySelectorAll:s=>s.includes('pagination-controls-list')&&state.primary?[pager]:[]};
+const location={origin:'https://www.linkedin.com',pathname:'/search/results/people/',href:'https://www.linkedin.com/search/results/people/?keywords=SAP&geoUrn=%5B%22123%22%5D'};
+const context=vm.createContext({document,location,URL,URLSearchParams,Date,Number,getComputedStyle:()=>({visibility:'visible'})});vm.runInContext(fs.readFileSync('vendor/linkedin-companion/reader.js','utf8'),context);const reader=context.SourcerReader;
+let value=reader.readSearch('standard');assert.equal(value.profiles.length,1,'a candidate with visible mutual-profile links must remain readable');assert.equal(value.profiles[0].url,own.href.replace(/\/$/,''));assert.equal(value.profiles[0].name,'Example Person');assert(!value.profiles[0].text.includes('Mutual Person'),'mutual connections are not candidate evidence');assert(value.profiles[0].text.includes('since 2021'));
+assert(value.paginationKnown&&value.hasNext);assert(reader.next('standard',value.signature));assert.equal(state.clicks,1);
+assert.throws(()=>reader.next('standard','different'));assert.equal(state.clicks,1);
+where.innerText='';assert.equal(reader.readSearch('standard').profiles.length,1,'a missing location remains unknown instead of discarding an identified candidate');where.innerText='Malaysia';
+next.disabled=true;value=reader.readSearch('standard');assert(value.paginationKnown&&!value.hasNext);assert.equal(reader.next('standard',value.signature),false);next.disabled=false;
+for(const key of ['hidden','nested']){state[key]=true;assert.equal(reader.readSearch('standard').profiles.length,0,key+' cards cannot supply candidate identity');state[key]=false;}
+name.querySelectorAll=()=>[own,mutual];assert.equal(reader.readSearch('standard').profiles.length,0,'two primary names remain ambiguous');name.querySelectorAll=()=>[own];
+state.primary=false;assert.equal(reader.readSearch('standard').profiles.length,0,'the fallback cannot read recommendation/sidebar cards outside primary results');
+assert.throws(()=>reader.readSearch('recruiter'),'Recruiter keeps its existing layout boundary');
+console.log('Modern People reader: primary candidate identity, mutual exclusion, visible scoped cards, ambiguity, native pagination and stale click protection passed.');

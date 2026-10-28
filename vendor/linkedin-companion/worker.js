@@ -256,6 +256,8 @@ async function restore() {
         bound.hr.query_index !== undefined && (!Number.isInteger(bound.hr.query_index) || bound.hr.query_index < 0 || bound.hr.query_index >= hrQueries(bound.hr).length ||
           bound.hr.key && new URL(bound.hr.key).searchParams.get('keywords') !== hrQueries(bound.hr)[bound.hr.query_index]) ||
         bound.hr.omitted_pages !== undefined && typeof bound.hr.omitted_pages !== 'boolean' ||
+        bound.hr.company_blank_polls !== undefined && (!Number.isInteger(bound.hr.company_blank_polls) || bound.hr.company_blank_polls<1 || bound.hr.company_blank_polls>12) ||
+        bound.hr.company_blank_reloads !== undefined && bound.hr.company_blank_reloads!==1 ||
         bound.hr.joined_count !== undefined && (!Number.isInteger(bound.hr.joined_count) || bound.hr.joined_count < 0 || bound.hr.joined_count > 100) ||
         bound.hr.joining && (!/^https:\/\/www\.linkedin\.com\/in\/[A-Za-z0-9_%~-]+$/.test(bound.hr.joining.url || '') || bound.hr.joining.tab_id !== null && !Number.isInteger(bound.hr.joining.tab_id) ||
           bound.hr.joining.scrolls !== undefined && (!Number.isInteger(bound.hr.joining.scrolls) || bound.hr.joining.scrolls < 0 || bound.hr.joining.scrolls > 4)) ||
@@ -549,7 +551,7 @@ async function handle(message, sender) {
     if(jobCapture?.bound!==connection || jobCapture.operation!==args.operation_id)return false;
     jobCapture.cancelled=true;return true;
   }
-  if (message.action === 'jobStatus') return {connected:true,job_read:true,job_search:true,job_search_revision:1,company_hr_revision:1,hr_company_identity_revision:1,hr_company_filter_revision:1,hr_company_source_revision:1,hr_resilience_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_keyword_revision:1,people_country_revision:1,companion_update_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
+  if (message.action === 'jobStatus') return {connected:true,job_read:true,job_search:true,job_search_revision:1,company_hr_revision:1,hr_company_identity_revision:1,hr_company_filter_revision:1,hr_company_source_revision:1,hr_resilience_revision:1,hr_layout_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_keyword_revision:1,people_country_revision:1,people_results_revision:1,companion_update_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
   if (message.action === 'hrBegin') {
     const bound = connection;
     if (!/^[a-f0-9]{32}$/.test(args.run_id || '') || !hrCompanyURL(args.company_url) || typeof args.company !== 'string' || !args.company.trim() || args.company.length > 200 ||
@@ -799,6 +801,21 @@ async function handle(message, sender) {
       const confirmed=await chrome.tabs.get(bound.source);live(bound,run);
       if(confirmed.url!==tab.url || confirmed.pendingUrl && confirmed.pendingUrl!==tab.url)throw safeError('The company page changed while confirming its identity.','HR_PAGE_CHANGED');
       if(confirmed.status!=='complete')return hrWaiting(hr);
+      // LinkedIn can finish navigation with an empty, unbooted document. One
+      // passive reload of this run's unchanged inactive company source is safe
+      // before any filter/profile work. Persist first; ambiguity never replays.
+      if(result?.blank_document===true && result.loading===true){
+        hr.company_blank_polls=Math.min(12,(hr.company_blank_polls || 0)+1);
+        if(hr.company_blank_polls>=12 && !hr.company_blank_reloads && !confirmed.active){
+          hr.company_blank_reloads=1;await persist();live(bound,run);
+          const current=await chrome.tabs.get(bound.source);live(bound,run);
+          if(current.url!==confirmed.url || current.pendingUrl && current.pendingUrl!==current.url)throw safeError('The company page changed before reloading.','HR_PAGE_CHANGED');
+          if(current.active || current.status!=='complete')return hrWaiting(hr);
+          await chrome.tabs.reload(bound.source);live(bound,run);return hrWaiting(hr);
+        }
+        await persist();return hrWaiting(hr);
+      }
+      delete hr.company_blank_polls;
       if(hr.expected_company_id && result?.company_id && result.company_id!==hr.expected_company_id)throw safeError('This company link now points to a different LinkedIn company. Check the saved ad before scanning.','HR_COMPANY_MISMATCH');
       if ((hr.job_url || hr.expected_company_id) && result?.company_name!==undefined) {
         if (typeof result.company_name!=='string' || !result.company_name.trim() || result.company_name.length>200 || /[\x00-\x1f\x7f]/.test(result.company_name)) throw safeError('The LinkedIn company name could not be confirmed.');

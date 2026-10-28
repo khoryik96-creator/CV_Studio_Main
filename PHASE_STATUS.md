@@ -4,6 +4,20 @@
 
 ## Release state
 
+- v24.6.503 is a local, unmerged UI cleanup stacked on v502 `3bbe021`.
+  Search fields/actions are compact; repetitive guidance moves behind Companion;
+  empty previews/selection tools and instructional placeholders are absent.
+  Real content, errors/progress, created dates, excerpts, folder choices and
+  accessibility remain. No scan-reader/backend/route/storage changes.
+
+- v24.6.502 is a local, unmerged correction on merged v501 `b646d8d` (PR #254).
+  It compacts saved-ad/bulk HR controls, accepts exact same-job verification
+  icons within modern titles, recovers a blank inactive company page once
+  before identity/filter reads, and reads modern People cards/pagination while
+  excluding mutual/sidebar profiles. Companion capabilities reject older
+  readers before scan/paid work. Routes, schemas and credential/paid boundaries
+  remain; no owner installation changes or merge.
+
 - v24.6.501 corrects all three findings on the unmerged v498–v500 stack.
   Microsoft DBEB punctuation remains constrained by provider/code/word guards;
   rechecks retain a signed, address/process-bound control identity for up to
