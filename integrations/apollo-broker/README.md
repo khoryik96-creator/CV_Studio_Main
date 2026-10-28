@@ -46,6 +46,9 @@ Do not use another application's client ID, including Apollo CLI's identity.
    `apollo_connection.json` as `broker_url`. This file ships to colleagues.
    An owner-only `CVSTUDIO_APOLLO_BROKER_URL` environment override is available
    for development. Client secrets and account tokens never belong here.
+   CV Studio calls the Worker with the `CVStudio-Apollo/1.0` User-Agent.
+   Cloudflare refuses Python's default `Python-urllib` agent with error 1010,
+   which CV Studio reports as an Apollo permission (403) message.
 8. Run the account/credit acceptance checks below before distributing a release.
 
 `wrangler.jsonc` also supports a CLI deployment after the owner fills in the

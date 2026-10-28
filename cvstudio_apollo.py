@@ -16,6 +16,9 @@ from urllib import request, error
 from urllib.parse import urlsplit
 
 
+USER_AGENT = "CVStudio-Apollo/1.0"
+
+
 class ApolloError(Exception):
     def __init__(self, message, code="APOLLO_INPUT", status=400):
         super().__init__(message)
@@ -49,8 +52,10 @@ class ApolloBrokerClient:
             raise ApolloError("Apollo sign-in is not enabled yet. Your CV Studio owner needs to finish setup.", "APOLLO_SETUP", 503)
         if action not in {"start", "poll", "cancel", "disconnect", "reveal", "lookup-status"}:
             raise ApolloError("Choose a supported Apollo action.")
+        # Cloudflare refuses urllib's default "Python-urllib" agent (error 1010).
         req = request.Request(self.origin + "/" + action, data=json.dumps(body).encode(),
-                              headers={"Content-Type":"application/json", "Accept":"application/json"}, method="POST")
+                              headers={"Content-Type":"application/json", "Accept":"application/json",
+                                       "User-Agent":USER_AGENT}, method="POST")
         try:
             with self.opener(req, timeout=25) as response:
                 raw = response.read(131073)
