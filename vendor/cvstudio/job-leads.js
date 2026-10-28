@@ -33,7 +33,19 @@
   const due = row => row.follow_up && row.follow_up <= localDate() && !['won', 'closed'].includes(row.status);
   function draft() { return {...Object.fromEntries(fields.map(key => [key, el(key).value])), description_truncated:descriptionTruncated, description_rich:descriptionRich}; }
   const richTags = new Set(['p','h3','h4','ul','ol','li','strong','em','br','blockquote']);
-  function content(target, plain, rich) {
+  const markupViews=new Map(),contentViews=new WeakMap();
+  function content(target, plain, rich, normalized=false) {
+    const view={};contentViews.set(target,view);
+    if(!normalized && typeof plain==='string' && /<(?:p|strong|b|em|i|ul|ol|li|h[1-6]|br|blockquote)(?:\s[^>]*|\s*\/?)>/i.test(plain)){
+      if(!markupViews.has(plain)){
+        if(markupViews.size>=32)markupViews.delete(markupViews.keys().next().value);
+        const pending=api({action:'format_content',render_markup:true,description:plain}).catch(()=>{if(markupViews.get(plain)===pending)markupViews.delete(plain);return null;});
+        markupViews.set(plain,pending);
+      }
+      markupViews.get(plain).then(value=>{
+        if(contentViews.get(target)===view && typeof value?.description==='string' && Array.isArray(value.description_rich))content(target,value.description,value.description_rich,true);
+      });
+    }
     target.replaceChildren();
     let count = 0;
     function add(parent, items, depth = 0) {
@@ -52,7 +64,15 @@
               else run.push(child);
             }
             flush();
-          } else { const child = document.createElement(item.tag); add(child, item.children, depth+1); parent.appendChild(child); }
+          } else {
+            const child = document.createElement(item.tag);
+            let children=item.children;
+            if(['ul','ol'].includes(item.tag)){
+              const words=(items,n=0)=>n>16?'':(items || []).map(value=>typeof value.text==='string'?value.text:words(value.children,n+1)).join('');
+              children=(children || []).flatMap(value=>value.tag===item.tag?value.children:[value]).filter(value=>value.tag!=='li'||words([value]).trim());
+            }
+            add(child, children, depth+1); parent.appendChild(child);
+          }
         }
       }
     }
@@ -512,6 +532,7 @@
       notify('Checking the companion…');
       const companion = await rpc('jobStatus',{},1500); checkHR();
       if (companion?.profile_browsing_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to keep browsing safely during scans.');
+      if (companion?.concurrent_scans_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to run Job Leads and Sourcer together.');
       if (!companion?.connected || companion.company_hr_revision !== 1 || companion.hr_company_identity_revision !== 1 || companion.hr_company_filter_revision !== 1 || companion.hr_company_source_revision !== 1 || companion.hr_resilience_revision !== 1 || companion.hr_layout_revision !== 1 || companion.hr_joined_revision !== 1 || companion.hr_joined_loading_revision !== 1 || companion.hr_keyword_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to use the corrected HR search and joining-date checks.');
       if (companion.busy) throw Error('Finish the current companion search or ad read first.');
       const saved=previousHRCompany(row),manual=companyURL && (!saved || companyURL!==saved.url);
@@ -730,6 +751,7 @@
       const companion = await rpc('jobStatus',{},1000).catch(() => null);
       checkDiscovery();
       if (!companion?.connected) throw Error('Open this CV Studio address in Chrome or Brave with the companion enabled. It connects automatically. Use Set up companion once if needed. LinkedIn job search cannot run inside the Codex preview.');
+      if (companion.concurrent_scans_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to run Job Leads and Sourcer together.');
       if (companion.job_search !== true || !Number.isInteger(companion.job_search_revision) || companion.job_search_revision < 1) throw Error('Update and reload the latest companion, refresh CV Studio and LinkedIn, then reconnect this tab to enable the current job search. Updating CV Studio alone does not update the companion.');
       if (companion.busy) throw Error('Finish the current companion search or ad read before starting another search.');
       discoveryRun = hex(); discovered = []; discoveryPicked.clear(); discoveryPage = 0; previewUrl = ''; previewCapture = null;
@@ -805,7 +827,7 @@
     return new Promise((resolve, reject) => {
       const id = hex(), timer = setTimeout(() => { pending.delete(id); reject(Error('The companion did not respond. Refresh this CV Studio tab after reloading the companion. Use Chrome or Brave, and click the companion toolbar icon once if this installation has not been connected. Saved ads remain available below.')); }, waitMs ?? (action === 'jobFromLink' ? args.company_only ? 55000 : 35000 : 12000));
       pending.set(id, {resolve, reject, timer});
-      window.postMessage({type:'CVSTUDIO_LINKEDIN_REQUEST', id, channel, action, args}, location.origin);
+      window.postMessage({type:'CVSTUDIO_LINKEDIN_REQUEST', id, channel, scope:'leads', action, args}, location.origin);
     });
   }
   window.addEventListener('message', event => {

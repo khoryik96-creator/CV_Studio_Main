@@ -1,5 +1,42 @@
 # LinkedIn Sourcer module
 
+## Concurrent scans and fresh profile lookups (v24.6.511)
+
+One authenticated app document can run one profiles session and one Job Leads
+session simultaneously. Scoped RPCs select isolated instances of the existing
+bounded worker logic: each retains its own run, source, allowed links, counters,
+owned/viewed maps, capture token and write queue. The profiles snapshot keeps
+its original key; leads uses `cvstudioLinkedinLeadsSessionV1`. An untagged legacy
+HR/Jobs snapshot moves in one atomic write before validation, never action
+execution. New tagged snapshots are not migrated again. No SQLite/journal or
+HTTP route schema changes occur.
+
+Shared tab leases reject cross-session source adoption, query exposure, reads,
+navigation, script injection and cleanup, including pending source creation.
+Stop cleans only its own session. Other app documents cannot take over an active
+session; both modules stay bound to one verified document. Same-session runs
+remain exclusive. Legacy unscoped pages retain the single-run behavior. A
+shared update reservation prevents either scan starting during manifest checks
+or extension reload. `concurrent_scans_revision:1` is checked before paid
+planning or leads discovery. Scoped status reports own busy/other busy; existing
+fields remain. No new permission, automatic paid replay or provider call.
+
+Normal new-UI profile progression requests a fresh inactive tab for each next
+observed URL, releasing the preceding owned tab only through conservative
+cleanup. A viewed tab remains open. This removes same-tab reuse transitions,
+where a late update for the old page could invalidate the next expected URL.
+The controller follows the validated replacement ID; observed-link authority,
+counts, evidence checks and read-only loading limits remain. Other profile
+identities, access checks and genuine source/filter changes still stop. This
+addresses a reproducible transition risk; the exact historical screenshot's
+transient browser event was not recorded and is not claimed as proven.
+
+Reference inspected at Gazy commit `7478039b2ccc467e9282a4c16a58222d7de3b6b1`:
+[profileFetcher.ts](https://github.com/khoryik96-creator/Gazy/blob/7478039b2ccc467e9282a4c16a58222d7de3b6b1/src/background/profileFetcher.ts)
+uses a fresh background tab per profile. Its search module still has one global
+search session; its ownership/cleanup, credential and provider-retry behavior
+was not copied into CV Studio. The source was read as a reference, not executed.
+
 ## Browse LinkedIn while scans run (v24.6.509)
 
 The owner explicitly changed the old activation-stop policy: switching tabs

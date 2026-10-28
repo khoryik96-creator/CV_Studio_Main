@@ -208,7 +208,7 @@
     connect().then(connection=>{
       const respond=reply=>window.postMessage({type:'CVSTUDIO_LINKEDIN_RESPONSE',channel:message.channel,id:message.id,...reply},location.origin);
       if(connection?.error){respond({error:connection.error});return;}
-      try { chrome.runtime.sendMessage({kind: 'sourcer', action: message.action, args: message.args}, reply => {
+      try { chrome.runtime.sendMessage({kind: 'sourcer', scope:message.scope, action: message.action, args: message.args}, reply => {
       const error = chrome.runtime.lastError;
       respond(error ? {error:'Refresh CV Studio after updating the companion.'} : reply);
       }); } catch {respond({error:'Refresh CV Studio after updating the companion.'});}

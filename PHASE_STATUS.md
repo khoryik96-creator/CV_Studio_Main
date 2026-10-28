@@ -4,6 +4,17 @@
 
 ## Release state
 
+- v24.6.511 is a local concurrent companion/ad-content correction on merged
+  v509 `7a25051`. Profiles/leads use separate bounded run state, ownership,
+  Stop and snapshots, with shared authenticated-document/update gates and
+  cross-session source/tab exclusion. Fresh inactive profile lookups avoid
+  reuse-event races; grouped-company transitions wait without reading or
+  clicking again until a valid singleton is confirmed. Literal saved HTML is
+  formatted safely for display without record writes. Root version stamping,
+  module notes and the v511 QA report cover the change. Existing permissions,
+  routes, schemas, billing/non-replay and owner installation remain. Separate
+  v510 JobAdder PR #257 is excluded; no publication or merge this checkpoint.
+
 - v24.6.509 is a local tab-browsing correction on merged v508 `156980b`.
   Viewing scan profiles retains exact-page read access but releases automatic
   navigation/closure permanently. Sourcer follows a confirmed fresh inactive

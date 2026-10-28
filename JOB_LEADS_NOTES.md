@@ -1,5 +1,33 @@
 # Job Leads module
 
+## Concurrent Sourcer scans and rich ad repair (v24.6.511)
+
+Job discovery, direct captures and HR scans use the `leads` companion scope;
+Sourcer uses `profiles`. Both can run together in the same authenticated
+CV Studio document, with independent run/source/Stop/ownership/counters and
+snapshots. Job Leads still runs one of its own workflows at a time. No scan may
+adopt another session's reserved source/profile. Viewed tabs remain protected;
+updates wait for both sessions. Old companions fail before starting discovery
+or paid planning. See Sourcer notes for migration and authentication details.
+
+During native grouped-company selection, a reordered group or a still-known
+multi-ID subset can remain visible while Apply finishes. Wait passively under
+the existing deadline without reading people, replaying a click or resetting
+the scan. Foreign/duplicate IDs and changed other filters still fail; only a
+singleton from the observed group (and saved ID when present) authorizes HR
+results. The Shiseido screenshot did not retain its transient URL, so no claim
+is made that every instance of that message had this exact cause.
+
+Some saved descriptions contain literal HTML rather than plain text. The
+existing `format_content` route can now produce a read-only presentation of
+that markup using bounded server-side HTML parsing and the established semantic
+tag allowlist. No raw HTML is inserted into the page. Empty list items and
+same-kind orphan list wrappers are removed; genuine nested/numbered items stay.
+Scripts, attributes, links, images and remote resource loading are absent.
+Stored records, drafts, notes, dates and backup/export content are untouched.
+A bounded per-tab cache deduplicates presentation requests; stale responses
+cannot overwrite a newer preview. No provider or new route/schema is involved.
+
 ## Browsing during HR scans (v24.6.509)
 
 The owner can switch LinkedIn tabs while a scan continues. Viewing a temporary

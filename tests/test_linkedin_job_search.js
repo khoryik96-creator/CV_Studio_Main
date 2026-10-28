@@ -28,7 +28,7 @@ function fixture(){
   const identity=require('./linkedin_companion_identity_fixture')(chrome);
   const boot=()=>{hooks={};vm.runInContext(worker,vm.createContext({chrome,URL,Map,Set,Date,console,setTimeout:(fn,ms,...args)=>setTimeout(fn,state.fastWait&&[350,500].includes(ms)?0:ms,...args),clearTimeout,crypto:identity.crypto,TextEncoder}));};boot();
   const sender=()=>({tab:{id:1},documentId:state.document,url:tabs.get(1).url});
-  const rpc=(action,args={},who=sender())=>new Promise(resolve=>hooks.message({kind:'sourcer',action,args},who,resolve));
+  const rpc=(action,args={},who=sender(),scope)=>new Promise(resolve=>hooks.message({kind:'sourcer',scope,action,args},who,resolve));
   const run='b'.repeat(32);
   return {state,tabs,boot,rpc,run,hooks:()=>hooks,arm:()=>hooks.arm(tabs.get(1)),begin:(patch={})=>rpc('jobSearchBegin',{run_id:run,query:'finance',location:'Malaysia',max_pages:2,...patch}),
     read:(id,method='readJobSearch')=>rpc('read',{run_id:run,tab_id:id,method,values:method==='readJobSearch'?[]:[row.url]}),end:()=>rpc('end',{run_id:run})};

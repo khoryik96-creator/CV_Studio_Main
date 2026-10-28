@@ -47,7 +47,7 @@
       const id = hex();
       const timer = setTimeout(() => { pending.delete(id); reject(Error(connectionHelp)); }, waitMs);
       pending.set(id, {resolve, reject, timer});
-      window.postMessage({type: 'CVSTUDIO_LINKEDIN_REQUEST', id, channel, action, args}, location.origin);
+      window.postMessage({type: 'CVSTUDIO_LINKEDIN_REQUEST', id, channel, scope:'profiles', action, args}, location.origin);
     });
   }
   window.addEventListener('message', event => {
@@ -91,7 +91,7 @@
       if (CVLinkedinCore.profileURL(selected.url)) throw Error('Choose a LinkedIn search or home tab, rather than a profile page.');
       return selected;
     },
-    async navigate(id, url) { await begin(); return rpc('navigate', {run_id: run.id, tab_id: id, url}); },
+    async navigate(id, url) { await begin(); return rpc('navigate', {run_id: run.id, tab_id: id, url, fresh:!!CVLinkedinCore.profileURL(url)}); },
     async createTab(url) { await begin(); return rpc('create', {run_id: run.id, url}); },
     async closeOwnedTab() { if (browserRun) { try { await rpc('end', {run_id: browserRun}); } finally { browserRun = ''; } } },
     async read(id, method, values) {
@@ -207,6 +207,7 @@
       options.mode = options.mode === 'auto' ? sourceMode(source) : options.mode;
       const status=await rpc('jobStatus');
       if(status?.profile_browsing_revision!==1)throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to keep browsing safely during scans.');
+      if(status?.concurrent_scans_revision!==1)throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to run Job Leads and Sourcer together.');
       if(options.mode==='standard'){
         if(status?.people_results_revision!==1 || !options.use_open_search && status?.people_country_revision!==1)throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn. This search needs the current People-card, pagination and Locations readers.');
       }

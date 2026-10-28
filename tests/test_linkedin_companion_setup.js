@@ -17,7 +17,7 @@ function fixture(){
   const identity=require('./linkedin_companion_identity_fixture')(chrome);
   const boot=()=>vm.runInNewContext(source,{chrome,fetch,URL,console,setTimeout,clearTimeout,crypto:identity.crypto,TextEncoder});boot();
   const sender=(id=1)=>({id:chrome.runtime.id,tab:tabs.get(id),frameId:0,documentId:state.document,url:tabs.get(id)?.url});
-  const rpc=(action,args={},who=sender())=>new Promise(resolve=>hooks.message({kind:'sourcer',action,args},who,resolve));
+  const rpc=(action,args={},who=sender(),scope)=>new Promise(resolve=>hooks.message({kind:'sourcer',scope,action,args},who,resolve));
   return {state,tabs,hooks,rpc,sender,session,identity:identity.state,boot};
 }
 const tests=[
@@ -111,11 +111,12 @@ const tests=[
     assert.equal(f.state.reloads,1);assert.equal(f.state.fetches[0].url,'chrome-extension://test-extension/manifest.json');
     assert.equal(f.state.fetches[0].options.cache,'no-store');
   }],
-  ['a search starting during update validation prevents reload',async()=>{
+  ['update validation reserves both sessions before any new scan can start',async()=>{
     const f=fixture();await f.rpc('connect');let resume;f.state.beforeFetch=()=>new Promise(resolve=>resume=resolve);
     const updating=f.rpc('reloadCompanion',{version:f.state.disk});await new Promise(resolve=>setImmediate(resolve));
-    assert((await f.rpc('begin',{run_id:'a'.repeat(32),source_tab_id:2,max_pages:2,mode:'standard'})).result);resume();
-    assert.match((await updating).error,/finish|stop/i);assert.equal(f.state.reloads,0);
+    assert((await f.rpc('begin',{run_id:'a'.repeat(32),source_tab_id:2,max_pages:2,mode:'standard'})).error);
+    assert((await f.rpc('hrBegin',{},f.sender(),'leads')).error);resume();
+    assert((await updating).result.reloading);await new Promise(resolve=>setTimeout(resolve,150));assert.equal(f.state.reloads,1);
   }],
   ['a background app cannot replace an idle binding and failed persistence grants no authority',async()=>{
     const f=fixture();await f.rpc('connect');f.tabs.set(3,{id:3,url:'http://127.0.0.1:5000/',status:'complete',active:false});

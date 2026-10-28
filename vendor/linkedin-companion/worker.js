@@ -1,5 +1,45 @@
+// Separate scan state under one authenticated CV Studio document. The existing
+// bounded scan implementation below is instantiated once for each module.
+const nativeChrome=chrome, sessions=new Map(), tabLeases=new Map(), inFlight=new Map();
+let updatePending=false;
+function sessionError(message) { const error=Error(message);error.cvstudioSafe=true;return error; }
+function otherOwns(scope,id) {
+  return tabLeases.has(id) && tabLeases.get(id)!==scope ||
+    [...sessions].some(([name,session])=>name!==scope && session.owns(id));
+}
+function assertSessionTab(scope,id) {
+  if(otherOwns(scope,id))throw sessionError('This tab belongs to the other running scan. Choose a different search tab.');
+}
+function releaseLeases(scope) {
+  if(inFlight.get(scope))return;
+  for(const [id,name] of tabLeases)if(name===scope && !sessions.get(scope).owns(id))tabLeases.delete(id);
+}
+function sessionChrome(scope) {
+  return {...nativeChrome,tabs:{...nativeChrome.tabs,
+    get:async id=>{assertSessionTab(scope,id);return nativeChrome.tabs.get(id);},
+    query:async args=>(await nativeChrome.tabs.query(args)).filter(tab=>!otherOwns(scope,tab.id)),
+    create:async args=>{const tab=await nativeChrome.tabs.create(args);assertSessionTab(scope,tab.id);tabLeases.set(tab.id,scope);return tab;},
+    update:async(id,args)=>{assertSessionTab(scope,id);return nativeChrome.tabs.update(id,args);},
+    remove:async id=>{assertSessionTab(scope,id);return nativeChrome.tabs.remove(id);}
+  },scripting:{...nativeChrome.scripting,executeScript:async args=>{
+    assertSessionTab(scope,args.target.tabId);return nativeChrome.scripting.executeScript(args);
+  }}};
+}
+const migrateSessions=(async()=>{
+  const key='cvstudioLinkedinSessionV1',leadKey='cvstudioLinkedinLeadsSessionV1';
+  const legacy=(await nativeChrome.storage.session.get(key))[key];
+  if(!legacy || legacy.scope!==undefined || !(['hr','jobs'].includes(legacy.connection?.kind) || !legacy.connection?.run && legacy.connection?.jobCompany))return;
+  if((await nativeChrome.storage.session.get(leadKey))[leadKey])throw Error('Ambiguous companion sessions.');
+  // One atomic write removes old action authority while transferring its exact
+  // bounded snapshot. Startup validates it and never resumes browser actions.
+  await nativeChrome.storage.session.set({[key]:null,[leadKey]:{...legacy,scope:'leads'}});
+})();
+
+
+function createCompanionSession(scope) {
+const chrome = sessionChrome(scope);
 let connection = null, owned = new Map(), viewed = new Map(), nextCount = 0, profileCount = 0, jobCapture = null;
-const SESSION_KEY = 'cvstudioLinkedinSessionV1';
+const SESSION_KEY = scope === 'profiles' ? 'cvstudioLinkedinSessionV1' : 'cvstudioLinkedinLeadsSessionV1';
 const TRUST_KEY = 'cvstudioLinkedinTrustedAppsV1';
 // Chrome session memory survives worker suspension, but not browser/extension
 // restarts. Never store credentials, captured content or provider requests here.
@@ -218,7 +258,7 @@ async function settleJobSearch(bound, run, tab) {
   await persist(); jobSearchLive(bound,run,await chrome.tabs.get(tab.id)); return true;
 }
 function persist() {
-  const snapshot = {version:1, connection:connection ? {...connection, allowed:[...(connection.allowed || [])]} : null,
+  const snapshot = {version:1, scope, connection:connection ? {...connection, allowed:[...(connection.allowed || [])]} : null,
     owned:[...owned], viewed:[...viewed], nextCount:Math.min(nextCount,15), profileCount:Math.min(profileCount,76)};
   const write = writes.catch(() => {}).then(() => {
     if (stateFailed) throw Error('Companion session storage is unavailable.');
@@ -228,10 +268,11 @@ function persist() {
   return write.catch(error => { stateFailed = true; connection = null; throw error; });
 }
 async function restore() {
+  await migrateSessions;
   await chrome.storage.local.setAccessLevel({accessLevel:'TRUSTED_CONTEXTS'});
   const saved = (await chrome.storage.session.get(SESSION_KEY))[SESSION_KEY];
   if (!saved) return;
-  if (saved.version !== 1 || !Array.isArray(saved.owned) || saved.owned.length > 76 ||
+  if (saved.scope !== undefined && saved.scope !== scope || saved.version !== 1 || !Array.isArray(saved.owned) || saved.owned.length > 76 ||
       !Number.isInteger(saved.nextCount) || saved.nextCount < 0 || saved.nextCount > 15 ||
       !Number.isInteger(saved.profileCount) || saved.profileCount < 0 || saved.profileCount > 76) throw Error('Invalid companion session.');
   for (const row of saved.owned) {
@@ -246,6 +287,7 @@ async function restore() {
   }
   const bound = saved.connection;
   if (!bound) return;
+  if (scope === 'profiles' && ['hr','jobs'].includes(bound.kind) || scope === 'leads' && bound.run && !['hr','jobs'].includes(bound.kind)) throw Error('Invalid session scope.');
   if (bound.jobCompany!==undefined && !jobCompanyEvidence(bound.jobCompany)) throw Error('Invalid job company evidence.');
   if (!Number.isInteger(bound.tabId) || bound.tabId < 0 || typeof bound.documentId !== 'string' || !bound.documentId || !local(bound.url) ||
       !Array.isArray(bound.allowed) || bound.allowed.length > 40 || bound.allowed.some(url => !profile(url)) || bound.kind && !['profiles','jobs','hr'].includes(bound.kind) ||
@@ -404,7 +446,7 @@ function connectApp(sender, pair=false) {
   const result=connections.catch(()=>{}).then(connect);
   connections=result;return result;
 }
-chrome.action.onClicked.addListener(async tab => {
+async function pair(tab) {
   try {
     await ready; await writes.catch(() => {});
     if (!local(tab.url)) { await chrome.action.setBadgeText({text: connection ? 'ON' : ''}); return; }
@@ -415,8 +457,8 @@ chrome.action.onClicked.addListener(async tab => {
     stateFailed = false;
     await connectApp({id:chrome.runtime.id,tab,frameId:0,documentId,url:tab.url},true);
   } catch { await chrome.action.setBadgeText({text:'APP'}); }
-});
-chrome.tabs.onRemoved.addListener(id => event(async () => {
+}
+function removed(id) { return event(async () => {
   const appRemoved=connection?.tabId === id, hrRemoved=appRemoved && connection.kind === 'hr';
   const changed=appRemoved || owned.has(id) || viewed.has(id);
   if (appRemoved) connection=null;
@@ -424,8 +466,8 @@ chrome.tabs.onRemoved.addListener(id => event(async () => {
   viewed.delete(id);
   if (hrRemoved) await closeHROwnedTabs();
   return changed;
-}));
-chrome.tabs.onUpdated.addListener((id, change) => event(async () => {
+}); }
+function updated(id,change) { return event(async () => {
   let changed = false;
   if (id === connection?.tabId && change.status === 'loading') {
     const wasHR=connection.kind === 'hr'; connection = null; changed = true;
@@ -443,8 +485,8 @@ chrome.tabs.onUpdated.addListener((id, change) => event(async () => {
     } catch { /* A closed/replaced document will connect on its next load. */ }
   }
   return changed;
-}));
-chrome.tabs.onActivated.addListener(info => event(() => protectViewed(info.tabId)));
+}); }
+function activated(info) { return event(() => protectViewed(info.tabId)); }
 async function readJobTab(bound, id, expected, companyOnly=false) {
   const verify = tab => {
     if(jobCapture?.cancelled)throw safeError('The job company read was stopped.','HR_STOPPED');
@@ -564,7 +606,7 @@ async function handle(message, sender) {
     if(jobCapture?.bound!==connection || jobCapture.operation!==args.operation_id)return false;
     jobCapture.cancelled=true;return true;
   }
-  if (message.action === 'jobStatus') return {connected:true,job_read:true,job_search:true,job_search_revision:1,company_hr_revision:1,hr_company_identity_revision:1,hr_company_filter_revision:1,hr_company_source_revision:1,hr_resilience_revision:1,hr_layout_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_keyword_revision:1,people_country_revision:1,people_results_revision:1,profile_browsing_revision:1,companion_update_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
+  if (message.action === 'jobStatus') return {connected:true,job_read:true,job_search:true,job_search_revision:1,company_hr_revision:1,hr_company_identity_revision:1,hr_company_filter_revision:1,hr_company_source_revision:1,hr_resilience_revision:1,hr_layout_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_keyword_revision:1,people_country_revision:1,people_results_revision:1,profile_browsing_revision:1,concurrent_scans_revision:1,companion_update_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
   if (message.action === 'hrBegin') {
     const bound = connection;
     if (!/^[a-f0-9]{32}$/.test(args.run_id || '') || !hrCompanyURL(args.company_url) || typeof args.company !== 'string' || !args.company.trim() || args.company.length > 200 ||
@@ -877,6 +919,10 @@ async function handle(message, sender) {
       const resolve=value=>{
         const key=hrSearchKey(value);if(key===hr.key || key==='https://www.linkedin.com/search/results/people/') return null;
         let ids;try { ids=JSON.parse(new URL(value).searchParams.get('currentCompany')); } catch {}
+        const pendingExpected=new URL(hr.key);pendingExpected.searchParams.set('currentCompany',JSON.stringify(ids));
+        // Only passive waiting for still-known group members is allowed. The
+        // final employer must remain singular before any people can be read.
+        if(Array.isArray(ids) && ids.length>1 && new Set(ids).size===ids.length && ids.every(id=>hr.company_group.includes(id)) && key===hrSearchKey(pendingExpected.href))return null;
         if (!Array.isArray(ids) || ids.length!==1 || !hr.company_group.includes(ids[0]) || hr.expected_company_id && ids[0]!==hr.expected_company_id) throw safeError('The grouped company selection changed. Start a new scan.','HR_COMPANY_MISMATCH');
         const expected=new URL(hr.key);expected.searchParams.set('currentCompany',JSON.stringify(ids));
         if(key!==hrSearchKey(expected.href)) throw safeError('The company search filters changed. Start a new scan.');
@@ -956,6 +1002,7 @@ async function handle(message, sender) {
   if (!linkedin(tab.url) && !((owned.has(tab.id) || viewed.has(tab.id)) && expectedLoading(tab,owned.get(tab.id) || viewed.get(tab.id))) && !(tab.id === connection.source && pendingPeopleSearch(tab))) throw Error('The selected tab left LinkedIn.');
   if (tab.id !== connection.source && !owned.has(tab.id) && !viewed.has(tab.id)) throw safeError('The scan profile tab changed or closed. Your candidate list is kept.');
   if (message.action === 'navigate') {
+    if(args.fresh!==undefined && typeof args.fresh!=='boolean')throw safeError('The profile navigation request is invalid.');
     const search = args.url?.startsWith('https://www.linkedin.com/search/results/people/?');
     if ((!search && !profile(args.url)) || (search && tab.id !== connection.source) ||
         (profile(args.url) && (!owned.has(tab.id) && !viewed.has(tab.id) || !connection.allowed.has(args.url)))) throw Error('This navigation is not supported.');
@@ -964,6 +1011,7 @@ async function handle(message, sender) {
     const replacement = async () => {
       // The viewed page is released before opening another exact observed URL.
       // It can never be closed by a suspended or older worker afterward.
+      if(args.fresh===true)await closeOwned(tab.id,previous);
       owned.delete(tab.id);viewed.delete(tab.id);await persist();live(bound,args.run_id);
       const created=await chrome.tabs.create({url:args.url,active:false});owned.set(created.id,args.url);
       try {await persist();live(bound,args.run_id);return {tab_id:created.id};}
@@ -971,7 +1019,7 @@ async function handle(message, sender) {
     };
     if (previous) {
       const current=await ownedTab(tab.id);live(bound,args.run_id);
-      if (viewed.has(tab.id) || current.active) return replacement();
+      if (args.fresh===true || viewed.has(tab.id) || current.active) return replacement();
       owned.set(tab.id,args.url);
     }
     if (search) {
@@ -1042,12 +1090,93 @@ async function handle(message, sender) {
   }
   throw Error('Unsupported browser action.');
 }
-chrome.runtime.onMessage.addListener((message, sender, reply) => {
-  if (message?.kind === 'sourcer_job_pick') {
-    pickJob(message,sender).then(result => reply({result}),error => reply({error:error.cvstudioSafe ? error.message : 'The ad could not be added. Reconnect the companion and try again.'}));
-    return true;
+return {ready,handle,pickJob,pair,connectApp,removed,updated,activated,publicError,
+  binding:()=>connection, busy:()=>!!connection?.run || !!jobCapture,
+  hasOwned:()=>!!owned.size,
+  owns:id=>!!connection?.run && connection.source===id || owned.has(id) || viewed.has(id)};
+}
+
+sessions.set('profiles',createCompanionSession('profiles'));
+sessions.set('leads',createCompanionSession('leads'));
+const allReady=Promise.all([...sessions.values()].map(session=>session.ready));
+let bindingWrites=Promise.resolve();
+function connectSessions(sender) {
+  const work=async()=>{
+    await allReady;
+    if(updatePending)throw sessionError('The companion is updating. Refresh CV Studio and LinkedIn when ready.');
+    for(const session of sessions.values()){
+      const bound=session.binding();
+      if(session.busy() && (bound?.tabId!==sender.tab?.id || bound?.documentId!==sender.documentId))throw sessionError('Finish the companion action in the other CV Studio tab first.');
+    }
+    for(const session of sessions.values())await session.connectApp(sender);
+  };
+  const result=bindingWrites.catch(()=>{}).then(work);bindingWrites=result;return result;
+}
+nativeChrome.action.onClicked.addListener(async tab=>{
+  await allReady;
+  if(updatePending || [...sessions.values()].some(session=>session.busy())){await nativeChrome.action.setBadgeText({text:'ON'});return;}
+  for(const session of sessions.values())await session.pair(tab);
+});
+for(const [event,method] of [['onRemoved','removed'],['onUpdated','updated'],['onActivated','activated']]){
+  nativeChrome.tabs[event].addListener((...args)=>Promise.all([...sessions].map(async([scope,session])=>{
+    await session[method](...args);releaseLeases(scope);
+  })));
+}
+const leadActions=new Set(['hrBegin','hrRead','hrNext','hrJoined','hrJoinedClose','jobRead','jobFromLink','jobReadCancel','jobTabs','jobSearchTabs','jobSearchBegin']);
+function messageScope(message) {
+  if(message.scope!==undefined){
+    if(!sessions.has(message.scope))throw sessionError('Refresh CV Studio to use the current companion.');
+    if(message.scope==='profiles' && leadActions.has(message.action) || message.scope==='leads' && ['begin','openPeopleSearch','create','navigate','tabs'].includes(message.action))throw sessionError('This browser action belongs to the other module.');
+    return message.scope;
   }
-  if (message?.kind !== 'sourcer') return false;
-  handle(message, sender).then(result => reply({result}), error => reply(publicError(error)));
-  return true;
+  if(leadActions.has(message.action))return 'leads';
+  if(['end','read','create','navigate'].includes(message.action)){
+    const matches=[...sessions].filter(([,session])=>session.binding()?.run && session.binding().run===message.args?.run_id);
+    if(matches.length>1)throw sessionError('The browser run could not be identified. Stop and start it again.');
+    if(matches.length)return matches[0][0];
+  }
+  return 'profiles';
+}
+async function dispatch(message,sender) {
+  await allReady;
+  if(message.action==='connect'){await connectSessions(sender);return {connected:true,version:nativeChrome.runtime.getManifest().version};}
+  const scope=messageScope(message),session=sessions.get(scope);
+  if(updatePending && !['jobStatus','end','jobReadCancel'].includes(message.action))throw sessionError('The companion is updating. Refresh CV Studio and LinkedIn when ready.');
+  for(const peer of sessions.values()){
+    const bound=peer.binding();
+    if(peer.busy() && (bound?.tabId!==sender.tab?.id || bound?.documentId!==sender.documentId))throw sessionError('Finish the companion action in the other CV Studio tab first.');
+  }
+  if(message.action==='reloadCompanion'){
+    if([...sessions.values()].some(s=>s.busy() || s.hasOwned()))throw sessionError('Finish or stop both scans before updating the companion.');
+    updatePending=true;
+  }
+  if(['begin','hrBegin','jobSearchBegin'].includes(message.action) && [...sessions].some(([name,s])=>name!==scope && s.binding()?.run===message.args?.run_id && s.binding()?.run))throw sessionError('A scan is already using this run identifier. Start again.');
+  // Old app pages retain the single-run contract. Only the current scoped UI
+  // may start a second session; it first checks the capability before spending.
+  if(message.scope===undefined && !['jobStatus','tabs','jobTabs','jobSearchTabs','end','jobReadCancel'].includes(message.action) && [...sessions].some(([name,s])=>name!==scope && s.busy()))throw sessionError('Update CV Studio before running both scans together.');
+  const token=(inFlight.get(scope)||0)+1;inFlight.set(scope,token);
+  let reloading=false;
+  try{
+    if(message.action==='begin' || message.action==='jobSearchBegin' && message.args?.use_open){
+      const id=message.args?.source_tab_id;if(Number.isInteger(id)){assertSessionTab(scope,id);tabLeases.set(id,scope);}
+    }
+    const result=await session.handle(message,sender);
+    if(message.action==='reloadCompanion')reloading=result?.reloading===true;
+    if(message.action==='jobStatus')return {...result,busy:message.scope===undefined?[...sessions.values()].some(s=>s.busy()):result.busy,other_busy:[...sessions].some(([name,s])=>name!==scope&&s.busy())};
+    return result;
+  }finally{inFlight.set(scope,inFlight.get(scope)-1);releaseLeases(scope);if(message.action==='reloadCompanion' && !reloading)updatePending=false;}
+}
+nativeChrome.runtime.onMessage.addListener((message,sender,reply)=>{
+  const errors=sessions.get('profiles').publicError;
+  if(message?.kind==='sourcer_job_pick'){
+    const scope='leads';inFlight.set(scope,(inFlight.get(scope)||0)+1);
+    allReady.then(()=>{
+      if(updatePending)throw sessionError('The companion is updating. Refresh CV Studio and LinkedIn when ready.');
+      const bound=sessions.get(scope).binding();
+      if([...sessions.values()].some(s=>s.busy() && (s.binding()?.tabId!==bound?.tabId || s.binding()?.documentId!==bound?.documentId)))throw sessionError('Open Job Leads in the CV Studio tab that is running the scan.');
+      return sessions.get(scope).pickJob(message,sender);
+    }).then(result=>reply({result}),error=>reply(errors(error))).finally(()=>{inFlight.set(scope,inFlight.get(scope)-1);releaseLeases(scope);});return true;
+  }
+  if(message?.kind!=='sourcer')return false;
+  dispatch(message,sender).then(result=>reply({result}),error=>reply(errors(error)));return true;
 });

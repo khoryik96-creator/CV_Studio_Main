@@ -13,6 +13,7 @@ function groupFixture(country='') {
         if(f.state.changedKeywords)url.searchParams.set('keywords','unrelated');
         tab.url=url.href;
         if(f.state.intermediate){f.state.finalURL=tab.url;tab.url='https://www.linkedin.com/search/results/people/?origin=FACETED_SEARCH';}
+        if(f.state.intermediateGroup){f.state.finalURL=tab.url;url.searchParams.set('currentCompany',JSON.stringify(f.state.intermediateGroup));tab.url=url.href;}
       }
       return [{result:true}];
     }
@@ -39,5 +40,15 @@ function groupFixture(country='') {
   assert.equal(delayed.state.hrReads,0);delayed.tabs.get(source).url=delayed.state.finalURL;
   let snapshot;for(let i=0;i<4;i++){snapshot=await delayed.readHR(source);if(snapshot.result&&!snapshot.result.loading)break;}
   assert.equal(snapshot.result.company_id,'456');
+  for(const ids of [['789','123','456'],['456','123']]){
+    const f=groupFixture();f.state.intermediateGroup=ids;await f.arm();const source=(await f.beginHR()).result.tab_id;
+    for(let i=0;i<7;i++){const response=await f.readHR(source);assert(!response.error);assert(response.result.loading)}
+    assert.equal(f.state.hrReads,0);const mutations=f.state.hrClicks.length;f.boot();assert((await f.readHR(source)).result.loading);assert.equal(f.state.hrClicks.length,mutations);
+    f.tabs.get(source).url=f.state.finalURL;await f.readHR(source);const result=await f.readHR(source);assert.equal(result.result.company_id,'456');assert.equal(f.state.hrReads,1);
+  }
+  for(const ids of [['456','999'],['456','456']]){
+    const f=groupFixture();f.state.intermediateGroup=ids;await f.arm();const source=(await f.beginHR()).result.tab_id;let response;
+    for(let i=0;i<7;i++){response=await f.readHR(source);if(response.error)break}assert(response.error);assert.equal(f.state.hrReads,0);
+  }
   console.log('Company group worker: native-only selection, non-first exact ID, country gates, suspension, transient URLs and no premature profile reads passed.');
 })().catch(error=>{console.error(error);process.exitCode=1});

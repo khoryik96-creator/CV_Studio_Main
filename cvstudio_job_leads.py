@@ -56,10 +56,7 @@ def rich_text(nodes):
     return ''.join(item['text'] if 'text' in item else rich_text(item['children']) for item in nodes)
 
 
-def format_description(description, source):
-    """Keep typography only when it describes exactly the retained plain text."""
-    if not isinstance(description, str) or len(description) > 20000 or not isinstance(source, str) or len(source) > 80000:
-        raise JobLeadsError("The job description is too large or invalid.")
+def _description_tree(source):
     class Reader(HTMLParser):
         def __init__(self):
             super().__init__(convert_charrefs=True)
@@ -101,6 +98,19 @@ def format_description(description, source):
             tag = item['tag']
             if tag == 'span':
                 result.extend(children)
+            elif tag in {'ul','ol'}:
+                normalized = []
+                for child in children:
+                    if child.get('tag') == 'li' and not rich_text([child]).strip():
+                        continue
+                    # Some ads wrap the actual list in an empty outer list item.
+                    # An orphan list of the same kind adds no meaningful level.
+                    if child.get('tag') == tag:
+                        normalized.extend(child['children'])
+                    else:
+                        normalized.append(child)
+                if normalized:
+                    result.append({'tag':tag,'children':normalized})
             elif tag in {'div','p'}:
                 # Layout wrappers are transparent around real paragraphs and
                 # lists. Only their own inline runs become paragraphs.
@@ -119,10 +129,17 @@ def format_description(description, source):
             else:
                 result.append({'tag':tag,'children':children})
         return result
+    parser = Reader()
+    parser.feed(source)
+    return normalize(parser.root)
+
+
+def format_description(description, source):
+    """Keep typography only when it describes exactly the retained plain text."""
+    if not isinstance(description, str) or len(description) > 20000 or not isinstance(source, str) or len(source) > 80000:
+        raise JobLeadsError("The job description is too large or invalid.")
     try:
-        parser = Reader()
-        parser.feed(source)
-        value = normalize(parser.root)
+        value = _description_tree(source)
         target = re.sub(r'\s+', '', description)
         actual = re.sub(r'\s+', '', rich_text(value))
         if actual != target:
@@ -158,6 +175,22 @@ def format_description(description, source):
         return value if re.sub(r'\s+', '', rich_text(value)) == target else []
     except (JobLeadsError, RecursionError):
         return []  # Plain text remains available when markup cannot be retained.
+
+
+def render_description_markup(source):
+    """Read-only presentation for ads stored as literal HTML; never execute it."""
+    if not isinstance(source,str) or len(source)>20000 or not re.search(r'<(?:p|strong|b|em|i|ul|ol|li|h[1-6]|br|blockquote)(?:\s[^>]*|\s*/?)>',source,re.I):
+        raise JobLeadsError("The job content is not supported markup.")
+    try:
+        value = clean_rich(_description_tree(source))
+        def plain(items):
+            return ''.join(node['text'] if 'text' in node else ('\n' if node['tag']=='br' else plain(node['children'])+('\n' if node['tag'] in {'p','h3','h4','ul','ol','li','blockquote'} else '')) for node in items)
+        words = re.sub(r'\n{3,}','\n\n',plain(value)).strip()
+        if len(words)>20000:
+            raise JobLeadsError("The formatted job description is too long.")
+        return {'description':words,'description_rich':value}
+    except RecursionError:
+        raise JobLeadsError("The formatted job description is too complex.") from None
 
 
 class JobLeadsError(ValueError):
