@@ -4,6 +4,16 @@
 
 ## Release state
 
+- v24.6.513 is a local grouped-company Apply correction on merged v511
+  `44f1887`. Native Show results may retain keywords while omitting the company
+  during navigation. Only that same-other-filter intermediate can wait after
+  confirmed Apply; no profile reads, click replay or deadline extension occurs.
+  Final company singleton/group/saved ID, source/country, concurrent-session
+  isolation and Stop gates remain. Old companions fail HR preflight. Native
+  Shiseido inspection and synthetic worker/reader regressions are in the v513
+  QA report. No route/schema/permission/provider/owner-update/publication/merge;
+  separate v512 JobAdder PR #257 is excluded.
+
 - v24.6.511 is a local concurrent companion/ad-content correction on merged
   v509 `7a25051`. Profiles/leads use separate bounded run state, ownership,
   Stop and snapshots, with shared authenticated-document/update gates and
