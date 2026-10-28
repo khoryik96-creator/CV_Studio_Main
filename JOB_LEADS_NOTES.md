@@ -1,5 +1,29 @@
 # Job Leads module
 
+## Native Show results transition (v24.6.513)
+
+Shiseido's retained search and exact ad employer confirmed the correct company;
+the saved ad had no previous HR identity. The inspected native Show results
+anchor retained the HR keywords/origin but omitted `currentCompany`, while the
+settled search had the correct single company. The v511 resolver rejected that
+intermediate link as a company change because only bare filterless URLs and
+known multi-ID subsets were allowed to wait.
+
+Only in `company_wait`, after the native Apply was confirmed, a URL with no
+`currentCompany` may now wait when every other canonical filter matches the
+original expected search. The original search key remains authoritative.
+No profiles are read, allowed links granted, filters clicked again or limits
+reset. The final search still needs one observed group member, the saved ID
+when present and the same other filters before country selection and results.
+Empty/duplicate company parameters, foreign IDs, different keywords/countries,
+other paths, access checks, deadline and Stop still reject. Committed and
+pending transitions survive worker suspension without replay.
+
+`hr_apply_transition_revision:1` is required before individual/bulk HR work,
+with update guidance for older companions. No storage field, HTTP route,
+permission, provider call, record edit or schema change is needed. The fix is
+general to the native transition; no company name or ID is hard-coded.
+
 ## Concurrent Sourcer scans and rich ad repair (v24.6.511)
 
 Job discovery, direct captures and HR scans use the `leads` companion scope;

@@ -1,5 +1,37 @@
 # LinkedIn Sourcer module
 
+## Source-bound evidence selection (v24.6.514)
+
+An AI-written quotation that is not a normalized substring of its own observed
+profile causes the existing unsupported-match error. Raw provider/profile
+payloads are not logged; the supplied request ID had no retained redacted entry,
+so no exact rejected wording was recovered or assumed to be a harmless edit.
+
+New review prompts ask for `evidence_refs` instead of typed quotations. Each
+clean profile's original text is split in order into non-empty exact passages
+of at most 250 characters, preferring a word boundary in the latter half. All
+non-whitespace source characters remain in order; full text is not duplicated
+beside the passages. Labels include the profile ID, a fresh per-request nonce
+and a bounded passage index. Up to four labels are selected per candidate.
+The app resolves them to the original source strings, then runs the unchanged
+strict quotation-grounding, identity, score, unknowns and candidate-count checks.
+
+The reference schema retains score/unknown bounds and per-stage candidate caps.
+Unknown, cross-profile, prior-request, malformed and mixed quote/reference
+outputs fail with existing typed response-error/accounting behavior. Legacy
+quote-only responses remain supported through the original exact grounding
+check. No fuzzy matching, invented quote repair, unchecked claims, silent
+candidate filtering, partial acceptance or automatic paid replay is introduced.
+Run state/expiry/Stop/request limits and source provenance remain unchanged.
+
+Client requests still send observed profile text; client results/export still
+receive ordinary supporting quotations, not internal labels. References exist
+only in the current review's memory and provider input/output; they never enter
+durable records, summaries, diagnostics or result exports. There is no new
+provider request; input/output token usage can change with the new representation
+and remains covered by existing estimates, guardrails and accounting. The
+native route/Agent test uses a synthetic provider, never a real key or paid call.
+
 ## Concurrent scans and fresh profile lookups (v24.6.511)
 
 One authenticated app document can run one profiles session and one Job Leads

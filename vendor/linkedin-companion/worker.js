@@ -606,7 +606,7 @@ async function handle(message, sender) {
     if(jobCapture?.bound!==connection || jobCapture.operation!==args.operation_id)return false;
     jobCapture.cancelled=true;return true;
   }
-  if (message.action === 'jobStatus') return {connected:true,job_read:true,job_search:true,job_search_revision:1,company_hr_revision:1,hr_company_identity_revision:1,hr_company_filter_revision:1,hr_company_source_revision:1,hr_resilience_revision:1,hr_layout_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_keyword_revision:1,people_country_revision:1,people_results_revision:1,profile_browsing_revision:1,concurrent_scans_revision:1,companion_update_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
+  if (message.action === 'jobStatus') return {connected:true,job_read:true,job_search:true,job_search_revision:1,company_hr_revision:1,hr_company_identity_revision:1,hr_company_filter_revision:1,hr_company_source_revision:1,hr_resilience_revision:1,hr_layout_revision:1,hr_apply_transition_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_keyword_revision:1,people_country_revision:1,people_results_revision:1,profile_browsing_revision:1,concurrent_scans_revision:1,companion_update_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
   if (message.action === 'hrBegin') {
     const bound = connection;
     if (!/^[a-f0-9]{32}$/.test(args.run_id || '') || !hrCompanyURL(args.company_url) || typeof args.company !== 'string' || !args.company.trim() || args.company.length > 200 ||
@@ -918,6 +918,11 @@ async function handle(message, sender) {
     if (hr.stage==='company_wait') {
       const resolve=value=>{
         const key=hrSearchKey(value);if(key===hr.key || key==='https://www.linkedin.com/search/results/people/') return null;
+        // LinkedIn's native Show results link can retain the keywords while
+        // temporarily omitting currentCompany. Wait for the confirmed company;
+        // this intermediate page must never authorize any profile reads.
+        const withoutCompany=new URL(hr.key);withoutCompany.searchParams.delete('currentCompany');
+        if(!new URL(value).searchParams.has('currentCompany') && key===hrSearchKey(withoutCompany.href))return null;
         let ids;try { ids=JSON.parse(new URL(value).searchParams.get('currentCompany')); } catch {}
         const pendingExpected=new URL(hr.key);pendingExpected.searchParams.set('currentCompany',JSON.stringify(ids));
         // Only passive waiting for still-known group members is allowed. The

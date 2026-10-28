@@ -21,7 +21,8 @@ function groupFixture(country='') {
   };
   return f;
 }
-(async()=>{
+module.exports={groupFixture};
+if(require.main===module)(async()=>{
   for(const country of ['', 'Malaysia']) {
     const f=groupFixture(country);await f.arm();const source=(await f.beginHR()).result.tab_id;
     let result;for(let i=0;i<16;i++){f.boot();result=await f.readHR(source);assert(!result.error,result.error);if(!result.result.loading)break;}
