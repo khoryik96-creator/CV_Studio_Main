@@ -9,11 +9,13 @@ function hrFixture(){
     const {action,args}=message;
     if(action==='jobStatus'){reply({connected:true,company_hr_revision:f.state.oldCompanion?0:1,hr_company_identity_revision:f.state.oldCompanyIdentity?0:1,hr_company_filter_revision:f.state.oldGroupFilter?0:1,hr_company_source_revision:f.state.oldCompanySource?0:1,hr_resilience_revision:f.state.oldResilience?0:1,hr_layout_revision:f.state.oldLayout?0:1,hr_apply_transition_revision:f.state.oldApplyTransition?0:1,concurrent_scans_revision:f.state.oldConcurrent?0:1,profile_browsing_revision:f.state.oldBrowsing?0:1,hr_joined_revision:1,hr_joined_loading_revision:f.state.oldJoinedLoading?0:1,hr_employment_revision:f.state.oldEmployment?0:1,hr_keyword_revision:f.state.oldKeywords?0:1,busy:!!f.state.hrBusy});return true;}
     if(action==='hrJoined'){
+      f.state.joinedCalls=(f.state.joinedCalls||0)+1;
+      if(f.state.joinedNavigationWaits>0){f.state.joinedNavigationWaits--;reply({loading:true,wait_stage:'profile_navigation'});return true;}
       const value=f.state.joinedLoading?{loading:true}:{url:args.url,joined:f.state.joined ?? '2020-06',...f.state.employment};
-      if(f.state.holdJoined)f.state.releaseJoined=()=>reply(value);else reply(value);
+      if(f.state.holdJoined && (!f.state.holdJoinedSecond || f.state.joinedCalls===2))f.state.releaseJoined=()=>reply(value);else reply(value);
       return true;
     }
-    if(action==='hrJoinedClose'){reply(true);return true;}
+    if(action==='hrJoinedClose'){if(f.state.holdDateCleanup)f.state.releaseDateCleanup=()=>reply(true);else reply(true);return true;}
     if(action==='jobFromLink'){if(f.state.holdCapture){f.state.releaseCapture=()=>reply({...f.state.records[0],company_url:companyURL,...f.state.companyCapture});return true;}if(f.state.captureError){reply(null,f.state.captureError);return true;}reply({...f.state.records[0],company_url:companyURL,...f.state.companyCapture});return true;}
     if(action==='jobReadCancel'){reply(true);return true;}
     if(action==='hrBegin'){f.state.hrArgs=args;f.state.hrBegins=(f.state.hrBegins||0)+1;reply({tab_id:30});return true;}
@@ -25,6 +27,7 @@ function hrFixture(){
       if(f.state.waitStage){reply({loading:true,wait_stage:f.state.waitStage});return true;}
       if(f.state.loading&&f.state.hrSeen===1){reply({loading:true});return true;}
       const snapshot={company_id:'123',source_url:'https://www.linkedin.com/search/results/people/?currentCompany=%5B%22123%22%5D'+(f.state.hrArgs.country?'&geoUrn=%5B%22106808692%22%5D':''),people:[profile],signature:'page'+f.state.hrPage,hasNext:f.state.hrPage===0,empty:false};
+      if(f.state.twoPeople)snapshot.people.push({...profile,name:'Second Person',url:profile.url+'-2'});
       if(f.state.queryCase){
         snapshot.query_index=f.state.hrPage;snapshot.query_count=3;snapshot.signature=f.state.hrPage+':same-person';snapshot.hasNext=f.state.hrPage<2;
         if(f.state.hrPage===0){snapshot.people=[];snapshot.signature='0:';}

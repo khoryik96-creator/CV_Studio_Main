@@ -12,7 +12,7 @@ function loadOnSecondRead(f,id){
   assert.equal((await first.read()).result?.loading,true,'same-source loading between initial metadata and joining verification waits');
   assert.equal(first.f.state.created.length,1,'no profile opens while source readiness is unknown');
   assert.equal(first.f.state.session.cvstudioLinkedinLeadsSessionV1.connection.hr.joined_count||0,0);
-  restore();first.f.boot();assert((await first.read()).result.loading);
+  restore();first.f.boot();assert.equal((await first.read()).result.wait_stage,'profile_navigation');
   assert.equal((await first.read()).result.joined,'2020-06');assert.equal(first.f.state.created.length,2);
 
   const injection=await ready();await injection.read();

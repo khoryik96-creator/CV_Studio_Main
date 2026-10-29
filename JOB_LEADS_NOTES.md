@@ -1,5 +1,30 @@
 # Job Leads module
 
+## Resuming HR batches and showing dates during a scan (v24.6.519)
+
+After an interrupted/failed batch, **Resume unfinished ads** retries failed or
+stopped ads first, followed by unstarted ads. Confirmed unchanged saved ads are
+skipped, including after refreshing and selecting the same ads. A changed saved
+ad revision needs a fresh scan after unfinished ads. Different selections or
+settings, or explicitly scanning a fully completed batch, start a new batch.
+No work starts on reload. A small browser checkpoint contains only opaque ad
+IDs, revisions, outcomes and scan settings, never people, emails, URLs or partial
+results. Unavailable/corrupt browser storage cannot silently skip ads; same-page
+progress remains usable if writing the browser checkpoint fails.
+
+Dates now render immediately when validated, before profile cleanup or the next
+person/page. Pending/interrupted lookups say Checking / Not checked rather than
+prematurely claiming Not available. Transient labels do not enter saved HR data.
+There are at most 60 navigation waits, 20 Experience waits and 80 total polls per
+optional lookup; the existing four-scroll, exact-source/profile/company, viewed-
+tab, Stop and scan-deadline guards remain. No inferred dates or automatic replay.
+
+The contact dialog adds **Open in JobAdder** after successful creation or safe
+confirmation of a prior create. Its ID and regional hostname come from the
+existing guarded server result/helper. Unconfirmed results and new reviews hide
+old links; the browser rejects non-JobAdder URLs and mismatched IDs. Opening the
+link is an explicit click; no extra API/paid call or automatic navigation occurs.
+
 ## HR employment ranges (v24.6.518)
 
 HR cards show **Employment: Oct 2026 to Present**, or an observed completed

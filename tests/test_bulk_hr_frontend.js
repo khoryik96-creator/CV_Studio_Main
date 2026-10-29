@@ -40,7 +40,8 @@ function bulkFixture(options={}){
   return f;
 }
 async function held(f){for(let i=0;i<40&&!f.state.release;i++)await new Promise(r=>setTimeout(r,0));assert(f.state.release,'a scan is in flight');}
-(async()=>{
+module.exports={bulkFixture,held};
+if(require.main===module)(async()=>{
   const f=bulkFixture({preferences:new Map([[preference,JSON.stringify({countryMode:'specific',country:'Malaysia',pages:10})]])});await f.init();f.select();
   assert.equal(typeof f.el('BulkHRStart').handlers.click,'function','selected ads have a bulk HR action');
   assert.equal(f.el('BulkHRCountry').value,'Malaysia');assert.equal(f.el('BulkHRPages').value,'10');
