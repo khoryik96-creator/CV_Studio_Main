@@ -177,7 +177,7 @@ def module(tmp_path):
 
 def test_existing_119_routes_and_five_guards_remain_exact(module):
     from cvstudio_architecture import _route_contract
-    previous = tuple(row for row in _route_contract(module.app) if row["endpoint"] not in {"job_leads", "email_verifier", "apollo_connection"})
+    previous = tuple(row for row in _route_contract(module.app) if row["endpoint"] not in {"job_leads", "email_verifier", "apollo_connection", "jobadder_contact_actions"})
     assert len(previous) == 119
     assert hashlib.sha256(json.dumps(previous,ensure_ascii=True,sort_keys=True,separators=(',',':')).encode()).hexdigest() == "da29d6476a2dc929fc3b4f06faae8bdffc7ce69261f58901b90de46d0b857e31"
     assert [fn.__name__ for fn in module.app.before_request_funcs[None]] == ["_assign_cvstudio_request_id","_reject_declared_oversize_request","_reject_non_local_host_header","_require_ai_spend_browser_session","_reject_cross_site_unsafe_request"]

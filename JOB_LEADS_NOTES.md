@@ -1,5 +1,38 @@
 # Job Leads module
 
+## Create company contacts in JobAdder (v24.6.517)
+
+Unlocked contacts offers **Create in JobAdder**. The owner explicitly chooses
+an existing JobAdder company; this workflow cannot create companies. Search,
+select the company, check first/last name and position, then Review contact and
+Create contact. The unlocked email is authoritative and the observed LinkedIn
+URL is sent as `social.linkedin`. The scan-country label is never sent as an
+address. Existing JobAdder sign-in/permissions apply; no Apollo lookup is made.
+
+The official public v2 OpenAPI was read without credentials: GET companies
+supports Name; GET contacts supports Email; POST contacts accepts the reviewed
+AddContactCommand fields and reports email duplicates with409. No duplicate
+override is used. Exact-email duplicate checks happen during review and again
+immediately before creation. Existing contacts under another company are shown
+without updating/moving them. Failed/truncated duplicate reads block creation.
+
+The review nonce binds the payload, selected company and current connection,
+expires after10 minutes, and becomes unusable when fields/account change.
+Protected operation metadata is persisted before POST; timeout/uncertainty can
+only be reconciled with a safe lookup, never an automatic POST replay. The POST
+sets `safe_to_retry=False`, `retries=0`, `refresh_on_401=False`. A lost result
+save leaves the pending marker intact. Duplicate clicks are serialized. The
+critical-write guard prevents sign-out/account replacement during the request.
+All business data/markers stay protected; no provider response content enters
+errors/logs. History is bounded at5,000 operations. No candidate, ad, HR evidence
+or email-verifier state is rewritten. One additive local POST route preserves
+the122 previous routes exactly and the five global request guards.
+
+Local tests and the actual native app use synthetic JobAdder transport. No real
+JobAdder contact was created; account-specific required/custom-field validation
+still requires owner-driven acceptance. The installed owner app is separate
+from the isolated preview. Held PR #257 is not included.
+
 ## Contact view visibility (v24.6.516)
 
 The Contacts panel has the shared `card` class, whose explicit flex display

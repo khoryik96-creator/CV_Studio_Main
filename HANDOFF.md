@@ -7,7 +7,28 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current source checkpoint: v24.6.516** on
+**Current source checkpoint: v24.6.517 (local, unmerged)** on
+`codex/v24.6.517-jobadder-contacts`, from merged v516 `fad1a39` / PR #264.
+The owner requests creating JobAdder company contacts from unlocked emails and
+explicitly chooses existing-company selection only. The contacts table opens
+a review dialog with source email/LinkedIn and editable name/position. Company
+selection and exact-email duplicate checks precede a short-lived payload/account-
+bound review token. A protected non-replay marker precedes a single contact
+POST with transport retry and 401 replay disabled. Ambiguous results permit
+only safe lookup recovery, including restart. No duplicate override, company
+creation, candidate write or outreach is added. Opaque archive keys remain
+in request/page memory only. One additive paired/critical-write-guarded
+`POST /jobadder/contact_actions` seals 123 routes while preserving the prior
+122-route digest and all five guards. Protected operation metadata has its
+own vault; no credential/SQLite migration. See Job Leads notes and v517 QA.
+The owner also requests employment month/year ranges; that work is next and
+will retain this checkpoint. No new push/PR/merge or live record test is
+authorized. PR #257 remains on hold. A separately requested owner pull-block
+repair preserved the one-line Apollo edit in stash and its local commit on
+a backup branch, then aligned that checkout cleanly to v516 with the same
+User-Agent already present. No owner server/credential/receipt/data restart.
+
+**Previous source checkpoint: v24.6.516, merged in PR #264** on
 `codex/v24.6.516-contacts-visibility`, from merged v515 `2514d1a` / PR #263.
 The owner authorizes fixing and merging the sole post-merge review finding:
 the global `.card` display rule overrode the Contacts panel's hidden attribute.

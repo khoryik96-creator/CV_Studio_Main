@@ -1691,3 +1691,9 @@
 .job-leads-contact-table td:nth-child(5){white-space:nowrap}
 #jobLeadsApolloContactsSearch{max-width:400px}
 #jobLeadsApolloContactsCount{font-weight:normal;color:var(--text3);margin-left:5px}
+.job-leads-ja-dialog{margin:auto;width:min(540px,calc(100vw - 24px));max-height:90vh;overflow:auto;border:1px solid var(--border);border-radius:12px;padding:20px;background:var(--surface);color:var(--text)}
+.job-leads-ja-dialog::backdrop{background:#102a4366}
+.job-leads-ja-dialog label{display:block;margin:12px 0 5px;font-size:12px;font-weight:600}
+.job-leads-ja-dialog input,.job-leads-ja-dialog select{width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text)}
+.job-leads-ja-dialog p{margin:14px 0}
+.job-leads-ja-dialog [hidden]{display:none}

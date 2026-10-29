@@ -24,7 +24,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.516"
+_INSTALL_RECEIPT_VERSION = "v24.6.517"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -347,7 +347,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.516"
+_CVSTUDIO_VERSION = "v24.6.517"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -1229,6 +1229,7 @@ _AI_SPEND_SESSION_COOKIE = "cvstudio_ai_spend_session"
 _AI_SPEND_SESSION_TOKEN = secrets.token_urlsafe(32)
 _CV_FORMAT_REVIEW_SIGNING_KEY = secrets.token_bytes(32)
 _AI_SPEND_EXACT_PATHS = frozenset({
+    "/jobadder/contact_actions",
     "/apollo",
     "/linkedin-sourcer",
     "/test",
@@ -2713,7 +2714,7 @@ def _ms_outlook_keychain_available():
 # Windows DPAPI, macOS Keychain, or an authenticated machine-bound fallback.
 def _cv_secure_service_name(service):
     clean = re.sub(r"[^a-z0-9_-]", "", str(service or "").lower())
-    if clean not in {"jobadder", "onenote", "ai", "companion", "apollo", "apollo_contacts"}:
+    if clean not in {"jobadder", "onenote", "ai", "companion", "apollo", "apollo_contacts", "jobadder_contacts"}:
         raise ValueError("Unsupported secure-store service")
     return clean
 
@@ -2765,7 +2766,7 @@ def _cv_secure_load(service):
             if isinstance(data, dict):
                 data["_storage"] = "windows_dpapi"
                 return data
-        if sys.platform == "darwin" and name != "apollo_contacts" and _ms_outlook_keychain_available():
+        if sys.platform == "darwin" and name not in {"apollo_contacts", "jobadder_contacts"} and _ms_outlook_keychain_available():
             proc = subprocess.run(["security", "find-generic-password", "-a", _ms_outlook_keychain_account(), "-s", "TheGuoLab.CVStudio." + name, "-w"], capture_output=True, text=True, timeout=10, check=False)
             if proc.returncode == 0:
                 data = json.loads((proc.stdout or "{}").strip())
@@ -2778,7 +2779,7 @@ def _cv_secure_load(service):
             data["_storage"] = "machine_bound_file"
             return data
     except Exception:
-        if name == "apollo_contacts":
+        if name in {"apollo_contacts", "jobadder_contacts"}:
             raise ValueError("Saved contacts could not be read securely") from None
     return {}
 
@@ -2797,7 +2798,7 @@ def _cv_secure_save(service, record):
         try: os.remove(fallback_path)
         except Exception: pass
         return "windows_dpapi"
-    if sys.platform == "darwin" and name != "apollo_contacts" and _ms_outlook_keychain_available():
+    if sys.platform == "darwin" and name not in {"apollo_contacts", "jobadder_contacts"} and _ms_outlook_keychain_available():
         proc = subprocess.run(["security", "add-generic-password", "-U", "-a", _ms_outlook_keychain_account(), "-s", "TheGuoLab.CVStudio." + name, "-w", text], capture_output=True, text=True, timeout=15, check=False)
         if proc.returncode == 0:
             try: os.remove(fallback_path)
@@ -15003,6 +15004,36 @@ def apollo_connection():
 _EMAIL_VERIFIER = EmailVerifier()
 
 
+from cvstudio_jobadder_write import JobAdderContactService, JobAdderContactError
+
+_JOB_LEADS_JA = JobAdderContactService(client=lambda:_JOBADDER_CLIENT,
+    account=lambda:_ja_public_info(), contact=lambda key:_APOLLO.contacts.get(key),
+    load=lambda:_cv_secure_load("jobadder_contacts"), save=lambda data:_cv_secure_save("jobadder_contacts",data))
+
+
+@app.route("/jobadder/contact_actions",methods=["POST"])
+@_ja_critical_write_route
+def jobadder_contact_actions():
+    try:
+        raw=request.stream.read(8193)
+        if len(raw)>8192:
+            raise JobAdderContactError("This contact request is too large.",status=413)
+        try:
+            data=json.loads(raw) if request.is_json else None
+        except (ValueError,UnicodeError):
+            data=None
+        if not isinstance(data,dict):
+            raise JobAdderContactError("Choose a valid contact action.")
+        token=_ja_refresh_access_token(force=False)
+        result=_JOB_LEADS_JA.perform(data,token)
+        response=jsonify(ok=True,**result);response.headers["Cache-Control"]="no-store"
+        return response
+    except (JobAdderContactError,ApolloError) as exc:
+        return _cvstudio_error_payload(exc.code,str(exc),exc.status,retryable=False,action="review_jobadder_contact")
+    except Exception:
+        return _cvstudio_error_payload("JOBADDER_CONTACT_FAILED","The JobAdder contact action could not be confirmed. Check its result before trying again.",503,retryable=False,action="check_jobadder_contact")
+
+
 @app.route("/email-verifier", methods=["POST"])
 def email_verifier():
     if request.content_length and request.content_length > 2048:
@@ -15027,9 +15058,9 @@ def email_verifier():
 
 _CVSTUDIO_ARCHITECTURE = _finalize_modular_monolith_app(
     app,
-    expected_route_count=122,
+    expected_route_count=123,
     expected_route_contract_sha256=(
-        "4cb6b3f8e64b3421c9b9fae819c7fe64e6b05d98db193bb1eb42f8da07aaf600"
+        "31cc98773e93ab23a18259ff73840ccb7a5fbaa5e10d47db3d5683430894798b"
     ),
     expected_before_request_handlers=(
         "_assign_cvstudio_request_id",

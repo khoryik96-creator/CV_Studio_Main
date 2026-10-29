@@ -4,6 +4,7 @@ class Element {
   addEventListener(type,fn){this.handlers[type]=fn} append(...values){this.children.push(...values)}
   appendChild(value){this.children.push(value);return value} replaceChildren(...values){this.children=values}
   setAttribute(name,value){this[name]=value} focus(){} scrollIntoView(){}
+  showModal(){this.open=true} close(){this.open=false}
   querySelectorAll(tag){return this.children.flatMap(child=>[...(child.tagName===tag?[child]:[]),...child.querySelectorAll(tag)])}
   click(){return this.handlers.click?.()} get selectedOptions(){return this.children.filter(row=>row.value===this.value)}
 }
@@ -37,6 +38,7 @@ function fixture(options={}){
     throw Error('Unexpected companion command '+message.action);
   }};
   const fetch=async(endpoint,options)=>{
+    if(endpoint==='/jobadder/contact_actions'){assert(state.onJA,'JobAdder contacts require an explicit fictional fixture');return state.onJA(JSON.parse(options.body));}
     if(endpoint==='/apollo') {
       assert(state.onApollo,'Apollo calls require an explicit test fixture');
       return state.onApollo(options?.body?JSON.parse(options.body):null);
@@ -69,6 +71,7 @@ function fixture(options={}){
     navigator:{clipboard:{writeText:async value=>{state.clipboard=value}}},
     setTimeout:(fn,ms)=>setTimeout(fn,ms===350?0:ms),clearTimeout,Option:function(text,value){const node=new Element('option',text);node.value=value;return node}});
   if(options.emailVerifier) vm.runInContext(fs.readFileSync(path.join(__dirname,'../vendor/cvstudio/email-verifier.js'),'utf8'),context);
+  if(options.jobAdderContacts)vm.runInContext(fs.readFileSync(path.join(__dirname,'../vendor/cvstudio/job-leads-jobadder.js'),'utf8'),context);
   if(options.apollo) {
     window.open=()=>{state.popup={location:{},close(){state.popupClosed=true}};return state.popup};
     vm.runInContext(fs.readFileSync(path.join(__dirname,'../vendor/cvstudio/job-leads-apollo.js'),'utf8'),context);
