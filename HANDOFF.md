@@ -7,17 +7,36 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current local checkpoint: v24.6.520 (not published or merged)** on
-`codex/v24.6.520-contact-assignments`, from merged v519 `37e9461` / PR #266.
-One contact owner and multiple recruiters can be chosen after company search.
-Select all / searchable checkboxes / Clear are compact; successful creation or
-safe confirmation remembers opted-in choices in the protected account-scoped
-store. Review and create revalidate active IDs, and edits invalidate review.
-Directory failures retain the old provider-default creation flow. No live
-JobAdder read/write. Windows 2169 passed,4 skipped,8418 subtests;79 JS and native
-fictional desktop/mobile, version/static/preflight/source-smoke checks pass.
-See the v520 QA report. New owner-requested dashboards/employment follow-up
-will build on this local checkpoint; no publication authorized. PR #257 held.
+**Current local checkpoint: v24.6.521 (not published or merged)** on
+`codex/v24.6.521-people-dashboards`, retaining local v520 `a076a07` contact
+assignment defaults from merged v519 `37e9461` / PR #266. The owner asks for
+all-HR and spreadsheet-style Sourcer dashboards and still-missing employment.
+Job Leads now has an HR people table of saved observations, deduplicated by
+profile/company, with per-person explicit Apollo unlock/recovery and filtered
+Excel. Sourcer assessments from new searches save automatically in a bounded
+protected archive with search filters, notes/revision checks and Excel; valid
+paid results stay usable with a visible warning if archiving fails.
+Reader readiness now waits for partially hydrated Experience metadata and
+other employers arriving first, with a direct heading scroll fallback. Existing
+blank dates can be refreshed individually using Check employment on cards or
+the HR dashboard, without rerunning an HR search. Exact company/profile checks,
+month/year precision, bounded owned inactive tabs and Stop remain. No inferred
+dates, new production route, SQL schema migration, live paid/contact action or
+owner installation/data update. Read-only inspection confirms blank saved
+observations despite later visible dates; historical timing is not proven.
+The local preview on5095 uses a separate read-only snapshot of job ads only;
+no credentials or unlocked-email vault is copied. See the v521 QA report for
+final gates and limits:2180 Python/4 skips/8418 subtests,80 JS, native fictional
+UI and static/preflight/source smoke pass. No publication/merge requested; PR #257 remains held.
+
+**Previous local checkpoint: v24.6.520 (not published or merged)** on
+`codex/v24.6.520-contact-assignments`, from merged v519. One contact owner and
+multiple recruiters can be chosen after company search. Select all, searchable
+checkboxes and Clear; successful creation/confirmation remembers opted-in
+protected connection-scoped defaults. Active IDs are revalidated at Review and
+Create; changed choices invalidate review. Directory failures preserve provider
+defaults. Windows2169/4 skips/8418 subtests,79 JS and native fictional UI pass.
+See the v520 QA report. This checkpoint is included in local v521.
 
 **Previous source checkpoint: v24.6.519 (merged PR #266)** on
 `codex/v24.6.519-hr-dates-resume`, from merged v518 `f78aacf` / PR #265.

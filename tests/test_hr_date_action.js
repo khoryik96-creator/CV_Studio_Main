@@ -1,0 +1,24 @@
+const assert=require('assert/strict');
+const {hrFixture}=require('./test_linkedin_company_hr');
+const args={operation_id:'a'.repeat(32),url:'https://www.linkedin.com/in/sample',company_url:'https://www.linkedin.com/company/example/',company_id:'123'};
+(async()=>{
+ const f=hrFixture();f.state.fastWait=true;await f.arm();f.state.employment={joined:'2026-10',left:'',current:true};
+ const result=await f.rpc('hrDate',args);assert(!result.error,result.error);assert.equal(result.result.joined,'2026-10');
+ assert.deepEqual(f.state.created.map(t=>t.url),[args.url]);assert.equal(f.state.removed.length,1,'only the owned inactive lookup closes');
+ assert.equal(f.state.hrMutations.length,0,'date checks do not navigate a search or company tab');
+ assert((await f.rpc('hrDate',{...args,url:'https://example.test/in/sample'})).error);
+ assert((await f.rpc('hrDate',args,undefined,'profiles')).error,'profiles scope cannot invoke HR reads');
+ const active=hrFixture();await active.arm();await active.beginHR();assert((await active.rpc('hrDate',args)).error,'one leads action at a time');
+ const viewed=hrFixture();viewed.state.fastWait=true;await viewed.arm();viewed.state.employment={joined:'2020',left:'2024',current:false};
+ const original=viewed.state.onScript;viewed.state.onScript=script=>{if(Array.isArray(script.args?.[0])){const tab=viewed.tabs.get(script.target.tabId);tab.active=true;}return original(script);};
+ const old=await viewed.rpc('hrDate',args);assert.equal(old.result.left,'2024');assert.equal(viewed.state.removed.length,0,'a tab viewed by the user stays open');
+ const unknown=hrFixture();unknown.state.fastWait=true;await unknown.arm();unknown.state.employment={joined:'',left:'',current:null};
+ assert.equal((await unknown.rpc('hrDate',args)).result.joined,'','missing dates never become fabricated months');
+ const invalid=hrFixture();await invalid.arm();invalid.state.employment={joined:'2024',left:'2020',current:false};assert((await invalid.rpc('hrDate',args)).error);
+ const stopped=hrFixture();stopped.state.fastWait=true;stopped.state.joinedNull=true;await stopped.arm();
+ const pending=stopped.rpc('hrDate',args);while(!stopped.state.joinedReads)await new Promise(resolve=>setImmediate(resolve));
+ assert.equal((await stopped.rpc('jobReadCancel',{operation_id:'b'.repeat(32)})).result,false,'another operation cannot cancel this lookup');
+ assert.equal((await stopped.rpc('jobReadCancel',{operation_id:args.operation_id})).result,true);
+ assert.match((await pending).error,/stopped/);assert.equal(stopped.state.removed.length,1);
+ console.log('Single employment check: exact profile/company, no search navigation, scopes, busy isolation, user-viewed tab protection and guarded ranges passed');
+})().catch(error=>{console.error(error);process.exitCode=1});

@@ -606,7 +606,55 @@ async function handle(message, sender) {
     if(jobCapture?.bound!==connection || jobCapture.operation!==args.operation_id)return false;
     jobCapture.cancelled=true;return true;
   }
-  if (message.action === 'jobStatus') return {connected:true,job_read:true,job_search:true,job_search_revision:1,company_hr_revision:1,hr_company_identity_revision:1,hr_company_filter_revision:1,hr_company_source_revision:1,hr_resilience_revision:1,hr_layout_revision:1,hr_apply_transition_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_employment_revision:1,hr_keyword_revision:1,people_country_revision:1,people_results_revision:1,profile_browsing_revision:1,concurrent_scans_revision:1,companion_update_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
+  if (message.action === 'jobStatus') return {connected:true,job_read:true,job_search:true,job_search_revision:1,company_hr_revision:1,hr_company_identity_revision:1,hr_company_filter_revision:1,hr_company_source_revision:1,hr_resilience_revision:1,hr_layout_revision:1,hr_apply_transition_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_employment_revision:1,hr_date_check_revision:1,hr_keyword_revision:1,people_country_revision:1,people_results_revision:1,profile_browsing_revision:1,concurrent_scans_revision:1,companion_update_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
+  if (message.action === 'hrDate') {
+    const bound=connection;
+    if(bound.run || jobCapture) throw safeError('Wait for the current HR action to finish before checking employment.');
+    if(!/^https:\/\/www\.linkedin\.com\/in\/[A-Za-z0-9_%~-]+$/.test(args.url || '') ||
+        !/^https:\/\/www\.linkedin\.com\/company\/[A-Za-z0-9_-]+\/$/.test(args.company_url || '') ||
+        !/^[0-9]{1,24}$/.test(args.company_id || '') || !/^[a-f0-9]{32}$/.test(args.operation_id || '')) throw safeError('Choose a saved HR person and company.');
+    const token={bound,operation:args.operation_id};jobCapture=token;let created=null,scrolls=0,metadata=0,committed=false;
+    try {
+      await closeHROwnedTabs();live(bound);
+      const tab=await chrome.tabs.create({url:args.url,active:false});created=tab.id;owned.set(created,args.url);await persist();
+      for(let attempt=0;attempt<100;attempt++) {
+        live(bound);if(token.cancelled || bound.run)throw safeError('The employment check stopped. Saved dates were kept.');
+        const opening=await chrome.tabs.get(created);live(bound);
+        if(!committed && opening.status==='loading' && (!opening.url || opening.url==='about:blank') && (!opening.pendingUrl || sameOwnedPage(opening.pendingUrl,args.url))) {
+          await new Promise(resolve=>setTimeout(resolve,500));continue;
+        }
+        const current=await ownedTab(created);live(bound);committed=true;
+        if(current.status==='complete') {
+          await jobScript({target:{tabId:created},files:['reader.js']},jobReaderStartError);
+          await ownedTab(created);live(bound);if(token.cancelled)throw safeError('The employment check stopped. Saved dates were kept.');
+          const [read]=await jobScript({target:{tabId:created},func:values=>{
+            try{return globalThis.SourcerReader.readHRJoined(...values);}
+            catch{return {hrError:true};}
+          },args:[[args.url,args.company_url,args.company_id]]},'The employment dates could not be read.');
+          await ownedTab(created);live(bound);if(token.cancelled)throw safeError('The employment check stopped. Saved dates were kept.');
+          const value=read?.result;
+          if(value?.hrError)throw safeError('LinkedIn needs sign-in, or the profile could not be confirmed. Saved dates were kept.');
+          if(value && !value.loading) {
+            const {joined,left,current}=value;
+            const date=s=>typeof s==='string' && /^(?:(?:19|20)\d{2}(?:-(?:0[1-9]|1[0-2]))?)?$/.test(s);
+            if(!date(joined) || !date(left) || ![true,false,null].includes(current) ||
+                current===true && (!joined || left) || current===false && (!joined || !left) || current===null && (joined || left) ||
+                left && (joined.length===4?joined+'-01':joined)>(left.length===4?left+'-12':left))throw safeError('The employment dates could not be confirmed.');
+            return {url:args.url,joined,left,current};
+          }
+          if(++metadata>=40)break;
+          if(scrolls<8 && !viewed.has(created)) {
+            scrolls++;await jobScript({target:{tabId:created},func:url=>document.visibilityState==='visible'?false:globalThis.SourcerReader.prepareHRJoined(url),args:[args.url]},'The Experience section could not be loaded.');
+          }
+        }
+        await new Promise(resolve=>setTimeout(resolve,500));
+      }
+      throw safeError('LinkedIn did not finish loading Experience. Saved dates were kept; try Check employment again.');
+    } finally {
+      if(created!==null)await closeOwned(created,args.url);
+      if(jobCapture===token)jobCapture=null;await persist();
+    }
+  }
   if (message.action === 'hrBegin') {
     const bound = connection;
     if (!/^[a-f0-9]{32}$/.test(args.run_id || '') || !hrCompanyURL(args.company_url) || typeof args.company !== 'string' || !args.company.trim() || args.company.length > 200 ||
@@ -1135,7 +1183,7 @@ for(const [event,method] of [['onRemoved','removed'],['onUpdated','updated'],['o
     await session[method](...args);releaseLeases(scope);
   })));
 }
-const leadActions=new Set(['hrBegin','hrRead','hrNext','hrJoined','hrJoinedClose','jobRead','jobFromLink','jobReadCancel','jobTabs','jobSearchTabs','jobSearchBegin']);
+const leadActions=new Set(['hrDate','hrBegin','hrRead','hrNext','hrJoined','hrJoinedClose','jobRead','jobFromLink','jobReadCancel','jobTabs','jobSearchTabs','jobSearchBegin']);
 function messageScope(message) {
   if(message.scope!==undefined){
     if(!sessions.has(message.scope))throw sessionError('Refresh CV Studio to use the current companion.');

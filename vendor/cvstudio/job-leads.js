@@ -499,6 +499,7 @@
       const card = node('article','','job-leads-hr-person'), link = node('a',person.name);
       link.href=person.url; link.target='_blank'; link.rel='noopener noreferrer';
       card.append(link,node('p',person.title),node('p',person.location || 'Location not shown','job-leads-muted'),node('p','Employment: '+hrEmploymentLabel(person),'job-leads-muted'),node('p','Matched: '+person.matched,'job-leads-muted'));
+      window.cvStudioPeople?.decorateDate(card,savedJob(previewUrl),person);
       window.cvStudioEmailVerifier?.decorate(card,person);
       window.cvStudioApollo?.decorate(card,person);
       target.append(card);
@@ -1218,5 +1219,6 @@
     const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = name; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
+  window.cvStudioJobLeads={refresh:load,lock:value=>lock(value),isBusy:()=>busy,employment:hrEmploymentLabel,rpc,activityStart:beginScanActivity,activityEnd:finishScanActivity};
   document.addEventListener('DOMContentLoaded', () => { if (new URLSearchParams(location.search).get('module') === 'jobleads') switchTab('jobleads'); });
 })();

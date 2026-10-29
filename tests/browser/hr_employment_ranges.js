@@ -21,12 +21,14 @@ const card=content=>'<div componentkey="entity-collection-item-fictional">'+cont
     assert((await read()).loading,'company entry exists before date hydration');
     await show(card(role(['HR Partner','Example · Full-time','Oct 2026 - Present · 1 mo','Malaysia · Hybrid'])));
     assert.deepEqual(await read(),{joined:'2026-10',left:'',current:true});
+    await show(card('<a href="https://www.linkedin.com/company/123/"><p>HR Partner</p><span aria-hidden="true">Oct 2026 - Present · 1 mo</span></a>'));
+    assert.deepEqual(await read(),{joined:'2026-10',left:'',current:true},'date spans remain inside the exact employer link');
     await show(card(role(['HR Partner','Example · Full-time','Mar 2025 - Jul 2026 · 1 yr 5 mos'])));
     assert.deepEqual(await read(),{joined:'2025-03',left:'2026-07',current:false});
     await show(card(role(['Example · Full-time'])+'<ul><li>'+role(['HR Director','Jan 2024 - Present'])+'</li><li>'+role(['HR Partner','Jun 2020 - Dec 2023'])+'</li></ul>'));
     assert.deepEqual(await read(),{joined:'2020-06',left:'',current:true});
     await show(card(role(['Other company','Oct 2000 - Present'],'999'))+'<div>About: Oct 1990 - Present</div>');
-    assert.deepEqual(await read(),{joined:'',left:'',current:null});
+    assert((await read()).loading,'other employer cards may hydrate before the requested company');
     await show(card(role(['HR Partner','Example','Oct 2026 - Present'])+'<button>Show all 5 experiences</button>'));
     assert.equal((await read()).joined,'','collapsed groups remain unknown');
     await page.close();await context.close();

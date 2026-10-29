@@ -58,8 +58,15 @@ def clean_profiles(raw):
         if not url or not re.fullmatch(r"p\d{1,4}", ref) or ref in seen or not text:
             raise SourcerError("A profile link or page reference is invalid.")
         seen.add(ref)
-        result.append({"id": ref, "url": url, "name": str(item.get("name") or "LinkedIn member")[:150],
-                       "text": text[:14000]})
+        entry = {"id": ref, "url": url, "name": str(item.get("name") or "LinkedIn member")[:150], "text": text[:14000]}
+        for key, limit in {'title':500, 'location':240}.items():
+            if key in item:
+                value = item[key]
+                if not isinstance(value,str) or len(value)>limit or any(ord(c)<32 for c in value):
+                    raise SourcerError('The observed profile metadata is invalid.')
+                if ' '.join(value.casefold().split()) in ' '.join(text.casefold().split()):
+                    entry[key] = value
+        result.append(entry)
     return result
 
 
@@ -146,7 +153,7 @@ def validate_reviews(value, profiles, maximum):
         if any(normalize(quote) not in text for quote in evidence):
             raise SourcerResponseError("A claimed match has no supporting text on the observed page.")
         # Name and URL always come from the reader, never from model output.
-        result.append({"id": row["id"], "url": known[row["id"]]["url"],
+        result.append({**{key:known[row['id']][key] for key in ['title','location'] if key in known[row['id']]}, "id": row["id"], "url": known[row["id"]]["url"],
                        "name": known[row["id"]]["name"], "score": score,
                        "evidence": evidence, "unknowns": unknowns})
     return sorted(result, key=lambda row: -row["score"])
@@ -277,9 +284,10 @@ class Run:
 
 
 class LinkedInSourcerService:
-    def __init__(self, *, key_available, provider_call):
+    def __init__(self, *, key_available, provider_call, candidates=None):
         self.key_available = key_available
         self.provider_call = provider_call
+        self.candidates = candidates
         self.run = None
         self.lock = threading.Lock()
 
@@ -291,6 +299,16 @@ class LinkedInSourcerService:
         if not isinstance(data, dict):
             raise SourcerError("A JSON request is required.")
         action = data.get("action")
+        if action in {'candidates', 'candidate_note'}:
+            if not self.candidates:
+                raise SourcerError('The candidate dashboard is unavailable.')
+            from cvstudio_people import PeopleError
+            try:
+                if action == 'candidate_note':
+                    return {'candidate':self.candidates.note(data.get('key'),data.get('revision'),data.get('notes'))}
+                return {'candidates':self.candidates.list()}
+            except PeopleError as exc:
+                raise SourcerError(str(exc)) from None
         if action == "start":
             return self.start(data)
         run = self.run
@@ -325,8 +343,16 @@ class LinkedInSourcerService:
                         " in its original order. Use only that profile's supplied passage IDs;"
                         " never retype or rewrite supporting text. If no supporting passage is available for"
                         " a profile, leave it out of candidates. Never invent evidence to fill a field."}
-            return self.paid(run, "profile_review", schema, observed,
-                             lambda value: resolve_review_evidence(value, profiles, maximum, references), "candidates")
+            result = self.paid(run, "profile_review", schema, observed,
+                               lambda value: resolve_review_evidence(value, profiles, maximum, references), "candidates")
+            if self.candidates:
+                from cvstudio_people import PeopleError
+                try:
+                    self.candidates.remember(run,result['candidates'],stage)
+                except PeopleError as exc:
+                    # Valid paid results/accounting remain usable; no replay to repair local storage.
+                    result['dashboard_warning'] = str(exc)
+            return result
         raise SourcerError("This sourcing action is not supported.")
 
     def start(self, data):

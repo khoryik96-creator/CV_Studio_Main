@@ -1703,3 +1703,25 @@
 .job-leads-ja-recruiters{max-height:140px;overflow:auto;margin-top:8px}
 .job-leads-ja-recruiters label,.job-leads-ja-dialog .job-leads-ja-remember{display:flex;align-items:center;gap:7px;font-weight:400;margin:7px 0}
 .job-leads-ja-dialog input[type="checkbox"]{width:auto;flex:0 0 auto;margin:0}
+/* Full-width, compact people dashboards, independent from search/card layout. */
+.people-dashboard[hidden], .people-dashboard [hidden], [data-date-stop][hidden], #peopleSourcerSearchPanel[hidden] { display:none !important; }
+.people-table a { color:var(--accent); font-weight:600; }
+.people-dashboard .card-body { padding:14px; min-width:0; }
+.people-filters { display:grid; grid-template-columns:minmax(180px,1fr) minmax(180px,1fr); gap:12px; }
+.people-filters label { display:flex; flex-direction:column; gap:4px; font-size:12px; }
+.people-filters input,.people-filters select { width:100%; min-width:0; padding:7px 9px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:inherit; font:inherit; }
+.people-table { max-height:65vh; overflow:auto; border:1px solid var(--border); border-radius:9px; }
+.people-table table { border-collapse:collapse; width:100%; font-size:12px; }
+.people-table th { position:sticky; top:0; z-index:1; text-align:left; background:var(--surface2); white-space:nowrap; }
+.people-table th,.people-table td { padding:9px 10px; border-bottom:1px solid var(--border); vertical-align:top; min-width:110px; max-width:300px; overflow-wrap:anywhere; }
+.people-table tr:hover td { background:rgba(38,112,224,.025); }
+.people-table td:nth-child(2) { min-width:200px; }
+.people-table button { display:block; font-size:11px; padding:5px 8px; margin-top:5px; white-space:nowrap; }
+.people-table small { display:block; max-width:190px; }
+.people-table details { width:220px; }
+.people-table summary { cursor:pointer; overflow-wrap:anywhere; }
+.people-table details:not([open]) summary { overflow:hidden; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; }
+.people-table ul { padding-left:16px; margin:6px 0; }
+.people-table textarea { min-width:170px; width:100%; min-height:54px; height:54px; max-height:160px; resize:vertical; font:inherit; padding:6px; }
+.people-email { user-select:text; white-space:nowrap; }
+@media(max-width:650px) { .people-filters { grid-template-columns:1fr; gap:7px; } .people-dashboard .card-head { flex-wrap:wrap; gap:8px; } }

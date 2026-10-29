@@ -580,7 +580,7 @@ class JobLeadsStore:
             connection.commit()
             return {"record": result, "duplicate": False}
 
-    def save_hr(self, identity, revision, raw):
+    def save_hr(self, identity, revision, raw, *, person_url=None, dates=None):
         _selection([{'id':identity, 'revision':revision}])
         with self._connection() as connection:
             connection.execute('BEGIN IMMEDIATE')
@@ -590,8 +590,17 @@ class JobLeadsStore:
             record = self._record(current)
             if record['deleted']:
                 raise JobLeadsError('Restore this ad before saving HR people.', 409, 'JOB_LEADS_CONFLICT')
-            record['hr'] = clean_hr(raw, record['company'])
-            record['hr']['scanned_at'] = _now()
+            if person_url is not None:
+                if not record.get('hr') or not isinstance(dates,dict) or set(dates) != {'joined','left','current'} or not dates.get('joined'):
+                    raise JobLeadsError('Choose a saved HR person with confirmed employment dates.')
+                person = next((p for p in record['hr']['people'] if p['url'].rstrip('/') == str(person_url).rstrip('/')),None)
+                if person is None:
+                    raise JobLeadsError('This person changed. Refresh HR people before checking employment.',409,'JOB_LEADS_CONFLICT')
+                person.update(dates)
+                record['hr'] = clean_hr(record['hr'],record['company'])
+            else:
+                record['hr'] = clean_hr(raw, record['company'])
+                record['hr']['scanned_at'] = _now()
             connection.execute('UPDATE leads SET payload=?,revision=revision+1,updated_at=? WHERE id=?',
                                (json.dumps(clean_record(record), ensure_ascii=False), _now(), identity))
             self._check_capacity(connection)

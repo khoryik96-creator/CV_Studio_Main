@@ -4,6 +4,20 @@
 
 ## Release state
 
+- v24.6.521 locally adds saved HR and Sourcer candidate dashboards while
+  retaining v520 owner/recruiter defaults. Saved HR observations deduplicate by
+  company/profile and use existing explicit per-person Apollo actions; cached
+  lookups across duplicate ads prevent another unlock offer. New Sourcer
+  assessments archive securely, with search/notes/Excel and failure-visible
+  preservation of valid paid results. Date-only refresh updates existing saved
+  cards after exact profile/company metadata checks, with owned-tab bounds and
+  Stop; partial Experience hydration waits instead of confirming absence.
+  No new production route/SQL schema or live paid/contact action. Owner data and
+  app are unchanged. Local preview uses only a read-only job-ad snapshot in a
+  separate directory. Final2180 Python/4 skips/8418 subtests,80 JS, native
+  fictional desktop/mobile and static/preflight/source smoke pass. Not
+  pushed/merged; held PR257 remains excluded.
+
 - v24.6.520 locally adds one Owner and multiple Recruiters/Select all to the
   reviewed contact flow. Protected connection-scoped defaults are remembered
   only after success/confirmation and can be opted out. Active roster and

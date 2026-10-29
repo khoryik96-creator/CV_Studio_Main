@@ -56,7 +56,8 @@
       if(urls.size!==1 || seen.has(url) || !text(names[0]) || !text(paragraphs[1]))continue;
       const words=paragraphs.filter(p=>[...p.querySelectorAll('a[href]')].every(a=>!profileURL(a.href) || profileURL(a.href)===url)).map(text).join('\n');
       if(words.length<8 || words.length>6500)continue;
-      seen.add(url);rows.push({id:'p'+rows.length,name:text(names[0]).slice(0,150),url,text:words});
+      seen.add(url);rows.push({id:'p'+rows.length,name:text(names[0]).slice(0,150),url,text:words,
+        title:text(paragraphs[1]).slice(0,500),location:text(paragraphs[2]).slice(0,240)});
       if(rows.length>=40)break;
     }
     for (const link of (primary || scope).querySelectorAll('a[href]')) {
@@ -639,7 +640,8 @@
     assertPage('', 'profile');
     if (profileURL(location.href) !== expectedURL) throw Error('The HR profile identity changed.');
     const main=document.querySelector('main'); if (!main) return false;
-    const experience=main.querySelector('[componentkey^="profileCardsExperienceOnly"], #experience');
+    const experience=main.querySelector('[componentkey^="profileCardsExperienceOnly"], #experience') ||
+      [...main.querySelectorAll('h2')].find(n=>visible(n) && text(n)==='Experience');
     if (experience) experience.scrollIntoView({block:'start',behavior:'instant'});
     else main.scrollBy({top:Math.min(main.clientHeight || 600,900),behavior:'instant'});
     return true;
@@ -656,7 +658,7 @@
     // in free-form role descriptions for dates.
     const scope = heading.getAttribute('componentkey') === 'ProfileNullStateCardAnchor_Experience' ? heading.parentElement?.parentElement :
       document.querySelector('main #experience')?.closest('section');
-    if (!scope) return unknown();
+    if (!scope) return {loading:true};
     const selector = '[componentkey^="entity-collection-item-"], li.artdeco-list__item';
     const cards = [...scope.querySelectorAll(selector)].filter(n=>visible(n) && !n.parentElement?.closest?.(selector));
     if (!cards.length) return {loading:true};
@@ -683,8 +685,9 @@
       if ([...card.querySelectorAll('a, button')].some(n=>visible(n) && /(?:show|see) all|more (?:positions|roles|experiences)/i.test(text(n)))) { ambiguous=true; continue; }
       const linked = n=>[...n.querySelectorAll('a[href*="/company/"]')].some(a=>visible(a) && [expectedCompany,'https://www.linkedin.com/company/'+companyId+'/'].includes(companyURL(a.href)));
       const roles=[...card.querySelectorAll('ul > li, [role="list"] > [role="listitem"]')].filter(n=>visible(n) && linked(n));
-      if (roles.some(n=>![...n.querySelectorAll('a[href*="/company/"] p, .pvs-entity__caption-wrapper')].filter(visible).some(n=>ranges(text(n))))) { pending=true; continue; }
-      const observed = links.flatMap(n=>[...n.querySelectorAll('p, .pvs-entity__caption-wrapper')].filter(visible).map(n=>ranges(text(n))).filter(Boolean));
+      const captions='p, .pvs-entity__caption-wrapper, span[aria-hidden="true"], time';
+      if (roles.some(n=>![...n.querySelectorAll('a[href*="/company/"] p, a[href*="/company/"] span[aria-hidden="true"], .pvs-entity__caption-wrapper')].filter(visible).some(n=>ranges(text(n))))) { pending=true; continue; }
+      const observed = links.flatMap(n=>[...n.querySelectorAll(captions)].filter(visible).map(n=>ranges(text(n))).filter(Boolean));
       // Legacy date captions can sit beside the company link, within the same
       // bounded Experience item, rather than inside that link.
       if (!observed.length && card.matches?.('li.artdeco-list__item')) {
@@ -694,8 +697,9 @@
       if (!unique.length) {
         // The company logo and role link can arrive before the date paragraph.
         // Poll within the existing lookup budget; never derive dates from tenure.
-        const metadata=links.map(text).join(' ');
-        if (!/\b(?:19|20)\d{2}\b|\b(?:years?|months?|yrs?|mos?)\b/i.test(metadata)) pending=true;
+        // A duration/company summary is not proof that role metadata finished
+        // hydrating. Keep polling; never convert a tenure into a joining date.
+        pending=true;
         continue;
       }
       const current = unique.filter(r=>r.current);
@@ -720,7 +724,9 @@
     if (ambiguous) return unknown();
     const current=matches.filter(r=>r.current);
     if (current.length) return current.length===1?current[0]:unknown();
-    if (!matches.length) return unknown();
+    // An Experience skeleton (or other employers hydrating first) does not
+    // establish that the requested company's employment is absent.
+    if (!matches.length) return {loading:true};
     const endBound=(value,last)=>Number(value.slice(0,4))*12+(value.length===7?Number(value.slice(5)):last?12:1);
     const latest=matches.filter(r=>matches.every(other=>r===other || endBound(r.left,false)>endBound(other.left,true)));
     return latest.length===1?latest[0]:unknown();

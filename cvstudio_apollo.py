@@ -136,6 +136,11 @@ class ApolloService:
             raise ApolloError("Finish the current Apollo action first.", "APOLLO_BUSY", 409)
         try:
             data = self._data()
+            if action == 'hr_people':
+                from cvstudio_people import hr_people
+                cache = data.get('emails', {}) if data.get('connection') else {}
+                return {'people':hr_people(self.rows() if self.rows else [],
+                    lambda row,person:self._public(cache[self._identity(row,person)]) if self._identity(row,person) in cache else None)}
             if action == "contacts":
                 if not self.contacts:
                     return {"contacts":[]}

@@ -116,6 +116,7 @@ DEFAULT_MODULES = (
         "linkedin_sourcer",
         "domain",
         ("cvstudio_linkedin_sourcer.py",),
+        ("people_dashboards",),
     ),
     ModuleDefinition(
         "job_leads",
@@ -133,7 +134,8 @@ DEFAULT_MODULES = (
         "domain",
         ("cvstudio_email_verifier.py",),
     ),
-    ModuleDefinition("apollo", "domain", ("cvstudio_apollo.py",)),
+    ModuleDefinition("apollo", "domain", ("cvstudio_apollo.py",), ("people_dashboards",)),
+    ModuleDefinition("people_dashboards", "domain", ("cvstudio_people.py",)),
     ModuleDefinition(
         "secrets",
         "domain",
@@ -325,6 +327,7 @@ DEFAULT_MODULES = (
         (
             "composition_root",
             "apollo",
+            "people_dashboards",
             "email_verifier",
             "ai_costs",
             "ai_providers",

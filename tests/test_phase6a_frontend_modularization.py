@@ -54,6 +54,8 @@ FRONTEND_MODULES = (
     "linkedin-sourcer-core.js",
     "linkedin-sourcer.js",
     "job-leads-apollo.js",
+    "people-dashboards.js",
+    "job-leads-jobadder.js",
     "job-leads.js",
     "email-verifier.js",
     "ai-proxy.js",

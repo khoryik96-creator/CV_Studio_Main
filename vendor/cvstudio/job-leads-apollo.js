@@ -36,6 +36,7 @@
       view.copy.hidden=!found;view.copy.disabled=working;
     }
     contactControls();
+    window.cvStudioPeople?.appBusy(working || appBusy);
   }
   function filteredContacts() {
     const query=el('ContactsSearch').value.trim().toLowerCase();
@@ -76,6 +77,7 @@
     finally {contactsLoading=false;contactControls();}
   }
   function showContacts(show) {
+    window.cvStudioPeople?.hideHR();
     el('AdsPanel').hidden=show;el('ContactsPanel').hidden=!show;
     el('AdsTab').setAttribute('aria-pressed',String(!show));el('ContactsTab').setAttribute('aria-pressed',String(show));
     if(show && !contactsLoading && !working) void refreshContacts();
@@ -145,25 +147,32 @@
     } catch(error) {message(error.message);}
     finally {working=false;controls();}
   }
-  async function unlock(person) {
-    if(working || appBusy || !account.connected || !row) return;
-    const current=row, token=sequence, previous=cache[person.url];
+  async function unlock(person, source=row, prior, notify=message, complete) {
+    if(working || appBusy || !account.connected || !source) return false;
+    const current=source, token=sequence, previous=prior===undefined?cache[person.url]:prior;
     if(!previous && !window.confirm('Unlock the business email for '+person.name+' using your Apollo account? This sends their LinkedIn profile, name and company to Apollo and may use an Apollo credit even if only profile data is returned.')) return;
-    working=true;message(previous?'Checking the previous lookup without spending another credit…':'Looking up this person in Apollo…');controls();
+    working=true;notify(previous?'Checking the previous lookup without spending another credit…':'Looking up this person in Apollo…');controls();
     try {
       const data=await api({action:'reveal',id:current.id,revision:current.revision,url:person.url,confirmed:!previous});
-      if(token===sequence) {cache[person.url]=data.result;message(data.contact_warning || data.result.message);}
+      if(token===sequence && row?.id===current.id) {cache[person.url]=data.result;}
+      notify(data.contact_warning || data.result.message);complete?.(data.result);
       if(data.result.state==='found' && (contactsLoaded || !el('ContactsPanel').hidden)) await refreshContacts();
     } catch(error) {
-      if(token===sequence) {
+      if(token===sequence && row?.id===current.id) {
         // The response may have been lost after charging/saving. A follow-up
         // reads the protected record; it never sends another paid operation.
         cache[person.url]={state:'unconfirmed',message:'The result could not be confirmed. Check the previous lookup before trying again.'};
-        message(error.message);await refreshEmails(current,token);
+        await refreshEmails(current,token);
       }
+      notify(error.message);return false;
     } finally {working=false;controls();}
+    return true;
   }
   window.cvStudioApollo={
+    connected:()=>account.connected,
+    available:()=>account.available,
+    connect,
+    unlockSaved:(current,person,previous,notify,complete)=>unlock(person,current,previous,notify,complete),
     async init() {
       if(ready) return;ready=true;
       el('Connect').addEventListener('click',connect);el('Disconnect').addEventListener('click',disconnect);

@@ -1,5 +1,47 @@
 # Job Leads module
 
+## People dashboards and employment refresh (v24.6.521)
+
+Job Leads -> HR people lists all saved non-trashed HR observations, one row per
+LinkedIn profile/company. The newest observation supplies title/location/dates;
+source-ad counts and links remain visible. Company/text filters,40-row paging
+and filtered Excel use literal cells. Country in an export is the scan filter,
+not an independently verified nationality/location. Existing Apollo lookups
+from duplicate ads are reused for display and read-only result checks. Unlock
+email remains an explicit per-person credit confirmation, never an automatic
+batch unlock; Unlocked contacts and JobAdder creation retain their own flow.
+
+Check employment is available on saved HR cards and HR dashboard rows. It reads
+only the exact saved LinkedIn profile and company in a newly owned inactive
+profile tab. The latest companion is required. Up to100 half-second polls,
+40 metadata reads and8 targeted scrolls bound this optional check; Stop is
+operation-bound, including Stop during a delayed reply. Viewed/navigated tabs
+are not automatically closed or scrolled. No user search is changed. Confirmed
+month/year ranges update only that saved person under the current ad revision;
+missing/invalid/stopped evidence preserves prior dates. A conflict asks for a
+refresh. This local update preserves notes, scan date/settings and completeness.
+
+Future HR scans now wait for partially hydrated Experience metadata, including
+other employers arriving first. The existing automatic scan/lookup bounds and
+company/profile guards remain. A current heading can be scrolled even before
+the old section-key selector appears. Date-caption spans remain inside the
+exact company role link. No duration is converted to an inferred date. Earlier
+blank saved observations require Check employment or a new HR scan.
+
+LinkedIn Sourcer -> Candidates is a separate full-width table with observed
+name/title/location, LinkedIn link, evidence match, detail-read state, supporting
+evidence, missing requirements and editable notes. New validated assessments
+save automatically by search/profile in a dedicated protected version1 archive
+(max5000 rows/8MiB), separate from credentials and SQL. Search briefs filter
+history; newer detail assessments do not downgrade to card-only observations.
+Notes use revision checks and survive table filtering/redraw. An unsaved note
+blocks closing without browser confirmation. A failed archive write shows a
+warning while valid paid output/accounting stays available in Search; it never
+replays provider transport. Excel exports matching saved rows only. Historic
+searches that were never saved by earlier versions cannot be reconstructed.
+Neither dashboard starts LinkedIn, paid assessment, unlock or contact creation
+just by opening. There is no automatic email reveal or protected-trait inference.
+
 ## Contact owner and recruiters (v24.6.520)
 
 Search for a JobAdder company, choose one Owner, and expand Recruiters for
