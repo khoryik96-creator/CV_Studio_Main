@@ -1,5 +1,21 @@
 # Job Leads module
 
+## Contact owner and recruiters (v24.6.520)
+
+Search for a JobAdder company, choose one Owner, and expand Recruiters for
+searchable checkboxes, Select all or Clear. Remember these choices is selected
+by default, but saves them only after successful contact creation/confirmation.
+Uncheck it for a one-off choice. Defaults belong to the current JobAdder
+connection and are kept in the existing protected store, never browser/SQLite.
+One owner is supported by JobAdder; recruiters can be multiple or explicitly
+empty. Omitted selections preserve JobAdder defaults. Only a complete active
+roster (up to1000) is offered; directory failures keep the original workflow
+usable with provider defaults. Unavailable prior users are not preselected.
+Assignments are validated at review and before the single create; editing them
+requires another review. Ambiguous-write recovery retains original assignments
+and never resubmits. The route-local request cap is16KiB for up to1000 IDs;
+global80MiB/123 routes/guards are unchanged. No authenticated live API QA.
+
 ## Resuming HR batches and showing dates during a scan (v24.6.519)
 
 After an interrupted/failed batch, **Resume unfinished ads** retries failed or

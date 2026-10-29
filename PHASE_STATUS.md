@@ -4,6 +4,13 @@
 
 ## Release state
 
+- v24.6.520 locally adds one Owner and multiple Recruiters/Select all to the
+  reviewed contact flow. Protected connection-scoped defaults are remembered
+  only after success/confirmation and can be opted out. Active roster and
+  reviewed-payload validation preserve non-replay/duplicate/account guards.
+  No new route/DB schema or live JobAdder call. Full Windows2169/4 skips/8418
+  subtests,79 JS, native fictional UI and preflight pass. Not pushed/merged.
+
 - v24.6.519 locally fixes date-result rendering and resumes unfinished bulk HR
   ads under unchanged selection/settings while skipping confirmed unchanged
   saves. Slow profile navigation no longer spends the metadata-read budget.

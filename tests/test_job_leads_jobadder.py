@@ -15,6 +15,7 @@ BASE={"account":SCOPE,"contact_key":KEY,"company_id":12,"first_name":"Example","
 class Client:
     def __init__(self):
         self.calls=[];self.matches=[];self.total=None;self.fail=None;self.company=12;self.before_post=None
+        self.users=[{'userId':7,'firstName':'Example','lastName':'Owner'}, {'userId':8,'firstName':'Example','lastName':'Recruiter'}]
     def request_json(self,path,**kw):
         self.calls.append((path,copy.deepcopy(kw)))
         if kw.get('method')=='POST':
@@ -24,6 +25,7 @@ class Client:
         if path=='contacts':return 200,{"items":copy.deepcopy(self.matches),"totalCount":self.total if self.total is not None else len(self.matches)}
         if path=='companies':return 200,{"items":[{"companyId":12,"name":"Example Company"}],"totalCount":1}
         if path=='companies/12':return 200,{"companyId":self.company,"name":"Example Company"}
+        if path=='users':return 200,{'items':copy.deepcopy(self.users),'totalCount':len(self.users)}
         raise AssertionError('Unexpected remote path')
 
 def setup():
@@ -135,6 +137,134 @@ def test_source_email_is_authoritative_and_scan_country_is_not_sent():
     call(service,'create',review_token=proof,confirmed=True,email='other@example.test',country='Malaysia',candidateId=9)
     payload=json.loads(next(kw['body'] for _,kw in client.calls if kw.get('method')=='POST'))
     assert payload['email']==SOURCE['email'] and 'country' not in payload and 'candidateId' not in payload
+
+
+def test_reviewed_owner_and_recruiters_are_posted_and_remembered_securely():
+    service,client,vault,account=setup()
+    fields={'owner_user_id':7,'recruiter_user_ids':[8,7],'remember_assignments':True}
+    proof=call(service,'review',**fields)['review_token']
+    result=call(service,'create',review_token=proof,confirmed=True,**fields)
+    assert result['state']=='created'
+    payload=json.loads(next(kw['body'] for _,kw in client.calls if kw.get('method')=='POST'))
+    assert payload['ownerUserId']==7 and payload['recruiterUserId']==[7,8]
+    options=service.perform({'action':'companies','query':'Example','include_assignments':True},'fictional-token')
+    assert options['assignments']['available'] is True
+    assert options['assignments']['defaults']=={'owner_user_id':7,'recruiter_user_ids':[7,8]}
+    assert options['assignments']['users']==[{'id':7,'name':'Example Owner'},{'id':8,'name':'Example Recruiter'}]
+    assert 'firstName' not in json.dumps(vault) and 'Example Owner' not in json.dumps(vault)
+    account['account_cache_namespace']='c'*64
+    other=service.perform({'action':'companies','query':'Example','include_assignments':True},'fictional-token')
+    assert other['assignments']['defaults'] is None,'defaults cannot cross a connection change'
+
+
+@pytest.mark.parametrize('patch',[{'owner_user_id':8},{'recruiter_user_ids':[8]}, {'recruiter_user_ids':[]}])
+def test_assignment_changes_require_a_new_review(patch):
+    service,client,vault,account=setup()
+    fields={'owner_user_id':7,'recruiter_user_ids':[7,8]}
+    proof=call(service,'review',**fields)['review_token']
+    with pytest.raises(JobAdderContactError):call(service,'create',review_token=proof,confirmed=True,**{**fields,**patch})
+    assert post_count(client)==0
+
+
+@pytest.mark.parametrize('fields',[
+    {'owner_user_id':True},{'owner_user_id':-1},{'owner_user_id':'7'}, {'owner_user_id':999},
+    {'recruiter_user_ids':'all'},{'recruiter_user_ids':[True]}, {'recruiter_user_ids':[8,8]},
+    {'recruiter_user_ids':[999]},{'recruiter_user_ids':list(range(1,1002))}, {'remember_assignments':'yes'},
+])
+def test_invalid_or_unknown_assignments_never_create(fields):
+    service,client,vault,account=setup()
+    with pytest.raises(JobAdderContactError):call(service,'review',**fields)
+    assert post_count(client)==0
+
+
+def test_inactive_assignments_cannot_survive_review_or_become_defaults():
+    service,client,vault,account=setup()
+    fields={'owner_user_id':7,'recruiter_user_ids':[8],'remember_assignments':True}
+    proof=call(service,'review',**fields)['review_token']
+    assert 'assignment_defaults' not in vault,'review alone does not change saved defaults'
+    client.users[0]['inactive']=True
+    with pytest.raises(JobAdderContactError):call(service,'create',review_token=proof,confirmed=True,**fields)
+    vault['assignment_defaults']={'account':SCOPE,'owner_user_id':7,'recruiter_user_ids':[8]}
+    options=service.perform({'action':'companies','query':'Example','include_assignments':True},'fictional-token')
+    assert options['assignments']['defaults'] is None and options['assignments']['stale'] is True
+    assert post_count(client)==0
+
+
+def test_default_assignments_are_omitted_but_explicit_empty_recruiters_are_sent():
+    service,client,vault,account=setup()
+    proof=call(service,'review',owner_user_id=None,recruiter_user_ids=[])['review_token']
+    call(service,'create',review_token=proof,confirmed=True,owner_user_id=None,recruiter_user_ids=[])
+    payload=json.loads(next(kw['body'] for _,kw in client.calls if kw.get('method')=='POST'))
+    assert 'ownerUserId' not in payload and payload['recruiterUserId']==[]
+
+
+def test_assignment_directory_failure_preserves_legacy_create_and_preferences():
+    service,client,vault,account=setup()
+    original=client.request_json
+    def request(path,**kwargs):
+        if path=='users':raise HTTPError('https://example.test',403,'denied',{},None)
+        return original(path,**kwargs)
+    client.request_json=request
+    options=service.perform({'action':'companies','query':'Example','include_assignments':True},'fictional-token')
+    assert options['assignments']['available'] is False
+    proof=review(service);assert call(service,'create',review_token=proof,confirmed=True)['state']=='created'
+    assert post_count(client)==1
+
+
+def test_unconfirmed_assignment_write_recovers_original_defaults_without_replay():
+    service,client,vault,account=setup()
+    fields={'owner_user_id':7,'recruiter_user_ids':[8],'remember_assignments':True}
+    proof=call(service,'review',**fields)['review_token'];client.fail=TimeoutError()
+    assert call(service,'create',review_token=proof,confirmed=True,**fields)['state']=='unconfirmed'
+    assert 'assignment_defaults' not in vault
+    client.matches=[{'contactId':45,'email':SOURCE['email'],'company':{'companyId':12,'name':'Example Company'}}]
+    assert call(service,'check',owner_user_id=999,recruiter_user_ids=[])['state']=='created'
+    assert vault['assignment_defaults']=={'account':SCOPE,'owner_user_id':7,'recruiter_user_ids':[8]}
+    assert 'assignments' not in next(iter(vault['operations'].values()))
+    assert post_count(client)==1
+
+
+def test_no_remember_preserves_prior_defaults_and_legacy_company_search_does_not_read_users():
+    service,client,vault,account=setup()
+    defaults={'account':SCOPE,'owner_user_id':7,'recruiter_user_ids':[8]}
+    vault.update(version=1,operations={},assignment_defaults=copy.deepcopy(defaults))
+    proof=call(service,'review',owner_user_id=8,recruiter_user_ids=[],remember_assignments=False)['review_token']
+    call(service,'create',review_token=proof,confirmed=True,owner_user_id=8,recruiter_user_ids=[],remember_assignments=False)
+    assert vault['assignment_defaults']==defaults
+    before=len(client.calls);service.perform({'action':'companies','query':'Example'},'fictional-token')
+    assert not any(path=='users' for path,_ in client.calls[before:])
+
+
+@pytest.mark.parametrize('data',[
+    {'items':[],'totalCount':2}, {'items':[],'totalCount':'0'}, {'items':[],'totalCount':1001},
+    {'items':[{'userId':True}],'totalCount':1},
+    {'items':[{'userId':7},{'userId':7}],'totalCount':2},
+    {'items':[{'userId':7,'inactive':'false'}],'totalCount':1},
+])
+def test_malformed_user_directory_cannot_authorize_assignments(data):
+    service,client,vault,account=setup();original=client.request_json
+    client.request_json=lambda path,**kwargs:(200,data) if path=='users' else original(path,**kwargs)
+    result=service.perform({'action':'companies','query':'Example','include_assignments':True},'fictional-token')
+    assert result['assignments']['available'] is False
+    with pytest.raises(JobAdderContactError):call(service,'review',owner_user_id=7)
+    assert post_count(client)==0
+
+
+def test_full_select_all_payload_fits_the_bounded_route_without_extra_post():
+    import app
+    service,client,vault,account=setup()
+    identities=list(range(2147482000,2147483000))
+    client.users=[{'userId':identity,'firstName':'Example','lastName':str(identity)} for identity in identities]
+    browser=app.app.test_client();browser.get('/')
+    data={**BASE,'action':'review','owner_user_id':identities[0],'recruiter_user_ids':identities,'position':'Role '*100}
+    headers={'X-CV-Studio-Request':'1'}
+    with mock.patch.object(app,'_JOB_LEADS_JA',service),mock.patch.object(app,'_ja_refresh_access_token',return_value='fictional-token'):
+        raw=json.dumps(data).encode();assert 8192<len(raw)<16384
+        result=browser.post('/jobadder/contact_actions',data=raw,content_type='application/json',headers=headers)
+        assert result.status_code==200 and result.json['state']=='review'
+        assert post_count(client)==0
+        too_large=browser.post('/jobadder/contact_actions',data=b' '*16385,content_type='application/json',headers=headers)
+        assert too_large.status_code==413 and post_count(client)==0
 
 def test_new_route_is_the_only_change_to_all_122_previous_routes():
     import app

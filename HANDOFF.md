@@ -7,7 +7,19 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current source checkpoint: v24.6.519 (owner-authorized for merge)** on
+**Current local checkpoint: v24.6.520 (not published or merged)** on
+`codex/v24.6.520-contact-assignments`, from merged v519 `37e9461` / PR #266.
+One contact owner and multiple recruiters can be chosen after company search.
+Select all / searchable checkboxes / Clear are compact; successful creation or
+safe confirmation remembers opted-in choices in the protected account-scoped
+store. Review and create revalidate active IDs, and edits invalidate review.
+Directory failures retain the old provider-default creation flow. No live
+JobAdder read/write. Windows 2169 passed,4 skipped,8418 subtests;79 JS and native
+fictional desktop/mobile, version/static/preflight/source-smoke checks pass.
+See the v520 QA report. New owner-requested dashboards/employment follow-up
+will build on this local checkpoint; no publication authorized. PR #257 held.
+
+**Previous source checkpoint: v24.6.519 (merged PR #266)** on
 `codex/v24.6.519-hr-dates-resume`, from merged v518 `f78aacf` / PR #265.
 The owner reports missing date text in a stopped scan and requests retrying
 unfinished bulk ads first, plus a link after creating a JobAdder contact.

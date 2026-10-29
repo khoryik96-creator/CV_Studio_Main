@@ -1697,3 +1697,9 @@
 .job-leads-ja-dialog input,.job-leads-ja-dialog select{width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text)}
 .job-leads-ja-dialog p{margin:14px 0}
 .job-leads-ja-dialog [hidden]{display:none}
+.job-leads-ja-assignments{margin-top:12px;border:1px solid var(--border);border-radius:8px;padding:9px}
+.job-leads-ja-assignments summary{cursor:pointer;font-size:12px;font-weight:600}
+.job-leads-ja-assignments .job-leads-actions{margin-top:9px}
+.job-leads-ja-recruiters{max-height:140px;overflow:auto;margin-top:8px}
+.job-leads-ja-recruiters label,.job-leads-ja-dialog .job-leads-ja-remember{display:flex;align-items:center;gap:7px;font-weight:400;margin:7px 0}
+.job-leads-ja-dialog input[type="checkbox"]{width:auto;flex:0 0 auto;margin:0}
