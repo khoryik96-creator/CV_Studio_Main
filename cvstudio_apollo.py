@@ -335,8 +335,16 @@ class ApolloContacts:
         # Match the browser's toLowerCase search so exports contain exactly the
         # same matching rows (casefold would also expand e.g. ß into ss).
         query = query.strip().lower()
-        return sorted((dict(row) for row in self._read().values()
+        return sorted(({**row,"contact_key":key} for key,row in self._read().items()
             if not query or query in " ".join(row.values()).lower()), key=lambda row:row["unlocked_at"], reverse=True)
+
+    def get(self, key):
+        if not isinstance(key,str) or not re.fullmatch(r"[a-f0-9]{64}",key):
+            raise ApolloError("Choose a saved unlocked contact.")
+        row=self._read().get(key)
+        if not row:
+            raise ApolloError("This saved contact is no longer available. Refresh contacts.", "APOLLO_CONTACT_CONFLICT", 409)
+        return dict(row)
 
 
 def export_contacts(rows):

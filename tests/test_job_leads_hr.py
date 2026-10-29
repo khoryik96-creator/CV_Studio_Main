@@ -133,3 +133,46 @@ def test_invalid_joining_dates_cannot_rewrite_saved_evidence(tmp_path, joined):
     with pytest.raises(JobLeadsError):
         store.save_hr(old['id'], old['revision'], search)
     assert store.list() == [old]
+
+
+@pytest.mark.parametrize('dates', [
+    {'joined':'2026-10','left':'','current':True},
+    {'joined':'2020-06','left':'2024-03','current':False},
+    {'joined':'2020','left':'2024','current':False},
+    {'joined':'','left':'','current':None},
+])
+def test_employment_ranges_roundtrip_without_schema_migration(tmp_path, dates):
+    import sqlite3
+    store = JobLeadsStore(tmp_path/'leads.sqlite3')
+    old = store.save(AD)['record']
+    search = copy.deepcopy(SEARCH)
+    search['people'][0].update(dates)
+    saved = store.save_hr(old['id'], old['revision'], search)['record']
+    assert all(saved['hr']['people'][0][key] == value for key, value in dates.items())
+    restored = JobLeadsStore(tmp_path/'restored.sqlite3')
+    restored.restore(store.backup())
+    assert restored.list()[0]['hr'] == saved['hr']
+    with sqlite3.connect(store.path) as connection:
+        assert connection.execute('PRAGMA user_version').fetchone()[0] == 2
+
+
+@pytest.mark.parametrize('dates', [
+    {'joined':'2024-01','left':'2023-12','current':False},
+    {'joined':'2024','left':'2023','current':False},
+    {'joined':'2024','left':'2025','current':True},
+    {'joined':'','left':'','current':True},
+    {'joined':'2024','left':'','current':False},
+    {'joined':'2024','left':'','current':'true'},
+    {'joined':'2024','left':'2024-01-01','current':False},
+    {'joined':'2024','left':'2025','current':None},
+    {'joined':'2024','current':True},
+    {'joined':'2024','left':''},
+])
+def test_invalid_employment_ranges_are_atomic(tmp_path, dates):
+    store = JobLeadsStore(tmp_path/'leads.sqlite3')
+    old = store.save(AD)['record']
+    search = copy.deepcopy(SEARCH)
+    search['people'][0].update(dates)
+    with pytest.raises(JobLeadsError):
+        store.save_hr(old['id'], old['revision'], search)
+    assert store.list() == [old]

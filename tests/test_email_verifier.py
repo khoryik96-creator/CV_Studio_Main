@@ -423,7 +423,7 @@ def module(tmp_path):
 
 def test_new_route_preserves_all_previous_120_routes_exactly(module):
     from cvstudio_architecture import _route_contract
-    previous=tuple(row for row in _route_contract(module.app) if row['endpoint'] not in {'email_verifier','apollo_connection'})
+    previous=tuple(row for row in _route_contract(module.app) if row['endpoint'] not in {'email_verifier','apollo_connection','jobadder_contact_actions'})
     assert len(previous)==120
     assert hashlib.sha256(json.dumps(previous,ensure_ascii=True,sort_keys=True,separators=(',',':')).encode()).hexdigest()=='ee8d33baeb48b961a2f50723faacbeb7fed86b55454b3518ab4a07bcd1e90033'
 

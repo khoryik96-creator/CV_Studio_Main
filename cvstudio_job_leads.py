@@ -320,6 +320,23 @@ def clean_hr(raw, company):
             entry[key] = value.strip()
         if entry['joined'] and not re.fullmatch(r'(?:19|20)\d{2}(?:-(?:0[1-9]|1[0-2]))?', entry['joined']):
             invalid()
+        # Optional additive evidence keeps old start-only records readable.
+        if 'left' in person or 'current' in person:
+            left, current = person.get('left'), person.get('current')
+            if ('left' not in person or 'current' not in person or
+                    not isinstance(left, str) or not re.fullmatch(r'(?:(?:19|20)\d{2}(?:-(?:0[1-9]|1[0-2]))?)?', left) or
+                    current is not None and type(current) is not bool):
+                invalid()
+            if ((current is True and (not entry['joined'] or left)) or
+                    (current is False and (not entry['joined'] or not left)) or
+                    (current is None and (entry['joined'] or left))):
+                invalid()
+            if left:
+                start_min = entry['joined'] if len(entry['joined']) == 7 else entry['joined'] + '-01'
+                end_max = left if len(left) == 7 else left + '-12'
+                if start_min > end_max:
+                    invalid()
+            entry.update(left=left, current=current)
         if (not entry['name'] or not entry['title'] or not entry['matched'] or
                 not re.fullmatch(r'https://www\.linkedin\.com/in/[A-Za-z0-9_%~-]+/?', entry['url'])):
             invalid()

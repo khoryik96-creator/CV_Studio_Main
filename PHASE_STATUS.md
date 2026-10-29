@@ -4,6 +4,27 @@
 
 ## Release state
 
+- v24.6.518 retains local v517 and adds observed employment ranges to HR cards.
+  Date metadata may hydrate after a company entry; bounded lookup waits now
+  cover that stage. Exact profile/company, source filters, Stop and owned-tab
+  checks remain. Optional end/current evidence preserves legacy start-only
+  records without a DB migration. Updated companion capability is required
+  for single/bulk scans. JobAdder non-replay now spans company choices for the
+  same account/email; uncertain recovery checks the original POST company.
+  The owner now authorizes publishing/merging both checkpoints; no live contact
+  or paid call. PR #257 remains on hold. See the v518 QA report and issue #35
+  for publication/merge identity.
+
+- v24.6.517 is a local Job Leads → JobAdder company-contact feature on merged
+  v516. Existing-company choice only, source-bound email, editable reviewed
+  name/position and exact-email duplicate checks precede a protected, explicitly
+  confirmed, one-time write. Account/review changes and uncertain outcomes block
+  replay; checking is read-only. One guarded POST action route raises the sealed
+  route count to123 with the full previous122 digest retained in tests. No
+  candidate/company creation, outreach, live write, credential or SQL migration.
+  The subsequent owner-requested HR employment range correction will retain
+  this local checkpoint. No push/PR/merge; held PR #257 is excluded.
+
 - v24.6.516 corrects the sole post-merge v515 review finding on master `2514d1a`
   / PR #263. A scoped `[hidden]` rule makes the Contacts card follow the selected
   Job Leads view despite the global flex-card rule. A native browser regression

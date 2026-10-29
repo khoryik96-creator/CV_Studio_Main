@@ -16,7 +16,7 @@ function hrFixture(country=''){
     if(Array.isArray(method)) {
       f.state.joinedReads=(f.state.joinedReads||0)+1;
       if(f.state.joinedNull)return [{result:null}];
-      return [{result:{joined:f.state.joinedBad?'2024-13':'2020-06'}}];
+      return [{result:f.state.employment || {joined:f.state.joinedBad?'2024-13':'2020-06'}}];
     }
     if(method==='https://www.linkedin.com/in/sample'){f.state.profileScrolls=(f.state.profileScrolls||0)+1;return [{result:true}];}
     if(method.startsWith('hrCountry')||method==='nextHRSearch'){

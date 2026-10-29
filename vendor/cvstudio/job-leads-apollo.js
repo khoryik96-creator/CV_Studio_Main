@@ -39,7 +39,7 @@
   }
   function filteredContacts() {
     const query=el('ContactsSearch').value.trim().toLowerCase();
-    return contacts.filter(row=>!query || Object.values(row).join(' ').toLowerCase().includes(query));
+    return contacts.filter(row=>!query || Object.entries(row).filter(([key])=>key!=='contact_key').map(([,value])=>value).join(' ').toLowerCase().includes(query));
   }
   function contactControls() {
     el('ContactsRefresh').disabled=contactsLoading || working;
@@ -57,6 +57,7 @@
       } else name.textContent=row.name;
       tr.append(name,...['position','company','country','email'].map(key=>text('td',row[key] || '—')),
         text('td',statusLabels[row.email_status] || statusLabels.unknown));
+      const action=document.createElement('td');window.cvStudioJAContacts?.decorate(action,row);tr.append(action);
       el('ContactsRows').append(tr);
     }
     el('ContactsPage').textContent=rows.length?`${contactsPage*40+1}–${Math.min((contactsPage+1)*40,rows.length)} of ${rows.length}`:'';

@@ -7,9 +7,9 @@ function hrFixture(){
   const f=fixture({activity:{markTabRunning:tab=>{assert.equal(tab,'jobleads');activity.push('running');return 1},markTabDone:()=>activity.push('done'),markTabFailed:()=>activity.push('failed')}});f.activity=activity;Object.assign(f.state,{hrPage:0,hrSeen:0});
   f.state.onRPC=(message,reply)=>{
     const {action,args}=message;
-    if(action==='jobStatus'){reply({connected:true,company_hr_revision:f.state.oldCompanion?0:1,hr_company_identity_revision:f.state.oldCompanyIdentity?0:1,hr_company_filter_revision:f.state.oldGroupFilter?0:1,hr_company_source_revision:f.state.oldCompanySource?0:1,hr_resilience_revision:f.state.oldResilience?0:1,hr_layout_revision:f.state.oldLayout?0:1,hr_apply_transition_revision:f.state.oldApplyTransition?0:1,concurrent_scans_revision:f.state.oldConcurrent?0:1,profile_browsing_revision:f.state.oldBrowsing?0:1,hr_joined_revision:1,hr_joined_loading_revision:f.state.oldJoinedLoading?0:1,hr_keyword_revision:f.state.oldKeywords?0:1,busy:!!f.state.hrBusy});return true;}
+    if(action==='jobStatus'){reply({connected:true,company_hr_revision:f.state.oldCompanion?0:1,hr_company_identity_revision:f.state.oldCompanyIdentity?0:1,hr_company_filter_revision:f.state.oldGroupFilter?0:1,hr_company_source_revision:f.state.oldCompanySource?0:1,hr_resilience_revision:f.state.oldResilience?0:1,hr_layout_revision:f.state.oldLayout?0:1,hr_apply_transition_revision:f.state.oldApplyTransition?0:1,concurrent_scans_revision:f.state.oldConcurrent?0:1,profile_browsing_revision:f.state.oldBrowsing?0:1,hr_joined_revision:1,hr_joined_loading_revision:f.state.oldJoinedLoading?0:1,hr_employment_revision:f.state.oldEmployment?0:1,hr_keyword_revision:f.state.oldKeywords?0:1,busy:!!f.state.hrBusy});return true;}
     if(action==='hrJoined'){
-      const value=f.state.joinedLoading?{loading:true}:{url:args.url,joined:f.state.joined ?? '2020-06'};
+      const value=f.state.joinedLoading?{loading:true}:{url:args.url,joined:f.state.joined ?? '2020-06',...f.state.employment};
       if(f.state.holdJoined)f.state.releaseJoined=()=>reply(value);else reply(value);
       return true;
     }
@@ -65,7 +65,7 @@ if(require.main===module)(async()=>{
   assert.equal(f.state.records[0].hr.people.length,1,'profiles deduplicate across pages');
   assert.equal(f.el('notes').value,'Unsaved draft stays');assert.match(f.el('HRMessage').textContent,/1 HR matches saved/);
   assert.equal(f.el('HRResults').children[0].children[0].textContent,'Sample <Person>','names remain text');
-  assert.equal(f.el('HRResults').children[0].children[3].textContent,'Joined company: Jun 2020');
+  assert.equal(f.el('HRResults').children[0].children[3].textContent,'Employment: Jun 2020');
   assert.equal(f.state.records[0].hr.people[0].joined,'2020-06');
   assert.equal(f.calls.filter(x=>x.action==='hrJoined').length,1,'duplicate pages do not re-open profiles');
   assert(f.calls.some(x=>x.action==='end'));
@@ -94,12 +94,12 @@ if(require.main===module)(async()=>{
   f.state.records[0].hr.people=[{...profile,name:'Changed in another window'}];f.state.records[0].revision++;
   await f.el('Refresh').click();assert.equal(f.el('HRResults').children[0].children[0].textContent,'Changed in another window','explicit Refresh loads newer saved HR evidence');
   f.state.records[0].hr.complete=false;f.state.records[0].revision++;await f.el('Refresh').click();assert.match(f.el('HRMessage').textContent,/Limited scan/);
-  for(const kind of ['oldCompanion','oldKeywords','oldCompanyIdentity','oldGroupFilter','oldCompanySource','oldResilience','oldLayout','oldJoinedLoading','oldBrowsing','oldConcurrent','oldApplyTransition','hrBusy','bad','conflict']){
+  for(const kind of ['oldCompanion','oldKeywords','oldCompanyIdentity','oldGroupFilter','oldCompanySource','oldResilience','oldLayout','oldJoinedLoading','oldEmployment','oldBrowsing','oldConcurrent','oldApplyTransition','hrBusy','bad','conflict']){
     const g=hrFixture();await g.init();g.state[kind]=true;await g.el('HRStart').click();
     assert(!g.state.records[0].hr,kind+' must not persist partial/unverified results');
     assert.match(g.el('HRMessage').textContent,/Previous saved results/);
     assert.deepEqual(g.activity,['running','failed'],kind+' must settle the activity on failure');
-    if(['oldCompanion','oldKeywords','oldCompanyIdentity','oldGroupFilter','oldCompanySource','oldResilience','oldLayout','oldJoinedLoading','oldBrowsing','oldConcurrent','oldApplyTransition','hrBusy'].includes(kind))assert(!g.calls.some(x=>x.action==='hrBegin'));
+    if(['oldCompanion','oldKeywords','oldCompanyIdentity','oldGroupFilter','oldCompanySource','oldResilience','oldLayout','oldJoinedLoading','oldEmployment','oldBrowsing','oldConcurrent','oldApplyTransition','hrBusy'].includes(kind))assert(!g.calls.some(x=>x.action==='hrBegin'));
   }
   const stopped=hrFixture();await stopped.init();stopped.state.hold=true;
   const run=stopped.el('HRStart').click();for(let n=0;n<20&&!stopped.state.release;n++)await new Promise(resolve=>setTimeout(resolve,0));
@@ -114,9 +114,9 @@ if(require.main===module)(async()=>{
   const trash=hrFixture();trash.state.records[0].deleted=true;trash.el('FolderFilter').value='!trash';await trash.init();
   assert(trash.el('HR').hidden);assert(trash.el('HRStart').disabled);
   const year=hrFixture();await year.init();year.state.joined='2023';await year.el('HRStart').click();
-  assert.equal(year.el('HRResults').children[0].children[3].textContent,'Joined company: 2023');
+  assert.equal(year.el('HRResults').children[0].children[3].textContent,'Employment: 2023');
   delete year.state.records[0].hr.people[0].joined;year.state.records[0].revision++;await year.el('Refresh').click();
-  assert.equal(year.el('HRResults').children[0].children[3].textContent,'Joined company: Not available','older records still render safely');
+  assert.equal(year.el('HRResults').children[0].children[3].textContent,'Employment: Not available','older records still render safely');
   const missing=hrFixture();await missing.init();missing.state.joinedLoading=true;await missing.el('HRStart').click();
   assert.equal(missing.state.records[0].hr.people[0].joined,'','optional missing Experience does not lose valid HR people');
   assert.equal(missing.calls.filter(x=>x.action==='hrJoined').length,20,'loading lookup has a bounded poll count');

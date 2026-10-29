@@ -1,5 +1,67 @@
 # Job Leads module
 
+## HR employment ranges (v24.6.518)
+
+HR cards show **Employment: Oct 2026 to Present**, or an observed completed
+range such as **Jun 2020 to Mar 2024**. Year-only source dates stay year-only;
+duration text is never used to calculate dates. Old records display only their
+saved start date, without assuming Present. Update the companion, refresh CV
+Studio and LinkedIn, then rescan to collect evidence absent from a saved scan.
+
+Exact-company modern/legacy Experience metadata is the only date source.
+Company logos/role links can arrive before date paragraphs; the reader now
+reports loading during that stage within the existing 20 polls / four scrolls.
+Present stints take precedence over separate old ones. Continuous visible
+promotions retain their start; ambiguous gaps, concurrent stints, collapsed
+groups and unorderable year-only endpoints remain unknown. No full-profile,
+About, education or role-description date fallback is added. Worker and UI
+validate profile identity and optional `left`/`current` fields; the existing
+revision-guarded JSON save/backup keeps them without changing the DB schema.
+`hr_employment_revision:1` prevents a new scan using an older companion.
+
+The reported historical scan snapshot is unavailable. Read-only inspection
+confirmed that the current visible modern entry is readable once hydrated;
+the newly reproduced loading path explains a possible missing-date outcome,
+not a claim that the exact old snapshot was recovered.
+
+The JobAdder pre-publication correction also binds protected non-replay state
+to the account/email rather than account/email/company. Changing the company
+cannot bypass an uncertain or completed create. Recovery checks the original
+POST company; fresh reviews still bind all selected fields and the account.
+
+## Create company contacts in JobAdder (v24.6.517)
+
+Unlocked contacts offers **Create in JobAdder**. The owner explicitly chooses
+an existing JobAdder company; this workflow cannot create companies. Search,
+select the company, check first/last name and position, then Review contact and
+Create contact. The unlocked email is authoritative and the observed LinkedIn
+URL is sent as `social.linkedin`. The scan-country label is never sent as an
+address. Existing JobAdder sign-in/permissions apply; no Apollo lookup is made.
+
+The official public v2 OpenAPI was read without credentials: GET companies
+supports Name; GET contacts supports Email; POST contacts accepts the reviewed
+AddContactCommand fields and reports email duplicates with409. No duplicate
+override is used. Exact-email duplicate checks happen during review and again
+immediately before creation. Existing contacts under another company are shown
+without updating/moving them. Failed/truncated duplicate reads block creation.
+
+The review nonce binds the payload, selected company and current connection,
+expires after10 minutes, and becomes unusable when fields/account change.
+Protected operation metadata is persisted before POST; timeout/uncertainty can
+only be reconciled with a safe lookup, never an automatic POST replay. The POST
+sets `safe_to_retry=False`, `retries=0`, `refresh_on_401=False`. A lost result
+save leaves the pending marker intact. Duplicate clicks are serialized. The
+critical-write guard prevents sign-out/account replacement during the request.
+All business data/markers stay protected; no provider response content enters
+errors/logs. History is bounded at5,000 operations. No candidate, ad, HR evidence
+or email-verifier state is rewritten. One additive local POST route preserves
+the122 previous routes exactly and the five global request guards.
+
+Local tests and the actual native app use synthetic JobAdder transport. No real
+JobAdder contact was created; account-specific required/custom-field validation
+still requires owner-driven acceptance. The installed owner app is separate
+from the isolated preview. Held PR #257 is not included.
+
 ## Contact view visibility (v24.6.516)
 
 The Contacts panel has the shared `card` class, whose explicit flex display

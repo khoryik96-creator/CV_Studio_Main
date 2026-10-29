@@ -645,6 +645,7 @@
     return true;
   }
   function readHRJoined(expectedURL, expectedCompany, companyId) {
+    const unknown=()=>({joined:'',left:'',current:null});
     assertPage('', 'profile');
     if (profileURL(location.href) !== expectedURL || !companyURL(expectedCompany) || !/^[0-9]{1,24}$/.test(companyId)) throw Error('The HR profile identity changed.');
     const main = document.querySelector('main');
@@ -655,7 +656,7 @@
     // in free-form role descriptions for dates.
     const scope = heading.getAttribute('componentkey') === 'ProfileNullStateCardAnchor_Experience' ? heading.parentElement?.parentElement :
       document.querySelector('main #experience')?.closest('section');
-    if (!scope) return {joined:''};
+    if (!scope) return unknown();
     const selector = '[componentkey^="entity-collection-item-"], li.artdeco-list__item';
     const cards = [...scope.querySelectorAll(selector)].filter(n=>visible(n) && !n.parentElement?.closest?.(selector));
     if (!cards.length) return {loading:true};
@@ -671,18 +672,18 @@
       const match = compact(words).match(/^((?:[A-Za-z]+ )?(?:19|20)\d{2})\s*[-–—]\s*(Present|(?:[A-Za-z]+ )?(?:19|20)\d{2})(?:\s*·.*)?$/i);
       if (!match) return null;
       const start=date(match[1]), current=/^present$/i.test(match[2]), end=current ? null : date(match[2]);
-      return start && (current || end && end.order >= start.order) ? {start,end,current} : null;
+      return start && (current || end && end.year*12+(end.month || 12) >= start.order) ? {start,end,current} : null;
     };
-    const matches = [];
+    const matches = []; let pending=false, ambiguous=false;
     for (const card of cards) {
       const links = [...card.querySelectorAll('a[href*="/company/"]')].filter(n=>visible(n) && [expectedCompany,'https://www.linkedin.com/company/'+companyId+'/'].includes(companyURL(n.href)));
       if (!links.length) continue;
       // An expandable group may hide the actual first role. A current role's
       // date alone must not be presented as the company joining date.
-      if ([...card.querySelectorAll('a, button')].some(n=>visible(n) && /(?:show|see) all|more (?:positions|roles|experiences)/i.test(text(n)))) continue;
+      if ([...card.querySelectorAll('a, button')].some(n=>visible(n) && /(?:show|see) all|more (?:positions|roles|experiences)/i.test(text(n)))) { ambiguous=true; continue; }
       const linked = n=>[...n.querySelectorAll('a[href*="/company/"]')].some(a=>visible(a) && [expectedCompany,'https://www.linkedin.com/company/'+companyId+'/'].includes(companyURL(a.href)));
       const roles=[...card.querySelectorAll('ul > li, [role="list"] > [role="listitem"]')].filter(n=>visible(n) && linked(n));
-      if (roles.some(n=>![...n.querySelectorAll('a[href*="/company/"] p, .pvs-entity__caption-wrapper')].filter(visible).some(n=>ranges(text(n))))) continue;
+      if (roles.some(n=>![...n.querySelectorAll('a[href*="/company/"] p, .pvs-entity__caption-wrapper')].filter(visible).some(n=>ranges(text(n))))) { pending=true; continue; }
       const observed = links.flatMap(n=>[...n.querySelectorAll('p, .pvs-entity__caption-wrapper')].filter(visible).map(n=>ranges(text(n))).filter(Boolean));
       // Legacy date captions can sit beside the company link, within the same
       // bounded Experience item, rather than inside that link.
@@ -690,22 +691,39 @@
         observed.push(...[...card.querySelectorAll('.pvs-entity__caption-wrapper')].filter(visible).map(n=>ranges(text(n))).filter(Boolean));
       }
       const unique = [...new Map(observed.map(r=>[r.start.value+'|'+(r.current?'present':r.end.value),r])).values()];
+      if (!unique.length) {
+        // The company logo and role link can arrive before the date paragraph.
+        // Poll within the existing lookup budget; never derive dates from tenure.
+        const metadata=links.map(text).join(' ');
+        if (!/\b(?:19|20)\d{2}\b|\b(?:years?|months?|yrs?|mos?)\b/i.test(metadata)) pending=true;
+        continue;
+      }
       const current = unique.filter(r=>r.current);
-      if (current.length > 1) return {joined:''};
-      if (current.length !== 1) continue;
-      let first=current[0].start;
-      // Walk only directly adjacent/overlapping roles in this current group.
+      if (current.length > 1) return unknown();
+      const latest=current[0] || unique.reduce((a,b)=>b.end.order>a.end.order?b:a);
+      // Year-only end dates cannot order two stints in the same year.
+      if (!current.length && unique.some(r=>r!==latest && r.end.year===latest.end.year && (!r.end.month || !latest.end.month))) { ambiguous=true; continue; }
+      let first=latest.start;
+      // Walk only directly adjacent/overlapping roles in this company group.
       // A gap (or imprecise end date) cannot prove continuity after rejoining.
       let complete=true;
-      for (const role of unique.filter(r=>!r.current).sort((a,b)=>b.start.order-a.start.order)) {
+      for (const role of unique.filter(r=>r!==latest && !r.current).sort((a,b)=>b.start.order-a.start.order)) {
         if (role.start.order < first.order) {
           if (!first.month || !role.end.month || role.end.order < first.order-1) { complete=false; break; }
           first=role.start;
         }
       }
-      if (complete) matches.push(first.value);
+      if (complete) matches.push({joined:first.value,left:latest.current?'':latest.end.value,current:latest.current});
+      else ambiguous=true;
     }
-    return {joined:matches.length === 1 ? matches[0] : ''};
+    if (pending) return {loading:true};
+    if (ambiguous) return unknown();
+    const current=matches.filter(r=>r.current);
+    if (current.length) return current.length===1?current[0]:unknown();
+    if (!matches.length) return unknown();
+    const endBound=(value,last)=>Number(value.slice(0,4))*12+(value.length===7?Number(value.slice(5)):last?12:1);
+    const latest=matches.filter(r=>matches.every(other=>r===other || endBound(r.left,false)>endBound(other.left,true)));
+    return latest.length===1?latest[0]:unknown();
   }
   function nextHRSearch(signature, company, country, keywords) {
     const snapshot = readHRSearch(company,country,keywords);
