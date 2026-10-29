@@ -1,8 +1,9 @@
 # v24.6.522 employment loading - local QA
 
 Base: local v521 1941e58 (including local v520 a076a07), from merged v519
-37e9461 / PR266. Branch codex/v24.6.522-employment-loading. No push or merge
-requested this turn; PR257 remains held/excluded.
+37e9461 / PR266. Branch codex/v24.6.522-employment-loading. The owner subsequently
+authorizes publication and merge of the v520-522 stack. Issue35 records final
+PR/merge identity. PR257 remains held/excluded.
 
 The owner reports that all employment dates still appear unavailable.
 Read-only inspection confirms the normal local installation is still v519.

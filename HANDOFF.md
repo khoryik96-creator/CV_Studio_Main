@@ -7,7 +7,7 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current local checkpoint: v24.6.522 (not published or merged)** on
+**Current source checkpoint: v24.6.522 (owner-authorized publication/merge)** on
 `codex/v24.6.522-employment-loading`, stacked on local v521 `1941e58` and
 v520 `a076a07`. The owner reports all employment blank. Read-only inspection
 found the normal installation still at v519 and blank persisted observations;
@@ -25,7 +25,9 @@ or explicitly rescan. No paid/contact action, owner data/server/extension update
 new production route or SQL schema migration. A real worker+real DOM regression
 fails on v521 and passes on v522; live read-only inspection is not acceptance
 of an installed updated companion. Full QA/limitations are in the v522 report.
-No publication/merge requested. PR #257 remains held/excluded.
+The owner now authorizes publication and merge of this stack, including local
+v520/521. Issue #35 records the resulting PR and merge identity. PR #257 remains
+held/excluded.
 
 **Previous local checkpoint: v24.6.521 (not published or merged)** on
 `codex/v24.6.521-people-dashboards`, retaining local v520 `a076a07` contact

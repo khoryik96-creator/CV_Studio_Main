@@ -13,7 +13,8 @@
   failure on v521 and success on v522. Owner app/data and installed extension
   remain unchanged; old blanks need an explicit employment check/rescan. Stacked
   v520/521 features retained. No new production route/SQL schema/paid action.
-  Not pushed/merged; held PR257 excluded. See v522 QA for final gates/limits.
+  Owner now authorizes publication/merge of the v520-522 stack; issue35 records
+  final PR/merge identity. Held PR257 excluded. See v522 QA for gates/limits.
 
 - v24.6.521 locally adds saved HR and Sourcer candidate dashboards while
   retaining v520 owner/recruiter defaults. Saved HR observations deduplicate by
