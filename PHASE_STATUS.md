@@ -11,8 +11,9 @@
   records without a DB migration. Updated companion capability is required
   for single/bulk scans. JobAdder non-replay now spans company choices for the
   same account/email; uncertain recovery checks the original POST company.
-  Both checkpoints are local and unmerged; no live contact/paid call. PR #257
-  remains on hold. See the v518 QA report.
+  The owner now authorizes publishing/merging both checkpoints; no live contact
+  or paid call. PR #257 remains on hold. See the v518 QA report and issue #35
+  for publication/merge identity.
 
 - v24.6.517 is a local Job Leads → JobAdder company-contact feature on merged
   v516. Existing-company choice only, source-bound email, editable reviewed

@@ -1,8 +1,9 @@
 # v24.6.518 — observed HR employment ranges
 
 Local correction stacked on v517 `8a7025d` (reviewed JobAdder company contacts),
-based on merged master v516 `fad1a39`. Neither new checkpoint is published or
-merged. Held PR #257 remains excluded.
+based on merged master v516 `fad1a39`. The owner now authorizes publication and
+merge of both tested checkpoints; issue #35 records their publication/merge
+identity. Held PR #257 remains excluded.
 
 The owner reports dates visible in LinkedIn but absent from saved HR cards,
 and requests month/year start/end ranges, including Present. Read-only scoped
