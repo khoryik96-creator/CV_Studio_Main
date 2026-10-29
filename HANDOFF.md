@@ -7,7 +7,24 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current source checkpoint: v24.6.517 (local, unmerged)** on
+**Current source checkpoint: v24.6.518 (local, unmerged)** on
+`codex/v24.6.517-jobadder-contacts`, stacked on local v517 `8a7025d`.
+The owner requests observed HR employment ranges: month/year through Present
+or the observed end date. Exact-company Experience entries now wait within the
+existing lookup budget when links arrive before date metadata, and carry
+optional `left` / `current` evidence through the worker, UI and existing JSON
+store. Current stints take precedence over separate earlier stints; ambiguous,
+collapsed, unrelated or duration-only evidence never becomes an invented date.
+Year-only sources retain their precision. `hr_employment_revision:1` requires
+the updated companion for single/bulk scans. Old start-only records remain
+readable and need a fresh scan to gain missing evidence. No schema migration.
+Final self-check also closes a v517 pre-publication non-replay gap: protected
+markers bind account/email across company choices; recovery uses the original
+POST company. Switching company cannot bypass an uncertain/completed write.
+No new push/PR/merge, live paid/unlock/contact creation, or owner-server change.
+PR #257 remains on hold. See v518 QA and Job Leads notes for validation.
+
+**Previous source checkpoint: v24.6.517 (local, unmerged)** on
 `codex/v24.6.517-jobadder-contacts`, from merged v516 `fad1a39` / PR #264.
 The owner requests creating JobAdder company contacts from unlocked emails and
 explicitly chooses existing-company selection only. The contacts table opens

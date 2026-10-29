@@ -3,12 +3,13 @@
 The application keeps ownership of the JobAdder OAuth token lifecycle, the
 critical-write concurrency guard (the ``_ja_critical_write_route`` decorator
 stays on the delegating routes) and the ``JobAdderClient`` transport.  This
-module holds only the JSON candidate-write handlers behind
+module holds the JSON candidate-write handlers behind
 ``/jobadder/create_candidate`` and ``/jobadder/update_candidate``.  It reaches
 the token refresh, request body and transport through injected callbacks and
 never imports the application.  Both writes stay non-retryable
 (``safe_to_retry=False``); the logic is a verbatim move of the legacy web-shell
-handlers.
+handlers. A separate reviewed company-contact service uses protected non-replay
+markers and never calls the candidate handlers.
 """
 
 from __future__ import annotations
@@ -51,7 +52,7 @@ class JobAdderContactService:
             if len(data["operations"]) > 5000:
                 raise ValueError()
             for key, entry in data["operations"].items():
-                if not re.fullmatch(r"[a-f0-9]{64}", key) or not isinstance(entry, dict) or entry.get("state") not in {"review", "pending", "unconfirmed", "rejected", "created", "exists"}:
+                if not re.fullmatch(r"[a-f0-9]{64}", key) or not isinstance(entry, dict) or entry.get("state") not in {"review", "pending", "unconfirmed", "rejected", "created", "exists"} or type(entry.get("company_id")) is not int or entry["company_id"] <= 0:
                     raise ValueError()
             return data
         except Exception:
@@ -146,14 +147,17 @@ class JobAdderContactService:
                 payload["social"] = {"linkedin":profile}
             encoded = json.dumps(payload,sort_keys=True,separators=(",",":")).encode()
             fingerprint = hashlib.sha256(encoded).hexdigest()
-            key = hashlib.sha256(json.dumps([scope,email.lower(),company_id]).encode()).hexdigest()
+            # A different company choice must not bypass an unresolved email
+            # write. The selected company stays in the review fingerprint and
+            # protected marker, and recovery checks the original POST company.
+            key = hashlib.sha256(json.dumps([scope,email.lower()]).encode()).hexdigest()
             store = self._store()
             previous = store["operations"].get(key)
             if previous and previous["state"] in {"created","exists"}:
                 return {"state":previous["state"],"contact_id":previous.get("contact_id"),"message":"This contact is already in JobAdder."}
             if previous and previous["state"] in {"pending","unconfirmed"}:
                 matches = self._duplicates(email,token)
-                exact = next((row for row in matches if row["company_id"]==company_id),None)
+                exact = next((row for row in matches if row["company_id"]==previous["company_id"]),None)
                 if exact:
                     previous.update(state="created",contact_id=exact["contact_id"]);self._write(store)
                     return {"state":"created",**exact,"message":"Contact confirmed in JobAdder. No request was repeated."}
@@ -170,7 +174,7 @@ class JobAdderContactService:
                 if key not in store["operations"] and len(store["operations"]) >= 5000:
                     raise JobAdderContactError("Local contact-create history is full. No contact was created.", "JOBADDER_CONTACT_LIMIT", 409)
                 nonce = secrets.token_hex(32)
-                store["operations"][key] = {"state":"review","payload":fingerprint,"proof":hashlib.sha256(nonce.encode()).hexdigest(),"expires":self.clock()+600}
+                store["operations"][key] = {"state":"review","company_id":company_id,"payload":fingerprint,"proof":hashlib.sha256(nonce.encode()).hexdigest(),"expires":self.clock()+600}
                 self._write(store)
                 return {"state":"review","review_token":nonce,"company":str(company["name"])[:200],"message":"Review these details, then choose Create contact."}
             if body.get("confirmed") is not True or not previous or previous["state"] != "review" or previous.get("payload") != fingerprint or previous.get("expires",0) <= self.clock() or not secrets.compare_digest(previous.get("proof", ""),hashlib.sha256(str(body.get("review_token", "")).encode()).hexdigest()):

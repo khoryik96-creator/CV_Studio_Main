@@ -464,6 +464,20 @@
     if (typeof value !== 'string' || !/^(?:19|20)\d{2}(?:-(?:0[1-9]|1[0-2]))?$/.test(value)) return 'Not available';
     return value.length === 4 ? value : ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][Number(value.slice(5))-1]+' '+value.slice(0,4);
   }
+  function hrEmployment(value) {
+    const {joined,left,current}=value;
+    if (!('left' in value) && !('current' in value)) return {};
+    if (typeof left !== 'string' || !/^(?:(?:19|20)\d{2}(?:-(?:0[1-9]|1[0-2]))?)?$/.test(left) || ![true,false,null].includes(current) ||
+        current===true && (!joined || left) || current===false && (!joined || !left) || current===null && (joined || left) ||
+        left && (joined.length===4?joined+'-01':joined)>(left.length===4?left+'-12':left)) throw Error('The HR employment dates could not be confirmed.');
+    return {left,current};
+  }
+  function hrEmploymentLabel(person) {
+    const start=hrJoinedLabel(person.joined);
+    if (start==='Not available') return start;
+    try { hrEmployment(person); } catch { return 'Not available'; }
+    return start+(person.current===true?' to Present':person.current===false?' to '+hrJoinedLabel(person.left):'');
+  }
   function hrPeople(people) {
     const target = el('HRResults'); target.replaceChildren();
     window.cvStudioApollo?.begin(savedJob(previewUrl));
@@ -471,7 +485,7 @@
       if (!/^https:\/\/www\.linkedin\.com\/in\/[A-Za-z0-9_%~-]+\/?$/.test(person?.url || '')) continue;
       const card = node('article','','job-leads-hr-person'), link = node('a',person.name);
       link.href=person.url; link.target='_blank'; link.rel='noopener noreferrer';
-      card.append(link,node('p',person.title),node('p',person.location || 'Location not shown','job-leads-muted'),node('p','Joined company: '+hrJoinedLabel(person.joined),'job-leads-muted'),node('p','Matched: '+person.matched,'job-leads-muted'));
+      card.append(link,node('p',person.title),node('p',person.location || 'Location not shown','job-leads-muted'),node('p','Employment: '+hrEmploymentLabel(person),'job-leads-muted'),node('p','Matched: '+person.matched,'job-leads-muted'));
       window.cvStudioEmailVerifier?.decorate(card,person);
       window.cvStudioApollo?.decorate(card,person);
       target.append(card);
@@ -534,7 +548,7 @@
       if (companion?.profile_browsing_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to keep browsing safely during scans.');
       if (companion?.concurrent_scans_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to run Job Leads and Sourcer together.');
       if (companion?.hr_apply_transition_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to use the corrected company-selection check.');
-      if (!companion?.connected || companion.company_hr_revision !== 1 || companion.hr_company_identity_revision !== 1 || companion.hr_company_filter_revision !== 1 || companion.hr_company_source_revision !== 1 || companion.hr_resilience_revision !== 1 || companion.hr_layout_revision !== 1 || companion.hr_joined_revision !== 1 || companion.hr_joined_loading_revision !== 1 || companion.hr_keyword_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to use the corrected HR search and joining-date checks.');
+      if (!companion?.connected || companion.company_hr_revision !== 1 || companion.hr_company_identity_revision !== 1 || companion.hr_company_filter_revision !== 1 || companion.hr_company_source_revision !== 1 || companion.hr_resilience_revision !== 1 || companion.hr_layout_revision !== 1 || companion.hr_joined_revision !== 1 || companion.hr_joined_loading_revision !== 1 || companion.hr_employment_revision !== 1 || companion.hr_keyword_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to use the corrected HR search and joining-date checks.');
       if (companion.busy) throw Error('Finish the current companion search or ad read first.');
       const saved=previousHRCompany(row),manual=companyURL && (!saved || companyURL!==saved.url);
       if (!manual) {
@@ -591,7 +605,7 @@
               const value=await rpc('hrJoined',{run_id:hrRun,tab_id:source.tab_id,url:profileURL}); checkHR();
               if (value && !value.loading) {
                 if (value.url !== profileURL || typeof value.joined !== 'string' || !/^(?:(?:19|20)\d{2}(?:-(?:0[1-9]|1[0-2]))?)?$/.test(value.joined)) throw Error('An HR joining date could not be confirmed.');
-                entry.joined=value.joined; break;
+                Object.assign(entry,{joined:value.joined},hrEmployment(value)); break;
               }
               await pauseDiscovery();
             }

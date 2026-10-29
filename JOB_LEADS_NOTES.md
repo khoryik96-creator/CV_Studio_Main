@@ -1,5 +1,34 @@
 # Job Leads module
 
+## HR employment ranges (v24.6.518)
+
+HR cards show **Employment: Oct 2026 to Present**, or an observed completed
+range such as **Jun 2020 to Mar 2024**. Year-only source dates stay year-only;
+duration text is never used to calculate dates. Old records display only their
+saved start date, without assuming Present. Update the companion, refresh CV
+Studio and LinkedIn, then rescan to collect evidence absent from a saved scan.
+
+Exact-company modern/legacy Experience metadata is the only date source.
+Company logos/role links can arrive before date paragraphs; the reader now
+reports loading during that stage within the existing 20 polls / four scrolls.
+Present stints take precedence over separate old ones. Continuous visible
+promotions retain their start; ambiguous gaps, concurrent stints, collapsed
+groups and unorderable year-only endpoints remain unknown. No full-profile,
+About, education or role-description date fallback is added. Worker and UI
+validate profile identity and optional `left`/`current` fields; the existing
+revision-guarded JSON save/backup keeps them without changing the DB schema.
+`hr_employment_revision:1` prevents a new scan using an older companion.
+
+The reported historical scan snapshot is unavailable. Read-only inspection
+confirmed that the current visible modern entry is readable once hydrated;
+the newly reproduced loading path explains a possible missing-date outcome,
+not a claim that the exact old snapshot was recovered.
+
+The JobAdder pre-publication correction also binds protected non-replay state
+to the account/email rather than account/email/company. Changing the company
+cannot bypass an uncertain or completed create. Recovery checks the original
+POST company; fresh reviews still bind all selected fields and the account.
+
 ## Create company contacts in JobAdder (v24.6.517)
 
 Unlocked contacts offers **Create in JobAdder**. The owner explicitly chooses

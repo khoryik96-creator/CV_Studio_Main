@@ -606,7 +606,7 @@ async function handle(message, sender) {
     if(jobCapture?.bound!==connection || jobCapture.operation!==args.operation_id)return false;
     jobCapture.cancelled=true;return true;
   }
-  if (message.action === 'jobStatus') return {connected:true,job_read:true,job_search:true,job_search_revision:1,company_hr_revision:1,hr_company_identity_revision:1,hr_company_filter_revision:1,hr_company_source_revision:1,hr_resilience_revision:1,hr_layout_revision:1,hr_apply_transition_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_keyword_revision:1,people_country_revision:1,people_results_revision:1,profile_browsing_revision:1,concurrent_scans_revision:1,companion_update_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
+  if (message.action === 'jobStatus') return {connected:true,job_read:true,job_search:true,job_search_revision:1,company_hr_revision:1,hr_company_identity_revision:1,hr_company_filter_revision:1,hr_company_source_revision:1,hr_resilience_revision:1,hr_layout_revision:1,hr_apply_transition_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_employment_revision:1,hr_keyword_revision:1,people_country_revision:1,people_results_revision:1,profile_browsing_revision:1,concurrent_scans_revision:1,companion_update_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
   if (message.action === 'hrBegin') {
     const bound = connection;
     if (!/^[a-f0-9]{32}$/.test(args.run_id || '') || !hrCompanyURL(args.company_url) || typeof args.company !== 'string' || !args.company.trim() || args.company.length > 200 ||
@@ -808,8 +808,16 @@ async function handle(message, sender) {
         return hrWaiting(hr);
       }
       if (typeof result.joined !== 'string' || !/^(?:(?:19|20)\d{2}(?:-(?:0[1-9]|1[0-2]))?)?$/.test(result.joined)) throw safeError('The joining date could not be confirmed.');
+      const employment={};
+      if ('left' in result || 'current' in result) {
+        const {joined,left,current}=result;
+        if (typeof left !== 'string' || !/^(?:(?:19|20)\d{2}(?:-(?:0[1-9]|1[0-2]))?)?$/.test(left) || ![true,false,null].includes(current) ||
+            current===true && (!joined || left) || current===false && (!joined || !left) || current===null && (joined || left) ||
+            left && (joined.length===4?joined+'-01':joined)>(left.length===4?left+'-12':left)) throw safeError('The employment dates could not be confirmed.');
+        Object.assign(employment,{left,current});
+      }
       await closeOwned(id,args.url); delete hr.joining; await persist(); live(bound,run);
-      return {url:args.url,joined:result.joined};
+      return {url:args.url,joined:result.joined,...employment};
     }
     if (tab.status !== 'complete') return hrWaiting(hr);
     if (hr.joining) throw safeError('Finish the current joining-date lookup before paging.');

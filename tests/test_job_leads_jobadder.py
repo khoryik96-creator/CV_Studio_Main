@@ -88,6 +88,21 @@ def test_ambiguous_write_survives_restart_and_only_reads_until_confirmed():
     client.matches=[{'contactId':45,'email':SOURCE['email'],'company':{'companyId':12,'name':'Example Company'}}]
     assert call(restarted,'check')['state']=='created' and post_count(client)==1
 
+
+def test_changing_company_cannot_bypass_uncertain_or_completed_email_write():
+    service,client,vault,account=setup();proof=review(service);client.fail=TimeoutError()
+    assert call(service,'create',review_token=proof,confirmed=True)['state']=='unconfirmed'
+    client.fail=None
+    original=client.request_json
+    client.request_json=lambda path,**kwargs: (200,{'companyId':13,'name':'Other Company'}) if path=='companies/13' else original(path,**kwargs)
+    for action in ['review','create','check']:
+        assert call(service,action,company_id=13,confirmed=True)['state']=='unconfirmed'
+    assert post_count(client)==1
+    client.matches=[{'contactId':45,'email':SOURCE['email'],'company':{'companyId':12,'name':'Example Company'}}]
+    assert call(service,'check',company_id=13)['state']=='created','recovery uses the company of the original POST'
+    assert call(service,'review',company_id=13)['state']=='created'
+    assert post_count(client)==1
+
 def test_storage_failure_before_post_and_corruption_fail_closed():
     service,client,vault,account=setup();proof=review(service)
     service.save=mock.Mock(side_effect=OSError('private path'))

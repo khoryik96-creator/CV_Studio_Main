@@ -4,6 +4,16 @@
 
 ## Release state
 
+- v24.6.518 retains local v517 and adds observed employment ranges to HR cards.
+  Date metadata may hydrate after a company entry; bounded lookup waits now
+  cover that stage. Exact profile/company, source filters, Stop and owned-tab
+  checks remain. Optional end/current evidence preserves legacy start-only
+  records without a DB migration. Updated companion capability is required
+  for single/bulk scans. JobAdder non-replay now spans company choices for the
+  same account/email; uncertain recovery checks the original POST company.
+  Both checkpoints are local and unmerged; no live contact/paid call. PR #257
+  remains on hold. See the v518 QA report.
+
 - v24.6.517 is a local Job Leads → JobAdder company-contact feature on merged
   v516. Existing-company choice only, source-bound email, editable reviewed
   name/position and exact-email duplicate checks precede a protected, explicitly
