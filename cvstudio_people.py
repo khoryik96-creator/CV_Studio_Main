@@ -72,7 +72,7 @@ def employment_label(person):
             return ''
         return s if len(s)==4 else ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][int(s[5:])-1]+' '+s[:4]
     start=label(person.get('joined',''))
-    return start+(' to Present' if person.get('current') is True else ' to '+label(person['left']) if person.get('current') is False else '') if start else 'Not available'
+    return start+(' to Present' if person.get('current') is True else ' to '+label(person['left']) if person.get('current') is False else '') if start else 'Not confirmed' if person.get('employment_status')=='not_shown' else 'Not checked'
 
 
 class SourcerCandidates:

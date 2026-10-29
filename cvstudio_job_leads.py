@@ -320,6 +320,11 @@ def clean_hr(raw, company):
             entry[key] = value.strip()
         if entry['joined'] and not re.fullmatch(r'(?:19|20)\d{2}(?:-(?:0[1-9]|1[0-2]))?', entry['joined']):
             invalid()
+        if 'employment_status' in person:
+            state=person['employment_status']
+            if not isinstance(state,str) or state not in {'observed','not_checked','not_shown'} or (state=='observed')!=bool(entry['joined']):
+                invalid()
+            entry['employment_status']=state
         # Optional additive evidence keeps old start-only records readable.
         if 'left' in person or 'current' in person:
             left, current = person.get('left'), person.get('current')
@@ -596,7 +601,7 @@ class JobLeadsStore:
                 person = next((p for p in record['hr']['people'] if p['url'].rstrip('/') == str(person_url).rstrip('/')),None)
                 if person is None:
                     raise JobLeadsError('This person changed. Refresh HR people before checking employment.',409,'JOB_LEADS_CONFLICT')
-                person.update(dates)
+                person.update(dates,employment_status='observed')
                 record['hr'] = clean_hr(record['hr'],record['company'])
             else:
                 record['hr'] = clean_hr(raw, record['company'])

@@ -1,5 +1,28 @@
 # Job Leads module
 
+## Direct Experience date loading (v24.6.522)
+
+Employment checks now open `/in/<observed-handle>/details/experience/` in the
+existing bounded owned inactive lookup. This avoids depending on Activity and
+lazy profile scrolling. Only the recognized Experience details section with its
+anchor supplies dates; sidebar/About/activity text is excluded. The base profile
+and exact company association still identify the person/stint. General Sourcer
+profile navigation is unchanged. An extra companion capability prevents the new
+UI from silently using an older installed date reader.
+
+Canonical lookup ownership survives worker suspension. Query/identity redirects
+remain rejected; user-viewed tabs are never automatically scrolled/closed. Old
+in-flight base-profile lookups remain readable without being reopened/replayed.
+Existing navigation/metadata poll limits and Stop continue to apply.
+
+Blank legacy or interrupted lookups say Not checked, including after saving and
+reopening. Confirmed-date counts appear in saved scan and bulk queue summaries,
+so saved people do not imply successful date checks. Existing blanks require an
+explicit Check employment or fresh scan; opening/updating the app cannot invent
+or backfill dates. Single-person failed checks preserve earlier confirmed dates.
+Update both app and companion. The preview's job-ad snapshot is separate from
+the normal installation and does not prove live updated-companion acceptance.
+
 ## People dashboards and employment refresh (v24.6.521)
 
 Job Leads -> HR people lists all saved non-trashed HR observations, one row per

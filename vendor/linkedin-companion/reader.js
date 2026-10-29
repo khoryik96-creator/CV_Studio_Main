@@ -25,11 +25,21 @@
     if (/unusual activity|temporarily restricted|security verification|you(?:.ve| have) reached.*(?:search|commercial).*limit|too many requests/i.test(text(document.querySelector('main') || document.body).slice(0, 5000))) return 'LinkedIn is showing an access or usage restriction. The agent will stop.';
     return '';
   }
+  function employmentProfileURL(value) {
+    try {
+      const u=new URL(value),match=u.pathname.match(/^\/in\/([A-Za-z0-9_%~-]+)\/details\/experience\/?$/);
+      if(match && u.origin==='https://www.linkedin.com' && !u.username && !u.password && !u.search && !u.hash)
+        return profileURL(u.origin+'/in/'+match[1]);
+      return profileURL(value);
+    } catch{return '';}
+  }
   function assertPage(mode, type = 'search') {
     if (location.origin !== 'https://www.linkedin.com') throw Error('This is not a supported LinkedIn page.');
     const problem = issue();
     if (problem) throw Error(problem);
-    if (type === 'profile') {
+    if (type === 'employment') {
+      if (!employmentProfileURL(location.href)) throw Error('The employment profile page changed. Nothing will be read.');
+    } else if (type === 'profile') {
       if (!profileURL(location.href)) throw Error('The profile page changed. Nothing will be read.');
     } else if (mode === 'standard' ? !/^\/search\/results\/people\/?$/.test(location.pathname) :
                !/^\/talent\//.test(location.pathname) || !!profileURL(location.href)) {
@@ -637,8 +647,8 @@
     return nextButton() || [...(document.querySelector('main')?.querySelectorAll('button') || [])].find(button=>visible(button) && /^(next|next page)$/i.test(button.getAttribute('aria-label') || text(button)) && button.parentElement?.querySelector('ul button[aria-label^="Page "]'));
   }
   function prepareHRJoined(expectedURL) {
-    assertPage('', 'profile');
-    if (profileURL(location.href) !== expectedURL) throw Error('The HR profile identity changed.');
+    assertPage('', 'employment');
+    if (employmentProfileURL(location.href) !== expectedURL) throw Error('The HR profile identity changed.');
     const main=document.querySelector('main'); if (!main) return false;
     const experience=main.querySelector('[componentkey^="profileCardsExperienceOnly"], #experience') ||
       [...main.querySelectorAll('h2')].find(n=>visible(n) && text(n)==='Experience');
@@ -648,16 +658,18 @@
   }
   function readHRJoined(expectedURL, expectedCompany, companyId) {
     const unknown=()=>({joined:'',left:'',current:null});
-    assertPage('', 'profile');
-    if (profileURL(location.href) !== expectedURL || !companyURL(expectedCompany) || !/^[0-9]{1,24}$/.test(companyId)) throw Error('The HR profile identity changed.');
+    assertPage('', 'employment');
+    if (employmentProfileURL(location.href) !== expectedURL || !companyURL(expectedCompany) || !/^[0-9]{1,24}$/.test(companyId)) throw Error('The HR profile identity changed.');
     const main = document.querySelector('main');
     const heading = [...document.querySelectorAll('main h2, h2')].find(n=>visible(n) && text(n) === 'Experience');
-    if (!main || !heading) return {loading:true};
+    const details=/\/details\/experience\/?$/.test(location.pathname);
+    if (!main || !details && !heading) return {loading:true};
     // Modern company groups have a stable entity key; legacy groups live in
     // the Experience section. Never scan About, activity, education or captions
     // in free-form role descriptions for dates.
-    const scope = heading.getAttribute('componentkey') === 'ProfileNullStateCardAnchor_Experience' ? heading.parentElement?.parentElement :
-      document.querySelector('main #experience')?.closest('section');
+    const detailScopes=details?[...main.querySelectorAll('[componentkey$="ExperienceDetailsSection"]')].filter(n=>visible(n) && n.querySelector('[componentkey="profileExperienceDetails_top_anchor"]')):[];
+    const scope = details ? detailScopes.length===1?detailScopes[0]:null :
+      heading.getAttribute('componentkey') === 'ProfileNullStateCardAnchor_Experience' ? heading.parentElement?.parentElement : document.querySelector('main #experience')?.closest('section');
     if (!scope) return {loading:true};
     const selector = '[componentkey^="entity-collection-item-"], li.artdeco-list__item';
     const cards = [...scope.querySelectorAll(selector)].filter(n=>visible(n) && !n.parentElement?.closest?.(selector));

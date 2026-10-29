@@ -61,7 +61,7 @@
     const note=el('HRMessage');note.textContent='Reading this person’s company employment in LinkedIn…';controls('HR');
     try {
       const status=await window.cvStudioJobLeads.rpc('jobStatus');
-      if(status?.hr_date_check_revision!==1)throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to check employment.');
+      if(status?.hr_date_check_revision!==1 || status.hr_experience_page_revision!==1)throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to check employment.');
       if(dateStopped)throw Error('Employment check stopped. Saved dates were kept.');
       const result=await window.cvStudioJobLeads.rpc('hrDate',{operation_id:dateOperation,url:person.url.replace(/\/$/,''),company_url:row.hr.company_url,company_id:row.hr.company_id},90000);
       if(dateStopped)throw Error('Employment check stopped. Saved dates were kept.');

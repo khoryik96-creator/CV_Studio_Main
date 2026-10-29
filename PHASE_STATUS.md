@@ -4,6 +4,17 @@
 
 ## Release state
 
+- v24.6.522 locally changes HR date reads to the exact profile's dedicated
+  Experience page, after live read-only evidence of delayed profile loading.
+  Narrow Experience/company/profile scope, existing polling/Stop/tab protection,
+  suspension and concurrent-module boundaries remain. A capability check requires
+  an updated companion. Legacy/unchecked dates are explicit, with confirmed-date
+  counts separate from saved matches. The actual worker+DOM pipeline reproduces
+  failure on v521 and success on v522. Owner app/data and installed extension
+  remain unchanged; old blanks need an explicit employment check/rescan. Stacked
+  v520/521 features retained. No new production route/SQL schema/paid action.
+  Not pushed/merged; held PR257 excluded. See v522 QA for final gates/limits.
+
 - v24.6.521 locally adds saved HR and Sourcer candidate dashboards while
   retaining v520 owner/recruiter defaults. Saved HR observations deduplicate by
   company/profile and use existing explicit per-person Apollo actions; cached

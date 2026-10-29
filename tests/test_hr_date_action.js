@@ -4,7 +4,7 @@ const args={operation_id:'a'.repeat(32),url:'https://www.linkedin.com/in/sample'
 (async()=>{
  const f=hrFixture();f.state.fastWait=true;await f.arm();f.state.employment={joined:'2026-10',left:'',current:true};
  const result=await f.rpc('hrDate',args);assert(!result.error,result.error);assert.equal(result.result.joined,'2026-10');
- assert.deepEqual(f.state.created.map(t=>t.url),[args.url]);assert.equal(f.state.removed.length,1,'only the owned inactive lookup closes');
+ assert.deepEqual(f.state.created.map(t=>t.url),[args.url+'/details/experience/']);assert.equal(f.state.removed.length,1,'only the owned inactive lookup closes');
  assert.equal(f.state.hrMutations.length,0,'date checks do not navigate a search or company tab');
  assert((await f.rpc('hrDate',{...args,url:'https://example.test/in/sample'})).error);
  assert((await f.rpc('hrDate',args,undefined,'profiles')).error,'profiles scope cannot invoke HR reads');

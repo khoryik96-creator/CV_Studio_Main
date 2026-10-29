@@ -7,7 +7,27 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current local checkpoint: v24.6.521 (not published or merged)** on
+**Current local checkpoint: v24.6.522 (not published or merged)** on
+`codex/v24.6.522-employment-loading`, stacked on local v521 `1941e58` and
+v520 `a076a07`. The owner reports all employment blank. Read-only inspection
+found the normal installation still at v519 and blank persisted observations;
+affected live profile Experience did not exist until scrolling. Its dedicated
+Experience page did show an exact-company month/year range without scrolling.
+New optional date reads now open the exact profile's canonical Experience page,
+with a narrowly recognized Experience scope, exact company/profile checks,
+existing bounds/Stop/viewed-tab protection and worker-suspension validation.
+General Sourcer profile reading is unchanged. A new companion capability gates
+both batch and individual checks; update the app AND companion before use.
+Blank legacy/interrupted results say Not checked. Saved scans and queue rows
+show confirmed-date counts separately from saved people. Previously saved blank
+records are not backfilled by merely opening the preview: use Check employment
+or explicitly rescan. No paid/contact action, owner data/server/extension update,
+new production route or SQL schema migration. A real worker+real DOM regression
+fails on v521 and passes on v522; live read-only inspection is not acceptance
+of an installed updated companion. Full QA/limitations are in the v522 report.
+No publication/merge requested. PR #257 remains held/excluded.
+
+**Previous local checkpoint: v24.6.521 (not published or merged)** on
 `codex/v24.6.521-people-dashboards`, retaining local v520 `a076a07` contact
 assignment defaults from merged v519 `37e9461` / PR #266. The owner asks for
 all-HR and spreadsheet-style Sourcer dashboards and still-missing employment.

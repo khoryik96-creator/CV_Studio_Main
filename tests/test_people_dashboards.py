@@ -86,6 +86,7 @@ def test_date_update_is_atomic_and_preserves_scan_metadata(tmp_path):
     row=store.save_hr(row['id'],row['revision'],SEARCH)['record'];hr=copy.deepcopy(row['hr']);url=hr['people'][0]['url']
     data=store.save_hr(row['id'],row['revision'],None,person_url=url,dates={'joined':'2026-10','left':'','current':True})['record']
     assert employment_label(data['hr']['people'][0])=='Oct 2026 to Present'
+    assert data['hr']['people'][0]['employment_status']=='observed'
     assert data['hr']['scanned_at']==hr['scanned_at'] and data['hr']['complete']==hr['complete']
     with pytest.raises(JobLeadsError):store.save_hr(row['id'],row['revision'],None,person_url=url,dates={'joined':'2020','left':'2024','current':False})
     with pytest.raises(JobLeadsError):store.save_hr(data['id'],data['revision'],None,person_url=url,dates={'joined':'2026-13','left':'','current':True})
@@ -95,7 +96,8 @@ def test_date_update_is_atomic_and_preserves_scan_metadata(tmp_path):
 @pytest.mark.parametrize('dates,label',[
     ({'joined':'2026-10','left':'','current':True},'Oct 2026 to Present'),
     ({'joined':'2020-06','left':'2024-03','current':False},'Jun 2020 to Mar 2024'),
-    ({'joined':'2020'},'2020'), ({'joined':''},'Not available')])
+    ({'joined':'2020'},'2020'), ({'joined':''},'Not checked'),
+    ({'joined':'','employment_status':'not_shown'},'Not confirmed')])
 def test_date_labels(dates,label):
     assert employment_label(dates)==label
 
@@ -143,3 +145,26 @@ def test_paid_success_survives_archive_failure_and_metadata_stays_observed():
     assert result['usage']['input_tokens']==10 and result['candidates'][0]['title']=='SAP Consultant'
     assert 'location' not in result['candidates'][0]
     assert result['run']['calls']==1
+
+
+@pytest.mark.parametrize('status,joined',[
+    ('not_checked',''),('not_shown',''),('observed','2022-07')])
+def test_employment_evidence_status_survives_reopen_and_backup(tmp_path,status,joined):
+    store=JobLeadsStore(tmp_path/'leads.sqlite3');row=store.save(AD)['record']
+    search=copy.deepcopy(SEARCH);search['people'][0].update(joined=joined,employment_status=status)
+    saved=store.save_hr(row['id'],row['revision'],search)['record']
+    reopened=JobLeadsStore(tmp_path/'leads.sqlite3').list()[0]
+    assert reopened['hr']==saved['hr']
+    restored=JobLeadsStore(tmp_path/'restored.sqlite3');restored.restore(store.backup())
+    assert restored.list()[0]['hr']==saved['hr']
+
+
+@pytest.mark.parametrize('status,joined',[
+    ('observed',''),('not_checked','2022-07'),('not_shown','2022-07'),
+    ('bogus',''),(None,''),([],''),({},''),(True,'')])
+def test_bad_employment_status_cannot_overwrite_saved_people(tmp_path,status,joined):
+    store=JobLeadsStore(tmp_path/'leads.sqlite3');row=store.save(AD)['record']
+    row=store.save_hr(row['id'],row['revision'],SEARCH)['record']
+    search=copy.deepcopy(SEARCH);search['people'][0].update(joined=joined,employment_status=status)
+    with pytest.raises(JobLeadsError):store.save_hr(row['id'],row['revision'],search)
+    assert store.list()[0]==row
