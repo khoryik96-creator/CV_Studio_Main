@@ -11,9 +11,9 @@ const response=data=>({ok:true,json:async()=>({ok:true,...data})});
     if(data.action==='review')return response({state:'review',review_token:'fictional-review',company:'Example Company',message:'Check the contact'});
     if(data.action==='create'){
       if(f.state.hold)await new Promise(resolve=>{f.state.release=resolve});
-      return response({state:f.state.unknown?'unconfirmed':'created',contact_id:f.state.unknown?null:45,message:f.state.unknown?'Check previous result':'Contact created'});
+      return response({state:f.state.unknown?'unconfirmed':'created',contact_id:f.state.unknown?null:45,contact_url:f.state.contactURL || 'https://au3.jobadder.com/contacts/45',message:f.state.unknown?'Check previous result':'Contact created'});
     }
-    if(data.action==='check')return response({state:'created',contact_id:45,message:'Previous result confirmed'});
+    if(data.action==='check')return response({state:'created',contact_id:45,contact_url:'https://au3.jobadder.com/contacts/45',message:'Previous result confirmed'});
     throw Error('Unexpected action');
   };
   await f.init();await tick();await f.el('ApolloContactsTab').click();await tick();
@@ -30,13 +30,21 @@ const response=data=>({ok:true,json:async()=>({ok:true,...data})});
   assert.equal(calls.filter(c=>c.action==='create').length,1);assert(f.el('JAClose').disabled);
   let prevented=false;f.el('JADialog').handlers.cancel({preventDefault(){prevented=true}});assert(prevented,'cannot fake-cancel an unsafe write');
   f.state.release();await create;assert.match(f.el('JAMessage').textContent,/Contact created/);
+  assert(!f.el('JAOpen').hidden);assert.equal(f.el('JAOpen').href,'https://au3.jobadder.com/contacts/45');
   assert.equal(calls.find(c=>c.action==='create').confirmed,true);assert.equal(calls.find(c=>c.action==='create').position,'HR Manager');
   assert.equal(f.el('notes').value,'Keep this ad draft');assert.equal(f.requests.length,0,'creating contacts never rewrites an ad');
   await f.el('JAClose').click();assert(!f.el('JADialog').open);
   await button.click();await f.el('JASearch').click();f.el('JACompany').value='12';await f.el('JAReview').click();
+  assert(f.el('JAOpen').hidden,'new review hides the previous contact link');
   f.state.hold=false;f.state.unknown=true;await f.el('JACreate').click();assert(!f.el('JACheck').hidden);
+  assert(f.el('JAOpen').hidden,'unconfirmed writes cannot expose a fabricated contact link');
   const writes=calls.filter(c=>c.action==='create').length;await f.el('JACheck').click();assert.equal(calls.filter(c=>c.action==='create').length,writes);
   assert.match(f.el('JAMessage').textContent,/confirmed/);
+  assert(!f.el('JAOpen').hidden,'read-only confirmation exposes its contact link');
+  for(const url of ['javascript:alert(1)','https://attacker.invalid/contacts/45','https://au3.jobadder.com/contacts/46','https://au3.jobadder.com/contacts/45?token=unsafe','https://au3.jobadder.com.attacker.invalid/contacts/45']) {
+    await button.click();await f.el('JASearch').click();f.el('JACompany').value='12';await f.el('JAReview').click();f.state.unknown=false;f.state.contactURL=url;await f.el('JACreate').click();
+    assert(f.el('JAOpen').hidden,'unsafe/mismatched link is rejected: '+url);
+  }
   assert(!calls.some(c=>Object.keys(c).some(k=>/secret|access_token|refresh_token/.test(k))));
   f.pagehide();console.log('JobAdder contact UI: existing-company choice, source fill, review invalidation, explicit single create, read-only recovery and draft safety passed.');
 })().catch(error=>{console.error(error);process.exit(1)});

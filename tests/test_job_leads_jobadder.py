@@ -158,3 +158,20 @@ def test_route_requires_browser_pairing_and_tracks_account_transition(tmp_path):
         client.before_post=during_post
         response=browser.post('/jobadder/contact_actions',json={**BASE,'action':'create','review_token':proof,'confirmed':True},headers=headers)
         assert response.json['state']=='created'
+        assert response.json['contact_url'].endswith('/contacts/45')
+
+
+@pytest.mark.parametrize('state,identity,expected', [
+    ('created',45,True),('exists',45,True),('unconfirmed',45,False),
+    ('review',45,False),('created',True,False),('created',None,False),('created',-1,False),
+])
+def test_contact_links_use_the_connected_jobadder_region_and_confirmed_id(state, identity, expected):
+    import app
+    browser=app.app.test_client();browser.get('/')
+    service=mock.Mock()
+    service.perform.return_value={'state':state,'contact_id':identity}
+    with mock.patch.object(app,'_JOB_LEADS_JA',service),mock.patch.object(app,'_ja_refresh_access_token',return_value='fictional-token'),mock.patch.object(app,'_jobadder_web_base',return_value='https://au3.jobadder.com'):
+        response=browser.post('/jobadder/contact_actions',json={'action':'check'},headers={'X-CV-Studio-Request':'1'})
+    assert response.status_code==200
+    assert ('contact_url' in response.json) is expected
+    if expected:assert response.json['contact_url']=='https://au3.jobadder.com/contacts/45'

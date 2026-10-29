@@ -3,13 +3,19 @@
   'use strict';
   const el=name=>document.getElementById('jobLeadsJA'+name);
   let ready=false,current=null,account='',review='',working=false,generation=0;
-  const msg=value=>{el('Message').textContent=value;};
+  const msg=value=>{el('Message').textContent=value;el('Open').hidden=true;el('Open').href='';};
+  function contactLink(data){
+    if(!['created','exists'].includes(data.state) || !Number.isSafeInteger(data.contact_id) || data.contact_id<=0 ||
+        typeof data.contact_url!=='string' || !/^https:\/\/[a-z0-9]+\.jobadder\.com\/contacts\/[1-9]\d*$/.test(data.contact_url) ||
+        data.contact_url.split('/').pop()!==String(data.contact_id))return;
+    el('Open').href=data.contact_url;el('Open').hidden=false;
+  }
   async function api(body){
     const response=await fetch('/jobadder/contact_actions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const data=await response.json();if(!response.ok || !data.ok)throw Error(data.error || 'JobAdder could not complete this action.');return data;
   }
   function lock(value){working=value;for(const name of ['Close','Search','CompanyQuery','Company','First','Last','Position','Review','Create','Check'])el(name).disabled=value;}
-  function invalidate(){review='';el('Create').hidden=true;el('Check').hidden=true;}
+  function invalidate(){review='';el('Create').hidden=true;el('Check').hidden=true;el('Open').hidden=true;el('Open').href='';}
   function body(action){return {action,contact_key:current.contact_key,account,company_id:Number(el('Company').value),first_name:el('First').value,last_name:el('Last').value,position:el('Position').value,review_token:review,confirmed:action==='create'};}
   async function search(){
     if(working)return;const token=generation;lock(true);invalidate();account='';el('Company').replaceChildren(new Option('Choose company',''));msg('Searching JobAdder companies…');
@@ -28,6 +34,7 @@
       const data=await api(request);if(token!==generation)return;
       review=data.review_token || '';el('Create').hidden=data.state!=='review';el('Check').hidden=data.state!=='unconfirmed';
       msg(data.message+(data.state==='review'?' Company: '+data.company:'')+(data.contact_id?' Contact #'+data.contact_id:'')+(data.matches?.length?' Company: '+data.matches.map(row=>row.company || 'Existing company').join(', '):''));
+      contactLink(data);
     }catch(error){if(token===generation){review='';el('Create').hidden=true;el('Check').hidden=action==='review';msg(error.message+(action==='create'?' Check the previous result before starting another request.':''));}}
     finally{if(token===generation)lock(false);}
   }

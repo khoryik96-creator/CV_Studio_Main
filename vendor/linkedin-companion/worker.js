@@ -775,12 +775,12 @@ async function handle(message, sender) {
         owned.set(created.id,args.url);
         try { live(bound,run); hr.joining.tab_id=created.id; await persist(); }
         catch(error) { await closeOwned(created.id,args.url); throw error; }
-        return hrWaiting(hr);
+        return hrWaiting(hr,'profile_navigation');
       }
       if (hr.joining.url !== args.url || hr.joining.tab_id === null) throw safeError('The joining-date lookup was interrupted. Start a new scan.');
       const id=hr.joining.tab_id;
       const profileTab=await ownedTab(id); live(bound,run);
-      if (profileTab.status !== 'complete') return hrWaiting(hr);
+      if (profileTab.status !== 'complete') return hrWaiting(hr,'profile_navigation');
       await jobScript({target:{tabId:id},files:['reader.js']},jobReaderStartError);
       await ownedTab(id); if (!await verify()) return hrWaiting(hr);
       const [injection]=await jobScript({target:{tabId:id},func:(values)=>{
@@ -805,7 +805,7 @@ async function handle(message, sender) {
           await jobScript({target:{tabId:id},func:url=>document.visibilityState==='visible'?false:globalThis.SourcerReader.prepareHRJoined(url),args:[args.url]},'The profile Experience section could not be loaded.');
           await ownedTab(id); if (!await verify()) return hrWaiting(hr);
         }
-        return hrWaiting(hr);
+        return hrWaiting(hr,'profile_experience');
       }
       if (typeof result.joined !== 'string' || !/^(?:(?:19|20)\d{2}(?:-(?:0[1-9]|1[0-2]))?)?$/.test(result.joined)) throw safeError('The joining date could not be confirmed.');
       const employment={};

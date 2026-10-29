@@ -23,6 +23,18 @@
   let previewUrl = '', previewCapture = null, previewSource = 'saved', previewDismissed = false;
   let hrRow = '', hrRun = '', hrCapture = '', hrStopped = false, hrRunning = false;
   let bulkHR = null;
+  const bulkCheckpointKey='cvstudio_job_leads_hr_queue_v1';
+  let bulkCheckpoint=null;
+  try {
+    const raw=localStorage.getItem(bulkCheckpointKey);
+    if(raw && raw.length<=16000) {
+      const value=JSON.parse(raw),settings=value.settings;
+      if(value.version===1 && settings && typeof settings.country==='string' && settings.country.length<=100 &&
+          typeof settings.keywords==='string' && settings.keywords.length<=600 && Number.isInteger(settings.pages) && settings.pages>=1 && settings.pages<=15 &&
+          Array.isArray(value.items) && value.items.length>0 && value.items.length<=40 && new Set(value.items.map(item=>item?.id)).size===value.items.length &&
+          value.items.every(item=>item && /^[a-f0-9]{32}$/.test(item.id) && Number.isInteger(item.revision) && item.revision>0 && ['waiting','running','saved','failed','stopped'].includes(item.state))) bulkCheckpoint=value;
+    }
+  } catch {}
   const receivedCaptures = new Map();
   let rows = [], editing = null, busy = false, dirty = false, page = 0, ready = false, lastReadUrl = '', descriptionTruncated = false, descriptionRich = [];
   const status = message => { el('Message').textContent = message; };
@@ -459,6 +471,7 @@
     preferredHR=value;
     setHRPreferenceControls(prefix === 'HR' ? 'BulkHR' : 'HR',value);
     try { localStorage.setItem(hrPreferenceKey,JSON.stringify(value)); } catch {}
+    bulkHRControls();
   }
   function hrJoinedLabel(value) {
     if (typeof value !== 'string' || !/^(?:19|20)\d{2}(?:-(?:0[1-9]|1[0-2]))?$/.test(value)) return 'Not available';
@@ -474,7 +487,7 @@
   }
   function hrEmploymentLabel(person) {
     const start=hrJoinedLabel(person.joined);
-    if (start==='Not available') return start;
+    if (start==='Not available') return person._employment==='checking'?'Checking…':person._employment==='not_checked'?'Not checked':start;
     try { hrEmployment(person); } catch { return 'Not available'; }
     return start+(person.current===true?' to Present':person.current===false?' to '+hrJoinedLabel(person.left):'');
   }
@@ -595,19 +608,28 @@
           const profileURL=person.url.replace(/\/$/,'');
           if (found.size >= 100 && !found.has(profileURL)) { omitted=true; continue; }
           if (found.size < 100 && !found.has(profileURL)) {
-            const entry={...person,url:profileURL,joined:''};
+            const entry={...person,url:profileURL,joined:'',_employment:'checking'};
             found.set(profileURL,entry); showPeople([...found.values()]);
             // Read only this observed profile, one background tab at a time.
             // A missing/slow Experience section is optional evidence, never a
             // fabricated date or reason to erase otherwise valid HR matches.
-            for (let attempt=0;attempt<20;attempt++) {
-              checkHR(); notify(`Checking when ${person.name} joined ${row.company}…`);
-              const value=await rpc('hrJoined',{run_id:hrRun,tab_id:source.tab_id,url:profileURL}); checkHR();
-              if (value && !value.loading) {
-                if (value.url !== profileURL || typeof value.joined !== 'string' || !/^(?:(?:19|20)\d{2}(?:-(?:0[1-9]|1[0-2]))?)?$/.test(value.joined)) throw Error('An HR joining date could not be confirmed.');
-                Object.assign(entry,{joined:value.joined},hrEmployment(value)); break;
+            let navigationWaits=0,dateWaits=0;
+            try {
+              for (let attempt=0;attempt<80;attempt++) {
+                checkHR(); notify(`Checking when ${person.name} joined ${row.company}…`);
+                const value=await rpc('hrJoined',{run_id:hrRun,tab_id:source.tab_id,url:profileURL}); checkHR();
+                if (value && !value.loading) {
+                  if (value.url !== profileURL || typeof value.joined !== 'string' || !/^(?:(?:19|20)\d{2}(?:-(?:0[1-9]|1[0-2]))?)?$/.test(value.joined)) throw Error('An HR joining date could not be confirmed.');
+                  Object.assign(entry,{joined:value.joined},hrEmployment(value));entry._employment='observed';break;
+                }
+                // A slow profile navigation must not use up the separate,
+                // bounded Experience hydration budget before the reader runs.
+                if(value?.wait_stage==='profile_navigation' ? ++navigationWaits>=60 : ++dateWaits>=20) break;
+                await pauseDiscovery();
               }
-              await pauseDiscovery();
+            } finally {
+              if(entry._employment==='checking') entry._employment='not_checked';
+              showPeople([...found.values()]);
             }
             checkHR(); await rpc('hrJoinedClose',{run_id:hrRun,tab_id:source.tab_id}); checkHR();
           }
@@ -632,7 +654,7 @@
       const complete=!finalSnapshot.hasNext && !omitted;
       saving=true;
       const response = await api({action:'save_hr',id:row.id,revision:row.revision,search:{company:row.company,company_name:finalSnapshot.company_name || companyName,company_url:finalSnapshot.company_url || companyURL,company_id:finalSnapshot.company_id,
-        country,keywords,source_url:finalSnapshot.source_url,complete,people:[...found.values()]}});
+        country,keywords,source_url:finalSnapshot.source_url,complete,people:[...found.values()].map(({_employment,...person})=>person)}});
       const index = rows.findIndex(item=>item.id===row.id); if (index >= 0) rows[index]=response.record;
       if (editing?.id === row.id) editing={...editing,revision:response.record.revision,hr:response.record.hr};
       hrRow=''; render(); drawPreview();
@@ -659,6 +681,28 @@
     for (const name of ['CountryMode','Country','Pages','Keywords']) el('BulkHR'+name).disabled=busy;
     el('BulkHRStart').disabled=busy || !rows.some(row=>picked.has(row.id) && !row.deleted);
     el('BulkHRStop').disabled=!bulkHR?.running || hrStopped;
+    let resume=false;
+    try { resume=bulkHRPlan(rows.filter(row=>picked.has(row.id) && !row.deleted),hrSettings('BulkHR')).resume; } catch {}
+    el('BulkHRStart').textContent=resume?'Resume unfinished ads':'Scan selected ads';
+  }
+  function bulkHRPlan(selection,settings) {
+    const previous=bulkCheckpoint,ids=selection.map(row=>row.id).sort();
+    const same=previous && previous.items.length===ids.length && previous.items.map(item=>item.id).sort().every((id,index)=>id===ids[index]) &&
+      ['country','keywords','pages'].every(key=>previous.settings[key]===settings[key]);
+    const items=selection.map(row=>{
+      const old=same && previous.items.find(item=>item.id===row.id);
+      return {row,saved:!!old && old.state==='saved' && old.revision===row.revision,priority:!old || old.state==='saved'?2:old.state==='waiting'?1:0};
+    });
+    const resume=!!same && items.some(item=>!item.saved);
+    if(!resume)for(const item of items){item.saved=false;item.priority=1;}
+    return {resume,items};
+  }
+  function rememberBulkHR() {
+    bulkCheckpoint={version:1,settings:bulkHR.settings,items:bulkHR.items.map(item=>({id:item.row.id,
+      revision:item.node.dataset.state==='saved' ? (rows.find(row=>row.id===item.row.id)?.revision || item.row.revision) : item.row.revision,state:item.node.dataset.state}))};
+    // Only opaque ad IDs, revisions, outcomes and selected settings are kept.
+    // No people, emails, URLs, partial results or automatic browser work.
+    try { localStorage.setItem(bulkCheckpointKey,JSON.stringify(bulkCheckpoint)); } catch {}
   }
   function stopHR() {
     if (!hrRunning) return;
@@ -682,23 +726,26 @@
       el('BulkHRProgress').hidden=false;el('BulkHRBar').hidden=true;el('BulkHRSummary').textContent='';el('BulkHRResults').replaceChildren();el('BulkHRMessage').textContent=error.message;return;
     }
     rememberHRPreferences('BulkHR');
+    const plan=bulkHRPlan(selection,settings);
     const activity=beginScanActivity();
-    hrStopped=false;hrRunning=true;bulkHR={running:true,completed:0,saved:0,failed:0,cancelled:0,items:[]};
+    hrStopped=false;hrRunning=true;bulkHR={running:true,settings,completed:0,saved:0,failed:0,cancelled:0,items:[]};
     el('BulkHRResults').replaceChildren();el('BulkHRProgress').hidden=false;el('BulkHRBar').hidden=false;
     el('BulkHRBar').max=selection.length;
-    for (const row of selection) {
-      const title=row.company+' — '+row.role,item=node('li',title+' · Waiting');item.dataset.state='waiting';
-      bulkHR.items.push({row,title,node:item});el('BulkHRResults').appendChild(item);
+    for (const entry of plan.items) {
+      const {row,saved,priority}=entry,title=row.company+' — '+row.role,item=node('li',title+(saved?' · Previously saved':' · Waiting'));item.dataset.state=saved?'saved':'waiting';
+      if(saved){bulkHR.completed++;bulkHR.saved++;}
+      bulkHR.items.push({row,title,node:item,priority});el('BulkHRResults').appendChild(item);
     }
-    bulkHRSummary();lock(true);
+    bulkHRSummary();rememberBulkHR();lock(true);
     let stoppedReason='';
     try {
-      for (let index=0;index<bulkHR.items.length;index++) {
+      for (const item of bulkHR.items.filter(item=>item.node.dataset.state!=='saved').sort((a,b)=>a.priority-b.priority)) {
         if (hrStopped) break;
-        const item=bulkHR.items[index],row=item.row;
+        const row=item.row;
         item.node.dataset.state='running';item.node.textContent=item.title+' · Scanning…';
+        rememberBulkHR();
         const notify=message=>{
-          el('BulkHRMessage').textContent=`Ad ${index+1} of ${selection.length} · ${item.title} · ${message}`;
+          el('BulkHRMessage').textContent=`Ad ${bulkHR.completed+1} of ${selection.length} · ${item.title} · ${message}`;
           if (savedJob(previewUrl)?.id===row.id) el('HRMessage').textContent=message;
         };
         const showPeople=people=>{if (savedJob(previewUrl)?.id===row.id) hrPeople(people);};
@@ -706,7 +753,7 @@
         item.node.dataset.state=outcome.state;
         item.node.textContent=item.title+' · '+(outcome.state==='saved' ? `${outcome.matches} HR matches saved${outcome.complete ? '' : ' · Limited scan'}` : outcome.message);
         bulkHR.completed++;if (outcome.state==='saved') bulkHR.saved++;else if (outcome.state==='failed') bulkHR.failed++;else bulkHR.cancelled++;
-        bulkHRSummary();
+        bulkHRSummary();rememberBulkHR();
         if (outcome.stopQueue) { stoppedReason=outcome.message;break; }
       }
     } catch(error) {
@@ -718,6 +765,7 @@
       bulkHR.running=false;hrRunning=false;
       const remaining=bulkHR.items.length-bulkHR.completed;
       for (const item of bulkHR.items) if (item.node.dataset.state==='waiting') item.node.textContent=item.title+' · Not started';
+      rememberBulkHR();
       el('BulkHRMessage').textContent=(hrStopped || stoppedReason ? 'Queue stopped. ' : 'Queue finished. ')+`${bulkHR.saved} ads saved, ${bulkHR.failed} failed${bulkHR.cancelled ? ', '+bulkHR.cancelled+' stopped' : ''}${remaining ? ', '+remaining+' not started' : ''}. `+(stoppedReason || 'Completed results are saved with each ad.');
       bulkHRSummary();lock(false);finishScanActivity(activity,bulkHR.failed>0 || !!stoppedReason);
     }
@@ -1011,6 +1059,7 @@
     el('BulkHRCountryMode').addEventListener('change',()=>{el('BulkHRCountry').hidden=el('BulkHRCountryLabel').hidden=!el('BulkHRCountryMode').value;rememberHRPreferences('BulkHR');});
     el('BulkHRCountry').addEventListener('input',()=>rememberHRPreferences('BulkHR'));
     el('BulkHRPages').addEventListener('change',()=>rememberHRPreferences('BulkHR'));
+    el('BulkHRKeywords').addEventListener('input',bulkHRControls);
     document.getElementById('viewJobLeads').dataset.companionChannel = channel;
     document.getElementById('viewJobLeads').dataset.companionActions = '1';
     document.getElementById('viewJobLeads').dataset.companionFolders = '2';
