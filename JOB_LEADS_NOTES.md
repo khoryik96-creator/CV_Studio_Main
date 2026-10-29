@@ -23,6 +23,14 @@ or backfill dates. Single-person failed checks preserve earlier confirmed dates.
 Update both app and companion. The preview's job-ad snapshot is separate from
 the normal installation and does not prove live updated-companion acceptance.
 
+Review correction before merge: individual confirmed employment checks retain
+an independent server observation timestamp. Duplicate-person dashboard rows
+keep the newest confirmed date range across ads, even if the newest ad has no
+date. Date refreshes use the exact date-source ad/revision/company link; title,
+scan/source fields and Apollo lookup authority keep their own source. Legacy
+dates use their original scan time. Reopen, backup and Excel retain this choice;
+invalid observation timestamps fail atomically. No SQL migration is required.
+
 ## People dashboards and employment refresh (v24.6.521)
 
 Job Leads -> HR people lists all saved non-trashed HR observations, one row per

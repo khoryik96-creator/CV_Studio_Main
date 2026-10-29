@@ -161,7 +161,17 @@ class SourcerCandidates:
 
 def hr_people(rows, cached=None):
     """One current saved observation per person/company, with exact action source."""
-    found = {}
+    def employment_time(person,hr):
+        stamp=person.get('employment_checked_at') or hr.get('scanned_at')
+        return datetime.fromisoformat(stamp.replace('Z','+00:00')).astimezone(timezone.utc) if stamp else datetime.min.replace(tzinfo=timezone.utc)
+    def merge_employment(target,person,row):
+        for name in ('joined','left','current','employment_status','employment_checked_at'):
+            target.pop(name,None)
+            if name in person:
+                target[name]=person[name]
+        target.update(employment=employment_label(person),employment_id=row['id'],
+                      employment_revision=row['revision'],employment_company_url=row['hr']['company_url'])
+    found, employment_times = {}, {}
     for row in sorted(rows, key=lambda r:(r.get('hr') or {}).get('scanned_at',''), reverse=True):
         hr = row.get('hr')
         if row.get('deleted') or not hr:
@@ -172,6 +182,9 @@ def hr_people(rows, cached=None):
             rank=lambda value:3 if value and value.get('state')=='found' else 2 if value and value.get('state') in {'pending','unconfirmed'} else 1 if value else 0
             if key in found:
                 found[key]['ads'] += 1
+                if person.get('joined') and (not found[key].get('joined') or employment_time(person,hr)>employment_times[key]):
+                    merge_employment(found[key],person,row)
+                    employment_times[key]=employment_time(person,hr)
                 if rank(result)>rank(found[key]['email_result']):
                     found[key].update(email_result=result,email_id=row['id'],email_revision=row['revision'])
                 continue
@@ -180,4 +193,6 @@ def hr_people(rows, cached=None):
                 'country':hr['country'], 'scanned_at':hr['scanned_at'], 'ads':1,
                 'job_url':row['url'], 'folder':row.get('folder',''), 'employment':employment_label(person),
                 'email_result':result,'email_id':row['id'],'email_revision':row['revision']}
+            merge_employment(found[key],person,row)
+            employment_times[key]=employment_time(person,hr)
     return list(found.values())

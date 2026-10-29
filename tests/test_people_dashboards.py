@@ -168,3 +168,34 @@ def test_bad_employment_status_cannot_overwrite_saved_people(tmp_path,status,joi
     search=copy.deepcopy(SEARCH);search['people'][0].update(joined=joined,employment_status=status)
     with pytest.raises(JobLeadsError):store.save_hr(row['id'],row['revision'],search)
     assert store.list()[0]==row
+
+
+def test_refreshed_older_ad_dates_survive_duplicate_projection_and_excel(tmp_path):
+    store=JobLeadsStore(tmp_path/'leads.sqlite3')
+    with mock.patch('cvstudio_job_leads._now',return_value='2026-10-01T00:00:00Z'):
+        old=store.save(AD)['record'];old=store.save_hr(old['id'],old['revision'],SEARCH)['record']
+    with mock.patch('cvstudio_job_leads._now',return_value='2026-10-02T00:00:00Z'):
+        newer=store.save({**AD,'url':'https://www.linkedin.com/jobs/view/123456'})['record']
+        newer=store.save_hr(newer['id'],newer['revision'],SEARCH)['record']
+    person=old['hr']['people'][0]
+    old=store.save_hr(old['id'],old['revision'],None,person_url=person['url'],dates={'joined':'2022-07','left':'','current':True})['record']
+    assert old['hr']['scanned_at']=='2026-10-01T00:00:00Z'
+    projected=hr_people(JobLeadsStore(tmp_path/'leads.sqlite3').list())[0]
+    assert projected['ads']==2 and projected['id']==newer['id']
+    assert projected['employment']=='Jul 2022 to Present'
+    assert projected['employment_id']==old['id'] and projected['employment_revision']==old['revision']
+    sheet=load_workbook(BytesIO(workbook([projected],{'employment':'Employment'},'People'))).active
+    assert sheet['A2'].value=='Jul 2022 to Present'
+    newer=store.save_hr(newer['id'],newer['revision'],None,person_url=person['url'],dates={'joined':'2024-03','left':'2026-08','current':False})['record']
+    latest=hr_people(store.list())[0]
+    assert latest['employment']=='Mar 2024 to Aug 2026' and latest['employment_id']==newer['id']
+    restored=JobLeadsStore(tmp_path/'restored.sqlite3');restored.restore(store.backup())
+    assert hr_people(restored.list())[0]['employment']==latest['employment']
+
+
+@pytest.mark.parametrize('stamp',[None,'','not a date','2026-10-29T00:00:00',[],True])
+def test_bad_employment_observation_time_is_atomic(tmp_path,stamp):
+    store=JobLeadsStore(tmp_path/'leads.sqlite3');row=store.save(AD)['record']
+    search=copy.deepcopy(SEARCH);search['people'][0].update(joined='2022-07',employment_checked_at=stamp)
+    with pytest.raises(JobLeadsError):store.save_hr(row['id'],row['revision'],search)
+    assert store.list()[0]==row

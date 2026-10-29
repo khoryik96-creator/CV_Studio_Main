@@ -46,7 +46,7 @@
     if(items.length){const list=document.createElement('ul');for(const item of items)list.append(text('li',item));details.append(list);}
     td.append(details);return td;
   }
-  function personSource(row) {return {id:row.id,revision:row.revision,company:row.company,hr:{company_id:row.company_id,company_url:row.company_url,people:[row]}};}
+  function personSource(row,employment=false) {return {id:employment?(row.employment_id || row.id):row.id,revision:employment?(row.employment_revision || row.revision):row.revision,company:row.company,hr:{company_id:row.company_id,company_url:employment?(row.employment_company_url || row.company_url):row.company_url,people:[row]}};}
   function decorateDate(target,row,person) {
     if(!row?.hr || !/^https:\/\/www\.linkedin\.com\/in\/[A-Za-z0-9_%~-]+\/?$/.test(person?.url || ''))return;
     const button=text('button','Check employment','sec');button.type='button';button.dataset.employment='';
@@ -84,7 +84,7 @@
       const tr=document.createElement('tr'),name=document.createElement('td');name.append(link(row.name,row.url));tr.append(name);
       if(kind==='HR') {
         tr.append(text('td',row.title || '—'),text('td',row.company),text('td',row.location || '—'));
-        const dates=text('td',row.employment);decorateDate(dates,personSource(row),row);tr.append(dates);
+        const dates=text('td',row.employment);decorateDate(dates,personSource(row,true),row);tr.append(dates);
         const email=document.createElement('td'),result=row.email_result;
         if(result?.state==='found')email.append(text('span',result.email,'people-email'));
         else {

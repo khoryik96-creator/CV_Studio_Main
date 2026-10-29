@@ -65,3 +65,20 @@ Owner app5000, its data and installed companion remain unchanged. Preview5095
 is restarted on v522 using the same isolated job-ad snapshot, with no credential
 or unlocked-email vault copies. No live paid request, unlock, contact creation,
 external message, SQL migration or automatic rescan is performed.
+
+
+PR267 review correction (before merge):
+- The review reproduced an older-ad employment refresh being hidden by a newer
+  blank duplicate. A new regression fails on the reviewed commit with Not checked
+  instead of the freshly confirmed range.
+- Confirmed ranges now carry server-generated microsecond observation timestamps
+  independent of the preserved scan timestamp. Deduplication retains the latest
+  confirmed evidence, plus its exact ad/revision/company URL for subsequent date
+  actions; original title/scan/source and Apollo action sources are independent.
+  Legacy confirmed observations fall back to their scan timestamp. Invalid or
+  inconsistent timestamp inputs cannot overwrite saved records.
+- Native actual-app duplicate fixture passes: older confirmed evidence appears
+  despite a newer blank ad, refresh posts to the exact older source, and the
+  resulting range survives dashboard and original-card refresh. Backend coverage
+  verifies Excel, reopen, backup, later former-employment replacement and atomic
+  invalid timestamp rejection. Full CI is rerun on the correction before merge.

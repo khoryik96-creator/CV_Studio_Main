@@ -25,6 +25,9 @@ or explicitly rescan. No paid/contact action, owner data/server/extension update
 new production route or SQL schema migration. A real worker+real DOM regression
 fails on v521 and passes on v522; live read-only inspection is not acceptance
 of an installed updated companion. Full QA/limitations are in the v522 report.
+PR267 review caught a duplicate-ad date selection defect before merge: an older
+ad employment refresh now carries a separate observation time and exact action
+source through dashboard deduplication/Excel. Newer blank ads cannot hide it.
 The owner now authorizes publication and merge of this stack, including local
 v520/521. Issue #35 records the resulting PR and merge identity. PR #257 remains
 held/excluded.

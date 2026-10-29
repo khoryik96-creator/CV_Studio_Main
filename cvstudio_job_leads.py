@@ -325,6 +325,12 @@ def clean_hr(raw, company):
             if not isinstance(state,str) or state not in {'observed','not_checked','not_shown'} or (state=='observed')!=bool(entry['joined']):
                 invalid()
             entry['employment_status']=state
+        if 'employment_checked_at' in person:
+            stamp=person['employment_checked_at']
+            if not entry['joined'] or not isinstance(stamp,str) or not stamp:
+                invalid()
+            _backup_created({'created_at':stamp})
+            entry['employment_checked_at']=datetime.fromisoformat(stamp.replace('Z','+00:00')).astimezone(timezone.utc).isoformat(timespec='microseconds').replace('+00:00','Z')
         # Optional additive evidence keeps old start-only records readable.
         if 'left' in person or 'current' in person:
             left, current = person.get('left'), person.get('current')
@@ -601,11 +607,15 @@ class JobLeadsStore:
                 person = next((p for p in record['hr']['people'] if p['url'].rstrip('/') == str(person_url).rstrip('/')),None)
                 if person is None:
                     raise JobLeadsError('This person changed. Refresh HR people before checking employment.',409,'JOB_LEADS_CONFLICT')
-                person.update(dates,employment_status='observed')
+                person.update(dates,employment_status='observed',employment_checked_at=datetime.now(timezone.utc).isoformat(timespec='microseconds').replace('+00:00','Z'))
                 record['hr'] = clean_hr(record['hr'],record['company'])
             else:
                 record['hr'] = clean_hr(raw, record['company'])
                 record['hr']['scanned_at'] = _now()
+                checked=datetime.now(timezone.utc).isoformat(timespec='microseconds').replace('+00:00','Z')
+                for person in record['hr']['people']:
+                    if person['joined']:
+                        person['employment_checked_at']=checked
             connection.execute('UPDATE leads SET payload=?,revision=revision+1,updated_at=? WHERE id=?',
                                (json.dumps(clean_record(record), ensure_ascii=False), _now(), identity))
             self._check_capacity(connection)
