@@ -7,7 +7,7 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current source checkpoint: v24.6.519 (local, unmerged)** on
+**Current source checkpoint: v24.6.519 (owner-authorized for merge)** on
 `codex/v24.6.519-hr-dates-resume`, from merged v518 `f78aacf` / PR #265.
 The owner reports missing date text in a stopped scan and requests retrying
 unfinished bulk ads first, plus a link after creating a JobAdder contact.
@@ -22,8 +22,9 @@ start fresh on an explicit click. Checkpoints contain no people/emails/URLs.
 Created/confirmed JobAdder contacts expose Open in JobAdder using the existing
 connected-region web-base helper and confirmed ID, with stale/unconfirmed and
 unsafe/mismatched links hidden. No new route, DB migration, paid call, live
-contact creation or owner record/server update. Publication/merge is not
-requested for this new work. Held PR #257 stays excluded. See v519 QA.
+contact creation or owner record/server update. The owner now authorizes
+publication and merge. Held PR #257 stays excluded. See v519 QA and issue #35
+for the publication/merge identity.
 
 **Previous source checkpoint: v24.6.518 (merged in PR #265)** on
 `codex/v24.6.517-jobadder-contacts`, stacked on local v517 `8a7025d`.

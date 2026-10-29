@@ -2,7 +2,8 @@
 
 Local checkpoint from merged v518 `f78aacf` / PR #265. The owner requests fixing
 missing dates in a stopped scan, resuming unfinished batch ads, and a contact
-link after creation. No publication/merge requested; PR #257 remains excluded.
+link after creation. The owner now authorizes publication and merge; issue #35
+records the result. PR #257 remains excluded.
 
 Read-only browser inspection confirmed the installed app serves518, the shown
 batch is stopped with no saved ads and 27 unstarted ads, and the exact-company

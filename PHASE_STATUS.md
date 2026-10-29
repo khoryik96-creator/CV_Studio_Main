@@ -9,7 +9,8 @@
   saves. Slow profile navigation no longer spends the metadata-read budget.
   A confirmed JobAdder contact ID exposes its connected-region web link. No
   date-identity relaxation, route/DB migration, live paid/contact write or owner
-  installation update. No publication/merge requested; PR #257 stays held.
+  installation update. The owner now authorizes publication and merge; issue
+  #35 records the result. PR #257 stays held.
 
 - v24.6.518 retains local v517 and adds observed employment ranges to HR cards.
   Date metadata may hydrate after a company entry; bounded lookup waits now
