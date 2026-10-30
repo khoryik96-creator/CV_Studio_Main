@@ -54,6 +54,14 @@ class JobAdderContactService:
             for key, entry in data["operations"].items():
                 if not re.fullmatch(r"[a-f0-9]{64}", key) or not isinstance(entry, dict) or entry.get("state") not in {"review", "pending", "unconfirmed", "rejected", "created", "exists"} or type(entry.get("company_id")) is not int or entry["company_id"] <= 0:
                     raise ValueError()
+                if "assignments" in entry:
+                    if not isinstance(entry["assignments"],dict):raise ValueError()
+                    self._assignments(entry["assignments"])
+            defaults=data.get("assignment_defaults")
+            if defaults is not None:
+                if not isinstance(defaults,dict) or not re.fullmatch(r"[a-f0-9]{64}",defaults.get("account", "")):
+                    raise ValueError()
+                self._assignments(defaults)
             return data
         except Exception:
             raise JobAdderContactError("JobAdder contact history could not be read securely. No contact was created.", "JOBADDER_CONTACT_STORAGE", 503) from None
@@ -108,6 +116,40 @@ class JobAdderContactService:
                 matches.append({"contact_id":identity, "company":str(company.get("name") or "")[:200], "company_id":company.get("companyId")})
         return matches
 
+    @staticmethod
+    def _assignments(body):
+        owner, recruiters = body.get("owner_user_id"), body.get("recruiter_user_ids")
+        valid_id=lambda value: type(value) is int and 0<value<=2147483647
+        if ((owner is not None and not valid_id(owner)) or
+                (recruiters is not None and (not isinstance(recruiters,list) or len(recruiters)>1000 or
+                not all(valid_id(value) for value in recruiters) or len(set(recruiters))!=len(recruiters))) or
+                type(body.get("remember_assignments",False)) is not bool):
+            raise JobAdderContactError("Choose one owner and valid recruiters from the JobAdder list.")
+        return owner, sorted(recruiters) if recruiters is not None else None
+
+    def _users(self, token):
+        _, data=self._request("users",token,params={"Limit":1000})
+        if (not isinstance(data,dict) or not isinstance(data.get("items"),list) or
+                type(data.get("totalCount")) is not int or data["totalCount"]!=len(data["items"]) or data["totalCount"]>1000):
+            raise JobAdderContactError("JobAdder did not return a complete user list.","JOBADDER_CONTACT_USERS",502)
+        users,seen=[],set()
+        for row in data["items"]:
+            identity=row.get("userId") if isinstance(row,dict) else None
+            if type(identity) is not int or not 0<identity<=2147483647 or identity in seen:
+                raise JobAdderContactError("JobAdder returned an incomplete user list.","JOBADDER_CONTACT_USERS",502)
+            seen.add(identity)
+            if any(type(row.get(flag,False)) is not bool for flag in ["inactive","deleted"]):
+                raise JobAdderContactError("JobAdder did not confirm active users.","JOBADDER_CONTACT_USERS",502)
+            if row.get("inactive") or row.get("deleted"):continue
+            names=[self._text(row.get(key) or "","JobAdder user name",200) for key in ["firstName","lastName"]]
+            users.append({"id":identity,"name":" ".join(value for value in names if value) or "User #"+str(identity)})
+        return sorted(users,key=lambda row:(row["name"].casefold(),row["id"]))
+
+    def _validate_users(self, token, owner, recruiters):
+        selected=set(recruiters or []) | ({owner} if owner is not None else set())
+        if selected and not selected.issubset({row["id"] for row in self._users(token)}):
+            raise JobAdderContactError("An owner or recruiter is no longer available. Search for the company and review the choices again.","JOBADDER_CONTACT_USERS",409)
+
     def perform(self, body, token):
         if not self.lock.acquire(blocking=False):
             raise JobAdderContactError("Finish the current JobAdder contact action first.", "JOBADDER_CONTACT_BUSY", 409)
@@ -128,7 +170,18 @@ class JobAdderContactService:
                 for row in data["items"][:50]:
                     if isinstance(row, dict) and type(row.get("companyId")) is int and row["companyId"]>0 and isinstance(row.get("name"), str):
                         rows.append({"id":row["companyId"], "name":row["name"][:200]})
-                return {"account":scope, "companies":rows, "more":data.get("totalCount",0)>len(rows)}
+                result={"account":scope, "companies":rows, "more":data.get("totalCount",0)>len(rows)}
+                if body.get("include_assignments") is True:
+                    try:
+                        users=self._users(token);defaults=self._store().get("assignment_defaults")
+                        defaults=defaults if defaults and defaults["account"]==scope else None
+                        selected=set(defaults.get("recruiter_user_ids") or []) if defaults else set()
+                        if defaults and defaults.get("owner_user_id") is not None:selected.add(defaults["owner_user_id"])
+                        stale=bool(defaults and not selected.issubset({row["id"] for row in users}))
+                        result["assignments"]={"available":True,"users":users,"stale":stale,"defaults":None if not defaults or stale else {key:defaults.get(key) for key in ["owner_user_id","recruiter_user_ids"]}}
+                    except JobAdderContactError:
+                        result["assignments"]={"available":False,"message":"Owner and recruiter choices could not be loaded. JobAdder defaults will be used."}
+                return result
             if body.get("account") != scope:
                 raise JobAdderContactError("The JobAdder account changed. Search for the company again.", "JOBADDER_CONTACT_ACCOUNT", 409)
             source = self.contact(body.get("contact_key"))
@@ -142,6 +195,9 @@ class JobAdderContactService:
                 raise JobAdderContactError("Enter the contact's name.")
             position = self._text(body.get("position", ""), "position", 500)
             payload = {"firstName":first,"lastName":last,"email":email,"position":position,"companyId":company_id}
+            owner,recruiters=self._assignments(body)
+            if owner is not None:payload["ownerUserId"]=owner
+            if recruiters is not None:payload["recruiterUserId"]=recruiters
             profile = source.get("profile_url", "")
             if re.fullmatch(r"https://www\.linkedin\.com/in/[A-Za-z0-9_%~-]+/?", profile):
                 payload["social"] = {"linkedin":profile}
@@ -159,12 +215,16 @@ class JobAdderContactService:
                 matches = self._duplicates(email,token)
                 exact = next((row for row in matches if row["company_id"]==previous["company_id"]),None)
                 if exact:
-                    previous.update(state="created",contact_id=exact["contact_id"]);self._write(store)
+                    previous.update(state="created",contact_id=exact["contact_id"])
+                    if "assignments" in previous:
+                        store["assignment_defaults"]={"account":scope,**previous.pop("assignments")}
+                    self._write(store)
                     return {"state":"created",**exact,"message":"Contact confirmed in JobAdder. No request was repeated."}
                 return {"state":"unconfirmed","message":"JobAdder has not confirmed the previous create request. Check JobAdder; this request will not be repeated."}
             if action == "check":
                 return {"state":"not_started","message":"No previous create request exists. Review the details first."}
             if action == "review":
+                self._validate_users(token,owner,recruiters)
                 _, company = self._request("companies/"+str(company_id),token)
                 if not isinstance(company, dict) or type(company.get("companyId")) is not int or company["companyId"] != company_id or not isinstance(company.get("name"),str) or not company["name"].strip():
                     raise JobAdderContactError("This company could not be confirmed. Search again.", "JOBADDER_CONTACT_COMPANY", 409)
@@ -180,11 +240,15 @@ class JobAdderContactService:
             if body.get("confirmed") is not True or not previous or previous["state"] != "review" or previous.get("payload") != fingerprint or previous.get("expires",0) <= self.clock() or not secrets.compare_digest(previous.get("proof", ""),hashlib.sha256(str(body.get("review_token", "")).encode()).hexdigest()):
                 raise JobAdderContactError("The review changed or expired. Review the details again before creating.", "JOBADDER_CONTACT_REVIEW", 409)
             # Repeat only the safe read immediately before the one unsafe write.
+            self._validate_users(token,owner,recruiters)
             matches = self._duplicates(email,token)
             if matches:
                 previous.update(state="exists",contact_id=matches[0]["contact_id"]);self._write(store)
                 return {"state":"exists","matches":matches,"message":"This email already exists in JobAdder. No new record was created."}
-            previous.update(state="pending");self._write(store)
+            previous.update(state="pending")
+            if body.get("remember_assignments") is True:
+                previous["assignments"]={"owner_user_id":owner,"recruiter_user_ids":recruiters}
+            self._write(store)
             try:
                 status, result = self.client().request_json("contacts",method="POST",body=encoded,
                     headers={"Content-Type":"application/json"},token=token,timeout=20,
@@ -199,6 +263,9 @@ class JobAdderContactService:
                 previous.update(state="rejected" if status in {400,401,403,422} else "unconfirmed")
             except Exception:
                 previous.update(state="unconfirmed")
+            if previous["state"]=="created" and "assignments" in previous:
+                store["assignment_defaults"]={"account":scope,**previous.pop("assignments")}
+            if previous["state"]=="rejected":previous.pop("assignments",None)
             self._write(store)
             state=previous["state"]
             return {"state":state,"contact_id":previous.get("contact_id"),"message":{

@@ -73,6 +73,7 @@ class Phase7AModularMonolithFoundationTests(unittest.TestCase):
                 "job_ads",
                 "email_verifier",
                 "apollo",
+                "people_dashboards",
                 "secrets",
                 "jobadder_request",
                 "jobadder_read",

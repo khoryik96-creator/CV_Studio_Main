@@ -27,12 +27,12 @@ assert.equal(read().joined,'2020-06','promotions retain earliest visible date in
 state.cards.unshift(card([link('123',['HR Manager','2010 - 2015 · 5 yrs'])]));
 assert.equal(read().joined,'2020-06','previous separate stint cannot replace rejoining date');
 state.cards=[card([link('example',['HR Director','2023 - Present · 3 yrs'])])];assert.equal(read().joined,'2023','year-only stays year-only');
-state.cards=[card([link('different',['Example','Jan 2000 - Present · 26 yrs'])])];assert.equal(read().joined,'','name alone never proves company identity');
+state.cards=[card([link('different',['Example','Jan 2000 - Present · 26 yrs'])])];assert(read().loading,'other employers arriving first cannot prove requested employment absent; names never prove identity');
 state.cards=[card([link('123',['Example','Jan 2020 - Dec 2023 · 4 yrs'])])];assert.equal(read().joined,'2020-01');assert.equal(read().left,'2023-12');assert.equal(read().current,false);
 state.cards.unshift(card([link('123',['Example','2010 - 2015'])]));assert.equal(read().left,'2023-12','most recent completed stint is shown');
 state.cards=[card([link('123',['Example','2020 - 2023'])]),card([link('123',['Example','Jan 2018 - Jun 2023'])])];assert.equal(read().joined,'','imprecise overlapping end dates cannot select a latest stint');
 state.cards=[card([link('123',['Example','Jan 2024 - Present · 2 yrs'])],true)];assert.equal(read().joined,'','hidden earlier roles cannot be guessed');
-state.cards=[card([link('123',['Example','5 years with the company'])])];assert.equal(read().joined,'','duration never becomes a calculated date');
+state.cards=[card([link('123',['Example','5 years with the company'])])];assert(read().loading,'a duration summary may precede lazy-loaded role dates; it never becomes a calculated date');
 state.cards=[card([link('123',['HR Director','Jan 2024 - Present']),link('123',['HR Manager','2018 - 2023'])])];assert.equal(read().joined,'','imprecise earlier role dates cannot establish a continuous stint');
 state.cards=[card([link('123',['HR Director','Jan 2024 - Present']),link('123',['HR Manager','Jan 2018 - Dec 2020'])])];assert.equal(read().joined,'','unexplained gap inside one company group is ambiguous');
 state.cards=[card([link('123',['Example','Feb 2024 - Present'])]),card([link('123',['Example','May 2022 - Present'])])];assert.equal(read().joined,'','ambiguous concurrent company stints stay unknown');
@@ -42,7 +42,7 @@ document.querySelector=s=>s==='main #experience'?{closest:()=>scope}:oldQuery(s)
 const legacy=card([link('123',[])]);legacy.matches=()=>true;
 const legacyQuery=legacy.querySelectorAll;legacy.querySelectorAll=s=>s==='.pvs-entity__caption-wrapper'?[el('August 2022 – Present · 4 yrs')]:legacyQuery(s);
 state.cards=[legacy];assert.equal(read().joined,'2022-08','legacy Experience captions stay scoped to the linked company item');
-document.querySelector=oldQuery;assert.equal(read().joined,'','unrecognized Experience containers never broaden to the full profile');
+document.querySelector=oldQuery;assert(read().loading,'an unrecognized or not-yet-hydrated Experience container waits without broadening to the full profile');
 heading.getAttribute=oldAttribute;
 state.hidden=true;assert(read().loading);state.hidden=false;
 state.cards=[];assert(read().loading,'an Experience skeleton is not confirmed empty evidence');

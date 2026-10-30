@@ -25,11 +25,21 @@
     if (/unusual activity|temporarily restricted|security verification|you(?:.ve| have) reached.*(?:search|commercial).*limit|too many requests/i.test(text(document.querySelector('main') || document.body).slice(0, 5000))) return 'LinkedIn is showing an access or usage restriction. The agent will stop.';
     return '';
   }
+  function employmentProfileURL(value) {
+    try {
+      const u=new URL(value),match=u.pathname.match(/^\/in\/([A-Za-z0-9_%~-]+)\/details\/experience\/?$/);
+      if(match && u.origin==='https://www.linkedin.com' && !u.username && !u.password && !u.search && !u.hash)
+        return profileURL(u.origin+'/in/'+match[1]);
+      return profileURL(value);
+    } catch{return '';}
+  }
   function assertPage(mode, type = 'search') {
     if (location.origin !== 'https://www.linkedin.com') throw Error('This is not a supported LinkedIn page.');
     const problem = issue();
     if (problem) throw Error(problem);
-    if (type === 'profile') {
+    if (type === 'employment') {
+      if (!employmentProfileURL(location.href)) throw Error('The employment profile page changed. Nothing will be read.');
+    } else if (type === 'profile') {
       if (!profileURL(location.href)) throw Error('The profile page changed. Nothing will be read.');
     } else if (mode === 'standard' ? !/^\/search\/results\/people\/?$/.test(location.pathname) :
                !/^\/talent\//.test(location.pathname) || !!profileURL(location.href)) {
@@ -56,7 +66,8 @@
       if(urls.size!==1 || seen.has(url) || !text(names[0]) || !text(paragraphs[1]))continue;
       const words=paragraphs.filter(p=>[...p.querySelectorAll('a[href]')].every(a=>!profileURL(a.href) || profileURL(a.href)===url)).map(text).join('\n');
       if(words.length<8 || words.length>6500)continue;
-      seen.add(url);rows.push({id:'p'+rows.length,name:text(names[0]).slice(0,150),url,text:words});
+      seen.add(url);rows.push({id:'p'+rows.length,name:text(names[0]).slice(0,150),url,text:words,
+        title:text(paragraphs[1]).slice(0,500),location:text(paragraphs[2]).slice(0,240)});
       if(rows.length>=40)break;
     }
     for (const link of (primary || scope).querySelectorAll('a[href]')) {
@@ -636,27 +647,30 @@
     return nextButton() || [...(document.querySelector('main')?.querySelectorAll('button') || [])].find(button=>visible(button) && /^(next|next page)$/i.test(button.getAttribute('aria-label') || text(button)) && button.parentElement?.querySelector('ul button[aria-label^="Page "]'));
   }
   function prepareHRJoined(expectedURL) {
-    assertPage('', 'profile');
-    if (profileURL(location.href) !== expectedURL) throw Error('The HR profile identity changed.');
+    assertPage('', 'employment');
+    if (employmentProfileURL(location.href) !== expectedURL) throw Error('The HR profile identity changed.');
     const main=document.querySelector('main'); if (!main) return false;
-    const experience=main.querySelector('[componentkey^="profileCardsExperienceOnly"], #experience');
+    const experience=main.querySelector('[componentkey^="profileCardsExperienceOnly"], #experience') ||
+      [...main.querySelectorAll('h2')].find(n=>visible(n) && text(n)==='Experience');
     if (experience) experience.scrollIntoView({block:'start',behavior:'instant'});
     else main.scrollBy({top:Math.min(main.clientHeight || 600,900),behavior:'instant'});
     return true;
   }
   function readHRJoined(expectedURL, expectedCompany, companyId) {
     const unknown=()=>({joined:'',left:'',current:null});
-    assertPage('', 'profile');
-    if (profileURL(location.href) !== expectedURL || !companyURL(expectedCompany) || !/^[0-9]{1,24}$/.test(companyId)) throw Error('The HR profile identity changed.');
+    assertPage('', 'employment');
+    if (employmentProfileURL(location.href) !== expectedURL || !companyURL(expectedCompany) || !/^[0-9]{1,24}$/.test(companyId)) throw Error('The HR profile identity changed.');
     const main = document.querySelector('main');
     const heading = [...document.querySelectorAll('main h2, h2')].find(n=>visible(n) && text(n) === 'Experience');
-    if (!main || !heading) return {loading:true};
+    const details=/\/details\/experience\/?$/.test(location.pathname);
+    if (!main || !details && !heading) return {loading:true};
     // Modern company groups have a stable entity key; legacy groups live in
     // the Experience section. Never scan About, activity, education or captions
     // in free-form role descriptions for dates.
-    const scope = heading.getAttribute('componentkey') === 'ProfileNullStateCardAnchor_Experience' ? heading.parentElement?.parentElement :
-      document.querySelector('main #experience')?.closest('section');
-    if (!scope) return unknown();
+    const detailScopes=details?[...main.querySelectorAll('[componentkey$="ExperienceDetailsSection"]')].filter(n=>visible(n) && n.querySelector('[componentkey="profileExperienceDetails_top_anchor"]')):[];
+    const scope = details ? detailScopes.length===1?detailScopes[0]:null :
+      heading.getAttribute('componentkey') === 'ProfileNullStateCardAnchor_Experience' ? heading.parentElement?.parentElement : document.querySelector('main #experience')?.closest('section');
+    if (!scope) return {loading:true};
     const selector = '[componentkey^="entity-collection-item-"], li.artdeco-list__item';
     const cards = [...scope.querySelectorAll(selector)].filter(n=>visible(n) && !n.parentElement?.closest?.(selector));
     if (!cards.length) return {loading:true};
@@ -683,8 +697,9 @@
       if ([...card.querySelectorAll('a, button')].some(n=>visible(n) && /(?:show|see) all|more (?:positions|roles|experiences)/i.test(text(n)))) { ambiguous=true; continue; }
       const linked = n=>[...n.querySelectorAll('a[href*="/company/"]')].some(a=>visible(a) && [expectedCompany,'https://www.linkedin.com/company/'+companyId+'/'].includes(companyURL(a.href)));
       const roles=[...card.querySelectorAll('ul > li, [role="list"] > [role="listitem"]')].filter(n=>visible(n) && linked(n));
-      if (roles.some(n=>![...n.querySelectorAll('a[href*="/company/"] p, .pvs-entity__caption-wrapper')].filter(visible).some(n=>ranges(text(n))))) { pending=true; continue; }
-      const observed = links.flatMap(n=>[...n.querySelectorAll('p, .pvs-entity__caption-wrapper')].filter(visible).map(n=>ranges(text(n))).filter(Boolean));
+      const captions='p, .pvs-entity__caption-wrapper, span[aria-hidden="true"], time';
+      if (roles.some(n=>![...n.querySelectorAll('a[href*="/company/"] p, a[href*="/company/"] span[aria-hidden="true"], .pvs-entity__caption-wrapper')].filter(visible).some(n=>ranges(text(n))))) { pending=true; continue; }
+      const observed = links.flatMap(n=>[...n.querySelectorAll(captions)].filter(visible).map(n=>ranges(text(n))).filter(Boolean));
       // Legacy date captions can sit beside the company link, within the same
       // bounded Experience item, rather than inside that link.
       if (!observed.length && card.matches?.('li.artdeco-list__item')) {
@@ -694,8 +709,9 @@
       if (!unique.length) {
         // The company logo and role link can arrive before the date paragraph.
         // Poll within the existing lookup budget; never derive dates from tenure.
-        const metadata=links.map(text).join(' ');
-        if (!/\b(?:19|20)\d{2}\b|\b(?:years?|months?|yrs?|mos?)\b/i.test(metadata)) pending=true;
+        // A duration/company summary is not proof that role metadata finished
+        // hydrating. Keep polling; never convert a tenure into a joining date.
+        pending=true;
         continue;
       }
       const current = unique.filter(r=>r.current);
@@ -720,7 +736,9 @@
     if (ambiguous) return unknown();
     const current=matches.filter(r=>r.current);
     if (current.length) return current.length===1?current[0]:unknown();
-    if (!matches.length) return unknown();
+    // An Experience skeleton (or other employers hydrating first) does not
+    // establish that the requested company's employment is absent.
+    if (!matches.length) return {loading:true};
     const endBound=(value,last)=>Number(value.slice(0,4))*12+(value.length===7?Number(value.slice(5)):last?12:1);
     const latest=matches.filter(r=>matches.every(other=>r===other || endBound(r.left,false)>endBound(other.left,true)));
     return latest.length===1?latest[0]:unknown();

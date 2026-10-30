@@ -75,6 +75,8 @@
       else statsRecord('LinkedIn Sourcer', 'linkedin_sourcer', Number(value.cost || 0), value.model, '', 'deepseek', statsMetaFromResponse(value, value.model, 'deepseek'));
     }
     if (!response.ok || value.error) throw Error(value.error || 'Sourcing request failed.');
+    if(value.dashboard_warning) el('DashboardWarning').textContent=value.dashboard_warning;
+    if(action==='review') window.cvStudioPeople?.sourcerChanged();
     return value;
   }
   async function begin() {

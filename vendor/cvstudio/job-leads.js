@@ -487,7 +487,7 @@
   }
   function hrEmploymentLabel(person) {
     const start=hrJoinedLabel(person.joined);
-    if (start==='Not available') return person._employment==='checking'?'Checking…':person._employment==='not_checked'?'Not checked':start;
+    if (start==='Not available') return person._employment==='checking'?'Checking…':person.employment_status==='not_shown' || person._employment==='observed'?'Not confirmed':'Not checked';
     try { hrEmployment(person); } catch { return 'Not available'; }
     return start+(person.current===true?' to Present':person.current===false?' to '+hrJoinedLabel(person.left):'');
   }
@@ -499,6 +499,7 @@
       const card = node('article','','job-leads-hr-person'), link = node('a',person.name);
       link.href=person.url; link.target='_blank'; link.rel='noopener noreferrer';
       card.append(link,node('p',person.title),node('p',person.location || 'Location not shown','job-leads-muted'),node('p','Employment: '+hrEmploymentLabel(person),'job-leads-muted'),node('p','Matched: '+person.matched,'job-leads-muted'));
+      window.cvStudioPeople?.decorateDate(card,savedJob(previewUrl),person);
       window.cvStudioEmailVerifier?.decorate(card,person);
       window.cvStudioApollo?.decorate(card,person);
       target.append(card);
@@ -518,7 +519,7 @@
     el('HRCountry').hidden = el('HRCountryLabel').hidden = !preference.countryMode;
     el('HRKeywords').value = search?.keywords || hrDefaultKeywords;
     el('HRPages').value = String(preference.pages); el('HRCompanyURL').value=search?.company_url || '';
-    el('HRMessage').textContent = search ? `${search.people.length} saved matches · ${search.country || 'Any country'} · Last scan ${createdLabel(search.scanned_at)}. ${search.complete ? '' : 'Limited scan; more matches may be available. '}LinkedIn company association; titles are keyword matches.` : 'Use the connected Chrome companion to scan this company. Results will be saved with this ad. No AI charge.';
+    el('HRMessage').textContent = search ? `${search.people.length} saved matches · ${search.people.filter(p=>p.joined).length}/${search.people.length} employment dates confirmed · ${search.country || 'Any country'} · Last scan ${createdLabel(search.scanned_at)}. ${search.complete ? '' : 'Limited scan; more matches may be available. '}LinkedIn company association; titles are keyword matches.` : 'Use the connected Chrome companion to scan this company. Results will be saved with this ad. No AI charge.';
     hrPeople(search?.people);
   }
   function checkHR() { if (hrStopped) throw Error('Stopped.'); }
@@ -561,7 +562,7 @@
       if (companion?.profile_browsing_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to keep browsing safely during scans.');
       if (companion?.concurrent_scans_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to run Job Leads and Sourcer together.');
       if (companion?.hr_apply_transition_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to use the corrected company-selection check.');
-      if (!companion?.connected || companion.company_hr_revision !== 1 || companion.hr_company_identity_revision !== 1 || companion.hr_company_filter_revision !== 1 || companion.hr_company_source_revision !== 1 || companion.hr_resilience_revision !== 1 || companion.hr_layout_revision !== 1 || companion.hr_joined_revision !== 1 || companion.hr_joined_loading_revision !== 1 || companion.hr_employment_revision !== 1 || companion.hr_keyword_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to use the corrected HR search and joining-date checks.');
+      if (!companion?.connected || companion.company_hr_revision !== 1 || companion.hr_company_identity_revision !== 1 || companion.hr_company_filter_revision !== 1 || companion.hr_company_source_revision !== 1 || companion.hr_resilience_revision !== 1 || companion.hr_layout_revision !== 1 || companion.hr_joined_revision !== 1 || companion.hr_joined_loading_revision !== 1 || companion.hr_employment_revision !== 1 || companion.hr_experience_page_revision !== 1 || companion.hr_keyword_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to use the corrected HR search and joining-date checks.');
       if (companion.busy) throw Error('Finish the current companion search or ad read first.');
       const saved=previousHRCompany(row),manual=companyURL && (!saved || companyURL!==saved.url);
       if (!manual) {
@@ -620,7 +621,7 @@
                 const value=await rpc('hrJoined',{run_id:hrRun,tab_id:source.tab_id,url:profileURL}); checkHR();
                 if (value && !value.loading) {
                   if (value.url !== profileURL || typeof value.joined !== 'string' || !/^(?:(?:19|20)\d{2}(?:-(?:0[1-9]|1[0-2]))?)?$/.test(value.joined)) throw Error('An HR joining date could not be confirmed.');
-                  Object.assign(entry,{joined:value.joined},hrEmployment(value));entry._employment='observed';break;
+                  Object.assign(entry,{joined:value.joined},hrEmployment(value));entry._employment=value.employment_status==='not_checked'?'not_checked':'observed';break;
                 }
                 // A slow profile navigation must not use up the separate,
                 // bounded Experience hydration budget before the reader runs.
@@ -654,12 +655,13 @@
       const complete=!finalSnapshot.hasNext && !omitted;
       saving=true;
       const response = await api({action:'save_hr',id:row.id,revision:row.revision,search:{company:row.company,company_name:finalSnapshot.company_name || companyName,company_url:finalSnapshot.company_url || companyURL,company_id:finalSnapshot.company_id,
-        country,keywords,source_url:finalSnapshot.source_url,complete,people:[...found.values()].map(({_employment,...person})=>person)}});
+        country,keywords,source_url:finalSnapshot.source_url,complete,people:[...found.values()].map(({_employment,...person})=>({...person,employment_status:person.joined?'observed':_employment==='observed'?'not_shown':'not_checked'}))}});
       const index = rows.findIndex(item=>item.id===row.id); if (index >= 0) rows[index]=response.record;
       if (editing?.id === row.id) editing={...editing,revision:response.record.revision,hr:response.record.hr};
       hrRow=''; render(); drawPreview();
-      const message=`${found.size} HR matches saved · ${country || 'Any country'} · Last scan ${createdLabel(response.record.hr.scanned_at)}. ${complete ? 'No further results shown by LinkedIn.' : 'Page/result limit reached; more people may be available on LinkedIn.'}`+(expectedID?' The ad could not be reread; its previously saved company identity was reconfirmed.':'');
-      outcome={state:'saved',matches:found.size,complete,message};notify(message);
+      const employmentConfirmed=[...found.values()].filter(person=>person.joined).length;
+      const message=`${found.size} HR matches saved · ${employmentConfirmed}/${found.size} employment dates confirmed · ${country || 'Any country'} · Last scan ${createdLabel(response.record.hr.scanned_at)}. ${complete ? 'No further results shown by LinkedIn.' : 'Page/result limit reached; more people may be available on LinkedIn.'}`+(expectedID?' The ad could not be reread; its previously saved company identity was reconfirmed.':'');
+      outcome={state:'saved',matches:found.size,employmentConfirmed,complete,message};notify(message);
     } catch(error) {
       if(error.companionCode==='HR_COMPANY_REDIRECT' && recovery===0 && jobURL && !found.size && !finalSnapshot && !saving && error.companyURL)retryCompanyURL=error.companyURL;
       const saveUnconfirmed=saving && error.code!=='JOB_LEADS_CONFLICT';
@@ -751,7 +753,7 @@
         const showPeople=people=>{if (savedJob(previewUrl)?.id===row.id) hrPeople(people);};
         const outcome=await scanHR(row,{...settings,companyURL:row.hr?.company_url || ''},notify,showPeople);
         item.node.dataset.state=outcome.state;
-        item.node.textContent=item.title+' · '+(outcome.state==='saved' ? `${outcome.matches} HR matches saved${outcome.complete ? '' : ' · Limited scan'}` : outcome.message);
+        item.node.textContent=item.title+' · '+(outcome.state==='saved' ? `${outcome.matches} HR matches saved${outcome.complete ? '' : ' · Limited scan'} · ${outcome.employmentConfirmed}/${outcome.matches} employment dates confirmed` : outcome.message);
         bulkHR.completed++;if (outcome.state==='saved') bulkHR.saved++;else if (outcome.state==='failed') bulkHR.failed++;else bulkHR.cancelled++;
         bulkHRSummary();rememberBulkHR();
         if (outcome.stopQueue) { stoppedReason=outcome.message;break; }
@@ -1218,5 +1220,6 @@
     const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = name; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
+  window.cvStudioJobLeads={refresh:load,lock:value=>lock(value),isBusy:()=>busy,employment:hrEmploymentLabel,rpc,activityStart:beginScanActivity,activityEnd:finishScanActivity};
   document.addEventListener('DOMContentLoaded', () => { if (new URLSearchParams(location.search).get('module') === 'jobleads') switchTab('jobleads'); });
 })();

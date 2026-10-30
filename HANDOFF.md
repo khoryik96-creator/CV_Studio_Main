@@ -7,7 +7,63 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current source checkpoint: v24.6.519 (owner-authorized for merge)** on
+**Current source checkpoint: v24.6.522 (owner-authorized publication/merge)** on
+`codex/v24.6.522-employment-loading`, stacked on local v521 `1941e58` and
+v520 `a076a07`. The owner reports all employment blank. Read-only inspection
+found the normal installation still at v519 and blank persisted observations;
+affected live profile Experience did not exist until scrolling. Its dedicated
+Experience page did show an exact-company month/year range without scrolling.
+New optional date reads now open the exact profile's canonical Experience page,
+with a narrowly recognized Experience scope, exact company/profile checks,
+existing bounds/Stop/viewed-tab protection and worker-suspension validation.
+General Sourcer profile reading is unchanged. A new companion capability gates
+both batch and individual checks; update the app AND companion before use.
+Blank legacy/interrupted results say Not checked. Saved scans and queue rows
+show confirmed-date counts separately from saved people. Previously saved blank
+records are not backfilled by merely opening the preview: use Check employment
+or explicitly rescan. No paid/contact action, owner data/server/extension update,
+new production route or SQL schema migration. A real worker+real DOM regression
+fails on v521 and passes on v522; live read-only inspection is not acceptance
+of an installed updated companion. Full QA/limitations are in the v522 report.
+PR267 review caught a duplicate-ad date selection defect before merge: an older
+ad employment refresh now carries a separate observation time and exact action
+source through dashboard deduplication/Excel. Newer blank ads cannot hide it.
+The owner now authorizes publication and merge of this stack, including local
+v520/521. Issue #35 records the resulting PR and merge identity. PR #257 remains
+held/excluded.
+
+**Previous local checkpoint: v24.6.521 (not published or merged)** on
+`codex/v24.6.521-people-dashboards`, retaining local v520 `a076a07` contact
+assignment defaults from merged v519 `37e9461` / PR #266. The owner asks for
+all-HR and spreadsheet-style Sourcer dashboards and still-missing employment.
+Job Leads now has an HR people table of saved observations, deduplicated by
+profile/company, with per-person explicit Apollo unlock/recovery and filtered
+Excel. Sourcer assessments from new searches save automatically in a bounded
+protected archive with search filters, notes/revision checks and Excel; valid
+paid results stay usable with a visible warning if archiving fails.
+Reader readiness now waits for partially hydrated Experience metadata and
+other employers arriving first, with a direct heading scroll fallback. Existing
+blank dates can be refreshed individually using Check employment on cards or
+the HR dashboard, without rerunning an HR search. Exact company/profile checks,
+month/year precision, bounded owned inactive tabs and Stop remain. No inferred
+dates, new production route, SQL schema migration, live paid/contact action or
+owner installation/data update. Read-only inspection confirms blank saved
+observations despite later visible dates; historical timing is not proven.
+The local preview on5095 uses a separate read-only snapshot of job ads only;
+no credentials or unlocked-email vault is copied. See the v521 QA report for
+final gates and limits:2180 Python/4 skips/8418 subtests,80 JS, native fictional
+UI and static/preflight/source smoke pass. No publication/merge requested; PR #257 remains held.
+
+**Previous local checkpoint: v24.6.520 (not published or merged)** on
+`codex/v24.6.520-contact-assignments`, from merged v519. One contact owner and
+multiple recruiters can be chosen after company search. Select all, searchable
+checkboxes and Clear; successful creation/confirmation remembers opted-in
+protected connection-scoped defaults. Active IDs are revalidated at Review and
+Create; changed choices invalidate review. Directory failures preserve provider
+defaults. Windows2169/4 skips/8418 subtests,79 JS and native fictional UI pass.
+See the v520 QA report. This checkpoint is included in local v521.
+
+**Previous source checkpoint: v24.6.519 (merged PR #266)** on
 `codex/v24.6.519-hr-dates-resume`, from merged v518 `f78aacf` / PR #265.
 The owner reports missing date text in a stopped scan and requests retrying
 unfinished bulk ads first, plus a link after creating a JobAdder contact.

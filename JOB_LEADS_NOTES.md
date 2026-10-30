@@ -1,5 +1,94 @@
 # Job Leads module
 
+## Direct Experience date loading (v24.6.522)
+
+Employment checks now open `/in/<observed-handle>/details/experience/` in the
+existing bounded owned inactive lookup. This avoids depending on Activity and
+lazy profile scrolling. Only the recognized Experience details section with its
+anchor supplies dates; sidebar/About/activity text is excluded. The base profile
+and exact company association still identify the person/stint. General Sourcer
+profile navigation is unchanged. An extra companion capability prevents the new
+UI from silently using an older installed date reader.
+
+Canonical lookup ownership survives worker suspension. Query/identity redirects
+remain rejected; user-viewed tabs are never automatically scrolled/closed. Old
+in-flight base-profile lookups remain readable without being reopened/replayed.
+Existing navigation/metadata poll limits and Stop continue to apply.
+
+Blank legacy or interrupted lookups say Not checked, including after saving and
+reopening. Confirmed-date counts appear in saved scan and bulk queue summaries,
+so saved people do not imply successful date checks. Existing blanks require an
+explicit Check employment or fresh scan; opening/updating the app cannot invent
+or backfill dates. Single-person failed checks preserve earlier confirmed dates.
+Update both app and companion. The preview's job-ad snapshot is separate from
+the normal installation and does not prove live updated-companion acceptance.
+
+Review correction before merge: individual confirmed employment checks retain
+an independent server observation timestamp. Duplicate-person dashboard rows
+keep the newest confirmed date range across ads, even if the newest ad has no
+date. Date refreshes use the exact date-source ad/revision/company link; title,
+scan/source fields and Apollo lookup authority keep their own source. Legacy
+dates use their original scan time. Reopen, backup and Excel retain this choice;
+invalid observation timestamps fail atomically. No SQL migration is required.
+
+## People dashboards and employment refresh (v24.6.521)
+
+Job Leads -> HR people lists all saved non-trashed HR observations, one row per
+LinkedIn profile/company. The newest observation supplies title/location/dates;
+source-ad counts and links remain visible. Company/text filters,40-row paging
+and filtered Excel use literal cells. Country in an export is the scan filter,
+not an independently verified nationality/location. Existing Apollo lookups
+from duplicate ads are reused for display and read-only result checks. Unlock
+email remains an explicit per-person credit confirmation, never an automatic
+batch unlock; Unlocked contacts and JobAdder creation retain their own flow.
+
+Check employment is available on saved HR cards and HR dashboard rows. It reads
+only the exact saved LinkedIn profile and company in a newly owned inactive
+profile tab. The latest companion is required. Up to100 half-second polls,
+40 metadata reads and8 targeted scrolls bound this optional check; Stop is
+operation-bound, including Stop during a delayed reply. Viewed/navigated tabs
+are not automatically closed or scrolled. No user search is changed. Confirmed
+month/year ranges update only that saved person under the current ad revision;
+missing/invalid/stopped evidence preserves prior dates. A conflict asks for a
+refresh. This local update preserves notes, scan date/settings and completeness.
+
+Future HR scans now wait for partially hydrated Experience metadata, including
+other employers arriving first. The existing automatic scan/lookup bounds and
+company/profile guards remain. A current heading can be scrolled even before
+the old section-key selector appears. Date-caption spans remain inside the
+exact company role link. No duration is converted to an inferred date. Earlier
+blank saved observations require Check employment or a new HR scan.
+
+LinkedIn Sourcer -> Candidates is a separate full-width table with observed
+name/title/location, LinkedIn link, evidence match, detail-read state, supporting
+evidence, missing requirements and editable notes. New validated assessments
+save automatically by search/profile in a dedicated protected version1 archive
+(max5000 rows/8MiB), separate from credentials and SQL. Search briefs filter
+history; newer detail assessments do not downgrade to card-only observations.
+Notes use revision checks and survive table filtering/redraw. An unsaved note
+blocks closing without browser confirmation. A failed archive write shows a
+warning while valid paid output/accounting stays available in Search; it never
+replays provider transport. Excel exports matching saved rows only. Historic
+searches that were never saved by earlier versions cannot be reconstructed.
+Neither dashboard starts LinkedIn, paid assessment, unlock or contact creation
+just by opening. There is no automatic email reveal or protected-trait inference.
+
+## Contact owner and recruiters (v24.6.520)
+
+Search for a JobAdder company, choose one Owner, and expand Recruiters for
+searchable checkboxes, Select all or Clear. Remember these choices is selected
+by default, but saves them only after successful contact creation/confirmation.
+Uncheck it for a one-off choice. Defaults belong to the current JobAdder
+connection and are kept in the existing protected store, never browser/SQLite.
+One owner is supported by JobAdder; recruiters can be multiple or explicitly
+empty. Omitted selections preserve JobAdder defaults. Only a complete active
+roster (up to1000) is offered; directory failures keep the original workflow
+usable with provider defaults. Unavailable prior users are not preselected.
+Assignments are validated at review and before the single create; editing them
+requires another review. Ambiguous-write recovery retains original assignments
+and never resubmits. The route-local request cap is16KiB for up to1000 IDs;
+global80MiB/123 routes/guards are unchanged. No authenticated live API QA.
+
 ## Resuming HR batches and showing dates during a scan (v24.6.519)
 
 After an interrupted/failed batch, **Resume unfinished ads** retries failed or

@@ -60,6 +60,14 @@ function profile(value) {
   try { const u = new URL(value); return linkedin(value) && !u.username && !u.password && /^\/(in\/[^/]+|talent\/(?:hire\/)?profile\/[^/]+)\/?$/.test(u.pathname); }
   catch { return false; }
 }
+function hrExperienceURL(value) {
+  try {
+    const u=new URL(value);
+    return u.origin==='https://www.linkedin.com' && !u.username && !u.password && !u.search && !u.hash &&
+      /^\/in\/[A-Za-z0-9_%~-]+\/details\/experience\/$/.test(u.pathname) ? u.href : '';
+  } catch{return '';}
+}
+const hrLookupURL=url=>url+'/details/experience/';
 function jobURL(value) {
   try {
     const u = new URL(value);
@@ -276,13 +284,13 @@ async function restore() {
       !Number.isInteger(saved.nextCount) || saved.nextCount < 0 || saved.nextCount > 15 ||
       !Number.isInteger(saved.profileCount) || saved.profileCount < 0 || saved.profileCount > 76) throw Error('Invalid companion session.');
   for (const row of saved.owned) {
-    if (!Array.isArray(row) || row.length !== 2 || !Number.isInteger(row[0]) || row[0] < 0 || owned.has(row[0]) || typeof row[1] !== 'string' || !row[1] || row[1].length > 2048 || !(profile(row[1]) || jobURL(row[1]) === row[1])) throw Error('Invalid owned tab.');
+    if (!Array.isArray(row) || row.length !== 2 || !Number.isInteger(row[0]) || row[0] < 0 || owned.has(row[0]) || typeof row[1] !== 'string' || !row[1] || row[1].length > 2048 || !(profile(row[1]) || jobURL(row[1]) === row[1] || scope==='leads' && hrExperienceURL(row[1]))) throw Error('Invalid owned tab.');
     owned.set(row[0], row[1]);
   }
   const protectedTabs=saved.viewed === undefined ? [] : saved.viewed;
   if (!Array.isArray(protectedTabs) || saved.owned.length+protectedTabs.length>76) throw Error('Invalid viewed tabs.');
   for (const row of protectedTabs) {
-    if (!Array.isArray(row) || row.length!==2 || !Number.isInteger(row[0]) || row[0]<0 || owned.has(row[0]) || viewed.has(row[0]) || typeof row[1]!=='string' || !row[1] || row[1].length>2048 || !(profile(row[1]) || jobURL(row[1])===row[1])) throw Error('Invalid viewed tab.');
+    if (!Array.isArray(row) || row.length!==2 || !Number.isInteger(row[0]) || row[0]<0 || owned.has(row[0]) || viewed.has(row[0]) || typeof row[1]!=='string' || !row[1] || row[1].length>2048 || !(profile(row[1]) || jobURL(row[1])===row[1] || scope==='leads' && hrExperienceURL(row[1]))) throw Error('Invalid viewed tab.');
     viewed.set(row[0],row[1]);
   }
   const bound = saved.connection;
@@ -308,6 +316,7 @@ async function restore() {
         bound.hr.company_blank_reloads !== undefined && bound.hr.company_blank_reloads!==1 ||
         bound.hr.joined_count !== undefined && (!Number.isInteger(bound.hr.joined_count) || bound.hr.joined_count < 0 || bound.hr.joined_count > 100) ||
         bound.hr.joining && (!/^https:\/\/www\.linkedin\.com\/in\/[A-Za-z0-9_%~-]+$/.test(bound.hr.joining.url || '') || bound.hr.joining.tab_id !== null && !Number.isInteger(bound.hr.joining.tab_id) ||
+          bound.hr.joining.page_url!==undefined && bound.hr.joining.page_url!==hrLookupURL(bound.hr.joining.url) ||
           bound.hr.joining.scrolls !== undefined && (!Number.isInteger(bound.hr.joining.scrolls) || bound.hr.joining.scrolls < 0 || bound.hr.joining.scrolls > 4)) ||
         bound.hr.stage !== 'company' && ((!/^[0-9]{1,24}$/.test(bound.hr.company_id || '') && !hrCompanyGroup(bound.hr.company_group)) || !bound.hr.key) ||
         bound.hr.key && (bound.hr.key.length > 2048 || hrSearchKey(bound.hr.key) !== bound.hr.key))) throw Error('Invalid binding.');
@@ -352,7 +361,7 @@ function live(bound, run) {
 function sameOwnedPage(value, expected) {
   // LinkedIn may add a single trailing slash while loading an observed profile.
   // Do not equate query/hash changes, another identity or arbitrary redirects.
-  return value === expected || !!profile(expected) && !/[?#]/.test(expected) && value === expected.replace(/\/$/,'') + '/';
+  return value === expected || typeof value==='string' && (!!profile(expected) || !!hrExperienceURL(expected)) && !/[?#]/.test(expected) && value.replace(/\/$/,'')===expected.replace(/\/$/,'');
 }
 function expectedLoading(tab, expected) { return tab.status === 'loading' && sameOwnedPage(tab.pendingUrl, expected); }
 async function ownedTab(id) {
@@ -606,7 +615,55 @@ async function handle(message, sender) {
     if(jobCapture?.bound!==connection || jobCapture.operation!==args.operation_id)return false;
     jobCapture.cancelled=true;return true;
   }
-  if (message.action === 'jobStatus') return {connected:true,job_read:true,job_search:true,job_search_revision:1,company_hr_revision:1,hr_company_identity_revision:1,hr_company_filter_revision:1,hr_company_source_revision:1,hr_resilience_revision:1,hr_layout_revision:1,hr_apply_transition_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_employment_revision:1,hr_keyword_revision:1,people_country_revision:1,people_results_revision:1,profile_browsing_revision:1,concurrent_scans_revision:1,companion_update_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
+  if (message.action === 'jobStatus') return {connected:true,job_read:true,job_search:true,job_search_revision:1,company_hr_revision:1,hr_company_identity_revision:1,hr_company_filter_revision:1,hr_company_source_revision:1,hr_resilience_revision:1,hr_layout_revision:1,hr_apply_transition_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_employment_revision:1,hr_date_check_revision:1,hr_experience_page_revision:1,hr_keyword_revision:1,people_country_revision:1,people_results_revision:1,profile_browsing_revision:1,concurrent_scans_revision:1,companion_update_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
+  if (message.action === 'hrDate') {
+    const bound=connection;
+    if(bound.run || jobCapture) throw safeError('Wait for the current HR action to finish before checking employment.');
+    if(!/^https:\/\/www\.linkedin\.com\/in\/[A-Za-z0-9_%~-]+$/.test(args.url || '') ||
+        !/^https:\/\/www\.linkedin\.com\/company\/[A-Za-z0-9_-]+\/$/.test(args.company_url || '') ||
+        !/^[0-9]{1,24}$/.test(args.company_id || '') || !/^[a-f0-9]{32}$/.test(args.operation_id || '')) throw safeError('Choose a saved HR person and company.');
+    const lookupURL=hrLookupURL(args.url),token={bound,operation:args.operation_id};jobCapture=token;let created=null,scrolls=0,metadata=0,committed=false;
+    try {
+      await closeHROwnedTabs();live(bound);
+      const tab=await chrome.tabs.create({url:lookupURL,active:false});created=tab.id;owned.set(created,lookupURL);await persist();
+      for(let attempt=0;attempt<100;attempt++) {
+        live(bound);if(token.cancelled || bound.run)throw safeError('The employment check stopped. Saved dates were kept.');
+        const opening=await chrome.tabs.get(created);live(bound);
+        if(!committed && opening.status==='loading' && (!opening.url || opening.url==='about:blank') && (!opening.pendingUrl || sameOwnedPage(opening.pendingUrl,lookupURL))) {
+          await new Promise(resolve=>setTimeout(resolve,500));continue;
+        }
+        const current=await ownedTab(created);live(bound);committed=true;
+        if(current.status==='complete') {
+          await jobScript({target:{tabId:created},files:['reader.js']},jobReaderStartError);
+          await ownedTab(created);live(bound);if(token.cancelled)throw safeError('The employment check stopped. Saved dates were kept.');
+          const [read]=await jobScript({target:{tabId:created},func:values=>{
+            try{return globalThis.SourcerReader.readHRJoined(...values);}
+            catch{return {hrError:true};}
+          },args:[[args.url,args.company_url,args.company_id]]},'The employment dates could not be read.');
+          await ownedTab(created);live(bound);if(token.cancelled)throw safeError('The employment check stopped. Saved dates were kept.');
+          const value=read?.result;
+          if(value?.hrError)throw safeError('LinkedIn needs sign-in, or the profile could not be confirmed. Saved dates were kept.');
+          if(value && !value.loading) {
+            const {joined,left,current}=value;
+            const date=s=>typeof s==='string' && /^(?:(?:19|20)\d{2}(?:-(?:0[1-9]|1[0-2]))?)?$/.test(s);
+            if(!date(joined) || !date(left) || ![true,false,null].includes(current) ||
+                current===true && (!joined || left) || current===false && (!joined || !left) || current===null && (joined || left) ||
+                left && (joined.length===4?joined+'-01':joined)>(left.length===4?left+'-12':left))throw safeError('The employment dates could not be confirmed.');
+            return {url:args.url,joined,left,current};
+          }
+          if(++metadata>=40)break;
+          if(scrolls<8 && !viewed.has(created)) {
+            scrolls++;await jobScript({target:{tabId:created},func:url=>document.visibilityState==='visible'?false:globalThis.SourcerReader.prepareHRJoined(url),args:[args.url]},'The Experience section could not be loaded.');
+          }
+        }
+        await new Promise(resolve=>setTimeout(resolve,500));
+      }
+      throw safeError('LinkedIn did not finish loading Experience. Saved dates were kept; try Check employment again.');
+    } finally {
+      if(created!==null)await closeOwned(created,lookupURL);
+      if(jobCapture===token)jobCapture=null;await persist();
+    }
+  }
   if (message.action === 'hrBegin') {
     const bound = connection;
     if (!/^[a-f0-9]{32}$/.test(args.run_id || '') || !hrCompanyURL(args.company_url) || typeof args.company !== 'string' || !args.company.trim() || args.company.length > 200 ||
@@ -760,7 +817,7 @@ async function handle(message, sender) {
       if (message.action === 'hrJoinedClose') {
         // Cleanup returns no profile evidence. An unchanged loading search may
         // still release its exact inactive owned lookup before the next person.
-        if (hr.joining && hr.joining.tab_id !== null) await closeOwned(hr.joining.tab_id,hr.joining.url);
+        if (hr.joining && hr.joining.tab_id !== null) await closeOwned(hr.joining.tab_id,hr.joining.page_url || hr.joining.url);
         delete hr.joining; await persist(); return true;
       }
       if (!sourceReady) return hrWaiting(hr);
@@ -769,12 +826,12 @@ async function handle(message, sender) {
         if ((hr.joined_count || 0) >= 100 || owned.size+viewed.size >= 76) throw safeError('The joining-date lookup limit was reached.');
         // Persist the attempt before opening. If suspension occurs mid-create,
         // the absent tab ID stops visibly rather than opening another tab.
-        hr.joined_count=(hr.joined_count || 0)+1; hr.joining={url:args.url,tab_id:null,scrolls:0};
+        hr.joined_count=(hr.joined_count || 0)+1; hr.joining={url:args.url,page_url:hrLookupURL(args.url),tab_id:null,scrolls:0};
         await persist(); live(bound,run);
-        const created=await chrome.tabs.create({url:args.url,active:false});
-        owned.set(created.id,args.url);
+        const created=await chrome.tabs.create({url:hr.joining.page_url,active:false});
+        owned.set(created.id,hr.joining.page_url);
         try { live(bound,run); hr.joining.tab_id=created.id; await persist(); }
-        catch(error) { await closeOwned(created.id,args.url); throw error; }
+        catch(error) { await closeOwned(created.id,hrLookupURL(args.url)); throw error; }
         return hrWaiting(hr,'profile_navigation');
       }
       if (hr.joining.url !== args.url || hr.joining.tab_id === null) throw safeError('The joining-date lookup was interrupted. Start a new scan.');
@@ -792,8 +849,8 @@ async function handle(message, sender) {
       if (result?.hrError) throw safeError(result.hrError === 'access' ? 'LinkedIn needs sign-in or is showing a restriction. Resolve it before scanning again.' : 'The HR profile changed or could not be confirmed.');
       if (result == null || result.loading) {
         const leaveViewed = async () => {
-          await closeOwned(id,args.url); delete hr.joining; await persist(); live(bound,run);
-          return {url:args.url,joined:''};
+          await closeOwned(id,hr.joining.page_url || args.url); delete hr.joining; await persist(); live(bound,run);
+          return {url:args.url,joined:'',employment_status:'not_checked'};
         };
         if (viewed.has(id)) return leaveViewed();
         // LinkedIn lazy-loads Experience after scrolling. Only our unchanged
@@ -816,7 +873,7 @@ async function handle(message, sender) {
             left && (joined.length===4?joined+'-01':joined)>(left.length===4?left+'-12':left)) throw safeError('The employment dates could not be confirmed.');
         Object.assign(employment,{left,current});
       }
-      await closeOwned(id,args.url); delete hr.joining; await persist(); live(bound,run);
+      await closeOwned(id,hr.joining.page_url || args.url); delete hr.joining; await persist(); live(bound,run);
       return {url:args.url,joined:result.joined,...employment};
     }
     if (tab.status !== 'complete') return hrWaiting(hr);
@@ -1135,7 +1192,7 @@ for(const [event,method] of [['onRemoved','removed'],['onUpdated','updated'],['o
     await session[method](...args);releaseLeases(scope);
   })));
 }
-const leadActions=new Set(['hrBegin','hrRead','hrNext','hrJoined','hrJoinedClose','jobRead','jobFromLink','jobReadCancel','jobTabs','jobSearchTabs','jobSearchBegin']);
+const leadActions=new Set(['hrDate','hrBegin','hrRead','hrNext','hrJoined','hrJoinedClose','jobRead','jobFromLink','jobReadCancel','jobTabs','jobSearchTabs','jobSearchBegin']);
 function messageScope(message) {
   if(message.scope!==undefined){
     if(!sessions.has(message.scope))throw sessionError('Refresh CV Studio to use the current companion.');

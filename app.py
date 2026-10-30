@@ -24,7 +24,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.519"
+_INSTALL_RECEIPT_VERSION = "v24.6.522"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -347,7 +347,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.519"
+_CVSTUDIO_VERSION = "v24.6.522"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -2714,7 +2714,7 @@ def _ms_outlook_keychain_available():
 # Windows DPAPI, macOS Keychain, or an authenticated machine-bound fallback.
 def _cv_secure_service_name(service):
     clean = re.sub(r"[^a-z0-9_-]", "", str(service or "").lower())
-    if clean not in {"jobadder", "onenote", "ai", "companion", "apollo", "apollo_contacts", "jobadder_contacts"}:
+    if clean not in {"jobadder", "onenote", "ai", "companion", "apollo", "apollo_contacts", "jobadder_contacts", "sourcer_candidates"}:
         raise ValueError("Unsupported secure-store service")
     return clean
 
@@ -2766,7 +2766,7 @@ def _cv_secure_load(service):
             if isinstance(data, dict):
                 data["_storage"] = "windows_dpapi"
                 return data
-        if sys.platform == "darwin" and name not in {"apollo_contacts", "jobadder_contacts"} and _ms_outlook_keychain_available():
+        if sys.platform == "darwin" and name not in {"apollo_contacts", "jobadder_contacts", "sourcer_candidates"} and _ms_outlook_keychain_available():
             proc = subprocess.run(["security", "find-generic-password", "-a", _ms_outlook_keychain_account(), "-s", "TheGuoLab.CVStudio." + name, "-w"], capture_output=True, text=True, timeout=10, check=False)
             if proc.returncode == 0:
                 data = json.loads((proc.stdout or "{}").strip())
@@ -2779,7 +2779,7 @@ def _cv_secure_load(service):
             data["_storage"] = "machine_bound_file"
             return data
     except Exception:
-        if name in {"apollo_contacts", "jobadder_contacts"}:
+        if name in {"apollo_contacts", "jobadder_contacts", "sourcer_candidates"}:
             raise ValueError("Saved contacts could not be read securely") from None
     return {}
 
@@ -2798,7 +2798,7 @@ def _cv_secure_save(service, record):
         try: os.remove(fallback_path)
         except Exception: pass
         return "windows_dpapi"
-    if sys.platform == "darwin" and name not in {"apollo_contacts", "jobadder_contacts"} and _ms_outlook_keychain_available():
+    if sys.platform == "darwin" and name not in {"apollo_contacts", "jobadder_contacts", "sourcer_candidates"} and _ms_outlook_keychain_available():
         proc = subprocess.run(["security", "add-generic-password", "-U", "-a", _ms_outlook_keychain_account(), "-s", "TheGuoLab.CVStudio." + name, "-w", text], capture_output=True, text=True, timeout=15, check=False)
         if proc.returncode == 0:
             try: os.remove(fallback_path)
@@ -14800,9 +14800,12 @@ def _linkedin_sourcer_provider_call(model, brief, task, schema, observed):
         raise error from None
 
 
+from cvstudio_people import SourcerCandidates, PeopleError, workbook as _people_workbook, CANDIDATE_FIELDS
+_SOURCER_CANDIDATES = SourcerCandidates(load=lambda:_cv_secure_load('sourcer_candidates'),save=lambda value:_cv_secure_save('sourcer_candidates',value))
 _LINKEDIN_SOURCER = LinkedInSourcerService(
     key_available=lambda: bool(_resolve_request_api_key({"provider": "deepseek"})),
     provider_call=lambda *args: _linkedin_sourcer_provider_call(*args),
+    candidates=_SOURCER_CANDIDATES,
 )
 
 
@@ -14868,7 +14871,19 @@ def linkedin_sourcer():
     if request.content_length and request.content_length > 650000:
         return jsonify(error="This page is too large for the sourcing module."), 413
     try:
-        return jsonify(_LINKEDIN_SOURCER.handle(request.get_json(silent=True)))
+        data = request.get_json(silent=True)
+        if isinstance(data,dict) and data.get('action') == 'export_candidates':
+            from cvstudio_people import filter_candidates
+            from io import BytesIO
+            try:
+                rows=filter_candidates(_SOURCER_CANDIDATES.list(),data.get('query',''),data.get('search',''))
+            except PeopleError as exc:
+                raise SourcerError(str(exc)) from None
+            response=send_file(BytesIO(_people_workbook(rows,CANDIDATE_FIELDS,'Candidates')),
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',as_attachment=True,download_name='CV-Studio-Candidates.xlsx')
+            response.headers['Cache-Control']='no-store'
+            return response
+        return jsonify(_LINKEDIN_SOURCER.handle(data))
     except SourcerError as error:
         extra = dict(getattr(error, "accounting", {}))
         if isinstance(error, SourcerResponseError):
@@ -14925,6 +14940,8 @@ def job_leads():
             result = _JOB_LEADS.move_to_folder(data.get('records'), data.get('folder'))
         elif data.get('action') == 'save_hr':
             result = _JOB_LEADS.save_hr(data.get('id'), data.get('revision'), data.get('search'))
+        elif data.get('action') == 'employment':
+            result = _JOB_LEADS.save_hr(data.get('id'),data.get('revision'),None,person_url=data.get('url'),dates=data.get('dates'))
         else:
             raise JobLeadsError("Choose a supported Job Leads action.")
         response = jsonify(ok=True, **result)
@@ -14982,7 +14999,17 @@ def apollo_connection():
                 raise ApolloError("Choose a valid Apollo action.")
             action = data.get("action")
             row = _JOB_LEADS.hr_record(data.get("id"), data.get("revision")) if action in {"emails", "reveal"} else None
-            if action in {"contacts", "export_contacts"}:
+            if action in {'hr_people','export_people'}:
+                result=_APOLLO.perform('hr_people')
+                if action=='export_people':
+                    from cvstudio_people import filter_people, HR_FIELDS
+                    from io import BytesIO
+                    result['people']=filter_people(result['people'],data.get('query',''),data.get('company',''))
+                    response=send_file(BytesIO(_people_workbook(result['people'],HR_FIELDS,'HR people')),
+                        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',as_attachment=True,download_name='CV-Studio-HR-People.xlsx')
+                    response.headers['Cache-Control']='no-store'
+                    return response
+            elif action in {"contacts", "export_contacts"}:
                 result = _APOLLO.perform("contacts", query=data.get("query", ""))
                 if action == "export_contacts":
                     from io import BytesIO
@@ -14998,6 +15025,8 @@ def apollo_connection():
         response = jsonify(ok=True, **result)
         response.headers["Cache-Control"] = "no-store"
         return response
+    except PeopleError as exc:
+        return _cvstudio_error_payload('PEOPLE_STORAGE',str(exc),503,retryable=False,action='refresh_job_leads')
     except (ApolloError, JobLeadsError) as exc:
         return _cvstudio_error_payload(exc.code, str(exc), exc.status, retryable=False, action="check_apollo_connection")
 
@@ -15015,8 +15044,8 @@ _JOB_LEADS_JA = JobAdderContactService(client=lambda:_JOBADDER_CLIENT,
 @_ja_critical_write_route
 def jobadder_contact_actions():
     try:
-        raw=request.stream.read(8193)
-        if len(raw)>8192:
+        raw=request.stream.read(16385)
+        if len(raw)>16384:
             raise JobAdderContactError("This contact request is too large.",status=413)
         try:
             data=json.loads(raw) if request.is_json else None

@@ -3,7 +3,7 @@ const worker=fs.readFileSync(path.join(__dirname,'../vendor/linkedin-companion/w
 const search='https://www.linkedin.com/jobs/search/?keywords=finance&location=Malaysia';
 const row={url:'https://www.linkedin.com/jobs/view/1234567890',company:'Example Finance',role:'Finance Manager',location:'Penang',description:'Visible search summary'};
 const copy=value=>JSON.parse(JSON.stringify(value));
-function fixture(){
+function fixture(options={}){
   let hooks;
   const state={session:{},created:[],removed:[],document:'bound',next:0,scroll:0,failWrite:false,reads:0,location:'Malaysia',failInjection:false,failReader:false};
   const tabs=new Map([[1,{id:1,url:'http://127.0.0.1:5000/',status:'complete'}],[2,{id:2,url:search,status:'complete'}],[3,{id:3,url:'https://www.linkedin.com/search/results/people/',status:'complete'}]]);
@@ -26,7 +26,7 @@ function fixture(){
       state.reads++;return [{result:{url:tabs.get(args.target.tabId).url,jobs:[row],signature:row.url,hasNext:true,paginationKnown:true,atBottom:true}}];
     }},runtime:{getManifest:()=>({version:'24.6.461'}),onMessage:{addListener:fn=>hooks.message=fn}}};
   const identity=require('./linkedin_companion_identity_fixture')(chrome);
-  const boot=()=>{hooks={};vm.runInContext(worker,vm.createContext({chrome,URL,Map,Set,Date,console,setTimeout:(fn,ms,...args)=>setTimeout(fn,state.fastWait&&[350,500].includes(ms)?0:ms,...args),clearTimeout,crypto:identity.crypto,TextEncoder}));};boot();
+  const boot=()=>{hooks={};vm.runInContext(options.workerSource || worker,vm.createContext({chrome,URL,Map,Set,Date,console,setTimeout:(fn,ms,...args)=>setTimeout(fn,state.fastWait&&[350,500].includes(ms)?0:ms,...args),clearTimeout,crypto:identity.crypto,TextEncoder}));};boot();
   const sender=()=>({tab:{id:1},documentId:state.document,url:tabs.get(1).url});
   const rpc=(action,args={},who=sender(),scope)=>new Promise(resolve=>hooks.message({kind:'sourcer',scope,action,args},who,resolve));
   const run='b'.repeat(32);

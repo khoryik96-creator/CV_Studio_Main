@@ -8,7 +8,7 @@ function bulkFixture(options={}){
   Object.assign(f.state,{active:null,ends:[],starts:[]});
   f.state.onRPC=(message,reply)=>{
     const {action,args}=message,s=f.state;
-    if(action==='jobStatus'){reply({connected:!s.disconnected,company_hr_revision:1,hr_company_identity_revision:1,hr_company_filter_revision:1,hr_company_source_revision:1,hr_resilience_revision:1,hr_layout_revision:1,hr_apply_transition_revision:1,concurrent_scans_revision:1,profile_browsing_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_employment_revision:1,hr_keyword_revision:1,busy:false});return true;}
+    if(action==='jobStatus'){reply({connected:!s.disconnected,company_hr_revision:1,hr_company_identity_revision:1,hr_company_filter_revision:1,hr_company_source_revision:1,hr_resilience_revision:1,hr_layout_revision:1,hr_apply_transition_revision:1,concurrent_scans_revision:1,profile_browsing_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_employment_revision:1,hr_experience_page_revision:1,hr_keyword_revision:1,busy:false});return true;}
     if(action==='jobFromLink'){
       const row=s.records.find(r=>r.url===args.url);s.active=row;
       if(row.id===s.failId){reply(null,'The company link is unavailable.');return true;}
@@ -51,6 +51,7 @@ if(require.main===module)(async()=>{
   assert.equal(new Set(f.state.starts.map(a=>a.run_id)).size,3);assert.deepEqual(f.state.ends,f.state.starts.map(a=>a.run_id));
   assert.equal(f.el('BulkHRBar').value,3);assert.equal(f.el('BulkHRBar').max,3);assert.match(f.el('BulkHRMessage').textContent,/finished/i);
   assert.equal(f.el('notes').value,'Keep my draft');assert.equal(f.requests.filter(r=>r.action==='save_hr').length,3);
+  assert(f.el('BulkHRResults').children.every(n=>/1\/1 employment dates confirmed/.test(n.textContent)),'saved matches and confirmed employment counts remain distinct');
   assert.equal(f.el('HRResults').children[0].children[0].textContent,'Example Person 1','another company cannot replace the previewed company HR cards');
   assert(f.state.records.every(r=>r.hr.people.length===1&&r.hr.country==='Malaysia'&&r.notes==='Important saved notes'&&r.contact==='Manual Contact'));
   const stopped=bulkFixture();await stopped.init();stopped.select();stopped.state.holdId='2'.repeat(32);const running=stopped.start();await held(stopped);

@@ -4,6 +4,39 @@
 
 ## Release state
 
+- v24.6.522 locally changes HR date reads to the exact profile's dedicated
+  Experience page, after live read-only evidence of delayed profile loading.
+  Narrow Experience/company/profile scope, existing polling/Stop/tab protection,
+  suspension and concurrent-module boundaries remain. A capability check requires
+  an updated companion. Legacy/unchecked dates are explicit, with confirmed-date
+  counts separate from saved matches. The actual worker+DOM pipeline reproduces
+  failure on v521 and success on v522. Owner app/data and installed extension
+  remain unchanged; old blanks need an explicit employment check/rescan. Stacked
+  v520/521 features retained. No new production route/SQL schema/paid action.
+  Owner now authorizes publication/merge of the v520-522 stack; issue35 records
+  final PR/merge identity. Held PR257 excluded. See v522 QA for gates/limits.
+
+- v24.6.521 locally adds saved HR and Sourcer candidate dashboards while
+  retaining v520 owner/recruiter defaults. Saved HR observations deduplicate by
+  company/profile and use existing explicit per-person Apollo actions; cached
+  lookups across duplicate ads prevent another unlock offer. New Sourcer
+  assessments archive securely, with search/notes/Excel and failure-visible
+  preservation of valid paid results. Date-only refresh updates existing saved
+  cards after exact profile/company metadata checks, with owned-tab bounds and
+  Stop; partial Experience hydration waits instead of confirming absence.
+  No new production route/SQL schema or live paid/contact action. Owner data and
+  app are unchanged. Local preview uses only a read-only job-ad snapshot in a
+  separate directory. Final2180 Python/4 skips/8418 subtests,80 JS, native
+  fictional desktop/mobile and static/preflight/source smoke pass. Not
+  pushed/merged; held PR257 remains excluded.
+
+- v24.6.520 locally adds one Owner and multiple Recruiters/Select all to the
+  reviewed contact flow. Protected connection-scoped defaults are remembered
+  only after success/confirmation and can be opted out. Active roster and
+  reviewed-payload validation preserve non-replay/duplicate/account guards.
+  No new route/DB schema or live JobAdder call. Full Windows2169/4 skips/8418
+  subtests,79 JS, native fictional UI and preflight pass. Not pushed/merged.
+
 - v24.6.519 locally fixes date-result rendering and resumes unfinished bulk HR
   ads under unchanged selection/settings while skipping confirmed unchanged
   saves. Slow profile navigation no longer spends the metadata-read budget.

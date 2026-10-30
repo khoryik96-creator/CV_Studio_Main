@@ -1,8 +1,8 @@
 const assert=require('assert/strict');
 const {fixture}=require('./test_linkedin_job_search');
 const companyURL='https://www.linkedin.com/company/example/';
-function hrFixture(country=''){
-  const f=fixture();Object.assign(f.state,{hrClicks:[],hrMutations:[],hrReads:0,country});
+function hrFixture(country='',options={}){
+  const f=fixture(options);Object.assign(f.state,{hrClicks:[],hrMutations:[],hrReads:0,country});
   f.state.onUpdate=(id,args)=>{assert(id>=11,'only newly created HR source is navigated');f.state.hrMutations.push(args.url);Object.assign(f.tabs.get(id),args);return {...f.tabs.get(id)}};
   f.state.onScript=args=>{
     if(!args.args||args.files)return;
@@ -131,7 +131,7 @@ if(require.main===module)(async()=>{
     const cleanup=hrFixture();await cleanup.arm();const source=(await cleanup.beginHR()).result.tab_id;await cleanup.readHR(source);await cleanup.readHR(source);
     await cleanup.rpc('hrJoined',{run_id:cleanup.run,tab_id:source,url:'https://www.linkedin.com/in/sample'});
     const profile=cleanup.tabs.get(12);
-    if(ownership==='pending')Object.assign(profile,{url:'about:blank',pendingUrl:'https://www.linkedin.com/in/sample',status:'loading'});
+    if(ownership==='pending')Object.assign(profile,{url:'about:blank',pendingUrl:'https://www.linkedin.com/in/sample/details/experience/',status:'loading'});
     if(ownership==='taken_over'){profile.active=true;await cleanup.hooks().activated({tabId:12});profile.active=false;}
     if(ownership==='redirected'){profile.url='https://www.linkedin.com/in/other';await cleanup.hooks().updated(12,{url:profile.url});}
     if(ownership==='other_pending')profile.pendingUrl='https://www.linkedin.com/in/other';
@@ -149,7 +149,7 @@ if(require.main===module)(async()=>{
   }
   const opening=hrFixture();await opening.arm();const os=(await opening.beginHR()).result.tab_id;await opening.readHR(os);await opening.readHR(os);
   opening.state.onCreated=tab=>new Promise(resolve=>{
-    Object.assign(tab,{url:'about:blank',pendingUrl:'https://www.linkedin.com/in/sample',status:'loading'});
+    Object.assign(tab,{url:'about:blank',pendingUrl:'https://www.linkedin.com/in/sample/details/experience/',status:'loading'});
     opening.state.finishCreate=resolve;
   });
   const pending=opening.rpc('hrJoined',{run_id:opening.run,tab_id:os,url:'https://www.linkedin.com/in/sample'});
