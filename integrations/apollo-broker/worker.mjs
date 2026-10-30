@@ -87,11 +87,13 @@ function companyMatches(org, expected) {
     sameCompanyName(org?.name,expected.company));
 }
 const object=value=>value && typeof value==='object' && !Array.isArray(value);
+// Proton Mail's public account domains are distinct from corporate proton.com.
+const PROTON_MAIL_DOMAINS=new Set(['proton.me','protonmail.com','protonmail.ch','pm.me']);
 function emailCandidate(value) {
   if(value===null || value===undefined || value==='')return {reason:'email_not_returned'};
   if(typeof value!=='string' || value.length>254 || !/^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,63}$/.test(value))return {reason:'email_unusable'};
   if(value.toLowerCase()==='email_not_unlocked@domain.com')return {reason:'email_redacted'};
-  if(/@(gmail|googlemail|yahoo|hotmail|outlook|live|aol|icloud|protonmail|proton|mail|gmx)\./i.test(value))return {reason:'personal_email_only'};
+  if(/@(gmail|googlemail|yahoo|hotmail|outlook|live|aol|icloud|mail|gmx)\./i.test(value) || PROTON_MAIL_DOMAINS.has(value.split('@')[1].toLowerCase()))return {reason:'personal_email_only'};
   return {email:value};
 }
 export function emailResult(data, expected) {

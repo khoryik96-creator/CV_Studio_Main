@@ -4,6 +4,19 @@
 
 ## Release state
 
+- v24.6.524 corrects the corporate/Proton Mail domain collision found by the
+  first separately approved live523 lookup. Exact public Proton Mail domains
+  remain excluded. Hosted524 is100% active (`29e8155b`); the second separately
+  approved live lookup completed found with provider status verified. Two new
+  operations total, no paid replay. Both task results and original owner cache
+  are preserved separately; the found test result is not imported into owner
+  cards/contacts. Existing cached negatives remain. Deployment retained D1,
+  secrets, runtime/observability/preview settings and no scheduled triggers.
+  Wrangler logged out afterward. Final59 focused Python,81 JS, actual Worker,
+  nativeWindows/static/source preflight and24 smoke assertions pass. Full2210
+  Python passed on523; no repeated full Python sweep for a JS-domain correction.
+  Source stack523/524 remains local/unmerged. See524 QA; heldPR257 excluded.
+
 - v24.6.523 local Apollo parsing correction accepts a positively bound
   saved-contact business email when the primary person field is empty, rejects
   placeholders and reports bounded no-email reasons. Exact person/company,

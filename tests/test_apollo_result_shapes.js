@@ -18,6 +18,12 @@ const {pathToFileURL}=require('url');
  assert.equal(read({contact:{...contact,person_id:undefined,linkedin_url:'http://www.linkedin.com/in/Sample-Person/'}}).state,'found');
  assert.equal(read({email:'email_not_unlocked@domain.com'}).state,'not_found','an Apollo redaction placeholder is not a deliverable email');
  assert.equal(read({email:'email_not_unlocked@domain.com',contact}).email,contact.email,'a positively matched real contact can replace a placeholder');
+ // A business domain sharing a provider's brand is not that mail provider.
+ assert.equal(read({email:'person@proton.com',email_status:'verified'}).state,'found');
+ assert.equal(read({contact:{...contact,email:'person@proton.com'}}).state,'found');
+ for(const domain of ['proton.me','protonmail.com','protonmail.ch','pm.me'])
+  assert.equal(read({email:'person@'+domain}).reason,'personal_email_only','actual Proton Mail domains stay excluded');
+ assert.equal(read({email:'person@PROTON.COM'}).state,'found');
  assert.equal(read({contact:{...contact,email:'person@gmail.com'}}).reason,'personal_email_only');
  assert.equal(read({contact:{...contact,email:'bad address'}}).reason,'email_unusable');
  assert.equal(read({}).reason,'email_not_returned');

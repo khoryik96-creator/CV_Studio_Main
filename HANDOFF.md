@@ -7,7 +7,33 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current local checkpoint: v24.6.523 Apollo result handling (not published/merged)**
+**Current local checkpoint: v24.6.524 Apollo business-domain correction (not pushed/merged)**
+on `codex/v24.6.524-apollo-business-domain`, stacked on local523 `696da66`
+from merged522 `deccf7f` / PR267. The owner approved hosted deployment and one
+new lookup, then separately approved one additional lookup after the first
+exposed a domain-classification defect. The first completed with personal-only
+because the previous wildcard treated a corporate Proton-branded domain as
+Proton Mail. The broker now excludes only Proton Mail's four exact public
+account domains; a fictional corporate-domain regression fails on523 and passes
+on524. Same-person/company, encrypted storage, scopes and paid non-replay remain.
+Hosted524 version `29e8155b-bcd7-41f8-ba98-fee4f78b6038` is100% active; the
+second approved lookup returned found with provider status verified. No third
+lookup was sent. Both test operations are separately DPAPI-journaled, and the
+original selected owner cache outcome is unchanged. The successful acceptance
+result is NOT imported into the owner's cached card/contact archive. Old cached
+negative outcomes do not automatically change or trigger another paid request.
+The existing D1 binding, secrets, runtime date, preview/observability settings
+and absence of cron triggers were retained; no schema or secret rotation.
+Official Wrangler deployment used explicitly approved access and encrypted
+Windows credential storage, followed by logout and unauthenticated verification.
+Final524 focused59 Python, all81 JS, real Worker SQLite/WebCrypto, syntax/version/
+repo/nativeWindows/preflight and24 source-smoke checks pass. Full2210 Python/
+4 skips/8418 subtests passed on523 before this JS-domain-only correction. No
+real person/email/token in source, fixtures, QA or coordination posts. See524
+QA for bounded live acceptance and remaining limits. PR257 remains held; no
+Git publication/merge of523/524 is requested.
+
+**Previous local checkpoint: v24.6.523 Apollo result handling (not published/merged)**
 on `codex/v24.6.523-apollo-email-results`, from merged522 `deccf7f` / PR267.
 The owner reports repeated no-business-email outcomes despite an email visible
 in Apollo. Read-only comparison confirms the exact example LinkedIn handle and

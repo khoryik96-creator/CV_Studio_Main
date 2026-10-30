@@ -82,15 +82,15 @@ async function main(){
   // it through the same operation without a second enrichment request.
   const primary=upstream.person;
   upstream.person={...primary,id:'fictional-person',organization_id:'fictional-organization',email:null,
-    contact:{person_id:'fictional-person',organization_id:'fictional-organization',email:'saved@example.test',email_status:'verified'}};
+    contact:{person_id:'fictional-person',organization_id:'fictional-organization',email:'fictional@proton.com',email_status:'verified'}};
   const savedOp={...op,operation_id:'6'.repeat(64)},beforeSaved=calls.filter(c=>c.url.includes('/people/match')).length;
   const savedResult=await (await post('reveal',savedOp)).json();
-  assert.equal(savedResult.email,'saved@example.test');assert.equal(savedResult.email_source,'saved_contact');
-  assert.equal((await (await post('lookup-status',savedOp)).json()).email,'saved@example.test');
+  assert.equal(savedResult.email,'fictional@proton.com');assert.equal(savedResult.email_source,'saved_contact');
+  assert.equal((await (await post('lookup-status',savedOp)).json()).email,'fictional@proton.com');
   await post('reveal',savedOp);
   assert.equal(calls.filter(c=>c.url.includes('/people/match')).length,beforeSaved+1);
   const resultCipher=sql.prepare('SELECT cipher FROM operations WHERE connection_id=? AND id=?').get(a.connection_id,savedOp.operation_id).cipher;
-  assert(!resultCipher.includes('saved@example.test'));
+  assert(!resultCipher.includes('fictional@proton.com'));
   const persisted=await unseal(env,resultCipher,a.connection_id+':'+savedOp.operation_id);
   assert(!('contact' in persisted) && !('person_id' in persisted),'raw contact/profile details are not retained');
   upstream.person=primary;
