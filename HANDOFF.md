@@ -7,7 +7,23 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current local checkpoint: v24.6.525 Job Leads corrections (not published/merged)**
+**Current local checkpoint: v24.6.526 search guidance (not published/merged)**
+on `codex/v24.6.526-search-guidance`, from merged525 `0c30448` / PR269.
+The owner requests the red next-step/missing-input outlines in Job Leads and
+LinkedIn Sourcer, matching contact creation. Each module now guides its active
+workflow only; editing moves the outline and clears invalid-field state.
+Missing inputs receive focus after the existing validation rejects the action,
+and collapsed details open to reveal the field. Job Leads covers ad search,
+companion setup, draft saving and single/bulk HR settings. Sourcer covers brief,
+explicit paid consent, limits, existing-search discovery, companion setup and
+Start; an interrupted run points to Stop first. Busy controls have no guidance.
+No automatic click, paid consent, transport retry, record save, route, schema or
+companion reader change. Source version stamping changes the companion manifest
+only; this UI guidance itself needs the updated app. The installed owner app and
+hosted broker remain untouched. See526 QA for focused/native interaction checks.
+No PR/merge requested for526. HeldPR257 remains excluded.
+
+**Previous checkpoint: v24.6.525 Job Leads corrections (merged PR269/0c30448)**
 on `codex/v24.6.525-job-leads-corrections`, from merged524 `0161728` / PR268.
 Owner requests failed employment reads, all-missing checks, unlocked-contact
 filters/verifier, guided JobAdder creation/recovery and an email-domain audit.

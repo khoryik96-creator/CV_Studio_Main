@@ -4,12 +4,34 @@
   const hex = () => crypto.randomUUID().replaceAll('-', '');
   const channel = hex(), pending = new Map();
   let agent = null, run = null, abort = null, results = [], browserRun = '', busy = false, runOptions = null, setupSequence = 0;
+  const guideNames = ['Brief','Consent','Pages','Calls','Source','Refresh','Start','Stop','SetupGuide'];
+  let guideIssue = '', guideTried = false, guideNotice = '';
+  function guide(name = '', invalid = false, focus = false) {
+    for (const key of guideNames) {
+      el(key).setAttribute('data-guide', String(!busy && key === name));
+      el(key).setAttribute('aria-invalid', String(!busy && invalid && key === name));
+    }
+    if (!busy && focus && name) {
+      for (let parent = el(name).parentElement; parent; parent = parent.parentElement) if (parent.tagName === 'DETAILS') parent.open = true;
+      el(name).focus();
+    }
+  }
+  function nextGuide() {
+    let name = !busy && run && !run.stopped ? 'Stop' : guideIssue;
+    if (!name) name = el('Brief').value.trim().length < 5 ? 'Brief' : !el('Consent').checked ? 'Consent' :
+      !Number.isInteger(Number(el('Pages').value)) || Number(el('Pages').value) < 1 || Number(el('Pages').value) > 15 ? 'Pages' :
+      !Number.isInteger(Number(el('Calls').value)) || Number(el('Calls').value) < 1 || Number(el('Calls').value) > 80 ? 'Calls' :
+      !freshPeopleSearch() && !el('Source').value ? 'Refresh' : 'Start';
+    guide(name, guideTried && ['Brief','Consent','Pages','Calls'].includes(name));
+  }
+  function invalidGuide(name) { guideNotice = el('Status').textContent; guide(name,true,true); }
   function tell(value) { el('Status').textContent = value; }
   function controls() {
     el('Start').disabled = busy; el('Stop').disabled = !busy && (!run || run.stopped);
     el('Export').disabled = !results.length; el('Clear').disabled = busy;
     for (const name of ['Brief', 'Mode', 'Pages', 'Calls', 'Source', 'OpenSearch', 'Consent', 'Refresh']) el(name).disabled = busy;
     el('Limits').textContent = `Up to ${el('Pages').value} pages · ${el('Calls').value} API requests.`;
+    nextGuide();
   }
   const connectionHelp = 'Open this CV Studio page in Chrome or Brave with the companion enabled. It connects automatically. Use Set up companion if needed.';
   async function companionSetup() {
@@ -156,12 +178,14 @@
       if ([...el('Source').options].some(option => option.value === selected)) el('Source').value = selected;
       else if (tabs.length) el('Source').value = String(tabs[0].id);
       const source = tabs.find(tab => String(tab.id) === el('Source').value);
+      guideIssue = '';
       el('Connection').textContent = freshPeopleSearch() ? 'Connected · a new People search will open each time you start.' : source ? 'Connected · ' + source.title + (el('OpenSearch').checked ? ' · keeping its filters' : ' · new keywords from your brief') : 'Companion connected. Open a LinkedIn People or Recruiter search, then start. It will be detected automatically.';
       el('ConnectionHint').textContent = freshPeopleSearch() ? 'Include a country in your brief to select it automatically in LinkedIn Locations. A new People search opens each time.' : el('OpenSearch').checked ? 'Your brief ranks the current results. Set location and other filters on LinkedIn first.' : 'New People searches select the country from your brief in Locations. For Recruiter, set its filters first and review the search already open.';
       if (!source && !freshPeopleSearch()) el('Options').open = true;
+      nextGuide();
       return source;
     } catch (error) {
-      if (sequence === setupSequence) { el('Connection').textContent = connectionHelp; el('Setup').open = true; }
+      if (sequence === setupSequence) { el('Connection').textContent = connectionHelp; el('Setup').open = true; guideIssue = 'SetupGuide'; nextGuide(); }
       throw error;
     }
   }
@@ -171,6 +195,10 @@
   };
   for (const name of ['Mode','OpenSearch']) el(name).addEventListener('change',window.refreshLinkedinSourcerTabs);
   for (const name of ['Pages','Calls']) el(name).addEventListener('input',controls);
+  for (const name of ['Brief','Consent','Pages','Calls','Mode','OpenSearch','Source']) el(name).addEventListener(['Consent','Mode','OpenSearch','Source'].includes(name) ? 'change' : 'input', () => {
+    if (guideNotice && el('Status').textContent === guideNotice) tell('');
+    guideNotice = ''; guideIssue = ''; guideTried = false; nextGuide();
+  });
   el('Source').addEventListener('change',() => { if (!busy) window.refreshLinkedinSourcerTabs(); });
   window.initLinkedinSourcer = async function() {
     if (!el('Brief') || busy) return;
@@ -185,11 +213,12 @@
   };
   window.startLinkedinSourcer = async function() {
     if (busy) return;
+    guideIssue = ''; guideTried = true;
     const options = {brief: el('Brief').value.trim(), mode: el('Mode').value, max_pages: Number(el('Pages').value),
       max_calls: Number(el('Calls').value), confirm_paid: el('Consent').checked, use_open_search: el('OpenSearch').checked};
-    if (!options.confirm_paid) { tell('Tick “Use DeepSeek for this search” below your brief, then start.'); el('Consent').focus(); return; }
-    if (options.brief.length < 5) { tell('Describe the role, location and skills you need.'); return; }
-    if (!Number.isInteger(options.max_pages) || options.max_pages < 1 || options.max_pages > 15 || !Number.isInteger(options.max_calls) || options.max_calls < 1 || options.max_calls > 80) { el('Options').open = true; tell('Choose 1–15 pages and 1–80 API requests in Search options.'); return; }
+    if (!options.confirm_paid) { tell('Tick “Use DeepSeek for this search” below your brief, then start.'); invalidGuide('Consent'); return; }
+    if (options.brief.length < 5) { tell('Describe the role, location and skills you need.'); invalidGuide('Brief'); return; }
+    if (!Number.isInteger(options.max_pages) || options.max_pages < 1 || options.max_pages > 15 || !Number.isInteger(options.max_calls) || options.max_calls < 1 || options.max_calls > 80) { el('Options').open = true; tell('Choose 1–15 pages and 1–80 API requests in Search options.'); invalidGuide(!Number.isInteger(options.max_pages) || options.max_pages < 1 || options.max_pages > 15 ? 'Pages' : 'Calls'); return; }
     busy = true; abort = new AbortController(); browserRun = ''; draw();
     const activity = markTabRunning('linkedinsourcer');
     let failed = false;
@@ -205,9 +234,10 @@
         if (!source || !Number.isInteger(source.id) || !CVLinkedinCore.isSearchURL(source.url,'standard')) throw Error('The companion could not open a People search. Reload and reconnect the latest companion.');
         options.mode = 'standard';
       }
-      if (!source) throw Error('Open a LinkedIn People or Recruiter search in this browser, then start again. Your current candidate list is kept.');
+      if (!source) { guideIssue = 'Refresh'; throw Error('Open a LinkedIn People or Recruiter search in this browser, then start again. Your current candidate list is kept.'); }
       options.mode = options.mode === 'auto' ? sourceMode(source) : options.mode;
       const status=await rpc('jobStatus');
+      if (status?.profile_browsing_revision !== 1 || status?.concurrent_scans_revision !== 1 || options.mode === 'standard' && (status?.people_results_revision !== 1 || !options.use_open_search && status?.people_country_revision !== 1)) { guideIssue = 'SetupGuide'; el('Setup').open = true; }
       if(status?.profile_browsing_revision!==1)throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to keep browsing safely during scans.');
       if(status?.concurrent_scans_revision!==1)throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to run Job Leads and Sourcer together.');
       if(options.mode==='standard'){

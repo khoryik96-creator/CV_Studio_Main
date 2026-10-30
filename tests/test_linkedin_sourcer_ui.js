@@ -4,6 +4,7 @@ class Element {
   addEventListener(type,fn){(this.events[type]??=[]).push(fn)}
   append(...items){this.children.push(...items)} appendChild(item){this.append(item);return item}
   replaceChildren(...items){this.children=items} focus(){this.focused=true}
+  setAttribute(name,value){this[name]=value}
   get options(){return this.children} async change(){for(const fn of this.events.change||[])await fn()}
 }
 const people={id:2,url:'https://www.linkedin.com/search/results/people/?keywords=SAP',title:'SAP people | LinkedIn',lastAccessed:20};
@@ -49,7 +50,7 @@ function fixture(reuse=true){
     markTabRunning:()=>1,finishTabRun:()=>{},responseHasPaidUsage:()=>false,
     navigator:{clipboard:{writeText:async text=>{if(state.clipboardFail)throw Error('Unavailable');state.copied=text;}}},
     fetch:async(url,options)=>{if(url==='/linkedin-sourcer?action=companion_setup')return {ok:true,json:async()=>({folder:'Bundled companion folder',version:'24.6.480'})};assert.equal(url,'/linkedin-sourcer');const body=options?.body?JSON.parse(options.body):null;if(body)requests.push(body);
-      if(!body)return {ok:true,json:async()=>({configured:true,run:null})};
+      if(!body)return {ok:true,json:async()=>({configured:true,run:state.resumeRun?{...run}:null})};
       if(body.action==='start'&&state.failStart)return {ok:false,json:async()=>({error:'Synthetic start rejected'})};
       if(body.action==='plan'&&state.holdPlan)await new Promise(resolve=>state.planReply=resolve);
       if(body.action==='stop')run.stopped=true;
@@ -60,6 +61,22 @@ function fixture(reuse=true){
     start:()=>window.startLinkedinSourcer(),stop:()=>window.stopLinkedinSourcer()};
 }
 (async()=>{
+  const guidance=fixture();await guidance.init();
+  assert.equal(guidance.el('Brief')['data-guide'],'true');assert.equal(guidance.el('Brief')['aria-invalid'],'false');
+  guidance.el('Brief').value='Finance manager';await guidance.el('Consent').change();
+  assert.equal(guidance.el('Consent')['data-guide'],'true');await guidance.start();assert.equal(guidance.el('Consent')['aria-invalid'],'true');
+  assert.equal(guidance.requests.length,0,'guidance never grants paid consent or starts AI work');
+  guidance.el('Consent').checked=true;await guidance.el('Consent').change();assert.equal(guidance.el('Consent')['aria-invalid'],'false');
+  assert.equal(guidance.el('Status').textContent,'','editing clears only the validation notice');
+  assert.equal(guidance.el('Start')['data-guide'],'true');guidance.el('Pages').value='0';await guidance.start();
+  assert.equal(guidance.el('Pages')['aria-invalid'],'true');assert.equal(guidance.el('Options').open,true);
+  guidance.el('Pages').value='10';guidance.state.hold=true;const guidedRun=guidance.start();
+  await new Promise(resolve=>setTimeout(resolve,0));assert.equal(guidance.el('Start')['data-guide'],'false');
+  assert.equal(guidance.el('Consent')['data-guide'],'false');await guidance.stop();guidance.state.held();await guidedRun;
+  assert.equal(guidance.el('Start')['data-guide'],'true');assert.equal(guidance.requests.length,0);
+  const interruptedGuide=fixture();interruptedGuide.state.resumeRun=true;await interruptedGuide.init();
+  assert.equal(interruptedGuide.el('Stop')['data-guide'],'true','an interrupted run guides Stop before a new search');
+  await interruptedGuide.stop();assert.equal(interruptedGuide.el('Stop')['data-guide'],'false');
   const f=fixture();f.state.tabs=[{id:9,url:'https://www.linkedin.com/jobs/search/',title:'Jobs',lastAccessed:99},{id:8,url:previous.url,title:'Profile',lastAccessed:100},people];await f.init();
   assert.equal(f.el('Source').value,'2',f.el('Connection').textContent+' / '+f.el('Status').textContent);assert.match(f.el('Connection').textContent,/Connected.*SAP people.*keeping its filters/);assert.equal(f.el('Options').open,false);
   assert.equal(f.requests.length,0,'tab discovery never starts AI work');assert.equal(f.el('Consent').checked,false,'permission stays explicit');

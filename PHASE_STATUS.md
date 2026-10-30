@@ -4,6 +4,13 @@
 
 ## Release state
 
+- v24.6.526 locally adds the owner-requested red guidance to Job Leads and
+  LinkedIn Sourcer. One next-step outline per active module workflow follows
+  edits, distinguishes actual invalid fields, reveals/focuses missing inputs
+  and clears during scans. Existing paid consent, validation, transport,
+  queues/Stop and storage behavior remain. Source-only from merged525 PR269 /
+  0c30448; no installation, hosting, live write or paid request. See526 QA.
+
 - v24.6.525 locally corrects overlapping-current/contained-role employment
   ranges, adds a capability gate and an explicit user-confirmed date fallback
   where LinkedIn has no company link. A bounded foreground missing-date queue
