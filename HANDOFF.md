@@ -7,7 +7,56 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current source checkpoint: v24.6.522 (owner-authorized publication/merge)** on
+**Current source checkpoint: v24.6.524 Apollo business-domain correction**
+on `codex/v24.6.524-apollo-business-domain`, stacked on local523 `696da66`
+from merged522 `deccf7f` / PR267. The owner approved hosted deployment and one
+new lookup, then separately approved one additional lookup after the first
+exposed a domain-classification defect. The first completed with personal-only
+because the previous wildcard treated a corporate Proton-branded domain as
+Proton Mail. The broker now excludes only Proton Mail's four exact public
+account domains; a fictional corporate-domain regression fails on523 and passes
+on524. Same-person/company, encrypted storage, scopes and paid non-replay remain.
+Hosted524 version `29e8155b-bcd7-41f8-ba98-fee4f78b6038` is100% active; the
+second approved lookup returned found with provider status verified. No third
+lookup was sent. Both test operations are separately DPAPI-journaled, and the
+original selected owner cache outcome is unchanged. The successful acceptance
+result is NOT imported into the owner's cached card/contact archive. Old cached
+negative outcomes do not automatically change or trigger another paid request.
+The existing D1 binding, secrets, runtime date, preview/observability settings
+and absence of cron triggers were retained; no schema or secret rotation.
+Official Wrangler deployment used explicitly approved access and encrypted
+Windows credential storage, followed by logout and unauthenticated verification.
+Final524 focused59 Python, all81 JS, real Worker SQLite/WebCrypto, syntax/version/
+repo/nativeWindows/preflight and24 source-smoke checks pass. Full2210 Python/
+4 skips/8418 subtests passed on523 before this JS-domain-only correction. No
+real person/email/token in source, fixtures, QA or coordination posts. See524
+QA for bounded live acceptance and remaining limits. The owner now explicitly
+authorizes publication and merge of the523/524 stack. Issue35 records the PR
+and resulting merge identity. HeldPR257 remains excluded.
+
+**Previous local checkpoint: v24.6.523 Apollo result handling (not published/merged)**
+on `codex/v24.6.523-apollo-email-results`, from merged522 `deccf7f` / PR267.
+The owner reports repeated no-business-email outcomes despite an email visible
+in Apollo. Read-only comparison confirms the exact example LinkedIn handle and
+employer on an Apollo saved contact with a verified business email, while the
+local protected cache holds not_found. Aggregate metadata only was inspected;
+no live person/email/token is retained in tests or QA. The original upstream
+response is not available, so the precise live API omission is NOT yet proven.
+A new failing parser fixture demonstrates ignored matched contact.email when
+person.email is empty. The correction accepts that fallback only with a positive
+person-ID/profile and employer binding with no contradictory evidence, excludes
+redaction placeholders, handles malformed replies as unconfirmed and emits only
+allowlisted no-email reasons. Existing scopes, endpoints, explicit credit gates,
+protected storage, account isolation and paid non-replay remain unchanged.
+Old completed lookup outcomes are retained: a code update cannot reconstruct
+missing upstream fields or silently re-spend credits. Hosted Worker deployment
+and a newly confirmed single live lookup are still needed for acceptance. No
+hosted deployment, new paid lookup or owner record/cache modification performed.
+Final2210 Python/4 skips/8418 subtests,81 JS, actual Worker SQLite/WebCrypto,
+static/version/repo/nativeWindows dependency and24 source-smoke checks pass.
+See v523 QA for tests/limits. PR257 remains held; no merge requested for v523.
+
+**Previous merged source checkpoint: v24.6.522 (PR267/deccf7f)** on
 `codex/v24.6.522-employment-loading`, stacked on local v521 `1941e58` and
 v520 `a076a07`. The owner reports all employment blank. Read-only inspection
 found the normal installation still at v519 and blank persisted observations;

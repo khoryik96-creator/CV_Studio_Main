@@ -161,3 +161,51 @@ unlock needs separate explicit owner authorization; do not silently spend credit
 as a connection test. Confirm returned profile/company and provider status, then
 simulate a lost response and confirm **Check lookup** does not issue another
 People Match request. This live acceptance remains pending until setup.
+
+
+## Business email response handling (v24.6.523)
+
+The broker first checks the exact matched person's primary business email. If
+it is empty/withheld, an embedded saved contact can supply its business email
+only when its person ID or LinkedIn profile positively binds to that same
+person, positively bound employer evidence agrees, and no supplied metadata
+contradicts either identity. An unrelated contact,
+freemail address or locked placeholder cannot become a business email. Parent
+and person-level low/none match confidence are rejected. No extra contact-read
+OAuth scope, phone/personal/waterfall request or second enrichment call is added.
+
+A bounded reason distinguishes no profile match, omitted email, personal-only,
+redacted/invalid email and an unconfirmed nested contact. Unknown diagnostics are
+ignored locally and raw responses never enter messages/logs. Already-completed
+operations and local negative results are still kept to prevent credit replay.
+Updating/reconnecting must not be advertised as recovering an old missing result.
+The hosted Worker needs this code independently of the desktop update. Proving
+an exact live response requires separately authorized provider credit use; a
+parser fixture proves the code gap, not what a previous live response contained.
+
+## Corporate-domain classification and hosted acceptance (v24.6.524)
+
+Proton Mail public account domains are matched exactly: `proton.me`,
+`protonmail.com`, `protonmail.ch` and `pm.me`. A corporate domain such as
+`proton.com` is not excluded merely because its brand resembles the provider.
+See [Proton's address documentation](https://proton.me/support/addresses-and-aliases).
+Existing same-profile/employer validation and all other email rules remain.
+
+The owner separately approved two new single-operation acceptance lookups:
+first after deploying523, then one after fixing the domain collision exposed by
+that first outcome. The second returned a business email with Apollo status
+verified. This proves that example, not universal email availability, delivery
+or every colleague's account. Both task outcomes remain encrypted separately;
+the original owner cache/ad data were not overwritten and the acceptance result
+was not imported into the owner's cards/contact archive. Updating hosted code
+will not clear completed negative outcomes or spend another credit for them.
+
+The524 Worker was deployed with the official Wrangler tool after explicit owner
+permission. Existing database binding/secrets and production settings were
+preserved, including the runtime date, disabled logs/traces/previews and the
+absence of scheduled triggers. No database schema was executed. The original
+setup's daily cleanup recommendation remains unconfigured on this deployment;
+request-time expiry guards still apply. Wrangler authentication was held in the
+Windows credential store and signed out after deployment. See the524 QA report
+for exact deployed version and validation bounds. Git publication/merge is a
+separate step and has not been performed for523/524.

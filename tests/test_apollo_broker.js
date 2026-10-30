@@ -78,6 +78,22 @@ async function main(){
   for(const url of ['http://www.linkedin.com/in/sample-person-2','http://www.linkedin.com/company/sample-person','https://evil.test/in/sample-person',''])
     assert.equal(emailResult({...apolloForm,person:{...apolloForm.person,linkedin_url:url}},expected).state,'mismatch');
   assert.equal(emailResult({...upstream,person:{...upstream.person,email_status:'catch_all'}},expected).email_status,'catch_all');
+  // The real Worker persists only the selected contact email and can recover
+  // it through the same operation without a second enrichment request.
+  const primary=upstream.person;
+  upstream.person={...primary,id:'fictional-person',organization_id:'fictional-organization',email:null,
+    contact:{person_id:'fictional-person',organization_id:'fictional-organization',email:'fictional@proton.com',email_status:'verified'}};
+  const savedOp={...op,operation_id:'6'.repeat(64)},beforeSaved=calls.filter(c=>c.url.includes('/people/match')).length;
+  const savedResult=await (await post('reveal',savedOp)).json();
+  assert.equal(savedResult.email,'fictional@proton.com');assert.equal(savedResult.email_source,'saved_contact');
+  assert.equal((await (await post('lookup-status',savedOp)).json()).email,'fictional@proton.com');
+  await post('reveal',savedOp);
+  assert.equal(calls.filter(c=>c.url.includes('/people/match')).length,beforeSaved+1);
+  const resultCipher=sql.prepare('SELECT cipher FROM operations WHERE connection_id=? AND id=?').get(a.connection_id,savedOp.operation_id).cipher;
+  assert(!resultCipher.includes('fictional@proton.com'));
+  const persisted=await unseal(env,resultCipher,a.connection_id+':'+savedOp.operation_id);
+  assert(!('contact' in persisted) && !('person_id' in persisted),'raw contact/profile details are not retained');
+  upstream.person=primary;
   await post('disconnect',a);assert.equal((await post('lookup-status',{...a,operation_id:op.operation_id})).status,401);assert.equal(sql.prepare('SELECT COUNT(*) AS n FROM operations WHERE connection_id=?').get(a.connection_id).n,0);
   // Refresh rotation is serialized and uncertain refreshes require reconnect.
   const existing=sql.prepare('SELECT cipher FROM connections WHERE id=?').get(b.connection_id);const old=await unseal(env,existing.cipher,b.connection_id);old.expires=900;

@@ -91,6 +91,18 @@ RESULT_MESSAGES = {
     "limited":"Apollo declined the lookup or reached an account limit. Check your Apollo account.",
 }
 
+# Bounded broker diagnostics only. Never expose an upstream payload or infer
+# that Apollo's website has no email merely because enrichment omitted it.
+NO_EMAIL_MESSAGES = {
+    'profile_not_found':'Apollo did not match this LinkedIn profile in the API.',
+    'email_not_returned':'Apollo matched the person but returned no business email. Its website may have a saved contact.',
+    'personal_email_only':'Apollo returned only a personal email; no business email was attached.',
+    'email_redacted':'Apollo returned a locked email placeholder; no real address was attached.',
+    'email_unusable':'Apollo returned an unusable email value; no address was attached.',
+    'contact_unconfirmed':'Apollo returned a saved contact whose identity could not be confirmed. No email was attached.',
+}
+
+
 
 class ApolloService:
     def __init__(self, *, client, load, save, clock=time.time, contacts=None, rows=None):
@@ -243,9 +255,16 @@ class ApolloService:
                 email_status = result.get("email_status", "unknown")
                 if state == "found":
                     if (not isinstance(email, str) or len(email) > 254 or not re.fullmatch(r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,63}", email) or
+                            email.lower()=="email_not_unlocked@domain.com" or
                             email_status not in {"verified", "unverified", "catch_all", "unavailable", "user_managed", "unknown"}):
                         raise ValueError()
                 previous.update(state=state, email=email if state == "found" else "", email_status=email_status if state == "found" else "unknown")
+                previous.pop('reason',None)
+                previous.pop('email_source',None)
+                if state=='not_found' and isinstance(result.get('reason'),str) and result['reason'] in NO_EMAIL_MESSAGES:
+                    previous['reason']=result['reason']
+                if state=='found' and result.get('email_source')=='saved_contact':
+                    previous['email_source']='saved_contact'
             except ApolloError as exc:
                 previous.update(state="auth_required" if exc.code=="APOLLO_AUTH" else "unconfirmed", email="", email_status="unknown")
             except Exception:
@@ -267,8 +286,11 @@ class ApolloService:
     @staticmethod
     def _public(result):
         state = result["state"]
+        reason=result.get('reason') if isinstance(result.get('reason'),str) else None
         return {"state":state, "email":result.get("email", ""), "email_status":result.get("email_status", "unknown"),
-                "message":RESULT_MESSAGES[state]}
+                "message":NO_EMAIL_MESSAGES.get(reason,RESULT_MESSAGES[state]) if state=='not_found' else RESULT_MESSAGES[state],
+                **({'reason':result['reason']} if state=='not_found' and reason in NO_EMAIL_MESSAGES else {}),
+                **({'email_source':'saved_contact'} if state=='found' and result.get('email_source')=='saved_contact' else {})}
 
 
 class ApolloContacts:
