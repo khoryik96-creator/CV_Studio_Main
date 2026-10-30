@@ -15,9 +15,27 @@
   }
   function selected(kind) {return el(kind+(kind==='HR'?'Company':'Search')).value;}
   const fields={HR:['name','title','company','location','country','employment','url','matched','job_url','scanned_at'],Candidates:['name','title','location','url','score','read','evidence','unknowns','notes','brief','saved_at']};
+  const collator=new Intl.Collator(undefined,{sensitivity:'base',numeric:true});
+  const SORTS=new Set(['saved_at','score','name','location','read']);
+  function candidateView() {
+    const sort=el('CandidatesSort').value,order=el('CandidatesOrder').value;
+    return {min_score:Number(el('CandidatesMinScore').value) || 0,read:el('CandidatesRead').value,sort:SORTS.has(sort)?sort:'saved_at',order:order==='asc'?'asc':'desc'};
+  }
   function filtered(kind) {
     const query=el(kind+'Query').value.trim().toLowerCase(),value=selected(kind);
-    return boards[kind].rows.filter(row=>(!value || row[kind==='HR'?'company_id':'run_id']===value) && (!query || fields[kind].map(k=>Array.isArray(row[k])?row[k].join(' '):String(row[k]??'')).join(' ').toLowerCase().includes(query)));
+    const rows=boards[kind].rows.filter(row=>(!value || row[kind==='HR'?'company_id':'run_id']===value) && (!query || fields[kind].map(k=>Array.isArray(row[k])?row[k].join(' '):String(row[k]??'')).join(' ').toLowerCase().includes(query)));
+    if(kind!=='Candidates')return rows;
+    // Same rules as the Excel export: filters first, blank values last, and
+    // equal values keep the newest-first archive order.
+    const view=candidateView(),picked=rows.filter(row=>(row.score ?? 0)>=view.min_score && (!view.read || row.read===view.read));
+    const blank=row=>view.sort==='score'?typeof row.score!=='number':!String(row[view.sort] ?? '').trim();
+    const compare=(a,b)=>view.sort==='score'?a.score-b.score:view.sort==='saved_at'?(a.saved_at<b.saved_at?-1:a.saved_at>b.saved_at?1:0):collator.compare(String(a[view.sort]),String(b[view.sort]));
+    const sign=view.order==='asc'?1:-1;
+    return picked.filter(row=>!blank(row)).map((row,index)=>({row,index})).sort((a,b)=>sign*compare(a.row,b.row) || a.index-b.index).map(item=>item.row).concat(picked.filter(blank));
+  }
+  function markSort() {
+    const view=candidateView();
+    for(const th of document.querySelectorAll('#peopleCandidatesPanel th[data-sort]')){if(th.dataset.sort===view.sort)th.setAttribute('aria-sort',view.order==='asc'?'ascending':'descending');else th.removeAttribute('aria-sort');}
   }
   function controls(kind) {
     const b=boards[kind],rows=filtered(kind);
@@ -178,6 +196,7 @@
       target.append(tr);
     }
     el(kind+'Page').textContent=all.length?`${b.page*40+1}–${Math.min((b.page+1)*40,all.length)} of ${all.length}`:'';controls(kind);
+    if(kind==='Candidates')markSort();
   }
   async function refresh(kind) {
     const b=boards[kind];if(b.loading){b.again=true;return;}b.loading=true;const generation=++b.generation;controls(kind);el(kind+'Message').textContent='Loading…';
@@ -192,7 +211,7 @@
   async function exportRows(kind) {
     const b=boards[kind];if(b.exporting || b.loading || !filtered(kind).length)return;b.exporting=true;controls(kind);
     try {
-      const response=await fetch(kind==='HR'?'/apollo':'/linkedin-sourcer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:kind==='HR'?'export_people':'export_candidates',query:el(kind+'Query').value,[kind==='HR'?'company':'search']:selected(kind)})});
+      const response=await fetch(kind==='HR'?'/apollo':'/linkedin-sourcer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:kind==='HR'?'export_people':'export_candidates',query:el(kind+'Query').value,[kind==='HR'?'company':'search']:selected(kind),...(kind==='Candidates'?candidateView():{})})});
       if(!response.ok){const data=await response.json();throw Error(data.error || 'Export failed.');}
       const url=URL.createObjectURL(await response.blob()),a=document.createElement('a');a.href=url;a.download='CV-Studio-'+(kind==='HR'?'HR-People':'Candidates')+'.xlsx';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
     } catch(error){el(kind+'Message').textContent=error.message;}
@@ -223,5 +242,13 @@
   window.addEventListener('pagehide',()=>{void stopDate();});
   window.addEventListener('beforeunload',event=>{if(noteDrafts.size){event.preventDefault();event.returnValue='';}});
   function candidates(show){el('CandidatesPanel').hidden=!show;el('SourcerSearchPanel').hidden=show;el('CandidatesTab').setAttribute('aria-pressed',String(show));el('SourcerSearchTab').setAttribute('aria-pressed',String(!show));if(show)void refresh('Candidates');}
+  // Sort/order choices are a per-viewer convenience in browser storage.
+  for(const name of ['Sort','Order']){
+    try{const saved=localStorage.getItem('cvstudio_candidates_'+name.toLowerCase());if(saved && [...el('Candidates'+name).options].some(option=>option.value===saved))el('Candidates'+name).value=saved;}catch{}
+  }
+  for(const name of ['MinScore','Read','Sort','Order'])el('Candidates'+name).addEventListener('change',()=>{
+    if(name==='Sort' || name==='Order')try{localStorage.setItem('cvstudio_candidates_'+name.toLowerCase(),el('Candidates'+name).value);}catch{}
+    boards.Candidates.page=0;draw('Candidates');
+  });
   el('CandidatesTab').addEventListener('click',()=>candidates(true));el('SourcerSearchTab').addEventListener('click',()=>candidates(false));initialized=true;
 })();

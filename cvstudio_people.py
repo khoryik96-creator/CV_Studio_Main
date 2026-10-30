@@ -58,8 +58,23 @@ def _filter(rows, query, selected, field, fields):
             (not query or query in ' '.join(' '.join(row.get(k,[])) if isinstance(row.get(k),list) else str(row.get(k,'')) for k in fields).lower())]
 
 
-def filter_candidates(rows, query='', search=''):
-    return _filter(rows,query,search,'run_id',CANDIDATE_FIELDS)
+CANDIDATE_SORTS = {'saved_at', 'score', 'name', 'location', 'read'}
+CANDIDATE_READS = {'', 'Profile detail', 'Search card'}
+
+
+def filter_candidates(rows, query='', search='', *, min_score=0, read='', sort='saved_at', order='desc'):
+    """Dashboard rows in the chosen order. Blank values always sort last."""
+    if (type(min_score) is not int or not 0 <= min_score <= 100 or read not in CANDIDATE_READS or
+            sort not in CANDIDATE_SORTS or order not in {'asc', 'desc'}):
+        raise PeopleError('Choose a valid candidate sort or filter.')
+    rows=[row for row in _filter(rows,query,search,'run_id',CANDIDATE_FIELDS)
+          if row.get('score',0)>=min_score and (not read or row.get('read')==read)]
+    def value(row):
+        item=row.get(sort)
+        return item if sort=='score' else str(item or '').casefold()
+    filled=[row for row in rows if value(row) not in ('', None)]
+    # sorted() is stable, so equal values keep the newest-first archive order.
+    return sorted(filled,key=value,reverse=order=='desc')+[row for row in rows if value(row) in ('', None)]
 
 
 def filter_people(rows, query='', company=''):

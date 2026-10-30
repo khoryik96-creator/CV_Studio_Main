@@ -199,3 +199,40 @@ def test_bad_employment_observation_time_is_atomic(tmp_path,stamp):
     search=copy.deepcopy(SEARCH);search['people'][0].update(joined='2022-07',employment_checked_at=stamp)
     with pytest.raises(JobLeadsError):store.save_hr(row['id'],row['revision'],search)
     assert store.list()[0]==row
+
+
+def test_candidate_sort_order_and_filters_match_the_dashboard():
+    rows=[{'name':'Bee','location':'','score':70,'read':'Search card','saved_at':'2026-10-03T00:00:00+00:00','run_id':'r','title':'','url':'','evidence':[],'unknowns':[],'notes':'','brief':''},
+          {'name':'alpha','location':'Kuala Lumpur','score':90,'read':'Profile detail','saved_at':'2026-10-01T00:00:00+00:00','run_id':'r','title':'','url':'','evidence':[],'unknowns':[],'notes':'','brief':''},
+          {'name':'Cee','location':'Singapore','score':70,'read':'Profile detail','saved_at':'2026-10-02T00:00:00+00:00','run_id':'r','title':'','url':'','evidence':[],'unknowns':[],'notes':'','brief':''}]
+    names=lambda **view:[row['name'] for row in filter_candidates(rows,**view)]
+    assert names()==['Bee','Cee','alpha'], 'default is newest assessed first, as before'
+    assert names(sort='saved_at',order='asc')==['alpha','Cee','Bee']
+    assert names(sort='score',order='desc')==['alpha','Bee','Cee'], 'equal scores keep archive order'
+    assert names(sort='score',order='asc')==['Bee','Cee','alpha']
+    assert names(sort='name',order='asc')==['alpha','Bee','Cee'], 'name order ignores letter case'
+    assert names(sort='name',order='desc')==['Cee','Bee','alpha']
+    assert names(sort='location',order='asc')==['alpha','Cee','Bee'] and names(sort='location',order='desc')==['Cee','alpha','Bee'], 'blank locations always last'
+    assert names(min_score=80)==['alpha'] and names(read='Search card')==['Bee'] and names(min_score=71,read='Search card')==[]
+    for bad in [dict(min_score=101),dict(min_score='80'),dict(min_score=True),dict(read='Other'),dict(sort='email'),dict(order='up')]:
+        with pytest.raises(PeopleError):filter_candidates(rows,**bad)
+
+
+def test_candidate_export_uses_the_same_sort_and_filters():
+    import sys
+    if 'app' not in sys.modules:
+        # Same isolated test receipt the other route suites use when run alone.
+        from pathlib import Path
+        from owner_build_tools import build_protected
+        build_protected.write_test_receipt(Path(__file__).resolve().parents[1])
+    import app
+    rows=[{'name':'Low','score':40,'read':'Search card'},{'name':'High','score':95,'read':'Profile detail'},{'name':'Mid','score':75,'read':'Profile detail'}]
+    seen={}
+    def capture(found,fields,title):
+        seen['names']=[row['name'] for row in found];return b'xlsx'
+    with mock.patch.object(app._SOURCER_CANDIDATES,'list',return_value=[{**row,'run_id':'r','location':'','title':'','url':'','evidence':[],'unknowns':[],'notes':'','brief':'','saved_at':'2026-10-01T00:00:00+00:00'} for row in rows]),\
+            mock.patch.object(app,'_people_workbook',side_effect=capture):
+        browser=app.app.test_client();browser.get('/');headers={'X-CV-Studio-Request':'1'}
+        response=browser.post('/linkedin-sourcer',json={'action':'export_candidates','min_score':50,'sort':'score','order':'asc'},headers=headers)
+        assert response.status_code==200 and seen['names']==['Mid','High']
+        assert browser.post('/linkedin-sourcer',json={'action':'export_candidates','sort':'email'},headers=headers).status_code==400

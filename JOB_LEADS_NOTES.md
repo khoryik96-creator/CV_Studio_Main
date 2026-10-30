@@ -1,5 +1,52 @@
 # Job Leads module
 
+## Signed clients dashboard (v24.6.527)
+
+Job Leads has a fourth view, **Signed clients**. The owner follows a few signed
+JobAdder clients and pulls their public LinkedIn job ads for review. JobAdder is
+only read: nothing in JobAdder is changed.
+
+- **Which clients count as signed.** The owner ticks the JobAdder company
+  statuses that mean a client has signed terms (for example "Signed Client").
+  The choice is checked against JobAdder's current status list when saved. The
+  client list only shows companies whose JobAdder status is one of the chosen
+  ones, even if JobAdder ignored the status filter.
+- **Following.** Following re-reads the company in JobAdder and is refused if
+  its status is no longer a chosen one. Up to 200 clients per account.
+- **LinkedIn link.** A followed client is pulled through its LinkedIn company
+  number. It comes from, in order:
+  1. the JobAdder company's LinkedIn link, when it is a numbered company page;
+  2. a link the owner pastes: a company page, or the "See all jobs" search
+     (`/jobs/search/?f_C=<number>`) of a named page;
+  3. a saved HR scan of the same LinkedIn company page.
+  A client without a number cannot be ticked for pulling.
+- **Pulling.** Pull job ads opens one company-filtered LinkedIn Jobs search per
+  ticked client, through the companion: `f_C` with no keywords.
+  - **Limits:** 1–5 pages per client, up to 15 clients and 600 ads per pull.
+  - **Search tabs:** each search tab stays open, as with the existing search.
+  - **Stop and failures:** Stop keeps what was found. A failed client is
+    reported and the next one continues.
+  - **Pulled times:** only clients that finished get a new "Last pulled" time.
+- **Review, then add.** Pulled ads are listed with the client they were pulled
+  for. Ads already in Job ads or Trash cannot be ticked. Add selected to Job ads
+  saves the ticked ads through the existing save action (status New, no
+  contact or notes, the chosen folder) and reloads the main list. Existing ads
+  are never overwritten.
+- **Busy Job Leads.** The dashboard can be read while Job Leads is busy. Pulling
+  and adding wait for Job Leads' own searches and saves.
+- **Accounts.** The status choice and follow list are kept per JobAdder account
+  in a new protected vault, `jobadder_clients`, never in SQLite or the browser.
+  JobAdder sign-out and an account change clear the view and stop a running
+  pull. A reply for the earlier account is not shown, and a stale page cannot
+  change the new account's choices (409).
+
+Route: one new `POST /jobadder/clients`. It reads JobAdder only, and the
+existing same-origin request guard covers it. The route contract goes from 123
+to 124. The
+companion's `jobSearchBegin` accepts an optional numeric `company_id`, gated by
+the new `job_search_company_revision` capability. Update the app **and** the
+companion. Older companions are reported before any search opens.
+
 ## Direct Experience date loading (v24.6.522)
 
 Employment checks now open `/in/<observed-handle>/details/experience/` in the

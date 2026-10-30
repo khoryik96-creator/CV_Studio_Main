@@ -7,7 +7,25 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current local checkpoint: v24.6.526 search guidance (not published/merged)**
+**Current checkpoint: v24.6.527 Signed clients and candidate sorting (unmerged)**
+on `claude/job-leads-signed-clients`, from merged v526 `7c3f0d5` / PR #270.
+The owner asked for a Job Leads dashboard of signed JobAdder clients, the
+ability to follow a few of them and to pull their job ads into the main Job
+ads list. They chose LinkedIn ads, company status as the "signed" test, review
+before adding, and a button to start the pull. They also asked for sorting and
+filters on the LinkedIn Sourcer Candidates dashboard.
+- New read-only `POST /jobadder/clients` (`cvstudio_jobadder_clients.py`): 123
+  to 124 routes (section 1). JobAdder is only read; choices live per account in
+  the new protected vault `jobadder_clients`.
+- New `vendor/cvstudio/job-leads-clients.js` and a fourth Job Leads tab. Pulls
+  use a company-filtered companion search (`company_id` / `f_C`, capability
+  `job_search_company_revision`). Update the app and the companion.
+- Candidates: sort by date, match, name, location or profile read in either
+  order, minimum-match and profile-read filters; Excel uses the same view.
+See the Job Leads and Sourcer notes and the v527 QA report. No JobAdder write,
+paid call, hosted change or owner installation update. PR #257 remains held.
+
+**Previous checkpoint: v24.6.526 search guidance (merged PR #270 / `7c3f0d5`)**
 on `codex/v24.6.526-search-guidance`, from merged525 `0c30448` / PR269.
 The owner requests the red next-step/missing-input outlines in Job Leads and
 LinkedIn Sourcer, matching contact creation. Each module now guides its active
@@ -494,8 +512,8 @@ the fetched master/coordination log before starting subsequent work.
 `app.py` ends with `_finalize_modular_monolith_app(...)`, which hard-asserts at
 import time:
 
-- `expected_route_count = 122`
-- `expected_route_contract_sha256 = "4cb6b3f8e64b3421c9b9fae819c7fe64e6b05d98db193bb1eb42f8da07aaf600"`
+- `expected_route_count = 124` (v24.6.527 adds `POST /jobadder/clients`)
+- `expected_route_contract_sha256 = "c24f7c6c98fb0c4855fc1f40a41f54bf70638e5d9e9262382b19d348a125d9e6"`
 - 5 before-request guards, in this exact order:
   `_assign_cvstudio_request_id`, `_reject_declared_oversize_request`,
   `_reject_non_local_host_header`, `_require_ai_spend_browser_session`,
@@ -504,7 +522,10 @@ import time:
 
 If you add, remove, or rename **any** route, the app refuses to boot until you
 recompute the SHA and bump the count in `app.py` **and** in the ~12 test files
-that pin `121` / the SHA (`tests/test_phase7a_*`, `tests/test_phase5b_*`, etc.).
+that pin the count / the SHA (`tests/test_phase7a_*`, `tests/test_phase5b_*`, etc.),
+and add the new endpoint to the "previous contract" exclusion lists (for example
+`tests/test_job_leads.py`, `tests/test_apollo_routes.py`). Held PR #257 also adds
+a route: whichever merges second must recompute both.
 If you are not touching routes, leave all of this alone.
 
 ## 2. Architecture and module extractions

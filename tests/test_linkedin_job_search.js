@@ -82,5 +82,21 @@ if(require.main===module)(async()=>{
     assert.match(error,/LinkedIn|reader/,'the failed browser step is actionable');assert(!error.includes('PRIVATE'),'raw injection errors never leave the worker');
     assert.match(error,kind==='failInjection'?/reader could not start/:/could not be read/);
   }
-  console.log('Job search companion: authority, source/run isolation, validated queries, suspension-safe page/scroll bounds, filter redirects and retained search tabs passed');
+  // Signed-client pulls: one LinkedIn company (f_C), keywords optional.
+  const client=fixture();await client.arm();
+  assert.equal((await client.rpc('jobStatus')).result.job_search_company_revision,1,'the app can detect the company filter');
+  const ci2=(await client.begin({query:'',location:'',company_id:'4242'})).result.tab_id;
+  const opened=new URL(client.state.created[0].url);
+  assert.equal(opened.searchParams.get('f_C'),'4242');assert(!opened.searchParams.has('keywords'),'no keywords are invented');assert(!opened.searchParams.has('location'));
+  assert.equal((await client.read(ci2)).result.jobs[0].url,row.url,'the company-filtered search is readable');
+  client.tabs.get(ci2).url='https://www.linkedin.com/jobs/search/?f_C=4242&currentJobId=1234567890&origin=COMPANY_PAGE_JOBS_CLUSTER_EXPANSION';
+  assert((await client.read(ci2)).result,'tracking parameters keep the company identity');
+  client.tabs.get(ci2).url='https://www.linkedin.com/jobs/search/?keywords=finance';
+  assert((await client.read(ci2)).error,'a search that loses the company filter cannot be read');await client.end();
+  const both=fixture();await both.arm();await both.begin({company_id:'77',location:'Malaysia'});
+  const withKeywords=new URL(both.state.created[0].url);assert.equal(withKeywords.searchParams.get('keywords'),'finance');assert.equal(withKeywords.searchParams.get('f_C'),'77');await both.end();
+  const badCompany=fixture();await badCompany.arm();
+  for(const patch of [{company_id:4242},{company_id:'abc'},{company_id:'1'.repeat(25)},{company_id:'1,2'},{company_id:'',query:''},{company_id:null,query:''}])assert((await badCompany.begin({query:'',...patch})).error);
+  assert.equal(badCompany.state.created.length,0,'invalid company filters never open a tab');
+  console.log('Job search companion: authority, source/run isolation, validated queries, suspension-safe page/scroll bounds, filter redirects, retained search tabs and single-company searches passed');
 })().catch(error=>{console.error(error);process.exitCode=1});

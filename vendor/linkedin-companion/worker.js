@@ -615,7 +615,7 @@ async function handle(message, sender) {
     if(jobCapture?.bound!==connection || jobCapture.operation!==args.operation_id)return false;
     jobCapture.cancelled=true;return true;
   }
-  if (message.action === 'jobStatus') return {connected:true,job_read:true,job_search:true,job_search_revision:1,company_hr_revision:1,hr_company_identity_revision:1,hr_company_filter_revision:1,hr_company_source_revision:1,hr_resilience_revision:1,hr_layout_revision:1,hr_apply_transition_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_employment_revision:1,hr_date_check_revision:1,hr_experience_page_revision:1,hr_employment_shapes_revision:1,hr_keyword_revision:1,people_country_revision:1,people_results_revision:1,profile_browsing_revision:1,concurrent_scans_revision:1,companion_update_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
+  if (message.action === 'jobStatus') return {connected:true,job_read:true,job_search:true,job_search_revision:1,job_search_company_revision:1,company_hr_revision:1,hr_company_identity_revision:1,hr_company_filter_revision:1,hr_company_source_revision:1,hr_resilience_revision:1,hr_layout_revision:1,hr_apply_transition_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_employment_revision:1,hr_date_check_revision:1,hr_experience_page_revision:1,hr_employment_shapes_revision:1,hr_keyword_revision:1,people_country_revision:1,people_results_revision:1,profile_browsing_revision:1,concurrent_scans_revision:1,companion_update_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
   if (message.action === 'hrDate') {
     const bound=connection;
     if(bound.run || jobCapture) throw safeError('Wait for the current HR action to finish before checking employment.');
@@ -693,10 +693,15 @@ async function handle(message, sender) {
     if (connection.run || jobCapture) throw Error('Stop the current browser action first.');
     let url;
     if (!args.use_open) {
-      if (typeof args.query !== 'string' || !args.query.trim() || args.query.length > 240 || /[\x00-\x1f]/.test(args.query) ||
+      // An optional single LinkedIn company filter (f_C) lists one signed
+      // client's ads; keywords become optional only with that filter.
+      const company = args.company_id === undefined ? '' : args.company_id;
+      if (company !== '' && (typeof company !== 'string' || !/^[0-9]{1,24}$/.test(company))) throw Error('Choose a valid LinkedIn company.');
+      if (typeof args.query !== 'string' || !args.query.trim() && !company || args.query.length > 240 || /[\x00-\x1f]/.test(args.query) ||
           typeof args.location !== 'string' || args.location.length > 160 || /[\x00-\x1f]/.test(args.location)) throw Error('Enter valid job keywords and location.');
       const target = new URL('https://www.linkedin.com/jobs/search/');
-      target.searchParams.set('keywords', args.query.trim());
+      if (args.query.trim()) target.searchParams.set('keywords', args.query.trim());
+      if (company) target.searchParams.set('f_C', company);
       if (args.location.trim()) target.searchParams.set('location', args.location.trim());
       url = target.href;
       if (!jobSearchKey(url)) throw Error('Shorten the job keywords or location.');

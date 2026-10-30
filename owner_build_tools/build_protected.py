@@ -40,8 +40,8 @@ except ModuleNotFoundError:  # Direct `python owner_build_tools/build_protected.
         find_pinned_checkout_action,
     )
 
-VERSION = "v24.6.526"
-VERSION_SLUG = "v24_6_526"
+VERSION = "v24.6.527"
+VERSION_SLUG = "v24_6_527"
 PRODUCT = "TheGuoLab-CVStudio"
 RECEIPT_SCHEMA = 2
 TOTP_MASK = bytes([147,57,36,83,116,245,122,57,165,162,176,168,249,50,204,128,45,174,232,56])
@@ -71,6 +71,7 @@ FRONTEND_MODULES = (
     "linkedin-sourcer.js",
     "job-leads-apollo.js",
     "people-dashboards.js",
+    "job-leads-clients.js",
     "job-leads-jobadder.js",
     "job-leads.js",
     "email-verifier.js",
