@@ -15,7 +15,8 @@
   Wrangler logged out afterward. Final59 focused Python,81 JS, actual Worker,
   nativeWindows/static/source preflight and24 smoke assertions pass. Full2210
   Python passed on523; no repeated full Python sweep for a JS-domain correction.
-  Source stack523/524 remains local/unmerged. See524 QA; heldPR257 excluded.
+  Owner now authorizes publication/merge of source stack523/524. Issue35 records
+  the resulting PR/merge identity. See524 QA; heldPR257 excluded.
 
 - v24.6.523 local Apollo parsing correction accepts a positively bound
   saved-contact business email when the primary person field is empty, rejects

@@ -7,7 +7,7 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current local checkpoint: v24.6.524 Apollo business-domain correction (not pushed/merged)**
+**Current source checkpoint: v24.6.524 Apollo business-domain correction**
 on `codex/v24.6.524-apollo-business-domain`, stacked on local523 `696da66`
 from merged522 `deccf7f` / PR267. The owner approved hosted deployment and one
 new lookup, then separately approved one additional lookup after the first
@@ -30,8 +30,9 @@ Final524 focused59 Python, all81 JS, real Worker SQLite/WebCrypto, syntax/versio
 repo/nativeWindows/preflight and24 source-smoke checks pass. Full2210 Python/
 4 skips/8418 subtests passed on523 before this JS-domain-only correction. No
 real person/email/token in source, fixtures, QA or coordination posts. See524
-QA for bounded live acceptance and remaining limits. PR257 remains held; no
-Git publication/merge of523/524 is requested.
+QA for bounded live acceptance and remaining limits. The owner now explicitly
+authorizes publication and merge of the523/524 stack. Issue35 records the PR
+and resulting merge identity. HeldPR257 remains excluded.
 
 **Previous local checkpoint: v24.6.523 Apollo result handling (not published/merged)**
 on `codex/v24.6.523-apollo-email-results`, from merged522 `deccf7f` / PR267.

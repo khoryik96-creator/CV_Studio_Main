@@ -1,8 +1,9 @@
 # v24.6.524 Apollo business-domain correction and hosted acceptance
 
 Date: 2026-10-30. Base: local523 `696da66`, on merged522 `deccf7f` / PR267.
-Branch: `codex/v24.6.524-apollo-business-domain`. Source523/524 remains local;
-no push, PR or merge requested. HeldPR257 is excluded.
+Branch: `codex/v24.6.524-apollo-business-domain`. The owner now explicitly
+authorizes publication and merge of the523/524 source stack; issue35 records
+the resulting PR and merge identity. HeldPR257 is excluded.
 
 ## Defect and correction
 
