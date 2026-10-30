@@ -5,6 +5,17 @@
   let ready=false, account={available:false,connected:false}, row=null, rowKey='', sequence=0;
   let working=false, appBusy=false, polling=false, pollGeneration=0, cache={}, views=[];
   let contacts=[], contactsPage=0, contactsLoading=false, contactsLoaded=false, contactsExporting=false;
+  const contactVerifiers=new Map();
+  const contactFilters=()=>({company:el('ContactsCompany').value,country:el('ContactsCountry').value,email_status:el('ContactsStatus').value});
+  function contactChoices() {
+    for(const [suffix,key,label] of [['Company','company_id','All companies'],['Country','country','All scan countries'],['Status','email_status','All Apollo statuses']]) {
+      const select=el('Contacts'+suffix),old=select.value,options=new Map();
+      for(const row of contacts) if(row[key]) options.set(row[key],suffix==='Company'?row.company:suffix==='Status'?(statusLabels[row[key]] || row[key]):row[key]);
+      select.replaceChildren(new Option(label,''));
+      for(const [value,name] of [...options].sort((a,b)=>a[1].localeCompare(b[1])))select.append(new Option(name,value));
+      select.value=options.has(old)?old:'';
+    }
+  }
   const statusLabels={verified:'Verified by Apollo',unverified:'Unverified by Apollo',catch_all:'Catch-all · reported by Apollo',unavailable:'Unavailable',user_managed:'User-managed in Apollo',unknown:'Status not provided by Apollo'};
   async function api(body) {
     const response=await fetch('/apollo',body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),timeout:30000}:{cache:'no-store'});
@@ -40,7 +51,9 @@
   }
   function filteredContacts() {
     const query=el('ContactsSearch').value.trim().toLowerCase();
-    return contacts.filter(row=>!query || Object.entries(row).filter(([key])=>key!=='contact_key').map(([,value])=>value).join(' ').toLowerCase().includes(query));
+    const filters=contactFilters();
+    return contacts.filter(row=>(!query || Object.entries(row).filter(([key])=>key!=='contact_key').map(([,value])=>value).join(' ').toLowerCase().includes(query)) &&
+      Object.entries(filters).every(([key,value])=>!value || row[key==='company'?'company_id':key]===value));
   }
   function contactControls() {
     el('ContactsRefresh').disabled=contactsLoading || working;
@@ -59,6 +72,13 @@
       tr.append(name,...['position','company','country','email'].map(key=>text('td',row[key] || '—')),
         text('td',statusLabels[row.email_status] || statusLabels.unknown));
       const action=document.createElement('td');window.cvStudioJAContacts?.decorate(action,row);tr.append(action);
+      const verify=document.createElement('td'),key=row.contact_key || row.profile_url+'|'+row.email;
+      if(!contactVerifiers.has(key)) {
+        const host=document.createElement('div');
+        window.cvStudioEmailVerifier?.decorate(host,row,{email:row.email,readOnly:true,compact:true});
+        contactVerifiers.set(key,host);
+      }
+      verify.append(contactVerifiers.get(key));tr.append(verify);
       el('ContactsRows').append(tr);
     }
     el('ContactsPage').textContent=rows.length?`${contactsPage*40+1}–${Math.min((contactsPage+1)*40,rows.length)} of ${rows.length}`:'';
@@ -70,7 +90,9 @@
     contactsLoading=true;contactControls();el('ContactsMessage').textContent='Loading contacts…';
     try {
       const data=await api({action:'contacts'});
-      contacts=data.contacts || [];contactsLoaded=true;
+      contacts=data.contacts || [];contactsLoaded=true;contactChoices();
+      const keys=new Set(contacts.map(row=>row.contact_key || row.profile_url+'|'+row.email));
+      for(const key of contactVerifiers.keys()) if(!keys.has(key))contactVerifiers.delete(key);
       el('ContactsMessage').textContent=data.contact_warning || (contacts.length?'':'No unlocked contacts yet.');
       renderContacts();
     } catch(error) {el('ContactsMessage').textContent=error.message;}
@@ -86,7 +108,7 @@
     if(contactsLoading || contactsExporting || working || !filteredContacts().length) return;
     contactsExporting=true;contactControls();
     try {
-      const response=await fetch('/apollo',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'export_contacts',query:el('ContactsSearch').value})});
+      const response=await fetch('/apollo',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'export_contacts',query:el('ContactsSearch').value,filters:contactFilters()})});
       if(!response.ok) {const data=await response.json();throw Error(data.error || 'Contacts could not be exported.');}
       const url=URL.createObjectURL(await response.blob()), link=document.createElement('a');
       link.href=url;link.download='CV-Studio-Contacts.xlsx';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
@@ -179,6 +201,7 @@
       el('AdsTab').addEventListener('click',()=>showContacts(false));el('ContactsTab').addEventListener('click',()=>showContacts(true));
       el('ContactsRefresh').addEventListener('click',refreshContacts);el('ContactsExport').addEventListener('click',exportContacts);
       el('ContactsSearch').addEventListener('input',()=>{contactsPage=0;renderContacts();});
+      for(const suffix of ['Company','Country','Status'])el('Contacts'+suffix).addEventListener('change',()=>{contactsPage=0;renderContacts();});
       el('ContactsPrevious').addEventListener('click',()=>{contactsPage=Math.max(0,contactsPage-1);renderContacts();});
       el('ContactsNext').addEventListener('click',()=>{contactsPage++;renderContacts();});
       el('ContactsPanel').hidden=true;renderContacts();

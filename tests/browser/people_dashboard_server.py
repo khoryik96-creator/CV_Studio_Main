@@ -7,7 +7,8 @@ from unittest import mock
 from pathlib import Path
 root=Path(__file__).resolve().parents[2];state=Path(tempfile.mkdtemp(prefix='people521-native-'))
 sys.path.insert(0,str(root));sys.path.insert(0,str(root/'tests'))
-os.environ.update(LOCALAPPDATA=str(state),APPDATA=str(state),CVSTUDIO_STATE_DIR=str(state/'state'),CVSTUDIO_DB_PATH=str(state/'db.sqlite3'),CVSTUDIO_JOB_STATE_PATH=str(state/'jobs.json'),SALARY_COMPARISON_DATA_DIR=str(state/'salary'),CVSTUDIO_OWNER_BUILD_SMOKE='1',CVSTUDIO_OWNER_BUILD_SMOKE_PORT='5096')
+fixture_port=int(os.environ.get('CVSTUDIO_PEOPLE_FIXTURE_PORT','5096'))
+os.environ.update(LOCALAPPDATA=str(state),APPDATA=str(state),CVSTUDIO_STATE_DIR=str(state/'state'),CVSTUDIO_DB_PATH=str(state/'db.sqlite3'),CVSTUDIO_JOB_STATE_PATH=str(state/'jobs.json'),SALARY_COMPARISON_DATA_DIR=str(state/'salary'),CVSTUDIO_OWNER_BUILD_SMOKE='1',CVSTUDIO_OWNER_BUILD_SMOKE_PORT=str(fixture_port))
 from owner_build_tools.build_protected import write_test_receipt
 write_test_receipt(root,environment={'HOME':str(state),'LOCALAPPDATA':str(state)})
 import app
@@ -34,4 +35,4 @@ app._SOURCER_CANDIDATES.remember(run,[dict(name='Example Person '+str(i).zfill(2
 @app.app.route('/__people_dashboard_fixture__')
 def fixture_marker():
     return {'fictional_people_fixture':True,'employment_source':row['id'],'latest_source':duplicate['id']}
-app.app.run(host='127.0.0.1',port=5096,debug=False,use_reloader=False)
+app.app.run(host='127.0.0.1',port=fixture_port,debug=False,use_reloader=False)

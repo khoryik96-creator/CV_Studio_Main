@@ -4,6 +4,21 @@
 
 ## Release state
 
+- v24.6.525 locally corrects overlapping-current/contained-role employment
+  ranges, adds a capability gate and an explicit user-confirmed date fallback
+  where LinkedIn has no company link. A bounded foreground missing-date queue
+  saves each person and refreshes shared-ad revisions; Stop and explicit restart
+  preserve completed work. Unlocked contacts gains company/scan-country/Apollo-
+  status filters, matching Excel and per-contact explicit first-party checks.
+  JobAdder guides missing/next fields, recovers independently of edited review
+  fields and treats documented409 as rejected. Owner explicitly approved a new
+  confirmed manual recovery: hashed expiring proof, repeated read, bounded
+  protected history and fresh Review/Create; no automatic unsafe replay. Apollo
+  domain exclusions are exact, local read refreshes serialize with a short bound.
+  No new route/SQL migration, paid call, live contact write, owner data update or
+  hosted deployment. Branch codex/v24.6.525-job-leads-corrections from merged524
+  PR268/0161728. Not pushed/merged; see525 QA. HeldPR257 excluded.
+
 - v24.6.524 corrects the corporate/Proton Mail domain collision found by the
   first separately approved live523 lookup. Exact public Proton Mail domains
   remain excluded. Hosted524 is100% active (`29e8155b`); the second separately

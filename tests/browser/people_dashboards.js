@@ -9,7 +9,7 @@ const {chromium}=require(process.env.CVSTUDIO_PLAYWRIGHT || 'playwright');
 (async()=>{const browser=await chromium.launch({headless:true});try{
  const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[],calls=[];
  page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.method()==='POST')calls.push({url:new URL(r.url()).pathname,data:r.postDataJSON()});});
- await page.addInitScript(()=>window.addEventListener('message',e=>{const d=e.data;if(d?.type==='CVSTUDIO_LINKEDIN_REQUEST'&&['hrDate','jobStatus'].includes(d.action))window.postMessage({type:'CVSTUDIO_LINKEDIN_RESPONSE',channel:d.channel,id:d.id,result:d.action==='jobStatus'?{connected:true,hr_date_check_revision:1,hr_experience_page_revision:1}:{url:d.args.url,joined:'2026-10',left:'',current:true}},location.origin);}));
+ await page.addInitScript(()=>window.addEventListener('message',e=>{const d=e.data;if(d?.type==='CVSTUDIO_LINKEDIN_REQUEST'&&['hrDate','jobStatus'].includes(d.action))window.postMessage({type:'CVSTUDIO_LINKEDIN_RESPONSE',channel:d.channel,id:d.id,result:d.action==='jobStatus'?{connected:true,hr_date_check_revision:1,hr_experience_page_revision:1,hr_employment_shapes_revision:1}:{url:d.args.url,joined:'2026-10',left:'',current:true}},location.origin);}));
  const marker=await page.request.get('http://127.0.0.1:5096/__people_dashboard_fixture__');const seed=await marker.json();assert.equal(seed.fictional_people_fixture,true,'Run only against the isolated fictional fixture');
  await page.goto('http://127.0.0.1:5096/?module=jobleads');await page.locator('#peopleHRTab').click();
  await page.locator('#peopleHRRows tr').first().waitFor();assert.equal(await page.locator('#peopleHRRows tr').count(),2);

@@ -176,3 +176,17 @@ def test_invalid_employment_ranges_are_atomic(tmp_path, dates):
     with pytest.raises(JobLeadsError):
         store.save_hr(old['id'], old['revision'], search)
     assert store.list() == [old]
+
+
+def test_manual_date_confirmation_is_explicit_retained_and_replaced_by_automatic_evidence(tmp_path):
+    store=JobLeadsStore(tmp_path/'leads.sqlite3');row=store.save(AD)['record']
+    row=store.save_hr(row['id'],row['revision'],copy.deepcopy(SEARCH))['record']
+    url=row['hr']['people'][0]['url'];dates={'joined':'2020-06','left':'','current':True}
+    with pytest.raises(JobLeadsError):store.save_hr(row['id'],row['revision'],None,person_url=url,dates=dates,user_confirmed='yes')
+    assert store.list()==[row]
+    row=store.save_hr(row['id'],row['revision'],None,person_url=url,dates=dates,user_confirmed=True)['record']
+    assert row['hr']['people'][0]['employment_confirmed_by_user'] is True
+    restored=JobLeadsStore(tmp_path/'restored.sqlite3');restored.restore(store.backup())
+    assert restored.list()[0]['hr']==row['hr']
+    row=store.save_hr(row['id'],row['revision'],None,person_url=url,dates=dates)['record']
+    assert 'employment_confirmed_by_user' not in row['hr']['people'][0]

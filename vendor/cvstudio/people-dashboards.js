@@ -3,7 +3,7 @@
   'use strict';
   const el=id=>document.getElementById('people'+id);
   const text=(tag,value,cls)=>{const n=document.createElement(tag);n.textContent=value;if(cls)n.className=cls;return n;};
-  const link=(value,url)=>{const a=text('a',value);if(/^https:\/\/www\.linkedin\.com\/(?:in\/[A-Za-z0-9_%~-]+\/?|talent\/(?:hire\/)?profile\/[^/?#]+|jobs\/view\/\d+\/?|company\/[A-Za-z0-9_-]+\/)$/u.test(url || '')){a.href=url;a.target='_blank';a.rel='noopener noreferrer';}return a;};
+  const link=(value,url)=>{const a=text('a',value);if(/^https:\/\/www\.linkedin\.com\/(?:in\/[A-Za-z0-9_%~-]+(?:\/details\/experience\/|\/?)|talent\/(?:hire\/)?profile\/[^/?#]+|jobs\/view\/\d+\/?|company\/[A-Za-z0-9_-]+\/)$/u.test(url || '')){a.href=url;a.target='_blank';a.rel='noopener noreferrer';}return a;};
   let appBusy=false, dateBusy=false, initialized=false,dateOperation='',dateStopped=false,activeDateStop=null;
   const noteDrafts=new Map();
   const boards={HR:{rows:[],page:0,loading:false,exporting:false,generation:0},Candidates:{rows:[],page:0,loading:false,exporting:false,generation:0}};
@@ -27,6 +27,8 @@
     el(kind+'Next').disabled=b.loading || (b.page+1)*40>=rows.length;
     for(const button of document.querySelectorAll('[data-employment]'))button.disabled=appBusy || dateBusy;
     el('HRDateStop').hidden=!dateBusy;el('HRDateStop').disabled=dateStopped;
+    el('HRDateAll').disabled=appBusy || dateBusy || boards.HR.loading || !filtered('HR').some(row=>!row.joined);
+    for(const suffix of ['Query','Company'])el('HR'+suffix).disabled=dateBusy;
     for(const button of document.querySelectorAll('[data-date-stop]')){button.hidden=!dateBusy || button!==activeDateStop;button.disabled=dateStopped;}
     if(kind==='HR') {
       for(const button of el('HRRows').querySelectorAll('[data-unlock]'))button.disabled=appBusy || dateBusy || !window.cvStudioApollo?.connected();
@@ -47,12 +49,73 @@
     td.append(details);return td;
   }
   function personSource(row,employment=false) {return {id:employment?(row.employment_id || row.id):row.id,revision:employment?(row.employment_revision || row.revision):row.revision,company:row.company,hr:{company_id:row.company_id,company_url:employment?(row.employment_company_url || row.company_url):row.company_url,people:[row]}};}
+  function manualDates(target,row,person) {
+    if(target.querySelector?.('[data-manual-dates]'))return;
+    const form=document.createElement('details');form.dataset.manualDates='';
+    const summary=text('summary','Set dates from LinkedIn'),start=document.createElement('input'),end=document.createElement('input'),present=document.createElement('input'),confirmed=document.createElement('input'),save=text('button','Save confirmed dates','sec'),note=text('small','');
+    start.type=end.type='month';start.setAttribute('aria-label','Employment start month and year');end.setAttribute('aria-label','Employment end month and year');
+    present.type=confirmed.type='checkbox';present.checked=true;end.disabled=true;save.type='button';
+    const label=(words,control)=>{const n=text('label',words);n.append(control);return n;};
+    present.addEventListener('change',()=>{end.disabled=present.checked;});
+    form.append(summary,link('Open LinkedIn Experience',person.url.replace(/\/$/,'')+'/details/experience/'),label('From',start),label('Present',present),label('To',end),label('I confirmed these dates and the employer: '+row.company,confirmed),save,note);
+    save.addEventListener('click',async()=>{
+      if(appBusy || dateBusy || window.cvStudioJobLeads?.isBusy())return;
+      if(!confirmed.checked || !/^(?:19|20)\d{2}-(?:0[1-9]|1[0-2])$/.test(start.value) || !present.checked && (!/^(?:19|20)\d{2}-(?:0[1-9]|1[0-2])$/.test(end.value) || end.value<start.value)){
+        note.textContent='Enter the visible month/year range and confirm the employer.';return;
+      }
+      save.disabled=true;window.cvStudioJobLeads.lock(true);note.textContent='Saving your confirmation…';
+      try{
+        const data=await api('/job-leads',{action:'employment',id:row.id,revision:row.revision,url:person.url,user_confirmed:true,dates:{joined:start.value,left:present.checked?'':end.value,current:present.checked}});
+        note.textContent='Dates saved · confirmed by you';await window.cvStudioJobLeads.refresh();await refresh('HR');
+      }catch(error){note.textContent=error.message;}
+      finally{save.disabled=false;window.cvStudioJobLeads.lock(false);}
+    });
+    target.append(form);
+  }
   function decorateDate(target,row,person) {
     if(!row?.hr || !/^https:\/\/www\.linkedin\.com\/in\/[A-Za-z0-9_%~-]+\/?$/.test(person?.url || ''))return;
     const button=text('button','Check employment','sec');button.type='button';button.dataset.employment='';
     const stop=text('button','Stop checking','sec');stop.type='button';stop.hidden=true;stop.dataset.dateStop='';stop.addEventListener('click',stopDate);
-    button.addEventListener('click',()=>{activeDateStop=stop;void checkEmployment(row,person,button);});target.append(button,stop);
+    button.addEventListener('click',()=>{activeDateStop=stop;void checkEmployment(row,person,button);});target.append(button,stop);if(person.employment_confirmed_by_user)target.append(text('small','Dates confirmed by you'));
     button.disabled=appBusy || dateBusy;
+  }
+  async function readEmployment(row,person) {
+    if(dateStopped)throw Error('Employment check stopped. Saved dates were kept.');
+    dateOperation=crypto.randomUUID().replaceAll('-','');
+    const result=await window.cvStudioJobLeads.rpc('hrDate',{operation_id:dateOperation,url:person.url.replace(/\/$/,''),company_url:row.hr.company_url,company_id:row.hr.company_id},90000);
+    if(dateStopped)throw Error('Employment check stopped. Saved dates were kept.');
+    if(result?.url!==person.url.replace(/\/$/,'') || !/^(?:19|20)\d{2}(?:-(?:0[1-9]|1[0-2]))?$/.test(result.joined || ''))throw Error('No employment range was confirmed for this company. Saved dates were kept.');
+    const data=await api('/job-leads',{action:'employment',id:row.id,revision:row.revision,url:person.url,dates:{joined:result.joined,left:result.left,current:result.current}});
+    return data.record.hr.people.find(p=>p.url.replace(/\/$/,'')===person.url.replace(/\/$/,''));
+  }
+  async function checkMissingEmployment() {
+    if(appBusy || dateBusy || boards.HR.loading || window.cvStudioJobLeads?.isBusy())return;
+    const pending=filtered('HR').filter(row=>!row.joined && /^https:\/\/www\.linkedin\.com\/in\/[A-Za-z0-9_%~-]+\/?$/.test(row.url));
+    if(!pending.length)return;
+    dateBusy=true;dateStopped=false;activeDateStop=null;
+    const activity=window.cvStudioJobLeads.activityStart(),deadline=Date.now()+3600000;let checked=0,failed=0,limited=false;
+    window.cvStudioJobLeads.lock(true);controls('HR');
+    const note=el('HRDateProgress'),queue=pending.slice(0,500);
+    try {
+      const status=await window.cvStudioJobLeads.rpc('jobStatus');
+      if(status?.hr_date_check_revision!==1 || status.hr_experience_page_revision!==1 || status.hr_employment_shapes_revision!==1)throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn.');
+      for(const item of queue) {
+        if(dateStopped)break;
+        if(Date.now()>deadline){limited=true;break;}
+        // Each save advances its ad revision. Read the refreshed observation
+        // source before the next person, including people sharing one ad.
+        const current=boards.HR.rows.find(row=>row.url===item.url && row.company_id===item.company_id);
+        if(!current || current.joined)continue;
+        note.textContent=`Checking ${checked+failed+1} of ${queue.length} · ${current.name}`;
+        try{await readEmployment(personSource(current,true),current);checked++;}
+        catch(error){if(dateStopped)break;failed++;note.textContent=error.message;}
+        dateOperation='';
+        if(!await refresh('HR'))throw Error('The saved people list could not be refreshed. Check again before continuing.');
+      }
+      note.textContent=`${dateStopped?'Stopped':limited?'Time limit reached':'Finished'} · ${checked} updated · ${failed} not confirmed`+(pending.length>queue.length?' · More missing dates remain; click Check missing dates again.':'');
+      await window.cvStudioJobLeads.refresh();
+    } catch(error){failed++;note.textContent=error.message;}
+    finally{dateBusy=false;dateOperation='';activeDateStop=null;window.cvStudioJobLeads.lock(false);window.cvStudioJobLeads.activityEnd(activity,failed>0);controls('HR');}
   }
   async function checkEmployment(row,person,button) {
     if(appBusy || dateBusy || window.cvStudioJobLeads?.isBusy())return;
@@ -61,19 +124,14 @@
     const note=el('HRMessage');note.textContent='Reading this person’s company employment in LinkedIn…';controls('HR');
     try {
       const status=await window.cvStudioJobLeads.rpc('jobStatus');
-      if(status?.hr_date_check_revision!==1 || status.hr_experience_page_revision!==1)throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to check employment.');
-      if(dateStopped)throw Error('Employment check stopped. Saved dates were kept.');
-      const result=await window.cvStudioJobLeads.rpc('hrDate',{operation_id:dateOperation,url:person.url.replace(/\/$/,''),company_url:row.hr.company_url,company_id:row.hr.company_id},90000);
-      if(dateStopped)throw Error('Employment check stopped. Saved dates were kept.');
-      if(result?.url!==person.url.replace(/\/$/,'') || !/^(?:19|20)\d{2}(?:-(?:0[1-9]|1[0-2]))?$/.test(result.joined || ''))throw Error('No employment range was confirmed for this company. Saved dates were kept.');
-      const data=await api('/job-leads',{action:'employment',id:row.id,revision:row.revision,url:person.url,dates:{joined:result.joined,left:result.left,current:result.current}});
-      const updated=data.record.hr.people.find(p=>p.url.replace(/\/$/,'')===person.url.replace(/\/$/,''));
+      if(status?.hr_date_check_revision!==1 || status.hr_experience_page_revision!==1 || status.hr_employment_shapes_revision!==1)throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to check employment.');
+      const updated=await readEmployment(row,person);
       button.textContent=window.cvStudioJobLeads.employment(updated);
       await window.cvStudioJobLeads.refresh();await refresh('HR');
       note.textContent='Employment updated: '+window.cvStudioJobLeads.employment(updated);
     } catch(error) {
       failed=!dateStopped;note.textContent=error.message;button.textContent='Retry employment';button.title=error.message;
-      const local=text('small',error.message);local.setAttribute('role','status');button.parentElement.append(local);
+      const local=text('small',error.message);local.setAttribute('role','status');button.parentElement.append(local);manualDates(button.parentElement,row,person);
     }
     finally {dateBusy=false;dateOperation='';activeDateStop=null;window.cvStudioJobLeads?.lock(false);window.cvStudioJobLeads.activityEnd(activity,failed);controls('HR');}
   }
@@ -127,8 +185,8 @@
       const data=await api(kind==='HR'?'/apollo':'/linkedin-sourcer',{action:kind==='HR'?'hr_people':'candidates'});
       if(generation!==b.generation)return;
       b.rows=data[kind==='HR'?'people':'candidates'] || [];choices(kind);draw(kind);
-      el(kind+'Message').textContent=b.rows.length?'':kind==='HR'?'No saved HR people yet.':'Candidates from new searches are saved here automatically.';
-    } catch(error){el(kind+'Message').textContent=error.message;}
+      el(kind+'Message').textContent=b.rows.length?'':kind==='HR'?'No saved HR people yet.':'Candidates from new searches are saved here automatically.';return true;
+    } catch(error){el(kind+'Message').textContent=error.message;return false;}
     finally{b.loading=false;controls(kind);if(b.again){b.again=false;if(!el(kind+'Panel').hidden)void refresh(kind);}}
   }
   async function exportRows(kind) {
@@ -159,8 +217,9 @@
     void refresh('HR');
   });
   el('HRConnect').addEventListener('click',()=>window.cvStudioApollo?.connect());
-  async function stopDate(){if(!dateBusy || !dateOperation)return;dateStopped=true;controls('HR');try{await window.cvStudioJobLeads.rpc('jobReadCancel',{operation_id:dateOperation});}catch{}}
+  async function stopDate(){if(!dateBusy)return;dateStopped=true;controls('HR');if(dateOperation)try{await window.cvStudioJobLeads.rpc('jobReadCancel',{operation_id:dateOperation});}catch{}}
   el('HRDateStop').addEventListener('click',stopDate);
+  el('HRDateAll').addEventListener('click',checkMissingEmployment);
   window.addEventListener('pagehide',()=>{void stopDate();});
   window.addEventListener('beforeunload',event=>{if(noteDrafts.size){event.preventDefault();event.returnValue='';}});
   function candidates(show){el('CandidatesPanel').hidden=!show;el('SourcerSearchPanel').hidden=show;el('CandidatesTab').setAttribute('aria-pressed',String(show));el('SourcerSearchTab').setAttribute('aria-pressed',String(!show));if(show)void refresh('Candidates');}

@@ -234,3 +234,13 @@ against the owner's real install receipt. Focused fixtures:
 
 The versioned QA report records actual test counts and what was checked live.
 Do not mistake synthetic mailbox fixtures for proof of real-address accuracy.
+
+## Unlocked contacts (v24.6.525)
+
+Unlocked contacts now offers an explicit Verify email button for the archived
+address. It uses the same first-party Deep check, bounds and recheck reference
+as HR cards, without a paid lookup, new mail service or delivery. The stored
+address is read-only in this control. Results stay in page memory across filters
+and pagination, and clear on reload; they do not overwrite Apollo's status or
+enter the protected contact archive. Contact Excel still reports the saved
+Apollo status, not a durable first-party verification result.

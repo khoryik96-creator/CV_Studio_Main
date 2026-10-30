@@ -1177,3 +1177,54 @@ folder clears the previous saved preview and its management actions. An
 existing populated folder selects its first matching ad with the correct
 count. Closed previews, search-result context/selections and unsaved drafts
 remain intact. Folder selection does not move, remove or update saved ads.
+
+## Employment and contact workflows (v24.6.525)
+
+Update both CV Studio and its companion: `hr_employment_shapes_revision:1`
+prevents an older reader silently retaining these failures. Within an exact
+company group, multiple Present roles overlap and establish a continuous range.
+Older ended roles are processed by their end coverage, allowing a long bridging
+role to contain a shorter secondment. Company identity, description exclusion,
+collapsed-group ambiguity, year precision, owned-tab safety and Stop remain.
+
+Unlinked employers cannot be assigned from a similar company name. After a
+failed single check, Set dates from LinkedIn opens a compact month/year form.
+The user must confirm the employer and visible dates before saving. These dates
+carry `employment_confirmed_by_user`, display their provenance and survive ad
+backup/restore/dashboard deduplication. A later successful automated check
+replaces that marker. No inference from tenure or copied narrative dates.
+
+HR people: Check missing dates runs the currently filtered missing-date rows,
+one at a time, with a progress count and Stop. Every confirmed result is saved
+immediately. The next person uses refreshed authoritative revisions, including
+people on the same ad. One failure does not discard earlier successes. At most
+500 people/one hour per click; another explicit click skips already dated rows.
+Reload never starts work. Failed/unconfirmed people remain eligible for a later
+explicit check or the manual confirmation form. An already-started atomic save
+can finish while Stop prevents the next person. No AI credit or new HR search.
+
+Unlocked contacts: company, Country (scan) and Apollo status intersect with the
+existing text search; Excel uses the same filters. Country remains the selected
+scan country, not a verified employer/person country. Each row offers Verify
+email using the existing first-party Deep check. It does not unlock/re-enrich,
+send mail or change an Apollo result. Its assessment stays in the current page
+across filters/paging; a browser reload clears it. SMTP evidence and Apollo's
+status are separate, and catch-all/timeout uncertainty remains explicit.
+
+JobAdder creation outlines the next required button or missing field in red.
+Previous-result checks bind the original protected account/email/company even
+when new-review name/assignment/company fields are edited. A documented409
+rejection is definite rejection, not proof that the POST outcome is unknown.
+
+The owner explicitly approved manual not-created recovery. First Check previous
+result must return no contacts for the exact email. Its ten-minute opaque proof
+is hashed in the same protected operation; it is bound to that account/email
+and replaced by a fresh check. The user must confirm checking JobAdder and
+choose Review a new request. The server repeats the duplicate read, rejects new
+matches or stale proofs, and archives the original protected attempt. A fresh
+Review and separate Create are then required, with the usual final duplicate
+check. A late-created record can still cause a duplicate, so this consequence
+is shown beside the confirmation. Recovery itself never sends a contact POST.
+Five recoveries maximum; prior history is never silently evicted. Unconfirmed
+requests are never automatically reset/replayed. No duplicate override or owner
+record was used to test this workflow; native QA uses isolated fictional state.

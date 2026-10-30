@@ -54,6 +54,12 @@ class JobAdderContactService:
             for key, entry in data["operations"].items():
                 if not re.fullmatch(r"[a-f0-9]{64}", key) or not isinstance(entry, dict) or entry.get("state") not in {"review", "pending", "unconfirmed", "rejected", "created", "exists"} or type(entry.get("company_id")) is not int or entry["company_id"] <= 0:
                     raise ValueError()
+                history=entry.get("attempts",[])
+                if (not isinstance(history,list) or len(history)>5 or any(not isinstance(old,dict) or old.get("state") not in {"pending","unconfirmed"} or type(old.get("company_id")) is not int or old["company_id"]<=0 for old in history)):
+                    raise ValueError()
+                recovery=entry.get("recovery")
+                if recovery is not None and (not isinstance(recovery,dict) or not re.fullmatch(r"[a-f0-9]{64}",str(recovery.get("proof",""))) or type(recovery.get("expires")) not in {int,float} or not 0<recovery["expires"]<1e12):
+                    raise ValueError()
                 if "assignments" in entry:
                     if not isinstance(entry["assignments"],dict):raise ValueError()
                     self._assignments(entry["assignments"])
@@ -159,7 +165,7 @@ class JobAdderContactService:
             if not token or not info.get("connected") or not scope:
                 raise JobAdderContactError("Connect JobAdder in Settings first.", "JOBADDER_CONTACT_AUTH", 401)
             action = body.get("action")
-            if action not in {"companies", "review", "create", "check"}:
+            if action not in {"companies", "review", "create", "check", "resolve_not_created"}:
                 raise JobAdderContactError("Choose a supported contact action.")
             if action == "companies":
                 query = self._text(body.get("query"), "company name", 200, True)
@@ -185,10 +191,51 @@ class JobAdderContactService:
             if body.get("account") != scope:
                 raise JobAdderContactError("The JobAdder account changed. Search for the company again.", "JOBADDER_CONTACT_ACCOUNT", 409)
             source = self.contact(body.get("contact_key"))
-            company_id = self._id(body.get("company_id"))
             email = self._text(source.get("email"), "email address", 100, True)
             if not _JOBADDER_EMAIL_RE.fullmatch(email):
                 raise JobAdderContactError("Check the unlocked email address.")
+            # A different company choice must not bypass an unresolved email
+            # write. The selected company stays in the review fingerprint and
+            # protected marker, and recovery checks the original POST company.
+            key = hashlib.sha256(json.dumps([scope,email.lower()]).encode()).hexdigest()
+            store = self._store()
+            previous = store["operations"].get(key)
+            if previous and previous["state"] in {"created","exists"}:
+                return {"state":previous["state"],"contact_id":previous.get("contact_id"),"message":"This contact is already in JobAdder."}
+            if previous and previous["state"] in {"pending","unconfirmed"}:
+                matches = self._duplicates(email,token)
+                exact = [row for row in matches if row["company_id"]==previous["company_id"]]
+                if len(exact)==1:
+                    exact=exact[0]
+                    previous.pop("recovery",None)
+                    previous.update(state="created",contact_id=exact["contact_id"])
+                    if "assignments" in previous:
+                        store["assignment_defaults"]={"account":scope,**previous.pop("assignments")}
+                    self._write(store)
+                    return {"state":"created",**exact,"message":"Contact confirmed in JobAdder. No request was repeated."}
+                if action=="resolve_not_created":
+                    recovery=previous.get("recovery") or {}
+                    if matches or body.get("confirmed_not_created") is not True or recovery.get("expires",0)<=self.clock() or not secrets.compare_digest(recovery.get("proof",""),hashlib.sha256(str(body.get("recovery_token","")).encode()).hexdigest()):
+                        raise JobAdderContactError("Check the previous result again and confirm in JobAdder that no contact was created. No request was repeated.","JOBADDER_CONTACT_RECOVERY",409)
+                    attempts=previous.get("attempts",[])
+                    if len(attempts)>=5:
+                        raise JobAdderContactError("This contact reached its manual recovery limit. Check it in JobAdder; earlier attempts were kept.","JOBADDER_CONTACT_LIMIT",409)
+                    archived={k:v for k,v in previous.items() if k not in {"attempts","recovery"}}
+                    archived["confirmed_not_created_at"]=self.clock()
+                    store["operations"][key]={"state":"rejected","reason":"user_confirmed_not_created","company_id":previous["company_id"],"attempts":[*attempts,archived]}
+                    self._write(store)
+                    return {"state":"not_started","message":"The previous attempt was kept. Review the details, then explicitly create a new request."}
+                result={"state":"unconfirmed","message":"A matching email exists in JobAdder, but the previous company could not be confirmed. Check the existing record; no request was repeated.","matches":matches} if matches else {"state":"unconfirmed","message":"No matching contact was found. Check JobAdder before confirming that the previous request was not created."}
+                if action=="check" and not matches:
+                    nonce=secrets.token_hex(32)
+                    previous["recovery"]={"proof":hashlib.sha256(nonce.encode()).hexdigest(),"expires":self.clock()+600}
+                    self._write(store);result["recovery_token"]=nonce
+                return result
+            if action=="resolve_not_created":
+                raise JobAdderContactError("Check the previous result before confirming a new request.","JOBADDER_CONTACT_RECOVERY",409)
+            if action == "check":
+                return {"state":"not_started","message":"No previous create request exists. Review the details first."}
+            company_id = self._id(body.get("company_id"))
             first = self._text(body.get("first_name", ""), "first name", 50)
             last = self._text(body.get("last_name", ""), "last name", 50)
             if not first and not last:
@@ -203,26 +250,6 @@ class JobAdderContactService:
                 payload["social"] = {"linkedin":profile}
             encoded = json.dumps(payload,sort_keys=True,separators=(",",":")).encode()
             fingerprint = hashlib.sha256(encoded).hexdigest()
-            # A different company choice must not bypass an unresolved email
-            # write. The selected company stays in the review fingerprint and
-            # protected marker, and recovery checks the original POST company.
-            key = hashlib.sha256(json.dumps([scope,email.lower()]).encode()).hexdigest()
-            store = self._store()
-            previous = store["operations"].get(key)
-            if previous and previous["state"] in {"created","exists"}:
-                return {"state":previous["state"],"contact_id":previous.get("contact_id"),"message":"This contact is already in JobAdder."}
-            if previous and previous["state"] in {"pending","unconfirmed"}:
-                matches = self._duplicates(email,token)
-                exact = next((row for row in matches if row["company_id"]==previous["company_id"]),None)
-                if exact:
-                    previous.update(state="created",contact_id=exact["contact_id"])
-                    if "assignments" in previous:
-                        store["assignment_defaults"]={"account":scope,**previous.pop("assignments")}
-                    self._write(store)
-                    return {"state":"created",**exact,"message":"Contact confirmed in JobAdder. No request was repeated."}
-                return {"state":"unconfirmed","message":"JobAdder has not confirmed the previous create request. Check JobAdder; this request will not be repeated."}
-            if action == "check":
-                return {"state":"not_started","message":"No previous create request exists. Review the details first."}
             if action == "review":
                 self._validate_users(token,owner,recruiters)
                 _, company = self._request("companies/"+str(company_id),token)
@@ -235,6 +262,8 @@ class JobAdderContactService:
                     raise JobAdderContactError("Local contact-create history is full. No contact was created.", "JOBADDER_CONTACT_LIMIT", 409)
                 nonce = secrets.token_hex(32)
                 store["operations"][key] = {"state":"review","company_id":company_id,"payload":fingerprint,"proof":hashlib.sha256(nonce.encode()).hexdigest(),"expires":self.clock()+600}
+                if previous and previous.get("attempts"):
+                    store["operations"][key]["attempts"]=previous["attempts"]
                 self._write(store)
                 return {"state":"review","review_token":nonce,"company":str(company["name"])[:200],"message":"Review these details, then choose Create contact."}
             if body.get("confirmed") is not True or not previous or previous["state"] != "review" or previous.get("payload") != fingerprint or previous.get("expires",0) <= self.clock() or not secrets.compare_digest(previous.get("proof", ""),hashlib.sha256(str(body.get("review_token", "")).encode()).hexdigest()):
@@ -260,7 +289,8 @@ class JobAdderContactService:
                     previous.update(state="unconfirmed")
             except urllib.error.HTTPError as exc:
                 status=exc.code;exc.close()
-                previous.update(state="rejected" if status in {400,401,403,422} else "unconfirmed")
+                previous.update(state="rejected" if status in {400,401,403,409,422} else "unconfirmed")
+                if status==409:previous["reason"]="duplicate_rejected"
             except Exception:
                 previous.update(state="unconfirmed")
             if previous["state"]=="created" and "assignments" in previous:
@@ -270,7 +300,7 @@ class JobAdderContactService:
             state=previous["state"]
             return {"state":state,"contact_id":previous.get("contact_id"),"message":{
                 "created":"Contact created in JobAdder.",
-                "rejected":"JobAdder rejected the details or permissions. Check the required contact fields and connection before reviewing again.",
+                "rejected":"JobAdder rejected this request because the email already exists. Search for that email in JobAdder; no duplicate override was used." if previous.get("reason")=="duplicate_rejected" else "JobAdder rejected the details or permissions. Check the required contact fields and connection before reviewing again.",
                 "unconfirmed":"JobAdder did not confirm the result. Check the previous request; it will not be repeated."}[state]}
         finally:
             self.lock.release()

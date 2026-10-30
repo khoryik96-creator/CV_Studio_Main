@@ -1,0 +1,54 @@
+/* Actual app + isolated fictional server. Never run against an owner server. */
+const assert=require('assert/strict'),path=require('path'),fs=require('fs');
+const {chromium}=require(process.env.CVSTUDIO_PLAYWRIGHT || 'playwright');
+const evidence=path.resolve(__dirname,'../../runtime/job-leads525-native');fs.mkdirSync(evidence,{recursive:true});
+(async()=>{const browser=await chromium.launch({headless:true,...(process.env.CVSTUDIO_CHROMIUM?{executablePath:process.env.CVSTUDIO_CHROMIUM}:{})});try{
+ const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[],requests=[],httpErrors=[];
+ page.on('response',r=>{if(r.status()>=400)httpErrors.push([new URL(r.url()).pathname,r.status()]);});
+ page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.method()==='POST')requests.push({url:new URL(r.url()).pathname,data:r.postDataJSON()});});
+ await page.route('**/*',route=>new URL(route.request().url()).origin==='http://127.0.0.1:5097'?route.continue():route.abort());
+ assert.equal((await (await page.request.get('http://127.0.0.1:5097/__job_leads525_fixture__')).json()).fictional_job_leads_fixture,true);
+ await page.addInitScript(()=>{window.fixtureDateReads=[];window.fixtureHoldDate=false;window.fixturePendingDate=null;window.addEventListener('message',e=>{
+  const d=e.data;if(d?.type!=='CVSTUDIO_LINKEDIN_REQUEST')return;
+  let result,error;
+  if(d.action==='jobStatus')result={connected:true,hr_date_check_revision:1,hr_experience_page_revision:1,hr_employment_shapes_revision:1};
+  else if(d.action==='hrDate'){window.fixtureDateReads.push(d.args.url);if(window.fixtureHoldDate){window.fixturePendingDate=d;return;}if(d.args.url.endsWith('queue-3'))error='Fictional employer link is unavailable.';else result={url:d.args.url,joined:'2020-06',left:'',current:true};}
+  else if(d.action==='jobReadCancel'){const held=window.fixturePendingDate;if(held){window.fixturePendingDate=null;window.postMessage({type:'CVSTUDIO_LINKEDIN_RESPONSE',channel:held.channel,id:held.id,error:'Stopped in fictional fixture.'},location.origin);}result=true;}else return;
+  window.postMessage({type:'CVSTUDIO_LINKEDIN_RESPONSE',channel:d.channel,id:d.id,...(error?{error}:{result})},location.origin);
+ });});
+ await page.goto('http://127.0.0.1:5097/?module=jobleads');await page.locator('#peopleHRTab').click();await page.locator('#peopleHRRows tr').first().waitFor();
+ assert.equal(await page.locator('#peopleHRRows tr').count(),5);await page.locator('#peopleHRDateAll').click();
+ await page.locator('#peopleHRDateProgress').filter({hasText:'2 updated'}).waitFor();assert.match(await page.locator('#peopleHRDateProgress').textContent(),/1 not confirmed/);
+ assert.equal(requests.filter(r=>r.data?.action==='employment').length,2,'shared-ad revisions must refresh between people');
+ await page.locator('#peopleHRDateAll').click();await page.locator('#peopleHRDateProgress').filter({hasText:'0 updated'}).waitFor();
+ assert.equal((await page.evaluate(()=>window.fixtureDateReads)).filter(x=>!x.endsWith('queue-3')).length,2,'already successful people are skipped on explicit restart');
+ await page.evaluate(()=>window.fixtureHoldDate=true);await page.locator('#peopleHRDateAll').click();await page.waitForFunction(()=>!!window.fixturePendingDate);await page.locator('#peopleHRDateStop').click();await page.locator('#peopleHRDateProgress').filter({hasText:'Stopped'}).waitFor();assert.equal(requests.filter(r=>r.data?.action==='employment').length,2,'Stop must not save a late response or start another person');await page.evaluate(()=>window.fixtureHoldDate=false);
+ const failed=page.locator('#peopleHRRows tr').filter({hasText:'Fictional Queue Person 3'});await failed.getByRole('button',{name:'Check employment',exact:true}).click();
+ await failed.getByText('Set dates from LinkedIn',{exact:true}).waitFor();await failed.getByText('Set dates from LinkedIn',{exact:true}).click();
+ await failed.getByRole('button',{name:'Save confirmed dates',exact:true}).click();assert.equal(requests.filter(r=>r.data?.action==='employment').length,2,'manual fallback requires dates and explicit confirmation');
+ await failed.getByLabel('Employment start month and year',{exact:true}).fill('2021-05');await failed.getByRole('button',{name:'Save confirmed dates',exact:true}).click();assert.equal(requests.filter(r=>r.data?.action==='employment').length,2,'a month alone cannot confirm an unlinked employer');await failed.getByLabel('I confirmed these dates and the employer: Example Company',{exact:true}).check();
+ await page.screenshot({path:path.join(evidence,'manual525.jpg'),fullPage:true});await failed.getByRole('button',{name:'Save confirmed dates',exact:true}).click();await failed.getByText('Dates confirmed by you',{exact:true}).waitFor();assert(requests.find(r=>r.data?.user_confirmed===true));
+ await page.screenshot({path:path.join(evidence,'hr525.jpg'),fullPage:true});
+ await page.locator('#jobLeadsApolloContactsTab').click();await page.locator('#jobLeadsApolloContactsRows tr').first().waitFor();
+ assert.equal(requests.filter(r=>r.url==='/email-verifier').length,0);
+ await page.locator('#jobLeadsApolloContactsCompany').selectOption('123');await page.locator('#jobLeadsApolloContactsCountry').selectOption('Malaysia');await page.locator('#jobLeadsApolloContactsStatus').selectOption('verified');
+ assert.equal(await page.locator('#jobLeadsApolloContactsRows tr').count(),1);
+ const download=page.waitForEvent('download');await page.locator('#jobLeadsApolloContactsExport').click();await (await download).saveAs(path.join(evidence,'filtered525.xlsx'));
+ await page.locator('#jobLeadsApolloContactsRows').getByRole('button',{name:'Verify email',exact:true}).click();await page.locator('#jobLeadsApolloContactsRows').getByText('Use caution',{exact:true}).waitFor();
+ assert.equal(requests.filter(r=>r.url==='/email-verifier').length,1);await page.locator('#jobLeadsApolloContactsCountry').selectOption('');await page.locator('#jobLeadsApolloContactsCountry').selectOption('Malaysia');assert(await page.locator('#jobLeadsApolloContactsRows').getByText('Use caution',{exact:true}).isVisible());
+ await page.screenshot({path:path.join(evidence,'contacts525.jpg'),fullPage:true});
+ await page.locator('#jobLeadsApolloContactsRows').getByRole('button',{name:'Create in JobAdder',exact:true}).click();
+ assert.equal(await page.locator('#jobLeadsJASearch').getAttribute('data-guide'),'true');await page.locator('#jobLeadsJAReview').click();assert.equal(await page.locator('#jobLeadsJASearch').getAttribute('aria-invalid'),'true');
+ await page.locator('#jobLeadsJASearch').click();await page.locator('#jobLeadsJACompany option[value="12"]').waitFor({state:'attached'});await page.locator('#jobLeadsJACompany').selectOption('12');
+ await page.locator('#jobLeadsJAFirst').fill('');await page.locator('#jobLeadsJALast').fill('');await page.locator('#jobLeadsJAReview').click();assert.equal(await page.locator('#jobLeadsJAFirst').getAttribute('aria-invalid'),'true');
+ await page.screenshot({path:path.join(evidence,'jobadder525.jpg'),fullPage:true});
+ await page.locator('#jobLeadsJAFirst').fill('Fictional');await page.locator('#jobLeadsJALast').fill('Contact');await page.locator('#jobLeadsJAReview').click();await page.locator('#jobLeadsJACreate').waitFor();
+ assert.equal(await page.locator('#jobLeadsJACreate').getAttribute('data-guide'),'true');await page.locator('#jobLeadsJACreate').click();await page.locator('#jobLeadsJACheck').waitFor();await page.locator('#jobLeadsJACheck').click();await page.locator('#jobLeadsJARecoveryPanel').waitFor();
+ await page.locator('#jobLeadsJARecovery').click();assert.equal(await page.locator('#jobLeadsJARecoveryConfirm').getAttribute('aria-invalid'),'true');
+ await page.locator('#jobLeadsJARecoveryConfirm').check();assert.equal(await page.locator('#jobLeadsJARecovery').getAttribute('data-guide'),'true');assert.equal(await page.locator('#jobLeadsJARecoveryConfirm').getAttribute('aria-invalid'),'false');await page.screenshot({path:path.join(evidence,'recovery525.jpg'),fullPage:true});await page.locator('#jobLeadsJARecovery').click();
+ await page.locator('#jobLeadsJAReview').click();await page.locator('#jobLeadsJACreate').waitFor();await page.locator('#jobLeadsJACreate').click();await page.locator('#jobLeadsJAOpen').waitFor();await page.locator('#jobLeadsJAClose').click();
+ assert.equal(requests.filter(r=>r.data?.action==='reveal').length,0,'these features cannot initiate Apollo credit use');
+ await page.setViewportSize({width:390,height:844});await page.screenshot({path:path.join(evidence,'mobile525.jpg'),fullPage:true});
+ assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'contacts should scroll inside the table');assert.deepEqual(errors,[]);assert.deepEqual(httpErrors,[],'normal refreshes must not produce busy/failure HTTP errors');
+ console.log('Native525 actual app: bulk missing-date saves/shared revision/retry skip, explicitly confirmed manual fallback, contact filters/Excel/explicit verifier state, JobAdder guide and isolated fake create, mobile/no Apollo spend passed.');
+}finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1});

@@ -4,13 +4,13 @@
  */
 const fs=require('fs'),path=require('path'),assert=require('assert/strict');
 const {chromium}=require(process.env.CVSTUDIO_PLAYWRIGHT || 'playwright');
-const reader=fs.readFileSync(path.join(__dirname,'../../vendor/linkedin-companion/reader.js'),'utf8');
+const reader=fs.readFileSync(process.env.CVSTUDIO_HR_READER || path.join(__dirname,'../../vendor/linkedin-companion/reader.js'),'utf8');
 const profile='https://www.linkedin.com/in/sample';
 const company='https://www.linkedin.com/company/example/';
 const role=(lines,id='123')=>'<a href="https://www.linkedin.com/company/'+id+'/"><p>'+lines.join('</p><p>')+'</p></a>';
 const card=content=>'<div componentkey="entity-collection-item-fictional">'+content+'</div>';
 (async()=>{
-  const browser=await chromium.launch({headless:true});
+  const browser=await chromium.launch({headless:true,...(process.env.CVSTUDIO_CHROMIUM?{executablePath:process.env.CVSTUDIO_CHROMIUM}:{})});
   try {
     const context=await browser.newContext();
     await context.route('**/*',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><main><section><div><h2 componentkey="ProfileNullStateCardAnchor_Experience">Experience</h2></div><div id="roles"></div></section></main>'}));
@@ -31,6 +31,16 @@ const card=content=>'<div componentkey="entity-collection-item-fictional">'+cont
     assert((await read()).loading,'other employer cards may hydrate before the requested company');
     await show(card(role(['HR Partner','Example','Oct 2026 - Present'])+'<button>Show all 5 experiences</button>'));
     assert.equal((await read()).joined,'','collapsed groups remain unknown');
+    await show(card(role(['Example Company'])+'<ul><li>'+role(['New HR role','Dec 2025 - Present'])+'</li><li>'+role(['Earlier HR role','Feb 2009 - Present'])+'</li></ul>'));
+    assert.deepEqual(await read(),{joined:'2009-02',left:'',current:true},'overlapping current roles prove a continuous company range');
+    await show(card(role(['Example Company'])+'<ul><li>'+role(['New HR role','Jun 2026 - Present'])+'</li><li>'+role(['Earlier HR role','Nov 2021 - Jun 2026'])+'</li><li>'+role(['Secondment','May 2025 - Aug 2025'])+'</li></ul>'));
+    assert.deepEqual(await read(),{joined:'2021-11',left:'',current:true},'a contained secondment cannot hide a longer bridging role');
+    await show(card('<div><a href="https://www.linkedin.com/company/123/">Example</a><div><p>HR Partner</p><p>May 2010 - Present · 16 yrs</p><p>Malaysia</p></div></div>'));
+    assert((await read()).loading,'unrecognized sibling paragraphs require company/date confirmation rather than borrowing dates');
+    await show(card('<div><a href="https://www.linkedin.com/company/123/">Example</a><div><p>HR Partner</p><p>Malaysia</p></div></div><div><p>Jan 1990 - Present</p></div>'));
+    assert((await read()).loading,'free-form description dates cannot supply role metadata');
+    await show(card('<div><figure></figure><div><div><p>HR Partner</p><p>Example Company · Full-time</p><p>Oct 2026 - Present</p></div></div></div>'));
+    assert(!(await read()).joined,'an unlinked employer cannot be silently assigned to the selected company');
     await page.close();await context.close();
     console.log('Native HR employment: delayed modern metadata, current/former month-year ranges, grouped promotions, exact company and collapsed evidence passed');
   } finally { await browser.close(); }

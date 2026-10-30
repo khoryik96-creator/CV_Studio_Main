@@ -24,6 +24,13 @@ const {pathToFileURL}=require('url');
  for(const domain of ['proton.me','protonmail.com','protonmail.ch','pm.me'])
   assert.equal(read({email:'person@'+domain}).reason,'personal_email_only','actual Proton Mail domains stay excluded');
  assert.equal(read({email:'person@PROTON.COM'}).state,'found');
+ for(const brand of ['gmail','googlemail','yahoo','hotmail','outlook','live','aol','icloud','mail','gmx']) {
+  assert.equal(read({email:'person@'+brand+'.example'}).state,'found','a provider-like corporate brand must not be excluded');
+  assert.equal(read({email:'person@'+brand+'.com'}).reason,'personal_email_only');
+ }
+ assert.equal(read({email:'person@company-outlook.com'}).state,'found');
+ assert.equal(read({email:'person@outlook.com.example'}).state,'found');
+
  assert.equal(read({contact:{...contact,email:'person@gmail.com'}}).reason,'personal_email_only');
  assert.equal(read({contact:{...contact,email:'bad address'}}).reason,'email_unusable');
  assert.equal(read({}).reason,'email_not_returned');

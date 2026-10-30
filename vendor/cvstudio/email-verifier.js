@@ -234,7 +234,7 @@
   window.addEventListener?.('pageshow',()=>{leaving=false;});
   window.cvStudioEmailVerifier={
     forCard:card=>cards.get(card),
-    decorate(card,person) {
+    decorate(card,person,options={}) {
       const wrap=textNode('div','','job-leads-email-check'), label=textNode('label','Email to verify'), input=document.createElement('input');
       input.type='email';input.autocomplete='off';input.setAttribute?.('aria-label','Email to verify for '+person.name);
       label.appendChild(input);
@@ -261,7 +261,10 @@
         if(!input.value || input.value===proposed) {input.value=email;++generation;recheckToken='';result.replaceChildren();}
         proposed=email;
       }};
+      if(options.readOnly)input.readOnly=true;
+      if(options.compact){label.hidden=true;wrap.className+=' job-leads-email-compact';}
       cards.set(card,controller);wrap.append(label,button,result);card.appendChild(wrap);
+      if(options.email)controller.suggest(options.email);
       return controller;
     }
   };
