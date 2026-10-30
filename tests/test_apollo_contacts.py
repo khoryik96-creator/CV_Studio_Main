@@ -212,3 +212,44 @@ def test_new_archive_uses_protected_files_and_detects_tampering(tmp_path):
         path.write_bytes(b'broken secure archive')
         with pytest.raises(ValueError,match='read securely'):
             app._cv_secure_load('apollo_contacts')
+
+
+def test_contact_filters_intersect_and_export_only_the_matching_rows():
+    service,broker,vault,contacts,archive=setup()
+    for company,country,status,name in [('123','Malaysia','verified','Alpha'),('123','Singapore','unverified','Beta'),('456','Malaysia','verified','Gamma')]:
+        row=copy.deepcopy(ROW);row['hr']['company_id']=company;row['hr']['country']=country
+        person={**PERSON,'name':name,'url':'https://www.linkedin.com/in/'+name.lower()}
+        contacts.remember([(row,person,{'state':'found','email':name.lower()+'@example.test','email_status':status})])
+    before=len(broker.calls)
+    rows=contacts.list(filters={'company':'123','country':'Malaysia','email_status':'verified'})
+    assert [r['name'] for r in rows]==['Alpha']
+    book=load_workbook(BytesIO(export_contacts(rows)))
+    assert book.active.max_row==2 and book.active.cell(2,1).value=='Alpha'
+    assert contacts.list('Gamma',filters={'company':'123'})==[]
+    assert len(broker.calls)==before,'filters and export never unlock or call a provider'
+
+
+@pytest.mark.parametrize('filters',[[],{'unknown':'x'},{'country':['Malaysia']},{'country':'x'*101},{'country':'bad\x00text'},{'company':'not-a-company-id'},{'email_status':'invented'}])
+def test_contact_filters_reject_unsupported_values(filters):
+    _,_,_,contacts,_=setup()
+    with pytest.raises(ApolloError):contacts.list(filters=filters)
+
+
+def test_local_dashboard_refresh_waits_for_an_overlapping_read_without_provider_work():
+    import threading
+    service,broker,vault,contacts,archive=setup();before=len(broker.calls)
+    service.rows=lambda:[]
+    started=threading.Event();finished=threading.Event();results=[]
+    service.lock.acquire()
+    def read():
+        started.set()
+        try:results.append(service.perform('hr_people'))
+        finally:finished.set()
+    worker=threading.Thread(target=read);worker.start();assert started.wait(2)
+    try:
+        assert not finished.wait(0.03),'local refresh waits instead of producing a normal UI busy error'
+        with pytest.raises(ApolloError) as error:service.perform('reveal',row=ROW,url=PERSON['url'],confirmed=True)
+        assert error.value.code=='APOLLO_BUSY','a paid operation still fails immediately rather than queuing'
+    finally:service.lock.release()
+    assert finished.wait(3);worker.join()
+    assert results and len(broker.calls)==before

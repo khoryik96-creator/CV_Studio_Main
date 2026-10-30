@@ -209,3 +209,20 @@ request-time expiry guards still apply. Wrangler authentication was held in the
 Windows credential store and signed out after deployment. See the524 QA report
 for exact deployed version and validation bounds. Git publication/merge is a
 separate step and has not been performed for523/524.
+
+## Exact domain exclusions (v24.6.525 source)
+
+The remaining provider-brand wildcards (for example mail.*, live.* and
+outlook.*) are replaced with an exact list of public mailbox domains. A company
+using a different domain with the same prefix is not silently excluded. Known
+personal-mail domains remain filtered under the existing business-email policy.
+This policy is not a mailbox-validity test or an exhaustive public-domain list;
+normal matched-person/company and email-shape checks still apply. Lead Finder's
+separate exact-domain/subdomain-boundary policy is unchanged.
+
+Reference examples: [Microsoft account domains](https://support.microsoft.com/en-us/outlook/pop-imap-and-smtp-settings-for-outlook-com),
+[Yahoo domain extensions](https://help.yahoo.com/kb/account/identify-domain-extension-yahoo-mail-sln36743.html).
+The hosted service is still the524 version until this source is separately
+deployed; the corporate Proton-domain correction is already live. This work
+performs no new provider lookup or deployment. A repository merge alone does
+not update the service or replace older cached negative outcomes.

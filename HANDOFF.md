@@ -7,7 +7,45 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current source checkpoint: v24.6.524 Apollo business-domain correction**
+**Current local checkpoint: v24.6.525 Job Leads corrections (not published/merged)**
+on `codex/v24.6.525-job-leads-corrections`, from merged524 `0161728` / PR268.
+Owner requests failed employment reads, all-missing checks, unlocked-contact
+filters/verifier, guided JobAdder creation/recovery and an email-domain audit.
+Read-only inspection of the four supplied profiles shows multiple Present roles
+and a contained secondment within exact linked company groups; one current role
+has no company link at all. Grouped overlapping Present roles now use their
+continuous earliest start; ended roles are processed by end coverage so a shorter
+secondment cannot hide a bridging role. Unlinked or unrecognized metadata is
+not guessed. Failed single checks offer explicit month/year entry plus employer/
+date confirmation, persisted with user-confirmation provenance and backup support.
+New companion capability gates this reader change; update app AND companion.
+HR people has Check missing dates for the current filters, a foreground bounded
+queue with progress/Stop, per-person saves and fresh revisions between people
+sharing an ad. A subsequent click skips already dated people. No automatic resume.
+Unlocked contacts gains intersecting company, scan-country and Apollo-status
+filters with matching Excel, plus explicit first-party email checks per contact.
+Probe results stay in page memory across filter/page redraws; no credit call.
+Country remains the scan filter, never an inferred company country. Normal local
+Apollo reads serialize briefly instead of racing dashboard refreshes into409;
+paid/account changes retain the immediate busy/non-replay gate.
+JobAdder buttons/fields guide the next step with red outlines. Checking previous
+results no longer depends on edited new-review fields. Documented409 duplicate
+rejections are definitive instead of becoming ambiguous writes. Owner separately
+approved manual recovery: a short-lived account/email-bound challenge, another
+safe duplicate read and explicit checked-not-created confirmation preserve the
+old protected attempt before allowing a fresh Review/Create. Five recoveries
+maximum, no automatic replay, no duplicate override and no owner marker reset.
+The email-domain audit replaces remaining Apollo brand-prefix wildcards with
+exact listed public mailbox domains. Other domain-prefix lookalikes remain
+eligible for normal matched-person/company validation; this is not mailbox
+validity. Hosted broker remains524 until a separately authorized update.
+One real read-only JobAdder email lookup confirmed zero matches. No real names,
+emails, profile IDs, credentials or provider bodies are retained in source/QA.
+No live contact creation, new paid lookup, installation update or hosted deploy.
+Final gates and evidence are in525 QA. The isolated fictional preview on5097
+contains no copied owner credentials, contacts or ad records. HeldPR257 excluded.
+
+**Previous merged source checkpoint: v24.6.524 Apollo business-domain correction**
 on `codex/v24.6.524-apollo-business-domain`, stacked on local523 `696da66`
 from merged522 `deccf7f` / PR267. The owner approved hosted deployment and one
 new lookup, then separately approved one additional lookup after the first

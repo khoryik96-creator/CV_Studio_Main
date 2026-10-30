@@ -47,7 +47,7 @@ CANDIDATE_FIELDS = {'name':'Name', 'title':'Headline / title', 'location':'Locat
     'brief':'Search brief', 'saved_at':'Last assessed (UTC)'}
 HR_FIELDS = {'name':'Name','title':'Position','company':'Company','location':'Observed location',
     'country':'Country (scan filter)','employment':'Employment','url':'LinkedIn URL',
-    'matched':'Matched HR keywords','job_url':'Source ad','scanned_at':'Last scan (UTC)'}
+    'matched':'Matched HR keywords','job_url':'Source ad','scanned_at':'Last scan (UTC)','employment_confirmation':'Date confirmation'}
 
 
 def _filter(rows, query, selected, field, fields):
@@ -165,11 +165,11 @@ def hr_people(rows, cached=None):
         stamp=person.get('employment_checked_at') or hr.get('scanned_at')
         return datetime.fromisoformat(stamp.replace('Z','+00:00')).astimezone(timezone.utc) if stamp else datetime.min.replace(tzinfo=timezone.utc)
     def merge_employment(target,person,row):
-        for name in ('joined','left','current','employment_status','employment_checked_at'):
+        for name in ('joined','left','current','employment_status','employment_checked_at','employment_confirmed_by_user'):
             target.pop(name,None)
             if name in person:
                 target[name]=person[name]
-        target.update(employment=employment_label(person),employment_id=row['id'],
+        target.update(employment=employment_label(person),employment_confirmation='User confirmed' if person.get('employment_confirmed_by_user') else 'LinkedIn company link' if person.get('joined') else '',employment_id=row['id'],
                       employment_revision=row['revision'],employment_company_url=row['hr']['company_url'])
     found, employment_times = {}, {}
     for row in sorted(rows, key=lambda r:(r.get('hr') or {}).get('scanned_at',''), reverse=True):

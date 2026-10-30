@@ -305,3 +305,21 @@ def test_contact_links_use_the_connected_jobadder_region_and_confirmed_id(state,
     assert response.status_code==200
     assert ('contact_url' in response.json) is expected
     if expected:assert response.json['contact_url']=='https://au3.jobadder.com/contacts/45'
+
+
+def test_previous_result_check_ignores_new_review_fields_but_keeps_original_identity():
+    service,client,vault,account=setup();proof=review(service);client.fail=TimeoutError()
+    assert call(service,'create',review_token=proof,confirmed=True)['state']=='unconfirmed'
+    client.fail=None;client.matches=[{'contactId':45,'email':SOURCE['email'],'company':{'companyId':12,'name':'Example Company'}}]
+    result=call(service,'check',company_id=0,first_name='',last_name='',owner_user_id='invalid')
+    assert result['state']=='created' and result['contact_id']==45
+    assert post_count(client)==1,'checking cannot repeat a contact POST even after review fields change'
+
+
+def test_documented_duplicate_rejection_is_not_an_ambiguous_write():
+    service,client,vault,account=setup();proof=review(service)
+    client.fail=HTTPError('https://example.test',409,'private upstream response',{},None)
+    result=call(service,'create',review_token=proof,confirmed=True)
+    assert result['state']=='rejected' and 'already exists' in result['message']
+    assert 'private' not in str(result) and post_count(client)==1
+    assert call(service,'check')['state']=='not_started'

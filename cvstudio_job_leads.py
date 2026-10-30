@@ -325,6 +325,9 @@ def clean_hr(raw, company):
             if not isinstance(state,str) or state not in {'observed','not_checked','not_shown'} or (state=='observed')!=bool(entry['joined']):
                 invalid()
             entry['employment_status']=state
+        if 'employment_confirmed_by_user' in person:
+            if type(person['employment_confirmed_by_user']) is not bool or not entry['joined']:invalid()
+            entry['employment_confirmed_by_user']=person['employment_confirmed_by_user']
         if 'employment_checked_at' in person:
             stamp=person['employment_checked_at']
             if not entry['joined'] or not isinstance(stamp,str) or not stamp:
@@ -591,8 +594,10 @@ class JobLeadsStore:
             connection.commit()
             return {"record": result, "duplicate": False}
 
-    def save_hr(self, identity, revision, raw, *, person_url=None, dates=None):
+    def save_hr(self, identity, revision, raw, *, person_url=None, dates=None, user_confirmed=False):
         _selection([{'id':identity, 'revision':revision}])
+        if type(user_confirmed) is not bool:
+            raise JobLeadsError('Confirm the company and visible employment dates.')
         with self._connection() as connection:
             connection.execute('BEGIN IMMEDIATE')
             current = connection.execute('SELECT * FROM leads WHERE id=?', (identity,)).fetchone()
@@ -608,6 +613,8 @@ class JobLeadsStore:
                 if person is None:
                     raise JobLeadsError('This person changed. Refresh HR people before checking employment.',409,'JOB_LEADS_CONFLICT')
                 person.update(dates,employment_status='observed',employment_checked_at=datetime.now(timezone.utc).isoformat(timespec='microseconds').replace('+00:00','Z'))
+                person.pop('employment_confirmed_by_user',None)
+                if user_confirmed:person['employment_confirmed_by_user']=True
                 record['hr'] = clean_hr(record['hr'],record['company'])
             else:
                 record['hr'] = clean_hr(raw, record['company'])

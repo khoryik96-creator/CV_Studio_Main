@@ -715,15 +715,16 @@
         continue;
       }
       const current = unique.filter(r=>r.current);
-      if (current.length > 1) return unknown();
-      const latest=current[0] || unique.reduce((a,b)=>b.end.order>a.end.order?b:a);
+      // Multiple roles marked Present overlap by definition. Within one exact
+      // employer group they establish continuity from the earliest such start.
+      const latest=current.length ? current.reduce((a,b)=>b.start.order<a.start.order?b:a) : unique.reduce((a,b)=>b.end.order>a.end.order?b:a);
       // Year-only end dates cannot order two stints in the same year.
       if (!current.length && unique.some(r=>r!==latest && r.end.year===latest.end.year && (!r.end.month || !latest.end.month))) { ambiguous=true; continue; }
       let first=latest.start;
       // Walk only directly adjacent/overlapping roles in this company group.
       // A gap (or imprecise end date) cannot prove continuity after rejoining.
       let complete=true;
-      for (const role of unique.filter(r=>r!==latest && !r.current).sort((a,b)=>b.start.order-a.start.order)) {
+      for (const role of unique.filter(r=>r!==latest && !r.current).sort((a,b)=>b.end.order-a.end.order)) {
         if (role.start.order < first.order) {
           if (!first.month || !role.end.month || role.end.order < first.order-1) { complete=false; break; }
           first=role.start;

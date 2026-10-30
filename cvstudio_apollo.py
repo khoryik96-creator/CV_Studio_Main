@@ -143,8 +143,12 @@ class ApolloService:
                 for row in rows if row.get("hr")
                 for person in row["hr"]["people"] if self._identity(row, person) in cache])
 
-    def perform(self, action, *, row=None, url="", confirmed=False, query=""):
-        if not self.lock.acquire(blocking=False):
+    def perform(self, action, *, row=None, url="", confirmed=False, query="", filters=None):
+        # Dashboard/card refreshes can overlap while reading protected local
+        # history. Give those reads a short bounded serialization window; paid
+        # and account-changing actions keep the immediate busy/non-replay gate.
+        acquired=self.lock.acquire(timeout=2) if action in {"hr_people","contacts","emails"} else self.lock.acquire(blocking=False)
+        if not acquired:
             raise ApolloError("Finish the current Apollo action first.", "APOLLO_BUSY", 409)
         try:
             data = self._data()
@@ -166,7 +170,7 @@ class ApolloService:
                         # Existing history must still be viewable/exportable if
                         # importing another email hits capacity/ad-store failure.
                         warning = "Some HR-card emails could not be copied to contacts. Saved contacts are shown; check storage and refresh to recover the remaining emails without another credit."
-                return {"contacts":self.contacts.list(query), "contact_warning":warning}
+                return {"contacts":self.contacts.list(query, filters=filters), "contact_warning":warning}
             if action == "connect":
                 if data.get("connection"):
                     raise ApolloError("Disconnect the current Apollo account before changing accounts.")
@@ -356,14 +360,25 @@ class ApolloContacts:
         except Exception:
             raise ApolloError("The email is saved on its HR card, but the contacts dashboard could not save it. Check storage, then refresh contacts; no credit will be spent again.", "APOLLO_CONTACTS_STORAGE", 503) from None
 
-    def list(self, query=""):
+    def list(self, query="", *, filters=None):
+        filters = {} if filters is None else filters
+        limits={"company":24,"country":100,"email_status":32}
+        if (not isinstance(filters,dict) or set(filters)-set(limits) or
+                any(not isinstance(v,str) or len(v)>limits[k] or any(ord(c)<32 for c in v) for k,v in filters.items())):
+            raise ApolloError("Choose valid contact filters.")
+        if filters.get("company") and not re.fullmatch(r"[0-9]{1,24}",filters["company"]):
+            raise ApolloError("Choose a company from the contacts list.")
+        if filters.get("email_status") and filters["email_status"] not in {"verified","unverified","catch_all","unavailable","user_managed","unknown"}:
+            raise ApolloError("Choose an Apollo status from the list.")
         if not isinstance(query, str) or len(query) > 240 or any(ord(c)<32 for c in query):
             raise ApolloError("Use a shorter contacts search.")
         # Match the browser's toLowerCase search so exports contain exactly the
         # same matching rows (casefold would also expand e.g. ß into ss).
         query = query.strip().lower()
         return sorted(({**row,"contact_key":key} for key,row in self._read().items()
-            if not query or query in " ".join(row.values()).lower()), key=lambda row:row["unlocked_at"], reverse=True)
+            if (not query or query in " ".join(row.values()).lower()) and
+                all(not value or row["company_id" if key=="company" else key]==value for key,value in filters.items())),
+            key=lambda row:row["unlocked_at"], reverse=True)
 
     def get(self, key):
         if not isinstance(key,str) or not re.fullmatch(r"[a-f0-9]{64}",key):
