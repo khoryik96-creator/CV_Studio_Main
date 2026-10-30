@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>CV Studio</title>
 <link rel="icon" type="image/png" href="cv_studio_logo.png?v=24.6.79-ui"/>
-<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.525">
-<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.525"></script>
+<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.526">
+<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.526"></script>
 <script>
 /* CV Studio Doctor — built-in diagnostic recorder.
  * Records JS errors, unhandled rejections, failed/slow network calls and
@@ -254,7 +254,7 @@
 <div class="app">
   <div class="header" style="position:relative;">
     <div>
-      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.525 (Offline) by The 郭 Lab</span></h1>
+      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.526 (Offline) by The 郭 Lab</span></h1>
 
     </div>
     <div class="header-tools">
@@ -851,7 +851,7 @@
             <div class="li-sourcer-row"><label for="liSourcerPages">Pages to review <input id="liSourcerPages" type="number" min="1" max="15" value="10"></label><label for="liSourcerCalls">API request limit <input id="liSourcerCalls" type="number" min="1" max="80" value="35"></label></div>
             <p class="li-sourcer-muted">Up to five promising profiles per page. Missing or collapsed details remain unknown.</p>
           </div></details>
-          <details id="liSourcerSetup"><summary>Set up companion / updates</summary>
+          <details id="liSourcerSetup"><summary id="liSourcerSetupGuide">Set up companion / updates</summary>
             <p>Trust CV Studio once using the companion’s toolbar icon. It then reconnects automatically in Chrome or Brave.</p>
             <div class="job-leads-actions"><button type="button" class="sec" onclick="copyLinkedinCompanionFolder(this)">Copy setup folder</button><button type="button" class="sec" onclick="reloadLinkedinCompanion(this)">Apply companion update</button><span data-companion-status role="status" aria-live="polite" style="overflow-wrap:anywhere;user-select:text"></span></div>
             <ol><li>Copy the setup folder above.</li><li>Open your browser’s Extensions page, turn on Developer mode, keep it on, and choose <strong>Load unpacked</strong>. Paste the copied folder path.</li><li>If you previously installed a downloaded copy, remove that old copy first. Refresh CV Studio and LinkedIn. With CV Studio open, click the companion’s toolbar icon once to trust this installation.</li></ol>
@@ -945,7 +945,7 @@
       <div class="card-body job-leads-board">
         <div class="job-leads-search-fields"><div><label for="jobLeadsSearchQuery">Job keywords</label><input id="jobLeadsSearchQuery" maxlength="240"></div><div><label for="jobLeadsSearchLocation">Location</label><input id="jobLeadsSearchLocation" maxlength="160"></div><div><label for="jobLeadsSearchMode">Search from</label><select id="jobLeadsSearchMode"><option value="new">New search</option><option value="open">Open LinkedIn search</option></select></div><div><label for="jobLeadsSearchPages">Pages</label><input id="jobLeadsSearchPages" type="number" min="1" max="15" value="3"></div></div>
         <div id="jobLeadsSearchOpen" hidden><label for="jobLeadsSearchSource">LinkedIn search tab</label><div class="job-leads-actions"><select id="jobLeadsSearchSource"></select><button type="button" class="sec" id="jobLeadsSearchRefresh">Refresh tabs</button></div></div>
-        <div class="job-leads-search-toolbar"><div class="job-leads-actions"><button type="button" class="primary" id="jobLeadsSearchStart">Search LinkedIn</button><button type="button" class="sec" id="jobLeadsSearchStop" disabled hidden>Stop</button><button type="button" class="sec" id="jobLeadsSearchClear" hidden>Clear</button></div><details class="job-leads-setup"><summary>Companion</summary><div class="job-leads-actions"><button type="button" class="sec" onclick="reloadLinkedinCompanion(this)">Apply update</button><button type="button" class="sec" onclick="copyLinkedinCompanionFolder(this)">Copy setup folder</button><span data-companion-status role="status" aria-live="polite"></span></div><p>Use Chrome or Brave. Load the copied folder in Extensions → Developer mode → Load unpacked. Refresh both tabs, then click the companion’s toolbar icon once to connect.</p><p>After updating CV Studio, apply the companion update here.</p><a href="/linkedin-sourcer?action=extension" download>Download ZIP</a></details></div>
+        <div class="job-leads-search-toolbar"><div class="job-leads-actions"><button type="button" class="primary" id="jobLeadsSearchStart">Search LinkedIn</button><button type="button" class="sec" id="jobLeadsSearchStop" disabled hidden>Stop</button><button type="button" class="sec" id="jobLeadsSearchClear" hidden>Clear</button></div><details class="job-leads-setup"><summary id="jobLeadsSearchSetupGuide">Companion</summary><div class="job-leads-actions"><button type="button" class="sec" onclick="reloadLinkedinCompanion(this)">Apply update</button><button type="button" class="sec" onclick="copyLinkedinCompanionFolder(this)">Copy setup folder</button><span data-companion-status role="status" aria-live="polite"></span></div><p>Use Chrome or Brave. Load the copied folder in Extensions → Developer mode → Load unpacked. Refresh both tabs, then click the companion’s toolbar icon once to connect.</p><p>After updating CV Studio, apply the companion update here.</p><a href="/linkedin-sourcer?action=extension" download>Download ZIP</a></details></div>
         <p id="jobLeadsSearchStatus" class="job-leads-search-status" role="status" aria-live="polite"></p>
         <div class="job-leads-discovery-save"><label for="jobLeadsSearchFolder">Save to folder</label><div class="job-leads-actions"><select id="jobLeadsSearchFolder"><option value="">Unfiled</option></select><button type="button" class="sec" id="jobLeadsSearchAdd" disabled hidden>Add selected</button></div></div>
         <div class="job-leads-actions" id="jobLeadsSearchSelection" hidden><label class="job-leads-pick"><input type="checkbox" id="jobLeadsSearchSelectPage" disabled>Select page</label><span id="jobLeadsSearchCount" class="job-leads-muted"></span></div>
@@ -2646,40 +2646,40 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
-<script src="/vendor/cvstudio/api-transport.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/page-nav.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/create-profile.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/company-profile.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/appearance.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/docx-export.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/the-owl.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/linkedin-sourcer-core.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/linkedin-sourcer.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/job-leads-jobadder.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/job-leads-apollo.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/people-dashboards.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/job-leads.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/email-verifier.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/settings.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/tab-status.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/cv-format.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/locks.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/ppc.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/batch-format.js?v=v24.6.525"></script>
+<script src="/vendor/cvstudio/api-transport.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/page-nav.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/create-profile.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/company-profile.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/appearance.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/docx-export.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/the-owl.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/linkedin-sourcer-core.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/linkedin-sourcer.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/job-leads-jobadder.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/job-leads-apollo.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/people-dashboards.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/job-leads.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/email-verifier.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/settings.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/tab-status.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/cv-format.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/locks.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/ppc.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/batch-format.js?v=v24.6.526"></script>
 <script>
 
 document.addEventListener('DOMContentLoaded', initPageNavPin);
@@ -2697,9 +2697,9 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 
 </script>
-<script src="/vendor/cvstudio/input-file.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/stats.js?v=v24.6.525"></script>
-<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.525"></script>
+<script src="/vendor/cvstudio/input-file.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/stats.js?v=v24.6.526"></script>
+<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.526"></script>
 <script>
 try { updateSummaryLockUI(); } catch(e) {}
 try { updateCvScoringLockUI(); } catch(e) {}

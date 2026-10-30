@@ -37,6 +37,41 @@
   } catch {}
   const receivedCaptures = new Map();
   let rows = [], editing = null, busy = false, dirty = false, page = 0, ready = false, lastReadUrl = '', descriptionTruncated = false, descriptionRich = [];
+  const guideNames = [...fields,'AutoFill','Save','SearchQuery','SearchLocation','SearchPages','SearchSource','SearchRefresh','SearchStart','SearchSetupGuide','SearchAdd','PreviewSave','HRStart','HRCountryMode','HRCountry','HRKeywords','HRPages','HRCompanyURL','BulkHRStart','BulkHRCountryMode','BulkHRCountry','BulkHRKeywords','BulkHRPages','SelectPage'];
+  let guideFlow = 'Search', guideTried = false, guideIssue = '';
+  function guide(name = '', invalid = false, focus = false) {
+    for (const key of guideNames) {
+      el(key).setAttribute('data-guide',String(!busy && key === name));
+      el(key).setAttribute('aria-invalid',String(!busy && invalid && key === name));
+    }
+    if (!busy && focus && name) {
+      for (let parent = el(name).parentElement; parent; parent = parent.parentElement) if (parent.tagName === 'DETAILS') parent.open = true;
+      el(name).focus();
+    }
+  }
+  function hrGuide(prefix) {
+    if (!['','specific'].includes(el(prefix+'CountryMode').value)) return prefix+'CountryMode';
+    if (el(prefix+'CountryMode').value && (!el(prefix+'Country').value.trim() || el(prefix+'Country').value.trim().length > 100 || /[\x00-\x1f\x7f]/.test(el(prefix+'Country').value.trim()))) return prefix+'Country';
+    if (!el(prefix+'Keywords').value.split(',').some(word=>word.trim()) || el(prefix+'Keywords').value.length > 600 || /[\x00-\x1f\x7f]/.test(el(prefix+'Keywords').value.trim())) return prefix+'Keywords';
+    const pages=Number(el(prefix+'Pages').value);
+    return !Number.isInteger(pages) || pages < 1 || pages > 15 ? prefix+'Pages' : prefix+'Start';
+  }
+  function nextGuide(focus = false) {
+    let name=guideIssue;
+    if (!name && guideFlow === 'Form') name=fields.find(key=>el(key).validity?.valid === false) || (!jobLink(el('url').value) ? 'url' : lastReadUrl && jobLink(el('url').value) !== lastReadUrl ? 'AutoFill' : !el('company').value.trim() ? 'company' : !el('role').value.trim() ? 'role' : 'Save');
+    if (!name && guideFlow === 'HR') name=el('HR').hidden ? '' : hrGuide('HR');
+    if (!name && guideFlow === 'BulkHR') name=picked.size ? hrGuide('BulkHR') : '';
+    if (!name && guideFlow === 'Search') {
+      const pages=Number(el('SearchPages').value), useOpen=el('SearchMode').value === 'open';
+      name=!useOpen && !el('SearchQuery').value.trim() ? 'SearchQuery' :
+        !Number.isInteger(pages) || pages < 1 || pages > 15 ? 'SearchPages' :
+        useOpen && !el('SearchSource').value ? 'SearchRefresh' : !el('SearchAdd').disabled && !el('SearchAdd').hidden ? 'SearchAdd' :
+        !el('PreviewSave').disabled && !el('PreviewSave').hidden ? 'PreviewSave' : 'SearchStart';
+    }
+    const invalid=guideTried && (fields.includes(name) || ['SearchQuery','SearchLocation','SearchPages','HRCountry','HRKeywords','HRPages','HRCompanyURL','BulkHRCountry','BulkHRKeywords','BulkHRPages'].includes(name));
+    guide(name,invalid,focus);
+  }
+  function chooseGuide(flow) { guideFlow=flow;guideTried=false;guideIssue='';nextGuide(); }
   const status = message => { el('Message').textContent = message; };
   function localDate() {
     const d = new Date();
@@ -129,6 +164,7 @@
     el('Created').hidden=!record?.created_at;
     el('Heading').textContent = editing ? 'Edit lead' : 'Save a job ad';
     el('Save').textContent = editing ? 'Save changes' : 'Save lead';
+    nextGuide();
   }
   function discard() { return !dirty || window.confirm('Discard the unsaved changes in this lead?'); }
   function lock(value) {
@@ -142,6 +178,7 @@
     el('List').querySelectorAll('input').forEach(input => { input.disabled = value; });
     discoveryControls();
     if (!value) { updateClear(); updateSelection(); }
+    nextGuide();
   }
   async function api(body) {
     const response = await fetch('/job-leads', body ? {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body), ...(body.action === 'lookup' ? {timeout:30000} : {})} : {});
@@ -293,20 +330,20 @@
       const actions = node('div', '', 'job-leads-actions');
       const link = node('a', 'Open LinkedIn ad'); link.href = row.url; link.target = '_blank'; link.rel = 'noopener noreferrer';
       const edit = node('button', row.deleted ? 'Restore' : 'Edit / view details', 'sec'); edit.type = 'button'; edit.disabled = busy;
-      edit.addEventListener('click', () => { if (row.deleted) return moveToTrash([row], false); if (!busy && discard()) { fill(row); status('Editing saved lead.'); el('Form').scrollIntoView({block:'start', behavior:'smooth'}); } });
+      edit.addEventListener('click', () => { if (row.deleted) return moveToTrash([row], false); if (!busy && discard()) { fill(row); chooseGuide('Form'); status('Editing saved lead.'); el('Form').scrollIntoView({block:'start', behavior:'smooth'}); } });
       const preview = node('button', 'Preview', 'sec'); preview.type = 'button'; preview.disabled = busy;
       preview.addEventListener('click', () => { if (!busy) selectPreview(row.url, true); });
       actions.append(link, preview, edit); card.appendChild(actions); list.appendChild(card);
       if (!row.deleted) {
         const hr = node('button',row.hr ? `HR people (${row.hr.people.length})` : 'HR people','sec'); hr.type='button'; hr.disabled=busy;
-        hr.addEventListener('click',()=>{ if (!busy) { selectPreview(row.url); el('HR').scrollIntoView({block:'nearest',behavior:'smooth'}); } }); actions.append(hr);
+        hr.addEventListener('click',()=>{ if (!busy) { selectPreview(row.url); chooseGuide('HR'); el('HR').scrollIntoView({block:'nearest',behavior:'smooth'}); } }); actions.append(hr);
       }
       if (!row.deleted) { const remove = node('button', 'Delete', 'sec job-lead-delete'); remove.type = 'button'; remove.disabled = busy; remove.addEventListener('click', () => moveToTrash([row], true)); actions.appendChild(remove); }
       if (!row.deleted) {
         const pick = node('label', '', 'job-lead-select'), checkbox = node('input');
         checkbox.type = 'checkbox'; checkbox.checked = picked.has(row.id); checkbox.disabled = busy;
         checkbox.setAttribute('aria-label', 'Select ' + row.company + ' — ' + row.role);
-        checkbox.addEventListener('change', () => { if (busy) return; if (checkbox.checked) picked.add(row.id); else picked.delete(row.id); updateSelection(); });
+        checkbox.addEventListener('change', () => { if (busy) return; if (checkbox.checked) picked.add(row.id); else picked.delete(row.id); updateSelection(); chooseGuide('BulkHR'); });
         pick.append(checkbox, document.createTextNode('Select')); card.appendChild(pick);
       }
       const details = node('details', '', 'job-lead-ad');
@@ -400,6 +437,7 @@
     el('HRStop').disabled = !hrRunning || hrStopped;
     bulkHRControls();
     el('SearchPagination').hidden = discovered.length <= 20;
+    nextGuide();
   }
   function drawPreview() {
     const row = previewRow(), saved = row && row === savedJob(row.url);
@@ -533,7 +571,8 @@
   async function startHR() {
     const row = savedJob(previewUrl);
     if (busy || !row || row.deleted) return;
-    let settings;try { settings=hrSettings('HR'); } catch(error) { el('HRMessage').textContent=error.message;return; }
+    chooseGuide('HR');guideTried=true;
+    let settings;try { settings=hrSettings('HR'); } catch(error) { el('HRMessage').textContent=error.message;nextGuide(true);return; }
     rememberHRPreferences();
     const activity=beginScanActivity();let outcome;
     hrStopped=false; hrRunning=true; hrRun=''; lock(true);
@@ -720,12 +759,13 @@
   async function startBulkHR() {
     const selection=rows.filter(row=>picked.has(row.id) && !row.deleted).map(row=>({...row}));
     if (busy || !selection.length) return;
+    chooseGuide('BulkHR');guideTried=true;
     let settings;
     try {
-      if (selection.length>40) throw Error('Select up to 40 ads for one HR scan. You can run the next group afterward.');
+      if (selection.length>40) { guideIssue='SelectPage'; throw Error('Select up to 40 ads for one HR scan. You can run the next group afterward.'); }
       settings=hrSettings('BulkHR');
     } catch(error) {
-      el('BulkHRProgress').hidden=false;el('BulkHRBar').hidden=true;el('BulkHRSummary').textContent='';el('BulkHRResults').replaceChildren();el('BulkHRMessage').textContent=error.message;return;
+      el('BulkHRProgress').hidden=false;el('BulkHRBar').hidden=true;el('BulkHRSummary').textContent='';el('BulkHRResults').replaceChildren();el('BulkHRMessage').textContent=error.message;nextGuide(true);return;
     }
     rememberHRPreferences('BulkHR');
     const plan=bulkHRPlan(selection,settings);
@@ -804,17 +844,19 @@
   }
   async function startDiscovery() {
     if (busy) return;
+    chooseGuide('Search');guideTried=true;
     const pages = Number(el('SearchPages').value), useOpen = el('SearchMode').value === 'open';
     const query = el('SearchQuery').value.trim(), where = el('SearchLocation').value.trim();
-    if (!Number.isInteger(pages) || pages < 1 || pages > 15) { searchStatus('Choose 1 to 15 pages.'); return; }
-    if (!useOpen && (!query || query.length > 240 || where.length > 160 || /[\x00-\x1f]/.test(query + where))) { searchStatus('Enter job keywords and an optional location.'); return; }
-    if (useOpen && !el('SearchSource').value) { searchStatus('Refresh search tabs and choose an open LinkedIn job search.'); return; }
+    if (!Number.isInteger(pages) || pages < 1 || pages > 15) { searchStatus('Choose 1 to 15 pages.'); guide('SearchPages',true,true); return; }
+    if (!useOpen && (!query || query.length > 240 || where.length > 160 || /[\x00-\x1f]/.test(query + where))) { searchStatus('Enter job keywords and an optional location.'); guide(!query || query.length > 240 || /[\x00-\x1f]/.test(query) ? 'SearchQuery' : 'SearchLocation',true,true); return; }
+    if (useOpen && !el('SearchSource').value) { searchStatus('Refresh search tabs and choose an open LinkedIn job search.'); guide('SearchRefresh',false,true); return; }
     discovering = true; discoveryStopped = false; discoveryRun = '';
     const activity=beginScanActivity();let failed=false;
     lock(true); searchStatus('Checking the browser companion…');
     try {
       const companion = await rpc('jobStatus',{},1000).catch(() => null);
       checkDiscovery();
+      if (!companion?.connected || companion.concurrent_scans_revision !== 1 || companion.job_search !== true || !Number.isInteger(companion.job_search_revision) || companion.job_search_revision < 1) { guideIssue='SearchSetupGuide';el('SearchPanel').open=true; }
       if (!companion?.connected) throw Error('Open this CV Studio address in Chrome or Brave with the companion enabled. It connects automatically. Use Set up companion once if needed. LinkedIn job search cannot run inside the Codex preview.');
       if (companion.concurrent_scans_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to run Job Leads and Sourcer together.');
       if (companion.job_search !== true || !Number.isInteger(companion.job_search_revision) || companion.job_search_revision < 1) throw Error('Update and reload the latest companion, refresh CV Studio and LinkedIn, then reconnect this tab to enable the current job search. Updating CV Studio alone does not update the companion.');
@@ -997,8 +1039,9 @@
   }
   async function fillFromLink(useBrowser = false, refreshContent = false) {
     if (busy) return;
+    chooseGuide('Form');guideTried=true;
     const url = jobLink(el('url').value);
-    if (!url) { status('Paste a LinkedIn job ad link to fill in its details.'); return; }
+    if (!url) { status('Paste a LinkedIn job ad link to fill in its details.'); guide('url',true,true); return; }
     if (editing && jobLink(editing.url) !== url) { status('Click New lead before filling a different job ad. Your current lead has been kept.'); return; }
     const previousSource = lastReadUrl, changedSource = previousSource && previousSource !== url;
     if (changedSource && !window.confirm('Use this different job ad? Its details will replace this draft, including contact, notes, status and dates. The folder will be kept.')) {
@@ -1055,13 +1098,14 @@
     el('BulkHRStart').addEventListener('click',startBulkHR);el('BulkHRStop').addEventListener('click',stopHR);
     setHRPreferenceControls('BulkHR',preferredHR || {countryMode:'',country:'',pages:3});
     el('BulkHRKeywords').value=hrDefaultKeywords;el('BulkHRProgress').hidden=true;
-    el('HRCountryMode').addEventListener('change',()=>{ el('HRCountry').hidden=el('HRCountryLabel').hidden=!el('HRCountryMode').value; rememberHRPreferences(); });
-    el('HRCountry').addEventListener('input',()=>rememberHRPreferences());
-    el('HRPages').addEventListener('change',()=>rememberHRPreferences());
-    el('BulkHRCountryMode').addEventListener('change',()=>{el('BulkHRCountry').hidden=el('BulkHRCountryLabel').hidden=!el('BulkHRCountryMode').value;rememberHRPreferences('BulkHR');});
-    el('BulkHRCountry').addEventListener('input',()=>rememberHRPreferences('BulkHR'));
-    el('BulkHRPages').addEventListener('change',()=>rememberHRPreferences('BulkHR'));
-    el('BulkHRKeywords').addEventListener('input',bulkHRControls);
+    el('HRCountryMode').addEventListener('change',()=>{ el('HRCountry').hidden=el('HRCountryLabel').hidden=!el('HRCountryMode').value; rememberHRPreferences(); chooseGuide('HR'); });
+    el('HRCountry').addEventListener('input',()=>{rememberHRPreferences();chooseGuide('HR');});
+    el('HRPages').addEventListener('change',()=>{rememberHRPreferences();chooseGuide('HR');});
+    for (const name of ['HRKeywords','HRCompanyURL']) el(name).addEventListener('input',()=>chooseGuide('HR'));
+    el('BulkHRCountryMode').addEventListener('change',()=>{el('BulkHRCountry').hidden=el('BulkHRCountryLabel').hidden=!el('BulkHRCountryMode').value;rememberHRPreferences('BulkHR');chooseGuide('BulkHR');});
+    el('BulkHRCountry').addEventListener('input',()=>{rememberHRPreferences('BulkHR');chooseGuide('BulkHR');});
+    el('BulkHRPages').addEventListener('change',()=>{rememberHRPreferences('BulkHR');chooseGuide('BulkHR');});
+    el('BulkHRKeywords').addEventListener('input',()=>{bulkHRControls();chooseGuide('BulkHR');});
     document.getElementById('viewJobLeads').dataset.companionChannel = channel;
     document.getElementById('viewJobLeads').dataset.companionActions = '1';
     document.getElementById('viewJobLeads').dataset.companionFolders = '2';
@@ -1077,7 +1121,8 @@
       discoveryStopped = true; discoveryControls(); searchStatus('Stopping after the current browser read. Found ads will be kept.');
       if (discoveryRun) { try { await rpc('end',{run_id:discoveryRun}); } catch {} }
     });
-    el('SearchMode').addEventListener('change',discoveryControls);
+    el('SearchMode').addEventListener('change',()=>{discoveryControls();chooseGuide('Search');});
+    for (const name of ['SearchQuery','SearchLocation','SearchPages','SearchSource']) el(name).addEventListener(name === 'SearchSource' ? 'change' : 'input',()=>chooseGuide('Search'));
     el('SearchRefresh').addEventListener('click',async () => {
       if (busy) return;
       lock(true);
@@ -1110,6 +1155,7 @@
       if (key === 'folder') rememberFolder(el(key).value.trim());
       if (key !== 'url' && !lastReadUrl) lastReadUrl = jobLink(el('url').value);
       if (key === 'description') { descriptionTruncated = false; descriptionRich = []; descriptionHint(); }
+      chooseGuide('Form');
     }));
     el('folder').addEventListener('change', () => rememberFolder(el('folder').value.trim()));
     el('AutoFill').addEventListener('click', () => fillFromLink());
@@ -1136,9 +1182,12 @@
       return fillFromLink();
     });
     el('url').addEventListener('change', () => { const url = jobLink(el('url').value); if (url && url !== lastReadUrl) return fillFromLink(); });
+    el('Save').addEventListener('click',()=>{chooseGuide('Form');guideTried=true;nextGuide(true);});
+    el('Form').addEventListener('invalid',()=>{guideFlow='Form';guideTried=true;guideIssue='';nextGuide(true);},true);
     el('Form').addEventListener('submit', async event => {
       event.preventDefault(); if (busy) return;
-      if (lastReadUrl && jobLink(el('url').value) !== lastReadUrl) { status('This is a different job ad. Use Fill from link to replace the draft, or New lead to enter it manually. Your current details have been kept.'); return; }
+      chooseGuide('Form');guideTried=true;
+      if (lastReadUrl && jobLink(el('url').value) !== lastReadUrl) { status('This is a different job ad. Use Fill from link to replace the draft, or New lead to enter it manually. Your current details have been kept.'); guide('AutoFill',false,true); return; }
       lock(true); status('Saving lead…');
       try {
         const value = await api({action:'save', record:{...draft(), ...(editing ? {id:editing.id, revision:editing.revision} : {})}});
@@ -1149,7 +1198,7 @@
       } catch (error) { status(error.message); }
       finally { lock(false); }
     });
-    el('New').addEventListener('click', () => { if (!busy && discard()) { fill(null); status('Ready for another job ad.'); } });
+    el('New').addEventListener('click', () => { if (!busy && discard()) { fill(null); chooseGuide('Form'); status('Ready for another job ad.'); } });
     el('Refresh').addEventListener('click', async () => { if (busy) return; lock(true); try { await load(); status('Saved leads refreshed. Reopen a lead to load its latest changes.'); } catch (error) { status(error.message); } finally { lock(false); } });
     for (const id of ['Search', 'Filter', 'FolderFilter']) el(id).addEventListener(id === 'Search' ? 'input' : 'change', applySavedFilters);
     el('FolderNew').addEventListener('click', () => { if (!busy) { el('FolderEditor').hidden = false; el('FolderName').focus(); } });
@@ -1163,7 +1212,7 @@
       for (const row of filtered().slice(page*40, (page+1)*40).filter(row => !row.deleted)) {
         if (el('SelectPage').checked) picked.add(row.id); else picked.delete(row.id);
       }
-      render();
+      render(); chooseGuide('BulkHR');
     });
     el('Clear').addEventListener('click', () => moveToTrash(filtered(), true, true));
     el('ClearAll').addEventListener('click', () => moveToTrash(rows.filter(row => !row.deleted), true, true));

@@ -1730,6 +1730,7 @@
 .job-leads-email-compact{border:0;padding:0;margin:0;min-width:145px}
 .job-leads-email-compact .job-leads-email-result p{margin:4px 0;font-size:11px}
 .job-leads-ja-dialog [data-guide="true"]{outline:2px solid #d92d20;outline-offset:2px}
+#viewJobLeads [data-guide="true"]:not(:disabled),#viewLinkedinSourcer [data-guide="true"]:not(:disabled){outline:2px solid #d92d20;outline-offset:2px}
 .job-leads-ja-dialog [aria-invalid="true"]{border-color:#d92d20}
 
 [data-manual-dates]{max-width:260px;margin-top:6px}

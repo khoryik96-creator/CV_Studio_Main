@@ -1228,3 +1228,13 @@ is shown beside the confirmation. Recovery itself never sends a contact POST.
 Five recoveries maximum; prior history is never silently evicted. Unconfirmed
 requests are never automatically reset/replayed. No duplicate override or owner
 record was used to test this workflow; native QA uses isolated fictional state.
+# v24.6.526 next-step guidance
+
+Job Leads now uses the same red outline as contact creation for the active ad
+search, draft-save or HR workflow. Missing inputs are outlined and focused after
+validation; their collapsed options open first. The outline moves as the user
+edits and is cleared while a request/scan is busy. Connection failures in ad
+search point to Companion. This display state never starts work, selects paid
+consent, saves records or alters scan/Stop/recovery behavior. Sourcer has matching
+guidance for its brief, explicit consent, limits, tab/setup and Start; interrupted
+runs point to Stop. See the526 QA report for native DOM/focus/keyboard evidence.
