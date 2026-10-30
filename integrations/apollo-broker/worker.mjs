@@ -80,21 +80,56 @@ function sameCompanyName(a, b) {
   const first=nameWords(a), second=nameWords(b);
   return !!first && first===second;
 }
-export function emailResult(data, expected) {
-  const person=data?.person;
-  if(!person) return {state:'not_found'};
-  const profile=linkedinHandle(person.linkedin_url,'in');
-  const org=person.organization;
+function companyMatches(org, expected) {
   const company=linkedinHandle(org?.linkedin_url,'company');
-  if(/^[0-9]+$/.test(company) && company!==expected.company_id) return {state:'mismatch'};
-  const companyMatches=(company && (company===linkedinHandle(expected.company_url,'company') || company===expected.company_id)) ||
-    sameCompanyName(org?.name,expected.company);
-  if(!profile || profile!==linkedinHandle(expected.url,'in') || !companyMatches || data.match_confidence==='low' || data.match_confidence==='none') return {state:'mismatch'};
-  const email=person.email;
-  if(typeof email!=='string' || email.length>254 || !/^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,63}$/.test(email) ||
-      /@(gmail|googlemail|yahoo|hotmail|outlook|live|aol|icloud|protonmail|proton|mail|gmx)\./i.test(email)) return {state:'not_found'};
-  return {state:'found',email,email_status:STATUS.has(person.email_status)?person.email_status:'unknown'};
+  if(/^[0-9]+$/.test(company) && company!==expected.company_id) return false;
+  return !!((company && (company===linkedinHandle(expected.company_url,'company') || company===expected.company_id)) ||
+    sameCompanyName(org?.name,expected.company));
 }
+const object=value=>value && typeof value==='object' && !Array.isArray(value);
+function emailCandidate(value) {
+  if(value===null || value===undefined || value==='')return {reason:'email_not_returned'};
+  if(typeof value!=='string' || value.length>254 || !/^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,63}$/.test(value))return {reason:'email_unusable'};
+  if(value.toLowerCase()==='email_not_unlocked@domain.com')return {reason:'email_redacted'};
+  if(/@(gmail|googlemail|yahoo|hotmail|outlook|live|aol|icloud|protonmail|proton|mail|gmx)\./i.test(value))return {reason:'personal_email_only'};
+  return {email:value};
+}
+export function emailResult(data, expected) {
+  if(!object(data) || !Object.hasOwn(data,'person'))return {state:'unconfirmed'};
+  const person=data.person;
+  if(person===null)return {state:'not_found',reason:'profile_not_found'};
+  if(!object(person))return {state:'unconfirmed'};
+  const profile=linkedinHandle(person.linkedin_url,'in');
+  if(!profile || profile!==linkedinHandle(expected.url,'in') || !companyMatches(person.organization,expected) ||
+      [data.match_confidence,person.match_confidence].some(value=>value==='low' || value==='none')) return {state:'mismatch'};
+  const primary=emailCandidate(person.email);
+  if(primary.email)return {state:'found',email:primary.email,email_status:STATUS.has(person.email_status)?person.email_status:'unknown'};
+  // Team-saved contacts can contain the business address while the public
+  // person.email field is empty. Never borrow a separate contact's email:
+  // require a positive person-ID/profile binding and reject contradictory
+  // profile/company metadata, even when the parent person matched.
+  const contact=person.contact;
+  if(object(contact)) {
+    const contactProfile=linkedinHandle(contact.linkedin_url,'in');
+    const idBound=typeof person.id==='string' && !!person.id && contact.person_id===person.id;
+    const profileBound=!!contactProfile && contactProfile===profile;
+    const organizationId=person.organization_id || person.organization?.id;
+    const sameOrganization=typeof organizationId==='string' && !!organizationId && contact.organization_id===organizationId;
+    const employerBound=sameOrganization || contact.organization!=null && companyMatches(contact.organization,expected) ||
+      contact.organization_name!=null && sameCompanyName(contact.organization_name,expected.company);
+    const conflict=contact.person_id!=null && contact.person_id!==person.id ||
+      contact.linkedin_url!=null && !profileBound ||
+      contact.organization!=null && !companyMatches(contact.organization,expected) ||
+      contact.organization_name!=null && !sameCompanyName(contact.organization_name,expected.company) ||
+      contact.organization_id!=null && organizationId!=null && !sameOrganization;
+    if(conflict || !employerBound || !idBound && !profileBound)return {state:'not_found',reason:'contact_unconfirmed'};
+    const saved=emailCandidate(contact.email);
+    if(saved.email)return {state:'found',email:saved.email,email_status:STATUS.has(contact.email_status)?contact.email_status:'unknown',email_source:'saved_contact'};
+    if(saved.reason!=='email_not_returned')return {state:'not_found',reason:saved.reason};
+  }
+  return {state:'not_found',reason:primary.reason};
+}
+
 function validPerson(p) {
   return p && typeof p.url==='string' && typeof p.company_url==='string' && typeof p.company_id==='string' && PROFILE.test(p.url) && COMPANY.test(p.company_url) && /^[0-9]{1,24}$/.test(p.company_id) &&
     typeof p.name==='string' && p.name.trim() && p.name.length<=200 && typeof p.company==='string' && p.company.trim() && p.company.length<=200 &&

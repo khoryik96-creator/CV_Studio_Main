@@ -4,6 +4,16 @@
 
 ## Release state
 
+- v24.6.523 local Apollo parsing correction accepts a positively bound
+  saved-contact business email when the primary person field is empty, rejects
+  placeholders and reports bounded no-email reasons. Exact person/company,
+  existing OAuth scopes and paid non-replay remain. Real website/cache
+  discrepancy observed read-only; original upstream payload is unavailable and
+  live root cause/acceptance remains unproven. No deployment, paid request or
+  cache clearing. Old terminal results remain; no automatic re-enrichment.
+  Final2210 Python/4 skips/8418 subtests,81 JS, actual Worker and source/native
+  preflight gates pass. Base v522 merged PR267/deccf7f. See v523 QA; PR257 excluded.
+
 - v24.6.522 locally changes HR date reads to the exact profile's dedicated
   Experience page, after live read-only evidence of delayed profile loading.
   Narrow Experience/company/profile scope, existing polling/Stop/tab protection,

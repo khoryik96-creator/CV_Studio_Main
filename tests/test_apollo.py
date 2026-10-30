@@ -160,3 +160,35 @@ def test_transport_names_cv_studio_instead_of_the_blocked_python_agent():
     ApolloBrokerClient(ORIGIN,opener).post('poll',{})
     agent=seen[0].get_header('User-agent')
     assert agent=='CVStudio-Apollo/1.0' and 'python' not in agent.lower()
+
+
+@pytest.mark.parametrize('reason',[
+    'profile_not_found','email_not_returned','personal_email_only','email_redacted',
+    'email_unusable','contact_unconfirmed'])
+def test_no_email_diagnostics_are_bounded_and_do_not_repeat_paid_lookup(reason):
+    service,broker,vault=fixture();connect(service)
+    broker.result={'state':'not_found','reason':reason,'raw':'private provider payload'}
+    result=service.perform('reveal',row=ROW,url=PERSON['url'],confirmed=True)['result']
+    assert result['reason']==reason and 'raw' not in result
+    assert 'private provider payload' not in json.dumps(result)
+    service.perform('reveal',row=ROW,url=PERSON['url'],confirmed=True)
+    assert [action for action,_ in broker.calls].count('reveal')==1
+    assert service.perform('emails',row=ROW)['emails'][PERSON['url']]==result
+
+
+@pytest.mark.parametrize('reason',[None,[],{},'private upstream content'])
+def test_unknown_optional_diagnostic_is_ignored_without_discarding_result(reason):
+    service,broker,vault=fixture();connect(service)
+    broker.result={'state':'not_found','reason':reason}
+    result=service.perform('reveal',row=ROW,url=PERSON['url'],confirmed=True)['result']
+    assert result['state']=='not_found' and 'reason' not in result
+
+
+def test_saved_contact_source_and_redaction_are_checked_locally_too():
+    service,broker,vault=fixture();connect(service)
+    broker.result={'state':'found','email':'person@example.test','email_status':'verified','email_source':'saved_contact'}
+    result=service.perform('reveal',row=ROW,url=PERSON['url'],confirmed=True)['result']
+    assert result['email_source']=='saved_contact'
+    service,broker,vault=fixture();connect(service)
+    broker.result={'state':'found','email':'email_not_unlocked@domain.com','email_status':'verified'}
+    assert service.perform('reveal',row=ROW,url=PERSON['url'],confirmed=True)['result']['state']=='unconfirmed'

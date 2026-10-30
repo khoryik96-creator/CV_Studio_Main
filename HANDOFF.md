@@ -7,7 +7,29 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current source checkpoint: v24.6.522 (owner-authorized publication/merge)** on
+**Current local checkpoint: v24.6.523 Apollo result handling (not published/merged)**
+on `codex/v24.6.523-apollo-email-results`, from merged522 `deccf7f` / PR267.
+The owner reports repeated no-business-email outcomes despite an email visible
+in Apollo. Read-only comparison confirms the exact example LinkedIn handle and
+employer on an Apollo saved contact with a verified business email, while the
+local protected cache holds not_found. Aggregate metadata only was inspected;
+no live person/email/token is retained in tests or QA. The original upstream
+response is not available, so the precise live API omission is NOT yet proven.
+A new failing parser fixture demonstrates ignored matched contact.email when
+person.email is empty. The correction accepts that fallback only with a positive
+person-ID/profile and employer binding with no contradictory evidence, excludes
+redaction placeholders, handles malformed replies as unconfirmed and emits only
+allowlisted no-email reasons. Existing scopes, endpoints, explicit credit gates,
+protected storage, account isolation and paid non-replay remain unchanged.
+Old completed lookup outcomes are retained: a code update cannot reconstruct
+missing upstream fields or silently re-spend credits. Hosted Worker deployment
+and a newly confirmed single live lookup are still needed for acceptance. No
+hosted deployment, new paid lookup or owner record/cache modification performed.
+Final2210 Python/4 skips/8418 subtests,81 JS, actual Worker SQLite/WebCrypto,
+static/version/repo/nativeWindows dependency and24 source-smoke checks pass.
+See v523 QA for tests/limits. PR257 remains held; no merge requested for v523.
+
+**Previous merged source checkpoint: v24.6.522 (PR267/deccf7f)** on
 `codex/v24.6.522-employment-loading`, stacked on local v521 `1941e58` and
 v520 `a076a07`. The owner reports all employment blank. Read-only inspection
 found the normal installation still at v519 and blank persisted observations;
