@@ -933,11 +933,11 @@
         <h3 class="job-leads-clients-heading">Followed clients</h3>
         <div class="people-table"><table><thead><tr><th>Pull</th><th>Client</th><th>LinkedIn company</th><th>Ads in Job ads</th><th>Last pulled</th><th>Actions</th></tr></thead><tbody id="jobLeadsClientsFollowed"></tbody></table></div>
         <p id="jobLeadsClientsFollowedEmpty" class="job-leads-muted">You are not following any clients yet. Find signed clients below and click Follow.</p>
-        <div class="job-leads-actions job-leads-clients-pull"><label for="jobLeadsClientsPages">Pages per client</label><select id="jobLeadsClientsPages"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="5">5</option></select><button type="button" class="primary" id="jobLeadsClientsPull" disabled>Pull job ads</button><button type="button" class="sec" id="jobLeadsClientsStop" disabled>Stop</button></div>
+        <div class="job-leads-actions job-leads-clients-pull"><label for="jobLeadsClientsPages">Pages per client</label><select id="jobLeadsClientsPages"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="5">5</option></select><button type="button" class="primary" id="jobLeadsClientsPull" disabled>Pull job ads</button><button type="button" class="sec" id="jobLeadsClientsStop" disabled>Stop</button><button type="button" class="sec" id="jobLeadsClientsUntick" disabled>Untick all</button><span id="jobLeadsClientsTicked" class="job-leads-muted"></span></div>
         <p id="jobLeadsClientsProgress" role="status" aria-live="polite" class="job-leads-muted"></p>
         <section id="jobLeadsClientsReview" class="job-leads-clients-box" aria-label="Pulled client job ads" hidden>
           <h3>Pulled ads to review <span id="jobLeadsClientsFoundCount">0</span></h3>
-          <div class="job-leads-actions"><label class="job-leads-pick"><input type="checkbox" id="jobLeadsClientsSelectNew">Select all new ads</label><label for="jobLeadsClientsFolder">Save to folder</label><select id="jobLeadsClientsFolder"><option value="">Unfiled</option></select><button type="button" class="primary" id="jobLeadsClientsAdd" disabled>Add selected to Job ads</button><button type="button" class="sec" id="jobLeadsClientsClear">Clear list</button></div>
+          <div class="job-leads-actions"><label class="job-leads-pick"><input type="checkbox" id="jobLeadsClientsSelectNew">Select new ads on this page</label><label for="jobLeadsClientsFolder">Save to folder</label><select id="jobLeadsClientsFolder"><option value="">Unfiled</option></select><button type="button" class="primary" id="jobLeadsClientsAdd" disabled>Add selected to Job ads</button><button type="button" class="sec" id="jobLeadsClientsClear">Clear list</button></div>
           <div class="people-table"><table><thead><tr><th>Add</th><th>Role</th><th>Client</th><th>Company on LinkedIn</th><th>Location</th><th>Posted</th></tr></thead><tbody id="jobLeadsClientsFound"></tbody></table></div>
           <div class="job-leads-actions job-leads-pagination"><span id="jobLeadsClientsFoundPage" class="job-leads-muted"></span><button type="button" class="sec" id="jobLeadsClientsFoundPrevious" disabled>Previous</button><button type="button" class="sec" id="jobLeadsClientsFoundNext" disabled>Next</button></div>
         </section>
@@ -2693,6 +2693,7 @@
 <script src="/vendor/cvstudio/job-leads-jobadder.js?v=v24.6.527"></script>
 <script src="/vendor/cvstudio/job-leads-apollo.js?v=v24.6.527"></script>
 <script src="/vendor/cvstudio/people-dashboards.js?v=v24.6.527"></script>
+<script src="/vendor/cvstudio/job-search-walk.js?v=v24.6.527"></script>
 <script src="/vendor/cvstudio/job-leads-clients.js?v=v24.6.527"></script>
 <script src="/vendor/cvstudio/job-leads.js?v=v24.6.527"></script>
 <script src="/vendor/cvstudio/email-verifier.js?v=v24.6.527"></script>

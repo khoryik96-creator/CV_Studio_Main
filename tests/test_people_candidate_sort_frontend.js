@@ -18,7 +18,7 @@ const ROWS=[person('Zara Demo','Penang',62,'Search card','2026-10-05T00:00:00+00
   person('Mia Demo','',75,'Search card','2026-10-03T00:00:00+00:00'),person('Ben Demo','Johor',48,'Profile detail','2026-10-02T00:00:00+00:00'),
   person('Kai Demo','Ipoh',91,'Search card','2026-10-01T00:00:00+00:00')];
 
-function fixture(stored=new Map()){
+function fixture(stored=new Map(),rows=ROWS){
   const ids=new Map(),posts=[];
   const document={getElementById:id=>{if(!ids.has(id))ids.set(id,new Element(/Sort|Order|MinScore|Read|Search|Company/.test(id)?'select':'div'));return ids.get(id);},
     createElement:tag=>new Element(tag),querySelectorAll:()=>[]};
@@ -28,7 +28,7 @@ function fixture(stored=new Map()){
     el('Candidates'+name).options=values.map(value=>({value}));
   const fetch=async(url,init)=>{
     const body=JSON.parse(init.body);posts.push({url,body});
-    if(body.action==='candidates')return {ok:true,json:async()=>({candidates:structuredClone(ROWS)})};
+    if(body.action==='candidates')return {ok:true,json:async()=>({candidates:structuredClone(rows)})};
     if(body.action==='hr_people')return {ok:true,json:async()=>({people:[]})};
     if(body.action==='export_candidates')return {ok:true,blob:async()=>'xlsx'};
     throw Error('unexpected '+body.action);
@@ -71,5 +71,14 @@ function fixture(stored=new Map()){
   assert.equal(again.el('CandidatesSort').value,'location');assert.equal(again.el('CandidatesOrder').value,'asc');
   const unknown=fixture(new Map([['cvstudio_candidates_sort','email']]));
   assert.equal(unknown.el('CandidatesSort').value,'saved_at','an unknown remembered choice is ignored');
-  console.log('Candidate dashboard: sort by date, match, name and location both ways, blank-last, minimum match, profile read, export view and remembered order passed.');
+  // Same names and expected order as tests/test_people_dashboards.py, so the
+  // screen and the Excel export agree (case, accents, numbers, blank last).
+  const NAMES=['Zara Lim','\u00c9milie Tan','Candidate 10','Candidate 9','adam Ong','  Bee Ng','\u00c5ngstr\u00f6m Lee','   ','\u00c9va Kumar','Eve Tan','Ezra Lim'];
+  const ASC=['adam Ong','\u00c5ngstr\u00f6m Lee','  Bee Ng','Candidate 9','Candidate 10','\u00c9milie Tan','\u00c9va Kumar','Eve Tan','Ezra Lim','Zara Lim','   '];
+  const DESC=['Zara Lim','Ezra Lim','Eve Tan','\u00c9va Kumar','\u00c9milie Tan','Candidate 10','Candidate 9','  Bee Ng','\u00c5ngstr\u00f6m Lee','adam Ong','   '];
+  const parity=fixture(new Map(),NAMES.map((name,index)=>({...person('P'+index,'',50,'Search card','2026-10-01T00:00:00+00:00'),name})));
+  await parity.el('CandidatesTab').click();await settle();
+  await parity.choose('Sort','name');await parity.choose('Order','asc');assert.deepEqual(parity.names(),ASC);
+  await parity.choose('Order','desc');assert.deepEqual(parity.names(),DESC);
+  console.log('Candidate dashboard: sort by date, match, name and location both ways, blank-last, minimum match, profile read, export view, remembered order and screen/Excel order parity passed.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

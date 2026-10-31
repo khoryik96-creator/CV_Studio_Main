@@ -1,8 +1,10 @@
-"""Signed JobAdder clients: read-only JobAdder access, account-scoped choices.
+"""Signed JobAdder clients: read-only JobAdder access, per-user choices.
 
-All companies, statuses, accounts and links are fictional; no network is used.
+All companies, statuses, users, accounts and links are fictional; no network
+is used.
 """
 import copy
+import hashlib
 import io
 import json
 import urllib.error
@@ -11,10 +13,12 @@ from unittest import mock
 import pytest
 
 from cvstudio_jobadder_clients import (JobAdderClientsService, JobAdderClientsError, linkedin_link,
-                                       MAX_FOLLOWED, MAX_ACCOUNTS)
+                                       MAX_FOLLOWED, MAX_ACCOUNTS, MAX_CONNECTIONS)
 
-ACCOUNT_A = "a" * 64
-ACCOUNT_B = "b" * 64
+ACCOUNT_A = "a" * 64          # browser namespace of one JobAdder sign-in
+ACCOUNT_B = "b" * 64          # namespace of a later sign-in
+API = "https://api.jobadder.com/v2"
+USER = {"userId": 7, "accountName": "Example Recruitment", "firstName": "Sample", "email": "sample.user@example.test"}
 STATUSES = {"items": [{"statusId": 1, "name": "Prospect", "active": True},
                       {"statusId": 2, "name": "Signed Client", "active": True},
                       {"statusId": 3, "name": "Former Client", "active": False}]}
@@ -28,9 +32,13 @@ def company(company_id, status_id=2, name="Example Client", linkedin=None):
     return row
 
 
+def identity(user_id=7, account="Example Recruitment", api=API):
+    return hashlib.sha256("|".join(["cvstudio-jobadder-clients-v1", api.lower(), account.casefold(), str(user_id)]).encode()).hexdigest()
+
+
 class Client:
     def __init__(self):
-        self.calls, self.replies = [], {}
+        self.calls, self.replies = [], {"users/current": copy.deepcopy(USER)}
 
     def request_json(self, path, **kwargs):
         self.calls.append((path, copy.deepcopy(kwargs)))
@@ -41,13 +49,16 @@ class Client:
             raise AssertionError("unexpected JobAdder read: " + path)
         return 200, copy.deepcopy(reply)
 
+    def paths(self):
+        return [path for path, _ in self.calls]
+
 
 def setup(account=ACCOUNT_A, connected=True):
-    vault, client, state = {}, Client(), {"account": account, "connected": connected}
+    vault, client, state = {}, Client(), {"account": account, "connected": connected, "api": API}
     def save(data):
         vault.clear(); vault.update(json.loads(json.dumps(data)))
     service = JobAdderClientsService(client=lambda: client,
-        account=lambda: {"connected": state["connected"], "account_cache_namespace": state["account"]},
+        account=lambda: {"connected": state["connected"], "account_cache_namespace": state["account"], "api_url": state["api"]},
         load=lambda: copy.deepcopy(vault), save=save, web_base=lambda: "https://app.jobadder.com", clock=lambda: 1000.0)
     return service, client, vault, state
 
@@ -60,9 +71,9 @@ def run(service, body, account=ACCOUNT_A):
     return service.perform({"account": account, **body}, token)
 
 
-def signed(service, client):
+def signed(service, client, account=ACCOUNT_A):
     client.replies["companies/lists/status"] = STATUSES
-    return run(service, {"action": "set_statuses", "status_ids": [2]})
+    return run(service, {"action": "set_statuses", "status_ids": [2]}, account=account)
 
 
 @pytest.mark.parametrize("value,expected", [
@@ -77,6 +88,9 @@ def signed(service, client):
     ("https://evil.test/company/866656/", ("", "")),
     ("https://user@www.linkedin.com/company/866656/", ("", "")),
     ("https://www.linkedin.com:8443/company/866656/", ("", "")),
+    ("https://www.linkedin.com:abc/company/866656/", ("", "")),
+    ("https://www.linkedin.com:99999/company/866656/", ("", "")),
+    ("https://[::1/company/1/", ("", "")),
     ("javascript:alert(1)", ("", "")),
     ("", ("", "")),
 ])
@@ -93,6 +107,73 @@ def test_every_action_needs_a_connected_account():
     assert client.calls == []
 
 
+@pytest.mark.parametrize("action", [None, ["overview"], {"a": 1}, 7, "delete"])
+def test_unsupported_actions_are_input_errors(action):
+    service, client, _vault, _state = setup()
+    with pytest.raises(JobAdderClientsError) as error:
+        run(service, {"action": action})
+    assert error.value.status == 400 and client.calls == []
+
+
+def test_choices_follow_the_jobadder_user_across_sign_ins():
+    service, client, vault, state = setup()
+    signed(service, client)
+    client.replies["companies/11"] = company(11, linkedin="https://www.linkedin.com/company/866656/")
+    run(service, {"action": "follow", "company_id": 11})
+    assert client.paths().count("users/current") == 1, "the user is read once per sign-in"
+    # Signing out and in again to the same user gives a new connection scope;
+    # the choices come back after one user read.
+    state["account"] = ACCOUNT_B
+    overview = run(service, {"action": "overview"}, account=ACCOUNT_B)
+    assert overview["account"] == ACCOUNT_B and overview["signed"] == [2] and [row["company_id"] for row in overview["followed"]] == [11]
+    assert client.paths().count("users/current") == 2
+    run(service, {"action": "overview"}, account=ACCOUNT_B)
+    assert client.paths().count("users/current") == 2, "a known sign-in needs no further user read"
+    assert set(vault["accounts"]) == {identity()} and vault["connections"] == {ACCOUNT_A: identity(), ACCOUNT_B: identity()}
+    # The vault keeps only a one-way key, never the user or account name.
+    text = json.dumps(vault)
+    assert "Example Recruitment" not in text and "sample.user" not in text and '"7"' not in text
+
+
+@pytest.mark.parametrize("user", [{"userId": 8, "accountName": "Example Recruitment"}, {"userId": 7, "accountName": "Other Agency"}])
+def test_another_user_or_account_never_sees_the_choices(user):
+    service, client, _vault, state = setup()
+    signed(service, client)
+    client.replies["companies/11"] = company(11)
+    run(service, {"action": "follow", "company_id": 11})
+    state["account"] = ACCOUNT_B
+    client.replies["users/current"] = user
+    assert run(service, {"action": "overview"}, account=ACCOUNT_B) == {"account": ACCOUNT_B, "signed": [], "followed": []}
+
+
+def test_another_jobadder_region_never_sees_the_choices():
+    service, client, _vault, state = setup()
+    signed(service, client)
+    state.update(account=ACCOUNT_B, api="https://api.au.jobadder.example/v2")
+    assert run(service, {"action": "overview"}, account=ACCOUNT_B)["signed"] == []
+
+
+@pytest.mark.parametrize("reply", [{"userId": 0}, {"userId": "7"}, {"userId": True}, {}, []])
+def test_an_unconfirmed_user_stops_every_action(reply):
+    service, client, vault, _state = setup()
+    client.replies["users/current"] = reply
+    with pytest.raises(JobAdderClientsError) as error:
+        run(service, {"action": "overview"})
+    assert error.value.status == 502 and not vault
+
+
+def test_a_stale_page_cannot_change_the_new_sign_in():
+    service, client, _vault, state = setup()
+    signed(service, client)
+    client.replies["companies/11"] = company(11)
+    run(service, {"action": "follow", "company_id": 11})
+    state["account"] = ACCOUNT_B
+    for action in ["set_statuses", "follow", "unfollow", "set_linkedin", "pulled"]:
+        with pytest.raises(JobAdderClientsError) as error:
+            run(service, {"action": action, "company_id": 11, "status_ids": [2], "link": ""}, account=ACCOUNT_A)
+        assert error.value.status == 409
+
+
 def test_statuses_are_read_and_the_choice_is_checked_against_jobadder():
     service, client, vault, _state = setup()
     client.replies["companies/lists/status"] = STATUSES
@@ -101,12 +182,22 @@ def test_statuses_are_read_and_the_choice_is_checked_against_jobadder():
     assert result["statuses"][2]["active"] is False and result["signed"] == []
     with pytest.raises(JobAdderClientsError) as error:
         run(service, {"action": "set_statuses", "status_ids": [2, 9]})
-    assert error.value.status == 409 and not vault
+    assert error.value.status == 409 and not vault["accounts"]
     assert run(service, {"action": "set_statuses", "status_ids": [3, 2]})["signed"] == [2, 3]
-    assert vault["accounts"][ACCOUNT_A]["statuses"] == [2, 3]
+    assert vault["accounts"][identity()]["statuses"] == [2, 3]
     for bad in [[2, 2], ["2"], [True], list(range(1, 60)), None]:
         with pytest.raises(JobAdderClientsError):
             run(service, {"action": "set_statuses", "status_ids": bad})
+
+
+def test_a_status_removed_from_jobadder_can_be_dropped():
+    service, client, vault, _state = setup()
+    client.replies["companies/lists/status"] = {"items": STATUSES["items"] + [{"statusId": 9, "name": "Old Signed", "active": True}]}
+    run(service, {"action": "set_statuses", "status_ids": [2, 9]})
+    client.replies["companies/lists/status"] = STATUSES
+    assert run(service, {"action": "statuses"})["signed"] == [2, 9], "the saved choice is shown as it is"
+    assert run(service, {"action": "set_statuses", "status_ids": [2]})["signed"] == [2]
+    assert vault["accounts"][identity()]["statuses"] == [2]
 
 
 def test_incomplete_status_list_is_an_error():
@@ -128,7 +219,8 @@ def test_company_list_needs_a_status_choice_and_uses_the_chosen_status_filter():
     result = run(service, {"action": "companies", "query": " Example ", "offset": 50})
     path, kwargs = client.calls[-1]
     assert path == "companies" and kwargs["params"] == {"StatusId": [2], "Offset": 50, "Limit": 50, "Name": "Example"}
-    assert set(kwargs) == {"token", "timeout", "fallback", "params"}, "read-only: no method, body or write retry"
+    for _path, call in client.calls:
+        assert set(call) == {"token", "timeout", "fallback", "params"}, "read-only: no method, body or write retry"
     # A company whose status is not chosen is never labelled signed, even if
     # JobAdder ignored the filter.
     assert [row["name"] for row in result["companies"]] == ["Example Client", "Second Client"]
@@ -161,11 +253,14 @@ def test_follow_reads_the_company_and_keeps_its_linkedin_page():
     client.replies["companies/12"] = company(12, status_id=1)
     with pytest.raises(JobAdderClientsError) as error:
         run(service, {"action": "follow", "company_id": 12})
-    assert error.value.status == 409 and "12" not in vault["accounts"][ACCOUNT_A]["followed"]
+    assert error.value.status == 409 and "12" not in vault["accounts"][identity()]["followed"]
     client.replies["companies/13"] = company(99)
     with pytest.raises(JobAdderClientsError) as error:
         run(service, {"action": "follow", "company_id": 13})
     assert error.value.status == 502
+    # A malformed LinkedIn link in JobAdder is ignored, not a server failure.
+    client.replies["companies/14"] = company(14, linkedin="https://www.linkedin.com:abc/company/x/")
+    assert next(row for row in run(service, {"action": "follow", "company_id": 14})["followed"] if row["company_id"] == 14)["linkedin_url"] == ""
     for bad in [0, -1, "11", True, None]:
         with pytest.raises(JobAdderClientsError):
             run(service, {"action": "follow", "company_id": bad})
@@ -182,8 +277,10 @@ def test_pasted_links_unfollow_and_pull_times():
     assert (followed()["linkedin_url"], followed()["linkedin_id"]) == ("https://www.linkedin.com/company/example-client/", "")
     run(service, {"action": "set_linkedin", "company_id": 11, "link": "https://www.linkedin.com/jobs/search/?f_C=4242"})
     assert (followed()["linkedin_url"], followed()["linkedin_id"]) == ("https://www.linkedin.com/company/example-client/", "4242")
-    with pytest.raises(JobAdderClientsError):
-        run(service, {"action": "set_linkedin", "company_id": 11, "link": "https://evil.test/company/1/"})
+    for bad in ["https://evil.test/company/1/", "https://www.linkedin.com:99999/company/x/"]:
+        with pytest.raises(JobAdderClientsError) as error:
+            run(service, {"action": "set_linkedin", "company_id": 11, "link": bad})
+        assert error.value.status == 400
     # Re-following when JobAdder still has no link keeps the pasted one.
     run(service, {"action": "follow", "company_id": 11})
     assert followed()["linkedin_id"] == "4242"
@@ -195,7 +292,7 @@ def test_pasted_links_unfollow_and_pull_times():
         run(service, {"action": "set_linkedin", "company_id": 12, "link": ""})
     assert error.value.status == 404
     assert run(service, {"action": "unfollow", "company_id": 11})["followed"] == []
-    assert vault["accounts"][ACCOUNT_A]["followed"] == {}
+    assert vault["accounts"][identity()]["followed"] == {}
     calls = len(client.calls)
     for action in ["overview", "unfollow", "pulled", "set_linkedin"]:
         try:
@@ -205,28 +302,31 @@ def test_pasted_links_unfollow_and_pull_times():
     assert len(client.calls) == calls, "local actions never contact JobAdder"
 
 
-def test_choices_belong_to_one_jobadder_account():
-    service, client, vault, state = setup()
+def test_re_follow_keeps_a_pasted_company_number_for_the_same_named_page():
+    service, client, _vault, _state = setup()
     signed(service, client)
-    client.replies["companies/11"] = company(11)
+    named = "https://www.linkedin.com/company/example-client/"
+    client.replies["companies/11"] = company(11, linkedin=named)
     run(service, {"action": "follow", "company_id": 11})
-    state["account"] = ACCOUNT_B
-    overview = run(service, {"action": "overview"}, account=ACCOUNT_B)
-    assert overview == {"account": ACCOUNT_B, "signed": [], "followed": []}
-    # A page left open under the first account cannot change the new one.
-    for action in ["set_statuses", "follow", "unfollow", "set_linkedin", "pulled"]:
-        with pytest.raises(JobAdderClientsError) as error:
-            run(service, {"action": action, "company_id": 11, "status_ids": [2], "link": ""}, account=ACCOUNT_A)
-        assert error.value.status == 409
-    state["account"] = ACCOUNT_A
-    assert [row["company_id"] for row in run(service, {"action": "overview"})["followed"]] == [11]
-    assert set(vault["accounts"]) == {ACCOUNT_A}
+    run(service, {"action": "set_linkedin", "company_id": 11, "link": "https://www.linkedin.com/jobs/search/?f_C=4242"})
+    row = run(service, {"action": "follow", "company_id": 11})["followed"][0]
+    assert (row["linkedin_url"], row["linkedin_id"]) == (named, "4242"), "a second Follow keeps the number LinkedIn needs"
+    # JobAdder later records a different page: the old number may belong to the
+    # old page, so it is dropped.
+    client.replies["companies/11"] = company(11, linkedin="https://www.linkedin.com/company/example-client-asia/")
+    row = run(service, {"action": "follow", "company_id": 11})["followed"][0]
+    assert (row["linkedin_url"], row["linkedin_id"]) == ("https://www.linkedin.com/company/example-client-asia/", "")
+    # A numbered page in JobAdder wins over anything pasted.
+    run(service, {"action": "set_linkedin", "company_id": 11, "link": "https://www.linkedin.com/jobs/search/?f_C=5555"})
+    client.replies["companies/11"] = company(11, linkedin="https://www.linkedin.com/company/909090/")
+    row = run(service, {"action": "follow", "company_id": 11})["followed"][0]
+    assert (row["linkedin_url"], row["linkedin_id"]) == ("https://www.linkedin.com/company/909090/", "909090")
 
 
-def test_follow_limit_and_account_eviction():
+def test_follow_limit_and_eviction_of_users_and_sign_ins():
     service, client, vault, state = setup()
     signed(service, client)
-    vault["accounts"][ACCOUNT_A]["followed"] = {str(n): {"name": "Client %d" % n, "linkedin_url": "", "linkedin_id": "",
+    vault["accounts"][identity()]["followed"] = {str(n): {"name": "Client %d" % n, "linkedin_url": "", "linkedin_id": "",
         "followed_at": "2026-10-30T00:00:00+00:00", "pulled_at": ""} for n in range(1, MAX_FOLLOWED + 1)}
     client.replies["companies/999"] = company(999)
     with pytest.raises(JobAdderClientsError) as error:
@@ -235,19 +335,27 @@ def test_follow_limit_and_account_eviction():
     for index in range(MAX_ACCOUNTS + 2):
         scope = "%064x" % (index + 1)
         state["account"] = scope
+        client.replies["users/current"] = {"userId": 100 + index, "accountName": "Example Recruitment"}
         service.clock = lambda index=index: 2000.0 + index
         client.replies["companies/lists/status"] = STATUSES
         run(service, {"action": "set_statuses", "status_ids": [2]}, account=scope)
-    assert len(vault["accounts"]) == MAX_ACCOUNTS and "%064x" % (MAX_ACCOUNTS + 2) in vault["accounts"]
+    assert len(vault["accounts"]) == MAX_ACCOUNTS and identity(100 + MAX_ACCOUNTS + 1) in vault["accounts"]
+    for index in range(MAX_CONNECTIONS + 5):
+        scope = "%064x" % (10_000 + index)
+        state["account"] = scope
+        run(service, {"action": "overview"}, account=scope)
+    assert len(vault["connections"]) == MAX_CONNECTIONS and "%064x" % (10_000 + MAX_CONNECTIONS + 4) in vault["connections"]
 
 
 @pytest.mark.parametrize("mutate", [
     lambda data: data.update(version=2),
     lambda data: data["accounts"].update({"not-hex": {}}),
-    lambda data: data["accounts"][ACCOUNT_A].update(statuses=["2"]),
-    lambda data: data["accounts"][ACCOUNT_A]["followed"].update({"11": {"name": "", "linkedin_url": "", "linkedin_id": "", "followed_at": "x", "pulled_at": ""}}),
-    lambda data: data["accounts"][ACCOUNT_A]["followed"].update({"11": {"name": "A", "linkedin_url": "https://evil.test/", "linkedin_id": "", "followed_at": "2026-10-30T00:00:00+00:00", "pulled_at": ""}}),
-    lambda data: data["accounts"][ACCOUNT_A]["followed"].update({"11": {"name": "A", "linkedin_url": "", "linkedin_id": 5, "followed_at": "2026-10-30T00:00:00+00:00", "pulled_at": ""}}),
+    lambda data: data["accounts"][identity()].update(statuses=["2"]),
+    lambda data: data["accounts"][identity()]["followed"].update({"11": {"name": "", "linkedin_url": "", "linkedin_id": "", "followed_at": "x", "pulled_at": ""}}),
+    lambda data: data["accounts"][identity()]["followed"].update({"11": {"name": "A", "linkedin_url": "https://evil.test/", "linkedin_id": "", "followed_at": "2026-10-30T00:00:00+00:00", "pulled_at": ""}}),
+    lambda data: data["accounts"][identity()]["followed"].update({"11": {"name": "A", "linkedin_url": "", "linkedin_id": 5, "followed_at": "2026-10-30T00:00:00+00:00", "pulled_at": ""}}),
+    lambda data: data["connections"].update({ACCOUNT_A: "not-a-key"}),
+    lambda data: data.update(connections=[]),
 ])
 def test_unreadable_saved_choices_fail_without_being_overwritten(mutate):
     service, client, vault, _state = setup()
@@ -285,28 +393,25 @@ def test_jobadder_errors_are_fixed_messages(failure, status):
 
 
 def test_sign_in_refresh_failure_and_missing_token():
-    service, client, _vault, _state = setup()
+    service, client, _vault, state = setup()
     def broken():
         raise OSError("offline")
     with pytest.raises(JobAdderClientsError) as error:
-        service.perform({"action": "statuses"}, broken)
-    assert error.value.status == 503
+        service.perform({"action": "overview"}, broken)
+    assert error.value.status == 503, "a new sign-in needs one user read"
     with pytest.raises(JobAdderClientsError) as error:
         service.perform({"action": "statuses"}, lambda: None)
     assert error.value.status == 401
-    # The local follow list needs no sign-in refresh.
+    run(service, {"action": "overview"})
+    calls = len(client.calls)
+    # Once this sign-in's user is known, the follow list needs no JobAdder.
     assert service.perform({"action": "overview"}, broken)["followed"] == []
-    assert client.calls == []
+    assert len(client.calls) == calls
 
 
 def test_route_is_post_only_bounded_and_local():
-    import sys
-    if "app" not in sys.modules:
-        # Same isolated test receipt the other route suites use when run alone.
-        from pathlib import Path
-        from owner_build_tools import build_protected
-        build_protected.write_test_receipt(Path(__file__).resolve().parents[1])
-    import app
+    from isolated_app import load_app
+    app = load_app()
     assert app._cv_secure_service_name("jobadder_clients") == "jobadder_clients"
     service, client, _vault, _state = setup()
     browser = app.app.test_client()
@@ -319,6 +424,7 @@ def test_route_is_post_only_bounded_and_local():
         assert response.get_json() == {"ok": True, "account": ACCOUNT_A, "signed": [], "followed": []}
         assert browser.post("/jobadder/clients", data="x" * 9000, content_type="application/json", headers=headers).status_code == 413
         assert browser.post("/jobadder/clients", data="{", content_type="application/json", headers=headers).status_code == 400
+        assert browser.post("/jobadder/clients", json={"action": ["overview"]}, headers=headers).status_code == 400
         client.replies["companies/lists/status"] = urllib.error.HTTPError("u", 500, "x", {}, io.BytesIO(b"secret body"))
         failed = browser.post("/jobadder/clients", json={"action": "statuses"}, headers=headers)
         assert failed.status_code == 502 and failed.get_json()["retryable"] is True and "secret" not in failed.get_data(as_text=True)

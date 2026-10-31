@@ -15,8 +15,22 @@
   }
   function selected(kind) {return el(kind+(kind==='HR'?'Company':'Search')).value;}
   const fields={HR:['name','title','company','location','country','employment','url','matched','job_url','scanned_at'],Candidates:['name','title','location','url','score','read','evidence','unknowns','notes','brief','saved_at']};
-  const collator=new Intl.Collator(undefined,{sensitivity:'base',numeric:true});
   const SORTS=new Set(['saved_at','score','name','location','read']);
+  // The same case-, accent- and number-aware key as cvstudio_people._sort_key,
+  // so the table and its Excel export list candidates in the same order.
+  const SPACE=/^[ \t\n\r\f\v\u00a0]+|[ \t\n\r\f\v\u00a0]+$/g;
+  function sortKey(value){const text=String(value ?? '').normalize('NFKD').replace(SPACE,'').toLowerCase().replace(/\p{Mn}/gu,'');return text.split(/([0-9]+)/).map((part,index)=>index%2?BigInt(part):part);}
+  function compareKeys(a,b){
+    for(let i=0;i<Math.min(a.length,b.length);i++){
+      const x=a[i],y=b[i];if(x===y)continue;
+      if(typeof x==='bigint')return x<y?-1:1;
+      const p=[...x],q=[...y];
+      for(let j=0;j<Math.min(p.length,q.length);j++){const m=p[j].codePointAt(0),n=q[j].codePointAt(0);if(m!==n)return m<n?-1:1;}
+      return p.length-q.length;
+    }
+    return a.length-b.length;
+  }
+  const score=row=>typeof row.score==='number' && Number.isFinite(row.score)?row.score:null;
   function candidateView() {
     const sort=el('CandidatesSort').value,order=el('CandidatesOrder').value;
     return {min_score:Number(el('CandidatesMinScore').value) || 0,read:el('CandidatesRead').value,sort:SORTS.has(sort)?sort:'saved_at',order:order==='asc'?'asc':'desc'};
@@ -27,9 +41,10 @@
     if(kind!=='Candidates')return rows;
     // Same rules as the Excel export: filters first, blank values last, and
     // equal values keep the newest-first archive order.
-    const view=candidateView(),picked=rows.filter(row=>(row.score ?? 0)>=view.min_score && (!view.read || row.read===view.read));
-    const blank=row=>view.sort==='score'?typeof row.score!=='number':!String(row[view.sort] ?? '').trim();
-    const compare=(a,b)=>view.sort==='score'?a.score-b.score:view.sort==='saved_at'?(a.saved_at<b.saved_at?-1:a.saved_at>b.saved_at?1:0):collator.compare(String(a[view.sort]),String(b[view.sort]));
+    const view=candidateView(),picked=rows.filter(row=>(score(row) ?? 0)>=view.min_score && (!view.read || row.read===view.read));
+    const keys=new Map(picked.map(row=>[row,view.sort==='score'?score(row):sortKey(row[view.sort])]));
+    const blank=row=>view.sort==='score'?keys.get(row)===null:keys.get(row).length===1 && keys.get(row)[0]==='';
+    const compare=(a,b)=>view.sort==='score'?keys.get(a)-keys.get(b):compareKeys(keys.get(a),keys.get(b));
     const sign=view.order==='asc'?1:-1;
     return picked.filter(row=>!blank(row)).map((row,index)=>({row,index})).sort((a,b)=>sign*compare(a.row,b.row) || a.index-b.index).map(item=>item.row).concat(picked.filter(blank));
   }

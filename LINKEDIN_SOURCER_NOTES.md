@@ -11,9 +11,12 @@ The Candidates dashboard can be sorted and filtered.
   detail or Search card only), alongside the existing search box and search
   brief.
 - **Ordering rules:**
-  - Names and locations ignore letter case.
-  - Blank values always sort last.
+  - Text ignores letter case and accents ("Éva" sorts with "Eva"), and numbers
+    inside text sort as numbers ("Candidate 9" before "Candidate 10").
+  - Blank values always sort last, including text that is only spaces.
   - Equal values keep the newest-assessed order.
+  - The page (`people-dashboards.js`) and the server (`cvstudio_people.py`) use
+    the same steps, and a shared test list holds both to the same order.
   - The sorted column carries `aria-sort`.
 - **Excel export:** it uses exactly the view on screen. The page and the server
   apply the same rules, and invalid values are refused.

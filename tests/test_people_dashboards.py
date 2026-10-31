@@ -219,13 +219,8 @@ def test_candidate_sort_order_and_filters_match_the_dashboard():
 
 
 def test_candidate_export_uses_the_same_sort_and_filters():
-    import sys
-    if 'app' not in sys.modules:
-        # Same isolated test receipt the other route suites use when run alone.
-        from pathlib import Path
-        from owner_build_tools import build_protected
-        build_protected.write_test_receipt(Path(__file__).resolve().parents[1])
-    import app
+    from isolated_app import load_app
+    app = load_app()
     rows=[{'name':'Low','score':40,'read':'Search card'},{'name':'High','score':95,'read':'Profile detail'},{'name':'Mid','score':75,'read':'Profile detail'}]
     seen={}
     def capture(found,fields,title):
@@ -236,3 +231,17 @@ def test_candidate_export_uses_the_same_sort_and_filters():
         response=browser.post('/linkedin-sourcer',json={'action':'export_candidates','min_score':50,'sort':'score','order':'asc'},headers=headers)
         assert response.status_code==200 and seen['names']==['Mid','High']
         assert browser.post('/linkedin-sourcer',json={'action':'export_candidates','sort':'email'},headers=headers).status_code==400
+
+
+# The same names, in the same expected order, are checked in
+# tests/test_people_candidate_sort_frontend.js so screen and Excel agree.
+PARITY_NAMES=['Zara Lim','\u00c9milie Tan','Candidate 10','Candidate 9','adam Ong','  Bee Ng','\u00c5ngstr\u00f6m Lee','   ','\u00c9va Kumar','Eve Tan','Ezra Lim']
+PARITY_ASC=['adam Ong','\u00c5ngstr\u00f6m Lee','  Bee Ng','Candidate 9','Candidate 10','\u00c9milie Tan','\u00c9va Kumar','Eve Tan','Ezra Lim','Zara Lim','   ']
+PARITY_DESC=['Zara Lim','Ezra Lim','Eve Tan','\u00c9va Kumar','\u00c9milie Tan','Candidate 10','Candidate 9','  Bee Ng','\u00c5ngstr\u00f6m Lee','adam Ong','   ']
+
+
+def test_candidate_name_order_matches_the_dashboard_rules():
+    rows=[{'name':name,'score':50,'read':'Search card','saved_at':'2026-10-01T00:00:00+00:00','run_id':'r','location':'','title':'','url':'','evidence':[],'unknowns':[],'notes':'','brief':''} for name in PARITY_NAMES]
+    assert [row['name'] for row in filter_candidates(rows,sort='name',order='asc')]==PARITY_ASC
+    assert [row['name'] for row in filter_candidates(rows,sort='name',order='desc')]==PARITY_DESC
+    assert [row['name'] for row in filter_candidates([{**rows[0],'score':None},{**rows[1],'score':True}],sort='score')]==['Zara Lim','\u00c9milie Tan'], 'non-numbers are blank, never an error'

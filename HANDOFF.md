@@ -15,8 +15,14 @@ ads list. They chose LinkedIn ads, company status as the "signed" test, review
 before adding, and a button to start the pull. They also asked for sorting and
 filters on the LinkedIn Sourcer Candidates dashboard.
 - New read-only `POST /jobadder/clients` (`cvstudio_jobadder_clients.py`): 123
-  to 124 routes (section 1). JobAdder is only read; choices live per account in
-  the new protected vault `jobadder_clients`.
+  to 124 routes (section 1). JobAdder is only read; choices live per JobAdder
+  user (a one-way key from `GET /users/current`, read once per sign-in) in the
+  new protected vault `jobadder_clients`, so a new sign-in restores them.
+- `vendor/cvstudio/job-search-walk.js` now holds the LinkedIn Jobs page loop and
+  result checks for both Job Leads' search and the client pull. Tests that load
+  `job-leads.js` must load it first, as `index.html` does.
+- Route tests that import the app should use `tests/isolated_app.py`, which
+  points every receipt/vault/database path at a temporary folder first.
 - New `vendor/cvstudio/job-leads-clients.js` and a fourth Job Leads tab. Pulls
   use a company-filtered companion search (`company_id` / `f_C`, capability
   `job_search_company_revision`). Update the app and the companion.

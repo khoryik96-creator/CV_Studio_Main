@@ -3,12 +3,14 @@
 The owner chooses which JobAdder company statuses mean "signed client" and
 follows a few of those companies. Their LinkedIn company pages let Job Leads
 pull the clients' public job ads for review. The status choice and the follow
-list are kept per JobAdder account in a protected vault, so another account
-never sees them. All transport, account and storage dependencies resolve
-through injected callbacks; this module never imports the application.
+list are kept per JobAdder user in a protected vault, so another account never
+sees them and signing in again restores them. All transport, account and
+storage dependencies resolve through injected callbacks; this module never
+imports the application.
 """
 from __future__ import annotations
 
+import hashlib
 import re
 import threading
 import time
@@ -18,6 +20,8 @@ from urllib.parse import parse_qs, urlsplit
 
 
 MAX_ACCOUNTS = 20
+MAX_CONNECTIONS = 100
+ACTIONS = {"overview", "statuses", "set_statuses", "companies", "follow", "unfollow", "set_linkedin", "pulled"}
 MAX_FOLLOWED = 200
 MAX_STATUSES = 50
 PAGE_SIZE = 50
@@ -58,11 +62,12 @@ def linkedin_link(value):
         return "", ""
     try:
         parts = urlsplit(value.strip())
+        host = (parts.hostname or "").lower()
+        # A malformed port raises here; it is not a LinkedIn page either way.
+        if (parts.scheme not in {"http", "https"} or parts.username or parts.password or parts.port is not None
+                or not re.fullmatch(r"(?:www\.|[a-z]{2}\.)?linkedin\.com", host)):
+            return "", ""
     except ValueError:
-        return "", ""
-    host = (parts.hostname or "").lower()
-    if (parts.scheme not in {"http", "https"} or parts.username or parts.password or parts.port
-            or not re.fullmatch(r"(?:www\.|[a-z]{2}\.)?linkedin\.com", host)):
         return "", ""
     company = re.fullmatch(r"/company/([A-Za-z0-9_-]{1,100})(?:/[A-Za-z0-9_/-]*)?", parts.path)
     if company:
@@ -89,9 +94,14 @@ class JobAdderClientsService:
         try:
             data = self.load()
             if not data:
-                return {"version": 1, "accounts": {}}
+                return {"version": 1, "accounts": {}, "connections": {}}
             accounts = data.get("accounts")
-            if data.get("version") != 1 or not isinstance(accounts, dict) or len(accounts) > MAX_ACCOUNTS:
+            data.setdefault("connections", {})
+            connections = data["connections"]
+            if (data.get("version") != 1 or not isinstance(accounts, dict) or len(accounts) > MAX_ACCOUNTS or
+                    not isinstance(connections, dict) or len(connections) > MAX_CONNECTIONS or
+                    any(not isinstance(key, str) or not isinstance(value, str) or not _SCOPE_RE.fullmatch(key) or not _SCOPE_RE.fullmatch(value)
+                        for key, value in connections.items())):
                 raise ValueError()
             for scope, entry in accounts.items():
                 if not _SCOPE_RE.fullmatch(scope) or not isinstance(entry, dict):
@@ -123,17 +133,43 @@ class JobAdderClientsService:
                                        "JOBADDER_CLIENTS_STORAGE", 503) from None
 
     @staticmethod
-    def _entry(data, scope):
-        entry = data["accounts"].get(scope)
+    def _entry(data, identity):
+        entry = data["accounts"].get(identity)
         return entry if entry else {"statuses": [], "followed": {}, "updated": 0}
 
-    def _put(self, data, scope, entry):
+    def _put(self, data, identity, entry):
         entry["updated"] = self.clock()
-        data["accounts"][scope] = entry
+        data["accounts"][identity] = entry
         while len(data["accounts"]) > MAX_ACCOUNTS:
-            oldest = min((key for key in data["accounts"] if key != scope), key=lambda key: data["accounts"][key]["updated"])
+            oldest = min((key for key in data["accounts"] if key != identity), key=lambda key: data["accounts"][key]["updated"])
             del data["accounts"][oldest]
         self._write(data)
+
+    def _identity(self, data, scope, api_url, token):
+        """A stable key for the signed-in JobAdder user and account.
+
+        Every completed JobAdder sign-in gets a new random connection scope, so
+        choices cannot be keyed by it. The first request of a connection reads
+        the current user once and remembers which key that connection maps to;
+        later requests, including offline ones, use the remembered key.
+        """
+        known = data["connections"].get(scope)
+        if known:
+            return known
+        who = self._request("users/current", self._token(token))
+        user_id = who.get("userId") if isinstance(who, dict) else None
+        if type(user_id) is not int or user_id <= 0:
+            raise JobAdderClientsError("JobAdder did not confirm the signed-in user. Reconnect JobAdder and try again.",
+                                       "JOBADDER_CLIENTS_SERVICE", 502)
+        material = "|".join(["cvstudio-jobadder-clients-v1", str(api_url or "").strip().lower(),
+                             _text(who.get("accountName"), 200).casefold(), str(user_id)])
+        identity = hashlib.sha256(material.encode("utf-8")).hexdigest()
+        connections = data["connections"]
+        connections[scope] = identity
+        while len(connections) > MAX_CONNECTIONS:
+            del connections[next(iter(connections))]
+        self._write(data)
+        return identity
 
     # JobAdder reads --------------------------------------------------------
 
@@ -148,7 +184,7 @@ class JobAdderClientsService:
             except Exception:
                 pass  # cleanup-only: a close failure must not hide the JobAdder status.
             if status in {401, 403}:
-                raise JobAdderClientsError("Your JobAdder connection cannot read companies. Reconnect JobAdder in Settings.",
+                raise JobAdderClientsError("Your JobAdder connection cannot read companies or the signed-in user. Reconnect JobAdder in Settings.",
                                            "JOBADDER_CLIENTS_AUTH", 403) from None
             if status == 404:
                 raise JobAdderClientsError("This company is no longer in JobAdder. Refresh the client list.",
@@ -197,7 +233,7 @@ class JobAdderClientsService:
         if not isinstance(info, dict) or not info.get("connected") or not isinstance(scope, str) or not _SCOPE_RE.fullmatch(scope):
             raise JobAdderClientsError("Connect JobAdder in Settings first.", "JOBADDER_CLIENTS_AUTH", 401)
         action = body.get("action")
-        if action not in {"overview", "statuses", "set_statuses", "companies", "follow", "unfollow", "set_linkedin", "pulled"}:
+        if not isinstance(action, str) or action not in ACTIONS:
             raise JobAdderClientsError("Choose a supported client action.")
         if action not in {"overview", "statuses", "companies"} and body.get("account") != scope:
             # A page opened under an earlier JobAdder account must not change
@@ -206,7 +242,7 @@ class JobAdderClientsService:
         if not self.lock.acquire(timeout=10):
             raise JobAdderClientsError("Finish the current client action first.", "JOBADDER_CLIENTS_BUSY", 409)
         try:
-            return self._perform(action, body, token, scope)
+            return self._perform(action, body, token, scope, str(info.get("api_url") or ""))
         finally:
             self.lock.release()
 
@@ -220,11 +256,13 @@ class JobAdderClientsService:
             raise JobAdderClientsError("Connect JobAdder in Settings first.", "JOBADDER_CLIENTS_AUTH", 401)
         return value
 
-    def _perform(self, action, body, token, scope):
+    def _perform(self, action, body, token, scope, api_url):
         data = self._store()
-        entry = self._entry(data, scope)
+        identity = self._identity(data, scope, api_url, token)
+        entry = self._entry(data, identity)
         if action == "overview":
-            # Local only: the follow list stays usable without JobAdder.
+            # Local once this connection's user is known: the follow list
+            # stays usable while JobAdder is unreachable.
             return {"account": scope, "signed": list(entry["statuses"]), "followed": self._followed(entry)}
         if action == "statuses":
             return {"account": scope, "statuses": self._statuses(self._token(token)), "signed": list(entry["statuses"])}
@@ -238,18 +276,18 @@ class JobAdderClientsService:
                 raise JobAdderClientsError("A chosen status is no longer in JobAdder. Refresh the statuses and choose again.",
                                            "JOBADDER_CLIENTS_STALE", 409)
             entry = {**entry, "statuses": sorted(chosen)}
-            self._put(data, scope, entry)
+            self._put(data, identity, entry)
             return {"account": scope, "signed": entry["statuses"]}
         if action == "companies":
             return self._companies(body, self._token(token), scope, entry)
         if action == "follow":
-            return self._follow(body, self._token(token), data, scope, entry)
+            return self._follow(body, self._token(token), data, scope, identity, entry)
         company_id = _id(body.get("company_id"), "Choose a followed client.")
         key = str(company_id)
         if action == "unfollow":
             followed = dict(entry["followed"])
             if followed.pop(key, None) is not None:
-                self._put(data, scope, {**entry, "followed": followed})
+                self._put(data, identity, {**entry, "followed": followed})
             return {"account": scope, "followed": self._followed({**entry, "followed": followed})}
         if key not in entry["followed"]:
             raise JobAdderClientsError("Follow this client first.", "JOBADDER_CLIENTS_MISSING", 404)
@@ -272,7 +310,7 @@ class JobAdderClientsService:
         else:  # pulled
             row["pulled_at"] = _now()
         followed = {**entry["followed"], key: row}
-        self._put(data, scope, {**entry, "followed": followed})
+        self._put(data, identity, {**entry, "followed": followed})
         return {"account": scope, "followed": self._followed({**entry, "followed": followed})}
 
     def _companies(self, body, token, scope, entry):
@@ -313,7 +351,7 @@ class JobAdderClientsService:
         return {"account": scope, "companies": rows, "offset": offset, "total": total,
                 "next_offset": offset + returned if more and offset + returned <= MAX_OFFSET else None}
 
-    def _follow(self, body, token, data, scope, entry):
+    def _follow(self, body, token, data, scope, identity, entry):
         company_id = _id(body.get("company_id"))
         key = str(company_id)
         if key not in entry["followed"] and len(entry["followed"]) >= MAX_FOLLOWED:
@@ -331,11 +369,17 @@ class JobAdderClientsService:
         social = company.get("social") if isinstance(company.get("social"), dict) else {}
         url, number = linkedin_link(social.get("linkedin") or "")
         old = entry["followed"].get(key)
+        if old:
+            # Keep what the owner pasted unless JobAdder now gives something
+            # better: a pasted company number survives while JobAdder's page
+            # is the same named page (or absent), because LinkedIn needs the
+            # number and a named page does not carry it.
+            if not number and old["linkedin_id"] and (not url or not old["linkedin_url"] or old["linkedin_url"] == url):
+                number = old["linkedin_id"]
+            if not url:
+                url = old["linkedin_url"]
         row = {"name": name, "linkedin_url": url, "linkedin_id": number,
                "followed_at": old["followed_at"] if old else _now(), "pulled_at": old["pulled_at"] if old else ""}
-        if old and not url and not number:
-            # Keep a link the owner pasted when JobAdder has none.
-            row["linkedin_url"], row["linkedin_id"] = old["linkedin_url"], old["linkedin_id"]
         followed = {**entry["followed"], key: row}
-        self._put(data, scope, {**entry, "followed": followed})
+        self._put(data, identity, {**entry, "followed": followed})
         return {"account": scope, "followed": self._followed({**entry, "followed": followed})}

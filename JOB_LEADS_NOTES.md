@@ -12,7 +12,11 @@ only read: nothing in JobAdder is changed.
   client list only shows companies whose JobAdder status is one of the chosen
   ones, even if JobAdder ignored the status filter.
 - **Following.** Following re-reads the company in JobAdder and is refused if
-  its status is no longer a chosen one. Up to 200 clients per account.
+  its status is no longer a chosen one. Up to 200 clients per user. Following
+  again keeps a pasted company number while JobAdder still shows the same named
+  page (or none); a numbered page in JobAdder replaces it.
+- **Statuses removed from JobAdder.** A saved status JobAdder no longer lists is
+  flagged, starts unticked, and is dropped by Save statuses.
 - **LinkedIn link.** A followed client is pulled through its LinkedIn company
   number. It comes from, in order:
   1. the JobAdder company's LinkedIn link, when it is a numbered company page;
@@ -20,25 +24,42 @@ only read: nothing in JobAdder is changed.
      (`/jobs/search/?f_C=<number>`) of a named page;
   3. a saved HR scan of the same LinkedIn company page.
   A client without a number cannot be ticked for pulling.
+- **Ticks.** At most 15 clients can be ticked for a pull. The first 15
+  pullable clients are ticked by default, and your ticks are remembered in this
+  browser. **Untick all** clears them.
 - **Pulling.** Pull job ads opens one company-filtered LinkedIn Jobs search per
   ticked client, through the companion: `f_C` with no keywords.
-  - **Limits:** 1–5 pages per client, up to 15 clients and 600 ads per pull.
+  - **Limits:** 1–5 pages per client, up to 15 clients and 600 ads waiting for
+    review. Once 600 ads wait, no further search opens. A client cut short is
+    not marked as pulled, and the summary says how many were not fully pulled.
+  - **Shared loop:** pages are read by `vendor/cvstudio/job-search-walk.js`, the
+    same loop and result checks the Job Leads search uses.
   - **Search tabs:** each search tab stays open, as with the existing search.
-  - **Stop and failures:** Stop keeps what was found. A failed client is
-    reported and the next one continues.
+  - **Stop and failures:** Stop ends the companion run at once and keeps what
+    was found; the summary counts every ad found, including a stopped client's.
+    A failed client is reported and the next one continues.
   - **Pulled times:** only clients that finished get a new "Last pulled" time.
 - **Review, then add.** Pulled ads are listed with the client they were pulled
-  for. Ads already in Job ads or Trash cannot be ticked. Add selected to Job ads
-  saves the ticked ads through the existing save action (status New, no
-  contact or notes, the chosen folder) and reloads the main list. Existing ads
-  are never overwritten.
-- **Busy Job Leads.** The dashboard can be read while Job Leads is busy. Pulling
-  and adding wait for Job Leads' own searches and saves.
-- **Accounts.** The status choice and follow list are kept per JobAdder account
-  in a new protected vault, `jobadder_clients`, never in SQLite or the browser.
-  JobAdder sign-out and an account change clear the view and stop a running
-  pull. A reply for the earlier account is not shown, and a stale page cannot
-  change the new account's choices (409).
+  for. Ads already in Job ads or Trash cannot be ticked. "Select new ads on
+  this page" ticks the current page only. Add selected to Job ads saves up to
+  100 ticked ads per click through the existing save action (status New, no
+  contact or notes, the chosen folder) and reloads the main list; any further
+  ticked ads stay ticked for the next click. Existing ads are never overwritten.
+- **Busy Job Leads.** The dashboard can be read while Job Leads is busy. Pull
+  and Add explain that Job Leads is busy instead of starting.
+- **Accounts.** The status choice and follow list are kept per JobAdder user in
+  a new protected vault, `jobadder_clients`, never in SQLite or the browser.
+  - **Same user:** every completed JobAdder sign-in gets a new random connection
+    key. The first request of each sign-in reads `GET /users/current` once (the
+    existing `read` scope covers it) and maps that sign-in to a one-way key made
+    from the region, account name and user id. Signing in again to the same
+    user restores the choices; another user or account never sees them. The
+    vault holds no name or user id.
+  - **Changes on the page:** JobAdder sign-out and an account change clear the
+    view and stop a running pull; the pull still ends its own companion run. A
+    reply for another account first re-reads this page's JobAdder account (as
+    the rest of CV Studio does) and reloads once. A stale page cannot change
+    the current choices (409).
 
 Route: one new `POST /jobadder/clients`. It reads JobAdder only, and the
 existing same-origin request guard covers it. The route contract goes from 123

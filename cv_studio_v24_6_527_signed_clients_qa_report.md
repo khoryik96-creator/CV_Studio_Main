@@ -25,16 +25,18 @@ The owner asked for two things:
   - **Actions:** overview, statuses, set_statuses, companies, follow,
     unfollow, set_linkedin and pulled.
   - **JobAdder reads:** company statuses, companies filtered by the chosen
-    statuses, and one company at follow time. Reads use only token, timeout,
-    fallback and params: no method, body or write retry.
+    statuses, one company at follow time, and the signed-in user once per
+    sign-in. Reads use only token, timeout, fallback and params: no method, body
+    or write retry.
   - **Defensive filter:** a company is labelled signed only if its JobAdder
     status is one of the chosen ones, even if JobAdder ignored the filter.
-  - **Storage:** choices are kept per JobAdder account (the one-way browser
-    namespace) in a new protected vault, `jobadder_clients`. That vault is
-    strict on read failure and does not use the macOS keychain, like the other
-    contact vaults.
-  - **Limits:** 200 followed clients per account and 20 accounts, with the
-    oldest account evicted.
+  - **Storage:** choices are kept per JobAdder user in a new protected vault,
+    `jobadder_clients`. The key is a one-way hash of region, account name and
+    user id from `GET /users/current`, read once per sign-in, so a new sign-in
+    to the same user restores the choices. That vault is strict on read failure
+    and does not use the macOS keychain, like the other contact vaults.
+  - **Limits:** 200 followed clients per user, 20 users with the oldest
+    evicted, and 100 remembered sign-ins.
   - **Stale pages:** a page left open under an earlier account cannot change
     choices (409).
   - **Error messages:** JobAdder errors become fixed messages: 401/403 become
@@ -110,9 +112,10 @@ The owner asked for two things:
 - **Deliberate breaks:** 48 breaks across the backend, frontend, companion,
   candidate sorting and account hooks.
   - **Result:** 47 are caught.
-  - **Survivor:** removing the second "skip saved ads" check in Add cannot
-    change behaviour. Every redraw already drops saved ads from the selection,
-    and the server never overwrites an existing ad.
+  - **Survivor (first round):** removing the second "skip saved ads" check in
+    Add could not change behaviour. Every redraw already drops saved ads from
+    the selection, and the server never overwrites an existing ad. See the
+    review round below for the final break count.
   - **What the breaks found:** they led to the fake page nesting its tables
     inside the panel. Before that, it could not see the bug below.
 - **Real browser:** the branch app ran in Chromium with a fictional JobAdder
@@ -138,6 +141,74 @@ The owner asked for two things:
     known Linux-only ones (Windows startup registration and Antiword).
   - **Node:** all 84 test files pass.
   - **Launcher line endings:** they match master.
+
+## Code review round (same version)
+
+A review of commit `fc58209` raised 15 findings. All are fixed on the same
+branch and version, and each fix has a test that fails when the fix is removed.
+
+1. **Choices were lost on every JobAdder sign-in.** They were keyed by the
+   connection key, which is new and random on each completed sign-in. They are
+   now keyed per user (`GET /users/current`, once per sign-in, hashed with
+   region and account name). A new sign-in to the same user restores them;
+   another user or account sees nothing.
+2. **Two route tests could write the real install receipt.** Run alone, they
+   wrote the receipt and imported the app with the owner's own HOME, AppData
+   and database. The new `tests/isolated_app.py` points every receipt, vault,
+   database and log path at a temporary folder first. A check with an empty
+   sentinel HOME confirms nothing is written outside it.
+3. **Searches kept opening after the 600-ad review limit.** Once 600 ads wait,
+   no further search opens and paging stops. A client cut short is not marked
+   as pulled, and the summary says how many were not fully pulled.
+4. **"Select all new ads" could exceed the 100-ad add limit.** Selection is now
+   per page ("Select new ads on this page"). Add saves up to 100 per click and
+   leaves the rest ticked for the next click.
+5. **A status removed from JobAdder could never be unticked.** It now starts
+   unticked, is flagged in the summary, and Save statuses drops it.
+6. **Following again wiped a pasted LinkedIn company number.** The number is
+   kept while JobAdder still shows the same named page or none. A different
+   page drops it, and a numbered page in JobAdder replaces it.
+7. **More than 15 linked clients made the default pull fail.** At most 15 can
+   be ticked: the first 15 are ticked by default. Ticks are remembered in the
+   browser, and there is an **Untick all** button.
+8. **An account change while a search was opening could leave the companion
+   busy.** Each pull now always ends the companion run it started, even after
+   the view was cleared. Stop ends the current run at once, as Job Leads does.
+9. **Excel could list candidates in a different order from the screen.** The
+   page and the server now share one rule: case- and accent-insensitive,
+   numbers inside text compared as numbers, blank (including only spaces) last.
+   A shared list of tricky names holds both to the same order.
+10. **A malformed port in a LinkedIn link caused a misleading 503.** It is now
+    simply not a LinkedIn page. Non-text actions are input errors (400).
+11. **Pull and Add did not update when Job Leads became busy or free.** Job
+    Leads' busy state no longer disables them. Clicking while Job Leads is busy
+    explains why nothing started.
+12. **Reconnecting JobAdder in another tab left a "Click Refresh" loop.** A
+    reply for another account now re-reads this page's account through the
+    same `applyJAPublicInfo` step the rest of CV Studio uses, then reloads once.
+    If they still differ, the owner is asked to reconnect.
+13. **The pull summary undercounted after Stop.** It now counts every ad found,
+    including a stopped client's.
+14. **Saved-ad counts made redraws slow.** About 3 s per redraw at 200 clients
+    and 5,000 ads. Counts and the saved-ad lookup are now built once per data
+    change; the test file runs that size in under a second.
+15. **The pull duplicated Job Leads' search loop.** Both now use
+    `vendor/cvstudio/job-search-walk.js` for the page/scroll/next loop, result
+    checks and job-link check. Job Leads' own search tests pass unchanged; the
+    three tests that load `job-leads.js` also load the shared file.
+
+**Validation after the fixes:**
+- **Deliberate breaks:** 78 breaks across the backend, frontend, shared search
+  loop, companion, candidate sorting, account hooks and test isolation; all 78
+  are caught. The first run let 8 through: each was a gap in a test, not in the
+  code, and the tests were strengthened. Examples: the parity list needed
+  accented names, and the cap test needed a client cut off mid-search.
+- **Python:** 2270 passed. The only failures are the same two Linux-only ones.
+- **Node:** all 84 test files pass.
+- **Real browser:** the Chromium run was repeated with the fixes. It confirmed
+  that after a simulated new sign-in to the same JobAdder user, the 4 followed
+  clients and the 3 ticks were still there. The only console errors were the
+  demo's unanswered work-type lookups again.
 
 ## Limits
 

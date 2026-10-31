@@ -105,7 +105,7 @@ const root = path.resolve(__dirname, '..');
   };
   const preferences=new Map();
   const ui=vm.createContext({window,document,location,localStorage:{getItem:key=>preferences.get(key)??null,setItem:(key,value)=>preferences.set(key,value),removeItem:key=>preferences.delete(key)},URL:TestURL,URLSearchParams,Blob,Map,Set,Date,Error,SyntaxError,Number,String,Object,JSON,Option:function(text,value){const node=new Element('option',text);node.value=value;return node},crypto:{randomUUID:()=>String(++sequence).padStart(32,'0')},setTimeout,clearTimeout,fetch});
-  vm.runInContext(fs.readFileSync(path.join(root,'vendor/cvstudio/job-leads.js'),'utf8'),ui);
+  vm.runInContext(fs.readFileSync(path.join(root,'vendor/cvstudio/job-search-walk.js'),'utf8'),ui);vm.runInContext(fs.readFileSync(path.join(root,'vendor/cvstudio/job-leads.js'),'utf8'),ui);
   await window.initJobLeads();
   el('url').value=url;el('company').value='=FORMULA()';el('role').value='<img src=x onerror=alert(1)>';el('notes').value='Important notes';
   el('Form').handlers.submit({preventDefault(){}}); // wait for both save and list request
@@ -245,7 +245,7 @@ const root = path.resolve(__dirname, '..');
   el('FolderFilter').value='Preferred';el('FolderFilter').handlers.change();
   await el('New').click();assert.equal(el('folder').value,'','Unfiled overrides the board filter');
   el('folder').value='Preferred';el('folder').handlers.change();
-  vm.runInContext(fs.readFileSync(path.join(root,'vendor/cvstudio/job-leads.js'),'utf8'),ui);await window.initJobLeads();
+  vm.runInContext(fs.readFileSync(path.join(root,'vendor/cvstudio/job-search-walk.js'),'utf8'),ui);vm.runInContext(fs.readFileSync(path.join(root,'vendor/cvstudio/job-leads.js'),'utf8'),ui);await window.initJobLeads();
   assert.equal(el('folder').value,'Preferred','selection survives reloading this CV Studio address');
   await el('FolderDelete').click();await el('New').click();
   assert.equal(el('folder').value,'');assert(!preferences.has('cvstudio_job_leads_folder'));
