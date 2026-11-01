@@ -174,6 +174,63 @@ def test_a_stale_page_cannot_change_the_new_sign_in():
         assert error.value.status == 409
 
 
+def switch_during(client, state, path, **change):
+    """Complete another sign-in (or a sign-out) while ``path`` is being read.
+
+    The shared JobAdder client reads with whatever sign-in is current, so that
+    read already returns the other connection's data.
+    """
+    read = client.request_json
+
+    def during(requested, **kwargs):
+        if requested == path:
+            state.update(change)
+        return read(requested, **kwargs)
+    client.request_json = during
+
+
+@pytest.mark.parametrize("change", [{"account": ACCOUNT_B}, {"connected": False}])
+@pytest.mark.parametrize("body,path", [
+    ({"action": "follow", "company_id": 11}, "companies/11"),
+    ({"action": "set_statuses", "status_ids": [2, 3]}, "companies/lists/status"),
+    ({"action": "statuses"}, "companies/lists/status"),
+    ({"action": "companies"}, "companies"),
+])
+def test_a_sign_in_during_an_action_saves_and_returns_nothing(body, path, change):
+    service, client, vault, state = setup()
+    signed(service, client)
+    client.replies["companies/11"] = company(11)
+    client.replies["companies"] = {"items": [company(11)], "totalCount": 1}
+    before = copy.deepcopy(vault)
+    switch_during(client, state, path, **change)
+    with pytest.raises(JobAdderClientsError) as error:
+        run(service, body)
+    assert (error.value.status, error.value.code) == (409, "JOBADDER_CLIENTS_ACCOUNT")
+    assert vault == before, "the other connection's data is never saved under this one"
+
+
+def test_a_sign_in_while_the_user_is_confirmed_records_no_connection():
+    service, client, vault, state = setup()
+    switch_during(client, state, "users/current", account=ACCOUNT_B)
+    with pytest.raises(JobAdderClientsError) as error:
+        run(service, {"action": "overview"})
+    assert error.value.status == 409 and vault == {}
+
+
+def test_a_reply_is_not_returned_after_the_account_changed():
+    service, client, _vault, state = setup()
+    signed(service, client)
+    answers = iter([ACCOUNT_A])
+    current = service.account
+    service.account = lambda: {**current(), "account_cache_namespace": next(answers, ACCOUNT_B)}
+    with pytest.raises(JobAdderClientsError) as error:
+        run(service, {"action": "overview"})
+    assert error.value.status == 409
+    service.account = current
+    state["account"] = ACCOUNT_A
+    assert run(service, {"action": "overview"})["signed"] == [2], "an unchanged sign-in is answered as before"
+
+
 def test_statuses_are_read_and_the_choice_is_checked_against_jobadder():
     service, client, vault, _state = setup()
     client.replies["companies/lists/status"] = STATUSES
@@ -198,6 +255,8 @@ def test_a_status_removed_from_jobadder_can_be_dropped():
     assert run(service, {"action": "statuses"})["signed"] == [2, 9], "the saved choice is shown as it is"
     assert run(service, {"action": "set_statuses", "status_ids": [2]})["signed"] == [2]
     assert vault["accounts"][identity()]["statuses"] == [2]
+    assert run(service, {"action": "set_statuses", "status_ids": []})["signed"] == [], "every status can be dropped"
+    assert vault["accounts"][identity()]["statuses"] == []
 
 
 def test_incomplete_status_list_is_an_error():

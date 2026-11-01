@@ -255,6 +255,19 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
    assert(!s.el('StatusesSave').disabled,'saving the remaining statuses is possible');
    await s.el('StatusesSave').click();await settle();assert.deepEqual(s.calls.at(-1),{action:'set_statuses',status_ids:[2],account:ACCOUNT});}
 
+  // When every saved status is gone from JobAdder, or every one is unticked,
+  // the empty choice still saves; an unchanged empty choice does not.
+  {const s=fixture({signed:[9]});await s.el('Tab').click();await settle();
+   assert(!s.el('StatusesSave').disabled,'the removed status can be dropped without choosing another');
+   await s.el('StatusesSave').click();await settle();assert.deepEqual(s.calls.at(-1),{action:'set_statuses',status_ids:[],account:ACCOUNT});
+   assert.match(s.el('Message').textContent,/No status is chosen/);assert(!s.el('Browse').open);
+   assert(s.el('StatusesSave').disabled,'nothing is left to save');
+   const u=fixture({signed:[2]});await u.el('Tab').click();await settle();
+   const boxes=u.el('Statuses').querySelectorAll('input');assert(boxes[1].checked);assert(u.el('StatusesSave').disabled);
+   boxes[1].checked=false;await boxes[1].dispatch('change');assert(!u.el('StatusesSave').disabled,'unticking every status can be saved');
+   await u.el('StatusesSave').click();await settle();assert.deepEqual(u.calls.at(-1),{action:'set_statuses',status_ids:[],account:ACCOUNT});
+   assert.match(u.el('SetupSummary').textContent,/not chosen yet/);assert(u.el('Search').disabled);}
+
   // Stop during a pull: the run ends at once and the summary counts what was found.
   {const s=fixture({signed:[2],followed:[client(11,'4242','Example Client')],pages:{'4242':[[job(1001),job(1002)],[job(1003)]]}});
    await s.el('Tab').click();await settle();

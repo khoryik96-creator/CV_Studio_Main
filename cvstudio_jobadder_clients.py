@@ -125,7 +125,8 @@ class JobAdderClientsService:
             raise JobAdderClientsError("Saved client choices could not be read securely. Keep the existing files and check local storage.",
                                        "JOBADDER_CLIENTS_STORAGE", 503) from None
 
-    def _write(self, data):
+    def _write(self, data, scope):
+        self._confirm(scope)
         try:
             self.save(data)
         except Exception:
@@ -137,13 +138,13 @@ class JobAdderClientsService:
         entry = data["accounts"].get(identity)
         return entry if entry else {"statuses": [], "followed": {}, "updated": 0}
 
-    def _put(self, data, identity, entry):
+    def _put(self, data, identity, entry, scope):
         entry["updated"] = self.clock()
         data["accounts"][identity] = entry
         while len(data["accounts"]) > MAX_ACCOUNTS:
             oldest = min((key for key in data["accounts"] if key != identity), key=lambda key: data["accounts"][key]["updated"])
             del data["accounts"][oldest]
-        self._write(data)
+        self._write(data, scope)
 
     def _identity(self, data, scope, api_url, token):
         """A stable key for the signed-in JobAdder user and account.
@@ -168,7 +169,7 @@ class JobAdderClientsService:
         connections[scope] = identity
         while len(connections) > MAX_CONNECTIONS:
             del connections[next(iter(connections))]
-        self._write(data)
+        self._write(data, scope)
         return identity
 
     # JobAdder reads --------------------------------------------------------
@@ -242,9 +243,21 @@ class JobAdderClientsService:
         if not self.lock.acquire(timeout=10):
             raise JobAdderClientsError("Finish the current client action first.", "JOBADDER_CLIENTS_BUSY", 409)
         try:
-            return self._perform(action, body, token, scope, str(info.get("api_url") or ""))
+            result = self._perform(action, body, token, scope, str(info.get("api_url") or ""))
+            self._confirm(scope)
+            return result
         finally:
             self.lock.release()
+
+    def _confirm(self, scope):
+        # The shared JobAdder client always reads with the current sign-in, and
+        # every completed sign-in gets a new scope that is never reused. An
+        # unchanged scope therefore proves every read so far came from the
+        # connection this action began with; otherwise nothing is saved or
+        # returned.
+        info = self.account()
+        if not isinstance(info, dict) or not info.get("connected") or info.get("account_cache_namespace") != scope:
+            raise JobAdderClientsError("The JobAdder account changed. Refresh the Signed clients view.", "JOBADDER_CLIENTS_ACCOUNT", 409)
 
     def _token(self, token):
         try:
@@ -276,7 +289,7 @@ class JobAdderClientsService:
                 raise JobAdderClientsError("A chosen status is no longer in JobAdder. Refresh the statuses and choose again.",
                                            "JOBADDER_CLIENTS_STALE", 409)
             entry = {**entry, "statuses": sorted(chosen)}
-            self._put(data, identity, entry)
+            self._put(data, identity, entry, scope)
             return {"account": scope, "signed": entry["statuses"]}
         if action == "companies":
             return self._companies(body, self._token(token), scope, entry)
@@ -287,7 +300,7 @@ class JobAdderClientsService:
         if action == "unfollow":
             followed = dict(entry["followed"])
             if followed.pop(key, None) is not None:
-                self._put(data, identity, {**entry, "followed": followed})
+                self._put(data, identity, {**entry, "followed": followed}, scope)
             return {"account": scope, "followed": self._followed({**entry, "followed": followed})}
         if key not in entry["followed"]:
             raise JobAdderClientsError("Follow this client first.", "JOBADDER_CLIENTS_MISSING", 404)
@@ -310,7 +323,7 @@ class JobAdderClientsService:
         else:  # pulled
             row["pulled_at"] = _now()
         followed = {**entry["followed"], key: row}
-        self._put(data, identity, {**entry, "followed": followed})
+        self._put(data, identity, {**entry, "followed": followed}, scope)
         return {"account": scope, "followed": self._followed({**entry, "followed": followed})}
 
     def _companies(self, body, token, scope, entry):
@@ -381,5 +394,5 @@ class JobAdderClientsService:
         row = {"name": name, "linkedin_url": url, "linkedin_id": number,
                "followed_at": old["followed_at"] if old else _now(), "pulled_at": old["pulled_at"] if old else ""}
         followed = {**entry["followed"], key: row}
-        self._put(data, identity, {**entry, "followed": followed})
+        self._put(data, identity, {**entry, "followed": followed}, scope)
         return {"account": scope, "followed": self._followed({**entry, "followed": followed})}

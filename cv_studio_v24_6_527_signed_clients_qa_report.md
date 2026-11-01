@@ -210,6 +210,38 @@ branch and version, and each fix has a test that fails when the fix is removed.
   clients and the 3 ticks were still there. The only console errors were the
   demo's unanswered work-type lookups again.
 
+## Codex review round on PR #273 (same version)
+
+Codex reviewed `cce1f61` and raised two findings. Both were reproduced and are
+fixed on the same branch and version.
+
+1. **A sign-in during an action could mix two JobAdder accounts (P1).** The
+   shared JobAdder client always reads with the current sign-in, but the
+   action kept the connection it started with. If another sign-in completed
+   while, for example, Follow was reading the company, the other account's
+   company could be saved into the first account's follow list and returned
+   under the first account's key. Now every save and every reply first checks
+   that the connection key is unchanged and still signed in; otherwise the
+   action saves nothing and returns 409 "The JobAdder account changed". A
+   completed sign-in always gets a new key that is never reused, so an
+   unchanged key proves every read came from the same sign-in. A sign-out
+   during an action is refused the same way. The shared JobAdder client and
+   its retry and refresh rules are unchanged.
+2. **An empty status choice could not be saved (P2).** When every saved status
+   had been removed from JobAdder, the view said to save to drop it, but Save
+   statuses stayed disabled until another status was ticked; unticking every
+   status could not be saved either. An empty choice now saves whenever it
+   differs from the saved one, and the message says no company counts as a
+   signed client until a status is chosen.
+
+**Validation after these fixes:**
+- **New tests:** 8 runs where a sign-in or sign-out completes during Follow,
+  Save statuses, statuses or the company list read; a sign-in while the user
+  is being confirmed; a reply after the account changed; and saving an empty
+  choice in both the page and the service.
+- **Deliberate breaks:** 6 more (each check removed in turn); all 6 caught.
+- **Python and Node:** see the PR checks; locally all 84 Node test files pass.
+
 ## Limits
 
 - **LinkedIn company number:** LinkedIn's company filter needs the company's

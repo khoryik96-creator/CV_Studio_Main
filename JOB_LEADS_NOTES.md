@@ -16,7 +16,9 @@ only read: nothing in JobAdder is changed.
   again keeps a pasted company number while JobAdder still shows the same named
   page (or none); a numbered page in JobAdder replaces it.
 - **Statuses removed from JobAdder.** A saved status JobAdder no longer lists is
-  flagged, starts unticked, and is dropped by Save statuses.
+  flagged, starts unticked, and is dropped by Save statuses, even when no
+  status is left. Unticking every status and saving is allowed too; no company
+  then counts as a signed client until a status is chosen again.
 - **LinkedIn link.** A followed client is pulled through its LinkedIn company
   number. It comes from, in order:
   1. the JobAdder company's LinkedIn link, when it is a numbered company page;
@@ -60,6 +62,12 @@ only read: nothing in JobAdder is changed.
     reply for another account first re-reads this page's JobAdder account (as
     the rest of CV Studio does) and reloads once. A stale page cannot change
     the current choices (409).
+  - **Sign-in during an action:** CV Studio's shared JobAdder client always
+    reads with the current sign-in. If another sign-in or a sign-out completes
+    while an action is reading JobAdder, the action saves nothing and returns
+    nothing (409, "The JobAdder account changed"). Each completed sign-in gets a
+    new connection key that is never reused, so an unchanged key at the end
+    proves every read came from the sign-in the action began with.
 
 Route: one new `POST /jobadder/clients`. It reads JobAdder only, and the
 existing same-origin request guard covers it. The route contract goes from 123

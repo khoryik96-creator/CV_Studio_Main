@@ -130,7 +130,8 @@
     el('SetupSummary').textContent = state.signed.length ? '· ' + (signedNames.length ? signedNames.join(', ') : state.signed.length + ' chosen') + (stale ? ` · ${stale} no longer in JobAdder` : '') : '· not chosen yet';
     el('StatusesLoad').disabled = locked || !state.loaded;
     const draft = state.statusDraft;
-    el('StatusesSave').disabled = locked || !draft || !draft.size || [...draft].sort((a, b) => a - b).join() === [...state.signed].sort((a, b) => a - b).join();
+    // An empty choice saves too, so statuses JobAdder no longer lists can all be dropped.
+    el('StatusesSave').disabled = locked || !draft || [...draft].sort((a, b) => a - b).join() === [...state.signed].sort((a, b) => a - b).join();
     el('Search').disabled = el('Query').disabled = locked || !state.loaded || !state.signed.length;
     const c = state.companies;
     el('CompaniesPrevious').disabled = locked || !c || c.offset === 0;
@@ -326,6 +327,7 @@
       const data = await call({action:'set_statuses', status_ids:ids, account:state.account});
       if (!accept(data, token)) return;
       state.signed = data.signed || ids; state.statusDraft = null; state.companies = null;
+      if (!state.signed.length) { message('Saved. No status is chosen, so no company counts as a signed client until you choose one.'); return; }
       message('Saved. Search below to find your signed clients.');
       el('Browse').open = true;
     });
