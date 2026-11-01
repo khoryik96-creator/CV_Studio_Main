@@ -51,6 +51,7 @@ _CHARACTERIZED_ROUTES = {
     "/jobadder/update_candidate": ({"POST"}, "jobadder_update_candidate"),
     "/jobadder/upload_cv": ({"POST"}, "jobadder_upload_cv"),
     "/jobadder/upload_original_cv": ({"POST"}, "jobadder_upload_original_cv"),
+    "/jobadder/clients": ({"POST"}, "jobadder_clients"),
 }
 
 _WRITE_ROUTES = (
@@ -112,10 +113,10 @@ class Phase7BJobAdderCoverageTests(unittest.TestCase):
 
     def test_jobadder_route_contract_is_exact(self):
         rules = list(app.app.url_map.iter_rules())
-        self.assertEqual(len(rules), 123)
+        self.assertEqual(len(rules), 124)
         by_rule = {rule.rule: rule for rule in rules}
         jobadder_rules = [r for r in rules if r.rule.startswith("/jobadder")]
-        self.assertEqual(len(jobadder_rules), 27)
+        self.assertEqual(len(jobadder_rules), 28)
         for rule in jobadder_rules:
             self.assertTrue(rule.endpoint)
             self.assertTrue((rule.methods & {"GET", "POST"}) <= {"GET", "POST"})

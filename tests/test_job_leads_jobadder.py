@@ -269,7 +269,7 @@ def test_full_select_all_payload_fits_the_bounded_route_without_extra_post():
 def test_new_route_is_the_only_change_to_all_122_previous_routes():
     import app
     from cvstudio_architecture import _route_contract
-    old=tuple(row for row in _route_contract(app.app) if row['endpoint']!='jobadder_contact_actions')
+    old=tuple(row for row in _route_contract(app.app) if row['endpoint'] not in {'jobadder_contact_actions','jobadder_clients'})
     assert len(old)==122 and hashlib.sha256(json.dumps(old,ensure_ascii=True,sort_keys=True,separators=(',',':')).encode()).hexdigest()=='4cb6b3f8e64b3421c9b9fae819c7fe64e6b05d98db193bb1eb42f8da07aaf600'
 
 def test_route_requires_browser_pairing_and_tracks_account_transition(tmp_path):

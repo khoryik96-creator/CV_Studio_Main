@@ -6,6 +6,7 @@ from io import BytesIO
 import json
 import re
 import threading
+import unicodedata
 from urllib.parse import urlsplit, unquote
 
 
@@ -58,8 +59,41 @@ def _filter(rows, query, selected, field, fields):
             (not query or query in ' '.join(' '.join(row.get(k,[])) if isinstance(row.get(k),list) else str(row.get(k,'')) for k in fields).lower())]
 
 
-def filter_candidates(rows, query='', search=''):
-    return _filter(rows,query,search,'run_id',CANDIDATE_FIELDS)
+CANDIDATE_SORTS = {'saved_at', 'score', 'name', 'location', 'read'}
+CANDIDATE_READS = {'', 'Profile detail', 'Search card'}
+_SORT_SPACE = ' \t\n\r\f\v\u00a0'
+
+
+def _sort_key(value):
+    """Case-, accent- and number-aware sort key ("Candidate 9" before "Candidate 10").
+
+    people-dashboards.js applies exactly the same steps, so the dashboard and
+    its Excel export list candidates in the same order. An empty key is blank.
+    """
+    text = unicodedata.normalize('NFKD', str(value if value is not None else '')).strip(_SORT_SPACE).lower()
+    text = ''.join(c for c in text if unicodedata.category(c) != 'Mn')
+    return tuple(int(part) if index % 2 else part for index, part in enumerate(re.split(r'([0-9]+)', text)))
+
+
+def _score(row):
+    value = row.get('score')
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
+def filter_candidates(rows, query='', search='', *, min_score=0, read='', sort='saved_at', order='desc'):
+    """Dashboard rows in the chosen order. Blank values always sort last."""
+    if (type(min_score) is not int or not 0 <= min_score <= 100 or read not in CANDIDATE_READS or
+            sort not in CANDIDATE_SORTS or order not in {'asc', 'desc'}):
+        raise PeopleError('Choose a valid candidate sort or filter.')
+    rows=[row for row in _filter(rows,query,search,'run_id',CANDIDATE_FIELDS)
+          if (_score(row) or 0)>=min_score and (not read or row.get('read')==read)]
+    if sort == 'score':
+        key, blank = _score, lambda row: _score(row) is None
+    else:
+        key = lambda row: _sort_key(row.get(sort))
+        blank = lambda row: key(row) == ('',)
+    # sorted() is stable, so equal values keep the newest-first archive order.
+    return sorted([row for row in rows if not blank(row)],key=key,reverse=order=='desc')+[row for row in rows if blank(row)]
 
 
 def filter_people(rows, query='', company=''):

@@ -7,7 +7,7 @@ from unittest import mock
 def test_apollo_adds_only_its_declared_route_to_the_exact_previous_contract():
     import app
     from cvstudio_architecture import _route_contract
-    previous=tuple(row for row in _route_contract(app.app) if row['endpoint'] not in {'apollo_connection','jobadder_contact_actions'})
+    previous=tuple(row for row in _route_contract(app.app) if row['endpoint'] not in {'apollo_connection','jobadder_contact_actions','jobadder_clients'})
     assert len(previous)==121
     assert hashlib.sha256(json.dumps(previous,ensure_ascii=True,sort_keys=True,separators=(',',':')).encode()).hexdigest()=='6b0b7dfd41ab2b85fa4685de18efdf1aad477fa91a39cbf0b8a8794eb923b221'
 

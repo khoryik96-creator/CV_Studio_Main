@@ -4,6 +4,15 @@
 
 ## Release state
 
+- v24.6.527 (unmerged, on `claude/job-leads-signed-clients` from merged v526
+  `7c3f0d5`) adds a Signed clients view to Job Leads. The owner chooses which
+  JobAdder statuses mean signed, follows clients, and pulls their LinkedIn job
+  ads for review through a company-filtered companion search; ticked ads are
+  added to Job ads. One new read-only route `POST /jobadder/clients` (123 to
+  124) and a per-account protected vault. The Sourcer Candidates dashboard
+  gains sort/order and minimum-match/profile-read filters, shared with Excel.
+  No JobAdder write, paid call or installation change. See the v527 QA report.
+
 - v24.6.526 locally adds the owner-requested red guidance to Job Leads and
   LinkedIn Sourcer. One next-step outline per active module workflow follows
   edits, distinguishes actual invalid fields, reveals/focuses missing inputs

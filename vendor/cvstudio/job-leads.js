@@ -813,14 +813,9 @@
     }
   }
   function rememberJobs(snapshot) {
-    if (!snapshot || !Array.isArray(snapshot.jobs) || snapshot.jobs.length > 40) throw Error('The job-search results could not be confirmed.');
-    for (const raw of snapshot.jobs) {
-      const url = jobLink(raw?.url || '');
-      if (!url || url !== raw.url || typeof raw.company !== 'string' || !raw.company.trim() || typeof raw.role !== 'string' || !raw.role.trim()) continue;
-      if (discovered.some(row => row.url === url) || discovered.length >= 600) continue;
-      discovered.push({url,company:raw.company.slice(0,200),role:raw.role.slice(0,240),location:typeof raw.location === 'string' ? raw.location.slice(0,240) : '',
-        date_posted:typeof raw.date_posted === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.date_posted) ? raw.date_posted : '',
-        description:typeof raw.description === 'string' ? raw.description.slice(0,6500) : '',description_truncated:true,description_rich:[],full:false});
+    for (const row of window.cvStudioJobSearch.rows(snapshot)) {
+      if (discovered.some(item => item.url === row.url) || discovered.length >= 600) continue;
+      discovered.push({...row,description_truncated:true,description_rich:[],full:false});
     }
     drawDiscovery();
   }
@@ -831,16 +826,6 @@
     if (token === null) return;
     if (failed && typeof markTabFailed === 'function') markTabFailed('jobleads',token);
     else if (typeof markTabDone === 'function') markTabDone('jobleads',token);
-  }
-  async function readDiscovery(tab, previous = '') {
-    for (let attempt=0;attempt<35;attempt++) {
-      checkDiscovery();
-      const result = await rpc('read',{run_id:discoveryRun,tab_id:tab,method:'readJobSearch',values:[]});
-      checkDiscovery();
-      if (!result?.loading && (!previous || result.empty || result.signature !== previous)) return result;
-      await pauseDiscovery();
-    }
-    throw Error('The job-search page did not finish changing. The ads already found are kept.');
   }
   async function startDiscovery() {
     if (busy) return;
@@ -866,22 +851,8 @@
       drawDiscovery(); searchStatus('Opening the LinkedIn job search in Chrome…');
       const source = await rpc('jobSearchBegin',{run_id:discoveryRun,query,location:where,max_pages:pages,use_open:useOpen,source_tab_id:Number(el('SearchSource').value)});
       checkDiscovery();
-      let previous = '';
-      for (let index=0;index<pages;index++) {
-        let snapshot = await readDiscovery(source.tab_id,previous);
-        if (snapshot.empty) break;
-        rememberJobs(snapshot);
-        for (let scroll=0;scroll<8 && !snapshot.atBottom;scroll++) {
-          checkDiscovery();
-          const moved = await rpc('read',{run_id:discoveryRun,tab_id:source.tab_id,method:'scrollJobSearch',values:[snapshot.signature]});
-          checkDiscovery(); if (!moved) break;
-          await pauseDiscovery(); snapshot = await readDiscovery(source.tab_id); rememberJobs(snapshot);
-        }
-        searchStatus(`Reviewed ${index+1} of ${pages} pages. ${discovered.length} unique ads found.`);
-        if (index+1 === pages || !snapshot.hasNext || discovered.length >= 600) break;
-        previous = snapshot.signature; checkDiscovery();
-        if (!await rpc('read',{run_id:discoveryRun,tab_id:source.tab_id,method:'nextJobSearch',values:[previous]})) break;
-      }
+      await window.cvStudioJobSearch.walk({rpc,run:discoveryRun,tab:source.tab_id,pages,check:checkDiscovery,keep:rememberJobs,
+        page:index => searchStatus(`Reviewed ${index+1} of ${pages} pages. ${discovered.length} unique ads found.`),full:() => discovered.length >= 600});
       checkDiscovery(); searchStatus(`Found ${discovered.length} ads.`);
     } catch (error) { failed=!discoveryStopped;searchStatus(discoveryStopped ? `Stopped. ${discovered.length} ads found so far are kept for review.` : error.message + ' Ads already found are kept.'); }
     finally {
@@ -952,16 +923,7 @@
     clearTimeout(item.timer); pending.delete(data.id);
     if (data.error) { const error=Error(data.error);if(/^HR_[A-Z_]{1,50}$/.test(data.error_code || ''))error.companionCode=data.error_code;if(/^https:\/\/www\.linkedin\.com\/company\/[A-Za-z0-9_-]+\/$/.test(data.company_url || ''))error.companyURL=data.company_url;item.reject(error); } else item.resolve(data.result);
   });
-  function jobLink(value) {
-    try {
-      if (value.length > 2048 || value.includes('\\')) return '';
-      const u = new URL(value.trim());
-      if (u.protocol !== 'https:' || !['www.linkedin.com', 'linkedin.com', 'my.linkedin.com', 'sg.linkedin.com'].includes(u.hostname) || u.username || u.password || u.port) return '';
-      const view = u.pathname.match(/^\/jobs\/view\/(?:[^/]*-)?([0-9]{1,24})\/?$/), ids = u.searchParams.getAll('currentJobId');
-      const id = view ? view[1] : /^\/jobs(?:\/search(?:-results)?|\/collections\/[^/]+)?\/?$/.test(u.pathname) && ids.length === 1 ? ids[0] : '';
-      return /^[0-9]{1,24}$/.test(id) ? 'https://www.linkedin.com/jobs/view/' + id : '';
-    } catch { return ''; }
-  }
+  function jobLink(value) { return window.cvStudioJobSearch.jobLink(value); }
   async function prepareSource(data) {
     if (data?.description_html) data.description_rich = (await api({action:'format_content', description:data.description || '', description_html:data.description_html})).description_rich;
     return data;

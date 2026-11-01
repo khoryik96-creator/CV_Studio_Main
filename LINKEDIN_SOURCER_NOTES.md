@@ -1,5 +1,28 @@
 # LinkedIn Sourcer module
 
+## Candidate sort and filters (v24.6.527)
+
+The Candidates dashboard can be sorted and filtered.
+
+- **Sort by:** Last assessed (the default and previous order), Match score,
+  Name, Location or Profile read.
+- **Order:** Descending or Ascending.
+- **Filters:** Minimum match (any, 50–90 or more) and Profile read (Profile
+  detail or Search card only), alongside the existing search box and search
+  brief.
+- **Ordering rules:**
+  - Text ignores letter case and accents ("Éva" sorts with "Eva"), and numbers
+    inside text sort as numbers ("Candidate 9" before "Candidate 10").
+  - Blank values always sort last, including text that is only spaces.
+  - Equal values keep the newest-assessed order.
+  - The page (`people-dashboards.js`) and the server (`cvstudio_people.py`) use
+    the same steps, and a shared test list holds both to the same order.
+  - The sorted column carries `aria-sort`.
+- **Excel export:** it uses exactly the view on screen. The page and the server
+  apply the same rules, and invalid values are refused.
+- **Remembered choices:** sort and order are remembered in this browser only.
+  Filters are not remembered.
+
 ## Source-bound evidence selection (v24.6.514)
 
 An AI-written quotation that is not a normalized substring of its own observed

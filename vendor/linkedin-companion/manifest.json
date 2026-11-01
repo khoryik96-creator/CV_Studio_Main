@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CV Studio LinkedIn Companion",
-  "version": "24.6.526",
+  "version": "24.6.527",
   "description": "LinkedIn Sourcer and job-link autofill for CV Studio. No AI keys or provider calls.",
   "minimum_chrome_version": "116",
   "permissions": ["activeTab", "scripting", "storage"],

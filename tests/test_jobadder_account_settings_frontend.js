@@ -194,6 +194,7 @@ async function signOutIsConfirmedSuccessOrderedAndFailureVisible() {
       clearTheSpiderJobAdderAccountState() { events.push('clear-spider-account'); },
       clearPPCJobAdderAccountState() { events.push('clear-ppc-account'); return Promise.resolve(); },
       invalidateOneNoteJobAdderMatches() { events.push('clear-onenote-account'); },
+      clearJobLeadsClientsAccountState() { events.push('clear-signed-clients'); },
       refreshIntegrationDiagnostics() { events.push('refresh'); return Promise.resolve(); },
       showToast(message, kind) { events.push('toast:' + kind + ':' + message); },
       Error,
@@ -224,6 +225,7 @@ async function signOutIsConfirmedSuccessOrderedAndFailureVisible() {
   assert.ok(success.events.includes('clear-spider-account'));
   assert.ok(success.events.includes('clear-ppc-account'));
   assert.ok(success.events.includes('clear-onenote-account'));
+  assert.ok(success.events.includes('clear-signed-clients'), 'sign-out clears followed clients and pulled ads');
   assert.ok(success.events.includes('refresh'));
 
   const failure = await run({
@@ -237,6 +239,7 @@ async function signOutIsConfirmedSuccessOrderedAndFailureVisible() {
   assert.ok(!failure.events.includes('clear-spider-account'));
   assert.ok(!failure.events.includes('clear-ppc-account'));
   assert.ok(!failure.events.includes('clear-onenote-account'));
+  assert.ok(!failure.events.includes('clear-signed-clients'));
   assert.strictEqual(failure.events.filter(item => item.startsWith('toast:err:')).length, 1);
 }
 
@@ -277,6 +280,7 @@ function tenantBoundBrowserStateInvalidationIsComplete() {
   assert.ok(publicInfo.includes('previousAccountCacheNamespace'));
   assert.ok(publicInfo.includes('nextAccountCacheNamespace'));
   assert.ok(publicInfo.includes('previousAccountCacheNamespace !== nextAccountCacheNamespace'));
+  assert.ok(publicInfo.includes('clearJobLeadsClientsAccountState()'), 'an account change clears the Signed clients view');
   assert.ok(functionSource(html, 'jaAccountCacheNamespace').includes('account_cache_namespace'));
   assert.ok(!functionSource(html, 'saveJobAdderSettings').includes('skipAccountStateInvalidation:true'));
   assert.ok(functionSource(html, 'signOutJobAdder').includes('skipAccountStateInvalidation:true'));

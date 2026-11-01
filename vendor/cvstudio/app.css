@@ -1727,6 +1727,19 @@
 @media(max-width:650px) { .people-filters { grid-template-columns:1fr; gap:7px; } .people-dashboard .card-head { flex-wrap:wrap; gap:8px; } }
 
 .contacts-filters{grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}
+/* Signed clients dashboard (Job Leads). */
+.job-leads-clients-box{margin:12px 0;border:1px solid var(--border);border-radius:9px;padding:10px 12px}
+.job-leads-clients-box summary{cursor:pointer;font-weight:600}
+.job-leads-clients-heading{margin:16px 0 8px;font-size:14px}
+.job-leads-clients-statuses{display:flex;flex-wrap:wrap;gap:6px 16px;margin:8px 0}
+.job-leads-clients-statuses label{display:flex;align-items:center;gap:6px;font-size:12px}
+.job-leads-clients-statuses input,.job-leads-clients td input[type="checkbox"]{width:auto;margin:0}
+.job-leads-clients-pull{margin-top:10px;align-items:center}
+.job-leads-clients .job-leads-actions label{font-size:12px;font-weight:600;color:var(--text2)}
+.job-leads-clients .job-leads-actions select{flex:0 0 auto;width:auto;min-width:90px}
+.job-leads-clients .job-leads-pick input{flex:none;width:16px;min-width:16px}
+.job-leads-clients td input[type="url"]{width:100%;min-width:160px;font:inherit;padding:5px 7px;border:1px solid var(--border);border-radius:7px}
+.job-leads-clients .job-leads-actions input[type="search"]{flex:1;min-width:140px}
 .job-leads-email-compact{border:0;padding:0;margin:0;min-width:145px}
 .job-leads-email-compact .job-leads-email-result p{margin:4px 0;font-size:11px}
 .job-leads-ja-dialog [data-guide="true"]{outline:2px solid #d92d20;outline-offset:2px}
