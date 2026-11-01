@@ -7,7 +7,16 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current checkpoint: v24.6.527 Signed clients and candidate sorting (unmerged)**
+**Current checkpoint: v24.6.528 Signed clients list fix (unmerged)**
+on `claude/job-leads-signed-clients`, restarted from merged v527 `3ea7880` /
+PR #273. The owner saw no clients after reloading and ticking statuses.
+Reload statuses now keeps unsaved ticks, saving statuses (or a first open with
+nothing followed) lists the signed clients at once, a company JobAdder lists
+without a status is shown unlabelled (Follow still checks its own status), and
+a page where none matched explains itself via the new `checked` count. Route
+contract unchanged (124). See the v528 QA report.
+
+**Previous checkpoint: v24.6.527 Signed clients and candidate sorting (merged PR #273 / `3ea7880`)**
 on `claude/job-leads-signed-clients`, from merged v526 `7c3f0d5` / PR #270.
 The owner asked for a Job Leads dashboard of signed JobAdder clients, the
 ability to follow a few of them and to pull their job ads into the main Job

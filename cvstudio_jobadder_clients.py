@@ -347,21 +347,27 @@ class JobAdderClientsService:
             if not isinstance(item, dict) or type(item.get("companyId")) is not int or item["companyId"] <= 0:
                 continue
             status = item.get("status") if isinstance(item.get("status"), dict) else {}
-            # Never label a company signed unless JobAdder says its status is
-            # one of the chosen ones, even if a filter were ignored upstream.
-            if status.get("statusId") not in signed:
+            # JobAdder already filtered by the chosen statuses. A company listed
+            # with another status is still left out in case the filter was
+            # ignored, and only a chosen status is ever shown as its label. A
+            # company listed without a status is shown unlabelled: Follow reads
+            # it again and refuses it unless its status is a chosen one.
+            listed = status.get("statusId")
+            if listed is not None and listed not in signed:
                 continue
             name = _text(item.get("name"), 200)
             if not name:
                 continue
             owner = item.get("owner") if isinstance(item.get("owner"), dict) else {}
-            rows.append({"company_id": item["companyId"], "name": name, "status": _text(status.get("name"), 100),
+            rows.append({"company_id": item["companyId"], "name": name, "status": _text(status.get("name"), 100) if listed is not None else "",
                          "owner": " ".join(part for part in (_text(owner.get("firstName"), 60), _text(owner.get("lastName"), 60)) if part),
                          "followed": str(item["companyId"]) in entry["followed"],
                          "jobadder_url": base + "/companies/" + str(item["companyId"])})
         returned = len(data["items"])
         more = returned > 0 and (offset + returned < total if total is not None else returned >= PAGE_SIZE)
-        return {"account": scope, "companies": rows, "offset": offset, "total": total,
+        # ``checked`` lets the page explain a page where JobAdder listed
+        # companies but none had a chosen status.
+        return {"account": scope, "companies": rows, "offset": offset, "total": total, "checked": returned,
                 "next_offset": offset + returned if more and offset + returned <= MAX_OFFSET else None}
 
     def _follow(self, body, token, data, scope, identity, entry):

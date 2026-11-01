@@ -310,6 +310,7 @@
         if (!accept(data, token)) return;
         state.statuses = data.statuses || []; state.signed = data.signed || state.signed; state.statusDraft = null;
         if (staleStatuses().length) { el('Setup').open = true; message('A saved signed status is no longer in JobAdder. Check the statuses and click Save statuses.'); }
+        else if (state.signed.length && !state.followed.length) { el('Browse').open = true; draw(); await readCompanies(token, 0); }
       } catch (error) { if (token === generation) message(error.message + ' Followed clients are still listed.'); }
     });
   }
@@ -317,8 +318,12 @@
     return work(async token => {
       const data = await call({action:'statuses'});
       if (!accept(data, token)) return;
-      state.statuses = data.statuses || []; state.signed = data.signed || []; state.statusDraft = null;
-      message(staleStatuses().length ? 'A saved signed status is no longer in JobAdder. Check the statuses and click Save statuses.' : 'Statuses reloaded from JobAdder.');
+      state.statuses = data.statuses || []; state.signed = data.signed || [];
+      // Ticks not saved yet survive a reload; only statuses JobAdder no longer lists are dropped.
+      if (state.statusDraft) { const known = knownStatuses(); state.statusDraft = new Set([...state.statusDraft].filter(id => known.has(id))); }
+      const unsaved = state.statusDraft && [...state.statusDraft].sort((a, b) => a - b).join() !== [...state.signed].sort((a, b) => a - b).join();
+      message(staleStatuses().length ? 'A saved signed status is no longer in JobAdder. Check the statuses and click Save statuses.'
+        : unsaved ? 'Statuses reloaded from JobAdder. Your ticks are not saved yet: click Save statuses.' : 'Statuses reloaded from JobAdder.');
     });
   }
   function saveStatuses() {
@@ -328,19 +333,22 @@
       if (!accept(data, token)) return;
       state.signed = data.signed || ids; state.statusDraft = null; state.companies = null;
       if (!state.signed.length) { message('Saved. No status is chosen, so no company counts as a signed client until you choose one.'); return; }
-      message('Saved. Search below to find your signed clients.');
-      el('Browse').open = true;
+      el('Browse').open = true; message('Saved. Loading your signed clients…'); draw();
+      // The choice is saved even if the list cannot be read right now.
+      try { await readCompanies(token, 0); } catch (error) { if (token === generation) message('Saved. ' + error.message); }
     });
   }
-  function searchCompanies(offset = 0) {
-    return work(async token => {
-      const data = await call({action:'companies', query:el('Query').value.trim(), offset});
-      if (!accept(data, token)) return;
-      state.companies = {rows:data.companies || [], offset:data.offset || 0, total:data.total ?? null, next:data.next_offset ?? null,
-        returned:Math.max((data.next_offset ?? 0) - (data.offset || 0), (data.companies || []).length)};
-      message(data.companies?.length ? '' : 'No signed clients found. Check the statuses or the name.');
-    });
+  // One page of signed clients from JobAdder, inside a running task.
+  async function readCompanies(token, offset) {
+    const data = await call({action:'companies', query:el('Query').value.trim(), offset});
+    if (!accept(data, token)) return;
+    const rows = data.companies || [], checked = Number.isSafeInteger(data.checked) ? data.checked : rows.length;
+    state.companies = {rows, offset:data.offset || 0, total:data.total ?? null, next:data.next_offset ?? null, returned:checked};
+    if (rows.length) message(rows.length === 1 ? '1 signed client found. Click Follow to add it.' : `${rows.length} signed clients found. Click Follow on the ones to pull job ads for.`);
+    else if (checked) message(`JobAdder listed ${checked} compan${checked === 1 ? 'y' : 'ies'} on this page, but none has a chosen status.` + (data.next_offset != null ? ' Click Next to look further, or search by name.' : ''));
+    else message('No signed clients found. Check the statuses or the name.');
   }
+  function searchCompanies(offset = 0) { return work(token => readCompanies(token, offset)); }
   function follow(company) {
     return work(async token => {
       const data = await call({action:'follow', company_id:company.company_id, account:state.account});

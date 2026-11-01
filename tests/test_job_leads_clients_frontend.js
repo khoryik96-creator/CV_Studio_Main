@@ -56,6 +56,8 @@ function fixture(options={}){
     if(body.action==='overview')return reply({account:state.account,signed:[...state.signed],followed:followed()});
     if(body.action==='statuses')return reply({account:state.account,statuses:structuredClone(state.statuses),signed:[...state.signed]});
     if(body.action==='set_statuses'){state.signed=[...body.status_ids];return reply({account:state.account,signed:[...state.signed]});}
+    if(body.action==='companies'&&state.companiesDown)return fail(502,'JobAdder could not list companies (HTTP 500). Try again later.');
+    if(body.action==='companies'&&state.companyReply)return reply({account:state.account,...state.companyReply});
     if(body.action==='companies')return reply({account:state.account,companies:state.companies.map(row=>({...row,followed:state.followed.some(f=>f.company_id===row.company_id)})),offset:0,total:2,next_offset:null});
     if(body.action==='follow'){const company=state.companies.find(row=>row.company_id===body.company_id);state.followed.push({company_id:company.company_id,name:company.name,...state.details[company.company_id],followed_at:'2026-10-30T00:00:00+00:00',pulled_at:'',jobadder_url:company.jobadder_url});return reply({account:state.account,followed:followed()});}
     if(body.action==='unfollow'){state.followed=state.followed.filter(row=>row.company_id!==body.company_id);return reply({account:state.account,followed:followed()});}
@@ -136,8 +138,10 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
   const statusBoxes=f.el('Statuses').querySelectorAll('input');assert.equal(statusBoxes.length,2);
   statusBoxes[1].checked=true;await statusBoxes[1].dispatch('change');assert(!f.el('StatusesSave').disabled);
   await f.el('StatusesSave').click();await settle();
-  assert.deepEqual(f.calls.at(-1),{action:'set_statuses',status_ids:[2],account:ACCOUNT});
+  // Saving lists the signed clients at once; no extra Search click is needed.
+  assert.deepEqual(f.calls.slice(-2),[{action:'set_statuses',status_ids:[2],account:ACCOUNT},{action:'companies',query:'',offset:0}]);
   assert.match(f.el('SetupSummary').textContent,/Signed Client/);assert(f.el('Browse').open);
+  assert.equal(f.el('Companies').children.length,2);assert.match(f.el('Message').textContent,/2 signed clients found/);
   f.el('Query').value=' Example ';await f.el('Search').click();await settle();
   assert.deepEqual(f.calls.at(-1),{action:'companies',query:'Example',offset:0});
   const companyRows=f.el('Companies').children;assert.equal(companyRows.length,2);
@@ -253,7 +257,35 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
   {const s=fixture({signed:[2,9]});await s.el('Tab').click();await settle();
    assert(s.el('Setup').open);assert.match(s.el('Message').textContent,/no longer in JobAdder/);assert.match(s.el('SetupSummary').textContent,/1 no longer in JobAdder/);
    assert(!s.el('StatusesSave').disabled,'saving the remaining statuses is possible');
-   await s.el('StatusesSave').click();await settle();assert.deepEqual(s.calls.at(-1),{action:'set_statuses',status_ids:[2],account:ACCOUNT});}
+   await s.el('StatusesSave').click();await settle();assert.deepEqual(s.calls.slice(-2).map(c=>c.action),['set_statuses','companies']);
+   assert.deepEqual(s.calls.at(-2),{action:'set_statuses',status_ids:[2],account:ACCOUNT});}
+
+  // Reload statuses keeps ticks that are not saved yet.
+  {const r=fixture();await r.el('Tab').click();await settle();
+   const boxes=r.el('Statuses').querySelectorAll('input');boxes[1].checked=true;await boxes[1].dispatch('change');
+   await r.el('StatusesLoad').click();await settle();
+   assert(r.el('Statuses').querySelectorAll('input')[1].checked,'the unsaved tick survives a reload');
+   assert.match(r.el('Message').textContent,/not saved yet/);assert(!r.el('StatusesSave').disabled);
+   await r.el('StatusesSave').click();await settle();assert.deepEqual(r.calls.at(-2),{action:'set_statuses',status_ids:[2],account:ACCOUNT});}
+
+  // Opening the view with statuses chosen and nothing followed lists the
+  // signed clients at once; with clients followed it does not read the list.
+  {const o=fixture({signed:[2]});await o.el('Tab').click();await settle();
+   assert.deepEqual(o.calls.map(c=>c.action),['overview','statuses','companies']);assert(o.el('Browse').open);assert.equal(o.el('Companies').children.length,2);
+   const k=fixture({signed:[2],followed:[client(11,'4242','Example Client')]});await k.el('Tab').click();await settle();
+   assert.deepEqual(k.calls.map(c=>c.action),['overview','statuses']);}
+
+  // A page where JobAdder listed companies but none had a chosen status says so;
+  // a list that cannot be read after saving still keeps the saved choice.
+  {const d=fixture({companyReply:{companies:[],offset:0,total:120,checked:50,next_offset:50}});await d.el('Tab').click();await settle();
+   const boxes=d.el('Statuses').querySelectorAll('input');boxes[1].checked=true;await boxes[1].dispatch('change');
+   await d.el('StatusesSave').click();await settle();
+   assert.match(d.el('Message').textContent,/JobAdder listed 50 companies on this page, but none has a chosen status\. Click Next/);
+   assert(!d.el('CompaniesNext').disabled,'the next page can be checked');
+   const e=fixture({companiesDown:true});await e.el('Tab').click();await settle();
+   const more=e.el('Statuses').querySelectorAll('input');more[1].checked=true;await more[1].dispatch('change');
+   await e.el('StatusesSave').click();await settle();
+   assert.match(e.el('Message').textContent,/^Saved\. JobAdder could not list companies/);assert.match(e.el('SetupSummary').textContent,/Signed Client/);}
 
   // When every saved status is gone from JobAdder, or every one is unticked,
   // the empty choice still saves; an unchanged empty choice does not.

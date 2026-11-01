@@ -285,7 +285,7 @@ def test_company_list_needs_a_status_choice_and_uses_the_chosen_status_filter():
     assert [row["name"] for row in result["companies"]] == ["Example Client", "Second Client"]
     assert result["companies"][0] == {"company_id": 11, "name": "Example Client", "status": "Signed Client", "owner": "Sample Owner",
                                       "followed": False, "jobadder_url": "https://app.jobadder.com/companies/11"}
-    assert result["next_offset"] == 53 and result["total"] == 120
+    assert result["next_offset"] == 53 and result["total"] == 120 and result["checked"] == 3
     client.replies["companies"] = {"items": [company(14)], "totalCount": 51}
     assert run(service, {"action": "companies", "offset": 50})["next_offset"] is None
     for bad in [{"offset": -1}, {"offset": "0"}, {"offset": 100001}, {"query": "x" * 201}, {"query": "a\nb"}]:
@@ -296,6 +296,26 @@ def test_company_list_needs_a_status_choice_and_uses_the_chosen_status_filter():
         with pytest.raises(JobAdderClientsError) as error:
             run(service, {"action": "companies"})
         assert error.value.status == 502
+
+
+def test_a_company_listed_without_a_status_is_shown_unlabelled_and_checked_on_follow():
+    service, client, _vault, _state = setup()
+    signed(service, client)
+    bare, nameless = company(15, name="Unlabelled Client"), company(16, name="Status Without Id")
+    del bare["status"]
+    nameless["status"] = {"name": "Signed Client"}
+    client.replies["companies"] = {"items": [bare, nameless, company(12, status_id=1, name="Not Signed")], "totalCount": 3}
+    result = run(service, {"action": "companies"})
+    # JobAdder filtered the list by the chosen statuses; only an unconfirmed
+    # status is left unlabelled, and another listed status is still left out.
+    assert [(row["name"], row["status"]) for row in result["companies"]] == [("Unlabelled Client", ""), ("Status Without Id", "")]
+    assert result["checked"] == 3
+    client.replies["companies/15"] = company(15, status_id=1, name="Unlabelled Client")
+    with pytest.raises(JobAdderClientsError) as error:
+        run(service, {"action": "follow", "company_id": 15})
+    assert error.value.code == "JOBADDER_CLIENTS_STALE", "Follow refuses it unless its own status is a chosen one"
+    client.replies["companies/15"] = company(15, name="Unlabelled Client")
+    assert [row["company_id"] for row in run(service, {"action": "follow", "company_id": 15})["followed"]] == [15]
 
 
 def test_follow_reads_the_company_and_keeps_its_linkedin_page():
