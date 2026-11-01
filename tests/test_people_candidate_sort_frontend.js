@@ -23,7 +23,7 @@ function fixture(stored=new Map(),rows=ROWS){
   const document={getElementById:id=>{if(!ids.has(id))ids.set(id,new Element(/Sort|Order|MinScore|Read|Search|Company/.test(id)?'select':'div'));return ids.get(id);},
     createElement:tag=>new Element(tag),querySelectorAll:()=>[]};
   const el=name=>document.getElementById('people'+name);
-  el('CandidatesSort').value='saved_at';el('CandidatesOrder').value='desc';el('CandidatesMinScore').value='0';el('CandidatesRead').value='';
+  el('CandidatesSort').value='saved_at';el('CandidatesOrder').value='desc';el('CandidatesMinScore').value='0';el('CandidatesRead').value='';el('CandidatesFolder').value='*';
   for(const [name,values] of [['Sort',['saved_at','score','name','location','read']],['Order',['desc','asc']]])
     el('Candidates'+name).options=values.map(value=>({value}));
   const fetch=async(url,init)=>{
@@ -34,11 +34,12 @@ function fixture(stored=new Map(),rows=ROWS){
     throw Error('unexpected '+body.action);
   };
   const localStorage={getItem:key=>stored.get(key) ?? null,setItem:(key,value)=>stored.set(key,String(value))};
-  const window={addEventListener(){},cvStudioJobLeads:null};
+  const window={addEventListener(){},cvStudioJobLeads:null,confirm:()=>true};
   const context=vm.createContext({window,document,fetch,localStorage,console,structuredClone,Intl,URL:{createObjectURL:()=>'blob:x',revokeObjectURL(){}},
     setTimeout,crypto:{randomUUID:()=>'00000000-0000-4000-8000-000000000000'}});
   vm.runInContext(source,context);
-  const names=()=>el('CandidatesRows').children.map(tr=>tr.children[0].children[0].textContent);
+  // The first column holds the select box and shortlist star; the name follows.
+  const names=()=>el('CandidatesRows').children.map(tr=>tr.children[1].children[0].textContent);
   const choose=async(name,value)=>{el('Candidates'+name).value=value;await el('Candidates'+name).dispatch('change');};
   return {el,posts,names,choose,stored};
 }

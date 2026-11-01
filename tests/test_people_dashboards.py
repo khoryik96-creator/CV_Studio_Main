@@ -103,7 +103,8 @@ def test_date_labels(dates,label):
 
 
 def test_guarded_dashboards_exports_and_new_vault(archive,tmp_path):
-    import app
+    from isolated_app import load_app
+    app=load_app()
     from test_apollo_contacts import setup
     store,_=archive;store.remember(SimpleNamespace(id='a'*32,brief='SAP Malaysia'),[candidate()],'screen')
     service,broker,*_=setup();before=len(broker.calls)
@@ -245,3 +246,108 @@ def test_candidate_name_order_matches_the_dashboard_rules():
     assert [row['name'] for row in filter_candidates(rows,sort='name',order='asc')]==PARITY_ASC
     assert [row['name'] for row in filter_candidates(rows,sort='name',order='desc')]==PARITY_DESC
     assert [row['name'] for row in filter_candidates([{**rows[0],'score':None},{**rows[1],'score':True}],sort='score')]==['Zara Lim','\u00c9milie Tan'], 'non-numbers are blank, never an error'
+
+
+def test_candidate_folders_shortlist_and_trash(archive):
+    store,data=archive;run=SimpleNamespace(id='a'*32,brief='SAP FICO in Malaysia')
+    store.remember(run,[candidate(),{**candidate(),'name':'Second Person','url':'https://www.linkedin.com/in/second'}],'screen')
+    now=lambda name:next(row for row in store.list() if row['name']==name)
+    pick=lambda *names:[{'key':now(name)['key'],'revision':now(name)['revision']} for name in names]
+    first=now('Example Person')
+    assert (first['folder'],first['shortlisted'],first['deleted'])==('',False,False)
+    assert store.create_folder(' Controlling ')=={'folder':'Controlling'} and store.folders()==['Controlling']
+    store.create_folder('Controlling');assert data['folders']==['Controlling'],'creating it again keeps one folder'
+    for bad in ['','   ','x'*81,'a\nb','*','!trash',None]:
+        with pytest.raises(PeopleError):store.create_folder(bad)
+    stale=pick('Example Person')
+    assert store.move(pick('Example Person'),'Controlling')=={'changed':1} and now('Example Person')['folder']=='Controlling'
+    with pytest.raises(PeopleError,match='changed in another window'):store.move(stale,'')
+    with pytest.raises(PeopleError,match='no longer exists'):store.move(pick('Second Person'),'Missing')
+    for bad in [[],None,[{'key':'x','revision':1}],[{'key':first['key'],'revision':'1'}],pick('Second Person')*2]:
+        with pytest.raises(PeopleError):store.move(bad,'Controlling')
+    starred=store.shortlist(first['key'],now('Example Person')['revision'],True)
+    assert starred['shortlisted'] is True and starred['revision']==now('Example Person')['revision']
+    with pytest.raises(PeopleError):store.shortlist(first['key'],starred['revision'],'yes')
+    assert store.trash(pick('Example Person'),True)=={'changed':1}
+    row=now('Example Person')
+    assert row['deleted'] is True and row['deleted_at'] and row['folder']=='Controlling' and row['shortlisted'] is True,'Trash keeps the folder and shortlist'
+    with pytest.raises(PeopleError,match='Restore candidates from Trash'):store.move(pick('Example Person'),'')
+    with pytest.raises(PeopleError,match='Restore this candidate'):store.shortlist(row['key'],row['revision'],False)
+    with pytest.raises(PeopleError):store.trash(pick('Example Person'),'yes')
+    rows=store.list()
+    names=lambda **view:sorted(row['name'] for row in filter_candidates(rows,**view))
+    assert names()==['Second Person'] and names(folder='!trash')==['Example Person'],'Trash shows only when chosen'
+    assert names(folder='Controlling')==[] and names(folder='')==['Second Person']
+    store.trash(pick('Example Person'),False);rows=store.list()
+    assert now('Example Person')['deleted'] is False and now('Example Person')['deleted_at']==''
+    assert names(folder='Controlling')==['Example Person'] and names(shortlisted=True)==['Example Person']
+    assert names(folder='*',shortlisted=True)==['Example Person'] and names(folder='',shortlisted=True)==[]
+    for bad in [dict(folder='a\nb'),dict(folder=None),dict(shortlisted='yes')]:
+        with pytest.raises(PeopleError):filter_candidates(rows,**bad)
+    # A note or a new assessment keeps the folders and the organisation.
+    store.note(first['key'],now('Example Person')['revision'],'Strong in CO-PA')
+    store.remember(run,[candidate()],'detail')
+    row=now('Example Person')
+    assert (row['folder'],row['shortlisted'],row['deleted'],row['notes'],row['read'])==('Controlling',True,False,'Strong in CO-PA','Profile detail')
+    assert data['folders']==['Controlling']
+    # Deleting a folder needs every candidate in it, and leaves them Unfiled.
+    with pytest.raises(PeopleError,match='changed in another window'):store.delete_folder('Controlling',[])
+    assert store.delete_folder('Controlling',pick('Example Person'))=={'changed':1}
+    assert store.folders()==[] and now('Example Person')['folder']=='' and now('Example Person')['shortlisted'] is True
+    with pytest.raises(PeopleError,match='changed in another window'):store.delete_folder('Controlling',[])
+    store.create_folder('Empty');assert store.delete_folder('Empty',[])=={'changed':0},'an empty folder deletes without a selection'
+
+
+def test_saved_candidates_with_unreadable_organisation_fail_closed(archive):
+    store,data=archive;run=SimpleNamespace(id='a'*32,brief='SAP')
+    store.remember(run,[candidate()],'screen')
+    key=next(iter(data['rows']))
+    legacy=copy.deepcopy(data);legacy.pop('folders')
+    for name in ['folder','shortlisted','deleted','deleted_at']:
+        legacy['rows'][key].pop(name)
+    assert SourcerCandidates(load=lambda:copy.deepcopy(legacy),save=lambda _:None).list()[0]['name']=='Example Person','dashboards saved before folders still read'
+    for patch in [dict(folders='Controlling'),dict(folders=['A','A']),dict(folders=['']),dict(folders=['a\nb']),dict(folders=[' padded']),dict(folders=['x']*201)]:
+        broken={**copy.deepcopy(data),**patch}
+        with pytest.raises(PeopleError,match='read securely'):
+            SourcerCandidates(load=lambda broken=broken:copy.deepcopy(broken),save=lambda _:pytest.fail('must not overwrite')).list()
+    for field,value in [('folder','a\nb'),('folder',' padded'),('folder','*'),('shortlisted','yes'),('deleted',1),('deleted_at',5),('folder',None)]:
+        broken=copy.deepcopy(data);broken['rows'][key][field]=value
+        with pytest.raises(PeopleError,match='read securely'):
+            SourcerCandidates(load=lambda broken=broken:copy.deepcopy(broken),save=lambda _:pytest.fail('must not overwrite')).list()
+
+
+def test_candidate_organising_actions_and_export_through_the_route():
+    from isolated_app import load_app
+    app=load_app();data={}
+    def save(value):
+        data.clear();data.update(copy.deepcopy(value))
+    store=SourcerCandidates(load=lambda:copy.deepcopy(data),save=save)
+    run=SimpleNamespace(id='c'*32,brief='SAP FICO in Malaysia')
+    store.remember(run,[candidate(),{**candidate(),'name':'Second Person','url':'https://www.linkedin.com/in/second'}],'screen')
+    seen={}
+    def capture(found,fields,title):
+        seen.update(names=[row['name'] for row in found],columns=list(fields.values()),rows=found);return b'xlsx'
+    with mock.patch.object(app._LINKEDIN_SOURCER,'candidates',store),mock.patch.object(app,'_SOURCER_CANDIDATES',store),\
+            mock.patch.object(app,'_people_workbook',side_effect=capture):
+        browser=app.app.test_client();browser.get('/');headers={'X-CV-Studio-Request':'1'}
+        post=lambda **body:browser.post('/linkedin-sourcer',json=body,headers=headers)
+        assert post(action='candidate_folder_create',name='Finance').get_json()=={'folder':'Finance'}
+        listed=post(action='candidates').get_json()
+        assert listed['folders']==['Finance'] and len(listed['candidates'])==2
+        first=next(row for row in listed['candidates'] if row['name']=='Example Person')
+        moved=post(action='candidate_move',items=[{'key':first['key'],'revision':first['revision']}],folder='Finance')
+        assert moved.status_code==200 and moved.get_json()=={'changed':1}
+        stale=post(action='candidate_move',items=[{'key':first['key'],'revision':first['revision']}],folder='')
+        assert stale.status_code==400 and 'changed in another window' in stale.get_json()['error']
+        current=lambda:next(row for row in post(action='candidates').get_json()['candidates'] if row['name']=='Example Person')
+        starred=post(action='candidate_shortlist',key=first['key'],revision=current()['revision'],shortlisted=True).get_json()['candidate']
+        assert starred['shortlisted'] is True
+        response=post(action='export_candidates',folder='Finance',shortlisted=True)
+        assert response.status_code==200 and seen['names']==['Example Person']
+        assert seen['columns'][-3:]==['Folder','Shortlisted','In Trash'] and (seen['rows'][0]['folder'],seen['rows'][0]['shortlisted'],seen['rows'][0]['deleted'])==('Finance','Yes','')
+        assert post(action='candidate_trash',items=[{'key':first['key'],'revision':current()['revision']}],deleted=True).get_json()=={'changed':1}
+        post(action='export_candidates');assert seen['names']==['Second Person'],'the default export leaves Trash out'
+        post(action='export_candidates',folder='!trash');assert seen['names']==['Example Person'] and seen['rows'][0]['deleted']=='Yes'
+        assert post(action='export_candidates',folder='a\nb').status_code==400
+        assert post(action='candidate_folder_delete',name='Finance',items=[{'key':first['key'],'revision':current()['revision']}]).get_json()=={'changed':1}
+        assert post(action='candidates').get_json()['folders']==[]

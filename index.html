@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>CV Studio</title>
 <link rel="icon" type="image/png" href="cv_studio_logo.png?v=24.6.79-ui"/>
-<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.528">
-<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.528"></script>
+<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.529">
+<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.529"></script>
 <script>
 /* CV Studio Doctor — built-in diagnostic recorder.
  * Records JS errors, unhandled rejections, failed/slow network calls and
@@ -254,7 +254,7 @@
 <div class="app">
   <div class="header" style="position:relative;">
     <div>
-      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.528 (Offline) by The 郭 Lab</span></h1>
+      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.529 (Offline) by The 郭 Lab</span></h1>
 
     </div>
     <div class="header-tools">
@@ -828,8 +828,10 @@
     <div class="job-leads-actions job-leads-contact-tabs" role="group" aria-label="LinkedIn Sourcer view"><button type="button" class="sec" id="peopleSourcerSearchTab" aria-pressed="true">Search</button><button type="button" class="sec" id="peopleCandidatesTab" aria-pressed="false">Candidates</button></div>
     <section class="card people-dashboard" id="peopleCandidatesPanel" aria-label="Candidate dashboard" hidden>
       <div class="card-head"><h2>Candidates <span id="peopleCandidatesCount">0</span></h2><div class="job-leads-actions"><button type="button" class="sec" id="peopleCandidatesRefresh">Refresh</button><button type="button" class="primary" id="peopleCandidatesExport">Export Excel</button></div></div>
-      <div class="card-body"><div class="people-filters contacts-filters"><label>Search candidates<input type="search" id="peopleCandidatesQuery" maxlength="240"></label><label>Search brief<select id="peopleCandidatesSearch"><option value="">All searches</option></select></label><label>Minimum match<select id="peopleCandidatesMinScore"><option value="0">Any match</option><option value="50">50 or more</option><option value="60">60 or more</option><option value="70">70 or more</option><option value="80">80 or more</option><option value="90">90 or more</option></select></label><label>Profile read<select id="peopleCandidatesRead"><option value="">All</option><option value="Profile detail">Profile detail</option><option value="Search card">Search card only</option></select></label><label>Sort by<select id="peopleCandidatesSort"><option value="saved_at">Last assessed</option><option value="score">Match score</option><option value="name">Name</option><option value="location">Location</option><option value="read">Profile read</option></select></label><label>Order<select id="peopleCandidatesOrder"><option value="desc">Descending</option><option value="asc">Ascending</option></select></label></div><p id="peopleCandidatesMessage" role="status" class="job-leads-muted"></p>
-        <div class="people-table"><table><thead><tr><th data-sort="name">Name</th><th>Headline / title</th><th data-sort="location">Location</th><th data-sort="score">Match</th><th data-sort="read">Profile read</th><th>Supporting evidence</th><th>Still unknown</th><th>Notes</th></tr></thead><tbody id="peopleCandidatesRows"></tbody></table></div>
+      <div class="card-body"><div class="people-filters contacts-filters"><label>Search candidates<input type="search" id="peopleCandidatesQuery" maxlength="240"></label><label>Search brief<select id="peopleCandidatesSearch"><option value="">All searches</option></select></label><label>Minimum match<select id="peopleCandidatesMinScore"><option value="0">Any match</option><option value="50">50 or more</option><option value="60">60 or more</option><option value="70">70 or more</option><option value="80">80 or more</option><option value="90">90 or more</option></select></label><label>Profile read<select id="peopleCandidatesRead"><option value="">All</option><option value="Profile detail">Profile detail</option><option value="Search card">Search card only</option></select></label><label>Sort by<select id="peopleCandidatesSort"><option value="saved_at">Last assessed</option><option value="score">Match score</option><option value="name">Name</option><option value="location">Location</option><option value="read">Profile read</option></select></label><label>Order<select id="peopleCandidatesOrder"><option value="desc">Descending</option><option value="asc">Ascending</option></select></label><label>Folder<select id="peopleCandidatesFolder"><option value="*">All folders</option><option value="">Unfiled</option><option value="!trash">Trash</option></select></label><label class="job-leads-pick"><input type="checkbox" id="peopleCandidatesShortlisted">Shortlisted only</label></div>
+        <div class="job-leads-actions people-candidate-tools"><label class="job-leads-pick"><input type="checkbox" id="peopleCandidatesSelectPage">Select all on this page</label><span id="peopleCandidatesSelected" class="job-leads-muted">0 selected</span><label for="peopleCandidatesMoveTo">Move to</label><select id="peopleCandidatesMoveTo"><option value="">Unfiled</option></select><button type="button" class="sec" id="peopleCandidatesMove" disabled>Move selected</button><button type="button" class="sec" id="peopleCandidatesTrash" disabled>Delete selected</button><button type="button" class="sec" id="peopleCandidatesRestore" hidden disabled>Restore selected</button></div>
+        <details class="people-folder-tools"><summary>Manage folders</summary><div class="job-leads-actions"><label for="peopleCandidatesNewFolder">New folder</label><input type="text" id="peopleCandidatesNewFolder" maxlength="80"><button type="button" class="sec" id="peopleCandidatesCreateFolder" disabled>Create folder</button><button type="button" class="sec" id="peopleCandidatesDeleteFolder" disabled>Delete chosen folder</button></div><p class="job-leads-muted">To delete a folder, choose it under Folder first. Its candidates move to Unfiled; none are deleted. Deleted candidates stay in Trash until you restore them.</p></details><p id="peopleCandidatesMessage" role="status" class="job-leads-muted"></p>
+        <div class="people-table"><table><thead><tr><th class="people-pick">Select</th><th data-sort="name">Name</th><th>Headline / title</th><th data-sort="location">Location</th><th data-sort="score">Match</th><th data-sort="read">Profile read</th><th>Supporting evidence</th><th>Still unknown</th><th>Notes</th></tr></thead><tbody id="peopleCandidatesRows"></tbody></table></div>
         <div class="job-leads-actions job-leads-pagination"><span id="peopleCandidatesPage"></span><button type="button" class="sec" id="peopleCandidatesPrevious">Previous</button><button type="button" class="sec" id="peopleCandidatesNext">Next</button></div>
       </div>
     </section>
@@ -2674,42 +2676,42 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
-<script src="/vendor/cvstudio/api-transport.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/page-nav.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/create-profile.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/company-profile.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/appearance.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/docx-export.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/the-owl.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/linkedin-sourcer-core.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/linkedin-sourcer.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/job-leads-jobadder.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/job-leads-apollo.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/people-dashboards.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/job-search-walk.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/job-leads-clients.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/job-leads.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/email-verifier.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/settings.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/tab-status.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/cv-format.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/locks.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/ppc.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/batch-format.js?v=v24.6.528"></script>
+<script src="/vendor/cvstudio/api-transport.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/page-nav.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/create-profile.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/company-profile.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/appearance.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/docx-export.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/the-owl.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/linkedin-sourcer-core.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/linkedin-sourcer.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/job-leads-jobadder.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/job-leads-apollo.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/people-dashboards.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/job-search-walk.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/job-leads-clients.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/job-leads.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/email-verifier.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/settings.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/tab-status.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/cv-format.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/locks.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/ppc.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/batch-format.js?v=v24.6.529"></script>
 <script>
 
 document.addEventListener('DOMContentLoaded', initPageNavPin);
@@ -2727,9 +2729,9 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 
 </script>
-<script src="/vendor/cvstudio/input-file.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/stats.js?v=v24.6.528"></script>
-<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.528"></script>
+<script src="/vendor/cvstudio/input-file.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/stats.js?v=v24.6.529"></script>
+<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.529"></script>
 <script>
 try { updateSummaryLockUI(); } catch(e) {}
 try { updateCvScoringLockUI(); } catch(e) {}

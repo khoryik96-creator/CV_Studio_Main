@@ -7,7 +7,16 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current checkpoint: v24.6.528 Signed clients list fix (unmerged)**
+**Current checkpoint: v24.6.529 Sourcer Candidates folders, shortlist and Trash (unmerged)**
+on `claude/job-leads-signed-clients` after v528. The owner asked for folders,
+delete and a shortlist on the Sourcer Candidates dashboard, like Job Leads.
+Folders (create, move selected, delete folder to Unfiled), a star shortlist
+with a filter, and recoverable Trash with Restore (no purge, as in Job Leads).
+Optional vault additions (`folders`; per-row `folder`, `shortlisted`,
+`deleted`, `deleted_at`), new actions on `/linkedin-sourcer` (still 124
+routes). See `LINKEDIN_SOURCER_NOTES.md` and the v529 QA report.
+
+**Previous checkpoint: v24.6.528 Signed clients list fix (unmerged)**
 on `claude/job-leads-signed-clients`, restarted from merged v527 `3ea7880` /
 PR #273. The owner saw no clients after reloading and ticking statuses.
 Reload statuses now keeps unsaved ticks, saving statuses (or a first open with
