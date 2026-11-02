@@ -233,6 +233,18 @@ process.on('exit',()=>{if(!finished){console.error('Candidate folders test did n
    s.server.open();await starred;await settle();release();await settle();
    assert.equal(s.star('Demo Beta').textContent,'\u2605','the star stays after the older read arrives');}
 
+  // A refresh that finishes while a star is saving does not hide the saved star,
+  // and the next star click uses the saved revision.
+  {const q=fixture();await q.el('CandidatesTab').click();await settle();
+   q.server.gate='candidate_shortlist';const starred=q.star('Demo Beta').click();await settle();
+   q.win.cvStudioPeople.sourcerChanged();await settle();
+   assert.equal(q.star('Demo Beta').textContent,'\u2606','the finished refresh shows the row before the save');
+   q.server.open();await starred;await settle();
+   assert.equal(q.star('Demo Beta').textContent,'\u2605','the saved star shows on the current row');
+   await q.star('Demo Beta').click();await settle();
+   assert.deepEqual(q.last('candidate_shortlist'),{action:'candidate_shortlist',key:'b'.repeat(64),revision:2,shortlisted:false});
+   assert.match(q.el('CandidatesMessage').textContent,/removed from the shortlist/);}
+
   // A refused note save works after a refresh, once the newer note was shown.
   {const c=fixture();await c.el('CandidatesTab').click();await settle();
    const editor=c.row('Demo Beta').children.at(-1).children[0];editor.children[1].value='Mine';await editor.children[1].dispatch('input');

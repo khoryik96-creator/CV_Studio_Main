@@ -228,8 +228,7 @@
           save.disabled=true;input.disabled=true;
           try {
             const data=await api('/linkedin-sourcer',{action:'candidate_note',key:row.key,revision:noteDrafts.get(row.key)?.revision ?? row.revision,notes:input.value});
-            ++boards.Candidates.generation;Object.assign(boards.Candidates.rows.find(value=>value.key===row.key) || row,data.candidate);
-            noteDrafts.delete(row.key);draw('Candidates');el('CandidatesMessage').textContent='Note saved.';
+            applySaved(data.candidate);noteDrafts.delete(row.key);draw('Candidates');el('CandidatesMessage').textContent='Note saved.';
           }
           catch(error){const draft=noteDrafts.get(row.key);if(draft)draft.refused=true;el('CandidatesMessage').textContent=error.message;save.disabled=false;}
           finally{input.disabled=false;}
@@ -291,6 +290,15 @@
     target.value=folderNames.includes(move)?move:'';
     pruneSelection();
   }
+  // A saved candidate updates the row shown now (a refresh may have replaced
+  // the list while the change was saving), unless that row is already newer.
+  // Reads still in progress are older than the change, so they are repeated.
+  function applySaved(candidate) {
+    const b=boards.Candidates;++b.generation;
+    const shown=b.rows.find(value=>value.key===candidate.key);
+    if(shown && candidate.revision>=shown.revision)Object.assign(shown,candidate);
+    reconcileCandidates();
+  }
   // The selected candidates with the revisions this window last saw.
   const items=()=>boards.Candidates.rows.filter(row=>selection.has(row.key)).map(row=>({key:row.key,revision:row.revision}));
   // One organising change, then a fresh read. Resolves with the reply, or
@@ -316,8 +324,7 @@
     b.working=true;controls('Candidates');
     try {
       const data=await api('/linkedin-sourcer',{action:'candidate_shortlist',key:current.key,revision:current.revision,shortlisted:current.shortlisted!==true});
-      // Newer than any read in progress, which is discarded and repeated.
-      ++b.generation;Object.assign(current,data.candidate);reconcileCandidates();
+      applySaved(data.candidate);
       el('CandidatesMessage').textContent=data.candidate.shortlisted?current.name+' is shortlisted.':current.name+' was removed from the shortlist.';
     } catch(error){el('CandidatesMessage').textContent=error.message;}
     finally{b.working=false;draw('Candidates');}

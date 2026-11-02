@@ -139,3 +139,13 @@ Also fixed in passing:
 - A stored version of `true` is refused.
 - The new frontend test has a hang guard.
 
+## Codex review on PR #274
+
+Codex raised one finding (P2), reproduced and fixed. A refresh that finished
+while a star or note was saving replaced the rows, so the saved reply updated a
+row no longer shown. The star looked unchanged, and the next click was refused
+as "changed in another window". Saved replies now update the row shown at that
+moment, unless it is already newer, and reads still in progress are repeated.
+A new test finishes a refresh during a held star save and then stars again;
+removing the fix fails it.
+
