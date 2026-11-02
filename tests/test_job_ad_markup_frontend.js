@@ -2,7 +2,7 @@ const assert=require('assert/strict'),{fixture}=require('./test_job_search_front
 const markup='<strong>Example company</strong><br><ul><li></li><ul><li>Build systems.</li></ul></ul>';
 const rich=[{tag:'strong',children:[{text:'Example company'}]},{tag:'ul',children:[{tag:'li',children:[{text:'Build systems.'}]}]}];
 const turn=()=>new Promise(resolve=>setImmediate(resolve));
-const preview=f=>f.el('List').querySelectorAll('button').find(button=>button.textContent==='Preview').click();
+const preview=f=>f.el('List').querySelectorAll('button').find(button=>button.className==='job-lead-title').click();
 (async()=>{
  const f=fixture();f.state.records[0].description=markup;f.state.records[0].description_rich=[];const original=structuredClone(f.state.records);
  f.state.onRequest=data=>{assert.equal(data.action,'format_content');assert(data.render_markup);return {ok:true,json:async()=>({description:'Example company\nBuild systems.',description_rich:rich})}};

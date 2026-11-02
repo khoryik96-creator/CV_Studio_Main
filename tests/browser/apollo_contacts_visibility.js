@@ -46,6 +46,7 @@ async function visibility(page,contactsVisible){
     for(const viewport of [{width:1360,height:960},{width:390,height:844}]){
       const page=await mount(context);await page.setViewportSize(viewport);
       await visibility(page,false);
+      await page.evaluate(()=>{document.getElementById('jobLeadsFormCard').hidden=false;}); // the manual form, as Add an ad manually opens it
       await page.locator('#jobLeadsnotes').fill('Keep this unsaved ad draft');
       await page.locator('#jobLeadsApolloContactsTab').click();
       await page.waitForFunction(()=>document.getElementById('jobLeadsApolloContactsCount').textContent==='44');

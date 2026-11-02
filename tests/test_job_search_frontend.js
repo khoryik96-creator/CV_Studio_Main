@@ -128,7 +128,7 @@ if(require.main===module)(async()=>{
   assert.equal(browse.requests.length,0,'browsing saved previews never writes records');
   await browse.el('PreviewClose').click();assert(browse.el('Preview').hidden);
   await browse.el('Refresh').click();assert(browse.el('Preview').hidden,'refresh does not reopen a dismissed preview');
-  await browse.el('List').children[0].querySelectorAll('button').find(button=>button.textContent==='Preview').click();
+  await browse.el('List').children[0].querySelectorAll('button').find(button=>button.className==='job-lead-title').click();
   browse.el('FolderFilter').value='Priority';browse.el('FolderFilter').handlers.change();
   assert.match(browse.el('PreviewPosition').textContent,/1 of 2/);await browse.el('PreviewNext').click();
   assert.equal(browse.el('PreviewTitle').textContent,'Cloud Architect');assert(browse.el('PreviewNext').disabled,'saved navigation respects folder filters');
@@ -138,7 +138,7 @@ if(require.main===module)(async()=>{
   await browse.el('PreviewRemove').click();assert(browse.state.records[1].deleted);
   assert.equal(browse.el('PreviewTitle').textContent,b.role,'removing a saved preview advances to the remaining ad');
   assert.equal(browse.state.records[1].notes,savedBase.notes,'Trash preserves saved notes');
-  await browse.el('List').children[0].querySelectorAll('button').find(button=>button.textContent==='Edit / view details').click();
+  await browse.el('List').children[0].querySelectorAll('button').find(button=>button.textContent==='Edit').click();
   browse.el('notes').value='Unsaved editing notes';browse.el('notes').handlers.input();browse.state.allowDiscard=false;
   const beforeCancel=browse.requests.length;await browse.el('PreviewRemove').click();
   assert.equal(browse.requests.length,beforeCancel,'cancelled discard prevents removing the edited ad');
@@ -147,7 +147,7 @@ if(require.main===module)(async()=>{
   assert(browse.el('Preview').hidden,'removing the last matching ad clears the preview');
   assert(browse.el('PreviewRemove').hidden);assert.equal(browse.state.records[2].deleted,false,'ads outside the chosen folder are unchanged');
   browse.el('FolderFilter').value='!trash';browse.el('FolderFilter').handlers.change();
-  await browse.el('List').children[0].querySelectorAll('button').find(button=>button.textContent==='Preview').click();
+  await browse.el('List').children[0].querySelectorAll('button').find(button=>button.className==='job-lead-title').click();
   assert.equal(browse.el('PreviewRemove').textContent,'Restore ad');await browse.el('PreviewRemove').click();
   assert.equal(browse.state.records[0].deleted,false,'a trashed preview restores through the existing guarded operation');
   assert.equal(browse.state.records[0].notes,savedBase.notes);
@@ -163,7 +163,7 @@ if(require.main===module)(async()=>{
   const empty=fixture();empty.state.records=[];await empty.init();
   assert(empty.el('Preview').hidden);assert(empty.el('PreviewRead').hidden);assert(empty.el('PreviewSave').hidden);
   const savedPreview=fixture();await savedPreview.init();
-  await savedPreview.el('List').querySelectorAll('button').find(button=>button.textContent==='Preview').click();
+  await savedPreview.el('List').querySelectorAll('button').find(button=>button.className==='job-lead-title').click();
   assert.equal(savedPreview.el('SearchPanel').open,true);
   savedPreview.el('description').value='Unsaved description';savedPreview.el('notes').value='Unsaved notes';savedPreview.el('notes').handlers.input();
   const beforeSaved=structuredClone(savedPreview.state.records);
@@ -278,7 +278,7 @@ if(require.main===module)(async()=>{
   const writes=direct.requests.length;assert((await direct.capture(b,{action:'purge'})).error);assert((await direct.capture(b,null)).error);assert.equal(direct.requests.length,writes);
   assert.equal(direct.el('notes').value,'Keep unsaved notes','folder creation/removal/restore preserve the manual draft');
   const editingCard=direct.el('List').children.find(card=>card.querySelectorAll('a').some(link=>link.href===b.url));
-  await editingCard.querySelectorAll('button').find(button=>button.textContent==='Edit / view details').click();
+  await editingCard.querySelectorAll('button').find(button=>button.textContent==='Edit').click();
   direct.el('notes').value='Keep this editing draft';direct.el('notes').handlers.input();const protectedWrites=direct.requests.length;
   assert.match((await direct.capture(b,{action:'remove'})).error,/Finish editing/);
   assert.match((await direct.capture(b,{action:'add',folder:'Priority'})).error,/Finish editing/);

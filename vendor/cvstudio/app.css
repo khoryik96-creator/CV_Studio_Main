@@ -1507,7 +1507,9 @@
 .ev-panel [hidden] { display:none; }
 @media(max-width:1000px) { .ev-layout { grid-template-columns:1fr; } .ev-panel textarea { height:140px !important; } }
 @media(max-width:500px) { .ev-panel { padding:16px; } .ev-summary { grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; } .ev-filters { grid-template-columns:1fr; gap:0; } }
-.job-leads-layout { display:grid; grid-template-columns:minmax(320px, .85fr) minmax(400px, 1.3fr); align-items:start; gap:20px; }
+.job-leads-layout { display:grid; grid-template-columns:1fr; align-items:start; gap:20px; }
+/* The manual form opens beside the list only while it is in use. */
+.job-leads-layout[data-form="open"] { grid-template-columns:minmax(320px, .85fr) minmax(400px, 1.3fr); }
 .job-leads-form, .job-leads-board { display:flex; flex-direction:column; gap:12px; }
 .job-leads-board { gap:8px; }
 .job-leads-sr { position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0; }
@@ -1786,3 +1788,18 @@
 [data-manual-dates] label{display:block;margin:6px 0}
 [data-manual-dates] input[type="checkbox"]{width:auto;margin-left:8px}
 [data-manual-dates] small{display:block;white-space:normal}
+
+/* Job ads: one filter row and a compact table (v24.6.543). */
+.job-leads-filters { grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); }
+.job-leads-board .job-leads-filters input, .job-leads-board .job-leads-filters select { min-height:36px; padding:7px 9px; }
+.job-leads-ads-table td { font-size:12px; }
+.job-leads-ads-table td:first-child, .job-leads-ads-table th:first-child { min-width:28px; width:28px; }
+.job-leads-ads-table td:nth-child(5) { white-space:normal; }
+.job-leads-ads-table .job-lead-title { background:none; border:0; padding:0; color:var(--accent); font:inherit; font-weight:600; text-align:left; cursor:pointer; }
+.job-leads-ads-table .job-lead-title:hover { text-decoration:underline; }
+.job-leads-ads-table tr.job-lead-due td:nth-child(2) { color:var(--danger, #b42318); }
+.job-leads-ads-table .job-leads-actions { flex-wrap:nowrap; gap:6px; }
+.job-leads-ads-table .job-leads-actions button, .job-leads-ads-table td > button { padding:4px 8px; font-size:11px; min-height:0; }
+.job-leads-tab-count { margin-left:4px; font-weight:600; opacity:.75; }
+/* Inside Job Leads the hidden attribute always wins over a class's display. */
+#viewJobLeads [hidden] { display:none !important; }

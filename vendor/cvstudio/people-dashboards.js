@@ -234,6 +234,7 @@
             const source=personSource(row);source.id=row.email_id || row.id;source.revision=row.email_revision || row.revision;
             const success=await window.cvStudioApollo?.unlockSaved(source,row,row.email_result || null,note,value=>{row.email_result=value;});
             if(success===false && !row.email_result)row.email_result={state:'unconfirmed',message:'Check the previous lookup before trying again.'};
+            if(row.email_result?.state==='found')el('HRNextStep').hidden=false; // next step: Unlocked contacts
             const message=el('HRMessage').textContent;await refresh('HR');el('HRMessage').textContent=message;
           });email.append(button);
         }
@@ -273,6 +274,7 @@
       if(generation!==b.generation)b.again=true;
       else {
         b.rows=data[kind==='HR'?'people':'candidates'] || [];
+        if(kind==='HR'){const count=document.getElementById('peopleHRTabCount');if(count){count.textContent=String(b.rows.length);count.dataset.exact='1';}}
         if(kind==='Candidates'){folderNames=Array.isArray(data.folders)?data.folders.filter(name=>typeof name==='string'):[];reconcileCandidates();}
         choices(kind);draw(kind);
         el(kind+'Message').textContent=b.rows.length?'':kind==='HR'?'No saved HR people yet.':'Candidates from new searches are saved here automatically.';shown=true;
@@ -388,6 +390,7 @@
     if(!openingHR)void refresh('HR');
   });
   el('HRConnect').addEventListener('click',()=>window.cvStudioApollo?.openSettings());
+  el('HRNext').addEventListener('click',()=>{el('HRNextStep').hidden=true;document.getElementById('jobLeadsApolloContactsTab')?.click();});
   async function stopDate(){if(!dateBusy)return;dateStopped=true;controls('HR');if(dateOperation)try{await window.cvStudioJobLeads.rpc('jobReadCancel',{operation_id:dateOperation});}catch{}}
   el('HRDateStop').addEventListener('click',stopDate);
   el('HRDateAll').addEventListener('click',checkMissingEmployment);

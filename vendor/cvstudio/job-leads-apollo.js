@@ -80,6 +80,7 @@
   function renderContacts() {
     const rows=filteredContacts();contactsPage=Math.min(contactsPage,Math.max(0,Math.ceil(rows.length/40)-1));
     el('ContactsCount').textContent=String(rows.length);
+    if(contactsLoaded)el('ContactsTabCount').textContent=String(contacts.length);
     el('ContactsRows').replaceChildren();
     for(const row of rows.slice(contactsPage*40,(contactsPage+1)*40)) {
       const tr=document.createElement('tr'), name=document.createElement('td');

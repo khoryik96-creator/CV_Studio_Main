@@ -4,7 +4,16 @@
 
 ## Release state
 
-- v24.6.542 is local/unmerged on `claude/job-leads-signed-clients` from
+- v24.6.543 is local/unmerged on `claude/job-leads-signed-clients` from
+  merged542/PR287/c282b18. It is a Job Leads layout release:
+  - Job ads table with Client/Posted/Sort filters and a hidden-until-used
+    manual form;
+  - Saved client job ads merged into Job ads;
+  - tabs in workflow order with counts;
+  - one Refresh per view;
+  - setup and next-step buttons.
+  Frontend only; no route or schema change.
+- v24.6.542 (merged PR287) was local/unmerged on `claude/job-leads-signed-clients` from
   merged541/PR286/7de5b82. It adds a team setup file: Import fills JobAdder,
   Outlook, OneNote and optional AI keys through the existing Save actions,
   and Create exports saved IDs plus only the secrets typed for that file.
