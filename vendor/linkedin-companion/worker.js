@@ -288,6 +288,9 @@ async function settleJobSearch(bound, run, tab) {
   // resolved values are then pinned for the rest of the run.
   for (const name of ['location','sortBy']) requested.searchParams.delete(name);
   for (const name of ['location','geoId','distance','sortBy']) resolved.searchParams.delete(name);
+  // A search opened without keywords (a client's company search) may get
+  // keywords filled in by LinkedIn's AI search; the company filter must stay.
+  if (!requested.searchParams.has('keywords')) resolved.searchParams.delete('keywords');
   if (requested.href !== resolved.href) {
     // Name only the changed filter parameters (never their values).
     const names=[...new Set([...requested.searchParams.keys(),...resolved.searchParams.keys()])]

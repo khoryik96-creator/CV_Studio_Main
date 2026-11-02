@@ -105,7 +105,19 @@ if(require.main===module)(async()=>{
   assert((await ai.read(aid)).error,'a sort change after the search was confirmed revokes reads, so pages are never mixed');
   ai.tabs.get(aid).url='https://www.linkedin.com/jobs/search-results/?f_C=4242&geoId=106808692&f_WT=2&keywords=secret%20words';
   const narrowed=(await ai.read(aid)).error;assert(narrowed,'an added filter or keywords still revoke reads');await ai.end();
-  const named=fixture();await named.arm();const nid=(await named.begin({query:'',location:'',company_id:'4242'})).result.tab_id;
+  // The AI search may fill in keywords for a company-only search on load.
+  const filled=fixture();await filled.arm();const fid=(await filled.begin({query:'',location:'',company_id:'4242'})).result.tab_id;
+  // The owner's live example: keywords=jobs added to a company-only search.
+  filled.tabs.get(fid).url='https://www.linkedin.com/jobs/search-results/?currentJobId=1234567890&keywords=jobs&f_C=4242';
+  assert.equal((await filled.read(fid)).result.jobs[0].url,row.url,'LinkedIn-filled keywords on a company-only search are accepted on load');
+  filled.tabs.get(fid).url='https://www.linkedin.com/jobs/search-results/?f_C=4242&geoId=106808692&keywords=other%20words';
+  assert((await filled.read(fid)).error,'after load the filled keywords are pinned');
+  filled.tabs.get(fid).url='https://www.linkedin.com/jobs/search-results/?keywords=jobs&f_C=9999';
+  assert((await filled.read(fid)).error,'a different company is never accepted');await filled.end();
+  const lostCompany=fixture();await lostCompany.arm();const lid=(await lostCompany.begin({query:'',location:'',company_id:'4242'})).result.tab_id;
+  lostCompany.tabs.get(lid).url='https://www.linkedin.com/jobs/search-results/?keywords=Synthetic%20Client';
+  assert.match((await lostCompany.read(lid)).error,/\(f_C\)/,'losing the company filter on load is refused and named');await lostCompany.end();
+  const named=fixture();await named.arm();const nid=(await named.begin({query:'finance',location:'',company_id:'4242'})).result.tab_id;
   named.tabs.get(nid).url='https://www.linkedin.com/jobs/search-results/?f_C=4242&keywords=secret%20words&f_WT=2';
   const reason=(await named.read(nid)).error;
   assert.match(reason,/\(f_WT, keywords\)/,'the error names the changed filters');assert(!reason.includes('secret'),'filter values never leave the worker');await named.end();

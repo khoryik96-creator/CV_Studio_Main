@@ -24,6 +24,10 @@ asked for a code review of v534–v537 and for all findings to be fixed.
   come from `cvStudioJobLeads.statusLabels`. Stop ends a save batch between ads.
 - Companion: `sortBy` is part of the search key; LinkedIn's default sort on load
   is tolerated in settle, then pinned (a mid-run sort change revokes reads).
+- Companion: LinkedIn's AI search fills in keywords for a company-only search
+  (owner's live case: `/jobs/search-results/?keywords=jobs&f_C=<id>`). Settle
+  now accepts LinkedIn-filled keywords only when the requested search had none,
+  then pins them; the company filter (`f_C`) must still match exactly.
 - Known flaky: `test_job_leads.py::test_concurrent_saves_share_one_identity_without_lost_edits`
   fails about 1 in 8 runs locally on master too (pre-existing).
 
