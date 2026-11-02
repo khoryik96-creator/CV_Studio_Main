@@ -12,7 +12,7 @@
   const MAX_FOUND = 600, MAX_PER_PULL = 15, FOUND_PAGE = 50, ADD_LIMIT = 100, COMPANY_PAGE = 50;
   const TICKS_KEY = 'cvstudio_signed_clients_ticks';
   const fresh = () => ({account:'', signed:[], statuses:null, followed:[], records:[], folders:[], companies:null, found:[], picked:new Set(),
-    chosen:null, foundPage:0, working:false, pulling:false, stopped:false, run:'', loaded:false, statusDraft:null});
+    chosen:null, foundPage:0, working:false, pulling:false, stopped:false, run:'', loaded:false, statusDraft:null, statusDirty:false});
   let state = fresh(), generation = 0, ready = false, resyncNeeded = false;
   let savedIndex = {records:null, urls:new Map()}, countIndex = {records:null, followed:null, counts:new Map()};
 
@@ -122,6 +122,10 @@
   const knownStatuses = () => new Set((state.statuses || []).map(row => row.id));
   const staleStatuses = () => state.statuses ? state.signed.filter(id => !knownStatuses().has(id)) : [];
   function pageRows() { return state.found.slice(state.foundPage * FOUND_PAGE, (state.foundPage + 1) * FOUND_PAGE); }
+  const sameIds = (a, b) => [...a].sort((x, y) => x - y).join() === [...b].sort((x, y) => x - y).join();
+  // Ticks the owner changed but has not saved: the client list still uses the
+  // saved statuses, so searching waits for Save statuses.
+  const unsavedStatuses = () => !!state.statusDraft && state.statusDirty && !sameIds(state.statusDraft, state.signed);
   function controls() {
     const locked = mine(), signedNames = (state.statuses || []).filter(row => state.signed.includes(row.id)).map(row => row.name);
     el('Count').textContent = String(state.followed.length);
@@ -131,11 +135,12 @@
     el('StatusesLoad').disabled = locked || !state.loaded;
     const draft = state.statusDraft;
     // An empty choice saves too, so statuses JobAdder no longer lists can all be dropped.
-    el('StatusesSave').disabled = locked || !draft || [...draft].sort((a, b) => a - b).join() === [...state.signed].sort((a, b) => a - b).join();
-    el('Search').disabled = el('Query').disabled = locked || !state.loaded || !state.signed.length;
+    el('StatusesSave').disabled = locked || !draft || sameIds(draft, state.signed);
+    const unsaved = unsavedStatuses();
+    el('Search').disabled = el('Query').disabled = locked || !state.loaded || !state.signed.length || unsaved;
     const c = state.companies;
-    el('CompaniesPrevious').disabled = locked || !c || c.offset === 0;
-    el('CompaniesNext').disabled = locked || !c || c.next === null;
+    el('CompaniesPrevious').disabled = locked || !c || c.offset === 0 || unsaved;
+    el('CompaniesNext').disabled = locked || !c || c.next === null || unsaved;
     // Job Leads' own busy state is checked when Pull/Add is clicked, so the
     // buttons never sit disabled after Job Leads finishes.
     el('Pull').disabled = locked || !pullable().length;
@@ -161,7 +166,11 @@
     for (const status of state.statuses) {
       const label = node('label'), box = node('input');
       box.type = 'checkbox'; box.value = String(status.id); box.checked = state.statusDraft.has(status.id); box.dataset.clientAction = '';
-      box.addEventListener('change', () => { if (box.checked) state.statusDraft.add(status.id); else state.statusDraft.delete(status.id); controls(); });
+      box.addEventListener('change', () => {
+        if (box.checked) state.statusDraft.add(status.id); else state.statusDraft.delete(status.id);
+        state.statusDirty = true; controls();
+        if (unsavedStatuses()) message('Click Save statuses to list clients with your new ticks.');
+      });
       label.append(box, node('span', status.name + (status.active ? '' : ' (inactive)')));
       target.append(label);
     }
@@ -204,7 +213,7 @@
     const target = el('Companies'), c = state.companies; target.replaceChildren();
     el('CompaniesPage').textContent = '';
     if (!c) return;
-    if (!c.rows.length) { const tr = node('tr'), td = node('td', c.offset ? 'No more signed clients.' : 'No signed clients match.'); td.colSpan = 4; tr.append(td); target.append(tr); }
+    if (!c.rows.length) { const tr = node('tr'), td = node('td', c.next !== null ? 'No signed clients on this page.' : c.offset ? 'No more signed clients.' : 'No signed clients match.'); td.colSpan = 4; tr.append(td); target.append(tr); }
     for (const company of c.rows) {
       const tr = node('tr'), name = node('td'); name.append(link(company.name, company.jobadder_url, JOBADDER_URL));
       const followed = state.followed.some(row => row.company_id === company.company_id);
@@ -302,23 +311,36 @@
       if (!accept(overview, token)) return;
       state.signed = overview.signed || [];
       setFollowed(overview.followed || []);
-      state.loaded = true; state.statusDraft = null;
+      state.loaded = true; state.statusDraft = null; state.statusDirty = false;
       message(state.signed.length ? '' : 'Start by choosing which JobAdder statuses mean a signed client.');
       if (!state.signed.length) el('Setup').open = true;
+      let list = false;
       try {
         const data = await call({action:'statuses'});
         if (!accept(data, token)) return;
-        state.statuses = data.statuses || []; state.signed = data.signed || state.signed; state.statusDraft = null;
+        state.statuses = data.statuses || []; state.signed = data.signed || state.signed; state.statusDraft = null; state.statusDirty = false;
         if (staleStatuses().length) { el('Setup').open = true; message('A saved signed status is no longer in JobAdder. Check the statuses and click Save statuses.'); }
-      } catch (error) { if (token === generation) message(error.message + ' Followed clients are still listed.'); }
+        // Nothing followed yet: show the signed clients once, without a Search click.
+        else list = !!state.signed.length && !state.followed.length && state.companies === null;
+      } catch (error) { if (token === generation) message(error.message + (state.followed.length ? ' Followed clients are still listed.' : '')); return; }
+      if (!list) return;
+      el('Browse').open = true; draw();
+      try { await readCompanies(token, 0); }
+      catch (error) { if (token === generation) message('Your signed clients could not be listed. ' + error.message); }
     });
   }
   function loadStatuses() {
     return work(async token => {
       const data = await call({action:'statuses'});
       if (!accept(data, token)) return;
-      state.statuses = data.statuses || []; state.signed = data.signed || []; state.statusDraft = null;
-      message(staleStatuses().length ? 'A saved signed status is no longer in JobAdder. Check the statuses and click Save statuses.' : 'Statuses reloaded from JobAdder.');
+      state.statuses = data.statuses || []; state.signed = data.signed || [];
+      // Ticks the owner changed survive a reload (minus statuses JobAdder no
+      // longer lists); untouched boxes show the saved choice, even one saved elsewhere.
+      if (state.statusDraft && state.statusDirty) { const known = knownStatuses(); state.statusDraft = new Set([...state.statusDraft].filter(id => known.has(id))); }
+      else { state.statusDraft = null; state.statusDirty = false; }
+      const unsaved = unsavedStatuses();
+      message(staleStatuses().length ? 'A saved signed status is no longer in JobAdder. Check the statuses and click Save statuses.'
+        : unsaved ? 'Statuses reloaded from JobAdder. Your ticks are not saved yet: click Save statuses.' : 'Statuses reloaded from JobAdder.');
     });
   }
   function saveStatuses() {
@@ -326,21 +348,23 @@
       const ids = [...(state.statusDraft || [])].sort((a, b) => a - b);
       const data = await call({action:'set_statuses', status_ids:ids, account:state.account});
       if (!accept(data, token)) return;
-      state.signed = data.signed || ids; state.statusDraft = null; state.companies = null;
+      state.signed = data.signed || ids; state.statusDraft = null; state.statusDirty = false; state.companies = null;
       if (!state.signed.length) { message('Saved. No status is chosen, so no company counts as a signed client until you choose one.'); return; }
-      message('Saved. Search below to find your signed clients.');
-      el('Browse').open = true;
+      el('Browse').open = true; message('Saved. Loading your signed clients…'); draw();
+      // The choice is saved even if the list cannot be read right now.
+      try { await readCompanies(token, 0); } catch (error) { if (token === generation) message('Saved. ' + error.message); }
     });
   }
-  function searchCompanies(offset = 0) {
-    return work(async token => {
-      const data = await call({action:'companies', query:el('Query').value.trim(), offset});
-      if (!accept(data, token)) return;
-      state.companies = {rows:data.companies || [], offset:data.offset || 0, total:data.total ?? null, next:data.next_offset ?? null,
-        returned:Math.max((data.next_offset ?? 0) - (data.offset || 0), (data.companies || []).length)};
-      message(data.companies?.length ? '' : 'No signed clients found. Check the statuses or the name.');
-    });
+  // One page of signed clients from JobAdder, inside a running task.
+  async function readCompanies(token, offset) {
+    const data = await call({action:'companies', query:el('Query').value.trim(), offset});
+    if (!accept(data, token)) return;
+    const rows = data.companies || [], checked = Number.isSafeInteger(data.checked) ? data.checked : rows.length;
+    state.companies = {rows, offset:data.offset || 0, total:data.total ?? null, next:data.next_offset ?? null, returned:checked};
+    if (rows.length) message(rows.length === 1 ? '1 signed client found. Click Follow to add it.' : `${rows.length} signed clients found. Click Follow on the ones to pull job ads for.`);
+    else message(state.companies.offset ? 'No more signed clients.' : 'No signed clients found. Check the statuses or the name.');
   }
+  function searchCompanies(offset = 0) { return work(token => readCompanies(token, offset)); }
   function follow(company) {
     return work(async token => {
       const data = await call({action:'follow', company_id:company.company_id, account:state.account});

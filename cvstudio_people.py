@@ -14,6 +14,15 @@ class PeopleError(Exception):
     pass
 
 
+def _folder(value, allow_unfiled=False):
+    """A candidate folder name, under the same rules as Job Leads folders."""
+    from cvstudio_job_leads import JobLeadsError, clean_folder
+    try:
+        return clean_folder(value, allow_unfiled)
+    except JobLeadsError as exc:
+        raise PeopleError(str(exc)) from None
+
+
 def workbook(rows, fields, title):
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill, Alignment
@@ -46,6 +55,7 @@ CANDIDATE_FIELDS = {'name':'Name', 'title':'Headline / title', 'location':'Locat
     'url':'LinkedIn URL', 'score':'Evidence match / 100', 'read':'Profile read',
     'evidence':'Supporting evidence', 'unknowns':'Still unknown', 'notes':'Notes',
     'brief':'Search brief', 'saved_at':'Last assessed (UTC)'}
+CANDIDATE_EXPORT_FIELDS = {**CANDIDATE_FIELDS, 'folder':'Folder', 'shortlisted':'Shortlisted', 'deleted':'In Trash'}
 HR_FIELDS = {'name':'Name','title':'Position','company':'Company','location':'Observed location',
     'country':'Country (scan filter)','employment':'Employment','url':'LinkedIn URL',
     'matched':'Matched HR keywords','job_url':'Source ad','scanned_at':'Last scan (UTC)','employment_confirmation':'Date confirmation'}
@@ -80,13 +90,23 @@ def _score(row):
     return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
 
 
-def filter_candidates(rows, query='', search='', *, min_score=0, read='', sort='saved_at', order='desc'):
-    """Dashboard rows in the chosen order. Blank values always sort last."""
-    if (type(min_score) is not int or not 0 <= min_score <= 100 or read not in CANDIDATE_READS or
-            sort not in CANDIDATE_SORTS or order not in {'asc', 'desc'}):
+def filter_candidates(rows, query='', search='', *, min_score=0, read='', sort='saved_at', order='desc',
+                      folder='*', shortlisted=False):
+    """Dashboard rows in the chosen order. Blank values always sort last.
+
+    ``folder`` is '*' for every folder, '' for Unfiled, '!trash' for Trash or
+    one folder's name; Trash only appears when it is chosen.
+    """
+    if (type(min_score) is not int or not 0 <= min_score <= 100 or not isinstance(read, str) or read not in CANDIDATE_READS or
+            not isinstance(sort, str) or sort not in CANDIDATE_SORTS or order not in ('asc', 'desc') or
+            not isinstance(shortlisted, bool) or not isinstance(folder, str)):
         raise PeopleError('Choose a valid candidate sort or filter.')
+    if folder not in {'*', '!trash'}:
+        folder = _folder(folder, allow_unfiled=True)
     rows=[row for row in _filter(rows,query,search,'run_id',CANDIDATE_FIELDS)
-          if (_score(row) or 0)>=min_score and (not read or row.get('read')==read)]
+          if (_score(row) or 0)>=min_score and (not read or row.get('read')==read)
+          and (row.get('deleted') is True if folder == '!trash' else row.get('deleted') is not True and (folder == '*' or row.get('folder', '') == folder))
+          and (not shortlisted or row.get('shortlisted') is True)]
     if sort == 'score':
         key, blank = _score, lambda row: _score(row) is None
     else:
@@ -94,6 +114,12 @@ def filter_candidates(rows, query='', search='', *, min_score=0, read='', sort='
         blank = lambda row: key(row) == ('',)
     # sorted() is stable, so equal values keep the newest-first archive order.
     return sorted([row for row in rows if not blank(row)],key=key,reverse=order=='desc')+[row for row in rows if blank(row)]
+
+
+def candidate_export_rows(rows):
+    """Readable folder, shortlist and Trash columns for the Excel export."""
+    return [{**row, 'folder': row.get('folder') or 'Unfiled', 'shortlisted': 'Yes' if row.get('shortlisted') is True else '',
+             'deleted': 'Yes' if row.get('deleted') is True else ''} for row in rows]
 
 
 def filter_people(rows, query='', company=''):
@@ -109,21 +135,40 @@ def employment_label(person):
     return start+(' to Present' if person.get('current') is True else ' to '+label(person['left']) if person.get('current') is False else '') if start else 'Not confirmed' if person.get('employment_status')=='not_shown' else 'Not checked'
 
 
+# How the owner organised a candidate; a new assessment keeps every field.
+_ORGANISATION = {'folder': '', 'shortlisted': False, 'deleted': False, 'deleted_at': ''}
+# Folder names shown by the dashboard itself, so they cannot also be folders.
+_BUILT_IN_FOLDERS = {'unfiled', 'trash', 'all folders'}
+
+
 class SourcerCandidates:
     MAX_ROWS = 5000
     MAX_BYTES = 8 * 1024 * 1024
+    MAX_FOLDERS = 200
 
     def __init__(self, *, load, save):
         self.load, self.save = load, save
         self.lock = threading.RLock()
 
-    def _read(self):
+    @staticmethod
+    def _size(value):
+        # Keys starting with '_' are added by the secure loader (for example
+        # '_storage'), never saved, so reads and writes measure the same bytes.
+        return len(json.dumps({key: item for key, item in value.items() if not str(key).startswith('_')}).encode())
+
+    def _load(self):
+        """Saved rows and folders. Version 1 is a dashboard nobody organised;
+        version 2 adds folders, shortlist and Trash, so an older CV Studio
+        refuses it instead of rewriting it without them."""
         try:
             value = self.load()
             if not value:
-                return {}
-            rows = value['rows']
-            if value['version'] != 1 or not isinstance(rows, dict) or len(rows) > self.MAX_ROWS or len(json.dumps({'version':1,'rows':rows}).encode()) > self.MAX_BYTES:
+                return {}, []
+            rows, folders = value['rows'], value.get('folders', [])
+            if (type(value['version']) is not int or value['version'] not in (1, 2) or not isinstance(rows, dict) or len(rows) > self.MAX_ROWS or
+                    self._size(value) > self.MAX_BYTES or not isinstance(folders, list) or
+                    len(folders) > self.MAX_FOLDERS or len(set(map(str, folders))) != len(folders) or
+                    any(not isinstance(name, str) or not name or _folder(name) != name for name in folders)):
                 raise ValueError()
             for key, row in rows.items():
                 if not re.fullmatch(r'[a-f0-9]{64}', key) or not isinstance(row, dict):
@@ -145,13 +190,20 @@ class SourcerCandidates:
                 for field, maximum in [('evidence',4), ('unknowns',6)]:
                     if not isinstance(row.get(field),list) or len(row[field]) > maximum or any(not isinstance(s,str) or len(s)>250 for s in row[field]):
                         raise ValueError()
-            return deepcopy(rows)
+                folder, stamp = row.get('folder', ''), row.get('deleted_at', '')
+                if (not isinstance(folder, str) or _folder(folder, allow_unfiled=True) != folder or
+                        not isinstance(row.get('shortlisted', False), bool) or not isinstance(row.get('deleted', False), bool) or
+                        not isinstance(stamp, str) or len(stamp) > 40):
+                    raise ValueError()
+            return deepcopy(rows), list(folders)
         except Exception:
             raise PeopleError('Saved candidates could not be read securely. Keep the existing files and check local storage.') from None
 
-    def _write(self, rows):
-        value = {'version':1,'rows':rows}
-        if len(rows) > self.MAX_ROWS or len(json.dumps(value).encode()) > self.MAX_BYTES:
+    def _write(self, rows, folders):
+        organised = bool(folders) or any(row.get(name, default) != default for row in rows.values()
+                                         for name, default in _ORGANISATION.items())
+        value = {'version': 2 if organised else 1, 'rows': rows, 'folders': folders}
+        if len(rows) > self.MAX_ROWS or self._size(value) > self.MAX_BYTES:
             raise PeopleError('The candidate dashboard is full. Export the current search; its results are still shown in Search.')
         try:
             self.save(value)
@@ -160,7 +212,7 @@ class SourcerCandidates:
 
     def remember(self, run, candidates, stage):
         with self.lock:
-            rows = self._read()
+            rows, folders = self._load()
             for person in candidates:
                 if '\x00' in person['name'] or '\x00' in run.brief:
                     raise PeopleError('This assessment contains unsupported text. Export the current search; existing saved candidates were kept.')
@@ -173,24 +225,129 @@ class SourcerCandidates:
                     read='Profile detail' if stage == 'detail' else 'Search card',
                     saved_at=datetime.now(timezone.utc).isoformat(timespec='seconds'),
                     notes=old['notes'] if old else '', revision=old['revision']+1 if old else 1)
+                # A new assessment keeps how the owner organised this candidate.
+                for name, default in _ORGANISATION.items():
+                    rows[key][name] = old.get(name, default) if old else default
             if candidates:
-                self._write(rows)
+                self._write(rows, folders)
+
+    @staticmethod
+    def _listed(rows):
+        return sorted(({**row,'key':key} for key,row in rows.items()),
+                      key=lambda r:(r['saved_at'],r['run_id'],r['score']), reverse=True)
+
+    @staticmethod
+    def _folder_names(rows, folders):
+        named = set(folders) | {row.get('folder', '') for row in rows.values()}
+        # The name itself breaks ties, so the order is the same on every run.
+        return sorted(named - {''}, key=lambda name: (_sort_key(name), name))
 
     def list(self):
         with self.lock:
-            return sorted(({**row,'key':key} for key,row in self._read().items()),
-                          key=lambda r:(r['saved_at'],r['run_id'],r['score']), reverse=True)
+            return self._listed(self._load()[0])
+
+    def snapshot(self):
+        """Candidates and folders from one read of the store."""
+        with self.lock:
+            rows, folders = self._load()
+            return {'candidates': self._listed(rows), 'folders': self._folder_names(rows, folders)}
 
     def note(self, key, revision, notes):
         if not isinstance(key,str) or not re.fullmatch(r'[a-f0-9]{64}',key) or type(revision) is not int or not isinstance(notes,str) or len(notes)>2000 or '\x00' in notes:
             raise PeopleError('Choose a saved candidate and a note of up to 2000 characters.')
         with self.lock:
-            rows = self._read()
+            rows, folders = self._load()
             if key not in rows or rows[key]['revision'] != revision:
                 raise PeopleError('This candidate changed. Copy your note, refresh the dashboard and try again.')
             rows[key].update(notes=notes,revision=revision+1)
-            self._write(rows)
+            self._write(rows, folders)
             return {**rows[key],'key':key}
+
+    # Organising: folders, shortlist and recoverable Trash, as in Job Leads.
+
+    def folders(self):
+        with self.lock:
+            return self._folder_names(*self._load())
+
+    def _selected(self, rows, items, allow_empty=False):
+        """Selected keys and revisions; every one must still be current."""
+        if not isinstance(items, list) or (not items and not allow_empty) or len(items) > self.MAX_ROWS:
+            raise PeopleError('Select saved candidates first.')
+        expected = {}
+        for item in items:
+            if (not isinstance(item, dict) or not isinstance(item.get('key'), str) or
+                    not re.fullmatch(r'[a-f0-9]{64}', item['key']) or item['key'] in expected or type(item.get('revision')) is not int):
+                raise PeopleError('Invalid candidate selection. Refresh the dashboard.')
+            expected[item['key']] = item['revision']
+        if any(key not in rows or rows[key]['revision'] != revision for key, revision in expected.items()):
+            raise PeopleError('A selected candidate changed in another window. Refresh before trying again.')
+        return expected
+
+    def create_folder(self, name):
+        name = _folder(name)
+        if name.casefold() in _BUILT_IN_FOLDERS:
+            raise PeopleError('Unfiled, Trash and All folders are built in. Choose another folder name.')
+        with self.lock:
+            rows, folders = self._load()
+            if name not in folders:
+                if len(folders) >= self.MAX_FOLDERS:
+                    raise PeopleError('You can keep up to 200 candidate folders. Delete one first.')
+                self._write(rows, folders + [name])
+            return {'folder': name}
+
+    def delete_folder(self, name, items):
+        """Remove a folder; its candidates (even in Trash) become Unfiled."""
+        name = _folder(name)
+        with self.lock:
+            rows, folders = self._load()
+            inside = {key: row['revision'] for key, row in rows.items() if row.get('folder', '') == name}
+            if name not in folders and not inside:
+                raise PeopleError('This folder changed in another window. Refresh before trying again.')
+            if self._selected(rows, items, allow_empty=True) != inside:
+                raise PeopleError('Candidates in this folder changed in another window. Refresh before deleting it.')
+            for key in inside:
+                rows[key].update(folder='', revision=rows[key]['revision'] + 1)
+            self._write(rows, [folder for folder in folders if folder != name])
+            return {'changed': len(inside)}
+
+    def move(self, items, name):
+        name = _folder(name, allow_unfiled=True)
+        with self.lock:
+            rows, folders = self._load()
+            if name and name not in folders and not any(row.get('folder', '') == name for row in rows.values()):
+                raise PeopleError('This folder no longer exists. Refresh and choose a folder.')
+            expected = self._selected(rows, items)
+            if any(rows[key].get('deleted') for key in expected):
+                raise PeopleError('Restore candidates from Trash before moving them.')
+            for key in expected:
+                rows[key].update(folder=name, revision=rows[key]['revision'] + 1)
+            self._write(rows, folders)
+            return {'changed': len(expected)}
+
+    def trash(self, items, deleted):
+        """Move to recoverable Trash, or restore to the same folder."""
+        if not isinstance(deleted, bool):
+            raise PeopleError('Choose whether to delete or restore the candidates.')
+        with self.lock:
+            rows, folders = self._load()
+            expected = self._selected(rows, items)
+            stamp = datetime.now(timezone.utc).isoformat(timespec='seconds') if deleted else ''
+            for key in expected:
+                rows[key].update(deleted=deleted, deleted_at=stamp, revision=rows[key]['revision'] + 1)
+            self._write(rows, folders)
+            return {'changed': len(expected)}
+
+    def shortlist(self, key, revision, value):
+        if not isinstance(value, bool):
+            raise PeopleError('Choose whether to shortlist this candidate.')
+        with self.lock:
+            rows, folders = self._load()
+            self._selected(rows, [{'key': key, 'revision': revision}])
+            if rows[key].get('deleted'):
+                raise PeopleError('Restore this candidate from Trash first.')
+            rows[key].update(shortlisted=value, revision=revision + 1)
+            self._write(rows, folders)
+            return {**rows[key], 'key': key}
 
 
 def hr_people(rows, cached=None):

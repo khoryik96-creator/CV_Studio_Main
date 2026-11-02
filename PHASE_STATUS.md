@@ -4,6 +4,17 @@
 
 ## Release state
 
+- v24.6.529 (unmerged, on `claude/job-leads-signed-clients` after v528) adds
+  folders, a shortlist star and recoverable Trash to the Sourcer Candidates
+  dashboard, like Job Leads. Optional additions to the `sourcer_candidates`
+  vault (still version 1); new actions on the existing `/linkedin-sourcer`
+  route (124 routes unchanged). Excel follows the view. No AI or LinkedIn call.
+- v24.6.528 (unmerged, on `claude/job-leads-signed-clients` restarted from
+  merged v527 `3ea7880`) fixes the Signed clients list: Reload statuses keeps
+  unsaved ticks, saving statuses lists the signed clients at once, a first
+  open with nothing followed lists them too, a company JobAdder lists without
+  a status is shown unlabelled (Follow still checks it), and an empty page
+  explains itself. No route change (124), no JobAdder write.
 - v24.6.527 (unmerged, on `claude/job-leads-signed-clients` from merged v526
   `7c3f0d5`) adds a Signed clients view to Job Leads. The owner chooses which
   JobAdder statuses mean signed, follows clients, and pulls their LinkedIn job

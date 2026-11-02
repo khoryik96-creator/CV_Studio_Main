@@ -1727,6 +1727,21 @@
 @media(max-width:650px) { .people-filters { grid-template-columns:1fr; gap:7px; } .people-dashboard .card-head { flex-wrap:wrap; gap:8px; } }
 
 .contacts-filters{grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}
+/* Sourcer Candidates: folders, shortlist and Trash. */
+.people-filters label.job-leads-pick{flex-direction:row;align-self:end;padding-bottom:8px}
+.people-filters .job-leads-pick input{width:16px;padding:0}
+.people-candidate-tools{margin:10px 0 0;align-items:center}
+.people-candidate-tools label,.people-folder-tools .job-leads-actions label{font-size:12px;font-weight:600;color:var(--text2)}
+.people-candidate-tools .job-leads-pick input{flex:none;width:16px;min-width:16px}
+.people-candidate-tools select,.people-folder-tools input[type=text]{flex:0 1 auto;width:auto;min-width:140px;max-width:240px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:inherit;font:inherit;font-size:12px}
+.people-folder-tools{margin:10px 0;border:1px solid var(--border);border-radius:9px;padding:8px 12px}
+.people-folder-tools summary{cursor:pointer;font-weight:600}
+.people-folder-tools .job-leads-actions{margin-top:8px}
+.people-table th.people-pick,.people-table td.people-pick{min-width:0;width:58px}
+.people-table td.people-pick input{width:16px;height:16px;margin:2px 0 0;accent-color:var(--accent)}
+.people-table td.people-pick button{margin-top:6px;padding:2px 7px;font-size:15px;line-height:1.2}
+.people-table td.people-pick button[aria-pressed=true]{color:#b7791f}
+#peopleCandidatesPanel .people-table td:nth-child(2){min-width:160px}
 /* Signed clients dashboard (Job Leads). */
 .job-leads-clients-box{margin:12px 0;border:1px solid var(--border);border-radius:9px;padding:10px 12px}
 .job-leads-clients-box summary{cursor:pointer;font-weight:600}

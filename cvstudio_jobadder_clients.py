@@ -342,14 +342,16 @@ class JobAdderClientsService:
             raise JobAdderClientsError("JobAdder returned an unexpected company list.", "JOBADDER_CLIENTS_SERVICE", 502)
         total = data.get("totalCount")
         total = total if type(total) is int and total >= 0 else None
-        signed, base, rows = set(entry["statuses"]), self.web_base(), []
+        signed, base, rows, unsigned = set(entry["statuses"]), self.web_base(), [], 0
         for item in data["items"]:
             if not isinstance(item, dict) or type(item.get("companyId")) is not int or item["companyId"] <= 0:
                 continue
             status = item.get("status") if isinstance(item.get("status"), dict) else {}
-            # Never label a company signed unless JobAdder says its status is
-            # one of the chosen ones, even if a filter were ignored upstream.
+            # JobAdder's list always carries each company's status (StatusModel
+            # requires statusId), so only a chosen status counts, even if the
+            # status filter were ignored upstream.
             if status.get("statusId") not in signed:
+                unsigned += 1
                 continue
             name = _text(item.get("name"), 200)
             if not name:
@@ -360,8 +362,16 @@ class JobAdderClientsService:
                          "followed": str(item["companyId"]) in entry["followed"],
                          "jobadder_url": base + "/companies/" + str(item["companyId"])})
         returned = len(data["items"])
+        if returned and unsigned == returned:
+            # With the status filter applied, every listed company has a chosen
+            # status. A full page with none means JobAdder ignored the filter,
+            # so paging through it would only show unrelated companies.
+            raise JobAdderClientsError("JobAdder returned companies without your signed statuses, so the list could not be "
+                                       "trusted. Try again later; nothing was changed.", "JOBADDER_CLIENTS_SERVICE", 502)
         more = returned > 0 and (offset + returned < total if total is not None else returned >= PAGE_SIZE)
-        return {"account": scope, "companies": rows, "offset": offset, "total": total,
+        # ``checked`` is how many companies JobAdder listed on this page, for
+        # the page range when an occasional one was left out.
+        return {"account": scope, "companies": rows, "offset": offset, "total": total, "checked": returned,
                 "next_offset": offset + returned if more and offset + returned <= MAX_OFFSET else None}
 
     def _follow(self, body, token, data, scope, identity, entry):

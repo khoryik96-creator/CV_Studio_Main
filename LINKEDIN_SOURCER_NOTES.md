@@ -1,5 +1,57 @@
 # LinkedIn Sourcer module
 
+## Candidate folders, shortlist and Trash (v24.6.529)
+
+The Candidates dashboard can be organised the way Job Leads ads are.
+
+- **Folders.** Open **Manage folders** to create a folder (up to 80
+  characters, up to 200 folders). Tick candidates (or **Select all on this
+  page**), choose **Move to** and click **Move selected**. Choose a folder under
+  **Folder** to see only its candidates; each option shows its count. To delete
+  a folder, choose it under Folder and click **Delete chosen folder**: its
+  candidates move to Unfiled and none are deleted. Creating a folder keeps the
+  current selection, so it can be moved straight in.
+- **Shortlist.** Click the star next to a candidate to shortlist it, and tick
+  **Shortlisted only** to see just those. The shortlist works in every folder.
+- **Delete and Trash.** **Delete selected** asks first, then moves the
+  candidates to a recoverable Trash. They keep their folder, shortlist and notes.
+  Choose **Trash** under Folder to see them, tick them and click **Restore
+  selected**. Trash is hidden from every other view. Candidates in Trash cannot
+  be moved or shortlisted until restored. As in Job Leads, there is no permanent
+  purge, so Trash still counts toward the 5,000-candidate dashboard limit.
+- **Excel** exports the same view, including the folder and shortlist filters.
+  Three new columns show Folder, Shortlisted and In Trash.
+- **Safety.** The selection remembers candidates, not versions: each change
+  sends the latest revision this window has seen, as Job Leads does, so the
+  owner's own note or star never makes a selection stale. If another window
+  changed a candidate since, nothing changes and the dashboard asks for a
+  refresh. Only candidates in the current view stay selected (changing a
+  filter starts a new selection, and un-starring in "Shortlisted only" drops
+  that candidate). A finished move, delete or restore clears the selection;
+  creating a folder keeps it, ready for Move selected. Each change waits for a
+  fresh list, even when a search refresh was already loading, and if that
+  reload fails the message says so. A new assessment of the same candidate in
+  the same search keeps its folder, shortlist, Trash state and notes. A note
+  typed before the owner's own change still saves; after a refused note save, a
+  refresh shows the newer note and the next Save replaces it.
+- **Names.** Unfiled, Trash and All folders are built in and cannot be folder
+  names. Folders are listed in a fixed order (case, accents and numbers as in
+  the candidate sort, then the exact name).
+
+Storage stays the protected `sourcer_candidates` vault. A dashboard nobody has
+organised is still saved as version 1; once it has a folder, a star or Trash it
+is saved as version 2, so an older CV Studio refuses it (fails closed) instead
+of rewriting it without them. The folder list and the per-candidate `folder`,
+`shortlisted`, `deleted` and `deleted_at` fields are optional, so dashboards
+saved earlier still read, and any unreadable value fails closed without being
+overwritten. The size limit measures exactly what is saved, never the secure
+loader's `_storage` marker, so a dashboard written under the limit always reads
+back. One read of the store returns both the candidates and the folders. All changes use the
+existing `/linkedin-sourcer` route (actions `candidate_shortlist`,
+`candidate_move`, `candidate_trash`, `candidate_folder_create` and
+`candidate_folder_delete`), so the route contract stays at 124. No AI or
+LinkedIn request is made.
+
 ## Candidate sort and filters (v24.6.527)
 
 The Candidates dashboard can be sorted and filtered.

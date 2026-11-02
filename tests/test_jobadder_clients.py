@@ -285,7 +285,7 @@ def test_company_list_needs_a_status_choice_and_uses_the_chosen_status_filter():
     assert [row["name"] for row in result["companies"]] == ["Example Client", "Second Client"]
     assert result["companies"][0] == {"company_id": 11, "name": "Example Client", "status": "Signed Client", "owner": "Sample Owner",
                                       "followed": False, "jobadder_url": "https://app.jobadder.com/companies/11"}
-    assert result["next_offset"] == 53 and result["total"] == 120
+    assert result["next_offset"] == 53 and result["total"] == 120 and result["checked"] == 3
     client.replies["companies"] = {"items": [company(14)], "totalCount": 51}
     assert run(service, {"action": "companies", "offset": 50})["next_offset"] is None
     for bad in [{"offset": -1}, {"offset": "0"}, {"offset": 100001}, {"query": "x" * 201}, {"query": "a\nb"}]:
@@ -296,6 +296,29 @@ def test_company_list_needs_a_status_choice_and_uses_the_chosen_status_filter():
         with pytest.raises(JobAdderClientsError) as error:
             run(service, {"action": "companies"})
         assert error.value.status == 502
+
+
+def test_only_chosen_statuses_are_listed_and_an_unfiltered_page_is_an_error():
+    service, client, _vault, _state = setup()
+    signed(service, client)
+    bare, nameless = company(15, name="No Status"), company(16, name="Status Without Id")
+    del bare["status"]
+    nameless["status"] = {"name": "Signed Client"}
+    # JobAdder's StatusModel always has a statusId, so a company without one
+    # is never counted as signed, even when others on the page are.
+    client.replies["companies"] = {"items": [bare, nameless, company(12, status_id=1, name="Not Signed"), company(11)], "totalCount": 4}
+    result = run(service, {"action": "companies"})
+    assert [row["name"] for row in result["companies"]] == ["Example Client"] and result["checked"] == 4
+    # A page where no company has a chosen status means JobAdder ignored the
+    # filter: a visible error instead of pages of unrelated companies.
+    client.replies["companies"] = {"items": [bare, company(12, status_id=1, name="Not Signed")], "totalCount": 4000}
+    with pytest.raises(JobAdderClientsError) as error:
+        run(service, {"action": "companies"})
+    assert (error.value.status, error.value.code) == (502, "JOBADDER_CLIENTS_SERVICE")
+    assert "without your signed statuses" in str(error.value)
+    # A page whose only company has no usable name is simply empty.
+    client.replies["companies"] = {"items": [company(13, name="")], "totalCount": 1}
+    assert run(service, {"action": "companies"})["companies"] == []
 
 
 def test_follow_reads_the_company_and_keeps_its_linkedin_page():

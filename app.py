@@ -24,7 +24,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.527"
+_INSTALL_RECEIPT_VERSION = "v24.6.529"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -347,7 +347,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.527"
+_CVSTUDIO_VERSION = "v24.6.529"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -14800,7 +14800,7 @@ def _linkedin_sourcer_provider_call(model, brief, task, schema, observed):
         raise error from None
 
 
-from cvstudio_people import SourcerCandidates, PeopleError, workbook as _people_workbook, CANDIDATE_FIELDS
+from cvstudio_people import SourcerCandidates, PeopleError, workbook as _people_workbook
 _SOURCER_CANDIDATES = SourcerCandidates(load=lambda:_cv_secure_load('sourcer_candidates'),save=lambda value:_cv_secure_save('sourcer_candidates',value))
 _LINKEDIN_SOURCER = LinkedInSourcerService(
     key_available=lambda: bool(_resolve_request_api_key({"provider": "deepseek"})),
@@ -14873,14 +14873,15 @@ def linkedin_sourcer():
     try:
         data = request.get_json(silent=True)
         if isinstance(data,dict) and data.get('action') == 'export_candidates':
-            from cvstudio_people import filter_candidates
+            from cvstudio_people import filter_candidates, candidate_export_rows, CANDIDATE_EXPORT_FIELDS
             from io import BytesIO
             try:
                 rows=filter_candidates(_SOURCER_CANDIDATES.list(),data.get('query',''),data.get('search',''),
-                    min_score=data.get('min_score',0),read=data.get('read',''),sort=data.get('sort','saved_at'),order=data.get('order','desc'))
+                    min_score=data.get('min_score',0),read=data.get('read',''),sort=data.get('sort','saved_at'),order=data.get('order','desc'),
+                    folder=data.get('folder','*'),shortlisted=data.get('shortlisted',False))
             except PeopleError as exc:
                 raise SourcerError(str(exc)) from None
-            response=send_file(BytesIO(_people_workbook(rows,CANDIDATE_FIELDS,'Candidates')),
+            response=send_file(BytesIO(_people_workbook(candidate_export_rows(rows),CANDIDATE_EXPORT_FIELDS,'Candidates')),
                 mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',as_attachment=True,download_name='CV-Studio-Candidates.xlsx')
             response.headers['Cache-Control']='no-store'
             return response

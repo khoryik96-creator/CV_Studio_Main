@@ -8,9 +8,19 @@ only read: nothing in JobAdder is changed.
 
 - **Which clients count as signed.** The owner ticks the JobAdder company
   statuses that mean a client has signed terms (for example "Signed Client").
-  The choice is checked against JobAdder's current status list when saved. The
-  client list only shows companies whose JobAdder status is one of the chosen
-  ones, even if JobAdder ignored the status filter.
+  The choice is checked against JobAdder's current status list when saved.
+  Saving lists the signed clients straight away, and opening the view with
+  statuses chosen but nothing followed lists them once (v24.6.528). Reload
+  statuses keeps ticks the owner changed but has not saved; boxes the owner did
+  not touch follow the saved choice, even one saved in another window. While
+  changed ticks are unsaved, Search and paging wait for Save statuses, because
+  the list always uses the saved statuses.
+- **The client list.** JobAdder filters the list by the chosen statuses
+  (`StatusId`, per `references/jobadder_v2_openapi.json`), and its company
+  status always carries a `statusId`. A company whose status is not a chosen one
+  is left out even if the filter were ignored. A page where JobAdder listed
+  companies but none had a chosen status means the filter was ignored, so it is
+  shown as an error instead of pages of unrelated companies.
 - **Following.** Following re-reads the company in JobAdder and is refused if
   its status is no longer a chosen one. Up to 200 clients per user. Following
   again keeps a pasted company number while JobAdder still shows the same named

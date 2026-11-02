@@ -5,8 +5,9 @@
   const text=(tag,value,cls)=>{const n=document.createElement(tag);n.textContent=value;if(cls)n.className=cls;return n;};
   const link=(value,url)=>{const a=text('a',value);if(/^https:\/\/www\.linkedin\.com\/(?:in\/[A-Za-z0-9_%~-]+(?:\/details\/experience\/|\/?)|talent\/(?:hire\/)?profile\/[^/?#]+|jobs\/view\/\d+\/?|company\/[A-Za-z0-9_-]+\/)$/u.test(url || '')){a.href=url;a.target='_blank';a.rel='noopener noreferrer';}return a;};
   let appBusy=false, dateBusy=false, initialized=false,dateOperation='',dateStopped=false,activeDateStop=null;
-  const noteDrafts=new Map();
-  const boards={HR:{rows:[],page:0,loading:false,exporting:false,generation:0},Candidates:{rows:[],page:0,loading:false,exporting:false,generation:0}};
+  const noteDrafts=new Map(),selection=new Set();
+  let folderNames=[];
+  const boards={HR:{rows:[],page:0,loading:false,exporting:false,generation:0},Candidates:{rows:[],page:0,loading:false,exporting:false,working:false,generation:0}};
   async function api(path,body) {
     const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),cache:'no-store'});
     const data=await response.json();
@@ -32,16 +33,19 @@
   }
   const score=row=>typeof row.score==='number' && Number.isFinite(row.score)?row.score:null;
   function candidateView() {
-    const sort=el('CandidatesSort').value,order=el('CandidatesOrder').value;
-    return {min_score:Number(el('CandidatesMinScore').value) || 0,read:el('CandidatesRead').value,sort:SORTS.has(sort)?sort:'saved_at',order:order==='asc'?'asc':'desc'};
+    const sort=el('CandidatesSort').value,order=el('CandidatesOrder').value,folder=el('CandidatesFolder').value;
+    return {min_score:Number(el('CandidatesMinScore').value) || 0,read:el('CandidatesRead').value,sort:SORTS.has(sort)?sort:'saved_at',order:order==='asc'?'asc':'desc',
+      folder:folder==='*' || folder==='!trash' || folder==='' || folderNames.includes(folder)?folder:'*',shortlisted:el('CandidatesShortlisted').checked===true};
   }
+  // Trash only shows when it is chosen, as in Job Leads.
+  const inFolder=(row,folder)=>folder==='!trash'?row.deleted===true:row.deleted!==true && (folder==='*' || (row.folder || '')===folder);
   function filtered(kind) {
     const query=el(kind+'Query').value.trim().toLowerCase(),value=selected(kind);
     const rows=boards[kind].rows.filter(row=>(!value || row[kind==='HR'?'company_id':'run_id']===value) && (!query || fields[kind].map(k=>Array.isArray(row[k])?row[k].join(' '):String(row[k]??'')).join(' ').toLowerCase().includes(query)));
     if(kind!=='Candidates')return rows;
     // Same rules as the Excel export: filters first, blank values last, and
     // equal values keep the newest-first archive order.
-    const view=candidateView(),picked=rows.filter(row=>(score(row) ?? 0)>=view.min_score && (!view.read || row.read===view.read));
+    const view=candidateView(),picked=rows.filter(row=>inFolder(row,view.folder) && (!view.shortlisted || row.shortlisted===true) && (score(row) ?? 0)>=view.min_score && (!view.read || row.read===view.read));
     const keys=new Map(picked.map(row=>[row,view.sort==='score'?score(row):sortKey(row[view.sort])]));
     const blank=row=>view.sort==='score'?keys.get(row)===null:keys.get(row).length===1 && keys.get(row)[0]==='';
     const compare=(a,b)=>view.sort==='score'?keys.get(a)-keys.get(b):compareKeys(keys.get(a),keys.get(b));
@@ -63,6 +67,18 @@
     el('HRDateAll').disabled=appBusy || dateBusy || boards.HR.loading || !filtered('HR').some(row=>!row.joined);
     for(const suffix of ['Query','Company'])el('HR'+suffix).disabled=dateBusy;
     for(const button of document.querySelectorAll('[data-date-stop]')){button.hidden=!dateBusy || button!==activeDateStop;button.disabled=dateStopped;}
+    if(kind==='Candidates') {
+      const view=candidateView(),busy=b.loading || b.working,trash=view.folder==='!trash',page=rows.slice(b.page*40,(b.page+1)*40);
+      el('CandidatesRefresh').disabled=busy;
+      el('CandidatesSelected').textContent=selection.size+' selected';
+      el('CandidatesSelectPage').disabled=busy || !page.length;el('CandidatesSelectPage').checked=!!page.length && page.every(row=>selection.has(row.key));
+      el('CandidatesMove').disabled=el('CandidatesMoveTo').disabled=busy || trash || !selection.size;
+      el('CandidatesTrash').hidden=trash;el('CandidatesTrash').disabled=busy || !selection.size;
+      el('CandidatesRestore').hidden=!trash;el('CandidatesRestore').disabled=busy || !selection.size;
+      el('CandidatesCreateFolder').disabled=busy || !el('CandidatesNewFolder').value.trim();
+      el('CandidatesDeleteFolder').disabled=busy || !folderNames.includes(view.folder);
+      for(const control of el('CandidatesRows').querySelectorAll('[data-organise]'))control.disabled=busy || control.dataset.organise==='trashed';
+    }
     if(kind==='HR') {
       for(const button of el('HRRows').querySelectorAll('[data-unlock]'))button.disabled=appBusy || dateBusy || !window.cvStudioApollo?.connected();
       el('HRConnect').hidden=!!window.cvStudioApollo?.connected();el('HRConnect').disabled=appBusy || dateBusy || !window.cvStudioApollo?.available();
@@ -172,7 +188,18 @@
     const b=boards[kind],all=filtered(kind),target=el(kind+'Rows');b.page=Math.min(b.page,Math.max(0,Math.ceil(all.length/40)-1));target.replaceChildren();
     el(kind+'Count').textContent=String(all.length);
     for(const row of all.slice(b.page*40,(b.page+1)*40)) {
-      const tr=document.createElement('tr'),name=document.createElement('td');name.append(link(row.name,row.url));tr.append(name);
+      const tr=document.createElement('tr'),name=document.createElement('td');name.append(link(row.name,row.url));
+      if(kind==='Candidates') {
+        const pick=text('td','','people-pick'),box=document.createElement('input'),star=text('button',row.shortlisted?'\u2605':'\u2606','sec');
+        box.type='checkbox';box.checked=selection.has(row.key);box.dataset.organise='';box.setAttribute('aria-label','Select '+row.name);
+        box.addEventListener('change',()=>{if(box.checked)selection.add(row.key);else selection.delete(row.key);controls('Candidates');});
+        star.type='button';star.dataset.organise=row.deleted?'trashed':'';star.setAttribute('aria-pressed',String(row.shortlisted===true));
+        star.setAttribute('aria-label',(row.shortlisted?'Remove from shortlist: ':'Shortlist ')+row.name);star.title=row.shortlisted?'Shortlisted':'Shortlist';
+        star.addEventListener('click',()=>shortlist(row));
+        pick.append(box,star);tr.append(pick);
+        name.append(text('small',(row.folder || 'Unfiled')+(row.deleted?' \u00b7 In Trash':'')));
+      }
+      tr.append(name);
       if(kind==='HR') {
         tr.append(text('td',row.title || '—'),text('td',row.company),text('td',row.location || '—'));
         const dates=text('td',row.employment);decorateDate(dates,personSource(row,true),row);tr.append(dates);
@@ -196,15 +223,14 @@
         const notes=document.createElement('td'),editor=document.createElement('details'),input=document.createElement('textarea'),save=text('button','Save note','sec');
         editor.append(text('summary',row.notes || 'Add note'));editor.open=noteDrafts.has(row.key);
         input.value=noteDrafts.get(row.key)?.value ?? row.notes;input.maxLength=2000;input.rows=2;input.setAttribute('aria-label','Notes for '+row.name);save.type='button';save.disabled=input.value===row.notes;
-        input.addEventListener('input',()=>{save.disabled=input.value===row.notes;if(save.disabled)noteDrafts.delete(row.key);else noteDrafts.set(row.key,{value:input.value,revision:noteDrafts.get(row.key)?.revision ?? row.revision});});
+        input.addEventListener('input',()=>{save.disabled=input.value===row.notes;if(save.disabled)noteDrafts.delete(row.key);else noteDrafts.set(row.key,{value:input.value,revision:noteDrafts.get(row.key)?.revision ?? row.revision,base:noteDrafts.get(row.key)?.base ?? row.notes});});
         save.addEventListener('click',async()=>{
           save.disabled=true;input.disabled=true;
           try {
             const data=await api('/linkedin-sourcer',{action:'candidate_note',key:row.key,revision:noteDrafts.get(row.key)?.revision ?? row.revision,notes:input.value});
-            ++boards.Candidates.generation;Object.assign(boards.Candidates.rows.find(value=>value.key===row.key) || row,data.candidate);
-            noteDrafts.delete(row.key);draw('Candidates');el('CandidatesMessage').textContent='Note saved.';
+            applySaved(data.candidate);noteDrafts.delete(row.key);draw('Candidates');el('CandidatesMessage').textContent='Note saved.';
           }
-          catch(error){el('CandidatesMessage').textContent=error.message;save.disabled=false;}
+          catch(error){const draft=noteDrafts.get(row.key);if(draft)draft.refused=true;el('CandidatesMessage').textContent=error.message;save.disabled=false;}
           finally{input.disabled=false;}
         });editor.append(input,save);notes.append(editor);tr.append(notes);
       }
@@ -213,15 +239,95 @@
     el(kind+'Page').textContent=all.length?`${b.page*40+1}–${Math.min((b.page+1)*40,all.length)} of ${all.length}`:'';controls(kind);
     if(kind==='Candidates')markSort();
   }
+  // A refresh asked for while one is reading waits for a new read after it,
+  // so every caller sees data that includes its own change. Resolves true
+  // only when that data was shown.
   async function refresh(kind) {
-    const b=boards[kind];if(b.loading){b.again=true;return;}b.loading=true;const generation=++b.generation;controls(kind);el(kind+'Message').textContent='Loading…';
+    const b=boards[kind];
+    if(b.loading){b.again=true;return b.next || (b.next=new Promise(resolve=>{b.settle=resolve;}));}
+    b.loading=true;const generation=++b.generation;controls(kind);el(kind+'Message').textContent='Loading…';
+    let shown=false;
     try {
       const data=await api(kind==='HR'?'/apollo':'/linkedin-sourcer',{action:kind==='HR'?'hr_people':'candidates'});
-      if(generation!==b.generation)return;
-      b.rows=data[kind==='HR'?'people':'candidates'] || [];choices(kind);draw(kind);
-      el(kind+'Message').textContent=b.rows.length?'':kind==='HR'?'No saved HR people yet.':'Candidates from new searches are saved here automatically.';return true;
-    } catch(error){el(kind+'Message').textContent=error.message;return false;}
-    finally{b.loading=false;controls(kind);if(b.again){b.again=false;if(!el(kind+'Panel').hidden)void refresh(kind);}}
+      // A change saved in this window meanwhile is newer than this read: read again.
+      if(generation!==b.generation)b.again=true;
+      else {
+        b.rows=data[kind==='HR'?'people':'candidates'] || [];
+        if(kind==='Candidates'){folderNames=Array.isArray(data.folders)?data.folders.filter(name=>typeof name==='string'):[];reconcileCandidates();}
+        choices(kind);draw(kind);
+        el(kind+'Message').textContent=b.rows.length?'':kind==='HR'?'No saved HR people yet.':'Candidates from new searches are saved here automatically.';shown=true;
+      }
+    } catch(error){el(kind+'Message').textContent=error.message;}
+    b.loading=false;controls(kind);
+    if(b.again){
+      b.again=false;const settle=b.settle;b.next=b.settle=null;
+      shown=el(kind+'Panel').hidden?false:await refresh(kind);
+      settle?.(shown);
+    }
+    return shown;
+  }
+  // Only candidates in the current view stay selected, as in Job Leads.
+  function pruneSelection() {
+    const visible=new Set(filtered('Candidates').map(row=>row.key));
+    for(const key of [...selection])if(!visible.has(key))selection.delete(key);
+  }
+  function reconcileCandidates() {
+    const rows=new Map(boards.Candidates.rows.map(row=>[row.key,row]));
+    // A draft follows its candidate while the saved note is unchanged. After a
+    // refused save the owner has seen the newer note, so the next Save replaces it.
+    for(const [key,draft] of noteDrafts){const row=rows.get(key);if(row && (row.notes===draft.base || draft.refused))Object.assign(draft,{revision:row.revision,base:row.notes,refused:false});}
+    const counts=new Map([['*',0],['',0],['!trash',0]]);
+    for(const row of boards.Candidates.rows){
+      if(row.deleted===true){counts.set('!trash',counts.get('!trash')+1);continue;}
+      counts.set('*',counts.get('*')+1);counts.set(row.folder || '',(counts.get(row.folder || '') || 0)+1);
+    }
+    const filter=el('CandidatesFolder'),target=el('CandidatesMoveTo'),old=filter.value,move=target.value;
+    const option=(value,label)=>{const n=text('option',label);n.value=value;return n;};
+    filter.replaceChildren(option('*',`All folders (${counts.get('*')})`),option('',`Unfiled (${counts.get('')})`),
+      ...folderNames.map(name=>option(name,`${name} (${counts.get(name) || 0})`)),option('!trash',`Trash (${counts.get('!trash')})`));
+    filter.value=old==='*' || old==='' || old==='!trash' || folderNames.includes(old)?old:'*';
+    target.replaceChildren(option('','Unfiled'),...folderNames.map(name=>option(name,name)));
+    target.value=folderNames.includes(move)?move:'';
+    pruneSelection();
+  }
+  // A saved candidate updates the row shown now (a refresh may have replaced
+  // the list while the change was saving), unless that row is already newer.
+  // Reads still in progress are older than the change, so they are repeated.
+  function applySaved(candidate) {
+    const b=boards.Candidates;++b.generation;
+    const shown=b.rows.find(value=>value.key===candidate.key);
+    if(shown && candidate.revision>=shown.revision)Object.assign(shown,candidate);
+    reconcileCandidates();
+  }
+  // The selected candidates with the revisions this window last saw.
+  const items=()=>boards.Candidates.rows.filter(row=>selection.has(row.key)).map(row=>({key:row.key,revision:row.revision}));
+  // One organising change, then a fresh read. Resolves with the reply, or
+  // null when nothing changed; a failed reload is reported, never hidden.
+  // A finished change clears the selection, as in Job Leads, except a new
+  // folder, which keeps it ready for Move selected.
+  async function organise(body,done,keep=false) {
+    const b=boards.Candidates;if(b.loading || b.working)return null;
+    b.working=true;controls('Candidates');el('CandidatesMessage').textContent='Saving…';
+    let data;
+    try {data=await api('/linkedin-sourcer',body);}
+    catch(error){el('CandidatesMessage').textContent=error.message;b.working=false;controls('Candidates');return null;}
+    b.working=false;if(!keep)selection.clear();
+    const shown=await refresh('Candidates'),problem=shown?'':el('CandidatesMessage').textContent;
+    if(!shown)selection.clear();
+    el('CandidatesMessage').textContent=done(data)+(shown?'':' The list could not be reloaded'+(problem?' ('+problem+')':'')+'. Click Refresh.');
+    controls('Candidates');return data;
+  }
+  const plural=(count,word)=>count+' '+word+(count===1?'':'s');
+  async function shortlist(row) {
+    const b=boards.Candidates,current=b.rows.find(value=>value.key===row.key) || row;
+    if(b.loading || b.working || current.deleted)return;
+    b.working=true;controls('Candidates');
+    try {
+      const data=await api('/linkedin-sourcer',{action:'candidate_shortlist',key:current.key,revision:current.revision,shortlisted:current.shortlisted!==true});
+      applySaved(data.candidate);
+      el('CandidatesMessage').textContent=data.candidate.shortlisted?current.name+' is shortlisted.':current.name+' was removed from the shortlist.';
+    } catch(error){el('CandidatesMessage').textContent=error.message;}
+    finally{b.working=false;draw('Candidates');}
   }
   async function exportRows(kind) {
     const b=boards[kind];if(b.exporting || b.loading || !filtered(kind).length)return;b.exporting=true;controls(kind);
@@ -240,8 +346,9 @@
   };
   for(const kind of ['HR','Candidates']) {
     el(kind+'Refresh').addEventListener('click',()=>refresh(kind));el(kind+'Export').addEventListener('click',()=>exportRows(kind));
-    el(kind+'Query').addEventListener('input',()=>{boards[kind].page=0;draw(kind);});
-    el(kind+(kind==='HR'?'Company':'Search')).addEventListener('change',()=>{boards[kind].page=0;draw(kind);});
+    // A different set of candidates starts a new selection, as in Job Leads.
+    el(kind+'Query').addEventListener('input',()=>{boards[kind].page=0;if(kind==='Candidates')selection.clear();draw(kind);});
+    el(kind+(kind==='HR'?'Company':'Search')).addEventListener('change',()=>{boards[kind].page=0;if(kind==='Candidates')selection.clear();draw(kind);});
     for(const [suffix,delta] of [['Previous',-1],['Next',1]])el(kind+suffix).addEventListener('click',()=>{boards[kind].page+=delta;draw(kind);});
     draw(kind);
   }
@@ -261,9 +368,44 @@
   for(const name of ['Sort','Order']){
     try{const saved=localStorage.getItem('cvstudio_candidates_'+name.toLowerCase());if(saved && [...el('Candidates'+name).options].some(option=>option.value===saved))el('Candidates'+name).value=saved;}catch{}
   }
-  for(const name of ['MinScore','Read','Sort','Order'])el('Candidates'+name).addEventListener('change',()=>{
-    if(name==='Sort' || name==='Order')try{localStorage.setItem('cvstudio_candidates_'+name.toLowerCase(),el('Candidates'+name).value);}catch{}
+  for(const name of ['MinScore','Read','Sort','Order','Folder','Shortlisted'])el('Candidates'+name).addEventListener('change',()=>{
+    if(name==='Sort' || name==='Order'){try{localStorage.setItem('cvstudio_candidates_'+name.toLowerCase(),el('Candidates'+name).value);}catch{}}
+    else selection.clear();
     boards.Candidates.page=0;draw('Candidates');
+  });
+  el('CandidatesSelectPage').addEventListener('change',()=>{
+    const page=filtered('Candidates').slice(boards.Candidates.page*40,(boards.Candidates.page+1)*40);
+    for(const row of page){if(el('CandidatesSelectPage').checked)selection.add(row.key);else selection.delete(row.key);}
+    draw('Candidates');
+  });
+  el('CandidatesMove').addEventListener('click',()=>{
+    const folder=el('CandidatesMoveTo').value,picked=items();
+    if(picked.length)void organise({action:'candidate_move',items:picked,folder},()=>`Moved ${plural(picked.length,'candidate')} to ${folder || 'Unfiled'}.`);
+  });
+  el('CandidatesTrash').addEventListener('click',()=>{
+    const picked=items();
+    if(picked.length && window.confirm(`Move ${plural(picked.length,'candidate')} to Trash? You can restore them from Trash in Folder.`))
+      void organise({action:'candidate_trash',items:picked,deleted:true},()=>`Moved ${plural(picked.length,'candidate')} to Trash. Choose Trash in Folder to restore them.`);
+  });
+  el('CandidatesRestore').addEventListener('click',()=>{
+    const picked=items();
+    if(picked.length)void organise({action:'candidate_trash',items:picked,deleted:false},()=>`Restored ${plural(picked.length,'candidate')} to ${picked.length===1?'its':'their'} folder.`);
+  });
+  el('CandidatesNewFolder').addEventListener('input',()=>controls('Candidates'));
+  el('CandidatesCreateFolder').addEventListener('click',async()=>{
+    const name=el('CandidatesNewFolder').value.trim();if(!name)return;
+    const data=await organise({action:'candidate_folder_create',name},reply=>`Folder ${reply.folder} created. Select candidates and choose it in Move to.`,true);
+    // Move to uses the name the service saved, which may be trimmed differently.
+    if(data){el('CandidatesNewFolder').value='';el('CandidatesMoveTo').value=folderNames.includes(data.folder)?data.folder:'';controls('Candidates');}
+  });
+  el('CandidatesDeleteFolder').addEventListener('click',()=>{
+    const name=candidateView().folder;if(!folderNames.includes(name))return;
+    const inside=boards.Candidates.rows.filter(row=>(row.folder || '')===name);
+    if(!window.confirm(`Delete the folder ${name}? Its ${plural(inside.length,'candidate')} move to Unfiled; none are deleted.`))return;
+    void organise({action:'candidate_folder_delete',name,items:inside.map(row=>({key:row.key,revision:row.revision}))},data=>{
+      el('CandidatesFolder').value='*';boards.Candidates.page=0;draw('Candidates');
+      return `Folder ${name} deleted. ${plural(data.changed,'candidate')} moved to Unfiled.`;
+    });
   });
   el('CandidatesTab').addEventListener('click',()=>candidates(true));el('SourcerSearchTab').addEventListener('click',()=>candidates(false));initialized=true;
 })();
