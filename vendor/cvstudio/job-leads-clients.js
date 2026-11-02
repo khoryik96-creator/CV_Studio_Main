@@ -300,7 +300,7 @@
       editor.append(input, button('Save link', () => setLink(client, input.value)));
       page.append(editor); tr.append(page);
       const count = savedCount(client), ads = node('td');
-      if (count) { const view = button(String(count), () => openAds(client.company_id)); view.setAttribute('aria-label', `View ${count} saved ads for ${client.name} in Job ads`); ads.append(view); }
+      if (count) { const view = button(String(count), () => openAds(client.company_id)); view.dataset.clientAction = ''; view.setAttribute('aria-label', `View ${count} saved ads for ${client.name} in Job ads`); ads.append(view); }
       else ads.textContent = '0';
       tr.append(ads, node('td', client.pulled_at ? client.pulled_at.slice(0, 10) : 'Never'));
       const actions = node('td'), unfollowButton = button('Unfollow', () => unfollow(client));
@@ -351,18 +351,24 @@
 
   // Client ads are listed in Job ads (its Client filter); this view counts them.
   function allClientAds() {
-    if (adsIndex.records !== state.records || adsIndex.followed !== state.followed)
-      adsIndex = {records:state.records, followed:state.followed, rows:clientAds(state.records, state.followed),
-        byId:new Map(clientAds(state.records, state.followed).map(row => [row.record.id, row.client]))};
+    if (adsIndex.records !== state.records || adsIndex.followed !== state.followed) {
+      const rows = clientAds(state.records, state.followed);
+      adsIndex = {records:state.records, followed:state.followed, rows, byId:new Map(rows.map(row => [row.record.id, row.client])), other:new Map()};
+    }
     return adsIndex.rows;
   }
   // The followed client a saved ad belongs to, once followed clients are known.
+  // Ads this view has not matched (Job ads' newer copies, ads in Trash) are
+  // matched by name once per id, tag and company until the lists change.
   function clientOf(record) {
     if (!state.loaded || !record?.id) return null;
     allClientAds();
-    const client = adsIndex.byId.get(record.id);
-    // Job ads' own records may be newer than this view's copy: match those by name.
-    const owner = client || (record.deleted ? null : clientAds([record], state.followed)[0]?.client);
+    let owner = record.deleted ? null : adsIndex.byId.get(record.id);
+    if (!owner) {
+      const key = record.id + '|' + (record.client?.company_id ?? '') + '|' + record.company;
+      if (!adsIndex.other.has(key)) adsIndex.other.set(key, clientAds([{...record, deleted:false}], state.followed)[0]?.client || null);
+      owner = adsIndex.other.get(key);
+    }
     return owner ? {company_id:owner.company_id, name:owner.name} : null;
   }
   const openAds = companyId => jobLeads()?.showClientAds?.(companyId);

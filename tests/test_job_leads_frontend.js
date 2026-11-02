@@ -293,6 +293,12 @@ const root = path.resolve(__dirname, '..');
    await el('AddManual').click();assert(!el('FormCard').hidden && el('AddManual').hidden);assert.equal(el('Layout').dataset.form,'open');
    await el('FormClose').click();await el('List').children[0].querySelectorAll('button').find(button=>button.textContent==='Edit').click();
    assert(!el('FormCard').hidden,'Edit opens the form');assert.equal(el('company').value,'Company 1');
+   // The HR people tab counts each person once per company, as the HR people list does.
+   const person=url=>({url,name:'Fictional HR',title:'HR',location:'',matched:'HR'});
+   records=[ad(1,{hr:{company_id:'41',people:[person('https://www.linkedin.com/in/fictional-hr'),person('https://www.linkedin.com/in/Fictional-HR/')]}}),
+     ad(2,{hr:{company_id:'41',people:[person('https://www.linkedin.com/in/fictional-hr')]}}),ad(3,{hr:{company_id:'42',people:[person('https://www.linkedin.com/in/fictional-hr')]}}),
+     ad(4,{deleted:true,hr:{company_id:'43',people:[person('https://www.linkedin.com/in/other-hr')]}})];
+   await el('Refresh').click();assert.equal(document.getElementById('peopleHRTabCount').textContent,'2','case, trailing slash and repeat ads count once; Trash is left out');
    records=[];await el('Refresh').click();assert.match(el('List').children[0].children[0].textContent,/No saved ads yet/);assert.equal(el('AdsTabCount').textContent,'0');}
   console.log('Job Leads: capture binding/isolation, save/edit/search, duplicate/draft protection, paste-link autofill, optional manual contact/status/date preservation, failure, CSV and HTML safety passed');
 })().catch(error=>{console.error(error);process.exitCode=1});

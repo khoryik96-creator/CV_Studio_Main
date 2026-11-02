@@ -25,6 +25,8 @@
   let bulkHR = null;
   // The HR queue resumes only its own unfinished run.
   const bulkCheckpointKeys={BulkHR:'cvstudio_job_leads_hr_queue_v1'};
+  // The Followed clients queue was merged into Job ads (v24.6.543).
+  try { localStorage.removeItem('cvstudio_job_leads_client_hr_queue_v1'); } catch {}
   const bulkCheckpoints={};
   for (const [prefix,key] of Object.entries(bulkCheckpointKeys)) {
     try {
@@ -347,9 +349,10 @@
     const selected = filtered(), list = el('List'); list.replaceChildren();
     el('Total').textContent = String(rows.filter(row => !row.deleted).length);
     el('AdsTabCount').textContent = el('Total').textContent;
-    // HR people until that tab reads its own list: each saved person once.
-    const people = new Set(rows.filter(row => !row.deleted).flatMap(row => (row.hr?.people || []).map(person => person.url)));
-    const hrCount = document.getElementById('peopleHRTabCount'); if (hrCount && !hrCount.dataset.exact) hrCount.textContent = String(people.size);
+    // HR people: each person once per company, keyed as the HR people list is.
+    const people = new Set(rows.filter(row => !row.deleted && row.hr).flatMap(row => (row.hr.people || []).map(person =>
+      (row.hr.company_id || '') + '|' + String(person.url || '').replace(/\/+$/, '').toLowerCase())));
+    const hrCount = document.getElementById('peopleHRTabCount'); if (hrCount) hrCount.textContent = String(people.size);
     el('Due').textContent = String(rows.filter(row => !row.deleted && due(row)).length);
     updateClear();
     page = Math.min(page, Math.max(0, Math.ceil(selected.length / 40)-1));
@@ -362,7 +365,7 @@
     }
     const button = (text, action, cls = 'sec') => { const value = node('button', text, cls); value.type = 'button'; value.disabled = busy; value.addEventListener('click', action); return value; };
     selected.slice(page*40, (page+1)*40).forEach(row => {
-      const tr = node('tr', '', due(row) ? 'job-lead-due' : ''), pick = node('td');
+      const tr = node('tr'), pick = node('td');
       if (!row.deleted) {
         const checkbox = node('input');
         checkbox.type = 'checkbox'; checkbox.checked = picked.has(row.id); checkbox.disabled = busy;

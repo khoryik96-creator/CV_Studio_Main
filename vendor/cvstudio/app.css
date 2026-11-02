@@ -1797,9 +1797,11 @@
 .job-leads-ads-table td:nth-child(5) { white-space:normal; }
 .job-leads-ads-table .job-lead-title { background:none; border:0; padding:0; color:var(--accent); font:inherit; font-weight:600; text-align:left; cursor:pointer; }
 .job-leads-ads-table .job-lead-title:hover { text-decoration:underline; }
-.job-leads-ads-table tr.job-lead-due td:nth-child(2) { color:var(--danger, #b42318); }
 .job-leads-ads-table .job-leads-actions { flex-wrap:nowrap; gap:6px; }
 .job-leads-ads-table .job-leads-actions button, .job-leads-ads-table td > button { padding:4px 8px; font-size:11px; min-height:0; }
-.job-leads-tab-count { margin-left:4px; font-weight:600; opacity:.75; }
+/* Shown as "Job ads (12)"; the brackets also keep the accessible name readable. */
+.job-leads-tab-count { font-weight:600; opacity:.75; }
+.job-leads-tab-count:not(:empty)::before { content:' ('; }
+.job-leads-tab-count:not(:empty)::after { content:')'; }
 /* Inside Job Leads the hidden attribute always wins over a class's display. */
 #viewJobLeads [hidden] { display:none !important; }

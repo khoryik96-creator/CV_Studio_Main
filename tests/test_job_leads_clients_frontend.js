@@ -579,7 +579,8 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
    // Job ads lists these ads: clientOf gives its Client column the same owner.
    const owner=record=>{const value=d.api.clientOf(record);return value?[value.company_id,value.name]:null;};
    assert.deepEqual([owner(records[0]),owner(records[1]),owner(records[2]),owner(records[3]),owner(records[4])],
-     [[11,'Example Client'],[11,'Example Client'],[12,'Second Client'],null,null],'deleted and unrelated ads have no client');
+     [[11,'Example Client'],[11,'Example Client'],[12,'Second Client'],[11,'Example Client'],null],'an ad in Trash keeps its client; an unrelated ad has none');
+   assert.equal(d.el('AdsCount').textContent,'3','the count still leaves out Trash');
    assert.deepEqual(owner(saved('z','Second Client Sdn Bhd',{role:'Newer in Job ads'})),[12,'Second Client'],'an ad Job ads has but this view has not read yet is matched by name');
    assert((d.state.redraws||0)>0,'Job ads redraws once followed clients are known');
    // Ads added on LinkedIn are counted when the owner returns to this tab.

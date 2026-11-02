@@ -274,7 +274,7 @@
       if(generation!==b.generation)b.again=true;
       else {
         b.rows=data[kind==='HR'?'people':'candidates'] || [];
-        if(kind==='HR'){const count=document.getElementById('peopleHRTabCount');if(count){count.textContent=String(b.rows.length);count.dataset.exact='1';}}
+        if(kind==='HR'){const count=document.getElementById('peopleHRTabCount');if(count)count.textContent=String(b.rows.length);}
         if(kind==='Candidates'){folderNames=Array.isArray(data.folders)?data.folders.filter(name=>typeof name==='string'):[];reconcileCandidates();}
         choices(kind);draw(kind);
         el(kind+'Message').textContent=b.rows.length?'':kind==='HR'?'No saved HR people yet.':'Candidates from new searches are saved here automatically.';shown=true;
@@ -385,6 +385,7 @@
     draw(kind);
   }
   el('HRTab').addEventListener('click',()=>{
+    el('HRNextStep').hidden=true; // a next step belongs to the unlock just made
     el('HRPanel').hidden=false;el('HRTab').setAttribute('aria-pressed','true');
     for(const kind of ['Ads','Contacts']){document.getElementById('jobLeadsApollo'+kind+'Panel').hidden=true;document.getElementById('jobLeadsApollo'+kind+'Tab').setAttribute('aria-pressed','false');}
     if(!openingHR)void refresh('HR');

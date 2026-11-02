@@ -975,7 +975,7 @@
             <label>Following<select id="jobLeadsClientsFollowingFilter"><option value="">All clients</option><option value="followed">Followed</option><option value="unfollowed">Not followed</option></select></label>
             <label>Sort<select id="jobLeadsClientsSort"><option value="name_asc">Company A–Z</option><option value="name_desc">Company Z–A</option><option value="status_asc">Status A–Z</option><option value="status_desc">Status Z–A</option><option value="owner_asc">Owner A–Z</option><option value="owner_desc">Owner Z–A</option></select></label>
           </div>
-          <div class="job-leads-actions"><button type="button" class="primary" id="jobLeadsClientsSearch">Search</button><button type="button" class="sec" id="jobLeadsClientsFiltersReset">Reset filters</button><button type="button" class="sec" id="jobLeadsClientsGoFollowed" hidden>Go to Followed clients</button></div>
+          <div class="job-leads-actions"><button type="button" class="primary" id="jobLeadsClientsSearch">Search</button><button type="button" class="sec" id="jobLeadsClientsFiltersReset">Reset filters</button><span class="job-leads-muted">Status, Owner, Following and Sort apply to this page</span><button type="button" class="sec" id="jobLeadsClientsGoFollowed" hidden>Go to Followed clients</button></div>
           <div class="people-table"><table><thead><tr><th>Client</th><th>Status</th><th>Owner</th><th>Follow</th></tr></thead><tbody id="jobLeadsClientsCompanies"></tbody></table></div>
           <div class="job-leads-actions job-leads-pagination"><span id="jobLeadsClientsCompaniesPage" class="job-leads-muted"></span><button type="button" class="sec" id="jobLeadsClientsCompaniesPrevious" disabled>Previous</button><button type="button" class="sec" id="jobLeadsClientsCompaniesNext" disabled>Next</button></div>
         </details>
@@ -998,7 +998,7 @@
           <div class="job-leads-actions job-leads-pagination"><span id="jobLeadsClientsFoundPage" class="job-leads-muted"></span><button type="button" class="sec" id="jobLeadsClientsFoundPrevious" disabled>Previous</button><button type="button" class="sec" id="jobLeadsClientsFoundNext" disabled>Next</button></div>
         </section>
         <section id="jobLeadsClientsAds" class="job-leads-clients-box job-leads-actions" aria-label="Saved client job ads">
-          <h3>Saved client job ads <span id="jobLeadsClientsAdsCount">0</span></h3><button type="button" class="primary" id="jobLeadsClientsAdsOpen">View in Job ads</button>
+          <h3>Saved client job ads <span id="jobLeadsClientsAdsCount">0</span></h3><button type="button" class="primary" id="jobLeadsClientsAdsOpen" data-client-action="">View in Job ads</button>
         </section>
         </div>
       </div>
