@@ -1444,6 +1444,7 @@
 .li-sourcer-row{display:flex;gap:12px;align-items:center}.li-sourcer-row>*{flex:1;min-width:0}.li-sourcer-check{display:flex;gap:9px;align-items:flex-start}.li-sourcer-check input{margin-top:3px;flex:0 0 auto}
 .li-sourcer-connection{display:flex;gap:9px;align-items:center;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--surface);font-size:12px;overflow-wrap:anywhere}.li-sourcer-dot{flex:0 0 7px;width:7px;height:7px;border-radius:50%;background:var(--text3)}
 .li-sourcer-permission{padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--surface)}.li-sourcer-permission p{padding-left:23px;margin-top:5px}.li-sourcer-option-fields{display:flex;flex-direction:column;gap:12px;padding-top:14px}.li-sourcer-form details summary{cursor:pointer;font-weight:650}.li-sourcer-form details{border-top:1px solid var(--border);padding-top:12px}#liSourcerStatus{font-size:12px;line-height:1.6}#liSourcerQuery{font-size:11px;overflow-wrap:anywhere}
+.li-sourcer-folder-editor:not([hidden]){display:grid;gap:8px;min-width:0}.li-sourcer-folder-editor>input{min-width:0;box-sizing:border-box}
 .li-sourcer-country{display:flex;gap:8px;min-width:0}.li-sourcer-country>select,.li-sourcer-country>input{flex:1;min-width:0}
 .li-sourcer-muted{color:var(--text3);font-size:11px;line-height:1.6}.li-sourcer-result{border-top:1px solid var(--border);padding:17px 0}.li-sourcer-result-head{display:flex;justify-content:space-between;gap:12px}.li-sourcer-result-head a{font-weight:750;overflow-wrap:anywhere}.li-sourcer-result ul{padding-left:18px;font-size:12px}.li-sourcer-form details{font-size:12px;line-height:1.65}.li-sourcer-form details li{margin:8px 0}
 @media(max-width:900px){.li-sourcer-layout{grid-template-columns:1fr}}
@@ -1741,6 +1742,7 @@
 .people-folder-tools .job-leads-actions{margin-top:8px}
 .people-table th.people-pick,.people-table td.people-pick{min-width:0;width:42px}
 .people-table td.people-pick input{width:16px;height:16px;margin:2px 0 0;accent-color:var(--accent)}
+.people-candidate-name .people-name-line>a:visited,.people-candidate-name .people-name-line>a.people-profile-opened{color:#8054b8}
 .people-name-line{display:flex;align-items:center;gap:6px}.people-name-line>a{min-width:0;overflow-wrap:anywhere}
 .people-candidate-name .people-shortlist{flex:none;display:inline-flex;align-items:center;justify-content:center;min-width:28px;min-height:28px;margin:0;padding:2px;border:0;border-radius:6px;background:transparent;color:var(--text3);font-size:19px;line-height:1;vertical-align:middle}
 .people-candidate-name .people-shortlist[aria-pressed=true]{color:#b7791f}

@@ -39,6 +39,8 @@ function fixture(reuse=true){
     if(message.action==='read'){
       state.readCount++;
       if(message.args.method==='setCountry'){if(state.countryWaits>0){state.countryWaits--;return reply({loading:true});}if(state.holdCountry){state.countryReply=()=>reply(true);return;}return reply(true);}
+      if(message.args.method==='readProfile' && state.profileReadError)return reply(null,state.profileReadError);
+      if(message.args.method==='readProfile' && state.profileWaits>0){state.profileWaits--;return reply({loading:true,wait_reason:state.profileWaitReason || 'profile'});}
       if(state.missingReads-- > 0 || state.missingMethod===message.args.method)return reply(null);
       return reply(message.args.method==='readProfile'?{text:candidate.text,name:candidate.name}:['search','next'].includes(message.args.method)?true:{profiles:[candidate],signature:'one',hasNext:!!state.morePages,paginationKnown:true});
     }
@@ -210,6 +212,24 @@ function fixture(reuse=true){
     outdated.el('Mode').value=mode;outdated.el('Brief').value='SAP finance';outdated.el('Consent').checked=true;outdated.state[flag]=true;await outdated.start();
     assert.equal(outdated.requests.length,0,'old tab policy stops before paid work in '+mode);assert(!outdated.calls.some(c=>c.action==='begin'));assert.match(outdated.el('Status').textContent,/companion update/);
     assert(outdated.calls.every(c=>c.scope==='profiles'),'every Sourcer browser action identifies its own session');
+  }
+  for(const mode of ['slow','unavailable','timeout','country','access','identity']) {
+    const f=fixture(false);await f.init();f.el('Brief').value='SAP finance';f.el('Consent').checked=true;
+    if(mode==='slow')f.state.profileWaits=35; // longer than old 15-second limit
+    if(mode==='timeout')f.state.profileWaits=100;
+    if(mode==='country'){f.state.profileWaits=100;f.state.profileWaitReason='country';}
+    if(mode==='unavailable')f.state.profileReadError='LinkedIn results could not be read. Refresh LinkedIn, then reload and reconnect the latest companion.';
+    if(mode==='access')f.state.profileReadError='LinkedIn needs sign-in or a verification check.';
+    if(mode==='identity')f.state.profileReadError='The scan profile tab changed or closed. Your candidate list is kept.';
+    await f.start();
+    const paid=f.requests.filter(r=>r.action==='review');
+    assert.equal(paid.filter(r=>r.stage==='screen').length,1,'screen call is never replayed');
+    assert.equal(paid.filter(r=>r.stage==='detail').length,mode==='slow'?1:0,'unread detail never reaches AI');
+    if(['unavailable','timeout'].includes(mode))assert.match(f.el('Status').textContent,/search-card results were kept/);
+    if(mode==='country')assert.match(f.el('Status').textContent,/selected country/);
+    if(mode==='access')assert.match(f.el('Status').textContent,/sign-in/);
+    if(mode==='identity')assert.match(f.el('Status').textContent,/changed or closed/);
+    assert(f.calls.some(c=>c.action==='end'),'every path closes its own run');
   }
   const ambiguousSearch=fixture(false);ambiguousSearch.el('Mode').value='lite';ambiguousSearch.state.tabs=[{id:7,url:'https://www.linkedin.com/talent/search',title:'Recruiter Lite'}];
   await ambiguousSearch.init();ambiguousSearch.el('Brief').value='SAP finance';ambiguousSearch.el('Consent').checked=true;ambiguousSearch.state.missingMethod='search';await ambiguousSearch.start();

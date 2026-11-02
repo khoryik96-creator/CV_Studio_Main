@@ -13,7 +13,7 @@ const root = path.resolve(__dirname, '..');
     [3, {id:3, url:'https://www.linkedin.com/in/unrelated', status:'complete'}]
   ]);
   const url = 'https://www.linkedin.com/in/sample-person';
-  let searchResult, readerFailure='';
+  let searchResult, readerFailure='', transient='',transition=false;
   const chrome = {
     storage:{session:{get:async()=>({}),set:async()=>{}}},
     action: {onClicked:{addListener:fn=>callbacks.click=fn},setBadgeText:async()=>{}},
@@ -22,6 +22,7 @@ const root = path.resolve(__dirname, '..');
       create:async({url})=>{const tab={id:++counter,url,active:false,status:'complete'};tabs.set(tab.id,tab);return tab},
       update:async(id,{url})=>{tabs.get(id).url=url},remove:async id=>tabs.delete(id)},
     scripting:{executeScript:async args=>{
+      if(transient && (args.files || args.args?.[0]==='next')){if(transition)tabs.get(2).url='https://www.linkedin.com/search/results/people/?keywords=changed';throw Error(transient);}
       if(args.files)return [{}];
       if(!args.args)return [{result:true,documentId:'app-document'}];
       if(readerFailure)return [{result:vm.runInNewContext('('+args.func.toString()+')(...values)',{values:args.args,SourcerReader:{[args.args[0]]:()=>{throw Error(readerFailure)}}})}];
@@ -48,6 +49,17 @@ const root = path.resolve(__dirname, '..');
   assert((await rpc('create',{run_id,url})).error, 'unobserved profile must be blocked');
   assert((await rpc('read',{run_id,tab_id:3,method:'readProfile',values:[tabs.get(3).url]})).error);
   await rpc('read',{run_id,tab_id:2,method:'readSearch',values:['standard']});
+  for(const reason of ['Frame with ID 0 was removed.','Execution context was destroyed.','Cannot find context with specified id']){
+    transient=reason;assert.equal((await rpc('read',{run_id,tab_id:2,method:'readSearch',values:['standard']})).result.loading,true,'exact-source observational transition is retryable');
+  }
+  transient='Frame with ID 0 was removed.';
+  assert((await rpc('read',{run_id,tab_id:2,method:'next',values:['standard','one']})).error,'an uncertain pagination action is never made retryable');
+  // A failed Next consumes the one allowed page action. Start a distinct run
+  // before the remaining original page-ceiling test.
+  await rpc('end',{run_id});await rpc('begin',begin);
+  transition=true;assert((await rpc('read',{run_id,tab_id:2,method:'readSearch',values:['standard']})).error,'a different search cannot be classified as a transient read');
+  transition=false;transient='';tabs.get(2).url='https://www.linkedin.com/search/results/people/';
+  assert((await rpc('read',{run_id,tab_id:2,method:'readSearch',values:['standard']})).result,'the next explicit read recovers without changing pages');
   searchResult=null;
   assert.equal((await rpc('read',{run_id,tab_id:2,method:'readSearch',values:['standard']})).result.loading,true,'missing injection results are loading, never successful snapshots');
   searchResult={profiles:'invalid'};

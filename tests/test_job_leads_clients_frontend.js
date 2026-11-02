@@ -35,7 +35,7 @@ function fixture(options={}){
     details:{11:{linkedin_url:'https://www.linkedin.com/company/example-client/',linkedin_id:'4242'},12:{linkedin_url:'',linkedin_id:''}},
     records:[{id:'1'.repeat(32),url:'https://www.linkedin.com/jobs/view/900',company:'Example Client',role:'Saved role',deleted:false},
              {id:'2'.repeat(32),url:'https://www.linkedin.com/jobs/view/901',company:'PT Example Client Tbk',role:'Other saved',deleted:false,hr:{company_url:'https://www.linkedin.com/company/second-client/',company_id:'5151'}}],
-    folders:['Clients'],busy:false,locks:[],refreshes:0,apiInfo:null,companion:{connected:true,concurrent_scans_revision:1,job_search:true,job_search_revision:1,job_search_company_revision:1,busy:false},
+    folders:['Clients'],busy:false,locks:[],refreshes:0,apiInfo:null,companion:{connected:true,concurrent_scans_revision:1,job_search:true,job_search_revision:1,job_search_company_revision:1,job_search_company_link_revision:1,busy:false},
     pages:{'4242':[[job(1001),job(900),job(1002)],[job(1003)]],'5151':[[job(1002,'Second Client'),job(2001,'Second Client'),{url:'https://evil.test/jobs/view/1',company:'X',role:'Bad'}]]},hold:null,holdBegin:null,...options};
   const deadlines=new Map();let timerId=100000;
   const reply=data=>({ok:true,json:async()=>({ok:true,...data})});
@@ -65,6 +65,13 @@ function fixture(options={}){
     if(body.action==='companies')return reply({account:state.account,companies:state.companies.map(row=>({...row,followed:state.followed.some(f=>f.company_id===row.company_id)})),offset:0,total:2,next_offset:null});
     if(body.action==='follow'){const company=state.companies.find(row=>row.company_id===body.company_id);state.followed.push({company_id:company.company_id,name:company.name,...state.details[company.company_id],followed_at:'2026-10-30T00:00:00+00:00',pulled_at:'',jobadder_url:company.jobadder_url});return reply({account:state.account,followed:followed()});}
     if(body.action==='unfollow'){state.followed=state.followed.filter(row=>row.company_id!==body.company_id);return reply({account:state.account,followed:followed()});}
+    if(body.action==='refresh_linkedin'){
+      if(state.holdRefresh)await new Promise(resolve=>state.releaseRefresh=resolve);
+      if(state.failRefresh===body.company_id)return fail(502,'Fictional company read failed.');
+      const row=state.followed.find(f=>f.company_id===body.company_id);if(!row)return fail(404,'Follow this client first.');
+      assert.equal(body.expected_url,row.linkedin_url);assert.equal(body.expected_id,row.linkedin_id);
+      const change=state.details[row.company_id];if(change?.linkedin_url || change?.linkedin_id)Object.assign(row,change);return reply({account:state.account,followed:followed()});
+    }
     if(body.action==='set_linkedin'){const row=state.followed.find(f=>f.company_id===body.company_id);const id=/f_C=(\d+)/.exec(body.link)?.[1];const page=/\/company\/([\w-]+)\//.exec(body.link)?.[1];if(id)row.linkedin_id=id;if(page){row.linkedin_url='https://www.linkedin.com/company/'+page+'/';row.linkedin_id=/^\d+$/.test(page)?page:'';}return reply({account:state.account,followed:followed()});}
     if(body.action==='pulled'){state.followed.find(f=>f.company_id===body.company_id).pulled_at='2026-10-30T09:00:00+00:00';return reply({account:state.account,followed:followed()});}
     throw Error('unexpected action '+body.action);
@@ -75,6 +82,12 @@ function fixture(options={}){
     rpc:async(action,args={})=>{
       rpcCalls.push({action,args:structuredClone(args)});
       if(action==='jobStatus')return state.companion;
+      if(action==='jobCompanyID'){
+        if(state.holdCompany)await new Promise(resolve=>state.releaseCompany=resolve);
+        if(state.failCompany)throw Error('Company could not be read.');
+        return {company_url:args.company_url,company_id:'4242'};
+      }
+      if(action==='jobReadCancel')return true;
       if(action==='jobSearchBegin'){
         assert.equal(args.use_open,false);assert.equal(args.query,'');begun.push(args.run_id);
         if(state.holdBegin)await new Promise(resolve=>{state.releaseBegin=resolve;});
@@ -125,6 +138,36 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
    assert.equal(f.calls.length,calls,'late response never starts statuses or another request');assert.equal(rows(f).length,0);
    f.state.holdOverview=false;await f.el('StatusesLoad').click();await settle();
    assert.equal(f.el('Statuses').querySelectorAll('input').length,2,'Reload statuses recovers the initial account read');}
+  // Refresh metadata independently of the local overview; named links can
+  // be selected, while missing links remain disabled. No implicit follow.
+  {const f=fixture({signed:[2],followed:[client(11,''),client(12,'5151')]});
+   await f.el('Tab').click();await settle();assert(box(rows(f)[0]).disabled);
+   const before=box(rows(f)[1]).checked;
+   f.state.details[11]={linkedin_url:'https://www.linkedin.com/company/fictional-client/',linkedin_id:''};
+   await f.el('RefreshFollowed').click();await settle();
+   assert(!box(rows(f)[0]).disabled,'JobAdder-added named link makes Pull selectable');assert.equal(box(rows(f)[1]).checked,before,'existing ticks survive');
+   assert.equal(f.calls.filter(c=>c.action==='refresh_linkedin').length,2);assert(!f.calls.some(c=>c.action==='follow'));
+   assert.match(f.el('Progress').textContent,/2 of 2 clients refreshed/);
+   box(rows(f)[0]).checked=true;await box(rows(f)[0]).dispatch('change');await f.el('Pull').click();await settle();
+   const lookup=f.rpcCalls.findIndex(c=>c.action==='jobCompanyID'),begin=f.rpcCalls.findIndex(c=>c.action==='jobSearchBegin');
+   assert(lookup>=0 && begin>lookup);assert.equal(f.rpcCalls[begin].args.company_id,'4242');assert.equal(f.state.locks.at(-1),false);}
+  {const f=fixture({signed:[2],followed:[client(11,''),client(12,'5151')],holdRefresh:true});
+   await f.el('Tab').click();await settle();const queue=f.el('RefreshFollowed').click();await settle();
+   assert(f.state.releaseRefresh);assert(!f.el('Stop').disabled);await f.el('Stop').click();f.state.releaseRefresh();await queue;
+   assert.equal(f.calls.filter(c=>c.action==='refresh_linkedin').length,1,'Stop prevents the next metadata request');assert.match(f.el('Progress').textContent,/Stopped/);}
+  {const f=fixture({signed:[2],followed:[client(11,''),client(12,'5151')],failRefresh:11});
+   await f.el('Tab').click();await settle();await f.el('RefreshFollowed').click();
+   assert.match(f.el('Progress').textContent,/1 could not be refreshed/);assert.equal(rows(f).length,2);assert.equal(f.calls.filter(c=>c.action==='refresh_linkedin').length,2,'a failed refresh does not block the next client');}
+  for(const mode of ['stop','account','failed','old']){
+   const row={...client(11,''),linkedin_url:'https://www.linkedin.com/company/fictional-client/'};
+   const f=fixture({signed:[2],followed:[row],holdCompany:mode==='stop'||mode==='account',failCompany:mode==='failed'});
+   await f.el('Tab').click();await settle();if(mode==='old')delete f.state.companion.job_search_company_link_revision;
+   const pulling=f.el('Pull').click();await settle();
+   if(mode==='stop'){await f.el('Stop').click();assert(f.rpcCalls.some(c=>c.action==='jobReadCancel'));f.state.releaseCompany();}
+   if(mode==='account'){f.clear();f.state.releaseCompany();}
+   await pulling;assert(!f.rpcCalls.some(c=>c.action==='jobSearchBegin'),'no search after '+mode+' lookup');
+   if(mode==='old')assert.match(f.el('Progress').textContent,/latest companion update/);
+  }
   // Pure helpers.
   {const {api}=fixture();
    assert.deepEqual([...api.words('PT Example Client Indonesia Tbk')],['example','client','indonesia']);

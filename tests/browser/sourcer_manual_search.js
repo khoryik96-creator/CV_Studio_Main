@@ -2,7 +2,7 @@
 const assert=require('assert/strict'),path=require('path'),fs=require('fs');
 const {chromium}=require(process.env.CVSTUDIO_PLAYWRIGHT || 'playwright');
 (async()=>{
- const origin='http://127.0.0.1:5099',out=path.resolve(__dirname,'../../runtime/sourcer532');fs.mkdirSync(out,{recursive:true});
+ const origin='http://127.0.0.1:5099',out=path.resolve(__dirname,'../../runtime/sourcer533');fs.mkdirSync(out,{recursive:true});
  const browser=await chromium.launch({headless:true,...(process.env.CVSTUDIO_CHROMIUM?{executablePath:process.env.CVSTUDIO_CHROMIUM}:{})});
  try{
   const page=await browser.newPage({viewport:{width:1440,height:1100}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -18,11 +18,14 @@ const {chromium}=require(process.env.CVSTUDIO_PLAYWRIGHT || 'playwright');
     else if(d.action==='jobStatus')result={connected:true,profile_browsing_revision:1,concurrent_scans_revision:1,people_results_revision:1,people_country_revision:1,people_country_ready_revision:1};
     else if(['begin','navigate','end'].includes(d.action))result=true;else if(d.action==='create')result=10;
     else if(d.action==='read')result=d.args.method==='setCountry'?true:d.args.method==='readProfile'?profile:{profiles:[profile],signature:'one',hasNext:false,paginationKnown:true};else return;
-    window.postMessage({type:'CVSTUDIO_LINKEDIN_RESPONSE',id:d.id,channel:d.channel,result},location.origin);
+    const answer=()=>window.postMessage({type:'CVSTUDIO_LINKEDIN_RESPONSE',id:d.id,channel:d.channel,result},location.origin);
+    if(d.action==='read' && d.args.method==='readProfile')setTimeout(answer,1000);else answer();
    });
   });
   await page.goto(origin+'/?module=linkedinsourcer');await page.waitForFunction(()=>!document.querySelector('#liSourcerFolderNew').disabled);
-  await page.locator('#liSourcerFolderNew').click();await page.locator('#liSourcerFolderName').fill('Manual review');await page.locator('#liSourcerFolderCreate').click();await page.waitForFunction(()=>document.querySelector('#liSourcerFolder').value==='Manual review' && !document.querySelector('#liSourcerFolderNew').disabled);
+  await page.locator('#liSourcerFolderNew').click();
+  const field=await page.locator('#liSourcerFolderName').boundingBox(),editor=await page.locator('#liSourcerFolderEditor').boundingBox(),create=await page.locator('#liSourcerFolderCreate').boundingBox();assert(field.width>=editor.width-2 && create.y>=field.y+field.height,'folder editor has full-width input and separate action row');
+  await page.locator('#liSourcerFolderEditor').screenshot({path:path.join(out,'folder-editor-desktop.jpg')});await page.locator('#liSourcerFolderName').fill('Manual review');await page.locator('#liSourcerFolderCreate').click();await page.waitForFunction(()=>document.querySelector('#liSourcerFolder').value==='Manual review' && !document.querySelector('#liSourcerFolderNew').disabled);
   const samples=[
    {query:'',prompt:'Oracle database and automation in Malaysia',mode:'auto',country:'Malaysia',plan:1},
    {query:'Oracle AND (Ansible OR Terraform)',prompt:'',mode:'specific',country:'Malaysia',plan:0},
@@ -36,7 +39,9 @@ const {chromium}=require(process.env.CVSTUDIO_PLAYWRIGHT || 'playwright');
    const before=(await status()).provider_calls.length;await page.evaluate(()=>{fixtureCalls=[]});
    await page.locator('#liSourcerConsent').check();await page.locator('#liSourcerStart').click();await page.waitForFunction(()=>document.querySelector('#liSourcerStart').disabled);
    assert(await page.locator('#liSourcerBoolean').isDisabled());assert(await page.locator('#liSourcerCountryMode').isDisabled());
+   await page.locator('#peopleCandidatesTab').click();assert(await page.locator('#peopleCandidatesPanel').isVisible());
    await page.waitForFunction(()=>!document.querySelector('#liSourcerStart').disabled,{},{timeout:20000});
+   await page.locator('#peopleSourcerSearchTab').click();
    assert.equal(await page.locator('#liSourcerCount').textContent(),'1');
    const calls=await page.evaluate(()=>fixtureCalls),query=new URL(calls.find(call=>call.action==='navigate').args.url).searchParams.get('keywords');
    if(sample.query)assert.equal(query,sample.query,'the exact user Boolean controls navigation');
@@ -51,9 +56,13 @@ const {chromium}=require(process.env.CVSTUDIO_PLAYWRIGHT || 'playwright');
   const row=page.locator('#peopleCandidatesRows tr').first();assert.equal(await row.locator('td.people-pick button').count(),0);assert.equal(await row.locator('td.people-pick input').count(),1);
   const star=row.locator('.people-shortlist');assert.equal(await star.count(),1);await star.click();await page.waitForFunction(()=>document.querySelector('#peopleCandidatesRows .people-shortlist')?.getAttribute('aria-pressed')==='true');
   const anchor=await row.locator('td.people-candidate-name a').boundingBox(),button=await row.locator('.people-shortlist').boundingBox();assert(Math.abs((anchor.y+anchor.height/2)-(button.y+button.height/2))<8,'star is on the name line');
+  await page.route('https://www.linkedin.com/in/**',route=>route.fulfill({status:200,contentType:'text/html',body:'<title>Fictional profile fixture</title><p>Fictional offline profile</p>'}));
+  const [opened]=await Promise.all([page.context().waitForEvent('page'),row.locator('td.people-candidate-name a').click()]);await opened.waitForLoadState();await opened.close();await page.waitForFunction(()=>document.querySelector('#peopleCandidatesRows .people-profile-opened'));assert.equal(await row.locator('td.people-candidate-name a').evaluate(n=>getComputedStyle(n).color),'rgb(128, 84, 184)');
+  await page.reload();await page.locator('#peopleCandidatesTab').click();await page.waitForFunction(()=>document.querySelector('#peopleCandidatesRows .people-profile-opened'));
   await row.locator('td.people-candidate-name').screenshot({path:path.join(out,'shortlist-name.jpg')});
   await page.locator('#peopleCandidatesPanel').screenshot({path:path.join(out,'shortlist-desktop.jpg')});
   await page.setViewportSize({width:390,height:844});await page.locator('#peopleSourcerSearchTab').click();assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert(await page.locator('#liSourcerCountryName').isVisible());
+  await page.locator('#liSourcerFolderNew').click();const mobileField=await page.locator('#liSourcerFolderName').boundingBox();assert(mobileField.x>=0 && mobileField.x+mobileField.width<=390);await page.locator('#liSourcerFolderEditor').screenshot({path:path.join(out,'folder-editor-mobile.jpg')});
   await page.locator('#peopleSourcerSearchPanel').screenshot({path:path.join(out,'search-controls-mobile.jpg')});assert.deepEqual(errors,[]);
   console.log('Native manual search: prompt-only, Boolean-only, both, inferred/specific/Any country, exact queries, provider-call counts, folder archive, remembered country, inline shortlist and mobile passed.');
  }finally{await browser.close();}

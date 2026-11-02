@@ -21,7 +21,7 @@ from urllib.parse import parse_qs, urlsplit
 
 MAX_ACCOUNTS = 20
 MAX_CONNECTIONS = 100
-ACTIONS = {"overview", "statuses", "set_statuses", "companies", "follow", "unfollow", "set_linkedin", "pulled"}
+ACTIONS = {"overview", "statuses", "set_statuses", "companies", "follow", "unfollow", "set_linkedin", "refresh_linkedin", "pulled"}
 MAX_FOLLOWED = 200
 MAX_STATUSES = 50
 PAGE_SIZE = 50
@@ -305,7 +305,29 @@ class JobAdderClientsService:
         if key not in entry["followed"]:
             raise JobAdderClientsError("Follow this client first.", "JOBADDER_CLIENTS_MISSING", 404)
         row = dict(entry["followed"][key])
-        if action == "set_linkedin":
+        if action == "refresh_linkedin":
+            # Refresh only an existing follow, never recreate one removed in
+            # another window or overwrite a newer manual link.
+            if (body.get("expected_url") != row["linkedin_url"] or
+                    body.get("expected_id") != row["linkedin_id"]):
+                raise JobAdderClientsError("This client's LinkedIn link changed. Refresh the list before checking JobAdder again.",
+                                           "JOBADDER_CLIENTS_STALE", 409)
+            company = self._request("companies/" + key, self._token(token))
+            name = _text(company.get("name"), 200) if isinstance(company, dict) else ""
+            if not isinstance(company, dict) or company.get("companyId") != company_id or not name:
+                raise JobAdderClientsError("JobAdder returned an unexpected company.", "JOBADDER_CLIENTS_SERVICE", 502)
+            social = company.get("social") if isinstance(company.get("social"), dict) else {}
+            registered = social.get("linkedin") or ""
+            url, number = linkedin_link(registered)
+            if registered and not url and not number:
+                raise JobAdderClientsError("This client's JobAdder LinkedIn field is not a company link. Correct it in JobAdder or save the company link here.",
+                                           "JOBADDER_CLIENTS_LINK", 409)
+            # A numeric-only fallback has no established association with a
+            # newly imported named page; resolve that page before pulling.
+            if not number and row["linkedin_id"] and (not url or row["linkedin_url"] == url):
+                number = row["linkedin_id"]
+            row.update(name=name, linkedin_url=url or row["linkedin_url"], linkedin_id=number)
+        elif action == "set_linkedin":
             link = body.get("link", "")
             if not isinstance(link, str) or len(link) > 2048:
                 raise JobAdderClientsError("Paste the client's LinkedIn company page.")

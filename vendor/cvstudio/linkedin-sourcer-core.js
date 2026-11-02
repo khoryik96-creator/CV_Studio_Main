@@ -70,6 +70,7 @@ class Agent {
     this.run = null;
     this.results = [];
     this.profileTab = null;
+    this.unreadProfiles = 0;
   }
   check() { if (this.signal.aborted) throw Error('Stopped.'); }
   async read(tab, method, args = []) {
@@ -152,7 +153,17 @@ class Agent {
             }
           }
           await this.wait(2000, this.signal);
-          const profile = await this.read(this.profileTab, 'readProfile', [candidate.url]);
+          let profile;
+          try {profile = await this.read(this.profileTab, 'readProfile', [candidate.url]);}
+          catch(error) {
+            this.check();
+            // Only an explicitly classified, exact-profile readiness timeout
+            // may be skipped. Access/identity/transport/AI failures still stop.
+            if(error.code!=='LI_PROFILE_NOT_READY')throw error;
+            inspected.add(candidate.url);this.unreadProfiles++;
+            this.update({status:'A background profile did not finish loading; keeping its search-card result and continuing.',results:this.results});
+            continue;
+          }
           details.push({...candidate, text: profile.text, name: profile.name || candidate.name,
                         publicUrl: profileURL(profile.publicUrl) || ''});
           inspected.add(candidate.url);
@@ -168,6 +179,7 @@ class Agent {
         if (!snapshot.hasNext || page === options.max_pages) {
           this.update({status: page === options.max_pages ? 'Finished the requested pages.' :
             snapshot.paginationKnown ? 'Reached the last result page.' : 'Finished this page. No recognized next-page control was found.'});
+          if(this.unreadProfiles)this.update({status:`Finished with ${this.unreadProfiles} profile${this.unreadProfiles===1?'':'s'} not fully loaded. Their search-card results were kept.`});
           break;
         }
         this.check();

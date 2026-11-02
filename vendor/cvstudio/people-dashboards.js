@@ -3,6 +3,23 @@
   'use strict';
   const el=id=>document.getElementById('people'+id);
   const text=(tag,value,cls)=>{const n=document.createElement(tag);n.textContent=value;if(cls)n.className=cls;return n;};
+  // Browser visited-link privacy differs across versions. Keep a bounded,
+  // tab-local fallback containing hashes, never profile URLs or record data.
+  const openedKey='cvstudio_candidate_opened',openedURLs=new Set();let openedHashes=new Set();
+  try {const saved=JSON.parse(sessionStorage.getItem(openedKey) || '[]');if(Array.isArray(saved))openedHashes=new Set(saved.filter(x=>typeof x==='string' && /^[a-f0-9]{64}$/.test(x)).slice(-2000));}catch{}
+  async function openedHash(url){try{return [...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(url)))].map(x=>x.toString(16).padStart(2,'0')).join('');}catch{return '';}}
+  function candidateVisit(anchor,url) {
+    if(!anchor.href)return;
+    const paint=()=>{anchor.className='people-profile-opened';anchor.title='Profile opened';};
+    if(openedURLs.has(url))paint();
+    void openedHash(url).then(key=>{if(key && openedHashes.has(key))paint();});
+    const mark=event=>{
+      if(event.type==='auxclick' && event.button!==1)return;
+      openedURLs.add(url);if(openedURLs.size>2000)openedURLs.delete(openedURLs.values().next().value);paint();
+      void openedHash(url).then(key=>{if(!key)return;openedHashes.delete(key);openedHashes.add(key);while(openedHashes.size>2000)openedHashes.delete(openedHashes.values().next().value);try{sessionStorage.setItem(openedKey,JSON.stringify([...openedHashes]));}catch{}});
+    };
+    anchor.addEventListener('click',mark);anchor.addEventListener('auxclick',mark);
+  }
   const link=(value,url)=>{const a=text('a',value);if(/^https:\/\/www\.linkedin\.com\/(?:in\/[A-Za-z0-9_%~-]+(?:\/details\/experience\/|\/?)|talent\/(?:hire\/)?profile\/[^/?#]+|jobs\/view\/\d+\/?|company\/[A-Za-z0-9_-]+\/)$/u.test(url || '')){a.href=url;a.target='_blank';a.rel='noopener noreferrer';}return a;};
   let appBusy=false, dateBusy=false, initialized=false,dateOperation='',dateStopped=false,activeDateStop=null;
   const noteDrafts=new Map(),selection=new Set();
@@ -197,6 +214,7 @@
         star.setAttribute('aria-label',(row.shortlisted?'Remove from shortlist: ':'Shortlist ')+row.name);star.title=row.shortlisted?'Shortlisted':'Shortlist';
         star.addEventListener('click',()=>shortlist(row));
         pick.append(box);tr.append(pick);
+        candidateVisit(name.children[0],row.url);
         const title=text('div','','people-name-line');title.append(name.children[0],star);
         name.className='people-candidate-name';name.replaceChildren(title);
         name.append(text('small',(row.folder || 'Unfiled')+(row.deleted?' \u00b7 In Trash':'')));

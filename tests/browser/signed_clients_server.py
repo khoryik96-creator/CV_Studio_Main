@@ -7,6 +7,7 @@ from unittest import mock
 
 import flask
 
+company_reads = {}
 root = Path(__file__).resolve().parents[2]
 os.environ['CVSTUDIO_PEOPLE_FIXTURE_PORT'] = '5098'
 with mock.patch.object(flask.Flask, 'run'):
@@ -33,7 +34,10 @@ class FictionalReadClient:
             offset, limit = params.get('Offset', 0), params.get('Limit', 50)
             data = {'items': rows[offset:offset + limit], 'totalCount': len(rows)}
         elif path.startswith('companies/'):
-            data = next(row for row in companies if str(row['companyId']) == path.split('/')[-1])
+            data = copy.deepcopy(next(row for row in companies if str(row['companyId']) == path.split('/')[-1]))
+            company_reads[path] = company_reads.get(path, 0) + 1
+            if path == 'companies/41' and company_reads[path] == 1:
+                data.pop('social', None)  # Link added in fictional JobAdder after Follow.
         else:
             data = {'items': [], 'totalCount': 0}
         return 200, copy.deepcopy(data)
