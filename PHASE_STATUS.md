@@ -4,6 +4,18 @@
 
 ## Release state
 
+- v24.6.533 is local/unmerged on `codex/v24.6.533-followed-client-refresh`
+  from merged532/PR277/3488805. Adds guarded existing-follow JobAdder metadata
+  refresh, named-company Pull with observed-ID companion resolution, bounded
+  background-profile readiness/card-only continuation, observational frame
+  transition recovery, purple opened candidate names and aligned folder editor.
+  124 routes/store schemas and paid/unsafe non-replay remain.2355 Python/4 skips/
+  8418 subtests,88 JS,15 isolated POC,24 smoke, native Chrome desktop/mobile/
+  dashboard-switch/visited-reload and Windows/static/consistency pass. No live
+  provider/paid/JobAdder request, owner install/data or hosted update. Real
+  historical browser failure is not proven. Update app+companion after merge;
+  PR257 held. See533 QA.531+532 below were subsequently merged via PR277.
+
 - v24.6.532 is local/unmerged on `codex/v24.6.532-sourcer-search-controls`,
   stacked on531/4894c43 from merged530/PR276. Adds exact-user Boolean + separate
   AI prompt/country inputs and moves candidate shortlist beside the name.

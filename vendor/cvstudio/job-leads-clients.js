@@ -12,7 +12,7 @@
   const MAX_FOUND = 600, MAX_PER_PULL = 15, FOUND_PAGE = 50, ADD_LIMIT = 100, COMPANY_PAGE = 50;
   const TICKS_KEY = 'cvstudio_signed_clients_ticks';
   const fresh = () => ({account:'', signed:[], statuses:null, followed:[], records:[], folders:[], companies:null, found:[], picked:new Set(),
-    chosen:null, foundPage:0, working:false, pulling:false, stopped:false, run:'', loaded:false, statusDraft:null, statusDirty:false, linkGuide:0, recordsReady:false});
+    chosen:null, foundPage:0, working:false, refreshing:false, resolving:false, pulling:false, stopped:false, run:'', loaded:false, statusDraft:null, statusDirty:false, linkGuide:0, recordsReady:false});
   let state = fresh(), generation = 0, ready = false, resyncNeeded = false;
   let savedIndex = {records:null, urls:new Map()}, countIndex = {records:null, followed:null, counts:new Map()};
 
@@ -34,6 +34,7 @@
     const match = (records || []).find(row => row?.hr?.company_url === client.linkedin_url && /^[0-9]{1,24}$/.test(row.hr.company_id || ''));
     return match ? match.hr.company_id : '';
   }
+  const eligible = client => !!linkedinId(client,state.records) || COMPANY_URL.test(client?.linkedin_url || '');
   function savedAds(client, records) {
     return (records || []).filter(row => !row.deleted && sameCompany(row.company, client.name)).length;
   }
@@ -134,7 +135,7 @@
     const b = node('button', text, cls); b.type = 'button'; b.addEventListener('click', action); return b;
   }
   function mine() { return state.working || state.pulling; }
-  const pullable = () => state.followed.filter(client => state.chosen?.has(client.company_id) && linkedinId(client, state.records));
+  const pullable = () => state.followed.filter(client => state.chosen?.has(client.company_id) && eligible(client));
   const knownStatuses = () => new Set((state.statuses || []).map(row => row.id));
   const staleStatuses = () => state.statuses ? state.signed.filter(id => !knownStatuses().has(id)) : [];
   function pageRows() { return state.found.slice(state.foundPage * FOUND_PAGE, (state.foundPage + 1) * FOUND_PAGE); }
@@ -171,6 +172,7 @@
     const locked = mine(), signedNames = (state.statuses || []).filter(row => state.signed.includes(row.id)).map(row => row.name);
     el('Count').textContent = String(state.followed.length);
     el('Refresh').disabled = locked;
+    el('RefreshFollowed').disabled = locked || !state.loaded || !state.followed.length;
     const stale = staleStatuses().length;
     el('SetupSummary').textContent = state.signed.length ? '· ' + (signedNames.length ? signedNames.join(', ') : state.signed.length + ' chosen') + (stale ? ` · ${stale} no longer in JobAdder` : '') : '· not chosen yet';
     el('StatusesLoad').disabled = locked;
@@ -186,7 +188,7 @@
     // buttons never sit disabled after Job Leads finishes.
     el('Pull').disabled = locked || !state.recordsReady || !state.signed.length || stale || !pullable().length;
     for (const name of ['StatusFilter','OwnerFilter','FollowingFilter','Sort','FiltersReset']) el(name).disabled=locked || !c?.rows.length;
-    el('Stop').disabled = !state.pulling || state.stopped;
+    el('Stop').disabled = !(state.pulling || state.refreshing) || state.stopped;
     el('Pages').disabled = locked;
     el('Untick').disabled = locked || !state.chosen?.size;
     el('Ticked').textContent = state.followed.length ? `${pullable().length} of ${MAX_PER_PULL} ticked` : '';
@@ -223,10 +225,10 @@
     const target = el('Followed'); target.replaceChildren();
     el('FollowedEmpty').hidden = !!state.followed.length || !state.loaded;
     for (const client of state.followed) {
-      const tr = node('tr'), id = linkedinId(client, state.records);
+      const tr = node('tr'), id = linkedinId(client, state.records), canPull = eligible(client);
       const pick = node('td'), box = node('input');
       // 'needs-link' keeps the box disabled whenever controls() re-enables the rest.
-      box.type = 'checkbox'; box.checked = !!id && !!state.chosen?.has(client.company_id); box.disabled = !id; box.dataset.clientAction = id ? '' : 'needs-link';
+      box.type = 'checkbox'; box.checked = canPull && !!state.chosen?.has(client.company_id); box.disabled = !canPull; box.dataset.clientAction = canPull ? '' : 'needs-link';
       box.setAttribute('aria-label', 'Pull job ads for ' + client.name);
       box.addEventListener('change', () => {
         if (box.checked && pullable().length >= MAX_PER_PULL) { box.checked = false; progress(`Tick up to ${MAX_PER_PULL} clients per pull.`); return; }
@@ -238,13 +240,13 @@
       const page = node('td');
       if (client.linkedin_url) page.append(link('LinkedIn page', client.linkedin_url, COMPANY_URL));
       page.append(node('small', id ? (client.linkedin_id ? 'Ready to pull' : 'Ready · company found in a saved HR scan') :
-        client.linkedin_url ? 'Paste the link of its "See all jobs" search to pull ads' : 'Add its LinkedIn company page'));
+        client.linkedin_url ? 'Company checked when pulling' : 'Add its LinkedIn company page'));
       const editor = node('details'), input = node('input');
-      editor.append(node('summary', id ? 'Change link' : 'Enable selection'));
+      editor.append(node('summary', canPull ? 'Change link' : 'Add link'));
       editor.open=state.linkGuide===client.company_id;
       input.type = 'url'; input.maxLength = 2048; input.setAttribute('aria-label', 'LinkedIn link for ' + client.name);
-      input.dataset.clientAction='';input.setAttribute('data-guide',String(!id && editor.open));
-      editor.addEventListener('toggle',()=>{input.setAttribute('data-guide',String(!id && editor.open));if(!id && editor.open)input.focus?.();});
+      input.dataset.clientAction='';input.setAttribute('data-guide',String(!canPull && editor.open));
+      editor.addEventListener('toggle',()=>{input.setAttribute('data-guide',String(!canPull && editor.open));if(!canPull && editor.open)input.focus?.();});
       editor.append(input, button('Save link', () => setLink(client, input.value)));
       page.append(editor); tr.append(page);
       tr.append(node('td', String(savedCount(client))), node('td', client.pulled_at ? client.pulled_at.slice(0, 10) : 'Never'));
@@ -331,13 +333,14 @@
   function setFollowed(rows) {
     const before = new Set(state.followed.map(row => row.company_id)), first = state.chosen === null;
     state.followed = rows;
+    if(rows.some(client=>client.company_id===state.linkGuide && eligible(client)))state.linkGuide=0;
     if (first) {
       // Remembered ticks first; otherwise tick the first clients that can be pulled.
       const stored = storedTicks();
       state.chosen = new Set(stored ? stored.filter(id => rows.some(row => row.company_id === id)) : []);
-      if (!stored) for (const client of rows) if (pullable().length < MAX_PER_PULL && linkedinId(client, state.records)) state.chosen.add(client.company_id);
+      if (!stored) for (const client of rows) if (pullable().length < MAX_PER_PULL && eligible(client)) state.chosen.add(client.company_id);
     } else {
-      for (const client of rows) if (!before.has(client.company_id) && pullable().length < MAX_PER_PULL && linkedinId(client, state.records)) state.chosen.add(client.company_id);
+      for (const client of rows) if (!before.has(client.company_id) && pullable().length < MAX_PER_PULL && eligible(client)) state.chosen.add(client.company_id);
     }
     for (const id of [...state.chosen]) if (!rows.some(row => row.company_id === id)) state.chosen.delete(id);
     while (pullable().length > MAX_PER_PULL) state.chosen.delete(pullable().at(-1).company_id);
@@ -431,8 +434,8 @@
       if (!accept(data, token)) return;
       setFollowed(data.followed || []);
       const client = state.followed.find(row => row.company_id === company.company_id);
-      state.linkGuide=client && !linkedinId(client,state.records)?client.company_id:0;
-      message(client && linkedinId(client, state.records) ? `Following ${client.name}.` : `Following ${company.name}. Add its LinkedIn company page to pull its ads.`);
+      state.linkGuide=client && !eligible(client)?client.company_id:0;
+      message(client && eligible(client) ? `Following ${client.name}.` : `Following ${company.name}. Add its LinkedIn company page to pull its ads.`);
     });
   }
   function unfollow(company) {
@@ -449,10 +452,30 @@
       if (!accept(data, token)) return;
       setFollowed(data.followed || []);
       const updated = state.followed.find(row => row.company_id === client.company_id);
-      state.linkGuide=updated && !linkedinId(updated,state.records)?updated.company_id:0;
-      if (updated && linkedinId(updated, state.records) && pullable().length < MAX_PER_PULL) { state.chosen.add(updated.company_id); rememberTicks(); }
-      message(updated && linkedinId(updated, state.records) ? `${client.name} is ready to pull.` :
-        `Saved. LinkedIn needs the company's number to list its ads: open the company page, click "See all jobs" and paste that link.`);
+      state.linkGuide=updated && !eligible(updated)?updated.company_id:0;
+      if (updated && eligible(updated) && pullable().length < MAX_PER_PULL) { state.chosen.add(updated.company_id); rememberTicks(); }
+      message(updated && eligible(updated) ? `${client.name} is ready to pull.` :
+        `Saved. Add a LinkedIn company page to pull its ads.`);
+    });
+  }
+  function refreshFollowed() {
+    return work(async token => {
+      const targets=[...state.followed];let checked=0,failed=0;const errors=[];
+      state.refreshing=true;state.stopped=false;controls();
+      try {
+        for (const client of targets) {
+          check(token);progress(`Checking JobAdder ${++checked} of ${targets.length}: ${client.name}…`);
+          try {
+            const data=await call({action:'refresh_linkedin',account:state.account,company_id:client.company_id,
+              expected_url:client.linkedin_url || '',expected_id:client.linkedin_id || ''});
+            if (!accept(data,token)) return;
+            setFollowed(data.followed || []);draw();
+          } catch(error) { if(token!==generation)return;failed++;errors.push(`${client.name}: ${error.message}`); }
+          if(state.stopped)break;
+        }
+        if(token===generation)progress(`${state.stopped?'Stopped. ':''}${checked-failed} of ${targets.length} clients refreshed from JobAdder.`+
+          (failed?` ${failed} could not be refreshed. ${errors.join(' ')}`:''));
+      } finally {if(token===generation){state.refreshing=false;controls();}}
     });
   }
   function check(token) { if (state.stopped || token !== generation) throw Error('Stopped.'); }
@@ -463,7 +486,22 @@
     state.run = run;
     let complete = true;
     try {
-      const source = await app.rpc('jobSearchBegin', {run_id:run, query:'', location:'', max_pages:pages, use_open:false, company_id:linkedinId(client, state.records)});
+      let companyId=linkedinId(client,state.records);
+      if(!companyId) {
+        state.resolving=true;
+        try {
+          const resolved=await app.rpc('jobCompanyID',{company_url:client.linkedin_url,operation_id:run},35000);
+          check(token);
+          if(resolved?.company_url!==client.linkedin_url || typeof resolved?.company_id!=='string' || !/^[0-9]{1,24}$/.test(resolved.company_id))
+            throw Error('LinkedIn did not confirm this company. Save its See all jobs search link and try again.');
+          companyId=resolved.company_id;
+        } catch(error) {
+          try {await app.rpc('jobReadCancel',{operation_id:run},1500);} catch {}
+          throw error;
+        } finally {if(token===generation)state.resolving=false;}
+      }
+      check(token);
+      const source = await app.rpc('jobSearchBegin', {run_id:run, query:'', location:'', max_pages:pages, use_open:false, company_id:companyId});
       check(token);
       await window.cvStudioJobSearch.walk({rpc:app.rpc, run, tab:source.tab_id, pages, check:() => check(token),
         keep:snapshot => {
@@ -502,6 +540,8 @@
       if (!status?.connected) throw Error('Open this CV Studio address in Chrome or Brave with the companion enabled, then try again.');
       if (status.concurrent_scans_revision !== 1 || status.job_search !== true || status.job_search_company_revision !== 1)
         throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to pull client ads. Updating CV Studio alone does not update the companion.');
+      if (targets.some(client=>!linkedinId(client,state.records)) && status.job_search_company_link_revision!==1)
+        throw Error('Apply the latest companion update to pull ads from a named company page.');
       if (status.busy) throw Error('Finish the current companion search or ad read first.');
       for (const [index, client] of targets.entries()) {
         check(token);
@@ -532,8 +572,9 @@
     }
   }
   function stop() {
-    if (!state.pulling) return;
-    state.stopped = true; controls(); progress('Stopping after the current browser read…');
+    if (!state.pulling && !state.refreshing) return;
+    state.stopped = true; controls(); progress('Stopping after the current read…');
+    if(state.resolving && state.run){try{void jobLeads()?.rpc?.('jobReadCancel',{operation_id:state.run}).catch(()=>{});}catch{}}
     if (state.run) { try { void jobLeads()?.rpc?.('end', {run_id:state.run}).catch(() => {}); } catch {} }
   }
   function addSelected() {
@@ -580,6 +621,7 @@
     ++generation;
     if (state.pulling) { state.stopped = true; jobLeads()?.lock?.(false); }
     const run = state.run;
+    if(state.resolving && run){try{void jobLeads()?.rpc?.('jobReadCancel',{operation_id:run}).catch(()=>{});}catch{}}
     state = fresh();
     if (run) { try { void jobLeads()?.rpc?.('end', {run_id:run}).catch(() => {}); } catch {} }
     if (!ready) return;
@@ -595,6 +637,7 @@
     el('Tab').addEventListener('click', () => show(true));
     for (const id of ['jobLeadsApolloAdsTab', 'jobLeadsApolloContactsTab', 'peopleHRTab']) document.getElementById(id)?.addEventListener('click', () => show(false));
     el('Refresh').addEventListener('click', () => load());
+    el('RefreshFollowed').addEventListener('click',refreshFollowed);
     el('StatusesLoad').addEventListener('click', () => state.loaded ? loadStatuses() : load());
     el('StatusesSave').addEventListener('click', saveStatuses);
     el('Search').addEventListener('click', () => searchCompanies(0));

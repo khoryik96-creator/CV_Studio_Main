@@ -1,5 +1,15 @@
 # Job Leads module
 
+## Followed-client link refresh (v24.6.533)
+
+**Refresh from JobAdder** beside Followed clients rereads the registered LinkedIn
+field for each existing followed company. Progress and Stop are shared with Pull;
+Stop finishes the current metadata read before the next. New follows are never
+created by refresh, and stale expected links/account changes are rejected.
+Selections, followed/pulled history and a manual link when JobAdder has none
+remain. Individual failures keep the old row and do not prevent later refreshes.
+
+
 ## Client loading recovery (v24.6.531)
 
 Followed clients and company statuses display independently of saved-ad hydration.
@@ -54,10 +64,16 @@ only read: nothing in JobAdder is changed.
   2. a link the owner pastes: a company page, or the "See all jobs" search
      (`/jobs/search/?f_C=<number>`) of a named page;
   3. a saved HR scan of the same LinkedIn company page.
-  A client without a number cannot be ticked for pulling. Following it opens
-  **Enable selection** and highlights the link field (v24.6.530). Paste its
-  **See all jobs** search link to enable the checkbox. A named company page
-  alone has no number; this release does not automatically discover one.
+  From v24.6.533 a valid named company page can also be ticked. During Pull,
+  the latest companion reads an owned inactive company Jobs page and resolves
+  a unique ID from its visible See/View all jobs link or company-header employee
+  link. It then uses the existing numeric `f_C` search. Other/suggested company
+  IDs are never guessed; ambiguity, sign-in checks or changed pages stop that
+  client visibly. A See all jobs search link remains a manual fallback. Missing
+  both link and number still disables selection and opens the highlighted link
+  editor. Stop/account changes cancel an in-flight ID read, and late/failed
+  responses cannot start a search. Only unchanged inactive owned tabs are closed.
+  Numeric clients retain the fast path; named links require updated companion.
 - **Ticks.** At most 15 clients can be ticked for a pull. The first 15
   pullable clients are ticked by default, and your ticks are remembered in this
   browser. **Untick all** clears them.

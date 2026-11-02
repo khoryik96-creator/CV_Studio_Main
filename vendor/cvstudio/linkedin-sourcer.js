@@ -174,9 +174,18 @@
     async closeOwnedTab() { if (browserRun) { try { await rpc('end', {run_id: browserRun}); } finally { browserRun = ''; } } },
     async read(id, method, values) {
       await begin();
-      for (let attempt = 0; attempt < (method === 'setCountry' ? 90 : 30); attempt++) {
+      let reason='';
+      for (let attempt = 0; attempt < (['setCountry','readProfile'].includes(method) ? 90 : 30); attempt++) {
         if (abort?.signal.aborted) throw Error('Stopped.');
-        const value = await rpc('read', {run_id: run.id, tab_id: id, method, values});
+        let value;
+        try {value = await rpc('read', {run_id: run.id, tab_id: id, method, values});}
+        catch(error) {
+          // A fixed reader failure for this detail page does not invalidate
+          // its already assessed search card. Never suppress access, changed
+          // identity, transport/disconnection, country or mutation errors.
+          if(method==='readProfile' && error.message==='LinkedIn results could not be read. Refresh LinkedIn, then reload and reconnect the latest companion.')error.code='LI_PROFILE_NOT_READY';
+          throw error;
+        }
         if (abort?.signal.aborted) throw Error('Stopped.');
         // A navigation can finish without a script result. Retry reads only;
         // never repeat a search submission or pagination click after ambiguity.
@@ -184,8 +193,12 @@
           if (!['readSearch','readProfile'].includes(method)) throw Error('LinkedIn did not confirm the browser action. Check its search tab before starting again.');
         }
         else if (!value.loading) return value;
+        reason=value?.wait_reason || '';
+        if(attempt===10 && method==='readProfile')tell('Waiting for the background LinkedIn profile… You can keep viewing Candidates.');
         await new Promise(resolve => setTimeout(resolve, 500));
       }
+      if(method==='readProfile' && reason==='profile'){const error=Error('This background profile did not finish loading. Its search-card result was kept.');error.code='LI_PROFILE_NOT_READY';throw error;}
+      if(reason==='country')throw Error('LinkedIn has not confirmed the selected country yet. Your results are kept. Check Locations in its search tab before starting again.');
       throw Error(method === 'setCountry' ? 'LinkedIn could not confirm the country in Locations. Check the country name and location menu in its search tab, then start again.' : 'LinkedIn results could not be read. Refresh LinkedIn, then reload and reconnect the latest companion.');
     }
   };

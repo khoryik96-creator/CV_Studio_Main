@@ -7,7 +7,37 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current checkpoint: v24.6.532 Sourcer search controls (local, unmerged)**
+**Current checkpoint: v24.6.533 followed-client refresh and Sourcer read/UI fixes (local, unmerged)**
+on `codex/v24.6.533-followed-client-refresh`, from merged532 PR277 /
+`3488805e0bf9c4e6af3a000ab9c8c7071c59249a`. Owner requested JobAdder link
+refresh, selectable named company links, purple opened candidate names, New
+folder alignment, and a halfway read failure while viewing Candidates.
+- Followed clients has Refresh from JobAdder: existing follows only, guarded
+  account/expected-link writes, progress/Stop, retained selections/history/manual
+  fallback. Named company pages now enable Pull. The companion opens an owned
+  inactive company Jobs page, observes a unique visible jobs/header company ID,
+  then starts the existing numeric-filtered search. Ambiguity/access/redirects
+  fail visibly; no guessed IDs, remote writes, or automatic request replay.
+- Candidates dashboard navigation does not call Stop. Known frame/context
+  transitions retry observations only, with exact-page checks. Background
+  profiles get45s readiness polling. A fixed profile-reader failure/readiness
+  timeout retains its screen assessment and continues; unread detail never goes
+  to AI or becomes checked. Access/identity/country/transport/AI failures still
+  stop. Final status counts unread profiles. No paid/click replay.
+- Opened candidate-name links turn purple, including middle clicks and redraw/
+  reload in this tab. Standard visited CSS plus a bounded2000-entry sessionStorage
+  hash fallback; no profile URLs or candidate data in that fallback, no new API.
+  New folder input is explicitly text/full width with a separate action row.
+2355 Python/4 skips/8418 subtests,88 JS,15 independent POC tests,24 smoke
+assertions, actual isolated native Chrome desktop/mobile/dashboard-switch/
+visited-reload checks and Windows/static/consistency gates pass. Tests use
+fictional transport/records. Exact historical live failure and real company
+DOM not reproduced; no live AI/paid/JobAdder request or owner data/install/
+extension/hosted change. Update app AND companion after merge. PR257 held.
+See533 QA. Prior531+532 are merged via PR277; their older notes below describe
+the local pre-merge checkpoints. New533 remains unpublished/unmerged.
+
+**Previous checkpoint: v24.6.532 Sourcer search controls (local, unmerged)**
 on `codex/v24.6.532-sourcer-search-controls`, stacked on531/`4894c43` from
 merged530 PR276 / `73061bc`. Owner requests a neater shortlist position and
 Boolean/country controls supporting prompt-only, Boolean-only or both.

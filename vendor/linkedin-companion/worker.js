@@ -91,6 +91,9 @@ function jobSearchKey(value) {
 function hrCompanyURL(value) {
   return typeof value === 'string' && /^https:\/\/www\.linkedin\.com\/company\/[A-Za-z0-9_-]+\/$/.test(value) ? value : '';
 }
+function companyJobsPage(value) {
+  try {const u=new URL(value);return u.origin==='https://www.linkedin.com' && !u.username && !u.password && !u.search && !u.hash && /^\/company\/[A-Za-z0-9_-]{1,100}\/jobs\/$/.test(u.pathname) ? value : '';}catch{return '';}
+}
 function companyPeopleRoot(value) {
   try { const u=new URL(value);return u.origin==='https://www.linkedin.com' && !u.username && !u.password && /^\/company\/[A-Za-z0-9_-]+\/people\/?$/.test(u.pathname) ? u.origin+u.pathname.replace(/people\/?$/,'') : ''; } catch { return ''; }
 }
@@ -254,12 +257,19 @@ function publicError(error) {
     ...(safe && /^HR_[A-Z_]{1,50}$/.test(error.cvstudioCode || '')?{error_code:error.cvstudioCode}:{}),
     ...(safe && hrCompanyURL(error.companyURL)?{company_url:error.companyURL}:{}),...(error?.cvstudioLoading?{loading:true}:{})};
 }
-async function jobScript(options, message) {
+async function jobScript(options, message, observational=false) {
   try {
     const results = await chrome.scripting.executeScript(options);
     if (!Array.isArray(results) || !results.length) throw Error();
     return results;
-  } catch { throw safeError(message); }
+  } catch(error) {
+    // A known document-transition error may be retried only for observation.
+    // Search submissions, Next, filter clicks and all other callers keep their
+    // non-replay behavior. Raw browser/page errors never leave this boundary.
+    if(observational && /(?:frame (?:with (?:ID|id) [0-9]+ )?(?:was removed|does not exist)|No frame with id|Execution context was destroyed|Cannot find context with specified id)/i.test(String(error?.message || '')))
+      return [{cvstudioTransient:true}];
+    throw safeError(message);
+  }
 }
 const jobReaderStartError = 'The LinkedIn reader could not start. Refresh LinkedIn, then reload and reconnect the latest companion.';
 const jobReaderReadError = 'LinkedIn job results could not be read. Refresh LinkedIn and try again. If this repeats, update and reload the companion.';
@@ -307,13 +317,13 @@ async function restore() {
       !Number.isInteger(saved.nextCount) || saved.nextCount < 0 || saved.nextCount > 15 ||
       !Number.isInteger(saved.profileCount) || saved.profileCount < 0 || saved.profileCount > 76) throw Error('Invalid companion session.');
   for (const row of saved.owned) {
-    if (!Array.isArray(row) || row.length !== 2 || !Number.isInteger(row[0]) || row[0] < 0 || owned.has(row[0]) || typeof row[1] !== 'string' || !row[1] || row[1].length > 2048 || !(profile(row[1]) || jobURL(row[1]) === row[1] || scope==='leads' && hrExperienceURL(row[1]))) throw Error('Invalid owned tab.');
+    if (!Array.isArray(row) || row.length !== 2 || !Number.isInteger(row[0]) || row[0] < 0 || owned.has(row[0]) || typeof row[1] !== 'string' || !row[1] || row[1].length > 2048 || !(profile(row[1]) || jobURL(row[1]) === row[1] || scope==='leads' && (hrExperienceURL(row[1]) || companyJobsPage(row[1])))) throw Error('Invalid owned tab.');
     owned.set(row[0], row[1]);
   }
   const protectedTabs=saved.viewed === undefined ? [] : saved.viewed;
   if (!Array.isArray(protectedTabs) || saved.owned.length+protectedTabs.length>76) throw Error('Invalid viewed tabs.');
   for (const row of protectedTabs) {
-    if (!Array.isArray(row) || row.length!==2 || !Number.isInteger(row[0]) || row[0]<0 || owned.has(row[0]) || viewed.has(row[0]) || typeof row[1]!=='string' || !row[1] || row[1].length>2048 || !(profile(row[1]) || jobURL(row[1])===row[1] || scope==='leads' && hrExperienceURL(row[1]))) throw Error('Invalid viewed tab.');
+    if (!Array.isArray(row) || row.length!==2 || !Number.isInteger(row[0]) || row[0]<0 || owned.has(row[0]) || viewed.has(row[0]) || typeof row[1]!=='string' || !row[1] || row[1].length>2048 || !(profile(row[1]) || jobURL(row[1])===row[1] || scope==='leads' && (hrExperienceURL(row[1]) || companyJobsPage(row[1])))) throw Error('Invalid viewed tab.');
     viewed.set(row[0],row[1]);
   }
   const bound = saved.connection;
@@ -643,7 +653,7 @@ async function handle(message, sender) {
     if(jobCapture?.bound!==connection || jobCapture.operation!==args.operation_id)return false;
     jobCapture.cancelled=true;return true;
   }
-  if (message.action === 'jobStatus') return {connected:true,job_read:true,job_search:true,job_search_revision:1,job_search_company_revision:1,company_hr_revision:1,hr_company_identity_revision:1,hr_company_filter_revision:1,hr_company_source_revision:1,hr_resilience_revision:1,hr_layout_revision:1,hr_apply_transition_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_employment_revision:1,hr_date_check_revision:1,hr_experience_page_revision:1,hr_employment_shapes_revision:1,hr_keyword_revision:1,people_country_revision:1,people_country_ready_revision:1,people_results_revision:1,profile_browsing_revision:1,concurrent_scans_revision:1,companion_update_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
+  if (message.action === 'jobStatus') return {connected:true,job_read:true,job_search:true,job_search_revision:1,job_search_company_revision:1,job_search_company_link_revision:1,company_hr_revision:1,hr_company_identity_revision:1,hr_company_filter_revision:1,hr_company_source_revision:1,hr_resilience_revision:1,hr_layout_revision:1,hr_apply_transition_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_employment_revision:1,hr_date_check_revision:1,hr_experience_page_revision:1,hr_employment_shapes_revision:1,hr_keyword_revision:1,people_country_revision:1,people_country_ready_revision:1,people_results_revision:1,profile_browsing_revision:1,concurrent_scans_revision:1,companion_update_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
   if (message.action === 'hrDate') {
     const bound=connection;
     if(bound.run || jobCapture) throw safeError('Wait for the current HR action to finish before checking employment.');
@@ -750,6 +760,46 @@ async function handle(message, sender) {
   if (message.action === 'jobTabs') {
     const tabs = await chrome.tabs.query({url: 'https://www.linkedin.com/*'});
     return tabs.filter(tab => jobURL(tab.url)).map(tab => ({id:tab.id, url:jobURL(tab.url), title:String(tab.title || 'LinkedIn job').slice(0, 160)}));
+  }
+  if(message.action==='jobCompanyID') {
+    const bound=connection,root=hrCompanyURL(args.company_url),expected=root+'jobs/';
+    if(!root || !companyJobsPage(expected) || !/^[a-f0-9]{32}$/.test(args.operation_id || ''))throw safeError('Choose a saved LinkedIn company page.');
+    if(bound.run || jobCapture)throw safeError('Finish the current Job Leads browser action first.');
+    const token={bound,operation:args.operation_id};jobCapture=token;let created=null;
+    const check=async()=>{
+      if(token.cancelled)throw safeError('The company read was stopped.','HR_STOPPED');
+      live(bound);const tab=await chrome.tabs.get(created);live(bound);
+      if(linkedinAccessPage(tab.url) || linkedinAccessPage(tab.pendingUrl))throw safeError('LinkedIn needs sign-in or a verification check. Resolve it in the browser and try again.','HR_ACCESS_REQUIRED');
+      if(tab.pendingUrl && tab.pendingUrl!==expected || tab.url!==expected && !expectedLoading(tab,expected))
+        throw safeError('The saved company page changed. Check its LinkedIn link or save its See all jobs search link.');
+      return tab.status==='complete' && tab.url===expected;
+    };
+    try {
+      // Reap only our unchanged inactive reads left by a suspended worker.
+      for(const [id,url] of [...owned,...viewed])if(companyJobsPage(url))await closeOwned(id,url);
+      live(bound);if(token.cancelled)throw safeError('The company read was stopped.','HR_STOPPED');
+      const tab=await chrome.tabs.create({url:expected,active:false});created=tab.id;owned.set(created,expected);await persist();
+      for(let attempt=0;attempt<40;attempt++) {
+        if(await check()) {
+          await jobScript({target:{tabId:created},files:['reader.js']},jobReaderStartError);
+          if(await check()) {
+            const [read]=await jobScript({target:{tabId:created},func:(method,root)=>{
+              try{return globalThis.SourcerReader[method](root);}catch{return {failed:true};}
+            },args:['readCompanyJobsID',root]},jobReaderReadError);
+            if(await check()) {
+              const result=read?.result;
+              if(result?.failed)throw safeError('LinkedIn could not confirm one company. Save its See all jobs search link and try again.');
+              if(result?.company_url===root && typeof result?.company_id==='string' && /^[0-9]{1,24}$/.test(result.company_id))return result;
+            }
+          }
+        }
+        await new Promise(resolve=>setTimeout(resolve,500));
+      }
+      throw safeError('LinkedIn did not show this company’s number. Open its company page, click See all jobs and save that search link.');
+    } finally {
+      if(created!==null)await closeOwned(created,expected);
+      if(jobCapture===token)jobCapture=null;await persist();
+    }
   }
   if (message.action === 'jobRead' || message.action === 'jobFromLink') {
     const bound = connection, expected = jobURL(message.action === 'jobRead' ? args.expected_url : args.url);
@@ -1149,7 +1199,7 @@ async function handle(message, sender) {
     }
     if (!['readSearch', 'readProfile', 'search', 'next'].includes(args.method)) throw Error('This browser action is not supported.');
     if (args.method === 'readProfile' ? !owned.has(tab.id) && !viewed.has(tab.id) : tab.id !== connection.source) throw Error('This read does not belong to the sourcing run.');
-    if (tab.status !== 'complete') return {loading: true};
+    if (tab.status !== 'complete') return {loading:true,wait_reason:args.method==='readProfile'?'profile':'search'};
     const readerError = 'LinkedIn results could not be read. Refresh LinkedIn, then reload and reconnect the latest companion.';
     const checkCountry=async()=>{
       const filter=bound.peopleSearch;
@@ -1158,12 +1208,22 @@ async function handle(message, sender) {
       if (filter.stage!=='ready' || hrSearchKey(source.url)!==filter.key || source.pendingUrl && hrSearchKey(source.pendingUrl)!==filter.key) throw safeError('The selected location or search changed. Start a new search.');
       return source.status==='complete';
     };
-    if (!await checkCountry()) return {loading:true};
-    await jobScript({target: {tabId: tab.id}, files: ['reader.js']},readerError);
-    if (!await checkCountry()) return {loading:true};
+    if (!await checkCountry()) return {loading:true,wait_reason:'country'};
+    const observational=['readSearch','readProfile'].includes(args.method),observedURL=tab.url;
+    const loading=async reason=>{
+      live(bound,args.run_id);
+      const current=args.method==='readProfile'?await ownedTab(tab.id):await chrome.tabs.get(tab.id);
+      live(bound,args.run_id);
+      if(current.url!==observedURL || current.pendingUrl && current.pendingUrl!==observedURL)throw safeError('The scan page changed during its read. Your candidate list is kept.');
+      return {loading:true,wait_reason:reason};
+    };
+    const prepared=await jobScript({target: {tabId: tab.id}, files: ['reader.js']},readerError,observational);
+    if(prepared[0]?.cvstudioTransient)return loading(args.method==='readProfile'?'profile':'search');
+    if (!await checkCountry()) return {loading:true,wait_reason:'country'};
     if (tab.id===bound.source && bound.peopleSearch?.country) {
-      const [selected]=await jobScript({target:{tabId:tab.id},func:country=>globalThis.SourcerReader.peopleCountrySelected(country),args:[bound.peopleSearch.country]},readerError);
-      if (!selected?.result || !await checkCountry()) return {loading:true};
+      const [selected]=await jobScript({target:{tabId:tab.id},func:country=>globalThis.SourcerReader.peopleCountrySelected(country),args:[bound.peopleSearch.country]},readerError,observational);
+      if(selected?.cvstudioTransient)return loading('country');
+      if (!selected?.result || !await checkCountry()) return {loading:true,wait_reason:'country'};
     }
     if (connection?.run !== args.run_id) throw Error('The browser run has stopped.');
     if (args.method === 'readProfile') await ownedTab(tab.id);
@@ -1175,16 +1235,17 @@ async function handle(message, sender) {
         // Script exceptions may arrive without a serializable result. Return a
         // fixed reason instead of leaking page content or treating failure as empty.
         catch (error) { return {cvstudioReaderError:/sign in|verification check|access or usage restriction/i.test(String(error?.message)) ? 'access' : 'reader'}; }
-      }, args: [args.method, args.values || []]},readerError);
+      }, args: [args.method, args.values || []]},readerError,observational);
+    if(injection?.cvstudioTransient)return loading(args.method==='readProfile'?'profile':'search');
     const result = injection?.result;
     live(bound, args.run_id);
     if (args.method === 'readProfile') { await ownedTab(tab.id); live(bound,args.run_id); }
     // A successful Next may already be loading the new page. Never replay its
     // click merely because the unchanged filters are temporarily loading.
-    if (!await checkCountry() && args.method !== 'next') return {loading:true};
+    if (!await checkCountry() && args.method !== 'next') return {loading:true,wait_reason:'country'};
     if (result?.cvstudioReaderError) throw safeError(result.cvstudioReaderError === 'access' ? 'LinkedIn needs sign-in or a verification check, or is showing a restriction. Open its tab and resolve this before starting again.' : readerError);
     if (result == null) {
-      if (['readSearch','readProfile'].includes(args.method)) return {loading:true};
+      if (['readSearch','readProfile'].includes(args.method)) return {loading:true,wait_reason:args.method==='readProfile'?'profile':'search'};
       throw safeError(readerError);
     }
     if (args.method === 'readSearch' && !Array.isArray(result.profiles)) throw safeError(readerError);
@@ -1225,7 +1286,7 @@ for(const [event,method] of [['onRemoved','removed'],['onUpdated','updated'],['o
     await session[method](...args);releaseLeases(scope);
   })));
 }
-const leadActions=new Set(['hrDate','hrBegin','hrRead','hrNext','hrJoined','hrJoinedClose','jobRead','jobFromLink','jobReadCancel','jobTabs','jobSearchTabs','jobSearchBegin']);
+const leadActions=new Set(['hrDate','hrBegin','hrRead','hrNext','hrJoined','hrJoinedClose','jobRead','jobFromLink','jobCompanyID','jobReadCancel','jobTabs','jobSearchTabs','jobSearchBegin']);
 function messageScope(message) {
   if(message.scope!==undefined){
     if(!sessions.has(message.scope))throw sessionError('Refresh CV Studio to use the current companion.');
