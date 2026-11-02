@@ -85,7 +85,7 @@ function fixture(options={}){
       if(action==='jobCompanyID'){
         if(state.holdCompany)await new Promise(resolve=>state.releaseCompany=resolve);
         if(state.failCompany)throw Error('Company could not be read.');
-        return {company_url:args.company_url,company_id:'4242'};
+        return {company_url:args.company_url,company_id:state.companyIds?.[args.company_url] || '4242'};
       }
       if(action==='jobReadCancel')return true;
       if(action==='jobSearchBegin'){
@@ -101,14 +101,16 @@ function fixture(options={}){
       const jobs=(state.pages[run.company]||[])[run.page]||[];
       return {jobs,signature:run.page+':'+jobs.map(row=>row.url).join('|'),hasNext:run.page+1<(state.pages[run.company]||[]).length,atBottom:true,empty:!jobs.length};
     }};
-  const window={cvStudioJobLeads:app,cvStudioPeople:{hideHR:()=>{state.hrHidden=true;}},_jaAccountCacheNamespace:'ja'+ACCOUNT,addEventListener:(name,fn)=>{windowEvents[name]=fn;}};
+  const opened=[];
+  const window={cvStudioJobLeads:app,cvStudioPeople:{hideHR:()=>{state.hrHidden=true;}},_jaAccountCacheNamespace:'ja'+ACCOUNT,addEventListener:(name,fn)=>{windowEvents[name]=fn;},
+    open:(url,name,features)=>{opened.push({url,name,features});return null;}};
   window.applyJAPublicInfo=info=>{const next=info?.connected?'ja'+info.account_cache_namespace:'';const before=window._jaAccountCacheNamespace;window._jaAccountCacheNamespace=next;state.applied=(state.applied||0)+1;if(before && before!==next)window.clearJobLeadsClientsAccountState();};
   const localStorage={getItem:key=>storage.has(key)?storage.get(key):null,setItem:(key,value)=>storage.set(key,String(value))};
   let serial=0;
   const context=vm.createContext({window,document,fetch,console,structuredClone,Promise,Set,Map,Array,Number,String,Math,Error,JSON,localStorage,URL,AbortController,
     crypto:{randomUUID:()=>'00000000-0000-4000-8000-'+String(++serial).padStart(12,'0')},setTimeout:(fn,ms)=>{if(state.manualDeadlines && ms>=10000){const id=++timerId;deadlines.set(id,{fn,ms});return id;}return setTimeout(fn,ms===350?0:ms)},clearTimeout:id=>{deadlines.delete(id);clearTimeout(id)}});
   vm.runInContext(walkSource,context);vm.runInContext(source,context);
-  return {el,state,calls,deadlines,leadsCalls,rpcCalls,begun,ended,storage,window,document,api:window.cvStudioJobLeadsClients,clear:()=>window.clearJobLeadsClientsAccountState(),pagehide:()=>windowEvents.pagehide?.()};
+  return {el,state,calls,deadlines,leadsCalls,rpcCalls,begun,ended,storage,window,document,opened,api:window.cvStudioJobLeadsClients,clear:()=>window.clearJobLeadsClientsAccountState(),pagehide:()=>windowEvents.pagehide?.(),focus:()=>windowEvents.focus?.()};
 }
 const rows=f=>f.el('Followed').children;
 const found=f=>f.el('Found').children;
@@ -197,7 +199,7 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
   assert.equal(f.el('Tab').getAttribute('aria-pressed'),'true');
   assert.deepEqual(f.calls.map(c=>c.action),['overview','statuses']);
   assert(f.el('Setup').open,'status setup opens until signed statuses are chosen');
-  assert.match(f.el('Message').textContent,/Start by choosing/);
+  assert.match(f.el('Message').textContent,/Start in Signed clients by choosing/);
   assert(f.el('Search').disabled && f.el('Pull').disabled);
 
   // Choose the signed status, then find and follow clients.
@@ -275,23 +277,21 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
   assert.deepEqual(Object.keys(f.leadsCalls[0].record).sort(),['company','contact','date_posted','description','description_rich','description_truncated','folder','follow_up','location','notes','role','status','url'].sort());
   assert.equal(f.leadsCalls[0].record.folder,'Clients');assert.equal(f.leadsCalls[0].record.status,'new');assert.equal(f.leadsCalls[0].record.notes,'');
   assert.equal(f.state.refreshes,1,'the main Job ads list reloads');
-  assert.match(f.el('Message').textContent,/^Added 3 ads to Clients/);
+  assert.match(f.el('Message').textContent,/^Saved 3 ads to Clients/);
   assert.match(found(f)[2].text,/Already in Job ads/);assert.equal(box(found(f)[0]).checked,false,'the unticked ad stays available');
   // Adding waits for a busy Job Leads, with a message.
   box(found(f)[0]).checked=true;await box(found(f)[0]).dispatch('change');f.state.busy=true;
   await f.el('Add').click();await settle();assert.match(f.el('Message').textContent,/Job Leads is busy/);assert.equal(f.leadsCalls.length,3);f.state.busy=false;
 
-  // Selecting is per page, and Add saves up to 100 at a time.
+  // Selecting is per page, and Save saves every selected ad.
   {const big=fixture({signed:[2],followed:[client(11,'4242','Example Client')],pages:{'4242':[bulk(3000,40),bulk(3040,40),bulk(3080,40),bulk(3120,30)]}});
    await big.el('Tab').click();await settle();big.el('Pages').value='5';await big.el('Pull').click();await settle(200);
    assert.equal(big.el('FoundCount').textContent,'150');
    big.el('SelectNew').checked=true;await big.el('SelectNew').dispatch('change');
    await big.el('FoundNext').click();assert.equal(found(big).filter(row=>box(row).checked).length,0,'selecting one page leaves the next page unticked');
    for(let page=1;page<3;page++){big.el('SelectNew').checked=true;await big.el('SelectNew').dispatch('change');assert.equal(found(big).filter(row=>box(row).checked).length,50,'one page at a time');if(page<2)await big.el('FoundNext').click();}
-   await big.el('Add').click();await settle(200);
-   assert.equal(big.leadsCalls.length,100);assert.match(big.el('Message').textContent,/50 selected ads are still waiting: click Add selected again/);
-   await big.el('Add').click();await settle(200);
-   assert.equal(big.leadsCalls.length,150);assert.doesNotMatch(big.el('Message').textContent,/still waiting/);}
+   await big.el('Add').click();await settle(400);
+   assert.equal(big.leadsCalls.length,150,'Save saves every selected ad in one click');assert.doesNotMatch(big.el('Message').textContent,/still waiting/);}
 
   // The review list cap: no more searches once 600 ads wait, and no "pulled" mark.
   {// Five clients of 5 pages x 35 ads: the fourth fills the list part-way.
@@ -474,9 +474,107 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
    await c.el('StatusesSave').click();await settle();assert(c.el('Pull').disabled);await c.el('Pull').click();await settle();
    assert(!c.rpcCalls.some(call=>call.action==='jobSearchBegin'));assert.match(c.el('Progress').textContent,/Save statuses/);assert.equal(rows(c).length,1);}
 
+  // Signed clients and Followed clients are separate views of one module.
+  {const v=fixture({signed:[2],followed:[client(11,'4242','Example Client')]});
+   await v.el('FollowedTab').click();await settle();
+   assert(!v.el('FollowedPanel').hidden && v.el('Panel').hidden,'Followed clients shows alone');
+   assert.equal(v.el('FollowedTab').getAttribute('aria-pressed'),'true');assert.equal(v.el('Tab').getAttribute('aria-pressed'),'false');
+   assert.equal(rows(v).length,1,'followed clients load in their own tab');
+   await v.el('Tab').click();await settle();assert(!v.el('Panel').hidden && v.el('FollowedPanel').hidden);
+   await v.document.getElementById('jobLeadsApolloAdsTab').click();assert(v.el('Panel').hidden && v.el('FollowedPanel').hidden,'another Job Leads view hides both');
+   v.state.signed=[];await v.el('FollowedTab').click();await settle();
+   assert.match(v.el('FollowedMessage').textContent,/Start in Signed clients/,'the followed view says where to start');
+   assert(v.el('OpenLinkedIn').disabled,'no LinkedIn search before signed statuses are chosen');}
+
+  // Open on LinkedIn: one search for every ticked client, opened from the click.
+  {const o=fixture({signed:[2],followed:[client(11,'4242','Example Client'),client(12,'5151','Second Client')]});
+   await o.el('FollowedTab').click();await settle();
+   assert.equal(o.api.linkedinSearch(['4242','5151','4242','bad']),'https://www.linkedin.com/jobs/search/?f_C=4242%2C5151');
+   assert.equal(o.api.linkedinSearch([]),'');
+   await o.el('OpenLinkedIn').click();await settle();
+   assert.equal(o.opened.length,1);assert.equal(o.opened[0].url,'https://www.linkedin.com/jobs/search/?f_C=4242%2C5151');
+   assert.match(o.opened[0].features,/noopener/);
+   assert.equal(o.el('LinkedInLink').href,o.opened[0].url,'the same search stays available as a link');assert(!o.el('LinkedInReady').hidden);
+   assert.match(o.el('Progress').textContent,/Opened LinkedIn job ads for 2 clients.*Add to CV Studio/);
+   assert(!o.rpcCalls.some(call=>['jobCompanyID','jobSearchBegin'].includes(call.action)),'known companies need no companion read or background search');
+   const tick=box(rows(o)[1]);tick.checked=false;await tick.dispatch('change');
+   assert(o.el('LinkedInReady').hidden,'changing the ticks drops the prepared search');
+   await o.el('OpenLinkedIn').click();await settle();assert.equal(o.opened.at(-1).url,'https://www.linkedin.com/jobs/search/?f_C=4242');}
+
+  // A client known only by its company page: the companion reads its number
+  // once, then the search is offered as a link (the click has passed).
+  {const page={...client(11,'','Example Client'),linkedin_url:'https://www.linkedin.com/company/example-client/'};
+   const n=fixture({signed:[2],followed:[page],records:[]});await n.el('FollowedTab').click();await settle();
+   await n.el('OpenLinkedIn').click();await settle(80);
+   assert.equal(n.rpcCalls.filter(call=>call.action==='jobCompanyID').length,1);assert.equal(n.opened.length,0,'no blocked pop-up after the companion read');
+   assert.equal(n.el('LinkedInLink').href,'https://www.linkedin.com/jobs/search/?f_C=4242');assert.match(n.el('Progress').textContent,/Open the LinkedIn search/);
+   assert.deepEqual(n.state.locks,[true,false],'Job Leads is locked only while the company is read');
+   assert.match(n.el('Followed').text,/company number read from LinkedIn/);
+   await n.el('OpenLinkedIn').click();await settle();
+   assert.equal(n.opened.length,1,'the number read this session opens directly next time');assert.equal(n.rpcCalls.filter(call=>call.action==='jobCompanyID').length,1);
+   await n.el('Pull').click();await settle(120);
+   assert.equal(n.rpcCalls.filter(call=>call.action==='jobCompanyID').length,1,'a pull reuses the number too');
+   assert.equal(n.rpcCalls.find(call=>call.action==='jobSearchBegin').args.company_id,'4242');
+   const failing=fixture({signed:[2],followed:[page],records:[],failCompany:true});await failing.el('FollowedTab').click();await settle();
+   await failing.el('OpenLinkedIn').click();await settle(80);
+   assert.match(failing.el('Progress').textContent,/No ticked client has a confirmed LinkedIn company yet\. Example Client: Company could not be read/);
+   assert(failing.el('LinkedInReady').hidden);assert(failing.rpcCalls.some(call=>call.action==='jobReadCancel'));
+   // A changed company page is read again, never searched with the old number.
+   n.state.companyIds={'https://www.linkedin.com/company/other-client/':'6363'};
+   n.state.followed[0].linkedin_url='https://www.linkedin.com/company/other-client/';await n.el('Refresh').click();await settle(40);
+   const reads=n.rpcCalls.filter(call=>call.action==='jobCompanyID').length;
+   await n.el('OpenLinkedIn').click();await settle(80);
+   assert.equal(n.rpcCalls.filter(call=>call.action==='jobCompanyID').length,reads+1,'the new page is read');
+   assert.equal(n.rpcCalls.at(-1).args.company_url,'https://www.linkedin.com/company/other-client/');
+   assert.equal(n.el('LinkedInLink').href,'https://www.linkedin.com/jobs/search/?f_C=6363','the old number is not reused for another page');
+   n.clear();assert.equal(n.state.linkedinSearch,undefined);assert.equal(n.el('LinkedInReady').hidden,true,'an account change drops the prepared search');}
+
+  // Select all new ads across every page, then save them in one click.
+  {const all=fixture({signed:[2],followed:[client(11,'4242','Example Client')],pages:{'4242':[bulk(5000,40),bulk(5040,40),[...bulk(5080,25),job(900)]]}});
+   await all.el('FollowedTab').click();await settle();all.el('Pages').value='5';await all.el('Pull').click();await settle(200);
+   assert.equal(all.el('FoundCount').textContent,'106');assert.match(all.el('Picked').textContent,/^0 of 105 new ads selected/);
+   await all.el('SelectAll').click();assert.match(all.el('Picked').textContent,/^105 of 105/,'already-saved ads are never selected');
+   assert(all.el('SelectAll').disabled);await all.el('SelectNone').click();assert.match(all.el('Picked').textContent,/^0 of 105/);
+   await all.el('SelectAll').click();await all.el('Add').click();await settle(400);
+   assert.equal(all.leadsCalls.length,105);assert.match(all.el('FollowedMessage').textContent,/Saved 105 ads to Unfiled.*Saved client ads/);
+   assert.equal(all.el('AdsCount').textContent,'107','saved ads join the dashboard straight away');}
+
+  // Saved client ads dashboard: only live ads of followed clients, with filters.
+  {const day=offset=>{const d=new Date();d.setDate(d.getDate()-offset);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
+   const saved=(id,company,patch)=>({id:id.repeat(32).slice(0,32),url:'https://www.linkedin.com/jobs/view/'+id.charCodeAt(0),company,role:'Role '+id,location:'Kuala Lumpur',status:'new',folder:'',date_posted:'',created_at:'2026-10-01T00:00:00Z',deleted:false,...patch});
+   const records=[saved('a','Example Client Sdn Bhd',{role:'Payroll Lead',date_posted:day(2),status:'contacted',folder:'Clients',created_at:'2026-10-05T00:00:00Z'}),
+     saved('b','PT Example Client Tbk',{role:'Data Analyst',date_posted:day(40),hr:{company_url:'https://www.linkedin.com/company/example-client/',company_id:'4242',scanned_at:'2026-10-20T08:00:00Z'}}),
+     saved('c','Second Client',{role:'Accountant',location:'Penang',date_posted:day(10)}),
+     saved('d','Example Client',{role:'Deleted role',deleted:true}),saved('e','Unrelated Company',{role:'Elsewhere'})];
+   const d=fixture({signed:[2],followed:[client(11,'4242','Example Client'),client(12,'5151','Second Client')],records,folders:['Clients']});
+   await d.el('FollowedTab').click();await settle();
+   assert.deepEqual(Array.from(d.api.clientAds(records,d.state.followed),row=>[row.record.role,row.client.name]),[['Payroll Lead','Example Client'],['Data Analyst','Example Client'],['Accountant','Second Client']]);
+   const table=()=>d.el('AdsRows').children.map(tr=>tr.children[1].text);
+   assert.equal(d.el('AdsCount').textContent,'3');assert.deepEqual(table(),['Payroll Lead','Accountant','Data Analyst'],'newest posted first');
+   assert.deepEqual(d.el('AdsTiles').children.map(tile=>tile.text),['3 Saved ads','2 Clients with ads','1 Posted in the last 7 days','2 Status: New','2 No HR scan yet']);
+   const first=d.el('AdsRows').children[0].children;
+   assert.deepEqual(first.map(cell=>cell.text),[day(2),'Payroll Lead','Example Client Sdn Bhd','Example Client','Kuala Lumpur','Contacted','Clients','2026-10-05','Not scanned']);
+   assert.equal(first[1].children[0].href,'https://www.linkedin.com/jobs/view/97');assert.equal(d.el('AdsRows').children[2].children[8].text,'2026-10-20');
+   const pick=async(name,value)=>{d.el(name).value=value;await d.el(name).dispatch('change');};
+   await pick('AdsClient','12');assert.deepEqual(table(),['Accountant']);assert.match(d.el('AdsPage').textContent,/1–1 of 1 \(filtered from 3\)/);
+   await pick('AdsClient','');await pick('AdsPosted','30');assert.deepEqual(table(),['Payroll Lead','Accountant']);
+   await pick('AdsStatus','contacted');assert.deepEqual(table(),['Payroll Lead']);
+   await d.el('AdsReset').click();await pick('AdsFolder','""');assert.deepEqual(table(),['Accountant','Data Analyst'],'Unfiled is its own folder choice');
+   await d.el('AdsReset').click();d.el('AdsQuery').value='penang';await d.el('AdsQuery').dispatch('input');assert.deepEqual(table(),['Accountant']);
+   await d.el('AdsReset').click();await pick('AdsSort','role_asc');assert.deepEqual(table(),['Accountant','Data Analyst','Payroll Lead']);
+   await pick('AdsSort','client_asc');assert.deepEqual(table(),['Data Analyst','Payroll Lead','Accountant'],'same client: job title breaks the tie');
+   assert.deepEqual(d.el('AdsClient').children.map(option=>option.textContent),['All clients','Example Client','Second Client']);
+   // Ads added on LinkedIn show up when the owner returns to this tab.
+   d.state.records.push(saved('f','Second Client',{role:'Added on LinkedIn',date_posted:day(1)}));d.focus();await settle();
+   assert.equal(d.el('AdsCount').textContent,'4');await d.el('AdsReset').click();assert.equal(table()[0],'Added on LinkedIn');
+   await d.el('Tab').click();await settle();d.state.records.push(saved('g','Second Client'));const before=d.el('AdsCount').textContent;d.focus();await settle();
+   assert.equal(d.el('AdsCount').textContent,before,'no background read while Followed clients is hidden');
+   const empty=fixture({signed:[2],followed:[client(11,'4242','Example Client')],records:[]});await empty.el('FollowedTab').click();await settle();
+   assert.match(empty.el('AdsEmpty').textContent,/No saved ads from followed clients yet/);assert(!empty.el('AdsEmpty').hidden);}
+
   // Account change on screen, and a JobAdder outage.
   const down=fixture({down:true});await down.el('Tab').click();await settle();
   assert.match(down.el('Message').textContent,/could not be reached/);assert(down.el('Pull').disabled);
   finished=true;
-  console.log('Signed clients view: status choice and stale statuses, follow, LinkedIn links, ticks, company-filtered pulls, review cap, per-page select and batched add, busy Job Leads, Stop, account changes and redraw cost passed.');
+  console.log('Signed and Followed clients views: separate tabs, Open on LinkedIn, select all and save, saved client ads dashboard, status choice and stale statuses, follow, LinkedIn links, ticks, company-filtered pulls, review cap, per-page select and batched add, busy Job Leads, Stop, account changes and redraw cost passed.');
 })().catch(error=>{console.error(error);process.exitCode=1;});
