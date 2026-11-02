@@ -357,11 +357,13 @@
     }
     return adsIndex.rows;
   }
-  // The followed client a saved ad belongs to, once followed clients are known.
-  // Ads this view has not matched (Job ads' newer copies, ads in Trash) are
-  // matched by name once per id, tag and company until the lists change.
+  // The followed client a saved ad belongs to: undefined until followed
+  // clients are known, then the client or null. Ads this view has not
+  // matched (Job ads' newer copies, ads in Trash) are matched by name once
+  // per id, tag and company until the lists change.
   function clientOf(record) {
-    if (!state.loaded || !record?.id) return null;
+    if (!state.loaded) return undefined;
+    if (!record?.id) return null;
     allClientAds();
     let owner = record.deleted ? null : adsIndex.byId.get(record.id);
     if (!owner) {
@@ -392,7 +394,7 @@
     el('FollowedBody').hidden = state.loaded && !followed;
     el('FollowedSetup').hidden = !state.loaded || followed;
     el('FollowedSetupText').textContent = signed ? 'Follow your clients in Signed clients to pull their job ads here.' : 'First choose which JobAdder statuses mean a signed client.';
-    el('AdsCount').textContent = String(allClientAds().length);
+    el('AdsCount').textContent = state.recordsReady ? String(allClientAds().length) : '—'; // not read yet
     // Job ads' Client column follows the followed list once it is known.
     if (notified !== state.followed) { notified = state.followed; jobLeads()?.redraw?.(); }
   }
@@ -846,6 +848,7 @@
       const listed = state.companies;
       await load();
       if (listed && state.loaded && state.companies && !unsavedStatuses()) await searchCompanies(state.companies.offset || 0);
+      if (state.loaded && !el('Message').textContent) el('Message').textContent = 'Refreshed from JobAdder.';
     });
     el('FollowedRefresh').addEventListener('click', async () => { await load(); if (state.loaded && state.followed.length) await refreshFollowed(); });
     el('OpenLinkedIn').addEventListener('click', openLinkedIn);

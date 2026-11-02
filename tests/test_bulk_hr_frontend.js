@@ -80,6 +80,7 @@ if(require.main===module)(async()=>{
   await large.init();large.select();await large.el('Next').click();large.select();await large.start();assert.equal(large.state.starts.length,0);assert.match(large.el('BulkHRMessage').textContent,/40 ads/,'bulk work has a bounded run size across page selections');
   const busy=bulkFixture();busy.state.holdId='1'.repeat(32);await busy.init();busy.select();const busyRun=busy.start();await held(busy);
   assert(busy.el('BulkHRNextStep').hidden,'the next step appears only after the queue ends');
+  await busy.jobLeads().showClientAds(11);assert.equal(busy.el('ClientFilter').value,'','View in Job ads never half-applies a filter mid-scan');assert.match(busy.el('Message').textContent,/when the HR scan finishes/);
   busy.state.release();await busyRun;
   // Two selected ads from the same company: one scan, its result copied to the other.
   const sameCo=bulkFixture();sameCo.state.records[1].company=sameCo.state.records[0].company;sameCo.state.slugs={2:'example-1'};await sameCo.init();sameCo.select();await sameCo.start();

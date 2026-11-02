@@ -372,7 +372,8 @@
       openingHR=true;
       try{el('HRTab').click();}finally{openingHR=false;}
       await refresh('HR');
-      if(companyId && [...el('HRCompany').options].some(option=>option.value===companyId)){el('HRCompany').value=companyId;boards.HR.page=0;draw('HR');}
+      // A company opens filtered to it; '' (or an unknown company) shows everyone.
+      if(companyId!==undefined){el('HRCompany').value=companyId && [...el('HRCompany').options].some(option=>option.value===companyId)?companyId:'';boards.HR.page=0;draw('HR');}
     },
     sourcerChanged(){if(!el('CandidatesPanel').hidden)void refresh('Candidates');}
   };
@@ -391,7 +392,7 @@
     if(!openingHR)void refresh('HR');
   });
   el('HRConnect').addEventListener('click',()=>window.cvStudioApollo?.openSettings());
-  el('HRNext').addEventListener('click',()=>{el('HRNextStep').hidden=true;document.getElementById('jobLeadsApolloContactsTab')?.click();});
+  el('HRGoContacts').addEventListener('click',()=>{el('HRNextStep').hidden=true;document.getElementById('jobLeadsApolloContactsTab')?.click();});
   async function stopDate(){if(!dateBusy)return;dateStopped=true;controls('HR');if(dateOperation)try{await window.cvStudioJobLeads.rpc('jobReadCancel',{operation_id:dateOperation});}catch{}}
   el('HRDateStop').addEventListener('click',stopDate);
   el('HRDateAll').addEventListener('click',checkMissingEmployment);

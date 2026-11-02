@@ -40,6 +40,22 @@ on `claude/job-leads-signed-clients`, from merged542 PR287 / `c282b18`.
   until a client is followed. The Signed clients search waits for statuses.
 - Filters use the shared `people-filters` grid. `#viewJobLeads [hidden]`
   always hides.
+- Second review (12 fixes):
+  - The unlock next step had reused id `peopleHRNext` (HR paging). It is now
+    `peopleHRGoContacts`, and `tests/test_index_unique_ids.js` guards every id.
+  - `showClientAds` does nothing to the filters during an HR scan, re-reads
+    saved ads, and clears Search/Status/Posted/Folder so every ad of that
+    client shows.
+  - `showHR('')` clears the company filter.
+  - A per-row "View" opens HR people for that company.
+  - Clients' `clientOf` returns `undefined` until followed clients load. Job
+    ads only then falls back to `record.client`.
+  - The client-ad count shows "—" until saved ads are read.
+  - Each filter call looks up an ad's client once.
+  - The Job ads table is not a nested 60vh scroll box.
+  - Signed Refresh confirms it ran.
+  - `localDate(daysBack)` is reused.
+  - Title buttons say "Preview … at …".
 - Pre-existing browser-test failures on master too: `hr_queue_resume.js`
   (no job-search-walk loaded) and the Sourcer part of `search_guidance.js`.
 

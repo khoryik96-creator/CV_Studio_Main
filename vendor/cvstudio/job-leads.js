@@ -78,8 +78,9 @@
   }
   function chooseGuide(flow) { guideFlow=flow;guideTried=false;guideIssue='';nextGuide(); }
   const status = message => { el('Message').textContent = message; };
-  function localDate() {
-    const d = new Date();
+  // Today's local date, or the date `daysBack` days earlier, as YYYY-MM-DD.
+  function localDate(daysBack = 0) {
+    const d = new Date(); d.setDate(d.getDate() - daysBack);
     return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
   const due = row => row.follow_up && row.follow_up <= localDate() && !['won', 'closed'].includes(row.status);
@@ -202,27 +203,28 @@
     drawDiscovery();
     return data;
   }
-  // The followed client an ad belongs to: Followed clients' own matching when
-  // it has loaded, otherwise the client the ad was saved for.
-  const clientOf = row => window.cvStudioJobLeadsClients?.clientOf?.(row) || (row?.client?.name ? row.client : null);
-  const postedOf = row => row.date_posted || estimateOf(row);
-  function sinceDay(days) {
-    const date = new Date(); date.setDate(date.getDate() - (days - 1)); // today and the days before
-    return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+  // The followed client an ad belongs to: Followed clients' own matching once
+  // it knows the followed clients, before that the client the ad was saved for.
+  function clientOf(row) {
+    const known = window.cvStudioJobLeadsClients?.clientOf?.(row);
+    return known !== undefined ? known : row?.client?.name ? row.client : null;
   }
+  const postedOf = row => row.date_posted || estimateOf(row);
   const SORTS = {saved_desc:['created_at',-1], saved_asc:['created_at',1], posted_desc:['posted',-1], posted_asc:['posted',1],
     role_asc:['role',1], company_asc:['company',1], client_asc:['client',1]};
   function filtered() {
     const term = el('Search').value.trim().toLocaleLowerCase(), filter = el('Filter').value, folder = el('FolderFilter').value;
-    const client = el('ClientFilter').value, days = Number(el('PostedFilter').value), since = days ? sinceDay(days) : '';
+    const client = el('ClientFilter').value, days = Number(el('PostedFilter').value), since = days ? localDate(days - 1) : ''; // today and the days before
+    // Each ad's client is looked up once per call, not per comparison.
+    const owners = new Map(), ownerOf = row => { if (!owners.has(row)) owners.set(row, clientOf(row)); return owners.get(row); };
     const list = rows.filter(row => (folder === '!trash' ? row.deleted : !row.deleted && (folder === '*' || (row.folder || '') === folder)) &&
       (!filter || row.status === filter || filter === 'due' && due(row)) &&
-      (!client || (client === '!any' ? !!clientOf(row) : String(clientOf(row)?.company_id ?? '') === client)) &&
+      (!client || (client === '!any' ? !!ownerOf(row) : String(ownerOf(row)?.company_id ?? '') === client)) &&
       (!since || postedOf(row) >= since) &&
-      (!term || [row.company, row.role, row.contact, row.notes, row.location, clientOf(row)?.name].some(value => String(value || '').toLocaleLowerCase().includes(term))));
+      (!term || [row.company, row.role, row.contact, row.notes, row.location, ownerOf(row)?.name].some(value => String(value || '').toLocaleLowerCase().includes(term))));
     const [field, direction] = SORTS[el('Sort').value] || [];
     if (!field) return list; // Recently updated: the saved order
-    const value = row => field === 'posted' ? postedOf(row) : field === 'client' ? clientOf(row)?.name || '' : row[field] || '';
+    const value = row => field === 'posted' ? postedOf(row) : field === 'client' ? ownerOf(row)?.name || '' : row[field] || '';
     // Blank values sort last in either direction.
     return list.sort((a, b) => { const x = value(a), y = value(b); return !x || !y ? (x ? -1 : y ? 1 : 0) : direction * String(x).localeCompare(String(y)); });
   }
@@ -375,13 +377,19 @@
       }
       // An estimate from LinkedIn's "2 weeks ago" is marked with ≈.
       const posted = row.date_posted ? postedLabel(row.date_posted) : estimateOf(row) ? '≈ ' + postedLabel(estimateOf(row)) : '—';
-      const title = node('td'); title.appendChild(button(row.role, () => { if (!busy) selectPreview(row.url, true); }, 'job-lead-title'));
+      const title = node('td'), open = button(row.role, () => { if (!busy) selectPreview(row.url, true); }, 'job-lead-title');
+      open.setAttribute('aria-label', 'Preview ' + row.role + ' at ' + row.company); title.appendChild(open);
       if (row.notes) title.appendChild(node('div', row.notes.slice(0, 120) + (row.notes.length > 120 ? '…' : ''), 'job-leads-muted'));
       const company = node('td', row.company); if (row.contact) company.appendChild(node('div', 'Contact: ' + row.contact, 'job-leads-muted'));
       const state = node('td', labels[row.status] || row.status);
       if (row.follow_up) state.appendChild(node('div', (due(row) ? 'Due · ' : 'Follow up · ') + row.follow_up, due(row) ? 'job-lead-due' : 'job-leads-muted'));
       const hr = node('td');
       if (!row.deleted) hr.appendChild(button(row.hr ? `HR people (${row.hr.people.length})` : 'Find HR', () => { if (!busy) { selectPreview(row.url); chooseGuide('HR'); el('HR').scrollIntoView({block:'nearest',behavior:'smooth'}); } }));
+      // The HR people tab, filtered to this company, is where emails are unlocked.
+      if (!row.deleted && row.hr?.people?.length && row.hr.company_id) {
+        const view = button('View', () => { if (!busy) window.cvStudioPeople?.showHR?.(String(row.hr.company_id)); });
+        view.setAttribute('aria-label', 'View HR people for ' + row.company); hr.append(view);
+      }
       const actions = node('div', '', 'job-leads-actions');
       const link = node('a', 'Open ↗'); link.href = row.url; link.target = '_blank'; link.rel = 'noopener noreferrer';
       actions.append(link, button(row.deleted ? 'Restore' : 'Edit', () => {
@@ -1344,9 +1352,14 @@
   // Ads saved from Followed clients are read again first, so none is missing.
   async function showClientAds(companyId = '!any') {
     document.getElementById('jobLeadsApolloAdsTab')?.click();
+    // Filters stay as they are while an HR scan runs (its selection is in use).
+    if (hrRunning) { status('Client ads can be listed when the HR scan finishes or is stopped.'); return; }
     if (!busy) { lock(true); try { await load(); } catch (error) { status(error.message); } finally { lock(false); } }
+    if (hrRunning) return;
+    // Only the client filter applies, so every saved ad of the client shows.
+    el('Search').value = ''; el('Filter').value = ''; el('PostedFilter').value = ''; el('FolderFilter').value = '*';
     el('ClientFilter').value = syncClients().has(String(companyId)) ? String(companyId) : '!any';
-    el('FolderFilter').value = '*'; applySavedFilters(); el('List').scrollIntoView?.({block:'start', behavior:'smooth'});
+    applySavedFilters(); el('List').scrollIntoView?.({block:'start', behavior:'smooth'});
   }
   window.cvStudioJobLeads={refresh:load,redraw:()=>{if(ready){syncClients();render();}},showClientAds,lock:value=>lock(value),isBusy:()=>busy,stopHR,hrRunning:()=>hrRunning,employment:hrEmploymentLabel,statusLabels:Object.freeze({...labels}),rpc,activityStart:beginScanActivity,activityEnd:finishScanActivity};
   document.addEventListener('DOMContentLoaded', () => { if (new URLSearchParams(location.search).get('module') === 'jobleads') switchTab('jobleads'); });

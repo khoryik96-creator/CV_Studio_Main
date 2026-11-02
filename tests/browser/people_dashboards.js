@@ -21,6 +21,11 @@ const {chromium}=require(process.env.CVSTUDIO_PLAYWRIGHT || 'playwright');
  await page.screenshot({path:path.join(evidence,'people521_hr.png'),fullPage:true});
  page.on('dialog',d=>d.accept());const unlock=page.locator('#peopleHRRows').getByRole('button',{name:'Unlock email',exact:true});assert.equal(await unlock.count(),1);await unlock.click();
  await page.waitForFunction(()=>!document.querySelector('#peopleHRRows [data-unlock]:not([hidden])'));assert.equal(calls.filter(r=>r.data?.action==='reveal').length,1);
+ // The unlock offers the next step on its own id (HR paging keeps peopleHRNext); reopening HR people clears it.
+ await page.locator('#peopleHRGoContacts').click();await page.locator('#jobLeadsApolloContactsPanel').waitFor();
+ await page.locator('#peopleHRTab').click();assert(!await page.locator('#peopleHRGoContacts').isVisible(),'reopening HR people clears the old next step');
+ const company=await page.locator('#peopleHRCompany option').nth(1).getAttribute('value');await page.locator('#peopleHRCompany').selectOption(company);
+ await page.evaluate(()=>window.cvStudioPeople.showHR(''));await page.waitForFunction(()=>document.querySelector('#peopleHRCompany').value==='');
  await page.locator('#jobLeadsApolloAdsTab').click();assert(!await page.locator('#peopleHRPanel').isVisible());
  await page.locator('#jobLeadsList button').filter({hasText:'HR people'}).first().click();await page.locator('#jobLeadsHRResults').getByText('Employment: Oct 2026 to Present',{exact:true}).waitFor();
  await page.locator('#tabLinkedinSourcer').click();await page.locator('#peopleCandidatesTab').click();await page.locator('#peopleCandidatesRows tr').first().waitFor();

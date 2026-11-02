@@ -1792,12 +1792,14 @@
 /* Job ads: one filter row and a compact table (v24.6.543). */
 .job-leads-filters { grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); }
 .job-leads-board .job-leads-filters input, .job-leads-board .job-leads-filters select { min-height:36px; padding:7px 9px; }
+.job-leads-ads-table { max-height:none; } /* the page scrolls, not a box inside it */
 .job-leads-ads-table td { font-size:12px; }
 .job-leads-ads-table td:first-child, .job-leads-ads-table th:first-child { min-width:28px; width:28px; }
 .job-leads-ads-table td:nth-child(5) { white-space:normal; }
 .job-leads-ads-table .job-lead-title { background:none; border:0; padding:0; color:var(--accent); font:inherit; font-weight:600; text-align:left; cursor:pointer; }
 .job-leads-ads-table .job-lead-title:hover { text-decoration:underline; }
 .job-leads-ads-table .job-leads-actions { flex-wrap:nowrap; gap:6px; }
+.job-leads-ads-table td > button + button { margin-left:6px; }
 .job-leads-ads-table .job-leads-actions button, .job-leads-ads-table td > button { padding:4px 8px; font-size:11px; min-height:0; }
 /* Shown as "Job ads (12)"; the brackets also keep the accessible name readable. */
 .job-leads-tab-count { font-weight:600; opacity:.75; }

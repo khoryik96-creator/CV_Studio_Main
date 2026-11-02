@@ -590,7 +590,8 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
    assert.equal(d.el('AdsCount').textContent,before,'no background read while Followed clients is hidden');
    const empty=fixture({signed:[2],followed:[client(11,'4242','Example Client')],records:[]});await empty.el('FollowedTab').click();await settle();
    assert.equal(empty.el('AdsCount').textContent,'0');
-   const before0=fixture({signed:[2],followed:[client(11,'4242','Example Client')]});assert.equal(before0.api.clientOf(records[0]),null,'nothing is matched before followed clients load');}
+   const before0=fixture({signed:[2],followed:[client(11,'4242','Example Client')]});assert.equal(before0.api.clientOf(records[0]),undefined,'unknown (not "no client") before followed clients load');
+   assert.equal(before0.el('AdsCount').textContent,'—','no count before saved ads are read');}
 
   // Review fixes: attribution by pulled client, then the most specific name.
   {const rec=(id,company,patch={})=>({id:id.padStart(32,'0'),url:'https://www.linkedin.com/jobs/view/'+id,company,role:'Role '+id,status:'new',folder:'',date_posted:'',created_at:'2026-10-01T00:00:00Z',deleted:false,...patch});

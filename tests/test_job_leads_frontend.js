@@ -284,8 +284,11 @@ const root = path.resolve(__dirname, '..');
    await el('FiltersReset').click();el('Search').value='second client';el('Search').handlers.input();assert.deepEqual(titles(),['Mid role'],'search includes the client name');
    el('Search').value='nothing like this';el('Search').handlers.input();assert.match(el('List').children[0].children[0].textContent,/No matching ads/);
    await el('FiltersReset').click();assert.equal(el('AdsTabCount').textContent,'3');
-   // Followed clients opens its ads here: one client, or every client ad.
+   // Followed clients opens its ads here: one client, or every client ad,
+   // with only the client filter applied.
+   el('Search').value='no such ad';el('Search').handlers.input();choose('PostedFilter','7');choose('Filter','won');
    await window.cvStudioJobLeads.showClientAds(12);assert.equal(el('ClientFilter').value,'12');assert.deepEqual(titles(),['Mid role']);
+   assert.deepEqual([el('Search').value,el('PostedFilter').value,el('Filter').value,el('FolderFilter').value],['','','','*'],'other filters are cleared');
    await window.cvStudioJobLeads.showClientAds(99);assert.equal(el('ClientFilter').value,'!any');
    await window.cvStudioJobLeads.showClientAds();assert.equal(el('ClientFilter').value,'!any');assert.deepEqual(titles(),['Zeta role','Mid role']);
    // The manual form opens only when it is used.
@@ -299,6 +302,12 @@ const root = path.resolve(__dirname, '..');
      ad(2,{hr:{company_id:'41',people:[person('https://www.linkedin.com/in/fictional-hr')]}}),ad(3,{hr:{company_id:'42',people:[person('https://www.linkedin.com/in/fictional-hr')]}}),
      ad(4,{deleted:true,hr:{company_id:'43',people:[person('https://www.linkedin.com/in/other-hr')]}})];
    await el('Refresh').click();assert.equal(document.getElementById('peopleHRTabCount').textContent,'2','case, trailing slash and repeat ads count once; Trash is left out');
+   // An ad with saved HR people opens the HR people tab filtered to its company.
+   await el('FiltersReset').click();let shownHR=null;window.cvStudioPeople={showHR:id=>{shownHR=id;}};
+   const hrCell=el('List').children.find(tr=>tr.children[2].children[0].textContent==='Role 1').children[9];
+   assert.deepEqual(hrCell.children.map(child=>child.textContent),['HR people (2)','View']);
+   await hrCell.children[1].click();assert.equal(shownHR,'41');assert.match(hrCell.children[1]['aria-label'],/View HR people for Company 1/);
+   assert.match(el('List').children[0].children[2].children[0]['aria-label'],/^Preview .+ at Company \d$/,'the title says what it does');
    records=[];await el('Refresh').click();assert.match(el('List').children[0].children[0].textContent,/No saved ads yet/);assert.equal(el('AdsTabCount').textContent,'0');}
   console.log('Job Leads: capture binding/isolation, save/edit/search, duplicate/draft protection, paste-link autofill, optional manual contact/status/date preservation, failure, CSV and HTML safety passed');
 })().catch(error=>{console.error(error);process.exitCode=1});
