@@ -362,6 +362,12 @@
     decorateDate,
     appBusy(value){appBusy=value;if(initialized)controls('HR');},
     hideHR(){el('HRPanel').hidden=true;el('HRTab').setAttribute('aria-pressed','false');},
+    // Followed clients opens HR people for one company (its LinkedIn number).
+    async showHR(companyId){
+      el('HRTab').click();
+      await refresh('HR');
+      if(companyId && [...el('HRCompany').options].some(option=>option.value===companyId)){el('HRCompany').value=companyId;boards.HR.page=0;draw('HR');}
+    },
     sourcerChanged(){if(!el('CandidatesPanel').hidden)void refresh('Candidates');}
   };
   for(const kind of ['HR','Candidates']) {

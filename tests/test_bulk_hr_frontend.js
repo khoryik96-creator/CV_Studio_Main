@@ -78,5 +78,14 @@ if(require.main===module)(async()=>{
   const trash=bulkFixture();trash.state.records[1].deleted=true;await trash.init();trash.select();await trash.start();assert.equal(trash.state.starts.length,2,'only selected live saved ads are scanned');
   const large=bulkFixture(),template=large.state.records[0];large.state.records=Array.from({length:41},(_,i)=>({...structuredClone(template),id:(i+1).toString(16).padStart(32,'0'),url:'https://www.linkedin.com/jobs/view/'+(1111111000+i)}));
   await large.init();large.select();await large.el('Next').click();large.select();await large.start();assert.equal(large.state.starts.length,0);assert.match(large.el('BulkHRMessage').textContent,/40 ads/,'bulk work has a bounded run size across page selections');
-  console.log('Bulk HR: shared saved settings, serial ownership/cleanup, progress, independent saves, Stop, pagehide, per-ad errors, stale writes, disconnects and drafts passed');
+  // Followed clients scans its own selection with its own settings and progress panel.
+  const followed=bulkFixture({preferences:new Map([[preference,JSON.stringify({countryMode:'specific',country:'Malaysia',pages:10})]])});await followed.init();
+  assert.equal(followed.el('ClientsHRPages').value,'10');assert.match(followed.el('ClientsHRKeywords').value,/talent acquisition/);
+  assert.equal(await followed.jobLeads().scanClientAds(['1'.repeat(32),'3'.repeat(32)]),true);
+  assert.deepEqual(followed.state.starts.map(a=>a.max_pages),[10,10]);assert.equal(followed.requests.filter(r=>r.action==='save_hr').length,2);
+  assert.equal(followed.el('ClientsHRBar').value,2);assert.match(followed.el('ClientsHRMessage').textContent,/finished/i);assert.equal(followed.el('ClientsHRResults').children.length,2);
+  assert.equal(followed.el('BulkHRResults').children.length,0,'the Job ads queue panel is untouched');assert.equal(followed.el('BulkHRMessage').textContent,'');
+  const tooMany=bulkFixture(),one=tooMany.state.records[0];tooMany.state.records=Array.from({length:41},(_,i)=>({...structuredClone(one),id:(i+1).toString(16).padStart(32,'0'),url:'https://www.linkedin.com/jobs/view/2'+String(i).padStart(9,'0')}));
+  await tooMany.init();assert.equal(await tooMany.jobLeads().scanClientAds(tooMany.state.records.map(r=>r.id)),false);assert.match(tooMany.el('ClientsHRMessage').textContent,/40 ads/);assert.equal(tooMany.state.starts.length,0);
+  console.log('Bulk HR: Followed clients queue panel, shared saved settings, serial ownership/cleanup, progress, independent saves, Stop, pagehide, per-ad errors, stale writes, disconnects and drafts passed');
 })().catch(error=>{console.error(error);process.exitCode=1});

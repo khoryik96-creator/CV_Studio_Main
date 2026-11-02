@@ -721,7 +721,7 @@
   function bulkHRControls() {
     for (const name of ['CountryMode','Country','Pages','Keywords']) el('BulkHR'+name).disabled=busy;
     el('BulkHRStart').disabled=busy || !rows.some(row=>picked.has(row.id) && !row.deleted);
-    el('BulkHRStop').disabled=!bulkHR?.running || hrStopped;
+    el('BulkHRStop').disabled=!bulkHR?.running || bulkHR.ui!==jobAdsHRUI || hrStopped;
     let resume=false;
     try { resume=bulkHRPlan(rows.filter(row=>picked.has(row.id) && !row.deleted),hrSettings('BulkHR')).resume; } catch {}
     el('BulkHRStart').textContent=resume?'Resume unfinished ads':'Scan selected ads';
@@ -749,34 +749,38 @@
     if (!hrRunning) return;
     hrStopped=true;el('HRMessage').textContent='Stopping after the current read…';
     if(hrCapture)rpc('jobReadCancel',{operation_id:hrCapture}).catch(()=>{});
-    if (bulkHR?.running) el('BulkHRMessage').textContent='Stopping after the current read. Completed ads are already saved; remaining ads will not start.';
+    if (bulkHR?.running) bulkHR.ui.part('Message').textContent='Stopping after the current read. Completed ads are already saved; remaining ads will not start.';
     discoveryControls();
   }
   function bulkHRSummary() {
-    el('BulkHRBar').value=bulkHR.completed;
-    el('BulkHRSummary').textContent=`${bulkHR.completed} of ${bulkHR.items.length} ads processed · ${bulkHR.saved} saved · ${bulkHR.failed} failed`+(bulkHR.cancelled ? ` · ${bulkHR.cancelled} stopped` : '');
+    bulkHR.ui.part('Bar').value=bulkHR.completed;
+    bulkHR.ui.part('Summary').textContent=`${bulkHR.completed} of ${bulkHR.items.length} ads processed · ${bulkHR.saved} saved · ${bulkHR.failed} failed`+(bulkHR.cancelled ? ` · ${bulkHR.cancelled} stopped` : '');
   }
-  async function startBulkHR() {
-    const selection=rows.filter(row=>picked.has(row.id) && !row.deleted).map(row=>({...row}));
-    if (busy || !selection.length) return;
-    chooseGuide('BulkHR');guideTried=true;
+  // The Job ads queue UI. Followed clients passes its own panel (same parts,
+  // another id prefix) so one scanner serves both views.
+  const jobAdsHRUI={prefix:'BulkHR',part:name=>el('BulkHR'+name),guide:true};
+  async function startBulkHR(ids=null,ui=jobAdsHRUI) {
+    const chosen=ids ? new Set(ids) : picked;
+    const selection=rows.filter(row=>chosen.has(row.id) && !row.deleted).map(row=>({...row}));
+    if (busy || !selection.length) return false;
+    if (ui.guide) { chooseGuide('BulkHR');guideTried=true; }
     let settings;
     try {
-      if (selection.length>40) { guideIssue='SelectPage'; throw Error('Select up to 40 ads for one HR scan. You can run the next group afterward.'); }
-      settings=hrSettings('BulkHR');
+      if (selection.length>40) { if (ui.guide) guideIssue='SelectPage'; throw Error('Select up to 40 ads for one HR scan. You can run the next group afterward.'); }
+      settings=hrSettings(ui.prefix);
     } catch(error) {
-      el('BulkHRProgress').hidden=false;el('BulkHRBar').hidden=true;el('BulkHRSummary').textContent='';el('BulkHRResults').replaceChildren();el('BulkHRMessage').textContent=error.message;nextGuide(true);return;
+      ui.part('Progress').hidden=false;ui.part('Bar').hidden=true;ui.part('Summary').textContent='';ui.part('Results').replaceChildren();ui.part('Message').textContent=error.message;if (ui.guide) nextGuide(true);return false;
     }
-    rememberHRPreferences('BulkHR');
+    rememberHRPreferences(ui.prefix);
     const plan=bulkHRPlan(selection,settings);
     const activity=beginScanActivity();
-    hrStopped=false;hrRunning=true;bulkHR={running:true,settings,completed:0,saved:0,failed:0,cancelled:0,items:[]};
-    el('BulkHRResults').replaceChildren();el('BulkHRProgress').hidden=false;el('BulkHRBar').hidden=false;
-    el('BulkHRBar').max=selection.length;
+    hrStopped=false;hrRunning=true;bulkHR={running:true,ui,settings,completed:0,saved:0,failed:0,cancelled:0,items:[]};
+    ui.part('Results').replaceChildren();ui.part('Progress').hidden=false;ui.part('Bar').hidden=false;
+    ui.part('Bar').max=selection.length;
     for (const entry of plan.items) {
       const {row,saved,priority}=entry,title=row.company+' — '+row.role,item=node('li',title+(saved?' · Previously saved':' · Waiting'));item.dataset.state=saved?'saved':'waiting';
       if(saved){bulkHR.completed++;bulkHR.saved++;}
-      bulkHR.items.push({row,title,node:item,priority});el('BulkHRResults').appendChild(item);
+      bulkHR.items.push({row,title,node:item,priority});ui.part('Results').appendChild(item);
     }
     bulkHRSummary();rememberBulkHR();lock(true);
     let stoppedReason='';
@@ -787,7 +791,7 @@
         item.node.dataset.state='running';item.node.textContent=item.title+' · Scanning…';
         rememberBulkHR();
         const notify=message=>{
-          el('BulkHRMessage').textContent=`Ad ${bulkHR.completed+1} of ${selection.length} · ${item.title} · ${message}`;
+          ui.part('Message').textContent=`Ad ${bulkHR.completed+1} of ${selection.length} · ${item.title} · ${message}`;
           if (savedJob(previewUrl)?.id===row.id) el('HRMessage').textContent=message;
         };
         const showPeople=people=>{if (savedJob(previewUrl)?.id===row.id) hrPeople(people);};
@@ -808,9 +812,17 @@
       const remaining=bulkHR.items.length-bulkHR.completed;
       for (const item of bulkHR.items) if (item.node.dataset.state==='waiting') item.node.textContent=item.title+' · Not started';
       rememberBulkHR();
-      el('BulkHRMessage').textContent=(hrStopped || stoppedReason ? 'Queue stopped. ' : 'Queue finished. ')+`${bulkHR.saved} ads saved, ${bulkHR.failed} failed${bulkHR.cancelled ? ', '+bulkHR.cancelled+' stopped' : ''}${remaining ? ', '+remaining+' not started' : ''}. `+(stoppedReason || 'Completed results are saved with each ad.');
+      ui.part('Message').textContent=(hrStopped || stoppedReason ? 'Queue stopped. ' : 'Queue finished. ')+`${bulkHR.saved} ads saved, ${bulkHR.failed} failed${bulkHR.cancelled ? ', '+bulkHR.cancelled+' stopped' : ''}${remaining ? ', '+remaining+' not started' : ''}. `+(stoppedReason || 'Completed results are saved with each ad.');
       bulkHRSummary();lock(false);finishScanActivity(activity,bulkHR.failed>0 || !!stoppedReason);
     }
+    return true;
+  }
+  // Followed clients: scan these saved ads with its own settings and progress
+  // panel. The latest saved ads are read first so revisions are current.
+  async function scanClientAds(ids) {
+    if (busy || hrRunning) return false;
+    await load();
+    return startBulkHR(ids,{prefix:'ClientsHR',part:name=>el('ClientsHR'+name),guide:false});
   }
   function rememberJobs(snapshot) {
     for (const row of window.cvStudioJobSearch.rows(snapshot)) {
@@ -1057,9 +1069,10 @@
     ready = true;
     el('HRStart').addEventListener('click',startHR);
     el('HRStop').addEventListener('click',stopHR);
-    el('BulkHRStart').addEventListener('click',startBulkHR);el('BulkHRStop').addEventListener('click',stopHR);
+    el('BulkHRStart').addEventListener('click',()=>startBulkHR());el('BulkHRStop').addEventListener('click',stopHR);
     setHRPreferenceControls('BulkHR',preferredHR || {countryMode:'',country:'',pages:3});
     el('BulkHRKeywords').value=hrDefaultKeywords;el('BulkHRProgress').hidden=true;
+    if (el('ClientsHRPages')) { setHRPreferenceControls('ClientsHR',preferredHR || {countryMode:'',country:'',pages:3});el('ClientsHRKeywords').value=hrDefaultKeywords; }
     el('HRCountryMode').addEventListener('change',()=>{ el('HRCountry').hidden=el('HRCountryLabel').hidden=!el('HRCountryMode').value; rememberHRPreferences(); chooseGuide('HR'); });
     el('HRCountry').addEventListener('input',()=>{rememberHRPreferences();chooseGuide('HR');});
     el('HRPages').addEventListener('change',()=>{rememberHRPreferences();chooseGuide('HR');});
@@ -1231,6 +1244,6 @@
     const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = name; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-  window.cvStudioJobLeads={refresh:load,lock:value=>lock(value),isBusy:()=>busy,employment:hrEmploymentLabel,statusLabels:Object.freeze({...labels}),rpc,activityStart:beginScanActivity,activityEnd:finishScanActivity};
+  window.cvStudioJobLeads={refresh:load,lock:value=>lock(value),isBusy:()=>busy,scanClientAds,stopHR,hrRunning:()=>hrRunning,employment:hrEmploymentLabel,statusLabels:Object.freeze({...labels}),rpc,activityStart:beginScanActivity,activityEnd:finishScanActivity};
   document.addEventListener('DOMContentLoaded', () => { if (new URLSearchParams(location.search).get('module') === 'jobleads') switchTab('jobleads'); });
 })();

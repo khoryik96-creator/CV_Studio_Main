@@ -7,7 +7,32 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current checkpoint: v24.6.539 client pulls follow company Jobs-page redirects (local, unmerged)**
+**Current checkpoint: v24.6.540 Job ads actions for Followed clients' saved ads (local, unmerged)**
+on `claude/job-leads-signed-clients`, from merged539 PR284 / `ee2ae86`. The owner asked for the same
+actions as Job ads on Followed clients' saved ads, with HR people and unlocked
+emails flowing to the HR people and Unlocked contacts tabs.
+- Saved client job ads has a row selection (page / all shown), plus:
+  - Move to folder, New folder, Delete folder (the folder filter must be a
+    specific folder) and Delete (Trash), using the existing `/job-leads`
+    move_folder/create_folder/delete_folder/trash actions with id+revision;
+  - Find HR people for the selection;
+  - per-ad "View" (when HR people were found).
+  Both lists, this one and Job ads, re-read after a change.
+- Find HR people reuses Job ads' scanner: `startBulkHR(ids, ui)` takes a UI
+  part getter (`jobAdsHRUI` default; `scanClientAds(ids)` uses the
+  `jobLeadsClientsHR*` panel and settings, with `hrSettings('ClientsHR')`). The
+  40-ad cap, resume checkpoint, Stop and save-as-each-finishes are unchanged.
+  `cvStudioJobLeads.scanClientAds/stopHR/hrRunning` are exposed. The
+  `BulkHRStart` click is wrapped so the event is not taken as ids.
+- HR results are saved on the ads, so they appear in HR people; unlocking
+  there feeds Unlocked contacts. View calls `cvStudioPeople.showHR(companyId)`,
+  which opens HR people filtered to that company.
+- The owner asked for less text: the Signed/Followed clients intro paragraphs,
+  the Pull/Open explainer (now button tooltips), the dashboard description and
+  the search placeholder are removed, and status messages are shortened.
+- No backend, route, schema or companion change.
+
+**Previous checkpoint: v24.6.539 client pulls follow company Jobs-page redirects (merged PR284 / `ee2ae86`)**
 on `claude/job-leads-signed-clients`, from merged538 PR283 / `68bae01`. Owner: DeltaFrontier
 pulled, but 2X and 4FINGERS failed. 4FINGERS failed with "The saved company page
 changed" (it has no jobs), and only the last failure reason was shown.

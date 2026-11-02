@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>CV Studio</title>
 <link rel="icon" type="image/png" href="cv_studio_logo.png?v=24.6.79-ui"/>
-<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.539">
-<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.539"></script>
+<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.540">
+<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.540"></script>
 <script>
 /* CV Studio Doctor — built-in diagnostic recorder.
  * Records JS errors, unhandled rejections, failed/slow network calls and
@@ -254,7 +254,7 @@
 <div class="app">
   <div class="header" style="position:relative;">
     <div>
-      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.539 (Offline) by The 郭 Lab</span></h1>
+      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.540 (Offline) by The 郭 Lab</span></h1>
 
     </div>
     <div class="header-tools">
@@ -929,10 +929,8 @@
     <section class="card people-dashboard job-leads-clients" id="jobLeadsClientsPanel" aria-label="Signed clients" hidden>
       <div class="card-head"><h2>Signed clients</h2><div class="job-leads-actions"><button type="button" class="sec" id="jobLeadsClientsRefresh">Refresh</button></div></div>
       <div class="card-body">
-        <p class="job-leads-muted">Choose which JobAdder statuses mean a signed client, then follow the clients whose LinkedIn job ads you want. Followed clients and their ads are in the Followed clients tab. JobAdder is only read.</p>
         <p id="jobLeadsClientsMessage" role="status" aria-live="polite" class="job-leads-muted"></p>
         <details id="jobLeadsClientsSetup" class="job-leads-clients-box"><summary>Signed client statuses <span id="jobLeadsClientsSetupSummary" class="job-leads-muted"></span></summary>
-          <p class="job-leads-muted">Tick the JobAdder company statuses that mean a client has signed terms with you.</p>
           <div id="jobLeadsClientsStatuses" class="job-leads-clients-statuses"></div>
           <div class="job-leads-actions"><button type="button" class="sec" id="jobLeadsClientsStatusesLoad">Reload statuses</button><button type="button" class="primary" id="jobLeadsClientsStatusesSave" disabled>Save statuses</button></div>
         </details>
@@ -956,11 +954,10 @@
         <p id="jobLeadsClientsFollowedMessage" role="status" aria-live="polite" class="job-leads-muted"></p>
         <div class="job-leads-actions"><h3 class="job-leads-clients-heading">Clients</h3><button type="button" class="sec" id="jobLeadsClientsRefreshFollowed">Refresh from JobAdder</button></div>
         <div class="people-table"><table><thead><tr><th>Pull</th><th>Client</th><th>LinkedIn company</th><th>Ads in Job ads</th><th>Last pulled</th><th>Actions</th></tr></thead><tbody id="jobLeadsClientsFollowed"></tbody></table></div>
-        <p id="jobLeadsClientsFollowedEmpty" class="job-leads-muted">You are not following any clients yet. Open Signed clients, find a client and click Follow.</p>
-        <div class="job-leads-actions job-leads-clients-pull"><label for="jobLeadsClientsPages">Pages per client</label><select id="jobLeadsClientsPages"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="5">5</option></select><button type="button" class="primary" id="jobLeadsClientsPull" disabled>Pull into CV Studio</button><button type="button" class="sec" id="jobLeadsClientsOpenLinkedIn" disabled>Open on LinkedIn</button><button type="button" class="sec" id="jobLeadsClientsStop" disabled>Stop</button><button type="button" class="sec" id="jobLeadsClientsUntick" disabled>Untick all</button><span id="jobLeadsClientsTicked" class="job-leads-muted"></span></div>
-        <p class="job-leads-muted"><strong>Pull into CV Studio</strong> lists every ad of the ticked clients below, so you can tick ads and save them here. <strong>Open on LinkedIn</strong> opens one LinkedIn job search for the ticked clients; choose ads there with each ad&rsquo;s Add to CV Studio button.</p>
+        <p id="jobLeadsClientsFollowedEmpty" class="job-leads-muted">No followed clients yet. Follow clients in Signed clients.</p>
+        <div class="job-leads-actions job-leads-clients-pull"><label for="jobLeadsClientsPages">Pages per client</label><select id="jobLeadsClientsPages"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="5">5</option></select><button type="button" class="primary" id="jobLeadsClientsPull" disabled title="List the ticked clients' LinkedIn ads here to review and save">Pull into CV Studio</button><button type="button" class="sec" id="jobLeadsClientsOpenLinkedIn" disabled title="Open one LinkedIn search for the ticked clients and add ads there">Open on LinkedIn</button><button type="button" class="sec" id="jobLeadsClientsStop" disabled>Stop</button><button type="button" class="sec" id="jobLeadsClientsUntick" disabled>Untick all</button><span id="jobLeadsClientsTicked" class="job-leads-muted"></span></div>
         <p id="jobLeadsClientsProgress" role="status" aria-live="polite" class="job-leads-muted"></p>
-        <p id="jobLeadsClientsLinkedInReady" class="job-leads-muted" hidden><a id="jobLeadsClientsLinkedInLink" target="_blank" rel="noopener noreferrer">Open the LinkedIn search</a></p>
+        <p id="jobLeadsClientsLinkedInReady" class="job-leads-muted" hidden><a id="jobLeadsClientsLinkedInLink" target="_blank" rel="noopener noreferrer">Open LinkedIn search</a></p>
         <section id="jobLeadsClientsReview" class="job-leads-clients-box" aria-label="Pulled client job ads" hidden>
           <h3>Pulled ads to review <span id="jobLeadsClientsFoundCount">0</span></h3>
           <div class="job-leads-actions"><label class="job-leads-pick"><input type="checkbox" id="jobLeadsClientsSelectNew">Select new ads on this page</label><button type="button" class="sec" id="jobLeadsClientsSelectAll">Select all new ads</button><button type="button" class="sec" id="jobLeadsClientsSelectNone">Clear selection</button><label for="jobLeadsClientsFolder">Save to folder</label><select id="jobLeadsClientsFolder"><option value="">Unfiled</option></select><button type="button" class="primary" id="jobLeadsClientsAdd" disabled>Save selected to Job ads</button><button type="button" class="sec" id="jobLeadsClientsClear">Clear list</button><span id="jobLeadsClientsPicked" class="job-leads-muted"></span></div>
@@ -969,7 +966,6 @@
         </section>
         <section id="jobLeadsClientsAds" class="job-leads-clients-box" aria-label="Saved client job ads">
           <h3>Saved client job ads <span id="jobLeadsClientsAdsCount">0</span></h3>
-          <p class="job-leads-muted">Ads in Job ads whose company matches a followed client, including ads you added from LinkedIn. Edit them in Job ads.</p>
           <div class="job-leads-clients-tiles" id="jobLeadsClientsAdsTiles"></div>
           <div class="job-leads-clients-filters job-leads-clients-ads-filters" role="group" aria-label="Filter and sort saved client ads">
             <label>Client<select id="jobLeadsClientsAdsClient"><option value="">All clients</option></select></label>
@@ -977,10 +973,29 @@
             <label>Folder<select id="jobLeadsClientsAdsFolder"><option value="">All folders</option></select></label>
             <label>Posted<select id="jobLeadsClientsAdsPosted"><option value="">Any time</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option></select></label>
             <label>Sort<select id="jobLeadsClientsAdsSort"><option value="posted_desc">Newest posted</option><option value="posted_asc">Oldest posted</option><option value="saved_desc">Newest saved</option><option value="saved_asc">Oldest saved</option><option value="role_asc">Job title A–Z</option><option value="company_asc">Company A–Z</option><option value="client_asc">Client A–Z</option></select></label>
-            <label>Search<input type="search" id="jobLeadsClientsAdsQuery" maxlength="200" placeholder="Title, company or location"></label>
+            <label>Search<input type="search" id="jobLeadsClientsAdsQuery" maxlength="200"></label>
             <div><button type="button" class="sec" id="jobLeadsClientsAdsReset">Reset</button></div>
           </div>
-          <div class="people-table"><table><thead><tr><th>Posted</th><th>Job title</th><th>Company</th><th>Client</th><th>Location</th><th>Status</th><th>Folder</th><th>Saved</th><th>HR scan</th></tr></thead><tbody id="jobLeadsClientsAdsRows"></tbody></table></div>
+          <div class="job-leads-folder-editor" id="jobLeadsClientsAdsFolderEditor" hidden><label for="jobLeadsClientsAdsFolderName">Folder name</label><input id="jobLeadsClientsAdsFolderName" maxlength="80"><div class="job-leads-actions"><button type="button" class="sec" id="jobLeadsClientsAdsFolderCreate">Create</button><button type="button" class="sec" id="jobLeadsClientsAdsFolderCancel">Cancel</button></div></div>
+          <div class="job-leads-actions job-leads-clients-ads-tools"><label class="job-leads-pick"><input type="checkbox" id="jobLeadsClientsAdsSelectPage">Select ads on this page</label><button type="button" class="sec" id="jobLeadsClientsAdsSelectAll">Select all shown</button><button type="button" class="sec" id="jobLeadsClientsAdsFolderNew">New folder</button><button type="button" class="sec" id="jobLeadsClientsAdsFolderDelete" disabled title="Choose a folder in the Folder filter first">Delete folder</button></div>
+          <div class="job-leads-actions job-leads-clients-ads-tools" id="jobLeadsClientsAdsSelection" hidden><strong id="jobLeadsClientsAdsSelected">0 selected</strong><label for="jobLeadsClientsAdsMoveFolder">Move to</label><select id="jobLeadsClientsAdsMoveFolder"><option value="">Unfiled</option></select><button type="button" class="sec" id="jobLeadsClientsAdsMove">Move selected</button><button type="button" class="sec job-lead-delete" id="jobLeadsClientsAdsTrash">Delete selected</button><button type="button" class="sec" id="jobLeadsClientsAdsSelectNone">Clear selection</button></div>
+          <section class="job-leads-bulk-hr" id="jobLeadsClientsHR" hidden aria-labelledby="jobLeadsClientsHRTitle">
+            <div class="job-leads-bulk-heading"><h3 id="jobLeadsClientsHRTitle">Find HR people</h3><button type="button" class="primary" id="jobLeadsClientsHRStart" disabled>Scan selected ads</button></div>
+            <div class="job-leads-pair">
+              <div><label for="jobLeadsClientsHRCountryMode">Country</label><div class="job-leads-country-control"><select id="jobLeadsClientsHRCountryMode"><option value="">Any country</option><option value="specific">Country</option></select><label class="job-leads-sr" for="jobLeadsClientsHRCountry" id="jobLeadsClientsHRCountryLabel" hidden>Country name</label><input id="jobLeadsClientsHRCountry" maxlength="100" hidden></div></div>
+              <div><label for="jobLeadsClientsHRPages">Pages per ad</label><select id="jobLeadsClientsHRPages"><option value="1">1</option><option value="3" selected>3</option><option value="5">5</option><option value="10">10</option><option value="15">15</option></select></div>
+            </div>
+            <details><summary>HR title keywords</summary><label for="jobLeadsClientsHRKeywords">Match any of these titles or keywords</label><textarea id="jobLeadsClientsHRKeywords" rows="3" maxlength="600"></textarea></details>
+            <p class="job-leads-muted">Up to 40 ads · Results appear in HR people</p>
+          </section>
+          <section class="job-leads-bulk-progress" id="jobLeadsClientsHRProgress" hidden aria-labelledby="jobLeadsClientsHRProgressTitle">
+            <div class="job-leads-actions"><h3 id="jobLeadsClientsHRProgressTitle">HR scan progress</h3><button type="button" class="sec" id="jobLeadsClientsHRStop" disabled>Stop</button></div>
+            <p id="jobLeadsClientsHRSummary" class="job-leads-muted" aria-live="polite"></p>
+            <progress id="jobLeadsClientsHRBar" max="1" value="0" aria-label="Selected ads processed"></progress>
+            <p id="jobLeadsClientsHRMessage" role="status" aria-live="polite"></p>
+            <ol id="jobLeadsClientsHRResults" aria-label="HR scan status for each ad"></ol>
+          </section>
+          <div class="people-table"><table><thead><tr><th>Select</th><th>Posted</th><th>Job title</th><th>Company</th><th>Client</th><th>Location</th><th>Status</th><th>Folder</th><th>Saved</th><th>HR people</th></tr></thead><tbody id="jobLeadsClientsAdsRows"></tbody></table></div>
           <p id="jobLeadsClientsAdsEmpty" class="job-leads-muted">No saved ads from followed clients yet.</p>
           <div class="job-leads-actions job-leads-pagination"><span id="jobLeadsClientsAdsPage" class="job-leads-muted"></span><button type="button" class="sec" id="jobLeadsClientsAdsPrevious" disabled>Previous</button><button type="button" class="sec" id="jobLeadsClientsAdsNext" disabled>Next</button></div>
         </section>
@@ -2712,42 +2727,42 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
-<script src="/vendor/cvstudio/api-transport.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/page-nav.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/create-profile.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/company-profile.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/appearance.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/docx-export.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/the-owl.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/linkedin-sourcer-core.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/linkedin-sourcer.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/job-leads-jobadder.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/job-leads-apollo.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/people-dashboards.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/job-search-walk.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/job-leads-clients.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/job-leads.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/email-verifier.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/settings.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/tab-status.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/cv-format.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/locks.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/ppc.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/batch-format.js?v=v24.6.539"></script>
+<script src="/vendor/cvstudio/api-transport.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/page-nav.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/create-profile.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/company-profile.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/appearance.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/docx-export.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/the-owl.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/linkedin-sourcer-core.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/linkedin-sourcer.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/job-leads-jobadder.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/job-leads-apollo.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/people-dashboards.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/job-search-walk.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/job-leads-clients.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/job-leads.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/email-verifier.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/settings.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/tab-status.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/cv-format.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/locks.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/ppc.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/batch-format.js?v=v24.6.540"></script>
 <script>
 
 document.addEventListener('DOMContentLoaded', initPageNavPin);
@@ -2765,9 +2780,9 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 
 </script>
-<script src="/vendor/cvstudio/input-file.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/stats.js?v=v24.6.539"></script>
-<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.539"></script>
+<script src="/vendor/cvstudio/input-file.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/stats.js?v=v24.6.540"></script>
+<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.540"></script>
 <script>
 try { updateSummaryLockUI(); } catch(e) {}
 try { updateCvScoringLockUI(); } catch(e) {}
