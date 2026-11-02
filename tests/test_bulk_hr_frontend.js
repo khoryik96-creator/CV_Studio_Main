@@ -103,6 +103,10 @@ if(require.main===module)(async()=>{
   const copied=saves.find(r=>r.id==='2'.repeat(32));assert.equal(copied.search.company,sameCo.state.records[1].company);assert.equal(copied.search.people.length,1);
   assert(sameCo.el('BulkHRResults').children.some(n=>/copied from .* \(same company, no extra scan\)/.test(n.textContent)));
   assert.match(sameCo.el('BulkHRSummary').textContent,/3 of 3 ads processed · 3 saved/);
+  // A same-named ad whose earlier scan found another LinkedIn company is scanned on its own.
+  const otherCo=bulkFixture();otherCo.state.records[1].company=otherCo.state.records[0].company;otherCo.state.records[1].hr={company_id:'99999999',company_url:'',people:[]};
+  await otherCo.init();otherCo.select();await otherCo.start();
+  assert.equal(otherCo.state.starts.length,3,'a different company identity is never copied');
   const early=bulkFixture();await early.init();const pending=early.jobLeads().scanClientAds(['1'.repeat(32)]);early.jobLeads().stopHR();
   assert.equal(await pending,false);assert.equal(early.state.starts.length,0,'Stop while saved ads reload means nothing is scanned');
   assert.equal(early.requests.filter(r=>r.action==='save_hr').length,0);assert.match(early.el('ClientsHRMessage').textContent,/Stopped before the scan started/);

@@ -8,15 +8,19 @@
   // in this browser's time zone; date_posted itself is never guessed.
   function relativePosted(value) {
     const words = compact(value).toLowerCase();
-    let days = null;
+    let days = null, hours = 0;
     const match = words.match(/\b(\d{1,3})\s+(minute|hour|day|week|month|year)s?\s+ago\b/);
     if (match) {
       const count = Number(match[1]);
-      days = {minute:0, hour:0, day:count, week:count * 7, month:count * 30, year:count * 365}[match[2]];
+      // Minutes and hours count back from now, so "5 hours ago" just after
+      // midnight is yesterday; longer units are whole calendar days.
+      if (match[2] === 'minute') { days = 0; hours = count / 60; }
+      else if (match[2] === 'hour') { days = 0; hours = count; }
+      else days = {day:count, week:count * 7, month:count * 30, year:count * 365}[match[2]];
     } else if (/\b(?:just now|moments? ago)\b/.test(words)) days = 0;
     else if (/\byesterday\b/.test(words)) days = 1;
     if (days === null || days > 3650) return '';
-    const date = new Date(); date.setHours(12, 0, 0, 0); date.setDate(date.getDate() - days);
+    const date = new Date(Date.now() - hours * 3600000); date.setHours(12, 0, 0, 0); date.setDate(date.getDate() - days);
     return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
   }
   function jobSummary(card) {

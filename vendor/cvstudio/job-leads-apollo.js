@@ -29,7 +29,13 @@
   // Connection messages show beside the Settings card; the Job ads note keeps
   // unlock results next to the HR cards.
   function setup(value) {el('SetupMessage').textContent=value;}
+  const settingsHint='Connect Apollo in Settings → Integrations & Data to unlock emails.';
   function openSettings() {
+    // Opened after the click finishes, so Settings' "click outside closes"
+    // listener does not close it again for the same click.
+    setTimeout(showSettings,0);
+  }
+  function showSettings() {
     const panel=document.getElementById('settingsPanel');
     if(panel && panel.style.display!=='block' && typeof window.toggleSettings==='function') window.toggleSettings();
     if(typeof window.showSettingsTab==='function') window.showSettingsTab('integrations');
@@ -177,7 +183,7 @@
     try {
       const data=await api({action:'disconnect'});
       account={...account,connected:false,connecting:false,name:''};cache={};el('Continue').hidden=true;
-      setup(data.warning || 'Apollo disconnected. Saved job ads and HR profiles were kept.');message('');
+      setup(data.warning || 'Apollo disconnected. Saved job ads and HR profiles were kept.');message(settingsHint);
     } catch(error) {setup(error.message);}
     finally {working=false;controls();}
   }
@@ -222,7 +228,7 @@
       try {
         account=await api();
         if(!account.available) setup('Your CV Studio owner needs to finish the one-time Apollo sign-in setup.');
-        if(!account.connected && !account.connecting) message('Connect Apollo in Settings → Integrations & Data to unlock emails.');
+        if(!account.connected && !account.connecting) message(settingsHint);
         await refreshEmails(row,sequence);
         if(account.connecting) void poll(++pollGeneration);
       } catch(error) {setup(error.message);message(error.message);}

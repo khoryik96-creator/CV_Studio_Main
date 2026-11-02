@@ -26,6 +26,15 @@ on `claude/job-leads-signed-clients`, from merged540 PR285 / `42cec2e`.
   `jobLeadsApolloSetupMessage`, and unlock results stay in
   `jobLeadsApolloMessage` beside the HR cards. HR people "Connect Apollo" now
   opens the Settings card (`cvStudioApollo.openSettings`).
+- Review fixes (same release):
+  - Connect Apollo opens Settings after the click, so the click-outside close
+    no longer shuts it.
+  - A copied HR save updates the open edit form's revision and redraws the
+    preview.
+  - Same-named ads whose saved `hr.company_id` differs are scanned separately.
+  - "N hours ago" counts back from now, so it is right across midnight.
+  - After Disconnect, Job ads shows where to reconnect.
+  - The bulk message shows copy progress.
 - Pre-existing, environment-only failures on master too:
   `test_cv_startup_stale_registration` (another-installation case) and
   `test_legacy_doc_requires_and_uses_verified_antiword`.

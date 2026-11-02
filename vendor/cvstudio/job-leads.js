@@ -211,9 +211,10 @@
     if (className) value.className = className;
     return value;
   }
-  const estimateOf = row => typeof row?.date_posted_estimate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(row.date_posted_estimate) ? row.date_posted_estimate : '';
+  const DAY = /^\d{4}-\d{2}-\d{2}$/;
+  const estimateOf = row => typeof row?.date_posted_estimate === 'string' && DAY.test(row.date_posted_estimate) ? row.date_posted_estimate : '';
   function postedLabel(value) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return 'Not available';
+    if (!DAY.test(value || '')) return 'Not available';
     const date = new Date(value + 'T00:00:00Z');
     return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat('en-GB', {day:'numeric', month:'short', year:'numeric', timeZone:'UTC'}).format(date) : 'Not available';
   }
@@ -797,16 +798,23 @@
     // once in a run and its saved result is copied to its other selected ads.
     const companyKey=row=>String(row.company || '').trim().toLocaleLowerCase();
     const scannedCompanies=new Map();
+    // A same-named ad whose earlier scan found a different LinkedIn company
+    // is scanned on its own.
+    const sameIdentity=(row,search)=>!row.hr?.company_id || !search.company_id || String(row.hr.company_id)===String(search.company_id);
     try {
       for (const item of bulkHR.items.filter(item=>item.node.dataset.state!=='saved').sort((a,b)=>a.priority-b.priority)) {
         if (hrStopped) break;
-        const row=item.row,shared=scannedCompanies.get(companyKey(row));
+        const row=item.row,known=scannedCompanies.get(companyKey(row)),shared=known && sameIdentity(row,known.search)?known:null;
         if (shared) {
           item.node.dataset.state='running';item.node.textContent=item.title+' · Copying from the same company…';
+          ui.part('Message').textContent=`Ad ${bulkHR.completed+1} of ${selection.length} · ${item.title} · Copying HR people from ${shared.title}…`;
           try {
             const response=await api({action:'save_hr',id:row.id,revision:row.revision,search:{...shared.search,company:row.company}});
             const index=rows.findIndex(value=>value.id===row.id);if(index>=0)rows[index]=response.record;
+            // Same bookkeeping as a scanned save: the open form keeps the new revision.
+            if (editing?.id === row.id) editing={...editing,revision:response.record.revision,hr:response.record.hr};
             item.node.dataset.state='saved';item.node.textContent=item.title+` · ${shared.matches} HR matches copied from ${shared.title} (same company, no extra scan)`;
+            if (savedJob(previewUrl)?.id===row.id) drawPreview(); // the new revision redraws its saved HR
             bulkHR.saved++;
           } catch(error) {
             item.node.dataset.state='failed';item.node.textContent=item.title+' · '+error.message+' Previous saved results and ad details were kept.';bulkHR.failed++;

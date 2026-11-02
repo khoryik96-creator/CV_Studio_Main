@@ -79,6 +79,11 @@ scope.innerText='0 jobs';assert.equal(reader.readJobSearch().empty,true,'modern 
 scope.innerText='100 jobs';state.cards=[duplicate];assert.equal(reader.readJobSearch().jobs.length,1,'modern cards are read after loading');
 let captured=reader.readJob(url);assert.equal(captured.role,'Finance Manager');assert.equal(captured.company,'Example Finance');assert.equal(captured.location,'Penang');
 assert.equal(captured.date_posted,'');assert.match(captured.date_posted_estimate,/^\d{4}-\d{2}-\d{2}$/,'the ad header age gives an estimated posted date');
+{const RealDate=Date,now=new RealDate(2026,2,10,0,30).getTime();
+ context.Date=class extends RealDate{constructor(...a){super(...(a.length?a:[now]))} static now(){return now}};
+ locationP.innerText='Penang · 5 hours ago · 20 applicants';assert.equal(reader.readJob(url).date_posted_estimate,'2026-03-09','hours count back from now, across midnight');
+ locationP.innerText='Penang · 2 days ago · 20 applicants';assert.equal(reader.readJob(url).date_posted_estimate,'2026-03-08');
+ context.Date=RealDate;locationP.innerText='Penang · 2 weeks ago · 20 applicants';}
 state.plainTitle=true;location.pathname='/jobs/view/1234567890/';location.href=url+'/';location.search='';
 captured=reader.readJob(url);assert.equal(captured.role,'Finance Manager','standalone plain title is not replaced by the Hybrid job-type link');
 assert.equal(captured.company_url,'https://www.linkedin.com/company/example/');assert.equal(captured.location,'Penang');
