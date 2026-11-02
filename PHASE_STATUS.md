@@ -4,6 +4,18 @@
 
 ## Release state
 
+- v24.6.532 is local/unmerged on `codex/v24.6.532-sourcer-search-controls`,
+  stacked on531/4894c43 from merged530/PR276. Adds exact-user Boolean + separate
+  AI prompt/country inputs and moves candidate shortlist beside the name.
+  Prompt-only, Boolean-only and both work; planning is skipped where unnecessary.
+  Country remains native People filtering; incompatible existing-search reuse
+  is rejected before spending, and review context keeps both inputs/evidence.
+  124 routes and existing stores remain. Final2345 Python/4 skips/8418 subtests,
+  85 JS,24 smoke assertions, actual isolated Chrome five-mode/query/call-count/
+  star/mobile checks and Windows/static/consistency pass. No live AI/paid or
+  owner installation/data/extension/hosted change. See532 QA;531/532 unmerged,
+  PR257 held.
+
 - v24.6.531 is local/unmerged on `codex/v24.6.531-companion-update-readiness`
   from merged530/73061bc/PR276. Fixes loading recovery: independent client/status
   display, bounded safe reads, recoverable initial failure, protected stale replies;

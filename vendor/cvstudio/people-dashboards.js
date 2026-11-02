@@ -190,13 +190,15 @@
     for(const row of all.slice(b.page*40,(b.page+1)*40)) {
       const tr=document.createElement('tr'),name=document.createElement('td');name.append(link(row.name,row.url));
       if(kind==='Candidates') {
-        const pick=text('td','','people-pick'),box=document.createElement('input'),star=text('button',row.shortlisted?'\u2605':'\u2606','sec');
+        const pick=text('td','','people-pick'),box=document.createElement('input'),star=text('button',row.shortlisted?'\u2605':'\u2606','sec people-shortlist');
         box.type='checkbox';box.checked=selection.has(row.key);box.dataset.organise='';box.setAttribute('aria-label','Select '+row.name);
         box.addEventListener('change',()=>{if(box.checked)selection.add(row.key);else selection.delete(row.key);controls('Candidates');});
         star.type='button';star.dataset.organise=row.deleted?'trashed':'';star.setAttribute('aria-pressed',String(row.shortlisted===true));
         star.setAttribute('aria-label',(row.shortlisted?'Remove from shortlist: ':'Shortlist ')+row.name);star.title=row.shortlisted?'Shortlisted':'Shortlist';
         star.addEventListener('click',()=>shortlist(row));
-        pick.append(box,star);tr.append(pick);
+        pick.append(box);tr.append(pick);
+        const title=text('div','','people-name-line');title.append(name.children[0],star);
+        name.className='people-candidate-name';name.replaceChildren(title);
         name.append(text('small',(row.folder || 'Unfiled')+(row.deleted?' \u00b7 In Trash':'')));
       }
       tr.append(name);

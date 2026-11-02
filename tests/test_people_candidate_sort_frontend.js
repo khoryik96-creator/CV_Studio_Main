@@ -39,7 +39,7 @@ function fixture(stored=new Map(),rows=ROWS){
     setTimeout,crypto:{randomUUID:()=>'00000000-0000-4000-8000-000000000000'}});
   vm.runInContext(source,context);
   // The first column holds the select box and shortlist star; the name follows.
-  const names=()=>el('CandidatesRows').children.map(tr=>tr.children[1].children[0].textContent);
+  const names=()=>el('CandidatesRows').children.map(tr=>tr.children[1].children[0].children[0].textContent);
   const choose=async(name,value)=>{el('Candidates'+name).value=value;await el('Candidates'+name).dispatch('change');};
   return {el,posts,names,choose,stored};
 }

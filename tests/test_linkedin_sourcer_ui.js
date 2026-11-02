@@ -12,7 +12,7 @@ const previous={name:'Previous candidate',url:'https://www.linkedin.com/in/previ
 function fixture(reuse=true){
   const ids=new Map(),events={},calls=[],requests=[];
   const el=name=>{if(!ids.has(name))ids.set(name,new Element());return ids.get(name)};
-  el('Mode').value='auto';el('Pages').value='10';el('Calls').value='35';el('OpenSearch').checked=reuse;
+  el('Mode').value='auto';el('CountryMode').value='auto';el('Pages').value='10';el('Calls').value='35';el('OpenSearch').checked=reuse;
   const state={tabs:[people],connected:true,hold:false,held:null,failStart:false,page:1,opened:0,missingReads:0,readCount:0,folders:[]},folderRequests=[];
   let serial=0;const deadlines=new Map();let deadlineId=100000;
   const run={id:'a'.repeat(32),calls:0,max_calls:35,tokens:0,usage_complete:true,stopped:false};
@@ -55,10 +55,11 @@ function fixture(reuse=true){
       if(body?.action==='candidate_folder_create'){folderRequests.push(body);const folder=body.name.trim();if(!state.folders.includes(folder))state.folders.push(folder);return {ok:true,json:async()=>({folder})};}
       if(body)requests.push(body);
       if(!body)return {ok:true,json:async()=>({configured:true,run:state.resumeRun?{...run}:null})};
+      if(body.action==='start')state.activeOptions=body;
       if(body.action==='start'&&state.failStart)return {ok:false,json:async()=>({error:'Synthetic start rejected'})};
       if(body.action==='plan'&&state.holdPlan)await new Promise(resolve=>state.planReply=resolve);
       if(body.action==='stop')run.stopped=true;
-      return {ok:true,json:async()=>({run:{...run},...(body.action==='plan'?{plan:{query:'SAP',country:state.planCountry||''}}:{}),...(body.action==='review'?{candidates:[candidate]}:{})})};}
+      return {ok:true,json:async()=>({run:{...run},...(body.action==='plan'?{plan:{query:state.activeOptions?.boolean_query||'SAP',country:state.activeOptions?.country_mode==='specific'?state.activeOptions.country:state.activeOptions?.country_mode==='any'?'':state.planCountry||''}}:{}),...(body.action==='review'?{candidates:[candidate]}:{})})};}
   });
   for(const file of ['linkedin-sourcer-core.js','linkedin-sourcer.js']){vm.runInContext(fs.readFileSync(path.join(__dirname,'../vendor/cvstudio',file),'utf8'),context);context.CVLinkedinCore=window.CVLinkedinCore;}
   return {el,state,calls,requests,folderRequests,deadlines,copy:window.copyLinkedinCompanionFolder,reload:window.reloadLinkedinCompanion,init:async()=>{await window.initLinkedinSourcer();await new Promise(resolve=>setTimeout(resolve,0))},
@@ -85,6 +86,20 @@ function fixture(reuse=true){
   const statusDeadline=[...silent.deadlines.values()].find(timer=>timer.ms===6000);assert(statusDeadline);statusDeadline.fn();await checking;
   assert.equal(silentButton.disabled,false);assert.match(silentNote.textContent,/companion.*reply|reply.*companion/i);
   silent.state.statusReply();await new Promise(resolve=>setImmediate(resolve));assert(!silent.calls.some(call=>call.action==='reloadCompanion'),'a late status reply cannot apply an update');
+  for(const brief of ['', 'Use visible evidence for current location and automation experience.']){
+    const manual=fixture(false);await manual.init();manual.el('Boolean').value='Oracle AND (Ansible OR Chef)';manual.el('Brief').value=brief;
+    manual.el('CountryMode').value='specific';manual.el('CountryName').value='Malaysia';await manual.el('CountryMode').change();manual.el('Consent').checked=true;
+    await manual.start();const sent=manual.requests.find(body=>body.action==='start');assert(sent,'a Boolean-only or combined search can start');
+    assert.equal(sent.boolean_query,'Oracle AND (Ansible OR Chef)');assert.equal(sent.brief,brief);assert.equal(sent.country,'Malaysia');
+    assert(manual.calls.some(call=>call.action==='navigate' && new URL(call.args.url).searchParams.get('keywords')==='Oracle AND (Ansible OR Chef)'));
+    assert.equal(manual.calls.find(call=>call.action==='read' && call.args.method==='setCountry').args.values[0],'Malaysia');
+  }
+  const complex=fixture(false);await complex.init();complex.el('Boolean').value='A AND B AND C AND D AND E';complex.el('Consent').checked=true;
+  await complex.start();assert.equal(complex.requests.length,0);assert.equal(complex.state.opened,0);assert.match(complex.el('Status').textContent,/Boolean/);assert.equal(complex.el('Boolean')['aria-invalid'],'true');
+  const noCountry=fixture(false);await noCountry.init();noCountry.el('Boolean').value='Oracle';noCountry.el('Consent').checked=true;noCountry.el('CountryMode').value='specific';await noCountry.el('CountryMode').change();
+  assert.equal(noCountry.el('CountryName').hidden,false);await noCountry.start();assert.equal(noCountry.requests.length,0);assert.equal(noCountry.el('CountryName')['aria-invalid'],'true');
+  const reuseBoolean=fixture(true);await reuseBoolean.init();reuseBoolean.el('Boolean').value='Oracle';reuseBoolean.el('Consent').checked=true;await reuseBoolean.start();
+  assert.equal(reuseBoolean.requests.length,0);assert.match(reuseBoolean.el('Status').textContent,/open search/i);
   const folders=fixture();folders.state.folders=['Database'];await folders.init();
   folders.el('Folder').value='Database';await folders.el('Folder').change();
   folders.el('Brief').value='Oracle database and Ansible automation';folders.el('Consent').checked=true;folders.state.holdPlan=true;

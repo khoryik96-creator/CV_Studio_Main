@@ -1,5 +1,45 @@
 # LinkedIn Sourcer module
 
+## Boolean, review prompt and country (v24.6.532)
+
+Search accepts either input, or both:
+- **Prompt only:** the existing AI planner creates role/skill keywords and the
+  review uses the complete prompt. The normal-search query budget still applies.
+- **Boolean only:** use the exact supplied query; it becomes the review brief.
+  With no prompt there is no country to infer, so From prompt means no geography
+  filter. Choose country applies the separate native Locations filter.
+- **Both:** the Boolean controls search; the complete prompt guides assessment.
+  The reviewer receives the exact Boolean separately, never as substituted prose.
+
+Country offers **From prompt**, **Any country** or **Choose country** with a name.
+The choice is remembered in this tab's session, not a credential/settings migration.
+An explicit selection overrides prompt geography for search filtering only; all
+review criteria remain. Native automatic selection is for People search. Recruiter
+still requires its own Locations controls. Review open search preserves LinkedIn
+filters, so incompatible Boolean/country controls must be cleared or that option
+turned off; they are never silently ignored.
+
+User Booleans are trimmed at their outer edges and validated for length (1000),
+straight quotes, balanced groups and operator placement. They are not narrowed or
+rephrased. Normal People search retains the three-operator budget and rejects an
+overbudget user Boolean before planning. Recruiter keeps its existing query budget.
+Generated prompt-only plans may still narrow optional positive alternatives under
+the existing rules. Both generated and explicitly chosen geography guards remain.
+
+Boolean-only and Boolean+explicit/Any country return an unpaid local plan. A
+Boolean+prompt with From prompt makes one criteria/country inference call, whose
+schema has no query field; the supplied Boolean remains final. Profile review
+still requires the existing explicit DeepSeek consent/key. Usage counts actual
+provider attempts; there is no fake paid usage or automatic retry. All criteria
+are pinned to the ephemeral run and forwarded to reviews. Current location or a
+search filter is not proof of citizenship/work eligibility: the reviewer is told
+to use explicit statements and otherwise list unknowns, never infer from names,
+languages or employers. No live model acceptance is claimed by fixture testing.
+
+The shortlist star is now beside the candidate name in a flex row. Checkbox
+selection stays in its own column; star semantics, revisions, Trash refusal,
+filters and exports remain. Candidate storage and route URLs are unchanged.
+
 ## Companion update recovery (v24.6.531)
 
 Apply update shows Reading CV Studio update, Connecting to companion and

@@ -47,6 +47,23 @@ function csv(rows) {
   return '\ufeff' + records.map(row => row.map(cell).join(',')).join('\r\n');
 }
 
+function booleanQueryError(value, mode='standard') {
+  if (typeof value!=='string' || value.length>1000) return 'Use a Boolean search of up to 1000 characters.';
+  const query=value.trim();if(!query)return '';
+  if (/[\x00-\x1f\x7f“”]/.test(query) || (query.match(/"/g)||[]).length%2) return 'Use a one-line Boolean search with straight double quotes.';
+  let depth=0,operand=true,operators=0;
+  const message='Check Boolean brackets, quotes and AND/OR/NOT operators.';
+  for(const token of query.match(/"[^"]*"|[()]|[^\s()"]+/g)||[]) {
+    if(token==='('){depth++;operand=true;}
+    else if(token===')'){if(operand || !depth)return message;depth--;operand=false;}
+    else if(token==='AND' || token==='OR'){if(operand)return message;operators++;operand=true;}
+    else if(token==='NOT'){operators++;operand=true;}
+    else {if(token.startsWith('"') && !token.slice(1,-1).trim())return message;operand=false;}
+  }
+  if(operand || depth)return message;
+  return mode==='standard' && operators>3 ? 'Your Boolean has too many operators for normal LinkedIn search. Use at most three, or choose Recruiter. Your Boolean was not changed.' : '';
+}
+
 class Agent {
   constructor({api, browser, update, signal, wait = pause}) {
     Object.assign(this, {api, browser, update, signal, wait});
@@ -174,5 +191,5 @@ class Agent {
   }
 }
 
-window.CVLinkedinCore = {Agent, csv, profileURL, isSearchURL};
+window.CVLinkedinCore = {Agent, csv, profileURL, isSearchURL, booleanQueryError};
 })();

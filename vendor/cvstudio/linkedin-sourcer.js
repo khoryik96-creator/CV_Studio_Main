@@ -7,7 +7,7 @@
   let folderBusy = false, folderChoice = '', companionUpdating = false;
   const folderPreference = 'cvstudio_linkedin_sourcer_folder';
   try { const value=sessionStorage.getItem(folderPreference);if(typeof value==='string' && value.length<=80 && !/[\x00-\x1f]/.test(value))folderChoice=value; } catch {}
-  const guideNames = ['Brief','Consent','Pages','Calls','Source','Refresh','Start','Stop','SetupGuide','FolderName','FolderCreate'];
+  const guideNames = ['Brief','Consent','Pages','Calls','Source','Refresh','Start','Stop','SetupGuide','FolderName','FolderCreate','Boolean','CountryMode','CountryName','OpenSearch'];
   let guideIssue = '', guideTried = false, guideNotice = '';
   function guide(name = '', invalid = false, focus = false) {
     for (const key of guideNames) {
@@ -22,18 +22,19 @@
   function nextGuide() {
     if(companionUpdating){guide();return;}
     let name = !busy && run && !run.stopped ? 'Stop' : guideIssue;
-    if (!name) name = el('Brief').value.trim().length < 5 ? 'Brief' : !el('Consent').checked ? 'Consent' :
+    if (!name) name = el('Brief').value.trim().length < 5 && !el('Boolean').value.trim() ? 'Brief' : !el('Consent').checked ? 'Consent' :
+      el('CountryMode').value==='specific' && !el('CountryName').value.trim() ? 'CountryName' :
       !Number.isInteger(Number(el('Pages').value)) || Number(el('Pages').value) < 1 || Number(el('Pages').value) > 15 ? 'Pages' :
       !Number.isInteger(Number(el('Calls').value)) || Number(el('Calls').value) < 1 || Number(el('Calls').value) > 80 ? 'Calls' :
       !freshPeopleSearch() && !el('Source').value ? 'Refresh' : 'Start';
-    guide(name, guideTried && ['Brief','Consent','Pages','Calls'].includes(name));
+    guide(name, guideTried && ['Brief','Boolean','CountryName','Consent','Pages','Calls'].includes(name));
   }
   function invalidGuide(name) { guideNotice = el('Status').textContent; guide(name,true,true); }
   function tell(value) { el('Status').textContent = value; }
   function controls() {
     el('Start').disabled = busy || folderBusy || companionUpdating; el('Stop').disabled = !busy && (!run || run.stopped);
     el('Export').disabled = !results.length; el('Clear').disabled = busy;
-    for (const name of ['Brief', 'Mode', 'Pages', 'Calls', 'Source', 'OpenSearch', 'Consent', 'Refresh']) el(name).disabled = busy;
+    for (const name of ['Brief', 'Boolean', 'CountryMode', 'CountryName', 'Mode', 'Pages', 'Calls', 'Source', 'OpenSearch', 'Consent', 'Refresh']) el(name).disabled = busy;
     for (const name of ['Folder','FolderNew','FolderName','FolderCreate','FolderCancel']) el(name).disabled = busy || folderBusy;
     el('Limits').textContent = `Up to ${el('Pages').value} pages · ${el('Calls').value} API requests.`;
     nextGuide();
@@ -232,8 +233,8 @@
       else if (tabs.length) el('Source').value = String(tabs[0].id);
       const source = tabs.find(tab => String(tab.id) === el('Source').value);
       guideIssue = '';
-      el('Connection').textContent = freshPeopleSearch() ? 'Connected · a new People search will open each time you start.' : source ? 'Connected · ' + source.title + (el('OpenSearch').checked ? ' · keeping its filters' : ' · new keywords from your brief') : 'Companion connected. Open a LinkedIn People or Recruiter search, then start. It will be detected automatically.';
-      el('ConnectionHint').textContent = freshPeopleSearch() ? 'Include a country in your brief to select it automatically in LinkedIn Locations. A new People search opens each time.' : el('OpenSearch').checked ? 'Your brief ranks the current results. Set location and other filters on LinkedIn first.' : 'New People searches select the country from your brief in Locations. For Recruiter, set its filters first and review the search already open.';
+      el('Connection').textContent = freshPeopleSearch() ? 'Connected · a new People search will open each time you start.' : source ? 'Connected · ' + source.title + (el('OpenSearch').checked ? ' · keeping its filters' : ' · new search keywords') : 'Companion connected. Open a LinkedIn People or Recruiter search, then start. It will be detected automatically.';
+      el('ConnectionHint').textContent = freshPeopleSearch() ? 'Country uses LinkedIn Locations. Your chosen country overrides prompt geography.' : el('OpenSearch').checked ? 'Your brief ranks the current results. Set location and other filters on LinkedIn first.' : 'For Recruiter, set Locations there. Use People search for automatic country selection.';
       if (!source && !freshPeopleSearch()) el('Options').open = true;
       nextGuide();
       return source;
@@ -246,6 +247,17 @@
     if (busy) return;
     try { await discoverTabs(); } catch { /* Connection guidance is shown beside the brief. */ }
   };
+  function countryControls() {el('CountryName').hidden=el('CountryMode').value!=='specific';}
+  try {
+    const saved=JSON.parse(sessionStorage.getItem('cvstudio_linkedin_sourcer_country') || 'null');
+    if(saved && ['auto','any','specific'].includes(saved.mode) && typeof saved.country==='string' && saved.country.length<=100 && !/[\x00-\x1f\x7f]/.test(saved.country)) {
+      el('CountryMode').value=saved.mode;el('CountryName').value=saved.country;
+    }
+  } catch {}
+  countryControls();
+  for(const name of ['CountryMode','CountryName'])el(name).addEventListener(name==='CountryMode'?'change':'input',()=>{
+    countryControls();try{sessionStorage.setItem('cvstudio_linkedin_sourcer_country',JSON.stringify({mode:el('CountryMode').value || 'auto',country:el('CountryName').value.slice(0,100)}));}catch{}
+  });
   for (const name of ['Mode','OpenSearch']) el(name).addEventListener('change',window.refreshLinkedinSourcerTabs);
   for (const name of ['Pages','Calls']) el(name).addEventListener('input',controls);
   el('Folder').addEventListener('change',()=>{rememberFolder();folderNotice('');});
@@ -255,7 +267,7 @@
   el('FolderCreate').addEventListener('click',createFolder);
   el('FolderCancel').addEventListener('click',()=>{el('FolderEditor').hidden=true;el('FolderName').value='';nextGuide();});
   document.getElementById('peopleSourcerSearchTab')?.addEventListener('click',()=>void refreshFolders());
-  for (const name of ['Brief','Consent','Pages','Calls','Mode','OpenSearch','Source']) el(name).addEventListener(['Consent','Mode','OpenSearch','Source'].includes(name) ? 'change' : 'input', () => {
+  for (const name of ['Brief','Boolean','CountryMode','CountryName','Consent','Pages','Calls','Mode','OpenSearch','Source']) el(name).addEventListener(['Consent','Mode','CountryMode','OpenSearch','Source'].includes(name) ? 'change' : 'input', () => {
     if (guideNotice && el('Status').textContent === guideNotice) tell('');
     guideNotice = ''; guideIssue = ''; guideTried = false; nextGuide();
   });
@@ -276,9 +288,15 @@
     if (busy || folderBusy || companionUpdating) return;
     guideIssue = ''; guideTried = true;
     const options = {brief: el('Brief').value.trim(), mode: el('Mode').value, max_pages: Number(el('Pages').value),
-      max_calls: Number(el('Calls').value), confirm_paid: el('Consent').checked, use_open_search: el('OpenSearch').checked, folder:el('Folder').value};
+      max_calls: Number(el('Calls').value), confirm_paid: el('Consent').checked, use_open_search: el('OpenSearch').checked, folder:el('Folder').value,
+      boolean_query:el('Boolean').value.trim(),country_mode:el('CountryMode').value || 'auto',country:el('CountryMode').value==='specific'?el('CountryName').value.trim():''};
     if (!options.confirm_paid) { tell('Tick “Use DeepSeek for this search” below your brief, then start.'); invalidGuide('Consent'); return; }
-    if (options.brief.length < 5) { tell('Describe the role, location and skills you need.'); invalidGuide('Brief'); return; }
+    if (options.brief.length < 5 && !options.boolean_query) { tell('Enter a prompt, a Boolean search, or both.'); invalidGuide('Brief'); return; }
+    const booleanError=CVLinkedinCore.booleanQueryError(options.boolean_query,options.mode==='auto'?'standard':options.mode);
+    if(booleanError){tell(booleanError);invalidGuide('Boolean');return;}
+    if(options.country_mode==='specific' && !options.country){tell('Enter the country name.');invalidGuide('CountryName');return;}
+    if(options.use_open_search && (options.boolean_query || options.country_mode!=='auto')){tell('Turn off Review open search in Search options to apply your Boolean or country selection.');invalidGuide('OpenSearch');return;}
+    if(!['auto','standard'].includes(options.mode) && options.country_mode==='specific'){tell('Automatic country filters use LinkedIn People search. In Recruiter set Locations there and review the open search.');invalidGuide('Mode');return;}
     if (!Number.isInteger(options.max_pages) || options.max_pages < 1 || options.max_pages > 15 || !Number.isInteger(options.max_calls) || options.max_calls < 1 || options.max_calls > 80) { el('Options').open = true; tell('Choose 1–15 pages and 1–80 API requests in Search options.'); invalidGuide(!Number.isInteger(options.max_pages) || options.max_pages < 1 || options.max_pages > 15 ? 'Pages' : 'Calls'); return; }
     busy = true; abort = new AbortController(); browserRun = ''; draw();
     const activity = markTabRunning('linkedinsourcer');

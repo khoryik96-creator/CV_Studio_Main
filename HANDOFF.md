@@ -7,7 +7,33 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current checkpoint: v24.6.531 loading/update recovery (local, unmerged)**
+**Current checkpoint: v24.6.532 Sourcer search controls (local, unmerged)**
+on `codex/v24.6.532-sourcer-search-controls`, stacked on531/`4894c43` from
+merged530 PR276 / `73061bc`. Owner requests a neater shortlist position and
+Boolean/country controls supporting prompt-only, Boolean-only or both.
+- Candidate shortlist star now sits in a flex name line beside the profile
+  link, including long names; the Select column contains only its checkbox.
+- Search has Boolean, AI review prompt, Country (From prompt / Any / Choose)
+  and existing destination-folder controls. Country selection survives this
+  tab's reload. No new placeholders or compulsory prompt for a Boolean search.
+- User Boolean is validated, never shortened or regenerated. Standard searches
+  keep the existing three-operator cap; errors precede browser/paid work.
+  Prompt-only retains AI keyword planning. Boolean+explicit/Any country and
+  Boolean-only skip paid planning, but profile review still needs consent/key.
+  Boolean+prompt+From prompt spends one criteria/country call with no query field
+  in its schema; the exact supplied query remains final. Both review inputs
+  reach the reviewer independently, with evidence/unknown requirements intact.
+- Automatic country selection remains a native People-search feature. Existing
+  search reuse cannot silently ignore manual controls; incompatible choices
+  are flagged before spending. No country filter is proof of citizenship or
+  work eligibility; reviewer instructions require explicit evidence/unknowns.
+Final2345 Python/4 skips/8418 subtests,85 JS,24 source smoke assertions, native
+Chrome five-mode/exact-query/call-count/folder/star/mobile flows and Windows/
+static/consistency gates pass. No live provider/paid call or owner data/install/
+extension/hosted change. Both local531 and532 remain unpublished/unmerged;
+PR257 held. See532 QA. Source CRLF and124 routes/storage contracts retained.
+
+**Previous checkpoint: v24.6.531 loading/update recovery (local, unmerged)**
 on `codex/v24.6.531-companion-update-readiness`, from merged530 PR276 /
 `73061bcc93f7249e67d74e8e192c333c34c99aa6`. Owner reports an update stuck at
 Checking companion and a missing Signed clients status list. Live read-only

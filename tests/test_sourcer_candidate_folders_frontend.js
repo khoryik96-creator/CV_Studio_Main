@@ -85,10 +85,10 @@ function fixture(){
     setTimeout,crypto:{randomUUID:()=>'00000000-0000-4000-8000-000000000000'}});
   vm.runInContext(source,context);
   const rows=()=>el('CandidatesRows').children;
-  const names=()=>rows().map(tr=>tr.children[1].children[0].textContent);
-  const row=name=>rows().find(tr=>tr.children[1].children[0].textContent===name);
+  const names=()=>rows().map(tr=>tr.children[1].children[0].children[0].textContent);
+  const row=name=>rows().find(tr=>tr.children[1].children[0].children[0].textContent===name);
   const select=async name=>{const box=row(name).children[0].children[0];box.checked=!box.checked;await box.dispatch('change');};
-  const star=name=>row(name).children[0].children[1];
+  const star=name=>row(name).children[1].children[0].children[1];
   const choose=async(name,value)=>{el('Candidates'+name).value=value;await el('Candidates'+name).dispatch('change');};
   const labels=name=>el('Candidates'+name).children.map(option=>option.textContent);
   return {el,posts,confirms,server,names,row,select,star,choose,labels,win:window,last:action=>posts.filter(post=>post.body.action===action).at(-1)?.body};
@@ -101,6 +101,7 @@ process.on('exit',()=>{if(!finished){console.error('Candidate folders test did n
   await f.el('CandidatesTab').click();await settle();
   // Trash is hidden until chosen; folders and counts come with the list.
   assert.deepEqual(f.names(),['Demo Gamma','Demo Beta','Demo Alpha']);
+  assert.equal(f.row('Demo Gamma').children[0].children.length,1,'only the selection checkbox occupies the select column');
   assert.deepEqual(f.labels('Folder'),['All folders (3)','Unfiled (2)','Finance (1)','Trash (1)']);
   assert.deepEqual(f.labels('MoveTo'),['Unfiled','Finance']);
   assert.equal(f.row('Demo Gamma').children[1].children[1].textContent,'Finance','the folder shows under the name');
