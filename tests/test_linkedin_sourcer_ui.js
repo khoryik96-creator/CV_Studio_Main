@@ -14,7 +14,7 @@ function fixture(reuse=true){
   const el=name=>{if(!ids.has(name))ids.set(name,new Element());return ids.get(name)};
   el('Mode').value='auto';el('Pages').value='10';el('Calls').value='35';el('OpenSearch').checked=reuse;
   const state={tabs:[people],connected:true,hold:false,held:null,failStart:false,page:1,opened:0,missingReads:0,readCount:0,folders:[]},folderRequests=[];
-  let serial=0;
+  let serial=0;const deadlines=new Map();let deadlineId=100000;
   const run={id:'a'.repeat(32),calls:0,max_calls:35,tokens:0,usage_complete:true,stopped:false};
   const candidate={id:'p0',name:'Sample candidate',url:'https://www.linkedin.com/in/sample',text:'SAP finance experience',score:85,evidence:['SAP finance experience'],unknowns:['Availability']};
   const location={origin:'http://127.0.0.1:5000',search:''};
@@ -24,6 +24,7 @@ function fixture(reuse=true){
     if(!state.connected)return reply(null,'The browser action stopped. Reconnect the companion or check the LinkedIn page.');
     if(message.action==='tabs'){if(state.hold){state.held=()=>reply(state.tabs);return}return reply(state.tabs)}
     if(message.action==='reloadCompanion')return reply(state.reloadResult||{current:true});
+    if(message.action==='jobStatus' && state.holdStatus){state.statusReply=()=>reply({connected:true,companion_update_revision:1});return;}
     if(message.action==='jobStatus')return reply({connected:true,concurrent_scans_revision:state.oldConcurrentCompanion?0:1,profile_browsing_revision:state.oldBrowsingCompanion?0:1,people_results_revision:state.oldResultsCompanion?0:1,people_country_revision:state.oldCountryCompanion?0:1,people_country_ready_revision:state.oldCountryReadyCompanion?0:1,companion_update_revision:state.oldUpdateCompanion?0:1});
     if(message.action==='openPeopleSearch'){
       if(state.oldCompanion)return reply(null,'Unsupported browser action.');
@@ -46,10 +47,10 @@ function fixture(reuse=true){
   const saved=JSON.stringify({run:null,results:[previous]});
   const context=vm.createContext({window,document:{getElementById:id=>el(id.replace(/^liSourcer/,'')),createElement:tag=>new Element(tag)},location,
     sessionStorage:{getItem:()=>saved,setItem:()=>{}},crypto:{randomUUID:()=>String(++serial).padStart(32,'0')},
-    setTimeout:(fn,ms)=>setTimeout(fn,[500,1000,1500,2000].includes(ms)?0:ms),clearTimeout,AbortController,URL,URLSearchParams,Blob,
+    setTimeout:(fn,ms)=>{if(state.manualDeadlines && ms>=6000){const id=++deadlineId;deadlines.set(id,{fn,ms});return id;}return setTimeout(fn,[500,1000,1500,2000].includes(ms)?0:ms)},clearTimeout:id=>{deadlines.delete(id);clearTimeout(id)},AbortController,URL,URLSearchParams,Blob,
     markTabRunning:()=>1,finishTabRun:()=>{},responseHasPaidUsage:()=>false,
     navigator:{clipboard:{writeText:async text=>{if(state.clipboardFail)throw Error('Unavailable');state.copied=text;}}},
-    fetch:async(url,options)=>{if(url==='/linkedin-sourcer?action=companion_setup')return {ok:true,json:async()=>({folder:'Bundled companion folder',version:'24.6.480'})};assert.equal(url,'/linkedin-sourcer');const body=options?.body?JSON.parse(options.body):null;
+    fetch:async(url,options)=>{if(url==='/linkedin-sourcer?action=companion_setup'){state.setupCalls=(state.setupCalls||0)+1;if(state.holdSetup)return new Promise(resolve=>state.setupReply=resolve);return {ok:true,json:async()=>state.holdSetupBody?new Promise(resolve=>state.setupBodyReply=resolve):({folder:'Bundled companion folder',version:'24.6.480'})};}assert.equal(url,'/linkedin-sourcer');const body=options?.body?JSON.parse(options.body):null;
       if(body?.action==='candidate_folders'){folderRequests.push(body);return {ok:true,json:async()=>({folders:[...state.folders]})};}
       if(body?.action==='candidate_folder_create'){folderRequests.push(body);const folder=body.name.trim();if(!state.folders.includes(folder))state.folders.push(folder);return {ok:true,json:async()=>({folder})};}
       if(body)requests.push(body);
@@ -60,10 +61,30 @@ function fixture(reuse=true){
       return {ok:true,json:async()=>({run:{...run},...(body.action==='plan'?{plan:{query:'SAP',country:state.planCountry||''}}:{}),...(body.action==='review'?{candidates:[candidate]}:{})})};}
   });
   for(const file of ['linkedin-sourcer-core.js','linkedin-sourcer.js']){vm.runInContext(fs.readFileSync(path.join(__dirname,'../vendor/cvstudio',file),'utf8'),context);context.CVLinkedinCore=window.CVLinkedinCore;}
-  return {el,state,calls,requests,folderRequests,copy:window.copyLinkedinCompanionFolder,reload:window.reloadLinkedinCompanion,init:async()=>{await window.initLinkedinSourcer();await new Promise(resolve=>setTimeout(resolve,0))},
+  return {el,state,calls,requests,folderRequests,deadlines,copy:window.copyLinkedinCompanionFolder,reload:window.reloadLinkedinCompanion,init:async()=>{await window.initLinkedinSourcer();await new Promise(resolve=>setTimeout(resolve,0))},
     start:()=>window.startLinkedinSourcer(),stop:()=>window.stopLinkedinSourcer()};
 }
 (async()=>{
+  for(const stage of ['holdSetup','holdSetupBody']){
+    const stalled=fixture();stalled.state.manualDeadlines=true;stalled.state[stage]=true;
+    const note=new Element(),button={disabled:false,parentElement:{querySelector:()=>note}};
+    const update=stalled.reload(button);await new Promise(resolve=>setImmediate(resolve));
+    const deadline=[...stalled.deadlines.values()].find(timer=>timer.ms===8000);
+    assert(deadline,'setup has a bounded deadline covering response headers and JSON');deadline.fn();await update;
+    assert.equal(button.disabled,false);assert.match(note.textContent,/CV Studio.*did not|could not.*CV Studio/i);
+    assert.equal(stalled.calls.length,0,'setup timeout sends no extension action');
+    if(stage==='holdSetup')stalled.state.setupReply({ok:true,json:async()=>({folder:'Late folder',version:'24.6.480'})});
+    else stalled.state.setupBodyReply({folder:'Late folder',version:'24.6.480'});
+    await new Promise(resolve=>setImmediate(resolve));assert.equal(stalled.calls.length,0,'late setup completion cannot trigger an update');
+  }
+  const silent=fixture();silent.state.manualDeadlines=true;silent.state.holdStatus=true;
+  const silentNote=new Element(),silentButton={disabled:false,parentElement:{querySelector:()=>silentNote}};
+  const checking=silent.reload(silentButton);await new Promise(resolve=>setImmediate(resolve));
+  const secondNote=new Element();await silent.reload({disabled:false,parentElement:{querySelector:()=>secondNote}});
+  assert.equal(silent.state.setupCalls,1,'update checks are shared across both buttons');
+  const statusDeadline=[...silent.deadlines.values()].find(timer=>timer.ms===6000);assert(statusDeadline);statusDeadline.fn();await checking;
+  assert.equal(silentButton.disabled,false);assert.match(silentNote.textContent,/companion.*reply|reply.*companion/i);
+  silent.state.statusReply();await new Promise(resolve=>setImmediate(resolve));assert(!silent.calls.some(call=>call.action==='reloadCompanion'),'a late status reply cannot apply an update');
   const folders=fixture();folders.state.folders=['Database'];await folders.init();
   folders.el('Folder').value='Database';await folders.el('Folder').change();
   folders.el('Brief').value='Oracle database and Ansible automation';folders.el('Consent').checked=true;folders.state.holdPlan=true;

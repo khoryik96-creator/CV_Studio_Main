@@ -4,7 +4,7 @@
   const hex = () => crypto.randomUUID().replaceAll('-', '');
   const channel = hex(), pending = new Map();
   let agent = null, run = null, abort = null, results = [], browserRun = '', busy = false, runOptions = null, setupSequence = 0;
-  let folderBusy = false, folderChoice = '';
+  let folderBusy = false, folderChoice = '', companionUpdating = false;
   const folderPreference = 'cvstudio_linkedin_sourcer_folder';
   try { const value=sessionStorage.getItem(folderPreference);if(typeof value==='string' && value.length<=80 && !/[\x00-\x1f]/.test(value))folderChoice=value; } catch {}
   const guideNames = ['Brief','Consent','Pages','Calls','Source','Refresh','Start','Stop','SetupGuide','FolderName','FolderCreate'];
@@ -20,6 +20,7 @@
     }
   }
   function nextGuide() {
+    if(companionUpdating){guide();return;}
     let name = !busy && run && !run.stopped ? 'Stop' : guideIssue;
     if (!name) name = el('Brief').value.trim().length < 5 ? 'Brief' : !el('Consent').checked ? 'Consent' :
       !Number.isInteger(Number(el('Pages').value)) || Number(el('Pages').value) < 1 || Number(el('Pages').value) > 15 ? 'Pages' :
@@ -30,7 +31,7 @@
   function invalidGuide(name) { guideNotice = el('Status').textContent; guide(name,true,true); }
   function tell(value) { el('Status').textContent = value; }
   function controls() {
-    el('Start').disabled = busy || folderBusy; el('Stop').disabled = !busy && (!run || run.stopped);
+    el('Start').disabled = busy || folderBusy || companionUpdating; el('Stop').disabled = !busy && (!run || run.stopped);
     el('Export').disabled = !results.length; el('Clear').disabled = busy;
     for (const name of ['Brief', 'Mode', 'Pages', 'Calls', 'Source', 'OpenSearch', 'Consent', 'Refresh']) el(name).disabled = busy;
     for (const name of ['Folder','FolderNew','FolderName','FolderCreate','FolderCancel']) el(name).disabled = busy || folderBusy;
@@ -72,10 +73,20 @@
   }
   const connectionHelp = 'Open this CV Studio page in Chrome or Brave with the companion enabled. It connects automatically. Use Set up companion if needed.';
   async function companionSetup() {
-    const response=await fetch('/linkedin-sourcer?action=companion_setup',{cache:'no-store'});
-    const setup=await response.json();
-    if (!response.ok || typeof setup.folder !== 'string' || !/^\d+\.\d+\.\d+$/.test(setup.version || '')) throw Error('Companion setup could not be read. Update and restart CV Studio.');
-    return setup;
+    const controller=new AbortController();let timer;
+    try {
+      // Bound headers AND JSON; fetch's global deadline ends at the headers.
+      return await Promise.race([
+        (async()=>{
+          const response=await fetch('/linkedin-sourcer?action=companion_setup',{cache:'no-store',signal:controller.signal,timeout:10000});
+          const setup=await response.json();
+          if (!response.ok || typeof setup.folder !== 'string' || !/^\d+\.\d+\.\d+$/.test(setup.version || '')) throw Error('Companion setup could not be read. Update and restart CV Studio.');
+          return setup;
+        })(),
+        new Promise((_,reject)=>{timer=setTimeout(()=>{reject(Error('CV Studio did not return its update details. Run Update & Restart, then try again.'));controller.abort();},8000);})
+      ]);
+    } finally {clearTimeout(timer);}
+
   }
   const companionNote = button => button.parentElement.querySelector('[data-companion-status]');
   window.copyLinkedinCompanionFolder = async function(button) {
@@ -90,21 +101,26 @@
     finally { button.disabled=false; }
   };
   window.reloadLinkedinCompanion = async function(button) {
-    const note=companionNote(button);button.disabled=true;note.textContent='Checking companion…';
+    const note=companionNote(button);
+    if(companionUpdating){note.textContent='A companion update check is already running.';return;}
+    if(busy){note.textContent='Stop the current search before updating the companion.';return;}
+    companionUpdating=true;button.disabled=true;controls();note.textContent='Reading CV Studio update…';
     try {
-      if(busy)throw Error('Stop the current search before updating the companion.');
       const setup=await companionSetup();
-      const status=await rpc('jobStatus');
+      note.textContent='Connecting to companion…';
+      const status=await rpc('jobStatus',{},6000,'The companion did not reply. Refresh this CV Studio tab in Chrome or Brave, then click the companion toolbar icon once. If needed, reload it on the browser Extensions page.');
       if(status?.companion_update_revision!==1)throw Error('Use Set up companion once to replace the old downloaded copy with the CV Studio folder.');
-      const result=await rpc('reloadCompanion',{version:setup.version});
+      if(status.busy || status.other_busy)throw Error('Finish or stop both scans before updating the companion.');
+      note.textContent='Applying companion update…';
+      const result=await rpc('reloadCompanion',{version:setup.version},12000,'The companion update was not confirmed. Refresh CV Studio and LinkedIn, then check the companion version before trying again.');
       note.textContent=result?.current ? 'Your companion is up to date.' : result?.reloading ? 'Companion is reloading. Refresh CV Studio and LinkedIn when ready.' : 'Set up companion once using the CV Studio folder below.';
     } catch(error) { note.textContent=error.message; }
-    finally { button.disabled=false; }
+    finally { companionUpdating=false;button.disabled=false;controls(); }
   };
-  function rpc(action, args = {}, waitMs = 12000) {
+  function rpc(action, args = {}, waitMs = 12000, timeoutMessage = connectionHelp) {
     return new Promise((resolve, reject) => {
       const id = hex();
-      const timer = setTimeout(() => { pending.delete(id); reject(Error(connectionHelp)); }, waitMs);
+      const timer = setTimeout(() => { pending.delete(id); reject(Error(timeoutMessage)); }, waitMs);
       pending.set(id, {resolve, reject, timer});
       window.postMessage({type: 'CVSTUDIO_LINKEDIN_REQUEST', id, channel, scope:'profiles', action, args}, location.origin);
     });
@@ -257,7 +273,7 @@
     } catch (error) { tell(error.message); }
   };
   window.startLinkedinSourcer = async function() {
-    if (busy || folderBusy) return;
+    if (busy || folderBusy || companionUpdating) return;
     guideIssue = ''; guideTried = true;
     const options = {brief: el('Brief').value.trim(), mode: el('Mode').value, max_pages: Number(el('Pages').value),
       max_calls: Number(el('Calls').value), confirm_paid: el('Consent').checked, use_open_search: el('OpenSearch').checked, folder:el('Folder').value};

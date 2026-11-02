@@ -13,9 +13,9 @@ function fixture(){
     scripting:{executeScript:async options=>{if(options.target.documentIds?.[0]!==undefined&&options.target.documentIds[0]!==state.document)throw Error('Stale document');return [{result:state.valid,documentId:state.document}]}},
     runtime:{id:'test-extension',getManifest:()=>({version:state.loaded}),getURL:file=>'chrome-extension://test-extension/'+file,
       reload:()=>state.reloads++,onMessage:{addListener:fn=>hooks.message=fn}}};
-  const fetch=async(url,options)=>{state.fetches.push({url,options});if(state.beforeFetch)await state.beforeFetch();return {ok:true,json:async()=>({manifest_version:3,name:'CV Studio LinkedIn Companion',version:state.disk})}};
+  const fetch=async(url,options)=>{state.fetches.push({url,options});if(state.beforeFetch)await state.beforeFetch();return {ok:true,json:async()=>{if(state.beforeJson)await state.beforeJson();return {manifest_version:3,name:'CV Studio LinkedIn Companion',version:state.disk}}}};
   const identity=require('./linkedin_companion_identity_fixture')(chrome);
-  const boot=()=>vm.runInNewContext(source,{chrome,fetch,URL,console,setTimeout,clearTimeout,crypto:identity.crypto,TextEncoder});boot();
+  const boot=()=>vm.runInNewContext(source,{chrome,fetch,URL,console,AbortController,setTimeout:(fn,ms)=>{if(state.manualDeadline && ms===8000){state.expireManifest=fn;return 'manifest-deadline';}return setTimeout(fn,ms)},clearTimeout:id=>{if(id!=='manifest-deadline')clearTimeout(id)},crypto:identity.crypto,TextEncoder});boot();
   const sender=(id=1)=>({id:chrome.runtime.id,tab:tabs.get(id),frameId:0,documentId:state.document,url:tabs.get(id)?.url});
   const rpc=(action,args={},who=sender(),scope)=>new Promise(resolve=>hooks.message({kind:'sourcer',scope,action,args},who,resolve));
   return {state,tabs,hooks,rpc,sender,session,identity:identity.state,boot};
@@ -103,6 +103,17 @@ const tests=[
       if(kind==='pending')f.tabs.get(1).pendingUrl='http://127.0.0.1:5000/other';
       if(kind==='nonlocal')sender.url='https://example.invalid/';
       assert((await f.rpc('connect',{},sender)).error,kind);assert.equal(f.session.cvstudioLinkedinSessionV1?.connection??null,null,kind);
+    }
+  }],
+  ['stalled manifest headers or JSON release the update reservation without a late reload',async()=>{
+    for(const stage of ['beforeFetch','beforeJson']){
+      const f=fixture();await f.rpc('connect');f.state.manualDeadline=true;let release;
+      f.state[stage]=()=>new Promise(resolve=>release=resolve);
+      const updating=f.rpc('reloadCompanion',{version:f.state.disk});await new Promise(resolve=>setImmediate(resolve));
+      assert.equal(typeof f.state.expireManifest,'function','manifest verification is bounded through its JSON body');
+      f.state.expireManifest();assert.match((await updating).error,/update.*files|files.*update/i);assert.equal(f.state.reloads,0);
+      assert((await f.rpc('begin',{run_id:'a'.repeat(32),source_tab_id:2,max_pages:2,mode:'standard'})).result,'timeout releases both session reservations');
+      release();await new Promise(resolve=>setTimeout(resolve,150));assert.equal(f.state.reloads,0,'late disk read never reloads during the new scan');
     }
   }],
   ['applies only locally installed matching update files',async()=>{

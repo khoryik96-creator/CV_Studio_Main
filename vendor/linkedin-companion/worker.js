@@ -624,8 +624,13 @@ async function handle(message, sender) {
     if (connection.run || jobCapture || owned.size) throw safeError('Finish or stop the current companion action before updating.');
     if (!/^\d+\.\d+\.\d+$/.test(args.version || '')) throw safeError('Refresh CV Studio and try the companion update again.');
     const bound=connection;
-    const response=await fetch(chrome.runtime.getURL('manifest.json'),{cache:'no-store'});
-    const installed=await response.json();
+    const controller=new AbortController();let timer,response,installed;
+    try {
+      ({response,installed}=await Promise.race([
+        (async()=>{const response=await fetch(chrome.runtime.getURL('manifest.json'),{cache:'no-store',signal:controller.signal});return {response,installed:await response.json()};})(),
+        new Promise((_,reject)=>{timer=setTimeout(()=>{reject(safeError('The companion update files did not finish loading. Reload it on the browser Extensions page, then refresh CV Studio.'));controller.abort();},8000);})
+      ]));
+    } finally {clearTimeout(timer);}
     if (!response.ok || installed.manifest_version !== 3 || installed.name !== 'CV Studio LinkedIn Companion' || installed.version !== args.version) throw safeError('Use Set up companion once and select the CV Studio folder. This downloaded copy is not updated with the app.');
     live(bound);
     if (bound.run || jobCapture || owned.size) throw safeError('Finish or stop the current companion action before updating.');

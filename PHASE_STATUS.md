@@ -4,7 +4,16 @@
 
 ## Release state
 
-- v24.6.530 is a local unmerged checkpoint on
+- v24.6.531 is local/unmerged on `codex/v24.6.531-companion-update-readiness`
+  from merged530/73061bc/PR276. Fixes loading recovery: independent client/status
+  display, bounded safe reads, recoverable initial failure, protected stale replies;
+  staged/shared companion update checks and bounded manifest JSON verification
+  release reservations without late reload. App+companion update needed. 85 JS,
+  88 focused Python/8 subtests,24 smoke assertions, actual isolated Chrome and
+  native Windows preflight pass. No provider call, owner write/install, PR/merge
+  or deployment. See531 QA. PR257 remains held.
+
+- v24.6.530 was merged as PR276 / `73061bc` from
   `codex/v24.6.530-client-sourcer-controls`, from merged529/786f40c/PR274.
   Signed clients restores browse results after reload, adds page-scoped
   status/owner/follow filters and sorting, guides missing LinkedIn-ID links,

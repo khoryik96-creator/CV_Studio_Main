@@ -37,11 +37,13 @@ function fixture(options={}){
              {id:'2'.repeat(32),url:'https://www.linkedin.com/jobs/view/901',company:'PT Example Client Tbk',role:'Other saved',deleted:false,hr:{company_url:'https://www.linkedin.com/company/second-client/',company_id:'5151'}}],
     folders:['Clients'],busy:false,locks:[],refreshes:0,apiInfo:null,companion:{connected:true,concurrent_scans_revision:1,job_search:true,job_search_revision:1,job_search_company_revision:1,busy:false},
     pages:{'4242':[[job(1001),job(900),job(1002)],[job(1003)]],'5151':[[job(1002,'Second Client'),job(2001,'Second Client'),{url:'https://evil.test/jobs/view/1',company:'X',role:'Bad'}]]},hold:null,holdBegin:null,...options};
+  const deadlines=new Map();let timerId=100000;
   const reply=data=>({ok:true,json:async()=>({ok:true,...data})});
   const fail=(status,error)=>({ok:false,status,json:async()=>({ok:false,error})});
   const fetch=async(url,init={})=>{
     if(url==='/jobadder/api_info')return {ok:true,json:async()=>state.apiInfo || {connected:true,account_cache_namespace:state.account}};
     if(url==='/job-leads'){
+      if(!init.body && state.holdRecords)return new Promise(resolve=>state.recordsReply=resolve);
       if(!init.body)return reply({records:structuredClone(state.records),folders:[...state.folders]});
       const body=JSON.parse(init.body);leadsCalls.push(body);assert.equal(body.action,'save');
       const duplicate=state.records.find(row=>row.url===body.record.url);
@@ -50,6 +52,7 @@ function fixture(options={}){
     }
     assert.equal(url,'/jobadder/clients','no other route is used');assert.equal(init.method,'POST');
     const body=JSON.parse(init.body);calls.push(body);
+    if(body.action==='overview' && state.holdOverview)return new Promise(resolve=>state.overviewReply=resolve);
     if(state.down)return fail(503,'JobAdder could not be reached to refresh the sign-in. Check the internet connection.');
     if(!['overview','statuses','companies'].includes(body.action) && body.account!==state.account)return fail(409,'The JobAdder account changed.');
     const followed=()=>structuredClone(state.followed);
@@ -89,10 +92,10 @@ function fixture(options={}){
   window.applyJAPublicInfo=info=>{const next=info?.connected?'ja'+info.account_cache_namespace:'';const before=window._jaAccountCacheNamespace;window._jaAccountCacheNamespace=next;state.applied=(state.applied||0)+1;if(before && before!==next)window.clearJobLeadsClientsAccountState();};
   const localStorage={getItem:key=>storage.has(key)?storage.get(key):null,setItem:(key,value)=>storage.set(key,String(value))};
   let serial=0;
-  const context=vm.createContext({window,document,fetch,console,structuredClone,Promise,Set,Map,Array,Number,String,Math,Error,JSON,localStorage,URL,
-    crypto:{randomUUID:()=>'00000000-0000-4000-8000-'+String(++serial).padStart(12,'0')},setTimeout:(fn,ms)=>setTimeout(fn,ms===350?0:ms)});
+  const context=vm.createContext({window,document,fetch,console,structuredClone,Promise,Set,Map,Array,Number,String,Math,Error,JSON,localStorage,URL,AbortController,
+    crypto:{randomUUID:()=>'00000000-0000-4000-8000-'+String(++serial).padStart(12,'0')},setTimeout:(fn,ms)=>{if(state.manualDeadlines && ms>=10000){const id=++timerId;deadlines.set(id,{fn,ms});return id;}return setTimeout(fn,ms===350?0:ms)},clearTimeout:id=>{deadlines.delete(id);clearTimeout(id)}});
   vm.runInContext(walkSource,context);vm.runInContext(source,context);
-  return {el,state,calls,leadsCalls,rpcCalls,begun,ended,storage,window,document,api:window.cvStudioJobLeadsClients,clear:()=>window.clearJobLeadsClientsAccountState(),pagehide:()=>windowEvents.pagehide?.()};
+  return {el,state,calls,deadlines,leadsCalls,rpcCalls,begun,ended,storage,window,document,api:window.cvStudioJobLeadsClients,clear:()=>window.clearJobLeadsClientsAccountState(),pagehide:()=>windowEvents.pagehide?.()};
 }
 const rows=f=>f.el('Followed').children;
 const found=f=>f.el('Found').children;
@@ -103,6 +106,25 @@ let finished=false;
 // A scenario that never settles must fail, not end silently with exit code 0.
 process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed clients test did not finish: a pending step never settled.');process.exitCode=1;}});
 (async()=>{
+  // Saved-ad hydration must not hide a ready account/status reply.
+  {const f=fixture({signed:[2],followed:[client(11,'4242')],holdRecords:true,manualDeadlines:true});
+   const loading=f.el('Tab').click();await settle();
+   assert(f.calls.some(call=>call.action==='statuses'),'company statuses load independently of saved ads');
+   assert.equal(f.el('Statuses').querySelectorAll('input').length,2);
+   assert.equal(f.el('Count').textContent,'1','followed clients display before saved-ad hydration finishes');
+   const deadline=[...f.deadlines.values()].find(timer=>timer.ms===15000);assert(deadline);deadline.fn();await loading;await settle();
+   assert(!f.el('Refresh').disabled);assert.match(f.el('Message').textContent,/saved ads.*could not|Saved ads.*could not/i);assert(f.el('Pull').disabled,'unknown saved ads must not authorize a pull');
+   assert.equal(rows(f).length,1,'a failed ads read does not discard followed clients');
+   f.state.recordsReply({ok:true,json:async()=>({records:[],folders:[]})});await settle();
+   assert.equal(rows(f).length,1,'late completion does not re-enter the load workflow');}
+  {const f=fixture({holdOverview:true,manualDeadlines:true});const loading=f.el('Tab').click();await settle();
+   const deadline=[...f.deadlines.values()].find(timer=>timer.ms===60000);assert(deadline);deadline.fn();await loading;await settle();
+   assert(!f.el('Refresh').disabled && !f.el('StatusesLoad').disabled,'failed startup leaves an explicit recovery action');
+   assert.match(f.el('Message').textContent,/did not finish|timed out/);const calls=f.calls.length;
+   f.state.overviewReply({ok:true,json:async()=>({account:ACCOUNT,signed:[2],followed:[client(11,'4242')]})});await settle();
+   assert.equal(f.calls.length,calls,'late response never starts statuses or another request');assert.equal(rows(f).length,0);
+   f.state.holdOverview=false;await f.el('StatusesLoad').click();await settle();
+   assert.equal(f.el('Statuses').querySelectorAll('input').length,2,'Reload statuses recovers the initial account read');}
   // Pure helpers.
   {const {api}=fixture();
    assert.deepEqual([...api.words('PT Example Client Indonesia Tbk')],['example','client','indonesia']);

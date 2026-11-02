@@ -1,5 +1,18 @@
 # LinkedIn Sourcer module
 
+## Companion update recovery (v24.6.531)
+
+Apply update shows Reading CV Studio update, Connecting to companion and
+Applying companion update separately. Setup headers and JSON have an8-second
+deadline, connection6seconds and apply12seconds. Buttons recover with a specific
+next step, no request is automatically replayed, and late responses cannot
+advance an expired workflow. Both update buttons share one check; Sourcer Start
+waits for it. Copy setup folder shares the bounded setup read. Worker manifest
+headers/body are bounded too; a failed check releases both scan reservations and
+a late file read cannot reload a newly started scan. Existing trust, downloaded-
+copy validation, exact installed-version checks and busy guards remain. Update
+both app and companion; older workers retain their old manifest-read behavior.
+
 ## New-search folders and readiness (v24.6.530)
 
 Search now has **Save to folder** and **New folder**. Folder creation and list
