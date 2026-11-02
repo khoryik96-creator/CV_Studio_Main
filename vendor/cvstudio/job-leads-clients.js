@@ -39,8 +39,13 @@
   }
   const eligible = client => !!linkedinId(client,state.records) || COMPANY_URL.test(client?.linkedin_url || '');
   // A company number the companion already read from the client's page this
-  // session is reused, so the page is not reopened for every pull.
-  const knownId = client => linkedinId(client, state.records) || state.resolvedIds.get(client.company_id) || '';
+  // session is reused, so the page is not reopened for every pull. It is
+  // bound to that exact page: a changed LinkedIn link is read again.
+  const knownId = client => {
+    const cached = state.resolvedIds.get(client.company_id);
+    return linkedinId(client, state.records) || (cached && cached.url === client.linkedin_url ? cached.id : '');
+  };
+  const remember = (client, id) => state.resolvedIds.set(client.company_id, {url:client.linkedin_url, id});
   // One LinkedIn job search for several companies; LinkedIn's company filter
   // takes a comma-separated list of numeric company IDs.
   function linkedinSearch(ids) {
@@ -601,7 +606,7 @@
           check(token);
           if(resolved?.company_url!==client.linkedin_url || typeof resolved?.company_id!=='string' || !/^[0-9]{1,24}$/.test(resolved.company_id))
             throw Error('LinkedIn did not confirm this company. Save its See all jobs search link and try again.');
-          companyId=resolved.company_id;state.resolvedIds.set(client.company_id,companyId);
+          companyId=resolved.company_id;remember(client,companyId);
         } catch(error) {
           try {await app.rpc('jobReadCancel',{operation_id:run},1500);} catch {}
           throw error;
@@ -727,7 +732,7 @@
           check(token);
           if (resolved?.company_url !== client.linkedin_url || typeof resolved?.company_id !== 'string' || !/^[0-9]{1,24}$/.test(resolved.company_id))
             throw Error('LinkedIn did not confirm this company. Save its See all jobs search link and try again.');
-          state.resolvedIds.set(client.company_id, resolved.company_id);
+          remember(client, resolved.company_id);
         } catch (error) {
           try { await app.rpc('jobReadCancel', {operation_id:run}, 1500); } catch {}
           if (state.stopped || token !== generation) throw error;

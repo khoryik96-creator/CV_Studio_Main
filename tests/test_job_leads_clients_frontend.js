@@ -85,7 +85,7 @@ function fixture(options={}){
       if(action==='jobCompanyID'){
         if(state.holdCompany)await new Promise(resolve=>state.releaseCompany=resolve);
         if(state.failCompany)throw Error('Company could not be read.');
-        return {company_url:args.company_url,company_id:'4242'};
+        return {company_url:args.company_url,company_id:state.companyIds?.[args.company_url] || '4242'};
       }
       if(action==='jobReadCancel')return true;
       if(action==='jobSearchBegin'){
@@ -519,6 +519,14 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
    await failing.el('OpenLinkedIn').click();await settle(80);
    assert.match(failing.el('Progress').textContent,/No ticked client has a confirmed LinkedIn company yet\. Example Client: Company could not be read/);
    assert(failing.el('LinkedInReady').hidden);assert(failing.rpcCalls.some(call=>call.action==='jobReadCancel'));
+   // A changed company page is read again, never searched with the old number.
+   n.state.companyIds={'https://www.linkedin.com/company/other-client/':'6363'};
+   n.state.followed[0].linkedin_url='https://www.linkedin.com/company/other-client/';await n.el('Refresh').click();await settle(40);
+   const reads=n.rpcCalls.filter(call=>call.action==='jobCompanyID').length;
+   await n.el('OpenLinkedIn').click();await settle(80);
+   assert.equal(n.rpcCalls.filter(call=>call.action==='jobCompanyID').length,reads+1,'the new page is read');
+   assert.equal(n.rpcCalls.at(-1).args.company_url,'https://www.linkedin.com/company/other-client/');
+   assert.equal(n.el('LinkedInLink').href,'https://www.linkedin.com/jobs/search/?f_C=6363','the old number is not reused for another page');
    n.clear();assert.equal(n.state.linkedinSearch,undefined);assert.equal(n.el('LinkedInReady').hidden,true,'an account change drops the prepared search');}
 
   // Select all new ads across every page, then save them in one click.

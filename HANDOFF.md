@@ -24,7 +24,8 @@ dashboard of saved client ads, with followed clients in their own tab.
   buttons. With all numbers known it opens straight from the click (pop-up
   allowed); otherwise `jobCompanyID` reads the missing numbers first and the
   search is offered as a link (a later window.open would be blocked). Numbers
-  read this session are cached in `state.resolvedIds` and reused by Pull.
+  read this session are cached in `state.resolvedIds` (bound to the exact
+  company page URL they were read from) and reused by Pull.
 - Saved client job ads dashboard: non-deleted Job Leads records whose company
   name matches a followed client (same match as the "Ads in Job ads" count),
   with tiles, client/status/folder/posted/search filters, sort and paging. It
