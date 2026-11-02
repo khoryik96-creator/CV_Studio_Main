@@ -322,7 +322,9 @@ class JobAdderClientsService:
             if registered and not url and not number:
                 raise JobAdderClientsError("This client's JobAdder LinkedIn field is not a company link. Correct it in JobAdder or save the company link here.",
                                            "JOBADDER_CLIENTS_LINK", 409)
-            if not number and row["linkedin_id"] and (not url or not row["linkedin_url"] or row["linkedin_url"] == url):
+            # A numeric-only fallback has no established association with a
+            # newly imported named page; resolve that page before pulling.
+            if not number and row["linkedin_id"] and (not url or row["linkedin_url"] == url):
                 number = row["linkedin_id"]
             row.update(name=name, linkedin_url=url or row["linkedin_url"], linkedin_id=number)
         elif action == "set_linkedin":

@@ -70,6 +70,18 @@
   owner-source preflight and `git diff --check` pass. No protected build/package
   or genuine Mac test is claimed.
 
+## PR278 pre-merge review correction
+
+Automatic review found that a numeric-only manual fallback could survive import
+of a newly registered named page, incorrectly bypassing page resolution. Refresh
+now retains an old number only when no new page is supplied or the same page was
+already associated with it. A newly imported page clears an unpaired old number.
+Two regression cases cover both clearing that stale number and preserving a
+numeric-only fallback when JobAdder still has no page. The former fails before
+correction. After correction85 focused backend/version tests and the client
+frontend fixture pass;the2355 full-suite result above precedes these two cases.
+Hosted checks must pass on the corrected head before merge.
+
 ## Preserved boundaries and practical limits
 
 124 production routes; existing SQL/vault schemas; protected credentials;

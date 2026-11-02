@@ -46,6 +46,21 @@ def test_refresh_preserves_manual_number_only_for_same_or_missing_registered_pag
     assert (updated['linkedin_url'], updated['linkedin_id']) == (expected_url, expected_id)
 
 
+@pytest.mark.parametrize('new_link,expected_id', [
+    ('https://www.linkedin.com/company/new-page/', ''),
+    (None, '42'),
+])
+def test_refresh_numeric_only_fallback_does_not_claim_a_new_page(new_link, expected_id):
+    service, client, _vault, _state, _row = followed()
+    row = run(service, {'action': 'set_linkedin', 'company_id': 11,
+                        'link': 'https://www.linkedin.com/jobs/search/?f_C=42'})['followed'][0]
+    assert row['linkedin_url'] == '' and row['linkedin_id'] == '42'
+    client.replies['companies/11'] = company(11, linkedin=new_link)
+    updated = refresh(service, row)['followed'][0]
+    assert updated['linkedin_url'] == (new_link or '')
+    assert updated['linkedin_id'] == expected_id, 'Only a number already paired with the same page may bypass page resolution'
+
+
 def test_refresh_never_resurrects_unfollowed_client_or_overwrites_new_manual_link():
     service, client, vault, _state, row = followed()
     run(service, {'action': 'set_linkedin', 'company_id': 11, 'link': 'https://www.linkedin.com/company/new/'})

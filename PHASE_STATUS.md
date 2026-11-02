@@ -14,7 +14,9 @@
   dashboard-switch/visited-reload and Windows/static/consistency pass. No live
   provider/paid/JobAdder request, owner install/data or hosted update. Real
   historical browser failure is not proven. Update app+companion after merge;
-  PR257 held. See533 QA.531+532 below were subsequently merged via PR277.
+  PR257 held. PR278 review also corrected an unpaired numeric fallback surviving
+  a newly imported named page;two regression cases and85 focused backend/version
+  tests pass. The2355 full-suite count above precedes those cases. See533 QA.531+532 below were subsequently merged via PR277.
 
 - v24.6.532 is local/unmerged on `codex/v24.6.532-sourcer-search-controls`,
   stacked on531/4894c43 from merged530/PR276. Adds exact-user Boolean + separate

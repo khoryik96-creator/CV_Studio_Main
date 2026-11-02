@@ -34,7 +34,11 @@ visited-reload checks and Windows/static/consistency gates pass. Tests use
 fictional transport/records. Exact historical live failure and real company
 DOM not reproduced; no live AI/paid/JobAdder request or owner data/install/
 extension/hosted change. Update app AND companion after merge. PR257 held.
-See533 QA. Prior531+532 are merged via PR277; their older notes below describe
+PR278 review corrective: a numeric-only fallback is cleared when JobAdder
+introduces a named page, since no prior page/number association was established.
+The new regression fails before correction;85 focused backend/version tests
+and the client frontend fixture pass after it. Earlier2355 full-suite count
+precedes the two new cases. See533 QA. Prior531+532 are merged via PR277; their older notes below describe
 the local pre-merge checkpoints. New533 remains unpublished/unmerged.
 
 **Previous checkpoint: v24.6.532 Sourcer search controls (local, unmerged)**
