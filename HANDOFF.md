@@ -7,7 +7,38 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current checkpoint: v24.6.529 Sourcer Candidates folders, shortlist and Trash (unmerged)**
+**Current checkpoint: v24.6.530 client and Sourcer controls (local, unmerged)**
+on `codex/v24.6.530-client-sourcer-controls`, from exact merged v529
+`786f40c157e5b017b952668ba14f31abfa05645a` / PR #274. The owner requested a
+latest-main audit, Signed clients reload/selection fixes and filters/sorting,
+new-search Sourcer folders, and a fix for Oracle/database AND automation queries
+and first-attempt country readiness.
+- Signed clients restores its browse read on first open even when followed
+  clients exist. Compact status/owner/follow filters and company/status/owner
+  sorting apply to the loaded page only; Name search remains server-side.
+  Pull refuses empty/stale signed statuses. Following a company without a
+  numeric LinkedIn ID opens/highlights Enable selection; its See all jobs link
+  supplies that number. Automatic company-ID discovery is not added.
+- Sourcer Search can choose/create a destination folder before any AI consent
+  or request. The choice survives this tab's reload, the run pins it, and new
+  archived candidates receive it. Existing same-run organisation is preserved;
+  a deleted destination fails visibly without resurrection or paid replay.
+- Overbudget positive AND-of-OR plans retain every required group within the
+  existing three-operator budget. Exclusions/mixed nesting remain rejected;
+  full requirements and native country selection remain unchanged.
+- Country setup can confirm an already-applied exact visible country with
+  stable query/other-filter proof instead of repeating a click. Location
+  hydration waits longer, bounded at 90 polls. New companion capability
+  `people_country_ready_revision` requires updating app AND companion.
+Baseline Windows audit: 2309 Python passed/4 skipped/8418 subtests, 85 root JS
+fixtures, and actual isolated Chromium candidate organisation/export/mobile.
+Final v530: 2316 Python passed/4 skipped/8418 subtests, all 85 root JS fixtures,
+native Signed clients and Sourcer folder/archive/mobile flows, source/static,
+repository consistency and genuine Windows Antiword/Tesseract preflight pass.
+No live LinkedIn acceptance, provider call, paid spending, owner app/data update,
+hosted deployment, PR or merge. PR #257 remains held. See530 QA and module notes.
+
+**Previous checkpoint: v24.6.529 Sourcer Candidates folders, shortlist and Trash (merged PR #274 / `786f40c`)**
 on `claude/job-leads-signed-clients` after v528. The owner asked for folders,
 delete and a shortlist on the Sourcer Candidates dashboard, like Job Leads.
 Folders (create, move selected, delete folder to Unfiled), a star shortlist
@@ -18,7 +49,7 @@ routes). A review round then fixed 15 findings (see the QA report), including a
 size check that could lock a near-full dashboard and the v528 status-less
 company change, which was reverted. See `LINKEDIN_SOURCER_NOTES.md`.
 
-**Previous checkpoint: v24.6.528 Signed clients list fix (unmerged)**
+**Previous checkpoint: v24.6.528 Signed clients list fix (merged PR #274 / `786f40c`)**
 on `claude/job-leads-signed-clients`, restarted from merged v527 `3ea7880` /
 PR #273. The owner saw no clients after reloading and ticking statuses.
 Reload statuses now keeps unsaved ticks, saving statuses (or a first open with

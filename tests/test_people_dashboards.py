@@ -54,6 +54,48 @@ def test_archive_failures_preserve_existing_data(archive):
     with pytest.raises(PeopleError,match='read securely'):broken.remember(run,[candidate()],'screen')
 
 
+def test_new_search_folder_is_validated_and_existing_organisation_survives(archive):
+    store,data=archive
+    store.create_folder('Database');store.create_folder('Reviewed')
+    assert store.target_folder('Database')=='Database' and store.target_folder('')==''
+    with pytest.raises(PeopleError,match='no longer exists'):store.target_folder('Missing')
+    run=SimpleNamespace(id='a'*32,brief='Oracle database and automation',folder='Database')
+    store.remember(run,[candidate()],'screen');row=store.list()[0]
+    assert row['folder']=='Database' and data['version']==2
+    store.move([{'key':row['key'],'revision':row['revision']}],'Reviewed');row=store.list()[0]
+    store.shortlist(row['key'],row['revision'],True);row=store.list()[0]
+    store.trash([{'key':row['key'],'revision':row['revision']}],True)
+    store.remember(run,[candidate()],'detail');row=store.list()[0]
+    assert row['folder']=='Reviewed' and row['shortlisted'] is True and row['deleted'] is True
+
+
+def test_folder_setup_is_unpaid_and_invalid_search_target_cannot_start(archive):
+    from cvstudio_linkedin_sourcer import LinkedInSourcerService,SourcerError
+    store,_=archive;provider=mock.Mock(side_effect=AssertionError('No paid call'))
+    service=LinkedInSourcerService(key_available=lambda:True,provider_call=provider,candidates=store)
+    assert service.handle({'action':'candidate_folder_create','name':'Database'})=={'folder':'Database'}
+    assert service.handle({'action':'candidate_folders'})=={'folders':['Database']}
+    start={'action':'start','brief':'Oracle database and automation','mode':'standard','max_pages':1,'max_calls':3,'confirm_paid':True}
+    for folder in ['Missing',[],None]:
+        with pytest.raises(SourcerError):service.handle({**start,'folder':folder})
+        assert service.run is None
+    assert service.handle({**start,'folder':'Database'})['run']['folder']=='Database'
+    provider.assert_not_called()
+
+
+def test_deleted_search_folder_does_not_reappear_or_replay_paid_results(archive):
+    from cvstudio_linkedin_sourcer import LinkedInSourcerService
+    store,_=archive;store.create_folder('Database')
+    provider=mock.Mock(return_value=({'content':[{'type':'tool_use','name':'return_profile_review','input':{'candidates':[{'id':'p0','score':80,'evidence':['SAP Consultant'],'unknowns':[]}]}}]},{'usage':{'input_tokens':10,'output_tokens':20}}))
+    service=LinkedInSourcerService(key_available=lambda:True,provider_call=provider,candidates=store)
+    run=service.handle({'action':'start','brief':'SAP consultant in Malaysia','mode':'standard','max_pages':1,'max_calls':3,'confirm_paid':True,'folder':'Database'})['run']
+    store.delete_folder('Database',[])
+    result=service.handle({'action':'review','run_id':run['id'],'stage':'screen','page':1,'profiles':[{'id':'p0','name':'Example','url':'https://www.linkedin.com/in/example','text':'SAP Consultant'}]})
+    assert result['candidates'] and result['usage']['input_tokens']==10 and result['run']['calls']==1
+    assert 'deleted' in result['dashboard_warning'] and store.folders()==[] and store.list()==[]
+    assert provider.call_count==1
+
+
 def test_exports_are_literal_and_filter_matches(archive):
     store,_=archive;run=SimpleNamespace(id='a'*32,brief='=SUM(1)')
     store.remember(run,[candidate()],'screen');row=store.list()[0]

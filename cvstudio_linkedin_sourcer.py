@@ -93,40 +93,87 @@ def validate_plan(value):
 def validate_standard_plan(value):
     plan = validate_plan(value)
     query = plan["query"]
-    # LinkedIn documents a consumer-query limit without publishing its size.
-    # Use the conservative three-operator query reproduced successfully live.
-    tokens = list(re.finditer(r'"[^"]*"|\b(?:AND|OR|NOT)\b|[()]', query))
+    token_pattern = r'"[^"]*"|\b(?:AND|OR|NOT)\b|[()]'
+    tokens = list(re.finditer(token_pattern, query))
     if sum(token.group() in {"AND", "OR", "NOT"} for token in tokens) <= 3:
         return plan
     message = ("This query is too complex for normal LinkedIn search. "
                "Use fewer keyword alternatives, or choose Recruiter.")
-    # Only a flat positive OR list is safely narrowed. Never discard AND/NOT
-    # clauses or flatten nested logic to make a provider's plan fit.
-    grouped = query.startswith("(") and query.endswith(")")
-    inner = query[1:-1].strip() if grouped else query
-    if inner.count('"') % 2 or re.search(r"[\x00-\x1f\x7f]", inner):
+
+    def unwrap(text):
+        text = text.strip()
+        while text.startswith('(') and text.endswith(')'):
+            depth, outer = 0, True
+            for token in re.finditer(token_pattern, text):
+                if token.group() == '(':
+                    depth += 1
+                elif token.group() == ')':
+                    depth -= 1
+                    if depth < 0:
+                        raise SourcerError(message)
+                    if depth == 0 and token.end() != len(text):
+                        outer = False
+            if depth or not outer:
+                break
+            text = text[1:-1].strip()
+        return text
+
+    # Keep every required skill group. Only positive OR alternatives within
+    # those groups can be narrowed; exclusions and nested mixed logic cannot.
+    inner = unwrap(query)
+    parts, start, depth = [], 0, 0
+    for token in re.finditer(token_pattern, inner):
+        op = token.group()
+        if op == 'NOT':
+            raise SourcerError(message)
+        if op == '(':
+            depth += 1
+        elif op == ')':
+            depth -= 1
+            if depth < 0:
+                raise SourcerError(message)
+        elif op == 'AND' and depth == 0:
+            parts.append(inner[start:token.start()].strip())
+            start = token.end()
+    parts.append(inner[start:].strip())
+    if depth or len(parts) > 4:
         raise SourcerError(message)
-    terms, start = [], 0
-    for token in re.finditer(r'"[^"]*"|\b(?:AND|OR|NOT)\b|[()]', inner):
-        if token.group().startswith('"'):
-            continue
-        if token.group() != "OR":
+    groups = []
+    for part in parts:
+        text = unwrap(part)
+        if text.count('"') % 2 or re.search(r'[\x00-\x1f\x7f]', text):
             raise SourcerError(message)
-        terms.append(inner[start:token.start()].strip())
-        start = token.end()
-    terms.append(inner[start:].strip())
-    aliases, seen = [], set()
-    for term in terms:
-        quoted = term.startswith('"') and term.endswith('"') and term.count('"') == 2
-        if (not term or not (term[1:-1].strip() if quoted else term)
-                or ('"' in term and not quoted)):
-            raise SourcerError(message)
-        key = term.casefold()
-        if key not in seen:
-            aliases.append(term)
-            seen.add(key)
-    shortened = " OR ".join(aliases[:4])
-    return {**plan, "query": "(" + shortened + ")" if grouped else shortened}
+        terms, start = [], 0
+        for token in re.finditer(token_pattern, text):
+            if token.group().startswith('"'):
+                continue
+            if token.group() != 'OR':
+                raise SourcerError(message)
+            terms.append(text[start:token.start()].strip())
+            start = token.end()
+        terms.append(text[start:].strip())
+        aliases, seen = [], set()
+        for term in terms:
+            quoted = term.startswith('"') and term.endswith('"') and term.count('"') == 2
+            if not term or not (term[1:-1].strip() if quoted else term) or ('"' in term and not quoted):
+                raise SourcerError(message)
+            if term.casefold() not in seen:
+                aliases.append(term)
+                seen.add(term.casefold())
+        groups.append(aliases)
+    chosen = [[group[0]] for group in groups]
+    budget = 4 - len(groups)  # at most three Boolean operators overall
+    for index in range(1, max(map(len, groups))):
+        for group, target in zip(groups, chosen):
+            if budget and index < len(group):
+                target.append(group[index])
+                budget -= 1
+    rendered = [' OR '.join(group) for group in chosen]
+    if len(groups) == 1:
+        shortened = '(' + rendered[0] + ')' if query.startswith('(') and query.endswith(')') else rendered[0]
+    else:
+        shortened = ' AND '.join('(' + text + ')' if len(group) > 1 else text for group, text in zip(chosen, rendered))
+    return {**plan, 'query': shortened}
 
 
 def validate_reviews(value, profiles, maximum):
@@ -234,7 +281,7 @@ STANDARD_PLAN_SCHEMA = {**PLAN_SCHEMA, "properties": {**PLAN_SCHEMA["properties"
     "query": {**PLAN_SCHEMA["properties"]["query"], "description":
         PLAN_SCHEMA["properties"]["query"]["description"] +
         " For normal People search, use at most three Boolean operators total outside quotes."
-        " Put the user's exact core role/skill first, with at most four high-signal aliases."
+        " Use at most four search terms total, including the user's exact core role/skill. For independent mandatory skills, keep AND between compact OR groups; for example (Oracle OR DBA) AND (Ansible OR automation)."
         " Keep the complete matching criteria in requirements; never drop mandatory exclusions to meet this budget."}}}
 REVIEW_SCHEMA = {"type": "object", "properties": {"candidates": {"type": "array", "items": {
     "type": "object", "properties": {"id": {"type": "string"},
@@ -264,6 +311,7 @@ REVIEW_REF_SCHEMA = {'type':'object', 'properties':{'candidates':{'type':'array'
 # Saved-candidate dashboard actions; each name maps to exactly one store call.
 _CANDIDATE_ACTIONS = {
     'candidates': lambda store, data: store.snapshot(),
+    'candidate_folders': lambda store, data: {'folders': store.folders()},
     'candidate_note': lambda store, data: {'candidate': store.note(data.get('key'), data.get('revision'), data.get('notes'))},
     'candidate_shortlist': lambda store, data: {'candidate': store.shortlist(data.get('key'), data.get('revision'), data.get('shortlisted'))},
     'candidate_move': lambda store, data: store.move(data.get('items'), data.get('folder')),
@@ -288,11 +336,12 @@ class Run:
     stopped: bool = False
     expires: float = field(default_factory=lambda: time.monotonic() + 3600)
     busy: threading.Lock = field(default_factory=threading.Lock)
+    folder: str = ''
 
     def summary(self):
         return {"id": self.id, "calls": self.calls, "max_calls": self.max_calls,
                 "tokens": self.tokens, "usage_complete": self.usage_complete,
-                "stopped": self.stopped, "max_pages": self.max_pages}
+                "stopped": self.stopped, "max_pages": self.max_pages, "folder": self.folder}
 
 
 class LinkedInSourcerService:
@@ -377,6 +426,17 @@ class LinkedInSourcerService:
             raise SourcerError("Enter a brief and select a supported LinkedIn mode.")
         if type(pages) is not int or not 1 <= pages <= 15 or type(calls) is not int or not 1 <= calls <= 80:
             raise SourcerError("Use 1–15 pages and 1–80 API requests.")
+        folder = data.get("folder", "")
+        if not isinstance(folder, str):
+            raise SourcerError("Choose a candidate folder for this search.")
+        if folder:
+            if not self.candidates:
+                raise SourcerError("The candidate dashboard is unavailable.")
+            from cvstudio_people import PeopleError
+            try:
+                folder = self.candidates.target_folder(folder)
+            except PeopleError as exc:
+                raise SourcerError(str(exc)) from None
         if not self.key_available():
             raise SourcerError("Save your DeepSeek key in Settings first.")
         with self.lock:
@@ -384,7 +444,7 @@ class LinkedInSourcerService:
             if old and (old.busy.locked() or (not old.stopped and time.monotonic() < old.expires)):
                 raise SourcerError("Stop the current run before starting another.")
             self.run = Run(brief.strip(), mode, pages, calls, "deepseek-v4-flash",
-                           review_open_search=data.get("use_open_search") is True)
+                           review_open_search=data.get("use_open_search") is True, folder=folder)
         return {"run": self.run.summary()}
 
     def paid(self, run, task, schema, data, validate, field_name):

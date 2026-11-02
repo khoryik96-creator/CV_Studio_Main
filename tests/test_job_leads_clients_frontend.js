@@ -154,6 +154,7 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
   assert.equal(rows(f).length,2);assert.equal(f.el('Count').textContent,'2');
   assert(box(rows(f)[0]).checked && !box(rows(f)[0]).disabled,'a client with a LinkedIn company id is ready to pull');
   assert(box(rows(f)[1]).disabled,'a client without a LinkedIn link cannot be pulled');
+  assert(rows(f)[1].querySelectorAll('input')[1].getAttribute('data-guide')==='true','Follow reveals the link needed to enable selection');
   assert.match(rows(f)[1].text,/Add its LinkedIn company page/);
   assert.match(rows(f)[0].text,/Ready to pull/);
   assert.equal(rows(f)[0].children[3].textContent,'2','saved ads are counted by company name, ignoring PT/Tbk');
@@ -285,12 +286,11 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
    assert.match(t.el('Message').textContent,/Click Save statuses to list clients with your new ticks/);
    boxes[1].checked=false;await boxes[1].dispatch('change');assert(!t.el('Search').disabled,'back to the saved choice');}
 
-  // Opening the view with statuses chosen and nothing followed lists the
-  // signed clients at once; with clients followed it does not read the list.
+  // A fresh page restores the browse list even when followed clients exist.
   {const o=fixture({signed:[2]});await o.el('Tab').click();await settle();
    assert.deepEqual(o.calls.map(c=>c.action),['overview','statuses','companies']);assert(o.el('Browse').open);assert.equal(o.el('Companies').children.length,2);
    const k=fixture({signed:[2],followed:[client(11,'4242','Example Client')]});await k.el('Tab').click();await settle();
-   assert.deepEqual(k.calls.map(c=>c.action),['overview','statuses']);
+   assert.deepEqual(k.calls.map(c=>c.action),['overview','statuses','companies']);assert.equal(k.el('Companies').children.length,2);
    // Opening the view again keeps the list already shown instead of reading JobAdder again.
    await o.el('Refresh').click();await settle();
    assert.deepEqual(o.calls.map(c=>c.action),['overview','statuses','companies','overview','statuses']);
@@ -371,6 +371,43 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
    const started=Date.now();await p.el('Tab').click();await settle();
    for(let n=0;n<30;n++){p.el('FoundNext').disabled=false;await p.el('FoundPrevious').click();}
    assert(Date.now()-started<8000,'redraws stay fast at the documented limits ('+(Date.now()-started)+' ms)');}
+
+  // Filters intersect over the loaded page, keep their choice across page
+  // reads and never query JobAdder themselves. Sort has deterministic ties
+  // and places unassigned owners last in either direction.
+  {const companies=[
+    {company_id:41,name:'Client 10',status:'Signed Client',owner:'Beta Owner'},
+    {company_id:42,name:'Client 2',status:'Signed Client',owner:'Alpha Owner'},
+    {company_id:43,name:'Zeta',status:'Active Client',owner:''},
+    {company_id:44,name:'alpha',status:'Active Client',owner:'Alpha Owner'}];
+   const c=fixture({signed:[2],followed:[client(41,'4242','Client 10')],companyReply:{companies,offset:0,total:4,checked:4,next_offset:null}});
+   const names=()=>c.el('Companies').children.flatMap(row=>row.querySelectorAll('a').map(a=>a.textContent));
+   const choose=async(name,value)=>{c.el(name).value=value;await c.el(name).dispatch('change');};
+   await c.el('Tab').click();await settle();const reads=c.calls.length;
+   assert.deepEqual(names(),['alpha','Client 2','Client 10','Zeta']);
+   await choose('Sort','name_desc');assert.deepEqual(names(),['Zeta','Client 10','Client 2','alpha']);
+   await choose('Sort','owner_desc');assert.deepEqual(names(),['Client 10','alpha','Client 2','Zeta']);
+   await choose('StatusFilter',JSON.stringify('Signed Client'));assert.deepEqual(names(),['Client 10','Client 2']);
+   await choose('OwnerFilter',JSON.stringify('Alpha Owner'));assert.deepEqual(names(),['Client 2']);
+   await choose('FollowingFilter','followed');assert.equal(names().length,0);assert.match(c.el('Companies').text,/filters on this page/);
+   await c.el('FiltersReset').click();await choose('FollowingFilter','followed');assert.deepEqual(names(),['Client 10']);
+   assert.match(c.el('CompaniesPage').textContent,/1 of 4 on this page/);
+   await choose('FollowingFilter','unfollowed');assert.deepEqual(names(),['alpha','Client 2','Zeta']);
+   await choose('OwnerFilter',JSON.stringify(''));assert.deepEqual(names(),['Zeta']);
+   assert.equal(c.calls.length,reads,'filter and sort changes stay local');
+   await c.el('FiltersReset').click();await choose('OwnerFilter',JSON.stringify('Beta Owner'));
+   c.state.companyReply={companies:[companies[1]],offset:50,total:51,checked:1,next_offset:null};
+   await c.el('Search').click();await settle();assert.equal(c.el('OwnerFilter').value,JSON.stringify('Beta Owner'));
+   assert.equal(names().length,0,'an absent owner filter stays active on another loaded page');
+   await c.el('FiltersReset').click();assert.deepEqual(names(),['Client 2']);
+   c.clear();assert.equal(c.el('OwnerFilter').value,'');assert(!c.el('OwnerFilter').text.includes('Beta Owner'),'account reset clears owner labels');}
+
+  // Clearing all signed statuses keeps followed choices but cannot start a
+  // pull, even if an event is invoked after the control became disabled.
+  {const c=fixture({signed:[2],followed:[client(11,'4242')]});await c.el('Tab').click();await settle();
+   const box=c.el('Statuses').querySelectorAll('input').find(value=>value.value==='2');box.checked=false;await box.dispatch('change');
+   await c.el('StatusesSave').click();await settle();assert(c.el('Pull').disabled);await c.el('Pull').click();await settle();
+   assert(!c.rpcCalls.some(call=>call.action==='jobSearchBegin'));assert.match(c.el('Progress').textContent,/Save statuses/);assert.equal(rows(c).length,1);}
 
   // Account change on screen, and a JobAdder outage.
   const down=fixture({down:true});await down.el('Tab').click();await settle();

@@ -4,18 +4,33 @@
 
 ## Release state
 
-- v24.6.529 (unmerged, on `claude/job-leads-signed-clients` after v528) adds
+- v24.6.530 is a local unmerged checkpoint on
+  `codex/v24.6.530-client-sourcer-controls`, from merged529/786f40c/PR274.
+  Signed clients restores browse results after reload, adds page-scoped
+  status/owner/follow filters and sorting, guides missing LinkedIn-ID links,
+  and blocks Pull with empty/stale statuses. Sourcer Search selects/creates
+  destination folders without AI calls, preserves all mandatory positive skill
+  groups in bounded normal queries, and confirms already-applied native
+  country filters with stable proof and longer bounded hydration. Update app
+  and companion for `people_country_ready_revision`. 124 routes and existing
+  SQL/protected-vault schema contracts remain. Final Windows2316 passed,
+  4 skipped, 8418 subtests;85 JS fixtures and actual isolated Chromium desktop/
+  mobile flows, source/static/native preflight and consistency pass. No live
+  provider calls, paid action, owner data/install change, PR/merge or hosting.
+  See `cv_studio_v24_6_530_client_sourcer_controls_qa_report.md`;PR257 held.
+
+- v24.6.529 (merged PR #274 / `786f40c`, on `claude/job-leads-signed-clients` after v528) adds
   folders, a shortlist star and recoverable Trash to the Sourcer Candidates
   dashboard, like Job Leads. Optional additions to the `sourcer_candidates`
-  vault (still version 1); new actions on the existing `/linkedin-sourcer`
+  vault (organisation uses version 2; older data stays readable); new actions on `/linkedin-sourcer`
   route (124 routes unchanged). Excel follows the view. No AI or LinkedIn call.
-- v24.6.528 (unmerged, on `claude/job-leads-signed-clients` restarted from
+- v24.6.528 (merged PR #274 / `786f40c`, on `claude/job-leads-signed-clients` restarted from
   merged v527 `3ea7880`) fixes the Signed clients list: Reload statuses keeps
   unsaved ticks, saving statuses lists the signed clients at once, a first
   open with nothing followed lists them too, a company JobAdder lists without
   a status is shown unlabelled (Follow still checks it), and an empty page
   explains itself. No route change (124), no JobAdder write.
-- v24.6.527 (unmerged, on `claude/job-leads-signed-clients` from merged v526
+- v24.6.527 (merged PR #273 / `3ea7880`, on `claude/job-leads-signed-clients` from merged v526
   `7c3f0d5`) adds a Signed clients view to Job Leads. The owner chooses which
   JobAdder statuses mean signed, follows clients, and pulls their LinkedIn job
   ads for review through a company-filtered companion search; ticked ads are

@@ -13,7 +13,7 @@ function fixture(reuse=true){
   const ids=new Map(),events={},calls=[],requests=[];
   const el=name=>{if(!ids.has(name))ids.set(name,new Element());return ids.get(name)};
   el('Mode').value='auto';el('Pages').value='10';el('Calls').value='35';el('OpenSearch').checked=reuse;
-  const state={tabs:[people],connected:true,hold:false,held:null,failStart:false,page:1,opened:0,missingReads:0,readCount:0};
+  const state={tabs:[people],connected:true,hold:false,held:null,failStart:false,page:1,opened:0,missingReads:0,readCount:0,folders:[]},folderRequests=[];
   let serial=0;
   const run={id:'a'.repeat(32),calls:0,max_calls:35,tokens:0,usage_complete:true,stopped:false};
   const candidate={id:'p0',name:'Sample candidate',url:'https://www.linkedin.com/in/sample',text:'SAP finance experience',score:85,evidence:['SAP finance experience'],unknowns:['Availability']};
@@ -24,7 +24,7 @@ function fixture(reuse=true){
     if(!state.connected)return reply(null,'The browser action stopped. Reconnect the companion or check the LinkedIn page.');
     if(message.action==='tabs'){if(state.hold){state.held=()=>reply(state.tabs);return}return reply(state.tabs)}
     if(message.action==='reloadCompanion')return reply(state.reloadResult||{current:true});
-    if(message.action==='jobStatus')return reply({connected:true,concurrent_scans_revision:state.oldConcurrentCompanion?0:1,profile_browsing_revision:state.oldBrowsingCompanion?0:1,people_results_revision:state.oldResultsCompanion?0:1,people_country_revision:state.oldCountryCompanion?0:1,companion_update_revision:state.oldUpdateCompanion?0:1});
+    if(message.action==='jobStatus')return reply({connected:true,concurrent_scans_revision:state.oldConcurrentCompanion?0:1,profile_browsing_revision:state.oldBrowsingCompanion?0:1,people_results_revision:state.oldResultsCompanion?0:1,people_country_revision:state.oldCountryCompanion?0:1,people_country_ready_revision:state.oldCountryReadyCompanion?0:1,companion_update_revision:state.oldUpdateCompanion?0:1});
     if(message.action==='openPeopleSearch'){
       if(state.oldCompanion)return reply(null,'Unsupported browser action.');
       const tab={...people,id:20+(++state.opened),url:'https://www.linkedin.com/search/results/people/',title:'New People search'};
@@ -37,7 +37,7 @@ function fixture(reuse=true){
     if(message.action==='create')return reply(10);
     if(message.action==='read'){
       state.readCount++;
-      if(message.args.method==='setCountry'){if(state.holdCountry){state.countryReply=()=>reply(true);return;}return reply(true);}
+      if(message.args.method==='setCountry'){if(state.countryWaits>0){state.countryWaits--;return reply({loading:true});}if(state.holdCountry){state.countryReply=()=>reply(true);return;}return reply(true);}
       if(state.missingReads-- > 0 || state.missingMethod===message.args.method)return reply(null);
       return reply(message.args.method==='readProfile'?{text:candidate.text,name:candidate.name}:['search','next'].includes(message.args.method)?true:{profiles:[candidate],signature:'one',hasNext:!!state.morePages,paginationKnown:true});
     }
@@ -49,7 +49,10 @@ function fixture(reuse=true){
     setTimeout:(fn,ms)=>setTimeout(fn,[500,1000,1500,2000].includes(ms)?0:ms),clearTimeout,AbortController,URL,URLSearchParams,Blob,
     markTabRunning:()=>1,finishTabRun:()=>{},responseHasPaidUsage:()=>false,
     navigator:{clipboard:{writeText:async text=>{if(state.clipboardFail)throw Error('Unavailable');state.copied=text;}}},
-    fetch:async(url,options)=>{if(url==='/linkedin-sourcer?action=companion_setup')return {ok:true,json:async()=>({folder:'Bundled companion folder',version:'24.6.480'})};assert.equal(url,'/linkedin-sourcer');const body=options?.body?JSON.parse(options.body):null;if(body)requests.push(body);
+    fetch:async(url,options)=>{if(url==='/linkedin-sourcer?action=companion_setup')return {ok:true,json:async()=>({folder:'Bundled companion folder',version:'24.6.480'})};assert.equal(url,'/linkedin-sourcer');const body=options?.body?JSON.parse(options.body):null;
+      if(body?.action==='candidate_folders'){folderRequests.push(body);return {ok:true,json:async()=>({folders:[...state.folders]})};}
+      if(body?.action==='candidate_folder_create'){folderRequests.push(body);const folder=body.name.trim();if(!state.folders.includes(folder))state.folders.push(folder);return {ok:true,json:async()=>({folder})};}
+      if(body)requests.push(body);
       if(!body)return {ok:true,json:async()=>({configured:true,run:state.resumeRun?{...run}:null})};
       if(body.action==='start'&&state.failStart)return {ok:false,json:async()=>({error:'Synthetic start rejected'})};
       if(body.action==='plan'&&state.holdPlan)await new Promise(resolve=>state.planReply=resolve);
@@ -57,10 +60,28 @@ function fixture(reuse=true){
       return {ok:true,json:async()=>({run:{...run},...(body.action==='plan'?{plan:{query:'SAP',country:state.planCountry||''}}:{}),...(body.action==='review'?{candidates:[candidate]}:{})})};}
   });
   for(const file of ['linkedin-sourcer-core.js','linkedin-sourcer.js']){vm.runInContext(fs.readFileSync(path.join(__dirname,'../vendor/cvstudio',file),'utf8'),context);context.CVLinkedinCore=window.CVLinkedinCore;}
-  return {el,state,calls,requests,copy:window.copyLinkedinCompanionFolder,reload:window.reloadLinkedinCompanion,init:async()=>{await window.initLinkedinSourcer();await new Promise(resolve=>setTimeout(resolve,0))},
+  return {el,state,calls,requests,folderRequests,copy:window.copyLinkedinCompanionFolder,reload:window.reloadLinkedinCompanion,init:async()=>{await window.initLinkedinSourcer();await new Promise(resolve=>setTimeout(resolve,0))},
     start:()=>window.startLinkedinSourcer(),stop:()=>window.stopLinkedinSourcer()};
 }
 (async()=>{
+  const folders=fixture();folders.state.folders=['Database'];await folders.init();
+  folders.el('Folder').value='Database';await folders.el('Folder').change();
+  folders.el('Brief').value='Oracle database and Ansible automation';folders.el('Consent').checked=true;folders.state.holdPlan=true;
+  const folderSearch=folders.start();while(!folders.state.planReply)await new Promise(resolve=>setTimeout(resolve,0));
+  assert.equal(folders.requests.find(body=>body.action==='start').folder,'Database');assert(folders.el('Folder').disabled && folders.el('FolderNew').disabled);
+  await folders.stop();folders.state.planReply();await folderSearch;
+  await folders.el('FolderNew').events.click[0]();folders.el('FolderName').value='  Automation  ';await folders.el('FolderCreate').events.click[0]();
+  assert.equal(folders.el('Folder').value,'Automation');assert.equal(folders.el('FolderEditor').hidden,true);
+  assert.equal(folders.folderRequests.filter(body=>body.action==='candidate_folder_create').length,1);
+  assert.equal(folders.requests.filter(body=>body.action==='start').length,1,'creating a folder never starts another paid run');
+  folders.state.folders=['Database'];await folders.el('peopleSourcerSearchTab').events.click[0]();await new Promise(resolve=>setTimeout(resolve,0));
+  assert.equal(folders.el('Folder').value,'');assert.match(folders.el('FolderStatus').textContent,/no longer exists/);
+  const delayedCountry=fixture(false);await delayedCountry.init();delayedCountry.el('Brief').value='Oracle database with Ansible in Malaysia';delayedCountry.el('Consent').checked=true;delayedCountry.state.planCountry='Malaysia';delayedCountry.state.countryWaits=35;
+  await delayedCountry.start();assert.equal(delayedCountry.calls.filter(call=>call.action==='read'&&call.args.method==='setCountry').length,36,'slow country hydration gets a bounded wait');
+  assert.equal(delayedCountry.requests.filter(body=>body.action==='plan').length,1);assert(!/could not confirm/.test(delayedCountry.el('Status').textContent));
+  const neverReady=fixture(false);await neverReady.init();neverReady.el('Brief').value='Oracle database in Malaysia';neverReady.el('Consent').checked=true;neverReady.state.planCountry='Malaysia';neverReady.state.countryWaits=100;
+  await neverReady.start();assert.equal(neverReady.calls.filter(call=>call.action==='read'&&call.args.method==='setCountry').length,90);assert.match(neverReady.el('Status').textContent,/could not confirm the country/);
+  assert.equal(neverReady.requests.filter(body=>body.action==='plan').length,1);assert(!neverReady.calls.some(call=>call.action==='read'&&call.args.method==='readSearch'));
   const guidance=fixture();await guidance.init();
   assert.equal(guidance.el('Brief')['data-guide'],'true');assert.equal(guidance.el('Brief')['aria-invalid'],'false');
   guidance.el('Brief').value='Finance manager';await guidance.el('Consent').change();

@@ -12,7 +12,7 @@
   const MAX_FOUND = 600, MAX_PER_PULL = 15, FOUND_PAGE = 50, ADD_LIMIT = 100, COMPANY_PAGE = 50;
   const TICKS_KEY = 'cvstudio_signed_clients_ticks';
   const fresh = () => ({account:'', signed:[], statuses:null, followed:[], records:[], folders:[], companies:null, found:[], picked:new Set(),
-    chosen:null, foundPage:0, working:false, pulling:false, stopped:false, run:'', loaded:false, statusDraft:null, statusDirty:false});
+    chosen:null, foundPage:0, working:false, pulling:false, stopped:false, run:'', loaded:false, statusDraft:null, statusDirty:false, linkGuide:0});
   let state = fresh(), generation = 0, ready = false, resyncNeeded = false;
   let savedIndex = {records:null, urls:new Map()}, countIndex = {records:null, followed:null, counts:new Map()};
 
@@ -122,6 +122,31 @@
   const knownStatuses = () => new Set((state.statuses || []).map(row => row.id));
   const staleStatuses = () => state.statuses ? state.signed.filter(id => !knownStatuses().has(id)) : [];
   function pageRows() { return state.found.slice(state.foundPage * FOUND_PAGE, (state.foundPage + 1) * FOUND_PAGE); }
+  const compareText = (a,b) => String(a || '').localeCompare(String(b || ''),undefined,{numeric:true,sensitivity:'base'});
+  function companyChoices(name, values, blank) {
+    const select=el(name),old=select.value,choices=new Map();
+    for (const value of values) choices.set(JSON.stringify(value || ''),value || blank);
+    if (old && !choices.has(old)) {
+      try { const value=JSON.parse(old);if(typeof value==='string')choices.set(old,(value || blank)+' (not on this page)'); } catch {}
+    }
+    const option=(value,label)=>{const n=node('option',label);n.value=value;return n;};
+    select.replaceChildren(option('',name==='StatusFilter'?'All statuses':'All owners'),
+      ...[...choices].sort((a,b)=>compareText(a[1],b[1])).map(([value,label])=>option(value,label)));
+    select.value=choices.has(old)?old:'';
+  }
+  function companyRows() {
+    const status=el('StatusFilter').value,owner=el('OwnerFilter').value,follow=el('FollowingFilter').value;
+    const followed=new Set(state.followed.map(row=>row.company_id));
+    const sorts={name_asc:['name',1],name_desc:['name',-1],status_asc:['status',1],status_desc:['status',-1],owner_asc:['owner',1],owner_desc:['owner',-1]};
+    const [field,direction]=sorts[el('Sort').value] || sorts.name_asc;
+    return (state.companies?.rows || []).filter(row=>(!status || JSON.stringify(row.status || '')===status) &&
+      (!owner || JSON.stringify(row.owner || '')===owner) && (!follow || followed.has(row.company_id)===(follow==='followed'))).sort((a,b)=>{
+        const x=a[field] || '',y=b[field] || '';
+        if (!x || !y) { if (x || y) return x?-1:1; }
+        else { const difference=direction*compareText(x,y);if(difference)return difference; }
+        return compareText(a.name,b.name) || a.company_id-b.company_id;
+      });
+  }
   const sameIds = (a, b) => [...a].sort((x, y) => x - y).join() === [...b].sort((x, y) => x - y).join();
   // Ticks the owner changed but has not saved: the client list still uses the
   // saved statuses, so searching waits for Save statuses.
@@ -143,7 +168,8 @@
     el('CompaniesNext').disabled = locked || !c || c.next === null || unsaved;
     // Job Leads' own busy state is checked when Pull/Add is clicked, so the
     // buttons never sit disabled after Job Leads finishes.
-    el('Pull').disabled = locked || !pullable().length;
+    el('Pull').disabled = locked || !state.signed.length || stale || !pullable().length;
+    for (const name of ['StatusFilter','OwnerFilter','FollowingFilter','Sort','FiltersReset']) el(name).disabled=locked || !c?.rows.length;
     el('Stop').disabled = !state.pulling || state.stopped;
     el('Pages').disabled = locked;
     el('Untick').disabled = locked || !state.chosen?.size;
@@ -198,8 +224,11 @@
       page.append(node('small', id ? (client.linkedin_id ? 'Ready to pull' : 'Ready · company found in a saved HR scan') :
         client.linkedin_url ? 'Paste the link of its "See all jobs" search to pull ads' : 'Add its LinkedIn company page'));
       const editor = node('details'), input = node('input');
-      editor.append(node('summary', client.linkedin_url || client.linkedin_id ? 'Change link' : 'Add link'));
+      editor.append(node('summary', id ? 'Change link' : 'Enable selection'));
+      editor.open=state.linkGuide===client.company_id;
       input.type = 'url'; input.maxLength = 2048; input.setAttribute('aria-label', 'LinkedIn link for ' + client.name);
+      input.dataset.clientAction='';input.setAttribute('data-guide',String(!id && editor.open));
+      editor.addEventListener('toggle',()=>{input.setAttribute('data-guide',String(!id && editor.open));if(!id && editor.open)input.focus?.();});
       editor.append(input, button('Save link', () => setLink(client, input.value)));
       page.append(editor); tr.append(page);
       tr.append(node('td', String(savedCount(client))), node('td', client.pulled_at ? client.pulled_at.slice(0, 10) : 'Never'));
@@ -212,9 +241,12 @@
   function drawCompanies() {
     const target = el('Companies'), c = state.companies; target.replaceChildren();
     el('CompaniesPage').textContent = '';
+    companyChoices('StatusFilter',(c?.rows || []).map(row=>row.status),'No status');
+    companyChoices('OwnerFilter',(c?.rows || []).map(row=>row.owner),'Unassigned');
     if (!c) return;
-    if (!c.rows.length) { const tr = node('tr'), td = node('td', c.next !== null ? 'No signed clients on this page.' : c.offset ? 'No more signed clients.' : 'No signed clients match.'); td.colSpan = 4; tr.append(td); target.append(tr); }
-    for (const company of c.rows) {
+    const visible=companyRows();
+    if (!visible.length) { const tr = node('tr'), td = node('td', c.rows.length ? 'No clients match the filters on this page.' : c.next !== null ? 'No signed clients on this page.' : c.offset ? 'No more signed clients.' : 'No signed clients match.'); td.colSpan = 4; tr.append(td); target.append(tr); }
+    for (const company of visible) {
       const tr = node('tr'), name = node('td'); name.append(link(company.name, company.jobadder_url, JOBADDER_URL));
       const followed = state.followed.some(row => row.company_id === company.company_id);
       const action = node('td'), control = followed ? button('Following · Unfollow', () => unfollow(company)) : button('Follow', () => follow(company), 'primary');
@@ -222,7 +254,7 @@
       tr.append(name, node('td', company.status || '—'), node('td', company.owner || '—'), action);
       target.append(tr);
     }
-    el('CompaniesPage').textContent = c.rows.length ? `${c.offset + 1}–${c.offset + c.returned}` + (c.total !== null ? ` of ${c.total}` : '') : '';
+    el('CompaniesPage').textContent = c.rows.length ? `${visible.length} of ${c.rows.length} on this page · ${c.offset + 1}–${c.offset + c.returned}` + (c.total !== null ? ` of ${c.total}` : '') : '';
   }
   function drawFound() {
     const target = el('Found'); target.replaceChildren();
@@ -320,8 +352,9 @@
         if (!accept(data, token)) return;
         state.statuses = data.statuses || []; state.signed = data.signed || state.signed; state.statusDraft = null; state.statusDirty = false;
         if (staleStatuses().length) { el('Setup').open = true; message('A saved signed status is no longer in JobAdder. Check the statuses and click Save statuses.'); }
-        // Nothing followed yet: show the signed clients once, without a Search click.
-        else list = !!state.signed.length && !state.followed.length && state.companies === null;
+        // A page reload starts with no browse results, even when followed
+        // clients were restored. Read this list once on first open too.
+        else list = !!state.signed.length && state.companies === null;
       } catch (error) { if (token === generation) message(error.message + (state.followed.length ? ' Followed clients are still listed.' : '')); return; }
       if (!list) return;
       el('Browse').open = true; draw();
@@ -371,6 +404,7 @@
       if (!accept(data, token)) return;
       setFollowed(data.followed || []);
       const client = state.followed.find(row => row.company_id === company.company_id);
+      state.linkGuide=client && !linkedinId(client,state.records)?client.company_id:0;
       message(client && linkedinId(client, state.records) ? `Following ${client.name}.` : `Following ${company.name}. Add its LinkedIn company page to pull its ads.`);
     });
   }
@@ -388,6 +422,7 @@
       if (!accept(data, token)) return;
       setFollowed(data.followed || []);
       const updated = state.followed.find(row => row.company_id === client.company_id);
+      state.linkGuide=updated && !linkedinId(updated,state.records)?updated.company_id:0;
       if (updated && linkedinId(updated, state.records) && pullable().length < MAX_PER_PULL) { state.chosen.add(updated.company_id); rememberTicks(); }
       message(updated && linkedinId(updated, state.records) ? `${client.name} is ready to pull.` :
         `Saved. LinkedIn needs the company's number to list its ads: open the company page, click "See all jobs" and paste that link.`);
@@ -421,6 +456,7 @@
   async function pull() {
     const app = jobLeads();
     if (mine() || !app?.rpc || !window.cvStudioJobSearch) return;
+    if (!state.signed.length || staleStatuses().length) { el('Setup').open=true;progress('Choose valid signed-client statuses and click Save statuses before pulling ads.');return; }
     if (app.isBusy?.()) { progress(BUSY_MESSAGE); return; }
     const pages = Number(el('Pages').value);
     if (![1, 2, 3, 5].includes(pages)) { progress('Choose the pages per client.'); return; }
@@ -518,7 +554,8 @@
     state = fresh();
     if (run) { try { void jobLeads()?.rpc?.('end', {run_id:run}).catch(() => {}); } catch {} }
     if (!ready) return;
-    message(''); progress(''); el('Query').value = ''; draw();
+    message(''); progress(''); el('Query').value = '';
+    for (const name of ['StatusFilter','OwnerFilter','FollowingFilter'])el(name).value='';el('Sort').value='name_asc';draw();
   }
   window.clearJobLeadsClientsAccountState = clear;
   window.cvStudioJobLeadsClients = {words, sameCompany, linkedinId, savedAds, cleanJobs, MAX_FOUND, MAX_PER_PULL};
@@ -532,6 +569,8 @@
     el('StatusesLoad').addEventListener('click', loadStatuses);
     el('StatusesSave').addEventListener('click', saveStatuses);
     el('Search').addEventListener('click', () => searchCompanies(0));
+    for (const name of ['StatusFilter','OwnerFilter','FollowingFilter','Sort'])el(name).addEventListener('change',()=>{drawCompanies();controls();});
+    el('FiltersReset').addEventListener('click',()=>{for(const name of ['StatusFilter','OwnerFilter','FollowingFilter'])el(name).value='';el('Sort').value='name_asc';drawCompanies();controls();});
     el('Query').addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault?.(); void searchCompanies(0); } });
     el('CompaniesPrevious').addEventListener('click', () => searchCompanies(Math.max(0, (state.companies?.offset || 0) - COMPANY_PAGE)));
     el('CompaniesNext').addEventListener('click', () => { if (state.companies?.next !== null) void searchCompanies(state.companies.next); });
